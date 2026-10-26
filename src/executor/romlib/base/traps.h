@@ -280,12 +280,31 @@ public:
     uint32_t (*impl)(const ot::Call &);
 };
 
+/* ... and a call into a component a library exports (AppleScriptLib's OSA
+   routines: `selector-location: Component` dispatchers in the
+   definitions): the CFM-68K entry pushes the call's parameters (sizes:
+   '2' or '4' per parameter after the instance) and makes it through
+   _ComponentDispatch (cfm68k_glue.cpp). */
+class ComponentCallExport : public internal::DeferredInit
+{
+public:
+    ComponentCallExport(const char *name, const char *library, uint16_t what, const char *sizes)
+        : name(name), library(library), what(what), sizes(sizes) {}
+    virtual void init() override;
+
+    const char *name, *library;
+    uint16_t what;
+    const char *sizes;
+};
+
 #define EXTERN_FUNCTION_WRAPPER(NAME, FPTR, INIT, ...) \
     extern Executor::traps::__VA_ARGS__ NAME
 #define EXTERN_DISPATCHER_TRAP(NAME, TRAP, SELECTOR) \
     extern Executor::traps::DispatcherTrap<Executor::traps::selectors::SELECTOR> NAME
 #define EXTERN_LIBRARY_FUNCTION(NAME, INIT, ...) \
     extern Executor::traps::__VA_ARGS__ NAME
+#define EXTERN_COMPONENT_CALL(NAME, INIT) \
+    extern Executor::traps::ComponentCallExport NAME
 #define EXTERN_OT_FUNCTION(NAME, INIT) \
     extern Executor::traps::OTFunction NAME
 #define EXTERN_LIBRARY_RAW(NAME, INIT) \
@@ -298,6 +317,8 @@ public:
 /* No explicit instantiation: two names (memcpy, _memcpy) can share one. */
 #define DEFINE_LIBRARY_FUNCTION(NAME, INIT, ...) \
     Executor::traps::__VA_ARGS__ NAME INIT
+#define DEFINE_COMPONENT_CALL(NAME, INIT) \
+    Executor::traps::ComponentCallExport NAME INIT
 #define DEFINE_OT_FUNCTION(NAME, INIT) \
     Executor::traps::OTFunction NAME INIT
 #define DEFINE_LIBRARY_RAW(NAME, INIT) \
@@ -314,6 +335,7 @@ public:
 #define CREATE_LIBRARY_FUNCTION PREPROCESSOR_CONCAT(TRAP_INSTANTIATION, _LIBRARY_FUNCTION)
 #define CREATE_LIBRARY_RAW PREPROCESSOR_CONCAT(TRAP_INSTANTIATION, _LIBRARY_RAW)
 #define CREATE_OT_FUNCTION PREPROCESSOR_CONCAT(TRAP_INSTANTIATION, _OT_FUNCTION)
+#define CREATE_COMPONENT_CALL PREPROCESSOR_CONCAT(TRAP_INSTANTIATION, _COMPONENT_CALL)
 
 #define COMMA ,
 #define PASCAL_TRAP(NAME, TRAP) \
@@ -332,6 +354,8 @@ public:
 
 #define LIBRARY_FUNCTION(LIB, NAME, IMPL) \
     CREATE_LIBRARY_FUNCTION(lib_##LIB##_##NAME, (#NAME, #LIB), LibraryFunction<decltype(IMPL) COMMA &IMPL>)
+#define COMPONENT_CALL(LIB, NAME, WHAT, SIZES) \
+    CREATE_COMPONENT_CALL(lib_##LIB##_##NAME, (#NAME, #LIB, WHAT, SIZES))
 #define OT_FUNCTION(LIB, NAME, SET, SETNAME, PASCAL, SIG, RET, IMPL) \
     CREATE_OT_FUNCTION(lib_##LIB##_##NAME, (#NAME, #LIB, SET, SETNAME, PASCAL, SIG, RET, &ot::IMPL))
 #define LIBRARY_RAW(LIB, NAME) \

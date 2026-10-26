@@ -48,6 +48,7 @@ void registerStructDumps_MemoryMgr();
 void registerStructDumps_MixedMode();
 void registerStructDumps_NameRegistry();
 void registerStructDumps_Navigation();
+void registerStructDumps_OSA();
 void registerStructDumps_OSEvent();
 void registerStructDumps_VRetraceMgr();
 void registerStructDumps_OSUtil();
@@ -125,6 +126,7 @@ void registerAllStructDumps()
     registerStructDumps_MixedMode();
     registerStructDumps_NameRegistry();
     registerStructDumps_Navigation();
+    registerStructDumps_OSA();
     registerStructDumps_OSEvent();
     registerStructDumps_VRetraceMgr();
     registerStructDumps_OSUtil();

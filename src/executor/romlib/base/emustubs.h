@@ -93,7 +93,6 @@ RAW_68K_FUNCTION(GNEFilterEnd);
 /* MacPhoenix: JShieldCursor's own routine (vdriver/dirtyrect.cpp). */
 RAW_68K_FUNCTION(ShieldCursorEnd);
 /* MacPhoenix: the Component Manager (component.cpp). */
-RAW_68K_TRAP(ComponentDispatch, 0xA82A);
 /* MacPhoenix: the File System Manager and its HFS utility routines
    (file/fsm.cpp). */
 RAW_68K_TRAP(FSMDispatch, 0xA0AC);

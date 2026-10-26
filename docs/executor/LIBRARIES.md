@@ -81,13 +81,14 @@ name, in which calling convention:
   with `library:` and a type; for now the sources register them (their
   storage is allocated when the library is set up).
 
-A component call says its selector; the component type is the
-dispatcher's:
+A component call says its selector; its dispatcher is a component
+type's (`selector-location: Component`, trap `$A82A`):
 
 ```yaml
 - dispatcher:
     name: OSAComponent
-    component: osa               # component type 'osa '
+    trap: 0xA82A
+    selector-location: Component
 - function:
     name: OSALoad
     return: OSAError
@@ -188,9 +189,23 @@ The library routes:
    (OpenTransport.md lists them as not written) and `OpenTransport.h`.
    Check: OTTest on 68k (the ASLM route) and PowerPC, the guest suite's
    network sections.
-5. **Components.** `Components.yaml`'s own calls, then OSA
-   (AppleScriptLib's table), then Executor's own native component (the
-   sound output device, `sound/soundIMVI.cpp`).
+5. **Components** — done 2026-10-26, but for the native component.
+   `Components.yaml` has the Component Manager's types, constants and 33
+   calls as `ComponentDispatch` subtraps (`moveq #sel,d0`), Executor's
+   routines typed (`component.cpp`; CallComponent and
+   CallComponentFunction, which reshape the stack, raw handlers on the
+   same dispatcher); InterfaceLib exports them as for any trap (the glue
+   for three of them is gone). `OSA.yaml` has the Open Scripting
+   Architecture's 42 calls on a `selector-location: Component`
+   dispatcher: on the C side Apple's inline (`move.l
+   #paramSize<<16|selector,-(sp); moveq #0,d0; _ComponentDispatch`, the
+   parameter size summed from the arguments after the instance), on
+   Executor's `COMPONENT_CALL` for those with `library: AppleScriptLib`
+   (the CFM-68K export that makes the call; the hand-written table is
+   gone, its 42 entries generated the same). Components.h and OSA.h are
+   real headers now (mvtest.c calls both). Left: Executor's own native
+   component (the sound output device, `sound/soundIMVI.cpp`), PowerPC
+   AppleScriptLib (Apple's file through CallComponentUPP today).
 
 Each step: `ctest -L executor` and `multiversal_retro68`, which grows a
 program per library (built against the generated headers alone).

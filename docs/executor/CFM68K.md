@@ -108,7 +108,8 @@ OS Runtime Architectures*:
    Manager glue, `DirCreate`, `ReadLocation`, the Object Support Library's
    record builders (`CreateObjSpecifier` & co.), component calls
    (`OpenDefaultComponent`, `CallComponentUPP` for a `ComponentParameters`
-   block), and AppleScriptLib's OSA routines as component calls; the trap-
+   block), and AppleScriptLib's OSA routines as component calls (OSA.yaml:
+   COMPONENT_CALL); the trap-
    and component-based ones run their trap through the trap table.
    **ObjectSupportLib** is Executor's even when Apple's file is there: the
    68k one runs `'proc'` resources against the AppleEvent Manager's private

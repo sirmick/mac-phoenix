@@ -28,6 +28,7 @@
 #include <mman/mman.h>
 #include <base/emustubs.h>
 #include <rsys/component.h>
+#include <Components.h>
 
 #include <algorithm>
 #include <map>
@@ -42,22 +43,7 @@ enum : uint32_t
 {
     kCompBase = 0x00010000,
     kInstBase = 0x00020000,
-    cmpWantsRegisterMessage = 0x80000000,
-    registerComponentGlobal = 1,
-    registerComponentNoDuplicates = 2,
-    registerComponentAfterExisting = 4,
-    componentDoAutoVersion = 1,
-    componentHasMultiplePlatforms = 8,
-    badComponentInstance = 0x80008001,
-    badComponentSelector = 0x80008002,
 };
-enum : int16_t
-{
-    kComponentOpenSelect = -1,
-    kComponentCloseSelect = -2,
-    kComponentRegisterSelect = -5,
-};
-const OSErr invalidComponentID = -3000;
 
 uint32_t rd32(uint32_t a) { return READUL(a); }
 uint16_t rd16(uint32_t a) { return READUW(a); }
@@ -547,379 +533,395 @@ void Executor::ROMlib_components_process_exit(const ProcessSerialNumber *psn,
     }
 }
 
-RAW_68K_IMPLEMENTATION(ComponentDispatch)
+/* ---- the Component Manager's calls (Components.yaml) ----------------------- */
+
+namespace
+{
+/* Components and instances are opaque IDs; the generated declarations type
+   them as pointers, which carry the ID as their guest address. */
+uint32_t gid(const void *p) { return p ? US_TO_SYN68K(p) : 0; }
+template<class T>
+T as(uint32_t v) { return v ? ptr_from_longint<T>(v) : nullptr; }
+}
+
+Component Executor::C_RegisterComponent(ComponentDescription *cdp, ComponentRoutineUPP componentEntryPoint,
+                                        INTEGER global, Handle componentName, Handle componentInfo,
+                                        Handle componentIcon)
+{
+    uint32_t cd = gid(cdp);
+    auto c = std::make_unique<Comp>();
+    c->type = rd32(cd);
+    c->subtype = rd32(cd + 4);
+    c->manufacturer = rd32(cd + 8);
+    c->flags = rd32(cd + 12);
+    c->mask = rd32(cd + 16);
+    c->entry = gid((const void *)componentEntryPoint);
+    c->name = sys_copy(componentName);
+    c->info = sys_copy(componentInfo);
+    c->icon = sys_copy(componentIcon);
+    Comp *p = add(std::move(c), global, false);
+    return as<Component>(p ? p->id : 0);
+}
+
+OSErr Executor::C_UnregisterComponent(Component aComponent)
+{
+    Comp *c = comp_of(gid(aComponent));
+    return c ? unregister(c) : invalidComponentID;
+}
+
+LONGINT Executor::C_CountComponents(ComponentDescription *looking)
+{
+    int32_t n = 0;
+    for(auto &c : comps)
+        if(visible(*c) && matches(*c, gid(looking)))
+            n++;
+    return n;
+}
+
+Component Executor::C_FindNextComponent(Component aComponent, ComponentDescription *looking)
+{
+    uint32_t after = gid(aComponent);
+    size_t i = 0;
+    if(after)
+    {
+        while(i < comps.size() && comps[i]->id != after)
+            i++;
+        i++;
+    }
+    for(; i < comps.size(); i++)
+        if(visible(*comps[i]) && matches(*comps[i], gid(looking)))
+            return as<Component>(comps[i]->id);
+    return nullptr;
+}
+
+OSErr Executor::C_GetComponentInfo(Component aComponent, ComponentDescription *cdp, Handle componentName,
+                                   Handle componentInfo, Handle componentIcon)
+{
+    Comp *c = comp_of(gid(aComponent));
+    if(!c)
+        return invalidComponentID;
+    if(uint32_t cd = gid(cdp))
+    {
+        WRITEUL(cd, c->type);
+        WRITEUL(cd + 4, c->subtype);
+        WRITEUL(cd + 8, c->manufacturer);
+        WRITEUL(cd + 12, c->flags);
+        WRITEUL(cd + 16, c->mask);
+    }
+    copy_into(c->name, gid(componentName));
+    copy_into(c->info, gid(componentInfo));
+    copy_into(c->icon, gid(componentIcon));
+    return noErr;
+}
+
+/* Private (Gestalt 'cpnt' on 7.5.5 calls it); name and value guessed. */
+LONGINT Executor::C_GetComponentMgrVersion()
+{
+    return 0x00030000;
+}
+
+LONGINT Executor::C_GetComponentListModSeed()
+{
+    return list_seed;
+}
+
+LONGINT Executor::C_GetComponentTypeModSeed(OSType componentType)
+{
+    return type_seeds[componentType];
+}
+
+ComponentInstance Executor::C_OpenComponent(Component aComponent)
+{
+    Comp *c = comp_of(gid(aComponent));
+    OSErr err;
+    return as<ComponentInstance>(c ? open_component(c, &err) : 0);
+}
+
+OSErr Executor::C_OpenAComponent(Component aComponent, GUEST<ComponentInstance> *ci)
+{
+    Comp *c = comp_of(gid(aComponent));
+    OSErr err = invalidComponentID;
+    uint32_t in = c ? open_component(c, &err) : 0;
+    WRITEUL(gid(ci), in);
+    return err;
+}
+
+OSErr Executor::C_CloseComponent(ComponentInstance aComponentInstance)
+{
+    return close_component(gid(aComponentInstance));
+}
+
+OSErr Executor::C_GetComponentInstanceError(ComponentInstance aComponentInstance)
+{
+    Inst *in = inst_of(gid(aComponentInstance));
+    return in ? in->error : (OSErr)(badComponentInstance & 0xFFFF);
+}
+
+void Executor::C_SetComponentInstanceError(ComponentInstance aComponentInstance, OSErr theError)
+{
+    if(Inst *in = inst_of(gid(aComponentInstance)))
+        in->error = theError;
+}
+
+Handle Executor::C_GetComponentInstanceStorage(ComponentInstance aComponentInstance)
+{
+    Inst *in = inst_of(gid(aComponentInstance));
+    return as<Handle>(in ? in->storage : 0);
+}
+
+void Executor::C_SetComponentInstanceStorage(ComponentInstance aComponentInstance, Handle theStorage)
+{
+    if(Inst *in = inst_of(gid(aComponentInstance)))
+        in->storage = gid(theStorage);
+}
+
+LONGINT Executor::C_GetComponentInstanceA5(ComponentInstance aComponentInstance)
+{
+    Inst *in = inst_of(gid(aComponentInstance));
+    return in ? in->a5 : 0;
+}
+
+void Executor::C_SetComponentInstanceA5(ComponentInstance aComponentInstance, LONGINT theA5)
+{
+    if(Inst *in = inst_of(gid(aComponentInstance)))
+        in->a5 = theA5;
+}
+
+LONGINT Executor::C_GetComponentRefcon(Component aComponent)
+{
+    Comp *c = comp_of(gid(aComponent));
+    return c ? c->refcon : 0;
+}
+
+void Executor::C_SetComponentRefcon(Component aComponent, LONGINT theRefcon)
+{
+    if(Comp *c = comp_of(gid(aComponent)))
+        c->refcon = theRefcon;
+}
+
+Component Executor::C_RegisterComponentResource(ComponentResourceHandle crh, INTEGER global)
+{
+    Handle cr = (Handle)crh;
+    Comp *p = nullptr;
+    FSSpec file;
+    INTEGER home = cr ? HomeResFile(cr) : -1;
+    if(cr && *cr && file_of(home, &file))
+    {
+        INTEGER saved = CurResFile();
+        UseResFile(home);
+        HLock(cr);
+        p = register_thng(US_TO_SYN68K(*cr), global, file);
+        HUnlock(cr);
+        UseResFile(saved);
+    }
+    return as<Component>(p ? p->id : 0);
+}
+
+LONGINT Executor::C_CountComponentInstances(Component aComponent)
+{
+    Comp *c = comp_of(gid(aComponent));
+    return c ? c->instances : 0;
+}
+
+LONGINT Executor::C_RegisterComponentResourceFile(INTEGER resRefNum, INTEGER global)
+{
+    return register_file(resRefNum, global);
+}
+
+namespace
+{
+INTEGER open_res_file(Component aComponent)
+{
+    Comp *c = comp_of(gid(aComponent));
+    if(!c || !c->from_file)
+        return -1;
+    FSSpec spec = c->file;
+    return FSpOpenResFile(&spec, fsRdPerm);
+}
+}
+
+INTEGER Executor::C_OpenComponentResFile(Component aComponent)
+{
+    return open_res_file(aComponent);
+}
+
+OSErr Executor::C_OpenAComponentResFile(Component aComponent, GUEST<INTEGER> *resRef)
+{
+    INTEGER rn = open_res_file(aComponent);
+    if(resRef)
+        *resRef = rn;
+    return rn == -1 ? (OSErr)resFNotFound : noErr;
+}
+
+OSErr Executor::C_CloseComponentResFile(INTEGER refnum)
+{
+    CloseResFile(refnum);
+    return ResError();
+}
+
+Component Executor::C_CaptureComponent(Component capturedComponent, Component capturingComponent)
+{
+    Comp *by = comp_of(gid(capturingComponent));
+    Comp *c = comp_of(gid(capturedComponent));
+    if(c && by)
+        c->captured_by = by;
+    return as<Component>(c ? c->id : 0);
+}
+
+OSErr Executor::C_UncaptureComponent(Component aComponent)
+{
+    Comp *c = comp_of(gid(aComponent));
+    if(c)
+        c->captured_by = nullptr;
+    return c ? noErr : invalidComponentID;
+}
+
+/* First in the search order. */
+OSErr Executor::C_SetDefaultComponent(Component aComponent, INTEGER)
+{
+    Comp *c = comp_of(gid(aComponent));
+    if(c)
+    {
+        auto it = std::find_if(comps.begin(), comps.end(), [c](auto &x) { return x.get() == c; });
+        std::rotate(comps.begin(), it, it + 1);
+    }
+    return c ? noErr : invalidComponentID;
+}
+
+/* No aliases here. */
+Component Executor::C_ResolveComponentAlias(Component aComponent)
+{
+    return aComponent;
+}
+
+namespace
+{
+uint32_t open_default(OSType type, OSType subtype, OSErr *err)
+{
+    *err = invalidComponentID;
+    for(auto &c : comps)
+        if(visible(*c) && c->type == type && (!subtype || c->subtype == subtype))
+            return open_component(c.get(), err);
+    return 0;
+}
+}
+
+ComponentInstance Executor::C_OpenDefaultComponent(OSType componentType, OSType componentSubType)
+{
+    OSErr err;
+    return as<ComponentInstance>(open_default(componentType, componentSubType, &err));
+}
+
+OSErr Executor::C_OpenADefaultComponent(OSType componentType, OSType componentSubType,
+                                        GUEST<ComponentInstance> *ci)
+{
+    OSErr err;
+    uint32_t in = open_default(componentType, componentSubType, &err);
+    if(ci)
+        WRITEUL(gid(ci), in);
+    return err;
+}
+
+ComponentResult Executor::C_DelegateComponentCall(ComponentParameters *originalParams, ComponentInstance ci)
+{
+    Inst *in = inst_of(gid(ci));
+    return in ? call_entry(in->comp, in, gid(originalParams)) : (ComponentResult)badComponentInstance;
+}
+
+OSErr Executor::C_GetComponentResource(Component aComponent, OSType resType, INTEGER resID,
+                                       GUEST<Handle> *theResource)
+{
+    Comp *c = comp_of(gid(aComponent));
+    OSErr err = resNotFound;
+    if(theResource)
+        *theResource = nullptr;
+    if(c && c->from_file)
+    {
+        FSSpec spec = c->file;
+        INTEGER saved = CurResFile();
+        INTEGER rn = FSpOpenResFile(&spec, fsRdPerm);
+        if(rn != -1)
+        {
+            UseResFile(rn);
+            Handle h = Get1Resource(resType, resID);
+            if(h)
+            {
+                DetachResource(h);
+                if(theResource)
+                    *theResource = h;
+                err = noErr;
+            }
+            UseResFile(saved);
+            CloseResFile(rn);
+        }
+    }
+    return err;
+}
+
+/* CallComponent (selector 0) and CallComponentFunction[WithStorage] (-1)
+   reshape the caller's stack, so they are raw handlers on the same
+   dispatcher. CallComponent: from the top, the parameter block header
+   {flags.b, paramSize.b, what.w}, paramSize bytes of parameters, the
+   instance and the result. CallComponentFunction: the parameters are
+   copied onto the stack and func is jumped to. */
+namespace
+{
+syn68k_addr_t call_component(syn68k_addr_t)
 {
     uint32_t ret = POPADDR();
-    int16_t sel = (int16_t)EM_D0;
-    auto res32 = [](uint32_t v) { WRITEUL(EM_A7, v); };
-    auto res16 = [](uint16_t v) { WRITEUW(EM_A7, v); };
-
-    switch(sel)
+    uint32_t params = EM_A7;
+    uint8_t size = READUB(params + 1);
+    uint32_t ci = rd32(params + 4 + size);
+    int32_t r;
+    if(Inst *in = inst_of(ci))
+        r = call_entry(in->comp, in, params);
+    else if(Comp *c = comp_of(ci))
     {
-        case 0: /* CallComponent */
-        {
-            uint32_t params = EM_A7;
-            uint8_t size = READUB(params + 1);
-            uint32_t ci = rd32(params + 4 + size);
-            int32_t r;
-            if(Inst *in = inst_of(ci))
-                r = call_entry(in->comp, in, params);
-            else if(Comp *c = comp_of(ci))
+        /* MacPhoenix: a component's ID where an instance is due: its open
+           instance, as the Sound control panel calls the output device the
+           Sound Manager keeps open; a native component needs none. */
+        Inst *open = nullptr;
+        for(auto &[id, i] : insts)
+            if(i.comp == c)
             {
-                /* MacPhoenix: a component's ID where an instance is due:
-                   its open instance, as the Sound control panel calls the
-                   output device the Sound Manager keeps open; a native
-                   component needs none. */
-                Inst *open = nullptr;
-                for(auto &[id, i] : insts)
-                    if(i.comp == c)
-                    {
-                        open = &i;
-                        break;
-                    }
-                if(open)
-                    r = call_entry(c, open, params);
-                else if(native_by_type.count(c->type) && native_by_type[c->type] == c)
-                    r = call_entry(c, nullptr, params);
-                else
-                    r = badComponentInstance;
-            }
-            else
-                r = badComponentInstance;
-            EM_A7 += 4 + size + 4;
-            res32(r);
-            break;
-        }
-        case -1: /* CallComponentFunction[WithStorage] */
-        {
-            uint32_t func = POPUL();
-            uint32_t params = POPUL();
-            uint8_t size = READUB(params + 1);
-            EM_A7 -= size;
-            memmove(SYN68K_TO_US(EM_A7), SYN68K_TO_US(params + 4), size);
-            PUSHADDR(ret);
-            return func;
-        }
-        case 0x01: /* RegisterComponent */
-        {
-            uint32_t icon = POPUL(), info = POPUL(), name = POPUL();
-            int16_t global = POPUW();
-            uint32_t entry = POPUL(), cd = POPUL();
-            auto c = std::make_unique<Comp>();
-            c->type = rd32(cd);
-            c->subtype = rd32(cd + 4);
-            c->manufacturer = rd32(cd + 8);
-            c->flags = rd32(cd + 12);
-            c->mask = rd32(cd + 16);
-            c->entry = entry;
-            c->name = sys_copy(guest_cast<Handle>(name));
-            c->info = sys_copy(guest_cast<Handle>(info));
-            c->icon = sys_copy(guest_cast<Handle>(icon));
-            Comp *p = add(std::move(c), global, false);
-            res32(p ? p->id : 0);
-            break;
-        }
-        case 0x02: /* UnregisterComponent */
-        {
-            Comp *c = comp_of(POPUL());
-            res16(c ? unregister(c) : invalidComponentID);
-            break;
-        }
-        case 0x03: /* CountComponents */
-        {
-            uint32_t looking = POPUL();
-            int32_t n = 0;
-            for(auto &c : comps)
-                if(visible(*c) && matches(*c, looking))
-                    n++;
-            res32(n);
-            break;
-        }
-        case 0x04: /* FindNextComponent */
-        {
-            uint32_t looking = POPUL(), after = POPUL();
-            size_t i = 0;
-            if(after)
-            {
-                while(i < comps.size() && comps[i]->id != after)
-                    i++;
-                i++;
-            }
-            uint32_t found = 0;
-            for(; i < comps.size(); i++)
-                if(visible(*comps[i]) && matches(*comps[i], looking))
-                {
-                    found = comps[i]->id;
-                    break;
-                }
-            res32(found);
-            break;
-        }
-        case 0x05: /* GetComponentInfo */
-        {
-            uint32_t icon = POPUL(), info = POPUL(), name = POPUL(), cd = POPUL();
-            Comp *c = comp_of(POPUL());
-            if(!c)
-            {
-                res16(invalidComponentID);
+                open = &i;
                 break;
             }
-            if(cd)
-            {
-                WRITEUL(cd, c->type);
-                WRITEUL(cd + 4, c->subtype);
-                WRITEUL(cd + 8, c->manufacturer);
-                WRITEUL(cd + 12, c->flags);
-                WRITEUL(cd + 16, c->mask);
-            }
-            copy_into(c->name, name);
-            copy_into(c->info, info);
-            copy_into(c->icon, icon);
-            res16(noErr);
-            break;
-        }
-        case 0x19: /* the Component Manager's version (private; Gestalt
-                      'cpnt' on 7.5.5 calls this; name and value guessed) */
-            res32(0x00030000);
-            break;
-        case 0x06: /* GetComponentListModSeed */
-            res32(list_seed);
-            break;
-        case 0x2C: /* GetComponentTypeModSeed */
-            res32(type_seeds[POPUL()]);
-            break;
-        case 0x07: /* OpenComponent */
-        {
-            Comp *c = comp_of(POPUL());
-            OSErr err;
-            res32(c ? open_component(c, &err) : 0);
-            break;
-        }
-        case 0x2D: /* OpenAComponent */
-        {
-            uint32_t out = POPUL();
-            Comp *c = comp_of(POPUL());
-            OSErr err = invalidComponentID;
-            uint32_t ci = c ? open_component(c, &err) : 0;
-            WRITEUL(out, ci);
-            res16(err);
-            break;
-        }
-        case 0x08: /* CloseComponent */
-            res16(close_component(POPUL()));
-            break;
-        case 0x0A: /* GetComponentInstanceError */
-        {
-            Inst *in = inst_of(POPUL());
-            res16(in ? in->error : (OSErr)(badComponentInstance & 0xFFFF));
-            break;
-        }
-        case 0x0B: /* SetComponentInstanceError */
-        {
-            int16_t err = POPUW();
-            if(Inst *in = inst_of(POPUL()))
-                in->error = err;
-            break;
-        }
-        case 0x0C: /* GetComponentInstanceStorage */
-        {
-            Inst *in = inst_of(POPUL());
-            res32(in ? in->storage : 0);
-            break;
-        }
-        case 0x0D: /* SetComponentInstanceStorage */
-        {
-            uint32_t h = POPUL();
-            if(Inst *in = inst_of(POPUL()))
-                in->storage = h;
-            break;
-        }
-        case 0x0E: /* GetComponentInstanceA5 */
-        {
-            Inst *in = inst_of(POPUL());
-            res32(in ? in->a5 : 0);
-            break;
-        }
-        case 0x0F: /* SetComponentInstanceA5 */
-        {
-            uint32_t a5 = POPUL();
-            if(Inst *in = inst_of(POPUL()))
-                in->a5 = a5;
-            break;
-        }
-        case 0x10: /* GetComponentRefcon */
-        {
-            Comp *c = comp_of(POPUL());
-            res32(c ? c->refcon : 0);
-            break;
-        }
-        case 0x11: /* SetComponentRefcon */
-        {
-            int32_t refcon = POPUL();
-            if(Comp *c = comp_of(POPUL()))
-                c->refcon = refcon;
-            break;
-        }
-        case 0x12: /* RegisterComponentResource */
-        {
-            int16_t global = POPUW();
-            Handle cr = guest_cast<Handle>(POPUL());
-            Comp *p = nullptr;
-            FSSpec file;
-            INTEGER home = cr ? HomeResFile(cr) : -1;
-            if(cr && *cr && file_of(home, &file))
-            {
-                INTEGER saved = CurResFile();
-                UseResFile(home);
-                HLock(cr);
-                p = register_thng(US_TO_SYN68K(*cr), global, file);
-                HUnlock(cr);
-                UseResFile(saved);
-            }
-            res32(p ? p->id : 0);
-            break;
-        }
-        case 0x13: /* CountComponentInstances */
-        {
-            Comp *c = comp_of(POPUL());
-            res32(c ? c->instances : 0);
-            break;
-        }
-        case 0x14: /* RegisterComponentResourceFile */
-        {
-            int16_t global = POPUW();
-            INTEGER refnum = POPUW();
-            res32(register_file(refnum, global));
-            break;
-        }
-        case 0x15: /* OpenComponentResFile */
-        case 0x2F: /* OpenAComponentResFile */
-        {
-            uint32_t out = sel == 0x2F ? POPUL() : 0;
-            Comp *c = comp_of(POPUL());
-            INTEGER rn = -1;
-            if(c && c->from_file)
-            {
-                FSSpec spec = c->file;
-                rn = FSpOpenResFile(&spec, fsRdPerm);
-            }
-            if(sel == 0x2F)
-            {
-                if(out)
-                    WRITEUW(out, rn);
-                res16(rn == -1 ? (OSErr)resFNotFound : noErr);
-            }
-            else
-                res16(rn);
-            break;
-        }
-        case 0x18: /* CloseComponentResFile */
-        {
-            INTEGER rn = POPUW();
-            CloseResFile(rn);
-            res16(ResError());
-            break;
-        }
-        case 0x1C: /* CaptureComponent */
-        {
-            Comp *by = comp_of(POPUL());
-            Comp *c = comp_of(POPUL());
-            if(c && by)
-                c->captured_by = by;
-            res32(c ? c->id : 0);
-            break;
-        }
-        case 0x1D: /* UncaptureComponent */
-        {
-            Comp *c = comp_of(POPUL());
-            if(c)
-                c->captured_by = nullptr;
-            res16(c ? noErr : invalidComponentID);
-            break;
-        }
-        case 0x1E: /* SetDefaultComponent: first in the search order */
-        {
-            POPUW();
-            Comp *c = comp_of(POPUL());
-            if(c)
-            {
-                auto it = std::find_if(comps.begin(), comps.end(),
-                                       [c](auto &x) { return x.get() == c; });
-                std::rotate(comps.begin(), it, it + 1);
-            }
-            res16(c ? noErr : invalidComponentID);
-            break;
-        }
-        case 0x20: /* ResolveComponentAlias: no aliases here */
-        {
-            uint32_t v = POPUL();
-            res32(v);
-            break;
-        }
-        case 0x21: /* OpenDefaultComponent */
-        case 0x2E: /* OpenADefaultComponent */
-        {
-            uint32_t out = sel == 0x2E ? POPUL() : 0;
-            uint32_t subtype = POPUL(), type = POPUL();
-            uint32_t ci = 0;
-            OSErr err = invalidComponentID;
-            for(auto &c : comps)
-                if(visible(*c) && c->type == type && (!subtype || c->subtype == subtype))
-                {
-                    ci = open_component(c.get(), &err);
-                    break;
-                }
-            if(sel == 0x2E)
-            {
-                if(out)
-                    WRITEUL(out, ci);
-                res16(err);
-            }
-            else
-                res32(ci);
-            break;
-        }
-        case 0x24: /* DelegateComponentCall */
-        {
-            uint32_t ci = POPUL(), params = POPUL();
-            Inst *in = inst_of(ci);
-            res32(in ? call_entry(in->comp, in, params) : badComponentInstance);
-            break;
-        }
-        case 0x35: /* GetComponentResource */
-        {
-            uint32_t out = POPUL();
-            int16_t id = POPUW();
-            uint32_t type = POPUL();
-            Comp *c = comp_of(POPUL());
-            OSErr err = resNotFound;
-            if(out)
-                WRITEUL(out, 0);
-            if(c && c->from_file)
-            {
-                FSSpec spec = c->file;
-                INTEGER saved = CurResFile();
-                INTEGER rn = FSpOpenResFile(&spec, fsRdPerm);
-                if(rn != -1)
-                {
-                    UseResFile(rn);
-                    Handle h = Get1Resource(type, id);
-                    if(h)
-                    {
-                        DetachResource(h);
-                        WRITEUL(out, US_TO_SYN68K(h));
-                        err = noErr;
-                    }
-                    UseResFile(saved);
-                    CloseResFile(rn);
-                }
-            }
-            res16(err);
-            break;
-        }
-        default:
-            fprintf(stderr, "[Executor] ComponentDispatch: selector %d not implemented\n", sel);
-            gui_fatal("ComponentDispatch selector 0x%x", (unsigned)(uint16_t)sel);
+        if(open)
+            r = call_entry(c, open, params);
+        else if(native_by_type.count(c->type) && native_by_type[c->type] == c)
+            r = call_entry(c, nullptr, params);
+        else
+            r = badComponentInstance;
     }
+    else
+        r = badComponentInstance;
+    EM_A7 += 4 + size + 4;
+    WRITEUL(EM_A7, r);
     return ret;
+}
+
+syn68k_addr_t call_component_function(syn68k_addr_t)
+{
+    uint32_t ret = POPADDR();
+    uint32_t func = POPUL();
+    uint32_t params = POPUL();
+    uint8_t size = READUB(params + 1);
+    EM_A7 -= size;
+    memmove(SYN68K_TO_US(EM_A7), SYN68K_TO_US(params + 4), size);
+    PUSHADDR(ret);
+    return func;
+}
+
+traps::Entrypoint call_component_ep("CallComponent");
+traps::Entrypoint call_component_function_ep("CallComponentFunction");
+
+struct RawSelectors : traps::internal::DeferredInit
+{
+    void init() override
+    {
+        ComponentDispatch.addSelector(0, &call_component_ep, call_component);
+        ComponentDispatch.addSelector(0xFFFF, &call_component_function_ep, call_component_function);
+    }
+} raw_selectors;
 }

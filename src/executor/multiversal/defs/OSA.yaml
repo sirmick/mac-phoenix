@@ -1,0 +1,856 @@
+# The Open Scripting Architecture (Inside Macintosh: Interapplication
+# Communication ch. 10): calls into a scripting component (AppleScript's,
+# or the generic one), each a component call through _ComponentDispatch
+# with its selector. Apple's components answer them; Executor exports them
+# from AppleScriptLib for CFM-68K code (COMPONENT_CALL, cfm68k_glue.cpp),
+# PowerPC code uses Apple's AppleScriptLib through CallComponentUPP.
+
+- typedef:
+    name: OSAID
+    type: uint32_t
+
+# ####
+
+- typedef:
+    name: OSAError
+    type: ComponentResult
+
+# ####
+
+- typedef:
+    name: ScriptingComponentSelector
+    type: OSType
+
+# ####
+
+- funptr:
+    name: OSAActiveUPP
+    return: OSErr
+    args:
+      - name: refCon
+        type: LONGINT
+
+# ####
+
+- funptr:
+    name: OSASendUPP
+    return: OSErr
+    args:
+      - name: theAppleEvent
+        type: const AppleEvent*
+      - name: reply
+        type: AppleEvent*
+      - name: sendMode
+        type: AESendMode
+      - name: sendPriority
+        type: AESendPriority
+      - name: timeOutInTicks
+        type: LONGINT
+      - name: idleProc
+        type: IdleUPP
+      - name: filterProc
+        type: EventFilterUPP
+      - name: refCon
+        type: LONGINT
+
+# ####
+
+- funptr:
+    name: OSACreateAppleEventUPP
+    return: OSErr
+    args:
+      - name: theAEEventClass
+        type: AEEventClass
+      - name: theAEEventID
+        type: AEEventID
+      - name: target
+        type: const AEAddressDesc*
+      - name: returnID
+        type: INTEGER
+      - name: transactionID
+        type: LONGINT
+      - name: result
+        type: AppleEvent*
+      - name: refCon
+        type: LONGINT
+
+# ####
+
+- enum:
+    values:
+      - name: kOSAComponentType
+        value: "'osa '"
+      - name: kOSAGenericScriptingComponentSubtype
+        value: "'scpt'"
+      - name: kOSAFileType
+        value: "'osas'"
+      - name: kOSASuite
+        value: "'ascr'"
+      - name: kOSANullScript
+        value: 0
+      - name: kOSANullMode
+        value: 0
+      - name: kOSAModeNull
+        value: 0
+      - name: kOSAModePreventGetSource
+        value: 1
+      - name: kOSAModeCompileIntoContext
+        value: 2
+      - name: kOSAModeAugmentContext
+        value: 4
+      - name: kOSAModeDisplayForHumans
+        value: 8
+      - name: kOSAModeNeverInteract
+        value: 16
+      - name: kOSAModeCanInteract
+        value: 32
+      - name: kOSAModeAlwaysInteract
+        value: 48
+      - name: kOSAModeCantSwitchLayer
+        value: 64
+      - name: kOSAModeDontReconnect
+        value: 128
+      - name: kOSAModeDoRecord
+        value: 4096
+      - name: kOSAModeDontStoreParent
+        value: 65536
+
+# ####
+
+- enum:
+    values:
+      - name: errOSASystemError
+        value: -1750
+      - name: errOSAInvalidID
+        value: -1751
+      - name: errOSABadStorageType
+        value: -1752
+      - name: errOSAScriptError
+        value: -1753
+      - name: errOSABadSelector
+        value: -1754
+      - name: errOSASourceNotAvailable
+        value: -1756
+      - name: errOSANoSuchDialect
+        value: -1757
+      - name: errOSADataFormatObsolete
+        value: -1758
+      - name: errOSADataFormatTooNew
+        value: -1759
+      - name: errOSAComponentMismatch
+        value: -1761
+      - name: errOSACantOpenComponent
+        value: -1762
+
+# ####
+
+- dispatcher:
+    name: OSAComponent
+    trap: 0xA82A
+    selector-location: Component
+
+# ####
+
+- function:
+    name: OSALoad
+    return: OSAError
+    args:
+      - name: scriptingComponent
+        type: "ComponentInstance"
+      - name: scriptData
+        type: "const AEDesc*"
+      - name: modeFlags
+        type: "LONGINT"
+      - name: resultingScriptID
+        type: "OSAID*"
+    dispatcher: OSAComponent
+    selector: 0x0001
+    library: AppleScriptLib
+
+# ####
+
+- function:
+    name: OSAStore
+    return: OSAError
+    args:
+      - name: scriptingComponent
+        type: "ComponentInstance"
+      - name: scriptID
+        type: "OSAID"
+      - name: desiredType
+        type: "DescType"
+      - name: modeFlags
+        type: "LONGINT"
+      - name: resultingScriptData
+        type: "AEDesc*"
+    dispatcher: OSAComponent
+    selector: 0x0002
+    library: AppleScriptLib
+
+# ####
+
+- function:
+    name: OSAExecute
+    return: OSAError
+    args:
+      - name: scriptingComponent
+        type: "ComponentInstance"
+      - name: compiledScriptID
+        type: "OSAID"
+      - name: contextID
+        type: "OSAID"
+      - name: modeFlags
+        type: "LONGINT"
+      - name: resultingScriptValueID
+        type: "OSAID*"
+    dispatcher: OSAComponent
+    selector: 0x0003
+    library: AppleScriptLib
+
+# ####
+
+- function:
+    name: OSADisplay
+    return: OSAError
+    args:
+      - name: scriptingComponent
+        type: "ComponentInstance"
+      - name: scriptValueID
+        type: "OSAID"
+      - name: desiredType
+        type: "DescType"
+      - name: modeFlags
+        type: "LONGINT"
+      - name: resultingText
+        type: "AEDesc*"
+    dispatcher: OSAComponent
+    selector: 0x0004
+    library: AppleScriptLib
+
+# ####
+
+- function:
+    name: OSAScriptError
+    return: OSAError
+    args:
+      - name: scriptingComponent
+        type: "ComponentInstance"
+      - name: selector
+        type: "OSType"
+      - name: desiredType
+        type: "DescType"
+      - name: resultingErrorDescription
+        type: "AEDesc*"
+    dispatcher: OSAComponent
+    selector: 0x0005
+    library: AppleScriptLib
+
+# ####
+
+- function:
+    name: OSADispose
+    return: OSAError
+    args:
+      - name: scriptingComponent
+        type: "ComponentInstance"
+      - name: scriptID
+        type: "OSAID"
+    dispatcher: OSAComponent
+    selector: 0x0006
+    library: AppleScriptLib
+
+# ####
+
+- function:
+    name: OSASetScriptInfo
+    return: OSAError
+    args:
+      - name: scriptingComponent
+        type: "ComponentInstance"
+      - name: scriptID
+        type: "OSAID"
+      - name: selector
+        type: "OSType"
+      - name: value
+        type: "LONGINT"
+    dispatcher: OSAComponent
+    selector: 0x0007
+    library: AppleScriptLib
+
+# ####
+
+- function:
+    name: OSAGetScriptInfo
+    return: OSAError
+    args:
+      - name: scriptingComponent
+        type: "ComponentInstance"
+      - name: scriptID
+        type: "OSAID"
+      - name: selector
+        type: "OSType"
+      - name: result
+        type: "LONGINT*"
+    dispatcher: OSAComponent
+    selector: 0x0008
+    library: AppleScriptLib
+
+# ####
+
+- function:
+    name: OSASetActiveProc
+    return: OSAError
+    args:
+      - name: scriptingComponent
+        type: "ComponentInstance"
+      - name: activeProc
+        type: "OSAActiveUPP"
+      - name: refCon
+        type: "LONGINT"
+    dispatcher: OSAComponent
+    selector: 0x0009
+    library: AppleScriptLib
+
+# ####
+
+- function:
+    name: OSAGetActiveProc
+    return: OSAError
+    args:
+      - name: scriptingComponent
+        type: "ComponentInstance"
+      - name: activeProc
+        type: "OSAActiveUPP*"
+      - name: refCon
+        type: "LONGINT*"
+    dispatcher: OSAComponent
+    selector: 0x000A
+    library: AppleScriptLib
+
+# ####
+
+- function:
+    name: OSAScriptingComponentName
+    return: OSAError
+    args:
+      - name: scriptingComponent
+        type: "ComponentInstance"
+      - name: resultingScriptingComponentName
+        type: "AEDesc*"
+    dispatcher: OSAComponent
+    selector: 0x0102
+    library: AppleScriptLib
+
+# ####
+
+- function:
+    name: OSACompile
+    return: OSAError
+    args:
+      - name: scriptingComponent
+        type: "ComponentInstance"
+      - name: sourceData
+        type: "const AEDesc*"
+      - name: modeFlags
+        type: "LONGINT"
+      - name: previousAndResultingScriptID
+        type: "OSAID*"
+    dispatcher: OSAComponent
+    selector: 0x0103
+    library: AppleScriptLib
+
+# ####
+
+- function:
+    name: OSACopyID
+    return: OSAError
+    args:
+      - name: scriptingComponent
+        type: "ComponentInstance"
+      - name: fromID
+        type: "OSAID"
+      - name: toID
+        type: "OSAID*"
+    dispatcher: OSAComponent
+    selector: 0x0104
+    library: AppleScriptLib
+
+# ####
+
+- function:
+    name: OSAGetSource
+    return: OSAError
+    args:
+      - name: scriptingComponent
+        type: "ComponentInstance"
+      - name: scriptID
+        type: "OSAID"
+      - name: desiredType
+        type: "DescType"
+      - name: resultingSourceData
+        type: "AEDesc*"
+    dispatcher: OSAComponent
+    selector: 0x0201
+    library: AppleScriptLib
+
+# ####
+
+- function:
+    name: OSACoerceFromDesc
+    return: OSAError
+    args:
+      - name: scriptingComponent
+        type: "ComponentInstance"
+      - name: scriptData
+        type: "const AEDesc*"
+      - name: modeFlags
+        type: "LONGINT"
+      - name: resultingScriptID
+        type: "OSAID*"
+    dispatcher: OSAComponent
+    selector: 0x0301
+    library: AppleScriptLib
+
+# ####
+
+- function:
+    name: OSACoerceToDesc
+    return: OSAError
+    args:
+      - name: scriptingComponent
+        type: "ComponentInstance"
+      - name: scriptID
+        type: "OSAID"
+      - name: desiredType
+        type: "DescType"
+      - name: modeFlags
+        type: "LONGINT"
+      - name: result
+        type: "AEDesc*"
+    dispatcher: OSAComponent
+    selector: 0x0302
+    library: AppleScriptLib
+
+# ####
+
+- function:
+    name: OSASetSendProc
+    return: OSAError
+    args:
+      - name: scriptingComponent
+        type: "ComponentInstance"
+      - name: sendProc
+        type: "OSASendUPP"
+      - name: refCon
+        type: "LONGINT"
+    dispatcher: OSAComponent
+    selector: 0x0401
+    library: AppleScriptLib
+
+# ####
+
+- function:
+    name: OSAGetSendProc
+    return: OSAError
+    args:
+      - name: scriptingComponent
+        type: "ComponentInstance"
+      - name: sendProc
+        type: "OSASendUPP*"
+      - name: refCon
+        type: "LONGINT*"
+    dispatcher: OSAComponent
+    selector: 0x0402
+    library: AppleScriptLib
+
+# ####
+
+- function:
+    name: OSASetCreateProc
+    return: OSAError
+    args:
+      - name: scriptingComponent
+        type: "ComponentInstance"
+      - name: createProc
+        type: "OSACreateAppleEventUPP"
+      - name: refCon
+        type: "LONGINT"
+    dispatcher: OSAComponent
+    selector: 0x0403
+    library: AppleScriptLib
+
+# ####
+
+- function:
+    name: OSAGetCreateProc
+    return: OSAError
+    args:
+      - name: scriptingComponent
+        type: "ComponentInstance"
+      - name: createProc
+        type: "OSACreateAppleEventUPP*"
+      - name: refCon
+        type: "LONGINT*"
+    dispatcher: OSAComponent
+    selector: 0x0404
+    library: AppleScriptLib
+
+# ####
+
+- function:
+    name: OSASetDefaultTarget
+    return: OSAError
+    args:
+      - name: scriptingComponent
+        type: "ComponentInstance"
+      - name: target
+        type: "const AEAddressDesc*"
+    dispatcher: OSAComponent
+    selector: 0x0405
+    library: AppleScriptLib
+
+# ####
+
+- function:
+    name: OSAStartRecording
+    return: OSAError
+    args:
+      - name: scriptingComponent
+        type: "ComponentInstance"
+      - name: compiledScriptToModifyID
+        type: "OSAID*"
+    dispatcher: OSAComponent
+    selector: 0x0501
+    library: AppleScriptLib
+
+# ####
+
+- function:
+    name: OSAStopRecording
+    return: OSAError
+    args:
+      - name: scriptingComponent
+        type: "ComponentInstance"
+      - name: compiledScriptID
+        type: "OSAID"
+    dispatcher: OSAComponent
+    selector: 0x0502
+    library: AppleScriptLib
+
+# ####
+
+- function:
+    name: OSALoadExecute
+    return: OSAError
+    args:
+      - name: scriptingComponent
+        type: "ComponentInstance"
+      - name: scriptData
+        type: "const AEDesc*"
+      - name: contextID
+        type: "OSAID"
+      - name: modeFlags
+        type: "LONGINT"
+      - name: resultingScriptValueID
+        type: "OSAID*"
+    dispatcher: OSAComponent
+    selector: 0x0601
+    library: AppleScriptLib
+
+# ####
+
+- function:
+    name: OSACompileExecute
+    return: OSAError
+    args:
+      - name: scriptingComponent
+        type: "ComponentInstance"
+      - name: sourceData
+        type: "const AEDesc*"
+      - name: contextID
+        type: "OSAID"
+      - name: modeFlags
+        type: "LONGINT"
+      - name: resultingScriptValueID
+        type: "OSAID*"
+    dispatcher: OSAComponent
+    selector: 0x0602
+    library: AppleScriptLib
+
+# ####
+
+- function:
+    name: OSADoScript
+    return: OSAError
+    args:
+      - name: scriptingComponent
+        type: "ComponentInstance"
+      - name: sourceData
+        type: "const AEDesc*"
+      - name: contextID
+        type: "OSAID"
+      - name: desiredType
+        type: "DescType"
+      - name: modeFlags
+        type: "LONGINT"
+      - name: resultingText
+        type: "AEDesc*"
+    dispatcher: OSAComponent
+    selector: 0x0603
+    library: AppleScriptLib
+
+# ####
+
+- function:
+    name: OSASetCurrentDialect
+    return: OSAError
+    args:
+      - name: scriptingComponent
+        type: "ComponentInstance"
+      - name: dialectCode
+        type: "INTEGER"
+    dispatcher: OSAComponent
+    selector: 0x0701
+    library: AppleScriptLib
+
+# ####
+
+- function:
+    name: OSAGetCurrentDialect
+    return: OSAError
+    args:
+      - name: scriptingComponent
+        type: "ComponentInstance"
+      - name: resultingDialectCode
+        type: "INTEGER*"
+    dispatcher: OSAComponent
+    selector: 0x0702
+    library: AppleScriptLib
+
+# ####
+
+- function:
+    name: OSAAvailableDialects
+    return: OSAError
+    args:
+      - name: scriptingComponent
+        type: "ComponentInstance"
+      - name: resultingDialectInfoList
+        type: "AEDesc*"
+    dispatcher: OSAComponent
+    selector: 0x0703
+    library: AppleScriptLib
+
+# ####
+
+- function:
+    name: OSAGetDialectInfo
+    return: OSAError
+    args:
+      - name: scriptingComponent
+        type: "ComponentInstance"
+      - name: dialectCode
+        type: "INTEGER"
+      - name: selector
+        type: "OSType"
+      - name: resultingDialectInfo
+        type: "AEDesc*"
+    dispatcher: OSAComponent
+    selector: 0x0704
+    library: AppleScriptLib
+
+# ####
+
+- function:
+    name: OSAAvailableDialectCodeList
+    return: OSAError
+    args:
+      - name: scriptingComponent
+        type: "ComponentInstance"
+      - name: resultingDialectCodeList
+        type: "AEDesc*"
+    dispatcher: OSAComponent
+    selector: 0x0705
+    library: AppleScriptLib
+
+# ####
+
+- function:
+    name: OSASetResumeDispatchProc
+    return: OSAError
+    args:
+      - name: scriptingComponent
+        type: "ComponentInstance"
+      - name: resumeDispatchProc
+        type: "AEEventHandlerUPP"
+      - name: refCon
+        type: "LONGINT"
+    dispatcher: OSAComponent
+    selector: 0x0801
+    library: AppleScriptLib
+
+# ####
+
+- function:
+    name: OSAGetResumeDispatchProc
+    return: OSAError
+    args:
+      - name: scriptingComponent
+        type: "ComponentInstance"
+      - name: resumeDispatchProc
+        type: "AEEventHandlerUPP*"
+      - name: refCon
+        type: "LONGINT*"
+    dispatcher: OSAComponent
+    selector: 0x0802
+    library: AppleScriptLib
+
+# ####
+
+- function:
+    name: OSAExecuteEvent
+    return: OSAError
+    args:
+      - name: scriptingComponent
+        type: "ComponentInstance"
+      - name: theAppleEvent
+        type: "const AppleEvent*"
+      - name: contextID
+        type: "OSAID"
+      - name: modeFlags
+        type: "LONGINT"
+      - name: resultingScriptValueID
+        type: "OSAID*"
+    dispatcher: OSAComponent
+    selector: 0x0803
+    library: AppleScriptLib
+
+# ####
+
+- function:
+    name: OSADoEvent
+    return: OSAError
+    args:
+      - name: scriptingComponent
+        type: "ComponentInstance"
+      - name: theAppleEvent
+        type: "const AppleEvent*"
+      - name: contextID
+        type: "OSAID"
+      - name: modeFlags
+        type: "LONGINT"
+      - name: reply
+        type: "AppleEvent*"
+    dispatcher: OSAComponent
+    selector: 0x0804
+    library: AppleScriptLib
+
+# ####
+
+- function:
+    name: OSAMakeContext
+    return: OSAError
+    args:
+      - name: scriptingComponent
+        type: "ComponentInstance"
+      - name: contextName
+        type: "const AEDesc*"
+      - name: parentContext
+        type: "OSAID"
+      - name: resultingContextID
+        type: "OSAID*"
+    dispatcher: OSAComponent
+    selector: 0x0805
+    library: AppleScriptLib
+
+# ####
+
+- function:
+    name: OSAGetDefaultScriptingComponent
+    return: OSAError
+    args:
+      - name: scriptingComponent
+        type: "ComponentInstance"
+      - name: scriptingSubType
+        type: "ScriptingComponentSelector*"
+    dispatcher: OSAComponent
+    selector: 0x1001
+    library: AppleScriptLib
+
+# ####
+
+- function:
+    name: OSASetDefaultScriptingComponent
+    return: OSAError
+    args:
+      - name: scriptingComponent
+        type: "ComponentInstance"
+      - name: scriptingSubType
+        type: "ScriptingComponentSelector"
+    dispatcher: OSAComponent
+    selector: 0x1002
+    library: AppleScriptLib
+
+# ####
+
+- function:
+    name: OSAGetScriptingComponent
+    return: OSAError
+    args:
+      - name: scriptingComponent
+        type: "ComponentInstance"
+      - name: scriptingSubType
+        type: "ScriptingComponentSelector"
+      - name: scriptingInstance
+        type: "ComponentInstance*"
+    dispatcher: OSAComponent
+    selector: 0x1003
+    library: AppleScriptLib
+
+# ####
+
+- function:
+    name: OSAGetScriptingComponentFromStored
+    return: OSAError
+    args:
+      - name: scriptingComponent
+        type: "ComponentInstance"
+      - name: scriptData
+        type: "const AEDesc*"
+      - name: scriptingSubType
+        type: "ScriptingComponentSelector*"
+    dispatcher: OSAComponent
+    selector: 0x1004
+    library: AppleScriptLib
+
+# ####
+
+- function:
+    name: OSAGenericToRealID
+    return: OSAError
+    args:
+      - name: scriptingComponent
+        type: "ComponentInstance"
+      - name: theScriptID
+        type: "OSAID*"
+      - name: theExactComponent
+        type: "ComponentInstance*"
+    dispatcher: OSAComponent
+    selector: 0x1005
+    library: AppleScriptLib
+
+# ####
+
+- function:
+    name: OSARealToGenericID
+    return: OSAError
+    args:
+      - name: scriptingComponent
+        type: "ComponentInstance"
+      - name: theScriptID
+        type: "OSAID*"
+      - name: theExactComponent
+        type: "ComponentInstance"
+    dispatcher: OSAComponent
+    selector: 0x1006
+    library: AppleScriptLib

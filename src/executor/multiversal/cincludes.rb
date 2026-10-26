@@ -197,6 +197,11 @@ class CIncludesGenerator < Generator
                 when "StackL"
                     m68kinlines << 0x2F3C << (sel >> 16) << (sel & 0xFFFF)
                 when "TrapBits"
+                when "Component"
+                    # move.l #paramSize<<16|selector,-(sp); moveq #0,d0;
+                    # _ComponentDispatch: the parameters after the instance.
+                    size = args[1..-1].map {|arg| [size_of_type(arg["type"]) || 4, 2].max}.sum
+                    m68kinlines << 0x2F3C << size << (sel & 0xFFFF) << 0x7000
                 else
                     complex = true
                 end
@@ -298,7 +303,7 @@ class CIncludesGenerator < Generator
     end
 
     def declare_dispatcher(value)
-        declare_trapnum(value["name"], value["trap"]) unless value["selector-location"] == "TrapBits"
+        declare_trapnum(value["name"], value["trap"]) unless ["TrapBits", "Component"].include? value["selector-location"]
     end
 
 
@@ -500,7 +505,7 @@ class CIncludesGenerator < Generator
             "Navigation", "Drag", "DriverServices", "Kernel", "Interrupts",
             "NameRegistry", "PCI",
             # Universal Interfaces names for what the definitions cover too
-            "Aliases", "Balloons", "CodeFragments", "Controls", "Desk",
+            "Aliases", "Balloons", "CodeFragments", "Components", "Controls", "Desk", "OSA",
             "DeskBus", "DiskInit", "Disks", "Displays", "Editions", "Finder",
             "Folders", "Lists", "MacTCP", "Movies", "Notification", "Packages",
             "Printing", "Retrace", "Scrap", "Script", "ShutDown", "Speech",

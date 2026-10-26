@@ -136,9 +136,8 @@ definitions cover (`cincludes.rb`; each just includes `Multiverse.h`).
 
 MacBrowser and parts of MacPhoenixSuite build against them alone (the
 test compiles them); the rest of MacPhoenix's guest programs don't yet.
-What they still miss: Open Transport, AppleScript/OSA and the Component
-Manager's calls (Executor implements them in C++ with no definitions:
-LIBRARIES.md is the plan), the HFS Plus constants (`kFSCatInfo*`),
+What they still miss: Open Transport's types (its functions are in the
+definitions, for Executor only: LIBRARIES.md), AppleScript.h, the HFS Plus constants (`kFSCatInfo*`),
 `fsRtDirID`, `SInt64`, MacTCP's parameter blocks and UPPs, `NMUPP`,
 `Video.h`'s records, `fp.h`, `TextCommon.h`, some high-level File
 Manager glue (`HSetFInfo`, `DirCreate`, `CatMove`), and `ONEWORDINLINE`. Some Executor signatures differ from Apple's

@@ -6,6 +6,7 @@
  * description of the routine; the trap-based ones run their trap through
  * the trap table, so an extension's patch sees the call. */
 
+#include <vector>
 #include <base/common.h>
 #include <base/builtinlibs.h>
 #include <base/functions.impl.h>
@@ -395,7 +396,7 @@ struct ComponentRoutine
 {
     const char *name;
     uint16_t what;
-    std::initializer_list<int> sizes; /* after the instance: 2 or 4 bytes */
+    std::vector<int> sizes; /* after the instance: 2 or 4 bytes */
 };
 }
 
@@ -438,53 +439,6 @@ syn68k_addr_t call_component_routine(const ComponentRoutine& r)
     return ret;
 }
 
-/* AppleScriptLib: the Open Scripting Architecture's routines (OSA.h,
-   OSAGeneric.h: each a component call, its selector and parameter sizes
-   as the 68k interfaces' inline code gives them). */
-const ComponentRoutine osa_routines[] = {
-    { "OSALoad", 0x0001, { 4, 4, 4 } },
-    { "OSAStore", 0x0002, { 4, 4, 4, 4 } },
-    { "OSAExecute", 0x0003, { 4, 4, 4, 4 } },
-    { "OSADisplay", 0x0004, { 4, 4, 4, 4 } },
-    { "OSAScriptError", 0x0005, { 4, 4, 4 } },
-    { "OSADispose", 0x0006, { 4 } },
-    { "OSASetScriptInfo", 0x0007, { 4, 4, 4 } },
-    { "OSAGetScriptInfo", 0x0008, { 4, 4, 4 } },
-    { "OSASetActiveProc", 0x0009, { 4, 4 } },
-    { "OSAGetActiveProc", 0x000A, { 4, 4 } },
-    { "OSAScriptingComponentName", 0x0102, { 4 } },
-    { "OSACompile", 0x0103, { 4, 4, 4 } },
-    { "OSACopyID", 0x0104, { 4, 4 } },
-    { "OSAGetSource", 0x0201, { 4, 4, 4 } },
-    { "OSACoerceFromDesc", 0x0301, { 4, 4, 4 } },
-    { "OSACoerceToDesc", 0x0302, { 4, 4, 4, 4 } },
-    { "OSASetSendProc", 0x0401, { 4, 4 } },
-    { "OSAGetSendProc", 0x0402, { 4, 4 } },
-    { "OSASetCreateProc", 0x0403, { 4, 4 } },
-    { "OSAGetCreateProc", 0x0404, { 4, 4 } },
-    { "OSASetDefaultTarget", 0x0405, { 4 } },
-    { "OSAStartRecording", 0x0501, { 4 } },
-    { "OSAStopRecording", 0x0502, { 4 } },
-    { "OSALoadExecute", 0x0601, { 4, 4, 4, 4 } },
-    { "OSACompileExecute", 0x0602, { 4, 4, 4, 4 } },
-    { "OSADoScript", 0x0603, { 4, 4, 4, 4, 4 } },
-    { "OSASetCurrentDialect", 0x0701, { 2 } },
-    { "OSAGetCurrentDialect", 0x0702, { 4 } },
-    { "OSAAvailableDialects", 0x0703, { 4 } },
-    { "OSAGetDialectInfo", 0x0704, { 2, 4, 4 } },
-    { "OSAAvailableDialectCodeList", 0x0705, { 4 } },
-    { "OSASetResumeDispatchProc", 0x0801, { 4, 4 } },
-    { "OSAGetResumeDispatchProc", 0x0802, { 4, 4 } },
-    { "OSAExecuteEvent", 0x0803, { 4, 4, 4, 4 } },
-    { "OSADoEvent", 0x0804, { 4, 4, 4, 4 } },
-    { "OSAMakeContext", 0x0805, { 4, 4, 4 } },
-    { "OSAGetDefaultScriptingComponent", 0x1001, { 4 } },
-    { "OSASetDefaultScriptingComponent", 0x1002, { 4 } },
-    { "OSAGetScriptingComponent", 0x1003, { 4, 4 } },
-    { "OSAGetScriptingComponentFromStored", 0x1004, { 4, 4 } },
-    { "OSAGenericToRealID", 0x1005, { 4, 4 } },
-    { "OSARealToGenericID", 0x1006, { 4, 4 } },
-};
 
 void add_call_component_upp()
 {
@@ -506,23 +460,6 @@ void add_call_component_upp()
     builtinlibs::addPPCData("InterfaceLib", "CallComponentUPP", cell);
 }
 
-ComponentInstance glue_OpenDefaultComponent(OSType type, OSType subType)
-{
-    return ptr_from_longint<ComponentInstance>(
-        pascal_trap(0xA82A, 0x21, 4, { { 4, (uint32_t)type }, { 4, (uint32_t)subType } }));
-}
-
-ComponentInstance glue_OpenComponent(Component c)
-{
-    return ptr_from_longint<ComponentInstance>(
-        pascal_trap(0xA82A, 0x07, 4, { { 4, US_TO_SYN68K(c) } }));
-}
-
-OSErr glue_CloseComponent(ComponentInstance ci)
-{
-    return pascal_trap(0xA82A, 0x08, 2, { { 4, US_TO_SYN68K(ci) } });
-}
-
 }
 
 /* Called before the first builtin library connection is made (the file is
@@ -533,8 +470,16 @@ void Executor::builtinlibs::addGlueEntrypoints()
         /* the older names (Strings.h's OLDROUTINENAMES): MPW's CFM-68K
            runtime calls P2CStr for the application's name */
         add_call_component_upp();
-        for(const ComponentRoutine& r : osa_routines)
-            builtinlibs::addCFM68KEntrypoint("AppleScriptLib", r.name,
-                [&r](syn68k_addr_t) { return call_component_routine(r); });
     }
+}
+
+/* A component call a library exports (the definitions' COMPONENT_CALL):
+   AppleScriptLib's OSA routines for CFM-68K code. */
+void Executor::traps::ComponentCallExport::init()
+{
+    auto *r = new ComponentRoutine{ name, what, {} };
+    for(const char *p = sizes; *p; p++)
+        r->sizes.push_back(*p - '0');
+    builtinlibs::addCFM68KEntrypoint(library, name,
+        [r](syn68k_addr_t) { return call_component_routine(*r); });
 }
