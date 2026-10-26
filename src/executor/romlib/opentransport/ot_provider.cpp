@@ -45,7 +45,7 @@
 using namespace Executor;
 using namespace Executor::ot;
 
-namespace
+namespace Executor::ot
 {
 
 /* ---- providers -------------------------------------------------------- */
@@ -54,12 +54,15 @@ constexpr uint32_t REF_BASE = 0x4F540000; /* 'OT' */
 uint32_t next_ref = 2;
 std::map<uint32_t, Provider> providers;
 
+namespace {
 struct Event
 {
     uint32_t ref, code;
     int32_t result;
     uint32_t cookie;
 };
+}
+
 std::deque<Event> events;
 
 std::vector<std::function<void()>> pump_hooks;
@@ -171,6 +174,15 @@ void call_notifier(Provider &p, uint32_t code, int32_t result, uint32_t cookie)
     uint32_t proc = p.notifier, ctx = p.context, a5 = p.a5, ref = p.ref;
     OT_LOG("notify %08x code $%08x result %d cookie $%08x\n", ref, code, result, cookie);
     p.in_notifier = true;
+    if(p.ppc)
+    {
+        /* void (*OTNotifyProcPtr)(void *context, OTEventCode, OTResult,
+           void *cookie), a PowerPC client's TV */
+        callPPC(proc, { ctx, code, (uint32_t)result, cookie });
+        if(Provider *q = find_provider(ref))
+            q->in_notifier = false;
+        return;
+    }
     uint32_t saved_a7 = EM_A7, saved_a5 = EM_A5;
     if(a5)
         EM_A5 = a5;
@@ -315,6 +327,7 @@ void pump()
 /* ---- addresses -------------------------------------------------------- */
 
 /* A TNetbuf: maxlen, len, buf. */
+namespace {
 struct Netbuf
 {
     uint32_t at;
@@ -323,6 +336,8 @@ struct Netbuf
     uint32_t buf() const { return READUL(at + 8); }
     void set_len(uint32_t n) const { WRITEUL(at + 4, n); }
 };
+}
+
 
 /* An InetAddress (16 bytes: type, port, host, 8 unused) from a netbuf. */
 bool read_inet(Netbuf nb, struct sockaddr_in &sin)
@@ -468,6 +483,7 @@ uint32_t async_open_endpoint_priv(const Call &c)
         return err;
     Provider &p = *find_provider(ref);
     p.notifier = c.l(3);
+    p.ppc = c.ppc();
     p.context = c.l(4);
     p.a5 = current_a5();
     p.async = true;
@@ -569,6 +585,7 @@ uint32_t install_notifier(const Call &c)
     if(!p)
         return kOTBadReferenceErr;
     p->notifier = c.l(1);
+    p->ppc = c.ppc();
     p->context = c.l(2);
     p->a5 = current_a5();
     OT_LOG("%08x notifier $%08x context $%08x\n", p->ref, p->notifier, p->context);
@@ -660,7 +677,7 @@ uint32_t get_prot_address(const Call &c)
 /* ---- bind and unbind -------------------------------------------------- */
 
 /* OSStatus OTBind(ref, TBind *req, TBind *ret) */
-uint32_t bind_(const Call &c)
+uint32_t ot_bind(const Call &c)
 {
     Provider *p = lookup(c);
     if(!p)
@@ -842,6 +859,7 @@ int32_t connect_done(Provider &p)
 /* Connects to a DNSAddress on an asynchronous or non-blocking endpoint:
    the name looked up on a host thread, then the connect made from the
    pump, its outcome T_CONNECT or T_DISCONNECT as for an address. */
+namespace {
 struct Looked
 {
     uint32_t ref;
@@ -849,6 +867,8 @@ struct Looked
     uint32_t ip;
     uint16_t port;
 };
+}
+
 std::mutex looked_mutex;
 std::vector<Looked> looked;
 bool lookup_hooked = false;
@@ -907,7 +927,7 @@ void start_connect_lookup(uint32_t ref, const std::string &name, uint16_t port)
 }
 
 /* OSStatus OTConnect(ref, TCall *snd, TCall *rcv) */
-uint32_t connect_(const Call &c)
+uint32_t ot_connect(const Call &c)
 {
     Provider *p = lookup(c);
     if(!p)
@@ -1048,7 +1068,7 @@ uint32_t rcv_connect(const Call &c)
 
 /* OSStatus OTListen(ref, TCall *call): a connection waiting to be
    accepted, its address and sequence number. */
-uint32_t listen_(const Call &c)
+uint32_t ot_listen(const Call &c)
 {
     Provider *p = lookup(c);
     if(!p)
@@ -1100,7 +1120,7 @@ uint32_t listen_(const Call &c)
 }
 
 /* OSStatus OTAccept(listener, acceptor, TCall *call) */
-uint32_t accept_(const Call &c)
+uint32_t ot_accept(const Call &c)
 {
     Provider *lis = lookup(c, 0);
     Provider *acc = lookup(c, 1);
@@ -1482,7 +1502,7 @@ uint32_t rcv_uderr(const Call &c)
 
 /* OTResult OTSync(ref): the endpoint's state, after a look at its socket
    (OT's brings its own idea of the state up to date). */
-uint32_t sync_(const Call &c)
+uint32_t ot_sync(const Call &c)
 {
     Provider *p = lookup(c);
     if(!p)
@@ -1538,7 +1558,7 @@ uint32_t get_provider_port_ref(const Call &c)
 /* SInt32 OTIoctl(ref, UInt32 cmd, void *data): the STREAMS module stack
    isn't there to talk to; signing up for miscellaneous events is accepted
    (there are none). */
-uint32_t ioctl_(const Call &c)
+uint32_t ot_ioctl(const Call &c)
 {
     if(!lookup(c))
         return kOTBadReferenceErr;
@@ -1551,7 +1571,7 @@ uint32_t ioctl_(const Call &c)
 
 /* ---- options (ot_options.cpp) -------------------------------------------- */
 
-uint32_t option_management_(const Call &c)
+uint32_t ot_option_management(const Call &c)
 {
     Provider *p = lookup(c);
     if(!p)
@@ -1566,6 +1586,7 @@ uint32_t option_management_(const Call &c)
    void *OTAllocPriv(ref, OTStructType, UInt32 fields, OSStatus *err,
    client): the structure with buffers for the fields asked for (T_ADDR 1,
    T_OPT 2, T_UDATA 4, T_ALL). */
+namespace {
 enum : uint32_t
 {
     T_BIND_S = 1,
@@ -1576,6 +1597,8 @@ enum : uint32_t
     T_UDERROR_S = 6,
     T_INFO_S = 7,
 };
+}
+
 
 uint32_t alloc_priv(const Call &c)
 {
@@ -1624,7 +1647,7 @@ uint32_t alloc_priv(const Call &c)
 }
 
 /* OTResult OTFree(void *, OTStructType) */
-uint32_t free_(const Call &c)
+uint32_t ot_free(const Call &c)
 {
     uint32_t a = c.l(0), type = c.l(1);
     if(!a)
@@ -1662,58 +1685,7 @@ uint32_t delay(const Call &c)
     return 0;
 }
 
-const char clnt[] = "OTClnt$LclClnt";
-
-const Def table[] = {
-    { clnt, "OTOpenEndpointPriv", Conv::C, "LLLLL", 'L', open_endpoint_priv },
-    { clnt, "OTAsyncOpenEndpointPriv", Conv::C, "LLLLLL", 'L', async_open_endpoint_priv },
-    { clnt, "OTCloseProviderPriv", Conv::C, "LL", 'L', close_provider_priv },
-    { clnt, "OTSETASYNCHRONOUS", Conv::Pascal, "L", 'L', set_async },
-    { clnt, "OTSETSYNCHRONOUS", Conv::Pascal, "L", 'L', set_sync },
-    { clnt, "OTISSYNCHRONOUS", Conv::Pascal, "L", 'B', is_sync },
-    { clnt, "OTSETBLOCKING", Conv::Pascal, "L", 'L', set_blocking },
-    { clnt, "OTSETNONBLOCKING", Conv::Pascal, "L", 'L', set_nonblocking },
-    { clnt, "OTISBLOCKING", Conv::Pascal, "L", 'B', is_blocking },
-    { clnt, "OTACKSENDS", Conv::Pascal, "L", 'L', ack_sends },
-    { clnt, "OTDONTACKSENDS", Conv::Pascal, "L", 'L', dont_ack_sends },
-    { clnt, "OTISACKINGSENDS", Conv::Pascal, "L", 'B', is_acking },
-    { clnt, "OTINSTALLNOTIFIER", Conv::Pascal, "LLL", 'L', install_notifier },
-    { clnt, "OTREMOVENOTIFIER", Conv::Pascal, "L", 'V', remove_notifier },
-    { clnt, "OTGETENDPOINTSTATE", Conv::Pascal, "L", 'L', get_endpoint_state },
-    { clnt, "OTGETENDPOINTINFO", Conv::Pascal, "LL", 'L', get_endpoint_info },
-    { clnt, "OTLOOK", Conv::Pascal, "L", 'L', look },
-    { clnt, "OTCOUNTDATABYTES", Conv::Pascal, "LL", 'L', count_data_bytes },
-    { clnt, "OTGETPROTADDRESS", Conv::Pascal, "LLL", 'L', get_prot_address },
-    { clnt, "OTBIND", Conv::Pascal, "LLL", 'L', bind_ },
-    { clnt, "OTUNBIND", Conv::Pascal, "L", 'L', unbind },
-    { clnt, "OTCONNECT", Conv::Pascal, "LLL", 'L', connect_ },
-    { clnt, "OTRCVCONNECT", Conv::Pascal, "LL", 'L', rcv_connect },
-    { clnt, "OTLISTEN", Conv::Pascal, "LL", 'L', listen_ },
-    { clnt, "OTACCEPT", Conv::Pascal, "LLL", 'L', accept_ },
-    { clnt, "OTSNDDISCONNECT", Conv::Pascal, "LL", 'L', snd_disconnect },
-    { clnt, "OTRCVDISCONNECT", Conv::Pascal, "LL", 'L', rcv_disconnect },
-    { clnt, "OTSNDORDERLYDISCONNECT", Conv::Pascal, "L", 'L', snd_orderly },
-    { clnt, "OTRCVORDERLYDISCONNECT", Conv::Pascal, "L", 'L', rcv_orderly },
-    { clnt, "OTSND", Conv::Pascal, "LLLL", 'L', snd },
-    { clnt, "OTRCV", Conv::Pascal, "LLLL", 'L', rcv },
-    { clnt, "OTSNDUDATA", Conv::Pascal, "LL", 'L', snd_udata },
-    { clnt, "OTRCVUDATA", Conv::Pascal, "LLL", 'L', rcv_udata },
-    { clnt, "OTOPTIONMANAGEMENT", Conv::Pascal, "LLL", 'L', option_management_ },
-    { clnt, "OTNEXTOPTION", Conv::Pascal, "LLL", 'L', next_option },
-    { clnt, "OTFINDOPTION", Conv::Pascal, "LLLL", 'L', find_option },
-    { clnt, "OTRCVUDERR", Conv::Pascal, "LL", 'L', rcv_uderr },
-    { clnt, "OTSYNC", Conv::Pascal, "L", 'L', sync_ },
-    { clnt, "OTCANCELSYNCHRONOUSCALLS", Conv::Pascal, "LL", 'L', cancel_sync_calls },
-    { clnt, "OTRESOLVEADDRESS", Conv::Pascal, "LLLL", 'L', resolve_address },
-    { clnt, "OTGETPROVIDERPORTREF", Conv::Pascal, "L", 'L', get_provider_port_ref },
-    { clnt, "OTIOCTL", Conv::Pascal, "LLL", 'L', ioctl_ },
-    { clnt, "OTAllocPriv", Conv::C, "LLLLL", 'L', alloc_priv },
-    { clnt, "OTFREE", Conv::Pascal, "LL", 'L', free_ },
-    { clnt, "OTIDLE", Conv::Pascal, "", 'V', idle },
-    { clnt, "OTDELAY", Conv::Pascal, "L", 'V', delay },
-};
-
-} // anonymous namespace
+} // namespace Executor::ot
 
 /* ---- the rest of the provider API ---------------------------------------- */
 
@@ -1780,7 +1752,3 @@ uint32_t Executor::ot::current_a5()
     return EM_A5;
 }
 
-void Executor::ot::register_providers()
-{
-    register_table(table);
-}

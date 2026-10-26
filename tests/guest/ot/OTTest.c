@@ -9,7 +9,12 @@
  * The echo server (TCP and UDP on one port) is named in Host:net_echo.txt
  * as "address port", written by the test harness (tests/lib/echo_server.py).
  * One line per case: "PASS name" or "FAIL name: why"; then
- * "DONE <failures>".  Built by build.mpw.sh in MPW (tests/guest/ot/).
+ * "DONE <failures>".  Built by build.mpw in MPW (tests/guest/ot/).
+ *
+ * OTTestPPC is the same source as a PowerPC application (MrC, PPCLink,
+ * Apple's PowerPC OT glue, which imports OTClientLib & co.): it writes its
+ * lines to Host:ot_results.txt and ends them with "---", as the guest
+ * suite's harness (tests/test_guest_suite.sh --results) expects.
  */
 
 #include <Types.h>
@@ -1300,12 +1305,20 @@ typedef struct
     long fired;
 } CancelTask;
 
+#if defined(powerc) || defined(__powerc)
+/* PowerPC: the task gets its record as a parameter, through a routine
+   descriptor (NewTimerProc). */
+static pascal void cancel_proc(TMTaskPtr tmp)
+{
+    CancelTask *t = (CancelTask *)tmp;
+#else
 #pragma parameter __D0 GetA1
 long GetA1(void) = 0x2009; /* MOVE.L A1,D0 */
 
 static pascal void cancel_proc(void)
 {
     CancelTask *t = (CancelTask *)GetA1();
+#endif
     long old = SetA5(t->a5);
     OTCancelSynchronousCalls(t->ep, kOTCanceledErr);
     t->fired = 1;
@@ -1336,7 +1349,11 @@ static void test_cancel(void)
         return;
     }
     OTMemzero(&t, sizeof t);
+#if defined(powerc) || defined(__powerc)
+    t.tm.tmAddr = NewTimerProc(cancel_proc);
+#else
     t.tm.tmAddr = (TimerUPP)cancel_proc;
+#endif
     t.a5 = SetCurrentA5();
     t.ep = ep;
     InsTime((QElemPtr)&t.tm);
@@ -1628,6 +1645,15 @@ static const struct
 static Boolean wanted(int argc, char **argv, const char *name)
 {
     int i;
+#if defined(powerc) || defined(__powerc)
+    /* Executor: a PowerPC Time Manager task that runs during a blocking OT
+       call ends the application (STRAGGLERS 64); the case is left out. */
+    if(!strcmp(name, "cancel"))
+    {
+        printf("SKIP cancel\n");
+        return false;
+    }
+#endif
     if(argc < 2)
         return true;
     for(i = 1; i < argc; i++)
@@ -1640,6 +1666,9 @@ int main(int argc, char **argv)
 {
     int i;
 
+#if defined(powerc) || defined(__powerc)
+    freopen("Host:ot_results.txt", "w", stdout);
+#endif
     read_echo_config();
     if(echo_port)
         printf("# echo %08lx port %u\n", (long)echo_host, echo_port);
@@ -1662,5 +1691,9 @@ int main(int argc, char **argv)
         CloseOpenTransport();
     }
     printf("DONE %d\n", failures);
+#if defined(powerc) || defined(__powerc)
+    printf("---\n");
+    fclose(stdout);
+#endif
     return failures ? 1 : 0;
 }

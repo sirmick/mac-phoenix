@@ -233,7 +233,6 @@ void install_callbacks()
 {
     if(cb_binder)
         return;
-    register_ot_functions();
     cb_binder = callback_install(binder, nullptr);
     cb_make = callback_install(make_manager, nullptr);
     cb_free = callback_install(free_manager, nullptr);

@@ -1,0 +1,1820 @@
+# Open Transport 1.1's client calls, as Executor answers them
+# (romlib/opentransport/, docs/executor/OpenTransport.md). Each is reached
+# two ways: 68k code binds it through the Shared Library Manager by its
+# function set and that set's name for it (`aslm:`; the sets name their
+# Pascal routines in capitals), PowerPC code imports it from its CFM library
+# (`library:`, under Apple's name). Executor's routine reads its arguments
+# through ot::Call (`uint32_t f(const ot::Call &)`), from the 68k stack or
+# the PowerPC registers, so the argument types here are only their sizes
+# (uint32_t a long or pointer, uint16_t a word, Boolean); OT's own types,
+# for the C side, are still to be written. Only for Executor until then.
+
+# ---- ot_client.cpp -----------------------------------------------
+
+- only-for: Executor
+  function:
+    name: "InitOpenTransportPriv"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+    library: OTClientUtilLib
+    aslm: { set: "OTClnt$LclUtils", name: "InitOpenTransportPriv" }
+    callconv: C
+    executor: init_priv
+
+- only-for: Executor
+  function:
+    name: "CloseOpenTransportPriv"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+    library: OTClientUtilLib
+    aslm: { set: "OTClnt$LclUtils", name: "CloseOpenTransportPriv" }
+    callconv: C
+    executor: close_priv
+
+- only-for: Executor
+  function:
+    name: "OTRegisterAsClientPriv"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+      - name: "arg3"
+        type: "uint32_t"
+    library: OTClientUtilLib
+    aslm: { set: "OTClnt$LclUtils", name: "OTRegisterAsClientPriv" }
+    callconv: C
+    executor: register_priv
+
+- only-for: Executor
+  function:
+    name: "OTUnregisterAsClientPriv"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+    library: OTClientUtilLib
+    aslm: { set: "OTClnt$LclUtils", name: "OTUnregisterAsClientPriv" }
+    callconv: C
+    executor: unregister_priv
+
+- only-for: Executor
+  function:
+    name: "OTAllocMemPriv"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+    library: OTClientUtilLib
+    aslm: { set: "OTClnt$LclUtils", name: "OTAllocMemPriv" }
+    callconv: C
+    executor: alloc_mem_priv
+
+- only-for: Executor
+  function:
+    name: "OTFreeMemPriv"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+    library: OTClientUtilLib
+    aslm: { set: "OTClnt$LclUtils", name: "OTFreeMemPriv" }
+    callconv: C
+    executor: free_mem_priv
+
+# ---- ot_inet.cpp -------------------------------------------------
+
+- only-for: Executor
+  function:
+    name: "OTOpenInternetServicesPriv"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+      - name: "arg3"
+        type: "uint32_t"
+      - name: "arg4"
+        type: "uint32_t"
+    library: OTInetClientLib
+    aslm: { set: "ot:inet$LclInetClnt", name: "OTOpenInternetServicesPriv" }
+    callconv: C
+    executor: open_priv
+
+- only-for: Executor
+  function:
+    name: "OTAsyncOpenInternetServicesPriv"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+      - name: "arg3"
+        type: "uint32_t"
+      - name: "arg4"
+        type: "uint32_t"
+      - name: "arg5"
+        type: "uint32_t"
+    library: OTInetClientLib
+    aslm: { set: "ot:inet$LclInetClnt", name: "OTAsyncOpenInternetServicesPriv" }
+    callconv: C
+    executor: async_open_priv
+
+- only-for: Executor
+  function:
+    name: "OTInetStringToAddress"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+      - name: "arg3"
+        type: "uint32_t"
+    library: OTInetClientLib
+    aslm: { set: "ot:inet$LclInetClnt", name: "OTINETSTRINGTOADDRESS" }
+    callconv: pascal
+    executor: string_to_address
+
+- only-for: Executor
+  function:
+    name: "OTInetAddressToName"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+      - name: "arg3"
+        type: "uint32_t"
+    library: OTInetClientLib
+    aslm: { set: "ot:inet$LclInetClnt", name: "OTINETADDRESSTONAME" }
+    callconv: pascal
+    executor: address_to_name
+
+- only-for: Executor
+  function:
+    name: "OTInitInetAddress"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint16_t"
+      - name: "arg3"
+        type: "uint32_t"
+    library: OTInetClientLib
+    aslm: { set: "ot:inet$LclInetClnt", name: "OTINITINETADDRESS" }
+    callconv: pascal
+    executor: init_inet_address
+
+- only-for: Executor
+  function:
+    name: "OTInitDNSAddress"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+    library: OTInetClientLib
+    aslm: { set: "ot:inet$LclInetClnt", name: "OTINITDNSADDRESS" }
+    callconv: pascal
+    executor: init_dns_address
+
+- only-for: Executor
+  function:
+    name: "OTInetStringToHost"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+    library: OTInetClientLib
+    aslm: { set: "ot:inet$LclInetClnt", name: "OTINETSTRINGTOHOST" }
+    callconv: pascal
+    executor: string_to_host
+
+- only-for: Executor
+  function:
+    name: "OTInetHostToString"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+    library: OTInetClientLib
+    aslm: { set: "ot:inet$LclInetClnt", name: "OTINETHOSTTOSTRING" }
+    callconv: pascal
+    executor: host_to_string
+
+- only-for: Executor
+  function:
+    name: "OTInetGetInterfaceInfo"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+    library: OTInetClientLib
+    aslm: { set: "ot:inet$LclInetClnt", name: "OTINETGETINTERFACEINFO" }
+    callconv: pascal
+    executor: get_interface_info
+
+- only-for: Executor
+  function:
+    name: "OTInetSysInfo"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+      - name: "arg3"
+        type: "uint32_t"
+    library: OTInetClientLib
+    aslm: { set: "ot:inet$LclInetClnt", name: "OTINETSYSINFO" }
+    callconv: pascal
+    executor: sys_info
+
+- only-for: Executor
+  function:
+    name: "OTInetMailExchange"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+      - name: "arg3"
+        type: "uint32_t"
+      - name: "arg4"
+        type: "uint32_t"
+    library: OTInetClientLib
+    aslm: { set: "ot:inet$LclInetClnt", name: "OTINETMAILEXCHANGE" }
+    callconv: pascal
+    executor: mail_exchange
+
+- only-for: Executor
+  function:
+    name: "OTInetQuery"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+      - name: "arg3"
+        type: "uint16_t"
+      - name: "arg4"
+        type: "uint16_t"
+      - name: "arg5"
+        type: "uint32_t"
+      - name: "arg6"
+        type: "uint32_t"
+      - name: "arg7"
+        type: "uint32_t"
+      - name: "arg8"
+        type: "uint32_t"
+      - name: "arg9"
+        type: "uint32_t"
+    library: OTInetClientLib
+    aslm: { set: "ot:inet$LclInetClnt", name: "OTINETQUERY" }
+    callconv: pascal
+    executor: query
+
+# ---- ot_provider.cpp ---------------------------------------------
+
+- only-for: Executor
+  function:
+    name: "OTOpenEndpointPriv"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+      - name: "arg3"
+        type: "uint32_t"
+      - name: "arg4"
+        type: "uint32_t"
+      - name: "arg5"
+        type: "uint32_t"
+    library: OTClientLib
+    aslm: { set: "OTClnt$LclClnt", name: "OTOpenEndpointPriv" }
+    callconv: C
+    executor: open_endpoint_priv
+
+- only-for: Executor
+  function:
+    name: "OTAsyncOpenEndpointPriv"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+      - name: "arg3"
+        type: "uint32_t"
+      - name: "arg4"
+        type: "uint32_t"
+      - name: "arg5"
+        type: "uint32_t"
+      - name: "arg6"
+        type: "uint32_t"
+    library: OTClientLib
+    aslm: { set: "OTClnt$LclClnt", name: "OTAsyncOpenEndpointPriv" }
+    callconv: C
+    executor: async_open_endpoint_priv
+
+- only-for: Executor
+  function:
+    name: "OTCloseProviderPriv"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+    library: OTClientLib
+    aslm: { set: "OTClnt$LclClnt", name: "OTCloseProviderPriv" }
+    callconv: C
+    executor: close_provider_priv
+
+- only-for: Executor
+  function:
+    name: "OTSetAsynchronous"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+    library: OTClientLib
+    aslm: { set: "OTClnt$LclClnt", name: "OTSETASYNCHRONOUS" }
+    callconv: pascal
+    executor: set_async
+
+- only-for: Executor
+  function:
+    name: "OTSetSynchronous"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+    library: OTClientLib
+    aslm: { set: "OTClnt$LclClnt", name: "OTSETSYNCHRONOUS" }
+    callconv: pascal
+    executor: set_sync
+
+- only-for: Executor
+  function:
+    name: "OTIsSynchronous"
+    return: "Boolean"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+    library: OTClientLib
+    aslm: { set: "OTClnt$LclClnt", name: "OTISSYNCHRONOUS" }
+    callconv: pascal
+    executor: is_sync
+
+- only-for: Executor
+  function:
+    name: "OTSetBlocking"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+    library: OTClientLib
+    aslm: { set: "OTClnt$LclClnt", name: "OTSETBLOCKING" }
+    callconv: pascal
+    executor: set_blocking
+
+- only-for: Executor
+  function:
+    name: "OTSetNonBlocking"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+    library: OTClientLib
+    aslm: { set: "OTClnt$LclClnt", name: "OTSETNONBLOCKING" }
+    callconv: pascal
+    executor: set_nonblocking
+
+- only-for: Executor
+  function:
+    name: "OTIsBlocking"
+    return: "Boolean"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+    library: OTClientLib
+    aslm: { set: "OTClnt$LclClnt", name: "OTISBLOCKING" }
+    callconv: pascal
+    executor: is_blocking
+
+- only-for: Executor
+  function:
+    name: "OTAckSends"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+    library: OTClientLib
+    aslm: { set: "OTClnt$LclClnt", name: "OTACKSENDS" }
+    callconv: pascal
+    executor: ack_sends
+
+- only-for: Executor
+  function:
+    name: "OTDontAckSends"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+    library: OTClientLib
+    aslm: { set: "OTClnt$LclClnt", name: "OTDONTACKSENDS" }
+    callconv: pascal
+    executor: dont_ack_sends
+
+- only-for: Executor
+  function:
+    name: "OTIsAckingSends"
+    return: "Boolean"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+    library: OTClientLib
+    aslm: { set: "OTClnt$LclClnt", name: "OTISACKINGSENDS" }
+    callconv: pascal
+    executor: is_acking
+
+- only-for: Executor
+  function:
+    name: "OTInstallNotifier"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+      - name: "arg3"
+        type: "uint32_t"
+    library: OTClientLib
+    aslm: { set: "OTClnt$LclClnt", name: "OTINSTALLNOTIFIER" }
+    callconv: pascal
+    executor: install_notifier
+
+- only-for: Executor
+  function:
+    name: "OTRemoveNotifier"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+    library: OTClientLib
+    aslm: { set: "OTClnt$LclClnt", name: "OTREMOVENOTIFIER" }
+    callconv: pascal
+    executor: remove_notifier
+
+- only-for: Executor
+  function:
+    name: "OTGetEndpointState"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+    library: OTClientLib
+    aslm: { set: "OTClnt$LclClnt", name: "OTGETENDPOINTSTATE" }
+    callconv: pascal
+    executor: get_endpoint_state
+
+- only-for: Executor
+  function:
+    name: "OTGetEndpointInfo"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+    library: OTClientLib
+    aslm: { set: "OTClnt$LclClnt", name: "OTGETENDPOINTINFO" }
+    callconv: pascal
+    executor: get_endpoint_info
+
+- only-for: Executor
+  function:
+    name: "OTLook"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+    library: OTClientLib
+    aslm: { set: "OTClnt$LclClnt", name: "OTLOOK" }
+    callconv: pascal
+    executor: look
+
+- only-for: Executor
+  function:
+    name: "OTCountDataBytes"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+    library: OTClientLib
+    aslm: { set: "OTClnt$LclClnt", name: "OTCOUNTDATABYTES" }
+    callconv: pascal
+    executor: count_data_bytes
+
+- only-for: Executor
+  function:
+    name: "OTGetProtAddress"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+      - name: "arg3"
+        type: "uint32_t"
+    library: OTClientLib
+    aslm: { set: "OTClnt$LclClnt", name: "OTGETPROTADDRESS" }
+    callconv: pascal
+    executor: get_prot_address
+
+- only-for: Executor
+  function:
+    name: "OTBind"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+      - name: "arg3"
+        type: "uint32_t"
+    library: OTClientLib
+    aslm: { set: "OTClnt$LclClnt", name: "OTBIND" }
+    callconv: pascal
+    executor: ot_bind
+
+- only-for: Executor
+  function:
+    name: "OTUnbind"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+    library: OTClientLib
+    aslm: { set: "OTClnt$LclClnt", name: "OTUNBIND" }
+    callconv: pascal
+    executor: unbind
+
+- only-for: Executor
+  function:
+    name: "OTConnect"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+      - name: "arg3"
+        type: "uint32_t"
+    library: OTClientLib
+    aslm: { set: "OTClnt$LclClnt", name: "OTCONNECT" }
+    callconv: pascal
+    executor: ot_connect
+
+- only-for: Executor
+  function:
+    name: "OTRcvConnect"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+    library: OTClientLib
+    aslm: { set: "OTClnt$LclClnt", name: "OTRCVCONNECT" }
+    callconv: pascal
+    executor: rcv_connect
+
+- only-for: Executor
+  function:
+    name: "OTListen"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+    library: OTClientLib
+    aslm: { set: "OTClnt$LclClnt", name: "OTLISTEN" }
+    callconv: pascal
+    executor: ot_listen
+
+- only-for: Executor
+  function:
+    name: "OTAccept"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+      - name: "arg3"
+        type: "uint32_t"
+    library: OTClientLib
+    aslm: { set: "OTClnt$LclClnt", name: "OTACCEPT" }
+    callconv: pascal
+    executor: ot_accept
+
+- only-for: Executor
+  function:
+    name: "OTSndDisconnect"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+    library: OTClientLib
+    aslm: { set: "OTClnt$LclClnt", name: "OTSNDDISCONNECT" }
+    callconv: pascal
+    executor: snd_disconnect
+
+- only-for: Executor
+  function:
+    name: "OTRcvDisconnect"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+    library: OTClientLib
+    aslm: { set: "OTClnt$LclClnt", name: "OTRCVDISCONNECT" }
+    callconv: pascal
+    executor: rcv_disconnect
+
+- only-for: Executor
+  function:
+    name: "OTSndOrderlyDisconnect"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+    library: OTClientLib
+    aslm: { set: "OTClnt$LclClnt", name: "OTSNDORDERLYDISCONNECT" }
+    callconv: pascal
+    executor: snd_orderly
+
+- only-for: Executor
+  function:
+    name: "OTRcvOrderlyDisconnect"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+    library: OTClientLib
+    aslm: { set: "OTClnt$LclClnt", name: "OTRCVORDERLYDISCONNECT" }
+    callconv: pascal
+    executor: rcv_orderly
+
+- only-for: Executor
+  function:
+    name: "OTSnd"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+      - name: "arg3"
+        type: "uint32_t"
+      - name: "arg4"
+        type: "uint32_t"
+    library: OTClientLib
+    aslm: { set: "OTClnt$LclClnt", name: "OTSND" }
+    callconv: pascal
+    executor: snd
+
+- only-for: Executor
+  function:
+    name: "OTRcv"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+      - name: "arg3"
+        type: "uint32_t"
+      - name: "arg4"
+        type: "uint32_t"
+    library: OTClientLib
+    aslm: { set: "OTClnt$LclClnt", name: "OTRCV" }
+    callconv: pascal
+    executor: rcv
+
+- only-for: Executor
+  function:
+    name: "OTSndUData"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+    library: OTClientLib
+    aslm: { set: "OTClnt$LclClnt", name: "OTSNDUDATA" }
+    callconv: pascal
+    executor: snd_udata
+
+- only-for: Executor
+  function:
+    name: "OTRcvUData"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+      - name: "arg3"
+        type: "uint32_t"
+    library: OTClientLib
+    aslm: { set: "OTClnt$LclClnt", name: "OTRCVUDATA" }
+    callconv: pascal
+    executor: rcv_udata
+
+- only-for: Executor
+  function:
+    name: "OTOptionManagement"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+      - name: "arg3"
+        type: "uint32_t"
+    library: OTClientLib
+    aslm: { set: "OTClnt$LclClnt", name: "OTOPTIONMANAGEMENT" }
+    callconv: pascal
+    executor: ot_option_management
+
+- only-for: Executor
+  function:
+    name: "OTNextOption"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+      - name: "arg3"
+        type: "uint32_t"
+    library: OTClientLib
+    aslm: { set: "OTClnt$LclClnt", name: "OTNEXTOPTION" }
+    callconv: pascal
+    executor: next_option
+
+- only-for: Executor
+  function:
+    name: "OTFindOption"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+      - name: "arg3"
+        type: "uint32_t"
+      - name: "arg4"
+        type: "uint32_t"
+    library: OTClientLib
+    aslm: { set: "OTClnt$LclClnt", name: "OTFINDOPTION" }
+    callconv: pascal
+    executor: find_option
+
+- only-for: Executor
+  function:
+    name: "OTRcvUDErr"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+    library: OTClientLib
+    aslm: { set: "OTClnt$LclClnt", name: "OTRCVUDERR" }
+    callconv: pascal
+    executor: rcv_uderr
+
+- only-for: Executor
+  function:
+    name: "OTSync"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+    library: OTClientLib
+    aslm: { set: "OTClnt$LclClnt", name: "OTSYNC" }
+    callconv: pascal
+    executor: ot_sync
+
+- only-for: Executor
+  function:
+    name: "OTCancelSynchronousCalls"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+    library: OTClientLib
+    aslm: { set: "OTClnt$LclClnt", name: "OTCANCELSYNCHRONOUSCALLS" }
+    callconv: pascal
+    executor: cancel_sync_calls
+
+- only-for: Executor
+  function:
+    name: "OTResolveAddress"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+      - name: "arg3"
+        type: "uint32_t"
+      - name: "arg4"
+        type: "uint32_t"
+    library: OTClientLib
+    aslm: { set: "OTClnt$LclClnt", name: "OTRESOLVEADDRESS" }
+    callconv: pascal
+    executor: resolve_address
+
+- only-for: Executor
+  function:
+    name: "OTGetProviderPortRef"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+    library: OTClientLib
+    aslm: { set: "OTClnt$LclClnt", name: "OTGETPROVIDERPORTREF" }
+    callconv: pascal
+    executor: get_provider_port_ref
+
+- only-for: Executor
+  function:
+    name: "OTIoctl"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+      - name: "arg3"
+        type: "uint32_t"
+    library: OTClientLib
+    aslm: { set: "OTClnt$LclClnt", name: "OTIOCTL" }
+    callconv: pascal
+    executor: ot_ioctl
+
+- only-for: Executor
+  function:
+    name: "OTAllocPriv"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+      - name: "arg3"
+        type: "uint32_t"
+      - name: "arg4"
+        type: "uint32_t"
+      - name: "arg5"
+        type: "uint32_t"
+    library: OTClientLib
+    aslm: { set: "OTClnt$LclClnt", name: "OTAllocPriv" }
+    callconv: C
+    executor: alloc_priv
+
+- only-for: Executor
+  function:
+    name: "OTFree"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+    library: OTClientLib
+    aslm: { set: "OTClnt$LclClnt", name: "OTFREE" }
+    callconv: pascal
+    executor: ot_free
+
+- only-for: Executor
+  function:
+    name: "OTIdle"
+    library: OTClientLib
+    aslm: { set: "OTClnt$LclClnt", name: "OTIDLE" }
+    callconv: pascal
+    executor: idle
+
+- only-for: Executor
+  function:
+    name: "OTDelay"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+    library: OTClientLib
+    aslm: { set: "OTClnt$LclClnt", name: "OTDELAY" }
+    callconv: pascal
+    executor: delay
+
+# ---- ot_tasks.cpp ------------------------------------------------
+
+- only-for: Executor
+  function:
+    name: "OTCreateDeferredTaskPriv"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+      - name: "arg3"
+        type: "uint32_t"
+    library: OTUtilityLib
+    aslm: { set: "OTClnt$CmnShared", name: "OTCreateDeferredTaskPriv" }
+    callconv: C
+    executor: create_deferred
+
+- only-for: Executor
+  function:
+    name: "OTDestroyDeferredTask"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+    library: OTUtilityLib
+    aslm: { set: "OTClnt$CmnShared", name: "OTDESTROYDEFERREDTASK" }
+    callconv: pascal
+    executor: destroy
+
+- only-for: Executor
+  function:
+    name: "OTScheduleDeferredTask"
+    return: "Boolean"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+    library: OTUtilityLib
+    aslm: { set: "OTClnt$CmnShared", name: "OTSCHEDULEDEFERREDTASK" }
+    callconv: pascal
+    executor: schedule
+
+- only-for: Executor
+  function:
+    name: "OTScheduleInterruptTask"
+    return: "Boolean"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+    library: OTUtilityLib
+    aslm: { set: "OTClnt$CmnShared", name: "OTSCHEDULEINTERRUPTTASK" }
+    callconv: pascal
+    executor: schedule
+
+- only-for: Executor
+  function:
+    name: "OTCreateSystemTaskPriv"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+      - name: "arg3"
+        type: "uint32_t"
+    library: OTUtilityLib
+    aslm: { set: "OTClnt$CmnShared", name: "OTCreateSystemTaskPriv" }
+    callconv: C
+    executor: create_system
+
+- only-for: Executor
+  function:
+    name: "OTDestroySystemTask"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+    library: OTUtilityLib
+    aslm: { set: "OTClnt$CmnShared", name: "OTDESTROYSYSTEMTASK" }
+    callconv: pascal
+    executor: destroy
+
+- only-for: Executor
+  function:
+    name: "OTScheduleSystemTask"
+    return: "Boolean"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+    library: OTUtilityLib
+    aslm: { set: "OTClnt$CmnShared", name: "OTSCHEDULESYSTEMTASK" }
+    callconv: pascal
+    executor: schedule
+
+- only-for: Executor
+  function:
+    name: "OTCancelSystemTask"
+    return: "Boolean"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+    library: OTUtilityLib
+    aslm: { set: "OTClnt$CmnShared", name: "OTCANCELSYSTEMTASK" }
+    callconv: pascal
+    executor: cancel
+
+- only-for: Executor
+  function:
+    name: "OTCanMakeSyncCall"
+    return: "Boolean"
+    library: OTUtilityLib
+    aslm: { set: "OTClnt$CmnShared", name: "OTCANMAKESYNCCALL" }
+    callconv: pascal
+    executor: can_make_sync_call
+
+- only-for: Executor
+  function:
+    name: "OTIsAtInterruptLevel"
+    return: "Boolean"
+    library: OTUtilityLib
+    aslm: { set: "OTClnt$CmnShared", name: "OTIsAtInterruptLevel" }
+    callconv: C
+    executor: is_at_interrupt_level
+
+- only-for: Executor
+  function:
+    name: "OTCanLoadLibraries"
+    return: "Boolean"
+    library: OTUtilityLib
+    aslm: { set: "OTClnt$CmnShared", name: "OTCanLoadLibraries" }
+    callconv: C
+    executor: can_load_libraries
+
+- only-for: Executor
+  function:
+    name: "OTEnterInterrupt"
+    library: OTUtilityLib
+    aslm: { set: "OTClnt$CmnShared", name: "OTENTERINTERRUPT" }
+    callconv: pascal
+    executor: enter_interrupt
+
+- only-for: Executor
+  function:
+    name: "OTLeaveInterrupt"
+    library: OTUtilityLib
+    aslm: { set: "OTClnt$CmnShared", name: "OTLEAVEINTERRUPT" }
+    callconv: pascal
+    executor: leave_interrupt
+
+# ---- ot_utils.cpp ------------------------------------------------
+
+- only-for: Executor
+  function:
+    name: "OTMemcpy"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+      - name: "arg3"
+        type: "uint32_t"
+    library: OTUtilityLib
+    aslm: { set: "OTClnt$CmnShared", name: "OTMemcpy" }
+    callconv: C
+    executor: ot_memcpy
+
+- only-for: Executor
+  function:
+    name: "OTMemmove"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+      - name: "arg3"
+        type: "uint32_t"
+    library: OTUtilityLib
+    aslm: { set: "OTClnt$CmnShared", name: "OTMemmove" }
+    callconv: C
+    executor: ot_memcpy
+
+- only-for: Executor
+  function:
+    name: "OTMemzero"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+    library: OTUtilityLib
+    aslm: { set: "OTClnt$CmnShared", name: "OTMemzero" }
+    callconv: C
+    executor: memzero
+
+- only-for: Executor
+  function:
+    name: "OTMemset"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+      - name: "arg3"
+        type: "uint32_t"
+    library: OTUtilityLib
+    aslm: { set: "OTClnt$CmnShared", name: "OTMemset" }
+    callconv: C
+    executor: ot_memset
+
+- only-for: Executor
+  function:
+    name: "OTMemcmp"
+    return: "Boolean"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+      - name: "arg3"
+        type: "uint32_t"
+    library: OTUtilityLib
+    aslm: { set: "OTClnt$CmnShared", name: "OTMemcmp" }
+    callconv: C
+    executor: ot_memcmp
+
+- only-for: Executor
+  function:
+    name: "OTStrLength"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+    library: OTUtilityLib
+    aslm: { set: "OTClnt$CmnShared", name: "OTStrLength" }
+    callconv: C
+    executor: strlength
+
+- only-for: Executor
+  function:
+    name: "OTStrCopy"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+    library: OTUtilityLib
+    aslm: { set: "OTClnt$CmnShared", name: "OTStrCopy" }
+    callconv: C
+    executor: strcopy
+
+- only-for: Executor
+  function:
+    name: "OTStrCat"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+    library: OTUtilityLib
+    aslm: { set: "OTClnt$CmnShared", name: "OTStrCat" }
+    callconv: C
+    executor: ot_strcat
+
+- only-for: Executor
+  function:
+    name: "OTStrEqual"
+    return: "Boolean"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+    library: OTUtilityLib
+    aslm: { set: "OTClnt$CmnShared", name: "OTStrEqual" }
+    callconv: C
+    executor: strequal
+
+- only-for: Executor
+  function:
+    name: "OTGetTimeStamp"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+    library: OTUtilityLib
+    aslm: { set: "OTClnt$CmnShared", name: "OTGetTimeStamp" }
+    callconv: C
+    executor: get_time_stamp
+
+- only-for: Executor
+  function:
+    name: "OTSubtractTimeStamps"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+      - name: "arg3"
+        type: "uint32_t"
+    library: OTUtilityLib
+    aslm: { set: "OTClnt$CmnShared", name: "OTSubtractTimeStamps" }
+    callconv: C
+    executor: subtract_time_stamps
+
+- only-for: Executor
+  function:
+    name: "OTTimeStampInMilliseconds"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+    library: OTUtilityLib
+    aslm: { set: "OTClnt$CmnShared", name: "OTTimeStampInMilliseconds" }
+    callconv: C
+    executor: stamp_in_ms
+
+- only-for: Executor
+  function:
+    name: "OTTimeStampInMicroseconds"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+    library: OTUtilityLib
+    aslm: { set: "OTClnt$CmnShared", name: "OTTimeStampInMicroseconds" }
+    callconv: C
+    executor: stamp_in_us
+
+- only-for: Executor
+  function:
+    name: "OTElapsedMilliseconds"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+    library: OTUtilityLib
+    aslm: { set: "OTClnt$CmnShared", name: "OTElapsedMilliseconds" }
+    callconv: C
+    executor: elapsed_ms
+
+- only-for: Executor
+  function:
+    name: "OTElapsedMicroseconds"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+    library: OTUtilityLib
+    aslm: { set: "OTClnt$CmnShared", name: "OTElapsedMicroseconds" }
+    callconv: C
+    executor: elapsed_us
+
+- only-for: Executor
+  function:
+    name: "OTGetClockTimeInSecs"
+    return: "uint32_t"
+    library: OTUtilityLib
+    aslm: { set: "OTClnt$CmnShared", name: "OTGetClockTimeInSecs" }
+    callconv: C
+    executor: clock_secs
+
+- only-for: Executor
+  function:
+    name: "OTLIFOEnqueue"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+    library: OTUtilityLib
+    aslm: { set: "OTClnt$CmnShared", name: "OTLIFOEnqueue" }
+    callconv: C
+    executor: lifo_enqueue
+
+- only-for: Executor
+  function:
+    name: "OTLIFODequeue"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+    library: OTUtilityLib
+    aslm: { set: "OTClnt$CmnShared", name: "OTLIFODequeue" }
+    callconv: C
+    executor: lifo_dequeue
+
+- only-for: Executor
+  function:
+    name: "OTLIFOStealList"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+    library: OTUtilityLib
+    aslm: { set: "OTClnt$CmnShared", name: "OTLIFOStealList" }
+    callconv: C
+    executor: lifo_steal
+
+- only-for: Executor
+  function:
+    name: "OTReverseList"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+    library: OTUtilityLib
+    aslm: { set: "OTClnt$CmnShared", name: "OTReverseList" }
+    callconv: C
+    executor: reverse_list
+
+- only-for: Executor
+  function:
+    name: "OTAddFirst"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+    library: OTUtilityLib
+    aslm: { set: "OTClnt$CmnShared", name: "OTAddFirst" }
+    callconv: C
+    executor: add_first
+
+- only-for: Executor
+  function:
+    name: "OTAddLast"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+    library: OTUtilityLib
+    aslm: { set: "OTClnt$CmnShared", name: "OTAddLast" }
+    callconv: C
+    executor: add_last
+
+- only-for: Executor
+  function:
+    name: "OTRemoveFirst"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+    library: OTUtilityLib
+    aslm: { set: "OTClnt$CmnShared", name: "OTRemoveFirst" }
+    callconv: C
+    executor: remove_first
+
+- only-for: Executor
+  function:
+    name: "OTRemoveLast"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+    library: OTUtilityLib
+    aslm: { set: "OTClnt$CmnShared", name: "OTRemoveLast" }
+    callconv: C
+    executor: remove_last
+
+- only-for: Executor
+  function:
+    name: "OTGetFirst"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+    library: OTUtilityLib
+    aslm: { set: "OTClnt$CmnShared", name: "OTGetFirst" }
+    callconv: C
+    executor: get_first
+
+- only-for: Executor
+  function:
+    name: "OTGetLast"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+    library: OTUtilityLib
+    aslm: { set: "OTClnt$CmnShared", name: "OTGetLast" }
+    callconv: C
+    executor: get_last
+
+- only-for: Executor
+  function:
+    name: "OTIsInList"
+    return: "Boolean"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+    library: OTUtilityLib
+    aslm: { set: "OTClnt$CmnShared", name: "OTIsInList" }
+    callconv: C
+    executor: is_in_list
+
+- only-for: Executor
+  function:
+    name: "OTRemoveLink"
+    return: "Boolean"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+    library: OTUtilityLib
+    aslm: { set: "OTClnt$CmnShared", name: "OTRemoveLink" }
+    callconv: C
+    executor: remove_link
+
+- only-for: Executor
+  function:
+    name: "OTGetIndexedLink"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+    library: OTUtilityLib
+    aslm: { set: "OTClnt$CmnShared", name: "OTGetIndexedLink" }
+    callconv: C
+    executor: get_indexed_link
+
+- only-for: Executor
+  function:
+    name: "OTEnqueue"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+      - name: "arg3"
+        type: "uint32_t"
+    library: OTUtilityLib
+    aslm: { set: "OTClnt$CmnShared", name: "OTEnqueue" }
+    callconv: C
+    executor: enqueue
+
+- only-for: Executor
+  function:
+    name: "OTDequeue"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+    library: OTUtilityLib
+    aslm: { set: "OTClnt$CmnShared", name: "OTDequeue" }
+    callconv: C
+    executor: dequeue
+
+- only-for: Executor
+  function:
+    name: "OTFindLink"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+      - name: "arg3"
+        type: "uint32_t"
+    library: OTUtilityLib
+    aslm: { set: "OTClnt$CmnShared", name: "OTFindLink" }
+    callconv: C
+    executor: find_link
+
+- only-for: Executor
+  function:
+    name: "OTFindAndRemoveLink"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+      - name: "arg3"
+        type: "uint32_t"
+    library: OTUtilityLib
+    aslm: { set: "OTClnt$CmnShared", name: "OTFindAndRemoveLink" }
+    callconv: C
+    executor: find_and_remove_link
+
+- only-for: Executor
+  function:
+    name: "OTAtomicSetBit"
+    return: "Boolean"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+    library: OTUtilityLib
+    aslm: { set: "OTClnt$CmnShared", name: "OTAtomicSetBit" }
+    callconv: C
+    executor: atomic_set_bit
+
+- only-for: Executor
+  function:
+    name: "OTAtomicClearBit"
+    return: "Boolean"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+    library: OTUtilityLib
+    aslm: { set: "OTClnt$CmnShared", name: "OTAtomicClearBit" }
+    callconv: C
+    executor: atomic_clear_bit
+
+- only-for: Executor
+  function:
+    name: "OTAtomicTestBit"
+    return: "Boolean"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+    library: OTUtilityLib
+    aslm: { set: "OTClnt$CmnShared", name: "OTAtomicTestBit" }
+    callconv: C
+    executor: atomic_test_bit
+
+- only-for: Executor
+  function:
+    name: "OTCompareAndSwapPtr"
+    return: "Boolean"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+      - name: "arg3"
+        type: "uint32_t"
+    library: OTUtilityLib
+    aslm: { set: "OTClnt$CmnShared", name: "OTCompareAndSwapPtr" }
+    callconv: C
+    executor: cas32
+
+- only-for: Executor
+  function:
+    name: "OTCompareAndSwap32"
+    return: "Boolean"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+      - name: "arg3"
+        type: "uint32_t"
+    library: OTUtilityLib
+    aslm: { set: "OTClnt$CmnShared", name: "OTCompareAndSwap32" }
+    callconv: C
+    executor: cas32
+
+- only-for: Executor
+  function:
+    name: "OTCompareAndSwap16"
+    return: "Boolean"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+      - name: "arg3"
+        type: "uint32_t"
+    library: OTUtilityLib
+    aslm: { set: "OTClnt$CmnShared", name: "OTCompareAndSwap16" }
+    callconv: C
+    executor: cas16
+
+- only-for: Executor
+  function:
+    name: "OTCompareAndSwap8"
+    return: "Boolean"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+      - name: "arg3"
+        type: "uint32_t"
+    library: OTUtilityLib
+    aslm: { set: "OTClnt$CmnShared", name: "OTCompareAndSwap8" }
+    callconv: C
+    executor: cas8
+
+- only-for: Executor
+  function:
+    name: "OTAtomicAdd32"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+    library: OTUtilityLib
+    aslm: { set: "OTClnt$CmnShared", name: "OTAtomicAdd32" }
+    callconv: C
+    executor: atomic_add32
+
+- only-for: Executor
+  function:
+    name: "OTAtomicAdd16"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+    library: OTUtilityLib
+    aslm: { set: "OTClnt$CmnShared", name: "OTAtomicAdd16" }
+    callconv: C
+    executor: atomic_add16
+
+- only-for: Executor
+  function:
+    name: "OTAtomicAdd8"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+    library: OTUtilityLib
+    aslm: { set: "OTClnt$CmnShared", name: "OTAtomicAdd8" }
+    callconv: C
+    executor: atomic_add8
+
+- only-for: Executor
+  function:
+    name: "OTCreatePortRef"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint16_t"
+      - name: "arg2"
+        type: "uint16_t"
+      - name: "arg3"
+        type: "uint16_t"
+      - name: "arg4"
+        type: "uint16_t"
+    library: OTUtilityLib
+    aslm: { set: "OTClnt$CmnShared", name: "OTCREATEPORTREF" }
+    callconv: pascal
+    executor: create_port_ref
+
+- only-for: Executor
+  function:
+    name: "OTGetDeviceTypeFromPortRef"
+    return: "int16_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+    library: OTUtilityLib
+    aslm: { set: "OTClnt$CmnShared", name: "OTGETDEVICETYPEFROMPORTREF" }
+    callconv: pascal
+    executor: device_type_of
+
+- only-for: Executor
+  function:
+    name: "OTGetBusTypeFromPortRef"
+    return: "int16_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+    library: OTUtilityLib
+    aslm: { set: "OTClnt$CmnShared", name: "OTGETBUSTYPEFROMPORTREF" }
+    callconv: pascal
+    executor: bus_type_of
+
+- only-for: Executor
+  function:
+    name: "OTGetSlotFromPortRef"
+    return: "int16_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+    library: OTUtilityLib
+    aslm: { set: "OTClnt$CmnShared", name: "OTGETSLOTFROMPORTREF" }
+    callconv: pascal
+    executor: slot_of
+
+- only-for: Executor
+  function:
+    name: "OTGetIndexedPort"
+    return: "Boolean"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+    library: OTClientUtilLib
+    aslm: { set: "OTClnt$LclUtils", name: "OTGETINDEXEDPORT" }
+    callconv: pascal
+    executor: get_indexed_port
+
+- only-for: Executor
+  function:
+    name: "OTFindPort"
+    return: "Boolean"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+    library: OTClientUtilLib
+    aslm: { set: "OTClnt$LclUtils", name: "OTFINDPORT" }
+    callconv: pascal
+    executor: find_port
+
+- only-for: Executor
+  function:
+    name: "OTFindPortByRef"
+    return: "Boolean"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+      - name: "arg2"
+        type: "uint32_t"
+    library: OTClientUtilLib
+    aslm: { set: "OTClnt$LclUtils", name: "OTFINDPORTBYREF" }
+    callconv: pascal
+    executor: find_port_by_ref
+
+- only-for: Executor
+  function:
+    name: "OTCreateConfiguration"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+    library: OTClientUtilLib
+    aslm: { set: "OTClnt$LclUtils", name: "OTCREATECONFIGURATION" }
+    callconv: pascal
+    executor: create_configuration
+
+- only-for: Executor
+  function:
+    name: "OTCloneConfiguration"
+    return: "uint32_t"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+    library: OTClientUtilLib
+    aslm: { set: "OTClnt$LclUtils", name: "OTCLONECONFIGURATION" }
+    callconv: pascal
+    executor: clone_configuration
+
+- only-for: Executor
+  function:
+    name: "OTDestroyConfiguration"
+    args:
+      - name: "arg1"
+        type: "uint32_t"
+    library: OTClientUtilLib
+    aslm: { set: "OTClnt$LclUtils", name: "OTDESTROYCONFIGURATION" }
+    callconv: pascal
+    executor: destroy_configuration

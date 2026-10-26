@@ -128,6 +128,8 @@
                 "executor": { "oneOf": [ {"type":"string"}, {"type":"boolean"}] },
                 "library": { "type": "string" },
                 "raw": { "type": "boolean" },
+                "aslm": { "type": "object", "properties": { "set": { "type": "string" }, "name": { "type": "string" } } },
+                "callconv": { "type": "string" },
                 "returnreg": { "$ref": "#/definitions/reg" },
                 "variants": { "type": "array", "items": { "type": "string" }},
                 "executor_extras": { "type": "string" },

@@ -51,6 +51,7 @@ void registerStructDumps_Navigation();
 void registerStructDumps_OSEvent();
 void registerStructDumps_VRetraceMgr();
 void registerStructDumps_OSUtil();
+void registerStructDumps_OpenTransport();
 void registerStructDumps_PCI();
 void registerStructDumps_PEFBinaryFormat();
 void registerStructDumps_Package();
@@ -127,6 +128,7 @@ void registerAllStructDumps()
     registerStructDumps_OSEvent();
     registerStructDumps_VRetraceMgr();
     registerStructDumps_OSUtil();
+    registerStructDumps_OpenTransport();
     registerStructDumps_PCI();
     registerStructDumps_PEFBinaryFormat();
     registerStructDumps_Package();

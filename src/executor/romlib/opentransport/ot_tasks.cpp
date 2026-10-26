@@ -24,15 +24,19 @@ using namespace Executor::ot;
 
 int Executor::ot::interrupt_level = 0;
 
-namespace
+namespace Executor::ot
 {
 
+namespace {
 struct Task
 {
     uint32_t proc, arg, a5;
     bool system;
+    bool ppc; /* a PowerPC client's (proc is a TV) */
     bool scheduled = false;
 };
+}
+
 std::map<uint32_t, Task> tasks; /* by cookie */
 uint32_t next_cookie = 0x4F540000; /* 'OT' */
 
@@ -43,6 +47,11 @@ void run(uint32_t cookie)
         return;
     it->second.scheduled = false;
     Task t = it->second;
+    if(t.ppc)
+    {
+        callPPC(t.proc, { t.arg });
+        return;
+    }
     uint32_t saved_a7 = EM_A7, saved_a5 = EM_A5;
     if(t.a5)
         EM_A5 = t.a5;
@@ -65,19 +74,19 @@ void run_scheduled(bool system, uint32_t a5)
         run(cookie);
 }
 
-bool hooked = false;
+bool tasks_hooked = false;
 
-uint32_t create(uint32_t proc, uint32_t arg, bool system)
+uint32_t create(uint32_t proc, uint32_t arg, bool system, bool ppc)
 {
-    if(!hooked)
+    if(!tasks_hooked)
     {
         add_pump_hook([] { run_scheduled(false, 0); });
-        hooked = true;
+        tasks_hooked = true;
     }
     if(!proc)
         return 0;
     uint32_t cookie = next_cookie += 4;
-    tasks[cookie] = { proc, arg, current_a5(), system };
+    tasks[cookie] = { proc, arg, current_a5(), system, ppc };
     OT_LOG("%s task $%08x: proc $%08x arg $%08x\n", system ? "system" : "deferred", cookie,
            proc, arg);
     return cookie;
@@ -86,12 +95,12 @@ uint32_t create(uint32_t proc, uint32_t arg, bool system)
 /* long OTCreateDeferredTaskPriv(OTProcessProcPtr, void *arg, client) */
 uint32_t create_deferred(const Call &c)
 {
-    return create(c.l(0), c.l(1), false);
+    return create(c.l(0), c.l(1), false, c.ppc());
 }
 
 uint32_t create_system(const Call &c)
 {
-    return create(c.l(0), c.l(1), true);
+    return create(c.l(0), c.l(1), true, c.ppc());
 }
 
 /* Boolean OTScheduleDeferredTask(long): false if it was scheduled already
@@ -155,30 +164,7 @@ uint32_t leave_interrupt(const Call &)
     return 0;
 }
 
-const char cmn[] = "OTClnt$CmnShared";
-
-const Def table[] = {
-    { cmn, "OTCreateDeferredTaskPriv", Conv::C, "LLL", 'L', create_deferred },
-    { cmn, "OTDESTROYDEFERREDTASK", Conv::Pascal, "L", 'L', destroy },
-    { cmn, "OTSCHEDULEDEFERREDTASK", Conv::Pascal, "L", 'B', schedule },
-    { cmn, "OTSCHEDULEINTERRUPTTASK", Conv::Pascal, "L", 'B', schedule },
-    { cmn, "OTCreateSystemTaskPriv", Conv::C, "LLL", 'L', create_system },
-    { cmn, "OTDESTROYSYSTEMTASK", Conv::Pascal, "L", 'L', destroy },
-    { cmn, "OTSCHEDULESYSTEMTASK", Conv::Pascal, "L", 'B', schedule },
-    { cmn, "OTCANCELSYSTEMTASK", Conv::Pascal, "L", 'B', cancel },
-    { cmn, "OTCANMAKESYNCCALL", Conv::Pascal, "", 'B', can_make_sync_call },
-    { cmn, "OTIsAtInterruptLevel", Conv::C, "", 'B', is_at_interrupt_level },
-    { cmn, "OTCanLoadLibraries", Conv::C, "", 'B', can_load_libraries },
-    { cmn, "OTENTERINTERRUPT", Conv::Pascal, "", 'V', enter_interrupt },
-    { cmn, "OTLEAVEINTERRUPT", Conv::Pascal, "", 'V', leave_interrupt },
-};
-
-} // anonymous namespace
-
-void Executor::ot::register_tasks()
-{
-    register_table(table);
-}
+} // namespace Executor::ot
 
 /* A process quits: tasks whose code was in its partition. */
 void Executor::ot::tasks_process_exit(uint32_t lo, uint32_t hi)

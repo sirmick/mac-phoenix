@@ -12,6 +12,7 @@ class PowerCore;
 
 namespace Executor
 {
+namespace ot { class Call; }
 
 namespace traps
 {
@@ -257,12 +258,36 @@ private:
     const char *library;
 };
 
+/* ... and one of Open Transport's (`aslm:` in the definitions): 68k code
+   binds it through the Shared Library Manager by its function set and that
+   set's name for it, PowerPC code imports it from `library`. The routine
+   reads its arguments through ot::Call (opentransport/ot_internal.h); sig
+   has a letter per argument ('L' long, 'W' word, 'B' Boolean), ret the
+   result's ('V' none). ot.cpp registers it both ways. */
+class OTFunction : public internal::DeferredInit
+{
+public:
+    OTFunction(const char *name, const char *library, const char *set, const char *setName,
+               bool pascal, const char *sig, char ret, uint32_t (*impl)(const ot::Call &))
+        : name(name), library(library), set(set), setName(setName), pascal(pascal),
+          sig(sig), ret(ret), impl(impl) {}
+    virtual void init() override;
+
+    const char *name, *library, *set, *setName;
+    bool pascal;
+    const char *sig;
+    char ret;
+    uint32_t (*impl)(const ot::Call &);
+};
+
 #define EXTERN_FUNCTION_WRAPPER(NAME, FPTR, INIT, ...) \
     extern Executor::traps::__VA_ARGS__ NAME
 #define EXTERN_DISPATCHER_TRAP(NAME, TRAP, SELECTOR) \
     extern Executor::traps::DispatcherTrap<Executor::traps::selectors::SELECTOR> NAME
 #define EXTERN_LIBRARY_FUNCTION(NAME, INIT, ...) \
     extern Executor::traps::__VA_ARGS__ NAME
+#define EXTERN_OT_FUNCTION(NAME, INIT) \
+    extern Executor::traps::OTFunction NAME
 #define EXTERN_LIBRARY_RAW(NAME, INIT) \
     extern Executor::traps::LibraryRawExport NAME
 #define DEFINE_FUNCTION_WRAPPER(NAME, FPTR, INIT, ...) \
@@ -273,6 +298,8 @@ private:
 /* No explicit instantiation: two names (memcpy, _memcpy) can share one. */
 #define DEFINE_LIBRARY_FUNCTION(NAME, INIT, ...) \
     Executor::traps::__VA_ARGS__ NAME INIT
+#define DEFINE_OT_FUNCTION(NAME, INIT) \
+    Executor::traps::OTFunction NAME INIT
 #define DEFINE_LIBRARY_RAW(NAME, INIT) \
     Executor::traps::LibraryRawExport NAME INIT
 
@@ -286,6 +313,7 @@ private:
 #define DISPATCHER_TRAP PREPROCESSOR_CONCAT(TRAP_INSTANTIATION, _DISPATCHER_TRAP)
 #define CREATE_LIBRARY_FUNCTION PREPROCESSOR_CONCAT(TRAP_INSTANTIATION, _LIBRARY_FUNCTION)
 #define CREATE_LIBRARY_RAW PREPROCESSOR_CONCAT(TRAP_INSTANTIATION, _LIBRARY_RAW)
+#define CREATE_OT_FUNCTION PREPROCESSOR_CONCAT(TRAP_INSTANTIATION, _OT_FUNCTION)
 
 #define COMMA ,
 #define PASCAL_TRAP(NAME, TRAP) \
@@ -304,6 +332,8 @@ private:
 
 #define LIBRARY_FUNCTION(LIB, NAME, IMPL) \
     CREATE_LIBRARY_FUNCTION(lib_##LIB##_##NAME, (#NAME, #LIB), LibraryFunction<decltype(IMPL) COMMA &IMPL>)
+#define OT_FUNCTION(LIB, NAME, SET, SETNAME, PASCAL, SIG, RET, IMPL) \
+    CREATE_OT_FUNCTION(lib_##LIB##_##NAME, (#NAME, #LIB, SET, SETNAME, PASCAL, SIG, RET, &ot::IMPL))
 #define LIBRARY_RAW(LIB, NAME) \
     CREATE_LIBRARY_RAW(lib_##LIB##_##NAME, (#NAME, #LIB))
 

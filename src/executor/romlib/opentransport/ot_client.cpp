@@ -17,7 +17,7 @@
 using namespace Executor;
 using namespace Executor::ot;
 
-namespace
+namespace Executor::ot
 {
 
 std::map<uint32_t, Client> clients; /* by client record */
@@ -81,23 +81,7 @@ uint32_t free_mem_priv(const Call &c)
     return 0;
 }
 
-const char utils[] = "OTClnt$LclUtils";
-
-const Def table[] = {
-    { utils, "InitOpenTransportPriv", Conv::C, "LL", 'L', init_priv },
-    { utils, "CloseOpenTransportPriv", Conv::C, "L", 'V', close_priv },
-    { utils, "OTRegisterAsClientPriv", Conv::C, "LLL", 'L', register_priv },
-    { utils, "OTUnregisterAsClientPriv", Conv::C, "L", 'L', unregister_priv },
-    { utils, "OTAllocMemPriv", Conv::C, "LL", 'L', alloc_mem_priv },
-    { utils, "OTFreeMemPriv", Conv::C, "LL", 'V', free_mem_priv },
-};
-
-} // anonymous namespace
-
-void Executor::ot::register_client()
-{
-    register_table(table);
-}
+} // namespace Executor::ot
 
 void Executor::ot::close_clients_in(uint32_t lo, uint32_t hi)
 {

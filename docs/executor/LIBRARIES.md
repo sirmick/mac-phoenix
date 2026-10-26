@@ -18,7 +18,7 @@ definitions, in a shape upstream multiversal can take.
 | Route | Executor's table | Entries | Typed | Reaches |
 |---|---|---|---|---|
 | Traps | generated `PASCAL_TRAP`, `PASCAL_SUBTRAP`, `REGISTER_TRAP`, `NOTRAP_FUNCTION` (`base/traps.h`) | ~2,000 | from the C++ signature | the trap table; the same wrappers export each one from InterfaceLib for PowerPC and CFM-68K (`base/traps.impl.h`) |
-| Open Transport over ASLM | `Def{set, name, Conv, "LLLLL", 'L', impl}` (`opentransport/ot_*.cpp`), index-to-name lists (`ot_names.inc`) | ~130 of ~330 names | no: signature strings, `impl(const Call&)` reads its arguments | 68k only; no `OpenTransportLib` for PowerPC |
+| Open Transport over ASLM | `Def{set, name, Conv, "LLLLL", 'L', impl}` (`opentransport/ot_*.cpp`), index-to-name lists (`ot_names.inc`) — in the definitions since step 4 | ~130 of ~330 names | no: signature strings, `impl(const Call&)` reads its arguments | 68k; PowerPC (OTClientLib & co.) since step 4 |
 | StdCLib, MathLib | `exportFn(LIB, "strlen", &c_strlen)`, `exportRaw` for variadic and hand-decoded routines, `exportData` (`clib/`) — in the definitions since step 2 | ~250 + ~70 raw + 25 data | yes (`callfromPPC::Invoker`) | PowerPC; StdCLib for CFM-68K too since step 2 |
 | CFM glue | `exportGlue("c2pstr", &fn)` (`cfm68k_glue.cpp`) — in the definitions since step 3 | ~50 | yes | InterfaceLib, ObjectSupportLib, for CFM-68K and PowerPC |
 | AppleScriptLib (OSA) | `{ "OSALoad", 0x0001, { 4, 4, 4 } }` (`cfm68k_glue.cpp`) | 42 | no: parameter sizes | CFM-68K, re-pushed to `_ComponentDispatch` |
@@ -48,7 +48,7 @@ name, in which calling convention:
       - name: size
         type: OTByteCount
     library: OTUtilityLib        # CFM library: PowerPC, and CFM-68K where it exists
-    aslm: { set: utils, index: 12 }   # the 68k route through ASLM, if any
+    aslm: { set: "OTClnt$LclUtils", name: OTAllocMemPriv }   # the 68k route
     callconv: C                  # C (default for libraries) or Pascal
     executor: C_
 ```
@@ -56,9 +56,12 @@ name, in which calling convention:
 - `library:` names the CFM library that exports the symbol. Several
   architectures can share it; a routine that exists in only one says so
   (`only-for: ppc`, the existing filter key).
-- `aslm:` gives the ASLM function set and index the 68k glue binds by
-  (Open Transport's static glue: `__SLM11FuncDispatch`). The set's
-  library name and version go in a `- aslm-set:` entry, once per set.
+- `aslm: { set: "OTClnt$LclClnt", name: OTBind }` gives the function set
+  68k glue binds it in through the Shared Library Manager, and the set's
+  name for it (Open Transport's sets name their Pascal routines in
+  capitals; the entry's `name` is Apple's, the PowerPC export's). Such a
+  routine reads its arguments through `ot::Call`, so the generator emits
+  `OT_FUNCTION` with a letter per argument from its type's size.
 - `callconv:` is for the 68k ASLM route (Open Transport has Pascal and
   C routines) and for the C side's `pascal`. It does not decide who pops
   in CFM-68K: there every routine with fixed arguments pops its own, C
@@ -172,7 +175,14 @@ The library routes:
    specifier builders, `OpenComponent`, ...). Left in `cfm68k_glue.cpp`:
    the routines with bodies, `CallComponentUPP`, AppleScriptLib's table
    (step 5) and the CFM-68K overrides.
-4. **Open Transport.** The `Def` tables become definitions and the
+4. **Open Transport** — done for Executor and PowerPC, 2026-10-26: the
+   130 functions are `OpenTransport.yaml` entries (`aslm:` and `library:`,
+   argument sizes only, `only-for: Executor`), registered by `OT_FUNCTION`
+   for the 68k binder and as PowerPC exports; the routines kept reading
+   their arguments through `ot::Call`, which reads PowerPC registers too
+   (OpenTransport.md, "The functions in the definitions"). Left: OT's own
+   types for the C side (`OpenTransport.h`), then the entries for both.
+   As planned: the `Def` tables become definitions and the
    implementations take typed arguments instead of `Call`. By-products:
    `OpenTransportLib`, `OTUtilityLib`, `OpenTptInternetLib` for PowerPC
    (OpenTransport.md lists them as not written) and `OpenTransport.h`.

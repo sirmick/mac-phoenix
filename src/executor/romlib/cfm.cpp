@@ -19,6 +19,7 @@
 #include <ResourceMgr.h>
 
 #include <rsys/cfm.h>
+#include <rsys/opentransport.h>
 #include <PEFBinaryFormat.h>
 #include <file/file.h>
 #include <rsys/launch.h>
@@ -632,6 +633,16 @@ OSErr Executor::C_GetSharedLibrary(ConstStr63Param library, OSType arch,
        selectors (docs/executor/CFM68K.md). */
     if(retval == fragLibNotFound && arch == "m68k"_4
        && EqualString(library, (StringPtr) "\020ObjectSupportLib", false, true))
+        if(ConnectionID cid = builtinlibs::getBuiltinLib(library, arch))
+        {
+            *cidp = cid;
+            *mainaddrp = nullptr;
+            return noErr;
+        }
+    /* ... and, Open Transport on, OT's PowerPC libraries (OpenTransport.yaml:
+       OTClientLib & co.): Apple's files need Apple's OT kernel. */
+    if(retval == fragLibNotFound && arch == "pwpc"_4 && ROMlib_open_transport
+       && ROMlib_ot_library(std::string((const char *)library + 1, library[0])))
         if(ConnectionID cid = builtinlibs::getBuiltinLib(library, arch))
         {
             *cidp = cid;

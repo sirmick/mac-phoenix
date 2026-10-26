@@ -690,6 +690,19 @@ set_tests_properties(ot_executor_noaslm PROPERTIES
   SKIP_RETURN_CODE 77
 )
 
+# The same cases from PowerPC code: OTTestPPC (MrC + PPCLink on Apple's
+# PowerPC OT glue) imports OTClientLib & co., which Executor answers from
+# the same routines (OpenTransport.yaml); results in Host:ot_results.txt.
+add_test(
+  NAME ot_ppc_executor
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --backend executor --app ${CMAKE_SOURCE_DIR}/tests/guest/ot/OTTestPPC.bin --results ot_results.txt --timeout 150 --port 18738
+)
+set_tests_properties(ot_ppc_executor PROPERTIES
+  TIMEOUT 200
+  LABELS "guest;executor"
+  SKIP_RETURN_CODE 77
+)
+
 # Thread Manager through Frontier's UserTalk threads (process.cpp).
 add_test(
   NAME threads_executor

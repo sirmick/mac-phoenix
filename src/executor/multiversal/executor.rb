@@ -302,7 +302,25 @@ class ExecutorGenerator < Generator
             # and is registered by its library's code; here it is only
             # declared to be there (checked when the library is set up).
             lib = fun["library"]
-            if fun["raw"] then
+            if fun["aslm"] then
+                # Open Transport's: bound through the Shared Library Manager
+                # on 68k as well; the routine reads its arguments through
+                # ot::Call, so only their sizes matter here.
+                letter = lambda do |t|
+                    case t
+                    when nil then "V"
+                    when "Boolean" then "B"
+                    when "uint16_t", "int16_t" then "W"
+                    else "L"
+                    end
+                end
+                sig = args.map {|arg| letter.call(arg["type"])}.join
+                pascal = fun["callconv"].to_s.downcase == "pascal"
+                @out << "namespace ot { uint32_t #{cname}(const Call &); }"
+                @out << "OT_FUNCTION(#{lib}, #{name}, \"#{fun["aslm"]["set"]}\", "
+                @out << "\"#{fun["aslm"]["name"]}\", #{pascal}, \"#{sig}\", "
+                @out << "'#{letter.call(fun["return"])}', #{cname});\n"
+            elsif fun["raw"] then
                 @out << "LIBRARY_RAW(#{lib}, #{name});\n"
             else
                 @out << (fun["return"] or "void") << " " << cname

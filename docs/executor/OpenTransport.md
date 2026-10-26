@@ -156,7 +156,35 @@ function set's ID as a C string at +16. The function sets and their indices
 * Not written: mappers and name registration (AppleTalk's NBP), the
   transaction calls (OTSndRequest and friends: ATP, ADSP), OTCreateOptions /
   OTCreateOptionString, no-copy receive (OTReleaseBuffer, OTReadBuffer),
-  transfer of ownership, the `Ntv*` and configuration-database sets, and
-  the PPC binding (CFM's OpenTransportLib, OTInetClientLib, OTUtilityLib
-  onto the same C++). Timer tasks and most port calls have no 68k glue in
-  OT 1.1 (native only), so 68k clients can't reach them.
+  transfer of ownership, the `Ntv*` and configuration-database sets
+  (`OTConfigLib` for PowerPC), `OTExitPatchPriv` (PowerPC glue; answered 0,
+  logged). Timer tasks and most port calls have no 68k glue in OT 1.1
+  (native only), so 68k clients can't reach them.
+
+## The functions in the definitions; PowerPC clients
+
+Every function Executor implements is an entry in
+`multiversal/defs/OpenTransport.yaml` (docs/executor/LIBRARIES.md, step
+4): its Apple name, the CFM library PowerPC code imports it from, its
+68k function set and that set's name for it (`aslm:`; the sets name their
+Pascal routines in capitals), its convention and argument sizes, and the
+routine (`uint32_t f(const ot::Call &)`). The generator turns each into
+`OT_FUNCTION`, which registers it both ways (`OTFunction::init` in
+`ot.cpp`): for the binder above, and as a PowerPC export.
+
+PowerPC applications reach OT through Apple's PowerPC glue
+(OpenTransportAppPPC.o & co.), which imports the same private routines
+from `OTClientLib` (the `OTClnt$LclClnt` set), `OTClientUtilLib`
+(`OTClnt$LclUtils`), `OTUtilityLib` (`OTClnt$CmnShared`),
+`OTInetClientLib` (`ot:inet$LclInetClnt`) and `OTGlobalLib` (data:
+`__gOTGlobal`, two timing records; zeroed). With OT on, Executor's Code
+Fragment Manager answers these before Apple's files (Apple's need Apple's
+OT kernel; their init routines fail). `ot::Call` reads a PowerPC caller's
+arguments from r3-r10 and the parameter area (`Call::byte` for a UInt8:
+a Pascal word's high byte on 68k, the low byte on PowerPC); notifiers,
+deferred and system tasks and `OTFindLink`'s search routine installed
+from PowerPC code are called as PowerPC code (`callPPC`). OTTestPPC (the
+same OTTest.c, MrC + PPCLink) passes its cases on Executor
+(`ot_ppc_executor`), all but `cancel`, which it leaves out: a PowerPC
+Time Manager task during a blocking call ends the application
+(STRAGGLERS 64).
