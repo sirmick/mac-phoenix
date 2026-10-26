@@ -203,7 +203,7 @@
       - name: reserved
         type: uint32_t
       - name: newID
-        type: GUEST<uint32_t>*
+        type: uint32_t*
     dispatcher: DisplayDispatch
     selector: 0x082E
     executor: C_
@@ -221,11 +221,11 @@
       - name: displayID
         type: uint32_t
       - name: portComponent
-        type: GUEST<Component>*
+        type: Component*
       - name: portDesc
         type: Ptr
       - name: portKind
-        type: GUEST<OSType>*
+        type: OSType*
     dispatcher: DisplayDispatch
     selector: 0x082F
     executor: C_
@@ -261,7 +261,7 @@
       - name: reserved
         type: uint32_t
       - name: newID
-        type: GUEST<uint32_t>*
+        type: uint32_t*
     dispatcher: DisplayDispatch
     selector: 0x0833
     executor: C_
@@ -277,11 +277,11 @@
       - name: displayID
         type: uint32_t
       - name: theDeviceComponent
-        type: GUEST<Component>*
+        type: Component*
       - name: theDesc
         type: Ptr
       - name: theKind
-        type: GUEST<OSType>*
+        type: OSType*
     dispatcher: DisplayDispatch
     selector: 0x0835
     executor: C_
@@ -295,7 +295,7 @@
       - name: portAVID
         type: uint32_t
       - name: deviceAVID
-        type: GUEST<uint32_t>*
+        type: uint32_t*
     dispatcher: DisplayDispatch
     selector: 0x043B
     executor: C_
@@ -421,7 +421,7 @@
     return: OSErr
     args:
       - name: desktopRegion
-        type: GUEST<RgnHandle>*
+        type: RgnHandle*
     dispatcher: DisplayDispatch
     selector: 0x0213
     executor: C_

@@ -142,6 +142,13 @@ Truncated = 1,
 TruncErr = -1,
 };
 
+// TruncText and TruncString truncation codes
+enum {smTruncEnd = 0,
+smTruncMiddle = 16384,
+truncEnd = 0,
+truncMiddle = 16384,
+};
+
 typedef uint8_t StyledLineBreakCode;
 
 struct DateCacheRecord{GUEST_STRUCT;GUEST<int16_t> hidden[256];};static_assert(sizeof(DateCacheRecord) == 512);void describeStruct(const DateCacheRecord&, std::ostream&);

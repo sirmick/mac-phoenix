@@ -1271,7 +1271,7 @@
       - name: pt
         type: Point
       - name: window
-        type: GUEST<WindowPtr>*
+        type: WindowPtr*
     dispatcher: LayerDispatch
     selector: 0x0407
     executor: C_
