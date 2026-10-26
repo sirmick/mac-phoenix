@@ -73,6 +73,15 @@ int32_t map_gai(int e)
     }
 }
 
+/* A name the resolver found, as Apple's DNR gives it: fully qualified,
+   with the root's dot ("localhost.", "dns.google."). */
+std::string fqdn(std::string name)
+{
+    if(!name.empty() && name.back() != '.')
+        name += '.';
+    return name;
+}
+
 Answer resolve(std::string name)
 {
     Answer a;
@@ -93,7 +102,7 @@ Answer resolve(std::string name)
     a.err = map_gai(hostnet::getaddrinfo(name.c_str(), nullptr, &hints, &res));
     if(a.err)
         return a;
-    a.name = res->ai_canonname ? res->ai_canonname : name;
+    a.name = fqdn(res->ai_canonname ? res->ai_canonname : name);
     for(auto *ai = res; ai && (int)a.addrs.size() < MAX_ADDRS; ai = ai->ai_next)
     {
         uint32_t ip = ntohl(((struct sockaddr_in *)ai->ai_addr)->sin_addr.s_addr);
@@ -114,7 +123,7 @@ Answer reverse(uint32_t ip)
     a.err = map_gai(hostnet::getnameinfo((struct sockaddr *)&sin, sizeof sin, host, sizeof host,
                                 nullptr, 0, NI_NAMEREQD));
     if(!a.err)
-        a.name = host;
+        a.name = fqdn(host);
     return a;
 }
 

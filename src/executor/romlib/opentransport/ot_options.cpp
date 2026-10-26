@@ -61,6 +61,7 @@ enum : uint32_t
 enum class Shape : uint8_t
 {
     Int,      /* a 4-byte number (or 1 or 2 bytes, as the client sends it) */
+    Byte,     /* one byte whatever the client sends (IP_TTL, as Apple's OT has it) */
     Linger,   /* t_linger: l_onoff, l_linger (seconds) */
     KeepAlive,/* t_kpalive: kp_onoff, kp_timeout (minutes) */
     Mreq,     /* TIPAddMulticast: group address, interface address */
@@ -87,7 +88,7 @@ const Opt opts[] = {
     { INET_TCP, 0x02, IPPROTO_TCP, TCP_MAXSEG, Shape::Int, 536, true, false, false },
     { INET_TCP, 0x08, SOL_SOCKET, SO_KEEPALIVE, Shape::KeepAlive, T_NO, true, false, false },
     { INET_IP, 0x02, IPPROTO_IP, IP_TOS, Shape::Int, 0, false, false, false },
-    { INET_IP, 0x03, IPPROTO_IP, IP_TTL, Shape::Int, 64, false, false, false },
+    { INET_IP, 0x03, IPPROTO_IP, IP_TTL, Shape::Byte, 255, false, false, false },
     { INET_IP, 0x04, SOL_SOCKET, SO_REUSEADDR, Shape::Int, T_NO, false, false, false },
     { INET_IP, 0x10, SOL_SOCKET, SO_DONTROUTE, Shape::Int, T_NO, false, false, false },
     { INET_IP, 0x20, SOL_SOCKET, SO_BROADCAST, Shape::Int, T_NO, false, true, false },
@@ -178,6 +179,11 @@ bool set_on_socket(int fd, const Opt &o, const std::vector<uint8_t> &v)
             int x = (int)read_int(v);
             return hostnet::setsockopt(fd, o.sol, o.so, &x, sizeof x) == 0;
         }
+        case Shape::Byte:
+        {
+            int x = v.empty() ? 0 : v[0];
+            return hostnet::setsockopt(fd, o.sol, o.so, &x, sizeof x) == 0;
+        }
         case Shape::Linger:
         {
             struct linger lg = { be32(v, 0) == T_YES, (int)be32(v, 4) };
@@ -217,12 +223,24 @@ void current(const Provider &p, const Opt &o, std::vector<uint8_t> &v)
             v = kept->second;
         else if(o.shape == Shape::Int)
             put_int(v, o.dflt);
+        else if(o.shape == Shape::Byte)
+            v.assign(1, (uint8_t)o.dflt);
         else
             v.assign(8, 0);
+        if(o.shape == Shape::Byte)
+            v.resize(1);
         return;
     }
     switch(o.shape)
     {
+        case Shape::Byte:
+        {
+            int x = 0;
+            socklen_t len = sizeof x;
+            hostnet::getsockopt(p.fd, o.sol, o.so, &x, &len);
+            v.assign(1, (uint8_t)x);
+            break;
+        }
         case Shape::Int:
         {
             int x = 0;
@@ -338,6 +356,13 @@ uint32_t Executor::ot::option_management(Provider &p, uint32_t req, uint32_t ret
             work.push_back(o);
     }
 
+    /* A level the stack doesn't know fails the whole request (Apple's OT);
+       an unknown option of a known level is T_NOTSUPPORT. */
+    for(auto &o : work)
+        if(o.level != XTI_GENERIC && o.level != INET_IP && o.level != INET_TCP
+           && o.level != INET_UDP)
+            return kOTBadOptionErr;
+
     uint32_t worst = T_SUCCESS;
     for(auto &o : work)
     {
@@ -363,6 +388,8 @@ uint32_t Executor::ot::option_management(Provider &p, uint32_t req, uint32_t ret
         {
             if(d->shape == Shape::Int)
                 put_int(o.value, d->dflt);
+            else if(d->shape == Shape::Byte)
+                o.value.assign(1, (uint8_t)d->dflt);
             else
                 o.value.assign(8, 0);
             o.status = T_SUCCESS;

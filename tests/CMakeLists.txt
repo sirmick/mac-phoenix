@@ -735,8 +735,7 @@ set_tests_properties(ot_ppc_executor PROPERTIES
 
 # And built with Retro68 against the headers generated from the definitions
 # (OpenTransport.yaml, OpenTptInternet.yaml), its public calls the glue in
-# custom/OpenTransportGlue.c (tests/guest/ot/build-retro68.sh). On Mac OS
-# 9.0.4 it gets the same results as OTTestPPC, Apple's glue (OpenTransport.md).
+# custom/OpenTransportGlue.c (tests/guest/ot/build-retro68.sh).
 add_test(
   NAME ot_retro68_ppc_executor
   COMMAND bash ${TEST_DIR}/test_guest_suite.sh --backend executor --app ${CMAKE_SOURCE_DIR}/tests/guest/ot/OTTestRetroPPC.bin --results ot_results.txt --timeout 150 --port 18740
@@ -744,6 +743,20 @@ add_test(
 set_tests_properties(ot_retro68_ppc_executor PROPERTIES
   TIMEOUT 200
   LABELS "guest;executor"
+  SKIP_RETURN_CODE 77
+)
+
+# The reference: Apple's Open Transport 2.6.1 (Mac OS 9.0.4) on the G3
+# under mame-ppc, against net-bridge's echo service (--echo-gateway), with
+# our glue (OTTestRetroPPC). OTTest's cases are what Apple's OT does (1.1.1
+# on 7.6.1 too, by hand: STRAGGLERS 66).
+add_test(
+  NAME ot_retro68_ppc_rom
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --backend kpx --core mame-ppc --jit --app ${CMAKE_SOURCE_DIR}/tests/guest/ot/OTTestRetroPPC.bin --results ot_results.txt --echo-gateway --timeout 220 --port 18744
+)
+set_tests_properties(ot_retro68_ppc_rom PROPERTIES
+  TIMEOUT 300
+  LABELS "guest"
   SKIP_RETURN_CODE 77
 )
 

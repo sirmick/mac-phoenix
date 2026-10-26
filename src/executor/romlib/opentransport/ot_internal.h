@@ -181,6 +181,7 @@ enum : int32_t
     kOTConfigurationChangedErr = -3283,
     kOTUserRequestedErr = -3284,
     kOTPortLostConnection = -3285,
+    kENOENTErr = -3201,
     kEINVALErr = -3221,
     kEWOULDBLOCKErr = -3234,
     kEALREADYErr = -3236,

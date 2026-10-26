@@ -809,7 +809,6 @@ int32_t block_wait(uint32_t ref, short events, int timeout_ms, bool &ready)
         if(p->cancel_err)
         {
             err = p->cancel_err;
-            p->cancel_err = 0;
             break;
         }
         int slice = 20;
@@ -1331,6 +1330,8 @@ uint32_t rcv(const Call &c)
         WRITEUL(c.l(3), 0);
     if(p->state != T_DATAXFER && p->state != T_OUTREL)
         return p->look ? kOTLookErr : kOTOutStateErr;
+    if(p->cancel_err)
+        return p->cancel_err;
     uint8_t *buf = c.p(1);
     uint32_t n = c.l(2);
     for(;;)
@@ -1515,27 +1516,35 @@ uint32_t ot_sync(const Call &c)
 
 /* OSStatus OTCancelSynchronousCalls(ref, OSStatus err): a blocking call
    waiting on the provider returns err (from a notifier, a deferred task, a
-   Time Manager task). Nothing waiting: nothing to do. */
+   Time Manager task). Nothing waiting: nothing to do. As in Apple's OT
+   (1.1.1 and 2.6), the cancel stays: the endpoint's receives answer err,
+   blocking or not, until the client cancels again with kOTNoError. */
 uint32_t cancel_sync_calls(const Call &c)
 {
     Provider *p = lookup(c);
     if(!p)
         return kOTBadReferenceErr;
-    if(p->in_sync_wait)
+    int32_t err = (int32_t)c.l(1);
+    if(err == kOTNoError)
+        p->cancel_err = 0;
+    else if(p->in_sync_wait)
     {
-        p->cancel_err = (int32_t)c.l(1);
+        p->cancel_err = err;
         OT_LOG("%08x: synchronous call cancelled (%d)\n", p->ref, p->cancel_err);
     }
     return kOTNoError;
 }
 
 /* OSStatus OTResolveAddress(ref, TBind *req, TBind *ret, OTTimeout): an
-   InetAddress as it is, a DNSAddress ("name[:port]") looked up. */
+   InetAddress as it is, a DNSAddress ("name[:port]") looked up; on a bound
+   endpoint only, as Apple's OT has it. */
 uint32_t resolve_address(const Call &c)
 {
     Provider *p = lookup(c);
     if(!p)
         return kOTBadReferenceErr;
+    if(p->state == T_UNBND)
+        return kOTOutStateErr;
     uint32_t req = c.l(1), ret = c.l(2);
     struct sockaddr_in sin;
     if(!req)
@@ -1549,15 +1558,17 @@ uint32_t resolve_address(const Call &c)
     return kOTNoError;
 }
 
-/* OTPortRef OTGetProviderPortRef(ref) */
-uint32_t get_provider_port_ref(const Call &c)
+/* OTPortRef OTGetProviderPortRef(ref): none for a TCP or UDP endpoint
+   (they sit on IP, not on a port), as Apple's OT answers. */
+uint32_t get_provider_port_ref(const Call &)
 {
-    return lookup(c) ? enet_port_ref() : 0;
+    return 0;
 }
 
 /* SInt32 OTIoctl(ref, UInt32 cmd, void *data): the STREAMS module stack
-   isn't there to talk to; signing up for miscellaneous events is accepted
-   (there are none). */
+   isn't there to talk to. Signing up for miscellaneous events is a link
+   module's (a port's) business: a TCP or UDP endpoint answers kENOENTErr,
+   as in Apple's OT 1.1.1 and 2.6. */
 uint32_t ot_ioctl(const Call &c)
 {
     if(!lookup(c))
@@ -1565,7 +1576,7 @@ uint32_t ot_ioctl(const Call &c)
     uint32_t cmd = c.l(1);
     OT_LOG("OTIoctl %08x cmd $%04x\n", c.l(0), cmd);
     if(cmd == 0x4F01) /* I_OTGetMiscellaneousEvents */
-        return kOTNoError;
+        return (uint32_t)kENOENTErr;
     return (uint32_t)kEINVALErr;
 }
 

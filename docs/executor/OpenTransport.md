@@ -228,7 +228,27 @@ Executor, which ignores it).
 
 OTTest built this way (`tests/guest/ot/build-retro68.sh`,
 `OTTestRetroPPC.bin`, committed) passes its 20 cases on Executor
-(`ot_retro68_ppc_executor`) and on Mac OS 9.0.4 gets what Apple's glue
-gets (OTTestPPC): the same 13 passes and 7 failures, the cases where real
-OT and OTTest disagree (STRAGGLERS 65). `multiversal_retro68` compiles
-OTTest.c for PowerPC against the headers and checks the glue library.
+(`ot_retro68_ppc_executor`) and on Mac OS 9.0.4 (`ot_retro68_ppc_rom`),
+as Apple's glue does (OTTestPPC). `multiversal_retro68` compiles OTTest.c
+for PowerPC against the headers and checks the glue library.
+
+## Checked against Apple's
+
+OTTest's cases are what Apple's OT does: 1.1.1 (Mac OS 7.6.1) and 2.6.1
+(Mac OS 9.0.4) on the G3 under mame-ppc, against net-bridge's echo
+service (`test_guest_suite.sh --echo-gateway`; STRAGGLERS 65). What
+that settled, where Executor had it otherwise:
+
+* `OTCancelSynchronousCalls(ep, err)` stays: the endpoint's receives,
+  blocking or not, answer err until the client cancels with kOTNoError.
+* System tasks run at WaitNextEvent (`toolevent.cpp`), not at
+  SystemTask, GetNextEvent or EventAvail.
+* `OTResolveAddress` wants a bound endpoint (else kOTOutStateErr).
+* Option management: an option of a level the stack doesn't know fails
+  the request with kOTBadOptionErr; an unknown option of a known level is
+  T_NOTSUPPORT. IP_TTL is a one-byte option (default 255).
+* TCP and UDP endpoints sit on IP: `OTGetProviderPortRef` is 0, and
+  `I_OTGetMiscellaneousEvents` answers kENOENTErr.
+* The resolver's names end with the root's dot (`localhost.`).
+* A reverse lookup asks the name servers, which may have no name for
+  127.0.0.1 (Executor's host resolver has one).

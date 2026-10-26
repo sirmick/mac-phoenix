@@ -3,6 +3,7 @@
 #include <base/builtinlibs.h>
 #include <PowerCore.h>
 #include <prefs/prefs.h>
+#include <rsys/process.h>
 
 #include <algorithm>
 
@@ -43,6 +44,18 @@ void Executor::executePPC(uint32_t addr)
         ~Depth() { --ppcDepth; }
     } depth;
     cpu.execute();
+}
+
+/* The mode the process runs in, the PowerPC registers and its depth in
+   PowerPC code: a process switched away from inside a PowerPC call
+   (WaitNextEvent from a PowerPC application) comes back to them, and the
+   68k process that runs meanwhile doesn't run in PowerPC mode on its stack. */
+void Executor::cpu_register_process_state()
+{
+    ROMlib_process_register_state(&currentCPUMode, sizeof currentCPUMode);
+    ROMlib_process_register_state(static_cast<PowerCoreState *>(&getPowerCore()),
+                                  sizeof(PowerCoreState));
+    ROMlib_process_register_state(&ppcDepth, sizeof ppcDepth);
 }
 
 uint32_t Executor::callPPC(uint32_t tv, std::initializer_list<uint32_t> args)
