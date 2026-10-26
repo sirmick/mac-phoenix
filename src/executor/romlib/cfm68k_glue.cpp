@@ -449,11 +449,12 @@ OSErr glue_CreateRangeDescriptor(AEDesc *start, AEDesc *stop, Boolean disposeInp
 /* CallComponentUPP (Components.h: "a global variable exported from
    InterfaceLib ... passed to CallUniversalProc to manually call a component
    function"): a routine descriptor for a routine taking a ComponentParameters
-   block, whose flags/paramSize/what words and parameters are the stack a 68k
-   component call pushes before _ComponentDispatch with D0 = 0. */
+   block, whose flags/paramSize/what words, parameters (paramSize bytes, the
+   last first) and the instance after them are the stack a 68k component call
+   pushes before _ComponentDispatch with D0 = 0. */
 LONGINT glue_CallComponent(Ptr params)
 {
-    uint32_t size = 4 + (uint8_t)params[1];
+    uint32_t size = 4 + (uint8_t)params[1] + 4;
     uint32_t save_a7 = EM_A7;
     EM_A7 -= 4;
     *ptr_from_longint<GUEST<uint32_t> *>(EM_A7) = 0;
@@ -581,6 +582,8 @@ void add_call_component_upp()
     auto *cell = (GUEST<UniversalProcPtr> *)NewPtrClear(sizeof(GUEST<UniversalProcPtr>));
     *cell = upp;
     builtinlibs::addCFM68KData("InterfaceLib", "CallComponentUPP", cell);
+    /* PowerPC callers reach it through Mixed Mode the same way. */
+    builtinlibs::addPPCData("InterfaceLib", "CallComponentUPP", cell);
 }
 
 ComponentInstance glue_OpenDefaultComponent(OSType type, OSType subType)

@@ -31,6 +31,7 @@ struct PowerCoreState
     uint32_t cr = 0;
     uint32_t lr = 0;
     uint32_t ctr = 0;
+    uint32_t fpscr = 0;   /* MacPhoenix: MathLib's floating-point environment */
 
     uint32_t CIA = 0;
 

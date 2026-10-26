@@ -58,7 +58,8 @@ npx playwright test
 # System Manager (docs/executor/FSM.md; ctest -R pcexchange_executor;
 # tests/lib/fat_image.py makes and checks them)
 # ... PowerPC code on mame-ppc: PowerPC-only apps always, fat apps' with
-# --executor-ppc (InterfaceLib only so far; no StdCLib/MathLib yet):
+# --executor-ppc; StdCLib and MathLib are Executor's own C++ (docs/executor/PPCLibs.md;
+# ctest -R 'clib_|guest_suite_ppc_executor'):
 ./build/mac-phoenix --backend executor --executor-system 7.5.5.img --executor-ppc
 ctest --test-dir build -L executor
 # Toolbox selectors/OT functions a session called that Executor lacks: "[unimplemented]"

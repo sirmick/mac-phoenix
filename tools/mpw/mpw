@@ -46,6 +46,7 @@ import signal
 import struct
 import subprocess
 import sys
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -350,7 +351,17 @@ def run(script, cwd=None, timeout=600, s=None, interfaces=None):
         marker = "\u00a7STATUS "
         wrapper = ('Set Exit 0\r"%s" \u2211 "%s"\rEcho "%s{Status}"\r'
                    % (mac_path(files["script"]), mac_path(files["out"]), marker))
-        r = exec_raw(wrapper, timeout=timeout + 60, script_timeout=timeout)
+        # The request is answered when the script ends; if the emulator dies
+        # meanwhile, say so at once rather than at the timeout.
+        result = {}
+        t = threading.Thread(target=lambda: result.update(
+            r=exec_raw(wrapper, timeout=timeout + 60, script_timeout=timeout)), daemon=True)
+        t.start()
+        while t.is_alive():
+            t.join(1.0)
+            if t.is_alive() and not alive(s):
+                raise MPWError("emulator died during the build; see %s" % s["log"])
+        r = result["r"]
         out = read_text(files["out"]) if os.path.exists(files["out"]) else ""
         for f in files.values():
             try:

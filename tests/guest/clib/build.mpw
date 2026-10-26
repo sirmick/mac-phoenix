@@ -1,0 +1,11 @@
+# build.mpw — CLibTest, PowerPC only, on StdCLib and MathLib (MrC, PPCLink);
+# tools/mpw/mpw build tests/guest/clib
+# products: CLibTest
+Delete -i CLibTest
+MrC clib.c -o clib.ppc.o
+PPCLink -main __start clib.ppc.o ∂
+	"{SharedLibraries}InterfaceLib" "{SharedLibraries}StdCLib" "{SharedLibraries}MathLib" ∂
+	"{PPCLibraries}StdCRuntime.o" "{PPCLibraries}PPCCRuntime.o" ∂
+	-t APPL -c 'CLbT' -o CLibTest
+Rez -a clib.r -o CLibTest
+SetFile -t APPL -c 'CLbT' -a B CLibTest

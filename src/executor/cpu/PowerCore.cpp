@@ -19,6 +19,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <exception>
 
 namespace {
 
@@ -28,6 +29,12 @@ namespace R = cpu::ppc;
 uint32_t exit_cell;
 
 std::atomic<cpu::Core *> the_core{nullptr};
+
+/* MacPhoenix: an exception out of a system call (ExitToShell's, from a
+   library's exit()) can't unwind through the recompiler's native frames:
+   the core stops at the exit cell and execute() rethrows it. Per host
+   thread, as the core's stop flag is. */
+thread_local std::exception_ptr pending_exception;
 
 void to_core(PowerCore &p, cpu::Core &c)
 {
@@ -41,6 +48,7 @@ void to_core(PowerCore &p, cpu::Core &c)
     c.set_reg(R::CR, p.cr);
     c.set_reg(R::LR, p.lr);
     c.set_reg(R::CTR, p.ctr);
+    c.set_reg(R::FPSCR, p.fpscr);
     c.set_reg(R::XER, (c.reg(R::XER) & 0x1FFFFFFFu) | p.getXER());
     c.set_pc(p.CIA);
 }
@@ -56,6 +64,7 @@ void from_core(PowerCore &p, cpu::Core &c)
     p.cr = c.reg(R::CR);
     p.lr = c.reg(R::LR);
     p.ctr = c.reg(R::CTR);
+    p.fpscr = c.reg(R::FPSCR);
     p.setXER(c.reg(R::XER));
     p.CIA = c.pc();
 }
@@ -75,7 +84,16 @@ public:
         {
             from_core(p, c);
             p.CIA = op_pc;
-            p.CIA = p.syscall(p);
+            try
+            {
+                p.CIA = p.syscall(p);
+            }
+            catch(...)
+            {
+                pending_exception = std::current_exception();
+                c.set_pc(p.exitAddress());
+                return OpResult::Stop;
+            }
             to_core(p, c);
             return OpResult::Continue;
         }
@@ -179,4 +197,10 @@ void PowerCore::execute()
             c.run();
     }
     from_core(*this, c);
+    if(pending_exception)
+    {
+        std::exception_ptr e = pending_exception;
+        pending_exception = nullptr;
+        std::rethrow_exception(e);
+    }
 }

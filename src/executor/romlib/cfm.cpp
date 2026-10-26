@@ -26,6 +26,7 @@
 #include <util/string.h>
 #include <base/builtinlibs.h>
 #include <base/cpu.h>
+#include <clib/clib.h>
 #include <algorithm>
 #include <string>
 #include <vector>
@@ -117,7 +118,11 @@ void Executor::ROMlib_cfm_terminate()
         loaded[i].terminated = true;
         if(loaded[i].term && loaded[i].arch == "m68k"_4)
             ROMlib_call_cfm68k(loaded[i].term);
+        else if(loaded[i].term)
+            callPPC(loaded[i].term, {});
     }
+    /* Executor's StdCLib: the application's streams are flushed and closed. */
+    clib::stdclibProcessExit();
 }
 
 void Executor::ROMlib_cfm_process_exit(uint32_t part_lo, uint32_t part_hi)
@@ -708,10 +713,14 @@ symbol_lookup(uint32_t *indexp, GUEST<Ptr> *valp, uint8_t imports[][4],
                         *valp = kUnresolvedCFragSymbolAddress;
                     else
                     {
-                        /* MacPhoenix: say so at load time; calling it aborts
-                           (PowerPC) or is answered 0 and logged (68k). */
+                        /* MacPhoenix: say so at load time; calling it is
+                           answered 0 and logged. A data import gets zeroed
+                           storage of its own, not a routine to read. */
                         fprintf(stderr, "CFM: unresolved import %s\n", symbol_name);
-                        *valp = builtinlibs::makeUndefinedSymbolStub(symbol_name, arch);
+                        if(class1 == kPEFDataSymbol)
+                            *valp = NewPtrSysClear(256);
+                        else
+                            *valp = builtinlibs::makeUndefinedSymbolStub(symbol_name, arch);
                     }
                 }
                 /*-->*/ break;
@@ -1050,11 +1059,12 @@ load_loader_section(const void *addr,
                           reloc_instrs, imports, symbol_names,
                           closure_id, connp, arch);
     }
-    if(retval == noErr && arch == "m68k"_4 && lihp->initSection != -1)
+    if(retval == noErr && lihp->initSection != -1)
     {
-        /* MacPhoenix: CFM-68K: the init routine's transition vector, called
-           with a CFragSystem7InitBlock that says where the fragment came
-           from (its file stays valid while the application runs). */
+        /* MacPhoenix: the init routine's transition vector, called with a
+           CFragSystem7InitBlock that says where the fragment came from (its
+           file stays valid while the application runs); CFM-68K and
+           PowerPC alike (upstream ran PowerPC ones only on a PowerPC host). */
         uint32_t tv = guest_cast<uint32_t>(connp->sects[PEFLIH_INIT_SECTION(lihp)].start)
                       + PEFLIH_INIT_OFFSET(lihp);
         InitBlock *ib = (InitBlock *)NewPtrClear(sizeof(InitBlock));
@@ -1084,36 +1094,12 @@ load_loader_section(const void *addr,
         ib->connectionID = guest_cast<uint32_t>((Ptr)connp);
         ib->libName = name;
         uint32_t arg = guest_cast<uint32_t>((Ptr)ib);
-        OSErr err = (int16_t)ROMlib_call_cfm68k(tv, &arg);
+        OSErr err = arch == "m68k"_4 ? (int16_t)ROMlib_call_cfm68k(tv, &arg)
+                                     : (int16_t)callPPC(tv, { arg });
         if(err != noErr)
         {
-            fprintf(stderr, "CFM-68K: init routine of %s: %d\n", o ? o->name.c_str() : "?", err);
+            fprintf(stderr, "CFM: init routine of %s: %d\n", o ? o->name.c_str() : "?", err);
             retval = err;
-        }
-    }
-    else if(retval == noErr && lihp->initSection != -1)
-    {
-        GUEST<uint32_t> *init_addr;
-        InitBlock init_block;
-
-        warning_unimplemented("register preservation, bad init_block");
-        // #warning this code has a lot of problems (register preservation, bad init_block)
-
-        init_addr = (GUEST<uint32_t> *)SYN68K_TO_US(guest_cast<uint32_t>(connp->sects[PEFLIH_INIT_SECTION(lihp)].start) + PEFLIH_INIT_OFFSET(lihp));
-
-        memset(&init_block, 0xFA, sizeof init_block);
-        //init_routine = (uint32_t(*)(uint32_t))SYN68K_TO_US(init_addr[0]);
-        //init_toc = (uint32_t)SYN68K_TO_US(init_addr[1]);
-#if defined(powerpc) || defined(__ppc__)
-        retval = ppc_call(init_toc, init_routine, (uint32_t)&init_block);
-#else
-        warning_unexpected("");
-        retval = paramErr;
-#endif
-        if(retval)
-        {
-            warning_unexpected("%d", retval);
-            retval = noErr;
         }
     }
     if(retval == noErr && lihp->termSection != -1)

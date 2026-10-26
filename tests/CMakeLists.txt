@@ -321,6 +321,41 @@ set_tests_properties(ppc_hello_executor PROPERTIES
   SKIP_RETURN_CODE 77
 )
 
+# StdCLib and MathLib on Executor (docs/executor/PPCLibs.md): CLibTest
+# (tests/guest/clib, MrC + PPCLink on StdCLib and MathLib) against Apple's
+# libraries on the Power Mac (Mac OS 9.0.4 on mame-ppc), the reference.
+add_test(
+  NAME clib_executor
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --backend executor --app ${CMAKE_SOURCE_DIR}/tests/guest/clib/CLibTest.bin --results clib_results.txt --network none --timeout 150 --port 18442
+)
+set_tests_properties(clib_executor PROPERTIES
+  TIMEOUT 200
+  LABELS "guest;executor"
+  SKIP_RETURN_CODE 77
+)
+add_test(
+  NAME clib_rom_ppc
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --backend kpx --core mame-ppc --jit --app ${CMAKE_SOURCE_DIR}/tests/guest/clib/CLibTest.bin --results clib_results.txt --network none --timeout 150 --port 18452
+)
+set_tests_properties(clib_rom_ppc PROPERTIES
+  TIMEOUT 220
+  LABELS "guest"
+  SKIP_RETURN_CODE 77
+  ENVIRONMENT "MACEMU_ROM=${TEST_PPC_ROM}"
+)
+
+# The fat MacPhoenixSuite's PowerPC code on Executor (--executor-ppc):
+# StdCLib, AppleScriptLib through CallComponentUPP, exit() through StdCLib.
+add_test(
+  NAME guest_suite_ppc_executor
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --backend executor --executor-ppc --network none --timeout 150 --port 18454
+)
+set_tests_properties(guest_suite_ppc_executor PROPERTIES
+  TIMEOUT 200
+  LABELS "guest;executor"
+  SKIP_RETURN_CODE 77
+)
+
 # The Notification Manager from an application in the background: the alert
 # with its text, the response procedure after the alert is dismissed (the
 # host presses Return), nmTypErr: tests/guest/notify. The ROM machine is the

@@ -10,6 +10,9 @@
  *      up in FreeHand 1.0
  */
 
+#include <vector>
+#include <string>
+#include <algorithm>
 #include <base/common.h>
 
 #include <math.h>
@@ -831,17 +834,29 @@ round_string(const char *in, char *out, bool negative_p,
     }
     else
     {
-        char temp[256], *dot;
+        char *dot;
         double d;
 
         /* We'll convert the number to a double, and then round it
        * with rint.  This should use the rounding mode we
        * set in Fsetenv.
+       * MacPhoenix: built in a string as long as the digits (a 256-char
+       * buffer overflowed from about 1e170 up), and the "%f" result cut
+       * at the point before it reaches `out`, which the caller sized for
+       * desired_digits + 2.
        */
-        sprintf(temp, "%s%.*s.%s", negative_p ? "-" : "", desired_digits, in,
-                in + desired_digits);
-        d = atof(temp);
-        sprintf(out, "%f", rint(d));
+        std::string temp = std::string(negative_p ? "-" : "")
+                           + std::string(in, desired_digits) + "." + (in + desired_digits);
+        d = atof(temp.c_str());
+        int needed = snprintf(nullptr, 0, "%.0f", rint(d));
+        std::vector<char> rounded(needed + 1);
+        snprintf(rounded.data(), rounded.size(), "%.0f", rint(d));
+        const char *r = rounded.data();
+        while(*r == '-' || (*r == '0' && r[1]))
+            r++;
+        size_t keep = std::min<size_t>(strlen(r), desired_digits + 1);
+        memcpy(out, r, keep);
+        out[keep] = '\0';
 
         /* Axe any floating point residual that may have appeared. */
         dot = strchr(out, '.');
@@ -871,7 +886,11 @@ void Executor::C_ROMlib_Fx2dec(DecForm *sp2, void *sp, Decimal *dp,
     DECLAREIN();
     ieee_t n;
     int digits;
-    char c_string[256] = "?"; /* Big enough to be safe. */
+    /* MacPhoenix: sized for the number (below); 256 chars overflowed for
+       fixed-style conversions of large values. */
+    std::vector<char> c_buf(256);
+    char *c_string = c_buf.data();
+    strcpy(c_string, "?");
 
     switch(sel & OPCODE_MASK)
     {
@@ -925,15 +944,12 @@ void Executor::C_ROMlib_Fx2dec(DecForm *sp2, void *sp, Decimal *dp,
         char *digit_string, *dot;
         int exponent, digits_to_keep;
 
-        /* Convert the number to ASCII. */
-        digit_string = (char *)alloca(SIGDIGLEN + 256); /* tons of extra space */
-
-#if !defined(CYGWIN32)
-        sprintf(digit_string, "%.80Lf", n);
-#else
-        // FIXME: #warning MAY LOSE PRECISION HERE
-        sprintf(digit_string, "%.80f", (double)n);
-#endif
+        /* Convert the number to ASCII. MacPhoenix: as long as it takes (an
+           alloca of SIGDIGLEN + 256 overflowed from about 1e170 up). */
+        int needed = snprintf(nullptr, 0, "%.80Lf", (long double)n);
+        std::vector<char> digit_buf(needed + 1);
+        digit_string = digit_buf.data();
+        snprintf(digit_string, needed + 1, "%.80Lf", (long double)n);
 
         dot = strchr(digit_string, '.');
         if(dot == nullptr)
@@ -961,6 +977,11 @@ void Executor::C_ROMlib_Fx2dec(DecForm *sp2, void *sp, Decimal *dp,
         }
 
         /* Round the value appropriately. */
+        if(digits_to_keep + 2 > (int)c_buf.size())
+        {
+            c_buf.resize(digits_to_keep + 2);
+            c_string = c_buf.data();
+        }
         if(digits_to_keep <= 0)
             c_string[0] = '\0'; /* zero */
         else
