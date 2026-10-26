@@ -558,7 +558,7 @@ set(misc_sources
   process.cpp alias.cpp edition.cpp  balloon.cpp
    adb.cpp color_wheel_bits.cpp finder.cpp  
   icon.cpp redrawscreen.cpp quicktime.cpp
-  commtool.cpp cfm.cpp pef_hash.cpp
+  commtool.cpp cfm.cpp cfm68k_glue.cpp pef_hash.cpp
   mixed_mode.cpp appearance.cpp
   executor.cpp  
   prefpanel.cpp

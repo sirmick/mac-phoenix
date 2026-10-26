@@ -118,16 +118,17 @@ cfm_launch(Handle cfrg0, OSType desired_arch, FSSpecPtr fsp)
 
     if(cfirp)
     {
-        GUEST<Ptr> mainAddr;
+        GUEST<Ptr> mainAddr = nullptr;
         Str255 errName;
         GUEST<ConnectionID> c_id;
+        OSErr err = noErr;
 
         unsigned char empty[] = { 0 };
 
         if(CFIR_LOCATION(cfirp) == kOnDiskFlat)
         {
             // #warning were ignoring a lot of the cfir attributes
-           OSErr err = GetDiskFragment(fsp, CFIR_OFFSET_TO_FRAGMENT(cfirp),
+            err = GetDiskFragment(fsp, CFIR_OFFSET_TO_FRAGMENT(cfirp),
                             CFIR_FRAGMENT_LENGTH(cfirp), empty,
                             kLoadLib,
                             &c_id,
@@ -135,6 +136,14 @@ cfm_launch(Handle cfrg0, OSType desired_arch, FSSpecPtr fsp)
                             errName);
             fprintf(stderr, "GetDiskFragment -> err == %d\n", err);
 
+        }
+        else if(CFIR_LOCATION(cfirp) == kOnDiskSegmented && desired_arch == "m68k"_4)
+        {
+            /* MacPhoenix: segmented CFM-68K (code in resources, loaded by
+               the Enabler's segment loader) isn't done (CFM68K.md). */
+            fprintf(stderr, "CFM-68K: segmented application not supported\n");
+            ROMlib_launch_failure = launch_cfm_requiring;
+            C_ExitToShell();
         }
         else if(CFIR_LOCATION(cfirp) == kOnDiskSegmented)
         {
@@ -150,6 +159,21 @@ cfm_launch(Handle cfrg0, OSType desired_arch, FSSpecPtr fsp)
                            &c_id, &mainAddr, errName);
 
             fprintf(stderr, "Memory leak from segmented fragment\n");
+        }
+        if(desired_arch == "m68k"_4)
+        {
+            /* MacPhoenix: CFM-68K (docs/executor/CFM68K.md): the main
+               routine's transition vector, on the 68k CPU. */
+            if(err != noErr || !mainAddr)
+            {
+                ROMlib_launch_failure = launch_cfm_requiring;
+                C_ExitToShell();
+            }
+            uint32_t tv = guest_cast<uint32_t>(mainAddr);
+            if(base::Debugger::instance)
+                base::Debugger::instance->initProcess(*ptr_from_longint<GUEST<uint32_t> *>(tv));
+            ROMlib_call_cfm68k(tv);
+            C_ExitToShell();
         }
         {
             void *mainAddr1 = (void*) mainAddr;
@@ -295,16 +319,26 @@ static void launchchain(ConstStringPtr fName, INTEGER vRefNum, Boolean resetmemo
             && ROMlib_find_cfrg(cfrg0, "pwpc"_4,
                                 kApplicationCFrag, (StringPtr) "");
 
+    /* MacPhoenix: a CFM-68K application (docs/executor/CFM68K.md) starts
+       through Executor's Code Fragment Manager, not its CODE 0 launch stub;
+       a fat one does unless PowerPC code is preferred. */
+    bool have68kFragment = cfrg0
+            && ROMlib_find_cfrg(cfrg0, "m68k"_4,
+                                kApplicationCFrag, (StringPtr) "");
+
+    OSType cfm_arch = 0;
     if(havePowerPCCode && ROMlib_prefer_ppc)
+        cfm_arch = "pwpc"_4;
+    else if(have68kFragment)
+        cfm_arch = "m68k"_4;
+    else if(havePowerPCCode && !code0)
+        cfm_arch = "pwpc"_4;
+    if(cfm_arch)
         code0 = nullptr;
-    
-    if(!havePowerPCCode && !code0)
+
+    if(!cfm_arch && !code0)
     {
-        if(cfrg0 && ROMlib_find_cfrg(cfrg0, "m68k"_4,
-                                     kApplicationCFrag, (StringPtr) ""))
-            ROMlib_launch_failure = launch_cfm_requiring;
-        else
-            ROMlib_launch_failure = launch_damaged;
+        ROMlib_launch_failure = launch_damaged;
         C_ExitToShell();
     }
 
@@ -395,7 +429,8 @@ static void launchchain(ConstStringPtr fName, INTEGER vRefNum, Boolean resetmemo
         FSSpec fs;
 
         FSMakeFSSpec(ROMlib_exevrefnum, 0, ROMlib_exefname, &fs);
-        cfm_launch(cfrg0, "pwpc"_4, &fs);
+        ROMlib_cfm_application_start();
+        cfm_launch(cfrg0, cfm_arch, &fs);
     }
 }
 

@@ -690,6 +690,95 @@ namespace callfromPPC
 
 }
 
+/* MacPhoenix: calls from CFM-68K code into a library routine (docs/executor/
+   CFM68K.md): arguments pushed right to left, each in a 4-byte slot
+   (narrower values widened, at the slot's low end), structures by value
+   padded to 4 bytes, the result in D0. A routine with fixed arguments pops
+   them, Pascal or C; a variadic one leaves them to the caller. */
+namespace callfromCFM68K
+{
+    template<typename T>
+    constexpr uint32_t slotSize()
+    {
+        return (uint32_t)((sizeof(GUEST<T>) + 3) & ~3);
+    }
+
+    template<typename T>
+    T readArg(uint32_t slot)
+    {
+        using GT = GUEST<T>;
+        if constexpr(callfromPPC::detail::isGuestStruct<T>)
+        {
+            T result;
+            std::memcpy(&result, ptr_from_longint<uint8_t *>(slot), sizeof result);
+            return result;
+        }
+        else if constexpr(sizeof(GT) < 4)
+            return *ptr_from_longint<GT *>(slot + 4 - sizeof(GT));
+        else
+            return *ptr_from_longint<GT *>(slot);
+    }
+
+    template<typename Ret>
+    void setResult(const Ret& ret)
+    {
+        if constexpr(callfromPPC::detail::isGuestStruct<Ret>)
+        {
+            static_assert(sizeof(Ret) <= 4, "structure results are not passed in D0");
+            EM_D0 = callfromPPC::detail::wordFromBytes(reinterpret_cast<const uint8_t *>(&ret), sizeof ret)
+                    >> (8 * (4 - sizeof ret));
+        }
+        else if constexpr(callfromPPC::detail::isFloatingParameter<Ret>)
+        {
+            /* Not seen yet from CFM-68K code; D0:D1 holds the IEEE double. */
+            GUEST<double> g = ret;
+            const uint8_t *b = reinterpret_cast<const uint8_t *>(&g);
+            EM_D0 = callfromPPC::detail::wordFromBytes(b, 4);
+            EM_D1 = callfromPPC::detail::wordFromBytes(b + 4, 4);
+        }
+        else
+        {
+            using Traits = guestvalues::GuestTypeTraits<Ret>;
+            static_assert(sizeof(typename Traits::GuestType) <= 4, "result does not fit in D0");
+            EM_D0 = EM_A0 = Traits::host_to_reg(ret);
+        }
+    }
+
+    template<typename F>
+    struct Invoker;
+
+    template<typename Ret, typename... Args>
+    struct Invoker<Ret (Args...)>
+    {
+        static constexpr uint32_t argBytes() { return (0 + ... + slotSize<Args>()); }
+
+        template<typename F, size_t... Is>
+        static void helper(const F& fptr, std::index_sequence<Is...>)
+        {
+            constexpr uint32_t sizes[] = { slotSize<Args>()..., 0 };
+            uint32_t offsets[sizeof...(Args) + 1] = {};
+            for(size_t i = 1; i <= sizeof...(Args); i++)
+                offsets[i] = offsets[i - 1] + sizes[i - 1];
+            uint32_t base = EM_A7 + 4;
+            std::tuple<Args...> args { readArg<Args>(base + offsets[Is])... };
+            if constexpr(std::is_void_v<Ret>)
+                fptr(std::get<Is>(args)...);
+            else
+                setResult<Ret>(fptr(std::get<Is>(args)...));
+        }
+
+        template<typename F>
+        static syn68k_addr_t invokeFromCFM68K(const F& fptr, bool calleePops)
+        {
+            helper(fptr, std::index_sequence_for<Args...>());
+            syn68k_addr_t ret = callconv::stack::pop<syn68k_addr_t>();
+            if(calleePops)
+                EM_A7 += argBytes();
+            return ret;
+        }
+    };
+}
+
 template<typename Ret, typename... Args, typename CallConv>
 Ret UPP<Ret(Args...), CallConv>::operator()(Args... args) const
 {

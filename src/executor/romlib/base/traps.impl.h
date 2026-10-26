@@ -15,6 +15,9 @@ namespace Executor
 namespace builtinlibs
 {
     void addPPCEntrypoint(const char *library, const char *function, std::function<uint32_t (PowerCore&)> code);
+    void addCFM68KEntrypoint(const char *library, const char *function,
+                             std::function<syn68k_addr_t (syn68k_addr_t)> code);
+    bool cfm68kCalleePops(const char *function);
 }
 
 namespace traps
@@ -139,6 +142,19 @@ void WrappedFunction<Ret (Args...), fptr, CallConv>::init()
                     return callfromPPC::Invoker<Ret (Args...)>::invokeFromPPC(cpu, fptr);
                 }
             );
+        builtinlibs::addCFM68KEntrypoint(libname, name,
+            [this, pops = builtinlibs::cfm68kCalleePops(name)](syn68k_addr_t addr) {
+                if(auto ret = this->checkBreak68K(addr); ~ret)
+                    return ret;
+                auto call = [this](Args... args) -> Ret { return this->callFromLibrary(args...); };
+#ifdef EXECUTOR_ENABLE_LOGGING
+                if(logging::enabled())
+                    return callfromCFM68K::Invoker<Ret (Args...)>::invokeFromCFM68K(
+                        logging::makeLoggedFunction1<Ret (Args...)>(name, call), pops);
+#endif
+                return callfromCFM68K::Invoker<Ret (Args...)>::invokeFromCFM68K(call, pops);
+            }
+        );
     }
 }
 
@@ -295,6 +311,19 @@ void TrapVariant<Trap, Ret (Args...), flags...>::init()
                     );
                 });
         }
+        builtinlibs::addCFM68KEntrypoint(libname, name,
+            [this, pops = builtinlibs::cfm68kCalleePops(name)](syn68k_addr_t addr) {
+                if(auto ret = this->checkBreak68K(addr); ~ret)
+                    return ret;
+                auto call = [this](Args... args) -> Ret { return (*this)(args...); };
+#ifdef EXECUTOR_ENABLE_LOGGING
+                if(logging::enabled())
+                    return callfromCFM68K::Invoker<Ret (Args...)>::invokeFromCFM68K(
+                        logging::makeLoggedFunction1<Ret (Args...)>(name, call), pops);
+#endif
+                return callfromCFM68K::Invoker<Ret (Args...)>::invokeFromCFM68K(call, pops);
+            }
+        );
     }
 }
 

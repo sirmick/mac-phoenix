@@ -8,6 +8,8 @@
 #include <MemoryMgr.h>
 
 #include <MixedMode.h>
+#include <rsys/cfm.h>
+#include <base/builtinlibs.h>
 
 #include <file/file.h>
 #include <base/cpu.h>
@@ -150,7 +152,30 @@ namespace
     static constexpr uint32_t regmask[] = {0U, 0xFFU, 0xFFFFU, 0xFFFFFFFFU};
 }
 
-extern uint32_t Executor::ModeSwitch(UniversalProcPtr theProcPtr, ProcInfoType procinfo, ISAType fromISA)
+/* MacPhoenix: a CFM-68K routine (ISA kM68kISA | kCFM68kRTA; docs/executor/
+   CFM68K.md): the procedure is a transition vector, and the routine takes
+   its arguments as CFM-68K code passes them, whatever the convention its
+   procInfo names: pushed right to left, 4 bytes each, the result in D0
+   (a Pascal routine pops its arguments; the stack is reset either way). */
+static constexpr ISAType kCFM68kISA = kM68kISA | 0x10;
+
+static uint32_t call_cfm68k_routine(ProcPtr tvector, int nParameters,
+                                    const uint32_t paramValues[])
+{
+    uint32_t save_a7 = EM_A7;
+    for(int i = nParameters - 1; i >= 0; i--)
+    {
+        EM_A7 -= 4;
+        *ptr_from_longint<GUEST<uint32_t>*>(EM_A7) = paramValues[i];
+    }
+    uint32_t tv = guest_cast<uint32_t>(tvector);
+    uint32_t retval = ROMlib_call_cfm68k(tv);
+    EM_A7 = save_a7;
+    return retval;
+}
+
+static uint32_t mode_switch(UniversalProcPtr theProcPtr, ProcInfoType procinfo,
+                            ISAType fromISA, uint32_t cfm68kArgs)
 {
     // Step 1/5: Figure out what routine we are calling
 
@@ -175,13 +200,17 @@ extern uint32_t Executor::ModeSwitch(UniversalProcPtr theProcPtr, ProcInfoType p
     }
     else
     {
+        /* A plain procedure pointer is classic 68k code; from CFM-68K code
+           (CallUniversalProc) too. */
         assert(fromISA != kM68kISA);
         m68kroutine.procDescriptor = (ProcPtr)theProcPtr;
         m68kroutine.procInfo = procinfo;
+        m68kroutine.ISA = kM68kISA;
         routine = &m68kroutine;
     }
 
     procinfo = routine->procInfo;
+    ISAType toISA = routine->ISA;
     // Now, routine points to target routine, and procinfo is the corresponding procinfo.
 
     // Step 2/5: Parse the procinfo
@@ -197,8 +226,47 @@ extern uint32_t Executor::ModeSwitch(UniversalProcPtr theProcPtr, ProcInfoType p
 
     uint32_t stackArgsSize = 0;
 
+    /* MacPhoenix: a dispatched routine (a trap dispatcher's selector in D0,
+       D1 or on top of the stack): the selector is the routine's first
+       parameter for native code, and the rest are Pascal (or C) stack
+       parameters from bit 8 on. */
+    enum { kNoSelector, kSelectorD0, kSelectorD1, kSelectorStack };
+    int selectorWhere = kNoSelector;
     switch(convention)
     {
+        case kD0DispatchedPascalStackBased:
+        case kD0DispatchedCStackBased:
+            selectorWhere = kSelectorD0;
+            break;
+        case kD1DispatchedPascalStackBased:
+            selectorWhere = kSelectorD1;
+            break;
+        case kStackDispatchedPascalStackBased:
+            selectorWhere = kSelectorStack;
+            break;
+    }
+    if(selectorWhere != kNoSelector)
+    {
+        int selectorSize = (procinfo >> 6) & 0x3;
+        paramSizes[nParameters++] = selectorSize ? selectorSize : 2;
+        if(selectorWhere == kSelectorStack)
+            stackArgsSize += sizeOnStack(paramSizes[0]);
+        for(uint32_t field = 8; field <= 30; field += 2)
+        {
+            uint32_t argsize = (procinfo >> field) & 0x3;
+            if(!argsize)
+                break;
+            paramSizes[nParameters++] = argsize;
+            stackArgsSize += argsize == 3 ? 4 : 2;
+        }
+        convention = convention == kD0DispatchedCStackBased ? kCStackBased : kPascalStackBased;
+    }
+    int firstStackParam = selectorWhere == kNoSelector ? 0 : 1;
+
+    switch(selectorWhere != kNoSelector ? -1 : convention)
+    {
+        case -1:
+            break;
         case kRegisterBased:
             for(uint32_t field = 11; field <= 27; field += 5)
             {
@@ -236,12 +304,20 @@ extern uint32_t Executor::ModeSwitch(UniversalProcPtr theProcPtr, ProcInfoType p
     // Step 3/5: Collect the arguments into paramValues[]
 
     PowerCore& cpu = getPowerCore();
-    uint32_t stackPointer = fromISA == kM68kISA ? EM_A7: cpu.r[1];
+    uint32_t stackPointer = fromISA == kM68kISA || fromISA == kCFM68kISA ? EM_A7: cpu.r[1];
 
     uint32_t paramValues[maxParameters];
     uint32_t retval = 0;
 
-    if(fromISA == kM68kISA)
+    if(fromISA == kCFM68kISA)
+    {
+        /* CallUniversalProc's arguments after the procInfo, 4 bytes each,
+           the value at the low end. */
+        for(int i = 0; i < nParameters; i++)
+            paramValues[i] = *ptr_from_longint<GUEST<uint32_t>*>(cfm68kArgs + 4 * i)
+                & regmask[paramSizes[i]];
+    }
+    else if(fromISA == kM68kISA)
     {
         uint8_t *stackArgPtr = ptr_from_longint<uint8_t*>(EM_A7 + 4);
 
@@ -250,12 +326,17 @@ extern uint32_t Executor::ModeSwitch(UniversalProcPtr theProcPtr, ProcInfoType p
             case kRegisterBased:
                 for(int i = 0; i < nParameters; i++)
                 {
-                    paramValues[i] = cpu_state.regs[regmap[paramSizes[i]]].ul.n
+                    paramValues[i] = cpu_state.regs[regmap[paramRegs[i]]].ul.n
                         & regmask[paramSizes[i]];
                 }
                 break;
             case kPascalStackBased:
-                for(int i = nParameters-1; i >= 0; i--)
+                if(selectorWhere == kSelectorStack)
+                {
+                    paramValues[0] = readsized(stackArgPtr, paramSizes[0]);
+                    stackArgPtr += sizeOnStack(paramSizes[0]);
+                }
+                for(int i = nParameters-1; i >= firstStackParam; i--)
                 {
                     paramValues[i] = readsized(stackArgPtr, paramSizes[i]);
                     stackArgPtr += sizeOnStack(paramSizes[i]);
@@ -263,7 +344,7 @@ extern uint32_t Executor::ModeSwitch(UniversalProcPtr theProcPtr, ProcInfoType p
                 break;
             case kCStackBased:
             case kThinkCStackBased:
-                for(int i = 0; i < nParameters; i++)
+                for(int i = firstStackParam; i < nParameters; i++)
                 {
                     paramValues[i] = readsized(stackArgPtr, paramSizes[i]);
                     stackArgPtr += sizeOnStack(paramSizes[i]);
@@ -273,6 +354,8 @@ extern uint32_t Executor::ModeSwitch(UniversalProcPtr theProcPtr, ProcInfoType p
                 fprintf(stderr,"modeswitch: unimplemented/invalid convention %d (procinfo = %08x)\n", convention, procinfo);
                 std::exit(1);
         }
+        if(selectorWhere == kSelectorD0 || selectorWhere == kSelectorD1)
+            paramValues[0] = (selectorWhere == kSelectorD0 ? EM_D0 : EM_D1) & regmask[paramSizes[0]];
     }
     else if(fromISA == kPowerPCISA)
     {
@@ -287,7 +370,7 @@ extern uint32_t Executor::ModeSwitch(UniversalProcPtr theProcPtr, ProcInfoType p
 
     // Step 4/5: Invoke function
 
-    if(routine->ISA == kPowerPCISA)
+    if(toISA == kPowerPCISA)
     {
         uint32_t frame_size = std::max(8, nParameters) * 4 + 24;
         cpu.r[1] = stackPointer - frame_size;
@@ -309,6 +392,12 @@ extern uint32_t Executor::ModeSwitch(UniversalProcPtr theProcPtr, ProcInfoType p
 
         retval = cpu.r[3];
     }
+    else if(toISA == kCFM68kISA)
+    {
+        EM_A7 = stackPointer;
+        retval = call_cfm68k_routine(routine->procDescriptor, nParameters, paramValues)
+            & regmask[resultSize];
+    }
     else
     {
         EM_A7 = stackPointer;
@@ -318,35 +407,43 @@ extern uint32_t Executor::ModeSwitch(UniversalProcPtr theProcPtr, ProcInfoType p
             case kRegisterBased:
                 for(int i = 0; i < nParameters; i++)
                 {
-                    cpu_state.regs[regmap[paramSizes[i]]].ul.n = paramValues[i];
+                    cpu_state.regs[regmap[paramRegs[i]]].ul.n = paramValues[i];
                 }
                 break;
 
             case kPascalStackBased:
                 if(resultSize)
                     pusharg(resultSize, 0);
-                for(int i = 0; i < nParameters; i++)
+                for(int i = firstStackParam; i < nParameters; i++)
                     pusharg(paramSizes[i], paramValues[i]);
+                if(selectorWhere == kSelectorStack)
+                    pusharg(paramSizes[0], paramValues[0]);
                 break;
 
             case kCStackBased:
-                for(int i = nParameters-1; i >= 0; i--)
+                for(int i = nParameters-1; i >= firstStackParam; i--)
                     pusharg(paramSizes[i], paramValues[i]);
                 break;
         }
+        if(selectorWhere == kSelectorD0)
+            EM_D0 = paramValues[0];
+        else if(selectorWhere == kSelectorD1)
+            EM_D1 = paramValues[0];
 
         execute68K(guest_cast<uint32_t>(routine->procDescriptor));
 
         switch(convention)
         {
             case kRegisterBased:
-                retval = cpu_state.regs[resultReg].ul.n
+                retval = cpu_state.regs[regmap[resultReg]].ul.n
                     & regmask[resultSize];
                 break;
 
             case kPascalStackBased:
-                readsized(ptr_from_longint<uint8_t*>(EM_A7), resultSize);
-                EM_A7 += sizeOnStack(resultSize);
+                /* MacPhoenix: the result was read and dropped. */
+                if(resultSize)
+                    retval = readsized(ptr_from_longint<uint8_t*>(EM_A7), resultSize);
+                EM_A7 += resultSize ? sizeOnStack(resultSize) : 0;
                 break;
             
             case kCStackBased:
@@ -370,7 +467,8 @@ extern uint32_t Executor::ModeSwitch(UniversalProcPtr theProcPtr, ProcInfoType p
         switch(convention)
         {
             case kRegisterBased:
-                cpu_state.regs[resultReg].ul.n = retval;
+                if(resultSize)
+                    cpu_state.regs[regmap[resultReg]].ul.n = retval;
                 break;
             case kPascalStackBased:
                 EM_A7 += stackArgsSize;
@@ -390,7 +488,45 @@ extern uint32_t Executor::ModeSwitch(UniversalProcPtr theProcPtr, ProcInfoType p
     }
 }
 
+extern uint32_t Executor::ModeSwitch(UniversalProcPtr theProcPtr, ProcInfoType procinfo, ISAType fromISA)
+{
+    return mode_switch(theProcPtr, procinfo, fromISA, 0);
+}
+
+uint32_t Executor::ROMlib_cfm68k_call_universal_proc(UniversalProcPtr theProcPtr,
+                                                     ProcInfoType procinfo, uint32_t args)
+{
+    return mode_switch(theProcPtr, procinfo, kCFM68kISA, args);
+}
+
 LONGINT Executor::C_CallUniversalProc(UniversalProcPtr theProcPtr, ProcInfoType procInfo)
 {
     return ModeSwitch(theProcPtr, procInfo, kPowerPCISA);
+}
+
+/* MacPhoenix: CallUniversalProc and CallOSTrapUniversalProc from CFM-68K code
+   (docs/executor/CFM68K.md): C routines, the routine's arguments after the
+   procInfo (and the trap word's), 4 bytes each; the caller pops. */
+namespace
+{
+struct CFM68KMixedMode
+{
+    CFM68KMixedMode()
+    {
+        builtinlibs::overrideCFM68KEntrypoint("CallUniversalProc", [](syn68k_addr_t) {
+            uint32_t sp = EM_A7;
+            auto upp = ptr_from_longint<UniversalProcPtr>(*ptr_from_longint<GUEST<uint32_t>*>(sp + 4));
+            ProcInfoType info = *ptr_from_longint<GUEST<uint32_t>*>(sp + 8);
+            EM_D0 = ROMlib_cfm68k_call_universal_proc(upp, info, sp + 12);
+            return POPADDR();
+        });
+        builtinlibs::overrideCFM68KEntrypoint("CallOSTrapUniversalProc", [](syn68k_addr_t) {
+            uint32_t sp = EM_A7;
+            auto upp = ptr_from_longint<UniversalProcPtr>(*ptr_from_longint<GUEST<uint32_t>*>(sp + 4));
+            ProcInfoType info = *ptr_from_longint<GUEST<uint32_t>*>(sp + 8);
+            EM_D0 = ROMlib_cfm68k_call_universal_proc(upp, info, sp + 12);
+            return POPADDR();
+        });
+    }
+} cfm68k_mixed_mode;
 }

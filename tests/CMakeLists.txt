@@ -403,6 +403,30 @@ set_tests_properties(guest_suite_executor PROPERTIES
   SKIP_RETURN_CODE 77
 )
 
+# CFM-68K (docs/executor/CFM68K.md): the suite built as a CFM-68K application
+# (build.cw.mpw's MacPhoenixSuiteCFM68K: code in the data fork, MSL linked
+# in, InterfaceLib and AppleScriptLib imported) on Executor's own Code
+# Fragment Manager; the ROM machine with Apple's CFM-68K Runtime Enabler
+# (dev-7.6.1) is the reference, without the network (its OT has none here).
+add_test(
+  NAME guest_suite_cfm68k_executor
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --backend executor --app ${CMAKE_SOURCE_DIR}/tests/guest/suite/MacPhoenixSuiteCFM68K.bin --results cfm68k_results.txt --timeout 150 --port 18712
+)
+set_tests_properties(guest_suite_cfm68k_executor PROPERTIES
+  TIMEOUT 200
+  LABELS "guest;executor"
+  SKIP_RETURN_CODE 77
+)
+add_test(
+  NAME guest_suite_cfm68k
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --image dev-7.6.1 --app ${CMAKE_SOURCE_DIR}/tests/guest/suite/MacPhoenixSuiteCFM68K.bin --results cfm68k_results.txt --sections "disk extfs audio applescript" --network none --timeout 200 --port 18714
+)
+set_tests_properties(guest_suite_cfm68k PROPERTIES
+  TIMEOUT 300
+  LABELS "guest"
+  SKIP_RETURN_CODE 77
+)
+
 # MacTCP in depth (MacPhoenixSuite's mactcp section, after network): async
 # calls, ASRs, no-copy receive, passive open, timeouts, UDP, TCPGlobalInfo,
 # the resolver's other calls. On Executor against a host echo server; on

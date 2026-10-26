@@ -8,6 +8,7 @@
 
 #include <FileMgr.h>
 #include <SegmentLdr.h>
+#include <rsys/cfm.h>
 #include <MemoryMgr.h>
 #include <mman/mman.h>
 #include <ResourceMgr.h>
@@ -176,6 +177,9 @@ void Executor::C_ExitToShell()
     {
         fprintf(stderr, "launch failure: %d\n", ROMlib_launch_failure);
     }
+
+    /* MacPhoenix: CFM-68K fragments' term routines (docs/executor/CFM68K.md). */
+    ROMlib_cfm_terminate();
 
     /* MacPhoenix: a process with its own thread just ends; the Process
        Manager tidies up and switches on (process.cpp). */
