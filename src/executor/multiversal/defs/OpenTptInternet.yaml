@@ -1,0 +1,516 @@
+# Open Transport's TCP/IP interface (OpenTptInternet.h): addresses, the
+# DNR's types and calls, the protocols' option names. See OpenTransport.yaml.
+# Names the host's socket headers have too (AF_INET, IP_*, TCP_*) are for
+# the C side only.
+
+- typedef:
+    name: InetPort
+    type: UInt16
+- typedef:
+    name: InetHost
+    type: UInt32
+- typedef:
+    name: InetSvcRef
+    type: void*
+
+# Address families: AF_INET is the host's <sys/socket.h> name too.
+- not-for: executor
+  enum:
+    values:
+      - name: AF_INET
+        value: 2
+      - name: AF_DNS
+        value: 42
+
+- enum:
+    values:
+      - name: kOTAnyInetAddress
+        value: 0
+
+- not-for: executor
+  define:
+    name: kDNRName
+    value: '"dnr"'
+- not-for: executor
+  define:
+    name: kTCPName
+    value: '"tcp"'
+- not-for: executor
+  define:
+    name: kUDPName
+    value: '"udp"'
+- not-for: executor
+  define:
+    name: kRawIPName
+    value: '"rawip"'
+
+# ---- Options: levels and names (the host's <netinet/in.h> has most of
+# these names: the C side only) ------------------------------------------
+
+- not-for: executor
+  enum:
+    values:
+      - name: INET_IP
+        value: 0x00
+      - name: INET_TCP
+        value: 0x06
+      - name: INET_UDP
+        value: 0x11
+      - name: TCP_NODELAY
+        value: 0x01
+      - name: TCP_MAXSEG
+        value: 0x02
+      - name: TCP_NOTIFY_THRESHOLD
+        value: 0x10
+      - name: TCP_ABORT_THRESHOLD
+        value: 0x11
+      - name: TCP_CONN_NOTIFY_THRESHOLD
+        value: 0x12
+      - name: TCP_CONN_ABORT_THRESHOLD
+        value: 0x13
+      - name: TCP_OOBINLINE
+        value: 0x14
+      - name: TCP_URGENT_PTR_TYPE
+        value: 0x15
+      - name: TCP_KEEPALIVE
+        value: 0x0008
+      - name: T_GARBAGE
+        value: 2
+      - name: UDP_CHECKSUM
+        value: 0x0600
+      - name: UDP_RX_ICMP
+        value: 0x2
+      - name: IP_OPTIONS
+        value: 0x01
+      - name: IP_TOS
+        value: 0x02
+      - name: IP_TTL
+        value: 0x03
+      - name: IP_REUSEADDR
+        value: 0x04
+      - name: IP_DONTROUTE
+        value: 0x10
+      - name: IP_BROADCAST
+        value: 0x20
+      - name: IP_HDRINCL
+        value: 0x1002
+      - name: IP_RCVOPTS
+        value: 0x1005
+      - name: IP_RCVDSTADDR
+        value: 0x1007
+      - name: IP_MULTICAST_IF
+        value: 0x1010
+      - name: IP_MULTICAST_TTL
+        value: 0x1011
+      - name: IP_MULTICAST_LOOP
+        value: 0x1012
+      - name: IP_ADD_MEMBERSHIP
+        value: 0x1013
+      - name: IP_DROP_MEMBERSHIP
+        value: 0x1014
+      - name: IP_BROADCAST_IF
+        value: 0x1015
+      - name: IP_RCVIFADDR
+        value: 0x1016
+
+- enum:
+    comment: IP_TOS precedence and type of service.
+    values:
+      - name: T_ROUTINE
+        value: 0
+      - name: T_PRIORITY
+        value: 1
+      - name: T_IMMEDIATE
+        value: 2
+      - name: T_FLASH
+        value: 3
+      - name: T_OVERRIDEFLASH
+        value: 4
+      - name: T_CRITIC_ECP
+        value: 5
+      - name: T_INETCONTROL
+        value: 6
+      - name: T_NETCONTROL
+        value: 7
+      - name: T_NOTOS
+        value: 0x0
+      - name: T_LDELAY
+        value: 0x10
+      - name: T_HITHRPT
+        value: 0x08
+      - name: T_HIREL
+        value: 0x04
+
+- not-for: executor
+  define:
+    name: SET_TOS(prec, tos)
+    value: (((0x7 & (prec)) << 5) | (0x1c & (tos)))
+
+- struct:
+    name: TIPAddMulticast
+    members:
+      - name: multicastGroupAddress
+        type: InetHost
+      - name: interfaceAddress
+        type: InetHost
+    size: 8
+
+- enum:
+    comment: The DNR's completion events.
+    values:
+      - name: T_DNRSTRINGTOADDRCOMPLETE
+        value: 0x10000001
+      - name: T_DNRADDRTONAMECOMPLETE
+        value: 0x10000002
+      - name: T_DNRSYSINFOCOMPLETE
+        value: 0x10000003
+      - name: T_DNRMAILEXCHANGECOMPLETE
+        value: 0x10000004
+      - name: T_DNRQUERYCOMPLETE
+        value: 0x10000005
+
+- struct:
+    name: InetAddress
+    members:
+      - name: fAddressType
+        type: OTAddressType
+        comment: AF_INET
+      - name: fPort
+        type: InetPort
+      - name: fHost
+        type: InetHost
+        comment: network byte order
+      - name: fUnused
+        type: UInt8[8]
+    size: 16
+
+- enum:
+    values:
+      - name: kMaxHostAddrs
+        value: 10
+      - name: kMaxSysStringLen
+        value: 32
+      - name: kMaxHostNameLen
+        value: 255
+
+- typedef:
+    name: InetDomainName
+    type: char[256]
+
+- struct:
+    name: InetHostInfo
+    members:
+      - name: name
+        type: InetDomainName
+      - name: addrs
+        type: InetHost[10]
+    size: 296
+
+- struct:
+    name: InetSysInfo
+    members:
+      - name: cpuType
+        type: char[32]
+      - name: osType
+        type: char[32]
+    size: 64
+
+- struct:
+    name: InetMailExchange
+    members:
+      - name: preference
+        type: UInt16
+      - name: exchange
+        type: InetDomainName
+    size: 258
+
+- struct:
+    name: DNSQueryInfo
+    members:
+      - name: qType
+        type: UInt16
+      - name: qClass
+        type: UInt16
+      - name: ttl
+        type: UInt32
+      - name: name
+        type: InetDomainName
+      - name: responseType
+        type: UInt16
+      - name: resourceLen
+        type: UInt16
+      - name: resourceData
+        type: char[4]
+    size: 272
+
+- struct:
+    name: DNSAddress
+    members:
+      - name: fAddressType
+        type: OTAddressType
+        comment: AF_DNS
+      - name: fName
+        type: InetDomainName
+    size: 258
+
+- struct:
+    name: InetInterfaceInfo
+    members:
+      - name: fAddress
+        type: InetHost
+      - name: fNetmask
+        type: InetHost
+      - name: fBroadcastAddr
+        type: InetHost
+      - name: fDefaultGatewayAddr
+        type: InetHost
+      - name: fDNSAddr
+        type: InetHost
+      - name: fVersion
+        type: UInt16
+      - name: fHWAddrLen
+        type: UInt16
+      - name: fHWAddr
+        type: UInt8*
+      - name: fIfMTU
+        type: UInt32
+      - name: fReservedPtrs
+        type: UInt8*[2]
+      - name: fDomainName
+        type: InetDomainName
+      - name: fReserved
+        type: UInt8[256]
+    size: 552
+
+- not-for: executor
+  define:
+    name: kDefaultInternetServicesPath
+    value: ((OTConfiguration*)-3)
+
+- enum:
+    values:
+      - name: kDefaultInetInterface
+        value: -1
+      - name: kInetInterfaceInfoVersion
+        value: 2
+
+# ---- ot_inet.cpp -------------------------------------------------
+
+- function:
+    name: OTOpenInternetServicesPriv
+    return: InetSvcRef
+    args:
+      - name: cfig
+        type: "OTConfiguration*"
+      - name: oflag
+        type: OTOpenFlags
+      - name: err
+        type: "OSStatus*"
+      - name: clientContext
+        type: OTClientContextPtr
+    library: OTInetClientLib
+    aslm: { set: "ot:inet$LclInetClnt", name: "OTOpenInternetServicesPriv" }
+    callconv: C
+    executor: open_priv
+
+- function:
+    name: OTAsyncOpenInternetServicesPriv
+    return: OSStatus
+    args:
+      - name: cfig
+        type: "OTConfiguration*"
+      - name: oflag
+        type: OTOpenFlags
+      - name: proc
+        type: OTNotifyProcPtr
+      - name: contextPtr
+        type: "void*"
+      - name: clientContext
+        type: OTClientContextPtr
+    library: OTInetClientLib
+    aslm: { set: "ot:inet$LclInetClnt", name: "OTAsyncOpenInternetServicesPriv" }
+    callconv: C
+    executor: async_open_priv
+
+- function:
+    name: OTInetStringToAddress
+    return: OSStatus
+    args:
+      - name: ref
+        type: InetSvcRef
+      - name: name
+        type: "char*"
+      - name: hinfo
+        type: "InetHostInfo*"
+    library: OTInetClientLib
+    aslm: { set: "ot:inet$LclInetClnt", name: "OTINETSTRINGTOADDRESS" }
+    callconv: pascal
+    executor: string_to_address
+
+- function:
+    name: OTInetAddressToName
+    return: OSStatus
+    args:
+      - name: ref
+        type: InetSvcRef
+      - name: addr
+        type: InetHost
+      - name: name
+        type: InetDomainName
+    library: OTInetClientLib
+    aslm: { set: "ot:inet$LclInetClnt", name: "OTINETADDRESSTONAME" }
+    callconv: pascal
+    executor: address_to_name
+
+- function:
+    name: OTInitInetAddress
+    args:
+      - name: addr
+        type: "InetAddress*"
+      - name: port
+        type: InetPort
+      - name: host
+        type: InetHost
+    library: OTInetClientLib
+    aslm: { set: "ot:inet$LclInetClnt", name: "OTINITINETADDRESS" }
+    callconv: pascal
+    executor: init_inet_address
+
+- function:
+    name: OTInitDNSAddress
+    return: OTByteCount
+    args:
+      - name: addr
+        type: "DNSAddress*"
+      - name: str
+        type: "char*"
+    library: OTInetClientLib
+    aslm: { set: "ot:inet$LclInetClnt", name: "OTINITDNSADDRESS" }
+    callconv: pascal
+    executor: init_dns_address
+
+- function:
+    name: OTInetStringToHost
+    return: OSStatus
+    args:
+      - name: str
+        type: "char*"
+      - name: host
+        type: "InetHost*"
+    library: OTInetClientLib
+    aslm: { set: "ot:inet$LclInetClnt", name: "OTINETSTRINGTOHOST" }
+    callconv: pascal
+    executor: string_to_host
+
+- function:
+    name: OTInetHostToString
+    args:
+      - name: host
+        type: InetHost
+      - name: str
+        type: "char*"
+    library: OTInetClientLib
+    aslm: { set: "ot:inet$LclInetClnt", name: "OTINETHOSTTOSTRING" }
+    callconv: pascal
+    executor: host_to_string
+
+- function:
+    name: OTInetGetInterfaceInfo
+    return: OSStatus
+    args:
+      - name: info
+        type: "InetInterfaceInfo*"
+      - name: val
+        type: SInt32
+    library: OTInetClientLib
+    aslm: { set: "ot:inet$LclInetClnt", name: "OTINETGETINTERFACEINFO" }
+    callconv: pascal
+    executor: get_interface_info
+
+- function:
+    name: OTInetSysInfo
+    return: OSStatus
+    args:
+      - name: ref
+        type: InetSvcRef
+      - name: name
+        type: "char*"
+      - name: sysinfo
+        type: "InetSysInfo*"
+    library: OTInetClientLib
+    aslm: { set: "ot:inet$LclInetClnt", name: "OTINETSYSINFO" }
+    callconv: pascal
+    executor: sys_info
+
+- function:
+    name: OTInetMailExchange
+    return: OSStatus
+    args:
+      - name: ref
+        type: InetSvcRef
+      - name: name
+        type: "char*"
+      - name: num
+        type: "UInt16*"
+      - name: mx
+        type: "InetMailExchange*"
+    library: OTInetClientLib
+    aslm: { set: "ot:inet$LclInetClnt", name: "OTINETMAILEXCHANGE" }
+    callconv: pascal
+    executor: mail_exchange
+
+- function:
+    name: OTInetQuery
+    return: OSStatus
+    args:
+      - name: ref
+        type: InetSvcRef
+      - name: name
+        type: "char*"
+      - name: qClass
+        type: UInt16
+      - name: qType
+        type: UInt16
+      - name: buf
+        type: "char*"
+      - name: buflen
+        type: OTByteCount
+      - name: argv
+        type: "void**"
+      - name: argvlen
+        type: OTByteCount
+      - name: flags
+        type: OTFlags
+    library: OTInetClientLib
+    aslm: { set: "ot:inet$LclInetClnt", name: "OTINETQUERY" }
+    callconv: pascal
+    executor: query
+
+# ---- The public calls: glue over the ...Priv routines with the client's
+# record (custom/OpenTransportGlue.c; PowerPC so far) ---------------------
+
+- not-for: executor
+  function:
+    name: OTOpenInternetServices
+    return: InetSvcRef
+    args:
+      - name: cfig
+        type: "OTConfiguration*"
+      - name: oflag
+        type: OTOpenFlags
+      - name: err
+        type: "OSStatus*"
+
+- not-for: executor
+  function:
+    name: OTAsyncOpenInternetServices
+    return: OSStatus
+    args:
+      - name: cfig
+        type: "OTConfiguration*"
+      - name: oflag
+        type: OTOpenFlags
+      - name: proc
+        type: OTNotifyProcPtr
+      - name: contextPtr
+        type: "void*"

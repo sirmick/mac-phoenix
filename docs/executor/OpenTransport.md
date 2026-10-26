@@ -188,3 +188,47 @@ same OTTest.c, MrC + PPCLink) passes its cases on Executor
 (`ot_ppc_executor`), `cancel` (a PowerPC Time Manager task cancelling a
 blocking call) since Mixed Mode keeps the PowerPC registers (STRAGGLERS
 64).
+
+## The C side: headers and PowerPC glue
+
+`OpenTransport.yaml` and `OpenTptInternet.yaml` are also Open Transport's
+C interface, as Retro68 programs see it (`OpenTransport.h`,
+`OpenTptInternet.h`, `OpenTptLinks.h`, all the generated `Multiverse.h`):
+OT 1.1's types, structures and constants from Apple's headers'
+declarations and Inside Macintosh: Networking with Open Transport,
+`size_t` as `OTByteCount` (32 bits for both processors and for
+Executor's 68k layouts, each structure's size checked there), the names
+the host's headers have as well (`E*`, `O_*`, `AF_INET`, `IP_*`,
+`TCP_*`) for the C side only. Every routine has its real types; the
+generator still gives `ot::Call` a letter per argument from the type's
+size (Boolean `B`, a word or byte `W`, else `L`), so the registrations
+are what they were.
+
+The libraries export the `...Priv` routines, not `InitOpenTransport`,
+`OTOpenEndpoint`, `OTAlloc`, the task creators and the rest that take
+the client: those are glue, `multiversal/custom/OpenTransportGlue.c`,
+compiled into `libppc/libOpenTransportApp.a` when Retro68's PowerPC
+compiler is on the generator's PATH (`custom/libraries.yaml`, `PowerPC:`).
+A program links `OpenTransportApp OpenTransportLib OpenTptInternetLib`
+(the last two Retro68's import libraries). 68k glue, binding through the
+Shared Library Manager, is not written yet.
+
+What the glue gives OT was seen from outside, Apple's PowerPC glue run
+against Executor (which logs what it gets) and against Mac OS 9.0.4's OT
+(a probe reading the record before and after): InitOpenTransportPriv gets
+3 and the client's record; the record is 36 bytes of OT's, but for words
+2-4, which the client points at storage of its own after the record (a
+long, two longs, and a routine descriptor), and the byte at 32, set. The
+descriptor is a PowerPC routine, Pascal, returning a long: the client's
+way out, which closes it (CloseOpenTransportPriv) and answers 0; OT keeps
+it to close the client itself. Without it OT 2.6 jumps into nothing.
+Every other `...Priv` routine but two gets the record last; the task
+creators get the record's first word, which OT sets at init (0 on
+Executor, which ignores it).
+
+OTTest built this way (`tests/guest/ot/build-retro68.sh`,
+`OTTestRetroPPC.bin`, committed) passes its 20 cases on Executor
+(`ot_retro68_ppc_executor`) and on Mac OS 9.0.4 gets what Apple's glue
+gets (OTTestPPC): the same 13 passes and 7 failures, the cases where real
+OT and OTTest disagree (STRAGGLERS 65). `multiversal_retro68` compiles
+OTTest.c for PowerPC against the headers and checks the glue library.

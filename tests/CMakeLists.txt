@@ -733,6 +733,20 @@ set_tests_properties(ot_ppc_executor PROPERTIES
   SKIP_RETURN_CODE 77
 )
 
+# And built with Retro68 against the headers generated from the definitions
+# (OpenTransport.yaml, OpenTptInternet.yaml), its public calls the glue in
+# custom/OpenTransportGlue.c (tests/guest/ot/build-retro68.sh). On Mac OS
+# 9.0.4 it gets the same results as OTTestPPC, Apple's glue (OpenTransport.md).
+add_test(
+  NAME ot_retro68_ppc_executor
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --backend executor --app ${CMAKE_SOURCE_DIR}/tests/guest/ot/OTTestRetroPPC.bin --results ot_results.txt --timeout 150 --port 18740
+)
+set_tests_properties(ot_retro68_ppc_executor PROPERTIES
+  TIMEOUT 200
+  LABELS "guest;executor"
+  SKIP_RETURN_CODE 77
+)
+
 # Thread Manager through Frontier's UserTalk threads (process.cpp).
 add_test(
   NAME threads_executor

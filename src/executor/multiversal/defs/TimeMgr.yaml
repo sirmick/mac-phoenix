@@ -19,6 +19,25 @@
 
 # ####
 
+- typedef:
+    name: TMTaskPtr
+    type: TMTask*
+
+# ####
+
+- funptr:
+    name: TimerProcPtr
+    args:
+      - name: tmTaskPtr
+        type: TMTaskPtr
+        register: A1
+    comment: |
+      A task's routine (tmAddr): on 68k it finds its task in A1; PowerPC
+      code gets it as its argument, through a routine descriptor
+      (NewTimerUPP). For Executor tmAddr stays a ProcPtr.
+
+# ####
+
 - function:
     name: InsTime
     args:

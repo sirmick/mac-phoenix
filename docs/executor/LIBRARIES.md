@@ -18,7 +18,7 @@ definitions, in a shape upstream multiversal can take.
 | Route | Executor's table | Entries | Typed | Reaches |
 |---|---|---|---|---|
 | Traps | generated `PASCAL_TRAP`, `PASCAL_SUBTRAP`, `REGISTER_TRAP`, `NOTRAP_FUNCTION` (`base/traps.h`) | ~2,000 | from the C++ signature | the trap table; the same wrappers export each one from InterfaceLib for PowerPC and CFM-68K (`base/traps.impl.h`) |
-| Open Transport over ASLM | `Def{set, name, Conv, "LLLLL", 'L', impl}` (`opentransport/ot_*.cpp`), index-to-name lists (`ot_names.inc`) — in the definitions since step 4 | ~130 of ~330 names | no: signature strings, `impl(const Call&)` reads its arguments | 68k; PowerPC (OTClientLib & co.) since step 4 |
+| Open Transport over ASLM | `Def{set, name, Conv, "LLLLL", 'L', impl}` (`opentransport/ot_*.cpp`), index-to-name lists (`ot_names.inc`) — in the definitions since step 4 | ~130 of ~330 names | in the definitions (OT 1.1's types, since step 4); `impl(const Call&)` still reads its arguments | 68k; PowerPC (OTClientLib & co.) since step 4; C headers and PowerPC glue for Retro68 |
 | StdCLib, MathLib | `exportFn(LIB, "strlen", &c_strlen)`, `exportRaw` for variadic and hand-decoded routines, `exportData` (`clib/`) — in the definitions since step 2 | ~250 + ~70 raw + 25 data | yes (`callfromPPC::Invoker`) | PowerPC; StdCLib for CFM-68K too since step 2 |
 | CFM glue | `exportGlue("c2pstr", &fn)` (`cfm68k_glue.cpp`) — in the definitions since step 3 | ~50 | yes | InterfaceLib, ObjectSupportLib, for CFM-68K and PowerPC |
 | AppleScriptLib (OSA) | `{ "OSALoad", 0x0001, { 4, 4, 4 } }` (`cfm68k_glue.cpp`) | 42 | no: parameter sizes | CFM-68K, re-pushed to `_ComponentDispatch` |
@@ -135,6 +135,17 @@ mechanism) or, for an ASLM library, through generated ASLM glue that
 does what Apple's static glue does. Headers by Apple's names
 (`OpenTransport.h`, `OSA.h`, `Components.h`, `fp.h`...).
 
+Glue that is PowerPC code (Open Transport's public calls over its
+`...Priv` exports) goes in `custom/` like the 68k glue and is listed
+under `PowerPC:` in `custom/libraries.yaml`: the generator compiles it
+into `libppc/` when `powerpc-apple-macos-gcc` is on its PATH. A
+`funptr` with `upp: false` is a plain function pointer (`pascal` on 68k
+unless `callconv: C`), as Open Transport's notifiers and task routines
+are: PowerPC code passes them as TVectors, not routine descriptors.
+A register-based `funptr` (`register:` on its arguments, D0-D3/A0-A3)
+gets its Mixed Mode procInfo (`kRegisterBased`, the layout Executor's
+Mixed Mode decodes): `uppTimerProcInfo` is $B802, as Apple's.
+
 ## Order of work
 
 The whole plan (agreed 2026-10-26):
@@ -181,8 +192,16 @@ The library routes:
    argument sizes only, `only-for: Executor`), registered by `OT_FUNCTION`
    for the 68k binder and as PowerPC exports; the routines kept reading
    their arguments through `ot::Call`, which reads PowerPC registers too
-   (OpenTransport.md, "The functions in the definitions"). Left: OT's own
-   types for the C side (`OpenTransport.h`), then the entries for both.
+   (OpenTransport.md, "The functions in the definitions"). The C side,
+   PowerPC half, done the same day: OT 1.1's types and constants in
+   `OpenTransport.yaml` and `OpenTptInternet.yaml`, the entries with real
+   types (the `ot::Call` letters from the types' sizes, unchanged), and
+   the public calls over the `...Priv` routines as glue
+   (`custom/OpenTransportGlue.c`, `libppc/libOpenTransportApp.a`; the
+   client record it hands OT as seen from outside, OpenTransport.md, "The
+   C side"). OTTest built with Retro68 on them passes on Executor and
+   matches Apple's glue on Mac OS 9.0.4. Left: the 68k glue (binding
+   through ASLM).
    As planned: the `Def` tables become definitions and the
    implementations take typed arguments instead of `Call`. By-products:
    `OpenTransportLib`, `OTUtilityLib`, `OpenTptInternetLib` for PowerPC

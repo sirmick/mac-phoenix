@@ -96,6 +96,17 @@
 
 # ####
 
+- struct:
+    name: UnsignedWide
+    members:
+      - name: hi
+        type: UInt32
+      - name: lo
+        type: UInt32
+    size: 8
+
+# ####
+
 - typedef:
     name: Str15
     type: Byte[16]

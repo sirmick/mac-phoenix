@@ -15,7 +15,7 @@
 #                             [--sections "disk extfs ..."] [--app SUITE.bin]
 #                             [--image NAME]
 #                             [--executor-debug memcheck,...]
-#                             [--key-on PATTERN:KEYCODE]
+#                             [--key-on PATTERN:KEYCODE] [--echo-gateway]
 #
 # --script runs a MacPerl script from tests/guest instead of the suite;
 # --results is the file either writes on Host: (default test_results.txt).
@@ -25,6 +25,8 @@
 # CodeWarrior one (tools/mpw/mpw --toolchain cw build tests/guest/suite -o DIR).
 # --image: boot a copy of another built image (provisioning/images/NAME.json),
 # e.g. dev-7.6.1, whose Extensions have the CFM-68K Runtime Enabler.
+# --echo-gateway: on a ROM machine, name net-bridge's echo service
+# (10.0.2.1 port 7) in Host:net_echo.txt, for OTTest.
 # --key-on: press a key (Mac keycode) once the results file has a line with
 # PATTERN, for an app that waits on the user (tests/guest/notify: Return on
 # the Notification Manager's alert).
@@ -81,6 +83,7 @@ while [[ $# -gt 0 ]]; do
         --app) SUITE_APP="$2"; shift 2 ;;
         --image) IMAGE_NAME="$2"; shift 2 ;;
         --key-on) KEY_ON="$2"; shift 2 ;;
+        --echo-gateway) ECHO_GATEWAY=1; shift ;;
         *) echo "Unknown arg: $1"; exit 1 ;;
     esac
 done
@@ -182,6 +185,9 @@ if [[ "$BACKEND" == "executor" ]]; then
     for i in $(seq 1 20); do [[ -s "$ECHO_PORTFILE" ]] && break; sleep 0.1; done
     printf '127.0.0.1 %s\r' "$(cat "$ECHO_PORTFILE")" > "$EXTFS_DIR/net_echo.txt"
     rm -f "$ECHO_PORTFILE"
+elif [[ -n "${ECHO_GATEWAY:-}" ]]; then
+    # --echo-gateway: net-bridge's own echo service on the gateway.
+    printf '10.0.2.1 7\r' > "$EXTFS_DIR/net_echo.txt"
 fi
 
 cleanup() {

@@ -255,7 +255,7 @@ class CIncludesGenerator < Generator
         @out << "#else\n" if optionalInline
 
         if !fun["inline"] || optionalInline then
-            @out << "pascal "
+            @out << "pascal " unless fun["callconv"].to_s.downcase == "c"
             @out << (fun["return"] or "void") << " "
             @out << name << "("
             @out << args.map {|arg| decl(arg["type"], arg["name"])}.join(", ")
@@ -308,10 +308,14 @@ class CIncludesGenerator < Generator
 
 
     def declare_funptr(value)
-        if value["callconv"] == "C" then
-            # A native C function pointer: no pascal, no UPP, name as given.
+        if value["callconv"] == "C" or value["upp"] == false then
+            # A native function pointer: no UPP, name as given (C, or
+            # pascal on 68k: Open Transport's notifiers, which PowerPC code
+            # passes as plain function pointers).
             args = (value["args"] or [])
-            @out << "typedef " << (value["return"] or "void") << " "
+            @out << "typedef "
+            @out << "pascal " unless value["callconv"] == "C"
+            @out << (value["return"] or "void") << " "
             @out << "(*" << value["name"] << ")("
             @out << args.map {|arg|decl(arg["type"], arg["name"])}.join(", ")
             @out << ");\n"
@@ -334,7 +338,20 @@ class CIncludesGenerator < Generator
         @out << args.map {|arg|decl(arg["type"], arg["name"])}.join(", ")
         @out << ");\n"
         
-        if args.any? {|arg| arg["register"]} then
+        # kRegisterBased: the result's size and register at bits 4 and 6,
+        # then per argument five bits from bit 11, its size and register
+        # (D0-D3 0-3, A0-A3 4-7), as Mixed Mode decodes it.
+        regnum = lambda {|r| r.to_s =~ /\A([AD])([0-3])\z/ ? ($1 == "D" ? 0 : 4) + $2.to_i : nil }
+        regs = args.map {|arg| regnum.call(arg["register"])}
+        if args.any? {|arg| arg["register"]} and regs.all? and
+                (not value["returnreg"] or regnum.call(value["returnreg"])) then
+            procinfo = 2
+            procinfo |= encode_size(value["return"]) << 4
+            procinfo |= (regnum.call(value["returnreg"]) || 0) << 6
+            args.each_with_index do |arg, i|
+                procinfo |= (encode_size(arg["type"]) | regs[i] << 2) << (11 + 5 * i)
+            end
+        elsif args.any? {|arg| arg["register"]} then
             procinfo = 42;
             print "WARNING UNSUPPORTED register funptr: #{name}\n"
         else
@@ -509,7 +526,8 @@ class CIncludesGenerator < Generator
             "DeskBus", "DiskInit", "Disks", "Displays", "Editions", "Finder",
             "Folders", "Lists", "MacTCP", "Movies", "Notification", "Packages",
             "Printing", "Retrace", "Scrap", "Script", "ShutDown", "Speech",
-            "TextServices", "Threads", "Translation"].each do |name|
+            "TextServices", "Threads", "Translation",
+            "OpenTransport", "OpenTptInternet", "OpenTptLinks"].each do |name|
             File.open("#{$options.output_dir}/CIncludes/#{name}.h", "w") do |f|
                 f << "#pragma once\n"
                 f << "#include \"Multiverse.h\"\n"
@@ -540,7 +558,11 @@ class CIncludesGenerator < Generator
         end
 
         libraries_config = YAML::load(File.read("custom/libraries.yaml"))
-        libraries_config.each do |libname, files|
+        # PowerPC glue (Open Transport's public calls over the libraries'
+        # ...Priv routines): its own libraries, in libppc, and only if
+        # Retro68's PowerPC compiler is on the PATH.
+        ppc_config = libraries_config.delete("PowerPC") || {}
+        (libraries_config.values + ppc_config.values).each do |files|
             allNames.subtract(files)
         end
         libraries_config["Interface"] = allNames.to_a
@@ -549,6 +571,19 @@ class CIncludesGenerator < Generator
             print "Linking lib#{libname}.a...\n"
             system("m68k-apple-macos-ar cqs #{$options.output_dir}/lib68k/lib#{libname}.a " +
                 files.map {|f| "#{$options.output_dir}/obj/#{f}.o"}.join(" "))
+        end
+
+        if system("command -v powerpc-apple-macos-gcc >/dev/null") then
+            FileUtils.mkdir_p "#{$options.output_dir}/objppc"
+            FileUtils.mkdir_p "#{$options.output_dir}/libppc"
+            ppc_config.each do |libname, files|
+                files.each do |f|
+                    system("powerpc-apple-macos-gcc -c #{$options.output_dir}/src/#{f}.c -o #{$options.output_dir}/objppc/#{f}.o -I #{$options.output_dir}/CIncludes -O -ffunction-sections")
+                end
+                print "Linking libppc/lib#{libname}.a...\n"
+                system("powerpc-apple-macos-ar cqs #{$options.output_dir}/libppc/lib#{libname}.a " +
+                    files.map {|f| "#{$options.output_dir}/objppc/#{f}.o"}.join(" "))
+            end
         end
         print "Done.\n"
     end

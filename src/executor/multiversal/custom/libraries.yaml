@@ -2,3 +2,8 @@ Navigation.far:
   - Navigation
   - NavServicesAvailable
 
+# Libraries of PowerPC code (libppc/), built when Retro68's PowerPC
+# compiler is on the PATH; the rest of the glue is 68k code.
+PowerPC:
+  OpenTransportApp:
+    - OpenTransportGlue

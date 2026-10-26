@@ -52,7 +52,10 @@ failed() { echo "FAIL: $1"; fail=1; }
 # 1. Generate. The generator compiles the glue library with the same gcc
 #    (found on PATH), so a definition that isn't valid C fails here.
 echo "--- generating CIncludes from $MV/defs"
-if (cd "$MV" && PATH="$(dirname "$GCC"):$PATH" \
+[[ -n "$PPC_GCC" ]] || PPC_GCC="$(command -v powerpc-apple-macos-gcc || true)"
+GENPATH="$(dirname "$GCC"):$PATH"
+[[ -n "$PPC_GCC" ]] && GENPATH="$(dirname "$PPC_GCC"):$GENPATH"
+if (cd "$MV" && PATH="$GENPATH" \
         ruby make-multiverse.rb -G CIncludes -o "$WORK/out") > "$WORK/generate.log" 2>&1 \
    && ! grep -qE 'error|No such file' "$WORK/generate.log"; then
     pass "headers and glue library generated ($(ls "$WORK/out/CIncludes" | wc -l) headers)"
@@ -95,8 +98,9 @@ fi
 
 # 3b. mvtest for PowerPC too, with a Retro68 that has it (the declarations
 #     without 68k inlines: InterfaceLib & co. imports). Compiled only;
-#     RetroTest (tests/guest/retro68) links and runs.
-[[ -n "$PPC_GCC" ]] || PPC_GCC="$(command -v powerpc-apple-macos-gcc || true)"
+#     RetroTest (tests/guest/retro68) links and runs. And OTTest, with Open
+#     Transport's PowerPC glue library (custom/OpenTransportGlue.c; linked
+#     and run by tests/guest/ot/build-retro68.sh and ot_retro68_ppc_executor).
 if [[ -n "$PPC_GCC" && -x "$PPC_GCC" ]]; then
     PPC_SYSINC="$(cd "$(dirname "$PPC_GCC")/.." && pwd)/powerpc-apple-macos/include"
     PVIEW="$WORK/include-ppc"
@@ -115,6 +119,19 @@ if [[ -n "$PPC_GCC" && -x "$PPC_GCC" ]]; then
     else
         head -20 "$WORK/mvtest-ppc.log"
         failed "mvtest.c for PowerPC"
+    fi
+    if "$PPC_GCC" -nostdinc -isystem "$("$PPC_GCC" -print-file-name=include)" -isystem "$PVIEW" \
+            -Wall -Wno-pointer-sign -Werror=implicit-function-declaration -fsyntax-only \
+            "$REPO/tests/guest/ot/OTTest.c" > "$WORK/ottest-ppc.log" 2>&1; then
+        pass "OTTest.c compiled for PowerPC"
+    else
+        head -20 "$WORK/ottest-ppc.log"
+        failed "OTTest.c for PowerPC"
+    fi
+    if [[ -s "$WORK/out/libppc/libOpenTransportApp.a" ]]; then
+        pass "Open Transport's PowerPC glue library"
+    else
+        failed "no libppc/libOpenTransportApp.a"
     fi
 else
     echo "(no powerpc-apple-macos-gcc: PowerPC not compiled)"

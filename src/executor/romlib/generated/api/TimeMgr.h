@@ -26,6 +26,14 @@ namespace Executor {
 struct TMTask{GUEST_STRUCT;GUEST<QElemPtr> qLink;GUEST<INTEGER> qType;GUEST<ProcPtr> tmAddr;GUEST<LONGINT> tmCount;GUEST<LONGINT> tmWakeUp;GUEST<LONGINT> tmReserved; // I don't trust IMIV-301
 };static_assert(sizeof(TMTask) == 22);void describeStruct(const TMTask&, std::ostream&);
 
+typedef TMTask *TMTaskPtr;
+
+// A task's routine (tmAddr): on 68k it finds its task in A1; PowerPC
+// code gets it as its argument, through a routine descriptor
+// (NewTimerUPP). For Executor tmAddr stays a ProcPtr.
+using TimerProcPtr = UPP<void(TMTaskPtr tmTaskPtr), Register<void(A1)>>;
+
+
 void InsTime(QElemPtr taskp);REGISTER_TRAP2(InsTime, 0xA058, void(A0), ClearD0);
 
 

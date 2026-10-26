@@ -5,14 +5,402 @@
 
 namespace Executor
 {
+void describeStruct(const OTAddress& x, std::ostream& os)
+{
+    os << "OTAddress{";
+    logging::logField(os, "fAddressType", x.fAddressType);
+    logging::logField(os, "fAddress", x.fAddress);
+    os << "}";
+}
+
+void describeStruct(const t_kpalive& x, std::ostream& os)
+{
+    os << "t_kpalive{";
+    logging::logField(os, "kp_onoff", x.kp_onoff);
+    logging::logField(os, "kp_timeout", x.kp_timeout);
+    os << "}";
+}
+
+void describeStruct(const t_linger& x, std::ostream& os)
+{
+    os << "t_linger{";
+    logging::logField(os, "l_onoff", x.l_onoff);
+    logging::logField(os, "l_linger", x.l_linger);
+    os << "}";
+}
+
+void describeStruct(const TOptionHeader& x, std::ostream& os)
+{
+    os << "TOptionHeader{";
+    logging::logField(os, "len", x.len);
+    logging::logField(os, "level", x.level);
+    logging::logField(os, "name", x.name);
+    logging::logField(os, "status", x.status);
+    os << "}";
+}
+
+void describeStruct(const TOption& x, std::ostream& os)
+{
+    os << "TOption{";
+    logging::logField(os, "len", x.len);
+    logging::logField(os, "level", x.level);
+    logging::logField(os, "name", x.name);
+    logging::logField(os, "status", x.status);
+    logging::logField(os, "value", x.value);
+    os << "}";
+}
+
+void describeStruct(const TEndpointInfo& x, std::ostream& os)
+{
+    os << "TEndpointInfo{";
+    logging::logField(os, "addr", x.addr);
+    logging::logField(os, "options", x.options);
+    logging::logField(os, "tsdu", x.tsdu);
+    logging::logField(os, "etsdu", x.etsdu);
+    logging::logField(os, "connect", x.connect);
+    logging::logField(os, "discon", x.discon);
+    logging::logField(os, "servtype", x.servtype);
+    logging::logField(os, "flags", x.flags);
+    os << "}";
+}
+
+void describeStruct(const OTPortRecord& x, std::ostream& os)
+{
+    os << "OTPortRecord{";
+    logging::logField(os, "fRef", x.fRef);
+    logging::logField(os, "fPortFlags", x.fPortFlags);
+    logging::logField(os, "fInfoFlags", x.fInfoFlags);
+    logging::logField(os, "fCapabilities", x.fCapabilities);
+    logging::logField(os, "fNumChildPorts", x.fNumChildPorts);
+    logging::logField(os, "fChildPorts", x.fChildPorts);
+    logging::logField(os, "fPortName", x.fPortName);
+    logging::logField(os, "fModuleName", x.fModuleName);
+    logging::logField(os, "fSlotID", x.fSlotID);
+    logging::logField(os, "fResourceInfo", x.fResourceInfo);
+    logging::logField(os, "fReserved", x.fReserved);
+    os << "}";
+}
+
+void describeStruct(const OTData& x, std::ostream& os)
+{
+    os << "OTData{";
+    logging::logField(os, "fNext", x.fNext);
+    logging::logField(os, "fData", x.fData);
+    logging::logField(os, "fLen", x.fLen);
+    os << "}";
+}
+
+void describeStruct(const TNetbuf& x, std::ostream& os)
+{
+    os << "TNetbuf{";
+    logging::logField(os, "maxlen", x.maxlen);
+    logging::logField(os, "len", x.len);
+    logging::logField(os, "buf", x.buf);
+    os << "}";
+}
+
+void describeStruct(const TBind& x, std::ostream& os)
+{
+    os << "TBind{";
+    logging::logField(os, "addr", x.addr);
+    logging::logField(os, "qlen", x.qlen);
+    os << "}";
+}
+
+void describeStruct(const TDiscon& x, std::ostream& os)
+{
+    os << "TDiscon{";
+    logging::logField(os, "udata", x.udata);
+    logging::logField(os, "reason", x.reason);
+    logging::logField(os, "sequence", x.sequence);
+    os << "}";
+}
+
+void describeStruct(const TCall& x, std::ostream& os)
+{
+    os << "TCall{";
+    logging::logField(os, "addr", x.addr);
+    logging::logField(os, "opt", x.opt);
+    logging::logField(os, "udata", x.udata);
+    logging::logField(os, "sequence", x.sequence);
+    os << "}";
+}
+
+void describeStruct(const TUnitData& x, std::ostream& os)
+{
+    os << "TUnitData{";
+    logging::logField(os, "addr", x.addr);
+    logging::logField(os, "opt", x.opt);
+    logging::logField(os, "udata", x.udata);
+    os << "}";
+}
+
+void describeStruct(const TUDErr& x, std::ostream& os)
+{
+    os << "TUDErr{";
+    logging::logField(os, "addr", x.addr);
+    logging::logField(os, "opt", x.opt);
+    logging::logField(os, "error", x.error);
+    os << "}";
+}
+
+void describeStruct(const TOptMgmt& x, std::ostream& os)
+{
+    os << "TOptMgmt{";
+    logging::logField(os, "opt", x.opt);
+    logging::logField(os, "flags", x.flags);
+    os << "}";
+}
+
+void describeStruct(const TRequest& x, std::ostream& os)
+{
+    os << "TRequest{";
+    logging::logField(os, "data", x.data);
+    logging::logField(os, "opt", x.opt);
+    logging::logField(os, "sequence", x.sequence);
+    os << "}";
+}
+
+void describeStruct(const TReply& x, std::ostream& os)
+{
+    os << "TReply{";
+    logging::logField(os, "data", x.data);
+    logging::logField(os, "opt", x.opt);
+    logging::logField(os, "sequence", x.sequence);
+    os << "}";
+}
+
+void describeStruct(const TUnitRequest& x, std::ostream& os)
+{
+    os << "TUnitRequest{";
+    logging::logField(os, "addr", x.addr);
+    logging::logField(os, "opt", x.opt);
+    logging::logField(os, "udata", x.udata);
+    logging::logField(os, "sequence", x.sequence);
+    os << "}";
+}
+
+void describeStruct(const TUnitReply& x, std::ostream& os)
+{
+    os << "TUnitReply{";
+    logging::logField(os, "opt", x.opt);
+    logging::logField(os, "udata", x.udata);
+    logging::logField(os, "sequence", x.sequence);
+    os << "}";
+}
+
+void describeStruct(const TRegisterRequest& x, std::ostream& os)
+{
+    os << "TRegisterRequest{";
+    logging::logField(os, "name", x.name);
+    logging::logField(os, "addr", x.addr);
+    logging::logField(os, "flags", x.flags);
+    os << "}";
+}
+
+void describeStruct(const TRegisterReply& x, std::ostream& os)
+{
+    os << "TRegisterReply{";
+    logging::logField(os, "addr", x.addr);
+    logging::logField(os, "nameid", x.nameid);
+    os << "}";
+}
+
+void describeStruct(const TLookupRequest& x, std::ostream& os)
+{
+    os << "TLookupRequest{";
+    logging::logField(os, "name", x.name);
+    logging::logField(os, "addr", x.addr);
+    logging::logField(os, "maxcnt", x.maxcnt);
+    logging::logField(os, "timeout", x.timeout);
+    logging::logField(os, "flags", x.flags);
+    os << "}";
+}
+
+void describeStruct(const TLookupBuffer& x, std::ostream& os)
+{
+    os << "TLookupBuffer{";
+    logging::logField(os, "fAddressLength", x.fAddressLength);
+    logging::logField(os, "fNameLength", x.fNameLength);
+    logging::logField(os, "fAddressBuffer", x.fAddressBuffer);
+    os << "}";
+}
+
+void describeStruct(const TLookupReply& x, std::ostream& os)
+{
+    os << "TLookupReply{";
+    logging::logField(os, "names", x.names);
+    logging::logField(os, "rspcount", x.rspcount);
+    os << "}";
+}
+
+void describeStruct(const OTLink& x, std::ostream& os)
+{
+    os << "OTLink{";
+    logging::logField(os, "fNext", x.fNext);
+    os << "}";
+}
+
+void describeStruct(const OTLIFO& x, std::ostream& os)
+{
+    os << "OTLIFO{";
+    logging::logField(os, "fHead", x.fHead);
+    os << "}";
+}
+
+void describeStruct(const OTList& x, std::ostream& os)
+{
+    os << "OTList{";
+    logging::logField(os, "fHead", x.fHead);
+    os << "}";
+}
+
 } // namespace Executor
 
 namespace Executor { namespace structdump {
 namespace
 {
+void dump_OTAddress(std::ostream& os, const void* p)
+{
+    describeStruct(*(const OTAddress*)p, os);
+}
+void dump_t_kpalive(std::ostream& os, const void* p)
+{
+    describeStruct(*(const t_kpalive*)p, os);
+}
+void dump_t_linger(std::ostream& os, const void* p)
+{
+    describeStruct(*(const t_linger*)p, os);
+}
+void dump_TOptionHeader(std::ostream& os, const void* p)
+{
+    describeStruct(*(const TOptionHeader*)p, os);
+}
+void dump_TOption(std::ostream& os, const void* p)
+{
+    describeStruct(*(const TOption*)p, os);
+}
+void dump_TEndpointInfo(std::ostream& os, const void* p)
+{
+    describeStruct(*(const TEndpointInfo*)p, os);
+}
+void dump_OTPortRecord(std::ostream& os, const void* p)
+{
+    describeStruct(*(const OTPortRecord*)p, os);
+}
+void dump_OTData(std::ostream& os, const void* p)
+{
+    describeStruct(*(const OTData*)p, os);
+}
+void dump_TNetbuf(std::ostream& os, const void* p)
+{
+    describeStruct(*(const TNetbuf*)p, os);
+}
+void dump_TBind(std::ostream& os, const void* p)
+{
+    describeStruct(*(const TBind*)p, os);
+}
+void dump_TDiscon(std::ostream& os, const void* p)
+{
+    describeStruct(*(const TDiscon*)p, os);
+}
+void dump_TCall(std::ostream& os, const void* p)
+{
+    describeStruct(*(const TCall*)p, os);
+}
+void dump_TUnitData(std::ostream& os, const void* p)
+{
+    describeStruct(*(const TUnitData*)p, os);
+}
+void dump_TUDErr(std::ostream& os, const void* p)
+{
+    describeStruct(*(const TUDErr*)p, os);
+}
+void dump_TOptMgmt(std::ostream& os, const void* p)
+{
+    describeStruct(*(const TOptMgmt*)p, os);
+}
+void dump_TRequest(std::ostream& os, const void* p)
+{
+    describeStruct(*(const TRequest*)p, os);
+}
+void dump_TReply(std::ostream& os, const void* p)
+{
+    describeStruct(*(const TReply*)p, os);
+}
+void dump_TUnitRequest(std::ostream& os, const void* p)
+{
+    describeStruct(*(const TUnitRequest*)p, os);
+}
+void dump_TUnitReply(std::ostream& os, const void* p)
+{
+    describeStruct(*(const TUnitReply*)p, os);
+}
+void dump_TRegisterRequest(std::ostream& os, const void* p)
+{
+    describeStruct(*(const TRegisterRequest*)p, os);
+}
+void dump_TRegisterReply(std::ostream& os, const void* p)
+{
+    describeStruct(*(const TRegisterReply*)p, os);
+}
+void dump_TLookupRequest(std::ostream& os, const void* p)
+{
+    describeStruct(*(const TLookupRequest*)p, os);
+}
+void dump_TLookupBuffer(std::ostream& os, const void* p)
+{
+    describeStruct(*(const TLookupBuffer*)p, os);
+}
+void dump_TLookupReply(std::ostream& os, const void* p)
+{
+    describeStruct(*(const TLookupReply*)p, os);
+}
+void dump_OTLink(std::ostream& os, const void* p)
+{
+    describeStruct(*(const OTLink*)p, os);
+}
+void dump_OTLIFO(std::ostream& os, const void* p)
+{
+    describeStruct(*(const OTLIFO*)p, os);
+}
+void dump_OTList(std::ostream& os, const void* p)
+{
+    describeStruct(*(const OTList*)p, os);
+}
 }
 
 void registerStructDumps_OpenTransport()
 {
+    static const TypeDesc types[] = {
+        { "OTAddress", sizeof(OTAddress), &dump_OTAddress },
+        { "t_kpalive", sizeof(t_kpalive), &dump_t_kpalive },
+        { "t_linger", sizeof(t_linger), &dump_t_linger },
+        { "TOptionHeader", sizeof(TOptionHeader), &dump_TOptionHeader },
+        { "TOption", sizeof(TOption), &dump_TOption },
+        { "TEndpointInfo", sizeof(TEndpointInfo), &dump_TEndpointInfo },
+        { "OTPortRecord", sizeof(OTPortRecord), &dump_OTPortRecord },
+        { "OTData", sizeof(OTData), &dump_OTData },
+        { "TNetbuf", sizeof(TNetbuf), &dump_TNetbuf },
+        { "TBind", sizeof(TBind), &dump_TBind },
+        { "TDiscon", sizeof(TDiscon), &dump_TDiscon },
+        { "TCall", sizeof(TCall), &dump_TCall },
+        { "TUnitData", sizeof(TUnitData), &dump_TUnitData },
+        { "TUDErr", sizeof(TUDErr), &dump_TUDErr },
+        { "TOptMgmt", sizeof(TOptMgmt), &dump_TOptMgmt },
+        { "TRequest", sizeof(TRequest), &dump_TRequest },
+        { "TReply", sizeof(TReply), &dump_TReply },
+        { "TUnitRequest", sizeof(TUnitRequest), &dump_TUnitRequest },
+        { "TUnitReply", sizeof(TUnitReply), &dump_TUnitReply },
+        { "TRegisterRequest", sizeof(TRegisterRequest), &dump_TRegisterRequest },
+        { "TRegisterReply", sizeof(TRegisterReply), &dump_TRegisterReply },
+        { "TLookupRequest", sizeof(TLookupRequest), &dump_TLookupRequest },
+        { "TLookupBuffer", sizeof(TLookupBuffer), &dump_TLookupBuffer },
+        { "TLookupReply", sizeof(TLookupReply), &dump_TLookupReply },
+        { "OTLink", sizeof(OTLink), &dump_OTLink },
+        { "OTLIFO", sizeof(OTLIFO), &dump_OTLIFO },
+        { "OTList", sizeof(OTList), &dump_OTList },
+    };
+    registerTypes(types, sizeof(types) / sizeof(types[0]));
 }
 }} // namespace Executor::structdump

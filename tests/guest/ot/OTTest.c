@@ -1305,7 +1305,7 @@ typedef struct
     long fired;
 } CancelTask;
 
-#if defined(powerc) || defined(__powerc)
+#if defined(powerc) || defined(__powerc) || defined(__POWERPC__)
 /* PowerPC: the task gets its record as a parameter, through a routine
    descriptor (NewTimerProc). */
 static pascal void cancel_proc(TMTaskPtr tmp)
@@ -1349,7 +1349,7 @@ static void test_cancel(void)
         return;
     }
     OTMemzero(&t, sizeof t);
-#if defined(powerc) || defined(__powerc)
+#if defined(powerc) || defined(__powerc) || defined(__POWERPC__)
     t.tm.tmAddr = NewTimerProc(cancel_proc);
 #else
     t.tm.tmAddr = (TimerUPP)cancel_proc;
@@ -1657,7 +1657,7 @@ int main(int argc, char **argv)
 {
     int i;
 
-#if defined(powerc) || defined(__powerc)
+#if defined(powerc) || defined(__powerc) || defined(__POWERPC__)
     freopen("Host:ot_results.txt", "w", stdout);
 #endif
     read_echo_config();
@@ -1682,7 +1682,7 @@ int main(int argc, char **argv)
         CloseOpenTransport();
     }
     printf("DONE %d\n", failures);
-#if defined(powerc) || defined(__powerc)
+#if defined(powerc) || defined(__powerc) || defined(__POWERPC__)
     printf("---\n");
     fclose(stdout);
 #endif

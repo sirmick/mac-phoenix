@@ -320,12 +320,13 @@ class ExecutorGenerator < Generator
             if fun["aslm"] then
                 # Open Transport's: bound through the Shared Library Manager
                 # on 68k as well; the routine reads its arguments through
-                # ot::Call, so only their sizes matter here.
+                # ot::Call, so only their sizes matter here: a Boolean, a
+                # word (a byte is a word too, the way Pascal passes it), or
+                # a long.
                 letter = lambda do |t|
-                    case t
-                    when nil then "V"
-                    when "Boolean" then "B"
-                    when "uint16_t", "int16_t" then "W"
+                    if t.nil? || t == "void" then "V"
+                    elsif t == "Boolean" then "B"
+                    elsif (size_of_type(t) || 4) <= 2 then "W"
                     else "L"
                     end
                 end

@@ -50,9 +50,10 @@ npx playwright test
 # MacTCP/OT reach the host through rsys/hostnet.h: -DEXECUTOR_NET=none builds them
 # with no network (the wasm build's default until the relay exists).
 # Open Transport is native C++ and on by default (docs/executor/OpenTransport.md),
-# for 68k (ASLM) and PowerPC (OTClientLib & co.) clients alike, its functions in
-# multiversal/defs/OpenTransport.yaml (ctest -R 'ot_'); --no-executor-ot leaves
-# applications to MacTCP:
+# for 68k (ASLM) and PowerPC (OTClientLib & co.) clients alike, its interface in
+# multiversal/defs/OpenTransport.yaml + OpenTptInternet.yaml (also Retro68's
+# headers, PowerPC glue in custom/OpenTransportGlue.c: tests/guest/ot/build-retro68.sh)
+# (ctest -R 'ot_'); --no-executor-ot leaves applications to MacTCP:
 ./build/mac-phoenix --backend executor --executor-system 7.5.5.img --no-executor-ot
 # CFM-68K applications (CodeWarrior IDE 3.2) run on Executor's own Code Fragment
 # Manager, no Enabler (docs/executor/CFM68K.md; ctest -R guest_suite_cfm68k)
