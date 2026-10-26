@@ -10,6 +10,9 @@
  * inline (as glue in a library neither toolchain links). */
 pascal void SuiteSysBeep(short duration) ONEWORDINLINE(0xA9C8);
 #define SysBeep SuiteSysBeep
+#else
+/* Code fragments import it from InterfaceLib (declared there for that). */
+#include <Sound.h>
 #endif
 
 void test_audio(void)

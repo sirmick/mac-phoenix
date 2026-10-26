@@ -13,6 +13,7 @@
 #                             [--network MODE] [--backend uae|kpx|executor]
 #                             [--script NAME.pl] [--results FILE]
 #                             [--sections "disk extfs ..."] [--app SUITE.bin]
+#                             [--image NAME]
 #                             [--executor-debug memcheck,...]
 #                             [--key-on PATTERN:KEYCODE]
 #
@@ -22,6 +23,8 @@
 # suite's sections to run (default: disk extfs audio applescript network
 # serial). --app: another build of the suite (MacBinary), e.g. the
 # CodeWarrior one (tools/mpw/mpw --toolchain cw build tests/guest/suite -o DIR).
+# --image: boot a copy of another built image (provisioning/images/NAME.json),
+# e.g. dev-7.6.1, whose Extensions have the CFM-68K Runtime Enabler.
 # --key-on: press a key (Mac keycode) once the results file has a line with
 # PATTERN, for an app that waits on the user (tests/guest/notify: Return on
 # the Notification Manager's alert).
@@ -76,6 +79,7 @@ while [[ $# -gt 0 ]]; do
         --results) RESULTS_NAME="$2"; shift 2 ;;
         --sections) SECTIONS="$2"; shift 2 ;;
         --app) SUITE_APP="$2"; shift 2 ;;
+        --image) IMAGE_NAME="$2"; shift 2 ;;
         --key-on) KEY_ON="$2"; shift 2 ;;
         *) echo "Unknown arg: $1"; exit 1 ;;
     esac
@@ -109,6 +113,9 @@ else
     ROM="${MACEMU_ROM:-$HOME/roms/quadra.rom}"
 fi
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+if [[ -n "${IMAGE_NAME:-}" && -z "${DISK:-}" ]]; then
+    DISK="$(bash "$SCRIPT_DIR/lib/refresh_test_disk.sh" "$IMAGE_NAME" $$)"
+fi
 if [[ "$BACKEND" == "executor" ]]; then
     # No ROM: Executor runs on the System Folder of the test copy of the
     # image (extracted once into <storage>/executor-systems, refreshed each

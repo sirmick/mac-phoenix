@@ -138,6 +138,10 @@ public:
     using UPPType = UPP<Ret (Args...), CallConv>;
 protected:
     UPPType guestFP;
+
+    /* MacPhoenix: how a library call (CFM-68K) reaches the routine; a trap
+       goes through its table entry once an extension has patched it. */
+    virtual Ret callFromLibrary(Args... args) const { return (*fptr)(args...); }
 };
 
 template<typename F, F* fptr, int trapno, typename CallConv = callconv::Pascal>
@@ -160,6 +164,10 @@ public:
     virtual void init() override;
 
     TrapFunction(const char* name, const char* exportToLib = nullptr) : WrappedFunction<Ret(Args...),fptr,CallConv>(name, exportToLib) {}
+
+protected:
+    Ret callFromLibrary(Args... args) const override { return (*this)(args...); }
+public:
 
     /* MacPhoenix: the tables live in guest memory and exist from
        traps::init on; InitMemory calls traps (NewPtr) before that. */

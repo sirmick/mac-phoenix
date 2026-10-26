@@ -1,17 +1,22 @@
 # build.cw.mpw — MacPhoenixSuite with CodeWarrior Pro 4's compilers
 # (tools/mpw/mpw --toolchain cw build tests/guest/suite): MWC68K and
 # MWLink68K, MWCPPC and MWLinkPPC, with Metrowerks' C library (MSL); the
-# same fat application build.mpw makes with Apple's.
-# products: MacPhoenixSuite
+# same fat application build.mpw makes with Apple's. MacPhoenixSuiteCFM68K is
+# the 68k code as a CFM-68K application (code in the data fork, MSL linked
+# in), for Executor's CFM-68K (docs/executor/CFM68K.md).
+# products: MacPhoenixSuite MacPhoenixSuiteCFM68K
 Set Sources "main files audio ascript tcpip net netdeep mactcp keyboard finder"
-Delete -i MacPhoenixSuite MacPhoenixSuite.68k    # Rez -a would add to the last build
+Delete -i MacPhoenixSuite MacPhoenixSuite.68k MacPhoenixSuiteCFM68K    # Rez -a would add to the last build
 Set Objects68K ""
 Set ObjectsPPC ""
+Set ObjectsCFM ""
 For f in {Sources}
 	MWC68K -model far -i "`Directory`" -i "{MSLCommonIncludes}" -i "{MSLMacIncludes}" {f}.c -o {f}.68k.o
 	MWCPPC -i "`Directory`" -i "{MSLCommonIncludes}" -i "{MSLMacIncludes}" {f}.c -o {f}.ppc.o
+	MWC68K -model CFMflatdf -i "`Directory`" -i "{MSLCommonIncludes}" -i "{MSLMacIncludes}" {f}.c -o {f}.cfm.o
 	Set Objects68K "{Objects68K} {f}.68k.o"
 	Set ObjectsPPC "{ObjectsPPC} {f}.ppc.o"
+	Set ObjectsCFM "{ObjectsCFM} {f}.cfm.o"
 End
 MWLink68K -model far -t APPL -c 'MPhS' {Objects68K} ∂
 	"{MWMacOS68K}MacOS.lib" "{MWRuntime68K}MSL Runtime68K.Lib" ∂
@@ -24,3 +29,13 @@ MWLinkPPC -t APPL -c 'MPhS' {ObjectsPPC} ∂
 	-o MacPhoenixSuite
 Rez -a cw.r -o MacPhoenixSuite
 SetFile -t APPL -c 'MPhS' -a B MacPhoenixSuite
+Set MacOSCommon "{HeadersAndLibs}MacOS Support:MacOS Common:"
+Set RuntimeCFM "{HeadersAndLibs}MacOS Support:Runtime:Runtime CFM68K:"
+MWLink68K -xm application -model CFMflatdf -t APPL -c 'MPhS' {ObjectsCFM} ∂
+	"{MacOSCommon}InterfaceLib" "{MacOSCommon}AppleScriptLib" ∂
+	"{RuntimeCFM}MSL AppRuntimeCFM68K.Lib" "{RuntimeCFM}MSL MWCFM68KRuntime.Lib" ∂
+	"{MSLLibraries}MSL C.CFM68K Fa(4i_8d).Lib" "{MSLLibraries}MSL SIOUX.CFM68K.Lib" ∂
+	"{MWMacOS68K}MathLib68K:MathLibCFM68K:MathLibCFM68K (4i_8d).Lib" ∂
+	-o MacPhoenixSuiteCFM68K
+Rez -a size.r -o MacPhoenixSuiteCFM68K
+SetFile -t APPL -c 'MPhS' -a B MacPhoenixSuiteCFM68K

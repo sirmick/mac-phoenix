@@ -25,11 +25,116 @@
 #include <hfs/hfs.h>
 #include <util/string.h>
 #include <base/builtinlibs.h>
+#include <base/cpu.h>
 #include <algorithm>
+#include <string>
+#include <vector>
+#include <strings.h>
 
 using namespace Executor;
 
 typedef int share_kind_t;
+
+/* MacPhoenix: the fragments prepared so far (docs/executor/CFM68K.md). A
+   library is prepared once per application and shared by its importers;
+   the list is per application zone, and its term routines run at
+   ExitToShell. */
+namespace
+{
+struct load_origin
+{
+    uint32_t where; /* kInMem, kOnDiskFlat */
+    FSSpec file;
+    uint32_t offset;
+    uint32_t length;
+    Ptr mem;
+    std::string name;
+};
+
+struct loaded_fragment
+{
+    load_origin origin;
+    OSType arch;
+    ConnectionID cid;
+    THz zone;
+    uint32_t term;
+    bool terminated;
+};
+
+std::vector<loaded_fragment> loaded;
+const load_origin *current_origin;
+
+bool same_name(const std::string& a, const std::string& b)
+{
+    return a.size() == b.size() && !strncasecmp(a.data(), b.data(), a.size());
+}
+
+bool same_file(const FSSpec& a, const FSSpec& b)
+{
+    return a.vRefNum == b.vRefNum && a.parID == b.parID
+        && EqualString(a.name, b.name, false, true);
+}
+
+loaded_fragment *find_loaded(ConnectionID cid)
+{
+    for(auto& f : loaded)
+        if(f.cid == cid)
+            return &f;
+    return nullptr;
+}
+
+std::string pstr(ConstStringPtr p)
+{
+    return p ? std::string((const char *)p + 1, p[0]) : std::string();
+}
+}
+
+uint32_t Executor::ROMlib_call_cfm68k(uint32_t tvector, const uint32_t *arg)
+{
+    uint32_t save_a7 = EM_A7, save_a5 = EM_A5;
+    if(arg)
+    {
+        EM_A7 -= 4;
+        *ptr_from_longint<GUEST<uint32_t> *>(EM_A7) = *arg;
+    }
+    uint32_t code = *ptr_from_longint<GUEST<uint32_t> *>(tvector);
+    EM_A0 = code;
+    EM_A1 = tvector + 4;
+    execute68K(code);
+    uint32_t d0 = EM_D0;
+    EM_A7 = save_a7;
+    EM_A5 = save_a5;
+    return d0;
+}
+
+void Executor::ROMlib_cfm_terminate()
+{
+    THz zone = LM(ApplZone);
+    for(size_t i = loaded.size(); i-- > 0;)
+    {
+        if(loaded[i].zone != zone || loaded[i].terminated)
+            continue;
+        loaded[i].terminated = true;
+        if(loaded[i].term && loaded[i].arch == "m68k"_4)
+            ROMlib_call_cfm68k(loaded[i].term);
+    }
+}
+
+void Executor::ROMlib_cfm_process_exit(uint32_t part_lo, uint32_t part_hi)
+{
+    loaded.erase(std::remove_if(loaded.begin(), loaded.end(),
+        [&](const loaded_fragment& f) {
+            uint32_t z = US_TO_SYN68K((void *)f.zone);
+            return z >= part_lo && z < part_hi;
+        }), loaded.end());
+}
+
+void Executor::ROMlib_cfm_application_start()
+{
+    THz zone = LM(ApplZone);
+    loaded.erase(std::remove_if(loaded.begin(), loaded.end(),
+        [&](const loaded_fragment& f) { return f.zone == zone; }), loaded.end());
+}
 
 static OSErr
 try_to_get_memory(void **addrp, syn68k_addr_t default_syn_address,
@@ -316,19 +421,28 @@ repeatedly_relocate(uint32_t count, uint8_t **relocAddressp, uint32_t val)
     *relocAddressp = (uint8_t *)p;
 }
 
+static Ptr main_address(ConnectionID cid)
+{
+    PEFLoaderInfoHeader *lihp = cid->lihp;
+    if(!lihp || lihp->mainSection < 0)
+        return nullptr;
+    return (Ptr)cid->sects[lihp->mainSection].start + lihp->mainOffset;
+}
+
 static OSErr
 check_existing_connections(ConstStr63Param library, OSType arch, LoadFlags loadflags,
                            GUEST<ConnectionID> *cidp, GUEST<Ptr> *mainaddrp, Str255 errName)
 {
-    /* TODO */
+    std::string name = pstr(library);
+    THz zone = LM(ApplZone);
+    for(auto& f : loaded)
+        if(f.arch == arch && f.zone == zone && same_name(f.origin.name, name))
+        {
+            *cidp = f.cid;
+            *mainaddrp = main_address(f.cid);
+            return noErr;
+        }
     return fragLibNotFound;
-}
-
-static void
-get_root_and_app(INTEGER *root_vrefp, LONGINT *root_diridp,
-                 INTEGER *app_vrefp, LONGINT *app_diridp)
-{
-    /* TODO */
 }
 
 static OSErr
@@ -356,6 +470,7 @@ check_file(INTEGER vref, LONGINT dirid, Str255 file, bool shlb_test_p,
         if(retval == noErr)
         {
             INTEGER rn;
+            INTEGER save_map = LM(CurMap);
 
             rn = FSpOpenResFile(&fs, fsRdPerm);
             if(rn == -1)
@@ -376,13 +491,26 @@ check_file(INTEGER vref, LONGINT dirid, Str255 file, bool shlb_test_p,
                     if(!cfirp)
                         retval = fragLibNotFound;
                     else
-                        retval = GetDiskFragment(&fs,
-                                                 CFIR_OFFSET_TO_FRAGMENT(cfirp),
-                                                 CFIR_FRAGMENT_LENGTH(cfirp), (Byte*)"",
+                    {
+                        /* MacPhoenix: named as the library asked for, which
+                           is how the next importer finds it prepared. */
+                        int32_t offset = CFIR_OFFSET_TO_FRAGMENT(cfirp);
+                        int32_t length = CFIR_FRAGMENT_LENGTH(cfirp);
+                        Str63 name;
+                        memcpy(name, CFIR_NAME(cfirp), std::min<int>(CFIR_NAME(cfirp)[0], 63) + 1);
+                        name[0] = std::min<int>(name[0], 63);
+                        /* The file stays open while the fragment's init
+                           routine runs: it may read its own resources. */
+                        retval = GetDiskFragment(&fs, offset, length, name,
                                                  loadflags, cidp, mainaddrp,
                                                  errName);
+                    }
                 }
-                CloseResFile(rn);
+                /* MacPhoenix: the application's own file (and the System's)
+                   was open before: leave it open. */
+                if(rn != LM(CurApRefNum) && rn != LM(SysMap))
+                    CloseResFile(rn);
+                LM(CurMap) = save_map;
             }
         }
     }
@@ -465,24 +593,33 @@ OSErr Executor::C_GetSharedLibrary(ConstStr63Param library, OSType arch,
     warning_trace_info("GetSharedLibrary (\"%.*s\")\n", library[0],
                        library + 1);
 
-    retval = check_existing_connections(library, arch, loadflags, cidp,
-                                        mainaddrp, errName);
+    /* MacPhoenix: one copy per application (kLoadNewCopy aside); then the
+       application's own file, its folder, the Extensions folder, and last
+       Executor's own libraries. (The root and application folders were
+       uninitialized TODOs.) */
+    retval = fragLibNotFound;
+    if((loadflags & 0xF) != kLoadNewCopy)
+        retval = check_existing_connections(library, arch, loadflags, cidp,
+                                            mainaddrp, errName);
+    if(retval == fragLibNotFound && loadflags == kFindLib)
+        return fragLibNotFound;
+    /* MacPhoenix: libraries whose routines Executor answers itself, as it
+       does Open Transport, before Apple's own: the 68k ObjectSupportLib
+       runs its 'proc' resources against the AppleEvent Manager's private
+       selectors (docs/executor/CFM68K.md). */
+    if(retval == fragLibNotFound && arch == "m68k"_4
+       && EqualString(library, (StringPtr) "\020ObjectSupportLib", false, true))
+        if(ConnectionID cid = builtinlibs::getBuiltinLib(library, arch))
+        {
+            *cidp = cid;
+            *mainaddrp = nullptr;
+            return noErr;
+        }
     if(retval == fragLibNotFound)
     {
-        INTEGER root_vref, app_vref;
-        LONGINT root_dirid, app_dirid;
-
-        get_root_and_app(&root_vref, &root_dirid, &app_vref, &app_dirid);
-        if(root_vref != app_vref || root_dirid != app_dirid)
-            retval = check_vanddir(root_vref, root_dirid, 0, library, arch,
-                                   loadflags, cidp, mainaddrp, errName);
-        if(retval != noErr)
-            retval = check_file(ROMlib_exevrefnum, 0, ROMlib_exefname, false,
-                                library, arch, loadflags, cidp, mainaddrp,
-                                errName);
-        if(retval != noErr)
-            retval = check_vanddir(app_vref, app_dirid, 0, library, arch,
-                                   loadflags, cidp, mainaddrp, errName);
+        retval = check_file(ROMlib_exevrefnum, 0, ROMlib_exefname, false,
+                            library, arch, loadflags, cidp, mainaddrp,
+                            errName);
         if(retval != noErr)
             retval = check_vanddir(ROMlib_exevrefnum, 0, 0, library, arch,
                                    loadflags, cidp, mainaddrp, errName);
@@ -509,7 +646,7 @@ OSErr Executor::C_GetSharedLibrary(ConstStr63Param library, OSType arch,
                 //retval = ROMlib_GetInterfaceLib(library, arch, loadflags, cidp,
                 //                                mainaddrp, errName);
                 printf("InterfaceLib\n");*/
-            if(ConnectionID cid = builtinlibs::getBuiltinLib(library))
+            if(ConnectionID cid = builtinlibs::getBuiltinLib(library, arch))
             {
                 *cidp = cid;
                 *mainaddrp = nullptr;
@@ -528,7 +665,7 @@ OSErr Executor::C_CloseConnection(GUEST<ConnectionID> *cidp)
 
 static OSErr
 symbol_lookup(uint32_t *indexp, GUEST<Ptr> *valp, uint8_t imports[][4],
-              const char *symbol_names, CFragClosureID closure_id)
+              const char *symbol_names, CFragClosureID closure_id, OSType arch)
 {
     OSErr retval;
     int index;
@@ -566,13 +703,15 @@ symbol_lookup(uint32_t *indexp, GUEST<Ptr> *valp, uint8_t imports[][4],
                     err = -1;//###
                 if(err != noErr)
                 {
-                    if(flags & 8)   // weak symbol
+                    /* MacPhoenix: a weak library's imports are weak too. */
+                    if((flags & 8) || l->weak)   // weak symbol
                         *valp = kUnresolvedCFragSymbolAddress;
                     else
                     {
-                        /* MacPhoenix: say so at load time; calling it aborts. */
+                        /* MacPhoenix: say so at load time; calling it aborts
+                           (PowerPC) or is answered 0 and logged (68k). */
                         fprintf(stderr, "CFM: unresolved import %s\n", symbol_name);
-                        *valp = builtinlibs::makeUndefinedSymbolStub(symbol_name);
+                        *valp = builtinlibs::makeUndefinedSymbolStub(symbol_name, arch);
                     }
                 }
                 /*-->*/ break;
@@ -588,7 +727,7 @@ static OSErr
 relocate(const PEFLoaderRelocationHeader reloc_headers[],
          int section, uint32_t reloc_count, uint8_t reloc_instrs[][2],
          uint8_t imports[][4], const char *symbol_names,
-         CFragClosureID closure_id, ConnectionID connp)
+         CFragClosureID closure_id, ConnectionID connp, OSType arch)
 {
     OSErr retval;
     uint8_t *relocAddress;
@@ -672,7 +811,7 @@ relocate(const PEFLoaderRelocationHeader reloc_headers[],
 
                                 retval = symbol_lookup(&importIndex, &symbol_val,
                                                        imports, symbol_names,
-                                                       closure_id);
+                                                       closure_id, arch);
                                 if(retval == noErr)
                                     repeatedly_relocate(1, &relocAddress,
                                                         guest_cast<uint32_t>(symbol_val));
@@ -700,7 +839,7 @@ relocate(const PEFLoaderRelocationHeader reloc_headers[],
                             importIndex = index;
                             retval = symbol_lookup(&importIndex, &symbol_val,
                                                    imports, symbol_names,
-                                                   closure_id);
+                                                   closure_id, arch);
                             if(retval == noErr)
                                 repeatedly_relocate(1, &relocAddress,
                                                     guest_cast<uint32_t>(symbol_val));
@@ -786,7 +925,7 @@ relocate(const PEFLoaderRelocationHeader reloc_headers[],
                                     importIndex = ((msb & 3) << 24 | (reloc_instrs[0][1]) << 16 | (reloc_instrs[1][0]) << 8 | (reloc_instrs[1][1]));
                                     retval = symbol_lookup(&importIndex, &symbol_val,
                                                            imports, symbol_names,
-                                                           closure_id);
+                                                           closure_id, arch);
                                     if(retval == noErr)
                                         repeatedly_relocate(1, &relocAddress,
                                                             guest_cast<uint32_t>(symbol_val));
@@ -854,6 +993,7 @@ begin_closure(uint32_t n_libs, PEFImportedLibrary *libs,
         }
         LIB_N_SYMBOLS(&retval->libs[i]) = PEFIL_SYMBOL_COUNT(&libs[i]);
         LIB_FIRST_SYMBOL(&retval->libs[i]) = PEFIL_FIRST_SYMBOL(&libs[i]);
+        retval->libs[i].weak = !!(libs[i].options & kPEFWeakImportLibMask);
     }
     return retval;
 }
@@ -908,9 +1048,50 @@ load_loader_section(const void *addr,
                           PEFRLH_SECTION_INDEX(&reloc_headers[i]),
                           reloc_count,
                           reloc_instrs, imports, symbol_names,
-                          closure_id, connp);
+                          closure_id, connp, arch);
     }
-    if(retval == noErr && lihp->initSection != 0xffffffff)
+    if(retval == noErr && arch == "m68k"_4 && lihp->initSection != -1)
+    {
+        /* MacPhoenix: CFM-68K: the init routine's transition vector, called
+           with a CFragSystem7InitBlock that says where the fragment came
+           from (its file stays valid while the application runs). */
+        uint32_t tv = guest_cast<uint32_t>(connp->sects[PEFLIH_INIT_SECTION(lihp)].start)
+                      + PEFLIH_INIT_OFFSET(lihp);
+        InitBlock *ib = (InitBlock *)NewPtrClear(sizeof(InitBlock));
+        FSSpec *fsp = (FSSpec *)NewPtrClear(sizeof(FSSpec));
+        StringPtr name = (StringPtr)NewPtrClear(64);
+        const load_origin *o = current_origin;
+        if(o)
+        {
+            name[0] = std::min<size_t>(o->name.size(), 63);
+            memcpy(name + 1, o->name.data(), name[0]);
+            ib->fragLocator.where = o->where;
+            if(o->where == kOnDiskFlat)
+            {
+                *fsp = o->file;
+                ib->fragLocator.u.onDisk.fileSpec = fsp;
+                ib->fragLocator.u.onDisk.offset = o->offset;
+                ib->fragLocator.u.onDisk.length = o->length;
+            }
+            else
+            {
+                ib->fragLocator.u.inMem.address = o->mem;
+                ib->fragLocator.u.inMem.length = o->length;
+            }
+        }
+        ib->contextID = 1;
+        ib->closureID = guest_cast<uint32_t>((Ptr)closure_id);
+        ib->connectionID = guest_cast<uint32_t>((Ptr)connp);
+        ib->libName = name;
+        uint32_t arg = guest_cast<uint32_t>((Ptr)ib);
+        OSErr err = (int16_t)ROMlib_call_cfm68k(tv, &arg);
+        if(err != noErr)
+        {
+            fprintf(stderr, "CFM-68K: init routine of %s: %d\n", o ? o->name.c_str() : "?", err);
+            retval = err;
+        }
+    }
+    else if(retval == noErr && lihp->initSection != -1)
     {
         GUEST<uint32_t> *init_addr;
         InitBlock init_block;
@@ -935,8 +1116,13 @@ load_loader_section(const void *addr,
             retval = noErr;
         }
     }
+    if(retval == noErr && lihp->termSection != -1)
+        if(loaded_fragment *f = find_loaded(connp))
+            f->term = guest_cast<uint32_t>(connp->sects[PEFLIH_TERM_SECTION(lihp)].start)
+                      + PEFLIH_TERM_OFFSET(lihp);
     if(retval == noErr)
-        *mainAddrp = (guest_cast<uint32_t>(connp->sects[PEFLIH_MAIN_SECTION(lihp)].start) + PEFLIH_MAIN_OFFSET(lihp));
+        *mainAddrp = lihp->mainSection == -1 ? 0
+            : (guest_cast<uint32_t>(connp->sects[PEFLIH_MAIN_SECTION(lihp)].start) + PEFLIH_MAIN_OFFSET(lihp));
     return retval;
 }
 
@@ -1096,9 +1282,12 @@ Executor::ROMlib_new_connection(uint32_t n_sects)
     return retval;
 }
 
-OSErr Executor::C_GetMemFragment(void *addr, uint32_t length, ConstStr63Param fragname,
-                                 LoadFlags flags, GUEST<ConnectionID> *connp,
-                                 GUEST<Ptr> *mainAddrp, Str255 errname)
+/* MacPhoenix: prepares the container at addr, named and placed as origin
+   says, and lists it before its imports are bound (a library that imports
+   its importer finds it). */
+static OSErr
+prepare_container(void *addr, const load_origin& origin, GUEST<ConnectionID> *connp,
+                  GUEST<Ptr> *mainAddrp)
 {
     OSErr retval;
 
@@ -1106,23 +1295,18 @@ OSErr Executor::C_GetMemFragment(void *addr, uint32_t length, ConstStr63Param fr
     PEFContainerHeader *headp;
     ConnectionID conn;
 
-    warning_unimplemented("ignoring flags = 0x%x\n", flags);
-
     main_addr = 0;
     *connp = 0;
 
     headp = (PEFContainerHeader*)addr;
 
-    if(PEF_CONTAINER_TAG1(headp) != "Joy!"_4)
-        warning_unexpected("0x%x", toHost(PEF_CONTAINER_TAG1(headp)));
+    if(PEF_CONTAINER_TAG1(headp) != "Joy!"_4
+       || PEF_CONTAINER_TAG2(headp) != "peff"_4)
+        return cfragFragmentFormatErr;
 
-    if(PEF_CONTAINER_TAG2(headp) != "peff"_4)
-        warning_unexpected("0x%x", toHost(PEF_CONTAINER_TAG2(headp)));
-
-    if(PEF_CONTAINER_ARCHITECTURE(headp)
-       != "pwpc"_4)
-        warning_unexpected("0x%x",
-                           toHost(PEF_CONTAINER_ARCHITECTURE(headp)));
+    OSType arch = PEF_CONTAINER_ARCHITECTURE(headp);
+    if(arch != "pwpc"_4 && arch != "m68k"_4)
+        return cfragFragmentFormatErr;
 
     if(PEF_CONTAINER_FORMAT_VERSION(headp) != 1)
         warning_unexpected("0x%x",
@@ -1132,16 +1316,44 @@ OSErr Executor::C_GetMemFragment(void *addr, uint32_t length, ConstStr63Param fr
 
     conn = ROMlib_new_connection(PEF_CONTAINER_SECTION_COUNT(headp));
     if(!conn)
-        retval = fragNoMem;
-    else
-        retval = do_pef_sections(conn, headp, &main_addr,
-                                 PEF_CONTAINER_ARCHITECTURE(headp));
+        return fragNoMem;
+
+    loaded.push_back({ origin, arch, conn, LM(ApplZone), 0, false });
+    const load_origin *saved_origin = current_origin;
+    load_origin origin_copy = origin;
+    current_origin = &origin_copy; /* the list may grow while we bind */
+
+    retval = do_pef_sections(conn, headp, &main_addr, arch);
+    current_origin = saved_origin;
+
+    fprintf(stderr, "[CFM] %s '%s' (%.4s): %d", origin.where == kInMem ? "memory" : "file",
+            origin.name.c_str(), (const char *)&headp->architecture, retval);
+    for(uint32_t i = 0; retval == noErr && i < conn->n_sects; i++)
+        if(conn->sects[i].length)
+            fprintf(stderr, " %u:%08x+%x", i, (uint32_t)guest_cast<uint32_t>(conn->sects[i].start),
+                    (uint32_t)conn->sects[i].length);
+    fprintf(stderr, "\n");
+    if(retval != noErr)
+    {
+        loaded.erase(std::remove_if(loaded.begin(), loaded.end(),
+            [&](const loaded_fragment& f) { return f.cid == conn; }), loaded.end());
+        return retval;
+    }
     *connp = conn;
+    *mainAddrp = guest_cast<Ptr>(main_addr);
+    return noErr;
+}
 
-    if(retval == noErr)
-        *mainAddrp = guest_cast<Ptr>(main_addr);
-
-    return retval;
+OSErr Executor::C_GetMemFragment(void *addr, uint32_t length, ConstStr63Param fragname,
+                                 LoadFlags flags, GUEST<ConnectionID> *connp,
+                                 GUEST<Ptr> *mainAddrp, Str255 errname)
+{
+    load_origin origin {};
+    origin.where = kInMem;
+    origin.mem = (Ptr)addr;
+    origin.length = length;
+    origin.name = pstr(fragname);
+    return prepare_container(addr, origin, connp, mainAddrp);
 }
 
 
@@ -1153,22 +1365,59 @@ OSErr Executor::C_GetDiskFragment(FSSpecPtr fsp, LONGINT offset,
 {
     OSErr retval;
 
-    warning_unimplemented("ignoring flags = 0x%x\n", flags);
+    /* MacPhoenix: a fragment already prepared from this file and offset is
+       shared (kLoadNewCopy aside); kFindLib only looks. */
+    if((flags & 0xF) != kLoadNewCopy)
+    {
+        THz zone = LM(ApplZone);
+        for(auto& f : loaded)
+            if(f.zone == zone && f.origin.where == kOnDiskFlat
+               && f.origin.offset == (uint32_t)offset && same_file(f.origin.file, *fsp))
+            {
+                *connp = f.cid;
+                *mainAddrp = main_address(f.cid);
+                return noErr;
+            }
+    }
+    if(flags == kFindLib)
+        return fragConnectionIDNotFound;
 
     GUEST<INTEGER> rn;
 
     retval = FSpOpenDF(fsp, fsRdPerm, &rn);
     if(retval == noErr)
     {
-        GUEST<LONGINT> len;
-            
-        retval = GetEOF(rn, &len);
+        GUEST<LONGINT> eof;
+        GetEOF(rn, &eof);
 
-        Ptr p = NewPtr(len);
-        FSRead(rn, &len, p);
+        /* MacPhoenix: the container at offset, length bytes (kWholeFork: to
+           the end); was the whole data fork, so a fat file's second
+           container never loaded. */
+        LONGINT len = length == kWholeFork ? eof - offset : length;
+        Ptr p = len > 0 ? NewPtr(len) : nullptr;
+        if(!p)
+            retval = len > 0 ? fragNoMem : cfragFragmentFormatErr;
+        else
+        {
+            GUEST<LONGINT> count = len;
+            retval = SetFPos(rn, fsFromStart, offset);
+            if(retval == noErr)
+                retval = FSRead(rn, &count, p);
+        }
+        FSClose(rn);
 
-        retval = GetMemFragment(p, len, fragname, flags, connp,
-                                mainAddrp, errname);
+        if(retval == noErr)
+        {
+            load_origin origin {};
+            origin.where = kOnDiskFlat;
+            origin.file = *fsp;
+            origin.offset = offset;
+            origin.length = len;
+            origin.name = pstr(fragname);
+            retval = prepare_container(p, origin, connp, mainAddrp);
+        }
+        if(retval != noErr && p)
+            DisposePtr(p);
     }
     return retval;
 }

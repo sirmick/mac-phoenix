@@ -142,7 +142,13 @@ rest. Everything comes from the CodeWarrior Pro 4 Tools CD, a public pin
   `MWLinkPPC` (which writes the `cfrg` itself) with InterfaceLib,
   AppleScriptLib, MathLib and the PPC MSL; `Rez` adds the 68k CODE and DATA
   (`include "NAME.68k" not 'cfrg';`) and the SIZE. Its build passes the
-  guest suite on the 68k, Executor and PowerPC machines.
+  guest suite on the 68k, Executor and PowerPC machines. It also makes
+  `MacPhoenixSuiteCFM68K`, the 68k code as a CFM-68K application:
+  `MWC68K -model CFMflatdf`, `MWLink68K -xm application -model CFMflatdf`
+  with MacOS Common's InterfaceLib and AppleScriptLib stubs (its MathLib is
+  PowerPC-only: `MathLibCFM68K (4i_8d).Lib` instead), `MSL
+  AppRuntimeCFM68K.Lib`, the CFM-68K MSL C and SIOUX
+  (docs/executor/CFM68K.md).
 
 Things to know: Metrowerks' objects aren't Apple's (`Link` can't read
 them, `MWLink68K` brings its own runtime module and wants MSL's); quoted

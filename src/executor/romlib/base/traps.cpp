@@ -95,12 +95,12 @@ void traps::init(bool log, const std::string& trapFilter)
             ostraptable[i] = US_TO_SYN68K((void*)&stub_Unimplemented);
     }
     /* MacPhoenix: _CodeFragmentDispatch ($AA5A) is unimplemented to 68k
-       code, as on a 68k Mac without the CFM-68K Runtime Enabler. Executor's
-       Code Fragment Manager only loads PowerPC fragments, but CFM-68K
-       applications (CodeWarrior IDE 3.2's CFMLaunch stub) take a $AA5A that
-       differs from _Unimplemented for the Enabler and call its private
-       selectors (-1, -3, $44): an unknown selector killed the machine. Now
-       they show their own "requires the CFM-68K Runtime Enabler" alert. */
+       code, as on a 68k Mac without the CFM-68K Runtime Enabler. Executor
+       launches CFM-68K applications through its own Code Fragment Manager
+       (docs/executor/CFM68K.md), so their CFMLaunch stub never runs; one
+       that does (it takes a $AA5A that differs from _Unimplemented for the
+       Enabler and calls its private selectors -1, -3, $44) shows its own
+       "requires the CFM-68K Runtime Enabler" alert. */
     tooltraptable[0xAA5A & 0x3FF] = US_TO_SYN68K((void*)&stub_Unimplemented);
 
     trap_install_handler(0xA, &alinehandler, (void *)0);
