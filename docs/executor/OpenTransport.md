@@ -185,6 +185,6 @@ a Pascal word's high byte on 68k, the low byte on PowerPC); notifiers,
 deferred and system tasks and `OTFindLink`'s search routine installed
 from PowerPC code are called as PowerPC code (`callPPC`). OTTestPPC (the
 same OTTest.c, MrC + PPCLink) passes its cases on Executor
-(`ot_ppc_executor`), all but `cancel`, which it leaves out: a PowerPC
-Time Manager task during a blocking call ends the application
-(STRAGGLERS 64).
+(`ot_ppc_executor`), `cancel` (a PowerPC Time Manager task cancelling a
+blocking call) since Mixed Mode keeps the PowerPC registers (STRAGGLERS
+64).

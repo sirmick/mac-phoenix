@@ -1645,15 +1645,6 @@ static const struct
 static Boolean wanted(int argc, char **argv, const char *name)
 {
     int i;
-#if defined(powerc) || defined(__powerc)
-    /* Executor: a PowerPC Time Manager task that runs during a blocking OT
-       call ends the application (STRAGGLERS 64); the case is left out. */
-    if(!strcmp(name, "cancel"))
-    {
-        printf("SKIP cancel\n");
-        return false;
-    }
-#endif
     if(argc < 2)
         return true;
     for(i = 1; i < argc; i++)
