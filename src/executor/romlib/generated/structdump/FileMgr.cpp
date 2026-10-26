@@ -466,6 +466,18 @@ void describeStruct(const FSSpec& x, std::ostream& os)
     os << "}";
 }
 
+void describeStruct(const GetVolParmsInfoBuffer& x, std::ostream& os)
+{
+    os << "GetVolParmsInfoBuffer{";
+    logging::logField(os, "vMVersion", x.vMVersion);
+    logging::logField(os, "vMAttrib", x.vMAttrib);
+    logging::logField(os, "vMLocalHand", x.vMLocalHand);
+    logging::logField(os, "vMServerAdr", x.vMServerAdr);
+    logging::logField(os, "vMVolumeGrade", x.vMVolumeGrade);
+    logging::logField(os, "vMForeignPrivID", x.vMForeignPrivID);
+    os << "}";
+}
+
 void describeStruct(const wide& x, std::ostream& os)
 {
     os << "wide{";
@@ -802,6 +814,10 @@ void dump_FSSpec(std::ostream& os, const void* p)
 {
     describeStruct(*(const FSSpec*)p, os);
 }
+void dump_GetVolParmsInfoBuffer(std::ostream& os, const void* p)
+{
+    describeStruct(*(const GetVolParmsInfoBuffer*)p, os);
+}
 void dump_wide(std::ostream& os, const void* p)
 {
     describeStruct(*(const wide*)p, os);
@@ -885,6 +901,7 @@ void registerStructDumps_FileMgr()
         { "VCB", sizeof(VCB), &dump_VCB },
         { "DrvQEl", sizeof(DrvQEl), &dump_DrvQEl },
         { "FSSpec", sizeof(FSSpec), &dump_FSSpec },
+        { "GetVolParmsInfoBuffer", sizeof(GetVolParmsInfoBuffer), &dump_GetVolParmsInfoBuffer },
         { "wide", sizeof(wide), &dump_wide },
         { "UTCDateTime", sizeof(UTCDateTime), &dump_UTCDateTime },
         { "HFSUniStr255", sizeof(HFSUniStr255), &dump_HFSUniStr255 },

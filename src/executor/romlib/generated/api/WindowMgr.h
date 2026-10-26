@@ -290,10 +290,7 @@ NOTRAP_FUNCTION2(LMGetDeskCPat);
 NOTRAP_FUNCTION2(LMSetDeskCPat);
 
 
-BEGIN_EXECUTOR_ONLY
-inline RgnHandle GetGrayRgn() { return LM(GrayRgn); }
-NOTRAP_FUNCTION2(GetGrayRgn);
-END_EXECUTOR_ONLY
+RgnHandle C_GetGrayRgn();NOTRAP_FUNCTION(GetGrayRgn);
 
 
 void C_SetWTitle(WindowPtr w, ConstStringPtr t);PASCAL_TRAP(SetWTitle, 0xA91A);

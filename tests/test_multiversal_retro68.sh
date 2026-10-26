@@ -91,7 +91,23 @@ else
     failed "mvtest.c"
 fi
 
-# 4. Retro68's samples, when its source tree is there (toolchain at
+# 4. MacPhoenix's own guest programs that build against these headers alone
+#    (docs/executor/README.md lists what the others still lack).
+for s in MacBrowser/MacBrowser.c tests/guest/mpw-hello/hello.c \
+         tests/guest/suite/main.c tests/guest/suite/finder.c \
+         tests/guest/suite/keyboard.c tests/guest/suite/net.c \
+         tests/guest/suite/netdeep.c; do
+    if "$GCC" "${CFLAGS[@]}" -w -Werror=implicit-function-declaration \
+            -I "$REPO/src/common/guest" -I "$REPO/src/common/include" \
+            -fsyntax-only "$REPO/$s" > "$WORK/guest.log" 2>&1; then
+        pass "guest program $s"
+    else
+        head -10 "$WORK/guest.log"
+        failed "guest program $s"
+    fi
+done
+
+# 5. Retro68's samples, when its source tree is there (toolchain at
 #    <retro68>/build/toolchain, samples at <retro68>/src/Samples).
 SAMPLES="$TOOLCHAIN/../../src/Samples"
 if [[ -d "$SAMPLES" ]]; then

@@ -4,7 +4,7 @@
  *                                ============                               *
  *                                                                           *
  * Needs:                                                                    *
- *     WindowMgr.h    ControlHandle, WindowPtr, ControlPtr                   *
+ *     WindowMgr.h    ControlHandle, WindowPtr                               *
  *     MacTypes.h     Rect, Byte, INTEGER, Handle, LONGINT, Str255,          *
  *                    ConstStringPtr, StringPtr, Boolean                     *
  *     QuickDraw.h    cSpecArray, RgnHandle                                  *
@@ -218,6 +218,9 @@ void C_SizeControl(ControlHandle c, INTEGER width, INTEGER height);PASCAL_TRAP(S
 void C_SetControlColor(ControlHandle ctl, CCTabHandle ctab);PASCAL_TRAP(SetControlColor, 0xAA43);
 
 
-typedef ControlPtr ControlRef;
+typedef ControlHandle ControlRef;
+
+using ControlDefUPP = UPP<LONGINT(INTEGER varCode, ControlHandle theControl, INTEGER message, LONGINT param)>;
+
 
 } /* namespace Executor */

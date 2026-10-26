@@ -169,7 +169,7 @@
 
 - typedef:
     name: AEArrayType
-    type: int16_t
+    type: uint8_t
 
 # ####
 
@@ -554,74 +554,22 @@
     name: _AE_hdlr_table_alloc
     return: OSErr
     args:
+      - name: n_elts
+        type: int32_t
+      - name: unknown_2
+        type: int32_t
+      - name: unknown_3
+        type: int32_t
+      - name: unknown_p
+        type: int8_t
       - name: table_return
         type: AE_hdlr_table_h*
-      - name: system_zone
-        type: uint8_t
-      - name: imports
-        type: const void*
-      - name: sizes
-        type: int32_t
-      - name: capacity_hint
-        type: int32_t
     comment: |
-      Private/undocumented entry point.  system_zone selects the system heap;
-      sizes is packed (valueSize << 16) | keySize; capacity_hint is the
-      expected number of entries (not a hard limit).  imports is a pointer to
-      a four-entry vector of manager routines, or 0.  Every observed caller
-      uses sizes == 0x00080008 and imports == 0.
+      Private/undocumented entry point.  The first argument is the initial
+      table capacity (the ROM passes 16, HyperCard passes 175 and 105); the
+      remaining arguments are not understood.
     dispatcher: Pack8
     selector: 0x092E
-    executor: C_
-
-# ####
-
-- function:
-    name: _AE_hdlr_table_free
-    return: OSErr
-    args:
-      - name: imports
-        type: const void*
-      - name: table
-        type: AE_hdlr_table_h*
-    dispatcher: Pack8
-    selector: 0x042F
-    executor: C_
-
-# ####
-
-- function:
-    name: _AE_hdlr_install_unique
-    return: OSErr
-    args:
-      - name: hdlr
-        type: AE_hdlr_t*
-      - name: key
-        type: AE_hdlr_selector_t*
-      - name: imports
-        type: const void*
-      - name: table
-        type: AE_hdlr_table_h
-    dispatcher: Pack8
-    selector: 0x0830
-    executor: C_
-
-# ####
-
-- function:
-    name: _AE_hdlr_install
-    return: OSErr
-    args:
-      - name: hdlr
-        type: AE_hdlr_t*
-      - name: key
-        type: AE_hdlr_selector_t*
-      - name: imports
-        type: const void*
-      - name: table
-        type: AE_hdlr_table_h
-    dispatcher: Pack8
-    selector: 0x0831
     executor: C_
 
 # ####
@@ -630,12 +578,9 @@
     name: _AE_hdlr_delete
     return: OSErr
     args:
-      - name: key
-        type: AE_hdlr_selector_t*
-      - name: imports
-        type: const void*
-      - name: table
-        type: AE_hdlr_table_h
+      - type: AE_hdlr_table_h
+      - type: int32_t
+      - type: AE_hdlr_selector_t*
     dispatcher: Pack8
     selector: 0x0632
     executor: C_
@@ -646,14 +591,10 @@
     name: _AE_hdlr_lookup
     return: OSErr
     args:
-      - name: result
-        type: AE_hdlr_t*
-      - name: key
-        type: AE_hdlr_selector_t*
-      - name: imports
-        type: const void*
-      - name: table
-        type: AE_hdlr_table_h
+      - type: AE_hdlr_table_h
+      - type: int32_t
+      - type: AE_hdlr_selector_t*
+      - type: AE_hdlr_t*
     dispatcher: Pack8
     selector: 0x0833
     executor: C_
@@ -661,19 +602,15 @@
 # ####
 
 - function:
-    name: _AE_hdlr_get_key
+    name: _AE_hdlr_install
     return: OSErr
     args:
-      - name: key
-        type: AE_hdlr_selector_t*
-      - name: index
-        type: int32_t
-      - name: imports
-        type: const void*
-      - name: table
-        type: AE_hdlr_table_h
+      - type: AE_hdlr_table_h
+      - type: int32_t
+      - type: AE_hdlr_selector_t*
+      - type: AE_hdlr_t*
     dispatcher: Pack8
-    selector: 0x0834
+    selector: 0x0831
     executor: C_
 
 # ####

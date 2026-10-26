@@ -49,7 +49,7 @@ name, in which calling convention:
         type: OTByteCount
     library: OTUtilityLib        # CFM library: PowerPC, and CFM-68K where it exists
     aslm: { set: utils, index: 12 }   # the 68k route through ASLM, if any
-    convention: C                # C (default for libraries) or pascal
+    callconv: C                  # C (default for libraries) or Pascal
     executor: C_
 ```
 
@@ -59,8 +59,10 @@ name, in which calling convention:
 - `aslm:` gives the ASLM function set and index the 68k glue binds by
   (Open Transport's static glue: `__SLM11FuncDispatch`). The set's
   library name and version go in a `- aslm-set:` entry, once per set.
-- `convention:` decides argument order and who pops for CFM-68K (today
-  the hand-written `c_routines68k` list in `builtinlibs.cpp`).
+- `callconv:` decides argument order and who pops for CFM-68K (today
+  the hand-written `c_routines68k` list in `builtinlibs.cpp`). The name
+  is upstream's: its `funptr` entries already take `callconv: C` for
+  native C function pointers (Driver Services).
 - `raw: true` for routines Executor decodes by hand (variadic `printf`,
   `CallUniversalProc`): the C side is declared normally, and Executor
   registers its own implementation, so the generator only checks that it
@@ -123,21 +125,40 @@ does what Apple's static glue does. Headers by Apple's names
 
 ## Order of work
 
-1. **Schema and generators; StdCLib and MathLib on them.** They are
+The whole plan (agreed 2026-10-26):
+
+0. Land what's done: `executor-ppc-libs` and `multiversal-retro68` into
+   main.
+1. Upstream multiversal's definitions and C side — done 2026-10-26
+   (README.md, "Upstream since the import"); its Executor-side generator
+   rewrite stays out.
+2. to 5., below: the library routes one by one.
+6. Outward: the upstream change (only once seen and agreed), a Retro68
+   with PowerPC to build the CFM side, Retro68's `AutomatedTests` on our
+   Executor through `LaunchAPPL`.
+
+Throughout, the aim is MacPhoenix's own guest programs building against
+the generated headers alone (BridgeAgent without Apple's UI 3.4 first);
+`multiversal_retro68` compiles each one that does.
+
+The library routes:
+
+
+2. **Schema and generators; StdCLib and MathLib on them.** They are
    typed already, so moving them is mechanical: the `exportFn` lists
    become definitions (`StdCLib.yaml`, `MathLib.yaml`) and the
    implementations stay. Adding CFM-68K to the libraries' architectures
    is STRAGGLERS 60 (MPW's CFM-68K programs import `NuStdCLib` and
    `NuIntEnv`). Check: `clib_executor`, `clib_rom_ppc`,
    `guest_suite_ppc_executor`, a CFM-68K MPW tool.
-2. **The CFM glue** (`cfm68k_glue.cpp`'s `exportGlue` list).
-3. **Open Transport.** The `Def` tables become definitions and the
+3. **The CFM glue** (`cfm68k_glue.cpp`'s `exportGlue` list).
+4. **Open Transport.** The `Def` tables become definitions and the
    implementations take typed arguments instead of `Call`. By-products:
    `OpenTransportLib`, `OTUtilityLib`, `OpenTptInternetLib` for PowerPC
    (OpenTransport.md lists them as not written) and `OpenTransport.h`.
    Check: OTTest on 68k (the ASLM route) and PowerPC, the guest suite's
    network sections.
-4. **Components.** `Components.yaml`'s own calls, then OSA
+5. **Components.** `Components.yaml`'s own calls, then OSA
    (AppleScriptLib's table), then Executor's own native component (the
    sound output device, `sound/soundIMVI.cpp`).
 

@@ -4,7 +4,7 @@
  *                                 ==========                                *
  *                                                                           *
  * Needs:                                                                    *
- *     MacTypes.h    INTEGER, LONGINT, Ptr, Fixed, Byte, Boolean, OSErr,     *
+ *     MacTypes.h    INTEGER, LONGINT, Ptr, Boolean, Fixed, Byte, OSErr,     *
  *                   OSType, Handle, ConstStringPtr, ResType                 *
  *     SANE.h        extended80                                              *
  *                                                                           *
@@ -44,6 +44,11 @@ using SndCallbackUPP = UPP<void(SndChannel *, SndCommand *)>;
 struct SndChannel{GUEST_STRUCT;GUEST<SndChannel*> nextChan;GUEST<Ptr> firstMod;GUEST<SndCallbackUPP> callBack;GUEST<LONGINT> userInfo;GUEST<LONGINT> wait;SndCommand cmdInProg;GUEST<INTEGER> flags;GUEST<INTEGER> qLength;GUEST<INTEGER> qHead;GUEST<INTEGER> qTail;SndCommand queue[stdQLength];};static_assert(sizeof(SndChannel) == 1060);void describeStruct(const SndChannel&, std::ostream&);
 
 typedef SndChannel *SndChannelPtr;
+
+struct ModifierStub;
+
+using SndModifierUPP = UPP<Boolean(SndChannelPtr , SndCommand *, ModifierStub *)>;
+
 
 enum {nullCmd,
 initCmd,

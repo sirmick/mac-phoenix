@@ -92,10 +92,26 @@ generated code (Phases 0–5, U1–U5, 2026-10-07 to 10-18), which touches the
 same files as most of MacPhoenix's trap work.
 
 Upstream's multiversal has moved on as well (50 commits by 2026-10-22, at
-`580f330`): Driver Services, Name Registry and PCI for NDRV drivers,
-high-level File Manager glue fixes for Retro68 (`HOpen`'s `ioMisc`,
-`AppFile`), register-output glue inlined, `GetGrayRgn`, and the same
-generator rewrite on its Executor side. None of it is merged.
+`580f330`). Taken (2026-10-26, as upstream's own commits, `git am`): the
+definitions and the C side, 18 commits. Driver Services, Name Registry
+and PCI with the generator features they need (`callconv: C` function
+pointers, `align: power`, `define`); the high-level File Manager glue
+fixes (`HOpen`'s `ioMisc`, `ioFVersNum`, `AppFile`); register-output
+glue inlined; `GetGrayRgn` as a function (`C_GetGrayRgn` in
+`windInit.cpp`); `ControlRef` as `ControlHandle`; the def-proc,
+decompressor, `TEDoText` and sound modifier UPP types (and the `A3`,
+`D3`, `D4`, `D7` register names in `base/functions.h`); the Apple Event
+Manager's constants and the #327 declarations (`ioDirMask`,
+`GetVolParmsInfoBuffer`, `bHasExtFSVol`: out of `file/file.h` now).
+Kept ours: `GetFrontProcess`'s entry (the same fix, made here
+independently, with more on the second argument), `AEArrayType` as a
+byte (Apple's `SInt8`; upstream made it `int16_t`) and the private
+`_AE_hdlr_*` entry points, whose new signatures go with upstream
+Executor's Apple Event Manager rework (`1af5b3e2`, "PACK 8 spec
+conformance"). Not taken: the Executor-side generator rewrite (above),
+`Executor.yaml` (upstream Executor's `unixmount`), and upstream's fix to
+`ROMlib_dotext`'s register convention (`bf0c04b0`), an Executor change
+still to look at.
 
 ## The definitions as Retro68's headers
 
@@ -118,14 +134,14 @@ generator wraps pointers itself; the C generator would write `GUEST`).
 The generator names a header for each Universal Interfaces file the
 definitions cover (`cincludes.rb`; each just includes `Multiverse.h`).
 
-Not enough yet to build MacPhoenix's own guest programs without Apple's
-headers. What they still miss: Open Transport, AppleScript/OSA and the
-Component Manager's calls (Executor implements them in C++ with no
-definitions), the HFS Plus constants (`kFSCatInfo*`), `fsRtDirID`,
-`ioDirMask`, `SInt64`, MacTCP's parameter blocks and UPPs, `NMUPP`,
-`Video.h`'s records, `fp.h`, `TextCommon.h`, the high-level File Manager
-glue (`HSetFInfo`, `DirCreate`, `CatMove`: upstream's fixes), and
-`ONEWORDINLINE`. Some Executor signatures differ from Apple's
+MacBrowser and parts of MacPhoenixSuite build against them alone (the
+test compiles them); the rest of MacPhoenix's guest programs don't yet.
+What they still miss: Open Transport, AppleScript/OSA and the Component
+Manager's calls (Executor implements them in C++ with no definitions:
+LIBRARIES.md is the plan), the HFS Plus constants (`kFSCatInfo*`),
+`fsRtDirID`, `SInt64`, MacTCP's parameter blocks and UPPs, `NMUPP`,
+`Video.h`'s records, `fp.h`, `TextCommon.h`, some high-level File
+Manager glue (`HSetFInfo`, `DirCreate`, `CatMove`), and `ONEWORDINLINE`. Some Executor signatures differ from Apple's
 (`NewThread` takes `ProcPtr` and `LONGINT`s, not `ThreadEntryUPP`,
 `ThreadStyle` and `ThreadOptions`).
 

@@ -5,7 +5,7 @@
  *                                                                           *
  * Needs:                                                                    *
  *     MacTypes.h    Boolean, INTEGER, ResType, Handle, ConstStringPtr,      *
- *                   StringPtr, LONGINT, Byte, SignedByte, Ptr               *
+ *                   StringPtr, LONGINT, Byte, SignedByte, Ptr, Size         *
  *                                                                           *
  *                                                                           *
  *****************************************************************************/
@@ -312,6 +312,9 @@ void C_SetResourceSize(Handle resource, int32_t size);PASCAL_SUBTRAP(SetResource
 
 
 Handle C_GetNextFOND(Handle fondHandle);PASCAL_SUBTRAP(GetNextFOND, 0xA822, 0x000A, ResourceDispatch);
+
+
+using ResourceDecompressionUPP = UPP<void(Ptr source, Ptr dest, Ptr working, Size len)>;
 
 
 } /* namespace Executor */
