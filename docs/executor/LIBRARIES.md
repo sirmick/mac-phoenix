@@ -204,6 +204,21 @@ rewritten on its Executor side (README.md, "Upstream since the
 import"), so the Executor half needs porting there; the C half and the
 definitions apply as they are. Nothing is sent without asking.
 
+## Seeing where things stand
+
+`tools/macdecode/libraries.py --scan` reads the import tables of every
+PEF container (PowerPC and CFM-68K) on the disk images and the export
+tables of Apple's libraries as MPW ships them (stub libraries; names
+only), into `<storage>/macdecode/libraries.json`; without `--scan` it
+prints a summary per library. The macdecode web view
+(`tools/macdecode/macdecode.py SNAPSHOT --serve`, default port 8765) has a
+**Libraries** page joining that with what the definitions say Executor
+answers, read on every load: per library, Apple's exports, Executor's,
+what programs import and what of that Executor lacks; then every symbol,
+filtered by library, Executor has/lacks and imported or not ("work
+list"), with the routes (PowerPC, CFM-68K, 68k ASLM set and name) and
+the routine.
+
 ## Tools on the Retro68 side
 
 - Retro68's `ImportLibraries` (89 PEF import stubs, generated in 2015
