@@ -126,6 +126,9 @@ cd src/executor/multiversal
 ruby make-multiverse.rb -G CIncludes -o OUT    # OUT/CIncludes, OUT/lib68k (glue)
 ```
 
+`ctest -R retro68_` runs RetroTest, a program built with Retro68 for 68k
+and PowerPC against these headers alone, on Executor and on Apple's
+systems (LIBRARIES.md, "Tools on the Retro68 side").
 `ctest -R multiversal_retro68` (`tests/test_multiversal_retro68.sh`)
 generates them, builds `tests/multiversal/mvtest.c` against them alone
 (none of Apple's headers), and compiles Retro68's samples. Definitions

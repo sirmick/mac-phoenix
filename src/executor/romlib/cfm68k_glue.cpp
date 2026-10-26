@@ -241,6 +241,19 @@ OSErr glue_DirCreate(INTEGER vRefNum, LONGINT parentDirID, ConstStringPtr name,
     return err;
 }
 
+/* The volume an open file is on (Inside Macintosh: Files, glue over
+   PBGetFCBInfo); Retro68's PowerPC runtime imports it. */
+OSErr glue_GetVRefNum(INTEGER prn, GUEST<INTEGER> *vrn)
+{
+    GuestTemp<FCBPBRec> pb;
+    pb->ioRefNum = prn;
+    pb->ioFCBIndx = 0;
+    OSErr err = PBGetFCBInfo(pb.p, false);
+    if(err == noErr && vrn)
+        *vrn = pb->ioFCBVRefNum;
+    return err;
+}
+
 /* _HFSDispatch $A260, selector $39 (Inside Macintosh: Files, "Low-Level File
    Access Routines"). */
 OSErr glue_PBHOpenRFDenySync(HParmBlkPtr pb)

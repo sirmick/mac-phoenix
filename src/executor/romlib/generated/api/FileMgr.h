@@ -499,7 +499,8 @@ QHdrPtr C_GetDrvQHdr();NOTRAP_FUNCTION(GetDrvQHdr);
 OSErr GetVInfo(INTEGER drv, StringPtr voln, GUEST<INTEGER> *vrn, GUEST<LONGINT> *freeb);LIBRARY_FUNCTION(InterfaceLib, GetVInfo, GetVInfo);
 
 
-OSErr GetVRefNum(INTEGER prn, GUEST<INTEGER> *vrn);
+OSErr glue_GetVRefNum(INTEGER prn, GUEST<INTEGER> *vrn);LIBRARY_FUNCTION(InterfaceLib, GetVRefNum, glue_GetVRefNum);
+
 
 OSErr GetVol(StringPtr voln, GUEST<INTEGER> *vrn);NOTRAP_FUNCTION2(GetVol);
 

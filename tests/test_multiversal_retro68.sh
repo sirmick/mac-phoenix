@@ -6,7 +6,7 @@
 # Mac programs with Retro68's m68k compiler against them alone: Apple's
 # Universal Interfaces, if the toolchain has them installed, are left out.
 #
-#   tests/test_multiversal_retro68.sh [--gcc PATH] [--work DIR]
+#   tests/test_multiversal_retro68.sh [--gcc PATH] [--ppc-gcc PATH] [--work DIR]
 #
 # Builds tests/multiversal/mvtest.c into an application (headers, glue
 # library, the calls MacPhoenix added to the definitions) and compiles
@@ -17,11 +17,13 @@ set -uo pipefail
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 MV="$REPO/src/executor/multiversal"
 GCC=""
+PPC_GCC=""
 WORK="${TMPDIR:-/tmp}/multiversal-retro68.$$"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --gcc)  GCC="$2"; shift 2 ;;
+        --ppc-gcc) PPC_GCC="$2"; shift 2 ;;
         --work) WORK="$2"; shift 2 ;;
         *) echo "unknown argument: $1" >&2; exit 2 ;;
     esac
@@ -89,6 +91,33 @@ if "$GCC" "${CFLAGS[@]}" -L "$WORK/out/lib68k" -o "$WORK/mvtest.code.bin" \
 else
     head -30 "$WORK/mvtest.log"
     failed "mvtest.c"
+fi
+
+# 3b. mvtest for PowerPC too, with a Retro68 that has it (the declarations
+#     without 68k inlines: InterfaceLib & co. imports). Compiled only;
+#     RetroTest (tests/guest/retro68) links and runs.
+[[ -n "$PPC_GCC" ]] || PPC_GCC="$(command -v powerpc-apple-macos-gcc || true)"
+if [[ -n "$PPC_GCC" && -x "$PPC_GCC" ]]; then
+    PPC_SYSINC="$(cd "$(dirname "$PPC_GCC")/.." && pwd)/powerpc-apple-macos/include"
+    PVIEW="$WORK/include-ppc"
+    mkdir -p "$PVIEW"
+    for f in "$PPC_SYSINC"/*; do
+        case "$(readlink "$f")" in
+            *Interfaces*/CIncludes/*|*universal/CIncludes/*|*multiversal/CIncludes/*) ;;
+            *) ln -s "$f" "$PVIEW/" ;;
+        esac
+    done
+    ln -sf "$WORK/out/CIncludes/"* "$PVIEW/"
+    if "$PPC_GCC" -nostdinc -isystem "$("$PPC_GCC" -print-file-name=include)" -isystem "$PVIEW" \
+            -Wall -Wno-pointer-sign -Werror=implicit-function-declaration -fsyntax-only \
+            "$REPO/tests/multiversal/mvtest.c" > "$WORK/mvtest-ppc.log" 2>&1; then
+        pass "mvtest.c compiled for PowerPC"
+    else
+        head -20 "$WORK/mvtest-ppc.log"
+        failed "mvtest.c for PowerPC"
+    fi
+else
+    echo "(no powerpc-apple-macos-gcc: PowerPC not compiled)"
 fi
 
 # 4. MacPhoenix's own guest programs that build against these headers alone

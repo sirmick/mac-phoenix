@@ -66,7 +66,9 @@ npx playwright test
 ctest --test-dir build -L executor
 # Executor's API definitions (src/executor/multiversal/defs) are also Retro68's
 # Multiversal Interfaces: ctest -R multiversal_retro68 builds a program against
-# the C headers they generate (docs/executor/README.md)
+# the C headers they generate, ctest -R retro68_ runs RetroTest (tests/guest/retro68,
+# 68k + PowerPC, Retro68 with PowerPC in ~/opt/retro68/build-ppc/toolchain) on
+# Executor and Apple's systems (docs/executor/README.md, LIBRARIES.md)
 # Toolbox selectors/OT functions a session called that Executor lacks: "[unimplemented]"
 # in the log, collected in ~/storage/executor/unimplemented.log (date, app, call)
 

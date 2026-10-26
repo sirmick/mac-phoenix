@@ -45,10 +45,13 @@ set_tests_properties(cpu_cores PROPERTIES TIMEOUT 10 LABELS "unit;mame")
 # Executor's API definitions as the Multiversal Interfaces for Retro68:
 # generate the C headers and glue library, build a program against them.
 # Skips (77) without Retro68's m68k compiler.
+find_program(RETRO68_PPC_GCC powerpc-apple-macos-gcc
+  HINTS "$ENV{HOME}/opt/retro68/build-ppc/toolchain/bin")
 add_test(
   NAME multiversal_retro68
   COMMAND bash ${TEST_DIR}/test_multiversal_retro68.sh
           $<$<BOOL:${RETRO68_GCC}>:--gcc> $<$<BOOL:${RETRO68_GCC}>:${RETRO68_GCC}>
+          $<$<BOOL:${RETRO68_PPC_GCC}>:--ppc-gcc> $<$<BOOL:${RETRO68_PPC_GCC}>:${RETRO68_PPC_GCC}>
 )
 set_tests_properties(multiversal_retro68 PROPERTIES
   TIMEOUT 120
@@ -381,6 +384,33 @@ set_tests_properties(clib_cfm68k PROPERTIES
   SKIP_RETURN_CODE 77
   ENVIRONMENT "MACEMU_ROM=${TEST_ROM}"
 )
+
+# RetroTest (tests/guest/retro68, build.sh): built with Retro68 against the
+# Multiversal Interfaces generated from Executor's definitions, for 68k and
+# PowerPC (traps, Component Manager and OSA inlines; InterfaceLib and
+# AppleScriptLib imports). On Executor, and on the ROM machines (the
+# Quadra with 7.5.5, Mac OS 9.0.4 on mame-ppc) as the reference.
+foreach(cell IN ITEMS "retro68_executor;--backend executor;RetroTest68K;18770;executor"
+                      "retro68_ppc_executor;--backend executor;RetroTestPPC;18772;executor"
+                      "retro68_rom;;RetroTest68K;18774;"
+                      "retro68_rom_ppc;--backend kpx --core mame-ppc --jit;RetroTestPPC;18776;")
+  list(GET cell 0 name)
+  list(GET cell 1 backend)
+  list(GET cell 2 app)
+  list(GET cell 3 port)
+  list(GET cell 4 label)
+  separate_arguments(backend_args UNIX_COMMAND "${backend}")
+  add_test(
+    NAME ${name}
+    COMMAND bash ${TEST_DIR}/test_guest_suite.sh ${backend_args} --app ${CMAKE_SOURCE_DIR}/tests/guest/retro68/${app}.bin --results retro68_results.txt --network none --timeout 150 --port ${port}
+  )
+  set_tests_properties(${name} PROPERTIES
+    TIMEOUT 220
+    LABELS "guest;${label}"
+    SKIP_RETURN_CODE 77
+    ENVIRONMENT "MACEMU_ROM=$<IF:$<STREQUAL:${app},RetroTestPPC>,${TEST_PPC_ROM},${TEST_ROM}>"
+  )
+endforeach()
 
 # The fat MacPhoenixSuite's PowerPC code on Executor (--executor-ppc):
 # StdCLib, AppleScriptLib through CallComponentUPP, exit() through StdCLib.

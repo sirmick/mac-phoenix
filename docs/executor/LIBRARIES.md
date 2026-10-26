@@ -239,9 +239,21 @@ the routine.
 - Retro68's `ImportLibraries` (89 PEF import stubs, generated in 2015
   from Apple's libraries) list every export of each Apple CFM library:
   the checklist for what a library's definitions still lack.
-- The toolchain in `toolchain/retro68` is 68k only (no
-  `powerpc-apple-macos`); the PowerPC and CFM side of the C headers needs
-  a Retro68 build with PowerPC.
+- The toolchain in `toolchain/retro68` is 68k only. A Retro68 with
+  PowerPC (and 68k, Multiversal) is built at
+  `~/opt/retro68/build-ppc/toolchain` (2026-10-26: `build-toolchain.bash
+  --multiversal --prefix=...`, from the same source; `nproc` capped at 4).
+  **RetroTest** (`tests/guest/retro68`, `build.sh`) is built with it for
+  both processors against the headers generated from the definitions
+  alone: traps, the Component Manager, OSA compiling and running
+  `6 * 7` (68k inlines; InterfaceLib and AppleScriptLib imports on
+  PowerPC). It passes on Executor (`retro68_executor`,
+  `retro68_ppc_executor`) and on Apple's systems (`retro68_rom`: the
+  Quadra with 7.5.5; `retro68_rom_ppc`: Mac OS 9.0.4), the binaries
+  committed. Found on the way: 7.5.5's Component Manager has no
+  `OpenAComponent` (Component Manager 3.0's; Executor answers it), and
+  Retro68's PowerPC runtime imports `GetVRefNum` (an InterfaceLib export
+  now).
 - Retro68's `LaunchAPPL` has an Executor backend (`-e executor`: runs the
   application with `--executor-path`, resource fork as `%`AppleDouble)
   and its `AutomatedTests` run through it; pointed at MacPhoenix
