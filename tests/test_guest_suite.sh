@@ -9,7 +9,7 @@
 #
 # Usage:
 #   tests/test_guest_suite.sh [--timeout 60] [--port 18094] [--disk path]
-#                             [--rom path] [--os-version 7.5.5|7.6]
+#                             [--rom path] [--os-version 7.5.5|7.6.1|9.0.4]
 #                             [--network MODE] [--backend uae|kpx|executor]
 #                             [--script NAME.pl] [--results FILE]
 #                             [--sections "disk extfs ..."] [--app SUITE.bin]

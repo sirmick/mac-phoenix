@@ -15,6 +15,7 @@
 void report_pass(const char *name);
 void report_fail(const char *name, const char *detail);
 void report_skip(const char *name, const char *reason);
+void report_note(const char *text);   /* a "# text" line, not counted */
 
 /* Waits for events (the app stays responsive and in front). */
 void idle_ticks(long ticks);

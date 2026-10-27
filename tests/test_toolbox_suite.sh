@@ -22,6 +22,10 @@
 # Usage:
 #   tests/test_toolbox_suite.sh [--backend uae|executor] [--port N]
 #                               [--timeout N] [--filter GTEST_FILTER]
+#                               [--os-version 7.5.5|7.6.1]
+#
+# --os-version: the System (tests-<version>.img; default 7.5.5). Its expected
+# failures are toolbox_expected_<backend>_<version>.txt where that exists.
 #
 # Skips (77) without the Retro68 toolchain, a ROM (uae) or the disk image.
 #
@@ -43,6 +47,7 @@ BACKEND="uae"
 FILTER=""
 TRACE=()
 CORE=""
+OS_VERSION=7.5.5
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --timeout) TIMEOUT="$2"; shift 2 ;;
@@ -52,6 +57,7 @@ while [[ $# -gt 0 ]]; do
         --trace)   TRACE=(--trace-atraps); shift ;;
         --logtraps) TRACE=(--executor-logtraps); shift ;;
         --core)    CORE="$2"; shift 2 ;;   # CPU core: uae | mame-68k
+        --os-version) OS_VERSION="$2"; shift 2 ;;
         *) echo "Unknown arg: $1"; exit 1 ;;
     esac
 done
@@ -61,7 +67,8 @@ cd "$PROJECT_ROOT"
 BINARY="${MACEMU_BINARY:-$PROJECT_ROOT/build/mac-phoenix}"
 APP_BUILD="$PROJECT_ROOT/build-m68k-tests"
 TOOLCHAIN="$PROJECT_ROOT/toolchain/retro68/m68k-apple-macos/cmake/retro68.toolchain.cmake"
-EXPECTED="$PROJECT_ROOT/tests/guest/toolbox_expected_${BACKEND}.txt"
+EXPECTED="$PROJECT_ROOT/tests/guest/toolbox_expected_${BACKEND}_${OS_VERSION}.txt"
+[[ -f "$EXPECTED" ]] || EXPECTED="$PROJECT_ROOT/tests/guest/toolbox_expected_${BACKEND}.txt"
 APP_NAME="MacPhoenixTests"
 
 [[ -x "$BINARY" ]] || { echo "SKIP: Binary not found: $BINARY"; exit 77; }
@@ -72,7 +79,7 @@ if [[ "$BACKEND" != "executor" ]]; then
     ROM="${MACEMU_ROM:-$HOME/roms/quadra.rom}"
     [[ -f "$ROM" ]] || { echo "SKIP: ROM not found: $ROM"; exit 77; }
 fi
-DISK="${MACEMU_DISK:-$(bash tests/lib/refresh_test_disk.sh tests-7.5.5 $$)}"
+DISK="${MACEMU_DISK:-$(bash tests/lib/refresh_test_disk.sh "tests-$OS_VERSION" $$)}"
 [[ -f "$DISK" ]] || { echo "SKIP: Disk image not found: $DISK"; exit 77; }
 
 # --- Build the application ---------------------------------------------------
@@ -90,7 +97,7 @@ echo " ok"
 EXTFS_DIR=$(mktemp -d ${TMPDIR:-/tmp}/mactoolbox-extfs.XXXXXX)
 python3 tests/guest/install_macbinary.py "$APP_BUILD/tests.bin" "$EXTFS_DIR" "$APP_NAME"
 OUT="$EXTFS_DIR/out"
-rm -f "${TMPDIR:-/tmp}/mactoolbox_out_${BACKEND}.txt"
+rm -f "${TMPDIR:-/tmp}/mactoolbox_out_${BACKEND}_${OS_VERSION}.txt"
 LOG=${TMPDIR:-/tmp}/mactoolbox_$$.log
 
 cleanup() {
@@ -102,7 +109,7 @@ cleanup() {
 }
 trap cleanup EXIT SIGTERM SIGINT
 
-echo "=== Toolbox Suite ($BACKEND) ==="
+echo "=== Toolbox Suite ($BACKEND, $OS_VERSION) ==="
 echo "Disk: $DISK  Port: $PORT"
 
 FLAGS=(--disk "$DISK")
@@ -149,8 +156,8 @@ until [[ -f "$OUT" ]] && tr '\r' '\n' < "$OUT" | grep -q '^MACPHOENIX-DONE'; do
     fi
     if (( $(date +%s) - START > TIMEOUT )); then
         curl -sf -X POST "http://localhost:$PORT/api/snapshot" -H 'Content-Type: application/json' \
-            -d "{\"name\":\"toolbox-${BACKEND}-timeout\"}" >/dev/null || true
-        echo " timeout (snapshot: ~/storage/snapshots/toolbox-${BACKEND}-timeout)"; break
+            -d "{\"name\":\"toolbox-${BACKEND}-${OS_VERSION}-timeout\"}" >/dev/null || true
+        echo " timeout (snapshot: ~/storage/snapshots/toolbox-${BACKEND}-${OS_VERSION}-timeout)"; break
     fi
     sleep 1
 done
@@ -163,7 +170,7 @@ if [[ ! -f "$OUT" ]]; then
     exit 1
 fi
 tr '\r' '\n' < "$OUT" > "$OUT.unix"
-cp "$OUT.unix" "${TMPDIR:-/tmp}/mactoolbox_out_${BACKEND}.txt"
+cp "$OUT.unix" "${TMPDIR:-/tmp}/mactoolbox_out_${BACKEND}_${OS_VERSION}.txt"
 grep -E '^\[ +(FAILED|PASSED|SKIPPED) +\]|^\[==========\]|^MACPHOENIX-DONE' "$OUT.unix" | grep -v "^\[  FAILED  \] .*listed below" || true
 
 # --- Compare with the expected failures ---------------------------------------

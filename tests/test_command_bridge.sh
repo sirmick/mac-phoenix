@@ -3,6 +3,7 @@
 # test_command_bridge.sh - Test command bridge API endpoints
 #
 # Tests /api/app, /api/windows, /api/wait (passive + queue), /api/launch, /api/quit
+# --os-version 7.6.1: on a copy of tests-7.6.1.img (default tests-7.5.5).
 #
 set -euo pipefail
 
@@ -13,6 +14,7 @@ PORT=18106
 SIG_PORT=18107
 BINARY="${MACEMU_BINARY:-$(cd "$(dirname "$0")/.." && pwd)/build/mac-phoenix}"
 PASS_FLAGS=()
+OS_VERSION=7.5.5
 
 # Parse args
 while [[ $# -gt 0 ]]; do
@@ -22,6 +24,7 @@ while [[ $# -gt 0 ]]; do
         --arch) ARCH="$2"; shift 2 ;;
         --port) PORT="$2"; SIG_PORT="$((PORT + 1))"; shift 2 ;;
         --timeout) TIMEOUT="$2"; shift 2 ;;
+        --os-version) OS_VERSION="$2"; shift 2 ;;
         --jit|--no-jit) PASS_FLAGS+=("$1"); shift ;;
         --m68k-host) PASS_FLAGS+=(--m68k-host "$2"); shift 2 ;;   # mame-ppc: C3a
         *) echo "Unknown arg: $1"; exit 1 ;;
@@ -39,7 +42,7 @@ else
     ROM="${MACEMU_ROM:-$HOME/roms/quadra.rom}"
 fi
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-DISK="${MACEMU_DISK:-$(bash "$SCRIPT_DIR/lib/refresh_test_disk.sh" tests-7.5.5 $$)}"
+DISK="${MACEMU_DISK:-$(bash "$SCRIPT_DIR/lib/refresh_test_disk.sh" "tests-$OS_VERSION" $$)}"
 
 if [[ ! -x "$BINARY" ]]; then
     echo "SKIP: Binary not found: $BINARY"
@@ -60,7 +63,7 @@ elif [[ ! -f "$ROM" ]]; then
     exit 77
 fi
 
-echo "=== Command Bridge Test: $BACKEND backend ==="
+echo "=== Command Bridge Test: $BACKEND backend, $(basename "$DISK") ==="
 
 cleanup() {
     if [[ -n "${EMU_PID:-}" ]]; then

@@ -40,6 +40,12 @@ void report_skip(const char *name, const char *reason)
     skipped++;
 }
 
+void report_note(const char *text)
+{
+    fprintf(results, "# %s\n", text);
+    fflush(results);
+}
+
 void idle_ticks(long ticks)
 {
     EventRecord ev;

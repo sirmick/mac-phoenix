@@ -33,7 +33,8 @@ from public media; a session of its own.
 Environment: MPW_TOOLCHAIN (apple), MPW_STATE (default ~/.cache/mac-phoenix/mpw
 or mpw-cw), MPW_PORT (18390, cw 18391), MPW_SYSTEM (mpw-service-7.5.5.img or
 mpw-cw-service-7.5.5.img: the copy of tests-7.5.5.img the session runs on),
-MACPHOENIX_BINARY, MACEMU_STORAGE (~/storage). See docs/MPW.md.
+MPW_OS (7.5.5: the session on tests-MPW_OS.img, e.g. 7.6.1; its copy is then
+mpw-service-7.6.1.img), MACPHOENIX_BINARY, MACEMU_STORAGE (~/storage). See docs/MPW.md.
 """
 import argparse
 import base64
@@ -79,7 +80,8 @@ TOOLCHAINS = {
                        'Set -e MWRuntime68K "{HeadersAndLibs}MacOS Support:Runtime:Runtime 68K:"\n'
                        'Set -e MWRuntimePPC "{HeadersAndLibs}MacOS Support:Runtime:Runtime PPC:"\n')},
 }
-SYSTEM_SOURCE = os.path.join(STORAGE, "images", "tests-7.5.5.img")
+OS_VERSION = os.environ.get("MPW_OS", "7.5.5")     # the System the session runs: tests-<version>.img
+SYSTEM_SOURCE = os.path.join(STORAGE, "images", "tests-%s.img" % OS_VERSION)
 
 # Other Universal Interfaces on the MPW disks, beside the toolchain's own
 # (provisioning/images/mpw.json, mpw-cw.json): version -> its folder. A line
@@ -111,7 +113,7 @@ def configure(toolchain):
     MPW_DISK = os.path.join(STORAGE, "images", t["image"] + ".img")
     STATE = os.environ.get("MPW_STATE", os.path.expanduser("~/.cache/mac-phoenix/" + t["state"]))
     PORT = int(os.environ.get("MPW_PORT", str(t["port"])))
-    SYSTEM_NAME = os.environ.get("MPW_SYSTEM", t["image"] + "-service-7.5.5.img")   # the session's own copy
+    SYSTEM_NAME = os.environ.get("MPW_SYSTEM", t["image"] + "-service-%s.img" % OS_VERSION)   # the session's own copy
     HOST = os.path.join(STATE, "host")     # the Host volume
     WORK = os.path.join(HOST, ".mpw")      # per-command scripts, output, status
     SESSION = os.path.join(STATE, "session.json")
@@ -188,7 +190,7 @@ def alive(s):
 
 
 def ensure_system():
-    """The session's System image: a copy of the 7.5.5 test disk, so the
+    """The session's System image: a copy of the test disk (7.5.5's), so the
     original is never mounted read-write; made again (and Executor's System
     Folder extracted from it again) when the source is newer."""
     dst = os.path.join(STORAGE, "images", SYSTEM_NAME)
@@ -197,8 +199,8 @@ def ensure_system():
     if not os.path.exists(dst) or os.path.getmtime(dst) < os.path.getmtime(SYSTEM_SOURCE):
         subprocess.check_call(["cp", "--reflink=auto", SYSTEM_SOURCE, dst])
         with open(dst + ".json", "w") as f:      # for the web UI's disk list
-            json.dump({"title": "MPW service: System 7.5.5 for " + TOOLCHAINS[TOOLCHAIN]["product"],
-                       "tags": ["mpw-service"], "copy_of": "tests-7.5.5"}, f, indent=1)
+            json.dump({"title": "MPW service: System %s for %s" % (OS_VERSION, TOOLCHAINS[TOOLCHAIN]["product"]),
+                       "tags": ["mpw-service"], "copy_of": "tests-" + OS_VERSION}, f, indent=1)
         for d in (dst, dst + ".clean"):
             shutil.rmtree(os.path.join(STORAGE, "executor-systems", os.path.basename(d)), ignore_errors=True)
     return dst
@@ -522,7 +524,7 @@ def cmd_setup(args):
     --toast: the old way, the MPW disk straight from the CD."""
     if not args.toast:
         subprocess.check_call([sys.executable, os.path.join(ROOT, "provisioning", "build.py"),
-                               TOOLCHAINS[TOOLCHAIN]["image"], "tests-7.5.5"]
+                               TOOLCHAINS[TOOLCHAIN]["image"], "tests-" + OS_VERSION]
                               + (["--force"] if args.force else []))
         return 0
     toast = args.toast
