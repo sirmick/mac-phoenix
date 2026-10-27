@@ -835,12 +835,15 @@ set_tests_properties(ot_retro68_68k_rom PROPERTIES
   ENVIRONMENT "MACEMU_ROM=${TEST_ROM}"
 )
 
-# Open Transport's configuration database (OTLib$CfigLib: what the TCP/IP
-# control panel reads and writes; ot_config.cpp) called directly by
-# CfgTest (tests/guest/otcfg, Retro68): Apple's OT 1.1.1 with Mac OS 7.6.1
-# on the Quadra is the reference, Executor on Apple's 7.6.1 System.
+# Open Transport's configuration database (OTLib$CfigLib on 68k,
+# OTConfigLib on PowerPC: what the TCP/IP control panel reads and writes;
+# ot_config.cpp) called directly by CfgTest (tests/guest/otcfg, Retro68):
+# Apple's OT 1.1.1 with Mac OS 7.6.1 on the Quadra and the G3 is the
+# reference, Executor on Apple's 7.6.1 System.
 foreach(cell IN ITEMS "otcfg_rom;;CfgTest68K;18952;guest;761"
-                      "otcfg_executor;--backend executor;CfgTest68K;18954;guest;761;executor")
+                      "otcfg_rom_ppc;--backend kpx --core mame-ppc --jit;CfgTestPPC;18956;guest;761;mame"
+                      "otcfg_executor;--backend executor;CfgTest68K;18954;guest;761;executor"
+                      "otcfg_executor_ppc;--backend executor;CfgTestPPC;18958;guest;761;executor")
   list(GET cell 0 name)
   list(GET cell 1 backend)
   list(GET cell 2 app)

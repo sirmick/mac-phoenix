@@ -625,6 +625,16 @@ OSErr Executor::C_GetSharedLibrary(ConstStr63Param library, OSType arch,
     if((loadflags & 0xF) != kLoadNewCopy)
         retval = check_existing_connections(library, arch, loadflags, cidp,
                                             mainaddrp, errName);
+    /* Executor's own Open Transport libraries are always there, so they
+       are found with kFindLib too. */
+    if(retval == fragLibNotFound && loadflags == kFindLib && arch == "pwpc"_4
+       && ROMlib_open_transport && ROMlib_ot_library(std::string((const char *)library + 1, library[0])))
+        if(ConnectionID cid = builtinlibs::getBuiltinLib(library, arch))
+        {
+            *cidp = cid;
+            *mainaddrp = nullptr;
+            return noErr;
+        }
     if(retval == fragLibNotFound && loadflags == kFindLib)
         return fragLibNotFound;
     /* MacPhoenix: libraries whose routines Executor answers itself, as it

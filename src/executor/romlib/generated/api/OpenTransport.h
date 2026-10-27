@@ -946,6 +946,15 @@ namespace ot { uint32_t cfg_tcp_change(const Call &); }OT_FUNCTION(OTConfigLib, 
 namespace ot { uint32_t cfg_tcp_check_consequences(const Call &); }OT_FUNCTION(OTConfigLib, TCPCheckChangeConfigurationConsequences, "OTLib$CfigLib", "TCPCheckChangeConfigurationConsequences", false, "LL", 'B', cfg_tcp_check_consequences);
 
 
+namespace ot { uint32_t at_open_services(const Call &); }OT_FUNCTION(OTATalkClientLib, OTAsyncOpenAppleTalkServicesPriv, "ot:atlk$LclATClnt", "OTAsyncOpenAppleTalkServicesPriv", false, "LLLLL", 'L', at_open_services);
+
+
+namespace ot { uint32_t at_my_zone(const Call &); }OT_FUNCTION(OTATalkClientLib, OTATalkGetMyZone, "ot:atlk$LclATClnt", "OTATalkGetMyZone", false, "LL", 'L', at_my_zone);
+
+
+namespace ot { uint32_t at_zone_list(const Call &); }OT_FUNCTION(OTATalkClientLib, OTATalkGetZoneList, "ot:atlk$LclATClnt", "OTATalkGetZoneList", false, "LL", 'L', at_zone_list);
+
+
 namespace ot { uint32_t cfg_set_active(const Call &); }OT_FUNCTION(OTConfigLib, OTSetActiveConfigID, "OTLib$CfigLib", "OTSetActiveConfigID", false, "LL", 'L', cfg_set_active);
 
 

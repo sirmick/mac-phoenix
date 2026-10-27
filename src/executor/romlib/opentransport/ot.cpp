@@ -203,7 +203,8 @@ void Executor::ot::register_defs(const Def *d, size_t n)
 bool Executor::ROMlib_ot_library(const std::string &name)
 {
     return name == "OTClientLib" || name == "OTClientUtilLib" || name == "OTUtilityLib"
-        || name == "OTInetClientLib" || name == "OTGlobalLib";
+        || name == "OTInetClientLib" || name == "OTGlobalLib" || name == "OTConfigLib"
+        || name == "OTATalkClientLib";
 }
 
 namespace

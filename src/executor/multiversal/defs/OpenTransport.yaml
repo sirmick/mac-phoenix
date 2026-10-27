@@ -3291,6 +3291,61 @@
     callconv: C
     executor: cfg_tcp_check_consequences
 
+# ---- AppleTalk (ot_atalk.cpp) -------------------------------------------
+#
+# What the TCP/IP control panel's PowerPC code imports from
+# OTATalkClientLib; Executor's OT has no AppleTalk, so they answer
+# kOTNotSupportedErr. PowerPC only: the 68k set (atlk$LclATClnt) is
+# named here, its indices are not known (index 0: none).
+
+- only-for: executor
+  function:
+    name: OTAsyncOpenAppleTalkServicesPriv
+    return: OSStatus
+    args:
+      - name: config
+        type: "void*"
+      - name: oflag
+        type: UInt32
+      - name: proc
+        type: "void*"
+      - name: context
+        type: "void*"
+      - name: client
+        type: "void*"
+    library: OTATalkClientLib
+    aslm: { set: "ot:atlk$LclATClnt", name: "OTAsyncOpenAppleTalkServicesPriv", index: 0 }
+    callconv: C
+    executor: at_open_services
+
+- only-for: executor
+  function:
+    name: OTATalkGetMyZone
+    return: OSStatus
+    args:
+      - name: ref
+        type: "void*"
+      - name: zone
+        type: "void*"
+    library: OTATalkClientLib
+    aslm: { set: "ot:atlk$LclATClnt", name: "OTATalkGetMyZone", index: 0 }
+    callconv: C
+    executor: at_my_zone
+
+- only-for: executor
+  function:
+    name: OTATalkGetZoneList
+    return: OSStatus
+    args:
+      - name: ref
+        type: "void*"
+      - name: zones
+        type: "void*"
+    library: OTATalkClientLib
+    aslm: { set: "ot:atlk$LclATClnt", name: "OTATalkGetZoneList", index: 0 }
+    callconv: C
+    executor: at_zone_list
+
 - only-for: executor
   function:
     name: OTSetActiveConfigID

@@ -284,8 +284,8 @@ an unimplemented C call) and what it does with the answers, and were then
 checked against Apple's OT 1.1.1 on the Quadra and the G3 by CfgTest
 (`tests/guest/otcfg`: its 68k build calls them by index through the
 Shared Library Manager, its PowerPC build imports them from `OTConfigLib`
-by name; `ctest -R otcfg`: Apple's answers `otcfg_rom`, Executor's
-`otcfg_executor`). Each is a C routine; `#` is its index in the set.
+by name; `ctest -R otcfg`: Apple's answers `otcfg_rom`, `otcfg_rom_ppc`,
+Executor's `otcfg_executor`, `otcfg_executor_ppc`). Each is a C routine; `#` is its index in the set.
 
 | # | Call | Arguments, result |
 |---|---|---|
@@ -359,7 +359,22 @@ resource file the panel makes) and imports (a name taken: replace or
 rename) on Executor as on the Quadra. Executor's networking stays the
 host's: a saved configuration is shown and kept, not applied.
 
-Left: PowerPC (`OTConfigLib`); the Duplicate and Rename dialogs show only
+**PowerPC.** The same calls are `OTConfigLib`'s exports for PowerPC
+code (`library:` in the definitions; Executor answers the library, as
+it does OTClientLib & co., and finds its OT libraries for `kFindLib`
+too): CfgTest's PowerPC build passes on Executor and on the G3's OT 1.1.1
+alike. The panel's PowerPC code (`--executor-ppc`) also imports
+`OTATalkClientLib`, which Executor answers now (`ot_atalk.cpp`: no
+AppleTalk, kOTNotSupportedErr): Apple's file needs Apple's OT kernel
+(`OTNtvUtilLib`'s initialisation fails) and the panel then says Open
+Transport isn't there. It still says so: it looks for the Shared Library
+Manager's PowerPC fragment, `SLMGlobal` (`GetSharedLibrary` with
+`kFindLib`, then its `__gSLMGlobal`), and calls through what that points
+to as PowerPC code; Executor's ASLM side is 68k only (handing it the 68k
+SLMGlobal sends the PowerPC into 68k code). So the panel runs its 68k
+code, as it does without `--executor-ppc`.
+
+Left: the panel's PowerPC code (ASLM's PowerPC side); the Duplicate and Rename dialogs show only
 their edit field on Executor (no prompt, no buttons, the text not
 selected; they work: Return takes them), and a dialog's or alert's area
 isn't fully redrawn after it closes (a Dialog/Window Manager matter).
