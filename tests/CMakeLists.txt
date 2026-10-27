@@ -424,6 +424,20 @@ set_tests_properties(retro68_ppc_executor_asl PROPERTIES
   SKIP_RETURN_CODE 77
 )
 
+# Retro68's own AutomatedTests (68k and PowerPC) on Executor, through
+# LaunchAPPL's Executor backend (tools/retro68/launchappl-executor); skipped
+# without the Retro68 build at ~/opt/retro68/build-ppc.
+add_test(
+  NAME retro68_automated_executor
+  COMMAND python3 ${CMAKE_SOURCE_DIR}/tools/retro68/automated_tests.py
+)
+set_tests_properties(retro68_automated_executor PROPERTIES
+  TIMEOUT 600
+  LABELS "guest;executor"
+  SKIP_RETURN_CODE 77
+  ENVIRONMENT "MACPHOENIX_EMULATOR=$<TARGET_FILE:mac-phoenix>"
+)
+
 # The fat MacPhoenixSuite's PowerPC code on Executor (--executor-ppc):
 # StdCLib, AppleScriptLib through CallComponentUPP, exit() through StdCLib.
 add_test(

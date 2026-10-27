@@ -1,0 +1,22 @@
+#!/bin/bash
+# launchappl-executor: MacPhoenix's Executor as Retro68's LaunchAPPL
+# Executor backend (`LaunchAPPL -e executor --executor-path=THIS`).
+#
+# LaunchAPPL writes the application into a temporary folder (data fork as
+# Application, resource fork and Finder info as %Application), runs
+#   <executor-path> [--executor-option ...] <folder>/Application
+# and passes the test if it exits 0; the test logs to <folder>/out. Here the
+# folder is shared with the guest (--extfs: Executor reaches only its data
+# folder and shared folders) and the application started on Executor's own
+# System; mac-phoenix exits when it quits. --executor-option arguments go to
+# mac-phoenix (e.g. --executor-option=--executor-logtraps).
+#
+# MACPHOENIX_EMULATOR: the mac-phoenix binary (default: build/mac-phoenix).
+set -u
+[[ $# -ge 1 ]] || { echo "usage: $0 [mac-phoenix options] APPLICATION" >&2; exit 2; }
+REPO="$(cd "$(dirname "$0")/../.." && pwd)"
+EMULATOR="${MACPHOENIX_EMULATOR:-$REPO/build/mac-phoenix}"
+app="${@: -1}"
+set -- "${@:1:$#-1}"
+exec "$EMULATOR" --config /dev/null --backend executor --no-webserver \
+    --extfs "$(dirname "$app")" --executor-app "$app" "$@"

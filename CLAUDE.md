@@ -70,6 +70,8 @@ ctest --test-dir build -L executor
 # the C headers they generate, ctest -R retro68_ runs RetroTest (tests/guest/retro68,
 # 68k + PowerPC, Retro68 with PowerPC in ~/opt/retro68/build-ppc/toolchain) on
 # Executor and Apple's systems (docs/executor/README.md, LIBRARIES.md)
+# Retro68's own AutomatedTests on Executor through LaunchAPPL -e executor:
+# tools/retro68/automated_tests.py (ctest -R retro68_automated_executor)
 # Toolbox selectors/OT functions a session called that Executor lacks: "[unimplemented]"
 # in the log, collected in ~/storage/executor/unimplemented.log (date, app, call)
 

@@ -161,8 +161,8 @@ The whole plan (agreed 2026-10-26):
    rewrite stays out.
 2. to 5., below: the library routes one by one.
 6. Outward: the upstream change (only once seen and agreed), a Retro68
-   with PowerPC to build the CFM side, Retro68's `AutomatedTests` on our
-   Executor through `LaunchAPPL`.
+   with PowerPC to build the CFM side (done), Retro68's `AutomatedTests`
+   on our Executor through `LaunchAPPL` (done 2026-10-27, below).
 
 Throughout, the aim is MacPhoenix's own guest programs building against
 the generated headers alone (BridgeAgent without Apple's UI 3.4 first);
@@ -298,7 +298,12 @@ the routine.
   Retro68's PowerPC runtime imports `GetVRefNum` (an InterfaceLib export
   now).
 - Retro68's `LaunchAPPL` has an Executor backend (`-e executor`: runs the
-  application with `--executor-path`, resource fork as `%`AppleDouble)
-  and its `AutomatedTests` run through it; pointed at MacPhoenix
-  (`--backend executor --executor-app`), they would run Retro68's tests
-  on our Executor.
+  application with `--executor-path`, resource fork as `%`AppleDouble).
+  `tools/retro68/launchappl-executor` is that executor for MacPhoenix
+  (`--backend executor --no-webserver`, the application's folder shared
+  with `--extfs`, which is where the tests write `out`; mac-phoenix exits
+  when the application quits), and `tools/retro68/automated_tests.py`
+  runs Retro68's `AutomatedTests` through it, 68k and PowerPC, from the
+  Retro68 build tree's own test list and expected output (the tree only
+  read). All 32 pass on Executor's own System (2026-10-27; ctest
+  `retro68_automated_executor`).
