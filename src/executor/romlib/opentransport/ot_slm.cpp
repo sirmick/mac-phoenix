@@ -25,7 +25,8 @@
  *                    as it was; binds the stub and jumps to the function.
  *   TLibraryManager  LibraryManager.h: TDynamic's slots (the first SC's
  *                    dummy), then the manager's; LoadClass is slot 16
- *                    ($40), GetLibrary slot 28 ($70). Fields after the
+ *                    ($40), GetFunctionPointer by name 19 ($4C) and by
+ *                    index 20 ($50), GetLibrary slot 28 ($70). Fields after the
  *                    vtable: fPool, fLibraryFile, fDefaultPool,
  *                    fGlobalWorld.
  *
@@ -140,6 +141,24 @@ syn68k_addr_t load_class(syn68k_addr_t, void *)
     return it != apple_load_class.end() ? it->second : apple_load_class.begin()->second;
 }
 
+/* CDECLProcPtr GetFunctionPointer(TLibraryManager *, const TFunctionSetID &,
+   const char *funcName, OSErr *) (slot 19, $4C), and the one by index
+   (unsigned int, slot 20, $50): ASLM's way to a function without a stub
+   (LibraryManager.h), the glue the Multiversal Interfaces generate for 68k
+   uses it. kASLMNotFound when the set or function isn't there. */
+syn68k_addr_t get_function_pointer(syn68k_addr_t, void *arg)
+{
+    bool by_index = arg != nullptr;
+    uint32_t sp = EM_A7;
+    std::string id = guest_cstring(READUL(sp + 8), 63);
+    uint32_t err = READUL(sp + 16);
+    syn68k_addr_t f = by_index ? function_pointer(id, (unsigned)READUL(sp + 12))
+                               : function_pointer(id, guest_cstring(READUL(sp + 12), 255));
+    if(err)
+        WRITEUW(err, f ? 0 : (uint16_t)kASLMNotFound);
+    return return_c(f);
+}
+
 /* TLibrary *GetLibrary(TLibraryManager *): nil, an application's. */
 syn68k_addr_t get_library(syn68k_addr_t, void *)
 {
@@ -240,6 +259,8 @@ void install_callbacks()
     our_manager_vtable = make_vtable(false);
     WRITEUL(our_manager_vtable + 0x40, cb_load_class);
     WRITEUL(our_manager_vtable + 0x70, callback_install(get_library, nullptr));
+    WRITEUL(our_manager_vtable + 0x4C, callback_install(get_function_pointer, nullptr));
+    WRITEUL(our_manager_vtable + 0x50, callback_install(get_function_pointer, (void *)1));
 }
 
 /* SLMGlobal and the root manager of our own. */

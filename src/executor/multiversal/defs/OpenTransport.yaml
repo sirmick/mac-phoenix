@@ -15,8 +15,9 @@
 # Some calls Apple's glue makes from others (InitOpenTransport,
 # OTOpenEndpoint, OTAlloc...): the library exports a ...Priv routine that
 # takes the client's record last. Those are declared for the C side only,
-# and custom/OpenTransportGlue.c defines them (PowerPC; the 68k glue, over
-# ASLM, is still to be written).
+# and custom/OpenTransportGlue.c defines them. On 68k the C side calls every
+# `aslm:` routine through the Shared Library Manager, by its set and its
+# 1-based index there (`index:`; Apple's ASLM has no names for OT's sets).
 #
 # Written from Apple's OT 1.1 headers' declarations and Inside Macintosh:
 # Networking with Open Transport; size_t is OTByteCount (32 bits on both
@@ -1455,7 +1456,7 @@
       - name: clientContext
         type: OTClientContextPtr
     library: OTClientUtilLib
-    aslm: { set: "OTClnt$LclUtils", name: "InitOpenTransportPriv" }
+    aslm: { set: "OTClnt$LclUtils", name: "InitOpenTransportPriv", index: 3 }
     callconv: C
     executor: init_priv
 
@@ -1465,7 +1466,7 @@
       - name: clientContext
         type: OTClientContextPtr
     library: OTClientUtilLib
-    aslm: { set: "OTClnt$LclUtils", name: "CloseOpenTransportPriv" }
+    aslm: { set: "OTClnt$LclUtils", name: "CloseOpenTransportPriv", index: 4 }
     callconv: C
     executor: close_priv
 
@@ -1480,7 +1481,7 @@
       - name: clientContext
         type: OTClientContextPtr
     library: OTClientUtilLib
-    aslm: { set: "OTClnt$LclUtils", name: "OTRegisterAsClientPriv" }
+    aslm: { set: "OTClnt$LclUtils", name: "OTRegisterAsClientPriv", index: 5 }
     callconv: C
     executor: register_priv
 
@@ -1491,7 +1492,7 @@
       - name: clientContext
         type: OTClientContextPtr
     library: OTClientUtilLib
-    aslm: { set: "OTClnt$LclUtils", name: "OTUnregisterAsClientPriv" }
+    aslm: { set: "OTClnt$LclUtils", name: "OTUnregisterAsClientPriv", index: 6 }
     callconv: C
     executor: unregister_priv
 
@@ -1504,7 +1505,7 @@
       - name: clientContext
         type: OTClientContextPtr
     library: OTClientUtilLib
-    aslm: { set: "OTClnt$LclUtils", name: "OTAllocMemPriv" }
+    aslm: { set: "OTClnt$LclUtils", name: "OTAllocMemPriv", index: 1 }
     callconv: C
     executor: alloc_mem_priv
 
@@ -1516,7 +1517,7 @@
       - name: clientContext
         type: OTClientContextPtr
     library: OTClientUtilLib
-    aslm: { set: "OTClnt$LclUtils", name: "OTFreeMemPriv" }
+    aslm: { set: "OTClnt$LclUtils", name: "OTFreeMemPriv", index: 2 }
     callconv: C
     executor: free_mem_priv
 
@@ -1537,7 +1538,7 @@
       - name: clientContext
         type: OTClientContextPtr
     library: OTClientLib
-    aslm: { set: "OTClnt$LclClnt", name: "OTOpenEndpointPriv" }
+    aslm: { set: "OTClnt$LclClnt", name: "OTOpenEndpointPriv", index: 29 }
     callconv: C
     executor: open_endpoint_priv
 
@@ -1558,7 +1559,7 @@
       - name: clientContext
         type: OTClientContextPtr
     library: OTClientLib
-    aslm: { set: "OTClnt$LclClnt", name: "OTAsyncOpenEndpointPriv" }
+    aslm: { set: "OTClnt$LclClnt", name: "OTAsyncOpenEndpointPriv", index: 30 }
     callconv: C
     executor: async_open_endpoint_priv
 
@@ -1571,7 +1572,7 @@
       - name: clientContext
         type: OTClientContextPtr
     library: OTClientLib
-    aslm: { set: "OTClnt$LclClnt", name: "OTCloseProviderPriv" }
+    aslm: { set: "OTClnt$LclClnt", name: "OTCloseProviderPriv", index: 9 }
     callconv: C
     executor: close_provider_priv
 
@@ -1582,7 +1583,7 @@
       - name: ref
         type: ProviderRef
     library: OTClientLib
-    aslm: { set: "OTClnt$LclClnt", name: "OTSETASYNCHRONOUS" }
+    aslm: { set: "OTClnt$LclClnt", name: "OTSETASYNCHRONOUS", index: 14 }
     callconv: pascal
     executor: set_async
 
@@ -1593,7 +1594,7 @@
       - name: ref
         type: ProviderRef
     library: OTClientLib
-    aslm: { set: "OTClnt$LclClnt", name: "OTSETSYNCHRONOUS" }
+    aslm: { set: "OTClnt$LclClnt", name: "OTSETSYNCHRONOUS", index: 13 }
     callconv: pascal
     executor: set_sync
 
@@ -1604,7 +1605,7 @@
       - name: ref
         type: ProviderRef
     library: OTClientLib
-    aslm: { set: "OTClnt$LclClnt", name: "OTISSYNCHRONOUS" }
+    aslm: { set: "OTClnt$LclClnt", name: "OTISSYNCHRONOUS", index: 15 }
     callconv: pascal
     executor: is_sync
 
@@ -1615,7 +1616,7 @@
       - name: ref
         type: ProviderRef
     library: OTClientLib
-    aslm: { set: "OTClnt$LclClnt", name: "OTSETBLOCKING" }
+    aslm: { set: "OTClnt$LclClnt", name: "OTSETBLOCKING", index: 11 }
     callconv: pascal
     executor: set_blocking
 
@@ -1626,7 +1627,7 @@
       - name: ref
         type: ProviderRef
     library: OTClientLib
-    aslm: { set: "OTClnt$LclClnt", name: "OTSETNONBLOCKING" }
+    aslm: { set: "OTClnt$LclClnt", name: "OTSETNONBLOCKING", index: 10 }
     callconv: pascal
     executor: set_nonblocking
 
@@ -1637,7 +1638,7 @@
       - name: ref
         type: ProviderRef
     library: OTClientLib
-    aslm: { set: "OTClnt$LclClnt", name: "OTISBLOCKING" }
+    aslm: { set: "OTClnt$LclClnt", name: "OTISBLOCKING", index: 12 }
     callconv: pascal
     executor: is_blocking
 
@@ -1648,7 +1649,7 @@
       - name: ref
         type: ProviderRef
     library: OTClientLib
-    aslm: { set: "OTClnt$LclClnt", name: "OTACKSENDS" }
+    aslm: { set: "OTClnt$LclClnt", name: "OTACKSENDS", index: 17 }
     callconv: pascal
     executor: ack_sends
 
@@ -1659,7 +1660,7 @@
       - name: ref
         type: ProviderRef
     library: OTClientLib
-    aslm: { set: "OTClnt$LclClnt", name: "OTDONTACKSENDS" }
+    aslm: { set: "OTClnt$LclClnt", name: "OTDONTACKSENDS", index: 16 }
     callconv: pascal
     executor: dont_ack_sends
 
@@ -1670,7 +1671,7 @@
       - name: ref
         type: ProviderRef
     library: OTClientLib
-    aslm: { set: "OTClnt$LclClnt", name: "OTISACKINGSENDS" }
+    aslm: { set: "OTClnt$LclClnt", name: "OTISACKINGSENDS", index: 18 }
     callconv: pascal
     executor: is_acking
 
@@ -1685,7 +1686,7 @@
       - name: contextPtr
         type: "void*"
     library: OTClientLib
-    aslm: { set: "OTClnt$LclClnt", name: "OTINSTALLNOTIFIER" }
+    aslm: { set: "OTClnt$LclClnt", name: "OTINSTALLNOTIFIER", index: 20 }
     callconv: pascal
     executor: install_notifier
 
@@ -1695,7 +1696,7 @@
       - name: ref
         type: ProviderRef
     library: OTClientLib
-    aslm: { set: "OTClnt$LclClnt", name: "OTREMOVENOTIFIER" }
+    aslm: { set: "OTClnt$LclClnt", name: "OTREMOVENOTIFIER", index: 21 }
     callconv: pascal
     executor: remove_notifier
 
@@ -1706,7 +1707,7 @@
       - name: ref
         type: EndpointRef
     library: OTClientLib
-    aslm: { set: "OTClnt$LclClnt", name: "OTGETENDPOINTSTATE" }
+    aslm: { set: "OTClnt$LclClnt", name: "OTGETENDPOINTSTATE", index: 34 }
     callconv: pascal
     executor: get_endpoint_state
 
@@ -1719,7 +1720,7 @@
       - name: info
         type: "TEndpointInfo*"
     library: OTClientLib
-    aslm: { set: "OTClnt$LclClnt", name: "OTGETENDPOINTINFO" }
+    aslm: { set: "OTClnt$LclClnt", name: "OTGETENDPOINTINFO", index: 31 }
     callconv: pascal
     executor: get_endpoint_info
 
@@ -1730,7 +1731,7 @@
       - name: ref
         type: EndpointRef
     library: OTClientLib
-    aslm: { set: "OTClnt$LclClnt", name: "OTLOOK" }
+    aslm: { set: "OTClnt$LclClnt", name: "OTLOOK", index: 37 }
     callconv: pascal
     executor: look
 
@@ -1743,7 +1744,7 @@
       - name: countPtr
         type: "OTByteCount*"
     library: OTClientLib
-    aslm: { set: "OTClnt$LclClnt", name: "OTCOUNTDATABYTES" }
+    aslm: { set: "OTClnt$LclClnt", name: "OTCOUNTDATABYTES", index: 39 }
     callconv: pascal
     executor: count_data_bytes
 
@@ -1758,7 +1759,7 @@
       - name: peerAddr
         type: "TBind*"
     library: OTClientLib
-    aslm: { set: "OTClnt$LclClnt", name: "OTGETPROTADDRESS" }
+    aslm: { set: "OTClnt$LclClnt", name: "OTGETPROTADDRESS", index: 32 }
     callconv: pascal
     executor: get_prot_address
 
@@ -1773,7 +1774,7 @@
       - name: retAddr
         type: "TBind*"
     library: OTClientLib
-    aslm: { set: "OTClnt$LclClnt", name: "OTBIND" }
+    aslm: { set: "OTClnt$LclClnt", name: "OTBIND", index: 41 }
     callconv: pascal
     executor: ot_bind
 
@@ -1784,7 +1785,7 @@
       - name: ref
         type: EndpointRef
     library: OTClientLib
-    aslm: { set: "OTClnt$LclClnt", name: "OTUNBIND" }
+    aslm: { set: "OTClnt$LclClnt", name: "OTUNBIND", index: 42 }
     callconv: pascal
     executor: unbind
 
@@ -1799,7 +1800,7 @@
       - name: rcvCall
         type: "TCall*"
     library: OTClientLib
-    aslm: { set: "OTClnt$LclClnt", name: "OTCONNECT" }
+    aslm: { set: "OTClnt$LclClnt", name: "OTCONNECT", index: 43 }
     callconv: pascal
     executor: ot_connect
 
@@ -1812,7 +1813,7 @@
       - name: call
         type: "TCall*"
     library: OTClientLib
-    aslm: { set: "OTClnt$LclClnt", name: "OTRCVCONNECT" }
+    aslm: { set: "OTClnt$LclClnt", name: "OTRCVCONNECT", index: 44 }
     callconv: pascal
     executor: rcv_connect
 
@@ -1825,7 +1826,7 @@
       - name: call
         type: "TCall*"
     library: OTClientLib
-    aslm: { set: "OTClnt$LclClnt", name: "OTLISTEN" }
+    aslm: { set: "OTClnt$LclClnt", name: "OTLISTEN", index: 45 }
     callconv: pascal
     executor: ot_listen
 
@@ -1840,7 +1841,7 @@
       - name: call
         type: "TCall*"
     library: OTClientLib
-    aslm: { set: "OTClnt$LclClnt", name: "OTACCEPT" }
+    aslm: { set: "OTClnt$LclClnt", name: "OTACCEPT", index: 46 }
     callconv: pascal
     executor: ot_accept
 
@@ -1853,7 +1854,7 @@
       - name: call
         type: "TCall*"
     library: OTClientLib
-    aslm: { set: "OTClnt$LclClnt", name: "OTSNDDISCONNECT" }
+    aslm: { set: "OTClnt$LclClnt", name: "OTSNDDISCONNECT", index: 47 }
     callconv: pascal
     executor: snd_disconnect
 
@@ -1866,7 +1867,7 @@
       - name: discon
         type: "TDiscon*"
     library: OTClientLib
-    aslm: { set: "OTClnt$LclClnt", name: "OTRCVDISCONNECT" }
+    aslm: { set: "OTClnt$LclClnt", name: "OTRCVDISCONNECT", index: 49 }
     callconv: pascal
     executor: rcv_disconnect
 
@@ -1877,7 +1878,7 @@
       - name: ref
         type: EndpointRef
     library: OTClientLib
-    aslm: { set: "OTClnt$LclClnt", name: "OTSNDORDERLYDISCONNECT" }
+    aslm: { set: "OTClnt$LclClnt", name: "OTSNDORDERLYDISCONNECT", index: 48 }
     callconv: pascal
     executor: snd_orderly
 
@@ -1888,7 +1889,7 @@
       - name: ref
         type: EndpointRef
     library: OTClientLib
-    aslm: { set: "OTClnt$LclClnt", name: "OTRCVORDERLYDISCONNECT" }
+    aslm: { set: "OTClnt$LclClnt", name: "OTRCVORDERLYDISCONNECT", index: 50 }
     callconv: pascal
     executor: rcv_orderly
 
@@ -1905,7 +1906,7 @@
       - name: flags
         type: OTFlags
     library: OTClientLib
-    aslm: { set: "OTClnt$LclClnt", name: "OTSND" }
+    aslm: { set: "OTClnt$LclClnt", name: "OTSND", index: 51 }
     callconv: pascal
     executor: snd
 
@@ -1922,7 +1923,7 @@
       - name: flags
         type: "OTFlags*"
     library: OTClientLib
-    aslm: { set: "OTClnt$LclClnt", name: "OTRCV" }
+    aslm: { set: "OTClnt$LclClnt", name: "OTRCV", index: 52 }
     callconv: pascal
     executor: rcv
 
@@ -1935,7 +1936,7 @@
       - name: udata
         type: "TUnitData*"
     library: OTClientLib
-    aslm: { set: "OTClnt$LclClnt", name: "OTSNDUDATA" }
+    aslm: { set: "OTClnt$LclClnt", name: "OTSNDUDATA", index: 53 }
     callconv: pascal
     executor: snd_udata
 
@@ -1950,7 +1951,7 @@
       - name: flags
         type: "OTFlags*"
     library: OTClientLib
-    aslm: { set: "OTClnt$LclClnt", name: "OTRCVUDATA" }
+    aslm: { set: "OTClnt$LclClnt", name: "OTRCVUDATA", index: 54 }
     callconv: pascal
     executor: rcv_udata
 
@@ -1965,7 +1966,7 @@
       - name: ret
         type: "TOptMgmt*"
     library: OTClientLib
-    aslm: { set: "OTClnt$LclClnt", name: "OTOPTIONMANAGEMENT" }
+    aslm: { set: "OTClnt$LclClnt", name: "OTOPTIONMANAGEMENT", index: 40 }
     callconv: pascal
     executor: ot_option_management
 
@@ -1980,7 +1981,7 @@
       - name: prevOptPtr
         type: "TOption**"
     library: OTClientLib
-    aslm: { set: "OTClnt$LclClnt", name: "OTNEXTOPTION" }
+    aslm: { set: "OTClnt$LclClnt", name: "OTNEXTOPTION", index: 5 }
     callconv: pascal
     executor: next_option
 
@@ -1997,7 +1998,7 @@
       - name: name
         type: OTXTIName
     library: OTClientLib
-    aslm: { set: "OTClnt$LclClnt", name: "OTFINDOPTION" }
+    aslm: { set: "OTClnt$LclClnt", name: "OTFINDOPTION", index: 6 }
     callconv: pascal
     executor: find_option
 
@@ -2010,7 +2011,7 @@
       - name: uderr
         type: "TUDErr*"
     library: OTClientLib
-    aslm: { set: "OTClnt$LclClnt", name: "OTRCVUDERR" }
+    aslm: { set: "OTClnt$LclClnt", name: "OTRCVUDERR", index: 55 }
     callconv: pascal
     executor: rcv_uderr
 
@@ -2021,7 +2022,7 @@
       - name: ref
         type: EndpointRef
     library: OTClientLib
-    aslm: { set: "OTClnt$LclClnt", name: "OTSYNC" }
+    aslm: { set: "OTClnt$LclClnt", name: "OTSYNC", index: 38 }
     callconv: pascal
     executor: ot_sync
 
@@ -2034,7 +2035,7 @@
       - name: err
         type: OSStatus
     library: OTClientLib
-    aslm: { set: "OTClnt$LclClnt", name: "OTCANCELSYNCHRONOUSCALLS" }
+    aslm: { set: "OTClnt$LclClnt", name: "OTCANCELSYNCHRONOUSCALLS", index: 19 }
     callconv: pascal
     executor: cancel_sync_calls
 
@@ -2051,7 +2052,7 @@
       - name: timeOut
         type: OTTimeout
     library: OTClientLib
-    aslm: { set: "OTClnt$LclClnt", name: "OTRESOLVEADDRESS" }
+    aslm: { set: "OTClnt$LclClnt", name: "OTRESOLVEADDRESS", index: 33 }
     callconv: pascal
     executor: resolve_address
 
@@ -2062,7 +2063,7 @@
       - name: ref
         type: ProviderRef
     library: OTClientLib
-    aslm: { set: "OTClnt$LclClnt", name: "OTGETPROVIDERPORTREF" }
+    aslm: { set: "OTClnt$LclClnt", name: "OTGETPROVIDERPORTREF", index: 72 }
     callconv: pascal
     executor: get_provider_port_ref
 
@@ -2077,7 +2078,7 @@
       - name: data
         type: "void*"
     library: OTClientLib
-    aslm: { set: "OTClnt$LclClnt", name: "OTIOCTL" }
+    aslm: { set: "OTClnt$LclClnt", name: "OTIOCTL", index: 22 }
     callconv: pascal
     executor: ot_ioctl
 
@@ -2096,7 +2097,7 @@
       - name: clientContext
         type: OTClientContextPtr
     library: OTClientLib
-    aslm: { set: "OTClnt$LclClnt", name: "OTAllocPriv" }
+    aslm: { set: "OTClnt$LclClnt", name: "OTAllocPriv", index: 35 }
     callconv: C
     executor: alloc_priv
 
@@ -2109,14 +2110,14 @@
       - name: structType
         type: OTStructType
     library: OTClientLib
-    aslm: { set: "OTClnt$LclClnt", name: "OTFREE" }
+    aslm: { set: "OTClnt$LclClnt", name: "OTFREE", index: 36 }
     callconv: pascal
     executor: ot_free
 
 - function:
     name: OTIdle
     library: OTClientLib
-    aslm: { set: "OTClnt$LclClnt", name: "OTIDLE" }
+    aslm: { set: "OTClnt$LclClnt", name: "OTIDLE", index: 1 }
     callconv: pascal
     executor: idle
 
@@ -2126,7 +2127,7 @@
       - name: seconds
         type: UInt32
     library: OTClientLib
-    aslm: { set: "OTClnt$LclClnt", name: "OTDELAY" }
+    aslm: { set: "OTClnt$LclClnt", name: "OTDELAY", index: 2 }
     callconv: pascal
     executor: delay
 
@@ -2143,7 +2144,7 @@
       - name: owner
         type: "void*"
     library: OTUtilityLib
-    aslm: { set: "OTClnt$CmnShared", name: "OTCreateDeferredTaskPriv" }
+    aslm: { set: "OTClnt$CmnShared", name: "OTCreateDeferredTaskPriv", index: 65 }
     callconv: C
     executor: create_deferred
 
@@ -2154,7 +2155,7 @@
       - name: dtCookie
         type: SInt32
     library: OTUtilityLib
-    aslm: { set: "OTClnt$CmnShared", name: "OTDESTROYDEFERREDTASK" }
+    aslm: { set: "OTClnt$CmnShared", name: "OTDESTROYDEFERREDTASK", index: 66 }
     callconv: pascal
     executor: destroy
 
@@ -2165,7 +2166,7 @@
       - name: dtCookie
         type: SInt32
     library: OTUtilityLib
-    aslm: { set: "OTClnt$CmnShared", name: "OTSCHEDULEDEFERREDTASK" }
+    aslm: { set: "OTClnt$CmnShared", name: "OTSCHEDULEDEFERREDTASK", index: 67 }
     callconv: pascal
     executor: schedule
 
@@ -2176,7 +2177,7 @@
       - name: dtCookie
         type: SInt32
     library: OTUtilityLib
-    aslm: { set: "OTClnt$CmnShared", name: "OTSCHEDULEINTERRUPTTASK" }
+    aslm: { set: "OTClnt$CmnShared", name: "OTSCHEDULEINTERRUPTTASK", index: 70 }
     callconv: pascal
     executor: schedule
 
@@ -2191,7 +2192,7 @@
       - name: owner
         type: "void*"
     library: OTUtilityLib
-    aslm: { set: "OTClnt$CmnShared", name: "OTCreateSystemTaskPriv" }
+    aslm: { set: "OTClnt$CmnShared", name: "OTCreateSystemTaskPriv", index: 61 }
     callconv: C
     executor: create_system
 
@@ -2202,7 +2203,7 @@
       - name: stCookie
         type: SInt32
     library: OTUtilityLib
-    aslm: { set: "OTClnt$CmnShared", name: "OTDESTROYSYSTEMTASK" }
+    aslm: { set: "OTClnt$CmnShared", name: "OTDESTROYSYSTEMTASK", index: 62 }
     callconv: pascal
     executor: destroy
 
@@ -2213,7 +2214,7 @@
       - name: stCookie
         type: SInt32
     library: OTUtilityLib
-    aslm: { set: "OTClnt$CmnShared", name: "OTSCHEDULESYSTEMTASK" }
+    aslm: { set: "OTClnt$CmnShared", name: "OTSCHEDULESYSTEMTASK", index: 63 }
     callconv: pascal
     executor: schedule
 
@@ -2224,7 +2225,7 @@
       - name: stCookie
         type: SInt32
     library: OTUtilityLib
-    aslm: { set: "OTClnt$CmnShared", name: "OTCANCELSYSTEMTASK" }
+    aslm: { set: "OTClnt$CmnShared", name: "OTCANCELSYSTEMTASK", index: 64 }
     callconv: pascal
     executor: cancel
 
@@ -2232,7 +2233,7 @@
     name: OTCanMakeSyncCall
     return: Boolean
     library: OTUtilityLib
-    aslm: { set: "OTClnt$CmnShared", name: "OTCANMAKESYNCCALL" }
+    aslm: { set: "OTClnt$CmnShared", name: "OTCANMAKESYNCCALL", index: 69 }
     callconv: pascal
     executor: can_make_sync_call
 
@@ -2240,7 +2241,7 @@
     name: OTIsAtInterruptLevel
     return: Boolean
     library: OTUtilityLib
-    aslm: { set: "OTClnt$CmnShared", name: "OTIsAtInterruptLevel" }
+    aslm: { set: "OTClnt$CmnShared", name: "OTIsAtInterruptLevel", index: 42 }
     callconv: C
     executor: is_at_interrupt_level
 
@@ -2248,21 +2249,21 @@
     name: OTCanLoadLibraries
     return: Boolean
     library: OTUtilityLib
-    aslm: { set: "OTClnt$CmnShared", name: "OTCanLoadLibraries" }
+    aslm: { set: "OTClnt$CmnShared", name: "OTCanLoadLibraries", index: 43 }
     callconv: C
     executor: can_load_libraries
 
 - function:
     name: OTEnterInterrupt
     library: OTUtilityLib
-    aslm: { set: "OTClnt$CmnShared", name: "OTENTERINTERRUPT" }
+    aslm: { set: "OTClnt$CmnShared", name: "OTENTERINTERRUPT", index: 46 }
     callconv: pascal
     executor: enter_interrupt
 
 - function:
     name: OTLeaveInterrupt
     library: OTUtilityLib
-    aslm: { set: "OTClnt$CmnShared", name: "OTLEAVEINTERRUPT" }
+    aslm: { set: "OTClnt$CmnShared", name: "OTLEAVEINTERRUPT", index: 47 }
     callconv: pascal
     executor: leave_interrupt
 
@@ -2278,7 +2279,7 @@
       - name: nBytes
         type: OTByteCount
     library: OTUtilityLib
-    aslm: { set: "OTClnt$CmnShared", name: "OTMemcpy" }
+    aslm: { set: "OTClnt$CmnShared", name: "OTMemcpy", index: 48 }
     callconv: C
     executor: ot_memcpy
 
@@ -2292,7 +2293,7 @@
       - name: nBytes
         type: OTByteCount
     library: OTUtilityLib
-    aslm: { set: "OTClnt$CmnShared", name: "OTMemmove" }
+    aslm: { set: "OTClnt$CmnShared", name: "OTMemmove", index: 49 }
     callconv: C
     executor: ot_memcpy
 
@@ -2304,7 +2305,7 @@
       - name: nBytes
         type: OTByteCount
     library: OTUtilityLib
-    aslm: { set: "OTClnt$CmnShared", name: "OTMemzero" }
+    aslm: { set: "OTClnt$CmnShared", name: "OTMemzero", index: 50 }
     callconv: C
     executor: memzero
 
@@ -2318,7 +2319,7 @@
       - name: nBytes
         type: OTByteCount
     library: OTUtilityLib
-    aslm: { set: "OTClnt$CmnShared", name: "OTMemset" }
+    aslm: { set: "OTClnt$CmnShared", name: "OTMemset", index: 51 }
     callconv: C
     executor: ot_memset
 
@@ -2333,7 +2334,7 @@
       - name: nBytes
         type: OTByteCount
     library: OTUtilityLib
-    aslm: { set: "OTClnt$CmnShared", name: "OTMemcmp" }
+    aslm: { set: "OTClnt$CmnShared", name: "OTMemcmp", index: 52 }
     callconv: C
     executor: ot_memcmp
 
@@ -2344,7 +2345,7 @@
       - name: str
         type: "const char*"
     library: OTUtilityLib
-    aslm: { set: "OTClnt$CmnShared", name: "OTStrLength" }
+    aslm: { set: "OTClnt$CmnShared", name: "OTStrLength", index: 53 }
     callconv: C
     executor: strlength
 
@@ -2356,7 +2357,7 @@
       - name: src
         type: "const char*"
     library: OTUtilityLib
-    aslm: { set: "OTClnt$CmnShared", name: "OTStrCopy" }
+    aslm: { set: "OTClnt$CmnShared", name: "OTStrCopy", index: 55 }
     callconv: C
     executor: strcopy
 
@@ -2368,7 +2369,7 @@
       - name: src
         type: "const char*"
     library: OTUtilityLib
-    aslm: { set: "OTClnt$CmnShared", name: "OTStrCat" }
+    aslm: { set: "OTClnt$CmnShared", name: "OTStrCat", index: 54 }
     callconv: C
     executor: ot_strcat
 
@@ -2381,7 +2382,7 @@
       - name: str2
         type: "const char*"
     library: OTUtilityLib
-    aslm: { set: "OTClnt$CmnShared", name: "OTStrEqual" }
+    aslm: { set: "OTClnt$CmnShared", name: "OTStrEqual", index: 56 }
     callconv: C
     executor: strequal
 
@@ -2391,7 +2392,7 @@
       - name: currentTime
         type: "OTTimeStamp*"
     library: OTUtilityLib
-    aslm: { set: "OTClnt$CmnShared", name: "OTGetTimeStamp" }
+    aslm: { set: "OTClnt$CmnShared", name: "OTGetTimeStamp", index: 35 }
     callconv: C
     executor: get_time_stamp
 
@@ -2406,7 +2407,7 @@
       - name: endEnd
         type: "OTTimeStamp*"
     library: OTUtilityLib
-    aslm: { set: "OTClnt$CmnShared", name: "OTSubtractTimeStamps" }
+    aslm: { set: "OTClnt$CmnShared", name: "OTSubtractTimeStamps", index: 36 }
     callconv: C
     executor: subtract_time_stamps
 
@@ -2417,7 +2418,7 @@
       - name: delta
         type: "OTTimeStamp*"
     library: OTUtilityLib
-    aslm: { set: "OTClnt$CmnShared", name: "OTTimeStampInMilliseconds" }
+    aslm: { set: "OTClnt$CmnShared", name: "OTTimeStampInMilliseconds", index: 37 }
     callconv: C
     executor: stamp_in_ms
 
@@ -2428,7 +2429,7 @@
       - name: delta
         type: "OTTimeStamp*"
     library: OTUtilityLib
-    aslm: { set: "OTClnt$CmnShared", name: "OTTimeStampInMicroseconds" }
+    aslm: { set: "OTClnt$CmnShared", name: "OTTimeStampInMicroseconds", index: 38 }
     callconv: C
     executor: stamp_in_us
 
@@ -2439,7 +2440,7 @@
       - name: startTime
         type: "OTTimeStamp*"
     library: OTUtilityLib
-    aslm: { set: "OTClnt$CmnShared", name: "OTElapsedMilliseconds" }
+    aslm: { set: "OTClnt$CmnShared", name: "OTElapsedMilliseconds", index: 39 }
     callconv: C
     executor: elapsed_ms
 
@@ -2450,7 +2451,7 @@
       - name: startTime
         type: "OTTimeStamp*"
     library: OTUtilityLib
-    aslm: { set: "OTClnt$CmnShared", name: "OTElapsedMicroseconds" }
+    aslm: { set: "OTClnt$CmnShared", name: "OTElapsedMicroseconds", index: 40 }
     callconv: C
     executor: elapsed_us
 
@@ -2458,7 +2459,7 @@
     name: OTGetClockTimeInSecs
     return: UInt32
     library: OTUtilityLib
-    aslm: { set: "OTClnt$CmnShared", name: "OTGetClockTimeInSecs" }
+    aslm: { set: "OTClnt$CmnShared", name: "OTGetClockTimeInSecs", index: 34 }
     callconv: C
     executor: clock_secs
 
@@ -2470,7 +2471,7 @@
       - name: link
         type: "OTLink*"
     library: OTUtilityLib
-    aslm: { set: "OTClnt$CmnShared", name: "OTLIFOEnqueue" }
+    aslm: { set: "OTClnt$CmnShared", name: "OTLIFOEnqueue", index: 17 }
     callconv: C
     executor: lifo_enqueue
 
@@ -2481,7 +2482,7 @@
       - name: list
         type: "OTLIFO*"
     library: OTUtilityLib
-    aslm: { set: "OTClnt$CmnShared", name: "OTLIFODequeue" }
+    aslm: { set: "OTClnt$CmnShared", name: "OTLIFODequeue", index: 18 }
     callconv: C
     executor: lifo_dequeue
 
@@ -2492,7 +2493,7 @@
       - name: list
         type: "OTLIFO*"
     library: OTUtilityLib
-    aslm: { set: "OTClnt$CmnShared", name: "OTLIFOStealList" }
+    aslm: { set: "OTClnt$CmnShared", name: "OTLIFOStealList", index: 19 }
     callconv: C
     executor: lifo_steal
 
@@ -2503,7 +2504,7 @@
       - name: list
         type: "OTLink*"
     library: OTUtilityLib
-    aslm: { set: "OTClnt$CmnShared", name: "OTReverseList" }
+    aslm: { set: "OTClnt$CmnShared", name: "OTReverseList", index: 20 }
     callconv: C
     executor: reverse_list
 
@@ -2515,7 +2516,7 @@
       - name: link
         type: "OTLink*"
     library: OTUtilityLib
-    aslm: { set: "OTClnt$CmnShared", name: "OTAddFirst" }
+    aslm: { set: "OTClnt$CmnShared", name: "OTAddFirst", index: 23 }
     callconv: C
     executor: add_first
 
@@ -2527,7 +2528,7 @@
       - name: link
         type: "OTLink*"
     library: OTUtilityLib
-    aslm: { set: "OTClnt$CmnShared", name: "OTAddLast" }
+    aslm: { set: "OTClnt$CmnShared", name: "OTAddLast", index: 24 }
     callconv: C
     executor: add_last
 
@@ -2538,7 +2539,7 @@
       - name: list
         type: "OTList*"
     library: OTUtilityLib
-    aslm: { set: "OTClnt$CmnShared", name: "OTRemoveFirst" }
+    aslm: { set: "OTClnt$CmnShared", name: "OTRemoveFirst", index: 25 }
     callconv: C
     executor: remove_first
 
@@ -2549,7 +2550,7 @@
       - name: list
         type: "OTList*"
     library: OTUtilityLib
-    aslm: { set: "OTClnt$CmnShared", name: "OTRemoveLast" }
+    aslm: { set: "OTClnt$CmnShared", name: "OTRemoveLast", index: 26 }
     callconv: C
     executor: remove_last
 
@@ -2560,7 +2561,7 @@
       - name: list
         type: "OTList*"
     library: OTUtilityLib
-    aslm: { set: "OTClnt$CmnShared", name: "OTGetFirst" }
+    aslm: { set: "OTClnt$CmnShared", name: "OTGetFirst", index: 27 }
     callconv: C
     executor: get_first
 
@@ -2571,7 +2572,7 @@
       - name: list
         type: "OTList*"
     library: OTUtilityLib
-    aslm: { set: "OTClnt$CmnShared", name: "OTGetLast" }
+    aslm: { set: "OTClnt$CmnShared", name: "OTGetLast", index: 28 }
     callconv: C
     executor: get_last
 
@@ -2584,7 +2585,7 @@
       - name: link
         type: "OTLink*"
     library: OTUtilityLib
-    aslm: { set: "OTClnt$CmnShared", name: "OTIsInList" }
+    aslm: { set: "OTClnt$CmnShared", name: "OTIsInList", index: 29 }
     callconv: C
     executor: is_in_list
 
@@ -2597,7 +2598,7 @@
       - name: link
         type: "OTLink*"
     library: OTUtilityLib
-    aslm: { set: "OTClnt$CmnShared", name: "OTRemoveLink" }
+    aslm: { set: "OTClnt$CmnShared", name: "OTRemoveLink", index: 31 }
     callconv: C
     executor: remove_link
 
@@ -2610,7 +2611,7 @@
       - name: index
         type: OTItemCount
     library: OTUtilityLib
-    aslm: { set: "OTClnt$CmnShared", name: "OTGetIndexedLink" }
+    aslm: { set: "OTClnt$CmnShared", name: "OTGetIndexedLink", index: 33 }
     callconv: C
     executor: get_indexed_link
 
@@ -2624,7 +2625,7 @@
       - name: linkOffset
         type: OTByteCount
     library: OTUtilityLib
-    aslm: { set: "OTClnt$CmnShared", name: "OTEnqueue" }
+    aslm: { set: "OTClnt$CmnShared", name: "OTEnqueue", index: 21 }
     callconv: C
     executor: enqueue
 
@@ -2637,7 +2638,7 @@
       - name: linkOffset
         type: OTByteCount
     library: OTUtilityLib
-    aslm: { set: "OTClnt$CmnShared", name: "OTDequeue" }
+    aslm: { set: "OTClnt$CmnShared", name: "OTDequeue", index: 22 }
     callconv: C
     executor: dequeue
 
@@ -2652,7 +2653,7 @@
       - name: ref
         type: "const void*"
     library: OTUtilityLib
-    aslm: { set: "OTClnt$CmnShared", name: "OTFindLink" }
+    aslm: { set: "OTClnt$CmnShared", name: "OTFindLink", index: 30 }
     callconv: C
     executor: find_link
 
@@ -2667,7 +2668,7 @@
       - name: ref
         type: "const void*"
     library: OTUtilityLib
-    aslm: { set: "OTClnt$CmnShared", name: "OTFindAndRemoveLink" }
+    aslm: { set: "OTClnt$CmnShared", name: "OTFindAndRemoveLink", index: 32 }
     callconv: C
     executor: find_and_remove_link
 
@@ -2680,7 +2681,7 @@
       - name: bitNumber
         type: OTByteCount
     library: OTUtilityLib
-    aslm: { set: "OTClnt$CmnShared", name: "OTAtomicSetBit" }
+    aslm: { set: "OTClnt$CmnShared", name: "OTAtomicSetBit", index: 7 }
     callconv: C
     executor: atomic_set_bit
 
@@ -2693,7 +2694,7 @@
       - name: bitNumber
         type: OTByteCount
     library: OTUtilityLib
-    aslm: { set: "OTClnt$CmnShared", name: "OTAtomicClearBit" }
+    aslm: { set: "OTClnt$CmnShared", name: "OTAtomicClearBit", index: 8 }
     callconv: C
     executor: atomic_clear_bit
 
@@ -2706,7 +2707,7 @@
       - name: bitNumber
         type: OTByteCount
     library: OTUtilityLib
-    aslm: { set: "OTClnt$CmnShared", name: "OTAtomicTestBit" }
+    aslm: { set: "OTClnt$CmnShared", name: "OTAtomicTestBit", index: 9 }
     callconv: C
     executor: atomic_test_bit
 
@@ -2721,7 +2722,7 @@
       - name: dest
         type: "void**"
     library: OTUtilityLib
-    aslm: { set: "OTClnt$CmnShared", name: "OTCompareAndSwapPtr" }
+    aslm: { set: "OTClnt$CmnShared", name: "OTCompareAndSwapPtr", index: 13 }
     callconv: C
     executor: cas32
 
@@ -2736,7 +2737,7 @@
       - name: dest
         type: "UInt32*"
     library: OTUtilityLib
-    aslm: { set: "OTClnt$CmnShared", name: "OTCompareAndSwap32" }
+    aslm: { set: "OTClnt$CmnShared", name: "OTCompareAndSwap32", index: 14 }
     callconv: C
     executor: cas32
 
@@ -2751,7 +2752,7 @@
       - name: dest
         type: "UInt16*"
     library: OTUtilityLib
-    aslm: { set: "OTClnt$CmnShared", name: "OTCompareAndSwap16" }
+    aslm: { set: "OTClnt$CmnShared", name: "OTCompareAndSwap16", index: 15 }
     callconv: C
     executor: cas16
 
@@ -2766,7 +2767,7 @@
       - name: dest
         type: "UInt8*"
     library: OTUtilityLib
-    aslm: { set: "OTClnt$CmnShared", name: "OTCompareAndSwap8" }
+    aslm: { set: "OTClnt$CmnShared", name: "OTCompareAndSwap8", index: 16 }
     callconv: C
     executor: cas8
 
@@ -2779,7 +2780,7 @@
       - name: dest
         type: "SInt32*"
     library: OTUtilityLib
-    aslm: { set: "OTClnt$CmnShared", name: "OTAtomicAdd32" }
+    aslm: { set: "OTClnt$CmnShared", name: "OTAtomicAdd32", index: 10 }
     callconv: C
     executor: atomic_add32
 
@@ -2792,7 +2793,7 @@
       - name: dest
         type: "SInt16*"
     library: OTUtilityLib
-    aslm: { set: "OTClnt$CmnShared", name: "OTAtomicAdd16" }
+    aslm: { set: "OTClnt$CmnShared", name: "OTAtomicAdd16", index: 11 }
     callconv: C
     executor: atomic_add16
 
@@ -2805,7 +2806,7 @@
       - name: dest
         type: "SInt8*"
     library: OTUtilityLib
-    aslm: { set: "OTClnt$CmnShared", name: "OTAtomicAdd8" }
+    aslm: { set: "OTClnt$CmnShared", name: "OTAtomicAdd8", index: 12 }
     callconv: C
     executor: atomic_add8
 
@@ -2822,7 +2823,7 @@
       - name: other
         type: UInt16
     library: OTUtilityLib
-    aslm: { set: "OTClnt$CmnShared", name: "OTCREATEPORTREF" }
+    aslm: { set: "OTClnt$CmnShared", name: "OTCREATEPORTREF", index: 1 }
     callconv: pascal
     executor: create_port_ref
 
@@ -2833,7 +2834,7 @@
       - name: ref
         type: OTPortRef
     library: OTUtilityLib
-    aslm: { set: "OTClnt$CmnShared", name: "OTGETDEVICETYPEFROMPORTREF" }
+    aslm: { set: "OTClnt$CmnShared", name: "OTGETDEVICETYPEFROMPORTREF", index: 2 }
     callconv: pascal
     executor: device_type_of
 
@@ -2844,7 +2845,7 @@
       - name: ref
         type: OTPortRef
     library: OTUtilityLib
-    aslm: { set: "OTClnt$CmnShared", name: "OTGETBUSTYPEFROMPORTREF" }
+    aslm: { set: "OTClnt$CmnShared", name: "OTGETBUSTYPEFROMPORTREF", index: 3 }
     callconv: pascal
     executor: bus_type_of
 
@@ -2857,7 +2858,7 @@
       - name: other
         type: "UInt16*"
     library: OTUtilityLib
-    aslm: { set: "OTClnt$CmnShared", name: "OTGETSLOTFROMPORTREF" }
+    aslm: { set: "OTClnt$CmnShared", name: "OTGETSLOTFROMPORTREF", index: 4 }
     callconv: pascal
     executor: slot_of
 
@@ -2870,7 +2871,7 @@
       - name: index
         type: OTItemCount
     library: OTClientUtilLib
-    aslm: { set: "OTClnt$LclUtils", name: "OTGETINDEXEDPORT" }
+    aslm: { set: "OTClnt$LclUtils", name: "OTGETINDEXEDPORT", index: 13 }
     callconv: pascal
     executor: get_indexed_port
 
@@ -2883,7 +2884,7 @@
       - name: portName
         type: "const char*"
     library: OTClientUtilLib
-    aslm: { set: "OTClnt$LclUtils", name: "OTFINDPORT" }
+    aslm: { set: "OTClnt$LclUtils", name: "OTFINDPORT", index: 11 }
     callconv: pascal
     executor: find_port
 
@@ -2896,7 +2897,7 @@
       - name: ref
         type: OTPortRef
     library: OTClientUtilLib
-    aslm: { set: "OTClnt$LclUtils", name: "OTFINDPORTBYREF" }
+    aslm: { set: "OTClnt$LclUtils", name: "OTFINDPORTBYREF", index: 12 }
     callconv: pascal
     executor: find_port_by_ref
 
@@ -2907,7 +2908,7 @@
       - name: path
         type: "const char*"
     library: OTClientUtilLib
-    aslm: { set: "OTClnt$LclUtils", name: "OTCREATECONFIGURATION" }
+    aslm: { set: "OTClnt$LclUtils", name: "OTCREATECONFIGURATION", index: 16 }
     callconv: pascal
     executor: create_configuration
 
@@ -2918,7 +2919,7 @@
       - name: cfig
         type: "OTConfiguration*"
     library: OTClientUtilLib
-    aslm: { set: "OTClnt$LclUtils", name: "OTCLONECONFIGURATION" }
+    aslm: { set: "OTClnt$LclUtils", name: "OTCLONECONFIGURATION", index: 18 }
     callconv: pascal
     executor: clone_configuration
 
@@ -2928,7 +2929,7 @@
       - name: cfig
         type: "OTConfiguration*"
     library: OTClientUtilLib
-    aslm: { set: "OTClnt$LclUtils", name: "OTDESTROYCONFIGURATION" }
+    aslm: { set: "OTClnt$LclUtils", name: "OTDESTROYCONFIGURATION", index: 17 }
     callconv: pascal
     executor: destroy_configuration
 

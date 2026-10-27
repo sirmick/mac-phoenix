@@ -200,8 +200,12 @@ The library routes:
    (`custom/OpenTransportGlue.c`, `libppc/libOpenTransportApp.a`; the
    client record it hands OT as seen from outside, OpenTransport.md, "The
    C side"). OTTest built with Retro68 on them passes on Executor and
-   matches Apple's glue on Mac OS 9.0.4. Left: the 68k glue (binding
-   through ASLM).
+   matches Apple's glue on Mac OS 9.0.4. The 68k half (2026-10-27): the
+   generator writes a wrapper per `aslm:` entry that gets its routine from
+   ASLM's documented client interface (a TLibraryManager of the
+   application's own, `GetFunctionPointer` by the set's index, now in the
+   entries); OTTest for 68k passes on Executor and on the Quadra with
+   Apple's ASLM and OT 1.1.1.
    As planned: the `Def` tables become definitions and the
    implementations take typed arguments instead of `Call`. By-products:
    `OpenTransportLib`, `OTUtilityLib`, `OpenTptInternetLib` for PowerPC

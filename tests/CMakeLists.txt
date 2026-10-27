@@ -760,6 +760,29 @@ set_tests_properties(ot_retro68_ppc_rom PROPERTIES
   SKIP_RETURN_CODE 77
 )
 
+# OTTest for 68k from the same headers, its calls bound through the Shared
+# Library Manager by the generated glue (TLibraryManager::GetFunctionPointer):
+# on Executor, and on the Quadra with Mac OS 7.6.1, Apple's ASLM and OT 1.1.1.
+add_test(
+  NAME ot_retro68_68k_executor
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --backend executor --app ${CMAKE_SOURCE_DIR}/tests/guest/ot/OTTestRetro68K.bin --results ot_results.txt --timeout 150 --port 18746
+)
+set_tests_properties(ot_retro68_68k_executor PROPERTIES
+  TIMEOUT 200
+  LABELS "guest;executor"
+  SKIP_RETURN_CODE 77
+)
+add_test(
+  NAME ot_retro68_68k_rom
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --os-version 7.6.1 --app ${CMAKE_SOURCE_DIR}/tests/guest/ot/OTTestRetro68K.bin --results ot_results.txt --echo-gateway --timeout 200 --port 18748
+)
+set_tests_properties(ot_retro68_68k_rom PROPERTIES
+  TIMEOUT 280
+  LABELS "guest"
+  SKIP_RETURN_CODE 77
+  ENVIRONMENT "MACEMU_ROM=${TEST_ROM}"
+)
+
 # Thread Manager through Frontier's UserTalk threads (process.cpp).
 add_test(
   NAME threads_executor

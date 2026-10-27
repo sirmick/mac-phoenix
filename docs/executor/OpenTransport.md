@@ -210,8 +210,22 @@ the client: those are glue, `multiversal/custom/OpenTransportGlue.c`,
 compiled into `libppc/libOpenTransportApp.a` when Retro68's PowerPC
 compiler is on the generator's PATH (`custom/libraries.yaml`, `PowerPC:`).
 A program links `OpenTransportApp OpenTransportLib OpenTptInternetLib`
-(the last two Retro68's import libraries). 68k glue, binding through the
-Shared Library Manager, is not written yet.
+(the last two Retro68's import libraries).
+
+For 68k the same library (`lib68k/libOpenTransportApp.a`) also has a
+wrapper for every `aslm:` entry, which the generator writes: it looks its
+routine up once, through the Shared Library Manager, by its function set
+and its 1-based index there (`aslm: { ..., index: }`, the order of
+`ot_names.inc`), and calls it. The lookup is ASLM's documented client
+interface (the ASLM SDK's LibraryManager.h): the application makes a
+TLibraryManager of its own with the root manager (SLMGlobal+$10, vtable
++$9C, after asking Gestalt `'otan'`), then `LoadClass` (slot 16, $40) and
+`GetFunctionPointer` by index (slot 20, $50) per set. By index, because
+Apple's ASLM has no names for OT's sets (by name it answers kNotFound);
+Executor's managers answer both (`ot_slm.cpp`). CloseOpenTransport (or
+`atexit`) frees the manager. The 68k record: SLMGlobal and the manager kept
+after it, words 3 and 2 pointing at them, word 7 `$01000100` and the byte at
+32 set, as Apple's 68k glue has them (seen on Executor).
 
 What the glue gives OT was seen from outside, Apple's PowerPC glue run
 against Executor (which logs what it gets) and against Mac OS 9.0.4's OT
@@ -227,10 +241,12 @@ creators get the record's first word, which OT sets at init (0 on
 Executor, which ignores it).
 
 OTTest built this way (`tests/guest/ot/build-retro68.sh`,
-`OTTestRetroPPC.bin`, committed) passes its 20 cases on Executor
-(`ot_retro68_ppc_executor`) and on Mac OS 9.0.4 (`ot_retro68_ppc_rom`),
-as Apple's glue does (OTTestPPC). `multiversal_retro68` compiles OTTest.c
-for PowerPC against the headers and checks the glue library.
+`OTTestRetroPPC.bin` and `OTTestRetro68K.bin`, committed) passes its 20
+cases on Executor (`ot_retro68_ppc_executor`, `ot_retro68_68k_executor`),
+on Mac OS 9.0.4 for PowerPC (`ot_retro68_ppc_rom`) and on the Quadra with
+Mac OS 7.6.1, Apple's ASLM and OT 1.1.1 for 68k (`ot_retro68_68k_rom`), as
+Apple's glue does. `multiversal_retro68` compiles OTTest.c for both
+processors against the headers and checks both glue libraries.
 
 ## Checked against Apple's
 

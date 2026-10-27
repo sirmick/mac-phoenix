@@ -103,6 +103,9 @@ void register_defs(const Def *defs, size_t n);
    one (0 for another set). */
 bool is_ot_set(const std::string &id);
 syn68k_addr_t bind_ot_stub(uint32_t stub);
+/* A function of one of OT's sets, by name or 1-based index (0: none). */
+syn68k_addr_t function_pointer(const std::string &id, const std::string &name);
+syn68k_addr_t function_pointer(const std::string &id, unsigned index);
 
 /* A fatal error: logged, the front end told, the emulator stopped. */
 [[noreturn]] void fatal(const std::string &msg);

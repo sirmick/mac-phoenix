@@ -137,6 +137,23 @@ else
     echo "(no powerpc-apple-macos-gcc: PowerPC not compiled)"
 fi
 
+# 3c. OTTest for 68k: Open Transport through the Shared Library Manager,
+#     the generated wrappers and the glue in lib68k/libOpenTransportApp.a
+#     (linked and run by tests/guest/ot/build-retro68.sh and the
+#     ot_retro68_68k_* cells).
+if "$GCC" "${CFLAGS[@]}" -fsyntax-only "$REPO/tests/guest/ot/OTTest.c" > "$WORK/ottest-68k.log" 2>&1; then
+    pass "OTTest.c compiled for 68k"
+else
+    head -20 "$WORK/ottest-68k.log"
+    failed "OTTest.c for 68k"
+fi
+if "$(dirname "$GCC")/m68k-apple-macos-nm" "$WORK/out/lib68k/libOpenTransportApp.a" 2>/dev/null \
+        | grep -qi " T OTBind$"; then
+    pass "Open Transport's 68k glue library"
+else
+    failed "no OTBind in lib68k/libOpenTransportApp.a"
+fi
+
 # 4. MacPhoenix's own guest programs that build against these headers alone
 #    (docs/executor/README.md lists what the others still lack).
 for s in MacBrowser/MacBrowser.c tests/guest/mpw-hello/hello.c \

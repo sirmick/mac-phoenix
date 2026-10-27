@@ -309,7 +309,7 @@
       - name: clientContext
         type: OTClientContextPtr
     library: OTInetClientLib
-    aslm: { set: "ot:inet$LclInetClnt", name: "OTOpenInternetServicesPriv" }
+    aslm: { set: "ot:inet$LclInetClnt", name: "OTOpenInternetServicesPriv", index: 2 }
     callconv: C
     executor: open_priv
 
@@ -328,7 +328,7 @@
       - name: clientContext
         type: OTClientContextPtr
     library: OTInetClientLib
-    aslm: { set: "ot:inet$LclInetClnt", name: "OTAsyncOpenInternetServicesPriv" }
+    aslm: { set: "ot:inet$LclInetClnt", name: "OTAsyncOpenInternetServicesPriv", index: 1 }
     callconv: C
     executor: async_open_priv
 
@@ -343,7 +343,7 @@
       - name: hinfo
         type: "InetHostInfo*"
     library: OTInetClientLib
-    aslm: { set: "ot:inet$LclInetClnt", name: "OTINETSTRINGTOADDRESS" }
+    aslm: { set: "ot:inet$LclInetClnt", name: "OTINETSTRINGTOADDRESS", index: 3 }
     callconv: pascal
     executor: string_to_address
 
@@ -358,7 +358,7 @@
       - name: name
         type: InetDomainName
     library: OTInetClientLib
-    aslm: { set: "ot:inet$LclInetClnt", name: "OTINETADDRESSTONAME" }
+    aslm: { set: "ot:inet$LclInetClnt", name: "OTINETADDRESSTONAME", index: 4 }
     callconv: pascal
     executor: address_to_name
 
@@ -372,7 +372,7 @@
       - name: host
         type: InetHost
     library: OTInetClientLib
-    aslm: { set: "ot:inet$LclInetClnt", name: "OTINITINETADDRESS" }
+    aslm: { set: "ot:inet$LclInetClnt", name: "OTINITINETADDRESS", index: 7 }
     callconv: pascal
     executor: init_inet_address
 
@@ -385,7 +385,7 @@
       - name: str
         type: "char*"
     library: OTInetClientLib
-    aslm: { set: "ot:inet$LclInetClnt", name: "OTINITDNSADDRESS" }
+    aslm: { set: "ot:inet$LclInetClnt", name: "OTINITDNSADDRESS", index: 11 }
     callconv: pascal
     executor: init_dns_address
 
@@ -398,7 +398,7 @@
       - name: host
         type: "InetHost*"
     library: OTInetClientLib
-    aslm: { set: "ot:inet$LclInetClnt", name: "OTINETSTRINGTOHOST" }
+    aslm: { set: "ot:inet$LclInetClnt", name: "OTINETSTRINGTOHOST", index: 8 }
     callconv: pascal
     executor: string_to_host
 
@@ -410,7 +410,7 @@
       - name: str
         type: "char*"
     library: OTInetClientLib
-    aslm: { set: "ot:inet$LclInetClnt", name: "OTINETHOSTTOSTRING" }
+    aslm: { set: "ot:inet$LclInetClnt", name: "OTINETHOSTTOSTRING", index: 9 }
     callconv: pascal
     executor: host_to_string
 
@@ -423,7 +423,7 @@
       - name: val
         type: SInt32
     library: OTInetClientLib
-    aslm: { set: "ot:inet$LclInetClnt", name: "OTINETGETINTERFACEINFO" }
+    aslm: { set: "ot:inet$LclInetClnt", name: "OTINETGETINTERFACEINFO", index: 10 }
     callconv: pascal
     executor: get_interface_info
 
@@ -438,7 +438,7 @@
       - name: sysinfo
         type: "InetSysInfo*"
     library: OTInetClientLib
-    aslm: { set: "ot:inet$LclInetClnt", name: "OTINETSYSINFO" }
+    aslm: { set: "ot:inet$LclInetClnt", name: "OTINETSYSINFO", index: 5 }
     callconv: pascal
     executor: sys_info
 
@@ -455,7 +455,7 @@
       - name: mx
         type: "InetMailExchange*"
     library: OTInetClientLib
-    aslm: { set: "ot:inet$LclInetClnt", name: "OTINETMAILEXCHANGE" }
+    aslm: { set: "ot:inet$LclInetClnt", name: "OTINETMAILEXCHANGE", index: 6 }
     callconv: pascal
     executor: mail_exchange
 
@@ -482,7 +482,7 @@
       - name: flags
         type: OTFlags
     library: OTInetClientLib
-    aslm: { set: "ot:inet$LclInetClnt", name: "OTINETQUERY" }
+    aslm: { set: "ot:inet$LclInetClnt", name: "OTINETQUERY", index: 12 }
     callconv: pascal
     executor: query
 

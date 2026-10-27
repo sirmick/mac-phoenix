@@ -293,6 +293,32 @@ syn68k_addr_t Executor::ot::bind_ot_stub(uint32_t stub)
     return addr;
 }
 
+/* TLibraryManager::GetFunctionPointer's work (ot_slm.cpp): a function of
+   one of OT's sets by the set's name for it, or by its index (1-based, as
+   in the stubs); 0 if the set isn't OT's or has no such function. */
+syn68k_addr_t Executor::ot::function_pointer(const std::string &id, const std::string &name)
+{
+    if(!find_set(id))
+        return 0;
+    auto it = defs().find(id + "/" + name);
+    if(it == defs().end())
+    {
+        fprintf(stderr, "[ot] GetFunctionPointer %s %s: not implemented\n", id.c_str(), name.c_str());
+        return callback_install(missing, new Missing{ id, name });
+    }
+    OT_LOG("GetFunctionPointer %s %s\n", id.c_str(), name.c_str());
+    return entry_for(it->second);
+}
+
+syn68k_addr_t Executor::ot::function_pointer(const std::string &id, unsigned index)
+{
+    const SetNames *s = find_set(id);
+    const char *name = name_of(s, index);
+    if(!s || !strcmp(name, "?"))
+        return 0;
+    return function_pointer(id, std::string(name));
+}
+
 std::string Executor::ot::guest_cstring(uint32_t addr, size_t max)
 {
     std::string s;

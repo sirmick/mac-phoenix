@@ -14,7 +14,9 @@
  * OTTestPPC is the same source as a PowerPC application (MrC, PPCLink,
  * Apple's PowerPC OT glue, which imports OTClientLib & co.): it writes its
  * lines to Host:ot_results.txt and ends them with "---", as the guest
- * suite's harness (tests/test_guest_suite.sh --results) expects.
+ * suite's harness (tests/test_guest_suite.sh --results) expects. So do
+ * OTTestRetroPPC and OTTestRetro68K, built with Retro68 against the
+ * headers and glue generated from Executor's definitions (build-retro68.sh).
  */
 
 #include <Types.h>
@@ -30,6 +32,14 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
+
+/* An application (PowerPC, or anything Retro68 builds) writes its lines to
+   Host:ot_results.txt; the 68k MPW tool to MPW's output. */
+#if defined(powerc) || defined(__powerc) || defined(__POWERPC__) || defined(__GNUC__)
+#define OT_APP 1
+#else
+#define OT_APP 0
+#endif
 
 static int failures = 0;
 static InetHost echo_host = 0;
@@ -856,8 +866,11 @@ static void test_atomics(void)
     long want;
     int i;
 
-    /* SC compiles these inline: BSET, BCLR, BTST, CAS. */
-    if(OTAtomicSetBit(&bits, 3) != 0 || bits != 0x08 || OTAtomicSetBit(&bits, 3) != 1)
+    /* SC compiles these inline: BSET, BCLR, BTST, CAS; elsewhere they are
+       OTClnt$CmnShared's calls. The bit operations answer the bit as it
+       was, 0 or not (OpenTransport.h): Apple's 68k library says true as
+       other than 1. */
+    if(OTAtomicSetBit(&bits, 3) != 0 || bits != 0x08 || !OTAtomicSetBit(&bits, 3))
     {
         fail("atomics", "OTAtomicSetBit", bits);
         return;
@@ -867,7 +880,7 @@ static void test_atomics(void)
         fail("atomics", "OTAtomicTestBit", bits);
         return;
     }
-    if(OTAtomicClearBit(&bits, 3) != 1 || bits != 0)
+    if(!OTAtomicClearBit(&bits, 3) || bits != 0)
     {
         fail("atomics", "OTAtomicClearBit", bits);
         return;
@@ -1337,6 +1350,12 @@ typedef struct
 static pascal void cancel_proc(TMTaskPtr tmp)
 {
     CancelTask *t = (CancelTask *)tmp;
+#elif defined(__GNUC__)
+/* 68k, Retro68: the task's record in A1, read before anything uses it. */
+static pascal void cancel_proc(void)
+{
+    CancelTask *t;
+    __asm__ volatile("move.l %%a1,%0" : "=g"(t));
 #else
 #pragma parameter __D0 GetA1
 long GetA1(void) = 0x2009; /* MOVE.L A1,D0 */
@@ -1377,6 +1396,8 @@ static void test_cancel(void)
     OTMemzero(&t, sizeof t);
 #if defined(powerc) || defined(__powerc) || defined(__POWERPC__)
     t.tm.tmAddr = NewTimerProc(cancel_proc);
+#elif defined(__GNUC__)
+    t.tm.tmAddr = (ProcPtr)cancel_proc;
 #else
     t.tm.tmAddr = (TimerUPP)cancel_proc;
 #endif
@@ -1712,7 +1733,7 @@ int main(int argc, char **argv)
 {
     int i;
 
-#if defined(powerc) || defined(__powerc) || defined(__POWERPC__)
+#if OT_APP
     freopen("Host:ot_results.txt", "w", stdout);
 #endif
     read_echo_config();
@@ -1737,7 +1758,7 @@ int main(int argc, char **argv)
         CloseOpenTransport();
     }
     printf("DONE %d\n", failures);
-#if defined(powerc) || defined(__powerc) || defined(__POWERPC__)
+#if OT_APP
     printf("---\n");
     fclose(stdout);
 #endif

@@ -133,6 +133,38 @@ class CIncludesGenerator < Generator
         out << "}"
     end
 
+    # A 68k routine of a function set bound through the Shared Library
+    # Manager (`aslm:`, Open Transport's): looked up by its index in the set
+    # the first time (and again once the client has a new manager), then
+    # called. By index: Apple's ASLM has no names for OT's sets. __OTFunction and __OTGeneration are the glue's
+    # (custom/OpenTransportGlue.c); a routine OT can't give answers
+    # kOTClientNotInittedErr, or 0.
+    def generate_aslm_wrapper(out:, fun:, name:, args:)
+        if !@aslm_included then
+            @aslm_included = true
+            out << "#if TARGET_CPU_68K\n"
+            out << "extern void *__OTFunction(const char *set, unsigned long index);\n"
+            out << "extern long __OTGeneration;\n"
+            out << "#endif\n"
+        end
+        ret = fun["return"] || "void"
+        conv = fun["callconv"].to_s.downcase == "c" ? "" : "pascal "
+        out << "#if TARGET_CPU_68K\n"
+        out << conv << ret << " " << name << "(" << args.map {|a| decl(a["type"], a["name"])}.join(", ") << ")\n{\n"
+        out << "typedef #{conv}#{ret} (*F)(" << args.map {|a| a["type"]}.join(", ") << ");\n"
+        out << "static F f;\nstatic long gen;\n"
+        out << "if(gen != __OTGeneration)\n{\n"
+        out << "f = (F)__OTFunction(\"#{fun["aslm"]["set"]}\", #{fun["aslm"]["index"]}); /* #{fun["aslm"]["name"]} */\n"
+        out << "gen = __OTGeneration;\n}\n"
+        fallback = if ret == "void" then ""
+                   elsif ["OSStatus", "OSErr", "OTResult"].include?(ret) then " kOTClientNotInittedErr"
+                   else " (#{ret})0"
+                   end
+        out << "if(!f)\nreturn#{fallback};\n"
+        out << (ret == "void" ? "" : "return ") << "f(" << args.map {|a| a["name"]}.join(", ") << ");\n}\n"
+        out << "#endif\n"
+    end
+
     def declare_function(fun, variant_index:nil)
         return if fun["name"] =~ /ROMlib/
         if fun["variants"] and not variant_index
@@ -272,6 +304,8 @@ class CIncludesGenerator < Generator
                 generate_function_definition(out:@impl_out, fun:fun, name:name, args:args, m68kinlines:m68kinlines)
             elsif fun["cfm"] then
                 generate_cfm_wrapper(out:@impl_out, fun:fun, name:name, args:args)
+            elsif fun["aslm"] and not fun["raw"] then
+                generate_aslm_wrapper(out:@impl_out, fun:fun, name:name, args:args)
             end
         end
         @out << "#endif\n" if optionalInline
@@ -492,6 +526,7 @@ class CIncludesGenerator < Generator
                 header = defs.headers[name]
                 @impl_out = ""
                 @cfmwrapper_included = false
+                @aslm_included = false
                 inc = generate_header(header)
         
                 f << inc
