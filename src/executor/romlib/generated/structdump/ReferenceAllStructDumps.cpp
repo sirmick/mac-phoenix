@@ -72,6 +72,7 @@ void registerStructDumps_StartMgr();
 void registerStructDumps_StdCLib();
 void registerStructDumps_StdFilePkg();
 void registerStructDumps_SysErr();
+void registerStructDumps_TextCommon();
 void registerStructDumps_TextServices();
 void registerStructDumps_ThreadMgr();
 void registerStructDumps_TimeMgr();
@@ -152,6 +153,7 @@ void registerAllStructDumps()
     registerStructDumps_StdCLib();
     registerStructDumps_StdFilePkg();
     registerStructDumps_SysErr();
+    registerStructDumps_TextCommon();
     registerStructDumps_TextServices();
     registerStructDumps_ThreadMgr();
     registerStructDumps_TimeMgr();

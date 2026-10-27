@@ -154,8 +154,9 @@ else
     failed "no OTBind in lib68k/libOpenTransportApp.a"
 fi
 
-# 4. MacPhoenix's own guest programs that build against these headers alone
-#    (docs/executor/README.md lists what the others still lack).
+# 4. MacPhoenix's own guest programs, against these headers alone: all
+#    but CLibTest (tests/guest/clib), which tests Apple's C library and so
+#    is built with that library's own headers (fp.h, fenv.h, ...).
 for s in BridgeAgent/BridgeAgent.c MacBrowser/MacBrowser.c MacBrowser/browser_shm.c \
          tests/guest/mpw-hello/hello.c tests/guest/retro68/rtest.c \
          tests/guest/bridgedemo/demo.c \
@@ -163,7 +164,10 @@ for s in BridgeAgent/BridgeAgent.c MacBrowser/MacBrowser.c MacBrowser/browser_sh
          tests/guest/suite/keyboard.c tests/guest/suite/net.c \
          tests/guest/suite/netdeep.c tests/guest/suite/files.c \
          tests/guest/suite/audio.c tests/guest/suite/ascript.c \
-         tests/guest/suite/mactcp.c tests/guest/suite/tcpip.c; do
+         tests/guest/suite/mactcp.c tests/guest/suite/tcpip.c \
+         tests/guest/hfsplus/FSRefTest.c tests/guest/hfsplus/MakeLongNames.c \
+         tests/guest/hfsplus/VolDump.c tests/guest/hfsplus/VolWrite.c \
+         tests/guest/notify/notify.c tests/guest/ppc-hello/hello.c; do
     if "$GCC" "${CFLAGS[@]}" -w -Werror=implicit-function-declaration \
             -I "$REPO/src/common/guest" -I "$REPO/src/common/include" \
             -fsyntax-only "$REPO/$s" > "$WORK/guest.log" 2>&1; then

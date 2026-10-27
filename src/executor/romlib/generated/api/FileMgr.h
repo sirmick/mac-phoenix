@@ -1057,10 +1057,98 @@ OSErr C_FSGetResourceForkName(HFSUniStr255Ptr resourceForkName);PASCAL_SUBTRAP(F
 OSErr glue_DirCreate(INTEGER vRefNum, LONGINT parentDirID, ConstStringPtr name, GUEST<LONGINT> *createdDirID);LIBRARY_FUNCTION(InterfaceLib, DirCreate, glue_DirCreate);
 
 
+OSErr glue_HSetFInfo(INTEGER vRefNum, LONGINT dirID, ConstStringPtr fileName, const FInfo *fndrInfo);LIBRARY_FUNCTION(InterfaceLib, HSetFInfo, glue_HSetFInfo);
+
+
+OSErr glue_HSetFLock(INTEGER vRefNum, LONGINT dirID, ConstStringPtr fileName);LIBRARY_FUNCTION(InterfaceLib, HSetFLock, glue_HSetFLock);
+
+
+OSErr glue_HRstFLock(INTEGER vRefNum, LONGINT dirID, ConstStringPtr fileName);LIBRARY_FUNCTION(InterfaceLib, HRstFLock, glue_HRstFLock);
+
+
+OSErr glue_CatMove(INTEGER vRefNum, LONGINT dirID, ConstStringPtr oldName, LONGINT newDirID, ConstStringPtr newName);LIBRARY_FUNCTION(InterfaceLib, CatMove, glue_CatMove);
+
+
 OSErr glue_PBHOpenRFDenySync(HParmBlkPtr pb);LIBRARY_FUNCTION(InterfaceLib, PBHOpenRFDenySync, glue_PBHOpenRFDenySync);
 
 
 OSErr glue_PBHOpenRFDenyAsync(HParmBlkPtr pb);LIBRARY_FUNCTION(InterfaceLib, PBHOpenRFDenyAsync, glue_PBHOpenRFDenyAsync);
 
+
+enum {kFSCatInfoNone = 0,
+kFSCatInfoTextEncoding = 1,
+kFSCatInfoNodeFlags = 2,
+kFSCatInfoVolume = 4,
+kFSCatInfoParentDirID = 8,
+kFSCatInfoNodeID = 16,
+kFSCatInfoCreateDate = 32,
+kFSCatInfoContentMod = 64,
+kFSCatInfoAttrMod = 128,
+kFSCatInfoAccessDate = 256,
+kFSCatInfoBackupDate = 512,
+kFSCatInfoPermissions = 1024,
+kFSCatInfoFinderInfo = 2048,
+kFSCatInfoFinderXInfo = 4096,
+kFSCatInfoValence = 8192,
+kFSCatInfoDataSizes = 16384,
+kFSCatInfoRsrcSizes = 32768,
+kFSCatInfoSharingFlags = 65536,
+kFSCatInfoUserPrivs = 131072,
+kFSCatInfoAllDates = 992,
+kFSCatInfoGettableInfo = 262143,
+kFSCatInfoSettableInfo = 8163,
+};
+
+enum {kFSNodeLockedBit = 0,
+kFSNodeLockedMask = 1,
+kFSNodeResOpenBit = 2,
+kFSNodeResOpenMask = 4,
+kFSNodeDataOpenBit = 3,
+kFSNodeDataOpenMask = 8,
+kFSNodeIsDirectoryBit = 4,
+kFSNodeIsDirectoryMask = 16,
+kFSNodeCopyProtectBit = 6,
+kFSNodeCopyProtectMask = 64,
+kFSNodeForkOpenBit = 7,
+kFSNodeForkOpenMask = 128,
+kFSNodeInSharedBit = 2,
+kFSNodeInSharedMask = 4,
+kFSNodeIsMountedBit = 3,
+kFSNodeIsMountedMask = 8,
+kFSNodeIsSharePointBit = 5,
+kFSNodeIsSharePointMask = 32,
+};
+
+enum {kFSIterateFlat = 0,
+kFSIterateSubtree = 1,
+kFSIterateDelete = 2,
+};
+
+enum {kFSAllocDefaultFlags = 0,
+kFSAllocAllOrNothingMask = 1,
+kFSAllocContiguousMask = 2,
+kFSAllocNoRoundUpMask = 4,
+};
+
+enum {kFSVolInfoNone = 0,
+kFSVolInfoCreateDate = 1,
+kFSVolInfoModDate = 2,
+kFSVolInfoBackupDate = 4,
+kFSVolInfoCheckedDate = 8,
+kFSVolInfoFileCount = 16,
+kFSVolInfoDirCount = 32,
+kFSVolInfoSizes = 64,
+kFSVolInfoBlocks = 128,
+kFSVolInfoNextAlloc = 256,
+kFSVolInfoRsrcClump = 512,
+kFSVolInfoDataClump = 1024,
+kFSVolInfoNextID = 2048,
+kFSVolInfoFinderInfo = 4096,
+kFSVolInfoFlags = 8192,
+kFSVolInfoFSInfo = 16384,
+kFSVolInfoDriveInfo = 32768,
+kFSVolInfoGettableInfo = 65535,
+kFSVolInfoSettableInfo = 12292,
+};
 
 } /* namespace Executor */

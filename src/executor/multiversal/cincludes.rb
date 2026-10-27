@@ -424,6 +424,26 @@ class CIncludesGenerator < Generator
 
             #define New#{name}Proc(proc) New#{name}UPP(proc)
             #define Dispose#{name}Proc(proc) Dispose#{name}UPP(proc)
+        UPPDECL
+        # Calling one (InvokeXUPP, and the older CallXProc): through Mixed
+        # Mode on CFM, directly on classic 68k. Not for register-based
+        # routines, which C can't call directly.
+        if procinfo != 42 and not args.any? {|arg| arg["register"]} then
+            params = args.each_with_index.map {|arg, i| arg["name"] || "arg#{i + 1}"}
+            plist = (params + ["userUPP"]).join(", ")
+            cargs = params.map {|p| "(#{p})"}
+            ret = value["return"]
+            cast = ret ? "(#{ret})" : "(void)"
+            @out << "#if !TARGET_API_MAC_CARBON\n"
+            @out << "#if TARGET_RT_MAC_CFM\n"
+            @out << "#define Invoke#{name}UPP(#{plist}) #{cast}CallUniversalProc((UniversalProcPtr)(userUPP), upp#{name}ProcInfo#{cargs.map {|a| ", " + a}.join})\n"
+            @out << "#else\n"
+            @out << "#define Invoke#{name}UPP(#{plist}) (*(userUPP))(#{cargs.join(", ")})\n"
+            @out << "#endif\n"
+            @out << "#define Call#{name}Proc(#{(["userRoutine"] + params).join(", ")}) Invoke#{name}UPP(#{(params + ["userRoutine"]).join(", ")})\n"
+            @out << "#endif\n\n"
+        end
+        @out << <<~UPPDECL
 
         UPPDECL
     end
@@ -523,6 +543,7 @@ class CIncludesGenerator < Generator
                 /* ConditionalMacros.h's names, for code written against
                    Apple's interfaces */
                 #define TARGET_OS_MAC 1
+                #define TYPE_LONGLONG 1
                 #define GENERATINGCFM TARGET_RT_MAC_CFM
                 #define GENERATING68K TARGET_CPU_68K
                 #define GENERATINGPOWERPC TARGET_CPU_PPC
@@ -583,7 +604,7 @@ class CIncludesGenerator < Generator
             "DeskBus", "DiskInit", "Disks", "Displays", "Editions", "Finder",
             "Folders", "Lists", "MacTCP", "Movies", "Notification", "Packages",
             "Printing", "Retrace", "Scrap", "Script", "ShutDown", "Speech",
-            "TextServices", "Threads", "Translation", "Video",
+            "TextCommon", "TextServices", "Threads", "Translation", "Video",
             "OpenTransport", "OpenTptInternet", "OpenTptLinks"].each do |name|
             File.open("#{$options.output_dir}/CIncludes/#{name}.h", "w") do |f|
                 f << "#pragma once\n"

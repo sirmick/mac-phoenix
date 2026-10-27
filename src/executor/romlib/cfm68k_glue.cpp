@@ -241,6 +241,57 @@ OSErr glue_DirCreate(INTEGER vRefNum, LONGINT parentDirID, ConstStringPtr name,
     return err;
 }
 
+/* HSetFInfo, HSetFLock, HRstFLock, CatMove (Inside Macintosh: Files, the
+   high-level HFS routines): glue over their parameter-block calls. */
+OSErr glue_HSetFInfo(INTEGER vRefNum, LONGINT dirID, ConstStringPtr name,
+                     const FInfo *fndrInfo)
+{
+    GuestTemp<HParamBlockRec> pb;
+    pb->fileParam.ioNamePtr = (StringPtr)name;
+    pb->fileParam.ioVRefNum = vRefNum;
+    pb->fileParam.ioFVersNum = 0;
+    pb->fileParam.ioFDirIndex = 0;
+    pb->fileParam.ioDirID = dirID;
+    OSErr err = PBHGetFInfo(pb.p, false);
+    if(err != noErr)
+        return err;
+    pb->fileParam.ioFlFndrInfo = *fndrInfo;
+    pb->fileParam.ioDirID = dirID;      /* PBHGetFInfo put the file number there */
+    return PBHSetFInfo(pb.p, false);
+}
+
+static OSErr hfs_lock(INTEGER vRefNum, LONGINT dirID, ConstStringPtr name, bool lock)
+{
+    GuestTemp<HParamBlockRec> pb;
+    pb->fileParam.ioNamePtr = (StringPtr)name;
+    pb->fileParam.ioVRefNum = vRefNum;
+    pb->fileParam.ioFVersNum = 0;
+    pb->fileParam.ioDirID = dirID;
+    return lock ? PBHSetFLock(pb.p, false) : PBHRstFLock(pb.p, false);
+}
+
+OSErr glue_HSetFLock(INTEGER vRefNum, LONGINT dirID, ConstStringPtr name)
+{
+    return hfs_lock(vRefNum, dirID, name, true);
+}
+
+OSErr glue_HRstFLock(INTEGER vRefNum, LONGINT dirID, ConstStringPtr name)
+{
+    return hfs_lock(vRefNum, dirID, name, false);
+}
+
+OSErr glue_CatMove(INTEGER vRefNum, LONGINT dirID, ConstStringPtr oldName,
+                   LONGINT newDirID, ConstStringPtr newName)
+{
+    GuestTemp<CMovePBRec> pb;
+    pb->ioNamePtr = (StringPtr)oldName;
+    pb->ioVRefNum = vRefNum;
+    pb->ioNewName = (StringPtr)newName;
+    pb->ioNewDirID = newDirID;
+    pb->ioDirID = dirID;
+    return PBCatMove(pb.p, false);
+}
+
 /* The volume an open file is on (Inside Macintosh: Files, glue over
    PBGetFCBInfo); Retro68's PowerPC runtime imports it. */
 OSErr glue_GetVRefNum(INTEGER prn, GUEST<INTEGER> *vrn)

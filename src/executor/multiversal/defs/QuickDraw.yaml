@@ -202,7 +202,8 @@
 
 # ####
 
-- enum:
+- only-for: Executor
+  enum:
     values:
       - name: frame
         value: 0
@@ -214,6 +215,29 @@
         value: 3
       - name: fill
         value: 4
+
+# ####
+
+# Apple's names; the short ones only with OLDROUTINENAMES (Executor's code
+# uses those).
+- not-for: Executor
+  enum:
+    values:
+      - name: kQDGrafVerbFrame
+        value: 0
+        old_name: frame
+      - name: kQDGrafVerbPaint
+        value: 1
+        old_name: paint
+      - name: kQDGrafVerbErase
+        value: 2
+        old_name: erase
+      - name: kQDGrafVerbInvert
+        value: 3
+        old_name: invert
+      - name: kQDGrafVerbFill
+        value: 4
+        old_name: fill
 
 # ####
 

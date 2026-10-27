@@ -166,7 +166,8 @@ The whole plan (agreed 2026-10-26):
 
 Throughout, the aim is MacPhoenix's own guest programs building against
 the generated headers alone (BridgeAgent without Apple's UI 3.4 first:
-done 2026-10-27, MacBrowser too);
+done 2026-10-27, MacBrowser too, then every guest program but CLibTest,
+and MacPhoenixSuite built with Retro68 runs; STRAGGLERS 63);
 `multiversal_retro68` compiles each one that does.
 
 The library routes:

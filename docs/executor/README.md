@@ -144,9 +144,13 @@ RetroTest, OTTest and MacPhoenixSuite: `tests/guest/suite/retro68`
 builds the suite with Retro68 for 68k and PowerPC from the same sources
 as its MPW build, and it gives the same results on Apple's systems and
 on Executor (`guest_suite_retro68*`); `multiversal_retro68` compiles
-each. What the others still miss: `fp.h`, `TextCommon.h`, the HFS Plus
-constants (`kFSCatInfo*`) and `SInt64`, `NMUPP`, and some high-level
-File Manager glue (`HSetFInfo`, `DirCreate`, `CatMove`, `HSetFLock`). Many parameters Apple declares `const T *` are plain
+each, and with it every other guest program but CLibTest, which tests
+Apple's C library and so is built with that library's own headers
+(`fp.h`, `fenv.h`, `PLStringFuncs.h`: StdCLib and MathLib's definitions
+are `only-for: Executor`, a guest's C headers come with its C library).
+RetroTest also runs the high-level HFS glue (`DirCreate`, `HSetFInfo`,
+`HSetFLock`, `CatMove`) on both processors, on Apple's systems and
+Executor. Many parameters Apple declares `const T *` are plain
 `T *` here (warnings in C). Some Executor signatures differ from Apple's
 (`NewThread` takes `ProcPtr` and `LONGINT`s, not `ThreadEntryUPP`,
 `ThreadStyle` and `ThreadOptions`); where the C side needs Apple's form

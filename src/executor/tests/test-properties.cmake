@@ -9,17 +9,14 @@ set_tests_properties(
             # creation dates not supported by linux filesystem
         executor.FileTest.SetFInfo_CrDat 
 
-            # unimplemented
-        executor.FileTest.SetFLock 
-
             # MakeFSSpec should resolve current directory, Executor stores 0 in FSSpec
         executor.FileTest.MakeFSSpec
     APPEND PROPERTIES LABELS xfail)
 
-#### Known failures, same on syn68k upstream (Linux has no creation date, and
-#### FSpSetFLock is unimplemented). Disabled so the mac-phoenix suite stays
-#### green; re-enable when the File Manager grows these.
+#### Known failure, same on syn68k upstream (Linux has no creation date).
+#### Disabled so the mac-phoenix suite stays green; re-enable when the File
+#### Manager grows it. (SetFLock: locks are the host file's write
+#### permission since 2026-10-27.)
 set_tests_properties(
         executor.FileTest.SetFInfo_CrDat
-        executor.FileTest.SetFLock
     PROPERTIES DISABLED TRUE)

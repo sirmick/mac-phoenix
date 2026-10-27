@@ -375,8 +375,39 @@ FileItemPtr LocalVolume::upgradeItem(FileItemPtr item, ItemFactory *betterFactor
     return newItem;
 }
 
+/* MacPhoenix: a file's lock (ioFlAttrib bit 0, PBHSetFLock) is its host
+   file's write permission: a locked file is one nobody may write. As on
+   HFS, it can't be opened for writing (permErr; fsCurPerm gets read
+   access), deleted or renamed (fLckdErr). */
+static bool isLocked(const ItemPtr& item)
+{
+    if(!std::dynamic_pointer_cast<FileItem>(item))
+        return false;
+    std::error_code ec;
+    auto perms = fs::status(item->path(), ec).permissions();
+    return !ec && (perms & fs::perms::owner_write) == fs::perms::none;
+}
+
+static void setLocked(const ItemPtr& item, bool locked)
+{
+    if(!std::dynamic_pointer_cast<FileItem>(item))
+        throw OSErrorException(paramErr);
+    std::error_code ec;
+    fs::permissions(item->path(),
+                    fs::perms::owner_write | fs::perms::group_write | fs::perms::others_write,
+                    locked ? fs::perm_options::remove : fs::perm_options::add, ec);
+    if(ec)
+        throw OSErrorException(ioErr);
+}
+
 void LocalVolume::openCommon(GUEST<short>& refNum, ItemPtr item, Fork fork, int8_t permission)
 {
+    if(isLocked(item) && permission != fsRdPerm)
+    {
+        if(permission != fsCurPerm)
+            throw OSErrorException(permErr);
+        permission = fsRdPerm;
+    }
     if(auto fileItem = std::dynamic_pointer_cast<FileItem>(item))
     {
         short& writeAccessRef = fork == Fork::resource ? fileItem->resWriteAccessRefNum : fileItem->dataWriteAccessRefNum;
@@ -485,7 +516,8 @@ void LocalVolume::getInfoCommon(CInfoPBPtr pb, InfoKind infoKind)
     }
     else if(FileItem *fileItem = dynamic_cast<FileItem*>(item.get()))
     {
-        pb->hFileInfo.ioFlAttrib = open_attrib_bits(item->cnid(), &vcb, &pb->hFileInfo.ioFRefNum);
+        pb->hFileInfo.ioFlAttrib = open_attrib_bits(item->cnid(), &vcb, &pb->hFileInfo.ioFRefNum)
+            | (isLocked(item) ? ATTRIB_ISLOCKED : 0);
         auto info = fileItem->getInfo();
         pb->hFileInfo.ioFlFndrInfo = info.file.info;
         
@@ -730,6 +762,8 @@ void LocalVolume::deleteCommon(ItemPtr item)
         for(auto& fcbx : fcbExtensions)
             if(fcbx.file == fileItem)
                 throw OSErrorException(fBsyErr);
+    if(isLocked(item))
+        throw OSErrorException(fLckdErr);
     itemCache->deleteItem(item);
 }
 
@@ -746,6 +780,8 @@ void LocalVolume::renameCommon(ItemPtr item, mac_string_view newName)
 {
     if(newName.find(':') != mac_string_view::npos)
         throw OSErrorException(bdNamErr);
+    if(isLocked(item))
+        throw OSErrorException(fLckdErr);
 
     auto parent = resolveDir(item->parID());
     itemCache->cacheDirectory(parent);
@@ -808,8 +844,11 @@ void LocalVolume::PBWrite(ParmBlkPtr pb)
     pb->ioParam.ioActCount = 0;
     setFPosCommon(pb, false);
     auto& fcbx = getFCBX(pb->ioParam.ioRefNum);
-    
-    
+    /* MacPhoenix: as HFS, a path opened without write access (fsRdPerm, or
+       fsCurPerm on a locked file) can't write. */
+    if(!(fcbx.fcb->fcbMdRByt & WRITEBIT))
+        throw OSErrorException(wrPermErr);
+
     size_t n;
     try
     {
@@ -921,6 +960,8 @@ void LocalVolume::PBGetEOF(ParmBlkPtr pb)
 void LocalVolume::PBSetEOF(ParmBlkPtr pb)
 {
     auto& fcbx = getFCBX(pb->ioParam.ioRefNum);
+    if(!(fcbx.fcb->fcbMdRByt & WRITEBIT))
+        throw OSErrorException(wrPermErr);
     try
     {
         fcbx.access->setEOF(pb->ioParam.ioMisc);
@@ -988,19 +1029,19 @@ void LocalVolume::PBUnlockRange(ParmBlkPtr pb)
 }
 void LocalVolume::PBSetFLock(ParmBlkPtr pb)
 {
-    throw OSErrorException(paramErr);
+    setLocked(resolve(pb->ioParam.ioNamePtr, pb->ioParam.ioVRefNum, 0), true);
 }
 void LocalVolume::PBHSetFLock(HParmBlkPtr pb)
 {
-    throw OSErrorException(paramErr);
+    setLocked(resolve(pb->ioParam.ioNamePtr, pb->ioParam.ioVRefNum, pb->fileParam.ioDirID), true);
 }
 void LocalVolume::PBRstFLock(ParmBlkPtr pb)
 {
-    throw OSErrorException(paramErr);
+    setLocked(resolve(pb->ioParam.ioNamePtr, pb->ioParam.ioVRefNum, 0), false);
 }
 void LocalVolume::PBHRstFLock(HParmBlkPtr pb)
 {
-    throw OSErrorException(paramErr);
+    setLocked(resolve(pb->ioParam.ioNamePtr, pb->ioParam.ioVRefNum, pb->fileParam.ioDirID), false);
 }
 void LocalVolume::PBSetFVers(ParmBlkPtr pb)
 {

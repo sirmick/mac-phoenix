@@ -34,6 +34,9 @@ GUEST<LONGINT> nmRefCon;};static_assert(sizeof(NMRec) == 36);void describeStruct
 //                            automatically
 typedef NMRec *NMRecPtr;
 
+using NMProcPtr = UPP<void(NMRecPtr nmReqPtr)>;
+
+
 OSErr NMInstall(NMRecPtr nmptr);REGISTER_TRAP2(NMInstall, 0xA05E, D0(A0));
 
 

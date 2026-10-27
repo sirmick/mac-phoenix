@@ -7,7 +7,8 @@
 
 # ####
 
-- struct:
+- only-for: Executor
+  struct:
     name: NMRec
     members:
       - name: qLink
@@ -36,6 +37,11 @@
         type: LONGINT
     size: 36
 
+# Apple's: nmResp an NMUPP (Executor's code keeps a ProcPtr).
+- not-for: Executor
+  struct:
+    name: NMRec
+
 # ####
 
 - typedef:
@@ -44,6 +50,44 @@
     comment: |
       value of -1 means remove queue element
                                  automatically
+
+# ####
+
+- funptr:
+    name: NMProcPtr
+    args:
+      - name: nmReqPtr
+        type: NMRecPtr
+
+# ####
+
+- not-for: Executor
+  struct:
+    name: NMRec
+    members:
+      - name: qLink
+        type: QElemPtr
+      - name: qType
+        type: INTEGER
+      - name: nmFlags
+        type: INTEGER
+      - name: nmPrivate
+        type: LONGINT
+      - name: nmReserved
+        type: INTEGER
+      - name: nmMark
+        type: INTEGER
+      - name: nmIcon
+        type: Handle
+      - name: nmSound
+        type: Handle
+      - name: nmStr
+        type: StringPtr
+      - name: nmResp
+        type: NMUPP
+      - name: nmRefCon
+        type: LONGINT
+    size: 36
 
 # ####
 

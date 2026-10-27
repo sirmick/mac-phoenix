@@ -294,6 +294,45 @@
 
 # ####
 
+# On classic 68k (MixedMode.h) a routine descriptor is the routine itself:
+# NewRoutineDescriptor casts, DisposeRoutineDescriptor does nothing; the
+# Mixed Mode Manager's traps are under the ...Trap names.
+- not-for: Executor
+  function:
+    name: NewRoutineDescriptorTrap
+    return: UniversalProcPtr
+    args:
+      - name: proc
+        type: ProcPtr
+      - name: info
+        type: ProcInfoType
+      - name: isa
+        type: ISAType
+    dispatcher: MixedModeDispatch
+    selector: 0x0000
+
+# ####
+
+- not-for: Executor
+  function:
+    name: DisposeRoutineDescriptorTrap
+    args:
+      - name: ptr
+        type: UniversalProcPtr
+    dispatcher: MixedModeDispatch
+    selector: 0x0001
+
+# ####
+
+- not-for: Executor
+  verbatim: |
+    #if TARGET_CPU_68K && !TARGET_RT_MAC_CFM
+    #define NewRoutineDescriptor(theProc, theProcInfo, theISA) ((UniversalProcPtr)(theProc))
+    #define DisposeRoutineDescriptor(theUPP)
+    #endif
+
+# ####
+
 - function:
     name: NewFatRoutineDescriptor
     return: UniversalProcPtr

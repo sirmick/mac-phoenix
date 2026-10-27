@@ -662,3 +662,84 @@ pascal LONGINT TEGetScrapLength(void)
 {
     return (unsigned short)LMGetTEScrpLength();
 }
+
+/* High-level HFS routines (Inside Macintosh: Files) over their
+   parameter-block calls. */
+pascal OSErr DirCreate(short vRefNum, long parentDirID, ConstStr255Param directoryName,
+                       long *createdDirID)
+{
+    HParamBlockRec pb;
+    OSErr err;
+    pb.fileParam.ioVRefNum = vRefNum;
+    pb.fileParam.ioNamePtr = (StringPtr)directoryName;
+    pb.fileParam.ioDirID = parentDirID;
+    err = PBDirCreateSync(&pb);
+    if(err == noErr && createdDirID)
+        *createdDirID = pb.fileParam.ioDirID;
+    return err;
+}
+
+static OSErr hfs_lock(short vRefNum, long dirID, ConstStr255Param fileName, Boolean lock)
+{
+    HParamBlockRec pb;
+    pb.fileParam.ioVRefNum = vRefNum;
+    pb.fileParam.ioNamePtr = (StringPtr)fileName;
+    pb.fileParam.ioFVersNum = 0;
+    pb.fileParam.ioDirID = dirID;
+    return lock ? PBHSetFLockSync(&pb) : PBHRstFLockSync(&pb);
+}
+
+pascal OSErr HSetFLock(short vRefNum, long dirID, ConstStr255Param fileName)
+{
+    return hfs_lock(vRefNum, dirID, fileName, true);
+}
+
+pascal OSErr HRstFLock(short vRefNum, long dirID, ConstStr255Param fileName)
+{
+    return hfs_lock(vRefNum, dirID, fileName, false);
+}
+
+pascal OSErr CatMove(short vRefNum, long dirID, ConstStr255Param oldName,
+                     long newDirID, ConstStr255Param newName)
+{
+    CMovePBRec pb;
+    pb.ioVRefNum = vRefNum;
+    pb.ioNamePtr = (StringPtr)oldName;
+    pb.ioDirID = dirID;
+    pb.ioNewName = (StringPtr)newName;
+    pb.ioNewDirID = newDirID;
+    return PBCatMoveSync(&pb);
+}
+
+/* The fork calls that take an SInt64 by value (Files.h): the trap takes
+   a pointer to it, as a Pascal value parameter over 4 bytes. */
+pascal OSErr FSReadFork(SInt16 forkRefNum, UInt16 positionMode, SInt64 positionOffset,
+                        ByteCount requestCount, void *buffer, ByteCount *actualCount)
+{
+    return FSReadFork68K(forkRefNum, positionMode, (wide *)&positionOffset, requestCount,
+                         (Ptr)buffer, actualCount);
+}
+
+pascal OSErr FSWriteFork(SInt16 forkRefNum, UInt16 positionMode, SInt64 positionOffset,
+                         ByteCount requestCount, const void *buffer, ByteCount *actualCount)
+{
+    return FSWriteFork68K(forkRefNum, positionMode, (wide *)&positionOffset, requestCount,
+                          (Ptr)buffer, actualCount);
+}
+
+pascal OSErr FSSetForkPosition(SInt16 forkRefNum, UInt16 positionMode, SInt64 positionOffset)
+{
+    return FSSetForkPosition68K(forkRefNum, positionMode, (wide *)&positionOffset);
+}
+
+pascal OSErr FSSetForkSize(SInt16 forkRefNum, UInt16 positionMode, SInt64 positionOffset)
+{
+    return FSSetForkSize68K(forkRefNum, positionMode, (wide *)&positionOffset);
+}
+
+pascal OSErr FSAllocateFork(SInt16 forkRefNum, FSAllocationFlags flags, UInt16 positionMode,
+                            SInt64 positionOffset, UInt64 requestCount, UInt64 *actualCount)
+{
+    return FSAllocateFork68K(forkRefNum, flags, positionMode, (wide *)&positionOffset,
+                             (wide *)&requestCount, actualCount);
+}

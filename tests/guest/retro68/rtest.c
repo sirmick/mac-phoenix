@@ -108,6 +108,39 @@ static void test_files(void)
     checkl("fsmakefsspec_host", FSMakeFSSpec(0, 0, "\pHost:retro68_results.txt", &spec), noErr);
 }
 
+/* The high-level HFS routines (glue over the parameter-block calls; on
+ * PowerPC InterfaceLib's): a folder in the Preferences folder, a file in
+ * it given Finder info, locked and unlocked, moved to a subfolder. */
+static void test_hfs_glue(void)
+{
+    short vref;
+    long prefs, dir = 0, sub = 0;
+    FInfo fi;
+    if(FindFolder(kOnSystemDisk, kPreferencesFolderType, kDontCreateFolder, &vref, &prefs) != noErr)
+    {
+        put("SKIP hfs_glue (no Preferences folder)\r");
+        return;
+    }
+    checkl("dircreate", DirCreate(vref, prefs, "\pRetroTest folder", &dir), noErr);
+    checkl("dircreate_sub", DirCreate(vref, dir, "\psub", &sub), noErr);
+    checkl("hcreate", HCreate(vref, dir, "\pfile", 'ttxt', 'TEXT'), noErr);
+    if(HGetFInfo(vref, dir, "\pfile", &fi) == noErr)
+    {
+        fi.fdType = 'RTst';
+        checkl("hsetfinfo", HSetFInfo(vref, dir, "\pfile", &fi), noErr);
+        fi.fdType = 0;
+        checkl("hsetfinfo_type", HGetFInfo(vref, dir, "\pfile", &fi) == noErr && fi.fdType == 'RTst', 1);
+    }
+    checkl("hsetflock", HSetFLock(vref, dir, "\pfile"), noErr);
+    checkl("hdelete_locked", HDelete(vref, dir, "\pfile"), fLckdErr);
+    checkl("hrstflock", HRstFLock(vref, dir, "\pfile"), noErr);
+    checkl("catmove", CatMove(vref, dir, "\pfile", sub, NULL), noErr);
+    checkl("catmove_moved", HGetFInfo(vref, sub, "\pfile", &fi), noErr);
+    HDelete(vref, sub, "\pfile");
+    HDelete(vref, dir, "\psub");
+    HDelete(vref, prefs, "\pRetroTest folder");
+}
+
 static void test_process(void)
 {
     ProcessSerialNumber psn;
@@ -186,6 +219,7 @@ int main(void)
 #endif
     test_toolbox();
     test_files();
+    test_hfs_glue();
     test_process();
     test_components();
     put("---\r");
