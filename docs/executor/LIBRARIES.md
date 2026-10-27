@@ -110,7 +110,11 @@ The C side is what Apple's headers do:
 (`move.l #size<<16|selector,-(sp); moveq #0,d0; _ComponentDispatch`),
 and for PowerPC a call to `CallComponentUPP`. Executor's side registers
 the selector with its component dispatch, typed from the C++ signature
-like a trap. The Component Manager's own calls (`OpenComponent`,
+like a trap: a function with `executor:` on such a dispatcher is one of
+Executor's own components' calls (`COMPONENT_FUNCTION`), its arguments
+read from the call's ComponentParameters (the last first, the instance
+after them), and `ROMlib_register_native_component` names the
+dispatcher whose calls a native component answers. The Component Manager's own calls (`OpenComponent`,
 `CallComponentFunction`, negative selectors) become ordinary
 `ComponentDispatch` subtraps in `Components.yaml`.
 
@@ -212,7 +216,7 @@ The library routes:
    (OpenTransport.md lists them as not written) and `OpenTransport.h`.
    Check: OTTest on 68k (the ASLM route) and PowerPC, the guest suite's
    network sections.
-5. **Components** — done 2026-10-26, but for the native component.
+5. **Components** — done 2026-10-26 (the native component 2026-10-27).
    `Components.yaml` has the Component Manager's types, constants and 33
    calls as `ComponentDispatch` subtraps (`moveq #sel,d0`), Executor's
    routines typed (`component.cpp`; CallComponent and
@@ -226,8 +230,17 @@ The library routes:
    Executor's `COMPONENT_CALL` for those with `library: AppleScriptLib`
    (the CFM-68K export that makes the call; the hand-written table is
    gone, its 42 entries generated the same). Components.h and OSA.h are
-   real headers now (mvtest.c calls both). Left: Executor's own native
-   component (the sound output device, `sound/soundIMVI.cpp`), PowerPC
+   real headers now (mvtest.c calls both). Executor's own native
+   component, the sound output device (2026-10-27): `SoundMgr.yaml` has
+   Sound.h's sound component calls on a `SoundComponent` dispatcher (13,
+   with `SoundComponentData`, `SoundParamBlock`, `SoundInfoList` and the
+   `si...` selectors the device answers); the two the device implements
+   have `executor: C_`, and `COMPONENT_FUNCTION` registers
+   `C_SoundComponentGetInfo`/`SetInfo` (`sound/soundIMVI.cpp`, typed
+   now) with the component type's dispatch (`component.cpp`), which
+   answers open, close, register, version and can-do itself and logs the
+   rest. The Sound control panel's Volumes and Sound Out pages read and
+   set the device as before; mvtest.c calls both. Left: PowerPC
    AppleScriptLib (Apple's file through CallComponentUPP today).
 
 Each step: `ctest -L executor` and `multiversal_retro68`, which grows a

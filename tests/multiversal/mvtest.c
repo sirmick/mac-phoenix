@@ -97,6 +97,25 @@ static void components(void)
     }
 }
 
+static void sound_output(void)
+{
+    ComponentDescription cd = { kSoundOutputDeviceType, 0, 0, 0, 0 };
+    Component c = FindNextComponent(NULL, &cd);
+    ComponentInstance ci;
+
+    if(c && OpenAComponent(c, &ci) == noErr)
+    {
+        uint32_t volume;
+        SoundInfoList rates;
+
+        if(SoundComponentGetInfo(ci, NULL, siHardwareVolume, &volume) == noErr)
+            (void)SoundComponentSetInfo(ci, NULL, siHardwareVolume, (void *)volume);
+        if(SoundComponentGetInfo(ci, NULL, siSampleRateAvailable, &rates) == noErr)
+            DisposeHandle(rates.infoHandle);
+        CloseComponent(ci);
+    }
+}
+
 static void misc(void)
 {
     Rect r;
@@ -140,6 +159,7 @@ int main(void)
     files();
     dialogs((DialogPtr)w);
     components();
+    sound_output();
     misc();
 
     while (!Button())

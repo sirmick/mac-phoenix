@@ -297,6 +297,25 @@ public:
     const char *sizes;
 };
 
+/* ... and a call one of Executor's own components answers (a
+   `selector-location: Component` dispatcher's function with `executor:`):
+   registered with the component type's dispatch (component.cpp) by
+   selector, its arguments read from the call's ComponentParameters. */
+template<typename F, F* fptr>
+class ComponentFunction {};
+
+template<typename Ret, typename... Args, Ret (*fptr)(Args...)>
+class ComponentFunction<Ret (Args...), fptr> : public internal::DeferredInit
+{
+public:
+    ComponentFunction(const char *name, const char *component, int16_t what)
+        : name(name), component(component), what(what) {}
+    virtual void init() override;
+
+    const char *name, *component;
+    int16_t what;
+};
+
 #define EXTERN_FUNCTION_WRAPPER(NAME, FPTR, INIT, ...) \
     extern Executor::traps::__VA_ARGS__ NAME
 #define EXTERN_DISPATCHER_TRAP(NAME, TRAP, SELECTOR) \
@@ -305,6 +324,8 @@ public:
     extern Executor::traps::__VA_ARGS__ NAME
 #define EXTERN_COMPONENT_CALL(NAME, INIT) \
     extern Executor::traps::ComponentCallExport NAME
+#define EXTERN_COMPONENT_FUNCTION(NAME, INIT, ...) \
+    extern Executor::traps::__VA_ARGS__ NAME
 #define EXTERN_OT_FUNCTION(NAME, INIT) \
     extern Executor::traps::OTFunction NAME
 #define EXTERN_LIBRARY_RAW(NAME, INIT) \
@@ -319,6 +340,8 @@ public:
     Executor::traps::__VA_ARGS__ NAME INIT
 #define DEFINE_COMPONENT_CALL(NAME, INIT) \
     Executor::traps::ComponentCallExport NAME INIT
+#define DEFINE_COMPONENT_FUNCTION(NAME, INIT, ...) \
+    Executor::traps::__VA_ARGS__ NAME INIT
 #define DEFINE_OT_FUNCTION(NAME, INIT) \
     Executor::traps::OTFunction NAME INIT
 #define DEFINE_LIBRARY_RAW(NAME, INIT) \
@@ -336,6 +359,7 @@ public:
 #define CREATE_LIBRARY_RAW PREPROCESSOR_CONCAT(TRAP_INSTANTIATION, _LIBRARY_RAW)
 #define CREATE_OT_FUNCTION PREPROCESSOR_CONCAT(TRAP_INSTANTIATION, _OT_FUNCTION)
 #define CREATE_COMPONENT_CALL PREPROCESSOR_CONCAT(TRAP_INSTANTIATION, _COMPONENT_CALL)
+#define CREATE_COMPONENT_FUNCTION PREPROCESSOR_CONCAT(TRAP_INSTANTIATION, _COMPONENT_FUNCTION)
 
 #define COMMA ,
 #define PASCAL_TRAP(NAME, TRAP) \
@@ -356,6 +380,8 @@ public:
     CREATE_LIBRARY_FUNCTION(lib_##LIB##_##NAME, (#NAME, #LIB), LibraryFunction<decltype(IMPL) COMMA &IMPL>)
 #define COMPONENT_CALL(LIB, NAME, WHAT, SIZES) \
     CREATE_COMPONENT_CALL(lib_##LIB##_##NAME, (#NAME, #LIB, WHAT, SIZES))
+#define COMPONENT_FUNCTION(COMPONENT, NAME, WHAT, IMPL) \
+    CREATE_COMPONENT_FUNCTION(comp_##NAME, (#NAME, #COMPONENT, (int16_t)WHAT), ComponentFunction<decltype(IMPL) COMMA &IMPL>)
 #define OT_FUNCTION(LIB, NAME, SET, SETNAME, PASCAL, SIG, RET, IMPL) \
     CREATE_OT_FUNCTION(lib_##LIB##_##NAME, (#NAME, #LIB, SET, SETNAME, PASCAL, SIG, RET, &ot::IMPL))
 #define LIBRARY_RAW(LIB, NAME) \

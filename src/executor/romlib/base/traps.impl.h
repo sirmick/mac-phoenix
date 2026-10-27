@@ -127,6 +127,35 @@ void LibraryFunction<Ret (Args...), fptr>::init()
     );
 }
 
+/* component.cpp: the routine answering `what` for Executor's components of
+   this type, given the call's ComponentParameters. */
+void registerComponentFunction(const char *component, int16_t what, const char *name,
+                               std::function<int32_t (syn68k_addr_t params)> code);
+
+/* ComponentParameters: flags, paramSize, what, then the arguments as a
+   Pascal caller pushed them, the last first and the instance after the
+   rest: read from the end of Args backwards. */
+template<typename... Args, std::size_t... Indices>
+void readComponentArgs(std::tuple<Args...>& args, syn68k_addr_t ptr, std::index_sequence<Indices...>)
+{
+    (callfrom68K::readCArg(std::get<sizeof...(Args) - 1 - Indices>(args), ptr), ...);
+}
+
+template<typename Ret, typename... Args, Ret (*fptr)(Args...)>
+void ComponentFunction<Ret (Args...), fptr>::init()
+{
+    registerComponentFunction(component, what, name,
+        [this](syn68k_addr_t params) -> int32_t {
+            std::tuple<Args...> args;
+            readComponentArgs(args, params + 4, std::index_sequence_for<Args...>());
+#ifdef EXECUTOR_ENABLE_LOGGING
+            if(logging::enabled())
+                return std::apply(logging::makeLoggedFunction1<Ret (Args...)>(name, fptr), args);
+#endif
+            return std::apply(fptr, args);
+        });
+}
+
 template<typename Ret, typename... Args, Ret (*fptr)(Args...), typename CallConv>
 void WrappedFunction<Ret (Args...), fptr, CallConv>::init()
 {

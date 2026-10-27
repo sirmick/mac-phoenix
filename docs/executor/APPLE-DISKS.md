@@ -157,7 +157,8 @@ turns off what they need. Each is a policy decision before it is a fix:
   methods, and the window growth). (b) The pages ask a sound output device
   component ('sdev'); the System's stand for sound hardware Executor never
   drives. Executor registers its own, native (component.cpp can now host C++
-  components: ROMlib_register_native_component), named and iconed after the
+  components: ROMlib_register_native_component, its calls the definitions'
+  SoundComponent functions, docs/executor/LIBRARIES.md), named and iconed after the
   System's first, answering volume/mute ('hvol' 'svol' 'hmut' 'smut'
   'hstp') and the format sent out (48 kHz 16-bit stereo, 'srat' 'ssiz'
   'chan' and their lists). The volume and mute apply to what Executor sends

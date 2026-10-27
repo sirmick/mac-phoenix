@@ -1358,3 +1358,380 @@
     comment: |
       MacPhoenix (name is a guess): group 0, selector 8: the group's slot
       goes back to the "no such group" handler.
+
+# ---- Sound components (Sound Manager 3.0) ----------------------------
+#
+# The calls a sound component answers (Inside Macintosh: Sound, chapter 5;
+# Sound.h), made through _ComponentDispatch. Executor's output device
+# component ('sdev', sound/soundIMVI.cpp) answers those with `executor:`;
+# the rest it reports as unimplemented (badComponentSelector).
+
+- struct:
+    name: SoundSourceRecord
+
+# ####
+
+- typedef:
+    name: SoundSource
+    type: SoundSourceRecord*
+
+# ####
+
+- struct:
+    name: SoundComponentData
+    members:
+      - name: flags
+        type: LONGINT
+      - name: format
+        type: OSType
+      - name: numChannels
+        type: INTEGER
+      - name: sampleSize
+        type: INTEGER
+      - name: sampleRate
+        type: UnsignedFixed
+      - name: sampleCount
+        type: LONGINT
+      - name: buffer
+        type: Byte*
+      - name: reserved
+        type: LONGINT
+    size: 28
+
+# ####
+
+- typedef:
+    name: SoundComponentDataPtr
+    type: SoundComponentData*
+
+# ####
+
+- struct:
+    name: SoundParamBlock
+
+# ####
+
+- funptr:
+    name: SoundParamUPP
+    return: Boolean
+    args:
+      - name: pb
+        type: SoundParamBlock**
+
+# ####
+
+- struct:
+    name: SoundParamBlock
+    members:
+      - name: recordSize
+        type: LONGINT
+      - name: desc
+        type: SoundComponentDataPtr
+      - name: rateMultiplier
+        type: UnsignedFixed
+      - name: leftVolume
+        type: INTEGER
+      - name: rightVolume
+        type: INTEGER
+      - name: quality
+        type: LONGINT
+      - name: filter
+        type: ComponentInstance
+      - name: moreRtn
+        type: SoundParamUPP
+      - name: completionRtn
+        type: SoundParamUPP
+      - name: refCon
+        type: LONGINT
+      - name: result
+        type: INTEGER
+    size: 38
+
+# ####
+
+- typedef:
+    name: SoundParamBlockPtr
+    type: SoundParamBlock*
+
+# ####
+
+- struct:
+    name: SoundInfoList
+    members:
+      - name: count
+        type: INTEGER
+      - name: infoHandle
+        type: Handle
+    size: 6
+
+# ####
+
+- enum:
+    values:
+      - name: kSoundOutputDeviceType
+        value: "'sdev'"
+      - name: kSoundComponentInitOutputDeviceSelect
+        value: 0x0001
+      - name: kSoundComponentSetSourceSelect
+        value: 0x0002
+      - name: kSoundComponentGetSourceSelect
+        value: 0x0003
+      - name: kSoundComponentGetSourceDataSelect
+        value: 0x0004
+      - name: kSoundComponentSetOutputSelect
+        value: 0x0005
+      - name: kSoundComponentAddSourceSelect
+        value: 0x0101
+      - name: kSoundComponentRemoveSourceSelect
+        value: 0x0102
+      - name: kSoundComponentGetInfoSelect
+        value: 0x0103
+      - name: kSoundComponentSetInfoSelect
+        value: 0x0104
+      - name: kSoundComponentStartSourceSelect
+        value: 0x0105
+      - name: kSoundComponentStopSourceSelect
+        value: 0x0106
+      - name: kSoundComponentPauseSourceSelect
+        value: 0x0107
+      - name: kSoundComponentPlaySourceBufferSelect
+        value: 0x0108
+
+# ####
+
+- enum:
+    values:
+      - name: siChannelAvailable
+        value: "'chav'"
+      - name: siHardwareMute
+        value: "'hmut'"
+      - name: siHardwareVolume
+        value: "'hvol'"
+      - name: siHardwareVolumeSteps
+        value: "'hstp'"
+      - name: siNumberChannels
+        value: "'chan'"
+      - name: siSampleRate
+        value: "'srat'"
+      - name: siSampleRateAvailable
+        value: "'srav'"
+      - name: siSampleSize
+        value: "'ssiz'"
+      - name: siSampleSizeAvailable
+        value: "'ssav'"
+      - name: siSpeakerMute
+        value: "'smut'"
+      - name: siSpeakerVolume
+        value: "'svol'"
+
+# ####
+
+- enum:
+    values:
+      - name: siUnknownInfoType
+        value: -231
+
+# ####
+
+- dispatcher:
+    name: SoundComponent
+    trap: 0xA82A
+    selector-location: Component
+
+# ####
+
+- function:
+    name: SoundComponentInitOutputDevice
+    return: ComponentResult
+    args:
+      - name: ti
+        type: ComponentInstance
+      - name: actions
+        type: LONGINT
+    dispatcher: SoundComponent
+    selector: 0x0001
+
+# ####
+
+- function:
+    name: SoundComponentSetSource
+    return: ComponentResult
+    args:
+      - name: ti
+        type: ComponentInstance
+      - name: sourceID
+        type: SoundSource
+      - name: source
+        type: ComponentInstance
+    dispatcher: SoundComponent
+    selector: 0x0002
+
+# ####
+
+- function:
+    name: SoundComponentGetSource
+    return: ComponentResult
+    args:
+      - name: ti
+        type: ComponentInstance
+      - name: sourceID
+        type: SoundSource
+      - name: source
+        type: ComponentInstance*
+    dispatcher: SoundComponent
+    selector: 0x0003
+
+# ####
+
+- function:
+    name: SoundComponentGetSourceData
+    return: ComponentResult
+    args:
+      - name: ti
+        type: ComponentInstance
+      - name: sourceData
+        type: SoundComponentDataPtr*
+    dispatcher: SoundComponent
+    selector: 0x0004
+
+# ####
+
+- function:
+    name: SoundComponentSetOutput
+    return: ComponentResult
+    args:
+      - name: ti
+        type: ComponentInstance
+      - name: requested
+        type: SoundComponentDataPtr
+      - name: actual
+        type: SoundComponentDataPtr*
+    dispatcher: SoundComponent
+    selector: 0x0005
+
+# ####
+
+- function:
+    name: SoundComponentAddSource
+    return: ComponentResult
+    args:
+      - name: ti
+        type: ComponentInstance
+      - name: sourceID
+        type: SoundSource*
+    dispatcher: SoundComponent
+    selector: 0x0101
+
+# ####
+
+- function:
+    name: SoundComponentRemoveSource
+    return: ComponentResult
+    args:
+      - name: ti
+        type: ComponentInstance
+      - name: sourceID
+        type: SoundSource
+    dispatcher: SoundComponent
+    selector: 0x0102
+
+# ####
+
+- function:
+    name: SoundComponentGetInfo
+    return: ComponentResult
+    args:
+      - name: ti
+        type: ComponentInstance
+      - name: sourceID
+        type: SoundSource
+      - name: selector
+        type: OSType
+      - name: infoPtr
+        type: void*
+    dispatcher: SoundComponent
+    selector: 0x0103
+    executor: C_
+
+# ####
+
+- function:
+    name: SoundComponentSetInfo
+    return: ComponentResult
+    args:
+      - name: ti
+        type: ComponentInstance
+      - name: sourceID
+        type: SoundSource
+      - name: selector
+        type: OSType
+      - name: infoPtr
+        type: void*
+    dispatcher: SoundComponent
+    selector: 0x0104
+    executor: C_
+    comment: |
+      For the selectors that take a value (siHardwareVolume and the
+      like), infoPtr is the value itself.
+
+# ####
+
+- function:
+    name: SoundComponentStartSource
+    return: ComponentResult
+    args:
+      - name: ti
+        type: ComponentInstance
+      - name: count
+        type: INTEGER
+      - name: sources
+        type: SoundSource*
+    dispatcher: SoundComponent
+    selector: 0x0105
+
+# ####
+
+- function:
+    name: SoundComponentStopSource
+    return: ComponentResult
+    args:
+      - name: ti
+        type: ComponentInstance
+      - name: count
+        type: INTEGER
+      - name: sources
+        type: SoundSource*
+    dispatcher: SoundComponent
+    selector: 0x0106
+
+# ####
+
+- function:
+    name: SoundComponentPauseSource
+    return: ComponentResult
+    args:
+      - name: ti
+        type: ComponentInstance
+      - name: count
+        type: INTEGER
+      - name: sources
+        type: SoundSource*
+    dispatcher: SoundComponent
+    selector: 0x0107
+
+# ####
+
+- function:
+    name: SoundComponentPlaySourceBuffer
+    return: ComponentResult
+    args:
+      - name: ti
+        type: ComponentInstance
+      - name: sourceID
+        type: SoundSource
+      - name: pb
+        type: SoundParamBlockPtr
+      - name: actions
+        type: LONGINT
+    dispatcher: SoundComponent
+    selector: 0x0108

@@ -293,6 +293,17 @@ class ExecutorGenerator < Generator
                 sizes = (fun["args"] or [])[1..-1].map {|arg| pascal_size(arg["type"])}.join
                 @out << "COMPONENT_CALL(#{fun["library"]}, #{name}, #{hexlit(fun["selector"])}, \"#{sizes}\");\n"
             end
+            # A call Executor's own (native) component of this type
+            # answers: registered with the type's dispatch by selector,
+            # its arguments read from the call's parameter block.
+            if fun["executor"] then
+                cname = fun["executor"].is_a?(String) ?
+                    (fun["executor"] =~ /_$/ ? fun["executor"] + name : fun["executor"]) : name
+                args = (fun["args"] or [])
+                @out << (fun["return"] or "void") << " " << cname
+                @out << "(" << (args.map {|arg| decl(arg["type"], arg["name"])}).join(", ") << ");"
+                @out << "COMPONENT_FUNCTION(#{fun["dispatcher"]}, #{name}, #{hexlit(fun["selector"])}, #{cname});\n"
+            end
             return
         end
 

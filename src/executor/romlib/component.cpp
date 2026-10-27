@@ -29,8 +29,10 @@
 #include <base/emustubs.h>
 #include <rsys/component.h>
 #include <Components.h>
+#include <base/traps.impl.h>
 
 #include <algorithm>
+#include <functional>
 #include <map>
 #include <memory>
 #include <vector>
@@ -464,15 +466,64 @@ void copy_into(Handle from, uint32_t to)
 
 namespace
 {
+/* The routines Executor's components answer, by the definitions'
+   dispatcher name and selector (COMPONENT_FUNCTION). */
+struct ComponentRoutine
+{
+    const char *name;
+    std::function<int32_t (syn68k_addr_t)> code;
+};
+std::map<std::string, std::map<int16_t, ComponentRoutine>> &component_routines()
+{
+    static std::map<std::string, std::map<int16_t, ComponentRoutine>> routines;
+    return routines;
+}
+
+struct NativeComponent
+{
+    const char *calls;
+    int32_t version;
+};
+
+int32_t native_call(const NativeComponent &nc, uint32_t params)
+{
+    int16_t what = (int16_t)READUW(params + 2);
+    const auto &routines = component_routines()[nc.calls];
+    auto r = routines.find(what);
+    if(r != routines.end())
+        return r->second.code(params);
+    switch(what)
+    {
+        case kComponentOpenSelect:
+        case kComponentCloseSelect:
+        case kComponentRegisterSelect:
+            return noErr;
+        case kComponentVersionSelect:
+            return nc.version;
+        case kComponentCanDoSelect:
+        {
+            int16_t which = (int16_t)READUW(params + 4);
+            return which == kComponentOpenSelect || which == kComponentCloseSelect
+                || which == kComponentCanDoSelect || which == kComponentVersionSelect
+                || which == kComponentRegisterSelect || routines.count(which);
+        }
+    }
+    char sel[8];
+    snprintf(sel, sizeof sel, "%04X", (uint16_t)what);
+    traps::log_unimplemented(std::string(nc.calls) + " selector $" + sel
+                             + ": answered badComponentSelector");
+    return badComponentSelector;
+}
+
 /* A native component's entry point, called as a component's code is
    (call_entry): pascal ComponentResult (ComponentParameters *, Handle). */
 syn68k_addr_t native_entry(syn68k_addr_t, void *arg)
 {
-    auto fn = (ROMlib_native_component_fn)arg;
+    auto *nc = (const NativeComponent *)arg;
     syn68k_addr_t ret = POPADDR();
-    uint32_t storage = POPUL();
+    POPUL(); /* storage: the routines ask the instance */
     uint32_t params = POPUL();
-    WRITEUL(EM_A7, (uint32_t)fn(params, storage));
+    WRITEUL(EM_A7, (uint32_t)native_call(*nc, params));
     return ret;
 }
 
@@ -492,13 +543,14 @@ Handle sys_pstring(const char *s)
 
 uint32_t Executor::ROMlib_register_native_component(uint32_t type, uint32_t subtype,
                                                     uint32_t manufacturer, const char *name,
-                                                    ROMlib_native_component_fn fn)
+                                                    const char *calls, int32_t version)
 {
     auto c = std::make_unique<Comp>();
     c->type = type;
     c->subtype = subtype;
     c->manufacturer = manufacturer;
-    c->entry = callback_install(native_entry, (void *)fn);
+    c->entry = callback_install(native_entry, new NativeComponent{ calls, version });
+    c->version = version;
     c->name = sys_pstring(name);
     Comp *p = add(std::move(c), registerComponentGlobal, false);
     if(!p)
@@ -924,4 +976,10 @@ struct RawSelectors : traps::internal::DeferredInit
         ComponentDispatch.addSelector(0xFFFF, &call_component_function_ep, call_component_function);
     }
 } raw_selectors;
+}
+
+void Executor::traps::registerComponentFunction(const char *component, int16_t what, const char *name,
+                                                std::function<int32_t (syn68k_addr_t)> code)
+{
+    component_routines()[component][what] = ComponentRoutine{ name, std::move(code) };
 }
