@@ -282,9 +282,9 @@ public:
 
 /* ... and a call into a component a library exports (AppleScriptLib's OSA
    routines: `selector-location: Component` dispatchers in the
-   definitions): the CFM-68K entry pushes the call's parameters (sizes:
-   '2' or '4' per parameter after the instance) and makes it through
-   _ComponentDispatch (cfm68k_glue.cpp). */
+   definitions): the CFM-68K and PowerPC entries push the call's
+   parameters (sizes: '2' or '4' per parameter after the instance) and make
+   it through _ComponentDispatch (cfm68k_glue.cpp). */
 class ComponentCallExport : public internal::DeferredInit
 {
 public:

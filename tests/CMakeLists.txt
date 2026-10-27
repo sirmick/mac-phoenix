@@ -412,6 +412,18 @@ foreach(cell IN ITEMS "retro68_executor;--backend executor;RetroTest68K;18770;ex
   )
 endforeach()
 
+# ... and its PowerPC build on Executor's own AppleScriptLib exports (the
+# definitions' OSA calls), Apple's file deleted from the run's System.
+add_test(
+  NAME retro68_ppc_executor_asl
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --backend executor --app ${CMAKE_SOURCE_DIR}/tests/guest/retro68/RetroTestPPC.bin --results retro68_results.txt --network none --timeout 150 --port 18778 --delete-file "System Folder:Extensions:AppleScriptLib"
+)
+set_tests_properties(retro68_ppc_executor_asl PROPERTIES
+  TIMEOUT 220
+  LABELS "guest;executor"
+  SKIP_RETURN_CODE 77
+)
+
 # The fat MacPhoenixSuite's PowerPC code on Executor (--executor-ppc):
 # StdCLib, AppleScriptLib through CallComponentUPP, exit() through StdCLib.
 add_test(

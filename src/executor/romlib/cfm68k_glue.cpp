@@ -414,10 +414,10 @@ struct ComponentRoutine
 }
 
 
-syn68k_addr_t call_component_routine(const ComponentRoutine& r)
+/* The call, as a 68k caller makes it: args[0] the instance, then the
+   routine's other parameters (each in a 32-bit value). */
+uint32_t make_component_call(const ComponentRoutine& r, const uint32_t *args)
 {
-    uint32_t args = EM_A7 + 4;
-    uint32_t nargs = 1 + r.sizes.size();
     uint32_t paramSize = 0;
     for(int size : r.sizes)
         paramSize += size;
@@ -426,14 +426,12 @@ syn68k_addr_t call_component_routine(const ComponentRoutine& r)
     EM_A7 -= 4;
     *ptr_from_longint<GUEST<uint32_t> *>(EM_A7) = 0;
     EM_A7 -= 4;
-    *ptr_from_longint<GUEST<uint32_t> *>(EM_A7) = *ptr_from_longint<GUEST<uint32_t> *>(args);
-    uint32_t slot = args + 4;
-    for(int size : r.sizes)
+    *ptr_from_longint<GUEST<uint32_t> *>(EM_A7) = args[0];
+    for(size_t i = 0; i < r.sizes.size(); i++)
     {
-        uint32_t value = *ptr_from_longint<GUEST<uint32_t> *>(slot);
-        slot += 4;
-        EM_A7 -= size;
-        if(size == 2)
+        uint32_t value = args[1 + i];
+        EM_A7 -= r.sizes[i];
+        if(r.sizes[i] == 2)
             *ptr_from_longint<GUEST<uint16_t> *>(EM_A7) = value;
         else
             *ptr_from_longint<GUEST<uint32_t> *>(EM_A7) = value;
@@ -445,6 +443,16 @@ syn68k_addr_t call_component_routine(const ComponentRoutine& r)
     execute68K(tooltraptable[0xA82A & 0x3FF]);
     uint32_t result = *ptr_from_longint<GUEST<uint32_t> *>(save_a7 - 4);
     EM_A7 = save_a7;
+    return result;
+}
+
+syn68k_addr_t call_component_routine(const ComponentRoutine& r)
+{
+    uint32_t nargs = 1 + r.sizes.size();
+    std::vector<uint32_t> args(nargs);
+    for(uint32_t i = 0; i < nargs; i++)
+        args[i] = *ptr_from_longint<GUEST<uint32_t> *>(EM_A7 + 4 + 4 * i);
+    uint32_t result = make_component_call(r, args.data());
 
     syn68k_addr_t ret = POPADDR();
     EM_A7 += 4 * nargs; /* a routine with fixed arguments pops them */
@@ -452,6 +460,17 @@ syn68k_addr_t call_component_routine(const ComponentRoutine& r)
     return ret;
 }
 
+/* ... and from PowerPC code: the instance in r3, the others after it. */
+uint32_t call_component_routine_ppc(const ComponentRoutine& r, PowerCore& cpu)
+{
+    uint32_t args[8];
+    for(size_t i = 0; i < 1 + r.sizes.size() && i < 8; i++)
+        args[i] = cpu.r[3 + i];
+    /* 68k code run from here pushes below the caller's frame. */
+    EM_A7 = cpu.r[1];
+    cpu.r[3] = make_component_call(r, args);
+    return cpu.lr;
+}
 
 void add_call_component_upp()
 {
@@ -487,12 +506,17 @@ void Executor::builtinlibs::addGlueEntrypoints()
 }
 
 /* A component call a library exports (the definitions' COMPONENT_CALL):
-   AppleScriptLib's OSA routines for CFM-68K code. */
+   AppleScriptLib's OSA routines for CFM-68K and PowerPC code. CFM finds
+   Apple's AppleScriptLib first where the System has it (it exports more
+   than the definitions have); these answer where it doesn't. */
 void Executor::traps::ComponentCallExport::init()
 {
     auto *r = new ComponentRoutine{ name, what, {} };
     for(const char *p = sizes; *p; p++)
         r->sizes.push_back(*p - '0');
+    assert(r->sizes.size() < 8);
     builtinlibs::addCFM68KEntrypoint(library, name,
         [r](syn68k_addr_t) { return call_component_routine(*r); });
+    builtinlibs::addPPCEntrypoint(library, name,
+        [r](PowerCore &cpu) { return call_component_routine_ppc(*r, cpu); });
 }

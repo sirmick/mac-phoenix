@@ -240,8 +240,15 @@ The library routes:
    now) with the component type's dispatch (`component.cpp`), which
    answers open, close, register, version and can-do itself and logs the
    rest. The Sound control panel's Volumes and Sound Out pages read and
-   set the device as before; mvtest.c calls both. Left: PowerPC
-   AppleScriptLib (Apple's file through CallComponentUPP today).
+   set the device as before; mvtest.c calls both. PowerPC AppleScriptLib
+   (2026-10-27): the same 42 `COMPONENT_CALL` entries are PowerPC exports
+   too (the instance in r3, the rest after it, made into the 68k call to
+   `_ComponentDispatch`). CFM still finds Apple's file first where the
+   System has one: Apple's exports 78 routines (the `AS...` calls,
+   properties and handlers, terminology, storage types, the debugger),
+   these 42 answer where it isn't. Check: RetroTestPPC with Apple's file
+   deleted from the run's System (`retro68_ppc_executor_asl`,
+   `test_guest_suite.sh --delete-file`).
 
 Each step: `ctest -L executor` and `multiversal_retro68`, which grows a
 program per library (built against the generated headers alone).

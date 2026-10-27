@@ -113,6 +113,9 @@ approximation where Executor's gives `?`.
   aborting; unresolved data imports get zeroed storage, not a routine.
 - `CallComponentUPP` for PowerPC (AppleScriptLib's component calls); the
   glue copied the parameters without the component instance after them.
+- AppleScriptLib's OSA routines are Executor's own PowerPC exports too
+  (OSA.yaml, `COMPONENT_CALL`; LIBRARIES.md), for a System without Apple's
+  AppleScriptLib file.
 - SANE's `Fx2dec` overflowed two stack buffers for numbers from about
   1e170 up (MrC folding `num2dec(&f, 1e300, &d)` crashed the MPW session).
 - mame-ppc reloads the rounding mode after a host op, so `fesetround`

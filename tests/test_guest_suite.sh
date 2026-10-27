@@ -16,6 +16,7 @@
 #                             [--image NAME]
 #                             [--executor-debug memcheck,...]
 #                             [--key-on PATTERN:KEYCODE] [--echo-gateway]
+#                             [--delete-file 'System Folder:Extensions:X']
 #
 # --script runs a MacPerl script from tests/guest instead of the suite;
 # --results is the file either writes on Host: (default test_results.txt).
@@ -27,6 +28,9 @@
 # e.g. dev-7.6.1, whose Extensions have the CFM-68K Runtime Enabler.
 # --echo-gateway: on a ROM machine, name net-bridge's echo service
 # (10.0.2.1 port 7) in Host:net_echo.txt, for OTTest.
+# --delete-file: delete a file from the run's copy of the image before the
+# boot (repeatable; hfsutils), e.g. Apple's AppleScriptLib, so Executor's
+# own answers.
 # --key-on: press a key (Mac keycode) once the results file has a line with
 # PATTERN, for an app that waits on the user (tests/guest/notify: Return on
 # the Notification Manager's alert).
@@ -53,6 +57,7 @@ EXTFS_DIR=""
 OS_VERSION=""
 ROM_OVERRIDE=""
 EXTRA_FLAGS=()
+DELETE_FILES=()
 DISMISS=1
 NETWORK="socket"
 SCRIPT_NAME=""
@@ -82,6 +87,7 @@ while [[ $# -gt 0 ]]; do
         --sections) SECTIONS="$2"; shift 2 ;;
         --app) SUITE_APP="$2"; shift 2 ;;
         --image) IMAGE_NAME="$2"; shift 2 ;;
+        --delete-file) DELETE_FILES+=("$2"); shift 2 ;;
         --key-on) KEY_ON="$2"; shift 2 ;;
         --echo-gateway) ECHO_GATEWAY=1; shift ;;
         *) echo "Unknown arg: $1"; exit 1 ;;
@@ -138,6 +144,22 @@ elif [[ -z "${DISK:-}" ]]; then
         IMG_BASE="tests-7.5.5"
     fi
     DISK="${MACEMU_DISK:-$(bash "$SCRIPT_DIR/lib/refresh_test_disk.sh" "$IMG_BASE" $$)}"
+fi
+
+# Files the run's own copy goes without (never a disk given by hand).
+if [[ ${#DELETE_FILES[@]} -gt 0 ]]; then
+    if [[ -n "${MACEMU_DISK:-}" || "$(basename "$DISK")" != test-*-$$.img ]]; then
+        echo "SKIP: --delete-file needs the run's own copy of the image"; exit 77
+    fi
+    command -v hdel >/dev/null || { echo "SKIP: --delete-file needs hfsutils (hdel)"; exit 77; }
+    HFS_HOME="$(mktemp -d ${TMPDIR:-/tmp}/mactest-hfs.XXXXXX)"   # hfsutils' state, not $HOME's
+    HOME="$HFS_HOME" hmount "$DISK" >/dev/null || { echo "FAIL: hmount $DISK"; exit 1; }
+    for f in "${DELETE_FILES[@]}"; do
+        HOME="$HFS_HOME" hdel ":$f" || { echo "FAIL: hdel :$f"; HOME="$HFS_HOME" humount; exit 1; }
+        echo "deleted :$f from $(basename "$DISK")"
+    done
+    HOME="$HFS_HOME" humount
+    rm -rf "$HFS_HOME"
 fi
 
 # --- Preflight checks ---
