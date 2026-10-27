@@ -176,6 +176,10 @@ syn68k_addr_t missing(syn68k_addr_t, void *arg)
     traps::log_unimplemented("Open Transport " + m->name + " (" + m->set
                              + "): answered kOTNotSupportedErr");
     uint32_t sp = EM_A7;
+    /* What it was given, for working out a private call's arguments. */
+    OT_LOG("%s (%s) not implemented: called from $%08x, stack %08x %08x %08x %08x %08x %08x\n",
+           m->name.c_str(), m->set.c_str(), READUL(sp), READUL(sp + 4), READUL(sp + 8),
+           READUL(sp + 12), READUL(sp + 16), READUL(sp + 20), READUL(sp + 24));
     EM_D0 = (uint32_t)(int32_t)kOTNotSupportedErr;
     EM_A7 = sp + 4;
     return READUL(sp);

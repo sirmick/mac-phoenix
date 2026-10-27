@@ -3048,3 +3048,168 @@
         type: OTProcessProcPtr
       - name: arg
         type: "void*"
+
+# ---- The configuration database (ot_config.cpp) ------------------------
+#
+# Private to Open Transport (OTLib$CfigLib on 68k; OTConfigLib for
+# PowerPC): what the TCP/IP control panel reads and writes. Their
+# arguments were worked out from the control panel's calls and Apple's OT
+# 1.1.1 (OpenTransport.md, "The configuration database"); only Executor's.
+
+- only-for: executor
+  function:
+    name: OTOpenConfigurationsDB
+    return: OSStatus
+    args:
+      - name: file
+        type: "const FSSpec*"
+      - name: permission
+        type: SInt32
+      - name: db
+        type: "void**"
+    library: OTConfigLib
+    aslm: { set: "OTLib$CfigLib", name: "OTOpenConfigurationsDB", index: 2 }
+    callconv: C
+    executor: cfg_open_db
+
+- only-for: executor
+  function:
+    name: OTCloseConfigurationsDB
+    return: OSStatus
+    args:
+      - name: db
+        type: "void**"
+    library: OTConfigLib
+    aslm: { set: "OTLib$CfigLib", name: "OTCloseConfigurationsDB", index: 3 }
+    callconv: C
+    executor: cfg_close_db
+
+- only-for: executor
+  function:
+    name: OTGetAttributeValue
+    return: OSStatus
+    args:
+      - name: db
+        type: "void*"
+      - name: config
+        type: UInt32
+      - name: attribute
+        type: OSType
+      - name: buffer
+        type: "void*"
+      - name: size
+        type: UInt32
+    library: OTConfigLib
+    aslm: { set: "OTLib$CfigLib", name: "OTGetAttributeValue", index: 22 }
+    callconv: C
+    executor: cfg_get_attribute_value
+
+- only-for: executor
+  function:
+    name: OTIsPortCompatibleWith
+    return: Boolean
+    args:
+      - name: port
+        type: "const OTPortRecord*"
+      - name: protocol
+        type: "const char*"
+    library: OTConfigLib
+    aslm: { set: "OTLib$CfigLib", name: "OTIsPortCompatibleWith", index: 26 }
+    callconv: C
+    executor: cfg_is_port_compatible
+
+- only-for: executor
+  function:
+    name: OTGetUserPortNameFromPortRef
+    return: Boolean
+    args:
+      - name: ref
+        type: OTPortRef
+      - name: name
+        type: StringPtr
+    library: OTConfigLib
+    aslm: { set: "OTLib$CfigLib", name: "OTGetUserPortNameFromPortRef", index: 24 }
+    callconv: C
+    executor: cfg_user_port_name
+
+- only-for: executor
+  function:
+    name: OTGetActiveConfigID
+    return: UInt32
+    args:
+      - name: db
+        type: "void*"
+    library: OTConfigLib
+    aslm: { set: "OTLib$CfigLib", name: "OTGetActiveConfigID", index: 9 }
+    callconv: C
+    executor: cfg_active_config
+
+- only-for: executor
+  function:
+    name: OTGetAttributeSize
+    return: UInt32
+    args:
+      - name: db
+        type: "void*"
+      - name: config
+        type: UInt32
+      - name: attribute
+        type: OSType
+    library: OTConfigLib
+    aslm: { set: "OTLib$CfigLib", name: "OTGetAttributeSize", index: 19 }
+    callconv: C
+    executor: cfg_attribute_size
+
+- only-for: executor
+  function:
+    name: OTGetDefaultPort
+    return: OTPortRef
+    args:
+      - name: deviceType
+        type: UInt32
+    library: OTConfigLib
+    aslm: { set: "OTLib$CfigLib", name: "OTGetDefaultPort", index: 23 }
+    callconv: C
+    executor: cfg_default_port
+
+- only-for: executor
+  function:
+    name: OTGetConfigsCount
+    return: UInt32
+    args:
+      - name: db
+        type: "void*"
+    library: OTConfigLib
+    aslm: { set: "OTLib$CfigLib", name: "OTGetConfigsCount", index: 7 }
+    callconv: C
+    executor: cfg_configs_count
+
+- only-for: executor
+  function:
+    name: OTGetIndexedConfigID
+    return: UInt32
+    args:
+      - name: db
+        type: "void*"
+      - name: index
+        type: UInt32
+    library: OTConfigLib
+    aslm: { set: "OTLib$CfigLib", name: "OTGetIndexedConfigID", index: 8 }
+    callconv: C
+    executor: cfg_indexed_config
+
+- only-for: executor
+  function:
+    name: OTGetConfigName
+    return: OSStatus
+    args:
+      - name: db
+        type: "void*"
+      - name: config
+        type: UInt32
+      - name: name
+        type: StringPtr
+    library: OTConfigLib
+    aslm: { set: "OTLib$CfigLib", name: "OTGetConfigName", index: 13 }
+    callconv: C
+    executor: cfg_config_name

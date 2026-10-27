@@ -156,8 +156,8 @@ function set's ID as a C string at +16. The function sets and their indices
 * Not written: mappers and name registration (AppleTalk's NBP), the
   transaction calls (OTSndRequest and friends: ATP, ADSP), OTCreateOptions /
   OTCreateOptionString, no-copy receive (OTReleaseBuffer, OTReadBuffer),
-  transfer of ownership, the `Ntv*` and configuration-database sets
-  (`OTConfigLib` for PowerPC), `OTExitPatchPriv` (PowerPC glue; answered 0,
+  transfer of ownership, the `Ntv*` set, most of the configuration
+  database (below), `OTExitPatchPriv` (PowerPC glue; answered 0,
   logged). Timer tasks and most port calls have no 68k glue in OT 1.1
   (native only), so 68k clients can't reach them.
 
@@ -268,3 +268,46 @@ that settled, where Executor had it otherwise:
 * The resolver's names end with the root's dot (`localhost.`).
 * A reverse lookup asks the name servers, which may have no name for
   127.0.0.1 (Executor's host resolver has one).
+
+## The configuration database
+
+What the TCP/IP control panel reads and writes (`OTLib$CfigLib` on 68k,
+27 private functions; `ot_config.cpp`). The database is a resource file,
+the panel's "TCP/IP Preferences": each configuration has an ID, its name
+is the `'cnam'` resource of that ID, each attribute is a resource of
+that ID whose type names it (`'iitf'` the interface, `'idns'`, `'ihst'`,
+`'irte'`, `'isdm'`, `'port'` "Ethernet", `'prot'` "tcp", `'dtyp'`,
+`'pwrd'`, `'stng'`, `'unld'`, `'ulvl'`, `'wpos'`...), and `'ccfg'` 1 holds
+the active configuration's ID. The calls are private, so their arguments
+come from what the panel passes (`--executor-debug ot` logs the stack of
+an unimplemented C call) and what it does with the answers:
+
+| Call | Arguments, result |
+|---|---|
+| `OTOpenConfigurationsDB` | `(const FSSpec *, permission, DBRef *)`, OSStatus |
+| `OTCloseConfigurationsDB` | `(DBRef *)`, OSStatus; the reference is cleared |
+| `OTGetActiveConfigID` | `(DBRef)`, the ID |
+| `OTGetConfigsCount` | `(DBRef)`, the count |
+| `OTGetIndexedConfigID` | `(DBRef, index)`, the ID (index from 1: a guess) |
+| `OTGetConfigName` | `(DBRef, ID, Str255)`, OSStatus (a guess) |
+| `OTGetAttributeSize` | `(DBRef, ID, OSType)`, the size |
+| `OTGetAttributeValue` | `(DBRef, ID, OSType, void *, size)`, OSStatus |
+| `OTIsPortCompatibleWith` | `(const OTPortRecord *, const char *protocol)`, Boolean |
+| `OTGetUserPortNameFromPortRef` | `(OTPortRef, Str255)`: "Ethernet" |
+| `OTGetDefaultPort` | `(device type)`, the OTPortRef |
+
+The panel also checks a configuration's interface against the ports
+(`OTFindPort`, `OTGetSlotFromPortRef`), so Executor's Ethernet port now
+has the record Apple's OT 1.1.1 gives a Quadra's (a probe there):
+`enet0` (`OTFindPort` takes `enet` too), module `enetDRVR`, fInfoFlags 1,
+fCapabilities $0B, not marked active.
+
+With these the panel opens on 7.6.1 (Apple's System) and shows the
+stored configuration: "Connect via: Ethernet", "Configure: Using DHCP
+Server". Left: on the Quadra the address fields read "< will be
+supplied by server >", on Executor they are empty edit boxes (the panel
+never changes those items' type; which items it shows depends on
+something not yet found); saving (the set, create, copy, delete and
+`TCP...ChangeConfiguration` calls); configurations dialog; checking the
+guessed forms against Apple's OT; PowerPC (`OTConfigLib`).
+

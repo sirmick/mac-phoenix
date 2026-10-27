@@ -519,6 +519,7 @@ set(opentransport_sources
     opentransport/ot_slm.cpp
     opentransport/ot_tasks.cpp
     opentransport/ot_options.cpp
+    opentransport/ot_config.cpp
     net/hostdns.cpp
 )
 

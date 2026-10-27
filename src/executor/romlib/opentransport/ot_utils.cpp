@@ -462,7 +462,11 @@ uint32_t destroy_configuration(const Call &c)
 }
 
 /* ---- ports ---------------------------------------------------------------
-   One: built-in Ethernet, "enet", which the host's network stands behind.
+   One: built-in Ethernet, which the host's network stands behind, with the
+   record Apple's OT 1.1.1 gives a Quadra's (seen there): named "enet0"
+   (OTFindPort takes "enet" too), module "enetDRVR", a DLPI port able to
+   yield (fCapabilities $0B), not marked active. The TCP/IP control panel
+   checks a configuration's interface against it.
    OTPortRecord (OpenTransport.h): fRef, fPortFlags, fInfoFlags,
    fCapabilities, fNumChildPorts, fChildPorts, fPortName[36],
    fModuleName[32], fSlotID[8], fResourceInfo[32], fReserved[164]. */
@@ -474,10 +478,10 @@ void fill_port_record(uint32_t rec)
     for(uint32_t i = 0; i < PORT_RECORD_SIZE; i++)
         WRITEUB(rec + i, 0);
     WRITEUL(rec + 0, enet_port_ref());
-    WRITEUL(rec + 4, 0x00000001); /* kOTPortIsActive */
-    WRITEUL(rec + 8, 0x00000001 | 0x00004000); /* kOTPortIsDLPI, kOTPortIsSystemRegistered */
-    std::memcpy(SYN68K_TO_US(rec + 24), "enet", 5); /* fPortName */
-    std::memcpy(SYN68K_TO_US(rec + 60), "enet", 5); /* fModuleName */
+    WRITEUL(rec + 8, 0x00000001); /* fInfoFlags: kOTPortIsDLPI */
+    WRITEUL(rec + 12, 0x0000000B); /* fCapabilities */
+    std::memcpy(SYN68K_TO_US(rec + 24), "enet0", 6); /* fPortName */
+    std::memcpy(SYN68K_TO_US(rec + 60), "enetDRVR", 9); /* fModuleName */
 }
 
 /* pascal Boolean OTGetIndexedPort(OTPortRecord *, size_t index) */
@@ -492,7 +496,8 @@ uint32_t get_indexed_port(const Call &c)
 /* pascal Boolean OTFindPort(OTPortRecord *, const char *name) */
 uint32_t find_port(const Call &c)
 {
-    if(!c.l(0) || guest_cstring(c.l(1), 64) != "enet")
+    std::string name = guest_cstring(c.l(1), 64);
+    if(!c.l(0) || (name != "enet0" && name != "enet"))
         return 0;
     fill_port_record(c.l(0));
     return 1;

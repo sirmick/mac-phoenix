@@ -5,8 +5,9 @@
  *                                                                           *
  * Needs:                                                                    *
  *     MacTypes.h          UInt32, SInt32, UInt8, UInt16, UnsignedWide,      *
- *                         Boolean, SInt16, SInt8                            *
+ *                         Boolean, SInt16, SInt8, OSType, StringPtr         *
  *     DriverServices.h    OSStatus                                          *
+ *     FileMgr.h           FSSpec                                            *
  *                                                                           *
  *                                                                           *
  *****************************************************************************/
@@ -19,6 +20,7 @@
 #include <base/lowglobals.h>
 #include "ExMacTypes.h"
 #include "DriverServices.h"
+#include "FileMgr.h"
 
 #define MODULE_NAME OpenTransport
 #include <base/api-module.h>
@@ -893,6 +895,39 @@ namespace ot { uint32_t clone_configuration(const Call &); }OT_FUNCTION(OTClient
 
 
 namespace ot { uint32_t destroy_configuration(const Call &); }OT_FUNCTION(OTClientUtilLib, OTDestroyConfiguration, "OTClnt$LclUtils", "OTDESTROYCONFIGURATION", true, "L", 'V', destroy_configuration);
+
+
+namespace ot { uint32_t cfg_open_db(const Call &); }OT_FUNCTION(OTConfigLib, OTOpenConfigurationsDB, "OTLib$CfigLib", "OTOpenConfigurationsDB", false, "LLL", 'L', cfg_open_db);
+
+
+namespace ot { uint32_t cfg_close_db(const Call &); }OT_FUNCTION(OTConfigLib, OTCloseConfigurationsDB, "OTLib$CfigLib", "OTCloseConfigurationsDB", false, "L", 'L', cfg_close_db);
+
+
+namespace ot { uint32_t cfg_get_attribute_value(const Call &); }OT_FUNCTION(OTConfigLib, OTGetAttributeValue, "OTLib$CfigLib", "OTGetAttributeValue", false, "LLLLL", 'L', cfg_get_attribute_value);
+
+
+namespace ot { uint32_t cfg_is_port_compatible(const Call &); }OT_FUNCTION(OTConfigLib, OTIsPortCompatibleWith, "OTLib$CfigLib", "OTIsPortCompatibleWith", false, "LL", 'B', cfg_is_port_compatible);
+
+
+namespace ot { uint32_t cfg_user_port_name(const Call &); }OT_FUNCTION(OTConfigLib, OTGetUserPortNameFromPortRef, "OTLib$CfigLib", "OTGetUserPortNameFromPortRef", false, "LL", 'B', cfg_user_port_name);
+
+
+namespace ot { uint32_t cfg_active_config(const Call &); }OT_FUNCTION(OTConfigLib, OTGetActiveConfigID, "OTLib$CfigLib", "OTGetActiveConfigID", false, "L", 'L', cfg_active_config);
+
+
+namespace ot { uint32_t cfg_attribute_size(const Call &); }OT_FUNCTION(OTConfigLib, OTGetAttributeSize, "OTLib$CfigLib", "OTGetAttributeSize", false, "LLL", 'L', cfg_attribute_size);
+
+
+namespace ot { uint32_t cfg_default_port(const Call &); }OT_FUNCTION(OTConfigLib, OTGetDefaultPort, "OTLib$CfigLib", "OTGetDefaultPort", false, "L", 'L', cfg_default_port);
+
+
+namespace ot { uint32_t cfg_configs_count(const Call &); }OT_FUNCTION(OTConfigLib, OTGetConfigsCount, "OTLib$CfigLib", "OTGetConfigsCount", false, "L", 'L', cfg_configs_count);
+
+
+namespace ot { uint32_t cfg_indexed_config(const Call &); }OT_FUNCTION(OTConfigLib, OTGetIndexedConfigID, "OTLib$CfigLib", "OTGetIndexedConfigID", false, "LL", 'L', cfg_indexed_config);
+
+
+namespace ot { uint32_t cfg_config_name(const Call &); }OT_FUNCTION(OTConfigLib, OTGetConfigName, "OTLib$CfigLib", "OTGetConfigName", false, "LLL", 'L', cfg_config_name);
 
 
 } /* namespace Executor */
