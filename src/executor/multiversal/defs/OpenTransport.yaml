@@ -3055,6 +3055,7 @@
 # PowerPC): what the TCP/IP control panel reads and writes. Their
 # arguments were worked out from the control panel's calls and Apple's OT
 # 1.1.1 (OpenTransport.md, "The configuration database"); only Executor's.
+# A database (db) is a resource file's refnum.
 
 - only-for: executor
   function:
@@ -3066,7 +3067,7 @@
       - name: permission
         type: SInt32
       - name: db
-        type: "void**"
+        type: "UInt32*"
     library: OTConfigLib
     aslm: { set: "OTLib$CfigLib", name: "OTOpenConfigurationsDB", index: 2 }
     callconv: C
@@ -3078,7 +3079,7 @@
     return: OSStatus
     args:
       - name: db
-        type: "void**"
+        type: "UInt32*"
     library: OTConfigLib
     aslm: { set: "OTLib$CfigLib", name: "OTCloseConfigurationsDB", index: 3 }
     callconv: C
@@ -3090,7 +3091,7 @@
     return: OSStatus
     args:
       - name: db
-        type: "void*"
+        type: UInt32
       - name: config
         type: UInt32
       - name: attribute
@@ -3138,7 +3139,7 @@
     return: UInt32
     args:
       - name: db
-        type: "void*"
+        type: UInt32
     library: OTConfigLib
     aslm: { set: "OTLib$CfigLib", name: "OTGetActiveConfigID", index: 9 }
     callconv: C
@@ -3150,7 +3151,7 @@
     return: UInt32
     args:
       - name: db
-        type: "void*"
+        type: UInt32
       - name: config
         type: UInt32
       - name: attribute
@@ -3178,7 +3179,7 @@
     return: UInt32
     args:
       - name: db
-        type: "void*"
+        type: UInt32
     library: OTConfigLib
     aslm: { set: "OTLib$CfigLib", name: "OTGetConfigsCount", index: 7 }
     callconv: C
@@ -3190,7 +3191,7 @@
     return: UInt32
     args:
       - name: db
-        type: "void*"
+        type: UInt32
       - name: index
         type: UInt32
     library: OTConfigLib
@@ -3204,7 +3205,7 @@
     return: OSStatus
     args:
       - name: db
-        type: "void*"
+        type: UInt32
       - name: config
         type: UInt32
       - name: name
@@ -3213,3 +3214,143 @@
     aslm: { set: "OTLib$CfigLib", name: "OTGetConfigName", index: 13 }
     callconv: C
     executor: cfg_config_name
+
+- only-for: executor
+  function:
+    name: OTCreateAConfiguration
+    return: OSStatus
+    args:
+      - name: db
+        type: UInt32
+      - name: config
+        type: "UInt32*"
+    library: OTConfigLib
+    aslm: { set: "OTLib$CfigLib", name: "OTCreateAConfiguration", index: 4 }
+    callconv: C
+    executor: cfg_create
+
+- only-for: executor
+  function:
+    name: OTCopyAConfiguration
+    return: OSStatus
+    args:
+      - name: fromDB
+        type: UInt32
+      - name: fromConfig
+        type: UInt32
+      - name: toDB
+        type: UInt32
+      - name: toConfig
+        type: UInt32
+      - name: name
+        type: ConstStringPtr
+    library: OTConfigLib
+    aslm: { set: "OTLib$CfigLib", name: "OTCopyAConfiguration", index: 5 }
+    callconv: C
+    executor: cfg_copy
+
+- only-for: executor
+  function:
+    name: OTDeleteAConfiguration
+    return: OSStatus
+    args:
+      - name: db
+        type: UInt32
+      - name: config
+        type: UInt32
+    library: OTConfigLib
+    aslm: { set: "OTLib$CfigLib", name: "OTDeleteAConfiguration", index: 6 }
+    callconv: C
+    executor: cfg_delete
+
+- only-for: executor
+  function:
+    name: TCPChangeConfiguration
+    return: OSStatus
+    args:
+      - name: db
+        type: UInt32
+      - name: config
+        type: UInt32
+    library: OTConfigLib
+    aslm: { set: "OTLib$CfigLib", name: "TCPChangeConfiguration", index: 11 }
+    callconv: C
+    executor: cfg_tcp_change
+
+- only-for: executor
+  function:
+    name: TCPCheckChangeConfigurationConsequences
+    return: Boolean
+    args:
+      - name: db
+        type: UInt32
+      - name: config
+        type: UInt32
+    library: OTConfigLib
+    aslm: { set: "OTLib$CfigLib", name: "TCPCheckChangeConfigurationConsequences", index: 10 }
+    callconv: C
+    executor: cfg_tcp_check_consequences
+
+- only-for: executor
+  function:
+    name: OTSetActiveConfigID
+    return: OSStatus
+    args:
+      - name: db
+        type: UInt32
+      - name: config
+        type: UInt32
+    library: OTConfigLib
+    aslm: { set: "OTLib$CfigLib", name: "OTSetActiveConfigID", index: 12 }
+    callconv: C
+    executor: cfg_set_active
+
+- only-for: executor
+  function:
+    name: OTSetConfigName
+    return: OSStatus
+    args:
+      - name: db
+        type: UInt32
+      - name: config
+        type: UInt32
+      - name: name
+        type: ConstStringPtr
+    library: OTConfigLib
+    aslm: { set: "OTLib$CfigLib", name: "OTSetConfigName", index: 14 }
+    callconv: C
+    executor: cfg_set_name
+
+- only-for: executor
+  function:
+    name: OTGetConfigID
+    return: UInt32
+    args:
+      - name: db
+        type: UInt32
+      - name: name
+        type: ConstStringPtr
+    library: OTConfigLib
+    aslm: { set: "OTLib$CfigLib", name: "OTGetConfigID", index: 15 }
+    callconv: C
+    executor: cfg_config_id
+
+- only-for: executor
+  function:
+    name: OTSetAttributeValue
+    return: OSStatus
+    args:
+      - name: db
+        type: UInt32
+      - name: config
+        type: UInt32
+      - name: attribute
+        type: OSType
+      - name: value
+        type: "const void*"
+      - name: size
+        type: UInt32
+    library: OTConfigLib
+    aslm: { set: "OTLib$CfigLib", name: "OTSetAttributeValue", index: 21 }
+    callconv: C
+    executor: cfg_set_attribute_value

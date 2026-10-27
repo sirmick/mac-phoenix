@@ -63,7 +63,7 @@ A test can carry several labels.
 | `guest` | Tests that run an application in the guest: the suites, `bridge_trap*`, `notify_*`, `keyboard_guest*`, `drag_executor*`, `aslm_executor*`, `toolbox_suite_*`, `mpw_toolchain_executor`, `guest_builds_current`, `ot_executor*`, `threads_executor*`, `ppc_hello_executor*` (37) |
 | `mame` | Tests on the MAME cores (`--core mame-68k`, `--core mame-ppc`), plus `cpu_cores` |
 | `executor` | The `--backend executor` guest cells and all `executor.*` gtests |
-| `761` | The cells on Mac OS 7.6.1 (`*_761`, `guest_suite_761`, `ot_retro68_68k_rom`) |
+| `761` | The cells on Mac OS 7.6.1 (`*_761`, `guest_suite_761`, `ot_retro68_68k_rom`, `otcfg_*`) |
 | `flaky` | `ot_retro68_ppc_rom_761` (STRAGGLERS 66); `ctest -LE flaky` leaves it out |
 | `xfail` | Executor gtests that are expected to fail (`src/executor/tests/test-properties.cmake`). Two of them on each core are also disabled |
 
@@ -125,6 +125,7 @@ Timeouts are the ctest `TIMEOUT` values in `tests/CMakeLists.txt`.
 | `mpw_toolchain_executor` | `test_mpw_toolchain.sh` | Apple's MPW (SC, Link, ToolServer) on Executor through `tools/mpw/mpw`; skips without the MPW disk (`tools/mpw/mpw setup`) |
 | `guest_builds_current` | `test_guest_builds.sh` | The committed guest programs (MacPhoenixSuite, OTTest) are their sources' builds: rebuilt with `tools/mpw/mpw` and compared |
 | `ot_executor` | `test_ot_executor.sh` | Executor's native Open Transport through Apple's 68k OT glue (`tests/guest/ot`, an MPW tool run in ToolServer) against a host echo server |
+| `otcfg_rom`, `otcfg_executor` | `test_guest_suite.sh --os-version 7.6.1 --app CfgTest68K.bin` | Open Transport's configuration database (what the TCP/IP control panel reads and writes; `tests/guest/otcfg`) called directly: Apple's OT 1.1.1 on the Quadra (the reference) and Executor's |
 | `threads_executor` | `test_threads_executor.sh` | The Thread Manager on Executor through UserLand Frontier's UserTalk threads (`/api/script`) |
 | `*_761` | the cell's script with `--os-version 7.6.1` | The same cells on Mac OS 7.6.1 (`tests-7.6.1`; label `761`): on the Quadra the guest suite (Retro68 build), RetroTest, the Finder and MacTCP sections, the command bridge and the Toolbox suite (`toolbox_expected_uae_7.6.1.txt`: 7.6.1's List Manager makes larger lists); on the G3 under mame-ppc the guest suite (MPW and Retro68 builds), RetroTest, OTTest and the command bridge; on Executor (Apple's 7.6.1 System) the guest suite in all four builds, RetroTest, OTTest (MPW, PowerPC, Retro68 68k and PowerPC), the command bridge, the Toolbox suite, Finder, MacTCP and the Notification Manager. `ot_retro68_ppc_rom_761` is also labelled `flaky`: Apple's OT 1.1.1 on the G3 crashes in `tcp_async` about half the runs (STRAGGLERS 66) |
 

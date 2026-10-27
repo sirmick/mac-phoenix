@@ -280,21 +280,42 @@ that ID whose type names it (`'iitf'` the interface, `'idns'`, `'ihst'`,
 `'pwrd'`, `'stng'`, `'unld'`, `'ulvl'`, `'wpos'`...), and `'ccfg'` 1 holds
 the active configuration's ID. The calls are private, so their arguments
 come from what the panel passes (`--executor-debug ot` logs the stack of
-an unimplemented C call) and what it does with the answers:
+an unimplemented C call) and what it does with the answers, and were then
+checked against Apple's OT 1.1.1 on the Quadra and the G3 by CfgTest
+(`tests/guest/otcfg`: its 68k build calls them by index through the
+Shared Library Manager, its PowerPC build imports them from `OTConfigLib`
+by name; `ctest -R otcfg`: Apple's answers `otcfg_rom`, Executor's
+`otcfg_executor`). Each is a C routine; `#` is its index in the set.
 
-| Call | Arguments, result |
-|---|---|
-| `OTOpenConfigurationsDB` | `(const FSSpec *, permission, DBRef *)`, OSStatus; the DBRef is the file's resource refnum |
-| `OTCloseConfigurationsDB` | `(DBRef *)`, OSStatus; the reference is cleared |
-| `OTGetActiveConfigID` | `(DBRef)`, the ID |
-| `OTGetConfigsCount` | `(DBRef)`, the count |
-| `OTGetIndexedConfigID` | `(DBRef, index)`, the ID (index from 1: a guess) |
-| `OTGetConfigName` | `(DBRef, ID, Str255)`, OSStatus (a guess) |
-| `OTGetAttributeSize` | `(DBRef, ID, OSType)`, the size |
-| `OTGetAttributeValue` | `(DBRef, ID, OSType, void *, size)`, OSStatus |
-| `OTIsPortCompatibleWith` | `(const OTPortRecord *, const char *protocol)`, Boolean |
-| `OTGetUserPortNameFromPortRef` | `(OTPortRef, Str255)`: "Ethernet" |
-| `OTGetDefaultPort` | `(device type)`, the OTPortRef |
+| # | Call | Arguments, result |
+|---|---|---|
+| 2 | `OTOpenConfigurationsDB` | `(const FSSpec *, permission, DBRef *)`, OSStatus; the DBRef is the file's resource refnum |
+| 3 | `OTCloseConfigurationsDB` | `(DBRef *)`, an OSErr (a word); the reference is set to −1 |
+| 4 | `OTCreateAConfiguration` | `(DBRef, UInt32 *ID)`, OSStatus: a nameless one, the lowest free ID from 128 |
+| 5 | `OTCopyAConfiguration` | `(DBRef from, fromID, DBRef to, toID, ConstStr255 name)`, OSStatus: every attribute, the copy named; `toID` made if need be (the panel copies into ID 1, "TempConfig") |
+| 6 | `OTDeleteAConfiguration` | `(DBRef, ID)`, OSStatus |
+| 7 | `OTGetConfigsCount` | `(DBRef)`, the count |
+| 8 | `OTGetIndexedConfigID` | `(DBRef, index)`, the ID; index from 1, 0 for none |
+| 9 | `OTGetActiveConfigID` | `(DBRef)`, the ID (`'ccfg'` 1) |
+| 10 | `TCPCheckChangeConfigurationConsequences` | `(DBRef, ID)`, Boolean: would putting it in force interrupt TCP/IP services (the panel then warns so). False on Apple's when TCP/IP isn't up; always on Executor's, which stores and doesn't apply |
+| 11 | `TCPChangeConfiguration` | `(DBRef, ID)`, OSStatus: put it in force (Executor: stored, not applied) |
+| 12 | `OTSetActiveConfigID` | `(DBRef, ID)`, OSStatus |
+| 13 | `OTGetConfigName` | `(DBRef, ID, Str255)`: no result to speak of (PowerPC's r3 is left as it was; Executor's answers noErr, resNotFound) |
+| 14 | `OTSetConfigName` | `(DBRef, ID, ConstStr255)`: no result to speak of (Apple's leaves 1 in D0, for an ID that isn't there too) |
+| 15 | `OTGetConfigID` | `(DBRef, ConstStr255 name)`, the ID, 0 for none; the name compared without case |
+| 19 | `OTGetAttributeSize` | `(DBRef, ID, OSType)`, the size, 0 for none |
+| 21 | `OTSetAttributeValue` | `(DBRef, ID, OSType, const void *, size)`, OSStatus; size 0 removes it |
+| 22 | `OTGetAttributeValue` | `(DBRef, ID, OSType, void *, size)`, OSStatus; for an attribute it hasn't, noErr and the buffer untouched |
+| 23 | `OTGetDefaultPort` | `(device type)`, the OTPortRef |
+| 24 | `OTGetUserPortNameFromPortRef` | `(OTPortRef, Str255)`: "Ethernet" |
+| 26 | `OTIsPortCompatibleWith` | `(const OTPortRecord *, const char *protocol)`, Boolean |
+
+Not reached by anything the panel does (they answer kOTNotSupportedErr
+and are logged): `OTCreateConfigurationsDB` (1; the panel makes an
+export file itself, with the Resource Manager, and copies into its
+refnum), `OTGetAttributesCount` (16), `OTGetIndexedAttributeID` (17),
+`OTSetAttributeValueHandle` (18), `OTGetAttributeValueHandle` (20),
+`OTGetPortIconFromPortRef` (25), `OTIsPortReal` (27).
 
 The panel also checks a configuration's interface against the ports
 (`OTFindPort`, `OTGetSlotFromPortRef`), so Executor's Ethernet port now
@@ -323,7 +344,23 @@ whose OT is always up on the host's network, the address the interface
 has (the router reads "< not available >": Executor's interface info
 has none).
 
-Left: saving (the set, create, copy, delete and
-`TCP...ChangeConfiguration` calls); configurations dialog; checking the
-guessed forms against Apple's OT; PowerPC (`OTConfigLib`).
+**Saving.** On closing with changes and "Save", the panel first copies
+the active configuration into a temporary one (ID 1, "TempConfig"), makes
+that active, writes the edits into it and asks
+`TCPCheckChangeConfigurationConsequences`; then it restores the active
+ID, deletes the temporary configuration, writes the edits into the
+active one (`OTSetAttributeValue` for each attribute, size 0 for those it
+drops: `'ipcp'`, `'alis'`) and calls `TCPChangeConfiguration`. `'ccfg'` 1
+is not an attribute of configuration 1: deleting the temporary
+configuration leaves it (and `'vers'`). The configurations dialog (File >
+Configurations) duplicates (`OTGetConfigID`, `OTCreateAConfiguration`,
+`OTCopyAConfiguration`), renames, deletes, makes active, exports (into a
+resource file the panel makes) and imports (a name taken: replace or
+rename) on Executor as on the Quadra. Executor's networking stays the
+host's: a saved configuration is shown and kept, not applied.
+
+Left: PowerPC (`OTConfigLib`); the Duplicate and Rename dialogs show only
+their edit field on Executor (no prompt, no buttons, the text not
+selected; they work: Return takes them), and a dialog's or alert's area
+isn't fully redrawn after it closes (a Dialog/Window Manager matter).
 

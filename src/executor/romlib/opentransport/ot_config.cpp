@@ -20,12 +20,14 @@
 
 #include <FileMgr.h>
 #include <MemoryMgr.h>
+#include <OSUtil.h>
 #include <ResourceMgr.h>
 #include <mman/mman.h>
 
 #include <algorithm>
 #include <cstring>
 #include <string>
+#include <vector>
 
 using namespace Executor;
 using namespace Executor::ot;
@@ -62,7 +64,8 @@ uint32_t cfg_open_db(const Call &c)
     return noErr;
 }
 
-/* OSStatus OTCloseConfigurationsDB(DBRef *): the reference is cleared. */
+/* OSErr OTCloseConfigurationsDB(DBRef *): the reference is set to -1
+   (Apple's OT 1.1.1, CfgTest). */
 uint32_t cfg_close_db(const Call &c)
 {
     GUEST<uint32_t> *ref = c.p<GUEST<uint32_t>>(0);
@@ -72,7 +75,7 @@ uint32_t cfg_close_db(const Call &c)
         return paramErr;
     CloseResFile(db);
     OSErr err = ResError();
-    *ref = 0;
+    *ref = 0xFFFFFFFF;
     return err;
 }
 
@@ -90,7 +93,9 @@ Handle attribute(INTEGER db, uint32_t config, uint32_t type)
 }
 
 /* OSStatus OTGetAttributeValue(DBRef, configID, OSType attribute,
-   void *buffer, size): the value's first size bytes. */
+   void *buffer, size): the value's first size bytes; for an attribute the
+   configuration doesn't have, noErr and the buffer as it was (Apple's OT
+   1.1.1, CfgTest). */
 uint32_t cfg_get_attribute_value(const Call &c)
 {
     INTEGER db = db_of(c.l(0));
@@ -102,7 +107,7 @@ uint32_t cfg_get_attribute_value(const Call &c)
     if(!db)
         return paramErr;
     if(!h)
-        return resNotFound;
+        return noErr;
     Size n = std::min<Size>(GetHandleSize(h), size);
     if(buffer)
         memcpy(buffer, *h, n);
@@ -244,6 +249,245 @@ uint32_t cfg_config_name(const Call &c)
     if(out)
         std::memcpy(out, name, name[0] + 1);
     return noErr;
+}
+
+/* UInt32 OTGetConfigID(DBRef, ConstStr255 name): the ID of the
+   configuration of that name, 0 if there is none. */
+uint32_t cfg_config_id(const Call &c)
+{
+    INTEGER db = db_of(c.l(0));
+    const uint8_t *want = c.p(1);
+    if(!db || !want)
+        return 0;
+    InDB in(db);
+    uint32_t r = 0;
+    for(INTEGER i = 1, n = Count1Resources("cnam"_4); i <= n && !r; i++)
+    {
+        Handle h = Get1IndResource("cnam"_4, i);
+        GUEST<INTEGER> id;
+        GUEST<ResType> type;
+        Str255 name;
+        if(!h)
+            continue;
+        GetResInfo(h, &id, &type, name);
+        if(EqualString(name, want, false, true))
+            r = (uint16_t)(INTEGER)id;
+    }
+    OT_LOG("OTGetConfigID: \"%.*s\" -> %u\n", want[0], want + 1, r);
+    return r;
+}
+
+namespace
+{
+/* Writes a resource of the database's file, made or replaced; size 0
+   removes it. */
+OSErr put_resource(INTEGER db, uint32_t type, INTEGER id, const void *data, Size size,
+                   ConstStringPtr name = nullptr)
+{
+    InDB in(db);
+    Handle h = Get1Resource(type, id);
+    if(size == 0 && !name)
+    {
+        if(h)
+        {
+            RemoveResource(h);
+            if(ResError() == noErr)
+                DisposeHandle(h);
+        }
+        return noErr;
+    }
+    if(h)
+    {
+        SetHandleSize(h, size);
+        if(MemError() != noErr)
+            return MemError();
+        if(size)
+            std::memcpy(*h, data, size);
+        if(name)
+            SetResInfo(h, id, name);
+        ChangedResource(h);
+    }
+    else
+    {
+        h = NewHandle(size);
+        if(!h)
+            return memFullErr;
+        if(size)
+            std::memcpy(*h, data, size);
+        static const unsigned char none[1] = { 0 };
+        AddResource(h, type, id, name ? name : none);
+    }
+    OSErr err = ResError();
+    if(err == noErr)
+        WriteResource(h);
+    return err ? err : ResError();
+}
+
+/* Every resource of the configuration, its name ('cnam') too: (type,
+   handle). Not the file's own: 'ccfg' 1 (the panel's temporary
+   configuration has ID 1 too) and 'vers'. */
+template<typename F>
+void each_attribute(INTEGER db, INTEGER config, F f)
+{
+    InDB in(db);
+    for(INTEGER t = 1, nt = Count1Types(); t <= nt; t++)
+    {
+        GUEST<ResType> type;
+        Get1IndType(&type, t);
+        if(type == "ccfg"_4 || type == "vers"_4)
+            continue;
+        Handle h = Get1Resource(type, config);
+        if(h)
+            f((uint32_t)(ResType)type, h);
+    }
+}
+}
+
+/* OSStatus OTSetAttributeValue(DBRef, configID, OSType attribute,
+   const void *value, size): the value, replaced; size 0 (value nil)
+   removes it (the panel does that for 'ipcp' and 'alis'). */
+uint32_t cfg_set_attribute_value(const Call &c)
+{
+    INTEGER db = db_of(c.l(0));
+    uint32_t config = c.l(1), type = c.l(2), size = c.l(4);
+    const uint8_t *value = c.p(3);
+    OT_LOG("OTSetAttributeValue: db %u config %u '%c%c%c%c' size %u\n", c.l(0), config, type >> 24,
+           type >> 16, type >> 8, type, size);
+    if(!db || (size && !value))
+        return paramErr;
+    return put_resource(db, type, (INTEGER)config, value, size);
+}
+
+/* OSStatus OTCreateAConfiguration(DBRef, UInt32 *configID): a new, empty
+   configuration (a nameless 'cnam'), the lowest free ID from 128. */
+uint32_t cfg_create(const Call &c)
+{
+    INTEGER db = db_of(c.l(0));
+    GUEST<uint32_t> *out = c.p<GUEST<uint32_t>>(1);
+    if(!db)
+        return paramErr;
+    INTEGER id = 128;
+    {
+        InDB in(db);
+        while(Get1Resource("cnam"_4, id))
+            id++;
+    }
+    static const unsigned char unnamed[1] = { 0 };
+    OSErr err = put_resource(db, "cnam"_4, id, nullptr, 0, unnamed);
+    OT_LOG("OTCreateAConfiguration: %d err %d\n", id, err);
+    if(err == noErr && out)
+        *out = (uint16_t)id;
+    return err;
+}
+
+/* OSStatus OTCopyAConfiguration(DBRef from, UInt32 fromID, DBRef to,
+   UInt32 toID, ConstStr255 name): every attribute of one configuration
+   into another (made with OTCreateAConfiguration), which is given the
+   name (nil: the original's). */
+uint32_t cfg_copy(const Call &c)
+{
+    INTEGER src = db_of(c.l(0)), dst = db_of(c.l(2));
+    INTEGER from = (INTEGER)c.l(1), to = (INTEGER)c.l(3);
+    const uint8_t *name = c.p(4);
+    if(!src || !dst)
+        return paramErr;
+    OSErr err = noErr;
+    Str255 original = { 0 };
+    each_attribute(src, from, [&](uint32_t type, Handle h) {
+        if(type == "cnam"_4)
+        {
+            GUEST<INTEGER> id;
+            GUEST<ResType> t;
+            GetResInfo(h, &id, &t, original);
+            return;
+        }
+        /* a copy: the destination may be the same file */
+        GUEST<Handle> held = h;
+        if(HandToHand(&held) != noErr)
+        {
+            err = memFullErr;
+            return;
+        }
+        Handle copy = held;
+        HLock(copy);
+        if(err == noErr)
+            err = put_resource(dst, type, to, *copy, GetHandleSize(copy));
+        DisposeHandle(copy);
+    });
+    if(err == noErr)
+        err = put_resource(dst, "cnam"_4, to, nullptr, 0, name ? name : original);
+    OT_LOG("OTCopyAConfiguration: %d -> %d \"%.*s\" err %d\n", from, to,
+           name ? name[0] : original[0], name ? name + 1 : original + 1, err);
+    return err;
+}
+
+/* OSStatus OTDeleteAConfiguration(DBRef, configID): the configuration's
+   attributes and name, gone. */
+uint32_t cfg_delete(const Call &c)
+{
+    INTEGER db = db_of(c.l(0));
+    INTEGER config = (INTEGER)c.l(1);
+    if(!db)
+        return paramErr;
+    std::vector<uint32_t> types;
+    each_attribute(db, config, [&](uint32_t type, Handle) { types.push_back(type); });
+    for(uint32_t type : types)
+        put_resource(db, type, config, nullptr, 0);
+    OT_LOG("OTDeleteAConfiguration: %d (%zu attributes)\n", config, types.size());
+    return noErr;
+}
+
+/* OTSetConfigName(DBRef, configID, ConstStr255 name): no result to speak
+   of (Apple's OT 1.1.1 leaves 1 in D0, for a configuration that isn't
+   there too: CfgTest); noErr here. */
+uint32_t cfg_set_name(const Call &c)
+{
+    INTEGER db = db_of(c.l(0));
+    INTEGER config = (INTEGER)c.l(1);
+    const uint8_t *name = c.p(2);
+    if(!db || !name)
+        return paramErr;
+    InDB in(db);
+    Handle h = Get1Resource("cnam"_4, config);
+    OT_LOG("OTSetConfigName: %d \"%.*s\" %s\n", config, name[0], name + 1, h ? "" : "(no such configuration)");
+    if(!h)
+        return resNotFound;
+    SetResInfo(h, config, name);
+    return ResError();
+}
+
+/* OSStatus OTSetActiveConfigID(DBRef, configID): 'ccfg' 1. */
+uint32_t cfg_set_active(const Call &c)
+{
+    INTEGER db = db_of(c.l(0));
+    GUEST<INTEGER> id = (INTEGER)c.l(1);
+    OT_LOG("OTSetActiveConfigID: %d\n", (INTEGER)id);
+    if(!db)
+        return paramErr;
+    return put_resource(db, "ccfg"_4, 1, &id, sizeof id);
+}
+
+/* Boolean TCPCheckChangeConfigurationConsequences(DBRef, configID):
+   whether putting the configuration in force would interrupt TCP/IP
+   services (the panel then warns "Saving the changes may interrupt any
+   TCP/IP services currently established"). It asks before saving, with
+   the edited configuration as a temporary one (ID 1, "TempConfig").
+   Nothing is interrupted here: the configuration is stored, not applied
+   (TCPChangeConfiguration). */
+uint32_t cfg_tcp_check_consequences(const Call &c)
+{
+    OT_LOG("TCPCheckChangeConfigurationConsequences: db %u config %u -> none\n", c.l(0), c.l(1));
+    return 0;
+}
+
+/* OSStatus TCPChangeConfiguration(DBRef, configID): put the configuration
+   in force in the TCP/IP stack. Executor's networking is the host's: the
+   configuration is stored (the user's choice: show and store), not
+   applied. */
+uint32_t cfg_tcp_change(const Call &c)
+{
+    OT_LOG("TCPChangeConfiguration: db %u config %u (stored, not applied)\n", c.l(0), c.l(1));
+    return db_of(c.l(0)) ? noErr : paramErr;
 }
 
 } // namespace Executor::ot

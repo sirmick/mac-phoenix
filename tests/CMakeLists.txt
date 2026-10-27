@@ -835,6 +835,30 @@ set_tests_properties(ot_retro68_68k_rom PROPERTIES
   ENVIRONMENT "MACEMU_ROM=${TEST_ROM}"
 )
 
+# Open Transport's configuration database (OTLib$CfigLib: what the TCP/IP
+# control panel reads and writes; ot_config.cpp) called directly by
+# CfgTest (tests/guest/otcfg, Retro68): Apple's OT 1.1.1 with Mac OS 7.6.1
+# on the Quadra is the reference, Executor on Apple's 7.6.1 System.
+foreach(cell IN ITEMS "otcfg_rom;;CfgTest68K;18952;guest;761"
+                      "otcfg_executor;--backend executor;CfgTest68K;18954;guest;761;executor")
+  list(GET cell 0 name)
+  list(GET cell 1 backend)
+  list(GET cell 2 app)
+  list(GET cell 3 port)
+  list(SUBLIST cell 4 -1 labels)
+  separate_arguments(backend_args UNIX_COMMAND "${backend}")
+  add_test(
+    NAME ${name}
+    COMMAND bash ${TEST_DIR}/test_guest_suite.sh ${backend_args} --os-version 7.6.1 --app ${CMAKE_SOURCE_DIR}/tests/guest/otcfg/${app}.bin --results cfg_results.txt --network none --timeout 150 --port ${port}
+  )
+  set_tests_properties(${name} PROPERTIES
+    TIMEOUT 230
+    LABELS "${labels}"
+    SKIP_RETURN_CODE 77
+    ENVIRONMENT "MACEMU_ROM=$<IF:$<STREQUAL:${app},CfgTestPPC>,${TEST_PPC_ROM},${TEST_ROM}>"
+  )
+endforeach()
+
 # Thread Manager through Frontier's UserTalk threads (process.cpp).
 add_test(
   NAME threads_executor

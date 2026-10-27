@@ -5,7 +5,8 @@
  *                                                                           *
  * Needs:                                                                    *
  *     MacTypes.h          UInt32, SInt32, UInt8, UInt16, UnsignedWide,      *
- *                         Boolean, SInt16, SInt8, OSType, StringPtr         *
+ *                         Boolean, SInt16, SInt8, OSType, StringPtr,        *
+ *                         ConstStringPtr                                    *
  *     DriverServices.h    OSStatus                                          *
  *     FileMgr.h           FSSpec                                            *
  *                                                                           *
@@ -928,6 +929,33 @@ namespace ot { uint32_t cfg_indexed_config(const Call &); }OT_FUNCTION(OTConfigL
 
 
 namespace ot { uint32_t cfg_config_name(const Call &); }OT_FUNCTION(OTConfigLib, OTGetConfigName, "OTLib$CfigLib", "OTGetConfigName", false, "LLL", 'L', cfg_config_name);
+
+
+namespace ot { uint32_t cfg_create(const Call &); }OT_FUNCTION(OTConfigLib, OTCreateAConfiguration, "OTLib$CfigLib", "OTCreateAConfiguration", false, "LL", 'L', cfg_create);
+
+
+namespace ot { uint32_t cfg_copy(const Call &); }OT_FUNCTION(OTConfigLib, OTCopyAConfiguration, "OTLib$CfigLib", "OTCopyAConfiguration", false, "LLLLL", 'L', cfg_copy);
+
+
+namespace ot { uint32_t cfg_delete(const Call &); }OT_FUNCTION(OTConfigLib, OTDeleteAConfiguration, "OTLib$CfigLib", "OTDeleteAConfiguration", false, "LL", 'L', cfg_delete);
+
+
+namespace ot { uint32_t cfg_tcp_change(const Call &); }OT_FUNCTION(OTConfigLib, TCPChangeConfiguration, "OTLib$CfigLib", "TCPChangeConfiguration", false, "LL", 'L', cfg_tcp_change);
+
+
+namespace ot { uint32_t cfg_tcp_check_consequences(const Call &); }OT_FUNCTION(OTConfigLib, TCPCheckChangeConfigurationConsequences, "OTLib$CfigLib", "TCPCheckChangeConfigurationConsequences", false, "LL", 'B', cfg_tcp_check_consequences);
+
+
+namespace ot { uint32_t cfg_set_active(const Call &); }OT_FUNCTION(OTConfigLib, OTSetActiveConfigID, "OTLib$CfigLib", "OTSetActiveConfigID", false, "LL", 'L', cfg_set_active);
+
+
+namespace ot { uint32_t cfg_set_name(const Call &); }OT_FUNCTION(OTConfigLib, OTSetConfigName, "OTLib$CfigLib", "OTSetConfigName", false, "LLL", 'L', cfg_set_name);
+
+
+namespace ot { uint32_t cfg_config_id(const Call &); }OT_FUNCTION(OTConfigLib, OTGetConfigID, "OTLib$CfigLib", "OTGetConfigID", false, "LL", 'L', cfg_config_id);
+
+
+namespace ot { uint32_t cfg_set_attribute_value(const Call &); }OT_FUNCTION(OTConfigLib, OTSetAttributeValue, "OTLib$CfigLib", "OTSetAttributeValue", false, "LLLLL", 'L', cfg_set_attribute_value);
 
 
 } /* namespace Executor */
