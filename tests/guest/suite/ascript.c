@@ -7,6 +7,7 @@
 #include <AppleEvents.h>
 #include <AppleScript.h>
 #include <Components.h>
+#include <Gestalt.h>
 #include <Memory.h>
 #include <OSA.h>
 #include <stdio.h>
@@ -65,8 +66,9 @@ int as_run(const char *src, char *out, int size)
 
 void test_applescript_dates(void)
 {
-    /* AppleScript on a Power Mac prints reals with 12 significant digits,
-     * on a 68k Mac (SANE's extended) 13; both PPC cores agree
+    /* AppleScript native on a Power Mac (1.3 and later, Mac OS 8.5 on)
+     * prints reals with 12 significant digits, 68k AppleScript (SANE's
+     * extended) 13, on a Power Mac too (7.6.1's 1.1); both PPC cores agree
      * (docs/cpu/PLAN.md S9). It is the machine's AppleScript, whatever
      * this code runs as. */
     static const char *cases[][3] = {
@@ -86,8 +88,13 @@ void test_applescript_dates(void)
     };
     char got[256], detail[400];
     const char *want;
-    int i;
+    long version = 0;
+    int i, native;
 
+    Gestalt('ascv', &version);   /* gestaltAppleScriptVersion: BCD in the low word */
+    native = on_powerpc() && (version & 0xFFFF) >= 0x0130;
+    sprintf(detail, "ascv %08lx%s", version, native ? " (native PowerPC)" : "");
+    report_note(detail);
     for(i = 0; i < sizeof cases / sizeof cases[0]; i++)
     {
         if(!as_run(cases[i][1], got, sizeof got))
@@ -95,7 +102,7 @@ void test_applescript_dates(void)
             report_fail(cases[i][0], got);
             continue;
         }
-        want = cases[i][2] ? cases[i][2] : on_powerpc() ? "0.333333333333" : "0.3333333333333";
+        want = cases[i][2] ? cases[i][2] : native ? "0.333333333333" : "0.3333333333333";
         if(strcmp(got, want) == 0)
             report_pass(cases[i][0]);
         else

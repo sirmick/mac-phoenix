@@ -20,19 +20,24 @@
 # own (romlib/opentransport/ot_slm.cpp). Either way no Apple ASLM code runs
 # for an OT client; the log must show Executor's manager.
 #
+# --os-version 7.6.1: the session on tests-7.6.1.img (MPW_OS) instead of 7.5.5's.
+#
 # KEEP_LOG=PATH keeps the emulator's log.
 #
 # Usage: tests/test_ot_executor.sh [--port N] [--core mame-68k] [--no-aslm]
+#                                  [--os-version 7.5.5|7.6.1]
 set -uo pipefail
 
 PORT=18394
 CORE=""
 NO_ASLM=""
+OS_VERSION=7.5.5
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --port) PORT="$2"; shift 2 ;;
         --core) CORE="$2"; shift 2 ;;
         --no-aslm) NO_ASLM=1; shift ;;
+        --os-version) OS_VERSION="$2"; shift 2 ;;
         --timeout) shift 2 ;;
         *) echo "Unknown arg: $1"; exit 1 ;;
     esac
@@ -44,13 +49,14 @@ STORAGE="${MACEMU_STORAGE:-$HOME/storage}"
 MPW=tools/mpw/mpw
 TOOL=tests/guest/ot/OTTest.bin
 [[ -f "$STORAGE/images/mpw.img" ]] || { echo "SKIP: no MPW disk (tools/mpw/mpw setup)"; exit 77; }
-[[ -f "$STORAGE/images/tests-7.5.5.img" ]] || { echo "SKIP: no tests-7.5.5.img (tools/mpw/mpw setup)"; exit 77; }
+[[ -f "$STORAGE/images/tests-$OS_VERSION.img" ]] || { echo "SKIP: no tests-$OS_VERSION.img (MPW_OS=$OS_VERSION tools/mpw/mpw setup)"; exit 77; }
 [[ -x build/mac-phoenix ]] || { echo "SKIP: no build/mac-phoenix"; exit 77; }
 [[ -f "$TOOL" ]] || { echo "FAIL: $TOOL missing"; exit 1; }
 
 export MPW_STATE=$(mktemp -d ${TMPDIR:-/tmp}/ottest.XXXXXX)
 export MPW_PORT=$PORT
-export MPW_SYSTEM="test-ot${CORE:+-$CORE}${NO_ASLM:+-noaslm}-7.5.5.img"
+export MPW_OS=$OS_VERSION
+export MPW_SYSTEM="test-ot${CORE:+-$CORE}${NO_ASLM:+-noaslm}-$OS_VERSION.img"
 cleanup() {
     $MPW stop
     [[ -n "${ECHO_PID:-}" ]] && kill "$ECHO_PID" 2>/dev/null
@@ -68,7 +74,7 @@ for _ in $(seq 1 50); do [[ -s "$MPW_STATE/echo_port" ]] && break; sleep 0.1; do
 echo "127.0.0.1 $(cat "$MPW_STATE/echo_port")" >"$HOST/net_echo.txt"
 cp "$TOOL" "$HOST/ot/"
 
-echo "=== Open Transport (Executor${CORE:+, $CORE}${NO_ASLM:+, no ASLM}) ==="
+echo "=== Open Transport (Executor, $OS_VERSION${CORE:+, $CORE}${NO_ASLM:+, no ASLM}) ==="
 if [[ -n "$NO_ASLM" ]]; then
     # The policy override sits beside the System Folder's clean copy, which
     # the first start extracts.

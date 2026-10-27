@@ -176,6 +176,10 @@ syn68k_addr_t missing(syn68k_addr_t, void *arg)
     traps::log_unimplemented("Open Transport " + m->name + " (" + m->set
                              + "): answered kOTNotSupportedErr");
     uint32_t sp = EM_A7;
+    /* What it was given, for working out a private call's arguments. */
+    OT_LOG("%s (%s) not implemented: called from $%08x, stack %08x %08x %08x %08x %08x %08x\n",
+           m->name.c_str(), m->set.c_str(), READUL(sp), READUL(sp + 4), READUL(sp + 8),
+           READUL(sp + 12), READUL(sp + 16), READUL(sp + 20), READUL(sp + 24));
     EM_D0 = (uint32_t)(int32_t)kOTNotSupportedErr;
     EM_A7 = sp + 4;
     return READUL(sp);
@@ -199,7 +203,8 @@ void Executor::ot::register_defs(const Def *d, size_t n)
 bool Executor::ROMlib_ot_library(const std::string &name)
 {
     return name == "OTClientLib" || name == "OTClientUtilLib" || name == "OTUtilityLib"
-        || name == "OTInetClientLib" || name == "OTGlobalLib";
+        || name == "OTInetClientLib" || name == "OTGlobalLib" || name == "OTConfigLib"
+        || name == "OTATalkClientLib";
 }
 
 namespace
@@ -282,7 +287,7 @@ syn68k_addr_t Executor::ot::bind_ot_stub(uint32_t stub)
     if(it != defs().end())
     {
         addr = entry_for(it->second);
-        OT_LOG("bind %s #%u %s\n", id.c_str(), index, name);
+        OT_LOG("bind %s #%u %s: $%08x\n", id.c_str(), index, name, (unsigned)addr);
     }
     else
     {

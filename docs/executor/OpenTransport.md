@@ -156,8 +156,8 @@ function set's ID as a C string at +16. The function sets and their indices
 * Not written: mappers and name registration (AppleTalk's NBP), the
   transaction calls (OTSndRequest and friends: ATP, ADSP), OTCreateOptions /
   OTCreateOptionString, no-copy receive (OTReleaseBuffer, OTReadBuffer),
-  transfer of ownership, the `Ntv*` and configuration-database sets
-  (`OTConfigLib` for PowerPC), `OTExitPatchPriv` (PowerPC glue; answered 0,
+  transfer of ownership, the `Ntv*` set, most of the configuration
+  database (below), `OTExitPatchPriv` (PowerPC glue; answered 0,
   logged). Timer tasks and most port calls have no 68k glue in OT 1.1
   (native only), so 68k clients can't reach them.
 
@@ -268,3 +268,114 @@ that settled, where Executor had it otherwise:
 * The resolver's names end with the root's dot (`localhost.`).
 * A reverse lookup asks the name servers, which may have no name for
   127.0.0.1 (Executor's host resolver has one).
+
+## The configuration database
+
+What the TCP/IP control panel reads and writes (`OTLib$CfigLib` on 68k,
+27 private functions; `ot_config.cpp`). The database is a resource file,
+the panel's "TCP/IP Preferences": each configuration has an ID, its name
+is the `'cnam'` resource of that ID, each attribute is a resource of
+that ID whose type names it (`'iitf'` the interface, `'idns'`, `'ihst'`,
+`'irte'`, `'isdm'`, `'port'` "Ethernet", `'prot'` "tcp", `'dtyp'`,
+`'pwrd'`, `'stng'`, `'unld'`, `'ulvl'`, `'wpos'`...), and `'ccfg'` 1 holds
+the active configuration's ID. The calls are private, so their arguments
+come from what the panel passes (`--executor-debug ot` logs the stack of
+an unimplemented C call) and what it does with the answers, and were then
+checked against Apple's OT 1.1.1 on the Quadra and the G3 by CfgTest
+(`tests/guest/otcfg`: its 68k build calls them by index through the
+Shared Library Manager, its PowerPC build imports them from `OTConfigLib`
+by name; `ctest -R otcfg`: Apple's answers `otcfg_rom`, `otcfg_rom_ppc`,
+Executor's `otcfg_executor`, `otcfg_executor_ppc`). Each is a C routine; `#` is its index in the set.
+
+| # | Call | Arguments, result |
+|---|---|---|
+| 2 | `OTOpenConfigurationsDB` | `(const FSSpec *, permission, DBRef *)`, OSStatus; the DBRef is the file's resource refnum |
+| 3 | `OTCloseConfigurationsDB` | `(DBRef *)`, an OSErr (a word); the reference is set to −1 |
+| 4 | `OTCreateAConfiguration` | `(DBRef, UInt32 *ID)`, OSStatus: a nameless one, the lowest free ID from 128 |
+| 5 | `OTCopyAConfiguration` | `(DBRef from, fromID, DBRef to, toID, ConstStr255 name)`, OSStatus: every attribute, the copy named; `toID` made if need be (the panel copies into ID 1, "TempConfig") |
+| 6 | `OTDeleteAConfiguration` | `(DBRef, ID)`, OSStatus |
+| 7 | `OTGetConfigsCount` | `(DBRef)`, the count |
+| 8 | `OTGetIndexedConfigID` | `(DBRef, index)`, the ID; index from 1, 0 for none |
+| 9 | `OTGetActiveConfigID` | `(DBRef)`, the ID (`'ccfg'` 1) |
+| 10 | `TCPCheckChangeConfigurationConsequences` | `(DBRef, ID)`, Boolean: would putting it in force interrupt TCP/IP services (the panel then warns so). False on Apple's when TCP/IP isn't up; always on Executor's, which stores and doesn't apply |
+| 11 | `TCPChangeConfiguration` | `(DBRef, ID)`, OSStatus: put it in force (Executor: stored, not applied) |
+| 12 | `OTSetActiveConfigID` | `(DBRef, ID)`, OSStatus |
+| 13 | `OTGetConfigName` | `(DBRef, ID, Str255)`: no result to speak of (PowerPC's r3 is left as it was; Executor's answers noErr, resNotFound) |
+| 14 | `OTSetConfigName` | `(DBRef, ID, ConstStr255)`: no result to speak of (Apple's leaves 1 in D0, for an ID that isn't there too) |
+| 15 | `OTGetConfigID` | `(DBRef, ConstStr255 name)`, the ID, 0 for none; the name compared without case |
+| 19 | `OTGetAttributeSize` | `(DBRef, ID, OSType)`, the size, 0 for none |
+| 21 | `OTSetAttributeValue` | `(DBRef, ID, OSType, const void *, size)`, OSStatus; size 0 removes it |
+| 22 | `OTGetAttributeValue` | `(DBRef, ID, OSType, void *, size)`, OSStatus; for an attribute it hasn't, noErr and the buffer untouched |
+| 23 | `OTGetDefaultPort` | `(device type)`, the OTPortRef |
+| 24 | `OTGetUserPortNameFromPortRef` | `(OTPortRef, Str255)`: "Ethernet" |
+| 26 | `OTIsPortCompatibleWith` | `(const OTPortRecord *, const char *protocol)`, Boolean |
+
+Not reached by anything the panel does (they answer kOTNotSupportedErr
+and are logged): `OTCreateConfigurationsDB` (1; the panel makes an
+export file itself, with the Resource Manager, and copies into its
+refnum), `OTGetAttributesCount` (16), `OTGetIndexedAttributeID` (17),
+`OTSetAttributeValueHandle` (18), `OTGetAttributeValueHandle` (20),
+`OTGetPortIconFromPortRef` (25), `OTIsPortReal` (27).
+
+The panel also checks a configuration's interface against the ports
+(`OTFindPort`, `OTGetSlotFromPortRef`), so Executor's Ethernet port now
+has the record Apple's OT 1.1.1 gives a Quadra's (a probe there):
+`enet0` (`OTFindPort` takes `enet` too), module `enetDRVR`, fInfoFlags 1,
+fCapabilities $0B, not marked active.
+
+With these the panel opens on 7.6.1 (Apple's System) and shows the
+stored configuration: "Connect via: Ethernet", "Configure: Using DHCP
+Server".
+
+**A DBRef is a resource file refnum.** Which address fields a server
+fills in comes from the panel's own `'srvr'` resources (14 bytes, a word
+per field, items 5 to 11; ID 100 + 10 × user mode + 30 for TCP over
+Ethernet + the method − 1: 132 is "TCP / Basic / DHCP"), read with
+`OTGetAttributeValue(ref, 132, 'srvr', buffer, 14)` where `ref` is the
+panel's own resource file refnum, kept in a word. So Apple's
+database reference is the file's refnum, and any open resource file is
+a database; Executor's was a pointer to a block of its own, the read
+failed, every field stayed an edit box. Found by tracing the panel on the
+Quadra (gdb, a hardware watchpoint on its code; the field table in its
+object), the panel's code only observed. A field a server fills in is
+static text: on the Quadra "< will be supplied by server >", since
+Apple's OT has not brought TCP/IP up when the panel opens; on Executor,
+whose OT is always up on the host's network, the address the interface
+has (the router reads "< not available >": Executor's interface info
+has none).
+
+**Saving.** On closing with changes and "Save", the panel first copies
+the active configuration into a temporary one (ID 1, "TempConfig"), makes
+that active, writes the edits into it and asks
+`TCPCheckChangeConfigurationConsequences`; then it restores the active
+ID, deletes the temporary configuration, writes the edits into the
+active one (`OTSetAttributeValue` for each attribute, size 0 for those it
+drops: `'ipcp'`, `'alis'`) and calls `TCPChangeConfiguration`. `'ccfg'` 1
+is not an attribute of configuration 1: deleting the temporary
+configuration leaves it (and `'vers'`). The configurations dialog (File >
+Configurations) duplicates (`OTGetConfigID`, `OTCreateAConfiguration`,
+`OTCopyAConfiguration`), renames, deletes, makes active, exports (into a
+resource file the panel makes) and imports (a name taken: replace or
+rename) on Executor as on the Quadra. Executor's networking stays the
+host's: a saved configuration is shown and kept, not applied.
+
+**PowerPC.** The same calls are `OTConfigLib`'s exports for PowerPC
+code (`library:` in the definitions; Executor answers the library, as
+it does OTClientLib & co., and finds its OT libraries for `kFindLib`
+too): CfgTest's PowerPC build passes on Executor and on the G3's OT 1.1.1
+alike. The panel's PowerPC code (`--executor-ppc`) also imports
+`OTATalkClientLib`, which Executor answers now (`ot_atalk.cpp`: no
+AppleTalk, kOTNotSupportedErr): Apple's file needs Apple's OT kernel
+(`OTNtvUtilLib`'s initialisation fails) and the panel then says Open
+Transport isn't there. It still says so: it looks for the Shared Library
+Manager's PowerPC fragment, `SLMGlobal` (`GetSharedLibrary` with
+`kFindLib`, then its `__gSLMGlobal`), and calls through what that points
+to as PowerPC code; Executor's ASLM side is 68k only (handing it the 68k
+SLMGlobal sends the PowerPC into 68k code). So the panel runs its 68k
+code, as it does without `--executor-ppc`.
+
+Left: the panel's PowerPC code (ASLM's PowerPC side); the Duplicate and Rename dialogs show only
+their edit field on Executor (no prompt, no buttons, the text not
+selected; they work: Return takes them), and a dialog's or alert's area
+isn't fully redrawn after it closes (a Dialog/Window Manager matter).
+

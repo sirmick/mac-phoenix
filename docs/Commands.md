@@ -92,7 +92,8 @@ Machine:
   --executor-system NAME     System under <storage>/executor-systems to run on
   --executor-start WHAT      finder | browser | path inside the System (default: finder)
   --[no-]executor-fresh      Start each run from the System's clean copy (default: on)
-  --executor-logtraps        Executor logs every trap call to stderr
+  --executor-logtraps        Executor logs every trap call to stderr (each call line ends
+                             with @ and the trap's guest address: the call site)
   --executor-debug OPTS      Executor's own debug options, comma-separated: memcheck (heap
                              consistency checks at every Memory Manager call, slow), allocs
                              (allocations >= 4K and the code that asked), fslog,

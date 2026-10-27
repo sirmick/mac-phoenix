@@ -1,0 +1,13 @@
+# Known failures of the Toolbox suite on Apple's ROM and Mac OS 7.6.1
+# (tests/test_toolbox_suite.sh --backend uae --os-version 7.6.1): the
+# ground truth, so each of these is a test that expects something real
+# 7.6.1 doesn't do.
+#
+# As on 7.5.5 (toolbox_expected_uae.txt).
+FileTest.MakeFSSpec
+# 7.6.1's List Manager makes a list 2 bytes larger than 7.5.5's (LNew of
+# 3x7 cells: 132 bytes, not $56 + 22 * 2 = 130; 70x40: 5690, not 5688).
+# The tests have 7.5.5's sizes, which Executor's List Manager gives on
+# either System.
+ListMgr.maxIndex
+ListMgr.maxIndex2

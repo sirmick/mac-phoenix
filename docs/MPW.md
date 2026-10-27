@@ -66,7 +66,8 @@ tools/mpw/mpw --toolchain cw build tests/guest/suite -o /tmp/cw
   references), on both SC and Link.
 * **Library order:** `Stubs.o` last, if at all (`IntEnv.o` covers it).
 * **One session per state directory.** Tests run their own (`MPW_STATE`,
-  `MPW_PORT`, `MPW_SYSTEM`); see `tests/test_mpw_toolchain.sh`.
+  `MPW_PORT`, `MPW_SYSTEM`); see `tests/test_mpw_toolchain.sh`. `MPW_OS=7.6.1`
+  runs the session on `tests-7.6.1.img` instead of 7.5.5's (`ot_executor_761`).
 * `emulator.log` in the state directory has Executor's output; a CPU crash
   ends the command with an error rather than a timeout.
 * **MPW C swaps `'\r'` and `'\n'`** (`'\n'` is 13): compare key codes and

@@ -692,7 +692,7 @@ foreach(codec png h264)
   if(codec STREQUAL "png")
     set(port 18444)
   else()
-    set(port 18446)
+    set(port 18456)
   endif()
   add_test(NAME cursor_executor_${codec}
     COMMAND bash ${TEST_DIR}/test_cursor_executor.sh --codec ${codec} --port ${port})
@@ -835,6 +835,33 @@ set_tests_properties(ot_retro68_68k_rom PROPERTIES
   ENVIRONMENT "MACEMU_ROM=${TEST_ROM}"
 )
 
+# Open Transport's configuration database (OTLib$CfigLib on 68k,
+# OTConfigLib on PowerPC: what the TCP/IP control panel reads and writes;
+# ot_config.cpp) called directly by CfgTest (tests/guest/otcfg, Retro68):
+# Apple's OT 1.1.1 with Mac OS 7.6.1 on the Quadra and the G3 is the
+# reference, Executor on Apple's 7.6.1 System.
+foreach(cell IN ITEMS "otcfg_rom;;CfgTest68K;18952;guest;761"
+                      "otcfg_rom_ppc;--backend kpx --core mame-ppc --jit;CfgTestPPC;18956;guest;761;mame"
+                      "otcfg_executor;--backend executor;CfgTest68K;18954;guest;761;executor"
+                      "otcfg_executor_ppc;--backend executor;CfgTestPPC;18958;guest;761;executor")
+  list(GET cell 0 name)
+  list(GET cell 1 backend)
+  list(GET cell 2 app)
+  list(GET cell 3 port)
+  list(SUBLIST cell 4 -1 labels)
+  separate_arguments(backend_args UNIX_COMMAND "${backend}")
+  add_test(
+    NAME ${name}
+    COMMAND bash ${TEST_DIR}/test_guest_suite.sh ${backend_args} --os-version 7.6.1 --app ${CMAKE_SOURCE_DIR}/tests/guest/otcfg/${app}.bin --results cfg_results.txt --network none --timeout 150 --port ${port}
+  )
+  set_tests_properties(${name} PROPERTIES
+    TIMEOUT 230
+    LABELS "${labels}"
+    SKIP_RETURN_CODE 77
+    ENVIRONMENT "MACEMU_ROM=$<IF:$<STREQUAL:${app},CfgTestPPC>,${TEST_PPC_ROM},${TEST_ROM}>"
+  )
+endforeach()
+
 # Thread Manager through Frontier's UserTalk threads (process.cpp).
 add_test(
   NAME threads_executor
@@ -906,7 +933,73 @@ set_tests_properties(guest_suite_ppc_mame PROPERTIES
   ENVIRONMENT "MACEMU_ROM=${TEST_PPC_ROM}"
 )
 
-
+# --- The same cells on Mac OS 7.6.1 (tests-7.6.1.img; ctest -L 761) ---
+# On the Quadra, on the G3 (Apple's OT 1.1.1 there crashes about half the
+# runs: STRAGGLERS 66) and on Executor. A cell: name; script; its arguments;
+# port; the script's timeout; labels (beside guest and 761); the ROM (q: the
+# Quadra's, g: the G3's, none: Executor).
+set(_ppc "--backend kpx --core mame-ppc --jit")
+foreach(cell IN ITEMS
+    # The Quadra
+    "guest_suite_retro68_761;test_guest_suite.sh;--app ${CMAKE_SOURCE_DIR}/tests/guest/suite/retro68/MacPhoenixSuite68K.bin;18900;150;;q"
+    "retro68_rom_761;test_guest_suite.sh;--app ${CMAKE_SOURCE_DIR}/tests/guest/retro68/RetroTest68K.bin --results retro68_results.txt --network none;18902;150;;q"
+    "command_bridge_761;test_command_bridge.sh;;18904;40;boot;q"
+    "toolbox_suite_uae_761;test_toolbox_suite.sh;--backend uae;18906;180;;q"
+    "finder_suite_761;test_guest_suite.sh;--sections finder --results finder_results.txt --network none;18908;120;;q"
+    "mactcp_rom_761;test_guest_suite.sh;--sections 'network mactcp' --results mactcp_results.txt;18910;120;;q"
+    # The G3 on mame-ppc
+    "guest_suite_ppc_761;test_guest_suite.sh;${_ppc};18912;120;mame;g"
+    "guest_suite_retro68_ppc_761;test_guest_suite.sh;${_ppc} --app ${CMAKE_SOURCE_DIR}/tests/guest/suite/retro68/MacPhoenixSuitePPC.bin;18914;150;mame;g"
+    "retro68_rom_ppc_761;test_guest_suite.sh;${_ppc} --app ${CMAKE_SOURCE_DIR}/tests/guest/retro68/RetroTestPPC.bin --results retro68_results.txt --network none;18916;150;mame;g"
+    "ot_retro68_ppc_rom_761;test_guest_suite.sh;${_ppc} --app ${CMAKE_SOURCE_DIR}/tests/guest/ot/OTTestRetroPPC.bin --results ot_results.txt --echo-gateway;18918;220;mame;g"
+    "command_bridge_ppc_761;test_command_bridge.sh;${_ppc};18920;40;boot;g"
+    # Executor on Apple's 7.6.1 System
+    "guest_suite_executor_761;test_guest_suite.sh;--backend executor;18922;150;executor;none"
+    "guest_suite_retro68_executor_761;test_guest_suite.sh;--backend executor --network none --app ${CMAKE_SOURCE_DIR}/tests/guest/suite/retro68/MacPhoenixSuite68K.bin;18924;150;executor;none"
+    "guest_suite_retro68_ppc_executor_761;test_guest_suite.sh;--backend executor --network none --app ${CMAKE_SOURCE_DIR}/tests/guest/suite/retro68/MacPhoenixSuitePPC.bin;18926;150;executor;none"
+    "guest_suite_ppc_executor_761;test_guest_suite.sh;--backend executor --executor-ppc --network none;18928;150;executor;none"
+    "retro68_executor_761;test_guest_suite.sh;--backend executor --app ${CMAKE_SOURCE_DIR}/tests/guest/retro68/RetroTest68K.bin --results retro68_results.txt --network none;18930;150;executor;none"
+    "retro68_ppc_executor_761;test_guest_suite.sh;--backend executor --app ${CMAKE_SOURCE_DIR}/tests/guest/retro68/RetroTestPPC.bin --results retro68_results.txt --network none;18932;150;executor;none"
+    "ot_executor_761;test_ot_executor.sh;;18934;240;executor;none"
+    "ot_ppc_executor_761;test_guest_suite.sh;--backend executor --app ${CMAKE_SOURCE_DIR}/tests/guest/ot/OTTestPPC.bin --results ot_results.txt;18936;150;executor;none"
+    "ot_retro68_ppc_executor_761;test_guest_suite.sh;--backend executor --app ${CMAKE_SOURCE_DIR}/tests/guest/ot/OTTestRetroPPC.bin --results ot_results.txt;18938;150;executor;none"
+    "ot_retro68_68k_executor_761;test_guest_suite.sh;--backend executor --app ${CMAKE_SOURCE_DIR}/tests/guest/ot/OTTestRetro68K.bin --results ot_results.txt;18940;150;executor;none"
+    "command_bridge_executor_761;test_command_bridge.sh;--backend executor;18942;60;boot;none"
+    "toolbox_suite_executor_761;test_toolbox_suite.sh;--backend executor;18944;180;executor;none"
+    "finder_suite_executor_761;test_guest_suite.sh;--backend executor --sections finder --results finder_results.txt --network none;18946;150;executor;none"
+    "mactcp_executor_761;test_guest_suite.sh;--backend executor --sections 'network mactcp' --results mactcp_results.txt --network none;18948;150;executor;none"
+    "notify_executor_761;test_guest_suite.sh;--backend executor --app ${CMAKE_SOURCE_DIR}/tests/guest/notify/NotifyTest.bin --results notify_test.txt --key-on waits_for_alert:36 --network none;18950;150;executor;none")
+  list(GET cell 0 name)
+  list(GET cell 1 script)
+  list(GET cell 2 args)
+  list(GET cell 3 port)
+  list(GET cell 4 timeout)
+  list(GET cell 5 labels)
+  list(GET cell 6 rom)
+  separate_arguments(args UNIX_COMMAND "${args}")
+  add_test(
+    NAME ${name}
+    COMMAND bash ${TEST_DIR}/${script} --os-version 7.6.1 ${args} --timeout ${timeout} --port ${port}
+  )
+  math(EXPR ctest_timeout "${timeout} + 80")
+  set_tests_properties(${name} PROPERTIES
+    TIMEOUT ${ctest_timeout}
+    LABELS "guest;761;${labels}"
+    SKIP_RETURN_CODE 77
+  )
+  if(rom STREQUAL "q")
+    set_property(TEST ${name} APPEND PROPERTY ENVIRONMENT "MACEMU_ROM=${TEST_ROM}")
+  elseif(rom STREQUAL "g")
+    set_property(TEST ${name} APPEND PROPERTY ENVIRONMENT "MACEMU_ROM=${TEST_PPC_ROM}")
+  endif()
+  if(script STREQUAL "test_toolbox_suite.sh")
+    set_property(TEST ${name} PROPERTY RESOURCE_LOCK toolbox_app)
+  endif()
+endforeach()
+set_property(TEST guest_suite_761 ot_retro68_68k_rom APPEND PROPERTY LABELS 761)
+# Apple's OT 1.1.1 on the G3 crashes in OTTest's tcp_async about half the
+# runs (STRAGGLERS 66): left in, marked (ctest -LE flaky leaves it out).
+set_property(TEST ot_retro68_ppc_rom_761 APPEND PROPERTY LABELS flaky)
 
 # Every test's scratch (logs, ExtFS folders, mktemp dirs) on the SSD, not in
 # /tmp: /tmp is RAM-backed here, and RAM is what runs out.

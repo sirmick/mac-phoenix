@@ -63,6 +63,8 @@ A test can carry several labels.
 | `guest` | Tests that run an application in the guest: the suites, `bridge_trap*`, `notify_*`, `keyboard_guest*`, `drag_executor*`, `aslm_executor*`, `toolbox_suite_*`, `mpw_toolchain_executor`, `guest_builds_current`, `ot_executor*`, `threads_executor*`, `ppc_hello_executor*` (37) |
 | `mame` | Tests on the MAME cores (`--core mame-68k`, `--core mame-ppc`), plus `cpu_cores` |
 | `executor` | The `--backend executor` guest cells and all `executor.*` gtests |
+| `761` | The cells on Mac OS 7.6.1 (`*_761`, `guest_suite_761`, `ot_retro68_68k_rom`, `otcfg_*`) |
+| `flaky` | `ot_retro68_ppc_rom_761` (STRAGGLERS 66); `ctest -LE flaky` leaves it out |
 | `xfail` | Executor gtests that are expected to fail (`src/executor/tests/test-properties.cmake`). Two of them on each core are also disabled |
 
 ### Test List
@@ -119,11 +121,13 @@ Timeouts are the ctest `TIMEOUT` values in `tests/CMakeLists.txt`.
 | `keyboard_guest`, `keyboard_guest_mame68k`, `keyboard_guest_executor` | `test_keyboard_guest.sh` | Keystrokes sent with `/api/keypress` reach the front application |
 | `drag_executor` | `test_drag_executor.sh` | Drag and drop between SimpleText and the Finder on Executor (a clipping file on the desktop and back) |
 | `aslm_executor` | `test_aslm_executor.sh` | Apple's Shared Library Manager on Executor through Apple's ASLM test tools in MPW Shell; skips without `~/storage/aslm-kit` |
-| `toolbox_suite_uae`, `toolbox_suite_executor` | `test_toolbox_suite.sh` | Executor's Toolbox gtests built with Retro68 into a 68k application and run in the guest: on Apple's ROM and System (the ground truth) and on Executor. Expected failures in `tests/guest/toolbox_expected_<backend>.txt`. Skips without Retro68; the two share a build directory (`RESOURCE_LOCK toolbox_app`) |
+| `toolbox_suite_uae`, `toolbox_suite_executor` | `test_toolbox_suite.sh` | Executor's Toolbox gtests built with Retro68 into a 68k application and run in the guest: on Apple's ROM and System (the ground truth) and on Executor. Expected failures in `tests/guest/toolbox_expected_<backend>.txt` (`..._<backend>_<version>.txt` with `--os-version`, where there is one). Skips without Retro68; the two share a build directory (`RESOURCE_LOCK toolbox_app`) |
 | `mpw_toolchain_executor` | `test_mpw_toolchain.sh` | Apple's MPW (SC, Link, ToolServer) on Executor through `tools/mpw/mpw`; skips without the MPW disk (`tools/mpw/mpw setup`) |
 | `guest_builds_current` | `test_guest_builds.sh` | The committed guest programs (MacPhoenixSuite, OTTest) are their sources' builds: rebuilt with `tools/mpw/mpw` and compared |
 | `ot_executor` | `test_ot_executor.sh` | Executor's native Open Transport through Apple's 68k OT glue (`tests/guest/ot`, an MPW tool run in ToolServer) against a host echo server |
+| `otcfg_rom`, `otcfg_rom_ppc`, `otcfg_executor`, `otcfg_executor_ppc` | `test_guest_suite.sh --os-version 7.6.1 --app CfgTest68K.bin` (`CfgTestPPC.bin`) | Open Transport's configuration database (what the TCP/IP control panel reads and writes; `tests/guest/otcfg`) called directly, from 68k code and PowerPC code: Apple's OT 1.1.1 on the Quadra and the G3 (the reference) and Executor's |
 | `threads_executor` | `test_threads_executor.sh` | The Thread Manager on Executor through UserLand Frontier's UserTalk threads (`/api/script`) |
+| `*_761` | the cell's script with `--os-version 7.6.1` | The same cells on Mac OS 7.6.1 (`tests-7.6.1`; label `761`): on the Quadra the guest suite (Retro68 build), RetroTest, the Finder and MacTCP sections, the command bridge and the Toolbox suite (`toolbox_expected_uae_7.6.1.txt`: 7.6.1's List Manager makes larger lists); on the G3 under mame-ppc the guest suite (MPW and Retro68 builds), RetroTest, OTTest and the command bridge; on Executor (Apple's 7.6.1 System) the guest suite in all four builds, RetroTest, OTTest (MPW, PowerPC, Retro68 68k and PowerPC), the command bridge, the Toolbox suite, Finder, MacTCP and the Notification Manager. `ot_retro68_ppc_rom_761` is also labelled `flaky`: Apple's OT 1.1.1 on the G3 crashes in `tcp_async` about half the runs (STRAGGLERS 66) |
 
 **Executor gtests** (label `executor`)
 
@@ -148,7 +152,7 @@ variables) or from the environment directly:
 | Scratch | `~/storage/tmp` | `cmake -B build -DTEST_TMPDIR=...` (every test's `TMPDIR`; `/tmp` is RAM-backed here) |
 
 The disk images are the ones `provisioning/build.py` makes:
-`tests-7.5.5` (most tests), `tests-7.6.1` (`guest_suite_761`),
+`tests-7.5.5` (most tests), `tests-7.6.1` (the `*_761` cells),
 `tests-9.0.4` (the PowerPC guest tests) and `6.0.8` (the SE and the IIci).
 `tests/lib/refresh_test_disk.sh NAME $$` builds the image if it is missing
 or out of date, then gives the test its own copy,
