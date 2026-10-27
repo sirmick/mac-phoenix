@@ -468,6 +468,12 @@ static Ptr floating_current; /* the current layer, when it is a floating one */
 static GUEST<WindowPeek> process_list_stash;
 static GUEST<AuxWinHandle> process_aux_win_stash;
 static GUEST<AuxCtlHandle> process_aux_ctl_stash;
+/* ... and its pending activate and deactivate events: a floating layer's
+   windows (Control Strip's strip) are no application's, so showing one
+   while its layer is current gives the application no activate event
+   (SimpleSound, given one for the strip, took its refCon for its own
+   data). */
+static GUEST<WindowPtr> process_activate_stash, process_deactive_stash;
 static bool root_current; /* SetCurLayer(root): FindWindow looks everywhere */
 /* SetCurLayer to another process's layer: FindWindow looks at its windows
    (Apple's Drag Manager descends into the drop target's layer). */
@@ -829,6 +835,8 @@ static void set_current_layer(Ptr rec)
         LM(WindowList) = process_list_stash;
         LM(AuxWinHead) = process_aux_win_stash;
         LM(AuxCtlHead) = process_aux_ctl_stash;
+        LM(CurActivate) = process_activate_stash;
+        LM(CurDeactive) = process_deactive_stash;
         floating_current = nullptr;
     }
     if(l.floating)
@@ -836,6 +844,8 @@ static void set_current_layer(Ptr rec)
         process_list_stash = LM(WindowList);
         process_aux_win_stash = LM(AuxWinHead);
         process_aux_ctl_stash = LM(AuxCtlHead);
+        process_activate_stash = LM(CurActivate);
+        process_deactive_stash = LM(CurDeactive);
         LM(WindowList) = LAYER_FIELD(l.floating, layer_windows, WindowPeek);
         LM(AuxWinHead) = LAYER_FIELD(l.floating, layer_aux_win, AuxWinHandle);
         LM(AuxCtlHead) = LAYER_FIELD(l.floating, layer_aux_ctl, AuxCtlHandle);
