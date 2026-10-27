@@ -1396,8 +1396,6 @@ static void test_cancel(void)
     OTMemzero(&t, sizeof t);
 #if defined(powerc) || defined(__powerc) || defined(__POWERPC__)
     t.tm.tmAddr = NewTimerProc(cancel_proc);
-#elif defined(__GNUC__)
-    t.tm.tmAddr = (ProcPtr)cancel_proc;
 #else
     t.tm.tmAddr = (TimerUPP)cancel_proc;
 #endif

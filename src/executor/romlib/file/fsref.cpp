@@ -1290,28 +1290,9 @@ static bool partialMatch(const std::u16string& name, const std::u16string& part)
     return false;
 }
 
-/* FSCatalogSearch's searchBits (Universal Interfaces 3.3.2) */
+/* FSCatalogSearch's searchBits: the definitions' fsSB... (FileMgr.yaml) */
 enum : uint32_t
 {
-    fsSBPartialName = 1u << 0,
-    fsSBFullName = 1u << 1,
-    fsSBFlAttrib = 1u << 2,
-    fsSBFlFndrInfo = 1u << 3,
-    fsSBDrNmFls = 1u << 4,
-    fsSBFlLgLen = 1u << 5,
-    fsSBFlPyLen = 1u << 6,
-    fsSBFlRLgLen = 1u << 7,
-    fsSBFlRPyLen = 1u << 8,
-    fsSBFlCrDat = 1u << 9,
-    fsSBFlMdDat = 1u << 10,
-    fsSBFlBkDat = 1u << 11,
-    fsSBFlXFndrInfo = 1u << 12,
-    fsSBFlParID = 1u << 13,
-    fsSBNegate = 1u << 14,
-    fsSBNodeID = 1u << 15,
-    fsSBAttributeModDate = 1u << 16,
-    fsSBAccessDate = 1u << 17,
-    fsSBPermissions = 1u << 18,
     kSearchBits = (1u << 19) - 1,       /* more: errFSBadSearchParams (9.0.4) */
     kInfoBits = kSearchBits & ~(fsSBPartialName | fsSBFullName | fsSBNegate),
 };

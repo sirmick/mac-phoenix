@@ -397,7 +397,7 @@ OSErr C_AEDisposeDesc(AEDesc *desc);PASCAL_SUBTRAP(AEDisposeDesc, 0xA816, 0x0204
 OSErr C_AECoerceDesc(AEDesc *desc, DescType result_type, AEDesc *desc_out);PASCAL_SUBTRAP(AECoerceDesc, 0xA816, 0x0603, Pack8);
 
 
-OSErr C_AEGetParamPtr(GUEST<AERecord> *record, AEKeyword keyword, DescType desired_type, GUEST<DescType> *type_out, Ptr data, Size max_size, GUEST<Size> *size_out);PASCAL_SUBTRAP(AEGetParamPtr, 0xA816, 0x0E11, Pack8);
+OSErr C_AEGetParamPtr(GUEST<AERecord> *record, AEKeyword keyword, DescType desired_type, GUEST<DescType> *type_out, void *data, Size max_size, GUEST<Size> *size_out);PASCAL_SUBTRAP(AEGetParamPtr, 0xA816, 0x0E11, Pack8);
 
 
 OSErr C_AEGetParamDesc(GUEST<AERecord> *record, AEKeyword keyword, DescType desired_type, AEDesc *desc_out);PASCAL_SUBTRAP(AEGetParamDesc, 0xA816, 0x0812, Pack8);
@@ -463,7 +463,7 @@ OSErr C_AEGetSpecialHandler(AEKeyword function_class, GUEST<AEEventHandlerUPP> *
 OSErr C_AESend(GUEST<AppleEvent> *evt, GUEST<AppleEvent> *reply, AESendMode send_mode, AESendPriority send_priority, int32_t timeout, IdleUPP idle_proc, EventFilterUPP filter_proc);PASCAL_SUBTRAP(AESend, 0xA816, 0x0D17, Pack8);
 
 
-OSErr C_AECoercePtr(DescType data_type, Ptr data, Size data_size, DescType result_type, AEDesc *desc_out);PASCAL_SUBTRAP(AECoercePtr, 0xA816, 0x0A02, Pack8);
+OSErr C_AECoercePtr(DescType data_type, const void *data, Size data_size, DescType result_type, AEDesc *desc_out);PASCAL_SUBTRAP(AECoercePtr, 0xA816, 0x0A02, Pack8);
 
 
 OSErr C_AEGetEventHandler(AEEventClass event_class, AEEventID event_id, GUEST<AEEventHandlerUPP> *hdlr, GUEST<int32_t> *refcon, Boolean system_handler_p);PASCAL_SUBTRAP(AEGetEventHandler, 0xA816, 0x0921, Pack8);
@@ -508,7 +508,7 @@ OSErr C_AERemoveCoercionHandler(DescType from_type, DescType to_type, AECoerceDe
 OSErr C_AEPutArray(GUEST<AEDescList> *list, AEArrayType type, AEArrayDataPointer array_data, DescType item_type, Size item_size, int32_t item_count);PASCAL_SUBTRAP(AEPutArray, 0xA816, 0x0B0D, Pack8);
 
 
-OSErr C_AECreateList(Ptr list_elt_prefix, Size list_elt_prefix_size, Boolean is_record_p, GUEST<AEDescList> *list_out);PASCAL_SUBTRAP(AECreateList, 0xA816, 0x0706, Pack8);
+OSErr C_AECreateList(const void *list_elt_prefix, Size list_elt_prefix_size, Boolean is_record_p, GUEST<AEDescList> *list_out);PASCAL_SUBTRAP(AECreateList, 0xA816, 0x0706, Pack8);
 
 
 OSErr C_AEGetAttributeDesc(GUEST<AppleEvent> *evt, AEKeyword keyword, DescType desired_type, AEDesc *desc_out);PASCAL_SUBTRAP(AEGetAttributeDesc, 0xA816, 0x0826, Pack8);
@@ -574,5 +574,12 @@ OSErr glue_CreateObjSpecifier(DescType desiredClass, AEDesc *container, DescType
 
 OSErr glue_CreateRangeDescriptor(AEDesc *start, AEDesc *stop, Boolean disposeInputs, AEDesc *result);LIBRARY_FUNCTION(InterfaceLib, CreateRangeDescriptor, glue_CreateRangeDescriptor);
 
+
+enum {typeShortInteger = typeSInt16,
+typeLongInteger = typeSInt32,
+typeAppParameters = "appa"_4,
+kAERestart = "rest"_4,
+kAEShutDown = "shut"_4,
+};
 
 } /* namespace Executor */

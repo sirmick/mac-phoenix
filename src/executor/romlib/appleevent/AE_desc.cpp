@@ -773,7 +773,7 @@ OSErr Executor::C_AEDuplicateDesc(AEDesc *src, AEDesc *dst)
 
 /* descriptor functions for lists */
 
-OSErr Executor::C_AECreateList(Ptr list_elt_prefix, Size list_elt_prefix_size,
+OSErr Executor::C_AECreateList(const void *list_elt_prefix, Size list_elt_prefix_size,
                                Boolean is_record_p, AEDescList *list_out)
 {
     list_header_t header;
@@ -942,7 +942,7 @@ OSErr Executor::C_AEPutParamDesc(AERecord *record, AEKeyword keyword,
 
 OSErr Executor::C_AEGetParamPtr(AERecord *record, AEKeyword keyword,
                               DescType desired_type, GUEST<DescType> *type_out,
-                              Ptr data, Size max_size, GUEST<Size> *size_out)
+                              void *data, Size max_size, GUEST<Size> *size_out)
 {
     descriptor_t *desc = (descriptor_t *)alloca(sizeof *desc);
     descriptor_t *coerced_desc = (descriptor_t *)alloca(sizeof *coerced_desc);
@@ -960,7 +960,7 @@ OSErr Executor::C_AEGetParamPtr(AERecord *record, AEKeyword keyword,
 
     *type_out = DESC_TYPE(coerced_desc);
     ae_desc_to_ptr(desc,
-                   data, max_size, size_out);
+                   (Ptr)data, max_size, size_out);
     AE_RETURN_ERROR(AEDisposeDesc(coerced_desc));
 }
 

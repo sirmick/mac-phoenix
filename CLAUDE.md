@@ -189,7 +189,8 @@ src/
 
 BridgeAgent/
   BridgeAgent.c                     — BridgeAgent source (Retro68 m68k); takes requests over the bridge trap $ABE5
-  BridgeAgent.bin                   — Pre-built MacBinary (committed; rebuilt by CMake when Retro68 present)
+  BridgeAgent.bin                   — Pre-built MacBinary (committed; rebuilt by CMake when Retro68 and ruby are
+                                      present, against the Multiversal Interfaces generated from Executor's definitions)
   BridgeAgent.r                     — Resource fork: SIZE, BNDL, FREF, creator sig, icons.r include
 
 tests/

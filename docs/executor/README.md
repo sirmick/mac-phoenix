@@ -137,15 +137,21 @@ generator wraps pointers itself; the C generator would write `GUEST`).
 The generator names a header for each Universal Interfaces file the
 definitions cover (`cincludes.rb`; each just includes `Multiverse.h`).
 
-MacBrowser and parts of MacPhoenixSuite build against them alone (the
-test compiles them); the rest of MacPhoenix's guest programs don't yet.
-What they still miss: Open Transport's types (its functions are in the
-definitions, for Executor only: LIBRARIES.md), AppleScript.h, the HFS Plus constants (`kFSCatInfo*`),
-`fsRtDirID`, `SInt64`, MacTCP's parameter blocks and UPPs, `NMUPP`,
-`Video.h`'s records, `fp.h`, `TextCommon.h`, some high-level File
-Manager glue (`HSetFInfo`, `DirCreate`, `CatMove`), and `ONEWORDINLINE`. Some Executor signatures differ from Apple's
+BridgeAgent and MacBrowser are built against them alone (CMake,
+`tools/retro68/multiversal-headers.sh`: generated into the build tree,
+with none of the toolchain's or Apple's interfaces; needs ruby), as are
+RetroTest, OTTest and parts of MacPhoenixSuite; `multiversal_retro68`
+compiles each. What the others still miss: `fp.h`, `TextCommon.h`,
+`AppleScript.h`, the HFS Plus constants (`kFSCatInfo*`) and `SInt64`,
+MacTCP's parameter blocks and UPPs, `NMUPP`, some high-level File
+Manager glue (`HSetFInfo`, `DirCreate`, `CatMove`, `HSetFLock`), and
+`ONEWORDINLINE`. Many parameters Apple declares `const T *` are plain
+`T *` here (warnings in C). Some Executor signatures differ from Apple's
 (`NewThread` takes `ProcPtr` and `LONGINT`s, not `ThreadEntryUPP`,
-`ThreadStyle` and `ThreadOptions`).
+`ThreadStyle` and `ThreadOptions`); where the C side needs Apple's form
+and Executor's code another, the definition is split (`only-for:
+Executor` / `not-for: Executor`: `TMTask`'s `tmAddr`, `GetFrontProcess`,
+`PBCatSearch`).
 
 ## Documentation
 

@@ -2633,7 +2633,8 @@
 
 # ####
 
-- function:
+- only-for: Executor
+  function:
     name: PBCatSearch
     return: OSErr
     args:
@@ -3518,6 +3519,142 @@
         type: int16_t[6]
     name: CatPositionRec
     size: 16
+
+# ####
+
+- struct:
+    name: CSParam
+    members:
+      - name: qLink
+        type: QElemPtr
+      - name: qType
+        type: INTEGER
+      - name: ioTrap
+        type: INTEGER
+      - name: ioCmdAddr
+        type: Ptr
+      - name: ioCompletion
+        type: ProcPtr
+      - name: ioResult
+        type: OSErr
+      - name: ioNamePtr
+        type: StringPtr
+      - name: ioVRefNum
+        type: INTEGER
+      - name: ioMatchPtr
+        type: FSSpecPtr
+      - name: ioReqMatchCount
+        type: LONGINT
+      - name: ioActMatchCount
+        type: LONGINT
+      - name: ioSearchBits
+        type: LONGINT
+      - name: ioSearchInfo1
+        type: CInfoPBPtr
+      - name: ioSearchInfo2
+        type: CInfoPBPtr
+      - name: ioSearchTime
+        type: LONGINT
+      - name: ioCatPosition
+        type: CatPositionRec
+      - name: ioOptBuffer
+        type: Ptr
+      - name: ioOptBufSize
+        type: LONGINT
+    size: 76
+
+# ####
+
+- typedef:
+    name: CSParamPtr
+    type: CSParam*
+
+# ####
+
+# Apple's form: its own parameter block (Executor's takes a ParmBlkPtr).
+- not-for: Executor
+  function:
+    name: PBCatSearch
+    return: OSErr
+    args:
+      - name: pb
+        type: CSParamPtr
+        register: A0
+      - name: async
+        type: Boolean
+        register: TrapBit<0x400>
+    file_trap: true
+    trap: 0xA260
+    dispatcher: FSDispatch
+    selector: 0x18
+    returnreg: D0
+    variants:
+      - PBCatSearchSync
+      - PBCatSearchAsync
+
+# ####
+
+- enum:
+    values:
+      - name: fsSBPartialName
+        value: 1
+      - name: fsSBFullName
+        value: 2
+      - name: fsSBFlAttrib
+        value: 4
+      - name: fsSBFlFndrInfo
+        value: 8
+      - name: fsSBFlLgLen
+        value: 32
+      - name: fsSBFlPyLen
+        value: 64
+      - name: fsSBFlRLgLen
+        value: 128
+      - name: fsSBFlRPyLen
+        value: 256
+      - name: fsSBFlCrDat
+        value: 512
+      - name: fsSBFlMdDat
+        value: 1024
+      - name: fsSBFlBkDat
+        value: 2048
+      - name: fsSBFlXFndrInfo
+        value: 4096
+      - name: fsSBFlParID
+        value: 8192
+      - name: fsSBNegate
+        value: 16384
+      - name: fsSBDrUsrWds
+        value: 8
+      - name: fsSBDrNmFls
+        value: 16
+      - name: fsSBDrCrDat
+        value: 512
+      - name: fsSBDrMdDat
+        value: 1024
+      - name: fsSBDrBkDat
+        value: 2048
+      - name: fsSBDrFndrInfo
+        value: 4096
+      - name: fsSBDrParID
+        value: 8192
+      - name: fsSBNodeID
+        value: 0x00008000
+      - name: fsSBAttributeModDate
+        value: 0x00010000
+      - name: fsSBAccessDate
+        value: 0x00020000
+      - name: fsSBPermissions
+        value: 0x00040000
+
+# ####
+
+- enum:
+    values:
+      - name: fsRtParID
+        value: 1
+      - name: fsRtDirID
+        value: 2
 
 # ####
 - struct:

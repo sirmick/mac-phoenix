@@ -628,3 +628,37 @@ pascal OSErr SerStatus(INTEGER rn, SerStaRec *serstap) /* IMII-253 */
         memcpy(serstap, status, sizeof(*serstap));
     return err;
 }
+
+/* TextEdit's private scrap and the desk scrap (Inside Macintosh: Text,
+   "TextEdit"): the scrap is the handle TEScrpHandle, its length in
+   TEScrpLength; 68k glue, not traps. */
+pascal OSErr TEFromScrap(void)
+{
+    LONGINT offset;
+    LONGINT len = GetScrap(LMGetTEScrpHandle(), 'TEXT', &offset);
+    if(len < 0)
+        return (OSErr)len;
+    LMSetTEScrpLength((INTEGER)len);
+    return noErr;
+}
+
+/* The caller zeroes the desk scrap first (ZeroScrap). */
+pascal OSErr TEToScrap(void)
+{
+    Handle h = LMGetTEScrpHandle();
+    LONGINT err;
+    HLock(h);
+    err = PutScrap(LMGetTEScrpLength(), 'TEXT', *h);
+    HUnlock(h);
+    return (OSErr)err;
+}
+
+pascal Handle TEScrapHandle(void)
+{
+    return LMGetTEScrpHandle();
+}
+
+pascal LONGINT TEGetScrapLength(void)
+{
+    return (unsigned short)LMGetTEScrpLength();
+}

@@ -990,7 +990,7 @@
       - name: type_out
         type: DescType*
       - name: data
-        type: Ptr
+        type: void*
       - name: max_size
         type: Size
       - name: size_out
@@ -1305,7 +1305,7 @@
       - name: data_type
         type: DescType
       - name: data
-        type: Ptr
+        type: const void*
       - name: data_size
         type: Size
       - name: result_type
@@ -1603,7 +1603,7 @@
     return: OSErr
     args:
       - name: list_elt_prefix
-        type: Ptr
+        type: const void*
       - name: list_elt_prefix_size
         type: Size
       - name: is_record_p
@@ -1979,3 +1979,20 @@
         type: "AEDesc*"
     library: InterfaceLib
     executor: glue_CreateRangeDescriptor
+
+# ####
+
+# Older names (AEDataModel.h), the application parameters, and the
+# Finder's restart and shut-down events (AERegistry.h)
+- enum:
+    values:
+      - name: typeShortInteger
+        value: typeSInt16
+      - name: typeLongInteger
+        value: typeSInt32
+      - name: typeAppParameters
+        value: "'appa'"
+      - name: kAERestart
+        value: "'rest'"
+      - name: kAEShutDown
+        value: "'shut'"

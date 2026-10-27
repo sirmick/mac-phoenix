@@ -2089,7 +2089,7 @@ OSErr Executor::process_launch(LaunchParamBlockRec *lpbp)
     if(process_info_t *q = running_process_of(*lpbp->launchAppSpec))
     {
         lpbp->launchProcessSN = q->serial_number;
-        if(!(lpbp->launchControlFlags & 0x0400 /* launchDontSwitch */) && q != front_process)
+        if(!(lpbp->launchControlFlags & launchDontSwitch) && q != front_process)
             pending_front = q;
         if(Ptr ap = (Ptr)lpbp->launchAppParameters)
             post_app_parameters(ap, q->serial_number);

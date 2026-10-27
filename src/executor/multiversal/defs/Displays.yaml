@@ -1,3 +1,9 @@
+- typedef:
+    name: DisplayIDType
+    type: UInt32
+
+# ####
+
 - funptr:
     args:
       - name: theEvent
@@ -115,7 +121,7 @@
       - name: displayDevice
         type: GDHandle
       - name: displayID
-        type: uint32_t*
+        type: DisplayIDType*
       - name: failToMain
         type: Boolean
     dispatcher: DisplayDispatch
@@ -129,7 +135,7 @@
     return: OSErr
     args:
       - name: displayID
-        type: uint32_t
+        type: DisplayIDType
       - name: displayDevice
         type: GDHandle*
       - name: failToMain
@@ -157,7 +163,7 @@
     return: OSErr
     args:
       - name: displayID
-        type: uint32_t
+        type: DisplayIDType
       - name: modeListFlags
         type: uint32_t
       - name: reserved
@@ -219,7 +225,7 @@
     return: OSErr
     args:
       - name: displayID
-        type: uint32_t
+        type: DisplayIDType
       - name: portComponent
         type: Component*
       - name: portDesc
@@ -241,7 +247,7 @@
       - name: notifyClass
         type: OSType
       - name: displayID
-        type: uint32_t
+        type: DisplayIDType
       - name: notifyComponent
         type: ComponentInstance
     dispatcher: DisplayDispatch
@@ -275,7 +281,7 @@
     return: OSErr
     args:
       - name: displayID
-        type: uint32_t
+        type: DisplayIDType
       - name: theDeviceComponent
         type: Component*
       - name: theDesc

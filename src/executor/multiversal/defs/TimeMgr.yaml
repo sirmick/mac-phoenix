@@ -1,4 +1,5 @@
-- struct:
+- only-for: Executor
+  struct:
     name: TMTask
     members:
       - name: qLink
@@ -16,6 +17,11 @@
         comment: |
           I don't trust IMIV-301
     size: 22
+
+# Apple's: tmAddr a TimerUPP (Executor's code keeps a ProcPtr).
+- not-for: Executor
+  struct:
+    name: TMTask
 
 # ####
 
@@ -35,6 +41,26 @@
       A task's routine (tmAddr): on 68k it finds its task in A1; PowerPC
       code gets it as its argument, through a routine descriptor
       (NewTimerUPP). For Executor tmAddr stays a ProcPtr.
+
+# ####
+
+- not-for: Executor
+  struct:
+    name: TMTask
+    members:
+      - name: qLink
+        type: QElemPtr
+      - name: qType
+        type: INTEGER
+      - name: tmAddr
+        type: TimerUPP
+      - name: tmCount
+        type: LONGINT
+      - name: tmWakeUp
+        type: LONGINT
+      - name: tmReserved
+        type: LONGINT
+    size: 22
 
 # ####
 

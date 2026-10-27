@@ -62,6 +62,64 @@ void describeStruct(const VDDefModeRec& x, std::ostream& os)
     os << "}";
 }
 
+void describeStruct(const VDSwitchInfoRec& x, std::ostream& os)
+{
+    os << "VDSwitchInfoRec{";
+    logging::logField(os, "csMode", x.csMode);
+    logging::logField(os, "csData", x.csData);
+    logging::logField(os, "csPage", x.csPage);
+    logging::logField(os, "csBaseAddr", x.csBaseAddr);
+    logging::logField(os, "csReserved", x.csReserved);
+    os << "}";
+}
+
+void describeStruct(const VDTimingInfoRec& x, std::ostream& os)
+{
+    os << "VDTimingInfoRec{";
+    logging::logField(os, "csTimingMode", x.csTimingMode);
+    logging::logField(os, "csTimingReserved", x.csTimingReserved);
+    logging::logField(os, "csTimingFormat", x.csTimingFormat);
+    logging::logField(os, "csTimingData", x.csTimingData);
+    logging::logField(os, "csTimingFlags", x.csTimingFlags);
+    os << "}";
+}
+
+void describeStruct(const VDDisplayConnectInfoRec& x, std::ostream& os)
+{
+    os << "VDDisplayConnectInfoRec{";
+    logging::logField(os, "csDisplayType", x.csDisplayType);
+    logging::logField(os, "csConnectTaggedType", x.csConnectTaggedType);
+    logging::logField(os, "csConnectTaggedData", x.csConnectTaggedData);
+    logging::logField(os, "csConnectFlags", x.csConnectFlags);
+    logging::logField(os, "csDisplayComponent", x.csDisplayComponent);
+    logging::logField(os, "csConnectReserved", x.csConnectReserved);
+    os << "}";
+}
+
+void describeStruct(const VDBaseAddressInfoRec& x, std::ostream& os)
+{
+    os << "VDBaseAddressInfoRec{";
+    logging::logField(os, "csDevData", x.csDevData);
+    logging::logField(os, "csDevBase", x.csDevBase);
+    logging::logField(os, "csModeReserved", x.csModeReserved);
+    logging::logField(os, "csModeBase", x.csModeBase);
+    os << "}";
+}
+
+void describeStruct(const VDResolutionInfoRec& x, std::ostream& os)
+{
+    os << "VDResolutionInfoRec{";
+    logging::logField(os, "csPreviousDisplayModeID", x.csPreviousDisplayModeID);
+    logging::logField(os, "csDisplayModeID", x.csDisplayModeID);
+    logging::logField(os, "csHorizontalPixels", x.csHorizontalPixels);
+    logging::logField(os, "csVerticalLines", x.csVerticalLines);
+    logging::logField(os, "csRefreshRate", x.csRefreshRate);
+    logging::logField(os, "csMaxDepthMode", x.csMaxDepthMode);
+    logging::logField(os, "csResolutionFlags", x.csResolutionFlags);
+    logging::logField(os, "csReserved", x.csReserved);
+    os << "}";
+}
+
 } // namespace Executor
 
 namespace Executor { namespace structdump {
@@ -91,6 +149,26 @@ void dump_VDDefModeRec(std::ostream& os, const void* p)
 {
     describeStruct(*(const VDDefModeRec*)p, os);
 }
+void dump_VDSwitchInfoRec(std::ostream& os, const void* p)
+{
+    describeStruct(*(const VDSwitchInfoRec*)p, os);
+}
+void dump_VDTimingInfoRec(std::ostream& os, const void* p)
+{
+    describeStruct(*(const VDTimingInfoRec*)p, os);
+}
+void dump_VDDisplayConnectInfoRec(std::ostream& os, const void* p)
+{
+    describeStruct(*(const VDDisplayConnectInfoRec*)p, os);
+}
+void dump_VDBaseAddressInfoRec(std::ostream& os, const void* p)
+{
+    describeStruct(*(const VDBaseAddressInfoRec*)p, os);
+}
+void dump_VDResolutionInfoRec(std::ostream& os, const void* p)
+{
+    describeStruct(*(const VDResolutionInfoRec*)p, os);
+}
 }
 
 void registerStructDumps_VDriver()
@@ -102,6 +180,11 @@ void registerStructDumps_VDriver()
         { "VDPgInfo", sizeof(VDPgInfo), &dump_VDPgInfo },
         { "VDFlagRec", sizeof(VDFlagRec), &dump_VDFlagRec },
         { "VDDefModeRec", sizeof(VDDefModeRec), &dump_VDDefModeRec },
+        { "VDSwitchInfoRec", sizeof(VDSwitchInfoRec), &dump_VDSwitchInfoRec },
+        { "VDTimingInfoRec", sizeof(VDTimingInfoRec), &dump_VDTimingInfoRec },
+        { "VDDisplayConnectInfoRec", sizeof(VDDisplayConnectInfoRec), &dump_VDDisplayConnectInfoRec },
+        { "VDBaseAddressInfoRec", sizeof(VDBaseAddressInfoRec), &dump_VDBaseAddressInfoRec },
+        { "VDResolutionInfoRec", sizeof(VDResolutionInfoRec), &dump_VDResolutionInfoRec },
     };
     registerTypes(types, sizeof(types) / sizeof(types[0]));
 }

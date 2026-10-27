@@ -52,6 +52,10 @@ enum {extendedBlockLen = sizeof(LaunchParamBlockRec) - 12,
 
 enum {launchContinue = 16384,
 launchNoFileFlags = 2048,
+launchUseMinimum = 1024,
+launchDontSwitch = 512,
+launchAllow24Bit = 256,
+launchInhibitDaemon = 128,
 };
 
 struct ProcessInfoRec{GUEST_STRUCT;GUEST<uint32_t> processInfoLength;GUEST<StringPtr> processName;ProcessSerialNumber processNumber;GUEST<uint32_t> processType;GUEST<OSType> processSignature;GUEST<uint32_t> processMode;GUEST<Ptr> processLocation;GUEST<uint32_t> processSize;GUEST<uint32_t> processFreeMem;ProcessSerialNumber processLauncher;GUEST<uint32_t> processLaunchDate;GUEST<uint32_t> processActiveTime;GUEST<FSSpecPtr> processAppSpec;};static_assert(sizeof(ProcessInfoRec) == 60);void describeStruct(const ProcessInfoRec&, std::ostream&);

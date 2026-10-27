@@ -156,7 +156,8 @@ fi
 
 # 4. MacPhoenix's own guest programs that build against these headers alone
 #    (docs/executor/README.md lists what the others still lack).
-for s in MacBrowser/MacBrowser.c tests/guest/mpw-hello/hello.c \
+for s in BridgeAgent/BridgeAgent.c MacBrowser/MacBrowser.c MacBrowser/browser_shm.c \
+         tests/guest/mpw-hello/hello.c tests/guest/retro68/rtest.c \
          tests/guest/suite/main.c tests/guest/suite/finder.c \
          tests/guest/suite/keyboard.c tests/guest/suite/net.c \
          tests/guest/suite/netdeep.c; do

@@ -793,6 +793,41 @@ typedef FSRef *FSRefPtr;
 
 struct CatPositionRec{GUEST_STRUCT;GUEST<int32_t> initialize;GUEST<int16_t> priv[6];};static_assert(sizeof(CatPositionRec) == 16);void describeStruct(const CatPositionRec&, std::ostream&);
 
+struct CSParam{GUEST_STRUCT;GUEST<QElemPtr> qLink;GUEST<INTEGER> qType;GUEST<INTEGER> ioTrap;GUEST<Ptr> ioCmdAddr;GUEST<ProcPtr> ioCompletion;GUEST<OSErr> ioResult;GUEST<StringPtr> ioNamePtr;GUEST<INTEGER> ioVRefNum;GUEST<FSSpecPtr> ioMatchPtr;GUEST<LONGINT> ioReqMatchCount;GUEST<LONGINT> ioActMatchCount;GUEST<LONGINT> ioSearchBits;GUEST<CInfoPBPtr> ioSearchInfo1;GUEST<CInfoPBPtr> ioSearchInfo2;GUEST<LONGINT> ioSearchTime;CatPositionRec ioCatPosition;GUEST<Ptr> ioOptBuffer;GUEST<LONGINT> ioOptBufSize;};static_assert(sizeof(CSParam) == 76);void describeStruct(const CSParam&, std::ostream&);
+
+typedef CSParam *CSParamPtr;
+
+enum {fsSBPartialName = 1,
+fsSBFullName = 2,
+fsSBFlAttrib = 4,
+fsSBFlFndrInfo = 8,
+fsSBFlLgLen = 32,
+fsSBFlPyLen = 64,
+fsSBFlRLgLen = 128,
+fsSBFlRPyLen = 256,
+fsSBFlCrDat = 512,
+fsSBFlMdDat = 1024,
+fsSBFlBkDat = 2048,
+fsSBFlXFndrInfo = 4096,
+fsSBFlParID = 8192,
+fsSBNegate = 16384,
+fsSBDrUsrWds = 8,
+fsSBDrNmFls = 16,
+fsSBDrCrDat = 512,
+fsSBDrMdDat = 1024,
+fsSBDrBkDat = 2048,
+fsSBDrFndrInfo = 4096,
+fsSBDrParID = 8192,
+fsSBNodeID = 32768,
+fsSBAttributeModDate = 65536,
+fsSBAccessDate = 131072,
+fsSBPermissions = 262144,
+};
+
+enum {fsRtParID = 1,
+fsRtDirID = 2,
+};
+
 struct FSCatalogInfo{GUEST_STRUCT;GUEST<uint16_t> nodeFlags;GUEST<FSVolumeRefNum> volume;GUEST<uint32_t> parentDirID;GUEST<uint32_t> nodeID;uint8_t sharingFlags;uint8_t userPrivileges;uint8_t reserved1;uint8_t reserved2;UTCDateTime createDate;UTCDateTime contentModDate;UTCDateTime attributeModDate;UTCDateTime accessDate;UTCDateTime backupDate;GUEST<uint32_t> permissions[4];uint8_t finderInfo[16];uint8_t extFinderInfo[16];GUEST<uint64_t> dataLogicalSize;GUEST<uint64_t> dataPhysicalSize;GUEST<uint64_t> rsrcLogicalSize;GUEST<uint64_t> rsrcPhysicalSize;GUEST<uint32_t> valence;GUEST<TextEncoding> textEncodingHint;};static_assert(sizeof(FSCatalogInfo) == 144);void describeStruct(const FSCatalogInfo&, std::ostream&);
 
 typedef FSCatalogInfo *FSCatalogInfoPtr;

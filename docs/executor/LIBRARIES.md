@@ -165,7 +165,8 @@ The whole plan (agreed 2026-10-26):
    on our Executor through `LaunchAPPL` (done 2026-10-27, below).
 
 Throughout, the aim is MacPhoenix's own guest programs building against
-the generated headers alone (BridgeAgent without Apple's UI 3.4 first);
+the generated headers alone (BridgeAgent without Apple's UI 3.4 first:
+done 2026-10-27, MacBrowser too);
 `multiversal_retro68` compiles each one that does.
 
 The library routes:
