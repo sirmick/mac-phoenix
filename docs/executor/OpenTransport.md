@@ -284,7 +284,7 @@ an unimplemented C call) and what it does with the answers:
 
 | Call | Arguments, result |
 |---|---|
-| `OTOpenConfigurationsDB` | `(const FSSpec *, permission, DBRef *)`, OSStatus |
+| `OTOpenConfigurationsDB` | `(const FSSpec *, permission, DBRef *)`, OSStatus; the DBRef is the file's resource refnum |
 | `OTCloseConfigurationsDB` | `(DBRef *)`, OSStatus; the reference is cleared |
 | `OTGetActiveConfigID` | `(DBRef)`, the ID |
 | `OTGetConfigsCount` | `(DBRef)`, the count |
@@ -304,10 +304,26 @@ fCapabilities $0B, not marked active.
 
 With these the panel opens on 7.6.1 (Apple's System) and shows the
 stored configuration: "Connect via: Ethernet", "Configure: Using DHCP
-Server". Left: on the Quadra the address fields read "< will be
-supplied by server >", on Executor they are empty edit boxes (the panel
-never changes those items' type; which items it shows depends on
-something not yet found); saving (the set, create, copy, delete and
+Server".
+
+**A DBRef is a resource file refnum.** Which address fields a server
+fills in comes from the panel's own `'srvr'` resources (14 bytes, a word
+per field, items 5 to 11; ID 100 + 10 × user mode + 30 for TCP over
+Ethernet + the method − 1: 132 is "TCP / Basic / DHCP"), read with
+`OTGetAttributeValue(ref, 132, 'srvr', buffer, 14)` where `ref` is the
+panel's own resource file refnum, kept in a word. So Apple's
+database reference is the file's refnum, and any open resource file is
+a database; Executor's was a pointer to a block of its own, the read
+failed, every field stayed an edit box. Found by tracing the panel on the
+Quadra (gdb, a hardware watchpoint on its code; the field table in its
+object), the panel's code only observed. A field a server fills in is
+static text: on the Quadra "< will be supplied by server >", since
+Apple's OT has not brought TCP/IP up when the panel opens; on Executor,
+whose OT is always up on the host's network, the address the interface
+has (the router reads "< not available >": Executor's interface info
+has none).
+
+Left: saving (the set, create, copy, delete and
 `TCP...ChangeConfiguration` calls); configurations dialog; checking the
 guessed forms against Apple's OT; PowerPC (`OTConfigLib`).
 

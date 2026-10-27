@@ -9,8 +9,11 @@
  * are private to Open Transport: their arguments were worked out from
  * what the control panel passes and checked against Apple's OT 1.1.1 on
  * the Quadra (docs/executor/OpenTransport.md, "The configuration
- * database"). A database reference is a block Executor keeps the
- * resource file's refnum in. */
+ * database"). A database reference is the resource file's refnum, as
+ * in Apple's OT: the panel keeps it in a word, and reads the defaults in
+ * its own file (the 'srvr' resources: which address fields a server
+ * fills in for each user mode, link and method) by passing that file's
+ * refnum, so any open resource file is a database. */
 
 #include "ot_internal.h"
 #include "ot_provider.h"
@@ -22,7 +25,6 @@
 
 #include <algorithm>
 #include <cstring>
-#include <set>
 #include <string>
 
 using namespace Executor;
@@ -33,16 +35,14 @@ namespace Executor::ot
 
 namespace
 {
-struct ConfigDB
+/* The refnum of an open resource file, from a reference; 0 if it is not
+   one. */
+INTEGER db_of(uint32_t ref)
 {
-    GUEST<INTEGER> refnum;
-};
-
-std::set<uint32_t> open_dbs; /* the references handed out */
-
-ConfigDB *db_of(uint32_t ref)
-{
-    return open_dbs.count(ref) ? (ConfigDB *)SYN68K_TO_US(ref) : nullptr;
+    if(ref == 0 || ref > 0x7FFF)
+        return 0;
+    GetResFileAttrs((INTEGER)ref);
+    return ResError() == noErr ? (INTEGER)ref : 0;
 }
 }
 
@@ -57,20 +57,8 @@ uint32_t cfg_open_db(const Call &c)
     OT_LOG("OTOpenConfigurationsDB: perm %d -> refnum %d err %d\n", perm, refnum, err);
     if(refnum == -1)
         return err ? err : fnfErr;
-    ConfigDB *db;
-    {
-        TheZoneGuard guard(LM(SysZone));
-        db = (ConfigDB *)NewPtrClear(sizeof(ConfigDB));
-    }
-    if(!db)
-    {
-        CloseResFile(refnum);
-        return memFullErr;
-    }
-    db->refnum = refnum;
-    open_dbs.insert(US_TO_SYN68K(db));
     if(out)
-        *out = US_TO_SYN68K(db);
+        *out = (uint16_t)refnum;
     return noErr;
 }
 
@@ -78,14 +66,12 @@ uint32_t cfg_open_db(const Call &c)
 uint32_t cfg_close_db(const Call &c)
 {
     GUEST<uint32_t> *ref = c.p<GUEST<uint32_t>>(0);
-    ConfigDB *db = ref ? db_of(*ref) : nullptr;
-    OT_LOG("OTCloseConfigurationsDB: %s\n", db ? "closed" : "not open");
+    INTEGER db = ref ? db_of(*ref) : 0;
+    OT_LOG("OTCloseConfigurationsDB: %d %s\n", db, db ? "closed" : "not open");
     if(!db)
         return paramErr;
-    CloseResFile(db->refnum);
+    CloseResFile(db);
     OSErr err = ResError();
-    open_dbs.erase(*ref);
-    DisposePtr((Ptr)db);
     *ref = 0;
     return err;
 }
@@ -93,10 +79,10 @@ uint32_t cfg_close_db(const Call &c)
 namespace
 {
 /* The attribute's resource in the database's file alone. */
-Handle attribute(ConfigDB *db, uint32_t config, uint32_t type)
+Handle attribute(INTEGER db, uint32_t config, uint32_t type)
 {
     GUEST<INTEGER> saved = LM(CurMap);
-    UseResFile(db->refnum);
+    UseResFile(db);
     Handle h = Get1Resource(type, (INTEGER)config);
     LM(CurMap) = saved;
     return h;
@@ -107,14 +93,14 @@ Handle attribute(ConfigDB *db, uint32_t config, uint32_t type)
    void *buffer, size): the value's first size bytes. */
 uint32_t cfg_get_attribute_value(const Call &c)
 {
-    ConfigDB *db = db_of(c.l(0));
+    INTEGER db = db_of(c.l(0));
     uint32_t config = c.l(1), type = c.l(2), size = c.l(4);
     uint8_t *buffer = c.p(3);
+    Handle h = db ? attribute(db, config, type) : nullptr;
+    OT_LOG("OTGetAttributeValue: db %u config %u '%c%c%c%c' size %u -> %s\n", c.l(0), config,
+           type >> 24, type >> 16, type >> 8, type, size, !db ? "no such database" : h ? "found" : "missing");
     if(!db)
         return paramErr;
-    Handle h = attribute(db, config, type);
-    OT_LOG("OTGetAttributeValue: config %u '%c%c%c%c' size %u -> %s\n", config, type >> 24,
-           type >> 16, type >> 8, type, size, h ? "found" : "missing");
     if(!h)
         return resNotFound;
     Size n = std::min<Size>(GetHandleSize(h), size);
@@ -160,7 +146,7 @@ uint32_t cfg_user_port_name(const Call &c)
    the 'ccfg' resource (ID 1); 0 if there is none. */
 uint32_t cfg_active_config(const Call &c)
 {
-    ConfigDB *db = db_of(c.l(0));
+    INTEGER db = db_of(c.l(0));
     if(!db)
         return 0;
     Handle h = attribute(db, 1, "ccfg"_4);
@@ -173,7 +159,7 @@ uint32_t cfg_active_config(const Call &c)
    size, 0 if the configuration has none. */
 uint32_t cfg_attribute_size(const Call &c)
 {
-    ConfigDB *db = db_of(c.l(0));
+    INTEGER db = db_of(c.l(0));
     uint32_t config = c.l(1), type = c.l(2);
     Handle h = db ? attribute(db, config, type) : nullptr;
     uint32_t n = h ? GetHandleSize(h) : 0;
@@ -198,7 +184,7 @@ namespace
 struct InDB
 {
     GUEST<INTEGER> saved = LM(CurMap);
-    explicit InDB(ConfigDB *db) { UseResFile(db->refnum); }
+    explicit InDB(INTEGER db) { UseResFile(db); }
     ~InDB() { LM(CurMap) = saved; }
 };
 }
@@ -206,7 +192,7 @@ struct InDB
 /* UInt32 OTGetConfigsCount(DBRef): how many configurations ('cnam'). */
 uint32_t cfg_configs_count(const Call &c)
 {
-    ConfigDB *db = db_of(c.l(0));
+    INTEGER db = db_of(c.l(0));
     if(!db)
         return 0;
     InDB in(db);
@@ -219,7 +205,7 @@ uint32_t cfg_configs_count(const Call &c)
    configuration (from 1), 0 if there is none. */
 uint32_t cfg_indexed_config(const Call &c)
 {
-    ConfigDB *db = db_of(c.l(0));
+    INTEGER db = db_of(c.l(0));
     uint32_t index = c.l(1);
     if(!db)
         return 0;
@@ -242,7 +228,7 @@ uint32_t cfg_indexed_config(const Call &c)
    resource's name. */
 uint32_t cfg_config_name(const Call &c)
 {
-    ConfigDB *db = db_of(c.l(0));
+    INTEGER db = db_of(c.l(0));
     uint32_t config = c.l(1);
     uint8_t *out = c.p(2);
     if(!db)

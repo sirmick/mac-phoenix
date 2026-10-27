@@ -10,6 +10,8 @@
 
 namespace Executor
 {
+extern uint32_t currentTrapPC;   // base/cpu.h
+
 namespace logging
 {
 
@@ -214,7 +216,8 @@ void logTrapCall(const char* trapname, Args... args)
     indent();
     std::clog << trapname << "(";
     logList(args...);
-    std::clog << ")\n" << std::flush;
+    // The trap's address in the guest: the call site at the first level.
+    std::clog << ") @" << std::hex << currentTrapPC << std::dec << "\n" << std::flush;
 }
 
 template<typename Ret, typename... Args>

@@ -286,7 +286,7 @@ syn68k_addr_t Executor::ot::bind_ot_stub(uint32_t stub)
     if(it != defs().end())
     {
         addr = entry_for(it->second);
-        OT_LOG("bind %s #%u %s\n", id.c_str(), index, name);
+        OT_LOG("bind %s #%u %s: $%08x\n", id.c_str(), index, name, (unsigned)addr);
     }
     else
     {
