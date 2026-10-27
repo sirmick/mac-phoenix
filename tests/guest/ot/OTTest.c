@@ -9,7 +9,14 @@
  * The echo server (TCP and UDP on one port) is named in Host:net_echo.txt
  * as "address port", written by the test harness (tests/lib/echo_server.py).
  * One line per case: "PASS name" or "FAIL name: why"; then
- * "DONE <failures>".  Built by build.mpw.sh in MPW (tests/guest/ot/).
+ * "DONE <failures>".  Built by build.mpw in MPW (tests/guest/ot/).
+ *
+ * OTTestPPC is the same source as a PowerPC application (MrC, PPCLink,
+ * Apple's PowerPC OT glue, which imports OTClientLib & co.): it writes its
+ * lines to Host:ot_results.txt and ends them with "---", as the guest
+ * suite's harness (tests/test_guest_suite.sh --results) expects. So do
+ * OTTestRetroPPC and OTTestRetro68K, built with Retro68 against the
+ * headers and glue generated from Executor's definitions (build-retro68.sh).
  */
 
 #include <Types.h>
@@ -25,6 +32,14 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
+
+/* An application (PowerPC, or anything Retro68 builds) writes its lines to
+   Host:ot_results.txt; the 68k MPW tool to MPW's output. */
+#if defined(powerc) || defined(__powerc) || defined(__POWERPC__) || defined(__GNUC__)
+#define OT_APP 1
+#else
+#define OT_APP 0
+#endif
 
 static int failures = 0;
 static InetHost echo_host = 0;
@@ -192,6 +207,12 @@ static void test_dns_sync(void)
         return;
     }
     printf("# localhost -> %s %08lx\n", info.name, (long)info.addrs[0]);
+    if(!info.name[0] || info.name[strlen(info.name) - 1] != '.')
+    {
+        fail("dns_sync", "localhost's name should end with the root's dot", 0);
+        OTCloseProvider(svc);
+        return;
+    }
     err = OTInetStringToAddress(svc, "no-such-host.invalid", &info);
     if(err == noErr)
     {
@@ -845,8 +866,11 @@ static void test_atomics(void)
     long want;
     int i;
 
-    /* SC compiles these inline: BSET, BCLR, BTST, CAS. */
-    if(OTAtomicSetBit(&bits, 3) != 0 || bits != 0x08 || OTAtomicSetBit(&bits, 3) != 1)
+    /* SC compiles these inline: BSET, BCLR, BTST, CAS; elsewhere they are
+       OTClnt$CmnShared's calls. The bit operations answer the bit as it
+       was, 0 or not (OpenTransport.h): Apple's 68k library says true as
+       other than 1. */
+    if(OTAtomicSetBit(&bits, 3) != 0 || bits != 0x08 || !OTAtomicSetBit(&bits, 3))
     {
         fail("atomics", "OTAtomicSetBit", bits);
         return;
@@ -856,7 +880,7 @@ static void test_atomics(void)
         fail("atomics", "OTAtomicTestBit", bits);
         return;
     }
-    if(OTAtomicClearBit(&bits, 3) != 1 || bits != 0)
+    if(!OTAtomicClearBit(&bits, 3) || bits != 0)
     {
         fail("atomics", "OTAtomicClearBit", bits);
         return;
@@ -947,6 +971,7 @@ static void test_tasks(void)
 {
     long st;
     unsigned long until;
+    EventRecord ev;
 
     dt_runs = st_runs = 0;
     dt_could_sync = -1;
@@ -1007,10 +1032,20 @@ static void test_tasks(void)
         OTDestroySystemTask(st);
         return;
     }
-    /* System task time: SystemTask, as WaitNextEvent calls it. */
+    /* System task time is WaitNextEvent's, not SystemTask's (nor
+       GetNextEvent's or EventAvail's): so in Apple's OT 1.1.1 and 2.6. */
+    until = TickCount() + 60;
+    while(TickCount() < until)
+        SystemTask();
+    if(st_runs)
+    {
+        fail("tasks", "a system task ran from SystemTask", st_runs);
+        OTDestroySystemTask(st);
+        return;
+    }
     until = TickCount() + 300;
     while(!st_runs && TickCount() < until)
-        SystemTask();
+        WaitNextEvent(0, &ev, 0, nil);
     if(st_runs != 3)
     {
         fail("tasks", "system task did not run once", st_runs);
@@ -1024,7 +1059,7 @@ static void test_tasks(void)
         OTDestroySystemTask(st);
         return;
     }
-    SystemTask();
+    WaitNextEvent(0, &ev, 0, nil);
     if(st_runs != 3)
     {
         fail("tasks", "a cancelled system task ran", st_runs);
@@ -1143,17 +1178,26 @@ static void test_options(void)
     }
     v = 1;
     err = one_option(ep, T_NEGOTIATE, 0x4242, 0x4242, &v, &st, &flags);
-    if(err || st != T_NOTSUPPORT || flags != T_NOTSUPPORT)
+    if(err != kOTBadOptionErr)
     {
-        fail("options", "an unknown option should be T_NOTSUPPORT", err ? err : st);
+        fail("options", "an option of an unknown level should be kOTBadOptionErr", err);
         close_orderly(ep);
         return;
     }
+    v = 1;
+    err = one_option(ep, T_NEGOTIATE, INET_TCP, 0x4242, &v, &st, &flags);
+    if(err || st != T_NOTSUPPORT || flags != T_NOTSUPPORT)
+    {
+        fail("options", "an unknown TCP option should be T_NOTSUPPORT", err ? err : st);
+        close_orderly(ep);
+        return;
+    }
+    /* IP_TTL is a byte, whatever size the client asks with. */
     v = 0;
     err = one_option(ep, T_DEFAULT, INET_IP, IP_TTL, &v, &st, nil);
-    if(err || st != T_SUCCESS || v == 0)
+    if(err || st != T_SUCCESS || (v & 0x00FFFFFF) || !(v >> 24))
     {
-        fail("options", "IP_TTL default", err ? err : st);
+        fail("options", "IP_TTL default, one byte", err ? err : (long)v);
         close_orderly(ep);
         return;
     }
@@ -1300,12 +1344,26 @@ typedef struct
     long fired;
 } CancelTask;
 
+#if defined(powerc) || defined(__powerc) || defined(__POWERPC__)
+/* PowerPC: the task gets its record as a parameter, through a routine
+   descriptor (NewTimerProc). */
+static pascal void cancel_proc(TMTaskPtr tmp)
+{
+    CancelTask *t = (CancelTask *)tmp;
+#elif defined(__GNUC__)
+/* 68k, Retro68: the task's record in A1, read before anything uses it. */
+static pascal void cancel_proc(void)
+{
+    CancelTask *t;
+    __asm__ volatile("move.l %%a1,%0" : "=g"(t));
+#else
 #pragma parameter __D0 GetA1
 long GetA1(void) = 0x2009; /* MOVE.L A1,D0 */
 
 static pascal void cancel_proc(void)
 {
     CancelTask *t = (CancelTask *)GetA1();
+#endif
     long old = SetA5(t->a5);
     OTCancelSynchronousCalls(t->ep, kOTCanceledErr);
     t->fired = 1;
@@ -1336,7 +1394,11 @@ static void test_cancel(void)
         return;
     }
     OTMemzero(&t, sizeof t);
+#if defined(powerc) || defined(__powerc) || defined(__POWERPC__)
+    t.tm.tmAddr = NewTimerProc(cancel_proc);
+#else
     t.tm.tmAddr = (TimerUPP)cancel_proc;
+#endif
     t.a5 = SetCurrentA5();
     t.ep = ep;
     InsTime((QElemPtr)&t.tm);
@@ -1356,7 +1418,18 @@ static void test_cancel(void)
         close_orderly(ep);
         return;
     }
-    /* The endpoint still works. */
+    /* The cancel stays (Apple's OT 1.1.1 and 2.6): receives answer it,
+       blocking or not, until the client cancels with kOTNoError. */
+    OTSetNonBlocking(ep);
+    r = OTRcv(ep, &c, 1, &flags);
+    OTSetBlocking(ep);
+    if(r != kOTCanceledErr)
+    {
+        fail("cancel", "a receive after the cancel should answer kOTCanceledErr", r);
+        close_orderly(ep);
+        return;
+    }
+    OTCancelSynchronousCalls(ep, kOTNoError);
     if(echo_sync(ep, "cancel") < 0)
     {
         close_orderly(ep);
@@ -1379,8 +1452,15 @@ static void test_dns_addr(void)
     char name[64];
     unsigned long until;
 
-    sprintf(name, "localhost:%u", echo_port);
-    /* OTResolveAddress: DNSAddress in, InetAddress out. */
+    /* The echo host by name when it is this machine, else by number. */
+    if(echo_host == 0x7F000001)
+        sprintf(name, "localhost:%u", echo_port);
+    else
+        sprintf(name, "%lu.%lu.%lu.%lu:%u", (unsigned long)(echo_host >> 24),
+                (unsigned long)((echo_host >> 16) & 255), (unsigned long)((echo_host >> 8) & 255),
+                (unsigned long)(echo_host & 255), echo_port);
+    /* OTResolveAddress: DNSAddress in, InetAddress out; on a bound
+       endpoint (unbound: kOTOutStateErr). */
     ep = open_tcp(&err);
     if(err)
     {
@@ -1396,6 +1476,14 @@ static void test_dns_addr(void)
     ret.addr.buf = (UInt8 *)&got;
     ret.addr.maxlen = sizeof got;
     err = OTResolveAddress(ep, &req, &ret, 10000);
+    if(err != kOTOutStateErr)
+    {
+        fail("dns_addr", "OTResolveAddress unbound should be kOTOutStateErr", err);
+        OTCloseProvider(ep);
+        return;
+    }
+    OTBind(ep, nil, nil);
+    err = OTResolveAddress(ep, &req, &ret, 10000);
     if(err || got.fAddressType != AF_INET || got.fPort != echo_port || got.fHost == 0)
     {
         fail("dns_addr", "OTResolveAddress", err ? err : (long)got.fPort);
@@ -1403,14 +1491,13 @@ static void test_dns_addr(void)
         return;
     }
     /* A blocking connect to a DNSAddress. */
-    OTBind(ep, nil, nil);
     OTMemzero(&call, sizeof call);
     call.addr.buf = (UInt8 *)&dns;
     call.addr.len = OTInitDNSAddress(&dns, name);
     err = OTConnect(ep, &call, nil);
     if(err)
     {
-        fail("dns_addr", "blocking OTConnect to localhost:port", err);
+        fail("dns_addr", "blocking OTConnect to a DNSAddress", err);
         OTCloseProvider(ep);
         return;
     }
@@ -1465,23 +1552,23 @@ static void test_dns_addr(void)
 static void test_misc(void)
 {
     OTPortRecord port, byname, byref;
+    int i;
+    SInt32 r;
     OSStatus err;
     EndpointRef ep;
     UInt16 other = 99;
     OTPortRef ref;
     TUDErr uderr;
 
-    if(!OTGetIndexedPort(&port, 0) || OTGetIndexedPort(&byname, 1))
+    for(i = 0; OTGetIndexedPort(&port, i); i++)
+        if(OTGetDeviceTypeFromPortRef(port.fRef) == kOTEthernetDevice)
+            break;
+    if(!OTGetIndexedPort(&port, i))
     {
-        fail("misc", "OTGetIndexedPort", 0);
+        fail("misc", "OTGetIndexedPort: no Ethernet port", i);
         return;
     }
-    printf("# port 0: %s ref %08lx\n", port.fPortName, (long)port.fRef);
-    if(OTGetDeviceTypeFromPortRef(port.fRef) != kOTEthernetDevice)
-    {
-        fail("misc", "port 0 is not Ethernet", OTGetDeviceTypeFromPortRef(port.fRef));
-        return;
-    }
+    printf("# port %d: %s ref %08lx\n", i, port.fPortName, (long)port.fRef);
     if(!OTFindPort(&byname, port.fPortName) || byname.fRef != port.fRef
        || !OTFindPortByRef(&byref, port.fRef) || strcmp(byref.fPortName, port.fPortName)
        || OTFindPort(&byname, "nosuchport"))
@@ -1503,7 +1590,7 @@ static void test_misc(void)
         fail("misc", "OTOpenEndpoint udp", err);
         return;
     }
-    if(OTGetProviderPortRef(ep) != port.fRef)
+    if(OTGetProviderPortRef(ep) != kOTInvalidPortRef)
     {
         fail("misc", "OTGetProviderPortRef", OTGetProviderPortRef(ep));
         OTCloseProvider(ep);
@@ -1529,9 +1616,10 @@ static void test_misc(void)
         OTCloseProvider(ep);
         return;
     }
-    if(OTIoctl(ep, I_OTGetMiscellaneousEvents, nil) != noErr)
+    /* Miscellaneous events are a port's: a UDP endpoint has none. */
+    if((r = OTIoctl(ep, I_OTGetMiscellaneousEvents, nil)) != kENOENTErr)
     {
-        fail("misc", "OTIoctl I_OTGetMiscellaneousEvents", 0);
+        fail("misc", "OTIoctl I_OTGetMiscellaneousEvents", r);
         OTCloseProvider(ep);
         return;
     }
@@ -1558,14 +1646,17 @@ static void test_inet_misc(void)
         fail("inet_misc", "OTOpenInternetServices", err);
         return;
     }
+    /* The name servers may have no name for 127.0.0.1 (Apple's DNR asks
+       them, it doesn't answer itself): a name, or kOTBadNameErr. */
+    name[0] = 0;
     err = OTInetAddressToName(svc, 0x7F000001, name);
-    if(err || !name[0])
+    if(err ? err != kOTBadNameErr : !name[0])
     {
         fail("inet_misc", "OTInetAddressToName 127.0.0.1", err);
         OTCloseProvider(svc);
         return;
     }
-    printf("# 127.0.0.1 -> %s\n", name);
+    printf("# 127.0.0.1 -> %ld %s\n", (long)err, name);
     /* These go to the host's name servers; whatever they answer, the calls
        come back with a result and leave the buffers sane. */
     err = OTInetMailExchange(svc, "no-such-host.invalid", &num, mx);
@@ -1640,6 +1731,9 @@ int main(int argc, char **argv)
 {
     int i;
 
+#if OT_APP
+    freopen("Host:ot_results.txt", "w", stdout);
+#endif
     read_echo_config();
     if(echo_port)
         printf("# echo %08lx port %u\n", (long)echo_host, echo_port);
@@ -1662,5 +1756,9 @@ int main(int argc, char **argv)
         CloseOpenTransport();
     }
     printf("DONE %d\n", failures);
+#if OT_APP
+    printf("---\n");
+    fclose(stdout);
+#endif
     return failures ? 1 : 0;
 }

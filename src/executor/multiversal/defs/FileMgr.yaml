@@ -1453,6 +1453,8 @@
         type: INTEGER*
       - name: freeb
         type: LONGINT*
+    library: InterfaceLib
+    executor: GetVInfo
 
 # ####
 
@@ -1464,6 +1466,8 @@
         type: INTEGER
       - name: vrn
         type: INTEGER*
+    library: InterfaceLib
+    executor: glue_GetVRefNum
 
 # ####
 
@@ -2629,7 +2633,8 @@
 
 # ####
 
-- function:
+- only-for: Executor
+  function:
     name: PBCatSearch
     return: OSErr
     args:
@@ -3514,6 +3519,142 @@
         type: int16_t[6]
     name: CatPositionRec
     size: 16
+
+# ####
+
+- struct:
+    name: CSParam
+    members:
+      - name: qLink
+        type: QElemPtr
+      - name: qType
+        type: INTEGER
+      - name: ioTrap
+        type: INTEGER
+      - name: ioCmdAddr
+        type: Ptr
+      - name: ioCompletion
+        type: ProcPtr
+      - name: ioResult
+        type: OSErr
+      - name: ioNamePtr
+        type: StringPtr
+      - name: ioVRefNum
+        type: INTEGER
+      - name: ioMatchPtr
+        type: FSSpecPtr
+      - name: ioReqMatchCount
+        type: LONGINT
+      - name: ioActMatchCount
+        type: LONGINT
+      - name: ioSearchBits
+        type: LONGINT
+      - name: ioSearchInfo1
+        type: CInfoPBPtr
+      - name: ioSearchInfo2
+        type: CInfoPBPtr
+      - name: ioSearchTime
+        type: LONGINT
+      - name: ioCatPosition
+        type: CatPositionRec
+      - name: ioOptBuffer
+        type: Ptr
+      - name: ioOptBufSize
+        type: LONGINT
+    size: 76
+
+# ####
+
+- typedef:
+    name: CSParamPtr
+    type: CSParam*
+
+# ####
+
+# Apple's form: its own parameter block (Executor's takes a ParmBlkPtr).
+- not-for: Executor
+  function:
+    name: PBCatSearch
+    return: OSErr
+    args:
+      - name: pb
+        type: CSParamPtr
+        register: A0
+      - name: async
+        type: Boolean
+        register: TrapBit<0x400>
+    file_trap: true
+    trap: 0xA260
+    dispatcher: FSDispatch
+    selector: 0x18
+    returnreg: D0
+    variants:
+      - PBCatSearchSync
+      - PBCatSearchAsync
+
+# ####
+
+- enum:
+    values:
+      - name: fsSBPartialName
+        value: 1
+      - name: fsSBFullName
+        value: 2
+      - name: fsSBFlAttrib
+        value: 4
+      - name: fsSBFlFndrInfo
+        value: 8
+      - name: fsSBFlLgLen
+        value: 32
+      - name: fsSBFlPyLen
+        value: 64
+      - name: fsSBFlRLgLen
+        value: 128
+      - name: fsSBFlRPyLen
+        value: 256
+      - name: fsSBFlCrDat
+        value: 512
+      - name: fsSBFlMdDat
+        value: 1024
+      - name: fsSBFlBkDat
+        value: 2048
+      - name: fsSBFlXFndrInfo
+        value: 4096
+      - name: fsSBFlParID
+        value: 8192
+      - name: fsSBNegate
+        value: 16384
+      - name: fsSBDrUsrWds
+        value: 8
+      - name: fsSBDrNmFls
+        value: 16
+      - name: fsSBDrCrDat
+        value: 512
+      - name: fsSBDrMdDat
+        value: 1024
+      - name: fsSBDrBkDat
+        value: 2048
+      - name: fsSBDrFndrInfo
+        value: 4096
+      - name: fsSBDrParID
+        value: 8192
+      - name: fsSBNodeID
+        value: 0x00008000
+      - name: fsSBAttributeModDate
+        value: 0x00010000
+      - name: fsSBAccessDate
+        value: 0x00020000
+      - name: fsSBPermissions
+        value: 0x00040000
+
+# ####
+
+- enum:
+    values:
+      - name: fsRtParID
+        value: 1
+      - name: fsRtDirID
+        value: 2
 
 # ####
 - struct:
@@ -4919,7 +5060,8 @@
 
 # ####
 
-- function:
+- only-for: Executor
+  function:
     name: FSReadFork
     return: OSErr
     args:
@@ -4963,7 +5105,8 @@
 
 # ####
 
-- function:
+- only-for: Executor
+  function:
     name: FSWriteFork
     return: OSErr
     args:
@@ -5014,7 +5157,8 @@
 
 # ####
 
-- function:
+- only-for: Executor
+  function:
     name: FSSetForkPosition
     return: OSErr
     args:
@@ -5059,7 +5203,8 @@
 
 # ####
 
-- function:
+- only-for: Executor
+  function:
     name: FSSetForkSize
     return: OSErr
     args:
@@ -5097,7 +5242,8 @@
 
 # ####
 
-- function:
+- only-for: Executor
+  function:
     name: FSAllocateFork
     return: OSErr
     args:
@@ -5221,3 +5367,423 @@
     executor: C_
 
 # ####
+
+# ####
+
+# InterfaceLib exports with no trap (Executor's glue, cfm68k_glue.cpp):
+# for PowerPC and CFM-68K code; on 68k the C side's glue (custom/glue.c).
+# Those only for Executor have no 68k glue yet.
+
+- function:
+    name: DirCreate
+    return: "OSErr"
+    args:
+      - name: "vRefNum"
+        type: "INTEGER"
+      - name: "parentDirID"
+        type: "LONGINT"
+      - name: "name"
+        type: "ConstStringPtr"
+      - name: "createdDirID"
+        type: "LONGINT*"
+    library: InterfaceLib
+    executor: glue_DirCreate
+
+# ####
+
+- function:
+    name: HSetFInfo
+    return: OSErr
+    args:
+      - name: vRefNum
+        type: INTEGER
+      - name: dirID
+        type: LONGINT
+      - name: fileName
+        type: ConstStringPtr
+      - name: fndrInfo
+        type: const FInfo*
+    library: InterfaceLib
+    executor: glue_HSetFInfo
+
+# ####
+
+- function:
+    name: HSetFLock
+    return: OSErr
+    args:
+      - name: vRefNum
+        type: INTEGER
+      - name: dirID
+        type: LONGINT
+      - name: fileName
+        type: ConstStringPtr
+    library: InterfaceLib
+    executor: glue_HSetFLock
+
+# ####
+
+- function:
+    name: HRstFLock
+    return: OSErr
+    args:
+      - name: vRefNum
+        type: INTEGER
+      - name: dirID
+        type: LONGINT
+      - name: fileName
+        type: ConstStringPtr
+    library: InterfaceLib
+    executor: glue_HRstFLock
+
+# ####
+
+- function:
+    name: CatMove
+    return: OSErr
+    args:
+      - name: vRefNum
+        type: INTEGER
+      - name: dirID
+        type: LONGINT
+      - name: oldName
+        type: ConstStringPtr
+      - name: newDirID
+        type: LONGINT
+      - name: newName
+        type: ConstStringPtr
+    library: InterfaceLib
+    executor: glue_CatMove
+
+# ####
+
+- only-for: Executor
+  function:
+    name: PBHOpenRFDenySync
+    return: "OSErr"
+    args:
+      - name: "pb"
+        type: "HParmBlkPtr"
+    library: InterfaceLib
+    executor: glue_PBHOpenRFDenySync
+
+# ####
+
+- only-for: Executor
+  function:
+    name: PBHOpenRFDenyAsync
+    return: "OSErr"
+    args:
+      - name: "pb"
+        type: "HParmBlkPtr"
+    library: InterfaceLib
+    executor: glue_PBHOpenRFDenyAsync
+
+# ####
+
+# HFS Plus (Files.h, File Manager 2.0): FSCatalogInfoBitmap, node flags,
+# iterator, allocation and volume-info flags
+
+- enum:
+    values:
+      - name: kFSCatInfoNone
+        value: 0x00000000
+      - name: kFSCatInfoTextEncoding
+        value: 0x00000001
+      - name: kFSCatInfoNodeFlags
+        value: 0x00000002
+      - name: kFSCatInfoVolume
+        value: 0x00000004
+      - name: kFSCatInfoParentDirID
+        value: 0x00000008
+      - name: kFSCatInfoNodeID
+        value: 0x00000010
+      - name: kFSCatInfoCreateDate
+        value: 0x00000020
+      - name: kFSCatInfoContentMod
+        value: 0x00000040
+      - name: kFSCatInfoAttrMod
+        value: 0x00000080
+      - name: kFSCatInfoAccessDate
+        value: 0x00000100
+      - name: kFSCatInfoBackupDate
+        value: 0x00000200
+      - name: kFSCatInfoPermissions
+        value: 0x00000400
+      - name: kFSCatInfoFinderInfo
+        value: 0x00000800
+      - name: kFSCatInfoFinderXInfo
+        value: 0x00001000
+      - name: kFSCatInfoValence
+        value: 0x00002000
+      - name: kFSCatInfoDataSizes
+        value: 0x00004000
+      - name: kFSCatInfoRsrcSizes
+        value: 0x00008000
+      - name: kFSCatInfoSharingFlags
+        value: 0x00010000
+      - name: kFSCatInfoUserPrivs
+        value: 0x00020000
+      - name: kFSCatInfoAllDates
+        value: 0x000003E0
+      - name: kFSCatInfoGettableInfo
+        value: 0x0003FFFF
+      - name: kFSCatInfoSettableInfo
+        value: 0x00001FE3
+
+- enum:
+    values:
+      - name: kFSNodeLockedBit
+        value: 0
+      - name: kFSNodeLockedMask
+        value: 0x0001
+      - name: kFSNodeResOpenBit
+        value: 2
+      - name: kFSNodeResOpenMask
+        value: 0x0004
+      - name: kFSNodeDataOpenBit
+        value: 3
+      - name: kFSNodeDataOpenMask
+        value: 0x0008
+      - name: kFSNodeIsDirectoryBit
+        value: 4
+      - name: kFSNodeIsDirectoryMask
+        value: 0x0010
+      - name: kFSNodeCopyProtectBit
+        value: 6
+      - name: kFSNodeCopyProtectMask
+        value: 0x0040
+      - name: kFSNodeForkOpenBit
+        value: 7
+      - name: kFSNodeForkOpenMask
+        value: 0x0080
+      - name: kFSNodeInSharedBit
+        value: 2
+      - name: kFSNodeInSharedMask
+        value: 0x0004
+      - name: kFSNodeIsMountedBit
+        value: 3
+      - name: kFSNodeIsMountedMask
+        value: 0x0008
+      - name: kFSNodeIsSharePointBit
+        value: 5
+      - name: kFSNodeIsSharePointMask
+        value: 0x0020
+
+- enum:
+    values:
+      - name: kFSIterateFlat
+        value: 0
+      - name: kFSIterateSubtree
+        value: 1
+      - name: kFSIterateDelete
+        value: 2
+
+- enum:
+    values:
+      - name: kFSAllocDefaultFlags
+        value: 0x0000
+      - name: kFSAllocAllOrNothingMask
+        value: 0x0001
+      - name: kFSAllocContiguousMask
+        value: 0x0002
+      - name: kFSAllocNoRoundUpMask
+        value: 0x0004
+
+- enum:
+    values:
+      - name: kFSVolInfoNone
+        value: 0x0000
+      - name: kFSVolInfoCreateDate
+        value: 0x0001
+      - name: kFSVolInfoModDate
+        value: 0x0002
+      - name: kFSVolInfoBackupDate
+        value: 0x0004
+      - name: kFSVolInfoCheckedDate
+        value: 0x0008
+      - name: kFSVolInfoFileCount
+        value: 0x0010
+      - name: kFSVolInfoDirCount
+        value: 0x0020
+      - name: kFSVolInfoSizes
+        value: 0x0040
+      - name: kFSVolInfoBlocks
+        value: 0x0080
+      - name: kFSVolInfoNextAlloc
+        value: 0x0100
+      - name: kFSVolInfoRsrcClump
+        value: 0x0200
+      - name: kFSVolInfoDataClump
+        value: 0x0400
+      - name: kFSVolInfoNextID
+        value: 0x0800
+      - name: kFSVolInfoFinderInfo
+        value: 0x1000
+      - name: kFSVolInfoFlags
+        value: 0x2000
+      - name: kFSVolInfoFSInfo
+        value: 0x4000
+      - name: kFSVolInfoDriveInfo
+        value: 0x8000
+      - name: kFSVolInfoGettableInfo
+        value: 0xFFFF
+      - name: kFSVolInfoSettableInfo
+        value: 0x3004
+
+# ####
+
+# Apple's forms of the fork calls that take a 64-bit value (Files.h): the
+# C side's, an SInt64 by value. On 68k the glue (custom/glue.c) makes the
+# trap call with a pointer to it (the ...68K entries); PowerPC imports
+# them from InterfaceLib, where Executor answers with its wide forms.
+
+- not-for: Executor
+  typedef:
+    name: SInt64
+    type: int64_t
+
+# ####
+
+- not-for: Executor
+  typedef:
+    name: UInt64
+    type: uint64_t
+
+# ####
+
+- not-for: Executor
+  function:
+    name: FSReadFork
+    return: OSErr
+    args:
+      - name: forkRefNum
+        type: SInt16
+      - name: positionMode
+        type: UInt16
+      - name: positionOffset
+        type: SInt64
+      - name: requestCount
+        type: ByteCount
+      - name: buffer
+        type: void*
+      - name: actualCount
+        type: ByteCount*
+
+# ####
+
+- not-for: Executor
+  function:
+    name: FSWriteFork
+    return: OSErr
+    args:
+      - name: forkRefNum
+        type: SInt16
+      - name: positionMode
+        type: UInt16
+      - name: positionOffset
+        type: SInt64
+      - name: requestCount
+        type: ByteCount
+      - name: buffer
+        type: const void*
+      - name: actualCount
+        type: ByteCount*
+
+# ####
+
+- not-for: Executor
+  function:
+    name: FSSetForkPosition
+    return: OSErr
+    args:
+      - name: forkRefNum
+        type: SInt16
+      - name: positionMode
+        type: UInt16
+      - name: positionOffset
+        type: SInt64
+
+# ####
+
+- not-for: Executor
+  function:
+    name: FSSetForkSize
+    return: OSErr
+    args:
+      - name: forkRefNum
+        type: SInt16
+      - name: positionMode
+        type: UInt16
+      - name: positionOffset
+        type: SInt64
+
+# ####
+
+- not-for: Executor
+  function:
+    name: FSAllocateFork
+    return: OSErr
+    args:
+      - name: forkRefNum
+        type: SInt16
+      - name: flags
+        type: FSAllocationFlags
+      - name: positionMode
+        type: UInt16
+      - name: positionOffset
+        type: SInt64
+      - name: requestCount
+        type: UInt64
+      - name: actualCount
+        type: UInt64*
+
+# ####
+
+# The FSRef calls' result codes (MacErrors.h); Executor's FSRef code has
+# its own (file/fsref.cpp).
+- not-for: Executor
+  enum:
+    values:
+      - name: errFSUnknownCall
+        value: -1400
+      - name: errFSBadFSRef
+        value: -1401
+      - name: errFSBadForkName
+        value: -1402
+      - name: errFSBadBuffer
+        value: -1403
+      - name: errFSBadForkRef
+        value: -1404
+      - name: errFSBadInfoBitmap
+        value: -1405
+      - name: errFSMissingCatInfo
+        value: -1406
+      - name: errFSNotAFolder
+        value: -1407
+      - name: errFSForkNotFound
+        value: -1409
+      - name: errFSNameTooLong
+        value: -1410
+      - name: errFSMissingName
+        value: -1411
+      - name: errFSBadPosMode
+        value: -1412
+      - name: errFSBadAllocFlags
+        value: -1413
+      - name: errFSNoMoreItems
+        value: -1417
+      - name: errFSBadItemCount
+        value: -1418
+      - name: errFSBadSearchParams
+        value: -1419
+      - name: errFSRefsDifferent
+        value: -1420
+      - name: errFSForkExists
+        value: -1421
+      - name: errFSBadIteratorFlags
+        value: -1422
+      - name: errFSIteratorNotFound
+        value: -1423
+      - name: errFSIteratorNotSupported
+        value: -1424

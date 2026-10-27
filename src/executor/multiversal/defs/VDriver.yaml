@@ -94,3 +94,266 @@
 - typedef:
     name: VDDefModePtr
     type: VDDefModeRec*
+
+# ####
+
+# ---- Video.h: driver control and status codes, the records they take
+
+# ####
+
+# Control codes
+- enum:
+    values:
+      - name: cscReset
+        value: 0
+      - name: cscKillIO
+        value: 1
+      - name: cscSetMode
+        value: 2
+      - name: cscSetEntries
+        value: 3
+      - name: cscSetGamma
+        value: 4
+      - name: cscGrayPage
+        value: 5
+      - name: cscGrayScreen
+        value: 5
+      - name: cscSetGray
+        value: 6
+      - name: cscSetInterrupt
+        value: 7
+      - name: cscDirectSetEntries
+        value: 8
+      - name: cscSetDefaultMode
+        value: 9
+      - name: cscSwitchMode
+        value: 10
+      - name: cscSetSync
+        value: 11
+      - name: cscSavePreferredConfiguration
+        value: 16
+      - name: cscSetHardwareCursor
+        value: 22
+      - name: cscDrawHardwareCursor
+        value: 23
+      - name: cscSetConvolution
+        value: 24
+      - name: cscSetPowerState
+        value: 25
+      - name: cscPrivateControlCall
+        value: 26
+      - name: cscSetMultiConnect
+        value: 28
+      - name: cscSetClutBehavior
+        value: 29
+      - name: cscSetDetailedTiming
+        value: 31
+      - name: cscDoCommunication
+        value: 33
+      - name: cscProbeConnection
+        value: 34
+      - name: cscUnusedCall
+        value: 127
+
+# ####
+
+# Status codes
+- enum:
+    values:
+      - name: cscGetMode
+        value: 2
+      - name: cscGetEntries
+        value: 3
+      - name: cscGetPageCnt
+        value: 4
+      - name: cscGetPages
+        value: 4
+      - name: cscGetPageBase
+        value: 5
+      - name: cscGetBaseAddr
+        value: 5
+      - name: cscGetGray
+        value: 6
+      - name: cscGetInterrupt
+        value: 7
+      - name: cscGetGamma
+        value: 8
+      - name: cscGetDefaultMode
+        value: 9
+      - name: cscGetCurMode
+        value: 10
+      - name: cscGetSync
+        value: 11
+      - name: cscGetConnection
+        value: 12
+      - name: cscGetModeTiming
+        value: 13
+      - name: cscGetModeBaseAddress
+        value: 14
+      - name: cscGetScanProc
+        value: 15
+      - name: cscGetPreferredConfiguration
+        value: 16
+      - name: cscGetNextResolution
+        value: 17
+      - name: cscGetVideoParameters
+        value: 18
+      - name: cscGetGammaInfoList
+        value: 20
+      - name: cscRetrieveGammaTable
+        value: 21
+      - name: cscSupportsHardwareCursor
+        value: 22
+      - name: cscGetHardwareCursorDrawState
+        value: 23
+      - name: cscGetConvolution
+        value: 24
+      - name: cscGetPowerState
+        value: 25
+      - name: cscPrivateStatusCall
+        value: 26
+      - name: cscGetDDCBlock
+        value: 27
+      - name: cscGetMultiConnect
+        value: 28
+      - name: cscGetClutBehavior
+        value: 29
+      - name: cscGetTimingRanges
+        value: 30
+      - name: cscGetDetailedTiming
+        value: 31
+      - name: cscGetCommunicationInfo
+        value: 32
+
+# ####
+
+- typedef:
+    name: DisplayModeID
+    type: UInt32
+
+# ####
+
+- typedef:
+    name: DepthMode
+    type: UInt16
+
+# ####
+
+- struct:
+    name: VDSwitchInfoRec
+    members:
+      - name: csMode
+        type: UInt16
+      - name: csData
+        type: UInt32
+      - name: csPage
+        type: UInt16
+      - name: csBaseAddr
+        type: Ptr
+      - name: csReserved
+        type: UInt32
+    size: 16
+
+# ####
+
+- typedef:
+    name: VDSwitchInfoPtr
+    type: VDSwitchInfoRec*
+
+# ####
+
+- struct:
+    name: VDTimingInfoRec
+    members:
+      - name: csTimingMode
+        type: UInt32
+      - name: csTimingReserved
+        type: UInt32
+      - name: csTimingFormat
+        type: UInt32
+      - name: csTimingData
+        type: UInt32
+      - name: csTimingFlags
+        type: UInt32
+    size: 20
+
+# ####
+
+- typedef:
+    name: VDTimingInfoPtr
+    type: VDTimingInfoRec*
+
+# ####
+
+- struct:
+    name: VDDisplayConnectInfoRec
+    members:
+      - name: csDisplayType
+        type: UInt16
+      - name: csConnectTaggedType
+        type: UInt8
+      - name: csConnectTaggedData
+        type: UInt8
+      - name: csConnectFlags
+        type: UInt32
+      - name: csDisplayComponent
+        type: UInt32
+      - name: csConnectReserved
+        type: UInt32
+    size: 16
+
+# ####
+
+- typedef:
+    name: VDDisplayConnectInfoPtr
+    type: VDDisplayConnectInfoRec*
+
+# ####
+
+- struct:
+    name: VDBaseAddressInfoRec
+    members:
+      - name: csDevData
+        type: LONGINT
+      - name: csDevBase
+        type: LONGINT
+      - name: csModeReserved
+        type: INTEGER
+      - name: csModeBase
+        type: LONGINT
+    size: 14
+
+# ####
+
+- typedef:
+    name: VDBaseAddressInfoPtr
+    type: VDBaseAddressInfoRec*
+
+# ####
+
+- struct:
+    name: VDResolutionInfoRec
+    members:
+      - name: csPreviousDisplayModeID
+        type: DisplayModeID
+      - name: csDisplayModeID
+        type: DisplayModeID
+      - name: csHorizontalPixels
+        type: UInt32
+      - name: csVerticalLines
+        type: UInt32
+      - name: csRefreshRate
+        type: Fixed
+      - name: csMaxDepthMode
+        type: DepthMode
+      - name: csResolutionFlags
+        type: UInt32
+      - name: csReserved
+        type: UInt32
+    size: 30
+
+# ####
+
+- typedef:
+    name: VDResolutionInfoPtr
+    type: VDResolutionInfoRec*

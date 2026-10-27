@@ -36,19 +36,22 @@
 using namespace Executor;
 using namespace Executor::ot;
 
-namespace
+namespace Executor::ot
 {
 
 constexpr uint32_t HOSTINFO_NAME = 0;     /* InetDomainName, 256 bytes */
 constexpr uint32_t HOSTINFO_ADDRS = 256;  /* InetHost[10] */
 constexpr int MAX_ADDRS = 10;
 
+namespace {
 struct Answer
 {
     int32_t err = kOTNoError;
     std::string name;
     std::vector<uint32_t> addrs;
 };
+}
+
 
 int32_t map_gai(int e)
 {
@@ -68,6 +71,15 @@ int32_t map_gai(int e)
         default:
             return kOTSysErrorErr;
     }
+}
+
+/* A name the resolver found, as Apple's DNR gives it: fully qualified,
+   with the root's dot ("localhost.", "dns.google."). */
+std::string fqdn(std::string name)
+{
+    if(!name.empty() && name.back() != '.')
+        name += '.';
+    return name;
 }
 
 Answer resolve(std::string name)
@@ -90,7 +102,7 @@ Answer resolve(std::string name)
     a.err = map_gai(hostnet::getaddrinfo(name.c_str(), nullptr, &hints, &res));
     if(a.err)
         return a;
-    a.name = res->ai_canonname ? res->ai_canonname : name;
+    a.name = fqdn(res->ai_canonname ? res->ai_canonname : name);
     for(auto *ai = res; ai && (int)a.addrs.size() < MAX_ADDRS; ai = ai->ai_next)
     {
         uint32_t ip = ntohl(((struct sockaddr_in *)ai->ai_addr)->sin_addr.s_addr);
@@ -111,7 +123,7 @@ Answer reverse(uint32_t ip)
     a.err = map_gai(hostnet::getnameinfo((struct sockaddr *)&sin, sizeof sin, host, sizeof host,
                                 nullptr, 0, NI_NAMEREQD));
     if(!a.err)
-        a.name = host;
+        a.name = fqdn(host);
     return a;
 }
 
@@ -155,6 +167,7 @@ int32_t ot_dns_query(const std::string &name, int cls, int type, std::vector<Hos
    An asynchronous provider's lookup runs on a host thread; its answer is
    written into the caller's memory at interrupt time and the completion
    event (cookie: the caller's buffer) goes to the notifier. */
+namespace {
 struct Done
 {
     uint32_t ref;
@@ -162,6 +175,8 @@ struct Done
     uint32_t cookie;
     std::function<int32_t()> fill; /* writes the answer; returns the result */
 };
+}
+
 std::mutex done_mutex;
 std::vector<Done> done;
 
@@ -183,17 +198,17 @@ void deliver()
     }
 }
 
-bool hooked = false;
+bool inet_hooked = false;
 
 /* Run work off the emulator thread (hostnet::run_detached); it returns
    the filler to run at interrupt time. */
 void later(Provider &p, uint32_t code, uint32_t cookie,
            std::function<std::function<int32_t()>()> work)
 {
-    if(!hooked)
+    if(!inet_hooked)
     {
         add_pump_hook(deliver);
-        hooked = true;
+        inet_hooked = true;
     }
     uint32_t ref = p.ref;
     hostnet::run_detached([=]() {
@@ -254,6 +269,7 @@ uint32_t async_open_priv(const Call &c)
         return err;
     Provider &p = *find_provider(ref);
     p.notifier = c.l(2);
+    p.ppc = c.ppc();
     p.context = c.l(3);
     p.a5 = current_a5();
     p.async = true;
@@ -613,24 +629,8 @@ uint32_t get_interface_info(const Call &c)
     return kOTNoError;
 }
 
-const char inet[] = "ot:inet$LclInetClnt";
 
-const Def table[] = {
-    { inet, "OTOpenInternetServicesPriv", Conv::C, "LLLL", 'L', open_priv },
-    { inet, "OTAsyncOpenInternetServicesPriv", Conv::C, "LLLLL", 'L', async_open_priv },
-    { inet, "OTINETSTRINGTOADDRESS", Conv::Pascal, "LLL", 'L', string_to_address },
-    { inet, "OTINETADDRESSTONAME", Conv::Pascal, "LLL", 'L', address_to_name },
-    { inet, "OTINITINETADDRESS", Conv::Pascal, "LWL", 'V', init_inet_address },
-    { inet, "OTINITDNSADDRESS", Conv::Pascal, "LL", 'L', init_dns_address },
-    { inet, "OTINETSTRINGTOHOST", Conv::Pascal, "LL", 'L', string_to_host },
-    { inet, "OTINETHOSTTOSTRING", Conv::Pascal, "LL", 'V', host_to_string },
-    { inet, "OTINETGETINTERFACEINFO", Conv::Pascal, "LL", 'L', get_interface_info },
-    { inet, "OTINETSYSINFO", Conv::Pascal, "LLL", 'L', sys_info },
-    { inet, "OTINETMAILEXCHANGE", Conv::Pascal, "LLLL", 'L', mail_exchange },
-    { inet, "OTINETQUERY", Conv::Pascal, "LLWWLLLLL", 'L', query },
-};
-
-} // anonymous namespace
+} // namespace Executor::ot
 
 int32_t Executor::ot::inet_resolve(const std::string &name, uint32_t &ip)
 {
@@ -639,7 +639,3 @@ int32_t Executor::ot::inet_resolve(const std::string &name, uint32_t &ip)
     return a.err ? a.err : a.addrs.empty() ? kOTBadNameErr : kOTNoError;
 }
 
-void Executor::ot::register_inet()
-{
-    register_table(table);
-}

@@ -453,4 +453,10 @@ OSErr C_UnlockMemory(void *address, uint32_t count);REGISTER_SUBTRAP(UnlockMemor
 OSErr C_LockMemoryContiguous(void *address, uint32_t count);REGISTER_SUBTRAP(LockMemoryContiguous, 0xA05C, 0x0004, MemoryDispatch, D0(A0, A1));
 
 
+THz glue_GetMyZone();LIBRARY_FUNCTION(InterfaceLib, GetMyZone, glue_GetMyZone);
+
+
+Size glue_InlineGetHandleSize(Handle h);LIBRARY_FUNCTION(InterfaceLib, InlineGetHandleSize, glue_InlineGetHandleSize);
+
+
 } /* namespace Executor */

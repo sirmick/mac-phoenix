@@ -49,8 +49,11 @@ npx playwright test
 ./build/mac-phoenix --backend executor --audio
 # MacTCP/OT reach the host through rsys/hostnet.h: -DEXECUTOR_NET=none builds them
 # with no network (the wasm build's default until the relay exists).
-# Open Transport is native C++ and on by default (docs/executor/OpenTransport.md);
-# --no-executor-ot leaves applications to MacTCP:
+# Open Transport is native C++ and on by default (docs/executor/OpenTransport.md),
+# for 68k (ASLM) and PowerPC (OTClientLib & co.) clients alike, its interface in
+# multiversal/defs/OpenTransport.yaml + OpenTptInternet.yaml (also Retro68's
+# headers, 68k + PowerPC glue in custom/OpenTransportGlue.c: tests/guest/ot/build-retro68.sh)
+# (ctest -R 'ot_'); --no-executor-ot leaves applications to MacTCP:
 ./build/mac-phoenix --backend executor --executor-system 7.5.5.img --no-executor-ot
 # CFM-68K applications (CodeWarrior IDE 3.2) run on Executor's own Code Fragment
 # Manager, no Enabler (docs/executor/CFM68K.md; ctest -R guest_suite_cfm68k)
@@ -64,7 +67,11 @@ npx playwright test
 ctest --test-dir build -L executor
 # Executor's API definitions (src/executor/multiversal/defs) are also Retro68's
 # Multiversal Interfaces: ctest -R multiversal_retro68 builds a program against
-# the C headers they generate (docs/executor/README.md)
+# the C headers they generate, ctest -R retro68_ runs RetroTest (tests/guest/retro68,
+# 68k + PowerPC, Retro68 with PowerPC in ~/opt/retro68/build-ppc/toolchain) on
+# Executor and Apple's systems (docs/executor/README.md, LIBRARIES.md)
+# Retro68's own AutomatedTests on Executor through LaunchAPPL -e executor:
+# tools/retro68/automated_tests.py (ctest -R retro68_automated_executor)
 # Toolbox selectors/OT functions a session called that Executor lacks: "[unimplemented]"
 # in the log, collected in ~/storage/executor/unimplemented.log (date, app, call)
 
@@ -182,7 +189,8 @@ src/
 
 BridgeAgent/
   BridgeAgent.c                     — BridgeAgent source (Retro68 m68k); takes requests over the bridge trap $ABE5
-  BridgeAgent.bin                   — Pre-built MacBinary (committed; rebuilt by CMake when Retro68 present)
+  BridgeAgent.bin                   — Pre-built MacBinary (committed; rebuilt by CMake when Retro68 and ruby are
+                                      present, against the Multiversal Interfaces generated from Executor's definitions)
   BridgeAgent.r                     — Resource fork: SIZE, BNDL, FREF, creator sig, icons.r include
 
 tests/

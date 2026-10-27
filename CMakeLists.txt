@@ -320,34 +320,33 @@ if(BUILD_BRIDGE_AGENT)
     get_filename_component(RETRO68_ROOT "${RETRO68_BIN_DIR}" DIRECTORY)
     set(RETRO68_RINCLUDES "${RETRO68_ROOT}/m68k-apple-macos/RIncludes")
 
-    # Apple Universal Interfaces 3.4 — the toolchain's default Multiversal
-    # headers are missing several files BridgeAgent uses (Script.h,
-    # Aliases.h, ShutDown.h, Scrap.h, Processes.r). If the user has UI 3.4
-    # at private/Universal Interfaces/Universal/Interfaces/, prepend its
-    # CIncludes/RIncludes to the gcc/Rez search paths so the build works
-    # against vanilla Retro68 (no need to install UI 3.4 into the toolchain
-    # tree itself). Apple's headers can't be redistributed in source, hence
-    # the gitignored private/ location.
-    set(BA_UI3 "${CMAKE_CURRENT_SOURCE_DIR}/private/Universal Interfaces/Universal/Interfaces")
-    # Retro68's gcc preasserts cpu=m68k but not system=macos; UI 3.4's
-    # ConditionalMacros.h needs both for its #if #system(macos) check or it
-    # falls through to "#error unsupported GNU C compiler".
-    set(BA_GCC_EXTRA_FLAGS -A system=macos)
-    set(BA_REZ_EXTRA_FLAGS "")
-    if(EXISTS "${BA_UI3}/CIncludes/Script.h")
-      # -idirafter (not -I): Retro68's Multiversal headers win for Files.h /
-      # Memory.h / etc. (which provide gcc-style inline trap glue), and UI 3.4
-      # only fills in headers Multiversal lacks (Script.h, Aliases.h,
-      # ShutDown.h, Scrap.h). With -I, UI 3.4's Files.h would shadow
-      # Multiversal and break linking — its FSWrite et al. are plain externs
-      # against an MPW/CodeWarrior runtime we don't have.
-      list(APPEND BA_GCC_EXTRA_FLAGS -idirafter "${BA_UI3}/CIncludes")
-      set(BA_REZ_EXTRA_FLAGS -I "${BA_UI3}/RIncludes")
-      message(STATUS "bridge-agent: using Apple UI 3.4 from private/")
-    else()
-      message(STATUS "bridge-agent: Apple UI 3.4 not present at private/Universal Interfaces/")
-      message(STATUS "              — BridgeAgent.c needs Script.h/Aliases.h/ShutDown.h/Scrap.h.")
-      message(STATUS "              Either drop UI 3.4 there or set BUILD_BRIDGE_AGENT=OFF.")
+    # The Mac interfaces: the Multiversal Interfaces generated from
+    # Executor's API definitions (src/executor/multiversal; needs ruby),
+    # alone: none of the toolchain's own or Apple's
+    # (tools/retro68/multiversal-headers.sh). Without ruby the committed
+    # .bin files stay.
+    find_program(RUBY_EXECUTABLE ruby)
+    set(MV_GUEST_DIR "${CMAKE_BINARY_DIR}/multiversal-guest")
+    set(MV_STAMP "${MV_GUEST_DIR}/stamp")
+    execute_process(COMMAND "${RETRO68_GCC}" -print-file-name=include
+                    OUTPUT_VARIABLE RETRO68_GCC_INCLUDE OUTPUT_STRIP_TRAILING_WHITESPACE)
+    file(GLOB MV_GUEST_DEPS
+         "${CMAKE_CURRENT_SOURCE_DIR}/src/executor/multiversal/defs/*.yaml"
+         "${CMAKE_CURRENT_SOURCE_DIR}/src/executor/multiversal/*.rb"
+         "${CMAKE_CURRENT_SOURCE_DIR}/src/executor/multiversal/custom/*")
+    add_custom_command(
+      OUTPUT "${MV_STAMP}"
+      COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/tools/retro68/multiversal-headers.sh"
+              "${MV_GUEST_DIR}" "${RETRO68_GCC}"
+      DEPENDS ${MV_GUEST_DEPS} "${CMAKE_CURRENT_SOURCE_DIR}/tools/retro68/multiversal-headers.sh"
+      COMMENT "Generating the Multiversal Interfaces for guest programs"
+      VERBATIM
+    )
+    set(BA_GCC_EXTRA_FLAGS -nostdinc -isystem "${RETRO68_GCC_INCLUDE}"
+        -isystem "${MV_GUEST_DIR}/include" -L "${MV_GUEST_DIR}/out/lib68k")
+    set(BA_REZ_EXTRA_FLAGS -I "${MV_GUEST_DIR}/out/RIncludes")
+    if(NOT RUBY_EXECUTABLE)
+      message(STATUS "bridge-agent: no ruby (the interfaces are generated) — keeping committed BridgeAgent.bin.")
     endif()
 
     set(BA_DIR "${CMAKE_CURRENT_SOURCE_DIR}/BridgeAgent")
@@ -367,7 +366,7 @@ if(BUILD_BRIDGE_AGENT)
       COMMAND "${RETRO68_GCC}" ${BA_GCC_EXTRA_FLAGS} -O2
               -I "${GUEST_COMMON_DIR}" -I "${GUEST_COMMON_INC}"
               -o "${BA_CODE}" BridgeAgent.c ${GUEST_COMMON_SRCS}
-      DEPENDS "${BA_DIR}/BridgeAgent.c"
+      DEPENDS "${BA_DIR}/BridgeAgent.c" "${MV_STAMP}"
               ${GUEST_COMMON_SRCS}
               "${GUEST_COMMON_DIR}/bridge_cfg.h"
               "${GUEST_COMMON_INC}/bridge_paths.h"
@@ -398,8 +397,8 @@ if(BUILD_BRIDGE_AGENT)
     add_custom_command(
       OUTPUT "${BA_BIN}"
       COMMAND "${RETRO68_REZ}" "${RETRO68_RINCLUDES}/Retro68APPL.r" BridgeAgent.r
-              -I "${RETRO68_RINCLUDES}"
               ${BA_REZ_EXTRA_FLAGS}
+              -I "${RETRO68_RINCLUDES}"
               --copy "${BA_CODE}"
               -o "${BA_BIN}"
               -t APPL -c MxBA
@@ -411,7 +410,9 @@ if(BUILD_BRIDGE_AGENT)
       VERBATIM
     )
 
-    add_custom_target(bridge-agent ALL DEPENDS "${BA_BIN}")
+    if(RUBY_EXECUTABLE)
+      add_custom_target(bridge-agent ALL DEPENDS "${BA_BIN}")
+    endif()
     message(STATUS "bridge-agent: using Retro68 at ${RETRO68_BIN_DIR}")
   endif()
 endif()
@@ -429,7 +430,7 @@ endif()
 # =============================================================================
 option(BUILD_MAC_BROWSER "Build the MacBrowser guest app from source (needs Retro68)" ON)
 
-if(BUILD_MAC_BROWSER AND BUILD_BRIDGE_AGENT AND RETRO68_GCC AND RETRO68_REZ)
+if(BUILD_MAC_BROWSER AND BUILD_BRIDGE_AGENT AND RETRO68_GCC AND RETRO68_REZ AND RUBY_EXECUTABLE)
   set(MB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/MacBrowser")
   set(MB_CODE "${MB_DIR}/MacBrowser.code.bin")
   set(MB_BIN  "${MB_DIR}/MacBrowser.bin")
@@ -440,12 +441,12 @@ if(BUILD_MAC_BROWSER AND BUILD_BRIDGE_AGENT AND RETRO68_GCC AND RETRO68_REZ)
   # the bridge cfg helper. Same code path BridgeAgent uses.
   add_custom_command(
     OUTPUT "${MB_CODE}"
-    COMMAND "${RETRO68_GCC}" -O2
+    COMMAND "${RETRO68_GCC}" ${BA_GCC_EXTRA_FLAGS} -O2
             -I "${CMAKE_CURRENT_SOURCE_DIR}/src/common/include"
             -I "${CMAKE_CURRENT_SOURCE_DIR}/src/common/guest"
             -o "${MB_CODE}" MacBrowser.c browser_shm.c
             "${CMAKE_CURRENT_SOURCE_DIR}/src/common/guest/bridge_cfg.c"
-    DEPENDS "${MB_DIR}/MacBrowser.c"
+    DEPENDS "${MB_DIR}/MacBrowser.c" "${MV_STAMP}"
             "${MB_DIR}/browser_shm.c"
             "${MB_DIR}/browser_shm.h"
             "${CMAKE_CURRENT_SOURCE_DIR}/src/common/include/MacBrowser.h"
@@ -478,6 +479,7 @@ if(BUILD_MAC_BROWSER AND BUILD_BRIDGE_AGENT AND RETRO68_GCC AND RETRO68_REZ)
   add_custom_command(
     OUTPUT "${MB_BIN}"
     COMMAND "${RETRO68_REZ}" "${RETRO68_RINCLUDES}/Retro68APPL.r" MacBrowser.r
+            ${BA_REZ_EXTRA_FLAGS}
             -I "${RETRO68_RINCLUDES}"
             --copy "${MB_CODE}"
             -o "${MB_BIN}"

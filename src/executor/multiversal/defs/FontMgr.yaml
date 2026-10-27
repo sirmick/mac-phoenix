@@ -698,3 +698,45 @@
     dispatcher: FontDispatch
     selector: 0x000C
     executor: C_
+
+# ####
+
+# InterfaceLib exports with no trap (Executor's glue, cfm68k_glue.cpp):
+# for PowerPC and CFM-68K code. Only for Executor until the C side has
+# 68k glue for them.
+
+- only-for: Executor
+  function:
+    name: GetSysFont
+    return: "INTEGER"
+    library: InterfaceLib
+    executor: glue_GetSysFont
+
+# ####
+
+- only-for: Executor
+  function:
+    name: GetAppFont
+    return: "INTEGER"
+    library: InterfaceLib
+    executor: glue_GetAppFont
+
+# ####
+
+- only-for: Executor
+  function:
+    name: LMGetSysFontSize
+    return: "INTEGER"
+    library: InterfaceLib
+    executor: glue_LMGetSysFontSize
+
+# ####
+
+- only-for: Executor
+  function:
+    name: LMSetSysFontSize
+    args:
+      - name: "size"
+        type: "INTEGER"
+    library: InterfaceLib
+    executor: glue_LMSetSysFontSize

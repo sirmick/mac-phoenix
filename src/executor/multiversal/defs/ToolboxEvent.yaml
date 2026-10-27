@@ -174,12 +174,16 @@
 - function:
     name: GetDblTime
     return: LONGINT
+    library: InterfaceLib
+    executor: GetDblTime
 
 # ####
 
 - function:
     name: GetCaretTime
     return: LONGINT
+    library: InterfaceLib
+    executor: GetCaretTime
 
 # ####
 

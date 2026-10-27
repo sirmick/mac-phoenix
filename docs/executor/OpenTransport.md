@@ -156,7 +156,115 @@ function set's ID as a C string at +16. The function sets and their indices
 * Not written: mappers and name registration (AppleTalk's NBP), the
   transaction calls (OTSndRequest and friends: ATP, ADSP), OTCreateOptions /
   OTCreateOptionString, no-copy receive (OTReleaseBuffer, OTReadBuffer),
-  transfer of ownership, the `Ntv*` and configuration-database sets, and
-  the PPC binding (CFM's OpenTransportLib, OTInetClientLib, OTUtilityLib
-  onto the same C++). Timer tasks and most port calls have no 68k glue in
-  OT 1.1 (native only), so 68k clients can't reach them.
+  transfer of ownership, the `Ntv*` and configuration-database sets
+  (`OTConfigLib` for PowerPC), `OTExitPatchPriv` (PowerPC glue; answered 0,
+  logged). Timer tasks and most port calls have no 68k glue in OT 1.1
+  (native only), so 68k clients can't reach them.
+
+## The functions in the definitions; PowerPC clients
+
+Every function Executor implements is an entry in
+`multiversal/defs/OpenTransport.yaml` (docs/executor/LIBRARIES.md, step
+4): its Apple name, the CFM library PowerPC code imports it from, its
+68k function set and that set's name for it (`aslm:`; the sets name their
+Pascal routines in capitals), its convention and argument sizes, and the
+routine (`uint32_t f(const ot::Call &)`). The generator turns each into
+`OT_FUNCTION`, which registers it both ways (`OTFunction::init` in
+`ot.cpp`): for the binder above, and as a PowerPC export.
+
+PowerPC applications reach OT through Apple's PowerPC glue
+(OpenTransportAppPPC.o & co.), which imports the same private routines
+from `OTClientLib` (the `OTClnt$LclClnt` set), `OTClientUtilLib`
+(`OTClnt$LclUtils`), `OTUtilityLib` (`OTClnt$CmnShared`),
+`OTInetClientLib` (`ot:inet$LclInetClnt`) and `OTGlobalLib` (data:
+`__gOTGlobal`, two timing records; zeroed). With OT on, Executor's Code
+Fragment Manager answers these before Apple's files (Apple's need Apple's
+OT kernel; their init routines fail). `ot::Call` reads a PowerPC caller's
+arguments from r3-r10 and the parameter area (`Call::byte` for a UInt8:
+a Pascal word's high byte on 68k, the low byte on PowerPC); notifiers,
+deferred and system tasks and `OTFindLink`'s search routine installed
+from PowerPC code are called as PowerPC code (`callPPC`). OTTestPPC (the
+same OTTest.c, MrC + PPCLink) passes its cases on Executor
+(`ot_ppc_executor`), `cancel` (a PowerPC Time Manager task cancelling a
+blocking call) since Mixed Mode keeps the PowerPC registers (STRAGGLERS
+64).
+
+## The C side: headers and PowerPC glue
+
+`OpenTransport.yaml` and `OpenTptInternet.yaml` are also Open Transport's
+C interface, as Retro68 programs see it (`OpenTransport.h`,
+`OpenTptInternet.h`, `OpenTptLinks.h`, all the generated `Multiverse.h`):
+OT 1.1's types, structures and constants from Apple's headers'
+declarations and Inside Macintosh: Networking with Open Transport,
+`size_t` as `OTByteCount` (32 bits for both processors and for
+Executor's 68k layouts, each structure's size checked there), the names
+the host's headers have as well (`E*`, `O_*`, `AF_INET`, `IP_*`,
+`TCP_*`) for the C side only. Every routine has its real types; the
+generator still gives `ot::Call` a letter per argument from the type's
+size (Boolean `B`, a word or byte `W`, else `L`), so the registrations
+are what they were.
+
+The libraries export the `...Priv` routines, not `InitOpenTransport`,
+`OTOpenEndpoint`, `OTAlloc`, the task creators and the rest that take
+the client: those are glue, `multiversal/custom/OpenTransportGlue.c`,
+compiled into `libppc/libOpenTransportApp.a` when Retro68's PowerPC
+compiler is on the generator's PATH (`custom/libraries.yaml`, `PowerPC:`).
+A program links `OpenTransportApp OpenTransportLib OpenTptInternetLib`
+(the last two Retro68's import libraries).
+
+For 68k the same library (`lib68k/libOpenTransportApp.a`) also has a
+wrapper for every `aslm:` entry, which the generator writes: it looks its
+routine up once, through the Shared Library Manager, by its function set
+and its 1-based index there (`aslm: { ..., index: }`, the order of
+`ot_names.inc`), and calls it. The lookup is ASLM's documented client
+interface (the ASLM SDK's LibraryManager.h): the application makes a
+TLibraryManager of its own with the root manager (SLMGlobal+$10, vtable
++$9C, after asking Gestalt `'otan'`), then `LoadClass` (slot 16, $40) and
+`GetFunctionPointer` by index (slot 20, $50) per set. By index, because
+Apple's ASLM has no names for OT's sets (by name it answers kNotFound);
+Executor's managers answer both (`ot_slm.cpp`). CloseOpenTransport (or
+`atexit`) frees the manager. The 68k record: SLMGlobal and the manager kept
+after it, words 3 and 2 pointing at them, word 7 `$01000100` and the byte at
+32 set, as Apple's 68k glue has them (seen on Executor).
+
+What the glue gives OT was seen from outside, Apple's PowerPC glue run
+against Executor (which logs what it gets) and against Mac OS 9.0.4's OT
+(a probe reading the record before and after): InitOpenTransportPriv gets
+3 and the client's record; the record is 36 bytes of OT's, but for words
+2-4, which the client points at storage of its own after the record (a
+long, two longs, and a routine descriptor), and the byte at 32, set. The
+descriptor is a PowerPC routine, Pascal, returning a long: the client's
+way out, which closes it (CloseOpenTransportPriv) and answers 0; OT keeps
+it to close the client itself. Without it OT 2.6 jumps into nothing.
+Every other `...Priv` routine but two gets the record last; the task
+creators get the record's first word, which OT sets at init (0 on
+Executor, which ignores it).
+
+OTTest built this way (`tests/guest/ot/build-retro68.sh`,
+`OTTestRetroPPC.bin` and `OTTestRetro68K.bin`, committed) passes its 20
+cases on Executor (`ot_retro68_ppc_executor`, `ot_retro68_68k_executor`),
+on Mac OS 9.0.4 for PowerPC (`ot_retro68_ppc_rom`) and on the Quadra with
+Mac OS 7.6.1, Apple's ASLM and OT 1.1.1 for 68k (`ot_retro68_68k_rom`), as
+Apple's glue does. `multiversal_retro68` compiles OTTest.c for both
+processors against the headers and checks both glue libraries.
+
+## Checked against Apple's
+
+OTTest's cases are what Apple's OT does: 1.1.1 (Mac OS 7.6.1) and 2.6.1
+(Mac OS 9.0.4) on the G3 under mame-ppc, against net-bridge's echo
+service (`test_guest_suite.sh --echo-gateway`; STRAGGLERS 65). What
+that settled, where Executor had it otherwise:
+
+* `OTCancelSynchronousCalls(ep, err)` stays: the endpoint's receives,
+  blocking or not, answer err until the client cancels with kOTNoError.
+* System tasks run at WaitNextEvent (`toolevent.cpp`), not at
+  SystemTask, GetNextEvent or EventAvail.
+* `OTResolveAddress` wants a bound endpoint (else kOTOutStateErr).
+* Option management: an option of a level the stack doesn't know fails
+  the request with kOTBadOptionErr; an unknown option of a known level is
+  T_NOTSUPPORT. IP_TTL is a one-byte option (default 255).
+* TCP and UDP endpoints sit on IP: `OTGetProviderPortRef` is 0, and
+  `I_OTGetMiscellaneousEvents` answers kENOENTErr.
+* The resolver's names end with the root's dot (`localhost.`).
+* A reverse lookup asks the name servers, which may have no name for
+  127.0.0.1 (Executor's host resolver has one).

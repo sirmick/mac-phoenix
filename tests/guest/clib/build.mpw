@@ -1,7 +1,14 @@
-# build.mpw — CLibTest, PowerPC only, on StdCLib and MathLib (MrC, PPCLink);
-# tools/mpw/mpw build tests/guest/clib
-# products: CLibTest
-Delete -i CLibTest
+# build.mpw — CLibTest on StdCLib and MathLib; tools/mpw/mpw build tests/guest/clib
+# CLibTest: PowerPC (MrC, PPCLink). CLibTest68K: CFM-68K on NuStdCLib and
+# NuIntEnv (SC -model cfmflat, ILink; MathLib is linked in on 68k and its
+# checks are PowerPC-only). ILink makes a CFM-68K application segmented
+# (code in 'rseg' resources), so it links a library with %__MAIN as its main
+# routine, MakeFlat puts the fragment in the data fork, and clib68k.r's
+# 'cfrg' makes it an application. A 68k Mac starts it through the CFM
+# launch stub (CODE 0 and 6: _LoadSeg 6, "CFM Launch"), taken from the
+# segmented link; Executor launches the fragment itself.
+# products: CLibTest CLibTest68K
+Delete -i CLibTest CLibTest68K CLibTest68K.lib CLibTest68K.seg
 MrC clib.c -o clib.ppc.o
 PPCLink -main __start clib.ppc.o ∂
 	"{SharedLibraries}InterfaceLib" "{SharedLibraries}StdCLib" "{SharedLibraries}MathLib" ∂
@@ -9,3 +16,13 @@ PPCLink -main __start clib.ppc.o ∂
 	-t APPL -c 'CLbT' -o CLibTest
 Rez -a clib.r -o CLibTest
 SetFile -t APPL -c 'CLbT' -a B CLibTest
+SC -model cfmflat clib.c -o clib.cfm68k.o
+ILink -model cfmflat -xm s -main %__MAIN -o CLibTest68K.lib clib.cfm68k.o ∂
+	"{CFM68KLibraries}NuMacRuntime.o" "{CFM68KLibraries}NuMathLib.o" ∂
+	"{SharedLibraries}InterfaceLib" "{SharedLibraries}StdCLib"
+ILink -model cfmflat -xm e -o CLibTest68K.seg clib.cfm68k.o ∂
+	"{CFM68KLibraries}NuMacRuntime.o" "{CFM68KLibraries}NuMathLib.o" ∂
+	"{SharedLibraries}InterfaceLib" "{SharedLibraries}StdCLib"
+MakeFlat CLibTest68K.lib -o CLibTest68K
+Rez -a clib68k.r -ov -o CLibTest68K
+SetFile -t APPL -c 'CLb6' -a B CLibTest68K

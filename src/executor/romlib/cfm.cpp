@@ -19,6 +19,7 @@
 #include <ResourceMgr.h>
 
 #include <rsys/cfm.h>
+#include <rsys/opentransport.h>
 #include <PEFBinaryFormat.h>
 #include <file/file.h>
 #include <rsys/launch.h>
@@ -97,6 +98,24 @@ uint32_t Executor::ROMlib_call_cfm68k(uint32_t tvector, const uint32_t *arg)
     {
         EM_A7 -= 4;
         *ptr_from_longint<GUEST<uint32_t> *>(EM_A7) = *arg;
+    }
+    uint32_t code = *ptr_from_longint<GUEST<uint32_t> *>(tvector);
+    EM_A0 = code;
+    EM_A1 = tvector + 4;
+    execute68K(code);
+    uint32_t d0 = EM_D0;
+    EM_A7 = save_a7;
+    EM_A5 = save_a5;
+    return d0;
+}
+
+uint32_t Executor::ROMlib_call_cfm68k(uint32_t tvector, std::initializer_list<uint32_t> args)
+{
+    uint32_t save_a7 = EM_A7, save_a5 = EM_A5;
+    for(auto it = args.end(); it != args.begin();)
+    {
+        EM_A7 -= 4;
+        *ptr_from_longint<GUEST<uint32_t> *>(EM_A7) = *--it;
     }
     uint32_t code = *ptr_from_longint<GUEST<uint32_t> *>(tvector);
     EM_A0 = code;
@@ -614,6 +633,16 @@ OSErr Executor::C_GetSharedLibrary(ConstStr63Param library, OSType arch,
        selectors (docs/executor/CFM68K.md). */
     if(retval == fragLibNotFound && arch == "m68k"_4
        && EqualString(library, (StringPtr) "\020ObjectSupportLib", false, true))
+        if(ConnectionID cid = builtinlibs::getBuiltinLib(library, arch))
+        {
+            *cidp = cid;
+            *mainaddrp = nullptr;
+            return noErr;
+        }
+    /* ... and, Open Transport on, OT's PowerPC libraries (OpenTransport.yaml:
+       OTClientLib & co.): Apple's files need Apple's OT kernel. */
+    if(retval == fragLibNotFound && arch == "pwpc"_4 && ROMlib_open_transport
+       && ROMlib_ot_library(std::string((const char *)library + 1, library[0])))
         if(ConnectionID cid = builtinlibs::getBuiltinLib(library, arch))
         {
             *cidp = cid;

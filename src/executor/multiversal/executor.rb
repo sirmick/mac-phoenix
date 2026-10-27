@@ -225,6 +225,9 @@ class ExecutorGenerator < Generator
     end
     def declare_dispatcher(value, extern:false)
         @available_dispatchers << value["name"]
+        # A component type's calls (selector-location: Component) go through
+        # _ComponentDispatch's own dispatcher; nothing to declare.
+        return if value["selector-location"] == "Component"
         @out << "EXTERN_" if extern
         @out << "DISPATCHER_TRAP(#{value["name"]}, "
         @out << "#{hexlit(value["trap"])}, #{value["selector-location"]});\n"
@@ -281,6 +284,29 @@ class ExecutorGenerator < Generator
         dispatcher = (fun["dispatcher"] && $global_name_map[fun["dispatcher"]]["dispatcher"])
         trap = (fun["trap"] or (dispatcher and dispatcher["trap"]))
 
+        if dispatcher and dispatcher["selector-location"] == "Component" then
+            # A call into a component (docs/executor/LIBRARIES.md): the
+            # component's own code answers it. A library that exports it
+            # (AppleScriptLib) gets an entry that makes the call: the
+            # parameters after the instance, in Pascal sizes.
+            if fun["library"] then
+                sizes = (fun["args"] or [])[1..-1].map {|arg| pascal_size(arg["type"])}.join
+                @out << "COMPONENT_CALL(#{fun["library"]}, #{name}, #{hexlit(fun["selector"])}, \"#{sizes}\");\n"
+            end
+            # A call Executor's own (native) component of this type
+            # answers: registered with the type's dispatch by selector,
+            # its arguments read from the call's parameter block.
+            if fun["executor"] then
+                cname = fun["executor"].is_a?(String) ?
+                    (fun["executor"] =~ /_$/ ? fun["executor"] + name : fun["executor"]) : name
+                args = (fun["args"] or [])
+                @out << (fun["return"] or "void") << " " << cname
+                @out << "(" << (args.map {|arg| decl(arg["type"], arg["name"])}).join(", ") << ");"
+                @out << "COMPONENT_FUNCTION(#{fun["dispatcher"]}, #{name}, #{hexlit(fun["selector"])}, #{cname});\n"
+            end
+            return
+        end
+
         cname = name
         if fun["executor"] then
             if fun["executor"].is_a?(String) then
@@ -293,9 +319,45 @@ class ExecutorGenerator < Generator
         end
         two = name == cname ? "2" : ""
 
-        @out << (fun["return"] or "void") << " " << cname
-
         args = (fun["args"] or [])
+
+        if fun["library"] then
+            # A shared library's export (docs/executor/LIBRARIES.md): reached
+            # by name from PowerPC and CFM-68K code, not through a trap.
+            # A raw one reads its own arguments from the PowerPC registers
+            # and is registered by its library's code; here it is only
+            # declared to be there (checked when the library is set up).
+            lib = fun["library"]
+            if fun["aslm"] then
+                # Open Transport's: bound through the Shared Library Manager
+                # on 68k as well; the routine reads its arguments through
+                # ot::Call, so only their sizes matter here: a Boolean, a
+                # word (a byte is a word too, the way Pascal passes it), or
+                # a long.
+                letter = lambda do |t|
+                    if t.nil? || t == "void" then "V"
+                    elsif t == "Boolean" then "B"
+                    elsif (size_of_type(t) || 4) <= 2 then "W"
+                    else "L"
+                    end
+                end
+                sig = args.map {|arg| letter.call(arg["type"])}.join
+                pascal = fun["callconv"].to_s.downcase == "pascal"
+                @out << "namespace ot { uint32_t #{cname}(const Call &); }"
+                @out << "OT_FUNCTION(#{lib}, #{name}, \"#{fun["aslm"]["set"]}\", "
+                @out << "\"#{fun["aslm"]["name"]}\", #{pascal}, \"#{sig}\", "
+                @out << "'#{letter.call(fun["return"])}', #{cname});\n"
+            elsif fun["raw"] then
+                @out << "LIBRARY_RAW(#{lib}, #{name});\n"
+            else
+                @out << (fun["return"] or "void") << " " << cname
+                @out << "(" << (args.map {|arg| decl(arg["type"], arg["name"])}).join(", ") << ");"
+                @out << "LIBRARY_FUNCTION(#{lib}, #{name}, #{cname});\n"
+            end
+            return
+        end
+
+        @out << (fun["return"] or "void") << " " << cname
 
         @out << "(" << (args.map {|arg| decl(arg["type"], arg["name"])}).join(", ") << ");"
 
@@ -348,6 +410,13 @@ class ExecutorGenerator < Generator
         else
             @out << "NOTRAP_FUNCTION#{two}(#{name});\n"
         end
+    end
+
+    # Bytes a Pascal caller pushes for an argument of this type: a word for
+    # anything up to two bytes, a long otherwise.
+    def pascal_size(type)
+        sz = size_of_type(type) || 4
+        sz <= 2 ? 2 : 4
     end
 
     def declare_funptr(value)

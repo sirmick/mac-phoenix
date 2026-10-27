@@ -376,6 +376,8 @@
         type: INTEGER
       - name: index
         type: INTEGER
+    library: InterfaceLib
+    executor: GetIndPattern
 
 # ####
 

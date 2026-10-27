@@ -372,25 +372,12 @@ static uint32_t mode_switch(UniversalProcPtr theProcPtr, ProcInfoType procinfo,
 
     if(toISA == kPowerPCISA)
     {
-        uint32_t frame_size = std::max(8, nParameters) * 4 + 24;
-        cpu.r[1] = stackPointer - frame_size;
-        PowerPCFrame& frame = *ptr_from_longint<PowerPCFrame*>(cpu.r[1]);
-
-        for(int i = 0; i < nParameters; i++)
-        {
-            if(i < 8)
-                cpu.r[i+3] = paramValues[i];
-            else
-                frame.parameters[i] = paramValues[i];
-        }
-
-        frame.saveRTOC = cpu.r[2];
+        /* MacPhoenix: through callPPC, which keeps the registers: 68k code
+           can call a PowerPC routine while PowerPC code is in a system
+           call (a Time Manager task during a blocking OTRcv), whose return
+           (cpu.lr) the routine would otherwise overwrite (STRAGGLERS 64). */
         PPCProcDescriptor& proc = *(PPCProcDescriptor*) routine->procDescriptor;
-        cpu.r[2] = proc.rtoc;
-        executePPC(proc.code);
-        cpu.r[2] = frame.saveRTOC;
-
-        retval = cpu.r[3];
+        retval = callPPC(proc.code, proc.rtoc, paramValues, nParameters);
     }
     else if(toISA == kCFM68kISA)
     {
@@ -458,7 +445,11 @@ static uint32_t mode_switch(UniversalProcPtr theProcPtr, ProcInfoType procinfo,
     //           maybe pop arguments (pascal calls from 68K),
     //           and store return value in the right plae
 
-    cpu.r[1] = EM_A7 = stackPointer;
+    /* MacPhoenix: r1 only for a PowerPC caller; a 68k caller's stack
+       pointer is not a suspended PowerPC caller's. */
+    EM_A7 = stackPointer;
+    if(fromISA == kPowerPCISA)
+        cpu.r[1] = stackPointer;
 
     if(fromISA == kM68kISA)
     {

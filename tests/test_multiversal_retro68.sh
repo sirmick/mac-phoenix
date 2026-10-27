@@ -6,7 +6,7 @@
 # Mac programs with Retro68's m68k compiler against them alone: Apple's
 # Universal Interfaces, if the toolchain has them installed, are left out.
 #
-#   tests/test_multiversal_retro68.sh [--gcc PATH] [--work DIR]
+#   tests/test_multiversal_retro68.sh [--gcc PATH] [--ppc-gcc PATH] [--work DIR]
 #
 # Builds tests/multiversal/mvtest.c into an application (headers, glue
 # library, the calls MacPhoenix added to the definitions) and compiles
@@ -17,11 +17,13 @@ set -uo pipefail
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 MV="$REPO/src/executor/multiversal"
 GCC=""
+PPC_GCC=""
 WORK="${TMPDIR:-/tmp}/multiversal-retro68.$$"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --gcc)  GCC="$2"; shift 2 ;;
+        --ppc-gcc) PPC_GCC="$2"; shift 2 ;;
         --work) WORK="$2"; shift 2 ;;
         *) echo "unknown argument: $1" >&2; exit 2 ;;
     esac
@@ -50,7 +52,10 @@ failed() { echo "FAIL: $1"; fail=1; }
 # 1. Generate. The generator compiles the glue library with the same gcc
 #    (found on PATH), so a definition that isn't valid C fails here.
 echo "--- generating CIncludes from $MV/defs"
-if (cd "$MV" && PATH="$(dirname "$GCC"):$PATH" \
+[[ -n "$PPC_GCC" ]] || PPC_GCC="$(command -v powerpc-apple-macos-gcc || true)"
+GENPATH="$(dirname "$GCC"):$PATH"
+[[ -n "$PPC_GCC" ]] && GENPATH="$(dirname "$PPC_GCC"):$GENPATH"
+if (cd "$MV" && PATH="$GENPATH" \
         ruby make-multiverse.rb -G CIncludes -o "$WORK/out") > "$WORK/generate.log" 2>&1 \
    && ! grep -qE 'error|No such file' "$WORK/generate.log"; then
     pass "headers and glue library generated ($(ls "$WORK/out/CIncludes" | wc -l) headers)"
@@ -91,12 +96,78 @@ else
     failed "mvtest.c"
 fi
 
-# 4. MacPhoenix's own guest programs that build against these headers alone
-#    (docs/executor/README.md lists what the others still lack).
-for s in MacBrowser/MacBrowser.c tests/guest/mpw-hello/hello.c \
+# 3b. mvtest for PowerPC too, with a Retro68 that has it (the declarations
+#     without 68k inlines: InterfaceLib & co. imports). Compiled only;
+#     RetroTest (tests/guest/retro68) links and runs. And OTTest, with Open
+#     Transport's PowerPC glue library (custom/OpenTransportGlue.c; linked
+#     and run by tests/guest/ot/build-retro68.sh and ot_retro68_ppc_executor).
+if [[ -n "$PPC_GCC" && -x "$PPC_GCC" ]]; then
+    PPC_SYSINC="$(cd "$(dirname "$PPC_GCC")/.." && pwd)/powerpc-apple-macos/include"
+    PVIEW="$WORK/include-ppc"
+    mkdir -p "$PVIEW"
+    for f in "$PPC_SYSINC"/*; do
+        case "$(readlink "$f")" in
+            *Interfaces*/CIncludes/*|*universal/CIncludes/*|*multiversal/CIncludes/*) ;;
+            *) ln -s "$f" "$PVIEW/" ;;
+        esac
+    done
+    ln -sf "$WORK/out/CIncludes/"* "$PVIEW/"
+    if "$PPC_GCC" -nostdinc -isystem "$("$PPC_GCC" -print-file-name=include)" -isystem "$PVIEW" \
+            -Wall -Wno-pointer-sign -Werror=implicit-function-declaration -fsyntax-only \
+            "$REPO/tests/multiversal/mvtest.c" > "$WORK/mvtest-ppc.log" 2>&1; then
+        pass "mvtest.c compiled for PowerPC"
+    else
+        head -20 "$WORK/mvtest-ppc.log"
+        failed "mvtest.c for PowerPC"
+    fi
+    if "$PPC_GCC" -nostdinc -isystem "$("$PPC_GCC" -print-file-name=include)" -isystem "$PVIEW" \
+            -Wall -Wno-pointer-sign -Werror=implicit-function-declaration -fsyntax-only \
+            "$REPO/tests/guest/ot/OTTest.c" > "$WORK/ottest-ppc.log" 2>&1; then
+        pass "OTTest.c compiled for PowerPC"
+    else
+        head -20 "$WORK/ottest-ppc.log"
+        failed "OTTest.c for PowerPC"
+    fi
+    if [[ -s "$WORK/out/libppc/libOpenTransportApp.a" ]]; then
+        pass "Open Transport's PowerPC glue library"
+    else
+        failed "no libppc/libOpenTransportApp.a"
+    fi
+else
+    echo "(no powerpc-apple-macos-gcc: PowerPC not compiled)"
+fi
+
+# 3c. OTTest for 68k: Open Transport through the Shared Library Manager,
+#     the generated wrappers and the glue in lib68k/libOpenTransportApp.a
+#     (linked and run by tests/guest/ot/build-retro68.sh and the
+#     ot_retro68_68k_* cells).
+if "$GCC" "${CFLAGS[@]}" -fsyntax-only "$REPO/tests/guest/ot/OTTest.c" > "$WORK/ottest-68k.log" 2>&1; then
+    pass "OTTest.c compiled for 68k"
+else
+    head -20 "$WORK/ottest-68k.log"
+    failed "OTTest.c for 68k"
+fi
+if "$(dirname "$GCC")/m68k-apple-macos-nm" "$WORK/out/lib68k/libOpenTransportApp.a" 2>/dev/null \
+        | grep -qi " T OTBind$"; then
+    pass "Open Transport's 68k glue library"
+else
+    failed "no OTBind in lib68k/libOpenTransportApp.a"
+fi
+
+# 4. MacPhoenix's own guest programs, against these headers alone: all
+#    but CLibTest (tests/guest/clib), which tests Apple's C library and so
+#    is built with that library's own headers (fp.h, fenv.h, ...).
+for s in BridgeAgent/BridgeAgent.c MacBrowser/MacBrowser.c MacBrowser/browser_shm.c \
+         tests/guest/mpw-hello/hello.c tests/guest/retro68/rtest.c \
+         tests/guest/bridgedemo/demo.c \
          tests/guest/suite/main.c tests/guest/suite/finder.c \
          tests/guest/suite/keyboard.c tests/guest/suite/net.c \
-         tests/guest/suite/netdeep.c; do
+         tests/guest/suite/netdeep.c tests/guest/suite/files.c \
+         tests/guest/suite/audio.c tests/guest/suite/ascript.c \
+         tests/guest/suite/mactcp.c tests/guest/suite/tcpip.c \
+         tests/guest/hfsplus/FSRefTest.c tests/guest/hfsplus/MakeLongNames.c \
+         tests/guest/hfsplus/VolDump.c tests/guest/hfsplus/VolWrite.c \
+         tests/guest/notify/notify.c tests/guest/ppc-hello/hello.c; do
     if "$GCC" "${CFLAGS[@]}" -w -Werror=implicit-function-declaration \
             -I "$REPO/src/common/guest" -I "$REPO/src/common/include" \
             -fsyntax-only "$REPO/$s" > "$WORK/guest.log" 2>&1; then

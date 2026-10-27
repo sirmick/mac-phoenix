@@ -51,6 +51,8 @@ typedef int32_t SInt32;
 
 typedef uint32_t UInt32;
 
+struct UnsignedWide{GUEST_STRUCT;GUEST<UInt32> hi;GUEST<UInt32> lo;};static_assert(sizeof(UnsignedWide) == 8);void describeStruct(const UnsignedWide&, std::ostream&);
+
 typedef Byte Str15[16];
 
 typedef Byte Str31[32];

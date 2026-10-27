@@ -34,6 +34,8 @@
 
 #include "ot_internal.h"
 #include <base/traps.h>
+#include <base/builtinlibs.h>
+#include <PowerCore.h>
 
 #include <rsys/opentransport.h>
 
@@ -194,6 +196,59 @@ void Executor::ot::register_defs(const Def *d, size_t n)
         defs()[std::string(d[i].set) + "/" + d[i].name] = &d[i];
 }
 
+bool Executor::ROMlib_ot_library(const std::string &name)
+{
+    return name == "OTClientLib" || name == "OTClientUtilLib" || name == "OTUtilityLib"
+        || name == "OTInetClientLib" || name == "OTGlobalLib";
+}
+
+namespace
+{
+/* OTGlobalLib's data: the glue's globals and the timing parameters, which
+   Executor's OT doesn't use; zeroed, in storage the guest can address. */
+alignas(8) uint8_t ot_global[256];
+alignas(8) uint8_t ot_micro_time_params[32];
+alignas(8) uint8_t ot_tick_time_params[32];
+struct OTGlobalData
+{
+    OTGlobalData()
+    {
+        builtinlibs::addPPCData("OTGlobalLib", "__gOTGlobal", ot_global);
+        builtinlibs::addPPCData("OTGlobalLib", "__gOTMicroTimeParams", ot_micro_time_params);
+        builtinlibs::addPPCData("OTGlobalLib", "__gOTTickTimeParams", ot_tick_time_params);
+    }
+};
+}
+
+/* A function from the definitions (OpenTransport.yaml): bound by 68k
+   glue through its set, and imported by PowerPC code from its library
+   (OTClientLib, OTUtilityLib, ...), under Apple's name. */
+void Executor::traps::OTFunction::init()
+{
+    static OTGlobalData global_data;
+    const Def *d = new Def{ set, setName, pascal ? Conv::Pascal : Conv::C, sig, ret, impl };
+    register_defs(d, 1);
+    builtinlibs::addPPCEntrypoint(library, name, [d](PowerCore &cpu) {
+        /* Host code that runs 68k code (a notifier, a patched trap) pushes
+           below the caller's frame. */
+        EM_A7 = cpu.r[1];
+        Call call(cpu, d->sig);
+        uint32_t r = d->impl(call);
+        switch(d->ret)
+        {
+            case 'W':
+                cpu.r[3] = (uint32_t)(int32_t)(int16_t)r;
+                break;
+            case 'B':
+                cpu.r[3] = r ? 1 : 0;
+                break;
+            default:
+                cpu.r[3] = r;
+        }
+        return cpu.lr;
+    });
+}
+
 void Executor::ot::fatal(const std::string &msg)
 {
     fprintf(stderr, "[ot] %s\n", msg.c_str());
@@ -204,19 +259,6 @@ void Executor::ot::fatal(const std::string &msg)
         hook(msg.c_str());
     }
     std::abort();
-}
-
-void Executor::ot::register_ot_functions()
-{
-    static bool done;
-    if(done)
-        return;
-    done = true;
-    register_client();
-    register_utils();
-    register_providers();
-    register_inet();
-    register_tasks();
 }
 
 bool Executor::ot::is_ot_set(const std::string &id)
@@ -249,6 +291,32 @@ syn68k_addr_t Executor::ot::bind_ot_stub(uint32_t stub)
     }
     WRITEUL(stub, addr);
     return addr;
+}
+
+/* TLibraryManager::GetFunctionPointer's work (ot_slm.cpp): a function of
+   one of OT's sets by the set's name for it, or by its index (1-based, as
+   in the stubs); 0 if the set isn't OT's or has no such function. */
+syn68k_addr_t Executor::ot::function_pointer(const std::string &id, const std::string &name)
+{
+    if(!find_set(id))
+        return 0;
+    auto it = defs().find(id + "/" + name);
+    if(it == defs().end())
+    {
+        fprintf(stderr, "[ot] GetFunctionPointer %s %s: not implemented\n", id.c_str(), name.c_str());
+        return callback_install(missing, new Missing{ id, name });
+    }
+    OT_LOG("GetFunctionPointer %s %s\n", id.c_str(), name.c_str());
+    return entry_for(it->second);
+}
+
+syn68k_addr_t Executor::ot::function_pointer(const std::string &id, unsigned index)
+{
+    const SetNames *s = find_set(id);
+    const char *name = name_of(s, index);
+    if(!s || !strcmp(name, "?"))
+        return 0;
+    return function_pointer(id, std::string(name));
 }
 
 std::string Executor::ot::guest_cstring(uint32_t addr, size_t max)
@@ -291,8 +359,17 @@ Call::Call(uint32_t sp, Conv conv, const char *sig)
     }
 }
 
+Call::Call(PowerCore &cpu, const char *sig)
+    : cpu_(&cpu)
+{
+    for(const char *p = sig; *p && n_ < 16; p++)
+        kind_[n_++] = *p;
+}
+
 uint32_t Call::l(int i) const
 {
+    if(cpu_)
+        return i < 8 ? cpu_->r[3 + i] : READUL(cpu_->r[1] + 24 + 4 * i);
     if(conv_ == Conv::Pascal && kind_[i] != 'L')
         return w(i);
     return READUL(sp_ + off_[i]);
@@ -300,13 +377,24 @@ uint32_t Call::l(int i) const
 
 uint16_t Call::w(int i) const
 {
+    if(cpu_)
+        return (uint16_t)l(i);
     if(conv_ == Conv::C)
         return (uint16_t)READUL(sp_ + off_[i]);
     return READUW(sp_ + off_[i]);
 }
 
+uint8_t Call::byte(int i) const
+{
+    if(cpu_ || conv_ == Conv::C)
+        return (uint8_t)l(i);
+    return READUB(sp_ + off_[i]);
+}
+
 bool Call::b(int i) const
 {
+    if(cpu_)
+        return (l(i) & 0xFF) != 0;
     if(conv_ == Conv::C)
         return (READUL(sp_ + off_[i]) & 0xFF) != 0;
     return READUB(sp_ + off_[i]) != 0;

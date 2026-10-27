@@ -4,6 +4,8 @@
 
 #include <base/common.h>
 
+#include <string>
+
 namespace Executor
 {
 /* Answer Open Transport (Gestalt 'otan'); on unless --no-executor-ot. */
@@ -13,6 +15,9 @@ extern bool ROMlib_open_transport;
    also puts the Shared Library Manager entries OT's glue binds through in
    place (Executor's own, or wrappers on Apple's ASLM). */
 bool ROMlib_ot_gestalt(OSType selector, int32_t *value);
+/* One of OT's PowerPC libraries Executor answers (OTClientLib, OTUtilityLib,
+   OTClientUtilLib, OTInetClientLib, OTGlobalLib), before Apple's files. */
+bool ROMlib_ot_library(const std::string &name);
 
 /* An application is about to start: Apple's ASLM, if it is running, gets
    its wrappers now, so a library manager the application makes before it

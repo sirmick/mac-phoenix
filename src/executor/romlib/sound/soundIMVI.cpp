@@ -600,113 +600,96 @@ OSErr Executor::C_SetDefaultOutputVolume(LONGINT level)
 
 /* MacPhoenix: the output device, as a sound output component ('sdev') of
    Executor's own: what the Sound control panel's Volumes and Sound Out
-   pages ask the device (SoundComponentGetInfo/SetInfo, Sound.h). Executor
-   mixes 8-bit mono at 22254.5 Hz; what it sends out is 48 kHz 16-bit
-   stereo, the format the device reports. */
+   pages ask the device (SoundComponentGetInfo/SetInfo, the definitions'
+   SoundComponent calls). Executor mixes 8-bit mono at 22254.5 Hz; what it
+   sends out is 48 kHz 16-bit stereo, the format the device reports. */
 namespace
 {
-enum
+enum : uint32_t
 {
-    kComponentOpenSelect = -1, kComponentCloseSelect = -2, kComponentCanDoSelect = -3,
-    kComponentVersionSelect = -4, kComponentRegisterSelect = -5,
-    kSoundComponentGetInfoSelect = 0x0103, kSoundComponentSetInfoSelect = 0x0104,
-    badComponentSelector = (int32_t)0x80008002, siUnknownInfoType = -231,
+    kRate48k = 0xBB800000, /* 48000.0, UnsignedFixed */
 };
 
-int32_t sound_output_component(uint32_t params, uint32_t storage)
+ComponentResult sound_output_info(OSType selector, void *infoPtr, bool set)
 {
-    int16_t what = (int16_t)READUW(params + 2);
-    switch(what)
+    /* the value itself, for the selectors that take one */
+    uint32_t value = US_TO_SYN68K(infoPtr);
+    switch(selector)
     {
-        case kComponentOpenSelect:
-        case kComponentCloseSelect:
-        case kComponentRegisterSelect:
+        case siHardwareVolume:
+        case siSpeakerVolume:
+            if(set)
+                ROMlib_sound_output_volume = value;
+            else
+                *(GUEST<uint32_t> *)infoPtr = ROMlib_sound_output_volume;
             return noErr;
-        case kComponentVersionSelect:
-            return 0x00010000;
-        case kComponentCanDoSelect:
+        case siHardwareMute:
+        case siSpeakerMute:
+            if(set)
+                ROMlib_sound_output_muted = value != 0;
+            else
+                *(GUEST<uint16_t> *)infoPtr = ROMlib_sound_output_muted;
+            return noErr;
+        case siHardwareVolumeSteps:
+            if(set)
+                break;
+            *(GUEST<uint16_t> *)infoPtr = 8;
+            return noErr;
+        /* the format sent out: 48 kHz 16-bit stereo, the only one */
+        case siSampleSize:
+        case siNumberChannels:
         {
-            int16_t which = (int16_t)READUW(params + 4);
-            return which == kComponentOpenSelect || which == kComponentCloseSelect
-                || which == kComponentCanDoSelect || which == kComponentVersionSelect
-                || which == kSoundComponentGetInfoSelect || which == kSoundComponentSetInfoSelect;
+            uint16_t v = selector == siSampleSize ? 16 : 2;
+            if(set)
+                return (value & 0xFFFF) == v ? noErr : siUnknownInfoType;
+            *(GUEST<uint16_t> *)infoPtr = v;
+            return noErr;
         }
-        case kSoundComponentGetInfoSelect:
-        case kSoundComponentSetInfoSelect:
+        case siSampleRate:
+            if(set)
+                return value == kRate48k ? noErr : siUnknownInfoType;
+            *(GUEST<uint32_t> *)infoPtr = kRate48k;
+            return noErr;
+        /* the choices, a SoundInfoList, the handle the caller's to
+           dispose: one of each */
+        case siSampleSizeAvailable:
+        case siChannelAvailable:
+        case siSampleRateAvailable:
         {
-            /* (ci, sourceID, OSType selector, infoPtr): the last argument
-               first in the block */
-            uint32_t info = READUL(params + 4);
-            uint32_t selector = READUL(params + 8);
-            bool set = what == kSoundComponentSetInfoSelect;
-            switch(selector)
-            {
-                case "hvol"_4: /* siHardwareVolume */
-                case "svol"_4: /* siSpeakerVolume */
-                    if(set)
-                        ROMlib_sound_output_volume = info; /* the value itself */
-                    else
-                        WRITEUL(info, ROMlib_sound_output_volume);
-                    return noErr;
-                case "hmut"_4: /* siHardwareMute */
-                case "smut"_4: /* siSpeakerMute */
-                    if(set)
-                        ROMlib_sound_output_muted = info != 0;
-                    else
-                        WRITEUW(info, ROMlib_sound_output_muted);
-                    return noErr;
-                case "hstp"_4: /* siHardwareVolumeSteps */
-                    if(set)
-                        break;
-                    WRITEUW(info, 8);
-                    return noErr;
-                /* the format sent out: 48 kHz 16-bit stereo, the only one */
-                case "ssiz"_4: /* siSampleSize */
-                case "chan"_4: /* siNumberChannels */
-                {
-                    uint16_t v = selector == "ssiz"_4 ? 16 : 2;
-                    if(set)
-                        return (info & 0xFFFF) == v ? noErr : siUnknownInfoType;
-                    WRITEUW(info, v);
-                    return noErr;
-                }
-                case "srat"_4: /* siSampleRate, UnsignedFixed */
-                    if(set)
-                        return info == 0xBB800000 ? noErr : siUnknownInfoType;
-                    WRITEUL(info, 0xBB800000);
-                    return noErr;
-                /* the choices, SoundInfoList {count, handle of values}, the
-                   caller's to dispose: one of each */
-                case "ssav"_4: /* siSampleSizeAvailable */
-                case "chav"_4: /* siChannelAvailable */
-                case "srav"_4: /* siSampleRateAvailable */
-                {
-                    if(set)
-                        break;
-                    bool rate = selector == "srav"_4;
-                    Handle h = NewHandle(rate ? 4 : 2);
-                    if(!h)
-                        return MemError();
-                    if(rate)
-                        *(GUEST<uint32_t> *)*h = 0xBB800000;
-                    else
-                        *(GUEST<uint16_t> *)*h = selector == "ssav"_4 ? 16 : 2;
-                    WRITEUW(info, 1);
-                    WRITEUL(info + 2, US_TO_SYN68K(h));
-                    return noErr;
-                }
-            }
-            char sel[5] = { (char)(selector >> 24), (char)(selector >> 16), (char)(selector >> 8),
-                            (char)selector, 0 };
-            traps::log_unimplemented(std::string("sound output component ") + (set ? "SetInfo" : "GetInfo")
-                                     + " '" + sel + "': answered siUnknownInfoType");
-            return siUnknownInfoType;
+            if(set)
+                break;
+            bool rate = selector == siSampleRateAvailable;
+            Handle h = NewHandle(rate ? 4 : 2);
+            if(!h)
+                return MemError();
+            if(rate)
+                *(GUEST<uint32_t> *)*h = kRate48k;
+            else
+                *(GUEST<uint16_t> *)*h = selector == siSampleSizeAvailable ? 16 : 2;
+            auto *list = (SoundInfoList *)infoPtr;
+            list->count = 1;
+            list->infoHandle = h;
+            return noErr;
         }
     }
-    traps::log_unimplemented("sound output component selector " + std::to_string(what)
-                             + ": answered badComponentSelector");
-    return badComponentSelector;
+    char sel[5] = { (char)(selector >> 24), (char)(selector >> 16), (char)(selector >> 8),
+                    (char)selector, 0 };
+    traps::log_unimplemented(std::string("sound output component ") + (set ? "SetInfo" : "GetInfo")
+                             + " '" + sel + "': answered siUnknownInfoType");
+    return siUnknownInfoType;
 }
+}
+
+ComponentResult Executor::C_SoundComponentGetInfo(ComponentInstance ti, SoundSource sourceID,
+                                                  OSType selector, void *infoPtr)
+{
+    return sound_output_info(selector, infoPtr, false);
+}
+
+ComponentResult Executor::C_SoundComponentSetInfo(ComponentInstance ti, SoundSource sourceID,
+                                                  OSType selector, void *infoPtr)
+{
+    return sound_output_info(selector, infoPtr, true);
 }
 
 static uint32_t sound_output_component_id;
@@ -714,7 +697,7 @@ static uint32_t sound_output_component_id;
 void Executor::ROMlib_install_sound_output_component()
 {
     sound_output_component_id = ROMlib_register_native_component(
-        "sdev"_4, "xctr"_4, "appl"_4, "Built-in", sound_output_component);
+        kSoundOutputDeviceType, "xctr"_4, "appl"_4, "Built-in", "SoundComponent", 0x00010000);
 }
 
 OSErr Executor::C_GetSoundOutputDevice(GUEST<uint32_t> *outputDevice)

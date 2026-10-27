@@ -93,6 +93,14 @@
         value: 0x4000
       - name: launchNoFileFlags
         value: 0x0800
+      - name: launchUseMinimum
+        value: 0x0400
+      - name: launchDontSwitch
+        value: 0x0200
+      - name: launchAllow24Bit
+        value: 0x0100
+      - name: launchInhibitDaemon
+        value: 0x0080
 
 # ####
 
@@ -437,6 +445,18 @@
       -16463, RAM $29E94 on the reference boot) takes anything else as a
       layer or window and answers the process owning it (procNotFound if
       none): the Drag Manager finds a drop target's process that way.
+
+# ####
+
+# Apple's: the inline pushes the -1 Executor's takes as a second argument.
+- not-for: Executor
+  function:
+    name: GetFrontProcess
+    return: OSErr
+    args:
+      - name: PSN
+        type: ProcessSerialNumber*
+    m68k-inline: [0x70FF, 0x2F00, 0x3F3C, 0x0039, 0xA88F]
 
 # ####
 

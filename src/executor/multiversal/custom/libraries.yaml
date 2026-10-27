@@ -2,3 +2,19 @@ Navigation.far:
   - Navigation
   - NavServicesAvailable
 
+# Open Transport's public calls (custom/OpenTransportGlue.c) and, for 68k,
+# the routines bound through the Shared Library Manager (the wrappers the
+# generator writes for OpenTransport.yaml's and OpenTptInternet.yaml's
+# `aslm:` entries).
+OpenTransportApp:
+  - OpenTransportGlue
+  - OpenTransport
+  - OpenTptInternet
+
+# Libraries of PowerPC code (libppc/), built when Retro68's PowerPC
+# compiler is on the PATH; the rest of the glue is 68k code.
+# OpenTransportApp for PowerPC: its public calls only (the ...Priv routines
+# are OT's CFM libraries' imports).
+PowerPC:
+  OpenTransportApp:
+    - OpenTransportGlue

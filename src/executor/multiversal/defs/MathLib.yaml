@@ -1,0 +1,1291 @@
+# MathLib: the Power Mac's maths library, as Executor answers it
+# (romlib/clib/mathlib.cpp; docs/executor/PPCLibs.md). Only for Executor,
+# as StdCLib. The h_ routines are the m_ ones with the host's floating-point
+# exception flags carried over to the guest's FPSCR; the l routines take
+# MathLib's double-double in f1:f2 and are raw.
+
+# ---- mathlib.cpp -------------------------------------------------
+
+- only-for: Executor
+  function:
+    name: "cos"
+    return: "double"
+    args:
+      - name: "x"
+        type: "double"
+    library: MathLib
+    executor: h_cos
+
+- only-for: Executor
+  function:
+    name: "sin"
+    return: "double"
+    args:
+      - name: "x"
+        type: "double"
+    library: MathLib
+    executor: h_sin
+
+- only-for: Executor
+  function:
+    name: "tan"
+    return: "double"
+    args:
+      - name: "x"
+        type: "double"
+    library: MathLib
+    executor: h_tan
+
+- only-for: Executor
+  function:
+    name: "acos"
+    return: "double"
+    args:
+      - name: "x"
+        type: "double"
+    library: MathLib
+    executor: h_acos
+
+- only-for: Executor
+  function:
+    name: "asin"
+    return: "double"
+    args:
+      - name: "x"
+        type: "double"
+    library: MathLib
+    executor: h_asin
+
+- only-for: Executor
+  function:
+    name: "atan"
+    return: "double"
+    args:
+      - name: "x"
+        type: "double"
+    library: MathLib
+    executor: h_atan
+
+- only-for: Executor
+  function:
+    name: "atan2"
+    return: "double"
+    args:
+      - name: "x"
+        type: "double"
+      - name: "y"
+        type: "double"
+    library: MathLib
+    executor: h_atan2
+
+- only-for: Executor
+  function:
+    name: "cosh"
+    return: "double"
+    args:
+      - name: "x"
+        type: "double"
+    library: MathLib
+    executor: h_cosh
+
+- only-for: Executor
+  function:
+    name: "sinh"
+    return: "double"
+    args:
+      - name: "x"
+        type: "double"
+    library: MathLib
+    executor: h_sinh
+
+- only-for: Executor
+  function:
+    name: "tanh"
+    return: "double"
+    args:
+      - name: "x"
+        type: "double"
+    library: MathLib
+    executor: h_tanh
+
+- only-for: Executor
+  function:
+    name: "acosh"
+    return: "double"
+    args:
+      - name: "x"
+        type: "double"
+    library: MathLib
+    executor: h_acosh
+
+- only-for: Executor
+  function:
+    name: "asinh"
+    return: "double"
+    args:
+      - name: "x"
+        type: "double"
+    library: MathLib
+    executor: h_asinh
+
+- only-for: Executor
+  function:
+    name: "atanh"
+    return: "double"
+    args:
+      - name: "x"
+        type: "double"
+    library: MathLib
+    executor: h_atanh
+
+- only-for: Executor
+  function:
+    name: "exp"
+    return: "double"
+    args:
+      - name: "x"
+        type: "double"
+    library: MathLib
+    executor: h_exp
+
+- only-for: Executor
+  function:
+    name: "expm1"
+    return: "double"
+    args:
+      - name: "x"
+        type: "double"
+    library: MathLib
+    executor: h_expm1
+
+- only-for: Executor
+  function:
+    name: "exp2"
+    return: "double"
+    args:
+      - name: "x"
+        type: "double"
+    library: MathLib
+    executor: h_exp2
+
+- only-for: Executor
+  function:
+    name: "log"
+    return: "double"
+    args:
+      - name: "x"
+        type: "double"
+    library: MathLib
+    executor: h_log
+
+- only-for: Executor
+  function:
+    name: "log2"
+    return: "double"
+    args:
+      - name: "x"
+        type: "double"
+    library: MathLib
+    executor: h_log2
+
+- only-for: Executor
+  function:
+    name: "log1p"
+    return: "double"
+    args:
+      - name: "x"
+        type: "double"
+    library: MathLib
+    executor: h_log1p
+
+- only-for: Executor
+  function:
+    name: "log10"
+    return: "double"
+    args:
+      - name: "x"
+        type: "double"
+    library: MathLib
+    executor: h_log10
+
+- only-for: Executor
+  function:
+    name: "logb"
+    return: "double"
+    args:
+      - name: "x"
+        type: "double"
+    library: MathLib
+    executor: h_logb
+
+- only-for: Executor
+  function:
+    name: "fabs"
+    return: "double"
+    args:
+      - name: "x"
+        type: "double"
+    library: MathLib
+    executor: h_fabs
+
+- only-for: Executor
+  function:
+    name: "sqrt"
+    return: "double"
+    args:
+      - name: "x"
+        type: "double"
+    library: MathLib
+    executor: h_sqrt
+
+- only-for: Executor
+  function:
+    name: "erf"
+    return: "double"
+    args:
+      - name: "x"
+        type: "double"
+    library: MathLib
+    executor: h_erf
+
+- only-for: Executor
+  function:
+    name: "erfc"
+    return: "double"
+    args:
+      - name: "x"
+        type: "double"
+    library: MathLib
+    executor: h_erfc
+
+- only-for: Executor
+  function:
+    name: "gamma"
+    return: "double"
+    args:
+      - name: "x"
+        type: "double"
+    library: MathLib
+    executor: h_gamma
+
+- only-for: Executor
+  function:
+    name: "lgamma"
+    return: "double"
+    args:
+      - name: "x"
+        type: "double"
+    library: MathLib
+    executor: h_lgamma
+
+- only-for: Executor
+  function:
+    name: "ceil"
+    return: "double"
+    args:
+      - name: "x"
+        type: "double"
+    library: MathLib
+    executor: h_ceil
+
+- only-for: Executor
+  function:
+    name: "floor"
+    return: "double"
+    args:
+      - name: "x"
+        type: "double"
+    library: MathLib
+    executor: h_floor
+
+- only-for: Executor
+  function:
+    name: "trunc"
+    return: "double"
+    args:
+      - name: "x"
+        type: "double"
+    library: MathLib
+    executor: h_trunc
+
+- only-for: Executor
+  function:
+    name: "round"
+    return: "double"
+    args:
+      - name: "x"
+        type: "double"
+    library: MathLib
+    executor: h_round
+
+- only-for: Executor
+  function:
+    name: "rint"
+    return: "double"
+    args:
+      - name: "x"
+        type: "double"
+    library: MathLib
+    executor: h_rint
+
+- only-for: Executor
+  function:
+    name: "nearbyint"
+    return: "double"
+    args:
+      - name: "x"
+        type: "double"
+    library: MathLib
+    executor: h_nearbyint
+
+- only-for: Executor
+  function:
+    name: "hypot"
+    return: "double"
+    args:
+      - name: "x"
+        type: "double"
+      - name: "y"
+        type: "double"
+    library: MathLib
+    executor: h_hypot
+
+- only-for: Executor
+  function:
+    name: "pow"
+    return: "double"
+    args:
+      - name: "x"
+        type: "double"
+      - name: "y"
+        type: "double"
+    library: MathLib
+    executor: h_pow
+
+- only-for: Executor
+  function:
+    name: "fmod"
+    return: "double"
+    args:
+      - name: "x"
+        type: "double"
+      - name: "y"
+        type: "double"
+    library: MathLib
+    executor: h_fmod
+
+- only-for: Executor
+  function:
+    name: "remainder"
+    return: "double"
+    args:
+      - name: "x"
+        type: "double"
+      - name: "y"
+        type: "double"
+    library: MathLib
+    executor: h_remainder
+
+- only-for: Executor
+  function:
+    name: "copysign"
+    return: "double"
+    args:
+      - name: "x"
+        type: "double"
+      - name: "y"
+        type: "double"
+    library: MathLib
+    executor: h_copysign
+
+- only-for: Executor
+  function:
+    name: "fdim"
+    return: "double"
+    args:
+      - name: "x"
+        type: "double"
+      - name: "y"
+        type: "double"
+    library: MathLib
+    executor: h_fdim
+
+- only-for: Executor
+  function:
+    name: "fmax"
+    return: "double"
+    args:
+      - name: "x"
+        type: "double"
+      - name: "y"
+        type: "double"
+    library: MathLib
+    executor: h_fmax
+
+- only-for: Executor
+  function:
+    name: "fmin"
+    return: "double"
+    args:
+      - name: "x"
+        type: "double"
+      - name: "y"
+        type: "double"
+    library: MathLib
+    executor: h_fmin
+
+- only-for: Executor
+  function:
+    name: "nextafterd"
+    return: "double"
+    args:
+      - name: "x"
+        type: "double"
+      - name: "y"
+        type: "double"
+    library: MathLib
+    executor: h_nextafterd
+
+- only-for: Executor
+  function:
+    name: "nextafterf"
+    return: "float"
+    args:
+      - name: "x"
+        type: "float"
+      - name: "y"
+        type: "float"
+    library: MathLib
+    executor: m_nextafterf
+
+- only-for: Executor
+  function:
+    name: "remquo"
+    return: "double"
+    args:
+      - name: "x"
+        type: "double"
+      - name: "y"
+        type: "double"
+      - name: "quo"
+        type: "uint32_t"
+    library: MathLib
+    executor: m_remquo
+
+- only-for: Executor
+  function:
+    name: "modf"
+    return: "double"
+    args:
+      - name: "x"
+        type: "double"
+      - name: "iptr"
+        type: "uint32_t"
+    library: MathLib
+    executor: m_modf
+
+- only-for: Executor
+  function:
+    name: "modff"
+    return: "float"
+    args:
+      - name: "x"
+        type: "float"
+      - name: "iptr"
+        type: "uint32_t"
+    library: MathLib
+    executor: m_modff
+
+- only-for: Executor
+  function:
+    name: "frexp"
+    return: "double"
+    args:
+      - name: "x"
+        type: "double"
+      - name: "exp"
+        type: "uint32_t"
+    library: MathLib
+    executor: m_frexp
+
+- only-for: Executor
+  function:
+    name: "ldexp"
+    return: "double"
+    args:
+      - name: "x"
+        type: "double"
+      - name: "n"
+        type: "int32_t"
+    library: MathLib
+    executor: m_ldexp
+
+- only-for: Executor
+  function:
+    name: "scalb"
+    return: "double"
+    args:
+      - name: "x"
+        type: "double"
+      - name: "n"
+        type: "int32_t"
+    library: MathLib
+    executor: m_scalb
+
+- only-for: Executor
+  function:
+    name: "rinttol"
+    return: "int32_t"
+    args:
+      - name: "x"
+        type: "double"
+    library: MathLib
+    executor: m_rinttol
+
+- only-for: Executor
+  function:
+    name: "roundtol"
+    return: "int32_t"
+    args:
+      - name: "x"
+        type: "double"
+    library: MathLib
+    executor: m_roundtol
+
+- only-for: Executor
+  function:
+    name: "relation"
+    return: "int16_t"
+    args:
+      - name: "x"
+        type: "double"
+      - name: "y"
+        type: "double"
+    library: MathLib
+    executor: m_relation
+
+- only-for: Executor
+  function:
+    name: "__fpclassifyd"
+    return: "int32_t"
+    args:
+      - name: "x"
+        type: "double"
+    library: MathLib
+    executor: m_fpclassifyd
+
+- only-for: Executor
+  function:
+    name: "__fpclassifyf"
+    return: "int32_t"
+    args:
+      - name: "x"
+        type: "float"
+    library: MathLib
+    executor: m_fpclassifyf
+
+- only-for: Executor
+  function:
+    name: "__isnormald"
+    return: "int32_t"
+    args:
+      - name: "x"
+        type: "double"
+    library: MathLib
+    executor: m_isnormald
+
+- only-for: Executor
+  function:
+    name: "__isnormalf"
+    return: "int32_t"
+    args:
+      - name: "x"
+        type: "float"
+    library: MathLib
+    executor: m_isnormalf
+
+- only-for: Executor
+  function:
+    name: "__isfinited"
+    return: "int32_t"
+    args:
+      - name: "x"
+        type: "double"
+    library: MathLib
+    executor: m_isfinited
+
+- only-for: Executor
+  function:
+    name: "__isfinitef"
+    return: "int32_t"
+    args:
+      - name: "x"
+        type: "float"
+    library: MathLib
+    executor: m_isfinitef
+
+- only-for: Executor
+  function:
+    name: "__isnand"
+    return: "int32_t"
+    args:
+      - name: "x"
+        type: "double"
+    library: MathLib
+    executor: m_isnand
+
+- only-for: Executor
+  function:
+    name: "__isnanf"
+    return: "int32_t"
+    args:
+      - name: "x"
+        type: "float"
+    library: MathLib
+    executor: m_isnanf
+
+- only-for: Executor
+  function:
+    name: "__signbitd"
+    return: "int32_t"
+    args:
+      - name: "x"
+        type: "double"
+    library: MathLib
+    executor: m_signbitd
+
+- only-for: Executor
+  function:
+    name: "__signbitf"
+    return: "int32_t"
+    args:
+      - name: "x"
+        type: "float"
+    library: MathLib
+    executor: m_signbitf
+
+- only-for: Executor
+  function:
+    name: "__fpclassify"
+    library: MathLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "__isnormal"
+    library: MathLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "__isfinite"
+    library: MathLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "__isnan"
+    library: MathLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "__signbit"
+    library: MathLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "__inf"
+    return: "double"
+    library: MathLib
+    executor: m_inf
+
+- only-for: Executor
+  function:
+    name: "nan"
+    return: "double"
+    args:
+      - name: "tag"
+        type: "const char*"
+    library: MathLib
+    executor: m_nan
+
+- only-for: Executor
+  function:
+    name: "nanf"
+    return: "float"
+    args:
+      - name: "tag"
+        type: "const char*"
+    library: MathLib
+    executor: m_nanf
+
+- only-for: Executor
+  function:
+    name: "nanl"
+    library: MathLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "compound"
+    return: "double"
+    args:
+      - name: "rate"
+        type: "double"
+      - name: "periods"
+        type: "double"
+    library: MathLib
+    executor: m_compound
+
+- only-for: Executor
+  function:
+    name: "annuity"
+    return: "double"
+    args:
+      - name: "rate"
+        type: "double"
+      - name: "periods"
+        type: "double"
+    library: MathLib
+    executor: m_annuity
+
+- only-for: Executor
+  function:
+    name: "randomx"
+    return: "double"
+    args:
+      - name: "xp"
+        type: "uint32_t"
+    library: MathLib
+    executor: m_randomx
+
+- only-for: Executor
+  function:
+    name: "feclearexcept"
+    args:
+      - name: "e"
+        type: "int32_t"
+    library: MathLib
+    executor: c_feclearexcept
+
+- only-for: Executor
+  function:
+    name: "feraiseexcept"
+    args:
+      - name: "e"
+        type: "int32_t"
+    library: MathLib
+    executor: c_feraiseexcept
+
+- only-for: Executor
+  function:
+    name: "fetestexcept"
+    return: "int32_t"
+    args:
+      - name: "e"
+        type: "int32_t"
+    library: MathLib
+    executor: c_fetestexcept
+
+- only-for: Executor
+  function:
+    name: "fegetexcept"
+    args:
+      - name: "flagp"
+        type: "uint32_t"
+      - name: "e"
+        type: "int32_t"
+    library: MathLib
+    executor: c_fegetexcept
+
+- only-for: Executor
+  function:
+    name: "fesetexcept"
+    args:
+      - name: "flagp"
+        type: "uint32_t"
+      - name: "e"
+        type: "int32_t"
+    library: MathLib
+    executor: c_fesetexcept
+
+- only-for: Executor
+  function:
+    name: "fegetround"
+    return: "int32_t"
+    library: MathLib
+    executor: c_fegetround
+
+- only-for: Executor
+  function:
+    name: "fesetround"
+    return: "int32_t"
+    args:
+      - name: "r"
+        type: "int32_t"
+    library: MathLib
+    executor: c_fesetround
+
+- only-for: Executor
+  function:
+    name: "fegetenv"
+    args:
+      - name: "envp"
+        type: "uint32_t"
+    library: MathLib
+    executor: c_fegetenv
+
+- only-for: Executor
+  function:
+    name: "feholdexcept"
+    return: "int32_t"
+    args:
+      - name: "envp"
+        type: "uint32_t"
+    library: MathLib
+    executor: c_feholdexcept
+
+- only-for: Executor
+  function:
+    name: "fesetenv"
+    args:
+      - name: "envp"
+        type: "uint32_t"
+    library: MathLib
+    executor: c_fesetenv
+
+- only-for: Executor
+  function:
+    name: "feupdateenv"
+    args:
+      - name: "envp"
+        type: "uint32_t"
+    library: MathLib
+    executor: c_feupdateenv
+
+- only-for: Executor
+  function:
+    name: "cosl"
+    library: MathLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "sinl"
+    library: MathLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "tanl"
+    library: MathLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "acosl"
+    library: MathLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "asinl"
+    library: MathLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "atanl"
+    library: MathLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "coshl"
+    library: MathLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "sinhl"
+    library: MathLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "tanhl"
+    library: MathLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "acoshl"
+    library: MathLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "asinhl"
+    library: MathLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "atanhl"
+    library: MathLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "expl"
+    library: MathLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "expm1l"
+    library: MathLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "exp2l"
+    library: MathLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "logl"
+    library: MathLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "log1pl"
+    library: MathLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "log10l"
+    library: MathLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "log2l"
+    library: MathLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "logbl"
+    library: MathLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "sqrtl"
+    library: MathLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "fabsl"
+    library: MathLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "erfl"
+    library: MathLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "erfcl"
+    library: MathLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "gammal"
+    library: MathLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "lgammal"
+    library: MathLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "ceill"
+    library: MathLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "floorl"
+    library: MathLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "rintl"
+    library: MathLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "nearbyintl"
+    library: MathLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "roundl"
+    library: MathLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "truncl"
+    library: MathLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "atan2l"
+    library: MathLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "powl"
+    library: MathLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "remainderl"
+    library: MathLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "copysignl"
+    library: MathLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "nextafterl"
+    library: MathLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "fdiml"
+    library: MathLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "fmaxl"
+    library: MathLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "fminl"
+    library: MathLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "hypotl"
+    library: MathLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "scalbl"
+    library: MathLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "ldexpl"
+    library: MathLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "frexpl"
+    library: MathLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "modfl"
+    library: MathLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "remquol"
+    library: MathLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "rinttoll"
+    library: MathLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "roundtoll"
+    library: MathLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "relationl"
+    library: MathLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "x80tod"
+    return: "double"
+    args:
+      - name: "x80"
+        type: "uint32_t"
+    library: MathLib
+    executor: m_x80tod
+
+- only-for: Executor
+  function:
+    name: "dtox80"
+    args:
+      - name: "xp"
+        type: "uint32_t"
+      - name: "x80"
+        type: "uint32_t"
+    library: MathLib
+    executor: m_dtox80
+
+- only-for: Executor
+  function:
+    name: "x80told"
+    library: MathLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "ldtox80"
+    args:
+      - name: "xp"
+        type: "uint32_t"
+      - name: "x80"
+        type: "uint32_t"
+    library: MathLib
+    executor: m_ldtox80
+
+- only-for: Executor
+  function:
+    name: "num2dec"
+    args:
+      - name: "f"
+        type: "uint32_t"
+      - name: "x"
+        type: "double"
+      - name: "d"
+        type: "uint32_t"
+    library: MathLib
+    executor: m_num2dec
+
+- only-for: Executor
+  function:
+    name: "num2decl"
+    library: MathLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "dec2num"
+    return: "double"
+    args:
+      - name: "d"
+        type: "uint32_t"
+    library: MathLib
+    executor: m_dec2num
+
+- only-for: Executor
+  function:
+    name: "dec2numl"
+    library: MathLib
+    raw: true
+
+- only-for: Executor
+  function:
+    name: "dec2f"
+    return: "float"
+    args:
+      - name: "d"
+        type: "uint32_t"
+    library: MathLib
+    executor: m_dec2f
+
+- only-for: Executor
+  function:
+    name: "dec2s"
+    return: "int16_t"
+    args:
+      - name: "d"
+        type: "uint32_t"
+    library: MathLib
+    executor: m_dec2s
+
+- only-for: Executor
+  function:
+    name: "dec2l"
+    return: "int32_t"
+    args:
+      - name: "d"
+        type: "uint32_t"
+    library: MathLib
+    executor: m_dec2l
+
+- only-for: Executor
+  function:
+    name: "str2dec"
+    args:
+      - name: "s"
+        type: "const char*"
+      - name: "ixp"
+        type: "uint32_t"
+      - name: "d"
+        type: "uint32_t"
+      - name: "vp"
+        type: "uint32_t"
+    library: MathLib
+    executor: m_str2dec
+
+- only-for: Executor
+  function:
+    name: "dec2str"
+    args:
+      - name: "f"
+        type: "uint32_t"
+      - name: "dp"
+        type: "uint32_t"
+      - name: "out"
+        type: "char*"
+    library: MathLib
+    executor: m_dec2str

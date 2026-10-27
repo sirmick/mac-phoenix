@@ -1,0 +1,22 @@
+# TextCommon.h: the text encoding constants programs name.
+
+- enum:
+    values:
+      - name: kTextEncodingMacRoman
+        value: 0
+      - name: kTextEncodingUnknown
+        value: 0xFFFF
+
+# ####
+
+- enum:
+    values:
+      - name: kTextEncodingDefaultVariant
+        value: 0
+
+# ####
+
+- enum:
+    values:
+      - name: kTextEncodingDefaultFormat
+        value: 0

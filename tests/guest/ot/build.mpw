@@ -1,6 +1,9 @@
 # build.mpw — OTTest, an MPW tool linked with Apple's 68k OT glue.
 #   tools/mpw/mpw build tests/guest/ot -o tests/guest/ot
-# products: OTTest
+# OTTestPPC: the same as a PowerPC application (MrC, PPCLink) on Apple's
+# PowerPC OT glue, which imports OTClientLib, OTUtilityLib & co. from the
+# OT stub libraries; it writes Host:ot_results.txt (OTTest.c).
+# products: OTTest OTTestPPC
 # OT's glue makes 32-bit references: both SC and Link need -model far.
 SC -b -mbg off -model far OTTest.c -o OTTest.c.o
 Link -model far -c "MPS " -t MPST -d ∂
@@ -13,3 +16,15 @@ Link -model far -c "MPS " -t MPST -d ∂
 	"{Libraries}IntEnv.o" ∂
 	"{Libraries}Interface.o" ∂
 	-o OTTest
+MrC OTTest.c -o OTTest.ppc.o
+PPCLink -main __start OTTest.ppc.o ∂
+	"{PPCLibraries}OpenTransportAppPPC.o" ∂
+	"{PPCLibraries}OpenTptInetPPC.o" ∂
+	"{PPCLibraries}OpenTptUtilsAppPPC.o" ∂
+	"{SharedLibraries}OpenTransportLib" "{SharedLibraries}OpenTransportUtilLib" ∂
+	"{SharedLibraries}OpenTptInternetLib" ∂
+	"{SharedLibraries}InterfaceLib" "{SharedLibraries}StdCLib" ∂
+	"{PPCLibraries}StdCRuntime.o" "{PPCLibraries}PPCCRuntime.o" ∂
+	-t APPL -c 'OTtP' -o OTTestPPC
+Rez -a OTTestPPC.r -o OTTestPPC
+SetFile -t APPL -c 'OTtP' -a B OTTestPPC

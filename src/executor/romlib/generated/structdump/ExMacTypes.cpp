@@ -5,6 +5,14 @@
 
 namespace Executor
 {
+void describeStruct(const UnsignedWide& x, std::ostream& os)
+{
+    os << "UnsignedWide{";
+    logging::logField(os, "hi", x.hi);
+    logging::logField(os, "lo", x.lo);
+    os << "}";
+}
+
 void describeStruct(const QHdr& x, std::ostream& os)
 {
     os << "QHdr{";
@@ -29,6 +37,10 @@ void describeStruct(const Rect& x, std::ostream& os)
 namespace Executor { namespace structdump {
 namespace
 {
+void dump_UnsignedWide(std::ostream& os, const void* p)
+{
+    describeStruct(*(const UnsignedWide*)p, os);
+}
 void dump_QHdr(std::ostream& os, const void* p)
 {
     describeStruct(*(const QHdr*)p, os);
@@ -42,6 +54,7 @@ void dump_Rect(std::ostream& os, const void* p)
 void registerStructDumps_ExMacTypes()
 {
     static const TypeDesc types[] = {
+        { "UnsignedWide", sizeof(UnsignedWide), &dump_UnsignedWide },
         { "QHdr", sizeof(QHdr), &dump_QHdr },
         { "Rect", sizeof(Rect), &dump_Rect },
     };

@@ -45,10 +45,13 @@ set_tests_properties(cpu_cores PROPERTIES TIMEOUT 10 LABELS "unit;mame")
 # Executor's API definitions as the Multiversal Interfaces for Retro68:
 # generate the C headers and glue library, build a program against them.
 # Skips (77) without Retro68's m68k compiler.
+find_program(RETRO68_PPC_GCC powerpc-apple-macos-gcc
+  HINTS "$ENV{HOME}/opt/retro68/build-ppc/toolchain/bin")
 add_test(
   NAME multiversal_retro68
   COMMAND bash ${TEST_DIR}/test_multiversal_retro68.sh
           $<$<BOOL:${RETRO68_GCC}>:--gcc> $<$<BOOL:${RETRO68_GCC}>:${RETRO68_GCC}>
+          $<$<BOOL:${RETRO68_PPC_GCC}>:--ppc-gcc> $<$<BOOL:${RETRO68_PPC_GCC}>:${RETRO68_PPC_GCC}>
 )
 set_tests_properties(multiversal_retro68 PROPERTIES
   TIMEOUT 120
@@ -358,6 +361,109 @@ set_tests_properties(clib_rom_ppc PROPERTIES
   ENVIRONMENT "MACEMU_ROM=${TEST_PPC_ROM}"
 )
 
+# The same for CFM-68K (CLibTest68K: SC -model cfmflat + ILink on NuStdCLib
+# and NuIntEnv, StdCLib's CFM-68K halves; MathLib's checks are PowerPC-only):
+# Executor's StdCLib, and Apple's NuStdCLib on the Quadra with the CFM-68K
+# Runtime Enabler (dev-7.6.1), the reference.
+add_test(
+  NAME clib_cfm68k_executor
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --backend executor --app ${CMAKE_SOURCE_DIR}/tests/guest/clib/CLibTest68K.bin --results clib_results.txt --network none --timeout 150 --port 18446
+)
+set_tests_properties(clib_cfm68k_executor PROPERTIES
+  TIMEOUT 200
+  LABELS "guest;executor"
+  SKIP_RETURN_CODE 77
+)
+add_test(
+  NAME clib_cfm68k
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --image dev-7.6.1 --app ${CMAKE_SOURCE_DIR}/tests/guest/clib/CLibTest68K.bin --results clib_results.txt --network none --timeout 200 --port 18448
+)
+set_tests_properties(clib_cfm68k PROPERTIES
+  TIMEOUT 300
+  LABELS "guest"
+  SKIP_RETURN_CODE 77
+  ENVIRONMENT "MACEMU_ROM=${TEST_ROM}"
+)
+
+# RetroTest (tests/guest/retro68, build.sh): built with Retro68 against the
+# Multiversal Interfaces generated from Executor's definitions, for 68k and
+# PowerPC (traps, Component Manager and OSA inlines; InterfaceLib and
+# AppleScriptLib imports). On Executor, and on the ROM machines (the
+# Quadra with 7.5.5, Mac OS 9.0.4 on mame-ppc) as the reference.
+foreach(cell IN ITEMS "retro68_executor;--backend executor;RetroTest68K;18770;executor"
+                      "retro68_ppc_executor;--backend executor;RetroTestPPC;18772;executor"
+                      "retro68_rom;;RetroTest68K;18774;"
+                      "retro68_rom_ppc;--backend kpx --core mame-ppc --jit;RetroTestPPC;18776;")
+  list(GET cell 0 name)
+  list(GET cell 1 backend)
+  list(GET cell 2 app)
+  list(GET cell 3 port)
+  list(GET cell 4 label)
+  separate_arguments(backend_args UNIX_COMMAND "${backend}")
+  add_test(
+    NAME ${name}
+    COMMAND bash ${TEST_DIR}/test_guest_suite.sh ${backend_args} --app ${CMAKE_SOURCE_DIR}/tests/guest/retro68/${app}.bin --results retro68_results.txt --network none --timeout 150 --port ${port}
+  )
+  set_tests_properties(${name} PROPERTIES
+    TIMEOUT 220
+    LABELS "guest;${label}"
+    SKIP_RETURN_CODE 77
+    ENVIRONMENT "MACEMU_ROM=$<IF:$<STREQUAL:${app},RetroTestPPC>,${TEST_PPC_ROM},${TEST_ROM}>"
+  )
+endforeach()
+
+# ... and its PowerPC build on Executor's own AppleScriptLib exports (the
+# definitions' OSA calls), Apple's file deleted from the run's System.
+add_test(
+  NAME retro68_ppc_executor_asl
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --backend executor --app ${CMAKE_SOURCE_DIR}/tests/guest/retro68/RetroTestPPC.bin --results retro68_results.txt --network none --timeout 150 --port 18778 --delete-file "System Folder:Extensions:AppleScriptLib"
+)
+set_tests_properties(retro68_ppc_executor_asl PROPERTIES
+  TIMEOUT 220
+  LABELS "guest;executor"
+  SKIP_RETURN_CODE 77
+)
+
+# MacPhoenixSuite built with Retro68 on the Multiversal Interfaces alone
+# (tests/guest/suite/retro68/build.sh; the MPW build uses Apple's): the
+# same results expected as from the MPW build, 68k and PowerPC, on Apple's
+# systems and on Executor.
+foreach(cell IN ITEMS "guest_suite_retro68;;MacPhoenixSuite68K;18801;"
+                      "guest_suite_retro68_executor;--backend executor --network none;MacPhoenixSuite68K;18803;executor"
+                      "guest_suite_retro68_ppc;--backend kpx --core mame-ppc --jit;MacPhoenixSuitePPC;18805;"
+                      "guest_suite_retro68_ppc_executor;--backend executor --network none;MacPhoenixSuitePPC;18807;executor")
+  list(GET cell 0 name)
+  list(GET cell 1 backend)
+  list(GET cell 2 app)
+  list(GET cell 3 port)
+  list(GET cell 4 label)
+  separate_arguments(backend_args UNIX_COMMAND "${backend}")
+  add_test(
+    NAME ${name}
+    COMMAND bash ${TEST_DIR}/test_guest_suite.sh ${backend_args} --app ${CMAKE_SOURCE_DIR}/tests/guest/suite/retro68/${app}.bin --timeout 150 --port ${port}
+  )
+  set_tests_properties(${name} PROPERTIES
+    TIMEOUT 220
+    LABELS "guest;${label}"
+    SKIP_RETURN_CODE 77
+    ENVIRONMENT "MACEMU_ROM=$<IF:$<STREQUAL:${app},MacPhoenixSuitePPC>,${TEST_PPC_ROM},${TEST_ROM}>"
+  )
+endforeach()
+
+# Retro68's own AutomatedTests (68k and PowerPC) on Executor, through
+# LaunchAPPL's Executor backend (tools/retro68/launchappl-executor); skipped
+# without the Retro68 build at ~/opt/retro68/build-ppc.
+add_test(
+  NAME retro68_automated_executor
+  COMMAND python3 ${CMAKE_SOURCE_DIR}/tools/retro68/automated_tests.py
+)
+set_tests_properties(retro68_automated_executor PROPERTIES
+  TIMEOUT 600
+  LABELS "guest;executor"
+  SKIP_RETURN_CODE 77
+  ENVIRONMENT "MACPHOENIX_EMULATOR=$<TARGET_FILE:mac-phoenix>"
+)
+
 # The fat MacPhoenixSuite's PowerPC code on Executor (--executor-ppc):
 # StdCLib, AppleScriptLib through CallComponentUPP, exit() through StdCLib.
 add_test(
@@ -664,6 +770,69 @@ set_tests_properties(ot_executor_noaslm PROPERTIES
   TIMEOUT 300
   LABELS "guest;executor"
   SKIP_RETURN_CODE 77
+)
+
+# The same cases from PowerPC code: OTTestPPC (MrC + PPCLink on Apple's
+# PowerPC OT glue) imports OTClientLib & co., which Executor answers from
+# the same routines (OpenTransport.yaml); results in Host:ot_results.txt.
+add_test(
+  NAME ot_ppc_executor
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --backend executor --app ${CMAKE_SOURCE_DIR}/tests/guest/ot/OTTestPPC.bin --results ot_results.txt --timeout 150 --port 18738
+)
+set_tests_properties(ot_ppc_executor PROPERTIES
+  TIMEOUT 200
+  LABELS "guest;executor"
+  SKIP_RETURN_CODE 77
+)
+
+# And built with Retro68 against the headers generated from the definitions
+# (OpenTransport.yaml, OpenTptInternet.yaml), its public calls the glue in
+# custom/OpenTransportGlue.c (tests/guest/ot/build-retro68.sh).
+add_test(
+  NAME ot_retro68_ppc_executor
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --backend executor --app ${CMAKE_SOURCE_DIR}/tests/guest/ot/OTTestRetroPPC.bin --results ot_results.txt --timeout 150 --port 18740
+)
+set_tests_properties(ot_retro68_ppc_executor PROPERTIES
+  TIMEOUT 200
+  LABELS "guest;executor"
+  SKIP_RETURN_CODE 77
+)
+
+# The reference: Apple's Open Transport 2.6.1 (Mac OS 9.0.4) on the G3
+# under mame-ppc, against net-bridge's echo service (--echo-gateway), with
+# our glue (OTTestRetroPPC). OTTest's cases are what Apple's OT does (1.1.1
+# on 7.6.1 too, by hand: STRAGGLERS 66).
+add_test(
+  NAME ot_retro68_ppc_rom
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --backend kpx --core mame-ppc --jit --app ${CMAKE_SOURCE_DIR}/tests/guest/ot/OTTestRetroPPC.bin --results ot_results.txt --echo-gateway --timeout 220 --port 18744
+)
+set_tests_properties(ot_retro68_ppc_rom PROPERTIES
+  TIMEOUT 300
+  LABELS "guest"
+  SKIP_RETURN_CODE 77
+)
+
+# OTTest for 68k from the same headers, its calls bound through the Shared
+# Library Manager by the generated glue (TLibraryManager::GetFunctionPointer):
+# on Executor, and on the Quadra with Mac OS 7.6.1, Apple's ASLM and OT 1.1.1.
+add_test(
+  NAME ot_retro68_68k_executor
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --backend executor --app ${CMAKE_SOURCE_DIR}/tests/guest/ot/OTTestRetro68K.bin --results ot_results.txt --timeout 150 --port 18746
+)
+set_tests_properties(ot_retro68_68k_executor PROPERTIES
+  TIMEOUT 200
+  LABELS "guest;executor"
+  SKIP_RETURN_CODE 77
+)
+add_test(
+  NAME ot_retro68_68k_rom
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --os-version 7.6.1 --app ${CMAKE_SOURCE_DIR}/tests/guest/ot/OTTestRetro68K.bin --results ot_results.txt --echo-gateway --timeout 200 --port 18748
+)
+set_tests_properties(ot_retro68_68k_rom PROPERTIES
+  TIMEOUT 280
+  LABELS "guest"
+  SKIP_RETURN_CODE 77
+  ENVIRONMENT "MACEMU_ROM=${TEST_ROM}"
 )
 
 # Thread Manager through Frontier's UserTalk threads (process.cpp).

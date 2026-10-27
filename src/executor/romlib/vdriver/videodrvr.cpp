@@ -18,6 +18,7 @@
 
 #include <base/common.h>
 #include <DeviceMgr.h>
+#include <VDriver.h>
 #include <MemoryMgr.h>
 #include <QuickDraw.h>
 #include <CQuickDraw.h>
@@ -35,18 +36,6 @@ using namespace Executor;
 
 namespace
 {
-enum
-{
-    /* Control */
-    cscReset = 0, cscKillIO = 1, cscSetMode = 2, cscSetEntries = 3, cscSetGamma = 4,
-    cscGrayPage = 5, cscSetGray = 6, cscSetInterrupt = 7, cscDirectSetEntries = 8,
-    cscSetDefaultMode = 9, cscSwitchMode = 10, cscSavePreferredConfiguration = 16,
-    /* Status */
-    cscGetMode = 2, cscGetEntries = 3, cscGetPages = 4, cscGetBaseAddr = 5, cscGetGray = 6,
-    cscGetInterrupt = 7, cscGetGamma = 8, cscGetDefaultMode = 9, cscGetCurMode = 10,
-    cscGetConnection = 12, cscGetModeBaseAddress = 14, cscGetPreferredConfiguration = 16,
-};
-
 enum { kFixedModeCRTConnect = 3, kAllModesValid = 0, kAllModesSafe = 1 };
 
 enum { firstVidMode = 0x80 };
@@ -58,21 +47,6 @@ static_assert(sizeof(VDSetEntryRecord) == 8);
 struct VDPageInfo { GUEST_STRUCT;
     GUEST<int16_t> csMode; GUEST<int32_t> csData; GUEST<int16_t> csPage; GUEST<Ptr> csBaseAddr; };
 static_assert(sizeof(VDPageInfo) == 12);
-
-struct VDSwitchInfoRec { GUEST_STRUCT;
-    GUEST<uint16_t> csMode; GUEST<uint32_t> csData; GUEST<uint16_t> csPage;
-    GUEST<Ptr> csBaseAddr; GUEST<uint32_t> csReserved; };
-static_assert(sizeof(VDSwitchInfoRec) == 16);
-
-struct VDDisplayConnectInfoRec { GUEST_STRUCT;
-    GUEST<uint16_t> csDisplayType; GUEST<uint8_t> csConnectTaggedType, csConnectTaggedData;
-    GUEST<uint32_t> csConnectFlags, csDisplayComponent, csConnectReserved; };
-static_assert(sizeof(VDDisplayConnectInfoRec) == 16);
-
-struct VDBaseAddressInfoRec { GUEST_STRUCT;
-    GUEST<int32_t> csDevData; GUEST<Ptr> csDevBase; GUEST<int16_t> csModeReserved;
-    GUEST<int32_t> csModeBase; };
-static_assert(sizeof(VDBaseAddressInfoRec) == 14);
 
 struct GammaTblHeader { GUEST_STRUCT;
     GUEST<int16_t> gVersion, gType, gFormulaSize, gChanCnt, gDataCnt, gDataWidth; };
@@ -314,7 +288,7 @@ static OSErr C_ROMlib_videostatus(ParmBlkPtr pb, DCtlPtr dce)
             VDBaseAddressInfoRec *b = param<VDBaseAddressInfoRec>(pb);
             if(b->csDevData != 0x80)
                 return statusErr;
-            b->csDevBase = screen_base();
+            b->csDevBase = US_TO_SYN68K(screen_base());
             return noErr;
         }
         default:

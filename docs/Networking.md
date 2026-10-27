@@ -32,7 +32,9 @@ In the guest, set TCP/IP (or MacTCP) to configure via DHCP:
 | Guests | `10.0.2.15` – `10.0.2.250`, one lease per MAC address |
 
 On the gateway, for tests from inside the guest: an echo service on port 7
-(TCP and UDP) and, on TCP port 8, a bulk stream of a known byte pattern.
+(TCP and UDP; up to four TCP connections at once, so a test's next connect
+doesn't find the last one still closing) and, on TCP port 8, a bulk stream
+of a known byte pattern.
 
 ## Several guests on one bridge
 

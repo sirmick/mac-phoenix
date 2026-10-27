@@ -1,0 +1,142 @@
+# AppleScript.h (Universal Interfaces 3.4): AppleScript's own component
+# calls, on the Open Scripting Architecture's dispatcher (OSA.yaml), and
+# its types and constants.
+
+- enum:
+    values:
+      - name: typeAppleScript
+        value: "'ascr'"
+      - name: kAppleScriptSubtype
+        value: typeAppleScript
+      - name: typeASStorage
+        value: typeAppleScript
+
+# ####
+
+- enum:
+    values:
+      - name: kASSelectInit
+        value: 0x1001
+      - name: kASSelectSetSourceStyles
+        value: 0x1002
+      - name: kASSelectGetSourceStyles
+        value: 0x1003
+      - name: kASSelectGetSourceStyleNames
+        value: 0x1004
+
+# ####
+
+- enum:
+    values:
+      - name: kASHasOpenHandler
+        value: "'hsod'"
+
+# ####
+
+- function:
+    name: ASInit
+    return: OSAError
+    args:
+      - name: scriptingComponent
+        type: ComponentInstance
+      - name: modeFlags
+        type: LONGINT
+      - name: minStackSize
+        type: LONGINT
+      - name: preferredStackSize
+        type: LONGINT
+      - name: maxStackSize
+        type: LONGINT
+      - name: minHeapSize
+        type: LONGINT
+      - name: preferredHeapSize
+        type: LONGINT
+      - name: maxHeapSize
+        type: LONGINT
+    dispatcher: OSAComponent
+    selector: 0x1001
+    library: AppleScriptLib
+
+# ####
+
+- enum:
+    values:
+      - name: kASDefaultMinStackSize
+        value: 4 * 1024
+      - name: kASDefaultPreferredStackSize
+        value: 16 * 1024
+      - name: kASDefaultMaxStackSize
+        value: 16 * 1024
+      - name: kASDefaultMinHeapSize
+        value: 4 * 1024
+      - name: kASDefaultPreferredHeapSize
+        value: 16 * 1024
+      - name: kASDefaultMaxHeapSize
+        value: 32 * 1024 * 1024
+
+# ####
+
+- function:
+    name: ASSetSourceStyles
+    return: OSAError
+    args:
+      - name: scriptingComponent
+        type: ComponentInstance
+      - name: sourceStyles
+        type: STHandle
+    dispatcher: OSAComponent
+    selector: 0x1002
+    library: AppleScriptLib
+
+# ####
+
+- function:
+    name: ASGetSourceStyles
+    return: OSAError
+    args:
+      - name: scriptingComponent
+        type: ComponentInstance
+      - name: resultingSourceStyles
+        type: STHandle*
+    dispatcher: OSAComponent
+    selector: 0x1003
+    library: AppleScriptLib
+
+# ####
+
+- function:
+    name: ASGetSourceStyleNames
+    return: OSAError
+    args:
+      - name: scriptingComponent
+        type: ComponentInstance
+      - name: modeFlags
+        type: LONGINT
+      - name: resultingSourceStyleNamesList
+        type: AEDescList*
+    dispatcher: OSAComponent
+    selector: 0x1004
+    library: AppleScriptLib
+
+# ####
+
+- enum:
+    values:
+      - name: kASSourceStyleUncompiledText
+        value: 0
+      - name: kASSourceStyleNormalText
+        value: 1
+      - name: kASSourceStyleLanguageKeyword
+        value: 2
+      - name: kASSourceStyleApplicationKeyword
+        value: 3
+      - name: kASSourceStyleComment
+        value: 4
+      - name: kASSourceStyleLiteral
+        value: 5
+      - name: kASSourceStyleUserSymbol
+        value: 6
+      - name: kASSourceStyleObjectSpecifier
+        value: 7
+      - name: kASNumberOfSourceStyles
+        value: 8

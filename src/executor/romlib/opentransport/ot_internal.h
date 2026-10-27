@@ -11,6 +11,8 @@
 #include <cstdint>
 #include <string>
 
+class PowerCore;
+
 namespace Executor
 {
 namespace ot
@@ -43,10 +45,20 @@ class Call
 {
 public:
     Call(uint32_t sp, Conv conv, const char *sig);
+    /* A PowerPC caller's (OTClientLib & co.): the arguments in r3-r10,
+       then the parameter area, a word each whatever the convention; a
+       Boolean in the low byte. */
+    Call(PowerCore &cpu, const char *sig);
+    /* For the routines a client hands OT (notifiers, tasks): which
+       processor runs them. */
+    bool ppc() const { return cpu_ != nullptr; }
 
     uint32_t l(int i) const;
     uint16_t w(int i) const;
     bool b(int i) const;
+    /* A byte (UInt8): a Pascal word's high byte on 68k, the low byte of a C
+       long or a PowerPC register. */
+    uint8_t byte(int i) const;
     /* A guest address, as a host pointer (nullptr for 0). */
     template<class T = uint8_t>
     T *p(int i) const
@@ -61,8 +73,9 @@ public:
     uint32_t arg_bytes() const { return bytes_; }
 
 private:
-    uint32_t sp_;
-    Conv conv_;
+    PowerCore *cpu_ = nullptr;
+    uint32_t sp_ = 0;
+    Conv conv_ = Conv::C;
     int n_ = 0;
     uint32_t bytes_ = 0;
     uint32_t off_[16] = {};
@@ -82,23 +95,17 @@ struct Def
     Impl impl;
 };
 
-/* Each part registers its table when OT first binds (ot.cpp calls the
-   register_* functions: romlib is an archive, so a part nothing refers to
-   would not be linked at all). */
+/* The functions are registered from the definitions (OpenTransport.yaml:
+   OT_FUNCTION in the generated code, register_function in ot.cpp). */
 void register_defs(const Def *defs, size_t n);
-template<size_t N>
-void register_table(const Def (&defs)[N]) { register_defs(defs, N); }
-void register_client();
-void register_utils();
-void register_providers();
-void register_inet();
-void register_tasks();
-void register_ot_functions(); /* all of the above, once */
 
 /* The function sets (ot.cpp): is this ID one of OT's, and bind a stub of
    one (0 for another set). */
 bool is_ot_set(const std::string &id);
 syn68k_addr_t bind_ot_stub(uint32_t stub);
+/* A function of one of OT's sets, by name or 1-based index (0: none). */
+syn68k_addr_t function_pointer(const std::string &id, const std::string &name);
+syn68k_addr_t function_pointer(const std::string &id, unsigned index);
 
 /* A fatal error: logged, the front end told, the emulator stopped. */
 [[noreturn]] void fatal(const std::string &msg);
@@ -177,6 +184,7 @@ enum : int32_t
     kOTConfigurationChangedErr = -3283,
     kOTUserRequestedErr = -3284,
     kOTPortLostConnection = -3285,
+    kENOENTErr = -3201,
     kEINVALErr = -3221,
     kEWOULDBLOCKErr = -3234,
     kEALREADYErr = -3236,

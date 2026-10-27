@@ -22,6 +22,9 @@
 
 namespace Executor
 {
+/* mathlib.cpp: SANE's extended80 at a guest address */
+long double fromX80(uint32_t p);
+
 namespace clib
 {
 
@@ -127,14 +130,46 @@ struct PPCArgs
     }
 };
 
+/* A call's parameter words, from PowerPC code or from CFM-68K code (the
+   68k stack: the return address, then the arguments right to left, each in
+   4 bytes). */
+struct CallArgs
+{
+    virtual ~CallArgs() = default;
+    virtual uint32_t word(int i) const = 0;
+    /* where word i is, for a CFM-68K call (its long doubles are read from
+       memory); 0 for a PowerPC call */
+    virtual uint32_t address(int) const { return 0; }
+};
+
+struct PPCCallArgs : CallArgs
+{
+    PPCArgs args;
+    explicit PPCCallArgs(PowerCore &cpu) : args{cpu} {}
+    uint32_t word(int i) const override { return args.word(i); }
+};
+
+struct CFM68KCallArgs : CallArgs
+{
+    uint32_t sp;   /* at the return address */
+    explicit CFM68KCallArgs(uint32_t sp) : sp(sp) {}
+    uint32_t address(int i) const override { return sp + 4 + 4 * i; }
+    uint32_t word(int i) const override { return read32(address(i)); }
+};
+
 /* Variadic arguments in order, a word at a time: from a call's parameter
-   area (printf) or from a va_list, which MrC makes a pointer into the
-   caller's parameter area (vprintf). A double takes two words, a long
-   double (MrC: double-double) four, all 4-byte aligned. */
+   area (printf) or from a va_list, which MrC and SC make a pointer into the
+   caller's parameter area (vprintf). A double takes two words, all 4-byte
+   aligned. A long double (%Lf) is a double on PowerPC (MrC's default); on
+   68k SANE's 10-byte extended padded to 12, which Apple's NuStdCLib reads
+   (SC converts some long doubles to double before passing them, a
+   variable one for instance; those print wrong there too). */
 struct VarArgs
 {
     virtual ~VarArgs() = default;
     virtual uint32_t word() = 0;
+    /* the next word's address, for 68k arguments; 0 on PowerPC */
+    virtual uint32_t address() const { return 0; }
 
     double dbl()
     {
@@ -143,43 +178,54 @@ struct VarArgs
     }
     double longDouble()
     {
-        double hi = dbl();
-        double lo = dbl();
-        return hi + lo;
+        uint32_t p = address();
+        if(!p)
+            return dbl();
+        double v = (double)fromX80(p);
+        word(), word(), word();
+        return v;
     }
 };
 
 struct CallVarArgs : VarArgs
 {
-    PPCArgs args;
+    const CallArgs &args;
     int next;
-    CallVarArgs(PowerCore &cpu, int first) : args{cpu}, next(first) {}
+    CallVarArgs(const CallArgs &args, int first) : args(args), next(first) {}
     uint32_t word() override { return args.word(next++); }
+    uint32_t address() const override { return args.address(next); }
 };
 
 struct ListVarArgs : VarArgs
 {
     uint32_t p;
-    explicit ListVarArgs(uint32_t ap) : p(ap) {}
+    bool m68k;
+    explicit ListVarArgs(uint32_t ap, bool m68k = false) : p(ap), m68k(m68k) {}
     uint32_t word() override
     {
         uint32_t w = read32(p);
         p += 4;
         return w;
     }
+    uint32_t address() const override { return m68k ? p : 0; }
 };
 
 /* ---- exports --------------------------------------------------------------- */
 
-/* A routine with a raw handler: reads its arguments, sets r3/f1, returns
+/* The typed routines are registered from the definitions (StdCLib.yaml,
+   MathLib.yaml: `library:`). A routine with a raw handler (`raw: true`
+   there) is registered here: it reads its arguments, sets r3/f1, returns
    where execution goes on (normally cpu.lr). */
 void exportRaw(const char *library, const char *name,
                std::function<uint32_t(PowerCore &)> code);
 
-/* A routine from its C++ signature (callfromPPC's Invoker). */
-template<typename F>
-void exportFn(const char *library, const char *name, F *fn);
+/* ... and its CFM-68K version: `body` gets the call's arguments and
+   answers D0. A variadic routine (printf) leaves its arguments to the
+   caller; one with fixed arguments (vprintf) pops `argWords` of them. */
+void exportRaw68k(const char *library, const char *name,
+                  std::function<uint32_t(const CallArgs &)> body, int argWords = -1);
 
+/* A data export, for PowerPC and CFM-68K fragments. */
 void exportData(const char *library, const char *name, void *address);
 
 /* ---- the libraries ---------------------------------------------------------- */
@@ -189,13 +235,17 @@ void addStdCLib();
 void addMathLib();
 
 /* A new application imports StdCLib: its state starts afresh. */
-void stdclibStart();
+void stdclibStart(bool m68k = false);
+/* Calls a routine of the client application (qsort's comparison, an atexit
+   or signal handler): a PowerPC TV, or a CFM-68K one for a NuStdCLib
+   client. */
+uint32_t callClient(uint32_t tv, std::initializer_list<uint32_t> args);
 /* The application ends (ExitToShell): streams flushed and closed. */
 void stdclibProcessExit();
 
 /* stdio.cpp, for stdclib.cpp */
 void addStdio();
-void stdioStart();
+void stdioStart(bool m68k);
 void stdioFlushAll();
 void stdioCloseAll();
 
@@ -224,14 +274,4 @@ inline bool cIsSpace(int c) { return c >= 0 && c < 256 && (ctypeTable[c] & 8); }
 inline bool cIsDigit(int c) { return c >= '0' && c <= '9'; }
 
 }
-}
-
-#include <base/functions.impl.h>
-
-template<typename F>
-void Executor::clib::exportFn(const char *library, const char *name, F *fn)
-{
-    exportRaw(library, name, [fn](PowerCore &cpu) {
-        return callfromPPC::Invoker<F>::invokeFromPPC(cpu, fn);
-    });
 }

@@ -1,5 +1,6 @@
 #include <Displays.h>
 #include <QuickDraw.h>
+#include <VDriver.h>
 #include <WindowMgr.h>
 #include <error/error.h>
 #include <MemoryMgr.h>
@@ -67,21 +68,6 @@ OSErr Executor::C_DMGetGDeviceByDisplayID(uint32_t displayID, GUEST<GDHandle> *d
    records are laid out as in Apple's Video.h and Displays.h. */
 namespace
 {
-struct VDSwitchInfoRec { GUEST_STRUCT;
-    GUEST<uint16_t> csMode; GUEST<uint32_t> csData; GUEST<uint16_t> csPage;
-    GUEST<Ptr> csBaseAddr; GUEST<uint32_t> csReserved; };
-static_assert(sizeof(VDSwitchInfoRec) == 16);
-
-struct VDResolutionInfoRec { GUEST_STRUCT;
-    GUEST<uint32_t> csPreviousDisplayModeID, csDisplayModeID, csHorizontalPixels,
-        csVerticalLines; GUEST<int32_t> csRefreshRate; GUEST<uint16_t> csMaxDepthMode;
-    GUEST<uint32_t> csResolutionReserved, csReserved; };
-static_assert(sizeof(VDResolutionInfoRec) == 30);
-
-struct VDTimingInfoRec { GUEST_STRUCT;
-    GUEST<uint32_t> csTimingMode, csTimingReserved, csTimingFormat, csTimingData, csTimingFlags; };
-static_assert(sizeof(VDTimingInfoRec) == 20);
-
 struct VPBlock { GUEST_STRUCT;
     GUEST<int32_t> vpBaseOffset; GUEST<int16_t> vpRowBytes; Rect vpBounds;
     GUEST<int16_t> vpVersion, vpPackType; GUEST<int32_t> vpPackSize, vpHRes, vpVRes;

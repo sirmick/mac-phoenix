@@ -231,13 +231,17 @@ void C_UpdateDialog(DialogPtr dp, RgnHandle rgn);PASCAL_TRAP(UpdateDialog, 0xA97
 Boolean C_DialogSelect(EventRecord *evt, GUEST<DialogPtr> *dpp, GUEST<INTEGER> *item);PASCAL_TRAP(DialogSelect, 0xA980);
 
 
-void DialogCut(DialogPtr dp);
+void DialogCut(DialogPtr dp);LIBRARY_FUNCTION(InterfaceLib, DialogCut, DialogCut);
 
-void DialogCopy(DialogPtr dp);
 
-void DialogPaste(DialogPtr dp);
+void DialogCopy(DialogPtr dp);LIBRARY_FUNCTION(InterfaceLib, DialogCopy, DialogCopy);
 
-void DialogDelete(DialogPtr dp);
+
+void DialogPaste(DialogPtr dp);LIBRARY_FUNCTION(InterfaceLib, DialogPaste, DialogPaste);
+
+
+void DialogDelete(DialogPtr dp);LIBRARY_FUNCTION(InterfaceLib, DialogDelete, DialogDelete);
+
 
 void C_ErrorSound(SoundUPP sp);PASCAL_TRAP(ErrorSound, 0xA98C);
 
@@ -302,11 +306,14 @@ Boolean C_IsCancelEvent(EventRecord *event);PASCAL_SUBTRAP(IsCancelEvent, 0xAA68
 Boolean C_CheckEventQueueForUserCancel(EventRecord *event);PASCAL_SUBTRAP(CheckEventQueueForUserCancel, 0xAA68, 0x0208, DialogDispatch);
 
 
-void AppendDITL(DialogPtr , Handle , DITLMethod );
+void AppendDITL(DialogPtr , Handle , DITLMethod );LIBRARY_FUNCTION(InterfaceLib, AppendDITL, AppendDITL);
 
-void ShortenDITL(DialogPtr , int16_t );
 
-int16_t CountDITL(DialogPtr );
+void ShortenDITL(DialogPtr , int16_t );LIBRARY_FUNCTION(InterfaceLib, ShortenDITL, ShortenDITL);
+
+
+int16_t CountDITL(DialogPtr );LIBRARY_FUNCTION(InterfaceLib, CountDITL, CountDITL);
+
 
 typedef DialogPtr DialogRef;
 

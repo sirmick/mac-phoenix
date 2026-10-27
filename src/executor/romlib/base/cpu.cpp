@@ -3,6 +3,7 @@
 #include <base/builtinlibs.h>
 #include <PowerCore.h>
 #include <prefs/prefs.h>
+#include <rsys/process.h>
 
 #include <algorithm>
 
@@ -45,7 +46,25 @@ void Executor::executePPC(uint32_t addr)
     cpu.execute();
 }
 
+/* The mode the process runs in, the PowerPC registers and its depth in
+   PowerPC code: a process switched away from inside a PowerPC call
+   (WaitNextEvent from a PowerPC application) comes back to them, and the
+   68k process that runs meanwhile doesn't run in PowerPC mode on its stack. */
+void Executor::cpu_register_process_state()
+{
+    ROMlib_process_register_state(&currentCPUMode, sizeof currentCPUMode);
+    ROMlib_process_register_state(static_cast<PowerCoreState *>(&getPowerCore()),
+                                  sizeof(PowerCoreState));
+    ROMlib_process_register_state(&ppcDepth, sizeof ppcDepth);
+}
+
 uint32_t Executor::callPPC(uint32_t tv, std::initializer_list<uint32_t> args)
+{
+    auto word = [](uint32_t addr) -> GUEST<uint32_t> & { return *ptr_from_longint<GUEST<uint32_t> *>(addr); };
+    return callPPC(word(tv), word(tv + 4), args.begin(), (int)args.size());
+}
+
+uint32_t Executor::callPPC(uint32_t code, uint32_t toc, const uint32_t *args, int n)
 {
     PowerCore &cpu = getPowerCore();
     PowerCoreState saved = cpu;
@@ -55,22 +74,20 @@ uint32_t Executor::callPPC(uint32_t tv, std::initializer_list<uint32_t> args)
     /* A frame (linkage area, a parameter area of at least 8 words) below
        both stacks the caller may have in use. */
     uint32_t sp = (ppcDepth ? std::min<uint32_t>(cpu.r[1], EM_A7) : (uint32_t)EM_A7) - 64;
-    uint32_t words = std::max<uint32_t>(8, (uint32_t)args.size());
+    uint32_t words = std::max<uint32_t>(8, (uint32_t)n);
     uint32_t frame = (sp - (24 + 4 * words)) & ~15u;
     auto word = [](uint32_t addr) -> GUEST<uint32_t> & { return *ptr_from_longint<GUEST<uint32_t> *>(addr); };
     word(frame) = saved.r[1];
-    int i = 0;
-    for(uint32_t a : args)
+    for(int i = 0; i < n; i++)
     {
         if(i < 8)
-            cpu.r[3 + i] = a;
-        word(frame + 24 + 4 * i) = a;
-        i++;
+            cpu.r[3 + i] = args[i];
+        word(frame + 24 + 4 * i) = args[i];
     }
     cpu.r[1] = frame;
-    cpu.r[2] = word(tv + 4);
+    cpu.r[2] = toc;
     EM_A7 = frame;
-    executePPC(word(tv));
+    executePPC(code);
     uint32_t result = cpu.r[3];
     static_cast<PowerCoreState &>(cpu) = saved;
     EM_A7 = savedA7;

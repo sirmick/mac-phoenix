@@ -126,6 +126,10 @@
                 "inline": { "type": "string" },
                 "noinline": { "type": "string" },
                 "executor": { "oneOf": [ {"type":"string"}, {"type":"boolean"}] },
+                "library": { "type": "string" },
+                "raw": { "type": "boolean" },
+                "aslm": { "type": "object", "properties": { "set": { "type": "string" }, "name": { "type": "string" }, "index": { "type": "integer" } } },
+                "callconv": { "type": "string" },
                 "returnreg": { "$ref": "#/definitions/reg" },
                 "variants": { "type": "array", "items": { "type": "string" }},
                 "executor_extras": { "type": "string" },
@@ -158,7 +162,8 @@
                 },
                 "returnreg": { "$ref": "#/definitions/reg" },
                 "comment": { "type": "string" },
-                "callconv": { "type": "string" }
+                "callconv": { "type": "string" },
+                "upp": { "type": "boolean" }
             },
             "additionalProperties": false,
             "required": [ "name" ]

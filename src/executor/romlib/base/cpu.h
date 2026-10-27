@@ -33,6 +33,13 @@ namespace Executor
        is r3. From host code in a PowerPC system call (qsort's comparison
        routine) or from 68k code (a fragment's init routine). */
     uint32_t callPPC(uint32_t tv, std::initializer_list<uint32_t> args);
+    /* ... the same for a routine's code and TOC, n arguments. */
+    uint32_t callPPC(uint32_t code, uint32_t toc, const uint32_t *args, int n);
+
+    /* MacPhoenix: the CPU state that is a process's own, not the machine's:
+       registered with the Process Manager (process.cpp), so a switch keeps
+       it per process. */
+    void cpu_register_process_state();
 
     unsigned long ROMlib_destroy_blocks(syn68k_addr_t start, uint32_t count,
                                         bool flush_only_faulty_checksums);

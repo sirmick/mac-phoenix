@@ -150,6 +150,15 @@ rest. Everything comes from the CodeWarrior Pro 4 Tools CD, a public pin
   AppRuntimeCFM68K.Lib`, the CFM-68K MSL C and SIOUX
   (docs/executor/CFM68K.md).
 
+Apple's MPW builds CFM-68K too (tests/guest/clib/build.mpw, CLibTest68K):
+`SC -model cfmflat`, then `ILink -model cfmflat` with `NuMacRuntime.o`
+and the fat stubs (`{SharedLibraries}StdCLib` has `NuStdCLib` and
+`NuIntEnv`). `-xm e` makes a segmented application (code in `'rseg'`),
+which Executor doesn't load; linking a library (`-xm s -main %__MAIN`),
+`MakeFlat` and an application `'cfrg'` make a flat one, and the segmented
+link's `CODE` 0 and 6 (the CFM launch stub) let a 68k Mac with the
+Enabler start it.
+
 Things to know: Metrowerks' objects aren't Apple's (`Link` can't read
 them, `MWLink68K` brings its own runtime module and wants MSL's); quoted
 includes need `-i "`` `Directory` ``"` (the compilers don't search the

@@ -18,12 +18,12 @@
 using namespace Executor;
 using namespace Executor::ot;
 
-namespace
+namespace Executor::ot
 {
 
 /* ---- memory and strings ---------------------------------------------- */
 
-uint32_t memcpy_(const Call &c)
+uint32_t ot_memcpy(const Call &c)
 {
     if(c.l(2))
         std::memmove(c.p(0), c.p(1), c.l(2)); /* OT's tolerates overlap */
@@ -38,7 +38,7 @@ uint32_t memzero(const Call &c)
 }
 
 /* void OTMemset(void *dest, uchar_p toSet, size_t nBytes) */
-uint32_t memset_(const Call &c)
+uint32_t ot_memset(const Call &c)
 {
     if(c.l(2))
         std::memset(c.p(0), c.l(1) & 0xFF, c.l(2));
@@ -46,7 +46,7 @@ uint32_t memset_(const Call &c)
 }
 
 /* Boolean OTMemcmp: true when the bytes are the same. */
-uint32_t memcmp_(const Call &c)
+uint32_t ot_memcmp(const Call &c)
 {
     uint32_t n = c.l(2);
     return !n || std::memcmp(c.p(0), c.p(1), n) == 0;
@@ -64,7 +64,7 @@ uint32_t strcopy(const Call &c)
     return 0;
 }
 
-uint32_t strcat_(const Call &c)
+uint32_t ot_strcat(const Call &c)
 {
     std::string a = guest_cstring(c.l(0), 0xFFFF);
     std::string b = guest_cstring(c.l(1), 0xFFFF);
@@ -277,8 +277,10 @@ uint32_t dequeue(const Call &c)
 }
 
 /* Boolean (*OTListSearchProcPtr)(const void *ref, OTLink *), C. */
-bool search_matches(uint32_t proc, uint32_t ref, uint32_t link)
+bool search_matches(uint32_t proc, uint32_t ref, uint32_t link, bool ppc)
 {
+    if(ppc)
+        return (callPPC(proc, { ref, link }) & 0xFF) != 0;
     uint32_t saved_a7 = EM_A7;
     EM_A7 -= 8;
     WRITEUL(EM_A7, ref);
@@ -292,7 +294,7 @@ bool search_matches(uint32_t proc, uint32_t ref, uint32_t link)
 uint32_t find_link(const Call &c)
 {
     for(uint32_t link = READUL(c.l(0)); link; link = READUL(link))
-        if(search_matches(c.l(1), c.l(2), link))
+        if(search_matches(c.l(1), c.l(2), link, c.ppc()))
             return link;
     return 0;
 }
@@ -301,7 +303,7 @@ uint32_t find_and_remove_link(const Call &c)
 {
     uint32_t at = c.l(0);
     for(uint32_t link = READUL(at); link; at = link, link = READUL(link))
-        if(search_matches(c.l(1), c.l(2), link))
+        if(search_matches(c.l(1), c.l(2), link, c.ppc()))
         {
             WRITEUL(at, READUL(link));
             return link;
@@ -393,7 +395,7 @@ uint32_t atomic_add8(const Call &c)
    byte. */
 uint32_t create_port_ref(const Call &c)
 {
-    return make_port_ref(c.w(0) >> 8, c.w(1), c.w(2), c.w(3));
+    return make_port_ref(c.byte(0), c.w(1), c.w(2), c.w(3));
 }
 
 uint32_t device_type_of(const Call &c)
@@ -505,78 +507,7 @@ uint32_t find_port_by_ref(const Call &c)
     return 1;
 }
 
-const char cmn[] = "OTClnt$CmnShared";
-const char utils[] = "OTClnt$LclUtils";
-
-const Def table[] = {
-    { cmn, "OTMemcpy", Conv::C, "LLL", 'V', memcpy_ },
-    { cmn, "OTMemmove", Conv::C, "LLL", 'V', memcpy_ },
-    { cmn, "OTMemzero", Conv::C, "LL", 'V', memzero },
-    { cmn, "OTMemset", Conv::C, "LLL", 'V', memset_ },
-    { cmn, "OTMemcmp", Conv::C, "LLL", 'B', memcmp_ },
-    { cmn, "OTStrLength", Conv::C, "L", 'L', strlength },
-    { cmn, "OTStrCopy", Conv::C, "LL", 'V', strcopy },
-    { cmn, "OTStrCat", Conv::C, "LL", 'V', strcat_ },
-    { cmn, "OTStrEqual", Conv::C, "LL", 'B', strequal },
-
-    { cmn, "OTGetTimeStamp", Conv::C, "L", 'V', get_time_stamp },
-    { cmn, "OTSubtractTimeStamps", Conv::C, "LLL", 'L', subtract_time_stamps },
-    { cmn, "OTTimeStampInMilliseconds", Conv::C, "L", 'L', stamp_in_ms },
-    { cmn, "OTTimeStampInMicroseconds", Conv::C, "L", 'L', stamp_in_us },
-    { cmn, "OTElapsedMilliseconds", Conv::C, "L", 'L', elapsed_ms },
-    { cmn, "OTElapsedMicroseconds", Conv::C, "L", 'L', elapsed_us },
-    { cmn, "OTGetClockTimeInSecs", Conv::C, "", 'L', clock_secs },
-
-    { cmn, "OTLIFOEnqueue", Conv::C, "LL", 'V', lifo_enqueue },
-    { cmn, "OTLIFODequeue", Conv::C, "L", 'L', lifo_dequeue },
-    { cmn, "OTLIFOStealList", Conv::C, "L", 'L', lifo_steal },
-    { cmn, "OTReverseList", Conv::C, "L", 'L', reverse_list },
-    { cmn, "OTAddFirst", Conv::C, "LL", 'V', add_first },
-    { cmn, "OTAddLast", Conv::C, "LL", 'V', add_last },
-    { cmn, "OTRemoveFirst", Conv::C, "L", 'L', remove_first },
-    { cmn, "OTRemoveLast", Conv::C, "L", 'L', remove_last },
-    { cmn, "OTGetFirst", Conv::C, "L", 'L', get_first },
-    { cmn, "OTGetLast", Conv::C, "L", 'L', get_last },
-    { cmn, "OTIsInList", Conv::C, "LL", 'B', is_in_list },
-    { cmn, "OTRemoveLink", Conv::C, "LL", 'B', remove_link },
-    { cmn, "OTGetIndexedLink", Conv::C, "LL", 'L', get_indexed_link },
-
-    { cmn, "OTEnqueue", Conv::C, "LLL", 'V', enqueue },
-    { cmn, "OTDequeue", Conv::C, "LL", 'L', dequeue },
-    { cmn, "OTFindLink", Conv::C, "LLL", 'L', find_link },
-    { cmn, "OTFindAndRemoveLink", Conv::C, "LLL", 'L', find_and_remove_link },
-
-    { cmn, "OTAtomicSetBit", Conv::C, "LL", 'B', atomic_set_bit },
-    { cmn, "OTAtomicClearBit", Conv::C, "LL", 'B', atomic_clear_bit },
-    { cmn, "OTAtomicTestBit", Conv::C, "LL", 'B', atomic_test_bit },
-    { cmn, "OTCompareAndSwapPtr", Conv::C, "LLL", 'B', cas32 },
-    { cmn, "OTCompareAndSwap32", Conv::C, "LLL", 'B', cas32 },
-    { cmn, "OTCompareAndSwap16", Conv::C, "LLL", 'B', cas16 },
-    { cmn, "OTCompareAndSwap8", Conv::C, "LLL", 'B', cas8 },
-    { cmn, "OTAtomicAdd32", Conv::C, "LL", 'L', atomic_add32 },
-    { cmn, "OTAtomicAdd16", Conv::C, "LL", 'L', atomic_add16 },
-    { cmn, "OTAtomicAdd8", Conv::C, "LL", 'L', atomic_add8 },
-
-    { cmn, "OTCREATEPORTREF", Conv::Pascal, "WWWW", 'L', create_port_ref },
-    { cmn, "OTGETDEVICETYPEFROMPORTREF", Conv::Pascal, "L", 'W', device_type_of },
-    { cmn, "OTGETBUSTYPEFROMPORTREF", Conv::Pascal, "L", 'W', bus_type_of },
-    { cmn, "OTGETSLOTFROMPORTREF", Conv::Pascal, "LL", 'W', slot_of },
-
-    { utils, "OTGETINDEXEDPORT", Conv::Pascal, "LL", 'B', get_indexed_port },
-    { utils, "OTFINDPORT", Conv::Pascal, "LL", 'B', find_port },
-    { utils, "OTFINDPORTBYREF", Conv::Pascal, "LL", 'B', find_port_by_ref },
-
-    { utils, "OTCREATECONFIGURATION", Conv::Pascal, "L", 'L', create_configuration },
-    { utils, "OTCLONECONFIGURATION", Conv::Pascal, "L", 'L', clone_configuration },
-    { utils, "OTDESTROYCONFIGURATION", Conv::Pascal, "L", 'V', destroy_configuration },
-};
-
-} // anonymous namespace
-
-void Executor::ot::register_utils()
-{
-    register_table(table);
-}
+} // namespace Executor::ot
 
 /* Configuration paths for the providers (ot_provider.cpp). */
 namespace Executor

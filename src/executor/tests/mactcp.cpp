@@ -621,7 +621,7 @@ TEST(MacTCP, UdpRoundTrip)
     std::memset(&pb, 0, sizeof(pb));
     pb.csParam.create.rcvBuff = area;
     pb.csParam.create.rcvBuffLen = kLen;
-    ASSERT_EQ(noErr, udpControl(refnum, pb, udpCreate));
+    ASSERT_EQ(noErr, udpControl(refnum, pb, UDPCreate));
     auto stream = pb.udpStream;
     uint16_t port = pb.csParam.create.localPort;
     ASSERT_NE(0, port) << "UDPCreate did not report the port it got";
@@ -636,7 +636,7 @@ TEST(MacTCP, UdpRoundTrip)
         std::memset(&pb.csParam, 0, sizeof(pb.csParam));
         pb.udpStream = stream;
         pb.csParam.receive.timeOut = 2;
-        ASSERT_EQ(noErr, udpControl(refnum, pb, udpRead));
+        ASSERT_EQ(noErr, udpControl(refnum, pb, UDPRead));
         got[i] = pb.csParam.receive.rcvBuff;
         ASSERT_EQ(strlen(want[i]), (size_t)(uint16_t)pb.csParam.receive.rcvBuffLen);
         EXPECT_EQ(0, std::memcmp(got[i], want[i], strlen(want[i])));
@@ -653,18 +653,18 @@ TEST(MacTCP, UdpRoundTrip)
         std::memset(&pb.csParam, 0, sizeof(pb.csParam));
         pb.udpStream = stream;
         pb.csParam.receive.rcvBuff = got[i];
-        EXPECT_EQ(noErr, udpControl(refnum, pb, udpBfrReturn));
+        EXPECT_EQ(noErr, udpControl(refnum, pb, UDPBfrReturn));
     }
     std::memset(&pb.csParam, 0, sizeof(pb.csParam));
     pb.udpStream = stream;
     pb.csParam.receive.rcvBuff = got[0];
-    EXPECT_EQ(invalidBufPtr, udpControl(refnum, pb, udpBfrReturn));
+    EXPECT_EQ(invalidBufPtr, udpControl(refnum, pb, UDPBfrReturn));
 
     /* Nothing more to read: the timeout. */
     std::memset(&pb.csParam, 0, sizeof(pb.csParam));
     pb.udpStream = stream;
     pb.csParam.receive.timeOut = 1;
-    EXPECT_EQ(commandTimeout, udpControl(refnum, pb, udpRead));
+    EXPECT_EQ(commandTimeout, udpControl(refnum, pb, UDPRead));
 
     /* UDPWrite, gathered from a WDS. */
     Ptr data = guestBuffer(8);
@@ -679,7 +679,7 @@ TEST(MacTCP, UdpRoundTrip)
     pb.csParam.send.remoteHost = 0x7F000001;
     pb.csParam.send.remotePort = host.port;
     pb.csParam.send.wdsPtr = wdsMem;
-    ASSERT_EQ(noErr, udpControl(refnum, pb, udpWrite));
+    ASSERT_EQ(noErr, udpControl(refnum, pb, UDPWrite));
     char buf[16] = {};
     struct sockaddr_in from = {};
     socklen_t flen = sizeof(from);
@@ -691,18 +691,18 @@ TEST(MacTCP, UdpRoundTrip)
     std::memset(&pb.csParam, 0, sizeof(pb.csParam));
     pb.udpStream = stream;
     pb.csParam.mtu.remoteHost = 0x7F000001;
-    ASSERT_EQ(noErr, udpControl(refnum, pb, udpMaxMTUSize));
+    ASSERT_EQ(noErr, udpControl(refnum, pb, UDPMaxMTUSize));
     EXPECT_GT((uint16_t)pb.csParam.mtu.mtuSize, 512);
 
     std::memset(&pb.csParam, 0, sizeof(pb.csParam));
     pb.udpStream = stream;
-    ASSERT_EQ(noErr, udpControl(refnum, pb, udpRelease));
+    ASSERT_EQ(noErr, udpControl(refnum, pb, UDPRelease));
     EXPECT_EQ(area, (Ptr)pb.csParam.create.rcvBuff);
     EXPECT_EQ(kLen, (uint32_t)pb.csParam.create.rcvBuffLen);
 
     /* The released stream is gone. */
     pb.udpStream = stream;
-    EXPECT_EQ(invalidStreamPtr, udpControl(refnum, pb, udpStatus));
+    EXPECT_EQ(invalidStreamPtr, udpControl(refnum, pb, UDPStatus));
 
     DisposePtr(wdsMem);
     DisposePtr(data);

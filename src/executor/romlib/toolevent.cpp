@@ -7,6 +7,7 @@
 
 #include <base/common.h>
 #include <rsys/process.h>
+#include <rsys/opentransport.h>
 #include <QuickDraw.h>
 #include <CQuickDraw.h>
 #include <EventMgr.h>
@@ -534,6 +535,10 @@ Boolean Executor::C_WaitNextEvent(INTEGER mask, EventRecord *evp,
        run (and clear it) while this one waits; the deadline is this call's. */
     uint32_t deadline = TickCount() + (sleep > 0 ? sleep : 0);
     ROMlib_process_idle_hook(sleep);
+    /* MacPhoenix: Open Transport's system tasks run here, as Apple's OT
+       (1.1.1 and 2.6) runs them: not from GetNextEvent, EventAvail or
+       SystemTask. */
+    ROMlib_ot_system_task();
 
     if(sleep > 0)
     {

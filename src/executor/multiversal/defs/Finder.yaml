@@ -392,3 +392,31 @@
     variants:
       - PBDTDeleteSync
       - PBDTDeleteAsync
+
+# ####
+
+# Finder flags (FInfo.fdFlags)
+- enum:
+    values:
+      - name: kIsOnDesk
+        value: 0x0001
+      - name: kColor
+        value: 0x000E
+      - name: kIsShared
+        value: 0x0040
+      - name: kHasNoINITs
+        value: 0x0080
+      - name: kHasBeenInited
+        value: 0x0100
+      - name: kHasCustomIcon
+        value: 0x0400
+      - name: kIsStationery
+        value: 0x0800
+      - name: kNameLocked
+        value: 0x1000
+      - name: kHasBundle
+        value: 0x2000
+      - name: kIsInvisible
+        value: 0x4000
+      - name: kIsAlias
+        value: 0x8000

@@ -387,9 +387,10 @@ OSErr Executor::C_AEResetTimer(AppleEvent *evt)
 
 /* type coersion */
 
-OSErr Executor::C_AECoercePtr(DescType data_type, Ptr data, Size data_size,
+OSErr Executor::C_AECoercePtr(DescType data_type, const void *data_ptr, Size data_size,
                               DescType result_type, AEDesc *desc_out)
 {
+    Ptr data = (Ptr)data_ptr;
     GUEST<AECoerceDescUPP> coercion_hdlr_s;
     GUEST<int32_t> refcon_s;
     Boolean is_desc_hdlr_p;

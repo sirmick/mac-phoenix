@@ -122,7 +122,8 @@ void C_LongMul(LONGINT a, LONGINT b, Int64Bit *c);PASCAL_TRAP(LongMul, 0xA867);
 PatHandle C_GetPattern(INTEGER id);PASCAL_TRAP(GetPattern, 0xA9B8);
 
 
-void GetIndPattern(Byte *op, INTEGER plistid, INTEGER index);
+void GetIndPattern(Byte *op, INTEGER plistid, INTEGER index);LIBRARY_FUNCTION(InterfaceLib, GetIndPattern, GetIndPattern);
+
 
 CursHandle C_GetCursor(INTEGER id);PASCAL_TRAP(GetCursor, 0xA9B9);
 

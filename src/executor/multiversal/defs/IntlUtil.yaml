@@ -377,6 +377,8 @@
         type: ConstStringPtr
       - name: str2
         type: ConstStringPtr
+    library: InterfaceLib
+    executor: IUCompString
 
 # ####
 
@@ -406,6 +408,8 @@
         type: ConstStringPtr
       - name: str2
         type: ConstStringPtr
+    library: InterfaceLib
+    executor: IUEqualString
 
 # ####
 
@@ -718,3 +722,39 @@
     dispatcher: Pack6
     selector: 0x002E
     executor: C_
+
+# ####
+
+# InterfaceLib exports with no trap (Executor's glue, cfm68k_glue.cpp):
+# for PowerPC and CFM-68K code. Only for Executor until the C side has
+# 68k glue for them.
+
+- only-for: Executor
+  function:
+    name: IUEqualPString
+    return: "INTEGER"
+    args:
+      - name: "a"
+        type: "ConstStringPtr"
+      - name: "b"
+        type: "ConstStringPtr"
+      - name: "arg3"
+        type: "Handle"
+    library: InterfaceLib
+    executor: glue_IUEqualPString
+
+# ####
+
+- only-for: Executor
+  function:
+    name: IUCompPString
+    return: "INTEGER"
+    args:
+      - name: "a"
+        type: "ConstStringPtr"
+      - name: "b"
+        type: "ConstStringPtr"
+      - name: "arg3"
+        type: "Handle"
+    library: InterfaceLib
+    executor: glue_IUCompPString

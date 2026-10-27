@@ -16,7 +16,8 @@ BUILTIN_NAMES=Set.new [
     "const",
     "bool",
     "sizeof",
-    "double"
+    "double",
+    "float"
 ]
 
 def hexlit(thing, sz=16)
@@ -73,12 +74,13 @@ class HeaderFile
 
 private
 
-    def collect_dep(str)
+    def collect_dep(str, except: [])
         tmp = str.to_s.dup
         tmp.gsub!(/'[^']+'/,"")
         tmp.gsub!(/"(?:[^"\\]|\\.)*"/,"")
+        tmp.gsub!(/\b(?:0x[0-9a-fA-F]+|[0-9]+)[uUlL]*\b/,"")
         tmp.scan(/[a-zA-Z_][a-zA-Z0-9_]*/).each do |x|
-            @required_names << x unless BUILTIN_NAMES.member?(x)
+            @required_names << x unless BUILTIN_NAMES.member?(x) or except.include?(x)
         end
     end
 
@@ -107,7 +109,10 @@ private
             when "typedef"
                 collect_dep(value["type"])
             when "define"
-                collect_dep(value["value"])
+                # A macro with parameters: those aren't names to look for,
+                # nor are C's own (a cast, offsetof).
+                params = value["name"][/\((.*)\)/, 1].to_s.split(",").map(&:strip)
+                collect_dep(value["value"], except: params + ["long", "offsetof"])
             when "struct", "union"
                 collect_members_dependencies value["members"] if value["members"]
             when "function", "funptr"

@@ -4,9 +4,10 @@
  *                                 ==========                                *
  *                                                                           *
  * Needs:                                                                    *
- *     MacTypes.h    INTEGER, LONGINT, Ptr, Boolean, Fixed, Byte, OSErr,     *
- *                   OSType, Handle, ConstStringPtr, ResType                 *
- *     SANE.h        extended80                                              *
+ *     MacTypes.h      INTEGER, LONGINT, Ptr, Boolean, Fixed, Byte,          *
+ *                     OSErr, OSType, Handle, ConstStringPtr, ResType        *
+ *     SANE.h          extended80                                            *
+ *     Components.h    ComponentInstance, ComponentResult                    *
  *                                                                           *
  *                                                                           *
  *****************************************************************************/
@@ -19,6 +20,7 @@
 #include <base/lowglobals.h>
 #include "ExMacTypes.h"
 #include "SANE.h"
+#include "Components.h"
 
 #define MODULE_NAME SoundMgr
 #include <base/api-module.h>
@@ -348,6 +350,89 @@ OSErr C_SndInstallDispatchGroup(INTEGER group, ProcPtr handler);PASCAL_SUBTRAP(S
 // MacPhoenix (name is a guess): group 0, selector 8: the group's slot
 // goes back to the "no such group" handler.
 OSErr C_SndRemoveDispatchGroup(INTEGER group);PASCAL_SUBTRAP(SndRemoveDispatchGroup, 0xA800, 0x80000, SoundDispatch);
+
+
+struct SoundSourceRecord;
+
+typedef SoundSourceRecord *SoundSource;
+
+struct SoundComponentData{GUEST_STRUCT;GUEST<LONGINT> flags;GUEST<OSType> format;GUEST<INTEGER> numChannels;GUEST<INTEGER> sampleSize;GUEST<UnsignedFixed> sampleRate;GUEST<LONGINT> sampleCount;GUEST<Byte*> buffer;GUEST<LONGINT> reserved;};static_assert(sizeof(SoundComponentData) == 28);void describeStruct(const SoundComponentData&, std::ostream&);
+
+typedef SoundComponentData *SoundComponentDataPtr;
+
+struct SoundParamBlock;
+
+using SoundParamUPP = UPP<Boolean(GUEST<SoundParamBlock*> *pb)>;
+
+
+struct SoundParamBlock{GUEST_STRUCT;GUEST<LONGINT> recordSize;GUEST<SoundComponentDataPtr> desc;GUEST<UnsignedFixed> rateMultiplier;GUEST<INTEGER> leftVolume;GUEST<INTEGER> rightVolume;GUEST<LONGINT> quality;GUEST<ComponentInstance> filter;GUEST<SoundParamUPP> moreRtn;GUEST<SoundParamUPP> completionRtn;GUEST<LONGINT> refCon;GUEST<INTEGER> result;};static_assert(sizeof(SoundParamBlock) == 38);void describeStruct(const SoundParamBlock&, std::ostream&);
+
+typedef SoundParamBlock *SoundParamBlockPtr;
+
+struct SoundInfoList{GUEST_STRUCT;GUEST<INTEGER> count;GUEST<Handle> infoHandle;};static_assert(sizeof(SoundInfoList) == 6);void describeStruct(const SoundInfoList&, std::ostream&);
+
+enum {kSoundOutputDeviceType = "sdev"_4,
+kSoundComponentInitOutputDeviceSelect = 1,
+kSoundComponentSetSourceSelect = 2,
+kSoundComponentGetSourceSelect = 3,
+kSoundComponentGetSourceDataSelect = 4,
+kSoundComponentSetOutputSelect = 5,
+kSoundComponentAddSourceSelect = 257,
+kSoundComponentRemoveSourceSelect = 258,
+kSoundComponentGetInfoSelect = 259,
+kSoundComponentSetInfoSelect = 260,
+kSoundComponentStartSourceSelect = 261,
+kSoundComponentStopSourceSelect = 262,
+kSoundComponentPauseSourceSelect = 263,
+kSoundComponentPlaySourceBufferSelect = 264,
+};
+
+enum {siChannelAvailable = "chav"_4,
+siHardwareMute = "hmut"_4,
+siHardwareVolume = "hvol"_4,
+siHardwareVolumeSteps = "hstp"_4,
+siNumberChannels = "chan"_4,
+siSampleRate = "srat"_4,
+siSampleRateAvailable = "srav"_4,
+siSampleSize = "ssiz"_4,
+siSampleSizeAvailable = "ssav"_4,
+siSpeakerMute = "smut"_4,
+siSpeakerVolume = "svol"_4,
+};
+
+enum {siUnknownInfoType = -231,
+};
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ComponentResult C_SoundComponentGetInfo(ComponentInstance ti, SoundSource sourceID, OSType selector, void *infoPtr);COMPONENT_FUNCTION(SoundComponent, SoundComponentGetInfo, 0x0103, C_SoundComponentGetInfo);
+
+
+// For the selectors that take a value (siHardwareVolume and the
+// like), infoPtr is the value itself.
+ComponentResult C_SoundComponentSetInfo(ComponentInstance ti, SoundSource sourceID, OSType selector, void *infoPtr);COMPONENT_FUNCTION(SoundComponent, SoundComponentSetInfo, 0x0104, C_SoundComponentSetInfo);
+
+
+
+
+
+
+
+
 
 
 } /* namespace Executor */

@@ -133,6 +133,38 @@ class CIncludesGenerator < Generator
         out << "}"
     end
 
+    # A 68k routine of a function set bound through the Shared Library
+    # Manager (`aslm:`, Open Transport's): looked up by its index in the set
+    # the first time (and again once the client has a new manager), then
+    # called. By index: Apple's ASLM has no names for OT's sets. __OTFunction and __OTGeneration are the glue's
+    # (custom/OpenTransportGlue.c); a routine OT can't give answers
+    # kOTClientNotInittedErr, or 0.
+    def generate_aslm_wrapper(out:, fun:, name:, args:)
+        if !@aslm_included then
+            @aslm_included = true
+            out << "#if TARGET_CPU_68K\n"
+            out << "extern void *__OTFunction(const char *set, unsigned long index);\n"
+            out << "extern long __OTGeneration;\n"
+            out << "#endif\n"
+        end
+        ret = fun["return"] || "void"
+        conv = fun["callconv"].to_s.downcase == "c" ? "" : "pascal "
+        out << "#if TARGET_CPU_68K\n"
+        out << conv << ret << " " << name << "(" << args.map {|a| decl(a["type"], a["name"])}.join(", ") << ")\n{\n"
+        out << "typedef #{conv}#{ret} (*F)(" << args.map {|a| a["type"]}.join(", ") << ");\n"
+        out << "static F f;\nstatic long gen;\n"
+        out << "if(gen != __OTGeneration)\n{\n"
+        out << "f = (F)__OTFunction(\"#{fun["aslm"]["set"]}\", #{fun["aslm"]["index"]}); /* #{fun["aslm"]["name"]} */\n"
+        out << "gen = __OTGeneration;\n}\n"
+        fallback = if ret == "void" then ""
+                   elsif ["OSStatus", "OSErr", "OTResult"].include?(ret) then " kOTClientNotInittedErr"
+                   else " (#{ret})0"
+                   end
+        out << "if(!f)\nreturn#{fallback};\n"
+        out << (ret == "void" ? "" : "return ") << "f(" << args.map {|a| a["name"]}.join(", ") << ");\n}\n"
+        out << "#endif\n"
+    end
+
     def declare_function(fun, variant_index:nil)
         return if fun["name"] =~ /ROMlib/
         if fun["variants"] and not variant_index
@@ -197,6 +229,11 @@ class CIncludesGenerator < Generator
                 when "StackL"
                     m68kinlines << 0x2F3C << (sel >> 16) << (sel & 0xFFFF)
                 when "TrapBits"
+                when "Component"
+                    # move.l #paramSize<<16|selector,-(sp); moveq #0,d0;
+                    # _ComponentDispatch: the parameters after the instance.
+                    size = args[1..-1].map {|arg| [size_of_type(arg["type"]) || 4, 2].max}.sum
+                    m68kinlines << 0x2F3C << size << (sel & 0xFFFF) << 0x7000
                 else
                     complex = true
                 end
@@ -250,7 +287,7 @@ class CIncludesGenerator < Generator
         @out << "#else\n" if optionalInline
 
         if !fun["inline"] || optionalInline then
-            @out << "pascal "
+            @out << "pascal " unless fun["callconv"].to_s.downcase == "c"
             @out << (fun["return"] or "void") << " "
             @out << name << "("
             @out << args.map {|arg| decl(arg["type"], arg["name"])}.join(", ")
@@ -267,6 +304,8 @@ class CIncludesGenerator < Generator
                 generate_function_definition(out:@impl_out, fun:fun, name:name, args:args, m68kinlines:m68kinlines)
             elsif fun["cfm"] then
                 generate_cfm_wrapper(out:@impl_out, fun:fun, name:name, args:args)
+            elsif fun["aslm"] and not fun["raw"] then
+                generate_aslm_wrapper(out:@impl_out, fun:fun, name:name, args:args)
             end
         end
         @out << "#endif\n" if optionalInline
@@ -298,22 +337,29 @@ class CIncludesGenerator < Generator
     end
 
     def declare_dispatcher(value)
-        declare_trapnum(value["name"], value["trap"]) unless value["selector-location"] == "TrapBits"
+        declare_trapnum(value["name"], value["trap"]) unless ["TrapBits", "Component"].include? value["selector-location"]
     end
 
 
     def declare_funptr(value)
-        if value["callconv"] == "C" then
-            # A native C function pointer: no pascal, no UPP, name as given.
+        # A C routine through a UPP (`callconv: C` with `upp: true`:
+        # MacTCP's completion routines, kCStackBased) is a UPP below.
+        c_upp = value["callconv"] == "C" && value["upp"] == true
+        if (value["callconv"] == "C" && !c_upp) or value["upp"] == false then
+            # A native function pointer: no UPP, name as given (C, or
+            # pascal on 68k: Open Transport's notifiers, which PowerPC code
+            # passes as plain function pointers).
             args = (value["args"] or [])
-            @out << "typedef " << (value["return"] or "void") << " "
+            @out << "typedef "
+            @out << "pascal " unless value["callconv"] == "C"
+            @out << (value["return"] or "void") << " "
             @out << "(*" << value["name"] << ")("
             @out << args.map {|arg|decl(arg["type"], arg["name"])}.join(", ")
             @out << ");\n"
             return
         end
 
-        @out << "typedef pascal "
+        @out << (c_upp ? "typedef " : "typedef pascal ")
 
         name = value["name"]
         if name=~/^([A-Za-z_][A-Za-z0-9]*)(ProcPtr|UPP)$/ then
@@ -329,11 +375,24 @@ class CIncludesGenerator < Generator
         @out << args.map {|arg|decl(arg["type"], arg["name"])}.join(", ")
         @out << ");\n"
         
-        if args.any? {|arg| arg["register"]} then
+        # kRegisterBased: the result's size and register at bits 4 and 6,
+        # then per argument five bits from bit 11, its size and register
+        # (D0-D3 0-3, A0-A3 4-7), as Mixed Mode decodes it.
+        regnum = lambda {|r| r.to_s =~ /\A([AD])([0-3])\z/ ? ($1 == "D" ? 0 : 4) + $2.to_i : nil }
+        regs = args.map {|arg| regnum.call(arg["register"])}
+        if args.any? {|arg| arg["register"]} and regs.all? and
+                (not value["returnreg"] or regnum.call(value["returnreg"])) then
+            procinfo = 2
+            procinfo |= encode_size(value["return"]) << 4
+            procinfo |= (regnum.call(value["returnreg"]) || 0) << 6
+            args.each_with_index do |arg, i|
+                procinfo |= (encode_size(arg["type"]) | regs[i] << 2) << (11 + 5 * i)
+            end
+        elsif args.any? {|arg| arg["register"]} then
             procinfo = 42;
             print "WARNING UNSUPPORTED register funptr: #{name}\n"
         else
-            procinfo = 0
+            procinfo = c_upp ? 1 : 0    # kCStackBased : kPascalStackBased
             procinfo |= encode_size(value["return"]) << 4
             shift = 6
             args.each do |arg|
@@ -365,6 +424,26 @@ class CIncludesGenerator < Generator
 
             #define New#{name}Proc(proc) New#{name}UPP(proc)
             #define Dispose#{name}Proc(proc) Dispose#{name}UPP(proc)
+        UPPDECL
+        # Calling one (InvokeXUPP, and the older CallXProc): through Mixed
+        # Mode on CFM, directly on classic 68k. Not for register-based
+        # routines, which C can't call directly.
+        if procinfo != 42 and not args.any? {|arg| arg["register"]} then
+            params = args.each_with_index.map {|arg, i| arg["name"] || "arg#{i + 1}"}
+            plist = (params + ["userUPP"]).join(", ")
+            cargs = params.map {|p| "(#{p})"}
+            ret = value["return"]
+            cast = ret ? "(#{ret})" : "(void)"
+            @out << "#if !TARGET_API_MAC_CARBON\n"
+            @out << "#if TARGET_RT_MAC_CFM\n"
+            @out << "#define Invoke#{name}UPP(#{plist}) #{cast}CallUniversalProc((UniversalProcPtr)(userUPP), upp#{name}ProcInfo#{cargs.map {|a| ", " + a}.join})\n"
+            @out << "#else\n"
+            @out << "#define Invoke#{name}UPP(#{plist}) (*(userUPP))(#{cargs.join(", ")})\n"
+            @out << "#endif\n"
+            @out << "#define Call#{name}Proc(#{(["userRoutine"] + params).join(", ")}) Invoke#{name}UPP(#{(params + ["userRoutine"]).join(", ")})\n"
+            @out << "#endif\n\n"
+        end
+        @out << <<~UPPDECL
 
         UPPDECL
     end
@@ -454,10 +533,30 @@ class CIncludesGenerator < Generator
                 #define nil NULL
         
                 #define STACK_ROUTINE_PARAMETER(n, sz) ((sz) << (kStackParameterPhase + ((n)-1) * kStackParameterWidth))
+                #define RESULT_SIZE(sizeCode) ((sizeCode) << kResultSizePhase)
+                #define SIZE_CODE(size) (((size) == 4) ? kFourByteCode : (((size) == 2) ? kTwoByteCode : (((size) == 1) ? kOneByteCode : 0)))
             
                 #ifndef OLDROUTINENAMES
                 #define OLDROUTINENAMES 0
                 #endif
+
+                /* ConditionalMacros.h's names, for code written against
+                   Apple's interfaces */
+                #define TARGET_OS_MAC 1
+                #define TYPE_LONGLONG 1
+                #define GENERATINGCFM TARGET_RT_MAC_CFM
+                #define GENERATING68K TARGET_CPU_68K
+                #define GENERATINGPOWERPC TARGET_CPU_PPC
+                #define ONEWORDINLINE(...) M68K_INLINE(__VA_ARGS__)
+                #define TWOWORDINLINE(...) M68K_INLINE(__VA_ARGS__)
+                #define THREEWORDINLINE(...) M68K_INLINE(__VA_ARGS__)
+                #define FOURWORDINLINE(...) M68K_INLINE(__VA_ARGS__)
+                #define FIVEWORDINLINE(...) M68K_INLINE(__VA_ARGS__)
+                #define SIXWORDINLINE(...) M68K_INLINE(__VA_ARGS__)
+                #define SEVENWORDINLINE(...) M68K_INLINE(__VA_ARGS__)
+                #define EIGHTWORDINLINE(...) M68K_INLINE(__VA_ARGS__)
+                #define NINEWORDINLINE(...) M68K_INLINE(__VA_ARGS__)
+                #define TENWORDINLINE(...) M68K_INLINE(__VA_ARGS__)
             PREAMBLE
         
             defs.topsort.each do |name|
@@ -470,6 +569,7 @@ class CIncludesGenerator < Generator
                 header = defs.headers[name]
                 @impl_out = ""
                 @cfmwrapper_included = false
+                @aslm_included = false
                 inc = generate_header(header)
         
                 f << inc
@@ -500,11 +600,12 @@ class CIncludesGenerator < Generator
             "Navigation", "Drag", "DriverServices", "Kernel", "Interrupts",
             "NameRegistry", "PCI",
             # Universal Interfaces names for what the definitions cover too
-            "Aliases", "Balloons", "CodeFragments", "Controls", "Desk",
+            "Aliases", "AppleScript", "Balloons", "CodeFragments", "Components", "Controls", "Desk", "OSA",
             "DeskBus", "DiskInit", "Disks", "Displays", "Editions", "Finder",
             "Folders", "Lists", "MacTCP", "Movies", "Notification", "Packages",
             "Printing", "Retrace", "Scrap", "Script", "ShutDown", "Speech",
-            "TextServices", "Threads", "Translation"].each do |name|
+            "TextCommon", "TextServices", "Threads", "Translation", "Video",
+            "OpenTransport", "OpenTptInternet", "OpenTptLinks"].each do |name|
             File.open("#{$options.output_dir}/CIncludes/#{name}.h", "w") do |f|
                 f << "#pragma once\n"
                 f << "#include \"Multiverse.h\"\n"
@@ -535,7 +636,11 @@ class CIncludesGenerator < Generator
         end
 
         libraries_config = YAML::load(File.read("custom/libraries.yaml"))
-        libraries_config.each do |libname, files|
+        # PowerPC glue (Open Transport's public calls over the libraries'
+        # ...Priv routines): its own libraries, in libppc, and only if
+        # Retro68's PowerPC compiler is on the PATH.
+        ppc_config = libraries_config.delete("PowerPC") || {}
+        (libraries_config.values + ppc_config.values).each do |files|
             allNames.subtract(files)
         end
         libraries_config["Interface"] = allNames.to_a
@@ -544,6 +649,19 @@ class CIncludesGenerator < Generator
             print "Linking lib#{libname}.a...\n"
             system("m68k-apple-macos-ar cqs #{$options.output_dir}/lib68k/lib#{libname}.a " +
                 files.map {|f| "#{$options.output_dir}/obj/#{f}.o"}.join(" "))
+        end
+
+        if system("command -v powerpc-apple-macos-gcc >/dev/null") then
+            FileUtils.mkdir_p "#{$options.output_dir}/objppc"
+            FileUtils.mkdir_p "#{$options.output_dir}/libppc"
+            ppc_config.each do |libname, files|
+                files.each do |f|
+                    system("powerpc-apple-macos-gcc -c #{$options.output_dir}/src/#{f}.c -o #{$options.output_dir}/objppc/#{f}.o -I #{$options.output_dir}/CIncludes -O -ffunction-sections")
+                end
+                print "Linking libppc/lib#{libname}.a...\n"
+                system("powerpc-apple-macos-ar cqs #{$options.output_dir}/libppc/lib#{libname}.a " +
+                    files.map {|f| "#{$options.output_dir}/objppc/#{f}.o"}.join(" "))
+            end
         end
         print "Done.\n"
     end

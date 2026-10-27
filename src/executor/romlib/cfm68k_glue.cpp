@@ -6,6 +6,7 @@
  * description of the routine; the trap-based ones run their trap through
  * the trap table, so an extension's patch sees the call. */
 
+#include <vector>
 #include <base/common.h>
 #include <base/builtinlibs.h>
 #include <base/functions.impl.h>
@@ -34,43 +35,21 @@ extern unsigned char XPRAM[8192];
 
 using namespace Executor;
 
-namespace
+namespace Executor
 {
 
-/* A routine for both CFM-68K and PowerPC fragments. */
-template<typename F>
-struct Export;
-
-template<typename Ret, typename... Args>
-struct Export<Ret (Args...)>
-{
-    static void add(const char *name, Ret (*fn)(Args...))
-    {
-        builtinlibs::addCFM68KEntrypoint("InterfaceLib", name,
-            [fn, pops = builtinlibs::cfm68kCalleePops(name)](syn68k_addr_t) {
-                return callfromCFM68K::Invoker<Ret (Args...)>::invokeFromCFM68K(fn, pops);
-            });
-        builtinlibs::addPPCEntrypoint("InterfaceLib", name,
-            [fn](PowerCore& cpu) {
-                return callfromPPC::Invoker<Ret (Args...)>::invokeFromPPC(cpu, fn);
-            });
-    }
-};
-
-template<typename F>
-void exportGlue(const char *name, F *fn)
-{
-    Export<F>::add(name, fn);
-}
 
 /* A Pascal trap called as 68k code calls it: room for the result, then the
    arguments, the first deepest; D0 the selector of a dispatcher that takes
    it there. Through the trap table, so patches run. */
+namespace {
 struct PascalArg
 {
     int size; /* 2 or 4 */
     uint32_t value;
 };
+}
+
 
 uint32_t pascal_trap(uint16_t trap, uint32_t d0, int resultSize,
                      std::initializer_list<PascalArg> args)
@@ -160,26 +139,6 @@ void glue_CopyCStringToPascal(const char *src, StringPtr dst)
 
 /* ---- the Operating System and International Utilities ------------------- */
 
-Boolean glue_EqualString(ConstStringPtr a, ConstStringPtr b, Boolean caseSens, Boolean diacSens)
-{
-    return EqualString(a, b, caseSens, diacSens);
-}
-
-INTEGER glue_RelString(ConstStringPtr a, ConstStringPtr b, Boolean caseSens, Boolean diacSens)
-{
-    return RelString(a, b, caseSens, diacSens);
-}
-
-INTEGER glue_IUEqualString(ConstStringPtr a, ConstStringPtr b)
-{
-    return IUEqualString(a, b);
-}
-
-INTEGER glue_IUCompString(ConstStringPtr a, ConstStringPtr b)
-{
-    return IUCompString(a, b);
-}
-
 /* The itl2 handle chooses the sorting rules; Executor has one set. */
 INTEGER glue_IUEqualPString(ConstStringPtr a, ConstStringPtr b, Handle)
 {
@@ -189,16 +148,6 @@ INTEGER glue_IUEqualPString(ConstStringPtr a, ConstStringPtr b, Handle)
 INTEGER glue_IUCompPString(ConstStringPtr a, ConstStringPtr b, Handle)
 {
     return IUCompString(a, b);
-}
-
-LONGINT glue_SetCurrentA5()
-{
-    return SetCurrentA5();
-}
-
-LONGINT glue_SetA5(LONGINT a5)
-{
-    return SetA5(a5);
 }
 
 /* A MachineLocation: 12 bytes, kept in parameter RAM $E4..$EF (Inside
@@ -257,16 +206,6 @@ void glue_LMSetSysFontSize(INTEGER size)
     LM(SysFontSiz) = size;
 }
 
-LONGINT glue_GetDblTime()
-{
-    return GetDblTime();
-}
-
-LONGINT glue_GetCaretTime()
-{
-    return GetCaretTime();
-}
-
 INTEGER glue_GetSysDirection()
 {
     return LM(TESysJust); /* GetSysDirection: TESysJust */
@@ -274,40 +213,11 @@ INTEGER glue_GetSysDirection()
 
 /* ---- the Dialog Manager --------------------------------------------------- */
 
-void glue_DialogCut(DialogPtr d) { DialogCut(d); }
-void glue_DialogCopy(DialogPtr d) { DialogCopy(d); }
-void glue_DialogPaste(DialogPtr d) { DialogPaste(d); }
-void glue_DialogDelete(DialogPtr d) { DialogDelete(d); }
-
-INTEGER glue_CountDITL(DialogPtr d)
-{
-    return CountDITL(d);
-}
-
-void glue_AppendDITL(DialogPtr d, Handle h, INTEGER method)
-{
-    AppendDITL(d, h, (DITLMethod)method);
-}
-
-void glue_ShortenDITL(DialogPtr d, INTEGER n)
-{
-    ShortenDITL(d, n);
-}
-
-void glue_GetIndPattern(Byte *pat, INTEGER listID, INTEGER index)
-{
-    GetIndPattern(pat, listID, index);
-}
-
 /* ---- the File Manager ----------------------------------------------------- */
-
-OSErr glue_GetVInfo(INTEGER drive, StringPtr name, GUEST<INTEGER> *vRefNum, GUEST<LONGINT> *freeBytes)
-{
-    return GetVInfo(drive, name, vRefNum, freeBytes);
-}
 
 /* Guest memory for a parameter block or descriptor handed to the Toolbox:
    a patched trap gets its address, and host stacks aren't guest memory. */
+namespace {
 template<typename T>
 struct GuestTemp
 {
@@ -315,6 +225,8 @@ struct GuestTemp
     ~GuestTemp() { DisposePtr((Ptr)p); }
     T *operator->() { return p; }
 };
+}
+
 
 OSErr glue_DirCreate(INTEGER vRefNum, LONGINT parentDirID, ConstStringPtr name,
                      GUEST<LONGINT> *createdDirID)
@@ -326,6 +238,70 @@ OSErr glue_DirCreate(INTEGER vRefNum, LONGINT parentDirID, ConstStringPtr name,
     OSErr err = PBDirCreate(pb.p, false);
     if(err == noErr && createdDirID)
         *createdDirID = pb->fileParam.ioDirID;
+    return err;
+}
+
+/* HSetFInfo, HSetFLock, HRstFLock, CatMove (Inside Macintosh: Files, the
+   high-level HFS routines): glue over their parameter-block calls. */
+OSErr glue_HSetFInfo(INTEGER vRefNum, LONGINT dirID, ConstStringPtr name,
+                     const FInfo *fndrInfo)
+{
+    GuestTemp<HParamBlockRec> pb;
+    pb->fileParam.ioNamePtr = (StringPtr)name;
+    pb->fileParam.ioVRefNum = vRefNum;
+    pb->fileParam.ioFVersNum = 0;
+    pb->fileParam.ioFDirIndex = 0;
+    pb->fileParam.ioDirID = dirID;
+    OSErr err = PBHGetFInfo(pb.p, false);
+    if(err != noErr)
+        return err;
+    pb->fileParam.ioFlFndrInfo = *fndrInfo;
+    pb->fileParam.ioDirID = dirID;      /* PBHGetFInfo put the file number there */
+    return PBHSetFInfo(pb.p, false);
+}
+
+static OSErr hfs_lock(INTEGER vRefNum, LONGINT dirID, ConstStringPtr name, bool lock)
+{
+    GuestTemp<HParamBlockRec> pb;
+    pb->fileParam.ioNamePtr = (StringPtr)name;
+    pb->fileParam.ioVRefNum = vRefNum;
+    pb->fileParam.ioFVersNum = 0;
+    pb->fileParam.ioDirID = dirID;
+    return lock ? PBHSetFLock(pb.p, false) : PBHRstFLock(pb.p, false);
+}
+
+OSErr glue_HSetFLock(INTEGER vRefNum, LONGINT dirID, ConstStringPtr name)
+{
+    return hfs_lock(vRefNum, dirID, name, true);
+}
+
+OSErr glue_HRstFLock(INTEGER vRefNum, LONGINT dirID, ConstStringPtr name)
+{
+    return hfs_lock(vRefNum, dirID, name, false);
+}
+
+OSErr glue_CatMove(INTEGER vRefNum, LONGINT dirID, ConstStringPtr oldName,
+                   LONGINT newDirID, ConstStringPtr newName)
+{
+    GuestTemp<CMovePBRec> pb;
+    pb->ioNamePtr = (StringPtr)oldName;
+    pb->ioVRefNum = vRefNum;
+    pb->ioNewName = (StringPtr)newName;
+    pb->ioNewDirID = newDirID;
+    pb->ioDirID = dirID;
+    return PBCatMove(pb.p, false);
+}
+
+/* The volume an open file is on (Inside Macintosh: Files, glue over
+   PBGetFCBInfo); Retro68's PowerPC runtime imports it. */
+OSErr glue_GetVRefNum(INTEGER prn, GUEST<INTEGER> *vrn)
+{
+    GuestTemp<FCBPBRec> pb;
+    pb->ioRefNum = prn;
+    pb->ioFCBIndx = 0;
+    OSErr err = PBGetFCBInfo(pb.p, false);
+    if(err == noErr && vrn)
+        *vrn = pb->ioFCBVRefNum;
     return err;
 }
 
@@ -354,18 +330,24 @@ OSErr glue_YieldToAnyThread()
    "Creating Object Specifier Records"): an object specifier and its range,
    comparison and logical descriptors are AE records of their own types,
    built from the keyword-specified descriptors listed there. */
+namespace {
 struct KeyedDesc
 {
     AEKeyword key;
     AEDesc *desc;
 };
+}
 
+
+namespace {
 struct KeyedType
 {
     AEKeyword key;
     DescType type;
     uint32_t value;
 };
+}
+
 
 OSErr build_record(DescType type, std::initializer_list<KeyedType> values,
                    std::initializer_list<KeyedDesc> descs, Boolean disposeInputs, AEDesc *result)
@@ -473,17 +455,20 @@ LONGINT glue_CallComponent(Ptr params)
    caller's ComponentCallNow(what, paramSize) would have them: room for the
    result, the instance (first parameter, deepest), the rest at their own
    sizes, then paramSize and what; D0 = 0. */
+namespace {
 struct ComponentRoutine
 {
     const char *name;
     uint16_t what;
-    std::initializer_list<int> sizes; /* after the instance: 2 or 4 bytes */
+    std::vector<int> sizes; /* after the instance: 2 or 4 bytes */
 };
+}
 
-syn68k_addr_t call_component_routine(const ComponentRoutine& r)
+
+/* The call, as a 68k caller makes it: args[0] the instance, then the
+   routine's other parameters (each in a 32-bit value). */
+uint32_t make_component_call(const ComponentRoutine& r, const uint32_t *args)
 {
-    uint32_t args = EM_A7 + 4;
-    uint32_t nargs = 1 + r.sizes.size();
     uint32_t paramSize = 0;
     for(int size : r.sizes)
         paramSize += size;
@@ -492,14 +477,12 @@ syn68k_addr_t call_component_routine(const ComponentRoutine& r)
     EM_A7 -= 4;
     *ptr_from_longint<GUEST<uint32_t> *>(EM_A7) = 0;
     EM_A7 -= 4;
-    *ptr_from_longint<GUEST<uint32_t> *>(EM_A7) = *ptr_from_longint<GUEST<uint32_t> *>(args);
-    uint32_t slot = args + 4;
-    for(int size : r.sizes)
+    *ptr_from_longint<GUEST<uint32_t> *>(EM_A7) = args[0];
+    for(size_t i = 0; i < r.sizes.size(); i++)
     {
-        uint32_t value = *ptr_from_longint<GUEST<uint32_t> *>(slot);
-        slot += 4;
-        EM_A7 -= size;
-        if(size == 2)
+        uint32_t value = args[1 + i];
+        EM_A7 -= r.sizes[i];
+        if(r.sizes[i] == 2)
             *ptr_from_longint<GUEST<uint16_t> *>(EM_A7) = value;
         else
             *ptr_from_longint<GUEST<uint32_t> *>(EM_A7) = value;
@@ -511,6 +494,16 @@ syn68k_addr_t call_component_routine(const ComponentRoutine& r)
     execute68K(tooltraptable[0xA82A & 0x3FF]);
     uint32_t result = *ptr_from_longint<GUEST<uint32_t> *>(save_a7 - 4);
     EM_A7 = save_a7;
+    return result;
+}
+
+syn68k_addr_t call_component_routine(const ComponentRoutine& r)
+{
+    uint32_t nargs = 1 + r.sizes.size();
+    std::vector<uint32_t> args(nargs);
+    for(uint32_t i = 0; i < nargs; i++)
+        args[i] = *ptr_from_longint<GUEST<uint32_t> *>(EM_A7 + 4 + 4 * i);
+    uint32_t result = make_component_call(r, args.data());
 
     syn68k_addr_t ret = POPADDR();
     EM_A7 += 4 * nargs; /* a routine with fixed arguments pops them */
@@ -518,53 +511,17 @@ syn68k_addr_t call_component_routine(const ComponentRoutine& r)
     return ret;
 }
 
-/* AppleScriptLib: the Open Scripting Architecture's routines (OSA.h,
-   OSAGeneric.h: each a component call, its selector and parameter sizes
-   as the 68k interfaces' inline code gives them). */
-const ComponentRoutine osa_routines[] = {
-    { "OSALoad", 0x0001, { 4, 4, 4 } },
-    { "OSAStore", 0x0002, { 4, 4, 4, 4 } },
-    { "OSAExecute", 0x0003, { 4, 4, 4, 4 } },
-    { "OSADisplay", 0x0004, { 4, 4, 4, 4 } },
-    { "OSAScriptError", 0x0005, { 4, 4, 4 } },
-    { "OSADispose", 0x0006, { 4 } },
-    { "OSASetScriptInfo", 0x0007, { 4, 4, 4 } },
-    { "OSAGetScriptInfo", 0x0008, { 4, 4, 4 } },
-    { "OSASetActiveProc", 0x0009, { 4, 4 } },
-    { "OSAGetActiveProc", 0x000A, { 4, 4 } },
-    { "OSAScriptingComponentName", 0x0102, { 4 } },
-    { "OSACompile", 0x0103, { 4, 4, 4 } },
-    { "OSACopyID", 0x0104, { 4, 4 } },
-    { "OSAGetSource", 0x0201, { 4, 4, 4 } },
-    { "OSACoerceFromDesc", 0x0301, { 4, 4, 4 } },
-    { "OSACoerceToDesc", 0x0302, { 4, 4, 4, 4 } },
-    { "OSASetSendProc", 0x0401, { 4, 4 } },
-    { "OSAGetSendProc", 0x0402, { 4, 4 } },
-    { "OSASetCreateProc", 0x0403, { 4, 4 } },
-    { "OSAGetCreateProc", 0x0404, { 4, 4 } },
-    { "OSASetDefaultTarget", 0x0405, { 4 } },
-    { "OSAStartRecording", 0x0501, { 4 } },
-    { "OSAStopRecording", 0x0502, { 4 } },
-    { "OSALoadExecute", 0x0601, { 4, 4, 4, 4 } },
-    { "OSACompileExecute", 0x0602, { 4, 4, 4, 4 } },
-    { "OSADoScript", 0x0603, { 4, 4, 4, 4, 4 } },
-    { "OSASetCurrentDialect", 0x0701, { 2 } },
-    { "OSAGetCurrentDialect", 0x0702, { 4 } },
-    { "OSAAvailableDialects", 0x0703, { 4 } },
-    { "OSAGetDialectInfo", 0x0704, { 2, 4, 4 } },
-    { "OSAAvailableDialectCodeList", 0x0705, { 4 } },
-    { "OSASetResumeDispatchProc", 0x0801, { 4, 4 } },
-    { "OSAGetResumeDispatchProc", 0x0802, { 4, 4 } },
-    { "OSAExecuteEvent", 0x0803, { 4, 4, 4, 4 } },
-    { "OSADoEvent", 0x0804, { 4, 4, 4, 4 } },
-    { "OSAMakeContext", 0x0805, { 4, 4, 4 } },
-    { "OSAGetDefaultScriptingComponent", 0x1001, { 4 } },
-    { "OSASetDefaultScriptingComponent", 0x1002, { 4 } },
-    { "OSAGetScriptingComponent", 0x1003, { 4, 4 } },
-    { "OSAGetScriptingComponentFromStored", 0x1004, { 4, 4 } },
-    { "OSAGenericToRealID", 0x1005, { 4, 4 } },
-    { "OSARealToGenericID", 0x1006, { 4, 4 } },
-};
+/* ... and from PowerPC code: the instance in r3, the others after it. */
+uint32_t call_component_routine_ppc(const ComponentRoutine& r, PowerCore& cpu)
+{
+    uint32_t args[8];
+    for(size_t i = 0; i < 1 + r.sizes.size() && i < 8; i++)
+        args[i] = cpu.r[3 + i];
+    /* 68k code run from here pushes below the caller's frame. */
+    EM_A7 = cpu.r[1];
+    cpu.r[3] = make_component_call(r, args);
+    return cpu.lr;
+}
 
 void add_call_component_upp()
 {
@@ -586,23 +543,6 @@ void add_call_component_upp()
     builtinlibs::addPPCData("InterfaceLib", "CallComponentUPP", cell);
 }
 
-ComponentInstance glue_OpenDefaultComponent(OSType type, OSType subType)
-{
-    return ptr_from_longint<ComponentInstance>(
-        pascal_trap(0xA82A, 0x21, 4, { { 4, (uint32_t)type }, { 4, (uint32_t)subType } }));
-}
-
-ComponentInstance glue_OpenComponent(Component c)
-{
-    return ptr_from_longint<ComponentInstance>(
-        pascal_trap(0xA82A, 0x07, 4, { { 4, US_TO_SYN68K(c) } }));
-}
-
-OSErr glue_CloseComponent(ComponentInstance ci)
-{
-    return pascal_trap(0xA82A, 0x08, 2, { { 4, US_TO_SYN68K(ci) } });
-}
-
 }
 
 /* Called before the first builtin library connection is made (the file is
@@ -610,58 +550,24 @@ OSErr glue_CloseComponent(ComponentInstance ci)
 void Executor::builtinlibs::addGlueEntrypoints()
 {
     {
-        exportGlue("c2pstr", &glue_c2pstr);
-        exportGlue("p2cstr", &glue_p2cstr);
-        exportGlue("c2pstrcpy", &glue_c2pstrcpy);
-        exportGlue("p2cstrcpy", &glue_p2cstrcpy);
-        exportGlue("CopyPascalStringToC", &glue_CopyPascalStringToC);
-        exportGlue("CopyCStringToPascal", &glue_CopyCStringToPascal);
-        exportGlue("EqualString", &glue_EqualString);
-        exportGlue("RelString", &glue_RelString);
-        exportGlue("IUEqualString", &glue_IUEqualString);
-        exportGlue("IUCompString", &glue_IUCompString);
-        exportGlue("IUEqualPString", &glue_IUEqualPString);
-        exportGlue("IUCompPString", &glue_IUCompPString);
-        exportGlue("SetCurrentA5", &glue_SetCurrentA5);
-        exportGlue("SetA5", &glue_SetA5);
-        exportGlue("ReadLocation", &glue_ReadLocation);
-        exportGlue("WriteLocation", &glue_WriteLocation);
-        exportGlue("FlushInstructionCache", &glue_FlushInstructionCache);
-        exportGlue("FlushDataCache", &glue_FlushDataCache);
-        exportGlue("GetMyZone", &glue_GetMyZone);
-        exportGlue("InlineGetHandleSize", &glue_InlineGetHandleSize);
-        exportGlue("GetSysFont", &glue_GetSysFont);
-        exportGlue("GetAppFont", &glue_GetAppFont);
-        exportGlue("LMGetSysFontSize", &glue_LMGetSysFontSize);
-        exportGlue("LMSetSysFontSize", &glue_LMSetSysFontSize);
-        exportGlue("GetDblTime", &glue_GetDblTime);
-        exportGlue("GetCaretTime", &glue_GetCaretTime);
-        exportGlue("GetSysDirection", &glue_GetSysDirection);
-        exportGlue("DialogCut", &glue_DialogCut);
-        exportGlue("DialogCopy", &glue_DialogCopy);
-        exportGlue("DialogPaste", &glue_DialogPaste);
-        exportGlue("DialogDelete", &glue_DialogDelete);
-        exportGlue("CountDITL", &glue_CountDITL);
-        exportGlue("AppendDITL", &glue_AppendDITL);
-        exportGlue("ShortenDITL", &glue_ShortenDITL);
-        exportGlue("GetIndPattern", &glue_GetIndPattern);
-        exportGlue("GetVInfo", &glue_GetVInfo);
-        exportGlue("DirCreate", &glue_DirCreate);
-        exportGlue("PBHOpenRFDenySync", &glue_PBHOpenRFDenySync);
-        exportGlue("PBHOpenRFDenyAsync", &glue_PBHOpenRFDenyAsync);
-        exportGlue("YieldToAnyThread", &glue_YieldToAnyThread);
-        exportGlue("OpenDefaultComponent", &glue_OpenDefaultComponent);
-        exportGlue("OpenComponent", &glue_OpenComponent);
-        exportGlue("CloseComponent", &glue_CloseComponent);
-        exportGlue("AEObjectInit", &glue_AEObjectInit);
+        /* the older names (Strings.h's OLDROUTINENAMES): MPW's CFM-68K
+           runtime calls P2CStr for the application's name */
         add_call_component_upp();
-        for(const ComponentRoutine& r : osa_routines)
-            builtinlibs::addCFM68KEntrypoint("AppleScriptLib", r.name,
-                [&r](syn68k_addr_t) { return call_component_routine(r); });
-        exportGlue("CreateOffsetDescriptor", &glue_CreateOffsetDescriptor);
-        exportGlue("CreateCompDescriptor", &glue_CreateCompDescriptor);
-        exportGlue("CreateLogicalDescriptor", &glue_CreateLogicalDescriptor);
-        exportGlue("CreateObjSpecifier", &glue_CreateObjSpecifier);
-        exportGlue("CreateRangeDescriptor", &glue_CreateRangeDescriptor);
     }
+}
+
+/* A component call a library exports (the definitions' COMPONENT_CALL):
+   AppleScriptLib's OSA routines for CFM-68K and PowerPC code. CFM finds
+   Apple's AppleScriptLib first where the System has it (it exports more
+   than the definitions have); these answer where it doesn't. */
+void Executor::traps::ComponentCallExport::init()
+{
+    auto *r = new ComponentRoutine{ name, what, {} };
+    for(const char *p = sizes; *p; p++)
+        r->sizes.push_back(*p - '0');
+    assert(r->sizes.size() < 8);
+    builtinlibs::addCFM68KEntrypoint(library, name,
+        [r](syn68k_addr_t) { return call_component_routine(*r); });
+    builtinlibs::addPPCEntrypoint(library, name,
+        [r](PowerCore &cpu) { return call_component_routine_ppc(*r, cpu); });
 }

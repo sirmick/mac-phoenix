@@ -19,6 +19,46 @@ void describeStruct(const ComponentInstanceRecord& x, std::ostream& os)
     os << "}";
 }
 
+void describeStruct(const ComponentDescription& x, std::ostream& os)
+{
+    os << "ComponentDescription{";
+    logging::logField(os, "componentType", x.componentType);
+    logging::logField(os, "componentSubType", x.componentSubType);
+    logging::logField(os, "componentManufacturer", x.componentManufacturer);
+    logging::logField(os, "componentFlags", x.componentFlags);
+    logging::logField(os, "componentFlagsMask", x.componentFlagsMask);
+    os << "}";
+}
+
+void describeStruct(const ResourceSpec& x, std::ostream& os)
+{
+    os << "ResourceSpec{";
+    logging::logField(os, "resType", x.resType);
+    logging::logField(os, "resID", x.resID);
+    os << "}";
+}
+
+void describeStruct(const ComponentResource& x, std::ostream& os)
+{
+    os << "ComponentResource{";
+    logging::logField(os, "cd", x.cd);
+    logging::logField(os, "component", x.component);
+    logging::logField(os, "componentName", x.componentName);
+    logging::logField(os, "componentInfo", x.componentInfo);
+    logging::logField(os, "componentIcon", x.componentIcon);
+    os << "}";
+}
+
+void describeStruct(const ComponentParameters& x, std::ostream& os)
+{
+    os << "ComponentParameters{";
+    logging::logField(os, "flags", x.flags);
+    logging::logField(os, "paramSize", x.paramSize);
+    logging::logField(os, "what", x.what);
+    logging::logField(os, "params", x.params);
+    os << "}";
+}
+
 } // namespace Executor
 
 namespace Executor { namespace structdump {
@@ -32,6 +72,22 @@ void dump_ComponentInstanceRecord(std::ostream& os, const void* p)
 {
     describeStruct(*(const ComponentInstanceRecord*)p, os);
 }
+void dump_ComponentDescription(std::ostream& os, const void* p)
+{
+    describeStruct(*(const ComponentDescription*)p, os);
+}
+void dump_ResourceSpec(std::ostream& os, const void* p)
+{
+    describeStruct(*(const ResourceSpec*)p, os);
+}
+void dump_ComponentResource(std::ostream& os, const void* p)
+{
+    describeStruct(*(const ComponentResource*)p, os);
+}
+void dump_ComponentParameters(std::ostream& os, const void* p)
+{
+    describeStruct(*(const ComponentParameters*)p, os);
+}
 }
 
 void registerStructDumps_Components()
@@ -39,6 +95,10 @@ void registerStructDumps_Components()
     static const TypeDesc types[] = {
         { "ComponentRecord", sizeof(ComponentRecord), &dump_ComponentRecord },
         { "ComponentInstanceRecord", sizeof(ComponentInstanceRecord), &dump_ComponentInstanceRecord },
+        { "ComponentDescription", sizeof(ComponentDescription), &dump_ComponentDescription },
+        { "ResourceSpec", sizeof(ResourceSpec), &dump_ResourceSpec },
+        { "ComponentResource", sizeof(ComponentResource), &dump_ComponentResource },
+        { "ComponentParameters", sizeof(ComponentParameters), &dump_ComponentParameters },
     };
     registerTypes(types, sizeof(types) / sizeof(types[0]));
 }

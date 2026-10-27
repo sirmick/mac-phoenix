@@ -148,6 +148,37 @@ void builtinlibs::addPPCData(const char *library, const char *name, void *addres
     builtins[library].push_back({name, address});
 }
 
+static std::unordered_map<std::string, std::vector<std::string>>& expectedRaw()
+{
+    static std::unordered_map<std::string, std::vector<std::string>> map;
+    return map;
+}
+
+void builtinlibs::expectRawExport(const char *library, const char *function)
+{
+    expectedRaw()[library].push_back(function);
+}
+
+bool builtinlibs::isExpectedRawExport(const char *library, const char *function)
+{
+    auto it = expectedRaw().find(library);
+    return it != expectedRaw().end()
+        && std::find(it->second.begin(), it->second.end(), function) != it->second.end();
+}
+
+void builtinlibs::checkRawExports(const char *library)
+{
+    auto it = expectedRaw().find(library);
+    if(it == expectedRaw().end())
+        return;
+    const auto& entries = builtins[library];
+    for(const std::string& function : it->second)
+        if(std::none_of(entries.begin(), entries.end(),
+                        [&](const map_entry_t& e) { return function == e.symbol_name; }))
+            std::cerr << "[Executor] " << library << ": " << function
+                      << " is declared raw in the definitions but not registered\n";
+}
+
 static std::unordered_map<std::string, std::function<syn68k_addr_t (syn68k_addr_t)>>& overrides68k()
 {
     static std::unordered_map<std::string, std::function<syn68k_addr_t (syn68k_addr_t)>> map;
@@ -214,12 +245,33 @@ ConnectionID builtinlibs::getBuiltinLib(ConstStr255Param libname, OSType arch)
         addGlueEntrypoints();
     }
 
+    /* MacPhoenix: StdCLib and MathLib, in ROM on a Power Mac
+       (docs/executor/PPCLibs.md); StdCLib's CFM-68K halves too. */
+    static bool clibs_added = false;
+    if(!clibs_added)
+    {
+        clibs_added = true;
+        clib::addStdCLib();
+        clib::addMathLib();
+        checkRawExports("StdCLib");
+        checkRawExports("MathLib");
+    }
+
     std::string name(libname + 1, libname + 1 + libname[0]);
     if(arch == "m68k"_4)
     {
         if(std::find(std::begin(interfacelib_aliases68k), std::end(interfacelib_aliases68k), name)
            != std::end(interfacelib_aliases68k))
             name = "InterfaceLib";
+        /* MPW's CFM-68K programs import StdCLib as two libraries (the
+           Enabler's): NuStdCLib (string, ctype, printf, time, ...) and
+           NuIntEnv (stdio's files, errno, exit, signal, PL strings). One
+           StdCLib answers both; a new application's starts afresh. */
+        if(name == "NuStdCLib" || name == "NuIntEnv")
+        {
+            name = "StdCLib";
+            clib::stdclibStart(true);
+        }
         /* One connection per library: its exports never move. */
         static std::unordered_map<std::string, ConnectionID> connections;
         ConnectionID& cid = connections[name];
@@ -243,15 +295,6 @@ ConnectionID builtinlibs::getBuiltinLib(ConstStr255Param libname, OSType arch)
         return cid;
     }
 
-    /* MacPhoenix: StdCLib and MathLib, in ROM on a Power Mac
-       (docs/executor/PPCLibs.md). */
-    static bool clibs_added = false;
-    if(!clibs_added)
-    {
-        clibs_added = true;
-        clib::addStdCLib();
-        clib::addMathLib();
-    }
     auto it = builtins.find(name);
     if(it == builtins.end())
         return nullptr;

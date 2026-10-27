@@ -126,6 +126,9 @@ cd src/executor/multiversal
 ruby make-multiverse.rb -G CIncludes -o OUT    # OUT/CIncludes, OUT/lib68k (glue)
 ```
 
+`ctest -R retro68_` runs RetroTest, a program built with Retro68 for 68k
+and PowerPC against these headers alone, on Executor and on Apple's
+systems (LIBRARIES.md, "Tools on the Retro68 side").
 `ctest -R multiversal_retro68` (`tests/test_multiversal_retro68.sh`)
 generates them, builds `tests/multiversal/mvtest.c` against them alone
 (none of Apple's headers), and compiles Retro68's samples. Definitions
@@ -134,16 +137,26 @@ generator wraps pointers itself; the C generator would write `GUEST`).
 The generator names a header for each Universal Interfaces file the
 definitions cover (`cincludes.rb`; each just includes `Multiverse.h`).
 
-MacBrowser and parts of MacPhoenixSuite build against them alone (the
-test compiles them); the rest of MacPhoenix's guest programs don't yet.
-What they still miss: Open Transport, AppleScript/OSA and the Component
-Manager's calls (Executor implements them in C++ with no definitions:
-LIBRARIES.md is the plan), the HFS Plus constants (`kFSCatInfo*`),
-`fsRtDirID`, `SInt64`, MacTCP's parameter blocks and UPPs, `NMUPP`,
-`Video.h`'s records, `fp.h`, `TextCommon.h`, some high-level File
-Manager glue (`HSetFInfo`, `DirCreate`, `CatMove`), and `ONEWORDINLINE`. Some Executor signatures differ from Apple's
+BridgeAgent and MacBrowser are built against them alone (CMake,
+`tools/retro68/multiversal-headers.sh`: generated into the build tree,
+with none of the toolchain's or Apple's interfaces; needs ruby), as are
+RetroTest, OTTest and MacPhoenixSuite: `tests/guest/suite/retro68`
+builds the suite with Retro68 for 68k and PowerPC from the same sources
+as its MPW build, and it gives the same results on Apple's systems and
+on Executor (`guest_suite_retro68*`); `multiversal_retro68` compiles
+each, and with it every other guest program but CLibTest, which tests
+Apple's C library and so is built with that library's own headers
+(`fp.h`, `fenv.h`, `PLStringFuncs.h`: StdCLib and MathLib's definitions
+are `only-for: Executor`, a guest's C headers come with its C library).
+RetroTest also runs the high-level HFS glue (`DirCreate`, `HSetFInfo`,
+`HSetFLock`, `CatMove`) on both processors, on Apple's systems and
+Executor. Many parameters Apple declares `const T *` are plain
+`T *` here (warnings in C). Some Executor signatures differ from Apple's
 (`NewThread` takes `ProcPtr` and `LONGINT`s, not `ThreadEntryUPP`,
-`ThreadStyle` and `ThreadOptions`).
+`ThreadStyle` and `ThreadOptions`); where the C side needs Apple's form
+and Executor's code another, the definition is split (`only-for:
+Executor` / `not-for: Executor`: `TMTask`'s `tmAddr`, `GetFrontProcess`,
+`PBCatSearch`).
 
 ## Documentation
 

@@ -102,7 +102,7 @@ class Site:
     def page(self, title, body):
         w = self.world
         s = w.snap
-        pages = ("", "lowmem", "traps", "entrypoints", "zones", "resources", "placeholders") + \
+        pages = ("", "lowmem", "traps", "entrypoints", "libraries", "zones", "resources", "placeholders") + \
             (("diff",) if self.cand else ())
         nav = "".join(f'<a href="/{p}">{ {"": "summary", "entrypoints": "entry points"}.get(p, p)}</a>'
                       for p in pages)
@@ -514,6 +514,108 @@ class Site:
                 "<th>Named by</th><th>Slot in the real table</th></tr>" + "".join(trs) + "</table></div>")
         return self.page("Entry points", body)
 
+    def libraries(self, q):
+        """Shared libraries' exports: what programs on the disk images import
+        (PowerPC and CFM-68K), what Apple's libraries export, what Executor
+        answers (the definitions: library:, aslm:, raw:; InterfaceLib's
+        exports of the traps Executor implements)."""
+        import libraries as L
+        index = L.load_index()
+        if index is None:
+            return self.page("Libraries", f"<p>No index: run <code>tools/macdecode/libraries.py --scan</code> "
+                                          f"(writes <code>{esc(L.INDEX)}</code>).</p>")
+        rows = L.rows(index)
+        scope = q.get("scope", ["system"])[0]
+        lib = q.get("lib", [""])[0]
+        filtered = "f" in q
+        es = set(q.get("e", [])) if filtered else {"has", "lacks"}
+        us = set(q.get("u", [])) if filtered else {"used", "unused"}
+        text = q.get("q", [""])[0].strip().lower()
+        how_label = {"typed": "typed", "raw": "raw (PowerPC)", "ot": "Open Transport", "trap": "trap's export",
+                     "component": "component call",
+                     "data": "data (sources)", "": "—"}
+
+        def routes(r):
+            h = r["how"]
+            if not h:
+                return ""
+            out = ["PowerPC"]
+            if h in ("typed", "trap", "ot", "data", "component"):
+                out.append("CFM-68K" if h != "ot" else "68k ASLM")
+            if h == "ot" and r["aslm"]:
+                out.append(f"{r['aslm']['set']}/{r['aslm']['name']}")
+            return " · ".join(out)
+
+        in_scope = [r for r in rows if scope == "all" or r["system"]]
+        # the summary, per library
+        per = {}
+        for r in in_scope:
+            t = per.setdefault(r["lib"], {"n": 0, "apple": 0, "has": 0, "used": 0, "lack": 0, "imports": 0})
+            t["n"] += 1
+            t["apple"] += bool(r["apple"])
+            t["has"] += bool(r["how"])
+            used = r["ppc"] + r["cfm68k"]
+            t["used"] += bool(used)
+            t["lack"] += bool(used and not r["how"])
+            t["imports"] += used
+        summary = "".join(
+            f'<tr><td><a href="/libraries?scope={scope}&lib={esc(k)}">{esc(k)}</a></td><td class="mono">{v["apple"] or ""}</td>'
+            f'<td class="mono">{v["has"] or ""}</td><td class="mono">{v["used"]}</td>'
+            f'<td class="mono {"bad" if v["lack"] else "ok"}">{v["lack"]}</td><td class="mono mut">{v["imports"]}</td></tr>'
+            for k, v in sorted(per.items(), key=lambda kv: -kv[1]["imports"]))
+
+        def keep(r):
+            if lib and r["lib"] != lib:
+                return False
+            if ("has" if r["how"] else "lacks") not in es:
+                return False
+            if ("used" if r["ppc"] or r["cfm68k"] else "unused") not in us:
+                return False
+            return not text or text in r["sym"].lower() or text in r["lib"].lower()
+        shown = sorted((r for r in in_scope if keep(r)), key=lambda r: (-(r["ppc"] + r["cfm68k"]), r["lib"], r["sym"]))
+        limit = 3000
+
+        def box(name, val, on, t):
+            return (f'<label style="margin-right:12px"><input type="checkbox" name="{name}" value="{val}"'
+                    f'{" checked" if on else ""}> {esc(t)}</label>')
+        form = ('<form method="get" style="line-height:2"><input type="hidden" name="f" value="1">'
+                f'<input type="hidden" name="scope" value="{esc(scope)}"><input type="hidden" name="lib" value="{esc(lib)}">'
+                "<b>Executor</b> " + box("e", "has", "has" in es, "answers it") + box("e", "lacks", "lacks" in es, "lacks it")
+                + " <b>Programs</b> " + box("u", "used", "used" in us, "import it") + box("u", "unused", "unused" in us, "don't")
+                + f' <input name="q" value="{esc(text)}" placeholder="search symbol or library" size="24">'
+                " <button>Filter</button></form>")
+        presets = " · ".join(f'<a href="/libraries?{qs}">{esc(t)}</a>' for t, qs in (
+            ("system libraries", "scope=system"), ("all libraries", "scope=all"),
+            ("work list: imported, Executor lacks", f"scope={scope}&lib={lib}&f=1&e=lacks&u=used"),
+            ("what Executor answers", f"scope={scope}&lib={lib}&f=1&e=has&u=used&u=unused")))
+        trs = []
+        for r in shown[:limit]:
+            cls = "" if r["how"] else ("v-todo" if r["ppc"] or r["cfm68k"] else "")
+            imgs = ", ".join(r["images"][:4]) + (" …" if len(r["images"]) > 4 else "")
+            trs.append(
+                f'<tr class="{cls}"><td>{esc(r["lib"])}{(" → " + esc(r["alias"])) if r["alias"] else ""}</td>'
+                f'<td class="mono nm">{esc(r["sym"])}</td><td class="mut">{esc(r["class"])}</td>'
+                f'<td>{esc(how_label[r["how"]])}{(" <span class=mut>" + esc(r["def"]) + "</span>") if r["def"] else ""}</td>'
+                f'<td class="mut">{esc(routes(r))}</td><td class="mono mut">{esc(r["impl"] or "")}</td>'
+                f'<td class="mut">{"yes" if r["apple"] else ""}</td>'
+                f'<td class="mono">{r["ppc"] or ""}</td><td class="mono">{r["cfm68k"] or ""}</td>'
+                f'<td class="mut">{esc(imgs)}</td></tr>')
+        body = (
+            f"<p>Presets: {presets}{(' — library <b>' + esc(lib) + '</b> (<a href=/libraries?scope=' + scope + '>all</a>)') if lib else ''}</p>"
+            "<p class='mut'>Imported = the PEF containers on the disk images that import the symbol (PowerPC, "
+            "CFM-68K; libraries.py --scan). Apple = in the export table of Apple's library as MPW ships it. "
+            "Executor = the definitions (src/executor/multiversal/defs: library:, aslm:, raw:) and the traps "
+            "Executor implements, which InterfaceLib exports; editing a YAML file shows on reload. System = Apple's "
+            "libraries (the rest ship with their applications).</p>"
+            "<details open><summary><b>Per library</b></summary><div class='wrap'><table><tr><th>Library</th>"
+            "<th>Apple exports</th><th>Executor</th><th>Imported symbols</th><th>Imported, Executor lacks</th>"
+            "<th>Imports</th></tr>" + summary + "</table></div></details>"
+            + form + f"<p><b>{len(shown)}</b> symbols{(' (first ' + str(limit) + ' shown)') if len(shown) > limit else ''}.</p>"
+            "<div class='wrap'><table><tr><th>Library</th><th>Symbol</th><th>Class</th><th>Executor</th>"
+            "<th>Routes</th><th>Routine</th><th>Apple</th><th>PowerPC imports</th><th>CFM-68K imports</th>"
+            "<th>Images</th></tr>" + "".join(trs) + "</table></div>")
+        return self.page("Libraries", body)
+
     def zones(self, q):
         w = self.world
         if "z" in q:
@@ -666,6 +768,7 @@ def serve(snap_path, defs, learned_path, disk, host, port, compare=None):
             route = {"/": lambda: site.summary(), "/lowmem": lambda: site.lowmem(q),
                      "/traps": lambda: site.traps(q), "/zones": lambda: site.zones(q),
                      "/entrypoints": lambda: site.entry_points(q),
+                     "/libraries": lambda: site.libraries(q),
                      "/needs": lambda: site.entry_points(q),
                      "/resources": lambda: site.resources(q),
                      "/placeholders": lambda: site.placeholders(q),

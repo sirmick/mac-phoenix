@@ -692,9 +692,14 @@ namespace callfromPPC
 
 /* MacPhoenix: calls from CFM-68K code into a library routine (docs/executor/
    CFM68K.md): arguments pushed right to left, each in a 4-byte slot
-   (narrower values widened, at the slot's low end), structures by value
-   padded to 4 bytes, the result in D0. A routine with fixed arguments pops
-   them, Pascal or C; a variadic one leaves them to the caller. */
+   (narrower values widened, at the slot's low end; a double in 8, a float
+   in 4), structures by value padded to 4 bytes, the result in D0 (a
+   float's bits too). A double result goes through a hidden pointer: the
+   caller pushes the address of 8 bytes last, so it comes first; the callee
+   stores the result there and answers the address in D0 (SC's code, seen
+   in its output). A routine with fixed arguments pops them, the hidden
+   pointer with them, Pascal or C; a variadic one leaves them to the
+   caller. */
 namespace callfromCFM68K
 {
     template<typename T>
@@ -728,13 +733,12 @@ namespace callfromCFM68K
             EM_D0 = callfromPPC::detail::wordFromBytes(reinterpret_cast<const uint8_t *>(&ret), sizeof ret)
                     >> (8 * (4 - sizeof ret));
         }
-        else if constexpr(callfromPPC::detail::isFloatingParameter<Ret>)
+        else if constexpr(std::is_same_v<Ret, float>)
         {
-            /* Not seen yet from CFM-68K code; D0:D1 holds the IEEE double. */
-            GUEST<double> g = ret;
-            const uint8_t *b = reinterpret_cast<const uint8_t *>(&g);
-            EM_D0 = callfromPPC::detail::wordFromBytes(b, 4);
-            EM_D1 = callfromPPC::detail::wordFromBytes(b + 4, 4);
+            float f = ret;
+            uint32_t bits;
+            std::memcpy(&bits, &f, sizeof bits);
+            EM_D0 = bits;
         }
         else
         {
@@ -750,7 +754,11 @@ namespace callfromCFM68K
     template<typename Ret, typename... Args>
     struct Invoker<Ret (Args...)>
     {
-        static constexpr uint32_t argBytes() { return (0 + ... + slotSize<Args>()); }
+        static constexpr bool hiddenResult = std::is_same_v<Ret, double>;
+        static constexpr uint32_t argBytes()
+        {
+            return (hiddenResult ? 4 : 0) + (0 + ... + slotSize<Args>());
+        }
 
         template<typename F, size_t... Is>
         static void helper(const F& fptr, std::index_sequence<Is...>)
@@ -759,10 +767,17 @@ namespace callfromCFM68K
             uint32_t offsets[sizeof...(Args) + 1] = {};
             for(size_t i = 1; i <= sizeof...(Args); i++)
                 offsets[i] = offsets[i - 1] + sizes[i - 1];
-            uint32_t base = EM_A7 + 4;
+            uint32_t base = EM_A7 + 4 + (hiddenResult ? 4 : 0);
             std::tuple<Args...> args { readArg<Args>(base + offsets[Is])... };
             if constexpr(std::is_void_v<Ret>)
                 fptr(std::get<Is>(args)...);
+            else if constexpr(hiddenResult)
+            {
+                uint32_t where = *ptr_from_longint<GUEST<uint32_t> *>(EM_A7 + 4);
+                Ret ret = fptr(std::get<Is>(args)...);
+                *ptr_from_longint<GUEST<double> *>(where) = ret;
+                EM_D0 = EM_A0 = where;
+            }
             else
                 setResult<Ret>(fptr(std::get<Is>(args)...));
         }

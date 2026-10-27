@@ -1,5 +1,7 @@
 #pragma once
 
+#include <initializer_list>
+
 #include <CodeFragments.h>
 #include <PEFBinaryFormat.h>
 #include <MixedMode.h>
@@ -90,6 +92,9 @@ extern ConnectionID ROMlib_new_connection(uint32_t n_sects);
    stack restored afterwards), with one stack argument if `arg` is given;
    answers D0. */
 extern uint32_t ROMlib_call_cfm68k(uint32_t tvector, const uint32_t *arg = nullptr);
+/* ... with arguments, pushed right to left in 4-byte slots (a C routine:
+   StdCLib's qsort comparison, atexit and signal handlers). */
+extern uint32_t ROMlib_call_cfm68k(uint32_t tvector, std::initializer_list<uint32_t> args);
 
 /* The term routines of the fragments the current application prepared, last
    prepared first (ExitToShell), and forgetting them when its partition goes

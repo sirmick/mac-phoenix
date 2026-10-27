@@ -84,6 +84,7 @@ struct Provider
     /* OTInstallNotifier's (or the async open's) notifier and context, and
        the A5 world to call it in (the client's when it was installed). */
     uint32_t notifier = 0, context = 0, a5 = 0;
+    bool ppc = false; /* the notifier is PowerPC code (a TV) */
     bool in_notifier = false;
 
     /* Endpoints. */

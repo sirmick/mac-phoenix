@@ -496,9 +496,11 @@ QHdrPtr C_GetVCBQHdr();NOTRAP_FUNCTION(GetVCBQHdr);
 QHdrPtr C_GetDrvQHdr();NOTRAP_FUNCTION(GetDrvQHdr);
 
 
-OSErr GetVInfo(INTEGER drv, StringPtr voln, GUEST<INTEGER> *vrn, GUEST<LONGINT> *freeb);
+OSErr GetVInfo(INTEGER drv, StringPtr voln, GUEST<INTEGER> *vrn, GUEST<LONGINT> *freeb);LIBRARY_FUNCTION(InterfaceLib, GetVInfo, GetVInfo);
 
-OSErr GetVRefNum(INTEGER prn, GUEST<INTEGER> *vrn);
+
+OSErr glue_GetVRefNum(INTEGER prn, GUEST<INTEGER> *vrn);LIBRARY_FUNCTION(InterfaceLib, GetVRefNum, glue_GetVRefNum);
+
 
 OSErr GetVol(StringPtr voln, GUEST<INTEGER> *vrn);NOTRAP_FUNCTION2(GetVol);
 
@@ -791,6 +793,41 @@ typedef FSRef *FSRefPtr;
 
 struct CatPositionRec{GUEST_STRUCT;GUEST<int32_t> initialize;GUEST<int16_t> priv[6];};static_assert(sizeof(CatPositionRec) == 16);void describeStruct(const CatPositionRec&, std::ostream&);
 
+struct CSParam{GUEST_STRUCT;GUEST<QElemPtr> qLink;GUEST<INTEGER> qType;GUEST<INTEGER> ioTrap;GUEST<Ptr> ioCmdAddr;GUEST<ProcPtr> ioCompletion;GUEST<OSErr> ioResult;GUEST<StringPtr> ioNamePtr;GUEST<INTEGER> ioVRefNum;GUEST<FSSpecPtr> ioMatchPtr;GUEST<LONGINT> ioReqMatchCount;GUEST<LONGINT> ioActMatchCount;GUEST<LONGINT> ioSearchBits;GUEST<CInfoPBPtr> ioSearchInfo1;GUEST<CInfoPBPtr> ioSearchInfo2;GUEST<LONGINT> ioSearchTime;CatPositionRec ioCatPosition;GUEST<Ptr> ioOptBuffer;GUEST<LONGINT> ioOptBufSize;};static_assert(sizeof(CSParam) == 76);void describeStruct(const CSParam&, std::ostream&);
+
+typedef CSParam *CSParamPtr;
+
+enum {fsSBPartialName = 1,
+fsSBFullName = 2,
+fsSBFlAttrib = 4,
+fsSBFlFndrInfo = 8,
+fsSBFlLgLen = 32,
+fsSBFlPyLen = 64,
+fsSBFlRLgLen = 128,
+fsSBFlRPyLen = 256,
+fsSBFlCrDat = 512,
+fsSBFlMdDat = 1024,
+fsSBFlBkDat = 2048,
+fsSBFlXFndrInfo = 4096,
+fsSBFlParID = 8192,
+fsSBNegate = 16384,
+fsSBDrUsrWds = 8,
+fsSBDrNmFls = 16,
+fsSBDrCrDat = 512,
+fsSBDrMdDat = 1024,
+fsSBDrBkDat = 2048,
+fsSBDrFndrInfo = 4096,
+fsSBDrParID = 8192,
+fsSBNodeID = 32768,
+fsSBAttributeModDate = 65536,
+fsSBAccessDate = 131072,
+fsSBPermissions = 262144,
+};
+
+enum {fsRtParID = 1,
+fsRtDirID = 2,
+};
+
 struct FSCatalogInfo{GUEST_STRUCT;GUEST<uint16_t> nodeFlags;GUEST<FSVolumeRefNum> volume;GUEST<uint32_t> parentDirID;GUEST<uint32_t> nodeID;uint8_t sharingFlags;uint8_t userPrivileges;uint8_t reserved1;uint8_t reserved2;UTCDateTime createDate;UTCDateTime contentModDate;UTCDateTime attributeModDate;UTCDateTime accessDate;UTCDateTime backupDate;GUEST<uint32_t> permissions[4];uint8_t finderInfo[16];uint8_t extFinderInfo[16];GUEST<uint64_t> dataLogicalSize;GUEST<uint64_t> dataPhysicalSize;GUEST<uint64_t> rsrcLogicalSize;GUEST<uint64_t> rsrcPhysicalSize;GUEST<uint32_t> valence;GUEST<TextEncoding> textEncodingHint;};static_assert(sizeof(FSCatalogInfo) == 144);void describeStruct(const FSCatalogInfo&, std::ostream&);
 
 typedef FSCatalogInfo *FSCatalogInfoPtr;
@@ -1016,5 +1053,102 @@ OSErr C_FSGetDataForkName(HFSUniStr255Ptr dataForkName);PASCAL_SUBTRAP(FSGetData
 
 OSErr C_FSGetResourceForkName(HFSUniStr255Ptr resourceForkName);PASCAL_SUBTRAP(FSGetResourceForkName, 0xAA52, 0x0019, HighLevelFSDispatch);
 
+
+OSErr glue_DirCreate(INTEGER vRefNum, LONGINT parentDirID, ConstStringPtr name, GUEST<LONGINT> *createdDirID);LIBRARY_FUNCTION(InterfaceLib, DirCreate, glue_DirCreate);
+
+
+OSErr glue_HSetFInfo(INTEGER vRefNum, LONGINT dirID, ConstStringPtr fileName, const FInfo *fndrInfo);LIBRARY_FUNCTION(InterfaceLib, HSetFInfo, glue_HSetFInfo);
+
+
+OSErr glue_HSetFLock(INTEGER vRefNum, LONGINT dirID, ConstStringPtr fileName);LIBRARY_FUNCTION(InterfaceLib, HSetFLock, glue_HSetFLock);
+
+
+OSErr glue_HRstFLock(INTEGER vRefNum, LONGINT dirID, ConstStringPtr fileName);LIBRARY_FUNCTION(InterfaceLib, HRstFLock, glue_HRstFLock);
+
+
+OSErr glue_CatMove(INTEGER vRefNum, LONGINT dirID, ConstStringPtr oldName, LONGINT newDirID, ConstStringPtr newName);LIBRARY_FUNCTION(InterfaceLib, CatMove, glue_CatMove);
+
+
+OSErr glue_PBHOpenRFDenySync(HParmBlkPtr pb);LIBRARY_FUNCTION(InterfaceLib, PBHOpenRFDenySync, glue_PBHOpenRFDenySync);
+
+
+OSErr glue_PBHOpenRFDenyAsync(HParmBlkPtr pb);LIBRARY_FUNCTION(InterfaceLib, PBHOpenRFDenyAsync, glue_PBHOpenRFDenyAsync);
+
+
+enum {kFSCatInfoNone = 0,
+kFSCatInfoTextEncoding = 1,
+kFSCatInfoNodeFlags = 2,
+kFSCatInfoVolume = 4,
+kFSCatInfoParentDirID = 8,
+kFSCatInfoNodeID = 16,
+kFSCatInfoCreateDate = 32,
+kFSCatInfoContentMod = 64,
+kFSCatInfoAttrMod = 128,
+kFSCatInfoAccessDate = 256,
+kFSCatInfoBackupDate = 512,
+kFSCatInfoPermissions = 1024,
+kFSCatInfoFinderInfo = 2048,
+kFSCatInfoFinderXInfo = 4096,
+kFSCatInfoValence = 8192,
+kFSCatInfoDataSizes = 16384,
+kFSCatInfoRsrcSizes = 32768,
+kFSCatInfoSharingFlags = 65536,
+kFSCatInfoUserPrivs = 131072,
+kFSCatInfoAllDates = 992,
+kFSCatInfoGettableInfo = 262143,
+kFSCatInfoSettableInfo = 8163,
+};
+
+enum {kFSNodeLockedBit = 0,
+kFSNodeLockedMask = 1,
+kFSNodeResOpenBit = 2,
+kFSNodeResOpenMask = 4,
+kFSNodeDataOpenBit = 3,
+kFSNodeDataOpenMask = 8,
+kFSNodeIsDirectoryBit = 4,
+kFSNodeIsDirectoryMask = 16,
+kFSNodeCopyProtectBit = 6,
+kFSNodeCopyProtectMask = 64,
+kFSNodeForkOpenBit = 7,
+kFSNodeForkOpenMask = 128,
+kFSNodeInSharedBit = 2,
+kFSNodeInSharedMask = 4,
+kFSNodeIsMountedBit = 3,
+kFSNodeIsMountedMask = 8,
+kFSNodeIsSharePointBit = 5,
+kFSNodeIsSharePointMask = 32,
+};
+
+enum {kFSIterateFlat = 0,
+kFSIterateSubtree = 1,
+kFSIterateDelete = 2,
+};
+
+enum {kFSAllocDefaultFlags = 0,
+kFSAllocAllOrNothingMask = 1,
+kFSAllocContiguousMask = 2,
+kFSAllocNoRoundUpMask = 4,
+};
+
+enum {kFSVolInfoNone = 0,
+kFSVolInfoCreateDate = 1,
+kFSVolInfoModDate = 2,
+kFSVolInfoBackupDate = 4,
+kFSVolInfoCheckedDate = 8,
+kFSVolInfoFileCount = 16,
+kFSVolInfoDirCount = 32,
+kFSVolInfoSizes = 64,
+kFSVolInfoBlocks = 128,
+kFSVolInfoNextAlloc = 256,
+kFSVolInfoRsrcClump = 512,
+kFSVolInfoDataClump = 1024,
+kFSVolInfoNextID = 2048,
+kFSVolInfoFinderInfo = 4096,
+kFSVolInfoFlags = 8192,
+kFSVolInfoFSInfo = 16384,
+kFSVolInfoDriveInfo = 32768,
+kFSVolInfoGettableInfo = 65535,
+kFSVolInfoSettableInfo = 12292,
+};
 
 } /* namespace Executor */

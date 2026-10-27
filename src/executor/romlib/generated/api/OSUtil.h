@@ -7,7 +7,7 @@
  *     MacTypes.h       Byte, INTEGER, LONGINT, Boolean, SignedByte,         *
  *                      QElemPtr, OSErr, Handle, ConstStringPtr,             *
  *                      StringPtr, ULONGINT, QHdrPtr, Str255,                *
- *                      ConstStr255Param                                     *
+ *                      ConstStr255Param, Ptr                                *
  *     VRetraceMgr.h    VBLTask                                              *
  *     FileMgr.h        ParamBlockRec, DrvQEl, VCB                           *
  *     OSEvent.h        EvQEl                                                *
@@ -290,9 +290,11 @@ OSErr PtrAndHand(const void *p, Handle h, LONGINT s1);REGISTER_TRAP2(PtrAndHand,
 
 LONGINT ROMlib_RelString(const uint8_t *s1, const uint8_t *s2, Boolean casesig, Boolean diacsig, LONGINT d0);
 
-INTEGER RelString(ConstStringPtr s1, ConstStringPtr s2, Boolean casesig, Boolean diacsig);
+INTEGER RelString(ConstStringPtr s1, ConstStringPtr s2, Boolean casesig, Boolean diacsig);LIBRARY_FUNCTION(InterfaceLib, RelString, RelString);
 
-Boolean EqualString(ConstStringPtr s1, ConstStringPtr s2, Boolean casesig, Boolean diacsig);
+
+Boolean EqualString(ConstStringPtr s1, ConstStringPtr s2, Boolean casesig, Boolean diacsig);LIBRARY_FUNCTION(InterfaceLib, EqualString, EqualString);
+
 
 void ROMlib_UprString(StringPtr s, Boolean diac, INTEGER len);
 
@@ -396,16 +398,46 @@ void C_FlushCodeCache();PASCAL_TRAP(FlushCodeCache, 0xA0BD);
 void HWPriv(LONGINT d0, LONGINT a0);REGISTER_TRAP2(HWPriv, 0xA198, void(D0, A0));
 
 
-LONGINT SetCurrentA5();
+LONGINT SetCurrentA5();LIBRARY_FUNCTION(InterfaceLib, SetCurrentA5, SetCurrentA5);
 
-LONGINT SetA5(LONGINT a5);
 
-void c2pstrcpy(Str255 dst, const char *src);
+LONGINT SetA5(LONGINT a5);LIBRARY_FUNCTION(InterfaceLib, SetA5, SetA5);
 
-void p2cstrcpy(char *dst, ConstStr255Param src);
 
-void CopyCStringToPascal(const char *src, Str255 dst);
+void glue_c2pstrcpy(Str255 dst, const char *src);LIBRARY_FUNCTION(InterfaceLib, c2pstrcpy, glue_c2pstrcpy);
 
-void CopyPascalStringToC(ConstStr255Param src, char *dst);
+
+void glue_p2cstrcpy(char *dst, ConstStr255Param src);LIBRARY_FUNCTION(InterfaceLib, p2cstrcpy, glue_p2cstrcpy);
+
+
+void glue_CopyCStringToPascal(const char *src, Str255 dst);LIBRARY_FUNCTION(InterfaceLib, CopyCStringToPascal, glue_CopyCStringToPascal);
+
+
+void glue_CopyPascalStringToC(ConstStr255Param src, char *dst);LIBRARY_FUNCTION(InterfaceLib, CopyPascalStringToC, glue_CopyPascalStringToC);
+
+
+StringPtr glue_c2pstr(char *s);LIBRARY_FUNCTION(InterfaceLib, c2pstr, glue_c2pstr);
+
+
+char * glue_p2cstr(StringPtr s);LIBRARY_FUNCTION(InterfaceLib, p2cstr, glue_p2cstr);
+
+
+StringPtr glue_c2pstr(char *s);LIBRARY_FUNCTION(InterfaceLib, C2PStr, glue_c2pstr);
+
+
+char * glue_p2cstr(StringPtr s);LIBRARY_FUNCTION(InterfaceLib, P2CStr, glue_p2cstr);
+
+
+void glue_ReadLocation(Ptr loc);LIBRARY_FUNCTION(InterfaceLib, ReadLocation, glue_ReadLocation);
+
+
+void glue_WriteLocation(Ptr loc);LIBRARY_FUNCTION(InterfaceLib, WriteLocation, glue_WriteLocation);
+
+
+void glue_FlushInstructionCache();LIBRARY_FUNCTION(InterfaceLib, FlushInstructionCache, glue_FlushInstructionCache);
+
+
+void glue_FlushDataCache();LIBRARY_FUNCTION(InterfaceLib, FlushDataCache, glue_FlushDataCache);
+
 
 } /* namespace Executor */

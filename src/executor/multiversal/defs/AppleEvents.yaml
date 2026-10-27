@@ -990,7 +990,7 @@
       - name: type_out
         type: DescType*
       - name: data
-        type: Ptr
+        type: void*
       - name: max_size
         type: Size
       - name: size_out
@@ -1305,7 +1305,7 @@
       - name: data_type
         type: DescType
       - name: data
-        type: Ptr
+        type: const void*
       - name: data_size
         type: Size
       - name: result_type
@@ -1603,7 +1603,7 @@
     return: OSErr
     args:
       - name: list_elt_prefix
-        type: Ptr
+        type: const void*
       - name: list_elt_prefix_size
         type: Size
       - name: is_record_p
@@ -1874,3 +1874,125 @@
     dispatcher: Pack8
     selector: 0x0E35
     executor: C_
+
+# ####
+
+# InterfaceLib exports with no trap (Executor's glue, cfm68k_glue.cpp):
+# for PowerPC and CFM-68K code. Only for Executor until the C side has
+# 68k glue for them.
+
+- only-for: Executor
+  function:
+    name: AEObjectInit
+    return: "OSErr"
+    library: InterfaceLib
+    executor: glue_AEObjectInit
+
+# ####
+
+- only-for: Executor
+  function:
+    name: CreateOffsetDescriptor
+    return: "OSErr"
+    args:
+      - name: "offset"
+        type: "LONGINT"
+      - name: "result"
+        type: "AEDesc*"
+    library: InterfaceLib
+    executor: glue_CreateOffsetDescriptor
+
+# ####
+
+- only-for: Executor
+  function:
+    name: CreateCompDescriptor
+    return: "OSErr"
+    args:
+      - name: "op"
+        type: "DescType"
+      - name: "operand1"
+        type: "AEDesc*"
+      - name: "operand2"
+        type: "AEDesc*"
+      - name: "disposeInputs"
+        type: "Boolean"
+      - name: "result"
+        type: "AEDesc*"
+    library: InterfaceLib
+    executor: glue_CreateCompDescriptor
+
+# ####
+
+- only-for: Executor
+  function:
+    name: CreateLogicalDescriptor
+    return: "OSErr"
+    args:
+      - name: "terms"
+        type: "AEDesc*"
+      - name: "op"
+        type: "DescType"
+      - name: "disposeInputs"
+        type: "Boolean"
+      - name: "result"
+        type: "AEDesc*"
+    library: InterfaceLib
+    executor: glue_CreateLogicalDescriptor
+
+# ####
+
+- only-for: Executor
+  function:
+    name: CreateObjSpecifier
+    return: "OSErr"
+    args:
+      - name: "desiredClass"
+        type: "DescType"
+      - name: "container"
+        type: "AEDesc*"
+      - name: "keyForm"
+        type: "DescType"
+      - name: "keyData"
+        type: "AEDesc*"
+      - name: "disposeInputs"
+        type: "Boolean"
+      - name: "result"
+        type: "AEDesc*"
+    library: InterfaceLib
+    executor: glue_CreateObjSpecifier
+
+# ####
+
+- only-for: Executor
+  function:
+    name: CreateRangeDescriptor
+    return: "OSErr"
+    args:
+      - name: "start"
+        type: "AEDesc*"
+      - name: "stop"
+        type: "AEDesc*"
+      - name: "disposeInputs"
+        type: "Boolean"
+      - name: "result"
+        type: "AEDesc*"
+    library: InterfaceLib
+    executor: glue_CreateRangeDescriptor
+
+# ####
+
+# Older names (AEDataModel.h), the application parameters, and the
+# Finder's restart and shut-down events (AERegistry.h)
+- enum:
+    values:
+      - name: typeShortInteger
+        value: typeSInt16
+      - name: typeLongInteger
+        value: typeSInt32
+      - name: typeAppParameters
+        value: "'appa'"
+      - name: kAERestart
+        value: "'rest'"
+      - name: kAEShutDown
+        value: "'shut'"

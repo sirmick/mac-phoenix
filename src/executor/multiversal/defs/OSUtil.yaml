@@ -565,6 +565,8 @@
         type: Boolean
       - name: diacsig
         type: Boolean
+    library: InterfaceLib
+    executor: RelString
 
 # ####
 
@@ -580,6 +582,8 @@
         type: Boolean
       - name: diacsig
         type: Boolean
+    library: InterfaceLib
+    executor: EqualString
 
 # ####
 
@@ -1015,6 +1019,8 @@
     return: LONGINT
     returnreg: D0
     m68k-inline: [0x200D, 0x2A78, 0x0904]
+    library: InterfaceLib
+    executor: SetCurrentA5
 
 # ####
 
@@ -1027,6 +1033,8 @@
         type: LONGINT
         register: D0
     m68k-inline: [0xC18D]
+    library: InterfaceLib
+    executor: SetA5
 
 # ####
 
@@ -1038,6 +1046,8 @@
       - name: src
         type: const char*
     carbon: only
+    library: InterfaceLib
+    executor: glue_c2pstrcpy
 
 # ####
 
@@ -1049,6 +1059,8 @@
       - name: src
         type: ConstStr255Param
     carbon: only
+    library: InterfaceLib
+    executor: glue_p2cstrcpy
 
 # ####
 
@@ -1060,6 +1072,8 @@
       - name: dst
         type: Str255
     carbon: only
+    library: InterfaceLib
+    executor: glue_CopyCStringToPascal
 
 # ####
 
@@ -1071,3 +1085,95 @@
       - name: dst
         type: char *
     carbon: only
+    library: InterfaceLib
+    executor: glue_CopyPascalStringToC
+
+# ####
+
+# InterfaceLib exports with no trap (Executor's glue, cfm68k_glue.cpp):
+# for PowerPC and CFM-68K code. Only for Executor until the C side has
+# 68k glue for them.
+
+- only-for: Executor
+  function:
+    name: c2pstr
+    return: "StringPtr"
+    args:
+      - name: "s"
+        type: "char*"
+    library: InterfaceLib
+    executor: glue_c2pstr
+
+# ####
+
+- only-for: Executor
+  function:
+    name: p2cstr
+    return: "char *"
+    args:
+      - name: "s"
+        type: "StringPtr"
+    library: InterfaceLib
+    executor: glue_p2cstr
+
+# ####
+
+- only-for: Executor
+  function:
+    name: C2PStr
+    return: "StringPtr"
+    args:
+      - name: "s"
+        type: "char*"
+    library: InterfaceLib
+    executor: glue_c2pstr
+
+# ####
+
+- only-for: Executor
+  function:
+    name: P2CStr
+    return: "char *"
+    args:
+      - name: "s"
+        type: "StringPtr"
+    library: InterfaceLib
+    executor: glue_p2cstr
+
+# ####
+
+- only-for: Executor
+  function:
+    name: ReadLocation
+    args:
+      - name: "loc"
+        type: "Ptr"
+    library: InterfaceLib
+    executor: glue_ReadLocation
+
+# ####
+
+- only-for: Executor
+  function:
+    name: WriteLocation
+    args:
+      - name: "loc"
+        type: "Ptr"
+    library: InterfaceLib
+    executor: glue_WriteLocation
+
+# ####
+
+- only-for: Executor
+  function:
+    name: FlushInstructionCache
+    library: InterfaceLib
+    executor: glue_FlushInstructionCache
+
+# ####
+
+- only-for: Executor
+  function:
+    name: FlushDataCache
+    library: InterfaceLib
+    executor: glue_FlushDataCache

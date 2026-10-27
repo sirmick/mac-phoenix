@@ -4,9 +4,9 @@
  *                                 ==========                                *
  *                                                                           *
  * Needs:                                                                    *
+ *     MacTypes.h       UInt32, OSErr, Boolean, Ptr, OSType, Handle,         *
+ *                      Rect, INTEGER, StringPtr                             *
  *     AppleEvents.h    AppleEvent                                           *
- *     MacTypes.h       OSErr, Boolean, Ptr, OSType, Handle, Rect,           *
- *                      INTEGER, StringPtr                                   *
  *     ProcessMgr.h     ProcessSerialNumber                                  *
  *     CQuickDraw.h     GDHandle                                             *
  *     Components.h     Component, ComponentInstance                         *
@@ -22,8 +22,8 @@
 #include <cassert>
 #include <iosfwd>
 #include <base/lowglobals.h>
-#include "AppleEvents.h"
 #include "ExMacTypes.h"
+#include "AppleEvents.h"
 #include "ProcessMgr.h"
 #include "CQuickDraw.h"
 #include "Components.h"
@@ -35,6 +35,8 @@
 
 
 namespace Executor {
+
+typedef UInt32 DisplayIDType;
 
 using DMNotificationUPP = UPP<void(GUEST<AppleEvent> *theEvent)>;
 
@@ -62,16 +64,16 @@ GDHandle C_DMGetFirstScreenDevice(Boolean activeOnly);PASCAL_SUBTRAP(DMGetFirstS
 GDHandle C_DMGetNextScreenDevice(GDHandle theDevice, Boolean activeOnly);PASCAL_SUBTRAP(DMGetNextScreenDevice, 0xABEB, 0x0001, DisplayDispatch);
 
 
-OSErr C_DMGetDisplayIDByGDevice(GDHandle displayDevice, GUEST<uint32_t> *displayID, Boolean failToMain);PASCAL_SUBTRAP(DMGetDisplayIDByGDevice, 0xABEB, 0x051F, DisplayDispatch);
+OSErr C_DMGetDisplayIDByGDevice(GDHandle displayDevice, GUEST<DisplayIDType> *displayID, Boolean failToMain);PASCAL_SUBTRAP(DMGetDisplayIDByGDevice, 0xABEB, 0x051F, DisplayDispatch);
 
 
-OSErr C_DMGetGDeviceByDisplayID(uint32_t displayID, GUEST<GDHandle> *displayDevice, Boolean failToMain);PASCAL_SUBTRAP(DMGetGDeviceByDisplayID, 0xABEB, 0x0520, DisplayDispatch);
+OSErr C_DMGetGDeviceByDisplayID(DisplayIDType displayID, GUEST<GDHandle> *displayDevice, Boolean failToMain);PASCAL_SUBTRAP(DMGetGDeviceByDisplayID, 0xABEB, 0x0520, DisplayDispatch);
 
 
 using DMDisplayModeListIteratorUPP = UPP<void(void *userData, uint32_t itemIndex, Ptr displaymodeInfo)>;
 
 
-OSErr C_DMNewDisplayModeList(uint32_t displayID, uint32_t modeListFlags, uint32_t reserved, GUEST<uint32_t> *thePanelCount, GUEST<Ptr> *thePanelList);PASCAL_SUBTRAP(DMNewDisplayModeList, 0xABEB, 0x0A36, DisplayDispatch);
+OSErr C_DMNewDisplayModeList(DisplayIDType displayID, uint32_t modeListFlags, uint32_t reserved, GUEST<uint32_t> *thePanelCount, GUEST<Ptr> *thePanelList);PASCAL_SUBTRAP(DMNewDisplayModeList, 0xABEB, 0x0A36, DisplayDispatch);
 
 
 OSErr C_DMGetIndexedDisplayModeFromList(Ptr panelList, uint32_t itemIndex, uint32_t reserved, DMDisplayModeListIteratorUPP listIterator, void *userData);PASCAL_SUBTRAP(DMGetIndexedDisplayModeFromList, 0xABEB, 0x0A37, DisplayDispatch);
@@ -81,17 +83,17 @@ OSErr C_DMGetIndexedDisplayModeFromList(Ptr panelList, uint32_t itemIndex, uint3
 OSErr C_DMNewAVIDByPortComponent(Component thePortComponent, OSType portKind, uint32_t reserved, GUEST<uint32_t> *newID);PASCAL_SUBTRAP(DMNewAVIDByPortComponent, 0xABEB, 0x082E, DisplayDispatch);
 
 
-OSErr C_DMGetPortComponentByAVID(uint32_t displayID, GUEST<Component> *portComponent, Ptr portDesc, GUEST<OSType> *portKind);PASCAL_SUBTRAP(DMGetPortComponentByAVID, 0xABEB, 0x082F, DisplayDispatch);
+OSErr C_DMGetPortComponentByAVID(DisplayIDType displayID, GUEST<Component> *portComponent, Ptr portDesc, GUEST<OSType> *portKind);PASCAL_SUBTRAP(DMGetPortComponentByAVID, 0xABEB, 0x082F, DisplayDispatch);
 
 
-OSErr C_DMSendDependentNotification(OSType notifyType, OSType notifyClass, uint32_t displayID, ComponentInstance notifyComponent);PASCAL_SUBTRAP(DMSendDependentNotification, 0xABEB, 0x0830, DisplayDispatch);
+OSErr C_DMSendDependentNotification(OSType notifyType, OSType notifyClass, DisplayIDType displayID, ComponentInstance notifyComponent);PASCAL_SUBTRAP(DMSendDependentNotification, 0xABEB, 0x0830, DisplayDispatch);
 
 
 // MacPhoenix: as DMNewAVIDByPortComponent, for a display device component: kDMGenErr.
 OSErr C_DMNewAVIDByDeviceComponent(Component theDeviceComponent, OSType portKind, uint32_t reserved, GUEST<uint32_t> *newID);PASCAL_SUBTRAP(DMNewAVIDByDeviceComponent, 0xABEB, 0x0833, DisplayDispatch);
 
 
-OSErr C_DMGetDeviceComponentByAVID(uint32_t displayID, GUEST<Component> *theDeviceComponent, Ptr theDesc, GUEST<OSType> *theKind);PASCAL_SUBTRAP(DMGetDeviceComponentByAVID, 0xABEB, 0x0835, DisplayDispatch);
+OSErr C_DMGetDeviceComponentByAVID(DisplayIDType displayID, GUEST<Component> *theDeviceComponent, Ptr theDesc, GUEST<OSType> *theKind);PASCAL_SUBTRAP(DMGetDeviceComponentByAVID, 0xABEB, 0x0835, DisplayDispatch);
 
 
 OSErr C_DMGetDeviceAVIDByPortAVID(uint32_t portAVID, GUEST<uint32_t> *deviceAVID);PASCAL_SUBTRAP(DMGetDeviceAVIDByPortAVID, 0xABEB, 0x043B, DisplayDispatch);

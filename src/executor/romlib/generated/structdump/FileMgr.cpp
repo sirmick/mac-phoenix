@@ -518,6 +518,30 @@ void describeStruct(const CatPositionRec& x, std::ostream& os)
     os << "}";
 }
 
+void describeStruct(const CSParam& x, std::ostream& os)
+{
+    os << "CSParam{";
+    logging::logField(os, "qLink", x.qLink);
+    logging::logField(os, "qType", x.qType);
+    logging::logField(os, "ioTrap", x.ioTrap);
+    logging::logField(os, "ioCmdAddr", x.ioCmdAddr);
+    logging::logField(os, "ioCompletion", x.ioCompletion);
+    logging::logField(os, "ioResult", x.ioResult);
+    logging::logField(os, "ioNamePtr", x.ioNamePtr);
+    logging::logField(os, "ioVRefNum", x.ioVRefNum);
+    logging::logField(os, "ioMatchPtr", x.ioMatchPtr);
+    logging::logField(os, "ioReqMatchCount", x.ioReqMatchCount);
+    logging::logField(os, "ioActMatchCount", x.ioActMatchCount);
+    logging::logField(os, "ioSearchBits", x.ioSearchBits);
+    logging::logField(os, "ioSearchInfo1", x.ioSearchInfo1);
+    logging::logField(os, "ioSearchInfo2", x.ioSearchInfo2);
+    logging::logField(os, "ioSearchTime", x.ioSearchTime);
+    logging::logField(os, "ioCatPosition", x.ioCatPosition);
+    logging::logField(os, "ioOptBuffer", x.ioOptBuffer);
+    logging::logField(os, "ioOptBufSize", x.ioOptBufSize);
+    os << "}";
+}
+
 void describeStruct(const FSCatalogInfo& x, std::ostream& os)
 {
     os << "FSCatalogInfo{";
@@ -838,6 +862,10 @@ void dump_CatPositionRec(std::ostream& os, const void* p)
 {
     describeStruct(*(const CatPositionRec*)p, os);
 }
+void dump_CSParam(std::ostream& os, const void* p)
+{
+    describeStruct(*(const CSParam*)p, os);
+}
 void dump_FSCatalogInfo(std::ostream& os, const void* p)
 {
     describeStruct(*(const FSCatalogInfo*)p, os);
@@ -907,6 +935,7 @@ void registerStructDumps_FileMgr()
         { "HFSUniStr255", sizeof(HFSUniStr255), &dump_HFSUniStr255 },
         { "FSRef", sizeof(FSRef), &dump_FSRef },
         { "CatPositionRec", sizeof(CatPositionRec), &dump_CatPositionRec },
+        { "CSParam", sizeof(CSParam), &dump_CSParam },
         { "FSCatalogInfo", sizeof(FSCatalogInfo), &dump_FSCatalogInfo },
         { "FSRefParam", sizeof(FSRefParam), &dump_FSRefParam },
         { "FSSearchParams", sizeof(FSSearchParams), &dump_FSSearchParams },

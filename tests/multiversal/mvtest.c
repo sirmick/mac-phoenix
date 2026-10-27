@@ -20,6 +20,8 @@
 /* Universal Interfaces names the generator writes for these definitions */
 #include <Aliases.h>
 #include <Balloons.h>
+#include <Components.h>
+#include <OSA.h>
 #include <Displays.h>
 #include <Folders.h>
 #include <Lists.h>
@@ -75,6 +77,45 @@ static void dialogs(DialogPtr d)
     (void)GetFrontWindowModalClass(&modalClass);
 }
 
+static void components(void)
+{
+    ComponentDescription cd = { 'osa ', 0, 0, 0, 0 };
+    Component c = FindNextComponent(NULL, &cd);
+    ComponentInstance ci;
+
+    if(c && CountComponents(&cd) > 0 && OpenAComponent(c, &ci) == noErr)
+    {
+        AEDesc text;
+        OSAID id = kOSANullScript;
+        if(AECreateDesc('TEXT', "1 + 1", 5, &text) == noErr)
+        {
+            if(OSACompile(ci, &text, kOSAModeNull, &id) == noErr)
+                OSADispose(ci, id);
+            AEDisposeDesc(&text);
+        }
+        CloseComponent(ci);
+    }
+}
+
+static void sound_output(void)
+{
+    ComponentDescription cd = { kSoundOutputDeviceType, 0, 0, 0, 0 };
+    Component c = FindNextComponent(NULL, &cd);
+    ComponentInstance ci;
+
+    if(c && OpenAComponent(c, &ci) == noErr)
+    {
+        uint32_t volume;
+        SoundInfoList rates;
+
+        if(SoundComponentGetInfo(ci, NULL, siHardwareVolume, &volume) == noErr)
+            (void)SoundComponentSetInfo(ci, NULL, siHardwareVolume, (void *)volume);
+        if(SoundComponentGetInfo(ci, NULL, siSampleRateAvailable, &rates) == noErr)
+            DisposeHandle(rates.infoHandle);
+        CloseComponent(ci);
+    }
+}
+
 static void misc(void)
 {
     Rect r;
@@ -117,6 +158,8 @@ int main(void)
     displays();
     files();
     dialogs((DialogPtr)w);
+    components();
+    sound_output();
     misc();
 
     while (!Button())

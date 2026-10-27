@@ -12,6 +12,7 @@ class PowerCore;
 
 namespace Executor
 {
+namespace ot { class Call; }
 
 namespace traps
 {
@@ -228,15 +229,123 @@ private:
     const Trap& trap;
 };
 
+/* MacPhoenix: a routine a shared library exports (docs/executor/
+   LIBRARIES.md, `library:` in the definitions): PowerPC and CFM-68K code
+   import it by name; no trap and no 68k UPP. */
+template<typename F, F* fptr>
+class LibraryFunction {};
+
+template<typename Ret, typename... Args, Ret (*fptr)(Args...)>
+class LibraryFunction<Ret (Args...), fptr> : public Entrypoint
+{
+public:
+    using Entrypoint::Entrypoint;
+    virtual void init() override;
+};
+
+/* ... and one that reads its own arguments from the PowerPC registers
+   (variadic, or decoded by hand: `raw: true`). Its library registers it
+   itself; the definitions only say it is there, and builtinlibs checks
+   that the two agree. */
+class LibraryRawExport : public internal::DeferredInit
+{
+public:
+    LibraryRawExport(const char *name, const char *library)
+        : name(name), library(library) {}
+    virtual void init() override;
+private:
+    const char *name;
+    const char *library;
+};
+
+/* ... and one of Open Transport's (`aslm:` in the definitions): 68k code
+   binds it through the Shared Library Manager by its function set and that
+   set's name for it, PowerPC code imports it from `library`. The routine
+   reads its arguments through ot::Call (opentransport/ot_internal.h); sig
+   has a letter per argument ('L' long, 'W' word, 'B' Boolean), ret the
+   result's ('V' none). ot.cpp registers it both ways. */
+class OTFunction : public internal::DeferredInit
+{
+public:
+    OTFunction(const char *name, const char *library, const char *set, const char *setName,
+               bool pascal, const char *sig, char ret, uint32_t (*impl)(const ot::Call &))
+        : name(name), library(library), set(set), setName(setName), pascal(pascal),
+          sig(sig), ret(ret), impl(impl) {}
+    virtual void init() override;
+
+    const char *name, *library, *set, *setName;
+    bool pascal;
+    const char *sig;
+    char ret;
+    uint32_t (*impl)(const ot::Call &);
+};
+
+/* ... and a call into a component a library exports (AppleScriptLib's OSA
+   routines: `selector-location: Component` dispatchers in the
+   definitions): the CFM-68K and PowerPC entries push the call's
+   parameters (sizes: '2' or '4' per parameter after the instance) and make
+   it through _ComponentDispatch (cfm68k_glue.cpp). */
+class ComponentCallExport : public internal::DeferredInit
+{
+public:
+    ComponentCallExport(const char *name, const char *library, uint16_t what, const char *sizes)
+        : name(name), library(library), what(what), sizes(sizes) {}
+    virtual void init() override;
+
+    const char *name, *library;
+    uint16_t what;
+    const char *sizes;
+};
+
+/* ... and a call one of Executor's own components answers (a
+   `selector-location: Component` dispatcher's function with `executor:`):
+   registered with the component type's dispatch (component.cpp) by
+   selector, its arguments read from the call's ComponentParameters. */
+template<typename F, F* fptr>
+class ComponentFunction {};
+
+template<typename Ret, typename... Args, Ret (*fptr)(Args...)>
+class ComponentFunction<Ret (Args...), fptr> : public internal::DeferredInit
+{
+public:
+    ComponentFunction(const char *name, const char *component, int16_t what)
+        : name(name), component(component), what(what) {}
+    virtual void init() override;
+
+    const char *name, *component;
+    int16_t what;
+};
+
 #define EXTERN_FUNCTION_WRAPPER(NAME, FPTR, INIT, ...) \
     extern Executor::traps::__VA_ARGS__ NAME
 #define EXTERN_DISPATCHER_TRAP(NAME, TRAP, SELECTOR) \
     extern Executor::traps::DispatcherTrap<Executor::traps::selectors::SELECTOR> NAME
+#define EXTERN_LIBRARY_FUNCTION(NAME, INIT, ...) \
+    extern Executor::traps::__VA_ARGS__ NAME
+#define EXTERN_COMPONENT_CALL(NAME, INIT) \
+    extern Executor::traps::ComponentCallExport NAME
+#define EXTERN_COMPONENT_FUNCTION(NAME, INIT, ...) \
+    extern Executor::traps::__VA_ARGS__ NAME
+#define EXTERN_OT_FUNCTION(NAME, INIT) \
+    extern Executor::traps::OTFunction NAME
+#define EXTERN_LIBRARY_RAW(NAME, INIT) \
+    extern Executor::traps::LibraryRawExport NAME
 #define DEFINE_FUNCTION_WRAPPER(NAME, FPTR, INIT, ...) \
     Executor::traps::__VA_ARGS__ NAME INIT;   \
     template class Executor::traps::__VA_ARGS__;
 #define DEFINE_DISPATCHER_TRAP(NAME, TRAP, SELECTOR) \
     Executor::traps::DispatcherTrap<Executor::traps::selectors::SELECTOR> NAME { #NAME, TRAP }
+/* No explicit instantiation: two names (memcpy, _memcpy) can share one. */
+#define DEFINE_LIBRARY_FUNCTION(NAME, INIT, ...) \
+    Executor::traps::__VA_ARGS__ NAME INIT
+#define DEFINE_COMPONENT_CALL(NAME, INIT) \
+    Executor::traps::ComponentCallExport NAME INIT
+#define DEFINE_COMPONENT_FUNCTION(NAME, INIT, ...) \
+    Executor::traps::__VA_ARGS__ NAME INIT
+#define DEFINE_OT_FUNCTION(NAME, INIT) \
+    Executor::traps::OTFunction NAME INIT
+#define DEFINE_LIBRARY_RAW(NAME, INIT) \
+    Executor::traps::LibraryRawExport NAME INIT
 
 #ifndef TRAP_INSTANTIATION
 #define TRAP_INSTANTIATION EXTERN
@@ -246,6 +355,11 @@ private:
 #define PREPROCESSOR_CONCAT(A,B) PREPROCESSOR_CONCAT1(A,B)
 #define CREATE_FUNCTION_WRAPPER PREPROCESSOR_CONCAT(TRAP_INSTANTIATION, _FUNCTION_WRAPPER)
 #define DISPATCHER_TRAP PREPROCESSOR_CONCAT(TRAP_INSTANTIATION, _DISPATCHER_TRAP)
+#define CREATE_LIBRARY_FUNCTION PREPROCESSOR_CONCAT(TRAP_INSTANTIATION, _LIBRARY_FUNCTION)
+#define CREATE_LIBRARY_RAW PREPROCESSOR_CONCAT(TRAP_INSTANTIATION, _LIBRARY_RAW)
+#define CREATE_OT_FUNCTION PREPROCESSOR_CONCAT(TRAP_INSTANTIATION, _OT_FUNCTION)
+#define CREATE_COMPONENT_CALL PREPROCESSOR_CONCAT(TRAP_INSTANTIATION, _COMPONENT_CALL)
+#define CREATE_COMPONENT_FUNCTION PREPROCESSOR_CONCAT(TRAP_INSTANTIATION, _COMPONENT_FUNCTION)
 
 #define COMMA ,
 #define PASCAL_TRAP(NAME, TRAP) \
@@ -261,6 +375,17 @@ private:
     CREATE_FUNCTION_WRAPPER(NAME, &C_##NAME, (#NAME, TRAPNAME, "InterfaceLib"), SubTrapFunction<decltype(C_##NAME) COMMA &C_##NAME COMMA TRAP COMMA SELECTOR COMMA callconv::Register<__VA_ARGS__>>)
 #define REGISTER_SUBTRAP2(NAME, TRAP, SELECTOR, TRAPNAME, ...) \
     CREATE_FUNCTION_WRAPPER(stub_##NAME, &NAME, (#NAME, TRAPNAME, "InterfaceLib"), SubTrapFunction<decltype(NAME) COMMA &NAME COMMA TRAP COMMA SELECTOR COMMA callconv::Register<__VA_ARGS__>>)
+
+#define LIBRARY_FUNCTION(LIB, NAME, IMPL) \
+    CREATE_LIBRARY_FUNCTION(lib_##LIB##_##NAME, (#NAME, #LIB), LibraryFunction<decltype(IMPL) COMMA &IMPL>)
+#define COMPONENT_CALL(LIB, NAME, WHAT, SIZES) \
+    CREATE_COMPONENT_CALL(lib_##LIB##_##NAME, (#NAME, #LIB, WHAT, SIZES))
+#define COMPONENT_FUNCTION(COMPONENT, NAME, WHAT, IMPL) \
+    CREATE_COMPONENT_FUNCTION(comp_##NAME, (#NAME, #COMPONENT, (int16_t)WHAT), ComponentFunction<decltype(IMPL) COMMA &IMPL>)
+#define OT_FUNCTION(LIB, NAME, SET, SETNAME, PASCAL, SIG, RET, IMPL) \
+    CREATE_OT_FUNCTION(lib_##LIB##_##NAME, (#NAME, #LIB, SET, SETNAME, PASCAL, SIG, RET, &ot::IMPL))
+#define LIBRARY_RAW(LIB, NAME) \
+    CREATE_LIBRARY_RAW(lib_##LIB##_##NAME, (#NAME, #LIB))
 
 #define NOTRAP_FUNCTION(NAME) \
     CREATE_FUNCTION_WRAPPER(NAME, &C_##NAME, (#NAME, "InterfaceLib"), WrappedFunction<decltype(C_##NAME) COMMA &C_##NAME>)

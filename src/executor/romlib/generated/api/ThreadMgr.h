@@ -118,4 +118,7 @@ OSErr C_ThreadCurrentStackSpace(LONGINT thread, GUEST<LONGINT> *freeStack);PASCA
 OSErr C_GetSpecificFreeThreadCount(LONGINT threadStyle, LONGINT stackSize, GUEST<INTEGER> *freeCount);PASCAL_SUBTRAP(GetSpecificFreeThreadCount, 0xABF2, 0x0615, ThreadDispatch);
 
 
+OSErr glue_YieldToAnyThread();LIBRARY_FUNCTION(InterfaceLib, YieldToAnyThread, glue_YieldToAnyThread);
+
+
 } /* namespace Executor */

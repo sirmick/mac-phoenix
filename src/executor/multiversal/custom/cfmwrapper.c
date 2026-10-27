@@ -24,12 +24,12 @@ OSErr __cfmwrapper_connect(__cfmsym *si, const unsigned char *library, const uns
         return err;
     }
 
-    si->proc = NewRoutineDescriptor((ProcPtr)symPtr, procInfo, arch == gestalt68k ? kM68kISA : kPowerPCISA);
+    si->proc = NewRoutineDescriptorTrap((ProcPtr)symPtr, procInfo, arch == gestalt68k ? kM68kISA : kPowerPCISA);
     return noErr;
 }
 
 void __cfmwrapper_disconnect(__cfmsym *si)
 {
-    DisposeRoutineDescriptor(si->proc);
+    DisposeRoutineDescriptorTrap(si->proc);
     CloseConnection(&si->conn);
 }

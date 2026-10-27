@@ -228,6 +228,7 @@ static void process_bootstrap()
     /* The default directory is per process (its volume is DefVCBPtr, in
        low memory): a launched application starts in its own folder. */
     ROMlib_process_register_state(&DefDirID, sizeof DefDirID);
+    cpu_register_process_state();
     layer_order.push_back(current_process_info);
     front_process = current_process_info;
 }
@@ -1299,20 +1300,31 @@ bool Executor::ROMlib_process_with_signature(OSType sig, ProcessSerialNumber *ps
     return false;
 }
 
+/* The process has QuickDraw: its A5 world's first long points at its
+   QuickDraw globals (InitGraf). A faceless one may never call InitGraf (a
+   PowerPC tool that only writes a file); what draws in its world (GetPort)
+   would follow a nil pointer. */
+static bool has_quickdraw()
+{
+    uint32_t a5 = guest_cast<uint32_t>(LM(CurrentA5));
+    return a5 && *ptr_from_longint<GUEST<uint32_t> *>(a5) != 0u;
+}
+
 /* Back on our thread after a switch: our world is in place. */
 static void resumed()
 {
     reap_dead();
     process_info_t *me = current_process_info;
+    bool qd = has_quickdraw();
     ROMlib_app_menu_update();
     /* The menu bar is the front process's: a process given background
        time must not paint its own over it (Disk Copy's flickered over
        Finder's at every slice), and the front process back from lending
        time to one repaints it only if someone else's is up (every slice
        repainted it, 20 times a second with BridgeAgent in the background). */
-    if(me == front_process && ROMlib_menubar_drawn != LM(MenuList))
+    if(qd && me == front_process && ROMlib_menubar_drawn != LM(MenuList))
         DrawMenuBar();
-    if(me->uncovered)
+    if(qd && me->uncovered)
     {
         /* What the process that quit covered: the desktop and our windows. */
         RgnHandle rgn = me->uncovered;
@@ -1328,7 +1340,7 @@ static void resumed()
         if(me == front_process)
             DrawMenuBar();
     }
-    if(me->raised)
+    if(qd && me->raised)
     {
         /* Brought to the front: redraw what the layers in front covered. */
         RgnHandle rgn = me->raised;
@@ -1352,7 +1364,7 @@ static void resumed()
     if(me->activate_pending)
     {
         me->activate_pending = false;
-        if(WindowPtr w = FrontWindow())
+        if(WindowPtr w = qd ? FrontWindow() : nullptr)
         {
             HiliteWindow(w, true);
             if(!(me->mode & 0x0800)) /* SIZE doesActivateOnFGSwitch */
@@ -2077,7 +2089,7 @@ OSErr Executor::process_launch(LaunchParamBlockRec *lpbp)
     if(process_info_t *q = running_process_of(*lpbp->launchAppSpec))
     {
         lpbp->launchProcessSN = q->serial_number;
-        if(!(lpbp->launchControlFlags & 0x0400 /* launchDontSwitch */) && q != front_process)
+        if(!(lpbp->launchControlFlags & launchDontSwitch) && q != front_process)
             pending_front = q;
         if(Ptr ap = (Ptr)lpbp->launchAppParameters)
             post_app_parameters(ap, q->serial_number);

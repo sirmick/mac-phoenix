@@ -66,4 +66,17 @@ OSErr PBDTOpenInform(DTPBPtr dtp);REGISTER_SUBTRAP2(PBDTOpenInform, 0xA060, 0x00
 
 OSErr PBDTDelete(DTPBPtr dtp, Boolean async);FILE_SUBTRAP(PBDTDelete, DTPBPtr, 0xA260, 0x002F, FSDispatch);
 
+enum {kIsOnDesk = 1,
+kColor = 14,
+kIsShared = 64,
+kHasNoINITs = 128,
+kHasBeenInited = 256,
+kHasCustomIcon = 1024,
+kIsStationery = 2048,
+kNameLocked = 4096,
+kHasBundle = 8192,
+kIsInvisible = 16384,
+kIsAlias = 32768,
+};
+
 } /* namespace Executor */

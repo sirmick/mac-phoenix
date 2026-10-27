@@ -120,6 +120,45 @@ void describeStruct(const _SCSTATUS& x, std::ostream& os)
     os << "}";
 }
 
+void describeStruct(const SoundComponentData& x, std::ostream& os)
+{
+    os << "SoundComponentData{";
+    logging::logField(os, "flags", x.flags);
+    logging::logField(os, "format", x.format);
+    logging::logField(os, "numChannels", x.numChannels);
+    logging::logField(os, "sampleSize", x.sampleSize);
+    logging::logField(os, "sampleRate", x.sampleRate);
+    logging::logField(os, "sampleCount", x.sampleCount);
+    logging::logField(os, "buffer", x.buffer);
+    logging::logField(os, "reserved", x.reserved);
+    os << "}";
+}
+
+void describeStruct(const SoundParamBlock& x, std::ostream& os)
+{
+    os << "SoundParamBlock{";
+    logging::logField(os, "recordSize", x.recordSize);
+    logging::logField(os, "desc", x.desc);
+    logging::logField(os, "rateMultiplier", x.rateMultiplier);
+    logging::logField(os, "leftVolume", x.leftVolume);
+    logging::logField(os, "rightVolume", x.rightVolume);
+    logging::logField(os, "quality", x.quality);
+    logging::logField(os, "filter", x.filter);
+    logging::logField(os, "moreRtn", x.moreRtn);
+    logging::logField(os, "completionRtn", x.completionRtn);
+    logging::logField(os, "refCon", x.refCon);
+    logging::logField(os, "result", x.result);
+    os << "}";
+}
+
+void describeStruct(const SoundInfoList& x, std::ostream& os)
+{
+    os << "SoundInfoList{";
+    logging::logField(os, "count", x.count);
+    logging::logField(os, "infoHandle", x.infoHandle);
+    os << "}";
+}
+
 } // namespace Executor
 
 namespace Executor { namespace structdump {
@@ -157,6 +196,18 @@ void dump__SCSTATUS(std::ostream& os, const void* p)
 {
     describeStruct(*(const _SCSTATUS*)p, os);
 }
+void dump_SoundComponentData(std::ostream& os, const void* p)
+{
+    describeStruct(*(const SoundComponentData*)p, os);
+}
+void dump_SoundParamBlock(std::ostream& os, const void* p)
+{
+    describeStruct(*(const SoundParamBlock*)p, os);
+}
+void dump_SoundInfoList(std::ostream& os, const void* p)
+{
+    describeStruct(*(const SoundInfoList*)p, os);
+}
 }
 
 void registerStructDumps_SoundMgr()
@@ -170,6 +221,9 @@ void registerStructDumps_SoundMgr()
         { "SndDoubleBuffer", sizeof(SndDoubleBuffer), &dump_SndDoubleBuffer },
         { "SndDoubleBufferHeader", sizeof(SndDoubleBufferHeader), &dump_SndDoubleBufferHeader },
         { "_SCSTATUS", sizeof(_SCSTATUS), &dump__SCSTATUS },
+        { "SoundComponentData", sizeof(SoundComponentData), &dump_SoundComponentData },
+        { "SoundParamBlock", sizeof(SoundParamBlock), &dump_SoundParamBlock },
+        { "SoundInfoList", sizeof(SoundInfoList), &dump_SoundInfoList },
     };
     registerTypes(types, sizeof(types) / sizeof(types[0]));
 }
