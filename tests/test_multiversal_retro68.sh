@@ -158,9 +158,12 @@ fi
 #    (docs/executor/README.md lists what the others still lack).
 for s in BridgeAgent/BridgeAgent.c MacBrowser/MacBrowser.c MacBrowser/browser_shm.c \
          tests/guest/mpw-hello/hello.c tests/guest/retro68/rtest.c \
+         tests/guest/bridgedemo/demo.c \
          tests/guest/suite/main.c tests/guest/suite/finder.c \
          tests/guest/suite/keyboard.c tests/guest/suite/net.c \
-         tests/guest/suite/netdeep.c; do
+         tests/guest/suite/netdeep.c tests/guest/suite/files.c \
+         tests/guest/suite/audio.c tests/guest/suite/ascript.c \
+         tests/guest/suite/mactcp.c tests/guest/suite/tcpip.c; do
     if "$GCC" "${CFLAGS[@]}" -w -Werror=implicit-function-declaration \
             -I "$REPO/src/common/guest" -I "$REPO/src/common/include" \
             -fsyntax-only "$REPO/$s" > "$WORK/guest.log" 2>&1; then

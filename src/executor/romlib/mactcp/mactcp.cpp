@@ -1399,13 +1399,13 @@ const char *cs_name(int cs)
     switch(cs)
     {
         case ipctlGetAddr: return "ipctlGetAddr";
-        case udpCreate: return "UDPCreate";
-        case udpRead: return "UDPRead";
-        case udpBfrReturn: return "UDPBfrReturn";
-        case udpWrite: return "UDPWrite";
-        case udpRelease: return "UDPRelease";
-        case udpMaxMTUSize: return "UDPMaxMTUSize";
-        case udpStatus: return "UDPStatus";
+        case UDPCreate: return "UDPCreate";
+        case UDPRead: return "UDPRead";
+        case UDPBfrReturn: return "UDPBfrReturn";
+        case UDPWrite: return "UDPWrite";
+        case UDPRelease: return "UDPRelease";
+        case UDPMaxMTUSize: return "UDPMaxMTUSize";
+        case UDPStatus: return "UDPStatus";
         case TCPCreate: return "TCPCreate";
         case TCPPassiveOpen: return "TCPPassiveOpen";
         case TCPActiveOpen: return "TCPActiveOpen";
@@ -1519,27 +1519,27 @@ static OSErr C_ROMlib_ippctl(ParmBlkPtr pbp, DCtlPtr dce)
             err = do_tcp_release(pb, done);
             break;
 
-        case udpCreate:
+        case UDPCreate:
             err = do_udp_create(upb);
             break;
-        case udpRead:
+        case UDPRead:
             err = do_udp_read(upb);
             break;
-        case udpBfrReturn:
+        case UDPBfrReturn:
             err = do_udp_bfr_return(upb);
             break;
-        case udpWrite:
+        case UDPWrite:
             err = do_udp_write(upb);
             break;
-        case udpRelease:
+        case UDPRelease:
             err = do_udp_release(upb, done);
             break;
-        case udpMaxMTUSize:
+        case UDPMaxMTUSize:
             /* An Ethernet frame less the IP and UDP headers. */
             upb->csParam.mtu.mtuSize = 1472;
             err = noErr;
             break;
-        case udpStatus:
+        case UDPStatus:
         {
             OSErr e = noErr;
             err = lookup(upb->udpStream, &e, true) ? noErr : e;
@@ -1550,9 +1550,9 @@ static OSErr C_ROMlib_ippctl(ParmBlkPtr pbp, DCtlPtr dce)
             err = do_tcp_global_info(pb);
             break;
 
-        case udpMultiCreate:
-        case udpMultiSend:
-        case udpMultiRead:
+        case UDPMultiCreate:
+        case UDPMultiSend:
+        case UDPMultiRead:
         case TCPExtendedStat:
             warning_unimplemented("MacTCP csCode %d", (int)pb->csCode);
             err = invalidLength; /* TODO: most fitting stub error? */

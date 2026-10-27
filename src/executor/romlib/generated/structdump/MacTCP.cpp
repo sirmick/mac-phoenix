@@ -144,6 +144,48 @@ void describeStruct(const TCPStatusPB& x, std::ostream& os)
     os << "}";
 }
 
+void describeStruct(const TCPParam& x, std::ostream& os)
+{
+    os << "TCPParam{";
+    logging::logField(os, "tcpRtoA", x.tcpRtoA);
+    logging::logField(os, "tcpRtoMin", x.tcpRtoMin);
+    logging::logField(os, "tcpRtoMax", x.tcpRtoMax);
+    logging::logField(os, "tcpMaxSegSize", x.tcpMaxSegSize);
+    logging::logField(os, "tcpMaxConn", x.tcpMaxConn);
+    logging::logField(os, "tcpMaxWindow", x.tcpMaxWindow);
+    os << "}";
+}
+
+void describeStruct(const TCPStats& x, std::ostream& os)
+{
+    os << "TCPStats{";
+    logging::logField(os, "tcpConnAttempts", x.tcpConnAttempts);
+    logging::logField(os, "tcpConnOpened", x.tcpConnOpened);
+    logging::logField(os, "tcpConnAccepted", x.tcpConnAccepted);
+    logging::logField(os, "tcpConnClosed", x.tcpConnClosed);
+    logging::logField(os, "tcpConnAborted", x.tcpConnAborted);
+    logging::logField(os, "tcpOctetsIn", x.tcpOctetsIn);
+    logging::logField(os, "tcpOctetsOut", x.tcpOctetsOut);
+    logging::logField(os, "tcpOctetsInDup", x.tcpOctetsInDup);
+    logging::logField(os, "tcpOctetsRetrans", x.tcpOctetsRetrans);
+    logging::logField(os, "tcpInputPkts", x.tcpInputPkts);
+    logging::logField(os, "tcpOutputPkts", x.tcpOutputPkts);
+    logging::logField(os, "tcpDupPkts", x.tcpDupPkts);
+    logging::logField(os, "tcpRetransPkts", x.tcpRetransPkts);
+    os << "}";
+}
+
+void describeStruct(const TCPGlobalInfoPB& x, std::ostream& os)
+{
+    os << "TCPGlobalInfoPB{";
+    logging::logField(os, "tcpParamPtr", x.tcpParamPtr);
+    logging::logField(os, "tcpStatsPtr", x.tcpStatsPtr);
+    logging::logField(os, "tcpCDBTable", x.tcpCDBTable);
+    logging::logField(os, "userDataPtr", x.userDataPtr);
+    logging::logField(os, "maxTCPConnections", x.maxTCPConnections);
+    os << "}";
+}
+
 void describeStruct(const TCPcsParam& x, std::ostream& os)
 {
     os << "TCPcsParam{";
@@ -154,6 +196,7 @@ void describeStruct(const TCPcsParam& x, std::ostream& os)
     logging::logField(os, "close", x.close);
     logging::logField(os, "abort", x.abort);
     logging::logField(os, "status", x.status);
+    logging::logField(os, "globalInfo", x.globalInfo);
     os << "}";
 }
 
@@ -325,6 +368,18 @@ void dump_TCPStatusPB(std::ostream& os, const void* p)
 {
     describeStruct(*(const TCPStatusPB*)p, os);
 }
+void dump_TCPParam(std::ostream& os, const void* p)
+{
+    describeStruct(*(const TCPParam*)p, os);
+}
+void dump_TCPStats(std::ostream& os, const void* p)
+{
+    describeStruct(*(const TCPStats*)p, os);
+}
+void dump_TCPGlobalInfoPB(std::ostream& os, const void* p)
+{
+    describeStruct(*(const TCPGlobalInfoPB*)p, os);
+}
 void dump_TCPcsParam(std::ostream& os, const void* p)
 {
     describeStruct(*(const TCPcsParam*)p, os);
@@ -380,6 +435,9 @@ void registerStructDumps_MacTCP()
         { "TCPClosePB", sizeof(TCPClosePB), &dump_TCPClosePB },
         { "TCPAbortPB", sizeof(TCPAbortPB), &dump_TCPAbortPB },
         { "TCPStatusPB", sizeof(TCPStatusPB), &dump_TCPStatusPB },
+        { "TCPParam", sizeof(TCPParam), &dump_TCPParam },
+        { "TCPStats", sizeof(TCPStats), &dump_TCPStats },
+        { "TCPGlobalInfoPB", sizeof(TCPGlobalInfoPB), &dump_TCPGlobalInfoPB },
         { "TCPcsParam", sizeof(TCPcsParam), &dump_TCPcsParam },
         { "TCPiopb", sizeof(TCPiopb), &dump_TCPiopb },
         { "GetAddrParamBlock", sizeof(GetAddrParamBlock), &dump_GetAddrParamBlock },

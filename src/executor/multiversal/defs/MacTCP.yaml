@@ -53,25 +53,25 @@
     values:
       - name: ipctlGetAddr
         value: 15
-      - name: udpCreate
+      - name: UDPCreate
         value: 20
-      - name: udpRead
+      - name: UDPRead
         value: 21
-      - name: udpBfrReturn
+      - name: UDPBfrReturn
         value: 22
-      - name: udpWrite
+      - name: UDPWrite
         value: 23
-      - name: udpRelease
+      - name: UDPRelease
         value: 24
-      - name: udpMaxMTUSize
+      - name: UDPMaxMTUSize
         value: 25
-      - name: udpStatus
+      - name: UDPStatus
         value: 26
-      - name: udpMultiCreate
+      - name: UDPMultiCreate
         value: 27
-      - name: udpMultiSend
+      - name: UDPMultiSend
         value: 28
-      - name: udpMultiRead
+      - name: UDPMultiRead
         value: 29
       - name: TCPCreate
         value: 30
@@ -491,6 +491,75 @@
         type: Ptr                   # 66
     size: 70
 
+- struct:
+    name: TCPParam
+    members:
+      - name: tcpRtoA
+        type: ULONGINT
+      - name: tcpRtoMin
+        type: ULONGINT
+      - name: tcpRtoMax
+        type: ULONGINT
+      - name: tcpMaxSegSize
+        type: ULONGINT
+      - name: tcpMaxConn
+        type: ULONGINT
+      - name: tcpMaxWindow
+        type: ULONGINT
+    size: 24
+
+- struct:
+    name: TCPStats
+    members:
+      - name: tcpConnAttempts
+        type: ULONGINT
+      - name: tcpConnOpened
+        type: ULONGINT
+      - name: tcpConnAccepted
+        type: ULONGINT
+      - name: tcpConnClosed
+        type: ULONGINT
+      - name: tcpConnAborted
+        type: ULONGINT
+      - name: tcpOctetsIn
+        type: ULONGINT
+      - name: tcpOctetsOut
+        type: ULONGINT
+      - name: tcpOctetsInDup
+        type: ULONGINT
+      - name: tcpOctetsRetrans
+        type: ULONGINT
+      - name: tcpInputPkts
+        type: ULONGINT
+      - name: tcpOutputPkts
+        type: ULONGINT
+      - name: tcpDupPkts
+        type: ULONGINT
+      - name: tcpRetransPkts
+        type: ULONGINT
+    size: 52
+
+- typedef:
+    name: StreamPPtr
+    type: StreamPtr*
+
+- struct:
+    name: TCPGlobalInfoPB
+    comment: |
+      TCPGlobalInfo (csCode 43): the driver's parameters and statistics.
+    members:
+      - name: tcpParamPtr
+        type: TCPParam*
+      - name: tcpStatsPtr
+        type: TCPStats*
+      - name: tcpCDBTable
+        type: StreamPPtr[1]
+      - name: userDataPtr
+        type: Ptr
+      - name: maxTCPConnections
+        type: uint16_t
+    size: 18
+
 - union:
     name: TCPcsParam
     members:
@@ -508,7 +577,20 @@
         type: TCPAbortPB
       - name: status
         type: TCPStatusPB
+      - name: globalInfo
+        type: TCPGlobalInfoPB
     size: 70
+
+- struct:
+    name: TCPiopb
+
+- funptr:
+    name: TCPIOCompletionUPP
+    callconv: C
+    upp: true
+    args:
+      - name: iopb
+        type: TCPiopb*
 
 - struct:
     name: TCPiopb
@@ -528,7 +610,7 @@
       - name: ioCmdAddr
         type: Ptr                   #  8
       - name: ioCompletion
-        type: ProcPtr               # 12
+        type: TCPIOCompletionUPP               # 12
       - name: ioResult
         type: OSErr                 # 16
       - name: ioNamePtr
@@ -697,6 +779,17 @@
 
 - struct:
     name: UDPiopb
+
+- funptr:
+    name: UDPIOCompletionUPP
+    callconv: C
+    upp: true
+    args:
+      - name: iopb
+        type: UDPiopb*
+
+- struct:
+    name: UDPiopb
     comment: |
       Same header as TCPiopb; udpStream at 28, csParam at 32.
     members:
@@ -709,7 +802,7 @@
       - name: ioCmdAddr
         type: Ptr                   #  8
       - name: ioCompletion
-        type: ProcPtr               # 12
+        type: UDPIOCompletionUPP               # 12
       - name: ioResult
         type: OSErr                 # 16
       - name: ioNamePtr

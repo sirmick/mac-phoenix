@@ -38,16 +38,16 @@ typedef uint16_t tcp_port;
 typedef Ptr StreamPtr;
 
 typedef enum {ipctlGetAddr = 15,
-udpCreate = 20,
-udpRead = 21,
-udpBfrReturn = 22,
-udpWrite = 23,
-udpRelease = 24,
-udpMaxMTUSize = 25,
-udpStatus = 26,
-udpMultiCreate = 27,
-udpMultiSend = 28,
-udpMultiRead = 29,
+UDPCreate = 20,
+UDPRead = 21,
+UDPBfrReturn = 22,
+UDPWrite = 23,
+UDPRelease = 24,
+UDPMaxMTUSize = 25,
+UDPStatus = 26,
+UDPMultiCreate = 27,
+UDPMultiSend = 28,
+UDPMultiRead = 29,
 TCPCreate = 30,
 TCPPassiveOpen = 31,
 TCPActiveOpen = 32,
@@ -169,14 +169,28 @@ struct TCPAbortPB{GUEST_STRUCT;GUEST<Ptr> userDataPtr;};static_assert(sizeof(TCP
 // field lastRTT, not lastRtt.
 struct TCPStatusPB{GUEST_STRUCT;Byte ulpTimeoutValue;Byte ulpTimeoutAction;GUEST<LONGINT> unused;GUEST<ip_addr> remoteHost;GUEST<tcp_port> remotePort;GUEST<ip_addr> localHost;GUEST<tcp_port> localPort;Byte tosFlags;Byte precedence;Byte connectionState;GUEST<uint16_t> sendWindow;GUEST<uint16_t> rcvWindow;GUEST<uint16_t> amtUnackedData;GUEST<uint16_t> amtUnreadData;GUEST<Ptr> securityLevelPtr;GUEST<ULONGINT> sendUnacked;GUEST<ULONGINT> sendNext;GUEST<ULONGINT> congestionWindow;GUEST<ULONGINT> rcvNext;GUEST<ULONGINT> srtt;GUEST<ULONGINT> lastRTT;GUEST<ULONGINT> sendMaxSegSize;GUEST<Ptr> connStatPtr;GUEST<Ptr> userDataPtr;};static_assert(sizeof(TCPStatusPB) == 70);void describeStruct(const TCPStatusPB&, std::ostream&);
 
-union TCPcsParam{GUEST_STRUCT;TCPCreatePB create;TCPOpenPB open;TCPSendPB send;TCPReceivePB receive;TCPClosePB close;TCPAbortPB abort;TCPStatusPB status;};static_assert(sizeof(TCPcsParam) == 70);void describeStruct(const TCPcsParam&, std::ostream&);
+struct TCPParam{GUEST_STRUCT;GUEST<ULONGINT> tcpRtoA;GUEST<ULONGINT> tcpRtoMin;GUEST<ULONGINT> tcpRtoMax;GUEST<ULONGINT> tcpMaxSegSize;GUEST<ULONGINT> tcpMaxConn;GUEST<ULONGINT> tcpMaxWindow;};static_assert(sizeof(TCPParam) == 24);void describeStruct(const TCPParam&, std::ostream&);
+
+struct TCPStats{GUEST_STRUCT;GUEST<ULONGINT> tcpConnAttempts;GUEST<ULONGINT> tcpConnOpened;GUEST<ULONGINT> tcpConnAccepted;GUEST<ULONGINT> tcpConnClosed;GUEST<ULONGINT> tcpConnAborted;GUEST<ULONGINT> tcpOctetsIn;GUEST<ULONGINT> tcpOctetsOut;GUEST<ULONGINT> tcpOctetsInDup;GUEST<ULONGINT> tcpOctetsRetrans;GUEST<ULONGINT> tcpInputPkts;GUEST<ULONGINT> tcpOutputPkts;GUEST<ULONGINT> tcpDupPkts;GUEST<ULONGINT> tcpRetransPkts;};static_assert(sizeof(TCPStats) == 52);void describeStruct(const TCPStats&, std::ostream&);
+
+typedef GUEST<StreamPtr> *StreamPPtr;
+
+// TCPGlobalInfo (csCode 43): the driver's parameters and statistics.
+struct TCPGlobalInfoPB{GUEST_STRUCT;GUEST<TCPParam*> tcpParamPtr;GUEST<TCPStats*> tcpStatsPtr;GUEST<StreamPPtr> tcpCDBTable[1];GUEST<Ptr> userDataPtr;GUEST<uint16_t> maxTCPConnections;};static_assert(sizeof(TCPGlobalInfoPB) == 18);void describeStruct(const TCPGlobalInfoPB&, std::ostream&);
+
+union TCPcsParam{GUEST_STRUCT;TCPCreatePB create;TCPOpenPB open;TCPSendPB send;TCPReceivePB receive;TCPClosePB close;TCPAbortPB abort;TCPStatusPB status;TCPGlobalInfoPB globalInfo;};static_assert(sizeof(TCPcsParam) == 70);void describeStruct(const TCPcsParam&, std::ostream&);
+
+struct TCPiopb;
+
+using TCPIOCompletionUPP = UPP<void(TCPiopb *iopb), callconv::CCall>;
+
 
 // The TCP I/O parameter block passed to PBControl on the .IPP
 // driver.  Canonical offsets: ioCompletion 12, ioResult 16,
 // ioNamePtr 18, ioVRefNum 22, ioCRefNum 24, csCode 26,
 // tcpStream 28, csParam 32.  csParam is 70 bytes -- the size of
 // its largest member, TCPStatusPB -- so the whole block is 102.
-struct TCPiopb{GUEST_STRUCT;GUEST<QElemPtr> qLink;GUEST<INTEGER> qType;GUEST<INTEGER> ioTrap;GUEST<Ptr> ioCmdAddr;GUEST<ProcPtr> ioCompletion;GUEST<OSErr> ioResult;GUEST<StringPtr> ioNamePtr;GUEST<INTEGER> ioVRefNum;GUEST<INTEGER> ioCRefNum;GUEST<INTEGER> csCode;GUEST<StreamPtr> tcpStream;TCPcsParam csParam;};static_assert(sizeof(TCPiopb) == 102);void describeStruct(const TCPiopb&, std::ostream&);
+struct TCPiopb{GUEST_STRUCT;GUEST<QElemPtr> qLink;GUEST<INTEGER> qType;GUEST<INTEGER> ioTrap;GUEST<Ptr> ioCmdAddr;GUEST<TCPIOCompletionUPP> ioCompletion;GUEST<OSErr> ioResult;GUEST<StringPtr> ioNamePtr;GUEST<INTEGER> ioVRefNum;GUEST<INTEGER> ioCRefNum;GUEST<INTEGER> csCode;GUEST<StreamPtr> tcpStream;TCPcsParam csParam;};static_assert(sizeof(TCPiopb) == 102);void describeStruct(const TCPiopb&, std::ostream&);
 
 typedef TCPiopb *TCPiopbPtr;
 
@@ -204,8 +218,13 @@ struct UDPMTUPB{GUEST_STRUCT;GUEST<uint16_t> mtuSize;GUEST<ip_addr> remoteHost;G
 
 union UDPcsParam{GUEST_STRUCT;UDPCreatePB create;UDPSendPB send;UDPReceivePB receive;UDPMTUPB mtu;};static_assert(sizeof(UDPcsParam) == 26);void describeStruct(const UDPcsParam&, std::ostream&);
 
+struct UDPiopb;
+
+using UDPIOCompletionUPP = UPP<void(UDPiopb *iopb), callconv::CCall>;
+
+
 // Same header as TCPiopb; udpStream at 28, csParam at 32.
-struct UDPiopb{GUEST_STRUCT;GUEST<QElemPtr> qLink;GUEST<INTEGER> qType;GUEST<INTEGER> ioTrap;GUEST<Ptr> ioCmdAddr;GUEST<ProcPtr> ioCompletion;GUEST<OSErr> ioResult;GUEST<StringPtr> ioNamePtr;GUEST<INTEGER> ioVRefNum;GUEST<INTEGER> ioCRefNum;GUEST<INTEGER> csCode;GUEST<StreamPtr> udpStream;UDPcsParam csParam;};static_assert(sizeof(UDPiopb) == 58);void describeStruct(const UDPiopb&, std::ostream&);
+struct UDPiopb{GUEST_STRUCT;GUEST<QElemPtr> qLink;GUEST<INTEGER> qType;GUEST<INTEGER> ioTrap;GUEST<Ptr> ioCmdAddr;GUEST<UDPIOCompletionUPP> ioCompletion;GUEST<OSErr> ioResult;GUEST<StringPtr> ioNamePtr;GUEST<INTEGER> ioVRefNum;GUEST<INTEGER> ioCRefNum;GUEST<INTEGER> csCode;GUEST<StreamPtr> udpStream;UDPcsParam csParam;};static_assert(sizeof(UDPiopb) == 58);void describeStruct(const UDPiopb&, std::ostream&);
 
 // StrToAddr/AddrToName result; rtnCode is cacheFault while a lookup
 // runs.

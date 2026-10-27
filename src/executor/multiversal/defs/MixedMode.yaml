@@ -155,6 +155,15 @@
 
 - enum:
     values:
+      - name: kCallingConventionPhase
+        value: 0
+      - name: kResultSizePhase
+        value: 4
+
+# ####
+
+- enum:
+    values:
       - name: kStackParameterPhase
         value: 6
 

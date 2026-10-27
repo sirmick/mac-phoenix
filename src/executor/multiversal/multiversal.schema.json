@@ -162,7 +162,8 @@
                 },
                 "returnreg": { "$ref": "#/definitions/reg" },
                 "comment": { "type": "string" },
-                "callconv": { "type": "string" }
+                "callconv": { "type": "string" },
+                "upp": { "type": "boolean" }
             },
             "additionalProperties": false,
             "required": [ "name" ]

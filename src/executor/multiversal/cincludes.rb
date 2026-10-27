@@ -342,7 +342,10 @@ class CIncludesGenerator < Generator
 
 
     def declare_funptr(value)
-        if value["callconv"] == "C" or value["upp"] == false then
+        # A C routine through a UPP (`callconv: C` with `upp: true`:
+        # MacTCP's completion routines, kCStackBased) is a UPP below.
+        c_upp = value["callconv"] == "C" && value["upp"] == true
+        if (value["callconv"] == "C" && !c_upp) or value["upp"] == false then
             # A native function pointer: no UPP, name as given (C, or
             # pascal on 68k: Open Transport's notifiers, which PowerPC code
             # passes as plain function pointers).
@@ -356,7 +359,7 @@ class CIncludesGenerator < Generator
             return
         end
 
-        @out << "typedef pascal "
+        @out << (c_upp ? "typedef " : "typedef pascal ")
 
         name = value["name"]
         if name=~/^([A-Za-z_][A-Za-z0-9]*)(ProcPtr|UPP)$/ then
@@ -389,7 +392,7 @@ class CIncludesGenerator < Generator
             procinfo = 42;
             print "WARNING UNSUPPORTED register funptr: #{name}\n"
         else
-            procinfo = 0
+            procinfo = c_upp ? 1 : 0    # kCStackBased : kPascalStackBased
             procinfo |= encode_size(value["return"]) << 4
             shift = 6
             args.each do |arg|
@@ -510,10 +513,29 @@ class CIncludesGenerator < Generator
                 #define nil NULL
         
                 #define STACK_ROUTINE_PARAMETER(n, sz) ((sz) << (kStackParameterPhase + ((n)-1) * kStackParameterWidth))
+                #define RESULT_SIZE(sizeCode) ((sizeCode) << kResultSizePhase)
+                #define SIZE_CODE(size) (((size) == 4) ? kFourByteCode : (((size) == 2) ? kTwoByteCode : (((size) == 1) ? kOneByteCode : 0)))
             
                 #ifndef OLDROUTINENAMES
                 #define OLDROUTINENAMES 0
                 #endif
+
+                /* ConditionalMacros.h's names, for code written against
+                   Apple's interfaces */
+                #define TARGET_OS_MAC 1
+                #define GENERATINGCFM TARGET_RT_MAC_CFM
+                #define GENERATING68K TARGET_CPU_68K
+                #define GENERATINGPOWERPC TARGET_CPU_PPC
+                #define ONEWORDINLINE(...) M68K_INLINE(__VA_ARGS__)
+                #define TWOWORDINLINE(...) M68K_INLINE(__VA_ARGS__)
+                #define THREEWORDINLINE(...) M68K_INLINE(__VA_ARGS__)
+                #define FOURWORDINLINE(...) M68K_INLINE(__VA_ARGS__)
+                #define FIVEWORDINLINE(...) M68K_INLINE(__VA_ARGS__)
+                #define SIXWORDINLINE(...) M68K_INLINE(__VA_ARGS__)
+                #define SEVENWORDINLINE(...) M68K_INLINE(__VA_ARGS__)
+                #define EIGHTWORDINLINE(...) M68K_INLINE(__VA_ARGS__)
+                #define NINEWORDINLINE(...) M68K_INLINE(__VA_ARGS__)
+                #define TENWORDINLINE(...) M68K_INLINE(__VA_ARGS__)
             PREAMBLE
         
             defs.topsort.each do |name|
@@ -557,7 +579,7 @@ class CIncludesGenerator < Generator
             "Navigation", "Drag", "DriverServices", "Kernel", "Interrupts",
             "NameRegistry", "PCI",
             # Universal Interfaces names for what the definitions cover too
-            "Aliases", "Balloons", "CodeFragments", "Components", "Controls", "Desk", "OSA",
+            "Aliases", "AppleScript", "Balloons", "CodeFragments", "Components", "Controls", "Desk", "OSA",
             "DeskBus", "DiskInit", "Disks", "Displays", "Editions", "Finder",
             "Folders", "Lists", "MacTCP", "Movies", "Notification", "Packages",
             "Printing", "Retrace", "Scrap", "Script", "ShutDown", "Speech",

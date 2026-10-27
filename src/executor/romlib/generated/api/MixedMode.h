@@ -74,6 +74,10 @@ kFourByteCode,
 enum {kCallingConventionWidth = 4,
 };
 
+enum {kCallingConventionPhase = 0,
+kResultSizePhase = 4,
+};
+
 enum {kStackParameterPhase = 6,
 };
 

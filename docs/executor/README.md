@@ -140,12 +140,13 @@ definitions cover (`cincludes.rb`; each just includes `Multiverse.h`).
 BridgeAgent and MacBrowser are built against them alone (CMake,
 `tools/retro68/multiversal-headers.sh`: generated into the build tree,
 with none of the toolchain's or Apple's interfaces; needs ruby), as are
-RetroTest, OTTest and parts of MacPhoenixSuite; `multiversal_retro68`
-compiles each. What the others still miss: `fp.h`, `TextCommon.h`,
-`AppleScript.h`, the HFS Plus constants (`kFSCatInfo*`) and `SInt64`,
-MacTCP's parameter blocks and UPPs, `NMUPP`, some high-level File
-Manager glue (`HSetFInfo`, `DirCreate`, `CatMove`, `HSetFLock`), and
-`ONEWORDINLINE`. Many parameters Apple declares `const T *` are plain
+RetroTest, OTTest and MacPhoenixSuite: `tests/guest/suite/retro68`
+builds the suite with Retro68 for 68k and PowerPC from the same sources
+as its MPW build, and it gives the same results on Apple's systems and
+on Executor (`guest_suite_retro68*`); `multiversal_retro68` compiles
+each. What the others still miss: `fp.h`, `TextCommon.h`, the HFS Plus
+constants (`kFSCatInfo*`) and `SInt64`, `NMUPP`, and some high-level
+File Manager glue (`HSetFInfo`, `DirCreate`, `CatMove`, `HSetFLock`). Many parameters Apple declares `const T *` are plain
 `T *` here (warnings in C). Some Executor signatures differ from Apple's
 (`NewThread` takes `ProcPtr` and `LONGINT`s, not `ThreadEntryUPP`,
 `ThreadStyle` and `ThreadOptions`); where the C side needs Apple's form

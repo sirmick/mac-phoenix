@@ -424,6 +424,32 @@ set_tests_properties(retro68_ppc_executor_asl PROPERTIES
   SKIP_RETURN_CODE 77
 )
 
+# MacPhoenixSuite built with Retro68 on the Multiversal Interfaces alone
+# (tests/guest/suite/retro68/build.sh; the MPW build uses Apple's): the
+# same results expected as from the MPW build, 68k and PowerPC, on Apple's
+# systems and on Executor.
+foreach(cell IN ITEMS "guest_suite_retro68;;MacPhoenixSuite68K;18801;"
+                      "guest_suite_retro68_executor;--backend executor --network none;MacPhoenixSuite68K;18803;executor"
+                      "guest_suite_retro68_ppc;--backend kpx --core mame-ppc --jit;MacPhoenixSuitePPC;18805;"
+                      "guest_suite_retro68_ppc_executor;--backend executor --network none;MacPhoenixSuitePPC;18807;executor")
+  list(GET cell 0 name)
+  list(GET cell 1 backend)
+  list(GET cell 2 app)
+  list(GET cell 3 port)
+  list(GET cell 4 label)
+  separate_arguments(backend_args UNIX_COMMAND "${backend}")
+  add_test(
+    NAME ${name}
+    COMMAND bash ${TEST_DIR}/test_guest_suite.sh ${backend_args} --app ${CMAKE_SOURCE_DIR}/tests/guest/suite/retro68/${app}.bin --timeout 150 --port ${port}
+  )
+  set_tests_properties(${name} PROPERTIES
+    TIMEOUT 220
+    LABELS "guest;${label}"
+    SKIP_RETURN_CODE 77
+    ENVIRONMENT "MACEMU_ROM=$<IF:$<STREQUAL:${app},MacPhoenixSuitePPC>,${TEST_PPC_ROM},${TEST_ROM}>"
+  )
+endforeach()
+
 # Retro68's own AutomatedTests (68k and PowerPC) on Executor, through
 # LaunchAPPL's Executor backend (tools/retro68/launchappl-executor); skipped
 # without the Retro68 build at ~/opt/retro68/build-ppc.
