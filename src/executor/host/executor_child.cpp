@@ -238,6 +238,7 @@ int executor_child_main(const config::EmulatorConfig& cfg, IPCBuffer *buf)
     c.app = expand_home(cfg.executor_app);
     c.logtraps = cfg.executor_logtraps;
     c.logtraps_nesting = cfg.executor_logtraps_nesting;
+    c.logtraps_filter = cfg.executor_logtraps_filter;
     c.debug_options = cfg.executor_debug;
     c.watch = cfg.watch;
     c.writable_images = cfg.executor_writable_images;
@@ -287,6 +288,7 @@ int executor_direct_main(const config::EmulatorConfig& cfg)
     c.app = expand_home(cfg.executor_app);
     c.logtraps = cfg.executor_logtraps;
     c.logtraps_nesting = cfg.executor_logtraps_nesting;
+    c.logtraps_filter = cfg.executor_logtraps_filter;
     c.debug_options = cfg.executor_debug;
     c.watch = cfg.watch;
     c.writable_images = cfg.executor_writable_images;

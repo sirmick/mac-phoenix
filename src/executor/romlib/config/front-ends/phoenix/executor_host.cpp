@@ -122,6 +122,11 @@ int run(const Config& c)
         args.push_back("--logtraps-nesting");
         args.push_back(std::to_string(c.logtraps_nesting));
     }
+    if(!c.logtraps_filter.empty())
+    {
+        args.push_back("--logtraps-filter");
+        args.push_back(c.logtraps_filter);
+    }
     if(!c.debug_options.empty())
     {
         args.push_back("--debug");

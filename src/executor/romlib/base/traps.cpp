@@ -94,6 +94,15 @@ uint32_t traps::Entrypoint::breakPPC(PowerCore& cpu)
 }
 
 
+static syn68k_addr_t cfm_dispatch_entry;
+
+void traps::installCodeFragmentDispatch()
+{
+    if(cfm_dispatch_entry
+       && tooltraptable[0xAA5A & 0x3FF] == US_TO_SYN68K((void*)&stub_Unimplemented))
+        tooltraptable[0xAA5A & 0x3FF] = cfm_dispatch_entry;
+}
+
 void traps::init(bool log, const std::string& trapFilter)
 {
     logging::setEnabled(log);
@@ -122,6 +131,7 @@ void traps::init(bool log, const std::string& trapFilter)
        that does (it takes a $AA5A that differs from _Unimplemented for the
        Enabler and calls its private selectors -1, -3, $44) shows its own
        "requires the CFM-68K Runtime Enabler" alert. */
+    cfm_dispatch_entry = tooltraptable[0xAA5A & 0x3FF];
     tooltraptable[0xAA5A & 0x3FF] = US_TO_SYN68K((void*)&stub_Unimplemented);
 
     trap_install_handler(0xA, &alinehandler, (void *)0);

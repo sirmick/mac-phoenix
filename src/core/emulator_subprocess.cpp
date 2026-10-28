@@ -143,6 +143,10 @@ std::vector<std::string> EmulatorSubprocess::build_child_args()
             args.push_back("--executor-logtraps-nesting");
             args.push_back(std::to_string(config_->executor_logtraps_nesting));
         }
+        if (!config_->executor_logtraps_filter.empty()) {
+            args.push_back("--executor-logtraps-filter");
+            args.push_back(config_->executor_logtraps_filter);
+        }
     }
     if (config_->executor_writable_images) {
         args.push_back("--executor-writable-images");

@@ -319,6 +319,23 @@ static gestalt_value_t *find_value(OSType selector)
     return nullptr;
 }
 
+/* MacPhoenix: what a selector answers from a System version on
+   (docs/executor/MacOS8-9.md, "One Toolbox for 7, 8 and 9"); values as
+   Mac OS 9.0.4 gives them on the G3 (a probe's Gestalt calls). Managers
+   whose code is the 8.x System's own libraries (Appearance, Icon
+   Services) are there when Executor runs that System; the 8.x Finder
+   quits at once without 'appr'. */
+static gestaltentry_t since_table[] = {
+    { "appr"_4, 0x00000001 }, /* the Appearance Manager (8.0) */
+    { "apvr"_4, 0x00000110 }, /* ... 1.1, as in 8.5 and 8.6 */
+    { "icon"_4, 0x0000001F }, /* Icon Services (8.5) */
+    { "cfrg"_4, 0x00000001 }, /* the Code Fragment Manager */
+    { "cltn"_4, 0x01108000 }, /* the Collection Manager 1.1 (collections.cpp) */
+};
+static const uint16_t since_versions[std::size(since_table)] = {
+    0x0800, 0x0800, 0x0850, 0x0800, 0x0800,
+};
+
 static gestaltentry_t *
 find_selector_in_table(OSType selector, gestaltentry_t table[],
                        int table_length)
@@ -355,6 +372,11 @@ find_selector_in_table(OSType selector, gestaltentry_t table[],
         retval = &table[i];
     else
         retval = 0;
+
+    if(!retval && table == gtable)
+        for(size_t j = 0; j < std::size(since_table); j++)
+            if(since_table[j].selector == selector && system_version >= since_versions[j])
+                retval = &since_table[j];
 
     return retval;
 }

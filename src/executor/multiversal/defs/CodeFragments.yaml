@@ -246,6 +246,28 @@
 
 # ####
 
+# A private selector (-20) that 8.x's Color Picker INIT calls when Gestalt
+# 'cfrg' says CFM is there: its own file's FSSpec and a Boolean, an OSErr
+# back (THREEWORDINLINE-style: the result word, the FSSpec, the Boolean,
+# then the selector). It hands CFM a file with fragments in it; Executor's
+# CFM looks in the Extensions folder itself, so it is noted and answered
+# noErr. The name is ours.
+- only-for: Executor
+  function:
+    name: CFragRegisterFilePrivate
+    return: OSErr
+    args:
+      - name: file
+        type: FSSpecPtr
+      - name: flag
+        type: Boolean
+    dispatcher: CodeFragmentDispatch
+    selector: 0xFFEC
+    executor: C_
+    export: false
+
+# ####
+
 - function:
     name: GetDiskFragment
     return: OSErr

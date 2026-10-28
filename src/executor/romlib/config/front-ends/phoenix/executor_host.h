@@ -37,6 +37,7 @@ struct Config
 
     bool logtraps = false;
     int logtraps_nesting = 1; // --logtraps-nesting: log calls nested this deep
+    std::string logtraps_filter; // --logtraps-filter: only these names (wildcards)
     std::string debug_options; // Executor's --debug string ("memcheck,...")
     std::string watch;         // --watch ADDR[:LEN]: report every write to guest memory
     bool writable_images = false; // disk images read-write (default: read-only)

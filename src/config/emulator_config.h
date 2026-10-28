@@ -142,6 +142,7 @@ struct EmulatorConfig {
     bool executor_fresh = true;
     bool executor_logtraps = false;    // Executor logs every trap call (args, results) to stderr
     int executor_logtraps_nesting = 1; // ... and calls nested this deep in Toolbox callbacks
+    std::string executor_logtraps_filter; // ... only these names (comma-separated wildcards)
     std::string executor_debug;        // Executor's own --debug options ("memcheck,fslog,..."; romlib/error/error.cpp)
     std::string watch;                 // --watch ADDR[:LEN]: write watchpoint on guest memory (Executor; guest_watch.h)
     bool executor_writable_images = false; // Executor mounts disk images read-write (test copies)

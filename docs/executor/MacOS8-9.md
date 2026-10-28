@@ -328,6 +328,32 @@ Next, in order:
    on. Also seen: a font file's resource map written back through a
    read-only fork (`Fonts/%Andale Mono`: "short write ... errno 9"), which
    a Mac would refuse with a permission error.
+
+   Then, why the Finder quits (2026-10-28; `--executor-logtraps-filter`
+   keeps the slowdown small enough that the race stays, and PowerPC
+   calls in the log now show their caller):
+   - Gestalt answers per System version (gestalt.cpp, since_table):
+     `'appr'` 1, `'apvr'` $110, `'icon'` $1F (8.5), `'cfrg'` 1, `'cltn'`
+     $01108000 on 8.x, values as 9.0.4 gives them (a probe on the G3).
+   - `_CodeFragmentDispatch` ($AA5A) is there for 68k code on 8.x (a
+     PowerPC-only System; 7.x keeps going without it). The Color Picker
+     INIT then calls its private selector -20 with its file's FSSpec: CFM
+     is told of a file with fragments; answered noErr
+     (`CFragRegisterFilePrivate`, `export: false`).
+   - `InsXTime`. `GetThreadStateGivenTaskRef` and
+     `SetThreadReadyGivenTaskRef` answer threadProtocolErr for a task
+     reference no process has, as 9.0.4 does (the Finder polls its main
+     thread with 0).
+   - The quit itself: the Finder's startup throws -35 (nsvErr) and its
+     main function, catching it, tears down without an alert (9.0.4's
+     Finder shows the alert, same error). The -35 comes from Icon
+     Services: every call fails (-35, -50). IconServicesLib is glue to
+     `$AA75`, which ToolboxUtils' init points at the System's native
+     Icon Services code; that code's state is set up by the System's own
+     startup, which Executor doesn't run, so it works from nil globals
+     (an FSSpec read at $28). Next: either run what the System's startup
+     does for Icon Services, or Executor's own Icon Services (step 7's
+     plan has it as Apple's for now).
 7. **The Finder running**, with the add-on libraries selectable per
    library: Executor's (once finished) or Apple's from the System file.
    Executor keeps the managers 8.x's System replaces the ROM's with

@@ -1631,3 +1631,11 @@ Executor::ROMlib_find_cfrg(Handle cfrg, OSType arch, uint8_t type, ConstStr255Pa
 
     return retval;
 }
+
+/* MacPhoenix: CodeFragmentDispatch's private selector -20
+   (CodeFragments.yaml): a file with fragments, from an extension's INIT
+   (8.x's Color Picker); the Extensions folder is searched anyway. */
+OSErr Executor::C_CFragRegisterFilePrivate(FSSpecPtr file, Boolean flag)
+{
+    return noErr;
+}

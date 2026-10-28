@@ -3585,10 +3585,17 @@ OSErr Executor::C_GetThreadCurrentTaskRef(GUEST<LONGINT> *threadTRef)
     return noErr;
 }
 
+/* MacPhoenix: a task reference no process has is threadProtocolErr, before
+   the thread is looked for, as Mac OS 9.0.4 answers (a probe on the G3:
+   task reference 0, any thread). The 8.6 Finder polls its main thread
+   with 0 and quits on threadNotFoundErr. */
 OSErr Executor::C_GetThreadStateGivenTaskRef(LONGINT threadTRef, LONGINT threadToGet,
                                              GUEST<INTEGER> *threadState)
 {
-    pm_thread *t = find_thread(process_of_task_ref(threadTRef), threadToGet);
+    process_info_t *p = process_of_task_ref(threadTRef);
+    if(!p)
+        return threadProtocolErr;
+    pm_thread *t = find_thread(p, threadToGet);
     if(!t)
         return threadNotFoundErr;
     *threadState = t->state;
@@ -3597,7 +3604,10 @@ OSErr Executor::C_GetThreadStateGivenTaskRef(LONGINT threadTRef, LONGINT threadT
 
 OSErr Executor::C_SetThreadReadyGivenTaskRef(LONGINT threadTRef, LONGINT threadToSet)
 {
-    pm_thread *t = find_thread(process_of_task_ref(threadTRef), threadToSet);
+    process_info_t *p = process_of_task_ref(threadTRef);
+    if(!p)
+        return threadProtocolErr;
+    pm_thread *t = find_thread(p, threadToSet);
     if(!t)
         return threadNotFoundErr;
     if(t->state == kStoppedThreadState)

@@ -120,7 +120,15 @@ uint32_t builtinlibs::handleSC(PowerCore& cpu)
     if(index >= 0 && index < nCallbacks)
     {
         if(cb->implementation)
-            return cb->implementation(cpu);
+        {
+            /* The call site, for the trap log (--executor-logtraps): a
+               PowerPC caller's return address. */
+            uint32_t saved = currentTrapPC;
+            currentTrapPC = cpu.lr;
+            uint32_t ret = cb->implementation(cpu);
+            currentTrapPC = saved;
+            return ret;
+        }
         /* MacPhoenix: an import nothing exports. A PowerPC caller cleans
            up after itself, so the call can be answered: 0, and logged. */
         traps::log_unimplemented(std::string("PowerPC ") + cb->name);

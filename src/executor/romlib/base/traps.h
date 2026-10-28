@@ -652,6 +652,11 @@ public:
     NOTRAP_FUNCTION2(LMSet##NAME)
 
 void init(bool enableLogging, const std::string& trapFilter = std::string());
+
+/* MacPhoenix: _CodeFragmentDispatch ($AA5A) for 68k code, on a System that
+   only runs on PowerPC Macs (8.0 and later), where CFM is always there;
+   7.x's 68k Mac goes without (traps.cpp). */
+void installCodeFragmentDispatch();
 extern std::unordered_map<std::string, traps::Entrypoint*> entrypoints;
 
 }

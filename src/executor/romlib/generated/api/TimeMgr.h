@@ -37,7 +37,8 @@ using TimerProcPtr = UPP<void(TMTaskPtr tmTaskPtr), Register<void(A1)>>;
 void InsTime(QElemPtr taskp);REGISTER_TRAP2(InsTime, 0xA058, void(A0), ClearD0);
 
 
-void InsXTime(QElemPtr taskp);
+void InsXTime(QElemPtr taskp);REGISTER_TRAP2(InsXTime, 0xA458, void(A0), ClearD0);
+
 
 void RmvTime(QElemPtr taskp);REGISTER_TRAP2(RmvTime, 0xA059, void(A0), ClearD0);
 

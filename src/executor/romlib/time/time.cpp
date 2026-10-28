@@ -209,6 +209,15 @@ void Executor::InsTime(QElemPtr taskp)
     Enqueue(taskp, &ROMlib_timehead);
 }
 
+/* MacPhoenix: the extended Time Manager's install (Inside Macintosh:
+   Processes): a task whose PrimeTime counts from when it last expired,
+   not from the call. Executor's tasks keep time that way already; the
+   8.6 Finder installs its idle timer with it. */
+void Executor::InsXTime(QElemPtr taskp)
+{
+    InsTime(taskp);
+}
+
 void Executor::RmvTime(QElemPtr taskp)
 {
     Dequeue(taskp, &ROMlib_timehead);

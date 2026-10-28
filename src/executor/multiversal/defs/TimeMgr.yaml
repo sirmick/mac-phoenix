@@ -82,7 +82,9 @@
       - name: taskp
         type: QElemPtr
         register: A0
+    executor: true
     trap: 0xA458
+    executor_extras: ClearD0
 
 # ####
 
