@@ -23,6 +23,8 @@
 #include <PEFBinaryFormat.h>
 #include <file/file.h>
 #include <rsys/launch.h>
+#include <rsys/process.h>
+#include <mman/mman.h>
 #include <hfs/hfs.h>
 #include <util/string.h>
 #include <base/builtinlibs.h>
@@ -160,12 +162,30 @@ void Executor::ROMlib_cfm_application_start()
         [&](const loaded_fragment& f) { return f.zone == zone; }), loaded.end());
 }
 
+/* MacPhoenix: memory for a fragment: the application heap, else
+   temporary memory (the Process Manager's zone), as Apple's CFM does when
+   the heap is too small: Mac OS 8.6's and 9's Finder loads its 1.8 MB
+   library into a partition of 930 KB. A block in temporary memory isn't
+   given back when the process quits (Executor's temporary memory isn't
+   tracked per process). */
+static Ptr
+cfm_new_ptr(Size n)
+{
+    Ptr p = NewPtr(n);
+    if(!p && ROMlib_pm_zone)
+    {
+        TheZoneGuard guard(ROMlib_pm_zone);
+        p = NewPtr(n);
+    }
+    return p;
+}
+
 static OSErr
 try_to_get_memory(void **addrp, syn68k_addr_t default_syn_address,
                   uint32_t total_size, int alignment)
 {
     // TODO: alignment
-    *addrp = NewPtr(total_size);
+    *addrp = cfm_new_ptr(total_size);
     return 0;
 }
 
@@ -1419,7 +1439,7 @@ OSErr Executor::C_GetDiskFragment(FSSpecPtr fsp, LONGINT offset,
            the end); was the whole data fork, so a fat file's second
            container never loaded. */
         LONGINT len = length == kWholeFork ? eof - offset : length;
-        Ptr p = len > 0 ? NewPtr(len) : nullptr;
+        Ptr p = len > 0 ? cfm_new_ptr(len) : nullptr;
         if(!p)
             retval = len > 0 ? fragNoMem : cfragFragmentFormatErr;
         else
