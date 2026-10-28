@@ -3,7 +3,280 @@
 # Executor: a guest program's own C headers declare these (Retro68's newlib,
 # MPW's CIncludes). Types are the implementations' (uint32_t for size_t and
 # for pointers the routine reads itself). Data exports (errno, _iob, ...)
-# are registered by stdclib.cpp; raw routines decode their own arguments.
+# are `data:` entries, their storage stdclib.cpp's and stdio.cpp's; raw
+# routines decode their own arguments.
+
+# ---- data ---------------------------------------------------------
+
+# ####
+
+- only-for: Executor
+  data:
+    name: "errno"
+    type: "int32_t"
+    library: StdCLib
+    executor: data_errno
+
+# ####
+
+# the last Toolbox error
+- only-for: Executor
+  data:
+    name: "MacOSErr"
+    type: "int16_t"
+    library: StdCLib
+    executor: data_MacOSErr
+
+# ####
+
+# the ctype table's address
+- only-for: Executor
+  data:
+    name: "__p_CType"
+    type: "uint8_t*"
+    library: StdCLib
+    executor: data_p_CType
+
+# ####
+
+# an MPW tool's environment
+- only-for: Executor
+  data:
+    name: "_IntEnv"
+    type: "uint8_t"
+    library: StdCLib
+    executor: data_IntEnv
+
+# ####
+
+- only-for: Executor
+  data:
+    name: "__C_phase"
+    type: "int32_t"
+    library: StdCLib
+    executor: data_C_phase
+
+# ####
+
+# a jmp_buf
+- only-for: Executor
+  data:
+    name: "__target_for_exit"
+    type: "uint8_t"
+    library: StdCLib
+    executor: data_target_for_exit
+
+# ####
+
+- only-for: Executor
+  data:
+    name: "_exit_status"
+    type: "int32_t"
+    library: StdCLib
+    executor: data_exit_status
+
+# ####
+
+# no debugger nub
+- only-for: Executor
+  data:
+    name: "__NubAt3"
+    type: "int32_t"
+    library: StdCLib
+    executor: data_NubAt3
+
+# ####
+
+- only-for: Executor
+  data:
+    name: "StandAlone"
+    type: "int32_t"
+    library: StdCLib
+    executor: data_StandAlone
+
+# ####
+
+- only-for: Executor
+  data:
+    name: "NoMoreDebugStr"
+    type: "int32_t"
+    library: StdCLib
+    executor: data_NoMoreDebugStr
+
+# ####
+
+# float.h's limits, as MPW's headers read them
+- only-for: Executor
+  data:
+    name: "_DBL_EPSILON"
+    type: "uint8_t"
+    library: StdCLib
+    executor: data_DBL_EPSILON
+
+# ####
+
+- only-for: Executor
+  data:
+    name: "_DBL_MAX"
+    type: "uint8_t"
+    library: StdCLib
+    executor: data_DBL_MAX
+
+# ####
+
+- only-for: Executor
+  data:
+    name: "_DBL_MIN"
+    type: "uint8_t"
+    library: StdCLib
+    executor: data_DBL_MIN
+
+# ####
+
+- only-for: Executor
+  data:
+    name: "_FLT_EPSILON"
+    type: "float"
+    library: StdCLib
+    executor: data_FLT_EPSILON
+
+# ####
+
+- only-for: Executor
+  data:
+    name: "_FLT_MAX"
+    type: "float"
+    library: StdCLib
+    executor: data_FLT_MAX
+
+# ####
+
+- only-for: Executor
+  data:
+    name: "_FLT_MIN"
+    type: "float"
+    library: StdCLib
+    executor: data_FLT_MIN
+
+# ####
+
+- only-for: Executor
+  data:
+    name: "_LDBL_EPSILON"
+    type: "uint8_t"
+    library: StdCLib
+    executor: data_LDBL_EPSILON
+
+# ####
+
+- only-for: Executor
+  data:
+    name: "_LDBL_MAX"
+    type: "uint8_t"
+    library: StdCLib
+    executor: data_LDBL_MAX
+
+# ####
+
+- only-for: Executor
+  data:
+    name: "_LDBL_MIN"
+    type: "uint8_t"
+    library: StdCLib
+    executor: data_LDBL_MIN
+
+# ####
+
+# internal: a zeroed block nothing should read
+- only-for: Executor
+  data:
+    name: "_StdDevs"
+    type: "uint8_t"
+    library: StdCLib
+    executor: data_StdDevs
+
+# ####
+
+- only-for: Executor
+  data:
+    name: "__SigEnv"
+    type: "uint8_t"
+    library: StdCLib
+    executor: data_SigEnv
+
+# ####
+
+- only-for: Executor
+  data:
+    name: "__loc"
+    type: "uint8_t"
+    library: StdCLib
+    executor: data_loc
+
+# ####
+
+- only-for: Executor
+  data:
+    name: "__yd"
+    type: "uint8_t"
+    library: StdCLib
+    executor: data_yd
+
+# ####
+
+- only-for: Executor
+  data:
+    name: "_CategoryLoc"
+    type: "uint8_t"
+    library: StdCLib
+    executor: data_CategoryLoc
+
+# ####
+
+- only-for: Executor
+  data:
+    name: "_PublicTimeInfo"
+    type: "uint8_t"
+    library: StdCLib
+    executor: data_PublicTimeInfo
+
+# ####
+
+- only-for: Executor
+  data:
+    name: "MoneyData"
+    type: "uint8_t"
+    library: StdCLib
+    executor: data_MoneyData
+
+# ####
+
+- only-for: Executor
+  data:
+    name: "NumericData"
+    type: "uint8_t"
+    library: StdCLib
+    executor: data_NumericData
+
+# ####
+
+# the FILE table
+- only-for: Executor
+  data:
+    name: "_iob"
+    type: "uint8_t"
+    library: StdCLib
+    executor: data_iob
+
+# ####
+
+- only-for: Executor
+  data:
+    name: "_lastbuf"
+    type: "uint8_t*"
+    library: StdCLib
+    executor: data_lastbuf
+
 
 # ---- stdclib.cpp -------------------------------------------------
 

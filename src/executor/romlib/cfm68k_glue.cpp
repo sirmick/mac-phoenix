@@ -523,8 +523,11 @@ uint32_t call_component_routine_ppc(const ComponentRoutine& r, PowerCore& cpu)
     return cpu.lr;
 }
 
-void add_call_component_upp()
+GUEST<UniversalProcPtr> *call_component_upp()
 {
+    static GUEST<UniversalProcPtr> *cell;
+    if(cell)
+        return cell;
     builtinlibs::addCFM68KEntrypoint("ExecutorPrivate", "CallComponent",
         [](syn68k_addr_t) {
             return callfromCFM68K::Invoker<LONGINT (Ptr)>::invokeFromCFM68K(&glue_CallComponent, true);
@@ -536,24 +539,18 @@ void add_call_component_upp()
     TheZoneGuard guard(LM(SysZone));
     /* kPascalStackBased, a 4-byte result, one 4-byte parameter. */
     UniversalProcPtr upp = NewRoutineDescriptor((ProcPtr)(Ptr)tv, 0xF0, kM68kISA | 0x10);
-    auto *cell = (GUEST<UniversalProcPtr> *)NewPtrClear(sizeof(GUEST<UniversalProcPtr>));
+    cell = (GUEST<UniversalProcPtr> *)NewPtrClear(sizeof(GUEST<UniversalProcPtr>));
     *cell = upp;
-    builtinlibs::addCFM68KData("InterfaceLib", "CallComponentUPP", cell);
-    /* PowerPC callers reach it through Mixed Mode the same way. */
-    builtinlibs::addPPCData("InterfaceLib", "CallComponentUPP", cell);
+    return cell;
 }
 
 }
 
-/* Called before the first builtin library connection is made (the file is
-   otherwise unreferenced, so a static initializer would not be linked). */
-void Executor::builtinlibs::addGlueEntrypoints()
+/* InterfaceLib's CallComponentUPP (Components.yaml), for CFM-68K and
+   PowerPC callers alike (PowerPC code reaches it through Mixed Mode). */
+void *Executor::data_CallComponentUPP()
 {
-    {
-        /* the older names (Strings.h's OLDROUTINENAMES): MPW's CFM-68K
-           runtime calls P2CStr for the application's name */
-        add_call_component_upp();
-    }
+    return call_component_upp();
 }
 
 /* A component call a library exports (the definitions' COMPONENT_CALL):

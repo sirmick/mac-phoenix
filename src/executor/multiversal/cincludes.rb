@@ -182,6 +182,7 @@ class CIncludesGenerator < Generator
 
         if variant_index then
             name = fun["variants"][variant_index]
+            return unless name     # a flag combination with no routine
             nbits = Math.log2(fun["variants"].length).ceil
 
             (0..nbits-1).each do |bitidx|
@@ -446,6 +447,12 @@ class CIncludesGenerator < Generator
         @out << <<~UPPDECL
 
         UPPDECL
+    end
+
+    # MacPhoenix: a library's exported variable, as Apple's headers declare
+    # it (Components.h: extern UniversalProcPtr CallComponentUPP).
+    def declare_data(value)
+        @out << "extern #{decl(value["type"], value["name"])};\n"
     end
 
     def declare_lowmem(value)

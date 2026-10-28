@@ -106,7 +106,7 @@ private
                     @declared_names << val["name"]
                     collect_dep(val["value"]) if val["value"]
                 end
-            when "typedef"
+            when "typedef", "data"
                 collect_dep(value["type"])
             when "define"
                 # A macro with parameters: those aren't names to look for,
@@ -120,7 +120,7 @@ private
                 (value ["args"] or []).each do |arg|
                     collect_dep(arg["type"])
                 end
-                @declared_names.merge value["variants"] if value["variants"]
+                @declared_names.merge value["variants"].compact if value["variants"]
             end
         end
         @required_names = @required_names - @declared_names

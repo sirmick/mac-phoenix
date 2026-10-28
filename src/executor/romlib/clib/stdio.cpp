@@ -1278,8 +1278,6 @@ void Executor::clib::stdioCloseAll()
 
 void Executor::clib::addStdio()
 {
-    exportData(LIB, "_iob", iob_);
-    exportData(LIB, "_lastbuf", lastbuf_);
 
 
 
@@ -1303,4 +1301,11 @@ void Executor::clib::addStdio()
     exportRaw68k(LIB, "scanf", &f_scanf);
     exportRaw68k(LIB, "fscanf", &f_fscanf);
     exportRaw68k(LIB, "sscanf", &f_sscanf);
+}
+
+/* The data exports' storage (StdCLib.yaml, `data:`). */
+namespace Executor
+{
+void *data_iob() { return iob_; }
+void *data_lastbuf() { return lastbuf_; }
 }

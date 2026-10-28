@@ -342,10 +342,10 @@ ProcPtr C_NGetTrapAddress(uint16_t n, TrapType ttype);NOTRAP_FUNCTION(NGetTrapAd
 void C_NSetTrapAddress(ProcPtr addr, uint16_t n, TrapType ttype);NOTRAP_FUNCTION(NSetTrapAddress);
 
 
-ProcPtr _GetTrapAddress_flags(uint16_t n, bool newTraps, bool tool);REGISTER_2FLAG_TRAP(_GetTrapAddress_flags, GetTrapAddress, INVALID_GetTrapAddress, GetOSTrapAddress, GetToolTrapAddress, 0xA146, ProcPtr(uint16_t ), A0(D0, TrapBit<0x200>, TrapBit<0x400>), ClearD0);
+ProcPtr _GetTrapAddress_flags(uint16_t n, bool newTraps, bool tool);REGISTER_TRAP2_UNEXPORTED(_GetTrapAddress_flags, 0xA146, A0(D0, TrapBit<0x200>, TrapBit<0x400>), ClearD0); TRAP_VARIANT(GetTrapAddress, _GetTrapAddress_flags, ProcPtr(uint16_t ), false, false); TRAP_VARIANT(GetOSTrapAddress, _GetTrapAddress_flags, ProcPtr(uint16_t ), true, false); TRAP_VARIANT(GetToolTrapAddress, _GetTrapAddress_flags, ProcPtr(uint16_t ), true, true);
 
 
-void _SetTrapAddress_flags(ProcPtr addr, uint16_t n, bool newTraps, bool tool);REGISTER_2FLAG_TRAP(_SetTrapAddress_flags, SetTrapAddress, INVALID_SetTrapAddress, SetOSTrapAddress, SetToolTrapAddress, 0xA047, void(ProcPtr , uint16_t ), void(A0, D0, TrapBit<0x200>, TrapBit<0x400>), ClearD0);
+void _SetTrapAddress_flags(ProcPtr addr, uint16_t n, bool newTraps, bool tool);REGISTER_TRAP2_UNEXPORTED(_SetTrapAddress_flags, 0xA047, void(A0, D0, TrapBit<0x200>, TrapBit<0x400>), ClearD0); TRAP_VARIANT(SetTrapAddress, _SetTrapAddress_flags, void(ProcPtr , uint16_t ), false, false); TRAP_VARIANT(SetOSTrapAddress, _SetTrapAddress_flags, void(ProcPtr , uint16_t ), true, false); TRAP_VARIANT(SetToolTrapAddress, _SetTrapAddress_flags, void(ProcPtr , uint16_t ), true, true);
 
 
 ProcPtr C_GetToolboxTrapAddress(uint16_t n);NOTRAP_FUNCTION(GetToolboxTrapAddress);

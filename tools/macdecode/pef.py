@@ -243,4 +243,5 @@ def dis(p, start, end):
             t = int(ins.op_str, 0)
             note = glue_target(p, toc, c, t) or ''
         print('%06x  %-8s %-24s %s' % (a, ins.mnemonic, ins.op_str, ('; ' + note) if note else ''))
-main()
+if __name__ == "__main__":
+    main()

@@ -196,11 +196,6 @@ void Executor::clib::exportRaw68k(const char *library, const char *name,
     });
 }
 
-void Executor::clib::exportData(const char *library, const char *name, void *address)
-{
-    builtinlibs::addPPCData(library, name, address);
-    builtinlibs::addCFM68KData(library, name, address);
-}
 
 /* ---- string.h ----------------------------------------------------------------- */
 
@@ -1471,6 +1466,39 @@ void Executor::clib::stdclibProcessExit()
 
 /* ---- the export table ---------------------------------------------------------- */
 
+/* The data exports' storage (StdCLib.yaml, `data:`). */
+namespace Executor
+{
+void *data_errno() { return errno_; }
+void *data_MacOSErr() { return macOSErr_; }
+void *data_p_CType() { return pCType_; }
+void *data_IntEnv() { return intEnv_; }
+void *data_C_phase() { return cPhase_; }
+void *data_target_for_exit() { return targetForExit_; }
+void *data_exit_status() { return exitStatus_; }
+void *data_NubAt3() { return nubAt3_; }
+void *data_StandAlone() { return standAlone_; }
+void *data_NoMoreDebugStr() { return noMoreDebugStr_; }
+void *data_DBL_EPSILON() { return dblEpsilon_; }
+void *data_DBL_MAX() { return dblMax_; }
+void *data_DBL_MIN() { return dblMin_; }
+void *data_FLT_EPSILON() { return fltEpsilon_; }
+void *data_FLT_MAX() { return fltMax_; }
+void *data_FLT_MIN() { return fltMin_; }
+void *data_LDBL_EPSILON() { return ldblEpsilon_; }
+void *data_LDBL_MAX() { return ldblMax_; }
+void *data_LDBL_MIN() { return ldblMin_; }
+void *data_StdDevs() { return zeroData_[0]; }
+void *data_SigEnv() { return zeroData_[1]; }
+void *data_loc() { return zeroData_[2]; }
+void *data_yd() { return zeroData_[3]; }
+void *data_CategoryLoc() { return zeroData_[4]; }
+void *data_PublicTimeInfo() { return zeroData_[5]; }
+void *data_MoneyData() { return zeroData_[6]; }
+void *data_NumericData() { return zeroData_[7]; }
+}
+
+
 namespace Executor
 {
 void c_assertprint(const char *file, int32_t line, const char *expr)
@@ -1482,30 +1510,6 @@ void c_assertprint(const char *file, int32_t line, const char *expr)
 
 void Executor::clib::addStdCLib()
 {
-    /* data */
-    exportData(LIB, "errno", errno_);
-    exportData(LIB, "MacOSErr", macOSErr_);
-    exportData(LIB, "__p_CType", pCType_);
-    exportData(LIB, "_IntEnv", intEnv_);
-    exportData(LIB, "__C_phase", cPhase_);
-    exportData(LIB, "__target_for_exit", targetForExit_);
-    exportData(LIB, "_exit_status", exitStatus_);
-    exportData(LIB, "__NubAt3", nubAt3_);
-    exportData(LIB, "StandAlone", standAlone_);
-    exportData(LIB, "NoMoreDebugStr", noMoreDebugStr_);
-    exportData(LIB, "_DBL_EPSILON", dblEpsilon_);
-    exportData(LIB, "_DBL_MAX", dblMax_);
-    exportData(LIB, "_DBL_MIN", dblMin_);
-    exportData(LIB, "_FLT_EPSILON", fltEpsilon_);
-    exportData(LIB, "_FLT_MAX", fltMax_);
-    exportData(LIB, "_FLT_MIN", fltMin_);
-    exportData(LIB, "_LDBL_EPSILON", ldblEpsilon_);
-    exportData(LIB, "_LDBL_MAX", ldblMax_);
-    exportData(LIB, "_LDBL_MIN", ldblMin_);
-    const char *internal[] = { "_StdDevs", "__SigEnv", "__loc", "__yd", "_CategoryLoc",
-                               "_PublicTimeInfo", "MoneyData", "NumericData" };
-    for(int i = 0; i < 8; i++)
-        exportData(LIB, internal[i], zeroData_[i]);
 
     /* string.h */
 

@@ -237,20 +237,21 @@ is the auditable list of what Executor implements).
 
 Next, in order:
 
-4. **Tools** (a small commit of its own). The generator writes the export
-   list it builds (per library, PowerPC and CFM-68K: `lowmem:` entries as
-   `LMGet`/`LMSet`, PB calls as `Sync`/`Async`, trap flag variants), and
-   `tools/macdecode/libraries.py` reads it instead of guessing from the
-   YAML (it undercounted by about 800). Internal names stop being exported
-   (`_NewPtr_flags`, `_BlockMove_flags`, `INVALID_GetTrapAddress`, ...).
-   Then coverage against Apple's export tables, read from the user's ROM
-   and System file each time (not committed).
-5. **Data exports in the YAML.** A declaration for a library's exported
-   variable (`data:` with name, type, library), generated into the headers
-   (`extern UniversalProcPtr CallComponentUPP;` as Retro68's
-   `Components.h` has it) and the export list. `CallComponentUPP` moves
-   to it from `cfm68k_glue.cpp`; `GetQDGlobals`, `gNotifyRectList` and the
-   like use it.
+4. **Tools** (done 2026-10-28). Executor's export tables as CFM binds
+   them, written by the executor_tests export test
+   (`build/executor-exports.json`), which `tools/macdecode/libraries.py`
+   reads instead of guessing from the YAML (it undercounted by about 800:
+   `lowmem:` entries' `LMGet`/`LMSet`, PB calls' `Sync`/`Async`, trap flag
+   variants). Internal names are no longer exported (`_NewPtr_flags`,
+   bare `PBRead`, `INVALID_GetTrapAddress`: `~` in `variants:`).
+   `libraries.py --coverage --rom ROM --system FOLDER`: against Apple's
+   libraries in the user's ROM and System file, read each time. See
+   LIBRARIES.md, "Seeing where things stand".
+5. **Data exports in the YAML** (done 2026-10-28). `data:` entries: name,
+   type, library and a getter for the storage; `extern` in the C headers
+   (`Components.h`: `extern UniversalProcPtr CallComponentUPP;`).
+   `CallComponentUPP` and StdCLib's and MathLib's data (`errno`, `_iob`,
+   `pi`, ...) are declared there now; nothing is exported from C++ alone.
 6. **Everything the ROM gives.** What an Old World Mac's ROM (and the
    System's patches) exports, measured on the G3 ROM (InterfaceLib 2493
    exports, Executor 1763; PrivateInterfaceLib 928, Executor 16; the 8.6

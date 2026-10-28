@@ -1076,8 +1076,6 @@ void Executor::clib::addMathLib()
 {
     writeDouble(guest(pi_), 3.14159265358979323846);
     write32(guest(feDflEnv_), 0);
-    exportData(LIB, "pi", pi_);
-    exportData(LIB, "_FE_DFL_ENV", feDflEnv_);
 
     exportRaw(LIB, "__fpclassify", [](PowerCore &cpu) { return raw_classifyL(cpu, m_fpclassifyd); });
     exportRaw(LIB, "__isnormal", [](PowerCore &cpu) { return raw_classifyL(cpu, m_isnormald); });
@@ -1141,4 +1139,11 @@ void Executor::clib::addMathLib()
 
     exportRaw(LIB, "num2decl", &raw_num2decl);
     exportRaw(LIB, "dec2numl", &raw_dec2numl);
+}
+
+/* The data exports' storage (MathLib.yaml, `data:`). */
+namespace Executor
+{
+void *data_pi() { return pi_; }
+void *data_FE_DFL_ENV() { return feDflEnv_; }
 }

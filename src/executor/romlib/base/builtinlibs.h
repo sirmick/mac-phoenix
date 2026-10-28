@@ -3,7 +3,9 @@
 #include <CodeFragments.h>
 #include <syn68k_public.h>
 #include <functional>
+#include <map>
 #include <string>
+#include <vector>
 
 class PowerCore;
 
@@ -18,6 +20,11 @@ namespace Executor
         /* MacPhoenix: a data export for PowerPC fragments (StdCLib's _iob,
            errno): the import binds to `address`, guest-addressable storage. */
         void addPPCData(const char *library, const char *name, void *address);
+
+        /* A data export the definitions declare (`data:`): PowerPC and
+           CFM-68K, bound to what `getter` answers once the libraries are
+           set up (their storage may be made then). */
+        void addDataExport(const char *library, const char *name, void *(*getter)());
 
         /* MacPhoenix: a routine for PowerPC code that no library exports
            (a slot of an object's vtable): the guest address of its
@@ -73,10 +80,13 @@ namespace Executor
                                                                         unsigned index);
         void checkASLMRawEntrypoints();
 
-        /* InterfaceLib's glue routines (cfm68k_glue.cpp). */
-        void addGlueEntrypoints();
-
         ConnectionID getBuiltinLib(ConstStr255Param libname, OSType arch = "pwpc"_4);
+
+        /* MacPhoenix: every library's exports, by name, as CFM binds them
+           ("pwpc" or "m68k"), the libraries' added entries included
+           (tools/macdecode/libraries.py reads them, via the executor_tests
+           export test). */
+        std::map<std::string, std::vector<std::string>> exportTable(OSType arch);
 
         Ptr makeUndefinedSymbolStub(const char *name, OSType arch = "pwpc"_4);
     }

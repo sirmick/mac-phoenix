@@ -225,9 +225,6 @@ void exportRaw(const char *library, const char *name,
 void exportRaw68k(const char *library, const char *name,
                   std::function<uint32_t(const CallArgs &)> body, int argWords = -1);
 
-/* A data export, for PowerPC and CFM-68K fragments. */
-void exportData(const char *library, const char *name, void *address);
-
 /* ---- the libraries ---------------------------------------------------------- */
 
 /* Each fills in its exports once. */

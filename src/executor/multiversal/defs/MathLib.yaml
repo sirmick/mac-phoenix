@@ -2,7 +2,29 @@
 # (romlib/clib/mathlib.cpp; docs/executor/PPCLibs.md). Only for Executor,
 # as StdCLib. The h_ routines are the m_ ones with the host's floating-point
 # exception flags carried over to the guest's FPSCR; the l routines take
-# MathLib's double-double in f1:f2 and are raw.
+# MathLib's double-double in f1:f2 and are raw. Its data (pi, _FE_DFL_ENV)
+# are `data:` entries, their storage mathlib.cpp's.
+
+# ---- data ---------------------------------------------------------
+
+# ####
+
+- only-for: Executor
+  data:
+    name: "pi"
+    type: "double"
+    library: MathLib
+    executor: data_pi
+
+# ####
+
+# fenv.h's default environment
+- only-for: Executor
+  data:
+    name: "_FE_DFL_ENV"
+    type: "uint32_t"
+    library: MathLib
+    executor: data_FE_DFL_ENV
 
 # ---- mathlib.cpp -------------------------------------------------
 

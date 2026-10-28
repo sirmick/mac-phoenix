@@ -8,6 +8,7 @@
 #include <PEFBinaryFormat.h>
 #include <unordered_map>
 #include <map>
+#include <set>
 #include <vector>
 #include <string>
 #include <iostream>
@@ -318,13 +319,16 @@ void builtinlibs::alsoExport(const char *library, const char *function, const ch
     alsoExports()[library].push_back({ function, from });
 }
 
-/* The entries another library exports as well, added to its table the
-   first time it is asked for. */
+/* The entries another library exports as well, added to its table (PowerPC
+   or CFM-68K) the first time it is asked for. */
 static void addAlsoExports(std::unordered_map<std::string, std::vector<map_entry_t>>& table,
                            const std::string& library)
 {
     auto it = alsoExports().find(library);
-    if(it == alsoExports().end() || it->second.empty())
+    if(it == alsoExports().end())
+        return;
+    static std::set<std::pair<const void *, std::string>> done;
+    if(!done.insert({ &table, library }).second)
         return;
     for(const auto& [function, from_lib] : it->second)
     {
@@ -336,7 +340,6 @@ static void addAlsoExports(std::unordered_map<std::string, std::vector<map_entry
                 break;
             }
     }
-    it->second.clear();
 }
 
 /* MacPhoenix: libraries new in a later System are found only when Executor
@@ -351,26 +354,97 @@ static bool libraryInThisSystem(const std::string& name)
     return it == since.end() || (uint16_t)LM(SysVersion) >= it->second;
 }
 
-ConnectionID builtinlibs::getBuiltinLib(ConstStr255Param libname, OSType arch)
+namespace
 {
-    static bool glue_added = false;
-    if(!glue_added)
-    {
-        glue_added = true;
-        addGlueEntrypoints();
-    }
+struct data_export
+{
+    const char *library, *name;
+    void *(*getter)();
+};
+std::vector<data_export>& dataExports()
+{
+    static std::vector<data_export> list;
+    return list;
+}
+}
 
-    /* MacPhoenix: StdCLib and MathLib, in ROM on a Power Mac
-       (docs/executor/PPCLibs.md); StdCLib's CFM-68K halves too. */
+void builtinlibs::addDataExport(const char *library, const char *name, void *(*getter)())
+{
+    dataExports().push_back({ library, name, getter });
+}
+
+/* The entries registered on first use: StdCLib and MathLib, in ROM on a
+   Power Mac (docs/executor/PPCLibs.md), StdCLib's CFM-68K halves too; then
+   the data exports the definitions declare. */
+static void addLazyEntrypoints()
+{
     static bool clibs_added = false;
     if(!clibs_added)
     {
         clibs_added = true;
         clib::addStdCLib();
         clib::addMathLib();
-        checkRawExports("StdCLib");
-        checkRawExports("MathLib");
+        builtinlibs::checkRawExports("StdCLib");
+        builtinlibs::checkRawExports("MathLib");
     }
+
+    static bool data_added = false;
+    if(!data_added)
+    {
+        data_added = true;
+        for(const data_export& d : dataExports())
+            if(void *address = d.getter())
+            {
+                builtinlibs::addPPCData(d.library, d.name, address);
+                builtinlibs::addCFM68KData(d.library, d.name, address);
+            }
+    }
+}
+
+/* CFM-68K: InterfaceLib's entries for routines whose entry is written by
+   hand (overrideCFM68KEntrypoint), added to its table once. */
+static void addOverrides68k()
+{
+    static bool added = false;
+    if(added)
+        return;
+    added = true;
+    for(auto& [function, code] : overrides68k())
+    {
+        auto& entries = builtins68k["InterfaceLib"];
+        if(std::none_of(entries.begin(), entries.end(),
+                        [&](const map_entry_t& e) { return function == e.symbol_name; }))
+            entries.push_back({function.c_str(), new_vector68k(function.c_str(), code)});
+    }
+}
+
+std::map<std::string, std::vector<std::string>> builtinlibs::exportTable(OSType arch)
+{
+    addLazyEntrypoints();
+    auto& table = arch == "m68k"_4 ? builtins68k : builtins;
+    if(arch == "m68k"_4)
+        addOverrides68k();
+    std::vector<std::string> also;
+    for(const auto& [library, entries] : alsoExports())
+        also.push_back(library);
+    for(const std::string& library : also)
+        if(library != "InterfaceLib")
+            addAlsoExports(table, library);
+    std::map<std::string, std::vector<std::string>> out;
+    for(const auto& [library, entries] : table)
+    {
+        std::vector<std::string>& names = out[library];
+        for(const map_entry_t& e : entries)
+            names.push_back(e.symbol_name);
+        std::sort(names.begin(), names.end());
+        names.erase(std::unique(names.begin(), names.end()), names.end());
+    }
+    return out;
+}
+
+ConnectionID builtinlibs::getBuiltinLib(ConstStr255Param libname, OSType arch)
+{
+    addLazyEntrypoints();
 
     std::string name(libname + 1, libname + 1 + libname[0]);
     if(arch == "m68k"_4)
@@ -393,13 +467,7 @@ ConnectionID builtinlibs::getBuiltinLib(ConstStr255Param libname, OSType arch)
             addAlsoExports(builtins68k, name);
         ConnectionID& cid = connections[name];
         if(!cid && name == "InterfaceLib")
-            for(auto& [function, code] : overrides68k())
-            {
-                auto& entries = builtins68k[name];
-                if(std::none_of(entries.begin(), entries.end(),
-                                [&](const map_entry_t& e) { return function == e.symbol_name; }))
-                    entries.push_back({function.c_str(), new_vector68k(function.c_str(), code)});
-            }
+            addOverrides68k();
         auto it = builtins68k.find(name);
         if(it == builtins68k.end())
             return nullptr;

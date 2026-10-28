@@ -50,6 +50,7 @@ set(NATIVE_TEST_SOURCES
         typeselect.cpp datetime.cpp numformat.cpp textedit.cpp sysheap.cpp
         sysroutines.cpp resprivate.cpp unknownselectors.cpp dialogs.cpp
         hfsplus_unicode.cpp hfsplus_volume.cpp
+        exports.cpp
         # Native-only: drives the .IPP driver through the Device Manager.
         # The dual-mode ABI comparison against Apple's headers belongs in
         # TEST_SOURCES later, once the Retro68 side has MacTCP.h.
@@ -138,6 +139,9 @@ else()
         target_link_options(executor_tests PRIVATE -sNODERAWFS=1)
     endif()
     target_compile_definitions(executor_tests PRIVATE -DEXECUTOR)
+    # The export tables, for tools/macdecode/libraries.py (exports.cpp).
+    target_compile_definitions(executor_tests PRIVATE
+        EXECUTOR_EXPORTS_OUT="${CMAKE_BINARY_DIR}/executor-exports.json")
     target_compile_definitions(executor_tests PRIVATE EXECUTOR_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/..")
     target_compile_options(executor_tests PRIVATE -Wno-multichar -fno-delete-null-pointer-checks)
     phoenix_exempt_from_hardening(executor_tests)

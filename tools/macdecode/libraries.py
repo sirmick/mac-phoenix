@@ -3,18 +3,23 @@ what Executor answers (docs/executor/LIBRARIES.md).
 
     tools/macdecode/libraries.py --scan [IMAGE ...]   build the index
     tools/macdecode/libraries.py                       print a summary
+    tools/macdecode/libraries.py --coverage [--rom ROM] [--system FOLDER]
+        Executor's exports against Apple's libraries in a Power Mac ROM and
+        a System file (an extracted System Folder, Executor's %System form):
+        their names, read from the user's files each time
 
-The index (<storage>/macdecode/libraries.json) has three parts:
+The index (<storage>/macdecode/libraries.json) has two parts:
   imports  every PEF container (PowerPC and CFM-68K) on the disk images,
            read for its import tables: per library and symbol, how many
            containers import it and on which images;
   apple    the export tables of Apple's libraries as MPW ships them (the
-           stub libraries in MPW's SharedLibraries folder: names only);
-  sources  data exports registered in Executor's sources (exportData,
-           addPPCData), which the definitions don't list yet.
-What Executor answers comes from the definitions themselves, read each
-time (`executor_exports`), so editing a YAML file shows on the next page
-load. The web view (`macdecode.py SNAPSHOT --serve`, /libraries) joins
+           stub libraries in MPW's SharedLibraries folder: names only).
+What Executor answers is its export tables as CFM binds them, written by
+the executor_tests export test (build/executor-exports.json; $EXECUTOR_EXPORTS
+for another build), each entry annotated from the definitions (which file,
+how). Without that file, the definitions alone (`definition_exports`: the
+names the trap macros expand, LMGet/LMSet, Sync/Async, flag variants, are
+missed). The web view (`macdecode.py SNAPSHOT --serve`, /libraries) joins
 the three.
 """
 import json
@@ -35,7 +40,6 @@ REPO = Path(__file__).resolve().parents[2]
 STORAGE = Path(os.environ.get("MACEMU_STORAGE", Path.home() / "storage"))
 INDEX = STORAGE / "macdecode" / "libraries.json"
 DEFS = REPO / "src/executor/multiversal/defs"
-SOURCES = REPO / "src/executor/romlib"
 MPW_DISK = STORAGE / "images" / "mpw.img"
 STUBS = ":Interfaces&Libraries:Libraries:SharedLibraries:"
 
@@ -209,29 +213,13 @@ def scan_apple(mpw_disk=MPW_DISK):
     return apple
 
 
-def scan_sources():
-    """sources[library] = [data symbol, ...] registered in Executor's code."""
-    out = defaultdict(set)
-    for p in SOURCES.rglob("*.cpp"):
-        s = p.read_text(errors="replace")
-        for m in re.finditer(r'addPPCData\("(\w+)", "([^"]+)"', s):
-            out[m.group(1)].add(m.group(2))
-        if "exportData(LIB" in s:
-            lib = re.search(r'LIB(?:\[\])?\s*=\s*"(\w+)"', s)
-            lib = lib and lib.group(1)
-            for m in re.finditer(r'exportData\(LIB, "([^"]+)"', s):
-                out[lib or "?"].add(m.group(1))
-    return {k: sorted(v) for k, v in out.items()}
-
-
 def default_images():
     skip = re.compile(r"^(test-|.*-service-|installers-)")
     return sorted(str(p) for p in (STORAGE / "images").glob("*.img") if not skip.match(p.name))
 
 
 def scan(images=None):
-    index = {"imports": scan_images(images or default_images()), "apple": scan_apple(),
-             "sources": scan_sources()}
+    index = {"imports": scan_images(images or default_images()), "apple": scan_apple()}
     INDEX.parent.mkdir(parents=True, exist_ok=True)
     INDEX.write_text(json.dumps(index))
     return index
@@ -251,10 +239,35 @@ ALIASES = {"NuStdCLib": "StdCLib", "NuIntEnv": "StdCLib",
                                             "PrivateInterfaceLib", "ObjectSupportLib")}}
 
 
+EXPORTS = Path(os.environ.get("EXECUTOR_EXPORTS", REPO / "build" / "executor-exports.json"))
+
+
 def executor_exports():
-    """{library: {symbol: how}}: how is "typed", "raw", "ot" (both 68k ASLM
-    and PowerPC), or "trap" (InterfaceLib's export of a trap Executor
-    implements)."""
+    """{library: {symbol: how}}, PowerPC and CFM-68K together: Executor's
+    export tables (EXPORTS), annotated from the definitions; how is "typed",
+    "raw", "ot", "component", "trap" (InterfaceLib's export of a trap), "lowmem"
+    (an accessor) or "generated" (a trap's Sync/Async or flag variant)."""
+    defs = definition_exports()
+    if not EXPORTS.exists():
+        print(f"libraries.py: no {EXPORTS} (ctest -R executor.Exports): "
+              "from the definitions alone", file=sys.stderr)
+        return defs
+    out = defaultdict(dict)
+    for libs in json.loads(EXPORTS.read_text()).values():
+        for lib, names in libs.items():
+            for n in names:
+                info = defs.get(lib, {}).get(n)
+                if not info:
+                    how = "lowmem" if n.startswith(("LMGet", "LMSet")) else "generated"
+                    info = {"how": how, "file": "", "aslm": None, "executor": None}
+                out[lib].setdefault(n, info)
+    return out
+
+
+def definition_exports():
+    """{library: {symbol: how}} as the definitions name them: how is "typed",
+    "raw", "ot" (both 68k ASLM and PowerPC), or "trap" (InterfaceLib's export
+    of a trap Executor implements)."""
     out = defaultdict(dict)
     files = {f: yaml.safe_load(f.read_text()) or [] for f in sorted(DEFS.glob("*.yaml"))}
     component_dispatchers = {i["dispatcher"]["name"] for items in files.values() for i in items
@@ -269,8 +282,9 @@ def executor_exports():
             if lib:
                 how = ("ot" if fn.get("aslm") else "raw" if fn.get("raw")
                        else "component" if fn.get("dispatcher") in component_dispatchers else "typed")
-                out[lib][fn["name"]] = {"how": how, "file": f.stem,
-                                        "aslm": fn.get("aslm"), "executor": fn.get("executor")}
+                for one in lib if isinstance(lib, list) else [lib]:
+                    out[one][fn["name"]] = {"how": how, "file": f.stem,
+                                            "aslm": fn.get("aslm"), "executor": fn.get("executor")}
             elif fn.get("executor") and item.get("api") != "carbon":
                 out["InterfaceLib"].setdefault(fn["name"], {"how": "trap", "file": f.stem,
                                                             "aslm": None, "executor": fn.get("executor")})
@@ -298,22 +312,18 @@ SYSTEM_EXTRA = {"CarbonLib", "OTKernelLib", "OTConfigLib", "OTKernelUtilLib", "O
 def rows(index):
     """One row per (library, symbol) any of the three knows."""
     ex = executor_exports()
-    src = index.get("sources", {}) if index else {}
     apple = index.get("apple", {}) if index else {}
     imports = index.get("imports", {}) if index else {}
-    libs = set(ex) | set(src) | set(apple) | {l for a in imports.values() for l in a}
+    libs = set(ex) | set(apple) | {l for a in imports.values() for l in a}
     out = []
     for lib in sorted(libs):
         target = ALIASES.get(lib, lib)
         syms = set(ex.get(target, {})) if lib == target else set()
-        syms |= set(src.get(lib, [])) if lib == target else set()
         syms |= set(apple.get(lib, {}).get("exports", {}))
         imp = {a: imports.get(a, {}).get(lib, {}) for a in ("pwpc", "m68k")}
         syms |= set(imp["pwpc"]) | set(imp["m68k"])
         for s in sorted(syms):
             e = ex.get(target, {}).get(s)
-            if not e and s in src.get(target, []):
-                e = {"how": "data", "file": "sources", "aslm": None, "executor": None}
             a = apple.get(lib, {}).get("exports", {})
             out.append({
                 "lib": lib, "sym": s, "alias": target if target != lib else "",
@@ -329,7 +339,92 @@ def rows(index):
     return out
 
 
+# ---- coverage against Apple's own libraries ------------------------------
+
+def rom_libraries(path):
+    """{library: {symbol, ...}} from an Old World Power Mac ROM: its 'nlib'
+    ROM resources (type, ID, name; the entry's data pointer just before),
+    each a PEF container. A library in more than one container (the G3's
+    InterfaceLib: the Toolbox's and the math routines') is their union."""
+    b = Path(path).read_bytes()
+    out = defaultdict(set)
+    for m in re.finditer(b"nlib", b):
+        i = m.start()
+        n = b[i + 7] if i + 7 < len(b) else 0
+        name = b[i + 8:i + 8 + n]
+        if not n or not all(32 <= c < 127 for c in name):
+            continue
+        data = struct.unpack_from(">I", b, i - 4)[0]
+        if b[data:data + 8] != b"Joy!peff":
+            continue
+        out[name.decode()] |= {s for s, _ in pef_exports(b, data)}
+    return dict(out)
+
+
+def appledouble_resource_fork(path):
+    """The resource fork of an AppleDouble header file (Executor's %NAME)."""
+    d = Path(path).read_bytes()
+    for i in range(struct.unpack_from(">H", d, 24)[0]):
+        eid, off, ln = struct.unpack_from(">III", d, 26 + 12 * i)
+        if eid == 2:
+            return d[off:off + ln]
+    return b""
+
+
+def system_libraries(folder):
+    """{library: {symbol, ...}} a System file brings: its 'nlib' resources
+    and the fragments in its data fork its 'cfrg's list (8.x's Toolbox
+    libraries). `folder`: an extracted System Folder (Executor's, the
+    resource fork in %System)."""
+    sys.path.insert(0, str(Path(__file__).parent))
+    import rsrc
+    data = (Path(folder) / "System").read_bytes()
+    res = rsrc.parse_resource_fork(appledouble_resource_fork(Path(folder) / "%System"))
+    out = defaultdict(set)
+    for (rtype, _), (name, b) in res.items():
+        if rtype == "nlib" and name and b[:8] == b"Joy!peff":
+            out[name] |= {s for s, _ in pef_exports(b, 0)}
+        elif rtype == "cfrg":
+            n, o = struct.unpack_from(">I", b, 28)[0], 32
+            for _ in range(n):
+                where = b[o + 0x17]
+                off, ln = struct.unpack_from(">II", b, o + 0x18)
+                size = struct.unpack_from(">H", b, o + 0x28)[0]
+                lib = b[o + 0x2b:o + 0x2b + b[o + 0x2a]].decode("mac_roman")
+                if where == 1 and b[o:o + 4] == b"pwpc" and data[off:off + 8] == b"Joy!peff":
+                    out[lib] |= {s for s, _ in pef_exports(data, off)}
+                o += size
+    return dict(out)
+
+
+def coverage(rom, system, index):
+    """Per Apple library: its exports, how many Executor has, how many the
+    disk images' programs import and of those Executor lacks."""
+    apple = defaultdict(set)
+    for source in (rom_libraries(rom) if rom else {}, system_libraries(system) if system else {}):
+        for lib, syms in source.items():
+            apple[lib] |= syms
+    if not EXPORTS.exists():
+        sys.exit(f"no {EXPORTS}: run ctest -R executor.Exports")
+    ex = json.loads(EXPORTS.read_text())["pwpc"]
+    imports = index.get("imports", {}).get("pwpc", {}) if index else {}
+    print(f"{'library':24} {'Apple':>6} {'Executor':>9} {'%':>4} {'imported':>9} {'lacking':>8}")
+    for lib in sorted(apple, key=lambda l: -len(apple[l])):
+        have = set(ex.get(lib, []))
+        used = set(imports.get(lib, {}))
+        print(f"{lib:24} {len(apple[lib]):6} {len(apple[lib] & have):9} "
+              f"{100 * len(apple[lib] & have) // max(1, len(apple[lib])):4} "
+              f"{len(used & apple[lib]):9} {len((used & apple[lib]) - have):8}")
+
+
 def main():
+    if "--coverage" in sys.argv:
+        args = sys.argv[sys.argv.index("--coverage") + 1:]
+        opt = lambda flag: args[args.index(flag) + 1] if flag in args else None
+        if not opt("--rom") and not opt("--system"):
+            sys.exit("--coverage [--rom ROM] [--system EXTRACTED-SYSTEM-FOLDER]")
+        coverage(opt("--rom"), opt("--system"), load_index())
+        return
     if "--scan" in sys.argv:
         images = [a for a in sys.argv[1:] if a != "--scan"]
         scan(images or None)

@@ -259,6 +259,19 @@ class ExecutorGenerator < Generator
 
     end
 
+    # MacPhoenix: a library's exported variable: Executor's getter
+    # (`executor:`, the name; true: data_NAME) gives its guest-addressable
+    # storage, asked for once the libraries are set up (builtinlibs).
+    def declare_data(value)
+        return unless value["executor"]
+        getter = value["executor"] == true ? "data_#{value["name"]}" : value["executor"]
+        @out << "void *#{getter}();"
+        Array(value["library"]).each do |lib|
+            @out << " DATA_EXPORT(#{lib.gsub(/\W/, '_')}, \"#{lib}\", #{value["name"]}, #{getter});"
+        end
+        @out << "\n"
+    end
+
     def handle_regcall_conv(fun)
         args = (fun["args"] or [])
         @out << (fun["returnreg"] or "void")
@@ -411,7 +424,23 @@ class ExecutorGenerator < Generator
         elsif fun["file_trap"] then
             @out << "FILE_#{sub}TRAP(#{name}, #{fun["args"][0]["type"]}, #{trap_sel_disp});"
         elsif trap && (fun["executor_extras"] || fun["returnreg"] || args.any? {|arg| arg["register"]}) then
-            if fun["variants"] then
+            if fun["variants"] && fun["variants"].include?(nil) then
+                # A flag combination with no routine of its own (~ in the
+                # definition): the trap and the other variants, one by one.
+                variants = fun["variants"]
+                nflags = variants.size >= 3 ? 2 : 1
+                args1 = fun["args"][0..-(nflags + 1)]
+                type = (fun["return"] or "void") + "(" + (args1.map {|arg| decl(arg["type"])}).join(", ") + ")"
+                @out << "REGISTER_TRAP2_UNEXPORTED(#{cname}, #{hexlit(trap)}, "
+                handle_regcall_conv(fun)
+                @out << ");"
+                variants.each_with_index do |variant, i|
+                    next unless variant
+                    flags = nflags == 2 ? [(i >> 1) & 1, i & 1] : [i]
+                    @out << " TRAP_VARIANT(#{variant}, #{cname}, #{type}, #{flags.map {|f| f == 1 ? "true" : "false"}.join(", ")});"
+                end
+                @out << "\n"
+            elsif fun["variants"] then
                 variants = fun["variants"]
                 nflagstr = variants.size >= 3 ? "2" : ""
                 @out << "REGISTER_#{nflagstr}FLAG_TRAP(#{cname}, #{variants.join(", ")}, "
@@ -423,8 +452,10 @@ class ExecutorGenerator < Generator
             else
                 @out << "REGISTER_#{sub}TRAP#{two}(#{name}, #{trap_sel_disp}, "
             end
-            handle_regcall_conv(fun)
-            @out << ");\n"
+            unless fun["variants"] && fun["variants"].include?(nil)
+                handle_regcall_conv(fun)
+                @out << ");\n"
+            end
         elsif fun["selector"] then
             @out << "PASCAL_SUBTRAP(#{name}, #{hexlit(trap)}, "
             @out << "#{hexlit(fun["selector"])}, #{hexlit(fun["dispatcher"])});\n"

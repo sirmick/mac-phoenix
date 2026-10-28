@@ -795,7 +795,7 @@
     returnreg: A0
     variants:
       - GetTrapAddress
-      - INVALID_GetTrapAddress
+      - ~ # no routine: tool without newTraps
       - GetOSTrapAddress
       - GetToolTrapAddress
     executor_extras: ClearD0
@@ -821,7 +821,7 @@
     trap: 0xA047
     variants:
       - SetTrapAddress
-      - INVALID_SetTrapAddress
+      - ~ # no routine: tool without newTraps
       - SetOSTrapAddress
       - SetToolTrapAddress
     executor_extras: ClearD0

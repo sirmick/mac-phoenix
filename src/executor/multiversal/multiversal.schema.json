@@ -50,6 +50,11 @@
                     },
                     {
                         "type": "object",
+                        "required": [ "data" ],
+                        "properties": { "data": { "$ref": "#/definitions/data" } }
+                    },
+                    {
+                        "type": "object",
                         "required": [ "define" ],
                         "properties": { "define": { "$ref": "#/definitions/define" } }
                     },
@@ -131,7 +136,7 @@
                 "aslm": { "type": "object", "properties": { "set": { "type": "string" }, "name": { "type": "string" }, "index": { "type": "integer" } } },
                 "callconv": { "type": "string" },
                 "returnreg": { "$ref": "#/definitions/reg" },
-                "variants": { "type": "array", "items": { "type": "string" }},
+                "variants": { "type": "array", "items": { "type": ["string", "null"] }},
                 "executor_extras": { "type": "string" },
                 "m68k-inline": { "type": "array", "items": { "type": "integer" }},
                 "dispatcher": { "type": "string" },
@@ -178,6 +183,18 @@
             },
             "additionalProperties": false,
             "required": [ "name", "type", "address" ]
+        },
+        "data": {
+            "type": "object",
+            "properties": {
+                "name": { "type": "string" },
+                "type": { "type": "string" },
+                "library": { "type": ["string", "array"] },
+                "executor": { "type": ["string", "boolean"] },
+                "comment": { "type": "string" }
+            },
+            "additionalProperties": false,
+            "required": [ "name", "type", "library" ]
         },
         "define": {
             "type": "object",

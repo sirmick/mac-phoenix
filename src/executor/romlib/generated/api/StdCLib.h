@@ -25,6 +25,93 @@
 
 namespace Executor {
 
+void *data_errno(); DATA_EXPORT(StdCLib, "StdCLib", errno, data_errno);
+
+
+void *data_MacOSErr(); DATA_EXPORT(StdCLib, "StdCLib", MacOSErr, data_MacOSErr);
+
+
+void *data_p_CType(); DATA_EXPORT(StdCLib, "StdCLib", __p_CType, data_p_CType);
+
+
+void *data_IntEnv(); DATA_EXPORT(StdCLib, "StdCLib", _IntEnv, data_IntEnv);
+
+
+void *data_C_phase(); DATA_EXPORT(StdCLib, "StdCLib", __C_phase, data_C_phase);
+
+
+void *data_target_for_exit(); DATA_EXPORT(StdCLib, "StdCLib", __target_for_exit, data_target_for_exit);
+
+
+void *data_exit_status(); DATA_EXPORT(StdCLib, "StdCLib", _exit_status, data_exit_status);
+
+
+void *data_NubAt3(); DATA_EXPORT(StdCLib, "StdCLib", __NubAt3, data_NubAt3);
+
+
+void *data_StandAlone(); DATA_EXPORT(StdCLib, "StdCLib", StandAlone, data_StandAlone);
+
+
+void *data_NoMoreDebugStr(); DATA_EXPORT(StdCLib, "StdCLib", NoMoreDebugStr, data_NoMoreDebugStr);
+
+
+void *data_DBL_EPSILON(); DATA_EXPORT(StdCLib, "StdCLib", _DBL_EPSILON, data_DBL_EPSILON);
+
+
+void *data_DBL_MAX(); DATA_EXPORT(StdCLib, "StdCLib", _DBL_MAX, data_DBL_MAX);
+
+
+void *data_DBL_MIN(); DATA_EXPORT(StdCLib, "StdCLib", _DBL_MIN, data_DBL_MIN);
+
+
+void *data_FLT_EPSILON(); DATA_EXPORT(StdCLib, "StdCLib", _FLT_EPSILON, data_FLT_EPSILON);
+
+
+void *data_FLT_MAX(); DATA_EXPORT(StdCLib, "StdCLib", _FLT_MAX, data_FLT_MAX);
+
+
+void *data_FLT_MIN(); DATA_EXPORT(StdCLib, "StdCLib", _FLT_MIN, data_FLT_MIN);
+
+
+void *data_LDBL_EPSILON(); DATA_EXPORT(StdCLib, "StdCLib", _LDBL_EPSILON, data_LDBL_EPSILON);
+
+
+void *data_LDBL_MAX(); DATA_EXPORT(StdCLib, "StdCLib", _LDBL_MAX, data_LDBL_MAX);
+
+
+void *data_LDBL_MIN(); DATA_EXPORT(StdCLib, "StdCLib", _LDBL_MIN, data_LDBL_MIN);
+
+
+void *data_StdDevs(); DATA_EXPORT(StdCLib, "StdCLib", _StdDevs, data_StdDevs);
+
+
+void *data_SigEnv(); DATA_EXPORT(StdCLib, "StdCLib", __SigEnv, data_SigEnv);
+
+
+void *data_loc(); DATA_EXPORT(StdCLib, "StdCLib", __loc, data_loc);
+
+
+void *data_yd(); DATA_EXPORT(StdCLib, "StdCLib", __yd, data_yd);
+
+
+void *data_CategoryLoc(); DATA_EXPORT(StdCLib, "StdCLib", _CategoryLoc, data_CategoryLoc);
+
+
+void *data_PublicTimeInfo(); DATA_EXPORT(StdCLib, "StdCLib", _PublicTimeInfo, data_PublicTimeInfo);
+
+
+void *data_MoneyData(); DATA_EXPORT(StdCLib, "StdCLib", MoneyData, data_MoneyData);
+
+
+void *data_NumericData(); DATA_EXPORT(StdCLib, "StdCLib", NumericData, data_NumericData);
+
+
+void *data_iob(); DATA_EXPORT(StdCLib, "StdCLib", _iob, data_iob);
+
+
+void *data_lastbuf(); DATA_EXPORT(StdCLib, "StdCLib", _lastbuf, data_lastbuf);
+
+
 char* c_memcpy(char *d, const char *s, uint32_t n);LIBRARY_FUNCTION(StdCLib, memcpy, c_memcpy);
 
 

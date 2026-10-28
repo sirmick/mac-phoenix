@@ -62,6 +62,11 @@ void traps::LibraryRawExport::init()
     builtinlibs::expectRawExport(library, name);
 }
 
+void traps::DataExport::init()
+{
+    builtinlibs::addDataExport(library, name, getter);
+}
+
 void traps::LibraryAlsoExport::init()
 {
     builtinlibs::alsoExport(library, name, from);

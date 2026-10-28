@@ -111,6 +111,19 @@
 
 # ####
 
+# A global variable InterfaceLib exports (Components.h): a routine
+# descriptor that code which isn't 68k passes to CallUniversalProc, with a
+# ComponentParameters block, to make a component call by hand. Executor's
+# copies the block onto the 68k stack and calls _ComponentDispatch
+# (cfm68k_glue.cpp).
+- data:
+    name: CallComponentUPP
+    type: UniversalProcPtr
+    library: InterfaceLib
+    executor: true
+
+# ####
+
 - funptr:
     name: ComponentRoutineUPP
     return: ComponentResult

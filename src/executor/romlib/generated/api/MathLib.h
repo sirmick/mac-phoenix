@@ -18,6 +18,12 @@
 
 namespace Executor {
 
+void *data_pi(); DATA_EXPORT(MathLib, "MathLib", pi, data_pi);
+
+
+void *data_FE_DFL_ENV(); DATA_EXPORT(MathLib, "MathLib", _FE_DFL_ENV, data_FE_DFL_ENV);
+
+
 double h_cos(double x);LIBRARY_FUNCTION(MathLib, cos, h_cos);
 
 

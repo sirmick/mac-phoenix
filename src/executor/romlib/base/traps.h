@@ -295,6 +295,21 @@ private:
     const char *library;
 };
 
+/* MacPhoenix: a library's exported variable (`data:` in the definitions:
+   CallComponentUPP, StdCLib's errno): `getter` gives its guest-addressable
+   storage, asked for once the libraries are set up (builtinlibs). */
+class DataExport : public internal::DeferredInit
+{
+public:
+    DataExport(const char *name, const char *library, void *(*getter)())
+        : name(name), library(library), getter(getter) {}
+    virtual void init() override;
+private:
+    const char *name;
+    const char *library;
+    void *(*getter)();
+};
+
 /* ... and a routine another library exports as well (`library:` on a
    trap's or subtrap's entry: SoundLib's Sound Manager calls; the second
    and later of a `library:` list): its entry in `from` (InterfaceLib for a
@@ -441,6 +456,8 @@ public:
     extern Executor::traps::LibraryRawExport NAME
 #define EXTERN_TRAP_GLUE(NAME, INIT, ...) \
     extern Executor::traps::__VA_ARGS__ NAME
+#define EXTERN_DATA_EXPORT(NAME, INIT) \
+    extern Executor::traps::DataExport NAME
 #define EXTERN_LIBRARY_ALSO(NAME, INIT) \
     extern Executor::traps::LibraryAlsoExport NAME
 #define EXTERN_ASLM_FUNCTION(NAME, INIT, ...) \
@@ -465,6 +482,8 @@ public:
     Executor::traps::LibraryRawExport NAME INIT
 #define DEFINE_TRAP_GLUE(NAME, INIT, ...) \
     Executor::traps::__VA_ARGS__ NAME INIT
+#define DEFINE_DATA_EXPORT(NAME, INIT) \
+    Executor::traps::DataExport NAME INIT
 #define DEFINE_LIBRARY_ALSO(NAME, INIT) \
     Executor::traps::LibraryAlsoExport NAME INIT
 #define DEFINE_ASLM_FUNCTION(NAME, INIT, ...) \
@@ -484,6 +503,7 @@ public:
 #define CREATE_LIBRARY_RAW PREPROCESSOR_CONCAT(TRAP_INSTANTIATION, _LIBRARY_RAW)
 #define CREATE_OT_FUNCTION PREPROCESSOR_CONCAT(TRAP_INSTANTIATION, _OT_FUNCTION)
 #define CREATE_LIBRARY_ALSO PREPROCESSOR_CONCAT(TRAP_INSTANTIATION, _LIBRARY_ALSO)
+#define CREATE_DATA_EXPORT PREPROCESSOR_CONCAT(TRAP_INSTANTIATION, _DATA_EXPORT)
 #define CREATE_TRAP_GLUE PREPROCESSOR_CONCAT(TRAP_INSTANTIATION, _TRAP_GLUE)
 #define CREATE_ASLM_FUNCTION PREPROCESSOR_CONCAT(TRAP_INSTANTIATION, _ASLM_FUNCTION)
 #define CREATE_ASLM_RAW PREPROCESSOR_CONCAT(TRAP_INSTANTIATION, _ASLM_RAW)
@@ -504,6 +524,13 @@ public:
     CREATE_FUNCTION_WRAPPER(NAME, &C_##NAME, (#NAME, TRAPNAME, "InterfaceLib"), SubTrapFunction<decltype(C_##NAME) COMMA &C_##NAME COMMA TRAP COMMA SELECTOR COMMA callconv::Register<__VA_ARGS__>>)
 #define REGISTER_SUBTRAP2(NAME, TRAP, SELECTOR, TRAPNAME, ...) \
     CREATE_FUNCTION_WRAPPER(stub_##NAME, &NAME, (#NAME, TRAPNAME, "InterfaceLib"), SubTrapFunction<decltype(NAME) COMMA &NAME COMMA TRAP COMMA SELECTOR COMMA callconv::Register<__VA_ARGS__>>)
+/* MacPhoenix: the implementation behind a trap's named variants (NewPtr,
+   NewPtrSys, ...; PBReadSync, PBReadAsync): the trap, not an export of its
+   own, as in Apple's InterfaceLib. */
+#define REGISTER_TRAP2_UNEXPORTED(NAME, TRAP, ...) \
+    CREATE_FUNCTION_WRAPPER(stub_##NAME, &NAME, (#NAME), TrapFunction<decltype(NAME) COMMA &NAME COMMA TRAP COMMA callconv::Register<__VA_ARGS__>>)
+#define REGISTER_SUBTRAP2_UNEXPORTED(NAME, TRAP, SELECTOR, TRAPNAME, ...) \
+    CREATE_FUNCTION_WRAPPER(stub_##NAME, &NAME, (#NAME, TRAPNAME), SubTrapFunction<decltype(NAME) COMMA &NAME COMMA TRAP COMMA SELECTOR COMMA callconv::Register<__VA_ARGS__>>)
 
 #define LIBRARY_FUNCTION(LIB, NAME, IMPL) \
     CREATE_LIBRARY_FUNCTION(lib_##LIB##_##NAME, (#NAME, #LIB), LibraryFunction<decltype(IMPL) COMMA &IMPL>)
@@ -521,6 +548,9 @@ public:
     CREATE_LIBRARY_RAW(lib_##LIB##_##NAME, (#NAME, #LIB))
 #define TRAP_GLUE(LIB, NAME, DISPATCHER, SELECTOR) \
     CREATE_TRAP_GLUE(glue_##LIB##_##NAME, (#NAME, #LIB, &DISPATCHER, SELECTOR), TrapGlue<decltype(NAME)>)
+/* TOKEN names the registration (LIBNAME may not be an identifier). */
+#define DATA_EXPORT(TOKEN, LIBNAME, NAME, GETTER) \
+    CREATE_DATA_EXPORT(dataexport_##TOKEN##_##NAME, (#NAME, LIBNAME, &GETTER))
 #define LIBRARY_ALSO(LIB, NAME, FROM) \
     CREATE_LIBRARY_ALSO(also_##LIB##_##NAME, (#NAME, #LIB, #FROM))
 #define ASLM_FUNCTION(SET, INDEX, NAME, IMPL) \
@@ -559,11 +589,11 @@ public:
 #define TRAP_VARIANT(NAME, IMPL_NAME, ...) \
     CREATE_FUNCTION_WRAPPER(NAME, , (stub_##IMPL_NAME, #NAME, "InterfaceLib"), TrapVariant<decltype(stub_##IMPL_NAME), __VA_ARGS__>)
 #define REGISTER_FLAG_TRAP(IMPL_NAME, NAME0, NAME1, TRAP, TYPE, ...) \
-    REGISTER_TRAP2(IMPL_NAME, TRAP, __VA_ARGS__); \
+    REGISTER_TRAP2_UNEXPORTED(IMPL_NAME, TRAP, __VA_ARGS__); \
     TRAP_VARIANT(NAME0, IMPL_NAME, TYPE, false); \
     TRAP_VARIANT(NAME1, IMPL_NAME, TYPE, true)
 #define REGISTER_2FLAG_TRAP(IMPL_NAME, NAME00, NAME01, NAME10, NAME11, TRAP, TYPE, ...) \
-    REGISTER_TRAP2(IMPL_NAME, TRAP, __VA_ARGS__); \
+    REGISTER_TRAP2_UNEXPORTED(IMPL_NAME, TRAP, __VA_ARGS__); \
     TRAP_VARIANT(NAME00, IMPL_NAME, TYPE, false, false); \
     TRAP_VARIANT(NAME10, IMPL_NAME, TYPE, true, false); \
     TRAP_VARIANT(NAME01, IMPL_NAME, TYPE, false, true); \
@@ -576,7 +606,7 @@ public:
     REGISTER_FLAG_TRAP(NAME, NAME##Sync, NAME##Async, TRAP, OSErr(PBTYPE), D0 (A0, TrapBit<ASYNCBIT>))
 
 #define FILE_SUBTRAP(NAME, PBTYPE, TRAP, SELECTOR, TRAPNAME) \
-    REGISTER_SUBTRAP2(NAME, TRAP, SELECTOR, TRAPNAME, D0 (A0, TrapBit<ASYNCBIT>)); \
+    REGISTER_SUBTRAP2_UNEXPORTED(NAME, TRAP, SELECTOR, TRAPNAME, D0 (A0, TrapBit<ASYNCBIT>)); \
     TRAP_VARIANT(NAME##Sync, NAME, OSErr(PBTYPE), false); \
     TRAP_VARIANT(NAME##Async, NAME, OSErr(PBTYPE), true)
 

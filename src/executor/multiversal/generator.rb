@@ -200,6 +200,11 @@ class Generator
         @out << value.strip << "\n"
     end
 
+    # MacPhoenix: a library's exported variable (CallComponentUPP, StdCLib's
+    # errno): nothing by default.
+    def declare_data(value)
+    end
+
     def generate_header(header)
         @out = ""
 
@@ -229,6 +234,9 @@ class Generator
 
                 when "lowmem"
                     declare_lowmem(value)
+
+                when "data"
+                    declare_data(value)
 
                 when "funptr"
                     @type_size_map[value["name"]] = 4

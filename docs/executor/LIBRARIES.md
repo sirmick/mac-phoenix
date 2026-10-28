@@ -86,9 +86,12 @@ name, in which calling convention:
   registered, or registered but not declared (`LIBRARY_RAW`).
 - `executor:` names the C++ routine as for traps (`c_` prefix + name, or
   the whole name, so aliases share one: `_memcpy` is `c_memcpy`).
-- Data exports (StdCLib's `errno`, `_iob`) are to be `- data:` entries
-  with `library:` and a type; for now the sources register them (their
-  storage is allocated when the library is set up).
+- A library's exported variable is a `- data:` entry: name, type,
+  `library:`, and `executor:` naming a getter (`void *data_NAME()`; `true`
+  for that name) that gives its guest-addressable storage, asked for once
+  the libraries are set up. The C headers declare it `extern`
+  (`Components.h`: `extern UniversalProcPtr CallComponentUPP;`), unless
+  it's `only-for: Executor` (StdCLib's `errno`, `_iob`; MathLib's `pi`).
 
 A component call says its selector; its dispatcher is a component
 type's (`selector-location: Component`, trap `$A82A`):
@@ -281,12 +284,32 @@ tables of Apple's libraries as MPW ships them (stub libraries; names
 only), into `<storage>/macdecode/libraries.json`; without `--scan` it
 prints a summary per library. The macdecode web view
 (`tools/macdecode/macdecode.py SNAPSHOT --serve`, default port 8765) has a
-**Libraries** page joining that with what the definitions say Executor
-answers, read on every load: per library, Apple's exports, Executor's,
-what programs import and what of that Executor lacks; then every symbol,
-filtered by library, Executor has/lacks and imported or not ("work
-list"), with the routes (PowerPC, CFM-68K, 68k ASLM set and name) and
-the routine.
+**Libraries** page joining that with what Executor answers, read on every
+load: per library, Apple's exports, Executor's, what programs import and
+what of that Executor lacks; then every symbol, filtered by library,
+Executor has/lacks and imported or not ("work list"), with the routes
+(PowerPC, CFM-68K, 68k ASLM set and name) and the routine.
+
+What Executor answers is its export tables as CFM binds them, which the
+executor_tests export test writes to `build/executor-exports.json`
+(`ctest -R executor.Exports`; `tests/exports.cpp`, which also fails if an
+implementation's own name, `_NewPtr_flags`, is exported). They are the
+definitions as the trap macros expand them: a `lowmem:` entry gives
+`LMGetX`/`LMSetX`, a File Manager call `PBXSync`/`PBXAsync`, a trap with
+flags its named variants (`NewPtr`, `NewPtrSys`, ...; `~` in `variants:`
+for a combination with no routine). Without the file, the definitions
+alone (undercounted).
+
+`libraries.py --coverage --rom ROM --system FOLDER` compares that with
+Apple's libraries themselves: a Power Mac ROM's (its `'nlib'` ROM
+resources: InterfaceLib, PrivateInterfaceLib, NameRegistryLib,
+DriverServicesLib, ...) and a System file's (its `'nlib'`s, and from 8.x
+the Toolbox libraries in its data fork its `'cfrg'`s list); FOLDER is an
+extracted System Folder (Executor's, `~/storage/executor-systems/IMAGE`).
+The names are read from the user's files each time, not kept. Per
+library: Apple's exports, Executor's, what programs import, what of that
+Executor lacks (Apple's own libraries on the System disks count as
+importers).
 
 ## Tools on the Retro68 side
 

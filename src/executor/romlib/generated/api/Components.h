@@ -4,7 +4,8 @@
  *                                ============                               *
  *                                                                           *
  * Needs:                                                                    *
- *     MacTypes.h    LONGINT, OSType, INTEGER, Handle, OSErr                 *
+ *     MacTypes.h     LONGINT, OSType, INTEGER, Handle, OSErr                *
+ *     MixedMode.h    UniversalProcPtr                                       *
  *                                                                           *
  *                                                                           *
  *****************************************************************************/
@@ -16,6 +17,7 @@
 #include <iosfwd>
 #include <base/lowglobals.h>
 #include "ExMacTypes.h"
+#include "MixedMode.h"
 
 #define MODULE_NAME Components
 #include <base/api-module.h>
@@ -44,6 +46,9 @@ typedef ComponentResource *ComponentResourcePtr;
 typedef GUEST<ComponentResourcePtr> *ComponentResourceHandle;
 
 struct ComponentParameters{GUEST_STRUCT;uint8_t flags;uint8_t paramSize;GUEST<INTEGER> what;GUEST<LONGINT> params[1];};static_assert(sizeof(ComponentParameters) == 8);void describeStruct(const ComponentParameters&, std::ostream&);
+
+void *data_CallComponentUPP(); DATA_EXPORT(InterfaceLib, "InterfaceLib", CallComponentUPP, data_CallComponentUPP);
+
 
 using ComponentRoutineUPP = UPP<ComponentResult(ComponentParameters *cp, Handle componentStorage)>;
 

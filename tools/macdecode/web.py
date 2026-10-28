@@ -533,7 +533,7 @@ class Site:
         text = q.get("q", [""])[0].strip().lower()
         how_label = {"typed": "typed", "raw": "raw (PowerPC)", "ot": "Open Transport", "trap": "trap's export",
                      "component": "component call",
-                     "data": "data (sources)", "": "—"}
+                     "lowmem": "low-memory accessor", "generated": "trap variant", "": "—"}
 
         def routes(r):
             h = r["how"]
@@ -604,8 +604,9 @@ class Site:
             f"<p>Presets: {presets}{(' — library <b>' + esc(lib) + '</b> (<a href=/libraries?scope=' + scope + '>all</a>)') if lib else ''}</p>"
             "<p class='mut'>Imported = the PEF containers on the disk images that import the symbol (PowerPC, "
             "CFM-68K; libraries.py --scan). Apple = in the export table of Apple's library as MPW ships it. "
-            "Executor = the definitions (src/executor/multiversal/defs: library:, aslm:, raw:) and the traps "
-            "Executor implements, which InterfaceLib exports; editing a YAML file shows on reload. System = Apple's "
+            "Executor = its export tables as CFM binds them (build/executor-exports.json, written by "
+            "ctest -R executor.Exports from the definitions in src/executor/multiversal/defs); rebuild and "
+            "rerun it after editing a YAML file. System = Apple's "
             "libraries (the rest ship with their applications).</p>"
             "<details open><summary><b>Per library</b></summary><div class='wrap'><table><tr><th>Library</th>"
             "<th>Apple exports</th><th>Executor</th><th>Imported symbols</th><th>Imported, Executor lacks</th>"
