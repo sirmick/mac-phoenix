@@ -101,6 +101,7 @@ Timeouts are the ctest `TIMEOUT` values in `tests/CMakeLists.txt`.
 | `command_bridge_ppc` | `test_command_bridge.sh --backend kpx` | The same on the G3 (Kheperix) |
 | `command_bridge_ppc_mame_m68k` | `test_command_bridge.sh --backend kpx --core mame-ppc --jit --m68k-host 1` | The same on mame-ppc with host-initiated 68k routines on a mame-68k core (C3a) |
 | `command_bridge_executor` | `test_command_bridge.sh --backend executor` | The same on Executor |
+| `command_bridge_quit_executor_761`, `command_bridge_quit_ppc_executor_761` | `test_command_bridge.sh --backend executor --os-version 7.6.1 [--executor-ppc] --quit-app ... SimpleSound` | The same, then SimpleSound launched and quit with `/api/quit` (the Quit Apple event, AppleScript's PACK 8 on 7.6.1), its 68k code and its PowerPC code |
 
 **Guest** (label `guest`; plus `executor`, `mame`, `bridge` as noted in
 `ctest -N -L`)

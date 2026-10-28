@@ -561,6 +561,27 @@ set_tests_properties(command_bridge_executor PROPERTIES
   SKIP_RETURN_CODE 77
 )
 
+# The Quit Apple event (/api/quit) to an application on Executor, its 68k
+# code and its PowerPC code (--executor-ppc): SimpleSound on 7.6.1, whose
+# Apple Event Manager is AppleScript's PACK 8; PowerPC code reaches it
+# through Pack8's patched table entry, as InterfaceLib does on a Mac.
+foreach(cell IN ITEMS "command_bridge_quit_executor_761;;18964"
+                      "command_bridge_quit_ppc_executor_761;--executor-ppc;18966")
+  list(GET cell 0 name)
+  list(GET cell 1 flags)
+  list(GET cell 2 port)
+  separate_arguments(flag_args UNIX_COMMAND "${flags}")
+  add_test(
+    NAME ${name}
+    COMMAND bash ${TEST_DIR}/test_command_bridge.sh --backend executor --os-version 7.6.1 ${flag_args} --quit-app "DISK:System Folder:Apple Menu Items:SimpleSound" SimpleSound --timeout 60 --port ${port}
+  )
+  set_tests_properties(${name} PROPERTIES
+    TIMEOUT 120
+    LABELS "executor;761"
+    SKIP_RETURN_CODE 77
+  )
+endforeach()
+
 add_test(
   NAME guest_suite_executor
   COMMAND bash ${TEST_DIR}/test_guest_suite.sh --backend executor --timeout 150 --port 18112

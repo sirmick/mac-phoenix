@@ -286,21 +286,27 @@ OSErr C_GetSoundHeaderOffset(Handle sndHandle, GUEST<LONGINT> *offset);PASCAL_SU
 
 
 UnsignedFixed C_UnsignedFixedMulDiv(UnsignedFixed value, UnsignedFixed multiplier, UnsignedFixed divisor);PASCAL_SUBTRAP(UnsignedFixedMulDiv, 0xA800, 0x60C0018, SoundDispatch);
+LIBRARY_ALSO(SoundLib, UnsignedFixedMulDiv);
 
 
 OSErr C_GetCompressionInfo(INTEGER compressionID, OSType format, INTEGER numChannels, INTEGER sampleSize, CompressionInfoPtr cp);PASCAL_SUBTRAP(GetCompressionInfo, 0xA800, 0x7100018, SoundDispatch);
+LIBRARY_ALSO(SoundLib, GetCompressionInfo);
 
 
 OSErr C_SetSoundPreference(OSType theType, ConstStringPtr name, Handle settings);PASCAL_SUBTRAP(SetSoundPreference, 0xA800, 0x6340018, SoundDispatch);
+LIBRARY_ALSO(SoundLib, SetSoundPreference);
 
 
 OSErr C_GetSoundPreference(OSType theType, ConstStringPtr name, Handle settings);PASCAL_SUBTRAP(GetSoundPreference, 0xA800, 0x6380018, SoundDispatch);
+LIBRARY_ALSO(SoundLib, GetSoundPreference);
 
 
 OSErr C_SndGetInfo(SndChannelPtr chan, OSType selector, void *infoPtr);PASCAL_SUBTRAP(SndGetInfo, 0xA800, 0x63C0018, SoundDispatch);
+LIBRARY_ALSO(SoundLib, SndGetInfo);
 
 
 OSErr C_SndSetInfo(SndChannelPtr chan, OSType selector, void *infoPtr);PASCAL_SUBTRAP(SndSetInfo, 0xA800, 0x6400018, SoundDispatch);
+LIBRARY_ALSO(SoundLib, SndSetInfo);
 
 
 OSErr C_SndPlay(SndChannelPtr chanp, Handle sndh, Boolean async);PASCAL_TRAP(SndPlay, 0xA805);
@@ -433,6 +439,12 @@ ComponentResult C_SoundComponentSetInfo(ComponentInstance ti, SoundSource source
 
 
 
+
+
+OSErr C_GetAlertBeepResID(GUEST<INTEGER> *id);LIBRARY_FUNCTION(SoundLib, GetAlertBeepResID, C_GetAlertBeepResID);
+
+
+OSErr C_SetAlertBeepResID(GUEST<INTEGER> *id);LIBRARY_FUNCTION(SoundLib, SetAlertBeepResID, C_SetAlertBeepResID);
 
 
 } /* namespace Executor */

@@ -14,6 +14,8 @@
 #include <FileMgr.h>
 #include <sound/sounddriver.h>
 #include <prefs/prefs.h>
+
+extern unsigned char XPRAM[]; /* core/xpram.cpp's (base/emustubs.cpp) */
 #include <rsys/component.h>
 #include <base/traps.h>
 #include <cmath>
@@ -733,15 +735,33 @@ OSErr Executor::C_GetSoundHeaderOffset(Handle sndHandle, GUEST<LONGINT> *offset)
     return retval;
 }
 
+/* value * multiplier / divisor, all unsigned 16.16 (rates: a sample rate
+   converted between time bases); a quotient past 32 bits, or a divisor of
+   0, saturates. */
 UnsignedFixed Executor::C_UnsignedFixedMulDiv(
     UnsignedFixed value, UnsignedFixed multiplier, UnsignedFixed divisor)
 {
-    UnsignedFixed retval;
+    if(divisor == 0)
+        return 0xFFFFFFFF;
+    uint64_t q = (uint64_t)(uint32_t)value * (uint32_t)multiplier / (uint32_t)divisor;
+    return q > 0xFFFFFFFF ? 0xFFFFFFFF : (UnsignedFixed)q;
+}
 
-    warning_sound_log("");
-    warning_unimplemented("");
-    retval = 0;
-    return retval;
+/* The alert sound's 'snd ' ID: a word in extended PRAM at $7C, where 68k
+   code (SimpleSound, the Sound control panel) reads and writes it with
+   ReadXPRam/WriteXPRam; SysBeep plays it (phoenix.cpp). */
+OSErr Executor::C_GetAlertBeepResID(GUEST<INTEGER> *id)
+{
+    *id = (INTEGER)(XPRAM[0x7C] << 8 | XPRAM[0x7D]);
+    return noErr;
+}
+
+OSErr Executor::C_SetAlertBeepResID(GUEST<INTEGER> *id)
+{
+    uint16_t v = (uint16_t)(INTEGER)*id;
+    XPRAM[0x7C] = v >> 8;
+    XPRAM[0x7D] = v & 0xFF;
+    return noErr;
 }
 
 OSErr Executor::C_GetCompressionInfo(INTEGER compressionID, OSType format,

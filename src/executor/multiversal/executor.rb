@@ -337,7 +337,7 @@ class ExecutorGenerator < Generator
             return
         end
 
-        if fun["library"] then
+        if fun["library"] and not trap then
             # A shared library's export (docs/executor/LIBRARIES.md): reached
             # by name from PowerPC and CFM-68K code, not through a trap.
             # A raw one reads its own arguments from the PowerPC registers
@@ -425,6 +425,12 @@ class ExecutorGenerator < Generator
             end
         else
             @out << "NOTRAP_FUNCTION#{two}(#{name});\n"
+        end
+        # A trap's routine that a library other than InterfaceLib exports
+        # for PowerPC and CFM-68K code (SoundLib's Sound Manager calls): the
+        # same entry under that library's name too.
+        if fun["library"] and trap and fun["executor"] then
+            @out << "LIBRARY_ALSO(#{fun["library"]}, #{name});\n"
         end
     end
 

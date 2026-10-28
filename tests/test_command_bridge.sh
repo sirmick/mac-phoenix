@@ -4,6 +4,9 @@
 #
 # Tests /api/app, /api/windows, /api/wait (passive + queue), /api/launch, /api/quit
 # --os-version 7.6.1: on a copy of tests-7.6.1.img (default tests-7.5.5).
+# --quit-app PATH NAME: also launch PATH (on the test disk; "DISK:" stands
+# for its volume), wait for NAME in front, /api/quit it, wait for it to go.
+# --executor-ppc: Executor runs fat applications' PowerPC code.
 #
 set -euo pipefail
 
@@ -15,6 +18,8 @@ SIG_PORT=18107
 BINARY="${MACEMU_BINARY:-$(cd "$(dirname "$0")/.." && pwd)/build/mac-phoenix}"
 PASS_FLAGS=()
 OS_VERSION=7.5.5
+QUIT_APP=""
+QUIT_NAME=""
 
 # Parse args
 while [[ $# -gt 0 ]]; do
@@ -25,6 +30,8 @@ while [[ $# -gt 0 ]]; do
         --port) PORT="$2"; SIG_PORT="$((PORT + 1))"; shift 2 ;;
         --timeout) TIMEOUT="$2"; shift 2 ;;
         --os-version) OS_VERSION="$2"; shift 2 ;;
+        --quit-app) QUIT_APP="$2"; QUIT_NAME="$3"; shift 3 ;;
+        --executor-ppc) PASS_FLAGS+=("$1"); shift ;;
         --jit|--no-jit) PASS_FLAGS+=("$1"); shift ;;
         --m68k-host) PASS_FLAGS+=(--m68k-host "$2"); shift 2 ;;   # mame-ppc: C3a
         *) echo "Unknown arg: $1"; exit 1 ;;
@@ -165,6 +172,30 @@ for i in $(seq 1 8); do
     sleep 1
 done
 check "/api/launch bad path stays Finder" "$APP_AFTER" 'Finder'
+
+# Test 6 (--quit-app): an application launched, then quit with the Quit
+# Apple event (BridgeAgent's kAEQuitApplication).
+if [[ -n "$QUIT_APP" ]]; then
+    echo "Test 6: POST /api/launch + /api/quit ($QUIT_NAME)"
+    APP_PATH="${QUIT_APP/#DISK:/$(basename "$DISK"):}"
+    LAUNCH=$(curl -s --max-time 20 -X POST "http://localhost:$PORT/api/launch" -d "{\"path\": \"$APP_PATH\"}" || echo "CURL_FAILED")
+    check "/api/launch $QUIT_NAME" "$LAUNCH" '"success": true'
+    WAIT_APP=$(curl -s -X POST "http://localhost:$PORT/api/wait" -d "{\"condition\": \"app=$QUIT_NAME\", \"timeout\": 20}" || echo "CURL_FAILED")
+    check "$QUIT_NAME in front" "$WAIT_APP" '"ok": true'
+    QUIT=$(curl -s --max-time 20 -X POST "http://localhost:$PORT/api/quit" || echo "CURL_FAILED")
+    check "/api/quit answered" "$QUIT" '"success": true'
+    APP_AFTER=""
+    for i in $(seq 1 20); do
+        APP_AFTER=$(curl -s "http://localhost:$PORT/api/app" || echo "CURL_FAILED")
+        echo "$APP_AFTER" | grep -q "$QUIT_NAME" || break
+        sleep 0.5
+    done
+    if echo "$APP_AFTER" | grep -q "$QUIT_NAME"; then
+        check "$QUIT_NAME quit" "$APP_AFTER" 'not in front'
+    else
+        check "$QUIT_NAME quit" "$APP_AFTER" '"app"'
+    fi
+fi
 
 echo ""
 if [[ $FAIL -eq 0 ]]; then

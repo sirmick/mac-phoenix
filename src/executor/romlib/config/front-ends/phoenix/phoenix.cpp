@@ -336,21 +336,26 @@ static Executor::Handle square_beep()
     return h;
 }
 
+extern unsigned char XPRAM[]; /* core/xpram.cpp's (base/emustubs.cpp) */
+
 /* SysBeep (osutil.cpp): with sound on, the alert sound is the System's
-   'snd ' 1, "Simple Beep", played through the Sound Manager, or a square
-   wave where there is none; otherwise nothing, as Executor's other front
-   ends do. The Sound control panel's choice of alert sound is not read
-   yet. */
+   alert sound the Sound control panel chose (its 'snd ' ID, a word in
+   extended PRAM at $7C), else 'snd ' 1, "Simple Beep", played through the
+   Sound Manager, or a square wave where there is none; otherwise nothing,
+   as Executor's other front ends do. */
 void PhoenixVideoDriver::beepAtUser()
 {
     bool on = Executor::ROMlib_PretendSound == Executor::soundon;
-    Executor::Handle h = on ? Executor::GetResource("snd "_4, 1) : nullptr;
+    int16_t id = (int16_t)(XPRAM[0x7C] << 8 | XPRAM[0x7D]);
+    Executor::Handle h = on && id ? Executor::GetResource("snd "_4, id) : nullptr;
+    if(on && !h)
+        h = Executor::GetResource("snd "_4, id = 1);
     static bool announced;
     if(!announced)
     {
         announced = true;
-        fprintf(stderr, "[Executor] SysBeep: sound %s, 'snd ' 1 %s\n",
-                on ? "on" : "pretend/off", h ? "found" : "missing (a square wave)");
+        fprintf(stderr, "[Executor] SysBeep: sound %s, 'snd ' %d %s\n",
+                on ? "on" : "pretend/off", id, h ? "found" : "missing (a square wave)");
     }
     if(h)
         Executor::SndPlay(nullptr, h, false);

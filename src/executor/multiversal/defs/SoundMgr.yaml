@@ -1085,6 +1085,7 @@
         type: UnsignedFixed
       - name: divisor
         type: UnsignedFixed
+    library: SoundLib
     dispatcher: SoundDispatch
     selector: 0x060C0018
     executor: C_
@@ -1105,6 +1106,7 @@
         type: INTEGER
       - name: cp
         type: CompressionInfoPtr
+    library: SoundLib
     dispatcher: SoundDispatch
     selector: 0x07100018
     executor: C_
@@ -1121,6 +1123,7 @@
         type: ConstStringPtr
       - name: settings
         type: Handle
+    library: SoundLib
     dispatcher: SoundDispatch
     selector: 0x06340018
     executor: C_
@@ -1137,6 +1140,7 @@
         type: ConstStringPtr
       - name: settings
         type: Handle
+    library: SoundLib
     dispatcher: SoundDispatch
     selector: 0x06380018
     executor: C_
@@ -1153,6 +1157,7 @@
         type: OSType
       - name: infoPtr
         type: void*
+    library: SoundLib
     dispatcher: SoundDispatch
     selector: 0x063C0018
     executor: C_
@@ -1169,6 +1174,7 @@
         type: OSType
       - name: infoPtr
         type: void*
+    library: SoundLib
     dispatcher: SoundDispatch
     selector: 0x06400018
     executor: C_
@@ -1735,3 +1741,28 @@
         type: LONGINT
     dispatcher: SoundComponent
     selector: 0x0108
+
+# ####
+
+# The alert sound's 'snd ' ID, a word in extended PRAM at $7C (where 68k
+# code reads and writes it with ReadXPRam/WriteXPRam); SoundLib's accessors
+# for PowerPC code, both given a pointer to the word.
+- only-for: executor
+  function:
+    name: GetAlertBeepResID
+    return: OSErr
+    args:
+      - name: id
+        type: INTEGER*
+    library: SoundLib
+    executor: C_
+
+- only-for: executor
+  function:
+    name: SetAlertBeepResID
+    return: OSErr
+    args:
+      - name: id
+        type: INTEGER*
+    library: SoundLib
+    executor: C_
