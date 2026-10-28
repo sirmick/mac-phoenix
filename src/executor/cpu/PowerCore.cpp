@@ -175,6 +175,24 @@ uint32_t PowerCore::exitAddress()
     return addr;
 }
 
+size_t PowerCore::execContextSize() const
+{
+    cpu::Core *c = the_core.load();
+    return c ? c->exec_context_size() : 0;
+}
+
+void PowerCore::saveExecContext(void *dst) const
+{
+    if(cpu::Core *c = the_core.load())
+        c->save_exec_context(dst);
+}
+
+void PowerCore::restoreExecContext(const void *src)
+{
+    if(cpu::Core *c = the_core.load())
+        c->restore_exec_context(src);
+}
+
 void PowerCore::requestInterrupt()
 {
     interruptFlag.clear();

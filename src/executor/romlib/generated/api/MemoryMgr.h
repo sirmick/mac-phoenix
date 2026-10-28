@@ -204,14 +204,20 @@ NOTRAP_FUNCTION2(LMSetCurStackBase);
 
 // MemoryMgr IMI-85 (true);
 const LowMemGlobal<Byte [20]> Scratch20{ 0x1E4 };
+inline Byte * LMGetScratch20() { return ptr_from_longint<Byte *>(0x01E4); }
+NOTRAP_FUNCTION2(LMGetScratch20);
 
 
 // MemoryMgr IMI-85 (true);
 const LowMemGlobal<Byte [8]> ToolScratch{ 0x9CE };
+inline Byte * LMGetToolScratch() { return ptr_from_longint<Byte *>(0x09CE); }
+NOTRAP_FUNCTION2(LMGetToolScratch);
 
 
 // MemoryMgr IMI-85 (true);
 const LowMemGlobal<Byte [8]> Scratch8{ 0x9FA };
+inline Byte * LMGetScratch8() { return ptr_from_longint<Byte *>(0x09FA); }
+NOTRAP_FUNCTION2(LMGetScratch8);
 
 
 // MemoryMgr IMI-85 (true);
@@ -232,6 +238,8 @@ NOTRAP_FUNCTION2(LMSetMinusOne);
 
 // MemoryMgr IMI-85 (true);
 const LowMemGlobal<Byte [12]> ApplScratch{ 0xA78 };
+inline Byte * LMGetApplScratch() { return ptr_from_longint<Byte *>(0x0A78); }
+NOTRAP_FUNCTION2(LMGetApplScratch);
 
 
 BEGIN_EXECUTOR_ONLY

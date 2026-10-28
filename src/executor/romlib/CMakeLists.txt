@@ -450,6 +450,7 @@ set(mman_sources
     mman/tempalloc.h
 
     mman/mman.cpp mman/mmansubr.cpp mman/whatis.cpp
+    mman/mmlib.cpp
     mman/tempmem.cpp
 )
 source_group(MMan FILES ${mman_sources})

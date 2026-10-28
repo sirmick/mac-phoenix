@@ -155,6 +155,23 @@ void Executor::ROMlib_cfm_process_exit(uint32_t part_lo, uint32_t part_hi)
         }), loaded.end());
 }
 
+bool Executor::ROMlib_cfm_ppc_code(uint32_t addr)
+{
+    for(const loaded_fragment& f : loaded)
+    {
+        if(f.arch != "pwpc"_4 || !f.cid)
+            continue;
+        for(uint32_t i = 0; i < f.cid->n_sects; i++)
+        {
+            const section_info_t& sect = f.cid->sects[i];
+            uint32_t start = ptr_to_longint(sect.start.get());
+            if((sect.perms & (1 << 2)) /* executable_section */ && addr >= start && addr - start < sect.length)
+                return true;
+        }
+    }
+    return false;
+}
+
 void Executor::ROMlib_cfm_application_start()
 {
     THz zone = LM(ApplZone);

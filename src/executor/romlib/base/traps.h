@@ -494,6 +494,10 @@ public:
 
 #define LIBRARY_FUNCTION(LIB, NAME, IMPL) \
     CREATE_LIBRARY_FUNCTION(lib_##LIB##_##NAME, (#NAME, #LIB), LibraryFunction<decltype(IMPL) COMMA &IMPL>)
+/* A library whose name isn't an identifier ("Memory Manager"): TOKEN names
+   the registration, LIBNAME is the library's. */
+#define LIBRARY_FUNCTION_NAMED(TOKEN, LIBNAME, NAME, IMPL) \
+    CREATE_LIBRARY_FUNCTION(lib_##TOKEN##_##NAME, (#NAME, LIBNAME), LibraryFunction<decltype(IMPL) COMMA &IMPL>)
 #define COMPONENT_CALL(LIB, NAME, WHAT, SIZES) \
     CREATE_COMPONENT_CALL(lib_##LIB##_##NAME, (#NAME, #LIB, WHAT, SIZES))
 #define COMPONENT_FUNCTION(COMPONENT, NAME, WHAT, IMPL) \

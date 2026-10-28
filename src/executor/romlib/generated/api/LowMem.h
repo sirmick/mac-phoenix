@@ -34,6 +34,8 @@ NOTRAP_FUNCTION2(LMSetnilhandle);
 // * NOTE: MacWrite starts writing longwords at location 0x80 for TRAPs
 // rsys/misc WHOKNOWS (true-b);
 const LowMemGlobal<GUEST<LONGINT> [10]> trapvectors{ 0x080 };
+inline GUEST<LONGINT> * LMGettrapvectors() { return ptr_from_longint<GUEST<LONGINT> *>(0x0080); }
+NOTRAP_FUNCTION2(LMGettrapvectors);
 
 
 // rsys/misc WHOKNOWS (true-b);

@@ -282,6 +282,8 @@ NOTRAP_FUNCTION2(LMSetRndSeed);
 
 // QuickDraw MPW (false);
 const LowMemGlobal<Byte [8]> ScreenVars{ 0x292 };
+inline Byte * LMGetScreenVars() { return ptr_from_longint<Byte *>(0x0292); }
+NOTRAP_FUNCTION2(LMGetScreenVars);
 
 
 // * NOTE: Key1Trans in the keyboard translator procedure, and Key2Trans in the

@@ -77,6 +77,13 @@ public:
 
     /* Run guest code from CIA until it returns to exitAddress(). */
     void execute();
+
+    /* MacPhoenix: the state of the execution in progress (cpu::Core's
+       exec context), per Thread Manager thread (process.cpp): threads
+       suspended inside PowerPC code resume in any order. */
+    size_t execContextSize() const;
+    void saveExecContext(void *dst) const;
+    void restoreExecContext(const void *src);
     /* Guest address of the exit cell. */
     uint32_t exitAddress();
     /* The recompiler checks each block's code before running it, so

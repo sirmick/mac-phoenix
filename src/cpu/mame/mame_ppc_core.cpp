@@ -109,8 +109,8 @@ public:
             return true;
         }
         if(exception >= 0 && exception < EXCEPTION_COUNT && logged[exception]++ < 20)
-            fprintf(stderr, "[mame-ppc] exception %d at %08x (srr1 %08x, msr %08x), skipped\n", exception, srr0,
-                    srr1, m_core->msr);
+            fprintf(stderr, "[mame-ppc] exception %d at %08x (srr1 %08x, msr %08x), skipped (lr %08x ctr %08x r1 %08x r2 %08x r12 %08x)\n", exception, srr0,
+                    srr1, m_core->msr, m_core->spr[SPR_LR], m_core->spr[SPR_CTR], m_core->r[1], m_core->r[2], m_core->r[12]);
         /* Skip the instruction: SRR0 is the faulting instruction except for
          * a system call, where it is already the next one. */
         m_core->pc = (exception == EXCEPTION_SYSCALL) ? srr0 : srr0 + 4;
@@ -135,6 +135,8 @@ public:
 
     using State = internal_ppc_state; /* the register block, reachable by the adapter */
     void run_slice() { execute_run(); }
+    /* MacPhoenix: the DRC, whose back-end keeps per-execution state. */
+    drcuml_state *drc() const { return m_drcuml.get(); }
     State &core() { return *m_core; }
     const State &core() const { return *m_core; }
     void flush_code() { code_flush_cache(); }
@@ -315,6 +317,27 @@ public:
         return bits;
     }
     void set_fpr(int i, uint64_t bits) override { memcpy(&dev_.core().f[i & 31], &bits, sizeof bits); }
+
+    size_t exec_context_size() const override
+    {
+        return sizeof(bool *) + sizeof(int) + (dev_.drc() ? dev_.drc()->exec_context_size() : 0);
+    }
+    void save_exec_context(void *dst) const override
+    {
+        uint8_t *d = (uint8_t *)dst;
+        memcpy(d, &stop_flag_, sizeof(bool *));
+        memcpy(d + sizeof(bool *), &depth_, sizeof(int));
+        if(dev_.drc())
+            dev_.drc()->save_exec_context(d + sizeof(bool *) + sizeof(int));
+    }
+    void restore_exec_context(const void *src) override
+    {
+        const uint8_t *s = (const uint8_t *)src;
+        memcpy(&stop_flag_, s, sizeof(bool *));
+        memcpy(&depth_, s + sizeof(bool *), sizeof(int));
+        if(dev_.drc())
+            dev_.drc()->restore_exec_context(s + sizeof(bool *) + sizeof(int));
+    }
 
     size_t context_size() const override { return sizeof(MamePpcDevice::State); }
     void save_context(void *dst) const override { memcpy(dst, &dev_.core(), sizeof(MamePpcDevice::State)); }

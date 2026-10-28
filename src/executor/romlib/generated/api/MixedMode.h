@@ -65,6 +65,18 @@ enum {kRoutineDescriptorVersion = 7,
 enum {kSelectorsAreNotIndexable = 0,
 };
 
+enum {kProcDescriptorIsAbsolute = 0,
+kProcDescriptorIsRelative = 1,
+kFragmentIsPrepared = 0,
+kFragmentNeedsPreparing = 2,
+kUseCurrentISA = 0,
+kUseNativeISA = 4,
+kPassSelector = 0,
+kDontPassSelector = 8,
+kRoutineIsNotDispatchedDefaultRoutine = 0,
+kRoutineIsDispatchedDefaultRoutine = 16,
+};
+
 enum {kNoByteCode,
 kOneByteCode,
 kTwoByteCode,

@@ -95,6 +95,59 @@ ToolboxUtils, DesktopItemsLib 1 each, and 11 from the Finder's other
 fragments (`FragRelease`, `GetProcessTrapAddress`, AppleTalk's `ATEvent`
 and `MPPOpen`, `RealScript`).
 
+## The Finder starting: what it needed (2026-10-28)
+
+The minimum, found by running the 8.6 Finder until it stops and taking
+what it called last (unresolved imports answer 0 and log
+`[unimplemented] PowerPC NAME` when called):
+
+* **The "Memory Manager" library** (new in 8.x: 8.6 has it, 7.6.1 hasn't;
+  `defs/MemoryManagerLib.yaml`, `mman/mmlib.cpp`): `MMNewHeap` (the
+  "Finder Object Heap"; 0 makes the Finder call `SysError(413)`),
+  `MMAllocateIn`, `MMAllocateClearIn`, `MMFree`, `MMGetFreeSpace`,
+  `MMGetDefaultHeap`, their forms from the Finder's calls. The first
+  library the version gating applies to (builtinlibs: found from System
+  8.0). The generator takes a library name that isn't an identifier
+  (`LIBRARY_FUNCTION_NAMED`).
+* **Thread Manager threads in PowerPC code.** A thread's entry, switcher
+  and termination procedures from a PowerPC caller are transition vectors
+  (their first word in a loaded PowerPC fragment's code:
+  `ROMlib_cfm_ppc_code`), run with `callPPC`, the entry on the thread's
+  stack. A thread switched away from inside PowerPC code keeps its
+  registers, mode and depth, and the core's execution in progress:
+  `cpu::Core::save_exec_context` (MAME's x86-64 back-end keeps the host
+  stack it entered on and FPU bookkeeping in shared fields, which nested
+  calls restore in order but coroutines resume out of order; arm64 the
+  same but for the stack). Process switches keep it too. The first
+  process holds the Process Manager's baton from the start, so its
+  threads can switch before any process has. ThreadTest
+  (`tests/guest/threads`: two threads yielding, switchers, a terminator,
+  results) passes 11/11 on Executor and on the G3 (`threads_ppc_executor_761`,
+  `threads_rom_ppc_761`).
+* **Accelerated code resources.** The Finder's MDEF is a routine
+  descriptor before a PEF container (routine flags
+  `kProcDescriptorIsRelative`, `kFragmentNeedsPreparing`, now in
+  `MixedMode.yaml`): Mixed Mode prepares the fragment at its first call
+  and the record then names its main routine (`mixed_mode.cpp`).
+* **`NewDesktopLayerOwner`** (PrivateInterfaceLib): 8.x's
+  `TakeDesktopLayer`, the desk layer's window for the Finder's desktop.
+* **Low-memory arrays' accessors** (`LMGetSysResName`, `LMGetCurApName`
+  and 13 others) exported from InterfaceLib, giving the address as
+  Apple's do.
+
+Now called and still unanswered (8.6): `RegisterAppearanceClient`,
+`GetViewsFont`, `SetThemeTextColor`, `SetThemeBackground`, `StandardMDEF`,
+`SetMenuItemKeyGlyph`, `SetSubmenuParentChoosable`, `PopupWindowEntry`;
+the window calls `GetWindowRegion`, `InvalWindowRect`/`Rgn`,
+`ValidWindowRect`, `SetWindowModified`, `Get`/`SetWindowProxyIcon`,
+`SetWindowProxyFSSpec`; Icon Services' `GetIconRefByName`,
+`GetIconRefFromFolder`, `RegisterIconRefFromIconFamily`, `CompositeIconRef`,
+`PlotIconRef`, `IconRefToRgn`, `SetIconDevice`; `RegisterToolboxListener`,
+`RequestVolumeNotification`, the PPC Toolbox (`PPCOpenSync`,
+`PPCInformAsync`), `InsXTime`, `GetWDInfo`, `CRMSearch`,
+`CallOSTrapUniversalProc`. Then a host crash in `EqualString` with a nil
+string (before the accessors).
+
 ## One Toolbox for 7, 8 and 9
 
 Executor stays one Toolbox, a superset; it doesn't grow an implementation

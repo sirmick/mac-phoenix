@@ -206,6 +206,22 @@
 # from a traced real boot and Apple's Process Manager (System 'scod'
 # -16463; tools/macdecode). Names are our guesses (learned.yaml).
 
+# Mac OS 8's form of TakeDesktopLayer, which its Finder calls from PowerPC
+# code (PrivateInterfaceLib): the desk layer's window into *layer, an error
+# (the Finder then calls SysError) if it can't be had. The form is from the
+# 8.6 Finder's call; Executor's is TakeDesktopLayer's.
+- only-for: executor
+  function:
+    name: NewDesktopLayerOwner
+    return: OSErr
+    args:
+      - name: layer
+        type: WindowPtr*
+    library: PrivateInterfaceLib
+    executor: C_
+
+# ####
+
 - function:
     name: TakeDesktopLayer
     return: OSErr

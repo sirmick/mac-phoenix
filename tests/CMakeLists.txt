@@ -930,6 +930,29 @@ foreach(cell IN ITEMS "drag_ppc_executor_761;--backend executor;7.6.1;18976;gues
   )
 endforeach()
 
+# The Thread Manager from PowerPC code (ThreadsLib) by ThreadTest
+# (tests/guest/threads, Retro68): on Executor, threads whose entries and
+# procedures are PowerPC code, switched while inside it (the core's
+# execution context per thread); Apple's on the G3.
+foreach(cell IN ITEMS "threads_ppc_executor_761;--backend executor;18982;guest;761;executor"
+                      "threads_rom_ppc_761;--backend kpx --core mame-ppc --jit;18984;guest;761;mame")
+  list(GET cell 0 name)
+  list(GET cell 1 backend)
+  list(GET cell 2 port)
+  list(SUBLIST cell 3 -1 labels)
+  separate_arguments(backend_args UNIX_COMMAND "${backend}")
+  add_test(
+    NAME ${name}
+    COMMAND bash ${TEST_DIR}/test_guest_suite.sh ${backend_args} --os-version 7.6.1 --app ${CMAKE_SOURCE_DIR}/tests/guest/threads/ThreadTestPPC.bin --results thread_results.txt --network none --timeout 150 --port ${port}
+  )
+  set_tests_properties(${name} PROPERTIES
+    TIMEOUT 230
+    LABELS "${labels}"
+    SKIP_RETURN_CODE 77
+    ENVIRONMENT "MACEMU_ROM=${TEST_PPC_ROM}"
+  )
+endforeach()
+
 # Thread Manager through Frontier's UserTalk threads (process.cpp).
 add_test(
   NAME threads_executor

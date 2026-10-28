@@ -128,6 +128,8 @@ NOTRAP_FUNCTION2(LMSetResErrProc);
 
 // ResourceMgr IMI-114 (true);
 const LowMemGlobal<Byte [20]> SysResName{ 0xAD8 };
+inline Byte * LMGetSysResName() { return ptr_from_longint<Byte *>(0x0AD8); }
+NOTRAP_FUNCTION2(LMGetSysResName);
 
 
 // ResourceMgr IMIV-19 (false);

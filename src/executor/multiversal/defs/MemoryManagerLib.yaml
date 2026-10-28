@@ -1,0 +1,88 @@
+# The "Memory Manager" library (Mac OS 8.6 and 9; not on 7.6.1): named
+# heaps the 8.6 and 9.0.4 Finder makes its objects in (FinderLib's
+# "Finder Object Heap"). Not in Apple's public interfaces: the forms are
+# from the Finder's calls (docs/executor/MacOS8-9.md): the heap's kind,
+# initial size, growth and a C-string name; allocation by size into a heap;
+# its free space as two sizes (total, largest block). Executor only
+# (romlib/mman/mmlib.cpp).
+
+- only-for: executor
+  struct:
+    name: MMHeap
+    comment: A heap; opaque.
+
+- only-for: executor
+  typedef:
+    name: MMHeapRef
+    type: MMHeap*
+
+- only-for: executor
+  function:
+    name: MMNewHeap
+    return: MMHeapRef
+    args:
+      - name: kind
+        type: uint32_t
+      - name: initialSize
+        type: Size
+      - name: growSize
+        type: Size
+      - name: name
+        type: const char*
+    library: Memory Manager
+    executor: C_
+
+- only-for: executor
+  function:
+    name: MMGetDefaultHeap
+    return: MMHeapRef
+    library: Memory Manager
+    executor: C_
+
+- only-for: executor
+  function:
+    name: MMAllocateIn
+    return: Ptr
+    args:
+      - name: size
+        type: Size
+      - name: heap
+        type: MMHeapRef
+    library: Memory Manager
+    executor: C_
+
+- only-for: executor
+  function:
+    name: MMAllocateClearIn
+    return: Ptr
+    args:
+      - name: size
+        type: Size
+      - name: heap
+        type: MMHeapRef
+    library: Memory Manager
+    executor: C_
+
+- only-for: executor
+  function:
+    name: MMFree
+    return: OSErr
+    args:
+      - name: block
+        type: Ptr
+    library: Memory Manager
+    executor: C_
+
+- only-for: executor
+  function:
+    name: MMGetFreeSpace
+    return: OSErr
+    args:
+      - name: heap
+        type: MMHeapRef
+      - name: total
+        type: Size*
+      - name: contiguous
+        type: Size*
+    library: Memory Manager
+    executor: C_

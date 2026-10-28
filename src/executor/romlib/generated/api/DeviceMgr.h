@@ -104,10 +104,14 @@ NOTRAP_FUNCTION2(LMSetUTableBase);
 
 // DeviceMgr IMII-197 (false);
 const LowMemGlobal<GUEST<ProcPtr> [8]> Lvl1DT{ 0x192 };
+inline GUEST<ProcPtr> * LMGetLvl1DT() { return ptr_from_longint<GUEST<ProcPtr> *>(0x0192); }
+NOTRAP_FUNCTION2(LMGetLvl1DT);
 
 
 // DeviceMgr IMII-198 (false);
 const LowMemGlobal<GUEST<ProcPtr> [8]> Lvl2DT{ 0x1B2 };
+inline GUEST<ProcPtr> * LMGetLvl2DT() { return ptr_from_longint<GUEST<ProcPtr> *>(0x01B2); }
+NOTRAP_FUNCTION2(LMGetLvl2DT);
 
 
 // DeviceMgr ThinkC (true-b);
@@ -152,6 +156,8 @@ NOTRAP_FUNCTION2(LMSetIWM);
 
 // DeviceMgr IMII-199 (false);
 const LowMemGlobal<GUEST<ProcPtr> [4]> ExtStsDT{ 0x2BE };
+inline GUEST<ProcPtr> * LMGetExtStsDT() { return ptr_from_longint<GUEST<ProcPtr> *>(0x02BE); }
+NOTRAP_FUNCTION2(LMGetExtStsDT);
 
 
 // DeviceMgr IMII-194 (false);

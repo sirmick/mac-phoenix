@@ -6,6 +6,7 @@
 #include <rsys/process.h>
 
 #include <algorithm>
+#include <cstring>
 
 namespace Executor
 {
@@ -56,6 +57,48 @@ void Executor::cpu_register_process_state()
     ROMlib_process_register_state(static_cast<PowerCoreState *>(&getPowerCore()),
                                   sizeof(PowerCoreState));
     ROMlib_process_register_state(&ppcDepth, sizeof ppcDepth);
+}
+
+namespace
+{
+struct ThreadCPUState
+{
+    PowerCoreState ppc;
+    Executor::CPUMode mode;
+    int depth;
+};
+}
+
+size_t Executor::cpu_thread_state_size()
+{
+    return sizeof(ThreadCPUState) + getPowerCore().execContextSize();
+}
+
+/* The registers, mode and depth, then the PowerPC core's execution in
+   progress (the JIT's host stack and the like). */
+void Executor::cpu_save_thread_state(void *to)
+{
+    ThreadCPUState s { static_cast<PowerCoreState &>(getPowerCore()), currentCPUMode, ppcDepth };
+    memcpy(to, &s, sizeof s);
+    getPowerCore().saveExecContext((uint8_t *)to + sizeof s);
+}
+
+void Executor::cpu_restore_thread_state(const void *from)
+{
+    ThreadCPUState s;
+    memcpy(&s, from, sizeof s);
+    static_cast<PowerCoreState &>(getPowerCore()) = s.ppc;
+    currentCPUMode = s.mode;
+    ppcDepth = s.depth;
+    getPowerCore().restoreExecContext((const uint8_t *)from + sizeof s);
+}
+
+uint32_t Executor::callPPCOnStack(uint32_t tv, uint32_t stack_top, std::initializer_list<uint32_t> args)
+{
+    /* callPPC puts its frame below the stacks in use: here, this one. */
+    getPowerCore().r[1] = stack_top;
+    EM_A7 = stack_top;
+    return callPPC(tv, args);
 }
 
 uint32_t Executor::callPPC(uint32_t tv, std::initializer_list<uint32_t> args)

@@ -209,6 +209,32 @@ static uint32_t mode_switch(UniversalProcPtr theProcPtr, ProcInfoType procinfo,
         routine = &m68kroutine;
     }
 
+    /* MacPhoenix: an accelerated code resource ('MDEF', 'WDEF', ... with a
+       routine descriptor before a PEF container; Mac OS 8's Finder's): its
+       record says the fragment is to be prepared, at an offset from the
+       descriptor. Prepared at the first call, as Apple's Mixed Mode does,
+       and the record then names the main routine's transition vector. */
+    if(routine->ISA == kPowerPCISA && (routine->routineFlags & kFragmentNeedsPreparing))
+    {
+        RoutineRecord *rr = const_cast<RoutineRecord *>(routine);
+        uint32_t container = ptr_to_longint(rr->procDescriptor.get());
+        if(rr->routineFlags & kProcDescriptorIsRelative)
+            container += ptr_to_longint(theProcPtr);
+        GUEST<ConnectionID> conn;
+        GUEST<Ptr> main;
+        Str255 err;
+        OSErr e = GetMemFragment(ptr_from_longint<void *>(container), 0, (StringPtr) "\0",
+                                 kReferenceCFrag, &conn, &main, err);
+        if(e != noErr || !main)
+        {
+            fprintf(stderr, "[Executor] Mixed Mode: preparing the fragment at $%08x failed (%d)\n",
+                    container, e);
+            return 0;
+        }
+        rr->procDescriptor = (ProcPtr)main.get();
+        rr->routineFlags = rr->routineFlags & ~(kProcDescriptorIsRelative | kFragmentNeedsPreparing);
+    }
+
     procinfo = routine->procInfo;
     ISAType toISA = routine->ISA;
     // Now, routine points to target routine, and procinfo is the corresponding procinfo.

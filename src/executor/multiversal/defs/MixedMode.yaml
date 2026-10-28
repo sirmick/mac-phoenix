@@ -137,6 +137,33 @@
 
 # ####
 
+# A routine record's flags (Inside Macintosh: PowerPC System Software, the
+# Mixed Mode Manager).
+- enum:
+    values:
+      - name: kProcDescriptorIsAbsolute
+        value: 0x00
+      - name: kProcDescriptorIsRelative
+        value: 0x01
+      - name: kFragmentIsPrepared
+        value: 0x00
+      - name: kFragmentNeedsPreparing
+        value: 0x02
+      - name: kUseCurrentISA
+        value: 0x00
+      - name: kUseNativeISA
+        value: 0x04
+      - name: kPassSelector
+        value: 0x00
+      - name: kDontPassSelector
+        value: 0x08
+      - name: kRoutineIsNotDispatchedDefaultRoutine
+        value: 0x00
+      - name: kRoutineIsDispatchedDefaultRoutine
+        value: 0x10
+
+# ####
+
 - enum:
     values:
       - name: kNoByteCode
