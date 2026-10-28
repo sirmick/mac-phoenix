@@ -237,8 +237,12 @@ class ExecutorGenerator < Generator
         @out << "{ #{hexlit(value["address"],12)} };\n"
         # @out << "LOWMEM_ACCESSOR(#{value["name"]});\n"
         if value["type"] =~ /^(.*)\[[^\[\]]*\]$/ then
-        #    @out << "inline GUEST<#{$1}>* LMGet#{value["name"]}() { return LM(#{value["name"]}); }\n"
-        #    @out << "NOTRAP_FUNCTION2(LMGet#{value["name"]});\n"
+            # MacPhoenix: an array's accessor gives its address, as Apple's
+            # do (LMGetCurApName, LMGetSysResName: a StringPtr), exported
+            # from InterfaceLib like the others.
+            ptype = decl($1 + "*")
+            @out << "inline #{ptype} LMGet#{value["name"]}() { return ptr_from_longint<#{ptype}>(#{hexlit(value["address"])}); }\n"
+            @out << "NOTRAP_FUNCTION2(LMGet#{value["name"]});\n"
         else
             sz = size_of_type(value["type"])
 
@@ -373,7 +377,12 @@ class ExecutorGenerator < Generator
             else
                 @out << (fun["return"] or "void") << " " << cname
                 @out << "(" << (args.map {|arg| decl(arg["type"], arg["name"])}).join(", ") << ");"
-                @out << "LIBRARY_FUNCTION(#{lib}, #{name}, #{cname});\n"
+                if lib =~ /\W/ then
+                    # A library name that isn't an identifier ("Memory Manager").
+                    @out << "LIBRARY_FUNCTION_NAMED(#{lib.gsub(/\W/, '_')}, \"#{lib}\", #{name}, #{cname});\n"
+                else
+                    @out << "LIBRARY_FUNCTION(#{lib}, #{name}, #{cname});\n"
+                end
             end
             return
         end

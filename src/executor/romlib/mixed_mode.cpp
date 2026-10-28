@@ -13,6 +13,7 @@
 
 #include <file/file.h>
 #include <base/cpu.h>
+#include <base/traps.h>
 #include <PowerCore.h>
 #include <cassert>
 #include <algorithm>
@@ -207,6 +208,32 @@ static uint32_t mode_switch(UniversalProcPtr theProcPtr, ProcInfoType procinfo,
         m68kroutine.procInfo = procinfo;
         m68kroutine.ISA = kM68kISA;
         routine = &m68kroutine;
+    }
+
+    /* MacPhoenix: an accelerated code resource ('MDEF', 'WDEF', ... with a
+       routine descriptor before a PEF container; Mac OS 8's Finder's): its
+       record says the fragment is to be prepared, at an offset from the
+       descriptor. Prepared at the first call, as Apple's Mixed Mode does,
+       and the record then names the main routine's transition vector. */
+    if(routine->ISA == kPowerPCISA && (routine->routineFlags & kFragmentNeedsPreparing))
+    {
+        RoutineRecord *rr = const_cast<RoutineRecord *>(routine);
+        uint32_t container = ptr_to_longint(rr->procDescriptor.get());
+        if(rr->routineFlags & kProcDescriptorIsRelative)
+            container += ptr_to_longint(theProcPtr);
+        GUEST<ConnectionID> conn;
+        GUEST<Ptr> main;
+        Str255 err;
+        OSErr e = GetMemFragment(ptr_from_longint<void *>(container), 0, (StringPtr) "\0",
+                                 kReferenceCFrag, &conn, &main, err);
+        if(e != noErr || !main)
+        {
+            fprintf(stderr, "[Executor] Mixed Mode: preparing the fragment at $%08x failed (%d)\n",
+                    container, e);
+            return 0;
+        }
+        rr->procDescriptor = (ProcPtr)main.get();
+        rr->routineFlags = rr->routineFlags & ~(kProcDescriptorIsRelative | kFragmentNeedsPreparing);
     }
 
     procinfo = routine->procInfo;
@@ -417,7 +444,17 @@ static uint32_t mode_switch(UniversalProcPtr theProcPtr, ProcInfoType procinfo,
         else if(selectorWhere == kSelectorD1)
             EM_D1 = paramValues[0];
 
+        /* MacPhoenix: what this call pushed, for a dispatcher that is
+           the routine itself and gets a selector Executor lacks: it can
+           answer the call as a Mac's does (traps.cpp,
+           unknown_selector_68k). Only for that entry: its stack pointer. */
+        traps::MixedModeCall saved_call = traps::mixed_mode_call;
+        if(convention == kPascalStackBased)
+            traps::mixed_mode_call = { EM_A7 - 4, stackArgsSize, resultSize ? (uint32_t)sizeOnStack(resultSize) : 0 };
+        else
+            traps::mixed_mode_call = {};
         execute68K(guest_cast<uint32_t>(routine->procDescriptor));
+        traps::mixed_mode_call = saved_call;
 
         switch(convention)
         {

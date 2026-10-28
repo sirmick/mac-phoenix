@@ -102,6 +102,9 @@ extern uint32_t ROMlib_call_cfm68k(uint32_t tvector, std::initializer_list<uint3
 extern void ROMlib_cfm_terminate();
 extern void ROMlib_cfm_process_exit(uint32_t part_lo, uint32_t part_hi);
 extern void ROMlib_cfm_application_start();
+/* MacPhoenix: addr is in a loaded PowerPC fragment's code (a transition
+   vector's first word points there). */
+extern bool ROMlib_cfm_ppc_code(uint32_t addr);
 
 /* CallUniversalProc from CFM-68K code: the routine's arguments start at
    args, 4 bytes each (mixed_mode.cpp). */

@@ -47,6 +47,7 @@ void registerStructDumps_LowMem();
 void registerStructDumps_MPW();
 void registerStructDumps_MacTCP();
 void registerStructDumps_MathLib();
+void registerStructDumps_MemoryManagerLib();
 void registerStructDumps_MemoryMgr();
 void registerStructDumps_MixedMode();
 void registerStructDumps_NameRegistry();
@@ -129,6 +130,7 @@ void registerAllStructDumps()
     registerStructDumps_MPW();
     registerStructDumps_MacTCP();
     registerStructDumps_MathLib();
+    registerStructDumps_MemoryManagerLib();
     registerStructDumps_MemoryMgr();
     registerStructDumps_MixedMode();
     registerStructDumps_NameRegistry();

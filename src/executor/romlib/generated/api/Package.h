@@ -33,6 +33,8 @@ bdConv = 7,
 
 // PackageMgr ThinkC (true-b);
 const LowMemGlobal<GUEST<Handle> [8]> AppPacks{ 0xAB8 };
+inline GUEST<Handle> * LMGetAppPacks() { return ptr_from_longint<GUEST<Handle> *>(0x0AB8); }
+NOTRAP_FUNCTION2(LMGetAppPacks);
 
 
 void C_InitPack(INTEGER packid);PASCAL_TRAP(InitPack, 0xA9E5);

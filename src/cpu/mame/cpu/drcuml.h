@@ -155,6 +155,13 @@ public:
 	virtual void hash_invalidate_range(u32 pcstart, u32 pcend) noexcept = 0;
 	virtual void get_info(drcbe_info &info) const noexcept = 0;
 	virtual bool logging() const noexcept { return false; }
+	// MacPhoenix: the state an execution keeps while it runs (the host
+	// stack it entered on, FPU mode bookkeeping, memory-resident UML
+	// registers): saved and restored when executions suspended on separate
+	// host coroutines resume out of order (Executor's PowerPC threads).
+	virtual size_t exec_context_size() const noexcept { return 0; }
+	virtual void save_exec_context(void *dst) const noexcept { }
+	virtual void restore_exec_context(const void *src) noexcept { }
 
 	// Optional direct access to the hash table, allowing a front-end to point an entry
 	// back at code it generated earlier rather than regenerating identical code.
@@ -192,6 +199,9 @@ public:
 	// reset the state
 	void reset();
 	int execute(uml::code_handle &entry) { return m_beintf->execute(entry); }
+	size_t exec_context_size() const noexcept { return m_beintf->exec_context_size(); }
+	void save_exec_context(void *dst) const noexcept { m_beintf->save_exec_context(dst); }
+	void restore_exec_context(const void *src) noexcept { m_beintf->restore_exec_context(src); }
 
 	// code generation
 	drcuml_block &begin_block(u32 maxinst) { return begin_block(maxinst, false); }

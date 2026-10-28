@@ -54,6 +54,19 @@ namespace internal
    no routine for (unknown_selector_68k returns where to continue);
    elsewhere 0, and the caller stops the session. */
 uint32_t unknown_selector_68k(const char *trap_name, uint32_t sel);
+
+/* MacPhoenix: a Pascal call Mixed Mode is making to 68k code (from
+   PowerPC code, CallUniversalProc): the stack pointer the routine is
+   entered with, the bytes of arguments it pushed (a stack selector
+   included) and of result. A dispatcher Mixed Mode calls directly with a
+   selector Executor lacks pops those and answers paramErr. */
+struct MixedModeCall
+{
+    uint32_t entry_sp = 0;
+    uint32_t arg_bytes = 0;
+    uint32_t result_bytes = 0;
+};
+extern MixedModeCall mixed_mode_call;
 void log_unimplemented(const std::string &what);
 extern std::string unimplemented_log_path; /* also appended to; empty: not */
 
@@ -494,6 +507,10 @@ public:
 
 #define LIBRARY_FUNCTION(LIB, NAME, IMPL) \
     CREATE_LIBRARY_FUNCTION(lib_##LIB##_##NAME, (#NAME, #LIB), LibraryFunction<decltype(IMPL) COMMA &IMPL>)
+/* A library whose name isn't an identifier ("Memory Manager"): TOKEN names
+   the registration, LIBNAME is the library's. */
+#define LIBRARY_FUNCTION_NAMED(TOKEN, LIBNAME, NAME, IMPL) \
+    CREATE_LIBRARY_FUNCTION(lib_##TOKEN##_##NAME, (#NAME, LIBNAME), LibraryFunction<decltype(IMPL) COMMA &IMPL>)
 #define COMPONENT_CALL(LIB, NAME, WHAT, SIZES) \
     CREATE_COMPONENT_CALL(lib_##LIB##_##NAME, (#NAME, #LIB, WHAT, SIZES))
 #define COMPONENT_FUNCTION(COMPONENT, NAME, WHAT, IMPL) \

@@ -93,6 +93,9 @@ extern void process_create(bool desk_accessory_p,
 END_EXECUTOR_ONLY
 
 
+OSErr C_NewDesktopLayerOwner(GUEST<WindowPtr> *layer);LIBRARY_FUNCTION(PrivateInterfaceLib, NewDesktopLayerOwner, C_NewDesktopLayerOwner);
+
+
 // The first caller (Finder) takes the Process Manager's desk layer: a window-shaped port whose visRgn is the desktop (GrayRgn), and gets protocolErr after that. Finder adopts its regions for its desktop window and SysErrors(41) unless this returns noErr.
 EXTERN_DISPATCHER_TRAP(OSDispatch, 0xA88F, StackW);
 OSErr C_TakeDesktopLayer(GUEST<WindowPtr> *layer);PASCAL_SUBTRAP(TakeDesktopLayer, 0xA88F, 0x0014, OSDispatch);

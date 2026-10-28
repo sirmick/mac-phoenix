@@ -356,6 +356,15 @@ public:
     virtual void save_context(void *dst) const = 0;
     virtual void restore_context(const void *src) = 0;
 
+    /* The state of the execution in progress (run() and what it nests:
+     * the JIT's host stack and FPU bookkeeping, the run loop's own), for a
+     * host that suspends executions on separate coroutines and resumes them
+     * out of order (Executor's PowerPC Thread Manager threads). Saved with
+     * the execution's coroutine, restored when it resumes. */
+    virtual size_t exec_context_size() const { return 0; }
+    virtual void save_exec_context(void *dst) const { (void)dst; }
+    virtual void restore_exec_context(const void *src) { (void)src; }
+
     /* Guest code in [addr, addr + len) changed (JITs and decoded-block
      * caches drop it). */
     virtual void invalidate(uint32_t addr, uint32_t len) { (void)addr; (void)len; }

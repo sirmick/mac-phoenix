@@ -437,6 +437,17 @@ public:
 
 	virtual void reset() override;
 	virtual int execute(uml::code_handle &entry) override;
+	virtual size_t exec_context_size() const noexcept override { return sizeof(near_state) + sizeof(drcuml_machine_state); }
+	virtual void save_exec_context(void *dst) const noexcept override
+	{
+		memcpy(dst, &m_near, sizeof(near_state));
+		memcpy((u8 *)dst + sizeof(near_state), &m_state, sizeof(drcuml_machine_state));
+	}
+	virtual void restore_exec_context(const void *src) noexcept override
+	{
+		memcpy(&m_near, src, sizeof(near_state));
+		memcpy(&m_state, (const u8 *)src + sizeof(near_state), sizeof(drcuml_machine_state));
+	}
 	virtual void generate(drcuml_block &block, const uml::instruction *instlist, uint32_t numinst) override;
 	virtual bool hash_exists(uint32_t mode, uint32_t pc) const noexcept override;
 	virtual void hash_invalidate_range(uint32_t pcstart, uint32_t pcend) noexcept override;

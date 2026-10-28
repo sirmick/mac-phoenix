@@ -85,6 +85,8 @@ struct EventRecord{GUEST_STRUCT;GUEST<INTEGER> what;GUEST<LONGINT> message;GUEST
 // was LONGINT KeypadMap[2];
 // EventMgr SysEqu.a (true-b);
 const LowMemGlobal<uint8_t [16]> KeyMap{ 0x174 };
+inline uint8_t * LMGetKeyMap() { return ptr_from_longint<uint8_t *>(0x0174); }
+NOTRAP_FUNCTION2(LMGetKeyMap);
 
 
 } /* namespace Executor */

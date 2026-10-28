@@ -41,6 +41,17 @@ namespace Executor
        it per process. */
     void cpu_register_process_state();
 
+    /* MacPhoenix: the same state per Thread Manager thread (process.cpp):
+       a thread switched away from inside PowerPC code (YieldToThread from
+       a PowerPC application) comes back to its registers, mode and depth. */
+    size_t cpu_thread_state_size();
+    void cpu_save_thread_state(void *to);
+    void cpu_restore_thread_state(const void *from);
+
+    /* ... and the PowerPC routine behind `tv` run on a stack of its own
+       (a PowerPC thread's entry), top `stack_top`. */
+    uint32_t callPPCOnStack(uint32_t tv, uint32_t stack_top, std::initializer_list<uint32_t> args);
+
     unsigned long ROMlib_destroy_blocks(syn68k_addr_t start, uint32_t count,
                                         bool flush_only_faulty_checksums);
 }

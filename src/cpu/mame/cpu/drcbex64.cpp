@@ -383,6 +383,9 @@ public:
 	// required overrides
 	virtual void reset() override;
 	virtual int execute(uml::code_handle &entry) override;
+	virtual size_t exec_context_size() const noexcept override;
+	virtual void save_exec_context(void *dst) const noexcept override;
+	virtual void restore_exec_context(const void *src) noexcept override;
 	virtual void generate(drcuml_block &block, const uml::instruction *instlist, u32 numinst) override;
 	virtual bool hash_exists(u32 mode, u32 pc) const noexcept override;
 	virtual void hash_invalidate_range(u32 pcstart, u32 pcend) noexcept override;
@@ -1306,6 +1309,41 @@ void drcbe_x64::reset()
 //  execute - execute a block of code referenced
 //  by the given handle
 //-------------------------------------------------
+
+// MacPhoenix: what execute() keeps per execution (see there), as one
+// record, for executions suspended on separate host coroutines.
+namespace {
+struct x64_exec_context
+{
+	void *stacksave;
+	u32 ssemode;
+	u32 ssemodesave;
+	u8 nominalfmod;
+	drcuml_machine_state state;
+};
+}
+
+size_t drcbe_x64::exec_context_size() const noexcept
+{
+	return sizeof(x64_exec_context);
+}
+
+void drcbe_x64::save_exec_context(void *dst) const noexcept
+{
+	x64_exec_context c{ m_near.stacksave, m_near.ssemode, m_near.ssemodesave, m_near.nominalfmod, m_state };
+	memcpy(dst, &c, sizeof c);
+}
+
+void drcbe_x64::restore_exec_context(const void *src) noexcept
+{
+	x64_exec_context c;
+	memcpy(&c, src, sizeof c);
+	m_near.stacksave = c.stacksave;
+	m_near.ssemode = c.ssemode;
+	m_near.ssemodesave = c.ssemodesave;
+	m_near.nominalfmod = c.nominalfmod;
+	m_state = c.state;
+}
 
 int drcbe_x64::execute(code_handle &entry)
 {

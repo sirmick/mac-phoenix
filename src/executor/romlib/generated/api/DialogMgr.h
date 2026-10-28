@@ -155,6 +155,8 @@ NOTRAP_FUNCTION2(LMSetDABeeper);
 
 // DialogMgr IMI-421 (true);
 const LowMemGlobal<GUEST<Handle> [4]> DAStrings{ 0xAA0 };
+inline GUEST<Handle> * LMGetDAStrings() { return ptr_from_longint<GUEST<Handle> *>(0x0AA0); }
+NOTRAP_FUNCTION2(LMGetDAStrings);
 
 
 // DialogMgr IMI-412 (true);

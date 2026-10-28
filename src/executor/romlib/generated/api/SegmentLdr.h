@@ -42,6 +42,8 @@ NOTRAP_FUNCTION2(LMSetloadtrap);
 
 // SegmentLdr IMII-59 (true);
 const LowMemGlobal<Byte [16]> FinderName{ 0x2E0 };
+inline Byte * LMGetFinderName() { return ptr_from_longint<Byte *>(0x02E0); }
+NOTRAP_FUNCTION2(LMGetFinderName);
 
 
 // SegmentLdr IMII-58 (true);
@@ -56,6 +58,8 @@ NOTRAP_FUNCTION2(LMSetCurApRefNum);
 //  * it is really 34 bytes long.
 // SegmentLdr IMII-58 (true);
 const LowMemGlobal<Byte [34]> CurApName{ 0x910 };
+inline Byte * LMGetCurApName() { return ptr_from_longint<Byte *>(0x0910); }
+NOTRAP_FUNCTION2(LMGetCurApName);
 
 
 // SegmentLdr IMII-62 (true-b);

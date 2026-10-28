@@ -14,6 +14,7 @@
 
 #include <mman/mman.h>
 #include <rsys/cfm.h>
+#include <PowerCore.h>
 #include <rsys/process.h>
 #include <ScrapMgr.h>
 #include <FileMgr.h>
@@ -94,6 +95,10 @@ get_size_resource()
 struct process_info
 {
     struct process_info *next = nullptr;
+    /* MacPhoenix: the PowerPC core's execution in progress (its JIT's host
+       stack and the like) while parked: a process parked inside PowerPC
+       code resumes after others ran theirs. */
+    std::vector<uint8_t> ppc_exec;
 
     uint32_t mode = 0;
     uint32_t type = 0;
@@ -218,6 +223,8 @@ static void forget_process(process_info_t *p)
         }
 }
 
+static void hand_baton(process_info_t *to);
+
 /* The first process: Executor's own thread. */
 static void process_bootstrap()
 {
@@ -231,6 +238,10 @@ static void process_bootstrap()
     cpu_register_process_state();
     layer_order.push_back(current_process_info);
     front_process = current_process_info;
+    /* It holds the baton from the start: its Thread Manager threads switch
+       before any process does (8.6's Finder, the first process, yields to
+       its threads at once). */
+    hand_baton(current_process_info);
 }
 
 /* ── The switched world ── */
@@ -369,6 +380,8 @@ static void save_world(process_info_t *p)
     save_lowmem(p->lowmem);
     p->cpu.resize(syn68k_context_size());
     syn68k_save_context(p->cpu.data());
+    p->ppc_exec.resize(getPowerCore().execContextSize());
+    getPowerCore().saveExecContext(p->ppc_exec.data());
     save_traps(p->traps);
     p->host.clear();
     for(const host_var &v : host_vars())
@@ -383,6 +396,8 @@ static void restore_world(process_info_t *p)
 {
     restore_lowmem(p->lowmem);
     syn68k_restore_context(p->cpu.data());
+    if(!p->ppc_exec.empty() && p->ppc_exec.size() == getPowerCore().execContextSize())
+        getPowerCore().restoreExecContext(p->ppc_exec.data());
     restore_traps(p->traps);
     size_t off = 0;
     for(const host_var &v : host_vars())
@@ -2738,6 +2753,11 @@ OSErr Executor::C_GetPortNameFromProcessSerialNumber(
  * Single process for now: per-process state lives here until the Process
  * Manager keeps real records (slice 2). Names are guesses (learned.yaml). */
 
+OSErr Executor::C_NewDesktopLayerOwner(GUEST<WindowPtr> *layer)
+{
+    return C_TakeDesktopLayer(layer);
+}
+
 OSErr Executor::C_TakeDesktopLayer(GUEST<WindowPtr> *layer)
 {
     if(desktop_layer)
@@ -2958,6 +2978,11 @@ struct pm_thread
     uint32_t switch_in = 0, switch_in_param = 0;
     uint32_t switch_out = 0, switch_out_param = 0;
     uint32_t terminator = 0, terminator_param = 0;
+    /* MacPhoenix: routines a PowerPC caller gave (transition vectors, not
+       68k code or routine descriptors), and the thread's CPU state while
+       parked (PowerPC registers, mode, depth). */
+    bool ppc_entry = false, ppc_switch_in = false, ppc_switch_out = false, ppc_terminator = false;
+    std::vector<uint8_t> cpu_state;
 };
 
 namespace
@@ -3034,8 +3059,23 @@ static pm_thread *find_thread(process_info_t *p, uint32_t id)
 }
 
 /* A Pascal procedure (ThreadID, long), the switcher and terminator kind. */
-static void call_thread_proc(uint32_t proc, uint32_t id, uint32_t param)
+/* A routine a PowerPC caller gave: a transition vector, whose first word
+   is in a loaded PowerPC fragment's code (a routine descriptor, $AAFE, is
+   for Mixed Mode; anything else 68k code). Not the CPU mode at the call:
+   a PowerPC call can reach Executor through a 68k patch of the trap. */
+static bool ppc_routine(uint32_t proc)
 {
+    bool r = proc && READUW(proc) != 0xAAFE && ROMlib_cfm_ppc_code(READUL(proc));
+    return r;
+}
+
+static void call_thread_proc(uint32_t proc, uint32_t id, uint32_t param, bool ppc = false)
+{
+    if(ppc)
+    {
+        callPPC(proc, { id, param });
+        return;
+    }
     EM_A7 -= 4;
     WRITEUL(EM_A7, id);
     EM_A7 -= 4;
@@ -3091,11 +3131,13 @@ static void thread_switch_to(process_info_t *p, pm_thread *to)
     if(to == me)
         return;
     if(me->switch_out)
-        call_thread_proc(me->switch_out, me->id, me->switch_out_param);
+        call_thread_proc(me->switch_out, me->id, me->switch_out_param, me->ppc_switch_out);
     if(me->state == kRunningThreadState)
         me->state = kReadyThreadState;
     me->cpu.resize(syn68k_context_size());
     syn68k_save_context(me->cpu.data());
+    me->cpu_state.resize(cpu_thread_state_size());
+    cpu_save_thread_state(me->cpu_state.data());
     to->state = kRunningThreadState;
     if(!to->started)
     {
@@ -3113,6 +3155,7 @@ static void thread_switch_to(process_info_t *p, pm_thread *to)
 
     wait_turn();
     /* Back: whoever switched to us restored our context. */
+    cpu_restore_thread_state(me->cpu_state.data());
     reap_threads();
     me->state = kRunningThreadState;
     if(me->kill)
@@ -3123,7 +3166,7 @@ static void thread_switch_to(process_info_t *p, pm_thread *to)
         throw ThreadExit();
     }
     if(me->switch_in)
-        call_thread_proc(me->switch_in, me->id, me->switch_in_param);
+        call_thread_proc(me->switch_in, me->id, me->switch_in_param, me->ppc_switch_in);
 }
 
 /* A thread is done (its entry returned, it was disposed of, or it quit
@@ -3135,7 +3178,7 @@ static void thread_finish(pm_thread *t, uint32_t result, bool quit_app)
     if(t->result_addr)
         WRITEUL(t->result_addr, result);
     if(t->terminator)
-        call_thread_proc(t->terminator, t->id, t->terminator_param);
+        call_thread_proc(t->terminator, t->id, t->terminator_param, t->ppc_terminator);
     t->finished = true;
     t->state = kStoppedThreadState;
     p->threads.erase(std::remove(p->threads.begin(), p->threads.end(), t), p->threads.end());
@@ -3175,15 +3218,21 @@ static void thread_body(pm_thread *t)
         if(t->kill)
             throw ThreadExit();
         if(t->switch_in)
-            call_thread_proc(t->switch_in, t->id, t->switch_in_param);
+            call_thread_proc(t->switch_in, t->id, t->switch_in_param, t->ppc_switch_in);
         EM_A6 = 0;
-        EM_A7 = (US_TO_SYN68K(t->stack) + t->stack_size) & ~3u;
-        EM_A7 -= 4;
-        WRITEUL(EM_A7, 0); /* the result */
-        EM_A7 -= 4;
-        WRITEUL(EM_A7, t->param);
-        execute68K(t->entry);
-        result = READUL(EM_A7);
+        uint32_t top = (US_TO_SYN68K(t->stack) + t->stack_size) & ~15u;
+        if(t->ppc_entry)
+            result = callPPCOnStack(t->entry, top, { t->param });
+        else
+        {
+            EM_A7 = top;
+            EM_A7 -= 4;
+            WRITEUL(EM_A7, 0); /* the result */
+            EM_A7 -= 4;
+            WRITEUL(EM_A7, t->param);
+            execute68K(t->entry);
+            result = READUL(EM_A7);
+        }
     }
     catch(const ThreadExit &)
     {
@@ -3281,6 +3330,7 @@ OSErr Executor::C_NewThread(LONGINT threadStyle, ProcPtr threadEntry, LONGINT th
     t->proc = p;
     t->style = threadStyle;
     t->entry = US_TO_SYN68K(threadEntry);
+    t->ppc_entry = ppc_routine(t->entry);
     t->param = threadParam;
     t->result_addr = threadResult ? US_TO_SYN68K(threadResult) : 0;
     t->stack = stack;
@@ -3311,7 +3361,7 @@ OSErr Executor::C_DisposeThread(LONGINT threadToDump, LONGINT threadResult, Bool
         if(t->result_addr)
             WRITEUL(t->result_addr, threadResult);
         if(t->terminator)
-            call_thread_proc(t->terminator, t->id, t->terminator_param);
+            call_thread_proc(t->terminator, t->id, t->terminator_param, t->ppc_terminator);
         if(t->stack)
             DisposePtr(t->stack);
         p->threads.erase(std::remove(p->threads.begin(), p->threads.end(), t), p->threads.end());
@@ -3449,11 +3499,13 @@ OSErr Executor::C_SetThreadSwitcher(LONGINT thread, ProcPtr threadSwitcher,
     {
         t->switch_in = proc;
         t->switch_in_param = switchProcParam;
+        t->ppc_switch_in = ppc_routine(proc);
     }
     else
     {
         t->switch_out = proc;
         t->switch_out_param = switchProcParam;
+        t->ppc_switch_out = ppc_routine(proc);
     }
     return noErr;
 }
@@ -3466,6 +3518,7 @@ OSErr Executor::C_SetThreadTerminator(LONGINT thread, ProcPtr threadTerminator,
         return threadNotFoundErr;
     t->terminator = threadTerminator ? US_TO_SYN68K(threadTerminator) : 0;
     t->terminator_param = terminationProcParam;
+    t->ppc_terminator = ppc_routine(t->terminator);
     return noErr;
 }
 

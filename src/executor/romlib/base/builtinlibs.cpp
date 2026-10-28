@@ -2,6 +2,7 @@
 #include <base/builtinlibs.h>
 #include <base/cpu.h>
 #include <base/traps.h>
+#include <OSUtil.h>
 #include <MemoryMgr.h>
 #include <rsys/cfm.h>
 #include <PEFBinaryFormat.h>
@@ -338,6 +339,18 @@ static void addAlsoExports(std::unordered_map<std::string, std::vector<map_entry
     it->second.clear();
 }
 
+/* MacPhoenix: libraries new in a later System are found only when Executor
+   runs that System (or a later one), as on a Mac (docs/executor/MacOS8-9.md,
+   "One Toolbox for 7, 8 and 9"; LibProbe on 7.6.1, 8.6 and 9.0.4). */
+static bool libraryInThisSystem(const std::string& name)
+{
+    static const std::unordered_map<std::string, uint16_t> since = {
+        { "Memory Manager", 0x0800 }, /* 8.6 has it, 7.6.1 hasn't */
+    };
+    auto it = since.find(name);
+    return it == since.end() || (uint16_t)LM(SysVersion) >= it->second;
+}
+
 ConnectionID builtinlibs::getBuiltinLib(ConstStr255Param libname, OSType arch)
 {
     static bool glue_added = false;
@@ -401,6 +414,8 @@ ConnectionID builtinlibs::getBuiltinLib(ConstStr255Param libname, OSType arch)
 
     if(name != "InterfaceLib")
         addAlsoExports(builtins, name);
+    if(!libraryInThisSystem(name))
+        return nullptr;
     auto it = builtins.find(name);
     if(it == builtins.end())
         return nullptr;
