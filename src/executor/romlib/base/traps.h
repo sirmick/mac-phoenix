@@ -282,18 +282,44 @@ private:
     const char *library;
 };
 
-/* ... and a trap's routine that another library exports as well (`library:`
-   on a trap's or subtrap's entry: SoundLib's Sound Manager calls): its
-   InterfaceLib entry under that library's name, for PowerPC and CFM-68K. */
+/* ... and a routine another library exports as well (`library:` on a
+   trap's or subtrap's entry: SoundLib's Sound Manager calls; the second
+   and later of a `library:` list): its entry in `from` (InterfaceLib for a
+   trap) under that library's name, for PowerPC and CFM-68K. */
 class LibraryAlsoExport : public internal::DeferredInit
 {
 public:
-    LibraryAlsoExport(const char *name, const char *library)
-        : name(name), library(library) {}
+    LibraryAlsoExport(const char *name, const char *library, const char *from)
+        : name(name), library(library), from(from) {}
     virtual void init() override;
 private:
     const char *name;
     const char *library;
+    const char *from;
+};
+
+/* ... and a library routine that is a trap's selector the guest's own code
+   answers (`library:` on a subtrap's entry without `executor:`: the Drag
+   Manager's, Apple's 68k code in the System): PowerPC and CFM-68K code
+   reach it through the dispatcher's table entry, the selector where the
+   dispatcher takes it, as InterfaceLib's glue does. While Executor's own
+   dispatcher is still there (nothing installed the manager), the call is
+   logged and answers 0. */
+template<typename F>
+class TrapGlue {};
+
+template<typename Ret, typename... Args>
+class TrapGlue<Ret (Args...)> : public internal::DeferredInit
+{
+public:
+    TrapGlue(const char *name, const char *library, GenericDispatcherTrap *dispatcher, uint32_t selector)
+        : name(name), library(library), dispatcher(dispatcher), selector(selector) {}
+    virtual void init() override;
+    Ret call(Args... args) const;
+
+    const char *name, *library;
+    GenericDispatcherTrap *dispatcher;
+    uint32_t selector;
 };
 
 /* ... and a routine of an ASLM function set that PowerPC code binds
@@ -400,6 +426,8 @@ public:
     extern Executor::traps::OTFunction NAME
 #define EXTERN_LIBRARY_RAW(NAME, INIT) \
     extern Executor::traps::LibraryRawExport NAME
+#define EXTERN_TRAP_GLUE(NAME, INIT, ...) \
+    extern Executor::traps::__VA_ARGS__ NAME
 #define EXTERN_LIBRARY_ALSO(NAME, INIT) \
     extern Executor::traps::LibraryAlsoExport NAME
 #define EXTERN_ASLM_FUNCTION(NAME, INIT, ...) \
@@ -422,6 +450,8 @@ public:
     Executor::traps::OTFunction NAME INIT
 #define DEFINE_LIBRARY_RAW(NAME, INIT) \
     Executor::traps::LibraryRawExport NAME INIT
+#define DEFINE_TRAP_GLUE(NAME, INIT, ...) \
+    Executor::traps::__VA_ARGS__ NAME INIT
 #define DEFINE_LIBRARY_ALSO(NAME, INIT) \
     Executor::traps::LibraryAlsoExport NAME INIT
 #define DEFINE_ASLM_FUNCTION(NAME, INIT, ...) \
@@ -441,6 +471,7 @@ public:
 #define CREATE_LIBRARY_RAW PREPROCESSOR_CONCAT(TRAP_INSTANTIATION, _LIBRARY_RAW)
 #define CREATE_OT_FUNCTION PREPROCESSOR_CONCAT(TRAP_INSTANTIATION, _OT_FUNCTION)
 #define CREATE_LIBRARY_ALSO PREPROCESSOR_CONCAT(TRAP_INSTANTIATION, _LIBRARY_ALSO)
+#define CREATE_TRAP_GLUE PREPROCESSOR_CONCAT(TRAP_INSTANTIATION, _TRAP_GLUE)
 #define CREATE_ASLM_FUNCTION PREPROCESSOR_CONCAT(TRAP_INSTANTIATION, _ASLM_FUNCTION)
 #define CREATE_ASLM_RAW PREPROCESSOR_CONCAT(TRAP_INSTANTIATION, _ASLM_RAW)
 #define CREATE_COMPONENT_CALL PREPROCESSOR_CONCAT(TRAP_INSTANTIATION, _COMPONENT_CALL)
@@ -471,8 +502,10 @@ public:
     CREATE_OT_FUNCTION(lib_##LIB##_##NAME, (#NAME, #LIB, SET, SETNAME, PASCAL, SIG, RET, &ot::IMPL))
 #define LIBRARY_RAW(LIB, NAME) \
     CREATE_LIBRARY_RAW(lib_##LIB##_##NAME, (#NAME, #LIB))
-#define LIBRARY_ALSO(LIB, NAME) \
-    CREATE_LIBRARY_ALSO(also_##LIB##_##NAME, (#NAME, #LIB))
+#define TRAP_GLUE(LIB, NAME, DISPATCHER, SELECTOR) \
+    CREATE_TRAP_GLUE(glue_##LIB##_##NAME, (#NAME, #LIB, &DISPATCHER, SELECTOR), TrapGlue<decltype(NAME)>)
+#define LIBRARY_ALSO(LIB, NAME, FROM) \
+    CREATE_LIBRARY_ALSO(also_##LIB##_##NAME, (#NAME, #LIB, #FROM))
 #define ASLM_FUNCTION(SET, INDEX, NAME, IMPL) \
     CREATE_ASLM_FUNCTION(aslm_##NAME, (#NAME, SET, INDEX), ASLMFunction<decltype(IMPL) COMMA &IMPL>)
 #define ASLM_RAW(SET, INDEX, NAME) \

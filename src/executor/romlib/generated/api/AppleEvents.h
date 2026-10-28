@@ -537,41 +537,54 @@ OSErr C_AEManagerInfo(AEKeyword keyword, GUEST<LONGINT> *resultp);PASCAL_SUBTRAP
 
 
 OSErr C_AEDisposeToken(AEDesc *theToken);PASCAL_SUBTRAP(AEDisposeToken, 0xA816, 0x023A, Pack8);
+LIBRARY_ALSO(ObjectSupportLib, AEDisposeToken, InterfaceLib);
 
 
 OSErr C_AEResolve(AEDesc *objectSpecifier, INTEGER callbackFlags, AEDesc *theToken);PASCAL_SUBTRAP(AEResolve, 0xA816, 0x0536, Pack8);
+LIBRARY_ALSO(ObjectSupportLib, AEResolve, InterfaceLib);
 
 
 OSErr C_AERemoveObjectAccessor(DescType desiredClass, DescType containerType, ProcPtr theAccessor, Boolean isSysHandler);PASCAL_SUBTRAP(AERemoveObjectAccessor, 0xA816, 0x0738, Pack8);
+LIBRARY_ALSO(ObjectSupportLib, AERemoveObjectAccessor, InterfaceLib);
 
 
 OSErr C_AEInstallObjectAccessor(DescType desiredClass, DescType containerType, ProcPtr theAccessor, LONGINT refcon, Boolean isSysHandler);PASCAL_SUBTRAP(AEInstallObjectAccessor, 0xA816, 0x0937, Pack8);
+LIBRARY_ALSO(ObjectSupportLib, AEInstallObjectAccessor, InterfaceLib);
 
 
 OSErr C_AEGetObjectAccessor(DescType desiredClass, DescType containerType, GUEST<ProcPtr> *theAccessor, GUEST<LONGINT> *accessorRefcon, Boolean isSysHandler);PASCAL_SUBTRAP(AEGetObjectAccessor, 0xA816, 0x0939, Pack8);
+LIBRARY_ALSO(ObjectSupportLib, AEGetObjectAccessor, InterfaceLib);
 
 
 OSErr C_AECallObjectAccessor(DescType desiredClass, AEDesc *containerToken, DescType containerClass, DescType keyForm, AEDesc *keyData, AEDesc *theToken);PASCAL_SUBTRAP(AECallObjectAccessor, 0xA816, 0x0C3B, Pack8);
+LIBRARY_ALSO(ObjectSupportLib, AECallObjectAccessor, InterfaceLib);
 
 
 OSErr C_AESetObjectCallbacks(ProcPtr myCompareProc, ProcPtr myCountProc, ProcPtr myDisposeTokenProc, ProcPtr myGetMarkTokenProc, ProcPtr myMarkProc, ProcPtr myAdjustMarksProc, ProcPtr myGetErrDescProc);PASCAL_SUBTRAP(AESetObjectCallbacks, 0xA816, 0x0E35, Pack8);
+LIBRARY_ALSO(ObjectSupportLib, AESetObjectCallbacks, InterfaceLib);
 
 
+LIBRARY_ALSO(ObjectSupportLib, AEObjectInit, InterfaceLib);
 OSErr glue_AEObjectInit();LIBRARY_FUNCTION(InterfaceLib, AEObjectInit, glue_AEObjectInit);
 
 
+LIBRARY_ALSO(ObjectSupportLib, CreateOffsetDescriptor, InterfaceLib);
 OSErr glue_CreateOffsetDescriptor(LONGINT offset, AEDesc *result);LIBRARY_FUNCTION(InterfaceLib, CreateOffsetDescriptor, glue_CreateOffsetDescriptor);
 
 
+LIBRARY_ALSO(ObjectSupportLib, CreateCompDescriptor, InterfaceLib);
 OSErr glue_CreateCompDescriptor(DescType op, AEDesc *operand1, AEDesc *operand2, Boolean disposeInputs, AEDesc *result);LIBRARY_FUNCTION(InterfaceLib, CreateCompDescriptor, glue_CreateCompDescriptor);
 
 
+LIBRARY_ALSO(ObjectSupportLib, CreateLogicalDescriptor, InterfaceLib);
 OSErr glue_CreateLogicalDescriptor(AEDesc *terms, DescType op, Boolean disposeInputs, AEDesc *result);LIBRARY_FUNCTION(InterfaceLib, CreateLogicalDescriptor, glue_CreateLogicalDescriptor);
 
 
+LIBRARY_ALSO(ObjectSupportLib, CreateObjSpecifier, InterfaceLib);
 OSErr glue_CreateObjSpecifier(DescType desiredClass, AEDesc *container, DescType keyForm, AEDesc *keyData, Boolean disposeInputs, AEDesc *result);LIBRARY_FUNCTION(InterfaceLib, CreateObjSpecifier, glue_CreateObjSpecifier);
 
 
+LIBRARY_ALSO(ObjectSupportLib, CreateRangeDescriptor, InterfaceLib);
 OSErr glue_CreateRangeDescriptor(AEDesc *start, AEDesc *stop, Boolean disposeInputs, AEDesc *result);LIBRARY_FUNCTION(InterfaceLib, CreateRangeDescriptor, glue_CreateRangeDescriptor);
 
 

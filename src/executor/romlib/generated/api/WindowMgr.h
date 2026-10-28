@@ -466,6 +466,7 @@ DISPATCHER_TRAP(LayerDispatch, 0xA829, D0<0xFF>);
 // Selector -1: the top of the current layer's parent chain. The Help
 // Manager wants its +$94 (first child) non-nil before it makes its layer.
 WindowPtr C_GetRootLayer();PASCAL_SUBTRAP(GetRootLayer, 0xA829, 0x00FF, LayerDispatch);
+LIBRARY_ALSO(PrivateInterfaceLib, GetRootLayer, InterfaceLib);
 
 
 // Selector -5: the desktop layer, low memory $9E2 (the record
@@ -473,11 +474,13 @@ WindowPtr C_GetRootLayer();PASCAL_SUBTRAP(GetRootLayer, 0xA829, 0x00FF, LayerDis
 // visRgn and updateRgn), by reference. The Help Manager tells the
 // desktop window by that updateRgn.
 OSErr C_GetDesktopLayer(GUEST<WindowPtr> *layer);PASCAL_SUBTRAP(GetDesktopLayer, 0xA829, 0x02FB, LayerDispatch);
+LIBRARY_ALSO(PrivateInterfaceLib, GetDesktopLayer, InterfaceLib);
 
 
 // Selector -7: the layer a window is in; a layer's parent; nil: the
 // current layer.
 WindowPtr C_GetWindowLayer(WindowPtr window);PASCAL_SUBTRAP(GetWindowLayer, 0xA829, 0x02F9, LayerDispatch);
+LIBRARY_ALSO(PrivateInterfaceLib, GetWindowLayer, InterfaceLib);
 
 
 // MacPhoenix (name is a guess). Selector 6: a layer's first child: the
@@ -485,6 +488,7 @@ WindowPtr C_GetWindowLayer(WindowPtr window);PASCAL_SUBTRAP(GetWindowLayer, 0xA8
 // Manager walks a layer's windows from it (nextWindow) to find the
 // one under the mouse (System 'proc' -16513 +$4342).
 WindowPtr C_GetLayerWindowList(WindowPtr layer);PASCAL_SUBTRAP(GetLayerWindowList, 0xA829, 0x0206, LayerDispatch);
+LIBRARY_ALSO(PrivateInterfaceLib, GetLayerWindowList, InterfaceLib);
 
 
 // MacPhoenix (name is a guess). Selector 7: FindWindow in the current
@@ -493,6 +497,7 @@ WindowPtr C_GetLayerWindowList(WindowPtr layer);PASCAL_SUBTRAP(GetLayerWindowLis
 // to descend (Drag Manager, 'proc' -16513 +$43d2; the Process Manager's
 // own GetLayerAtPoint). Here too.
 int16_t C_FindWindowInLayer(Point pt, GUEST<WindowPtr> *window);PASCAL_SUBTRAP(FindWindowInLayer, 0xA829, 0x0407, LayerDispatch);
+LIBRARY_ALSO(PrivateInterfaceLib, FindWindowInLayer, InterfaceLib);
 
 
 // Selector 1. Apple's makes the layer a window of WDEF 127 in the
@@ -500,37 +505,45 @@ int16_t C_FindWindowInLayer(Point pt, GUEST<WindowPtr> *window);PASCAL_SUBTRAP(F
 // makes its balloon layer in the root with refCon $BADFACE. Here a
 // floating layer, in front of every process.
 OSErr C_NewLayer(GUEST<WindowPtr> *layer, Boolean visible, Boolean flag, WindowPtr behind, int32_t refcon);PASCAL_SUBTRAP(NewLayer, 0xA829, 0x0801, LayerDispatch);
+LIBRARY_ALSO(PrivateInterfaceLib, NewLayer, InterfaceLib);
 
 
 Boolean C_IsLayer(WindowPtr window);PASCAL_SUBTRAP(IsLayer, 0xA829, 0x0202, LayerDispatch);
+LIBRARY_ALSO(PrivateInterfaceLib, IsLayer, InterfaceLib);
 
 
 WindowPtr C_GetCurLayer();PASCAL_SUBTRAP(GetCurLayer, 0xA829, 0x0003, LayerDispatch);
+LIBRARY_ALSO(PrivateInterfaceLib, GetCurLayer, InterfaceLib);
 
 
 // Selector 4: WindowList, AuxWinHead and AuxCtlHead become the layer's
 // (nil: the root).
 void C_SetCurLayer(WindowPtr layer);PASCAL_SUBTRAP(SetCurLayer, 0xA829, 0x0204, LayerDispatch);
+LIBRARY_ALSO(PrivateInterfaceLib, SetCurLayer, InterfaceLib);
 
 
 // Selector 5: SetCurLayer, answering the layer that was current.
 WindowPtr C_SwapCurLayer(WindowPtr layer);PASCAL_SUBTRAP(SwapCurLayer, 0xA829, 0x0205, LayerDispatch);
+LIBRARY_ALSO(PrivateInterfaceLib, SwapCurLayer, InterfaceLib);
 
 
 // Key Caps calls it with (window, false, 1, 2) when CheckWindow says the
 // window it restored is off screen.  We centre it on the main screen.
 void C_AutoPositionWindow(WindowPtr window, Boolean arg1, SignedByte arg2, SignedByte arg3);PASCAL_SUBTRAP(AutoPositionWindow, 0xA829, 0x0509, LayerDispatch);
+LIBRARY_ALSO(PrivateInterfaceLib, AutoPositionWindow, InterfaceLib);
 
 
 // Key Caps calls it with (window, false, 1) on the position it restored
 // from its 'kcwn' resource.  True when the window can be reached: its
 // title bar (entire: the whole window) is on the desktop.
 Boolean C_CheckWindow(WindowPtr window, Boolean entire, SignedByte kind);PASCAL_SUBTRAP(CheckWindow, 0xA829, 0x040C, LayerDispatch);
+LIBRARY_ALSO(PrivateInterfaceLib, CheckWindow, InterfaceLib);
 
 
 // Key Caps saves the result in its 'kcwn' resource and reads it back as
 // the window's global content rectangle.
 void C_GetWindowContentRect(WindowPtr window, Rect *r);PASCAL_SUBTRAP(GetWindowContentRect, 0xA829, 0x04F6, LayerDispatch);
+LIBRARY_ALSO(PrivateInterfaceLib, GetWindowContentRect, InterfaceLib);
 
 
 } /* namespace Executor */

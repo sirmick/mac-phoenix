@@ -186,15 +186,19 @@ using IndexToStringUPP = UPP<Boolean(INTEGER item, GUEST<ScriptCode> *itemsScrip
 
 
 void C_TypeSelectClear(TypeSelectRecord *tsr);PASCAL_SUBTRAP(TypeSelectClear, 0xA9ED, 0x0028, Pack6);
+LIBRARY_ALSO(PrivateInterfaceLib, TypeSelectClear, InterfaceLib);
 
 
 Boolean C_TypeSelectNewKey(EventRecord *theEvent, TypeSelectRecord *tsr);PASCAL_SUBTRAP(TypeSelectNewKey, 0xA9ED, 0x002A, Pack6);
+LIBRARY_ALSO(PrivateInterfaceLib, TypeSelectNewKey, InterfaceLib);
 
 
 INTEGER C_TypeSelectFindItem(TypeSelectRecord *tsr, INTEGER listSize, INTEGER selectMode, IndexToStringUPP getStringProc, void *getStringRefCon);PASCAL_SUBTRAP(TypeSelectFindItem, 0xA9ED, 0x002C, Pack6);
+LIBRARY_ALSO(PrivateInterfaceLib, TypeSelectFindItem, InterfaceLib);
 
 
 INTEGER C_TypeSelectCompare(TypeSelectRecord *tsr, ScriptCode testStringScript, StringPtr testStringPtr);PASCAL_SUBTRAP(TypeSelectCompare, 0xA9ED, 0x002E, Pack6);
+LIBRARY_ALSO(PrivateInterfaceLib, TypeSelectCompare, InterfaceLib);
 
 
 INTEGER glue_IUEqualPString(ConstStringPtr a, ConstStringPtr b, Handle arg3);LIBRARY_FUNCTION(InterfaceLib, IUEqualPString, glue_IUEqualPString);

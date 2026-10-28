@@ -1210,6 +1210,7 @@
     return: WindowPtr
     dispatcher: LayerDispatch
     selector: 0x00FF
+    library: PrivateInterfaceLib
     executor: C_
     comment: |
       Selector -1: the top of the current layer's parent chain. The Help
@@ -1225,6 +1226,7 @@
         type: WindowPtr*
     dispatcher: LayerDispatch
     selector: 0x02FB
+    library: PrivateInterfaceLib
     executor: C_
     comment: |
       Selector -5: the desktop layer, low memory $9E2 (the record
@@ -1242,6 +1244,7 @@
         type: WindowPtr
     dispatcher: LayerDispatch
     selector: 0x02F9
+    library: PrivateInterfaceLib
     executor: C_
     comment: |
       Selector -7: the layer a window is in; a layer's parent; nil: the
@@ -1257,6 +1260,7 @@
         type: WindowPtr
     dispatcher: LayerDispatch
     selector: 0x0206
+    library: PrivateInterfaceLib
     executor: C_
     comment: |
       MacPhoenix (name is a guess). Selector 6: a layer's first child: the
@@ -1276,6 +1280,7 @@
         type: WindowPtr*
     dispatcher: LayerDispatch
     selector: 0x0407
+    library: PrivateInterfaceLib
     executor: C_
     comment: |
       MacPhoenix (name is a guess). Selector 7: FindWindow in the current
@@ -1302,6 +1307,7 @@
         type: int32_t
     dispatcher: LayerDispatch
     selector: 0x0801
+    library: PrivateInterfaceLib
     executor: C_
     comment: |
       Selector 1. Apple's makes the layer a window of WDEF 127 in the
@@ -1319,6 +1325,7 @@
         type: WindowPtr
     dispatcher: LayerDispatch
     selector: 0x0202
+    library: PrivateInterfaceLib
     executor: C_
 
 # ####
@@ -1328,6 +1335,7 @@
     return: WindowPtr
     dispatcher: LayerDispatch
     selector: 0x0003
+    library: PrivateInterfaceLib
     executor: C_
 
 # ####
@@ -1339,6 +1347,7 @@
         type: WindowPtr
     dispatcher: LayerDispatch
     selector: 0x0204
+    library: PrivateInterfaceLib
     executor: C_
     comment: |
       Selector 4: WindowList, AuxWinHead and AuxCtlHead become the layer's
@@ -1354,6 +1363,7 @@
         type: WindowPtr
     dispatcher: LayerDispatch
     selector: 0x0205
+    library: PrivateInterfaceLib
     executor: C_
     comment: |
       Selector 5: SetCurLayer, answering the layer that was current.
@@ -1376,6 +1386,7 @@
         type: SignedByte
     dispatcher: LayerDispatch
     selector: 0x0509
+    library: PrivateInterfaceLib
     executor: C_
 
 # ####
@@ -1396,6 +1407,7 @@
         type: SignedByte
     dispatcher: LayerDispatch
     selector: 0x040C
+    library: PrivateInterfaceLib
     executor: C_
 
 # ####
@@ -1412,5 +1424,6 @@
         type: Rect*
     dispatcher: LayerDispatch
     selector: 0x04F6
+    library: PrivateInterfaceLib
     executor: C_
 

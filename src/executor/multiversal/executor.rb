@@ -291,7 +291,7 @@ class ExecutorGenerator < Generator
             # parameters after the instance, in Pascal sizes.
             if fun["library"] then
                 sizes = (fun["args"] or [])[1..-1].map {|arg| pascal_size(arg["type"])}.join
-                @out << "COMPONENT_CALL(#{fun["library"]}, #{name}, #{hexlit(fun["selector"])}, \"#{sizes}\");\n"
+                @out << "COMPONENT_CALL(#{Array(fun["library"])[0]}, #{name}, #{hexlit(fun["selector"])}, \"#{sizes}\");\n"
             end
             # A call Executor's own (native) component of this type
             # answers: registered with the type's dispatch by selector,
@@ -343,7 +343,12 @@ class ExecutorGenerator < Generator
             # A raw one reads its own arguments from the PowerPC registers
             # and is registered by its library's code; here it is only
             # declared to be there (checked when the library is set up).
-            lib = fun["library"]
+            # A list: the first library has the export, the others export
+            # the same routine too (ObjectSupportLib's glue, InterfaceLib's
+            # on CFM-68K).
+            libs = Array(fun["library"])
+            lib = libs[0]
+            libs[1..-1].each {|other| @out << "LIBRARY_ALSO(#{other}, #{name}, #{lib});\n" }
             if fun["aslm"] then
                 # Open Transport's: bound through the Shared Library Manager
                 # on 68k as well; the routine reads its arguments through
@@ -430,7 +435,14 @@ class ExecutorGenerator < Generator
         # for PowerPC and CFM-68K code (SoundLib's Sound Manager calls): the
         # same entry under that library's name too.
         if fun["library"] and trap and fun["executor"] then
-            @out << "LIBRARY_ALSO(#{fun["library"]}, #{name});\n"
+            Array(fun["library"]).each {|lib| @out << "LIBRARY_ALSO(#{lib}, #{name}, InterfaceLib);\n" }
+        end
+        # A selector the guest's own code answers (the Drag Manager's),
+        # exported by a library: glue through the dispatcher's table entry.
+        if fun["library"] and fun["selector"] and fun["dispatcher"] and not fun["executor"] then
+            Array(fun["library"]).each do |lib|
+                @out << "TRAP_GLUE(#{lib}, #{name}, #{fun["dispatcher"]}, #{hexlit(fun["selector"])});\n"
+            end
         end
     end
 

@@ -64,7 +64,7 @@ void traps::LibraryRawExport::init()
 
 void traps::LibraryAlsoExport::init()
 {
-    builtinlibs::alsoExport(library, name);
+    builtinlibs::alsoExport(library, name, from);
 }
 
 void traps::ASLMRawExport::init()

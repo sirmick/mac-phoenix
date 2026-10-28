@@ -415,6 +415,7 @@
         type: void*
     dispatcher: DragDispatch
     selector: 0x0001
+    library: DragLib
 
 # ####
 
@@ -430,6 +431,7 @@
         type: void*
     dispatcher: DragDispatch
     selector: 0x0002
+    library: DragLib
 
 # ####
 
@@ -443,6 +445,7 @@
         type: WindowRef
     dispatcher: DragDispatch
     selector: 0x0003
+    library: DragLib
 
 # ####
 
@@ -456,6 +459,7 @@
         type: WindowRef
     dispatcher: DragDispatch
     selector: 0x0004
+    library: DragLib
 
 # ####
 
@@ -491,6 +495,7 @@
         type: DragRef*
     dispatcher: DragDispatch
     selector: 0x0005
+    library: DragLib
 
 # ####
 
@@ -502,6 +507,7 @@
         type: DragRef
     dispatcher: DragDispatch
     selector: 0x0006
+    library: DragLib
 
 # ####
 
@@ -523,6 +529,7 @@
         type: FlavorFlags
     dispatcher: DragDispatch
     selector: 0x0007
+    library: DragLib
 
 # ####
 
@@ -544,6 +551,7 @@
         type: UInt32
     dispatcher: DragDispatch
     selector: 0x0009
+    library: DragLib
 
 # ####
 
@@ -559,6 +567,7 @@
         type: void*
     dispatcher: DragDispatch
     selector: 0x000A
+    library: DragLib
 
 # ####
 
@@ -574,6 +583,7 @@
         type: void*
     dispatcher: DragDispatch
     selector: 0x000B
+    library: DragLib
 
 # ####
 
@@ -589,6 +599,7 @@
         type: void*
     dispatcher: DragDispatch
     selector: 0x000C
+    library: DragLib
 
 # ####
 
@@ -604,6 +615,7 @@
         type: RgnHandle
     dispatcher: DragDispatch
     selector: 0x000D
+    library: DragLib
 
 # ####
 
@@ -617,6 +629,7 @@
         type: UInt16*
     dispatcher: DragDispatch
     selector: 0x000E
+    library: DragLib
 
 # ####
 
@@ -632,6 +645,7 @@
         type: DragItemRef*
     dispatcher: DragDispatch
     selector: 0x000F
+    library: DragLib
 
 # ####
 
@@ -647,6 +661,7 @@
         type: UInt16*
     dispatcher: DragDispatch
     selector: 0x0010
+    library: DragLib
 
 # ####
 
@@ -664,6 +679,7 @@
         type: FlavorType*
     dispatcher: DragDispatch
     selector: 0x0011
+    library: DragLib
 
 # ####
 
@@ -681,6 +697,7 @@
         type: FlavorFlags*
     dispatcher: DragDispatch
     selector: 0x0012
+    library: DragLib
 
 # ####
 
@@ -698,6 +715,7 @@
         type: Size*
     dispatcher: DragDispatch
     selector: 0x0013
+    library: DragLib
 
 # ####
 
@@ -719,6 +737,7 @@
         type: UInt32
     dispatcher: DragDispatch
     selector: 0x0014
+    library: DragLib
 
 # ####
 
@@ -734,6 +753,7 @@
         type: Rect*
     dispatcher: DragDispatch
     selector: 0x0015
+    library: DragLib
 
 # ####
 
@@ -749,6 +769,7 @@
         type: const Rect*
     dispatcher: DragDispatch
     selector: 0x0016
+    library: DragLib
 
 # ####
 
@@ -762,6 +783,7 @@
         type: AEDesc*
     dispatcher: DragDispatch
     selector: 0x0017
+    library: DragLib
 
 # ####
 
@@ -775,6 +797,7 @@
         type: const AEDesc*
     dispatcher: DragDispatch
     selector: 0x0018
+    library: DragLib
 
 # ####
 
@@ -788,6 +811,7 @@
         type: DragAttributes*
     dispatcher: DragDispatch
     selector: 0x0019
+    library: DragLib
 
 # ####
 
@@ -803,6 +827,7 @@
         type: Point*
     dispatcher: DragDispatch
     selector: 0x001A
+    library: DragLib
 
 # ####
 
@@ -816,6 +841,7 @@
         type: Point
     dispatcher: DragDispatch
     selector: 0x001B
+    library: DragLib
 
 # ####
 
@@ -829,6 +855,7 @@
         type: Point*
     dispatcher: DragDispatch
     selector: 0x001C
+    library: DragLib
 
 # ####
 
@@ -846,6 +873,7 @@
         type: INTEGER*
     dispatcher: DragDispatch
     selector: 0x001D
+    library: DragLib
 
 # ####
 
@@ -861,6 +889,7 @@
         type: Boolean
     dispatcher: DragDispatch
     selector: 0x001E
+    library: DragLib
 
 # ####
 
@@ -872,6 +901,7 @@
         type: DragRef
     dispatcher: DragDispatch
     selector: 0x001F
+    library: DragLib
 
 # ####
 
@@ -887,6 +917,7 @@
         type: INTEGER
     dispatcher: DragDispatch
     selector: 0x0020
+    library: DragLib
 
 # ####
 
@@ -898,6 +929,7 @@
         type: DragRef
     dispatcher: DragDispatch
     selector: 0x0021
+    library: DragLib
 
 # ####
 
@@ -911,6 +943,7 @@
         type: RgnHandle
     dispatcher: DragDispatch
     selector: 0x0022
+    library: DragLib
 
 # ####
 
@@ -922,6 +955,7 @@
         type: Point
     dispatcher: DragDispatch
     selector: 0x0023
+    library: DragLib
 
 # ####
 
@@ -939,6 +973,7 @@
         type: ZoomAcceleration
     dispatcher: DragDispatch
     selector: 0x0024
+    library: DragLib
 
 # ####
 
@@ -956,6 +991,7 @@
         type: ZoomAcceleration
     dispatcher: DragDispatch
     selector: 0x0025
+    library: DragLib
 
 # ####
 
@@ -969,6 +1005,7 @@
         type: RGBColor*
     dispatcher: DragDispatch
     selector: 0x0026
+    library: DragLib
 
 # ####
 
@@ -989,6 +1026,7 @@
         type: DragImageFlags
     dispatcher: DragDispatch
     selector: 0x0027
+    library: DragLib
 
 # ####
 
@@ -1005,3 +1043,4 @@
         type: DragBehaviors
     dispatcher: DragDispatch
     selector: 0x0028
+    library: DragLib

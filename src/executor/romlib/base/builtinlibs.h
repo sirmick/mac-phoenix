@@ -56,7 +56,7 @@ namespace Executor
         /* MacPhoenix: a library that exports one of InterfaceLib's routines
            as well (SoundLib's Sound Manager calls; `library:` on a trap's
            entry): the same entry under its name, PowerPC and CFM-68K. */
-        void alsoExport(const char *library, const char *function);
+        void alsoExport(const char *library, const char *function, const char *from = "InterfaceLib");
 
         /* MacPhoenix: routines of ASLM function sets that PowerPC code
            binds through ASLM itself (`aslm:` without `library:` in the

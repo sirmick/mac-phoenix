@@ -7,6 +7,7 @@
 #include <error/error.h>
 
 #include <cassert>
+#include <type_traits>
 #include <iostream>
 #include <functional>
 
@@ -152,6 +153,40 @@ void ASLMFunction<Ret (Args...), fptr>::init()
 #endif
         return callfromPPC::Invoker<Ret (Args...)>::invokeFromPPC(cpu, fptr);
     });
+}
+
+template<typename Ret, typename... Args>
+Ret TrapGlue<Ret (Args...)>::call(Args... args) const
+{
+    if(!dispatcher->isPatched() || !dispatcher->putSelector(selector))
+    {
+        log_unimplemented(std::string("library glue ") + name + " (" + library
+                          + "): nothing answers its trap; answered 0");
+        if constexpr(std::is_void_v<Ret>)
+            return;
+        else
+            return Ret();
+    }
+    return (UPP<Ret (Args...), callconv::Pascal>(SYN68K_TO_US(dispatcher->tableEntry())))(args...);
+}
+
+template<typename Ret, typename... Args>
+void TrapGlue<Ret (Args...)>::init()
+{
+    builtinlibs::addPPCEntrypoint(library, name, [this](PowerCore& cpu) {
+        auto f = [this](Args... args) -> Ret { return this->call(args...); };
+#ifdef EXECUTOR_ENABLE_LOGGING
+        if(logging::enabled())
+            return callfromPPC::Invoker<Ret (Args...)>::invokeFromPPC(cpu,
+                logging::makeLoggedFunction1<Ret (Args...)>(name, f));
+#endif
+        return callfromPPC::Invoker<Ret (Args...)>::invokeFromPPC(cpu, f);
+    });
+    builtinlibs::addCFM68KEntrypoint(library, name,
+        [this, pops = builtinlibs::cfm68kCalleePops(name)](syn68k_addr_t) {
+            auto f = [this](Args... args) -> Ret { return this->call(args...); };
+            return callfromCFM68K::Invoker<Ret (Args...)>::invokeFromCFM68K(f, pops);
+        });
 }
 
 /* component.cpp: the routine answering `what` for Executor's components of

@@ -60,6 +60,22 @@ neither, i.e. the system's own code (ROM, or the System file's patches).
 Loading "Memory Manager" (the Finder's `MMNewHeap` & co.) hangs
 `GetSharedLibrary` on both, so it is probed last.
 
+By version (LibProbe on the G3, extensions off, 7.6.1 too: the table
+the version gating of "One Toolbox for 7, 8 and 9" follows; numbers are
+exports):
+
+| | Libraries |
+|---|---|
+| On 7.6.1 already | InterfaceLib (2539), PrivateInterfaceLib (929), DragLib (40), ThreadsLib (33), ObjectSupportLib (13), Translation (34), NameRegistryLib (32), StdCLib, MathLib, SoundLib, QuickdrawLib, Math64Lib, DriverServicesLib, DriverLoaderLib, VideoServicesLib, CursorDevicesLib, ColorPickerLib, AppleGuideGlueLib, AppleScriptLib, Open Transport's, QuickTimeLib |
+| New in 8.x (8.6) | AppearanceLib, WindowsLib, ControlsLib, MenusLib, MacDialogsLib, IconServicesLib, FontManager, FontObjects, ToolboxUtils, NavigationLib, FoldersLib, CollectionsLib, ControlStripLib, ATSUnicodeLib, LocalesLib, TextCommon, UnicodeConverter, TextEncodingConverter, ContextualMenu, FileSharingLib, UTCUtils, StringCompare, DebugLib |
+| New in 9.0.4 | DesktopItemsLib, PPCToolbox, NumberFormatting |
+| Grown | PrivateInterfaceLib 929 → 1852 (9.0.4), Translation 34 → 58 and FontManager 77 → 114 (8.x), NameRegistryLib 32 → 70 (9.0.4) |
+
+So steps 1 and 2 below (ThreadsLib, ObjectSupportLib, PrivateInterfaceLib,
+DragLib) are libraries 7.x has too: Executor answers them on every
+System. The ones new in 8.x and 9 are to be found only when Executor runs
+that System (CFM answers "not found" on 7.x, as a 7.6.1 Mac does).
+
 LibProbe on Executor (as the start application, `--executor-app`, with
 8.6's and 9.0.4's System Folders and no extensions) loads 11 of these:
 InterfaceLib, StdCLib, MathLib, SoundLib, AppleScriptLib, OTClientLib,
@@ -114,14 +130,26 @@ per System version.
 
 ## The work
 
-1. **Library names for PowerPC.** Export what Executor has under 8/9's
-   library names: `library:` on the definitions (`LIBRARY_ALSO`, as
-   SoundLib's): ThreadsLib (14), ObjectSupportLib (7, PowerPC too),
-   PrivateInterfaceLib (10). Check: the unresolved list shrinks by 31.
-2. **Trap-routed exports.** A definition with a trap or selector but no
-   Executor routine (the Drag Manager's 29: Apple's 68k code answers them
-   on 7.x; `InsXTime`) gets a PowerPC and CFM-68K export that calls
-   through the trap table, as InterfaceLib's glue does. Then DragLib.
+1. **Library names for PowerPC** — done (2026-10-28). What Executor has,
+   under 8/9's library names, by family: `library:` on the definitions
+   (`LIBRARY_ALSO`, as SoundLib's; a list for a library routine exported
+   by more than one): the Thread Manager (ThreadsLib, 21), the object
+   support calls (ObjectSupportLib, 13, InterfaceLib too), the layer
+   calls, `TypeSelect*`, `Begin/EndSystemMode`, `AddAppleMenuItem`
+   (PrivateInterfaceLib, 20). The 8.6 Finder's unresolved imports: 233 →
+   202.
+2. **Trap-routed exports** — done for selectors (2026-10-28). A subtrap's
+   definition with `library:` and no Executor routine gets a PowerPC and
+   CFM-68K export that sets the selector and calls through the
+   dispatcher's table entry, as InterfaceLib's glue does (`TRAP_GLUE`;
+   logged and answered 0 while Executor's own dispatcher is still there).
+   DragLib (39, all of the Drag Manager's): Apple's 68k Drag Manager in
+   the System answers them. DragTest (`tests/guest/drag`, Retro68
+   PowerPC: a drag made, flavors added and read back, bounds, disposed)
+   passes 14/14 on Executor 7.6.1 and on the G3 with 7.6.1 and 9.0.4
+   (`drag_ppc_executor_761`, `drag_rom_ppc_761`, `drag_rom_ppc_904`).
+   The 8.6 Finder's unresolved imports: 202 → 173. Left: plain traps
+   (`InsXTime`).
 3. **The System's `'nlib'`s.** Register the System file's native
    libraries with CFM at startup, as the System does (TextCommon,
    UnicodeConverter, Math64Lib, ...), each one checked: Apple's code or

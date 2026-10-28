@@ -1753,6 +1753,7 @@
         type: AEDesc*
     dispatcher: Pack8
     selector: 0x023A
+    library: ObjectSupportLib
     executor: C_
 
 # ####
@@ -1769,6 +1770,7 @@
         type: AEDesc*
     dispatcher: Pack8
     selector: 0x0536
+    library: ObjectSupportLib
     executor: C_
 
 # ####
@@ -1787,6 +1789,7 @@
         type: Boolean
     dispatcher: Pack8
     selector: 0x0738
+    library: ObjectSupportLib
     executor: C_
 
 # ####
@@ -1807,6 +1810,7 @@
         type: Boolean
     dispatcher: Pack8
     selector: 0x0937
+    library: ObjectSupportLib
     executor: C_
 
 # ####
@@ -1827,6 +1831,7 @@
         type: Boolean
     dispatcher: Pack8
     selector: 0x0939
+    library: ObjectSupportLib
     executor: C_
 
 # ####
@@ -1849,6 +1854,7 @@
         type: AEDesc*
     dispatcher: Pack8
     selector: 0x0C3B
+    library: ObjectSupportLib
     executor: C_
 
 # ####
@@ -1873,6 +1879,7 @@
         type: ProcPtr
     dispatcher: Pack8
     selector: 0x0E35
+    library: ObjectSupportLib
     executor: C_
 
 # ####
@@ -1885,7 +1892,7 @@
   function:
     name: AEObjectInit
     return: "OSErr"
-    library: InterfaceLib
+    library: [InterfaceLib, ObjectSupportLib]
     executor: glue_AEObjectInit
 
 # ####
@@ -1899,7 +1906,7 @@
         type: "LONGINT"
       - name: "result"
         type: "AEDesc*"
-    library: InterfaceLib
+    library: [InterfaceLib, ObjectSupportLib]
     executor: glue_CreateOffsetDescriptor
 
 # ####
@@ -1919,7 +1926,7 @@
         type: "Boolean"
       - name: "result"
         type: "AEDesc*"
-    library: InterfaceLib
+    library: [InterfaceLib, ObjectSupportLib]
     executor: glue_CreateCompDescriptor
 
 # ####
@@ -1937,7 +1944,7 @@
         type: "Boolean"
       - name: "result"
         type: "AEDesc*"
-    library: InterfaceLib
+    library: [InterfaceLib, ObjectSupportLib]
     executor: glue_CreateLogicalDescriptor
 
 # ####
@@ -1959,7 +1966,7 @@
         type: "Boolean"
       - name: "result"
         type: "AEDesc*"
-    library: InterfaceLib
+    library: [InterfaceLib, ObjectSupportLib]
     executor: glue_CreateObjSpecifier
 
 # ####
@@ -1977,7 +1984,7 @@
         type: "Boolean"
       - name: "result"
         type: "AEDesc*"
-    library: InterfaceLib
+    library: [InterfaceLib, ObjectSupportLib]
     executor: glue_CreateRangeDescriptor
 
 # ####

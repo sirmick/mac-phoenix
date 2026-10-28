@@ -347,6 +347,7 @@
         type: int32_t
     dispatcher: OSDispatch
     selector: 0x0031
+    library: PrivateInterfaceLib
     executor: C_
     comment: >
       Finder feeds the Apple Menu Items folder to the Process Manager, which
@@ -621,6 +622,7 @@
     return: OSErr
     dispatcher: OSDispatch
     selector: 0x0040
+    library: PrivateInterfaceLib
     executor: C_
 
 # ####
@@ -630,6 +632,7 @@
     return: OSErr
     dispatcher: OSDispatch
     selector: 0x0041
+    library: PrivateInterfaceLib
     executor: C_
 
 # ####
