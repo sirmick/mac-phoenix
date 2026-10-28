@@ -463,7 +463,14 @@ void Executor::InitPerProcessLowMem()
     LM(TEDoText) = (ProcPtr)&ROMlib_dotext; /* where should this go ? */
 
     LM(WWExist) = LM(QDExist) = EXIST_NO;
-    LM(PortList) = nullptr; /* made by the first InitGraf (qGrafport.cpp) */
+    /* MacPhoenix: the list of open ports, empty, in the system heap: on a
+       Mac QuickDraw has it from startup, and 8.x's AppearanceLib, prepared
+       when the Finder loads it, walks it before the Finder's InitGraf
+       (InitGraf makes it if it's missing: qGrafport.cpp). */
+    {
+        TheZoneGuard guard(LM(SysZone));
+        LM(PortList) = NewHandleClear(2);
+    }
     LM(SCSIFlags) = 0xEC00; /* scsi+clock+xparam+mmu+adb
 				 (no fpu,aux or pwrmgr) */
 

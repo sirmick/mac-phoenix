@@ -474,12 +474,13 @@ NOTRAP_FUNCTION2(LMGetHiliteMode);
 NOTRAP_FUNCTION2(LMSetHiliteMode);
 
 
-// undocumented; 2-byte count followed by array of GrafPtrs
+// undocumented; 2-byte count followed by array of GrafPtrs. Its
+// accessors are PrivateInterfaceLib's (8.x's AppearanceLib walks it).
 const LowMemGlobal<Handle > PortList{ 0xD66 };
 inline Handle  LMGetPortList() { return LM(PortList); }
 inline void LMSetPortList(Handle val) { LM(PortList) = val; }
-NOTRAP_FUNCTION2(LMGetPortList);
-NOTRAP_FUNCTION2(LMSetPortList);
+LIBRARY_FUNCTION(PrivateInterfaceLib, LMGetPortList, LMGetPortList);
+LIBRARY_FUNCTION(PrivateInterfaceLib, LMSetPortList, LMSetPortList);
 
 
 void C_CopyBits(BitMap *src_bitmap, BitMap *dst_bitmap, const Rect *src_rect, const Rect *dst_rect, INTEGER mode, RgnHandle mask);PASCAL_TRAP(CopyBits, 0xA8EC);

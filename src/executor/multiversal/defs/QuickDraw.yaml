@@ -1292,8 +1292,10 @@
     name: PortList
     type: Handle
     address: 0xD66
+    library: PrivateInterfaceLib
     comment: |
-      undocumented; 2-byte count followed by array of GrafPtrs
+      undocumented; 2-byte count followed by array of GrafPtrs. Its
+      accessors are PrivateInterfaceLib's (8.x's AppearanceLib walks it).
 
 # ####
 

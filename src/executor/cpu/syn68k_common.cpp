@@ -680,6 +680,15 @@ void syn68k_describe_cpu(FILE *out)
             a += n;
         }
     }
+    /* MacPhoenix: the PowerPC's state at its last call into Executor (the
+       recompiler keeps the live one to itself): which routine called the
+       Toolbox last, and its registers then. */
+    {
+        PowerCore& ppc = PowerCore::instance();
+        if(ppc.CIA || ppc.lr)
+            fprintf(out, "PowerPC at its last call out: CIA $%08X lr $%08X r1 $%08X r2 $%08X r3 $%08X r4 $%08X\n",
+                    ppc.CIA, ppc.lr, ppc.r[1], ppc.r[2], ppc.r[3], ppc.r[4]);
+    }
     uint32_t sp = r[15];
     if(syn68k_is_guest_mapped((uintptr_t)SYN68K_TO_US(sp), 32))
     {

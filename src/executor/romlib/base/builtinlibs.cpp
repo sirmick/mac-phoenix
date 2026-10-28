@@ -451,7 +451,22 @@ ConnectionID builtinlibs::getBuiltinLib(ConstStr255Param libname, OSType arch)
     {
         if(std::find(std::begin(interfacelib_aliases68k), std::end(interfacelib_aliases68k), name)
            != std::end(interfacelib_aliases68k))
+        {
+            /* MacPhoenix: answered from InterfaceLib's table, with what the
+               library exports under its own name merged in (PrivateInterface-
+               Lib's accessors: `library:` on a lowmem entry). */
+            static std::set<std::string> merged;
+            if(merged.insert(name).second)
+            {
+                addAlsoExports(builtins68k, name);
+                auto& into = builtins68k["InterfaceLib"];
+                for(const map_entry_t& e : builtins68k[name])
+                    if(std::none_of(into.begin(), into.end(),
+                                    [&](const map_entry_t& i) { return !strcmp(i.symbol_name, e.symbol_name); }))
+                        into.push_back(e);
+            }
             name = "InterfaceLib";
+        }
         /* MPW's CFM-68K programs import StdCLib as two libraries (the
            Enabler's): NuStdCLib (string, ctype, printf, time, ...) and
            NuIntEnv (stdio's files, errno, exit, signal, PL strings). One

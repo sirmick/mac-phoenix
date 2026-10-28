@@ -313,6 +313,21 @@ Next, in order:
    when the Finder loads it, calls it before the Finder's InitGraf). The
    8.6 Finder then reaches its event loop, calling Window Manager 2.0's
    and the Menu Manager's routines (step 7) on the way.
+
+   Then `PortList` (QuickDraw's open ports, $D66): made at startup in the
+   system heap, not by the first InitGraf, and its accessors are
+   PrivateInterfaceLib's. AppearanceLib walks it to set each port's
+   highlight colour; it got 0 and wrote a colour into the driver unit
+   table (`--watch` found it: its report now gives the PowerPC's state at
+   its last call out). For CFM-68K code, a library Executor answers with
+   InterfaceLib's table (PrivateInterfaceLib & co.) has its own entries
+   merged in. Now the 8.6 Finder runs its event loop (update and activate
+   events) for a second, then quits by itself: no Apple event, no alert,
+   an orderly teardown (`--executor-logtraps --executor-logtraps-nesting 8`:
+   its work runs on Thread Manager threads). Next: what it decides that
+   on. Also seen: a font file's resource map written back through a
+   read-only fork (`Fonts/%Andale Mono`: "short write ... errno 9"), which
+   a Mac would refuse with a permission error.
 7. **The Finder running**, with the add-on libraries selectable per
    library: Executor's (once finished) or Apple's from the System file.
    Executor keeps the managers 8.x's System replaces the ROM's with
