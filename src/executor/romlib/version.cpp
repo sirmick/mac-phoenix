@@ -71,13 +71,15 @@ ROMlib_set_system_version(uint32_t version)
 {
     static uint32_t old_version = -1;
 
-    /* MacPhoenix: Apple's System file (it has 'lpch' resources; Executor's
-       own has none) says its version in 'vers' 1, and its resources stay
-       as Apple wrote them. */
+    /* MacPhoenix: Apple's System file (it has 'boot' resources, the boot
+       blocks' code, and up to 7.6.1 'lpch'; Executor's own has neither) says
+       its version in 'vers' 1, and its resources stay as Apple wrote them.
+       Mac OS 8 and 9 have no 'lpch': taken for Executor's own, 9.0.4's
+       Finder was told System 7.0 and stopped ("too old"). */
     {
         GUEST<INTEGER> save_map = LM(CurMap);
         LM(CurMap) = LM(SysMap);
-        bool apple = Count1Resources("lpch"_4) > 0;
+        bool apple = Count1Resources("lpch"_4) > 0 || Count1Resources("boot"_4) > 0;
         Handle vers = apple ? C_Get1Resource("vers"_4, 1) : nullptr;
         LM(CurMap) = save_map;
         ROMlib_apple_system_file = apple;

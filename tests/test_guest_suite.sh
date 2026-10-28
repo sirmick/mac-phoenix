@@ -31,6 +31,8 @@
 # --delete-file: delete a file from the run's copy of the image before the
 # boot (repeatable; hfsutils), e.g. Apple's AppleScriptLib, so Executor's
 # own answers.
+# --hold-key KEYCODE: hold a key from the start until the Finder is up
+# (56, Shift: extensions off on the ROM machines).
 # --key-on: press a key (Mac keycode) once the results file has a line with
 # PATTERN, for an app that waits on the user (tests/guest/notify: Return on
 # the Notification Manager's alert).
@@ -89,6 +91,7 @@ while [[ $# -gt 0 ]]; do
         --image) IMAGE_NAME="$2"; shift 2 ;;
         --delete-file) DELETE_FILES+=("$2"); shift 2 ;;
         --key-on) KEY_ON="$2"; shift 2 ;;
+        --hold-key) HOLD_KEY="$2"; shift 2 ;;
         --echo-gateway) ECHO_GATEWAY=1; shift ;;
         *) echo "Unknown arg: $1"; exit 1 ;;
     esac
@@ -279,6 +282,10 @@ for i in $(seq 1 20); do
 done
 
 curl -sf -X POST "http://localhost:$PORT/api/emulator/start" >/dev/null
+if [[ -n "${HOLD_KEY:-}" ]]; then
+    curl -sf -X POST "http://localhost:$PORT/api/keypress" -H 'Content-Type: application/json' \
+        -d "{\"key\": $HOLD_KEY, \"down\": true}" >/dev/null || true
+fi
 
 # --- Wait for boot to desktop ---
 
@@ -299,6 +306,10 @@ while true; do
 
     if [[ "$PHASE" == "Finder" || "$PHASE" == "desktop" ]]; then
         echo " $PHASE (${ELAPSED}s)"
+        if [[ -n "${HOLD_KEY:-}" ]]; then
+            curl -sf -X POST "http://localhost:$PORT/api/keypress" -H 'Content-Type: application/json' \
+                -d "{\"key\": $HOLD_KEY, \"down\": false}" >/dev/null || true
+        fi
         break
     fi
     echo -n "."
