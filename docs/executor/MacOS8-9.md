@@ -135,7 +135,21 @@ what it called last (unresolved imports answer 0 and log
   and 13 others) exported from InterfaceLib, giving the address as
   Apple's do.
 
-Now called and still unanswered (8.6): `RegisterAppearanceClient`,
+* **A selector Executor lacks, through Mixed Mode**: PowerPC code calls
+  some traps with `CallUniversalProc` on the trap's address (8.6 calls
+  `OSDispatch` selector $75 that way, from the desktop printing libraries
+  the Finder loads). Mixed Mode knows the call's argument and result
+  sizes from the procinfo, so a dispatcher it calls directly with an
+  unknown selector answers paramErr and pops them, as a Mac's does,
+  logged, instead of stopping the session (`traps::mixed_mode_call`).
+
+**Where it is now:** the 8.6 Finder runs: its menu bar (File, Edit,
+View, Special) and the desktop pattern, no disk icons yet (Icon
+Services), a black area where a window's Appearance drawing should be.
+The 9.0.4 Finder runs as far (no extensions), then says 'The disk ""
+cannot be used, because an error of type -35 occurred'.
+
+Called and still unanswered (8.6, 36 calls): `RegisterAppearanceClient`,
 `GetViewsFont`, `SetThemeTextColor`, `SetThemeBackground`, `StandardMDEF`,
 `SetMenuItemKeyGlyph`, `SetSubmenuParentChoosable`, `PopupWindowEntry`;
 the window calls `GetWindowRegion`, `InvalWindowRect`/`Rgn`,

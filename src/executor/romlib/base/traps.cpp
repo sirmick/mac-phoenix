@@ -170,6 +170,8 @@ const D0SizedDispatcher d0_sized[] = {
 };
 }
 
+Executor::traps::MixedModeCall Executor::traps::mixed_mode_call;
+
 uint32_t Executor::traps::unknown_selector_68k(const char *trap_name, uint32_t sel)
 {
     char what[160];
@@ -204,6 +206,21 @@ uint32_t Executor::traps::unknown_selector_68k(const char *trap_name, uint32_t s
             WRITEUW(EM_A7, 0);
         else if(result_bytes == 4)
             WRITEUL(EM_A7, 0);
+        return ret;
+    }
+    if(mixed_mode_call.entry_sp && mixed_mode_call.entry_sp == EM_A7)
+    {
+        snprintf(what, sizeof what,
+                 "%s selector $%x (through Mixed Mode, %u argument bytes): answered paramErr",
+                 trap_name, (unsigned)sel, (unsigned)mixed_mode_call.arg_bytes);
+        log_unimplemented(what);
+        syn68k_addr_t ret = POPADDR();
+        EM_A7 += mixed_mode_call.arg_bytes;
+        if(mixed_mode_call.result_bytes == 2)
+            WRITEUW(EM_A7, (uint16_t)-50);
+        else if(mixed_mode_call.result_bytes == 4)
+            WRITEUL(EM_A7, (uint32_t)-50);
+        EM_D0 = (uint32_t)-50;
         return ret;
     }
     snprintf(what, sizeof what, "%s selector $%x: no size in the selector, session stopped (called from $%x)",

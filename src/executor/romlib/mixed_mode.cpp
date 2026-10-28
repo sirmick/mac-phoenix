@@ -13,6 +13,7 @@
 
 #include <file/file.h>
 #include <base/cpu.h>
+#include <base/traps.h>
 #include <PowerCore.h>
 #include <cassert>
 #include <algorithm>
@@ -443,7 +444,17 @@ static uint32_t mode_switch(UniversalProcPtr theProcPtr, ProcInfoType procinfo,
         else if(selectorWhere == kSelectorD1)
             EM_D1 = paramValues[0];
 
+        /* MacPhoenix: what this call pushed, for a dispatcher that is
+           the routine itself and gets a selector Executor lacks: it can
+           answer the call as a Mac's does (traps.cpp,
+           unknown_selector_68k). Only for that entry: its stack pointer. */
+        traps::MixedModeCall saved_call = traps::mixed_mode_call;
+        if(convention == kPascalStackBased)
+            traps::mixed_mode_call = { EM_A7 - 4, stackArgsSize, resultSize ? (uint32_t)sizeOnStack(resultSize) : 0 };
+        else
+            traps::mixed_mode_call = {};
         execute68K(guest_cast<uint32_t>(routine->procDescriptor));
+        traps::mixed_mode_call = saved_call;
 
         switch(convention)
         {
