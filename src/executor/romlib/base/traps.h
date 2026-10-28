@@ -93,7 +93,23 @@ class GenericDispatcherTrap : public Entrypoint
 public:
     virtual void addSelector(uint32_t sel, Entrypoint* entrypoint, std::function<syn68k_addr_t(syn68k_addr_t)> handler) = 0;
     GenericDispatcherTrap(const char* name, uint16_t trapno) : Entrypoint(name), trapno(trapno) {}
+
+    /* MacPhoenix: something other than Executor's dispatcher is in the
+       trap's table entry (Apple's PACK 8, installed by AppleScript, in
+       Pack8's): a library call goes there, as InterfaceLib's do on a Mac,
+       with the selector where the dispatcher takes it (putSelector: false
+       if that is the stack). */
+    bool isPatched() const
+    {
+        return trapno && tooltraptable && originalFunction && tableEntry() != originalFunction;
+    }
+    syn68k_addr_t tableEntry() const
+    {
+        return (trapno & TOOLBIT) ? tooltraptable[trapno & 0x3FF] : ostraptable[trapno & 0xFF];
+    }
+    virtual bool putSelector(uint32_t sel) const = 0;
 protected:
+    syn68k_addr_t originalFunction = 0;
     struct SelectorEntry
     {
         Entrypoint* entrypoint;
@@ -110,6 +126,7 @@ class DispatcherTrap : public GenericDispatcherTrap
 public:
     virtual void init() override;
     virtual void addSelector(uint32_t sel, Entrypoint* entrypoint, std::function<syn68k_addr_t(syn68k_addr_t)> handler) override;
+    virtual bool putSelector(uint32_t sel) const override;
 
     using GenericDispatcherTrap::GenericDispatcherTrap;
 };
@@ -199,6 +216,13 @@ public:
     Ret operator()(Args... args) const { return fptr(args...); }
     SubTrapFunction(const char* name, GenericDispatcherTrap& dispatcher, const char* exportToLib = nullptr);
     virtual void init() override;
+protected:
+    Ret callFromLibrary(Args... args) const override
+    {
+        if(dispatcher.isPatched() && dispatcher.putSelector(selector))
+            return (UPP<Ret (Args...), CallConv>(SYN68K_TO_US(dispatcher.tableEntry())))(args...);
+        return fptr(args...);
+    }
 private:
     GenericDispatcherTrap& dispatcher;
 };
@@ -251,6 +275,20 @@ class LibraryRawExport : public internal::DeferredInit
 {
 public:
     LibraryRawExport(const char *name, const char *library)
+        : name(name), library(library) {}
+    virtual void init() override;
+private:
+    const char *name;
+    const char *library;
+};
+
+/* ... and a trap's routine that another library exports as well (`library:`
+   on a trap's or subtrap's entry: SoundLib's Sound Manager calls): its
+   InterfaceLib entry under that library's name, for PowerPC and CFM-68K. */
+class LibraryAlsoExport : public internal::DeferredInit
+{
+public:
+    LibraryAlsoExport(const char *name, const char *library)
         : name(name), library(library) {}
     virtual void init() override;
 private:
@@ -362,6 +400,8 @@ public:
     extern Executor::traps::OTFunction NAME
 #define EXTERN_LIBRARY_RAW(NAME, INIT) \
     extern Executor::traps::LibraryRawExport NAME
+#define EXTERN_LIBRARY_ALSO(NAME, INIT) \
+    extern Executor::traps::LibraryAlsoExport NAME
 #define EXTERN_ASLM_FUNCTION(NAME, INIT, ...) \
     extern Executor::traps::__VA_ARGS__ NAME
 #define EXTERN_ASLM_RAW(NAME, INIT) \
@@ -382,6 +422,8 @@ public:
     Executor::traps::OTFunction NAME INIT
 #define DEFINE_LIBRARY_RAW(NAME, INIT) \
     Executor::traps::LibraryRawExport NAME INIT
+#define DEFINE_LIBRARY_ALSO(NAME, INIT) \
+    Executor::traps::LibraryAlsoExport NAME INIT
 #define DEFINE_ASLM_FUNCTION(NAME, INIT, ...) \
     Executor::traps::__VA_ARGS__ NAME INIT
 #define DEFINE_ASLM_RAW(NAME, INIT) \
@@ -398,6 +440,7 @@ public:
 #define CREATE_LIBRARY_FUNCTION PREPROCESSOR_CONCAT(TRAP_INSTANTIATION, _LIBRARY_FUNCTION)
 #define CREATE_LIBRARY_RAW PREPROCESSOR_CONCAT(TRAP_INSTANTIATION, _LIBRARY_RAW)
 #define CREATE_OT_FUNCTION PREPROCESSOR_CONCAT(TRAP_INSTANTIATION, _OT_FUNCTION)
+#define CREATE_LIBRARY_ALSO PREPROCESSOR_CONCAT(TRAP_INSTANTIATION, _LIBRARY_ALSO)
 #define CREATE_ASLM_FUNCTION PREPROCESSOR_CONCAT(TRAP_INSTANTIATION, _ASLM_FUNCTION)
 #define CREATE_ASLM_RAW PREPROCESSOR_CONCAT(TRAP_INSTANTIATION, _ASLM_RAW)
 #define CREATE_COMPONENT_CALL PREPROCESSOR_CONCAT(TRAP_INSTANTIATION, _COMPONENT_CALL)
@@ -428,6 +471,8 @@ public:
     CREATE_OT_FUNCTION(lib_##LIB##_##NAME, (#NAME, #LIB, SET, SETNAME, PASCAL, SIG, RET, &ot::IMPL))
 #define LIBRARY_RAW(LIB, NAME) \
     CREATE_LIBRARY_RAW(lib_##LIB##_##NAME, (#NAME, #LIB))
+#define LIBRARY_ALSO(LIB, NAME) \
+    CREATE_LIBRARY_ALSO(also_##LIB##_##NAME, (#NAME, #LIB))
 #define ASLM_FUNCTION(SET, INDEX, NAME, IMPL) \
     CREATE_ASLM_FUNCTION(aslm_##NAME, (#NAME, SET, INDEX), ASLMFunction<decltype(IMPL) COMMA &IMPL>)
 #define ASLM_RAW(SET, INDEX, NAME) \

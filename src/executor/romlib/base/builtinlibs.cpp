@@ -305,6 +305,37 @@ Ptr builtinlibs::makeUndefinedSymbolStub(const char *name, OSType arch)
     return (Ptr) &callback;
 }
 
+static std::unordered_map<std::string, std::vector<std::string>>& alsoExports()
+{
+    static std::unordered_map<std::string, std::vector<std::string>> map;
+    return map;
+}
+
+void builtinlibs::alsoExport(const char *library, const char *function)
+{
+    alsoExports()[library].push_back(function);
+}
+
+/* The InterfaceLib entries another library exports as well, added to its
+   table the first time it is asked for. */
+static void addAlsoExports(std::unordered_map<std::string, std::vector<map_entry_t>>& table,
+                           const std::string& library)
+{
+    auto it = alsoExports().find(library);
+    if(it == alsoExports().end() || it->second.empty())
+        return;
+    auto& from = table["InterfaceLib"];
+    auto& to = table[library];
+    for(const std::string& function : it->second)
+        for(const map_entry_t& e : from)
+            if(function == e.symbol_name)
+            {
+                to.push_back(e);
+                break;
+            }
+    it->second.clear();
+}
+
 ConnectionID builtinlibs::getBuiltinLib(ConstStr255Param libname, OSType arch)
 {
     static bool glue_added = false;
@@ -343,6 +374,8 @@ ConnectionID builtinlibs::getBuiltinLib(ConstStr255Param libname, OSType arch)
         }
         /* One connection per library: its exports never move. */
         static std::unordered_map<std::string, ConnectionID> connections;
+        if(name != "InterfaceLib")
+            addAlsoExports(builtins68k, name);
         ConnectionID& cid = connections[name];
         if(!cid && name == "InterfaceLib")
             for(auto& [function, code] : overrides68k())
@@ -364,6 +397,8 @@ ConnectionID builtinlibs::getBuiltinLib(ConstStr255Param libname, OSType arch)
         return cid;
     }
 
+    if(name != "InterfaceLib")
+        addAlsoExports(builtins, name);
     auto it = builtins.find(name);
     if(it == builtins.end())
         return nullptr;

@@ -62,6 +62,11 @@ void traps::LibraryRawExport::init()
     builtinlibs::expectRawExport(library, name);
 }
 
+void traps::LibraryAlsoExport::init()
+{
+    builtinlibs::alsoExport(library, name);
+}
+
 void traps::ASLMRawExport::init()
 {
     builtinlibs::expectASLMRawEntrypoint(set, index, name);

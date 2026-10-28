@@ -53,6 +53,11 @@ namespace Executor
         bool isExpectedRawExport(const char *library, const char *function);
         void checkRawExports(const char *library);
 
+        /* MacPhoenix: a library that exports one of InterfaceLib's routines
+           as well (SoundLib's Sound Manager calls; `library:` on a trap's
+           entry): the same entry under its name, PowerPC and CFM-68K. */
+        void alsoExport(const char *library, const char *function);
+
         /* MacPhoenix: routines of ASLM function sets that PowerPC code
            binds through ASLM itself (`aslm:` without `library:` in the
            definitions), by set and index, for Executor's PowerPC binder

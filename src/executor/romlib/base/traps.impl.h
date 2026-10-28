@@ -27,12 +27,17 @@ namespace traps
 
 namespace selectors
 {
+/* MacPhoenix: inRegister and put: how a library call made through a
+   patched dispatcher's table entry passes the selector (in a register
+   only; a stack selector's calls go to Executor's routine). */
 template <uint32_t mask>
 struct D0
 {
     static const uint32_t selectorMask = mask;
     static uint32_t get() { return EM_D0 & mask; }
     static void commit() {}
+    static constexpr bool inRegister = true;
+    static void put(uint32_t sel) { EM_D0 = (EM_D0 & ~mask) | (sel & mask); }
 };
 template <uint32_t mask>
 struct D1
@@ -40,6 +45,8 @@ struct D1
     static const uint32_t selectorMask = mask;
     static uint32_t get() { return EM_D1 & mask; }
     static void commit() {}
+    static constexpr bool inRegister = true;
+    static void put(uint32_t sel) { EM_D1 = (EM_D1 & ~mask) | (sel & mask); }
 };
 
 
@@ -47,6 +54,8 @@ template <uint32_t mask>
 struct StackWMasked
 {
     static const uint32_t selectorMask = mask;
+    static constexpr bool inRegister = false;
+    static void put(uint32_t) {}
     static uint32_t get() { return READUW(EM_A7 + 4) & mask; }
     static void commit()
     {
@@ -60,6 +69,8 @@ template <uint32_t mask>
 struct StackLMasked
 {
     static const uint32_t selectorMask = mask;
+    static constexpr bool inRegister = false;
+    static void put(uint32_t) {}
     static uint32_t get() { return READUL(EM_A7 + 4) & mask; }
     static void commit()
     {
@@ -72,6 +83,8 @@ template <uint32_t mask>
 struct StackWLookahead
 {
     static const uint32_t selectorMask = mask;
+    static constexpr bool inRegister = false;
+    static void put(uint32_t) {}
     static uint32_t get() { return READUW(EM_A7 + 4) & mask; }
     static void commit() {}
 };
@@ -201,14 +214,19 @@ void WrappedFunction<Ret (Args...), fptr, CallConv>::init()
 
     if(libname)
     {
+        /* MacPhoenix: PowerPC code reaches the routine as a library call:
+           through the trap's table entry once something has patched it
+           (Apple's PACK 8 for the Apple Event Manager's calls), as
+           InterfaceLib's glue does on a Mac, and as CFM-68K code does. */
 #ifdef EXECUTOR_ENABLE_LOGGING
         if(logging::enabled())
             builtinlibs::addPPCEntrypoint(libname, name,
                 [this](PowerCore& cpu) { 
                     if(auto ret = this->checkBreakPPC(cpu); ~ret)
                         return ret;
-
-                    return callfromPPC::Invoker<Ret (Args...)>::invokeFromPPC(cpu, logging::makeLoggedFunction(name, fptr)); 
+                    auto call = [this](Args... args) -> Ret { return this->callFromLibrary(args...); };
+                    return callfromPPC::Invoker<Ret (Args...)>::invokeFromPPC(cpu,
+                        logging::makeLoggedFunction1<Ret (Args...)>(name, call));
                 }
             );
         else
@@ -217,8 +235,8 @@ void WrappedFunction<Ret (Args...), fptr, CallConv>::init()
                 [this](PowerCore& cpu) { 
                     if(auto ret = this->checkBreakPPC(cpu); ~ret)
                         return ret;
-                    
-                    return callfromPPC::Invoker<Ret (Args...)>::invokeFromPPC(cpu, fptr);
+                    auto call = [this](Args... args) -> Ret { return this->callFromLibrary(args...); };
+                    return callfromPPC::Invoker<Ret (Args...)>::invokeFromPPC(cpu, call);
                 }
             );
         builtinlibs::addCFM68KEntrypoint(libname, name,
@@ -343,15 +361,27 @@ void DispatcherTrap<SelectorConvention>::init()
     if(trapno)
     {
         ProcPtr guestFP = (ProcPtr)SYN68K_TO_US(::callback_install(&invokeFrom68K, this));
+        originalFunction = US_TO_SYN68K(((void*)guestFP));
         if(trapno & TOOLBIT)
         {
-            tooltraptable[trapno & 0x3FF] = US_TO_SYN68K(((void*)guestFP));
+            tooltraptable[trapno & 0x3FF] = originalFunction;
         }
         else
         {
-            ostraptable[trapno & 0xFF] = US_TO_SYN68K(((void*)guestFP));
+            ostraptable[trapno & 0xFF] = originalFunction;
         }
     }
+}
+
+template<class SelectorConvention>
+bool DispatcherTrap<SelectorConvention>::putSelector(uint32_t sel) const
+{
+    if constexpr(SelectorConvention::inRegister)
+    {
+        SelectorConvention::put(sel);
+        return true;
+    }
+    return false;
 }
 
 template<typename Trap, typename Ret, typename... Args, bool... flags>
