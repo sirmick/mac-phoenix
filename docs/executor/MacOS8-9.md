@@ -79,6 +79,39 @@ ToolboxUtils, DesktopItemsLib 1 each, and 11 from the Finder's other
 fragments (`FragRelease`, `GetProcessTrapAddress`, AppleTalk's `ATEvent`
 and `MPPOpen`, `RealScript`).
 
+## One Toolbox for 7, 8 and 9
+
+Executor stays one Toolbox, a superset; it doesn't grow an implementation
+per System version.
+
+* **New managers are additions.** The Appearance Manager, Window Manager
+  2.0, Icon Services, the Translation Manager, the 32-bit control and menu
+  calls came beside System 7's calls, which kept working. Each is
+  implemented once; 7.x code doesn't call them (applications ask Gestalt
+  first).
+* **What the System says is per version.** Gestalt and the libraries CFM
+  finds follow the System Executor runs on (`'sysv'` from its `'vers'`):
+  a table of which feature exists from which version (Appearance 8.0,
+  HFS+ 8.1, Icon Services, Window Manager 2.0 and built-in Navigation
+  8.5, ...), not separate code. On 7.x they stay absent, so 7.x
+  applications see what they see now (offering them there, as a Mac with
+  the extensions would, is a later choice).
+* **The look is the one fork.** 8 and 9 draw with the Appearance
+  Manager's theme (platinum); Executor's window, control and menu
+  definition procedures draw System 7's. The theme drawing calls
+  (`DrawThemeWindowFrame` & co.) do the drawing, and the definition
+  procedures call them when the theme is on, as Apple's do: one drawing
+  layer with two styles. 8/9 run with System 7's look first; platinum
+  comes after.
+* **Behaviour is checked per version.** Where Apple's changed between
+  versions, Executor follows the System it runs on, checked against that
+  version on a ROM machine (8.6 and 9.0.4 on the G3, as 7.6.1 against the
+  Quadra), as the extension policy's `@ 7.6` already does.
+* **What ships as a file stays Apple's.** Extensions, the System's
+  `'nlib'`s, the Finder: Apple's code on Executor's Toolbox, as on 7.x.
+  8/9 put more there (TextCommon, UnicodeConverter, ContextualMenu), which
+  is less for Executor to write.
+
 ## The work
 
 1. **Library names for PowerPC.** Export what Executor has under 8/9's
