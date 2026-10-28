@@ -862,6 +862,29 @@ foreach(cell IN ITEMS "otcfg_rom;;CfgTest68K;18952;guest;761"
   )
 endforeach()
 
+# The Shared Library Manager's PowerPC side (what the TCP/IP control
+# panel's PowerPC code uses; ot_slm_ppc.cpp) through the ASLM SDK's glue:
+# SLMTest (tests/guest/slm, MPW MrCpp). Apple's "Shared Library Manager
+# PPC" with Mac OS 7.6.1 on the G3 is the reference.
+foreach(cell IN ITEMS "slm_rom_ppc;--backend kpx --core mame-ppc --jit;18960;guest;761;mame"
+                      "slm_executor_ppc;--backend executor;18962;guest;761;executor")
+  list(GET cell 0 name)
+  list(GET cell 1 backend)
+  list(GET cell 2 port)
+  list(SUBLIST cell 3 -1 labels)
+  separate_arguments(backend_args UNIX_COMMAND "${backend}")
+  add_test(
+    NAME ${name}
+    COMMAND bash ${TEST_DIR}/test_guest_suite.sh ${backend_args} --os-version 7.6.1 --app ${CMAKE_SOURCE_DIR}/tests/guest/slm/SLMTest.bin --results slm_results.txt --network none --timeout 150 --port ${port}
+  )
+  set_tests_properties(${name} PROPERTIES
+    TIMEOUT 230
+    LABELS "${labels}"
+    SKIP_RETURN_CODE 77
+    ENVIRONMENT "MACEMU_ROM=${TEST_PPC_ROM}"
+  )
+endforeach()
+
 # Thread Manager through Frontier's UserTalk threads (process.cpp).
 add_test(
   NAME threads_executor

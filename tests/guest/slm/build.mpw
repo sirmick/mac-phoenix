@@ -1,0 +1,14 @@
+# build.mpw — SLMTest, a PowerPC application on the Shared Library Manager
+# through the ASLM SDK's glue (LibraryManagerPPC.o, in {PPCLibraries} on the
+# MPW disks); it writes Host:slm_results.txt (SLMTest.cp).
+#   tools/mpw/mpw build tests/guest/slm -o tests/guest/slm
+# products: SLMTest
+MrCpp SLMTest.cp -o SLMTest.cp.o
+PPCLink -main __start SLMTest.cp.o ∂
+	"{PPCLibraries}LibraryManagerPPC.o" ∂
+	"{PPCLibraries}MrCPlusLib.o" ∂
+	"{SharedLibraries}InterfaceLib" "{SharedLibraries}StdCLib" ∂
+	"{PPCLibraries}StdCRuntime.o" "{PPCLibraries}PPCCRuntime.o" ∂
+	-t APPL -c 'SLMt' -o SLMTest
+Rez -a SLMTest.r -o SLMTest
+SetFile -t APPL -c 'SLMt' -a B SLMTest

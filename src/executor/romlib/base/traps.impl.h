@@ -18,6 +18,8 @@ namespace builtinlibs
     void addCFM68KEntrypoint(const char *library, const char *function,
                              std::function<syn68k_addr_t (syn68k_addr_t)> code);
     bool cfm68kCalleePops(const char *function);
+    void addASLMEntrypoint(const char *set, unsigned index, const char *function,
+                           std::function<uint32_t (PowerCore&)> code);
 }
 
 namespace traps
@@ -125,6 +127,18 @@ void LibraryFunction<Ret (Args...), fptr>::init()
             return callfromCFM68K::Invoker<Ret (Args...)>::invokeFromCFM68K(fptr, pops);
         }
     );
+}
+
+template<typename Ret, typename... Args, Ret (*fptr)(Args...)>
+void ASLMFunction<Ret (Args...), fptr>::init()
+{
+    builtinlibs::addASLMEntrypoint(set, index, name, [this](PowerCore& cpu) {
+#ifdef EXECUTOR_ENABLE_LOGGING
+        if(logging::enabled())
+            return callfromPPC::Invoker<Ret (Args...)>::invokeFromPPC(cpu, logging::makeLoggedFunction(this->name, fptr));
+#endif
+        return callfromPPC::Invoker<Ret (Args...)>::invokeFromPPC(cpu, fptr);
+    });
 }
 
 /* component.cpp: the routine answering `what` for Executor's components of

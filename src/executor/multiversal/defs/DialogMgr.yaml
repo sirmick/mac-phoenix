@@ -728,11 +728,16 @@
 - function:
     name: GetAlertStage
     return: INTEGER
+    returnreg: D0
+    m68k-inline: [0x3038, 0x0A9A]   # MOVE.W ACount,D0
+    executor: true
 
 # ####
 
 - function:
     name: ResetAlertStage
+    m68k-inline: [0x4278, 0x0A9A]   # CLR.W ACount
+    executor: true
 
 # ####
 
@@ -775,6 +780,22 @@
       - type: Handle
     trap: 0xAA4B
     executor: C_
+
+# ####
+
+# The standard filter called directly (InterfaceLib's; on 68k, glue over
+# GetStdFilterProc: custom/glue.c).
+- function:
+    name: StdFilterProc
+    return: Boolean
+    args:
+      - name: dp
+        type: DialogPtr
+      - name: evt
+        type: EventRecord*
+      - name: item
+        type: INTEGER*
+    executor: true
 
 # ####
 

@@ -321,6 +321,22 @@ class ExecutorGenerator < Generator
 
         args = (fun["args"] or [])
 
+        if fun["aslm"] and not fun["library"] then
+            # A routine of an ASLM function set that PowerPC code binds
+            # through ASLM itself (LibraryManager.yaml): registered with
+            # Executor's PowerPC binder by set and index.
+            set = fun["aslm"]["set"]
+            index = fun["aslm"]["index"]
+            if fun["raw"] then
+                @out << "ASLM_RAW(\"#{set}\", #{index}, #{name});\n"
+            else
+                @out << (fun["return"] or "void") << " " << cname
+                @out << "(" << (args.map {|arg| decl(arg["type"], arg["name"])}).join(", ") << ");"
+                @out << "ASLM_FUNCTION(\"#{set}\", #{index}, #{name}, #{cname});\n"
+            end
+            return
+        end
+
         if fun["library"] then
             # A shared library's export (docs/executor/LIBRARIES.md): reached
             # by name from PowerPC and CFM-68K code, not through a trap.

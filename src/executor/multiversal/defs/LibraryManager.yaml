@@ -1,0 +1,137 @@
+# The Shared Library Manager's own function set, "!$fset", as far as
+# Executor answers it for PowerPC code (romlib/opentransport/ot_slm_ppc.cpp;
+# docs/executor/OpenTransport.md, "The Shared Library Manager's PowerPC
+# side"). The types, names and errors are the ASLM SDK's (LibraryManager.h,
+# LibraryManagerUtilities.h); the indices are those of the SDK glue's stub
+# records (LibraryManagerPPC.o).
+#
+# An `aslm:` entry without `library:` is a routine of an ASLM function set
+# that PowerPC code binds through ASLM itself (SLMGlobal+$88, a stub record
+# naming the set and the index), not a CFM export: the generator registers
+# it with Executor's PowerPC binder by set and index (`ASLM_FUNCTION`,
+# typed like a library export; `ASLM_RAW` for one that handles the
+# registers itself). Executor only: a client's C++ interface is the SDK's
+# (classes, TRY/CATCH macros), and ASLM's classes (the root manager, client
+# managers, pools, TProcNotifier) have no form in the definitions; those
+# stay in ot_slm_ppc.cpp.
+
+- only-for: executor
+  define:
+    name: kASLMNotFoundErr
+    value: -3120
+- only-for: executor
+  define:
+    name: kASLMOutOfMemoryErr
+    value: -3126
+- only-for: executor
+  define:
+    name: kASLMLibraryManagerNotLoadedErr
+    value: -3132
+
+- only-for: executor
+  typedef:
+    name: GlobalWorld
+    type: void*
+
+- only-for: executor
+  struct:
+    name: TLibraryManager
+    comment: A client's manager (LibraryManager.h's class); opaque here.
+
+- only-for: executor
+  struct:
+    name: TException
+    comment: |
+      An exception handler on the process's stack (PushException, TRY).
+      PowerPC's: fBuffer is SetupException's save of r0-r31 and LR (68k
+      code has 12 longs there).
+    members:
+      - name: fPrev
+        type: TException*
+      - name: fReserved
+        type: uint32_t
+      - name: fBuffer
+        type: LONGINT[33]
+      - name: fMessage
+        type: char*
+      - name: fPtr
+        type: void*
+      - name: fError
+        type: OSErr
+    size: 150
+
+# ####
+
+- only-for: executor
+  function:
+    name: PushException
+    args:
+      - name: e
+        type: TException*
+    aslm: { set: "!$fset", index: 19, name: PushException }
+    callconv: C
+    executor: true
+
+- only-for: executor
+  function:
+    name: PopException
+    return: TException*
+    args:
+      - name: e
+        type: TException*
+    aslm: { set: "!$fset", index: 20, name: PopException }
+    callconv: C
+    executor: true
+
+# To the innermost handler: SetupException returns a second time.
+- only-for: executor
+  function:
+    name: Fail
+    args:
+      - name: err
+        type: LONGINT
+      - name: msg
+        type: const char*
+    aslm: { set: "!$fset", index: 21, name: Fail }
+    callconv: C
+    raw: true
+
+- only-for: executor
+  function:
+    name: MatchException
+    return: Boolean
+    args:
+      - name: e
+        type: TException*
+      - name: err
+        type: LONGINT
+    aslm: { set: "!$fset", index: 22, name: MatchException }
+    callconv: C
+    executor: true
+
+- only-for: executor
+  function:
+    name: GetCurrentClient
+    return: TLibraryManager*
+    aslm: { set: "!$fset", index: 29, name: GetCurrentClient }
+    callconv: C
+    executor: true
+
+- only-for: executor
+  function:
+    name: ASLMGetCurrentGlobalWorld
+    return: GlobalWorld
+    aslm: { set: "!$fset", index: 49, name: ASLMGetCurrentGlobalWorld }
+    callconv: C
+    executor: true
+
+- only-for: executor
+  function:
+    name: ASLMSetCurrentGlobalWorld
+    return: GlobalWorld
+    args:
+      - name: world
+        type: GlobalWorld
+    aslm: { set: "!$fset", index: 50, name: ASLMSetCurrentGlobalWorld }
+    callconv: C
+    executor: true

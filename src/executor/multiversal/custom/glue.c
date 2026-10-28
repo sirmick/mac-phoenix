@@ -743,3 +743,12 @@ pascal OSErr FSAllocateFork(SInt16 forkRefNum, FSAllocationFlags flags, UInt16 p
     return FSAllocateFork68K(forkRefNum, flags, positionMode, (wide *)&positionOffset,
                              (wide *)&requestCount, actualCount);
 }
+
+/* The standard modal dialog filter, called directly: the one
+   GetStdFilterProc gives, a Pascal routine on 68k. */
+pascal Boolean StdFilterProc(DialogPtr dp, EventRecord *evt, INTEGER *item)
+{
+    pascal Boolean (*filter)(DialogPtr, EventRecord *, INTEGER *);
+    GetStdFilterProc((ProcPtr *)&filter);
+    return filter(dp, evt, item);
+}

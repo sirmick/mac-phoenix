@@ -517,6 +517,7 @@ set(opentransport_sources
     opentransport/ot_inet.cpp
     opentransport/ot_utils.cpp
     opentransport/ot_slm.cpp
+    opentransport/ot_slm_ppc.cpp
     opentransport/ot_tasks.cpp
     opentransport/ot_options.cpp
     opentransport/ot_atalk.cpp

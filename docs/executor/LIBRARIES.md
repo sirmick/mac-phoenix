@@ -19,6 +19,7 @@ definitions, in a shape upstream multiversal can take.
 |---|---|---|---|---|
 | Traps | generated `PASCAL_TRAP`, `PASCAL_SUBTRAP`, `REGISTER_TRAP`, `NOTRAP_FUNCTION` (`base/traps.h`) | ~2,000 | from the C++ signature | the trap table; the same wrappers export each one from InterfaceLib for PowerPC and CFM-68K (`base/traps.impl.h`) |
 | Open Transport over ASLM | `Def{set, name, Conv, "LLLLL", 'L', impl}` (`opentransport/ot_*.cpp`), index-to-name lists (`ot_names.inc`) — in the definitions since step 4 | ~130 of ~330 names | in the definitions (OT 1.1's types, since step 4); `impl(const Call&)` still reads its arguments | 68k; PowerPC (OTClientLib & co.) since step 4; C headers and PowerPC glue for Retro68 |
+| ASLM's own set for PowerPC (`"!$fset"`) | in the definitions (`LibraryManager.yaml`, 2026-10-27): `ASLM_FUNCTION`/`ASLM_RAW` by set and index | 7 of 58 | yes (`callfromPPC::Invoker`) | PowerPC code bound through SLMGlobal+$88 (`opentransport/ot_slm_ppc.cpp`); Executor only; ASLM's classes (root manager, managers, pools, TProcNotifier) stay hand-written: the definitions have no form for objects |
 | StdCLib, MathLib | `exportFn(LIB, "strlen", &c_strlen)`, `exportRaw` for variadic and hand-decoded routines, `exportData` (`clib/`) — in the definitions since step 2 | ~250 + ~70 raw + 25 data | yes (`callfromPPC::Invoker`) | PowerPC; StdCLib for CFM-68K too since step 2 |
 | CFM glue | `exportGlue("c2pstr", &fn)` (`cfm68k_glue.cpp`) — in the definitions since step 3 | ~50 | yes | InterfaceLib, ObjectSupportLib, for CFM-68K and PowerPC |
 | AppleScriptLib (OSA) | `{ "OSALoad", 0x0001, { 4, 4, 4 } }` (`cfm68k_glue.cpp`) | 42 | no: parameter sizes | CFM-68K, re-pushed to `_ComponentDispatch` |
@@ -62,6 +63,14 @@ name, in which calling convention:
   capitals; the entry's `name` is Apple's, the PowerPC export's). Such a
   routine reads its arguments through `ot::Call`, so the generator emits
   `OT_FUNCTION` with a letter per argument from its type's size.
+  Without `library:` the routine is no CFM export but one PowerPC code
+  binds through ASLM itself (a stub record naming set and index, handed to
+  SLMGlobal+$88): `aslm: { set: "!$fset", index: 21, name: Fail }`. The
+  generator registers it with Executor's PowerPC binder by set and index,
+  typed (`ASLM_FUNCTION`) or, with `raw: true`, only declared
+  (`ASLM_RAW`; builtinlibs checks it against what the code registers).
+  ASLM's own set is `LibraryManager.yaml`, Executor only: a client's C++
+  interface is the SDK's.
 - `callconv:` is for the 68k ASLM route (Open Transport has Pascal and
   C routines) and for the C side's `pascal`. It does not decide who pops
   in CFM-68K: there every routine with fixed arguments pops its own, C

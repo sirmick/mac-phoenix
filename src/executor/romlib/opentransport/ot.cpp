@@ -204,7 +204,7 @@ bool Executor::ROMlib_ot_library(const std::string &name)
 {
     return name == "OTClientLib" || name == "OTClientUtilLib" || name == "OTUtilityLib"
         || name == "OTInetClientLib" || name == "OTGlobalLib" || name == "OTConfigLib"
-        || name == "OTATalkClientLib";
+        || name == "OTATalkClientLib" || name == "SLMGlobal";
 }
 
 namespace
@@ -221,6 +221,7 @@ struct OTGlobalData
         builtinlibs::addPPCData("OTGlobalLib", "__gOTGlobal", ot_global);
         builtinlibs::addPPCData("OTGlobalLib", "__gOTMicroTimeParams", ot_micro_time_params);
         builtinlibs::addPPCData("OTGlobalLib", "__gOTTickTimeParams", ot_tick_time_params);
+        slm_ppc_init();
     }
 };
 }
@@ -438,4 +439,5 @@ void Executor::ROMlib_ot_process_exit(uint32_t part_lo, uint32_t part_hi)
     close_clients_in(part_lo, part_hi);
     tasks_process_exit(part_lo, part_hi);
     slm_process_exit(part_lo, part_hi);
+    slm_ppc_process_exit(part_lo, part_hi);
 }

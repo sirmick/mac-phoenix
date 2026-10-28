@@ -117,6 +117,9 @@ bool slm_ready();
 void slm_expect_ot_client();
 bool slm_apple_running();
 void slm_process_exit(uint32_t lo, uint32_t hi);
+/* The PowerPC side (ot_slm_ppc.cpp): the library SLMGlobal. */
+void slm_ppc_init();
+void slm_ppc_process_exit(uint32_t lo, uint32_t hi);
 
 /* Clients whose record is in [lo, hi): their providers closed (ot_client.cpp). */
 void close_clients_in(uint32_t lo, uint32_t hi);

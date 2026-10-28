@@ -6,6 +6,7 @@
 #include <rsys/cfm.h>
 #include <PEFBinaryFormat.h>
 #include <unordered_map>
+#include <map>
 #include <vector>
 #include <string>
 #include <iostream>
@@ -131,21 +132,89 @@ uint32_t builtinlibs::handleSC(PowerCore& cpu)
     }
 }
 
-void builtinlibs::addPPCEntrypoint(const char *library, const char *function, std::function<uint32_t (PowerCore&)> code)
+static PPCCallback& new_callback(const char *function, std::function<uint32_t (PowerCore&)> code)
 {
     assert(nCallbacks < std::size(callbacks));
     PPCCallback& callback = callbacks[nCallbacks++];
     callback.sc = POWERCORE_OP_SYSCALL;
     callback.codePtr = &callback.sc;
-    callback.implementation = code;
+    callback.implementation = std::move(code);
     callback.name = function;
+    return callback;
+}
 
-    builtins[library].push_back({function, &callback});
+void builtinlibs::addPPCEntrypoint(const char *library, const char *function, std::function<uint32_t (PowerCore&)> code)
+{
+    builtins[library].push_back({function, &new_callback(function, std::move(code))});
+}
+
+uint32_t builtinlibs::newPPCRoutine(const char *name, std::function<uint32_t (PowerCore&)> code)
+{
+    return ptr_to_longint(&new_callback(name, std::move(code)));
 }
 
 void builtinlibs::addPPCData(const char *library, const char *name, void *address)
 {
     builtins[library].push_back({name, address});
+}
+
+namespace
+{
+    struct ASLMEntry
+    {
+        const char *name;
+        bool raw;
+        std::function<uint32_t (PowerCore&)> code;
+    };
+    std::map<std::pair<std::string, unsigned>, ASLMEntry>& aslmEntries()
+    {
+        static std::map<std::pair<std::string, unsigned>, ASLMEntry> map;
+        return map;
+    }
+    std::map<std::pair<std::string, unsigned>, const char *>& aslmExpectedRaw()
+    {
+        static std::map<std::pair<std::string, unsigned>, const char *> map;
+        return map;
+    }
+}
+
+void builtinlibs::addASLMEntrypoint(const char *set, unsigned index, const char *function,
+                                    std::function<uint32_t (PowerCore&)> code)
+{
+    aslmEntries()[{ set, index }] = { function, false, std::move(code) };
+}
+
+void builtinlibs::addASLMRawEntrypoint(const char *set, unsigned index, const char *function,
+                                       std::function<uint32_t (PowerCore&)> code)
+{
+    aslmEntries()[{ set, index }] = { function, true, std::move(code) };
+}
+
+void builtinlibs::expectASLMRawEntrypoint(const char *set, unsigned index, const char *function)
+{
+    aslmExpectedRaw()[{ set, index }] = function;
+}
+
+const std::function<uint32_t (PowerCore&)> *builtinlibs::findASLMEntrypoint(const std::string& set,
+                                                                             unsigned index)
+{
+    auto it = aslmEntries().find({ set, index });
+    return it == aslmEntries().end() ? nullptr : &it->second.code;
+}
+
+void builtinlibs::checkASLMRawEntrypoints()
+{
+    for(auto& [key, function] : aslmExpectedRaw())
+    {
+        auto it = aslmEntries().find(key);
+        if(it == aslmEntries().end() || !it->second.raw || strcmp(it->second.name, function))
+            std::cerr << "[Executor] ASLM \"" << key.first << "\" " << key.second << ": "
+                      << function << " is declared raw in the definitions but not registered\n";
+    }
+    for(auto& [key, entry] : aslmEntries())
+        if(entry.raw && !aslmExpectedRaw().count(key))
+            std::cerr << "[Executor] ASLM \"" << key.first << "\" " << key.second << ": "
+                      << entry.name << " is registered raw but not declared in the definitions\n";
 }
 
 static std::unordered_map<std::string, std::vector<std::string>>& expectedRaw()

@@ -367,15 +367,58 @@ alike. The panel's PowerPC code (`--executor-ppc`) also imports
 `OTATalkClientLib`, which Executor answers now (`ot_atalk.cpp`: no
 AppleTalk, kOTNotSupportedErr): Apple's file needs Apple's OT kernel
 (`OTNtvUtilLib`'s initialisation fails) and the panel then says Open
-Transport isn't there. It still says so: it looks for the Shared Library
-Manager's PowerPC fragment, `SLMGlobal` (`GetSharedLibrary` with
-`kFindLib`, then its `__gSLMGlobal`), and calls through what that points
-to as PowerPC code; Executor's ASLM side is 68k only (handing it the 68k
-SLMGlobal sends the PowerPC into 68k code). So the panel runs its 68k
-code, as it does without `--executor-ppc`.
+Transport isn't there. It also uses the Shared Library Manager's PowerPC
+side (below), and with that its PowerPC code runs: it opens, shows and
+saves configurations as its 68k code does, and quits from its File menu
+with its manager, death watcher and OT client given back.
 
-Left: the panel's PowerPC code (ASLM's PowerPC side); the Duplicate and Rename dialogs show only
+Left: the Duplicate and Rename dialogs show only
 their edit field on Executor (no prompt, no buttons, the text not
 selected; they work: Return takes them), and a dialog's or alert's area
 isn't fully redrawn after it closes (a Dialog/Window Manager matter).
+
+## The Shared Library Manager's PowerPC side
+
+The TCP/IP control panel's PowerPC code is linked with the ASLM SDK's
+PowerPC glue (`LibraryManagerPPC.o`, on the MPW disks): its operator new
+and delete, its TRY/CATCH blocks and its death watcher are ASLM's. The
+glue finds ASLM through the fragment `SLMGlobal` (GetSharedLibrary with
+kLoadLib, then the data export `__gSLMGlobal`, a pointer to ASLM's
+globals) and calls through what that points to as PowerPC code. Executor
+answers the library itself (`ot_slm_ppc.cpp`; Apple's "Shared Library
+Manager PPC" stays off), as far as the glue goes for what the panel does.
+Which entries those are was seen in the panel's linked copy of the glue;
+ASLM's own code was not read. The classes, fields, function sets and
+errors are the ASLM SDK's headers', and the indices of ASLM's own function
+set `"!$fset"` the glue's stub records' (58 functions, named in the
+source).
+
+| Where | What | Executor |
+|---|---|---|
+| SLMGlobal+$10 | the root manager; the glue takes it not being nil as "ASLM is loaded". Its vtable (as every PowerPC vtable here: pointers to transition vectors): +$74 makes a client's TLibraryManager `(root, **out, frame, pool size, zone, memory type, nonApp)`, +$78 frees it (true: unload ASLM too), +$60/+$64 `InstallDeathWatcher`/`RemoveDeathWatcher` | a manager of its own per client; false; true, never notified |
+| SLMGlobal+$28 | a trace object | nil |
+| SLMGlobal+$64 | a routine descriptor that loads (1) or unloads (2) ASLM | nil: always loaded |
+| SLMGlobal+$7C, +$88 | the constructor and function binders: a stub record in r12 (bound vector, client vector record with the set's ID at +16, index at +12), r3-r10 also in the caller's parameter area | never binds the stub, so each call comes through; `TProcNotifier(proc, refPtr)` (`"!$pnot"` 3); `"!$fset"` below |
+| TLibraryManager | the vtable, fPool, fLibraryFile, fDefaultPool, fGlobalWorld | a pool of its own as fPool and fDefaultPool |
+| a pool | operator new calls its +$24 `(pool, size)`; operator delete takes the block's pool from the long before it (low four bits masked) and calls +$2C `(pool, block)` | blocks from the client's heap |
+
+Of `"!$fset"`, which are definitions (`multiversal/defs/LibraryManager.yaml`,
+`aslm:` without `library:`: registered with the binder by set and index;
+LIBRARIES.md): `PushException` (19), `PopException` (20: takes the
+TException and any inside it off the process's stack, nothing if Fail
+did already), `Fail` (21: to the innermost TRY, whose `fBuffer` is
+SetupException's save of r0-r31 and LR at +$80; `fError` and `fMessage`
+set, SetupException returning 1), `MatchException` (22),
+`GetCurrentClient` (29: the manager of the process's A5 world),
+`ASLMGetCurrentGlobalWorld` and `ASLMSetCurrentGlobalWorld` (49, 50: a
+PowerPC client's global world is its CurrentA5, as on the G3). Any other
+function or class is logged and answers 0. The classes have no form in the
+definitions and stay in `ot_slm_ppc.cpp`.
+
+SLMTest (`tests/guest/slm/SLMTest.cp`, MPW MrCpp with the SDK's glue)
+checks the same on Apple's ASLM PPC with Mac OS 7.6.1 on the G3
+(`slm_rom_ppc`) and on Executor (`slm_executor_ppc`): InitLibraryManager
+and CleanupLibraryManager (twice), operator new and delete (200 blocks),
+TRY/CATCH/CATCH(e)/RERAISE/Fail with a message, the current client, the
+global world, a TProcNotifier as a death watcher.
 

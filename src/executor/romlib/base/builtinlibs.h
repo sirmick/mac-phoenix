@@ -3,6 +3,7 @@
 #include <CodeFragments.h>
 #include <syn68k_public.h>
 #include <functional>
+#include <string>
 
 class PowerCore;
 
@@ -17,6 +18,11 @@ namespace Executor
         /* MacPhoenix: a data export for PowerPC fragments (StdCLib's _iob,
            errno): the import binds to `address`, guest-addressable storage. */
         void addPPCData(const char *library, const char *name, void *address);
+
+        /* MacPhoenix: a routine for PowerPC code that no library exports
+           (a slot of an object's vtable): the guest address of its
+           transition vector. */
+        uint32_t newPPCRoutine(const char *name, std::function<uint32_t (PowerCore&)> code);
 
         /* MacPhoenix: the same routine for CFM-68K code (docs/executor/
            CFM68K.md): an 8-byte transition vector whose code is a callback;
@@ -46,6 +52,21 @@ namespace Executor
         void expectRawExport(const char *library, const char *function);
         bool isExpectedRawExport(const char *library, const char *function);
         void checkRawExports(const char *library);
+
+        /* MacPhoenix: routines of ASLM function sets that PowerPC code
+           binds through ASLM itself (`aslm:` without `library:` in the
+           definitions), by set and index, for Executor's PowerPC binder
+           (opentransport/ot_slm_ppc.cpp). A raw one (`raw: true`) is
+           registered by its own code; checkASLMRawEntrypoints reports any
+           declared but not registered, or registered raw and not declared. */
+        void addASLMEntrypoint(const char *set, unsigned index, const char *function,
+                               std::function<uint32_t (PowerCore&)> code);
+        void addASLMRawEntrypoint(const char *set, unsigned index, const char *function,
+                                  std::function<uint32_t (PowerCore&)> code);
+        void expectASLMRawEntrypoint(const char *set, unsigned index, const char *function);
+        const std::function<uint32_t (PowerCore&)> *findASLMEntrypoint(const std::string& set,
+                                                                        unsigned index);
+        void checkASLMRawEntrypoints();
 
         /* InterfaceLib's glue routines (cfm68k_glue.cpp). */
         void addGlueEntrypoints();
