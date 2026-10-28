@@ -6,6 +6,7 @@
 // FIXME: #warning be written and we should do what the Mac does
 
 #include <base/common.h>
+#include <SysErr.h>
 
 #include <QuickDraw.h>
 #include <CQuickDraw.h>
@@ -665,6 +666,10 @@ void tint(RGBColor& c, const RGBColor& label, bool selected, bool disabled)
 OSErr plot(IconSource& src, const Rect *rect, IconAlignmentType align,
            IconTransformType transform)
 {
+    /* MacPhoenix: nothing to draw into before InitGraf (no port): Apple's
+       Icon Services answers noErr there too (IconTest on 9.0.4). */
+    if(LM(QDExist) != EXIST_YES)
+        return noErr;
     Chosen c;
     OSErr err = choose(src, rect, c);
     if(err != noErr)

@@ -351,9 +351,25 @@ Next, in order:
      `$AA75`, which ToolboxUtils' init points at the System's native
      Icon Services code; that code's state is set up by the System's own
      startup, which Executor doesn't run, so it works from nil globals
-     (an FSSpec read at $28). Next: either run what the System's startup
-     does for Icon Services, or Executor's own Icon Services (step 7's
-     plan has it as Apple's for now).
+     (an FSSpec read at $28). Decided: Executor's own Icon Services.
+
+   Icon Services (done 2026-10-28; `_IconServicesDispatch` $AA75,
+   IconServicesLib's 37 documented routines; IconServices.yaml from
+   Icons.h, iconservices.cpp, docs/executor/IconServices.md): IconRefs
+   over Executor's records of icon families, the System's icons from the
+   System file's icon resources, applications' from the desktop database,
+   files' and folders' custom icons, drawing and hit testing through Icon
+   Utilities' suites. IconTest (tests/guest/iconservices) passes 34/34 on
+   Executor 7.6.1 and on the G3 with 9.0.4 (`icons_ppc_executor_761`,
+   `icons_rom_ppc_904`); 9.0.4 settled the owner counts (system icons are
+   shared; registering twice is one more owner; unregistering invalidates
+   at once; a composite holds its parts), the generic icon for an unknown
+   creator/type, paramErr for a missing family element. With it the 8.6
+   Finder stays up (menu bar, desktop pattern); no volume icons yet: it
+   learns of volumes through calls still missing (RequestVolumeNotification,
+   GetIconRefByName, the PPC Toolbox, ...). Also Window Manager 2.0's
+   InvalWindowRect/Rgn and ValidWindowRect/Rgn (WindowsLib, found on 8.x
+   only).
 7. **The Finder running**, with the add-on libraries selectable per
    library: Executor's (once finished) or Apple's from the System file.
    Executor keeps the managers 8.x's System replaces the ROM's with

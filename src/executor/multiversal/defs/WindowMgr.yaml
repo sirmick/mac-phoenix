@@ -1072,6 +1072,63 @@
 
 # ####
 
+# MacPhoenix: Window Manager 2.0's (WindowsLib, 8.5 and later; MacWindows.h):
+# InvalRect & co. on a given window, in its local coordinates, whatever
+# the current port is.
+# ####
+
+- function:
+    name: InvalWindowRect
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowPtr
+      - name: bounds
+        type: const Rect*
+    library: WindowsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: InvalWindowRgn
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowPtr
+      - name: region
+        type: RgnHandle
+    library: WindowsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: ValidWindowRect
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowPtr
+      - name: bounds
+        type: const Rect*
+    library: WindowsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: ValidWindowRgn
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowPtr
+      - name: region
+        type: RgnHandle
+    library: WindowsLib
+    executor: C_
+
+# ####
+
 - function:
     name: BeginUpdate
     args:

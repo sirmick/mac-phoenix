@@ -107,3 +107,41 @@ void Executor::C_EndUpdate(WindowPtr w)
               PORT_BOUNDS(w).top);
     ROMlib_emptyvis = 0;
 }
+
+/* MacPhoenix: Window Manager 2.0's (WindowMgr.yaml): the 7.x calls with
+   the window's port current for them. */
+namespace
+{
+template<typename F>
+OSStatus inWindow(WindowPtr window, F f)
+{
+    if(!window)
+        return paramErr;
+    GUEST<GrafPtr> saved;
+    GetPort(&saved);
+    SetPort(window);
+    f();
+    SetPort(saved);
+    return noErr;
+}
+}
+
+OSStatus Executor::C_InvalWindowRect(WindowPtr window, const Rect *bounds)
+{
+    return inWindow(window, [&] { C_InvalRect(bounds); });
+}
+
+OSStatus Executor::C_InvalWindowRgn(WindowPtr window, RgnHandle region)
+{
+    return inWindow(window, [&] { C_InvalRgn(region); });
+}
+
+OSStatus Executor::C_ValidWindowRect(WindowPtr window, const Rect *bounds)
+{
+    return inWindow(window, [&] { C_ValidRect(bounds); });
+}
+
+OSStatus Executor::C_ValidWindowRgn(WindowPtr window, RgnHandle region)
+{
+    return inWindow(window, [&] { C_ValidRgn(region); });
+}

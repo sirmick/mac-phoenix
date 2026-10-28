@@ -55,7 +55,7 @@ atTopRight = atTop | atRight, // 14
 atBottomRight = atBottom | atRight, // 15
 };
 
-enum {kAlignNode = 0,
+enum {kAlignNone = 0,
 kAlignVerticalCenter = 1,
 kAlignTop = 2,
 kAlignBottom = 3,

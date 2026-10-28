@@ -357,6 +357,7 @@ static bool libraryInThisSystem(const std::string& name)
 {
     static const std::unordered_map<std::string, uint16_t> since = {
         { "Memory Manager", 0x0800 }, /* 8.6 has it, 7.6.1 hasn't */
+        { "WindowsLib", 0x0800 }, /* Window Manager 2.0's calls: 8.5's */
     };
     auto it = since.find(name);
     return it == since.end() || (uint16_t)LM(SysVersion) >= it->second;

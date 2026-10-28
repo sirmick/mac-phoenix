@@ -80,7 +80,7 @@
 
 - enum:
     values:
-      - name: kAlignNode
+      - name: kAlignNone
         value: 0
       - name: kAlignVerticalCenter
         value: 1

@@ -4,11 +4,13 @@
  *                                ===========                                *
  *                                                                           *
  * Needs:                                                                    *
- *     QuickDraw.h    GrafPtr, CGrafPtr, GrafPort, RgnHandle, PicHandle,     *
- *                    CTabHandle, PixPatHandle                               *
- *     MacTypes.h     INTEGER, Boolean, Handle, StringHandle, LONGINT,       *
- *                    Rect, ConstStringPtr, StringPtr, OSErr, SignedByte     *
- *     EventMgr.h     EventRecord                                            *
+ *     QuickDraw.h         GrafPtr, CGrafPtr, GrafPort, RgnHandle,           *
+ *                         PicHandle, CTabHandle, PixPatHandle               *
+ *     MacTypes.h          INTEGER, Boolean, Handle, StringHandle,           *
+ *                         LONGINT, Rect, ConstStringPtr, StringPtr,         *
+ *                         OSErr, SignedByte                                 *
+ *     EventMgr.h          EventRecord                                       *
+ *     DriverServices.h    OSStatus                                          *
  *                                                                           *
  *                                                                           *
  *****************************************************************************/
@@ -22,6 +24,7 @@
 #include "QuickDraw.h"
 #include "ExMacTypes.h"
 #include "EventMgr.h"
+#include "DriverServices.h"
 
 #define MODULE_NAME WindowMgr
 #include <base/api-module.h>
@@ -432,6 +435,18 @@ void C_ValidRect(const Rect *r);PASCAL_TRAP(ValidRect, 0xA92A);
 
 
 void C_ValidRgn(RgnHandle r);PASCAL_TRAP(ValidRgn, 0xA929);
+
+
+OSStatus C_InvalWindowRect(WindowPtr window, const Rect *bounds);LIBRARY_FUNCTION(WindowsLib, InvalWindowRect, C_InvalWindowRect);
+
+
+OSStatus C_InvalWindowRgn(WindowPtr window, RgnHandle region);LIBRARY_FUNCTION(WindowsLib, InvalWindowRgn, C_InvalWindowRgn);
+
+
+OSStatus C_ValidWindowRect(WindowPtr window, const Rect *bounds);LIBRARY_FUNCTION(WindowsLib, ValidWindowRect, C_ValidWindowRect);
+
+
+OSStatus C_ValidWindowRgn(WindowPtr window, RgnHandle region);LIBRARY_FUNCTION(WindowsLib, ValidWindowRgn, C_ValidWindowRgn);
 
 
 void C_BeginUpdate(WindowPtr w);PASCAL_TRAP(BeginUpdate, 0xA922);

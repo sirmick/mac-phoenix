@@ -1,0 +1,989 @@
+# MacPhoenix: Icon Services (Mac OS 8.5; Universal Interfaces' Icons.h,
+# docs/executor/IconServices.md): icons by reference (IconRef), registered
+# by creator and type, for files, folders and volumes, drawn and hit-tested
+# through Icon Utilities' icon suites. On a Mac it is the System's native
+# code behind _IconServicesDispatch ($AA75), PowerPC code reaching it
+# through IconServicesLib's glue; Executor implements it in C++
+# (iconservices.cpp) and exports IconServicesLib's routines.
+
+- dispatcher:
+    name: IconServicesDispatch
+    trap: 0xAA75
+    selector-location: D0<0xFF>
+    comment: |
+      The selector in D0 (TWOWORDINLINE(0x70nn, 0xAA75): moveq #nn, D0),
+      Pascal arguments on the stack.
+
+# ####
+
+- struct:
+    name: OpaqueIconRef
+
+- typedef:
+    name: IconRef
+    type: OpaqueIconRef*
+
+- typedef:
+    name: IconServicesUsageFlags
+    type: uint32_t
+
+# ####
+
+# 'icns' (kIconFamilyType): the type, the whole size, then elements, each
+# a type, its size (header included) and data.
+- struct:
+    name: IconFamilyElement
+    members:
+      - name: elementType
+        type: OSType
+      - name: elementSize
+        type: LONGINT
+      - name: elementData
+        type: uint8_t[1]
+
+- struct:
+    name: IconFamilyResource
+    members:
+      - name: resourceType
+        type: OSType
+      - name: resourceSize
+        type: LONGINT
+      - name: elements
+        type: IconFamilyElement[1]
+
+- typedef:
+    name: IconFamilyPtr
+    type: IconFamilyResource*
+
+- typedef:
+    name: IconFamilyHandle
+    type: IconFamilyPtr*
+
+# ####
+
+- enum:
+    values:
+      - name: kSystemIconsCreator
+        value: "'macs'"
+      - name: kClipboardIcon
+        value: "'CLIP'"
+      - name: kClippingUnknownTypeIcon
+        value: "'clpu'"
+      - name: kClippingPictureTypeIcon
+        value: "'clpp'"
+      - name: kClippingTextTypeIcon
+        value: "'clpt'"
+      - name: kClippingSoundTypeIcon
+        value: "'clps'"
+      - name: kDesktopIcon
+        value: "'desk'"
+      - name: kFinderIcon
+        value: "'FNDR'"
+      - name: kFontSuitcaseIcon
+        value: "'FFIL'"
+      - name: kFullTrashIcon
+        value: "'ftrh'"
+      - name: kGenericApplicationIcon
+        value: "'APPL'"
+      - name: kGenericCDROMIcon
+        value: "'cddr'"
+      - name: kGenericControlPanelIcon
+        value: "'APPC'"
+      - name: kGenericControlStripModuleIcon
+        value: "'sdev'"
+      - name: kGenericComponentIcon
+        value: "'thng'"
+      - name: kGenericDeskAccessoryIcon
+        value: "'APPD'"
+      - name: kGenericDocumentIcon
+        value: "'docu'"
+      - name: kGenericEditionFileIcon
+        value: "'edtf'"
+      - name: kGenericExtensionIcon
+        value: "'INIT'"
+      - name: kGenericFileServerIcon
+        value: "'srvr'"
+      - name: kGenericFontIcon
+        value: "'ffil'"
+      - name: kGenericFontScalerIcon
+        value: "'sclr'"
+      - name: kGenericFloppyIcon
+        value: "'flpy'"
+      - name: kGenericHardDiskIcon
+        value: "'hdsk'"
+      - name: kGenericIDiskIcon
+        value: "'idsk'"
+      - name: kGenericRemovableMediaIcon
+        value: "'rmov'"
+      - name: kGenericMoverObjectIcon
+        value: "'movr'"
+      - name: kGenericPCCardIcon
+        value: "'pcmc'"
+      - name: kGenericPreferencesIcon
+        value: "'pref'"
+      - name: kGenericQueryDocumentIcon
+        value: "'qery'"
+      - name: kGenericRAMDiskIcon
+        value: "'ramd'"
+      - name: kGenericSharedLibaryIcon
+        value: "'shlb'"
+      - name: kGenericStationeryIcon
+        value: "'sdoc'"
+      - name: kGenericSuitcaseIcon
+        value: "'suit'"
+      - name: kGenericWORMIcon
+        value: "'worm'"
+      - name: kInternationResourcesIcon
+        value: "'ifil'"
+      - name: kKeyboardLayoutIcon
+        value: "'kfil'"
+      - name: kSoundFileIcon
+        value: "'sfil'"
+      - name: kSystemSuitcaseIcon
+        value: "'zsys'"
+      - name: kTrashIcon
+        value: "'trsh'"
+      - name: kTrueTypeFontIcon
+        value: "'tfil'"
+      - name: kTrueTypeFlatFontIcon
+        value: "'sfnt'"
+      - name: kTrueTypeMultiFlatFontIcon
+        value: "'ttcf'"
+      - name: kUserIDiskIcon
+        value: "'udsk'"
+      - name: kInternetLocationHTTPIcon
+        value: "'ilht'"
+      - name: kInternetLocationFTPIcon
+        value: "'ilft'"
+      - name: kInternetLocationAppleShareIcon
+        value: "'ilaf'"
+      - name: kInternetLocationAppleTalkZoneIcon
+        value: "'ilat'"
+      - name: kInternetLocationFileIcon
+        value: "'ilfi'"
+      - name: kInternetLocationMailIcon
+        value: "'ilma'"
+      - name: kInternetLocationNewsIcon
+        value: "'ilnw'"
+      - name: kInternetLocationNSLNeighborhoodIcon
+        value: "'ilns'"
+      - name: kInternetLocationGenericIcon
+        value: "'ilge'"
+      - name: kGenericFolderIcon
+        value: "'fldr'"
+      - name: kDropFolderIcon
+        value: "'dbox'"
+      - name: kMountedFolderIcon
+        value: "'mntd'"
+      - name: kOpenFolderIcon
+        value: "'ofld'"
+      - name: kOwnedFolderIcon
+        value: "'ownd'"
+      - name: kPrivateFolderIcon
+        value: "'prvf'"
+      - name: kSharedFolderIcon
+        value: "'shfl'"
+      - name: kSharingPrivsNotApplicableIcon
+        value: "'shna'"
+      - name: kSharingPrivsReadOnlyIcon
+        value: "'shro'"
+      - name: kSharingPrivsReadWriteIcon
+        value: "'shrw'"
+      - name: kSharingPrivsUnknownIcon
+        value: "'shuk'"
+      - name: kSharingPrivsWritableIcon
+        value: "'writ'"
+      - name: kUserFolderIcon
+        value: "'ufld'"
+      - name: kWorkgroupFolderIcon
+        value: "'wfld'"
+      - name: kGuestUserIcon
+        value: "'gusr'"
+      - name: kUserIcon
+        value: "'user'"
+      - name: kOwnerIcon
+        value: "'susr'"
+      - name: kGroupIcon
+        value: "'grup'"
+      - name: kAppleExtrasFolderIcon
+        value: "'aexƒ'"
+      - name: kAppleMenuFolderIcon
+        value: "'amnu'"
+      - name: kApplicationsFolderIcon
+        value: "'apps'"
+      - name: kApplicationSupportFolderIcon
+        value: "'asup'"
+      - name: kAssistantsFolderIcon
+        value: "'astƒ'"
+      - name: kContextualMenuItemsFolderIcon
+        value: "'cmnu'"
+      - name: kControlPanelDisabledFolderIcon
+        value: "'ctrD'"
+      - name: kControlPanelFolderIcon
+        value: "'ctrl'"
+      - name: kControlStripModulesFolderIcon
+        value: "'sdvƒ'"
+      - name: kDocumentsFolderIcon
+        value: "'docs'"
+      - name: kExtensionsDisabledFolderIcon
+        value: "'extD'"
+      - name: kExtensionsFolderIcon
+        value: "'extn'"
+      - name: kFavoritesFolderIcon
+        value: "'favs'"
+      - name: kFontsFolderIcon
+        value: "'font'"
+      - name: kHelpFolderIcon
+        value: "'ƒhlp'"
+      - name: kInternetFolderIcon
+        value: "'intƒ'"
+      - name: kInternetPlugInFolderIcon
+        value: "'ƒnet'"
+      - name: kLocalesFolderIcon
+        value: "'ƒloc'"
+      - name: kMacOSReadMeFolderIcon
+        value: "'morƒ'"
+      - name: kPreferencesFolderIcon
+        value: "'prfƒ'"
+      - name: kPrinterDescriptionFolderIcon
+        value: "'ppdf'"
+      - name: kPrinterDriverFolderIcon
+        value: "'ƒprd'"
+      - name: kPrintMonitorFolderIcon
+        value: "'prnt'"
+      - name: kRecentApplicationsFolderIcon
+        value: "'rapp'"
+      - name: kRecentDocumentsFolderIcon
+        value: "'rdoc'"
+      - name: kRecentServersFolderIcon
+        value: "'rsrv'"
+      - name: kScriptingAdditionsFolderIcon
+        value: "'ƒscr'"
+      - name: kSharedLibrariesFolderIcon
+        value: "'ƒlib'"
+      - name: kScriptsFolderIcon
+        value: "'scrƒ'"
+      - name: kShutdownItemsDisabledFolderIcon
+        value: "'shdD'"
+      - name: kShutdownItemsFolderIcon
+        value: "'shdf'"
+      - name: kSpeakableItemsFolder
+        value: "'spki'"
+      - name: kStartupItemsDisabledFolderIcon
+        value: "'strD'"
+      - name: kStartupItemsFolderIcon
+        value: "'strt'"
+      - name: kSystemExtensionDisabledFolderIcon
+        value: "'macD'"
+      - name: kSystemFolderIcon
+        value: "'macs'"
+      - name: kTextEncodingsFolderIcon
+        value: "'ƒtex'"
+      - name: kAppearanceFolderIcon
+        value: "'appr'"
+      - name: kUtilitiesFolderIcon
+        value: "'utiƒ'"
+      - name: kVoicesFolderIcon
+        value: "'fvoc'"
+      - name: kColorSyncFolderIcon
+        value: "'prof'"
+      - name: kInternetSearchSitesFolderIcon
+        value: "'issf'"
+      - name: kUsersFolderIcon
+        value: "'usrƒ'"
+      - name: kAppleScriptBadgeIcon
+        value: "'scrp'"
+      - name: kLockedBadgeIcon
+        value: "'lbdg'"
+      - name: kMountedBadgeIcon
+        value: "'mbdg'"
+      - name: kSharedBadgeIcon
+        value: "'sbdg'"
+      - name: kAliasBadgeIcon
+        value: "'abdg'"
+      - name: kAlertNoteIcon
+        value: "'note'"
+      - name: kAlertCautionIcon
+        value: "'caut'"
+      - name: kAlertStopIcon
+        value: "'stop'"
+      - name: kAppleTalkIcon
+        value: "'atlk'"
+      - name: kAppleTalkZoneIcon
+        value: "'atzn'"
+      - name: kAFPServerIcon
+        value: "'afps'"
+      - name: kFTPServerIcon
+        value: "'ftps'"
+      - name: kHTTPServerIcon
+        value: "'htps'"
+      - name: kGenericNetworkIcon
+        value: "'gnet'"
+      - name: kIPFileServerIcon
+        value: "'isrv'"
+      - name: kAppleLogoIcon
+        value: "'capl'"
+      - name: kAppleMenuIcon
+        value: "'sapl'"
+      - name: kBackwardArrowIcon
+        value: "'baro'"
+      - name: kFavoriteItemsIcon
+        value: "'favr'"
+      - name: kForwardArrowIcon
+        value: "'faro'"
+      - name: kGridIcon
+        value: "'grid'"
+      - name: kHelpIcon
+        value: "'help'"
+      - name: kKeepArrangedIcon
+        value: "'arng'"
+      - name: kLockedIcon
+        value: "'lock'"
+      - name: kNoFilesIcon
+        value: "'nfil'"
+      - name: kNoFolderIcon
+        value: "'nfld'"
+      - name: kNoWriteIcon
+        value: "'nwrt'"
+      - name: kProtectedApplicationFolderIcon
+        value: "'papp'"
+      - name: kProtectedSystemFolderIcon
+        value: "'psys'"
+      - name: kRecentItemsIcon
+        value: "'rcnt'"
+      - name: kShortcutIcon
+        value: "'shrt'"
+      - name: kSortAscendingIcon
+        value: "'asnd'"
+      - name: kSortDescendingIcon
+        value: "'dsnd'"
+      - name: kUnlockedIcon
+        value: "'ulck'"
+      - name: kConnectToIcon
+        value: "'cnct'"
+
+- enum:
+    values:
+      - name: kIconServicesNormalUsageFlag
+        value: 0
+
+- enum:
+    values:
+      - name: kIconFamilyType
+        value: "'icns'"
+
+- enum:
+    values:
+      - name: invalidIconRefErr
+        value: -2580
+      - name: noSuchIconErr
+        value: -2581
+      - name: noIconDataAvailableErr
+        value: -2582
+
+# ####
+
+- function:
+    name: IconServicesInit
+    return: OSErr
+    args:
+      - name: initBlockPtr
+        type: InitBlock*
+    dispatcher: IconServicesDispatch
+    selector: 0x15
+    library: IconServicesLib
+    executor: C_
+
+# ####
+
+- function:
+    name: IconServicesTerminate
+    dispatcher: IconServicesDispatch
+    selector: 0x16
+    library: IconServicesLib
+    executor: C_
+
+# ####
+
+- function:
+    name: IconRefToIconFamily
+    return: OSErr
+    args:
+      - name: theIconRef
+        type: IconRef
+      - name: whichIcons
+        type: IconSelectorValue
+      - name: iconFamily
+        type: IconFamilyHandle*
+    dispatcher: IconServicesDispatch
+    selector: 0x24
+    library: IconServicesLib
+    executor: C_
+
+# ####
+
+- function:
+    name: IconFamilyToIconSuite
+    return: OSErr
+    args:
+      - name: iconFamily
+        type: IconFamilyHandle
+      - name: whichIcons
+        type: IconSelectorValue
+      - name: iconSuite
+        type: Handle*
+    dispatcher: IconServicesDispatch
+    selector: 0x25
+    library: IconServicesLib
+    executor: C_
+
+# ####
+
+- function:
+    name: IconSuiteToIconFamily
+    return: OSErr
+    args:
+      - name: iconSuite
+        type: Handle
+      - name: whichIcons
+        type: IconSelectorValue
+      - name: iconFamily
+        type: IconFamilyHandle*
+    dispatcher: IconServicesDispatch
+    selector: 0x26
+    library: IconServicesLib
+    executor: C_
+
+# ####
+
+- function:
+    name: SetIconFamilyData
+    return: OSErr
+    args:
+      - name: iconFamily
+        type: IconFamilyHandle
+      - name: iconType
+        type: OSType
+      - name: h
+        type: Handle
+    dispatcher: IconServicesDispatch
+    selector: 0x30
+    library: IconServicesLib
+    executor: C_
+
+# ####
+
+- function:
+    name: GetIconFamilyData
+    return: OSErr
+    args:
+      - name: iconFamily
+        type: IconFamilyHandle
+      - name: iconType
+        type: OSType
+      - name: h
+        type: Handle
+    dispatcher: IconServicesDispatch
+    selector: 0x31
+    library: IconServicesLib
+    executor: C_
+
+# ####
+
+- function:
+    name: GetIconRefOwners
+    return: OSErr
+    args:
+      - name: theIconRef
+        type: IconRef
+      - name: owners
+        type: uint16_t*
+    dispatcher: IconServicesDispatch
+    selector: 0x0B
+    library: IconServicesLib
+    executor: C_
+
+# ####
+
+- function:
+    name: AcquireIconRef
+    return: OSErr
+    args:
+      - name: theIconRef
+        type: IconRef
+    dispatcher: IconServicesDispatch
+    selector: 0x27
+    library: IconServicesLib
+    executor: C_
+
+# ####
+
+- function:
+    name: ReleaseIconRef
+    return: OSErr
+    args:
+      - name: theIconRef
+        type: IconRef
+    dispatcher: IconServicesDispatch
+    selector: 0x28
+    library: IconServicesLib
+    executor: C_
+
+# ####
+
+- function:
+    name: GetIconRefFromFile
+    return: OSErr
+    args:
+      - name: theFile
+        type: const FSSpec*
+      - name: theIconRef
+        type: IconRef*
+      - name: theLabel
+        type: INTEGER*
+    dispatcher: IconServicesDispatch
+    selector: 0x02
+    library: IconServicesLib
+    executor: C_
+
+# ####
+
+- function:
+    name: GetIconRef
+    return: OSErr
+    args:
+      - name: vRefNum
+        type: INTEGER
+      - name: creator
+        type: OSType
+      - name: iconType
+        type: OSType
+      - name: theIconRef
+        type: IconRef*
+    dispatcher: IconServicesDispatch
+    selector: 0x21
+    library: IconServicesLib
+    executor: C_
+
+# ####
+
+- function:
+    name: GetIconRefFromFolder
+    return: OSErr
+    args:
+      - name: vRefNum
+        type: INTEGER
+      - name: parentFolderID
+        type: LONGINT
+      - name: folderID
+        type: LONGINT
+      - name: attributes
+        type: SignedByte
+      - name: accessPrivileges
+        type: SignedByte
+      - name: theIconRef
+        type: IconRef*
+    dispatcher: IconServicesDispatch
+    selector: 0x22
+    library: IconServicesLib
+    executor: C_
+
+# ####
+
+- function:
+    name: RegisterIconRefFromIconFamily
+    return: OSErr
+    args:
+      - name: creator
+        type: OSType
+      - name: iconType
+        type: OSType
+      - name: iconFamily
+        type: IconFamilyHandle
+      - name: theIconRef
+        type: IconRef*
+    dispatcher: IconServicesDispatch
+    selector: 0x1C
+    library: IconServicesLib
+    executor: C_
+
+# ####
+
+- function:
+    name: RegisterIconRefFromResource
+    return: OSErr
+    args:
+      - name: creator
+        type: OSType
+      - name: iconType
+        type: OSType
+      - name: resourceFile
+        type: const FSSpec*
+      - name: resourceID
+        type: INTEGER
+      - name: theIconRef
+        type: IconRef*
+    dispatcher: IconServicesDispatch
+    selector: 0x23
+    library: IconServicesLib
+    executor: C_
+
+# ####
+
+- function:
+    name: UnregisterIconRef
+    return: OSErr
+    args:
+      - name: creator
+        type: OSType
+      - name: iconType
+        type: OSType
+    dispatcher: IconServicesDispatch
+    selector: 0x08
+    library: IconServicesLib
+    executor: C_
+
+# ####
+
+- function:
+    name: UpdateIconRef
+    return: OSErr
+    args:
+      - name: theIconRef
+        type: IconRef
+    dispatcher: IconServicesDispatch
+    selector: 0x09
+    library: IconServicesLib
+    executor: C_
+
+# ####
+
+- function:
+    name: OverrideIconRefFromResource
+    return: OSErr
+    args:
+      - name: theIconRef
+        type: IconRef
+      - name: resourceFile
+        type: const FSSpec*
+      - name: resourceID
+        type: INTEGER
+    dispatcher: IconServicesDispatch
+    selector: 0x2A
+    library: IconServicesLib
+    executor: C_
+
+# ####
+
+- function:
+    name: OverrideIconRef
+    return: OSErr
+    args:
+      - name: oldIconRef
+        type: IconRef
+      - name: newIconRef
+        type: IconRef
+    dispatcher: IconServicesDispatch
+    selector: 0x2B
+    library: IconServicesLib
+    executor: C_
+
+# ####
+
+- function:
+    name: RemoveIconRefOverride
+    return: OSErr
+    args:
+      - name: theIconRef
+        type: IconRef
+    dispatcher: IconServicesDispatch
+    selector: 0x1E
+    library: IconServicesLib
+    executor: C_
+
+# ####
+
+- function:
+    name: CompositeIconRef
+    return: OSErr
+    args:
+      - name: backgroundIconRef
+        type: IconRef
+      - name: foregroundIconRef
+        type: IconRef
+      - name: compositeIconRef
+        type: IconRef*
+    dispatcher: IconServicesDispatch
+    selector: 0x14
+    library: IconServicesLib
+    executor: C_
+
+# ####
+
+- function:
+    name: IsIconRefComposite
+    return: OSErr
+    args:
+      - name: compositeIconRef
+        type: IconRef
+      - name: backgroundIconRef
+        type: IconRef*
+      - name: foregroundIconRef
+        type: IconRef*
+    dispatcher: IconServicesDispatch
+    selector: 0x1A
+    library: IconServicesLib
+    executor: C_
+
+# ####
+
+- function:
+    name: IsValidIconRef
+    return: Boolean
+    args:
+      - name: theIconRef
+        type: IconRef
+    dispatcher: IconServicesDispatch
+    selector: 0x32
+    library: IconServicesLib
+    executor: C_
+
+# ####
+
+- function:
+    name: PlotIconRef
+    return: OSErr
+    args:
+      - name: theRect
+        type: const Rect*
+      - name: align
+        type: IconAlignmentType
+      - name: transform
+        type: IconTransformType
+      - name: theIconServicesUsageFlags
+        type: IconServicesUsageFlags
+      - name: theIconRef
+        type: IconRef
+    dispatcher: IconServicesDispatch
+    selector: 0x0E
+    library: IconServicesLib
+    executor: C_
+
+# ####
+
+- function:
+    name: PtInIconRef
+    return: Boolean
+    args:
+      - name: testPt
+        type: const Point*
+      - name: iconRect
+        type: const Rect*
+      - name: align
+        type: IconAlignmentType
+      - name: theIconServicesUsageFlags
+        type: IconServicesUsageFlags
+      - name: theIconRef
+        type: IconRef
+    dispatcher: IconServicesDispatch
+    selector: 0x0F
+    library: IconServicesLib
+    executor: C_
+
+# ####
+
+- function:
+    name: RectInIconRef
+    return: Boolean
+    args:
+      - name: testRect
+        type: const Rect*
+      - name: iconRect
+        type: const Rect*
+      - name: align
+        type: IconAlignmentType
+      - name: iconServicesUsageFlags
+        type: IconServicesUsageFlags
+      - name: theIconRef
+        type: IconRef
+    dispatcher: IconServicesDispatch
+    selector: 0x10
+    library: IconServicesLib
+    executor: C_
+
+# ####
+
+- function:
+    name: IconRefToRgn
+    return: OSErr
+    args:
+      - name: theRgn
+        type: RgnHandle
+      - name: iconRect
+        type: const Rect*
+      - name: align
+        type: IconAlignmentType
+      - name: iconServicesUsageFlags
+        type: IconServicesUsageFlags
+      - name: theIconRef
+        type: IconRef
+    dispatcher: IconServicesDispatch
+    selector: 0x11
+    library: IconServicesLib
+    executor: C_
+
+# ####
+
+- function:
+    name: GetIconSizesFromIconRef
+    return: OSErr
+    args:
+      - name: iconSelectorInput
+        type: IconSelectorValue
+      - name: iconSelectorOutputPtr
+        type: IconSelectorValue*
+      - name: iconServicesUsageFlags
+        type: IconServicesUsageFlags
+      - name: theIconRef
+        type: IconRef
+    dispatcher: IconServicesDispatch
+    selector: 0x12
+    library: IconServicesLib
+    executor: C_
+
+# ####
+
+- function:
+    name: FlushIconRefs
+    return: OSErr
+    args:
+      - name: creator
+        type: OSType
+      - name: iconType
+        type: OSType
+    dispatcher: IconServicesDispatch
+    selector: 0x29
+    library: IconServicesLib
+    executor: C_
+
+# ####
+
+- function:
+    name: FlushIconRefsByVolume
+    return: OSErr
+    args:
+      - name: vRefNum
+        type: INTEGER
+    dispatcher: IconServicesDispatch
+    selector: 0x18
+    library: IconServicesLib
+    executor: C_
+
+# ####
+
+- function:
+    name: SetCustomIconsEnabled
+    return: OSErr
+    args:
+      - name: vRefNum
+        type: INTEGER
+      - name: enableCustomIcons
+        type: Boolean
+    dispatcher: IconServicesDispatch
+    selector: 0x1F
+    library: IconServicesLib
+    executor: C_
+
+# ####
+
+- function:
+    name: GetCustomIconsEnabled
+    return: OSErr
+    args:
+      - name: vRefNum
+        type: INTEGER
+      - name: customIconsEnabled
+        type: Boolean*
+    dispatcher: IconServicesDispatch
+    selector: 0x20
+    library: IconServicesLib
+    executor: C_
+
+# ####
+
+- function:
+    name: IsIconRefMaskEmpty
+    return: Boolean
+    args:
+      - name: iconRef
+        type: IconRef
+    dispatcher: IconServicesDispatch
+    selector: 0x33
+    library: IconServicesLib
+    executor: C_
+
+# ####
+
+- function:
+    name: GetIconRefVariant
+    return: IconRef
+    args:
+      - name: inIconRef
+        type: IconRef
+      - name: inVariant
+        type: OSType
+      - name: outTransform
+        type: IconTransformType*
+    dispatcher: IconServicesDispatch
+    selector: 0x34
+    library: IconServicesLib
+    executor: C_
+
+# ####
+
+- function:
+    name: RegisterIconRefFromIconFile
+    return: OSErr
+    args:
+      - name: creator
+        type: OSType
+      - name: iconType
+        type: OSType
+      - name: iconFile
+        type: const FSSpec*
+      - name: theIconRef
+        type: IconRef*
+    dispatcher: IconServicesDispatch
+    selector: 0x35
+    library: IconServicesLib
+    executor: C_
+
+# ####
+
+- function:
+    name: ReadIconFile
+    return: OSErr
+    args:
+      - name: iconFile
+        type: const FSSpec*
+      - name: iconFamily
+        type: IconFamilyHandle*
+    dispatcher: IconServicesDispatch
+    selector: 0x36
+    library: IconServicesLib
+    executor: C_
+
+# ####
+
+- function:
+    name: WriteIconFile
+    return: OSErr
+    args:
+      - name: iconFamily
+        type: IconFamilyHandle
+      - name: iconFile
+        type: const FSSpec*
+    dispatcher: IconServicesDispatch
+    selector: 0x37
+    library: IconServicesLib
+    executor: C_
