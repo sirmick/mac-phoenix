@@ -128,6 +128,7 @@ OSErr C_SetHideDesktopInBackground(Boolean hide);PASCAL_SUBTRAP(SetHideDesktopIn
 
 // Finder feeds the Apple Menu Items folder to the Process Manager, which draws the Apple menu (22 bytes of params; System 'scod' -16463 +3020). name must be non-empty and key nonzero, else paramErr. The entry keeps the name behind two placeholder bytes (the icon's room), the suite, the key, sortGroup (passed to the sort comparison), the low bytes of flagA/flagB and a copy of info. Names other than name, iconSuite and key are guesses.
 OSErr C_AddAppleMenuItem(StringPtr name, int16_t sortGroup, int16_t flagA, Handle iconSuite, int16_t flagB, StringPtr info, int32_t key);PASCAL_SUBTRAP(AddAppleMenuItem, 0xA88F, 0x0031, OSDispatch);
+LIBRARY_ALSO(PrivateInterfaceLib, AddAppleMenuItem, InterfaceLib);
 
 
 // Removes the caller's items with that key (0: all of them).
@@ -186,9 +187,11 @@ OSErr C_LaunchDeskAccessory(const FSSpec *pFileSpec, ConstStringPtr pDAName);PAS
 
 
 OSErr C_BeginSystemMode();PASCAL_SUBTRAP(BeginSystemMode, 0xA88F, 0x0040, OSDispatch);
+LIBRARY_ALSO(PrivateInterfaceLib, BeginSystemMode, InterfaceLib);
 
 
 OSErr C_EndSystemMode();PASCAL_SUBTRAP(EndSystemMode, 0xA88F, 0x0041, OSDispatch);
+LIBRARY_ALSO(PrivateInterfaceLib, EndSystemMode, InterfaceLib);
 
 
 OSErr C_GetPortNameFromProcessSerialNumber(PPCPortPtr port_name, ProcessSerialNumber *serial_number);PASCAL_SUBTRAP(GetPortNameFromProcessSerialNumber, 0xA88F, 0x0046, OSDispatch);

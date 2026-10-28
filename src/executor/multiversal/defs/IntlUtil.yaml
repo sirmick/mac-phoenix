@@ -671,6 +671,7 @@
         type: TypeSelectRecord*
     dispatcher: Pack6
     selector: 0x0028
+    library: PrivateInterfaceLib
     executor: C_
 
 # ####
@@ -685,6 +686,7 @@
         type: TypeSelectRecord*
     dispatcher: Pack6
     selector: 0x002A
+    library: PrivateInterfaceLib
     executor: C_
 
 # ####
@@ -705,6 +707,7 @@
         type: void*
     dispatcher: Pack6
     selector: 0x002C
+    library: PrivateInterfaceLib
     executor: C_
 
 # ####
@@ -721,6 +724,7 @@
         type: StringPtr
     dispatcher: Pack6
     selector: 0x002E
+    library: PrivateInterfaceLib
     executor: C_
 
 # ####

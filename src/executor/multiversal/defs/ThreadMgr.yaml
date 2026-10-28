@@ -75,6 +75,7 @@
         type: LONGINT
     dispatcher: ThreadDispatch
     selector: 0x0501
+    library: ThreadsLib
     executor: C_
 
 - function:
@@ -87,6 +88,7 @@
         type: INTEGER*
     dispatcher: ThreadDispatch
     selector: 0x0402
+    library: ThreadsLib
     executor: C_
 
 - function:
@@ -109,6 +111,7 @@
         type: LONGINT*
     dispatcher: ThreadDispatch
     selector: 0x0E03
+    library: ThreadsLib
     executor: C_
 
 - function:
@@ -123,6 +126,7 @@
         type: Boolean
     dispatcher: ThreadDispatch
     selector: 0x0504
+    library: ThreadsLib
     executor: C_
 
 - function:
@@ -133,6 +137,7 @@
         type: LONGINT
     dispatcher: ThreadDispatch
     selector: 0x0205
+    library: ThreadsLib
     executor: C_
     comment: YieldToAnyThread is YieldToThread(kNoThreadID).
 
@@ -144,6 +149,7 @@
         type: LONGINT*
     dispatcher: ThreadDispatch
     selector: 0x0206
+    library: ThreadsLib
     executor: C_
 
 - function:
@@ -156,6 +162,7 @@
         type: INTEGER*
     dispatcher: ThreadDispatch
     selector: 0x0407
+    library: ThreadsLib
     executor: C_
 
 - function:
@@ -170,6 +177,7 @@
         type: LONGINT
     dispatcher: ThreadDispatch
     selector: 0x0508
+    library: ThreadsLib
     executor: C_
 
 - function:
@@ -180,6 +188,7 @@
         type: ProcPtr
     dispatcher: ThreadDispatch
     selector: 0x0209
+    library: ThreadsLib
     executor: C_
 
 - function:
@@ -196,6 +205,7 @@
         type: Boolean
     dispatcher: ThreadDispatch
     selector: 0x070A
+    library: ThreadsLib
     executor: C_
 
 - function:
@@ -203,6 +213,7 @@
     return: OSErr
     dispatcher: ThreadDispatch
     selector: 0x000B
+    library: ThreadsLib
     executor: C_
 
 - function:
@@ -210,6 +221,7 @@
     return: OSErr
     dispatcher: ThreadDispatch
     selector: 0x000C
+    library: ThreadsLib
     executor: C_
 
 - function:
@@ -224,6 +236,7 @@
         type: ProcPtr
     dispatcher: ThreadDispatch
     selector: 0x060D
+    library: ThreadsLib
     executor: C_
 
 - function:
@@ -234,6 +247,7 @@
         type: LONGINT*
     dispatcher: ThreadDispatch
     selector: 0x020E
+    library: ThreadsLib
     executor: C_
 
 - function:
@@ -248,6 +262,7 @@
         type: INTEGER*
     dispatcher: ThreadDispatch
     selector: 0x060F
+    library: ThreadsLib
     executor: C_
 
 - function:
@@ -260,6 +275,7 @@
         type: LONGINT
     dispatcher: ThreadDispatch
     selector: 0x0410
+    library: ThreadsLib
     executor: C_
 
 - function:
@@ -274,6 +290,7 @@
         type: LONGINT
     dispatcher: ThreadDispatch
     selector: 0x0611
+    library: ThreadsLib
     executor: C_
 
 - function:
@@ -288,6 +305,7 @@
         type: LONGINT
     dispatcher: ThreadDispatch
     selector: 0x0512
+    library: ThreadsLib
     executor: C_
 
 - function:
@@ -300,6 +318,7 @@
         type: LONGINT*
     dispatcher: ThreadDispatch
     selector: 0x0413
+    library: ThreadsLib
     executor: C_
 
 - function:
@@ -312,6 +331,7 @@
         type: LONGINT*
     dispatcher: ThreadDispatch
     selector: 0x0414
+    library: ThreadsLib
     executor: C_
 
 - function:
@@ -326,6 +346,7 @@
         type: INTEGER*
     dispatcher: ThreadDispatch
     selector: 0x0615
+    library: ThreadsLib
     executor: C_
 
 # ####

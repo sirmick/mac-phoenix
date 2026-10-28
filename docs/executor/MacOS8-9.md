@@ -114,10 +114,14 @@ per System version.
 
 ## The work
 
-1. **Library names for PowerPC.** Export what Executor has under 8/9's
-   library names: `library:` on the definitions (`LIBRARY_ALSO`, as
-   SoundLib's): ThreadsLib (14), ObjectSupportLib (7, PowerPC too),
-   PrivateInterfaceLib (10). Check: the unresolved list shrinks by 31.
+1. **Library names for PowerPC** — done (2026-10-28). What Executor has,
+   under 8/9's library names, by family: `library:` on the definitions
+   (`LIBRARY_ALSO`, as SoundLib's; a list for a library routine exported
+   by more than one): the Thread Manager (ThreadsLib, 21), the object
+   support calls (ObjectSupportLib, 13, InterfaceLib too), the layer
+   calls, `TypeSelect*`, `Begin/EndSystemMode`, `AddAppleMenuItem`
+   (PrivateInterfaceLib, 20). The 8.6 Finder's unresolved imports: 233 →
+   202.
 2. **Trap-routed exports.** A definition with a trap or selector but no
    Executor routine (the Drag Manager's 29: Apple's 68k code answers them
    on 7.x; `InsXTime`) gets a PowerPC and CFM-68K export that calls

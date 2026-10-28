@@ -282,18 +282,20 @@ private:
     const char *library;
 };
 
-/* ... and a trap's routine that another library exports as well (`library:`
-   on a trap's or subtrap's entry: SoundLib's Sound Manager calls): its
-   InterfaceLib entry under that library's name, for PowerPC and CFM-68K. */
+/* ... and a routine another library exports as well (`library:` on a
+   trap's or subtrap's entry: SoundLib's Sound Manager calls; the second
+   and later of a `library:` list): its entry in `from` (InterfaceLib for a
+   trap) under that library's name, for PowerPC and CFM-68K. */
 class LibraryAlsoExport : public internal::DeferredInit
 {
 public:
-    LibraryAlsoExport(const char *name, const char *library)
-        : name(name), library(library) {}
+    LibraryAlsoExport(const char *name, const char *library, const char *from)
+        : name(name), library(library), from(from) {}
     virtual void init() override;
 private:
     const char *name;
     const char *library;
+    const char *from;
 };
 
 /* ... and a routine of an ASLM function set that PowerPC code binds
@@ -471,8 +473,8 @@ public:
     CREATE_OT_FUNCTION(lib_##LIB##_##NAME, (#NAME, #LIB, SET, SETNAME, PASCAL, SIG, RET, &ot::IMPL))
 #define LIBRARY_RAW(LIB, NAME) \
     CREATE_LIBRARY_RAW(lib_##LIB##_##NAME, (#NAME, #LIB))
-#define LIBRARY_ALSO(LIB, NAME) \
-    CREATE_LIBRARY_ALSO(also_##LIB##_##NAME, (#NAME, #LIB))
+#define LIBRARY_ALSO(LIB, NAME, FROM) \
+    CREATE_LIBRARY_ALSO(also_##LIB##_##NAME, (#NAME, #LIB, #FROM))
 #define ASLM_FUNCTION(SET, INDEX, NAME, IMPL) \
     CREATE_ASLM_FUNCTION(aslm_##NAME, (#NAME, SET, INDEX), ASLMFunction<decltype(IMPL) COMMA &IMPL>)
 #define ASLM_RAW(SET, INDEX, NAME) \

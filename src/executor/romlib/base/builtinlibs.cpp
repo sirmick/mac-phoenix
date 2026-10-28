@@ -305,34 +305,36 @@ Ptr builtinlibs::makeUndefinedSymbolStub(const char *name, OSType arch)
     return (Ptr) &callback;
 }
 
-static std::unordered_map<std::string, std::vector<std::string>>& alsoExports()
+/* By library: (routine, library whose entry it is). */
+static std::unordered_map<std::string, std::vector<std::pair<std::string, std::string>>>& alsoExports()
 {
-    static std::unordered_map<std::string, std::vector<std::string>> map;
+    static std::unordered_map<std::string, std::vector<std::pair<std::string, std::string>>> map;
     return map;
 }
 
-void builtinlibs::alsoExport(const char *library, const char *function)
+void builtinlibs::alsoExport(const char *library, const char *function, const char *from)
 {
-    alsoExports()[library].push_back(function);
+    alsoExports()[library].push_back({ function, from });
 }
 
-/* The InterfaceLib entries another library exports as well, added to its
-   table the first time it is asked for. */
+/* The entries another library exports as well, added to its table the
+   first time it is asked for. */
 static void addAlsoExports(std::unordered_map<std::string, std::vector<map_entry_t>>& table,
                            const std::string& library)
 {
     auto it = alsoExports().find(library);
     if(it == alsoExports().end() || it->second.empty())
         return;
-    auto& from = table["InterfaceLib"];
-    auto& to = table[library];
-    for(const std::string& function : it->second)
+    for(const auto& [function, from_lib] : it->second)
+    {
+        auto& from = table[from_lib];
         for(const map_entry_t& e : from)
             if(function == e.symbol_name)
             {
-                to.push_back(e);
+                table[library].push_back(e);
                 break;
             }
+    }
     it->second.clear();
 }
 
