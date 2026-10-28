@@ -437,6 +437,13 @@ class ExecutorGenerator < Generator
         if fun["library"] and trap and fun["executor"] then
             Array(fun["library"]).each {|lib| @out << "LIBRARY_ALSO(#{lib}, #{name}, InterfaceLib);\n" }
         end
+        # A selector the guest's own code answers (the Drag Manager's),
+        # exported by a library: glue through the dispatcher's table entry.
+        if fun["library"] and fun["selector"] and fun["dispatcher"] and not fun["executor"] then
+            Array(fun["library"]).each do |lib|
+                @out << "TRAP_GLUE(#{lib}, #{name}, #{fun["dispatcher"]}, #{hexlit(fun["selector"])});\n"
+            end
+        end
     end
 
     # Bytes a Pascal caller pushes for an argument of this type: a word for

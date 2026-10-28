@@ -159,86 +159,125 @@ using DragDrawingUPP = UPP<OSErr(DragRegionMessage message, RgnHandle showRegion
 DISPATCHER_TRAP(DragDispatch, 0xABED, D0W);
 
 
-OSErr InstallTrackingHandler(DragTrackingHandlerUPP trackingHandler, WindowRef theWindow, void *handlerRefCon);
+OSErr InstallTrackingHandler(DragTrackingHandlerUPP trackingHandler, WindowRef theWindow, void *handlerRefCon);TRAP_GLUE(DragLib, InstallTrackingHandler, DragDispatch, 0x0001);
 
-OSErr InstallReceiveHandler(DragReceiveHandlerUPP receiveHandler, WindowRef theWindow, void *handlerRefCon);
 
-OSErr RemoveTrackingHandler(DragTrackingHandlerUPP trackingHandler, WindowRef theWindow);
+OSErr InstallReceiveHandler(DragReceiveHandlerUPP receiveHandler, WindowRef theWindow, void *handlerRefCon);TRAP_GLUE(DragLib, InstallReceiveHandler, DragDispatch, 0x0002);
 
-OSErr RemoveReceiveHandler(DragReceiveHandlerUPP receiveHandler, WindowRef theWindow);
+
+OSErr RemoveTrackingHandler(DragTrackingHandlerUPP trackingHandler, WindowRef theWindow);TRAP_GLUE(DragLib, RemoveTrackingHandler, DragDispatch, 0x0003);
+
+
+OSErr RemoveReceiveHandler(DragReceiveHandlerUPP receiveHandler, WindowRef theWindow);TRAP_GLUE(DragLib, RemoveReceiveHandler, DragDispatch, 0x0004);
+
 
 // MacPhoenix. Private in 7.5.5 (name is our guess). Finder registers a 7-long record (its hook routine, a window, ..., a refCon at +$10) with the System's Drag Manager at start-up, install = true, and removes it at quit (install = false). Apple's routine ('proc' -16516 routine $80) installs the globals' two trampolines as the window's tracking and receive handlers with the record {hook, refCon}; the trampolines call the hook with (message, globals+4). With Apple's Drag Manager in charge of the trap (drag.cpp) this entry is not reached; the C++ stub stays for Executor's own System.
 OSErr C_SetFinderDragHooks(Ptr hooks, Boolean install);PASCAL_SUBTRAP(SetFinderDragHooks, 0xABED, 0xC301, DragDispatch);
 
 
-OSErr NewDrag(GUEST<DragRef> *theDrag);
+OSErr NewDrag(GUEST<DragRef> *theDrag);TRAP_GLUE(DragLib, NewDrag, DragDispatch, 0x0005);
 
-OSErr DisposeDrag(DragRef theDrag);
 
-OSErr AddDragItemFlavor(DragRef theDrag, DragItemRef theItemRef, FlavorType theType, const void *dataPtr, Size dataSize, FlavorFlags theFlags);
+OSErr DisposeDrag(DragRef theDrag);TRAP_GLUE(DragLib, DisposeDrag, DragDispatch, 0x0006);
 
-OSErr SetDragItemFlavorData(DragRef theDrag, DragItemRef theItemRef, FlavorType theType, const void *dataPtr, Size dataSize, UInt32 dataOffset);
 
-OSErr SetDragSendProc(DragRef theDrag, DragSendDataUPP sendProc, void *dragSendRefCon);
+OSErr AddDragItemFlavor(DragRef theDrag, DragItemRef theItemRef, FlavorType theType, const void *dataPtr, Size dataSize, FlavorFlags theFlags);TRAP_GLUE(DragLib, AddDragItemFlavor, DragDispatch, 0x0007);
 
-OSErr SetDragInputProc(DragRef theDrag, DragInputUPP inputProc, void *dragInputRefCon);
 
-OSErr SetDragDrawingProc(DragRef theDrag, DragDrawingUPP drawingProc, void *dragDrawingRefCon);
+OSErr SetDragItemFlavorData(DragRef theDrag, DragItemRef theItemRef, FlavorType theType, const void *dataPtr, Size dataSize, UInt32 dataOffset);TRAP_GLUE(DragLib, SetDragItemFlavorData, DragDispatch, 0x0009);
 
-OSErr TrackDrag(DragRef theDrag, const EventRecord *theEvent, RgnHandle theRegion);
 
-OSErr CountDragItems(DragRef theDrag, GUEST<UInt16> *numItems);
+OSErr SetDragSendProc(DragRef theDrag, DragSendDataUPP sendProc, void *dragSendRefCon);TRAP_GLUE(DragLib, SetDragSendProc, DragDispatch, 0x000A);
 
-OSErr GetDragItemReferenceNumber(DragRef theDrag, UInt16 index, GUEST<DragItemRef> *theItemRef);
 
-OSErr CountDragItemFlavors(DragRef theDrag, DragItemRef theItemRef, GUEST<UInt16> *numFlavors);
+OSErr SetDragInputProc(DragRef theDrag, DragInputUPP inputProc, void *dragInputRefCon);TRAP_GLUE(DragLib, SetDragInputProc, DragDispatch, 0x000B);
 
-OSErr GetFlavorType(DragRef theDrag, DragItemRef theItemRef, UInt16 index, GUEST<FlavorType> *theType);
 
-OSErr GetFlavorFlags(DragRef theDrag, DragItemRef theItemRef, FlavorType theType, GUEST<FlavorFlags> *theFlags);
+OSErr SetDragDrawingProc(DragRef theDrag, DragDrawingUPP drawingProc, void *dragDrawingRefCon);TRAP_GLUE(DragLib, SetDragDrawingProc, DragDispatch, 0x000C);
 
-OSErr GetFlavorDataSize(DragRef theDrag, DragItemRef theItemRef, FlavorType theType, GUEST<Size> *dataSize);
 
-OSErr GetFlavorData(DragRef theDrag, DragItemRef theItemRef, FlavorType theType, void *dataPtr, GUEST<Size> *dataSize, UInt32 dataOffset);
+OSErr TrackDrag(DragRef theDrag, const EventRecord *theEvent, RgnHandle theRegion);TRAP_GLUE(DragLib, TrackDrag, DragDispatch, 0x000D);
 
-OSErr GetDragItemBounds(DragRef theDrag, DragItemRef theItemRef, Rect *itemBounds);
 
-OSErr SetDragItemBounds(DragRef theDrag, DragItemRef theItemRef, const Rect *itemBounds);
+OSErr CountDragItems(DragRef theDrag, GUEST<UInt16> *numItems);TRAP_GLUE(DragLib, CountDragItems, DragDispatch, 0x000E);
 
-OSErr GetDropLocation(DragRef theDrag, AEDesc *dropLocation);
 
-OSErr SetDropLocation(DragRef theDrag, const AEDesc *dropLocation);
+OSErr GetDragItemReferenceNumber(DragRef theDrag, UInt16 index, GUEST<DragItemRef> *theItemRef);TRAP_GLUE(DragLib, GetDragItemReferenceNumber, DragDispatch, 0x000F);
 
-OSErr GetDragAttributes(DragRef theDrag, GUEST<DragAttributes> *flags);
 
-OSErr GetDragMouse(DragRef theDrag, GUEST<Point> *mouse, GUEST<Point> *globalPinnedMouse);
+OSErr CountDragItemFlavors(DragRef theDrag, DragItemRef theItemRef, GUEST<UInt16> *numFlavors);TRAP_GLUE(DragLib, CountDragItemFlavors, DragDispatch, 0x0010);
 
-OSErr SetDragMouse(DragRef theDrag, Point globalPinnedMouse);
 
-OSErr GetDragOrigin(DragRef theDrag, GUEST<Point> *globalInitialMouse);
+OSErr GetFlavorType(DragRef theDrag, DragItemRef theItemRef, UInt16 index, GUEST<FlavorType> *theType);TRAP_GLUE(DragLib, GetFlavorType, DragDispatch, 0x0011);
 
-OSErr GetDragModifiers(DragRef theDrag, GUEST<INTEGER> *modifiers, GUEST<INTEGER> *mouseDownModifiers, GUEST<INTEGER> *mouseUpModifiers);
 
-OSErr ShowDragHilite(DragRef theDrag, RgnHandle hiliteFrame, Boolean inside);
+OSErr GetFlavorFlags(DragRef theDrag, DragItemRef theItemRef, FlavorType theType, GUEST<FlavorFlags> *theFlags);TRAP_GLUE(DragLib, GetFlavorFlags, DragDispatch, 0x0012);
 
-OSErr HideDragHilite(DragRef theDrag);
 
-OSErr DragPreScroll(DragRef theDrag, INTEGER dH, INTEGER dV);
+OSErr GetFlavorDataSize(DragRef theDrag, DragItemRef theItemRef, FlavorType theType, GUEST<Size> *dataSize);TRAP_GLUE(DragLib, GetFlavorDataSize, DragDispatch, 0x0013);
 
-OSErr DragPostScroll(DragRef theDrag);
 
-OSErr UpdateDragHilite(DragRef theDrag, RgnHandle updateRgn);
+OSErr GetFlavorData(DragRef theDrag, DragItemRef theItemRef, FlavorType theType, void *dataPtr, GUEST<Size> *dataSize, UInt32 dataOffset);TRAP_GLUE(DragLib, GetFlavorData, DragDispatch, 0x0014);
 
-Boolean WaitMouseMoved(Point initialMouse);
 
-OSErr ZoomRects(const Rect *fromRect, const Rect *toRect, INTEGER zoomSteps, ZoomAcceleration acceleration);
+OSErr GetDragItemBounds(DragRef theDrag, DragItemRef theItemRef, Rect *itemBounds);TRAP_GLUE(DragLib, GetDragItemBounds, DragDispatch, 0x0015);
 
-OSErr ZoomRegion(RgnHandle region, Point zoomDistance, INTEGER zoomSteps, ZoomAcceleration acceleration);
 
-OSErr GetDragHiliteColor(WindowRef window, RGBColor *color);
+OSErr SetDragItemBounds(DragRef theDrag, DragItemRef theItemRef, const Rect *itemBounds);TRAP_GLUE(DragLib, SetDragItemBounds, DragDispatch, 0x0016);
 
-OSErr SetDragImage(DragRef theDrag, PixMapHandle imagePixMap, RgnHandle imageRgn, Point imageOffsetPt, DragImageFlags theImageFlags);
 
-OSErr ChangeDragBehaviors(DragRef theDrag, DragBehaviors inBehaviorsToSet, DragBehaviors inBehaviorsToClear);
+OSErr GetDropLocation(DragRef theDrag, AEDesc *dropLocation);TRAP_GLUE(DragLib, GetDropLocation, DragDispatch, 0x0017);
+
+
+OSErr SetDropLocation(DragRef theDrag, const AEDesc *dropLocation);TRAP_GLUE(DragLib, SetDropLocation, DragDispatch, 0x0018);
+
+
+OSErr GetDragAttributes(DragRef theDrag, GUEST<DragAttributes> *flags);TRAP_GLUE(DragLib, GetDragAttributes, DragDispatch, 0x0019);
+
+
+OSErr GetDragMouse(DragRef theDrag, GUEST<Point> *mouse, GUEST<Point> *globalPinnedMouse);TRAP_GLUE(DragLib, GetDragMouse, DragDispatch, 0x001A);
+
+
+OSErr SetDragMouse(DragRef theDrag, Point globalPinnedMouse);TRAP_GLUE(DragLib, SetDragMouse, DragDispatch, 0x001B);
+
+
+OSErr GetDragOrigin(DragRef theDrag, GUEST<Point> *globalInitialMouse);TRAP_GLUE(DragLib, GetDragOrigin, DragDispatch, 0x001C);
+
+
+OSErr GetDragModifiers(DragRef theDrag, GUEST<INTEGER> *modifiers, GUEST<INTEGER> *mouseDownModifiers, GUEST<INTEGER> *mouseUpModifiers);TRAP_GLUE(DragLib, GetDragModifiers, DragDispatch, 0x001D);
+
+
+OSErr ShowDragHilite(DragRef theDrag, RgnHandle hiliteFrame, Boolean inside);TRAP_GLUE(DragLib, ShowDragHilite, DragDispatch, 0x001E);
+
+
+OSErr HideDragHilite(DragRef theDrag);TRAP_GLUE(DragLib, HideDragHilite, DragDispatch, 0x001F);
+
+
+OSErr DragPreScroll(DragRef theDrag, INTEGER dH, INTEGER dV);TRAP_GLUE(DragLib, DragPreScroll, DragDispatch, 0x0020);
+
+
+OSErr DragPostScroll(DragRef theDrag);TRAP_GLUE(DragLib, DragPostScroll, DragDispatch, 0x0021);
+
+
+OSErr UpdateDragHilite(DragRef theDrag, RgnHandle updateRgn);TRAP_GLUE(DragLib, UpdateDragHilite, DragDispatch, 0x0022);
+
+
+Boolean WaitMouseMoved(Point initialMouse);TRAP_GLUE(DragLib, WaitMouseMoved, DragDispatch, 0x0023);
+
+
+OSErr ZoomRects(const Rect *fromRect, const Rect *toRect, INTEGER zoomSteps, ZoomAcceleration acceleration);TRAP_GLUE(DragLib, ZoomRects, DragDispatch, 0x0024);
+
+
+OSErr ZoomRegion(RgnHandle region, Point zoomDistance, INTEGER zoomSteps, ZoomAcceleration acceleration);TRAP_GLUE(DragLib, ZoomRegion, DragDispatch, 0x0025);
+
+
+OSErr GetDragHiliteColor(WindowRef window, RGBColor *color);TRAP_GLUE(DragLib, GetDragHiliteColor, DragDispatch, 0x0026);
+
+
+OSErr SetDragImage(DragRef theDrag, PixMapHandle imagePixMap, RgnHandle imageRgn, Point imageOffsetPt, DragImageFlags theImageFlags);TRAP_GLUE(DragLib, SetDragImage, DragDispatch, 0x0027);
+
+
+OSErr ChangeDragBehaviors(DragRef theDrag, DragBehaviors inBehaviorsToSet, DragBehaviors inBehaviorsToClear);TRAP_GLUE(DragLib, ChangeDragBehaviors, DragDispatch, 0x0028);
+
 
 } /* namespace Executor */

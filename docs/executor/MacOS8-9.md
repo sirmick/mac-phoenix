@@ -122,10 +122,18 @@ per System version.
    calls, `TypeSelect*`, `Begin/EndSystemMode`, `AddAppleMenuItem`
    (PrivateInterfaceLib, 20). The 8.6 Finder's unresolved imports: 233 →
    202.
-2. **Trap-routed exports.** A definition with a trap or selector but no
-   Executor routine (the Drag Manager's 29: Apple's 68k code answers them
-   on 7.x; `InsXTime`) gets a PowerPC and CFM-68K export that calls
-   through the trap table, as InterfaceLib's glue does. Then DragLib.
+2. **Trap-routed exports** — done for selectors (2026-10-28). A subtrap's
+   definition with `library:` and no Executor routine gets a PowerPC and
+   CFM-68K export that sets the selector and calls through the
+   dispatcher's table entry, as InterfaceLib's glue does (`TRAP_GLUE`;
+   logged and answered 0 while Executor's own dispatcher is still there).
+   DragLib (39, all of the Drag Manager's): Apple's 68k Drag Manager in
+   the System answers them. DragTest (`tests/guest/drag`, Retro68
+   PowerPC: a drag made, flavors added and read back, bounds, disposed)
+   passes 14/14 on Executor 7.6.1 and on the G3 with 7.6.1 and 9.0.4
+   (`drag_ppc_executor_761`, `drag_rom_ppc_761`, `drag_rom_ppc_904`).
+   The 8.6 Finder's unresolved imports: 202 → 173. Left: plain traps
+   (`InsXTime`).
 3. **The System's `'nlib'`s.** Register the System file's native
    libraries with CFM at startup, as the System does (TextCommon,
    UnicodeConverter, Math64Lib, ...), each one checked: Apple's code or
