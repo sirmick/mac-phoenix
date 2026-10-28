@@ -1090,6 +1090,37 @@
 
 # ####
 
+- only-for: Executor
+  dispatcher:
+    name: HeapDispatch
+    trap: 0xA0A4
+    selector-location: D0W
+    comment: |
+      MacPhoenix: the Memory Manager's private dispatcher (8.x), called
+      through the OS trap table by the System's PowerPC libraries
+      (ATSSupport: CallOSTrapUniversalProc on the table's $A0A4 entry,
+      kD0DispatchedPascalStackBased). Not in Apple's headers; only the
+      selector seen called is answered, the others logged as missing.
+
+# ####
+
+# Selector $20, no arguments: a heap for system-wide allocations that
+# isn't the application's: ATSSupport makes it the current zone to
+# allocate a 256 KB cache, and falls back to the system heap when that
+# fails. Executor answers the Process Manager's zone (temporary memory),
+# where the System file's fragments go too.
+- only-for: Executor
+  function:
+    name: HeapDispatchSharedZone
+    return: THz
+    trap: 0xA0A4
+    dispatcher: HeapDispatch
+    selector: 0x0020
+    executor: C_
+    export: false
+
+# ####
+
 - dispatcher:
     name: MemoryDispatch
     trap: 0xA05C

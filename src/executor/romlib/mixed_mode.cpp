@@ -8,6 +8,7 @@
 #include <MemoryMgr.h>
 
 #include <MixedMode.h>
+#include <OSUtil.h>
 #include <rsys/cfm.h>
 #include <base/builtinlibs.h>
 
@@ -412,6 +413,21 @@ static uint32_t mode_switch(UniversalProcPtr theProcPtr, ProcInfoType procinfo,
         retval = call_cfm68k_routine(routine->procDescriptor, nParameters, paramValues)
             & regmask[resultSize];
     }
+    else if(fromISA == kPowerPCISA
+            && ptr_to_longint(routine->procDescriptor) == tooltraptable[_Unimplemented & 0x3FF])
+    {
+        /* MacPhoenix: PowerPC code calling a trap Executor lacks by its
+           address (the System's libraries read the OS trap table in low
+           memory: _HeapDispatch at $0690). _Unimplemented would stop the
+           session without saying which; logged with what there is, and
+           answered paramErr, as a dispatcher answers a selector it lacks. */
+        char what[160];
+        snprintf(what, sizeof what,
+                 "trap through its address from PowerPC (procInfo $%08x, first argument $%x, caller $%08x): answered paramErr",
+                 (unsigned)procinfo, nParameters ? (unsigned)paramValues[0] : 0u, (unsigned)cpu.lr);
+        traps::log_unimplemented(what);
+        retval = (uint32_t)(int32_t)paramErr & regmask[resultSize];
+    }
     else
     {
         EM_A7 = stackPointer;
@@ -528,6 +544,11 @@ uint32_t Executor::ROMlib_cfm68k_call_universal_proc(UniversalProcPtr theProcPtr
 }
 
 LONGINT Executor::C_CallUniversalProc(UniversalProcPtr theProcPtr, ProcInfoType procInfo)
+{
+    return ModeSwitch(theProcPtr, procInfo, kPowerPCISA);
+}
+
+LONGINT Executor::C_CallOSTrapUniversalProc(UniversalProcPtr theProcPtr, ProcInfoType procInfo)
 {
     return ModeSwitch(theProcPtr, procInfo, kPowerPCISA);
 }

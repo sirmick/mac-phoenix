@@ -153,6 +153,11 @@ OSErr C_RestoreMixedModeState(void *statep, uint32_t vers);PASCAL_SUBTRAP(Restor
 LONGINT C_CallUniversalProc(UniversalProcPtr theProcPtr, ProcInfoType procInfo);NOTRAP_FUNCTION(CallUniversalProc);
 
 
+// As CallUniversalProc, the variable arguments come from the PowerPC
+// stack (CFM-68K callers: mixed_mode.cpp's entry).
+LONGINT C_CallOSTrapUniversalProc(UniversalProcPtr theProcPtr, ProcInfoType procInfo);NOTRAP_FUNCTION(CallOSTrapUniversalProc);
+
+
 BEGIN_EXECUTOR_ONLY
 extern uint32_t ModeSwitch(UniversalProcPtr theProcPtr, ProcInfoType procInfo, ISAType fromISA);
 END_EXECUTOR_ONLY

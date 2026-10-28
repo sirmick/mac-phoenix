@@ -431,6 +431,36 @@
 
 # ####
 
+# CallUniversalProc for a 68k OS trap's routine (Inside Macintosh: PowerPC
+# System Software, "Mixed Mode Manager"): the routine is called as the OS
+# trap dispatcher calls it, which keeps A1, D1 and D2 for the caller. The
+# PowerPC caller sees none of the 68k registers, so it is CallUniversalProc.
+- not-for: executor
+  function:
+    name: CallOSTrapUniversalProc
+    return: LONGINT
+    args:
+      - name: theProcPtr
+        type: UniversalProcPtr
+      - name: procInfo
+        type: ProcInfoType
+      - type: ...
+- only-for: executor
+  function:
+    name: CallOSTrapUniversalProc
+    executor: C_
+    comment: |
+      As CallUniversalProc, the variable arguments come from the PowerPC
+      stack (CFM-68K callers: mixed_mode.cpp's entry).
+    return: LONGINT
+    args:
+      - name: theProcPtr
+        type: UniversalProcPtr
+      - name: procInfo
+        type: ProcInfoType
+
+# ####
+
 - only-for: Executor
   verbatim: |
     extern uint32_t ModeSwitch(UniversalProcPtr theProcPtr, ProcInfoType procInfo, ISAType fromISA);

@@ -457,7 +457,10 @@ class ExecutorGenerator < Generator
                 @out << ");\n"
             end
         elsif fun["selector"] then
-            @out << "PASCAL_SUBTRAP(#{name}, #{hexlit(trap)}, "
+            # `export: false`: the trap's selector only, not an InterfaceLib
+            # export (a private call Apple's headers don't name).
+            @out << (fun["export"] == false ? "PASCAL_SUBTRAP_UNEXPORTED(" : "PASCAL_SUBTRAP(")
+            @out << "#{name}, #{hexlit(trap)}, "
             @out << "#{hexlit(fun["selector"])}, #{hexlit(fun["dispatcher"])});\n"
         elsif trap then
             if name == cname then

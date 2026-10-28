@@ -113,3 +113,10 @@ void Executor::C_TempDisposeHandle(Handle h, GUEST<OSErr> *result_code)
     DisposeHandle(h);
     *result_code = LM(MemErr);
 }
+
+/* MacPhoenix: _HeapDispatch selector $20 (MemoryMgr.yaml): the heap for
+   system-wide allocations, the Process Manager's zone. */
+THz Executor::C_HeapDispatchSharedZone()
+{
+    return ROMlib_pm_zone ? ROMlib_pm_zone : (THz)LM(SysZone);
+}

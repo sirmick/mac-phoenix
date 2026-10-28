@@ -281,6 +281,19 @@ Next, in order:
       `SysZoneFloatSizes`, `MakeExecutable`: nothing to do on Executor).
    d. The rest of the tables, with a test program where the behaviour
       isn't obvious.
+
+   Found on the way (2026-10-28): the System's PowerPC libraries call 68k
+   traps through the trap tables in low memory (OS traps at $0400, Toolbox
+   traps at $0E00: ATSSupport reads $0690, `_HeapDispatch`; CollectionsLib
+   $1DD8, `_CollectionMgr`) with `CallOSTrapUniversalProc` /
+   `CallUniversalProc`. Done: `CallOSTrapUniversalProc` (MixedMode.yaml);
+   `_HeapDispatch` selector $20 (a heap for system-wide allocations, from
+   how ATSSupport uses it: Executor answers temporary memory;
+   `export: false`, the name being ours); Mixed Mode logs a PowerPC call to
+   a trap Executor lacks (procInfo, first argument, caller) and answers
+   paramErr instead of `_Unimplemented`'s fatal alert. Next there: the
+   Collection Manager (`_CollectionMgr`, $ABF6; Inside Macintosh: More
+   Macintosh Toolbox; System 7.5 and later).
 7. **The Finder running**, with the add-on libraries selectable per
    library: Executor's (once finished) or Apple's from the System file.
    Executor keeps the managers 8.x's System replaces the ROM's with

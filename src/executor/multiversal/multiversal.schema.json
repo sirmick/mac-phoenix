@@ -138,6 +138,7 @@
                 "returnreg": { "$ref": "#/definitions/reg" },
                 "variants": { "type": "array", "items": { "type": ["string", "null"] }},
                 "executor_extras": { "type": "string" },
+                "export": { "type": "boolean" },
                 "m68k-inline": { "type": "array", "items": { "type": "integer" }},
                 "dispatcher": { "type": "string" },
                 "selector": { "type": "integer" },

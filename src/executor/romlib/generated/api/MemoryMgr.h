@@ -440,6 +440,17 @@ void C_TempHUnlock(Handle h, GUEST<OSErr> *result_code);PASCAL_SUBTRAP(TempHUnlo
 void C_TempDisposeHandle(Handle h, GUEST<OSErr> *result_code);PASCAL_SUBTRAP(TempDisposeHandle, 0xA88F, 0x0020, OSDispatch);
 
 
+// MacPhoenix: the Memory Manager's private dispatcher (8.x), called
+// through the OS trap table by the System's PowerPC libraries
+// (ATSSupport: CallOSTrapUniversalProc on the table's $A0A4 entry,
+// kD0DispatchedPascalStackBased). Not in Apple's headers; only the
+// selector seen called is answered, the others logged as missing.
+DISPATCHER_TRAP(HeapDispatch, 0xA0A4, D0W);
+
+
+THz C_HeapDispatchSharedZone();PASCAL_SUBTRAP_UNEXPORTED(HeapDispatchSharedZone, 0xA0A4, 0x0020, HeapDispatch);
+
+
 // MacPhoenix: the virtual memory calls. There is no virtual memory, so
 // holding and locking succeed and do nothing, as on a Mac with it off
 // (Warcraft II holds its sound buffers).
