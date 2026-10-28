@@ -269,9 +269,11 @@ void C_SetDialogItemText(Handle item, ConstStringPtr text);PASCAL_TRAP(SetDialog
 void C_SelectDialogItemText(DialogPtr dp, INTEGER itemno, INTEGER start, INTEGER stop);PASCAL_TRAP(SelectDialogItemText, 0xA97E);
 
 
-INTEGER GetAlertStage();
+INTEGER GetAlertStage();NOTRAP_FUNCTION2(GetAlertStage);
 
-void ResetAlertStage();
+
+void ResetAlertStage();NOTRAP_FUNCTION2(ResetAlertStage);
+
 
 void C_HideDialogItem(DialogPtr dp, INTEGER item);PASCAL_TRAP(HideDialogItem, 0xA827);
 
@@ -280,6 +282,9 @@ void C_ShowDialogItem(DialogPtr dp, INTEGER item);PASCAL_TRAP(ShowDialogItem, 0x
 
 
 DialogPtr C_NewColorDialog(void *, const Rect *, ConstStringPtr , Boolean , INTEGER , WindowPtr , Boolean , LONGINT , Handle );PASCAL_TRAP(NewColorDialog, 0xAA4B);
+
+
+Boolean StdFilterProc(DialogPtr dp, EventRecord *evt, GUEST<INTEGER> *item);NOTRAP_FUNCTION2(StdFilterProc);
 
 
 OSErr C_GetStdFilterProc(GUEST<ProcPtr> *proc);PASCAL_SUBTRAP(GetStdFilterProc, 0xAA68, 0x0203, DialogDispatch);

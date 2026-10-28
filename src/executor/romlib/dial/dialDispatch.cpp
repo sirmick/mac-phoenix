@@ -29,6 +29,12 @@ void Executor::ROMlib_dialog_forget(DialogPtr dialog)
     cancel_items.erase(dialog);
 }
 
+/* The standard filter, called directly (InterfaceLib exports it). */
+Boolean Executor::StdFilterProc(DialogPtr dp, EventRecord *evt, GUEST<INTEGER> *item)
+{
+    return C_ROMlib_myfilt(dp, evt, item);
+}
+
 /* traps from the DialogDispatch trap */
 
 OSErr Executor::C_GetStdFilterProc(GUEST<ProcPtr> *proc)
