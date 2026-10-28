@@ -258,6 +258,38 @@ private:
     const char *library;
 };
 
+/* ... and a routine of an ASLM function set that PowerPC code binds
+   through ASLM itself (`aslm:` without `library:`, LibraryManager.yaml):
+   registered with Executor's PowerPC binder (opentransport/ot_slm_ppc.cpp)
+   by its set and index, typed like a library export. */
+template<typename F, F* fptr>
+class ASLMFunction {};
+
+template<typename Ret, typename... Args, Ret (*fptr)(Args...)>
+class ASLMFunction<Ret (Args...), fptr> : public internal::DeferredInit
+{
+public:
+    ASLMFunction(const char *name, const char *set, unsigned index)
+        : name(name), set(set), index(index) {}
+    virtual void init() override;
+
+    const char *name, *set;
+    unsigned index;
+};
+
+/* ... and one that handles the PowerPC registers itself (`raw: true`):
+   its code registers it; the definitions say it is there. */
+class ASLMRawExport : public internal::DeferredInit
+{
+public:
+    ASLMRawExport(const char *name, const char *set, unsigned index)
+        : name(name), set(set), index(index) {}
+    virtual void init() override;
+private:
+    const char *name, *set;
+    unsigned index;
+};
+
 /* ... and one of Open Transport's (`aslm:` in the definitions): 68k code
    binds it through the Shared Library Manager by its function set and that
    set's name for it, PowerPC code imports it from `library`. The routine
@@ -330,6 +362,10 @@ public:
     extern Executor::traps::OTFunction NAME
 #define EXTERN_LIBRARY_RAW(NAME, INIT) \
     extern Executor::traps::LibraryRawExport NAME
+#define EXTERN_ASLM_FUNCTION(NAME, INIT, ...) \
+    extern Executor::traps::__VA_ARGS__ NAME
+#define EXTERN_ASLM_RAW(NAME, INIT) \
+    extern Executor::traps::ASLMRawExport NAME
 #define DEFINE_FUNCTION_WRAPPER(NAME, FPTR, INIT, ...) \
     Executor::traps::__VA_ARGS__ NAME INIT;   \
     template class Executor::traps::__VA_ARGS__;
@@ -346,6 +382,10 @@ public:
     Executor::traps::OTFunction NAME INIT
 #define DEFINE_LIBRARY_RAW(NAME, INIT) \
     Executor::traps::LibraryRawExport NAME INIT
+#define DEFINE_ASLM_FUNCTION(NAME, INIT, ...) \
+    Executor::traps::__VA_ARGS__ NAME INIT
+#define DEFINE_ASLM_RAW(NAME, INIT) \
+    Executor::traps::ASLMRawExport NAME INIT
 
 #ifndef TRAP_INSTANTIATION
 #define TRAP_INSTANTIATION EXTERN
@@ -358,6 +398,8 @@ public:
 #define CREATE_LIBRARY_FUNCTION PREPROCESSOR_CONCAT(TRAP_INSTANTIATION, _LIBRARY_FUNCTION)
 #define CREATE_LIBRARY_RAW PREPROCESSOR_CONCAT(TRAP_INSTANTIATION, _LIBRARY_RAW)
 #define CREATE_OT_FUNCTION PREPROCESSOR_CONCAT(TRAP_INSTANTIATION, _OT_FUNCTION)
+#define CREATE_ASLM_FUNCTION PREPROCESSOR_CONCAT(TRAP_INSTANTIATION, _ASLM_FUNCTION)
+#define CREATE_ASLM_RAW PREPROCESSOR_CONCAT(TRAP_INSTANTIATION, _ASLM_RAW)
 #define CREATE_COMPONENT_CALL PREPROCESSOR_CONCAT(TRAP_INSTANTIATION, _COMPONENT_CALL)
 #define CREATE_COMPONENT_FUNCTION PREPROCESSOR_CONCAT(TRAP_INSTANTIATION, _COMPONENT_FUNCTION)
 
@@ -386,6 +428,10 @@ public:
     CREATE_OT_FUNCTION(lib_##LIB##_##NAME, (#NAME, #LIB, SET, SETNAME, PASCAL, SIG, RET, &ot::IMPL))
 #define LIBRARY_RAW(LIB, NAME) \
     CREATE_LIBRARY_RAW(lib_##LIB##_##NAME, (#NAME, #LIB))
+#define ASLM_FUNCTION(SET, INDEX, NAME, IMPL) \
+    CREATE_ASLM_FUNCTION(aslm_##NAME, (#NAME, SET, INDEX), ASLMFunction<decltype(IMPL) COMMA &IMPL>)
+#define ASLM_RAW(SET, INDEX, NAME) \
+    CREATE_ASLM_RAW(aslm_##NAME, (#NAME, SET, INDEX))
 
 #define NOTRAP_FUNCTION(NAME) \
     CREATE_FUNCTION_WRAPPER(NAME, &C_##NAME, (#NAME, "InterfaceLib"), WrappedFunction<decltype(C_##NAME) COMMA &C_##NAME>)

@@ -62,6 +62,11 @@ void traps::LibraryRawExport::init()
     builtinlibs::expectRawExport(library, name);
 }
 
+void traps::ASLMRawExport::init()
+{
+    builtinlibs::expectASLMRawEntrypoint(set, index, name);
+}
+
 uint32_t traps::Entrypoint::break68K(uint32_t addr)
 {
     if(base::Debugger::instance)

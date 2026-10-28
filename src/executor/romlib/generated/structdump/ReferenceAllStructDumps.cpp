@@ -41,6 +41,7 @@ void registerStructDumps_MenuMgr();
 void registerStructDumps_HelpMgr();
 void registerStructDumps_Iconutil();
 void registerStructDumps_IntlUtil();
+void registerStructDumps_LibraryManager();
 void registerStructDumps_ListMgr();
 void registerStructDumps_LowMem();
 void registerStructDumps_MPW();
@@ -122,6 +123,7 @@ void registerAllStructDumps()
     registerStructDumps_HelpMgr();
     registerStructDumps_Iconutil();
     registerStructDumps_IntlUtil();
+    registerStructDumps_LibraryManager();
     registerStructDumps_ListMgr();
     registerStructDumps_LowMem();
     registerStructDumps_MPW();
