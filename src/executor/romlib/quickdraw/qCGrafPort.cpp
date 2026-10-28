@@ -3,6 +3,7 @@
  */
 
 #include <base/common.h>
+#include <SysErr.h>
 #include <QuickDraw.h>
 #include <CQuickDraw.h>
 #include <MemoryMgr.h>
@@ -308,6 +309,10 @@ void Executor::C_OpColor(RGBColor *color)
 
 void Executor::C_HiliteColor(RGBColor *color)
 {
+    /* MacPhoenix: nothing before InitGraf (8.x's AppearanceLib, prepared
+       when the Finder loads it, calls it before the Finder's InitGraf). */
+    if(LM(QDExist) != EXIST_YES || !color)
+        return;
     if(!CGrafPort_p(qdGlobals().thePort))
         return;
 

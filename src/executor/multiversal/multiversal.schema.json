@@ -180,6 +180,7 @@
                 "name": { "type": "string" },
                 "type": { "type": "string" },
                 "address": { "type": "integer" },
+                "library": { "type": "string" },
                 "comment": { "type": "string" }
             },
             "additionalProperties": false,

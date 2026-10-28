@@ -86,6 +86,10 @@ name, in which calling convention:
   registered, or registered but not declared (`LIBRARY_RAW`).
 - `executor:` names the C++ routine as for traps (`c_` prefix + name, or
   the whole name, so aliases share one: `_memcpy` is `c_memcpy`).
+- A `lowmem:` entry's `LMGetX`/`LMSetX` are InterfaceLib's; `library:`
+  names another (`ExpandMem`'s are PrivateInterfaceLib's).
+- A trap's selector a private call reaches, under a name of ours, is
+  `export: false` (`_HeapDispatch` $20): the selector, no export.
 - A library's exported variable is a `- data:` entry: name, type,
   `library:`, and `executor:` naming a getter (`void *data_NAME()`; `true`
   for that name) that gives its guest-addressable storage, asked for once

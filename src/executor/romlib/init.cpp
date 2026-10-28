@@ -419,7 +419,7 @@ void Executor::InitPerProcessLowMem()
         JShieldCursor,
         JSetCrsr,
         JCrsrObscure,
-        AE_info,
+        ExpandMem,
         KeyMap
         
         // if it ever becomes a LoMem global: DefDirID

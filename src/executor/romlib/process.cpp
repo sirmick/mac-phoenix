@@ -388,8 +388,8 @@ static void save_world(process_info_t *p)
         p->host.insert(p->host.end(), (uint8_t *)v.p, (uint8_t *)v.p + v.n);
     if(ROMlib_ae_private())
         p->ae_tables = ROMlib_ae_private()->appl_zone_tables;
-    if(LM(AE_info))
-        p->guest_ae_tables = LM(AE_info)->appl_zone_tables;
+    if(LM(ExpandMem))
+        p->guest_ae_tables = LM(ExpandMem)->appl_zone_tables;
 }
 
 static void restore_world(process_info_t *p)
@@ -411,8 +411,8 @@ static void restore_world(process_info_t *p)
     }
     if(ROMlib_ae_private())
         ROMlib_ae_private()->appl_zone_tables = p->ae_tables;
-    if(LM(AE_info))
-        LM(AE_info)->appl_zone_tables = p->guest_ae_tables;
+    if(LM(ExpandMem))
+        LM(ExpandMem)->appl_zone_tables = p->guest_ae_tables;
 }
 
 /* A new process's world: low memory and CPU as the first process had them
@@ -426,8 +426,8 @@ static void fresh_world(process_info_t *p)
         memset(v.p, 0, v.n);
     if(ROMlib_ae_private())
         ROMlib_ae_private()->appl_zone_tables = nullptr;
-    if(LM(AE_info))
-        LM(AE_info)->appl_zone_tables = nullptr;
+    if(LM(ExpandMem))
+        LM(ExpandMem)->appl_zone_tables = nullptr;
 }
 
 void Executor::process_capture_template()

@@ -120,3 +120,15 @@ THz Executor::C_HeapDispatchSharedZone()
 {
     return ROMlib_pm_zone ? ROMlib_pm_zone : (THz)LM(SysZone);
 }
+
+/* MacPhoenix: BlockZero, BlockZeroUncached (MemoryMgr.yaml). */
+void Executor::C_BlockZero(void *destPtr, Size byteCount)
+{
+    if(destPtr && byteCount > 0)
+        memset(destPtr, 0, byteCount);
+}
+
+void Executor::C_BlockZeroUncached(void *destPtr, Size byteCount)
+{
+    C_BlockZero(destPtr, byteCount);
+}

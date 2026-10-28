@@ -451,6 +451,12 @@ DISPATCHER_TRAP(HeapDispatch, 0xA0A4, D0W);
 THz C_HeapDispatchSharedZone();PASCAL_SUBTRAP_UNEXPORTED(HeapDispatchSharedZone, 0xA0A4, 0x0020, HeapDispatch);
 
 
+void C_BlockZero(void *destPtr, Size byteCount);NOTRAP_FUNCTION(BlockZero);
+
+
+void C_BlockZeroUncached(void *destPtr, Size byteCount);NOTRAP_FUNCTION(BlockZeroUncached);
+
+
 // MacPhoenix: the virtual memory calls. There is no virtual memory, so
 // holding and locking succeed and do nothing, as on a Mac with it off
 // (Warcraft II holds its sound buffers).

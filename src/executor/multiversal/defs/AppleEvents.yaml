@@ -899,11 +899,14 @@
 # ####
 
 - lowmem:
-    name: AE_info
+    name: ExpandMem
     type: AE_info_ptr
     address: 0x2B6
+    library: PrivateInterfaceLib
     comment: |
-      AppleEvents AEGizmo (true);
+      ExpandMem, the System's extended low memory (Executor's record of
+      it: AE_info_t). Its accessors are PrivateInterfaceLib's (8.x's
+      libraries import LMGetExpandMem from there).
 
 # ####
 

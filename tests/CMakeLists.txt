@@ -953,6 +953,29 @@ foreach(cell IN ITEMS "threads_ppc_executor_761;--backend executor;18982;guest;7
   )
 endforeach()
 
+# The Collection Manager from PowerPC code (CollectionsLib) by
+# CollectionTest (tests/guest/collections, Retro68): Executor's
+# (collections.cpp), and Apple's on the G3 with 9.0.4 (7.6.1 has none).
+foreach(cell IN ITEMS "collections_ppc_executor_761;--backend executor;7.6.1;18986;guest;761;executor"
+                      "collections_rom_ppc_904;--backend kpx --core mame-ppc --jit;9.0.4;18988;guest;mame")
+  list(GET cell 0 name)
+  list(GET cell 1 backend)
+  list(GET cell 2 os)
+  list(GET cell 3 port)
+  list(SUBLIST cell 4 -1 labels)
+  separate_arguments(backend_args UNIX_COMMAND "${backend}")
+  add_test(
+    NAME ${name}
+    COMMAND bash ${TEST_DIR}/test_guest_suite.sh ${backend_args} --os-version ${os} --app ${CMAKE_SOURCE_DIR}/tests/guest/collections/CollectionTestPPC.bin --results collection_results.txt --network none --timeout 150 --port ${port}
+  )
+  set_tests_properties(${name} PROPERTIES
+    TIMEOUT 230
+    LABELS "${labels}"
+    SKIP_RETURN_CODE 77
+    ENVIRONMENT "MACEMU_ROM=${TEST_PPC_ROM}"
+  )
+endforeach()
+
 # Thread Manager through Frontier's UserTalk threads (process.cpp).
 add_test(
   NAME threads_executor

@@ -20,6 +20,7 @@ void registerStructDumps_BinaryDecimal();
 void registerStructDumps_WindowMgr();
 void registerStructDumps_CQuickDraw();
 void registerStructDumps_CodeFragments();
+void registerStructDumps_Collections();
 void registerStructDumps_CommTool();
 void registerStructDumps_ControlMgr();
 void registerStructDumps_DeskMgr();
@@ -103,6 +104,7 @@ void registerAllStructDumps()
     registerStructDumps_WindowMgr();
     registerStructDumps_CQuickDraw();
     registerStructDumps_CodeFragments();
+    registerStructDumps_Collections();
     registerStructDumps_CommTool();
     registerStructDumps_ControlMgr();
     registerStructDumps_DeskMgr();

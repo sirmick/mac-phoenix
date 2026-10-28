@@ -1,0 +1,754 @@
+# MacPhoenix: the Collection Manager (Inside Macintosh: QuickDraw GX
+# Environment and Utilities, "Collection Manager"), from Universal
+# Interfaces' Collections.h and Collections.r. A collection is a set of items
+# keyed by tag and ID, each with data and attribute bits, that can be
+# flattened to a stream ('flac'). On a Mac it is the System's code behind
+# _CollectionMgr ($ABF6, 8.x: the native Collections fragment), PowerPC
+# code reaching it through CollectionsLib's glue; Executor implements it in
+# C++ (collections.cpp) and exports CollectionsLib's routines.
+
+- dispatcher:
+    name: CollectionMgr
+    trap: 0xABF6
+    selector-location: D0<0xFF>
+    comment: |
+      The selector in D0 (TWOWORDINLINE(0x70nn, 0xABF6): moveq #nn, D0),
+      Pascal arguments on the stack.
+
+# ####
+
+- struct:
+    name: OpaqueCollection
+
+- typedef:
+    name: Collection
+    type: OpaqueCollection*
+
+- typedef:
+    name: CollectionTag
+    type: OSType
+
+# ####
+
+- enum:
+    values:
+      - name: kCollectionDontWantTag
+        value: 0
+      - name: kCollectionDontWantId
+        value: 0
+      - name: kCollectionDontWantSize
+        value: 0
+      - name: kCollectionDontWantAttributes
+        value: 0
+      - name: kCollectionDontWantIndex
+        value: 0
+      - name: kCollectionDontWantData
+        value: 0
+
+- enum:
+    values:
+      - name: kCollectionNoAttributes
+        value: 0x00000000
+      - name: kCollectionAllAttributes
+        value: -1
+      - name: kCollectionUserAttributes
+        value: 0x0000FFFF
+      - name: kCollectionDefaultAttributes
+        value: 0x40000000
+
+- enum:
+    values:
+      - name: kCollectionPersistenceBit
+        value: 30
+      - name: kCollectionLockBit
+        value: 31
+
+- enum:
+    values:
+      - name: kCollectionPersistenceMask
+        value: 0x40000000
+      - name: kCollectionLockMask
+        value: -2147483648
+
+- enum:
+    values:
+      - name: collectionItemLockedErr
+        value: -5750
+      - name: collectionItemNotFoundErr
+        value: -5751
+      - name: collectionIndexRangeErr
+        value: -5752
+      - name: collectionVersionErr
+        value: -5753
+
+# ####
+
+- funptr:
+    name: CollectionFlattenUPP
+    return: OSErr
+    args:
+      - name: size
+        type: LONGINT
+      - name: data
+        type: void*
+      - name: refCon
+        type: void*
+
+# ####
+
+- funptr:
+    name: CollectionExceptionUPP
+    return: OSErr
+    args:
+      - name: c
+        type: Collection
+      - name: status
+        type: OSErr
+
+# ####
+
+- function:
+    name: NewCollection
+    return: Collection
+    dispatcher: CollectionMgr
+    selector: 0x00
+    library: CollectionsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: DisposeCollection
+    args:
+      - name: c
+        type: Collection
+    dispatcher: CollectionMgr
+    selector: 0x01
+    library: CollectionsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: CloneCollection
+    return: Collection
+    args:
+      - name: c
+        type: Collection
+    dispatcher: CollectionMgr
+    selector: 0x02
+    library: CollectionsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: CountCollectionOwners
+    return: LONGINT
+    args:
+      - name: c
+        type: Collection
+    dispatcher: CollectionMgr
+    selector: 0x03
+    library: CollectionsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: CopyCollection
+    return: Collection
+    args:
+      - name: srcCollection
+        type: Collection
+      - name: dstCollection
+        type: Collection
+    dispatcher: CollectionMgr
+    selector: 0x04
+    library: CollectionsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: GetCollectionDefaultAttributes
+    return: LONGINT
+    args:
+      - name: c
+        type: Collection
+    dispatcher: CollectionMgr
+    selector: 0x05
+    library: CollectionsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: SetCollectionDefaultAttributes
+    args:
+      - name: c
+        type: Collection
+      - name: whichAttributes
+        type: LONGINT
+      - name: newAttributes
+        type: LONGINT
+    dispatcher: CollectionMgr
+    selector: 0x06
+    library: CollectionsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: CountCollectionItems
+    return: LONGINT
+    args:
+      - name: c
+        type: Collection
+    dispatcher: CollectionMgr
+    selector: 0x07
+    library: CollectionsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: AddCollectionItem
+    return: OSErr
+    args:
+      - name: c
+        type: Collection
+      - name: tag
+        type: CollectionTag
+      - name: id
+        type: LONGINT
+      - name: itemSize
+        type: LONGINT
+      - name: itemData
+        type: const void*
+    dispatcher: CollectionMgr
+    selector: 0x08
+    library: CollectionsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: GetCollectionItem
+    return: OSErr
+    args:
+      - name: c
+        type: Collection
+      - name: tag
+        type: CollectionTag
+      - name: id
+        type: LONGINT
+      - name: itemSize
+        type: LONGINT*
+      - name: itemData
+        type: void*
+    dispatcher: CollectionMgr
+    selector: 0x09
+    library: CollectionsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: RemoveCollectionItem
+    return: OSErr
+    args:
+      - name: c
+        type: Collection
+      - name: tag
+        type: CollectionTag
+      - name: id
+        type: LONGINT
+    dispatcher: CollectionMgr
+    selector: 0x0A
+    library: CollectionsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: SetCollectionItemInfo
+    return: OSErr
+    args:
+      - name: c
+        type: Collection
+      - name: tag
+        type: CollectionTag
+      - name: id
+        type: LONGINT
+      - name: whichAttributes
+        type: LONGINT
+      - name: newAttributes
+        type: LONGINT
+    dispatcher: CollectionMgr
+    selector: 0x0B
+    library: CollectionsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: GetCollectionItemInfo
+    return: OSErr
+    args:
+      - name: c
+        type: Collection
+      - name: tag
+        type: CollectionTag
+      - name: id
+        type: LONGINT
+      - name: index
+        type: LONGINT*
+      - name: itemSize
+        type: LONGINT*
+      - name: attributes
+        type: LONGINT*
+    dispatcher: CollectionMgr
+    selector: 0x0C
+    library: CollectionsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: ReplaceIndexedCollectionItem
+    return: OSErr
+    args:
+      - name: c
+        type: Collection
+      - name: index
+        type: LONGINT
+      - name: itemSize
+        type: LONGINT
+      - name: itemData
+        type: const void*
+    dispatcher: CollectionMgr
+    selector: 0x0D
+    library: CollectionsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: GetIndexedCollectionItem
+    return: OSErr
+    args:
+      - name: c
+        type: Collection
+      - name: index
+        type: LONGINT
+      - name: itemSize
+        type: LONGINT*
+      - name: itemData
+        type: void*
+    dispatcher: CollectionMgr
+    selector: 0x0E
+    library: CollectionsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: RemoveIndexedCollectionItem
+    return: OSErr
+    args:
+      - name: c
+        type: Collection
+      - name: index
+        type: LONGINT
+    dispatcher: CollectionMgr
+    selector: 0x0F
+    library: CollectionsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: SetIndexedCollectionItemInfo
+    return: OSErr
+    args:
+      - name: c
+        type: Collection
+      - name: index
+        type: LONGINT
+      - name: whichAttributes
+        type: LONGINT
+      - name: newAttributes
+        type: LONGINT
+    dispatcher: CollectionMgr
+    selector: 0x10
+    library: CollectionsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: GetIndexedCollectionItemInfo
+    return: OSErr
+    args:
+      - name: c
+        type: Collection
+      - name: index
+        type: LONGINT
+      - name: tag
+        type: CollectionTag*
+      - name: id
+        type: LONGINT*
+      - name: itemSize
+        type: LONGINT*
+      - name: attributes
+        type: LONGINT*
+    dispatcher: CollectionMgr
+    selector: 0x11
+    library: CollectionsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: CollectionTagExists
+    return: Boolean
+    args:
+      - name: c
+        type: Collection
+      - name: tag
+        type: CollectionTag
+    dispatcher: CollectionMgr
+    selector: 0x12
+    library: CollectionsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: CountCollectionTags
+    return: LONGINT
+    args:
+      - name: c
+        type: Collection
+    dispatcher: CollectionMgr
+    selector: 0x13
+    library: CollectionsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: GetIndexedCollectionTag
+    return: OSErr
+    args:
+      - name: c
+        type: Collection
+      - name: tagIndex
+        type: LONGINT
+      - name: tag
+        type: CollectionTag*
+    dispatcher: CollectionMgr
+    selector: 0x14
+    library: CollectionsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: CountTaggedCollectionItems
+    return: LONGINT
+    args:
+      - name: c
+        type: Collection
+      - name: tag
+        type: CollectionTag
+    dispatcher: CollectionMgr
+    selector: 0x15
+    library: CollectionsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: GetTaggedCollectionItem
+    return: OSErr
+    args:
+      - name: c
+        type: Collection
+      - name: tag
+        type: CollectionTag
+      - name: whichItem
+        type: LONGINT
+      - name: itemSize
+        type: LONGINT*
+      - name: itemData
+        type: void*
+    dispatcher: CollectionMgr
+    selector: 0x16
+    library: CollectionsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: GetTaggedCollectionItemInfo
+    return: OSErr
+    args:
+      - name: c
+        type: Collection
+      - name: tag
+        type: CollectionTag
+      - name: whichItem
+        type: LONGINT
+      - name: id
+        type: LONGINT*
+      - name: index
+        type: LONGINT*
+      - name: itemSize
+        type: LONGINT*
+      - name: attributes
+        type: LONGINT*
+    dispatcher: CollectionMgr
+    selector: 0x17
+    library: CollectionsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: PurgeCollection
+    args:
+      - name: c
+        type: Collection
+      - name: whichAttributes
+        type: LONGINT
+      - name: matchingAttributes
+        type: LONGINT
+    dispatcher: CollectionMgr
+    selector: 0x18
+    library: CollectionsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: PurgeCollectionTag
+    args:
+      - name: c
+        type: Collection
+      - name: tag
+        type: CollectionTag
+    dispatcher: CollectionMgr
+    selector: 0x19
+    library: CollectionsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: EmptyCollection
+    args:
+      - name: c
+        type: Collection
+    dispatcher: CollectionMgr
+    selector: 0x1A
+    library: CollectionsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: FlattenCollection
+    return: OSErr
+    args:
+      - name: c
+        type: Collection
+      - name: flattenProc
+        type: CollectionFlattenUPP
+      - name: refCon
+        type: void*
+    dispatcher: CollectionMgr
+    selector: 0x1B
+    library: CollectionsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: FlattenPartialCollection
+    return: OSErr
+    args:
+      - name: c
+        type: Collection
+      - name: flattenProc
+        type: CollectionFlattenUPP
+      - name: refCon
+        type: void*
+      - name: whichAttributes
+        type: LONGINT
+      - name: matchingAttributes
+        type: LONGINT
+    dispatcher: CollectionMgr
+    selector: 0x1C
+    library: CollectionsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: UnflattenCollection
+    return: OSErr
+    args:
+      - name: c
+        type: Collection
+      - name: flattenProc
+        type: CollectionFlattenUPP
+      - name: refCon
+        type: void*
+    dispatcher: CollectionMgr
+    selector: 0x1D
+    library: CollectionsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: GetCollectionExceptionProc
+    return: CollectionExceptionUPP
+    args:
+      - name: c
+        type: Collection
+    dispatcher: CollectionMgr
+    selector: 0x1E
+    library: CollectionsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: SetCollectionExceptionProc
+    args:
+      - name: c
+        type: Collection
+      - name: exceptionProc
+        type: CollectionExceptionUPP
+    dispatcher: CollectionMgr
+    selector: 0x1F
+    library: CollectionsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: GetNewCollection
+    return: Collection
+    args:
+      - name: collectionID
+        type: INTEGER
+    dispatcher: CollectionMgr
+    selector: 0x20
+    library: CollectionsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: AddCollectionItemHdl
+    return: OSErr
+    args:
+      - name: aCollection
+        type: Collection
+      - name: tag
+        type: CollectionTag
+      - name: id
+        type: LONGINT
+      - name: itemData
+        type: Handle
+    dispatcher: CollectionMgr
+    selector: 0x21
+    library: CollectionsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: GetCollectionItemHdl
+    return: OSErr
+    args:
+      - name: aCollection
+        type: Collection
+      - name: tag
+        type: CollectionTag
+      - name: id
+        type: LONGINT
+      - name: itemData
+        type: Handle
+    dispatcher: CollectionMgr
+    selector: 0x22
+    library: CollectionsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: ReplaceIndexedCollectionItemHdl
+    return: OSErr
+    args:
+      - name: aCollection
+        type: Collection
+      - name: index
+        type: LONGINT
+      - name: itemData
+        type: Handle
+    dispatcher: CollectionMgr
+    selector: 0x23
+    library: CollectionsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: GetIndexedCollectionItemHdl
+    return: OSErr
+    args:
+      - name: aCollection
+        type: Collection
+      - name: index
+        type: LONGINT
+      - name: itemData
+        type: Handle
+    dispatcher: CollectionMgr
+    selector: 0x24
+    library: CollectionsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: FlattenCollectionToHdl
+    return: OSErr
+    args:
+      - name: aCollection
+        type: Collection
+      - name: flattened
+        type: Handle
+    dispatcher: CollectionMgr
+    selector: 0x25
+    library: CollectionsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: UnflattenCollectionFromHdl
+    return: OSErr
+    args:
+      - name: aCollection
+        type: Collection
+      - name: flattened
+        type: Handle
+    dispatcher: CollectionMgr
+    selector: 0x26
+    library: CollectionsLib
+    executor: C_

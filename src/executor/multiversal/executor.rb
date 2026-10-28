@@ -242,7 +242,7 @@ class ExecutorGenerator < Generator
             # from InterfaceLib like the others.
             ptype = decl($1 + "*")
             @out << "inline #{ptype} LMGet#{value["name"]}() { return ptr_from_longint<#{ptype}>(#{hexlit(value["address"])}); }\n"
-            @out << "NOTRAP_FUNCTION2(LMGet#{value["name"]});\n"
+            lowmem_export(value, "LMGet#{value["name"]}")
         else
             sz = size_of_type(value["type"])
 
@@ -253,8 +253,8 @@ class ExecutorGenerator < Generator
                 @out << "inline #{decl(value["type"])} LMGet#{value["name"]}() { return LM(#{value["name"]}); }\n"
                 @out << "inline void LMSet#{value["name"]}(#{decl(value["type"],"val")}) { LM(#{value["name"]}) = val; }\n"
             end
-            @out << "NOTRAP_FUNCTION2(LMGet#{value["name"]});\n"
-            @out << "NOTRAP_FUNCTION2(LMSet#{value["name"]});\n"
+            lowmem_export(value, "LMGet#{value["name"]}")
+            lowmem_export(value, "LMSet#{value["name"]}")
     end
 
     end
@@ -270,6 +270,17 @@ class ExecutorGenerator < Generator
             @out << " DATA_EXPORT(#{lib.gsub(/\W/, '_')}, \"#{lib}\", #{value["name"]}, #{getter});"
         end
         @out << "\n"
+    end
+
+    # MacPhoenix: a low-memory accessor's export: InterfaceLib's, or the
+    # library the definition names (`library:` PrivateInterfaceLib: the
+    # System's private globals, ExpandMem).
+    def lowmem_export(value, accessor)
+        if value["library"] then
+            @out << "LIBRARY_FUNCTION(#{value["library"]}, #{accessor}, #{accessor});\n"
+        else
+            @out << "NOTRAP_FUNCTION2(#{accessor});\n"
+        end
     end
 
     def handle_regcall_conv(fun)

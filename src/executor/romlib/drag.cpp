@@ -395,7 +395,7 @@ void Executor::ROMlib_install_drag_manager()
 {
     if(!ROMlib_apple_system_file || !LM(SysMapHndl))
         return;
-    AE_info_t *em = LM(AE_info);
+    AE_info_t *em = LM(ExpandMem);
     if(!em)
         return;
     if(!pieces[0] && !load())

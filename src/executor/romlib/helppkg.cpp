@@ -79,7 +79,7 @@ enum
 
 uint8_t *globals()
 {
-    AE_info_t *em = LM(AE_info);
+    AE_info_t *em = LM(ExpandMem);
     return em ? (uint8_t *)(Ptr)em->emHelpGlobals : nullptr;
 }
 
@@ -163,7 +163,7 @@ void Executor::ROMlib_install_help_package()
         return;
     if(!package && !load())
         return;
-    AE_info_t *em = LM(AE_info);
+    AE_info_t *em = LM(ExpandMem);
     if(!em)
         return;
     if(!em->emHelpGlobals && !make_globals(em))

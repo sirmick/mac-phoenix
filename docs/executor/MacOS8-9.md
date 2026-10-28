@@ -291,9 +291,28 @@ Next, in order:
    how ATSSupport uses it: Executor answers temporary memory;
    `export: false`, the name being ours); Mixed Mode logs a PowerPC call to
    a trap Executor lacks (procInfo, first argument, caller) and answers
-   paramErr instead of `_Unimplemented`'s fatal alert. Next there: the
-   Collection Manager (`_CollectionMgr`, $ABF6; Inside Macintosh: More
-   Macintosh Toolbox; System 7.5 and later).
+   paramErr instead of `_Unimplemented`'s fatal alert.
+
+   The Collection Manager (done 2026-10-28; `_CollectionMgr` $ABF6,
+   CollectionsLib's 39 routines; Collections.yaml, collections.cpp,
+   docs/executor/CollectionManager.md). 7.6.1's System file has no
+   Collections or CollectionsLib (8.6's has both), and nothing on 7.x has
+   called $ABF6 on Executor: Apple's 8.x libraries, run as they are, bring
+   it in. CollectionTest (tests/guest/collections, Retro68 PowerPC) passes
+   49/49 on Executor 7.6.1 and on the G3 with 9.0.4
+   (`collections_ppc_executor_761`, `collections_rom_ppc_904`); Apple's
+   9.0.4 settled what Inside Macintosh leaves open (items in tag and ID
+   order; replacing keeps the attributes; the lock protects the data only;
+   a flattened stream read through its offsets). Apple's 9.0.4 writes
+   wrong offsets for an item replaced by larger data; Executor's are right.
+
+   Then: `BlockZero` (MemoryMgr.yaml; its stub not zeroing ended in a
+   corrupted heap); `ExpandMem`'s accessors from PrivateInterfaceLib
+   (`library:` on a `lowmem:` entry; Executor called it `AE_info`);
+   `HiliteColor` before `InitGraf` does nothing (AppearanceLib, prepared
+   when the Finder loads it, calls it before the Finder's InitGraf). The
+   8.6 Finder then reaches its event loop, calling Window Manager 2.0's
+   and the Menu Manager's routines (step 7) on the way.
 7. **The Finder running**, with the add-on libraries selectable per
    library: Executor's (once finished) or Apple's from the System file.
    Executor keeps the managers 8.x's System replaces the ROM's with

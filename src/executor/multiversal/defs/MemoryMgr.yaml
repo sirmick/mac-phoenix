@@ -1121,6 +1121,30 @@
 
 # ####
 
+# BlockZero and BlockZeroUncached (Universal Interfaces' MacMemory.h):
+# InterfaceLib 8.5 and later, and DriverServicesLib; no trap.
+- function:
+    name: BlockZero
+    args:
+      - name: destPtr
+        type: void*
+      - name: byteCount
+        type: Size
+    executor: C_
+
+# ####
+
+- function:
+    name: BlockZeroUncached
+    args:
+      - name: destPtr
+        type: void*
+      - name: byteCount
+        type: Size
+    executor: C_
+
+# ####
+
 - dispatcher:
     name: MemoryDispatch
     trap: 0xA05C

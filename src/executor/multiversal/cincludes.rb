@@ -611,7 +611,7 @@ class CIncludesGenerator < Generator
             "DeskBus", "DiskInit", "Disks", "Displays", "Editions", "Finder",
             "Folders", "Lists", "MacTCP", "Movies", "Notification", "Packages",
             "Printing", "Retrace", "Scrap", "Script", "ShutDown", "Speech",
-            "TextCommon", "TextServices", "Threads", "Translation", "Video",
+            "TextCommon", "TextServices", "Threads", "Translation", "Video", "Collections",
             "OpenTransport", "OpenTptInternet", "OpenTptLinks"].each do |name|
             File.open("#{$options.output_dir}/CIncludes/#{name}.h", "w") do |f|
                 f << "#pragma once\n"

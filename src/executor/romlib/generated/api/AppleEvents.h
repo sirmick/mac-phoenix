@@ -376,12 +376,14 @@ formName = "name"_4,
 formUniqueID = "ID  "_4,
 };
 
-// AppleEvents AEGizmo (true);
-const LowMemGlobal<AE_info_ptr > AE_info{ 0x2B6 };
-inline AE_info_ptr  LMGetAE_info() { return LM(AE_info); }
-inline void LMSetAE_info(AE_info_ptr val) { LM(AE_info) = val; }
-NOTRAP_FUNCTION2(LMGetAE_info);
-NOTRAP_FUNCTION2(LMSetAE_info);
+// ExpandMem, the System's extended low memory (Executor's record of
+// it: AE_info_t). Its accessors are PrivateInterfaceLib's (8.x's
+// libraries import LMGetExpandMem from there).
+const LowMemGlobal<AE_info_ptr > ExpandMem{ 0x2B6 };
+inline AE_info_ptr  LMGetExpandMem() { return LM(ExpandMem); }
+inline void LMSetExpandMem(AE_info_ptr val) { LM(ExpandMem) = val; }
+LIBRARY_FUNCTION(PrivateInterfaceLib, LMGetExpandMem, LMGetExpandMem);
+LIBRARY_FUNCTION(PrivateInterfaceLib, LMSetExpandMem, LMSetExpandMem);
 
 
 // prototypes go here

@@ -47,7 +47,7 @@ void Executor::AE_init(void)
     em->sys_heap_reserve = 0x10000;
     /* MacPhoenix: ExpandMem's key cache, as the Script Manager sets it. */
     em->emKeyCache = ROMlib_kchr_ptr();
-    LM(AE_info) = em;
+    LM(ExpandMem) = em;
 
     info = (AE_info_t *)NewPtrSysClear(sizeof *info);
 
