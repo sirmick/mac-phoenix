@@ -60,6 +60,22 @@ neither, i.e. the system's own code (ROM, or the System file's patches).
 Loading "Memory Manager" (the Finder's `MMNewHeap` & co.) hangs
 `GetSharedLibrary` on both, so it is probed last.
 
+By version (LibProbe on the G3, extensions off, 7.6.1 too: the table
+the version gating of "One Toolbox for 7, 8 and 9" follows; numbers are
+exports):
+
+| | Libraries |
+|---|---|
+| On 7.6.1 already | InterfaceLib (2539), PrivateInterfaceLib (929), DragLib (40), ThreadsLib (33), ObjectSupportLib (13), Translation (34), NameRegistryLib (32), StdCLib, MathLib, SoundLib, QuickdrawLib, Math64Lib, DriverServicesLib, DriverLoaderLib, VideoServicesLib, CursorDevicesLib, ColorPickerLib, AppleGuideGlueLib, AppleScriptLib, Open Transport's, QuickTimeLib |
+| New in 8.x (8.6) | AppearanceLib, WindowsLib, ControlsLib, MenusLib, MacDialogsLib, IconServicesLib, FontManager, FontObjects, ToolboxUtils, NavigationLib, FoldersLib, CollectionsLib, ControlStripLib, ATSUnicodeLib, LocalesLib, TextCommon, UnicodeConverter, TextEncodingConverter, ContextualMenu, FileSharingLib, UTCUtils, StringCompare, DebugLib |
+| New in 9.0.4 | DesktopItemsLib, PPCToolbox, NumberFormatting |
+| Grown | PrivateInterfaceLib 929 → 1852 (9.0.4), Translation 34 → 58 and FontManager 77 → 114 (8.x), NameRegistryLib 32 → 70 (9.0.4) |
+
+So steps 1 and 2 below (ThreadsLib, ObjectSupportLib, PrivateInterfaceLib,
+DragLib) are libraries 7.x has too: Executor answers them on every
+System. The ones new in 8.x and 9 are to be found only when Executor runs
+that System (CFM answers "not found" on 7.x, as a 7.6.1 Mac does).
+
 LibProbe on Executor (as the start application, `--executor-app`, with
 8.6's and 9.0.4's System Folders and no extensions) loads 11 of these:
 InterfaceLib, StdCLib, MathLib, SoundLib, AppleScriptLib, OTClientLib,
