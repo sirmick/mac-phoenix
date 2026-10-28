@@ -41,28 +41,43 @@ the policy.
 
 ## Where the libraries come from
 
-What the Finder imports, by library (8.6 and 9.0.4 together), and who
-provides each on a real Old World 8.6/9 Mac:
+Measured on the G3 (mame-ppc) with Apple's 8.6 and 9.0.4, extensions off
+(Shift held through startup: `test_guest_suite.sh --hold-key 56`), by
+LibProbe (`tests/guest/libprobe`): for each library name, whether CFM has
+it loaded already, whether it loads, its exports and where its code is;
+then each one's source: the System file's `'nlib'` resources, an
+Extensions file's `'cfrg'` (CFM finds those with extensions off too), or
+neither, i.e. the system's own code (ROM, or the System file's patches).
 
-| Library | Unresolved | On a Mac | Executor |
+| Source | 8.6 | 9.0.4 | On Executor |
 |---|---|---|---|
-| InterfaceLib | 41 of 664 | ROM / System patches | Executor's |
-| AppearanceLib | 52 | ROM / System patches (Appearance Manager) | missing: not in the definitions |
-| PrivateInterfaceLib | 35 | same | 10 implemented, under InterfaceLib only |
-| DragLib | 29 | same | defined as `DragDispatch` traps; Apple's 68k Drag Manager answers them on 7.x; no PowerPC export |
-| IconServicesLib | 26 | same | missing |
-| Translation | 17 | same (Translation Manager / Easy Open) | missing |
-| WindowsLib | 17 | same (Window Manager 2.0) | missing (`InvalWindowRect` C side only) |
-| ThreadsLib | 14 | same | all 14 implemented, exported from InterfaceLib only |
-| ObjectSupportLib | 7 | same | all 7 implemented (CFM-68K only) |
-| ControlsLib, MenusLib, MacDialogsLib | 6, 5, 1 | same | missing (32-bit control values, menu item enabling, ...) |
-| Memory Manager (MM*), FontManager, FontObjects, ToolboxUtils, DesktopItemsLib | 5, 2, 2, 1, 1 | same | missing |
-| other fragments of the Finder | 11 | the Finder's own | `FragRelease`, `GetProcessTrapAddress`, AppleTalk (`ATEvent`, `MPPOpen`), `RealScript` |
-| SoundLib, TextCommon, UnicodeConverter, QuickdrawLib, Math64Lib, VideoServicesLib, PCCardLib, ... | — | `'nlib'` resources in the System file (21 on 8.6, 28 on 9.0.4) | not registered (SoundLib is Executor's since STRAGGLERS 69) |
-| ContextualMenu, FileSharingLib, ColorPickerLib, AppleGuideGlueLib, ... | — | Extensions (`'cfrg'`) | Apple's file, when the policy allows it |
+| ROM | InterfaceLib, PrivateInterfaceLib, NameRegistryLib | InterfaceLib | Executor's |
+| The system's own (no file) | AppearanceLib (217 exports), WindowsLib (129), ControlsLib (83), MenusLib (45), MacDialogsLib (6), DragLib (43), IconServicesLib (50), Translation (58), ThreadsLib (31), ObjectSupportLib (13), FontManager (77), FontObjects (41), ToolboxUtils (135), NavigationLib (19), FoldersLib (14), CollectionsLib (39), ControlStripLib (26), ATSUnicodeLib (101), LocalesLib (13), DriverServicesLib (224), DebugLib, StdCLib, MathLib | the same (AppearanceLib 218, WindowsLib 135, ControlsLib 99, MenusLib 50, MacDialogsLib 10, IconServicesLib 53, FontManager 114, FontObjects 67), and PrivateInterfaceLib (1852), NameRegistryLib (70), DesktopItemsLib (4), StringCompare, NumberFormatting | Executor's job: StdCLib and MathLib are; the rest are missing or under InterfaceLib only |
+| System file `'nlib'` | TextCommon, UnicodeConverter, SoundLib, QuickdrawLib, Math64Lib, VideoServicesLib, DriverLoaderLib, CursorDevicesLib, UTCUtils, StringCompare | the same and PPCToolbox, DebugLib (not StringCompare) | not registered (SoundLib is Executor's) |
+| Extensions file | ContextualMenu, FileSharingLib, ColorPickerLib, AppleGuideGlueLib, AppleScriptLib, OTClientLib & co., QuickTimeLib, TextEncodingConverter | the same | Apple's file when the policy allows it; OT's and AppleScriptLib's are Executor's |
+| Not there | DialogsLib, DesktopItemsLib, PCCard, PPCToolbox, CarbonLib (-2821) | DialogsLib, PCCard, CarbonLib | — |
 
-So the Toolbox libraries are Executor's job, as InterfaceLib is: what
-ships in files on 8.6/9 is extensions' and the System file's `'nlib'`s.
+Loading "Memory Manager" (the Finder's `MMNewHeap` & co.) hangs
+`GetSharedLibrary` on both, so it is probed last.
+
+LibProbe on Executor (as the start application, `--executor-app`, with
+8.6's and 9.0.4's System Folders and no extensions) loads 11 of these:
+InterfaceLib, StdCLib, MathLib, SoundLib, AppleScriptLib, OTClientLib,
+OTUtilityLib (Executor's), and FileSharingLib, TextCommon,
+UnicodeConverter, TextEncodingConverter (Apple's files in Extensions,
+found by CFM there). Everything in the "system's own" row is missing.
+
+What the Finder imports and Executor lacks, by library (8.6 and 9.0.4
+together): AppearanceLib 52, InterfaceLib 41 (of 664), PrivateInterfaceLib
+35 (10 implemented under InterfaceLib only), DragLib 29 (defined as
+`DragDispatch` traps, which Apple's 68k Drag Manager answers on 7.x; no
+PowerPC export), IconServicesLib 26, Translation 17, WindowsLib 17,
+ThreadsLib 14 (all implemented, exported from InterfaceLib only),
+ObjectSupportLib 7 (all implemented, CFM-68K only), ControlsLib 6,
+MenusLib 5, Memory Manager 5, FontManager 2, FontObjects 2, MacDialogsLib,
+ToolboxUtils, DesktopItemsLib 1 each, and 11 from the Finder's other
+fragments (`FragRelease`, `GetProcessTrapAddress`, AppleTalk's `ATEvent`
+and `MPPOpen`, `RealScript`).
 
 ## The work
 
@@ -106,5 +121,10 @@ ships in files on 8.6/9 is extensions' and the System file's `'nlib'`s.
 
 * `tools/macdecode/pef.py`: a PEF container's imports by library and
   symbol, TOC slots, an annotated PowerPC disassembly.
+* `tests/guest/libprobe` (LibProbe, Retro68 PowerPC, `build-retro68.sh`):
+  which libraries a system provides and where their code is;
+  `MACEMU_ROM=~/storage/roms/g3.rom tests/test_guest_suite.sh --backend kpx
+  --core mame-ppc --jit --image 8.6 --app tests/guest/libprobe/LibProbePPC.bin
+  --results libprobe.txt --hold-key 56` (Executor: `--backend executor`).
 * The unresolved imports of a session: `CFM: unresolved import NAME` in
   the log; calls to them: `[unimplemented] PowerPC NAME`.
