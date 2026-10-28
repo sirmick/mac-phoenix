@@ -551,3 +551,18 @@ Executor::PRNTOFPERR(INTEGER prn, OSErr *errp)
     *errp = err;
     return retval;
 }
+
+/* MacPhoenix: 8.x's volume notifications (FileMgr.yaml): a routine the
+   File Manager is to call when volumes come and go (procInfo $E0: Pascal,
+   an OSErr, one pointer: a block with an event code at 4 and the vRefNum
+   at 6, from how the 8.6 Finder reads it). Accepted; no notification is
+   sent yet (the Finder finds the mounted volumes in the VCB queue). */
+OSErr Executor::C_RequestVolumeNotification(UniversalProcPtr notifyProc, void *refCon)
+{
+    return noErr;
+}
+
+OSErr Executor::C_DeclineVolumeNotification(UniversalProcPtr notifyProc, void *refCon)
+{
+    return noErr;
+}

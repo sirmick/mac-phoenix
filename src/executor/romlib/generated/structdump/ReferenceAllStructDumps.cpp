@@ -4,12 +4,12 @@
 namespace Executor { namespace structdump {
 void registerStructDumps_ExMacTypes();
 void registerStructDumps_ADB();
+void registerStructDumps_MixedMode();
 void registerStructDumps_FileMgr();
 void registerStructDumps_AliasMgr();
 void registerStructDumps_EventMgr();
 void registerStructDumps_NotifyMgr();
 void registerStructDumps_AppleEvents();
-void registerStructDumps_MixedMode();
 void registerStructDumps_Components();
 void registerStructDumps_OSA();
 void registerStructDumps_QuickDraw();
@@ -89,12 +89,12 @@ void registerAllStructDumps()
 {
     registerStructDumps_ExMacTypes();
     registerStructDumps_ADB();
+    registerStructDumps_MixedMode();
     registerStructDumps_FileMgr();
     registerStructDumps_AliasMgr();
     registerStructDumps_EventMgr();
     registerStructDumps_NotifyMgr();
     registerStructDumps_AppleEvents();
-    registerStructDumps_MixedMode();
     registerStructDumps_Components();
     registerStructDumps_OSA();
     registerStructDumps_QuickDraw();

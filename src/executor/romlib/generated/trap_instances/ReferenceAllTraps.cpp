@@ -2,12 +2,12 @@ namespace Executor {
 namespace ReferenceTraps {
 void ExMacTypes();
 void ADB();
+void MixedMode();
 void FileMgr();
 void AliasMgr();
 void EventMgr();
 void NotifyMgr();
 void AppleEvents();
-void MixedMode();
 void Components();
 void OSA();
 void QuickDraw();
@@ -86,12 +86,12 @@ void VDriver();
 void ReferenceAllTraps() {
 ReferenceTraps::ExMacTypes();
 ReferenceTraps::ADB();
+ReferenceTraps::MixedMode();
 ReferenceTraps::FileMgr();
 ReferenceTraps::AliasMgr();
 ReferenceTraps::EventMgr();
 ReferenceTraps::NotifyMgr();
 ReferenceTraps::AppleEvents();
-ReferenceTraps::MixedMode();
 ReferenceTraps::Components();
 ReferenceTraps::OSA();
 ReferenceTraps::QuickDraw();

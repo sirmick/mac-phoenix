@@ -5787,3 +5787,34 @@
         value: -1423
       - name: errFSIteratorNotSupported
         value: -1424
+
+# ####
+
+# MacPhoenix: 8.x's volume notifications (PrivateInterfaceLib; not in
+# Apple's headers): the 8.6 Finder hands a routine and a refCon, and learns
+# of volumes through it. The signature is from its call.
+- only-for: Executor
+  function:
+    name: RequestVolumeNotification
+    return: OSErr
+    args:
+      - name: notifyProc
+        type: UniversalProcPtr
+      - name: refCon
+        type: void*
+    library: PrivateInterfaceLib
+    executor: C_
+
+# ####
+
+- only-for: Executor
+  function:
+    name: DeclineVolumeNotification
+    return: OSErr
+    args:
+      - name: notifyProc
+        type: UniversalProcPtr
+      - name: refCon
+        type: void*
+    library: PrivateInterfaceLib
+    executor: C_

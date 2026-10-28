@@ -370,6 +370,18 @@ Next, in order:
    GetIconRefByName, the PPC Toolbox, ...). Also Window Manager 2.0's
    InvalWindowRect/Rgn and ValidWindowRect/Rgn (WindowsLib, found on 8.x
    only).
+
+   Where the desktop stands (2026-10-28): the Finder finds the mounted
+   volumes in the VCB queue (GetVCBQHdr; volumes -1 and -2), registers
+   for volume notifications (RequestVolumeNotification: a routine,
+   procInfo $E0, given a block with an event code at 4 and the vRefNum at
+   6; accepted, nothing sent yet), gets the startup disk's icon
+   (GetIconRefFromFolder) and draws it at the top right, in its desktop
+   window (the screen, its visible region the whole desktop). It then
+   repaints that column's background (DMDrawDesktopRegion, a region that
+   includes the icon), invalidates its desktop window, and draws nothing
+   between BeginUpdate and EndUpdate: what it draws on an update is the
+   next thing to find. The Trash and the other volume are never drawn.
 7. **The Finder running**, with the add-on libraries selectable per
    library: Executor's (once finished) or Apple's from the System file.
    Executor keeps the managers 8.x's System replaces the ROM's with

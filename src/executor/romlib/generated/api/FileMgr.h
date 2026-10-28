@@ -4,9 +4,11 @@
  *                                 =========                                 *
  *                                                                           *
  * Needs:                                                                    *
- *     MacTypes.h    OSType, LONGINT, Rect, INTEGER, SignedByte, Ptr,        *
- *                   ULONGINT, StringPtr, QElemPtr, Byte, Str63, OSErr,      *
- *                   ConstStringPtr, QHdrPtr, Boolean, Handle, ScriptCode    *
+ *     MacTypes.h     OSType, LONGINT, Rect, INTEGER, SignedByte, Ptr,       *
+ *                    ULONGINT, StringPtr, QElemPtr, Byte, Str63, OSErr,     *
+ *                    ConstStringPtr, QHdrPtr, Boolean, Handle,              *
+ *                    ScriptCode                                             *
+ *     MixedMode.h    UniversalProcPtr                                       *
  *                                                                           *
  *                                                                           *
  *****************************************************************************/
@@ -18,6 +20,7 @@
 #include <iosfwd>
 #include <base/lowglobals.h>
 #include "ExMacTypes.h"
+#include "MixedMode.h"
 
 #define MODULE_NAME FileMgr
 #include <base/api-module.h>
@@ -1150,5 +1153,11 @@ kFSVolInfoDriveInfo = 32768,
 kFSVolInfoGettableInfo = 65535,
 kFSVolInfoSettableInfo = 12292,
 };
+
+OSErr C_RequestVolumeNotification(UniversalProcPtr notifyProc, void *refCon);LIBRARY_FUNCTION(PrivateInterfaceLib, RequestVolumeNotification, C_RequestVolumeNotification);
+
+
+OSErr C_DeclineVolumeNotification(UniversalProcPtr notifyProc, void *refCon);LIBRARY_FUNCTION(PrivateInterfaceLib, DeclineVolumeNotification, C_DeclineVolumeNotification);
+
 
 } /* namespace Executor */
