@@ -33,11 +33,16 @@ the policy.
     1.8 MB library, Executor's CFM allocated it in the 930 KB application
     heap and answered "not found". CFM now falls back to temporary memory
     (`cfm.cpp`, `cfm_new_ptr`), as Apple's does.
-* Now: the Finder's library loads and runs, with 233 (8.6) and 266
-  (9.0.4) of its imports unresolved (answered 0 when called; called so
-  far: `MMNewHeap`, 9.0.4's `OpenResFileUnderSystemMap`), and Executor's
-  About box comes up (its Apple-menu entry, which the Finder seems to
-  open). Same picture on 8.6 and 9.0.4.
+* Then (steps 1 and 2 below, "The Finder starting"): the 8.6 Finder ran
+  to its menu bar and desktop pattern with 173 imports unresolved.
+* Now (step 3, 2026-10-28): CFM finds 8.x's Toolbox libraries in the
+  System file. With Executor keeping the core managers, Apple's
+  IconServicesLib, AppearanceLib, ToolboxUtils, PreferencesLib,
+  Translation, FontManager, FontObjects, ATSUI, NavigationLib,
+  CollectionsLib and TextCommon/UnicodeConverter prepare and initialize;
+  the session then stops in `NewPtr` with no current zone (a library's init
+  setting the zone from an accessor Executor lacks). They import about 170
+  routines Executor lacks between them, most of them the ROM's (step 6).
 
 ## Where the libraries come from
 
@@ -52,7 +57,7 @@ neither, i.e. the system's own code (ROM, or the System file's patches).
 | Source | 8.6 | 9.0.4 | On Executor |
 |---|---|---|---|
 | ROM | InterfaceLib, PrivateInterfaceLib, NameRegistryLib | InterfaceLib | Executor's |
-| The system's own (no file) | AppearanceLib (217 exports), WindowsLib (129), ControlsLib (83), MenusLib (45), MacDialogsLib (6), DragLib (43), IconServicesLib (50), Translation (58), ThreadsLib (31), ObjectSupportLib (13), FontManager (77), FontObjects (41), ToolboxUtils (135), NavigationLib (19), FoldersLib (14), CollectionsLib (39), ControlStripLib (26), ATSUnicodeLib (101), LocalesLib (13), DriverServicesLib (224), DebugLib, StdCLib, MathLib | the same (AppearanceLib 218, WindowsLib 135, ControlsLib 99, MenusLib 50, MacDialogsLib 10, IconServicesLib 53, FontManager 114, FontObjects 67), and PrivateInterfaceLib (1852), NameRegistryLib (70), DesktopItemsLib (4), StringCompare, NumberFormatting | Executor's job: StdCLib and MathLib are; the rest are missing or under InterfaceLib only |
+| The system's own (no file: in fact the System file's data fork, step 3) | AppearanceLib (217 exports), WindowsLib (129), ControlsLib (83), MenusLib (45), MacDialogsLib (6), DragLib (43), IconServicesLib (50), Translation (58), ThreadsLib (31), ObjectSupportLib (13), FontManager (77), FontObjects (41), ToolboxUtils (135), NavigationLib (19), FoldersLib (14), CollectionsLib (39), ControlStripLib (26), ATSUnicodeLib (101), LocalesLib (13), DriverServicesLib (224), DebugLib, StdCLib, MathLib | the same (AppearanceLib 218, WindowsLib 135, ControlsLib 99, MenusLib 50, MacDialogsLib 10, IconServicesLib 53, FontManager 114, FontObjects 67), and PrivateInterfaceLib (1852), NameRegistryLib (70), DesktopItemsLib (4), StringCompare, NumberFormatting | Executor's job: StdCLib and MathLib are; the rest are missing or under InterfaceLib only |
 | System file `'nlib'` | TextCommon, UnicodeConverter, SoundLib, QuickdrawLib, Math64Lib, VideoServicesLib, DriverLoaderLib, CursorDevicesLib, UTCUtils, StringCompare | the same and PPCToolbox, DebugLib (not StringCompare) | not registered (SoundLib is Executor's) |
 | Extensions file | ContextualMenu, FileSharingLib, ColorPickerLib, AppleGuideGlueLib, AppleScriptLib, OTClientLib & co., QuickTimeLib, TextEncodingConverter | the same | Apple's file when the policy allows it; OT's and AppleScriptLib's are Executor's |
 | Not there | DialogsLib, DesktopItemsLib, PCCard, PPCToolbox, CarbonLib (-2821) | DialogsLib, PCCard, CarbonLib | — |
@@ -197,52 +202,104 @@ per System version.
 
 ## The work
 
-1. **Library names for PowerPC** — done (2026-10-28). What Executor has,
-   under 8/9's library names, by family: `library:` on the definitions
+Done:
+
+1. **Library names for PowerPC** (2026-10-28). What Executor has, under
+   8/9's library names, by family: `library:` on the definitions
    (`LIBRARY_ALSO`, as SoundLib's; a list for a library routine exported
    by more than one): the Thread Manager (ThreadsLib, 21), the object
    support calls (ObjectSupportLib, 13, InterfaceLib too), the layer
    calls, `TypeSelect*`, `Begin/EndSystemMode`, `AddAppleMenuItem`
    (PrivateInterfaceLib, 20). The 8.6 Finder's unresolved imports: 233 →
    202.
-2. **Trap-routed exports** — done for selectors (2026-10-28). A subtrap's
+2. **Trap-routed exports** for selectors (2026-10-28). A subtrap's
    definition with `library:` and no Executor routine gets a PowerPC and
    CFM-68K export that sets the selector and calls through the
-   dispatcher's table entry, as InterfaceLib's glue does (`TRAP_GLUE`;
-   logged and answered 0 while Executor's own dispatcher is still there).
-   DragLib (39, all of the Drag Manager's): Apple's 68k Drag Manager in
-   the System answers them. DragTest (`tests/guest/drag`, Retro68
-   PowerPC: a drag made, flavors added and read back, bounds, disposed)
-   passes 14/14 on Executor 7.6.1 and on the G3 with 7.6.1 and 9.0.4
-   (`drag_ppc_executor_761`, `drag_rom_ppc_761`, `drag_rom_ppc_904`).
-   The 8.6 Finder's unresolved imports: 202 → 173. Left: plain traps
-   (`InsXTime`).
-3. **The System's `'nlib'`s.** Register the System file's native
-   libraries with CFM at startup, as the System does (TextCommon,
-   UnicodeConverter, Math64Lib, ...), each one checked: Apple's code or
-   Executor's (SoundLib, QuickdrawLib, the sound hardware plug-ins: not
-   Apple's).
-4. **InterfaceLib's 41.** The Text Services Manager's document calls, the
-   PPC Toolbox and NBP (answer as a Mac without AppleTalk), the File
-   Manager utilities (`UTLocateFCB` & co., `GetFSInfo`), `SleepQInstall`,
-   `GetTime`, `Microseconds`, `CallOSTrapUniversalProc`,
-   `CompareAndSwap`, `BlockZero`, ...: many are definitions without a
-   PowerPC export (raw 68k traps, C side only).
-5. **Mac OS 8's Toolbox.** The Appearance Manager (52: theme drawing,
-   control embedding, `GetControlData`/`SetControlData`, bevel buttons,
-   `StandardAlert`, theme sounds and cursors), Window Manager 2.0 (17:
-   proxy icons, `TransitionWindow`, `WindowPathSelect`, `SetWindowBounds`),
-   ControlsLib, MenusLib, MacDialogsLib: new definitions from Apple's
-   documentation (Mac OS 8 Toolbox Reference) and C++ routines. The
-   biggest piece; on 7.x they answer as a Mac without Appearance does.
-6. **Icon Services** (26), the **Translation Manager** (17, the Finder's
-   private Easy Open calls), **PrivateInterfaceLib**'s other 25 (resource
-   maps under the System map, layers, volume notification), the MM*
-   heaps, font objects, `RegisterToolboxListener`.
-7. **The Finder running.** What it calls once the imports are there, as
-   for 7.6.1's Finder (the About box first), checked against 8.6 and
-   9.0.4 on the G3 (mame-ppc); a Finder test cell on each.
-8. **Extensions** (the 7.6.1 round again): Speech (`AliasDispatch $2F`),
+   dispatcher's table entry, as InterfaceLib's glue does (`TRAP_GLUE`).
+   DragLib (39): Apple's 68k Drag Manager in the System answers them;
+   DragTest (`tests/guest/drag`) passes 14/14 on Executor 7.6.1 and on the
+   G3 with 7.6.1 and 9.0.4. The 8.6 Finder's unresolved imports: 202 → 173.
+3. **The System file's own fragments** (2026-10-28). 8.x's Toolbox
+   libraries "with no file" are PEF containers in the System file's data
+   fork, listed by its `'cfrg'` resources (several, by machine):
+   AppearanceLib, WindowsLib, IconServicesLib, Translation, FontManager,
+   ... CFM looks there after Executor's own libraries. On the way: init
+   routines run once the whole closure is prepared (8.x's libraries import
+   each other in a cycle), a file a library is being prepared from stays
+   open while its imports are looked up, the System's fragments go in
+   temporary memory.
+
+The direction is an Executor that eventually needs nothing of Apple's;
+Apple's libraries from the System file are scaffolding until Executor's
+own exist. Everything Executor exports is declared in the multiversal
+YAML (the generated headers are Retro68's Multiversal Interfaces; the YAML
+is the auditable list of what Executor implements).
+
+Next, in order:
+
+4. **Tools** (a small commit of its own). The generator writes the export
+   list it builds (per library, PowerPC and CFM-68K: `lowmem:` entries as
+   `LMGet`/`LMSet`, PB calls as `Sync`/`Async`, trap flag variants), and
+   `tools/macdecode/libraries.py` reads it instead of guessing from the
+   YAML (it undercounted by about 800). Internal names stop being exported
+   (`_NewPtr_flags`, `_BlockMove_flags`, `INVALID_GetTrapAddress`, ...).
+   Then coverage against Apple's export tables, read from the user's ROM
+   and System file each time (not committed).
+5. **Data exports in the YAML.** A declaration for a library's exported
+   variable (`data:` with name, type, library), generated into the headers
+   (`extern UniversalProcPtr CallComponentUPP;` as Retro68's
+   `Components.h` has it) and the export list. `CallComponentUPP` moves
+   to it from `cfm68k_glue.cpp`; `GetQDGlobals`, `gNotifyRectList` and the
+   like use it.
+6. **Everything the ROM gives.** What an Old World Mac's ROM (and the
+   System's patches) exports, measured on the G3 ROM (InterfaceLib 2493
+   exports, Executor 1763; PrivateInterfaceLib 928, Executor 16; the 8.6
+   System adds about 230 to InterfaceLib, 9.0.4 more): InterfaceLib,
+   PrivateInterfaceLib, NameRegistryLib, DriverServicesLib's application
+   side (`UpTime`, `DurationToAbsolute`, atomic operations, `CStrCopy`).
+   The hardware parts (ATA, Heathrow, ATI, PCI, power, the nanokernel's
+   exceptions) answer as a Mac without the device; NQD is private
+   (Executor's QuickDraw answers through InterfaceLib); Math64Lib is a
+   System `'nlib'` (step 8). In batches, by how many containers on our
+   images import each call (`libraries.py`):
+   a. The open ones: the Finder's and Apple's libraries' unresolved
+      imports; the Component Manager's calls for PowerPC code
+      (`CallComponentFunction`, `CallComponentFunctionWithStorage`,
+      `CallComponentFunctionWithStorageProcInfo`, `CallComponentCanDo`,
+      `GetComponentVersion`, `ComponentSetTarget`, ...: Components.yaml);
+      calls Executor implements for 68k code without a PowerPC export
+      (`GetWDInfo`, `InsXTime`, `GetTime`, `PostEvent`, `UpperString`,
+      `SleepQInstall`, `PBControlImmed`, ...); `Microseconds`,
+      `BlockZero`, `Wide*`, `X2Fix`.
+   b. The low-memory accessors (about 740 across both libraries):
+      `lowmem:` entries, accessors under the right library.
+   c. The rest our software imports: Text Services Manager documents,
+      Mixed Mode helpers (`CallOSTrapUniversalProc`), CFM's `FragGet*`,
+      NBP and the PPC Toolbox (as a Mac without AppleTalk), the emulator
+      and Memory Manager internals (`SetEmulatorRegister`,
+      `SysZoneFloatSizes`, `MakeExecutable`: nothing to do on Executor).
+   d. The rest of the tables, with a test program where the behaviour
+      isn't obvious.
+7. **The Finder running**, with the add-on libraries selectable per
+   library: Executor's (once finished) or Apple's from the System file.
+   Executor keeps the managers 8.x's System replaces the ROM's with
+   (WindowsLib, MenusLib, ControlsLib, EventsLib, MacDialogsLib, ListsLib,
+   NQD: Apple's expect their private state; tried, they clash). Apple's
+   for now: IconServicesLib, Translation, CollectionsLib, FontObjects and
+   ATSUI, NavigationLib, TextCommon/UnicodeConverter, PreferencesLib,
+   FoldersLib, ToolboxUtils. Each moves to Executor's column when Executor
+   has it, tested against Apple's running on the same Executor (and on the
+   G3). The Appearance Manager is Executor's own early (Apple's calls the
+   Window Manager's and NQD's private hooks; the theme drawing is the one
+   fork anyway, "One Toolbox for 7, 8 and 9"); then Window Manager 2.0 and
+   the 32-bit control and menu calls in Executor's managers. On 7.x the
+   choice exists where Executor's version does (or an extension file
+   brings Apple's). A Finder test cell on 8.6 and 9.0.4.
+8. **The System's `'nlib'`s.** Registered with CFM at startup, as the
+   System does (TextCommon, UnicodeConverter, Math64Lib, ...), each
+   checked: Apple's code or Executor's (SoundLib, QuickdrawLib, the sound
+   hardware plug-ins: not Apple's).
+9. **Extensions** (the 7.6.1 round again): Speech (`AliasDispatch $2F`),
    then what each of 8/9's extensions needs.
 
 ## Tools

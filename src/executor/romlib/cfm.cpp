@@ -28,6 +28,7 @@
 #include <hfs/hfs.h>
 #include <util/string.h>
 #include <base/builtinlibs.h>
+#include <res/resource.h>
 #include <base/cpu.h>
 #include <clib/clib.h>
 #include <algorithm>
@@ -67,6 +68,20 @@ struct loaded_fragment
 
 std::vector<loaded_fragment> loaded;
 const load_origin *current_origin;
+
+/* MacPhoenix: init routines run once the whole closure is prepared, as
+   Apple's CFM does: libraries that import each other (8.x's ToolboxUtils,
+   AppearanceLib, PreferencesLib, ...) are all relocated before any of them
+   runs. In the order their preparation finished: imports first. */
+struct pending_init
+{
+    uint32_t tv;
+    uint32_t arg;
+    OSType arch;
+    std::string name;
+};
+std::vector<pending_init> pending_inits;
+int prepare_depth;
 
 bool same_name(const std::string& a, const std::string& b)
 {
@@ -184,16 +199,23 @@ void Executor::ROMlib_cfm_application_start()
    the heap is too small: Mac OS 8.6's and 9's Finder loads its 1.8 MB
    library into a partition of 930 KB. A block in temporary memory isn't
    given back when the process quits (Executor's temporary memory isn't
-   tracked per process). */
+   tracked per process). A fragment from the System file (AppearanceLib &
+   co.) is the system's, not the application's: temporary memory first, so
+   that it doesn't fill the heap of the application that happens to load
+   it. */
+static bool loading_system_fragment;
+
 static Ptr
 cfm_new_ptr(Size n)
 {
-    Ptr p = NewPtr(n);
+    Ptr p = loading_system_fragment ? nullptr : NewPtr(n);
     if(!p && ROMlib_pm_zone)
     {
         TheZoneGuard guard(ROMlib_pm_zone);
         p = NewPtr(n);
     }
+    if(!p && loading_system_fragment)
+        p = NewPtr(n);
     return p;
 }
 
@@ -533,6 +555,13 @@ check_file(INTEGER vref, LONGINT dirid, Str255 file, bool shlb_test_p,
             INTEGER rn;
             INTEGER save_map = LM(CurMap);
 
+            /* MacPhoenix: a file already open (a library being prepared
+               from it imports another) answers its refnum: stays open. */
+            std::vector<INTEGER> open_before;
+            resmaphand map;
+            WALKMAPTOP(map)
+                open_before.push_back((*map)->resfn);
+            EWALKMAP()
             rn = FSpOpenResFile(&fs, fsRdPerm);
             if(rn == -1)
                 retval = fragLibNotFound;
@@ -567,9 +596,10 @@ check_file(INTEGER vref, LONGINT dirid, Str255 file, bool shlb_test_p,
                                                  errName);
                     }
                 }
-                /* MacPhoenix: the application's own file (and the System's)
-                   was open before: leave it open. */
-                if(rn != LM(CurApRefNum) && rn != LM(SysMap))
+                /* MacPhoenix: a file that was open before (the
+                   application's own, the System, a library's being
+                   prepared): leave it open. */
+                if(std::find(open_before.begin(), open_before.end(), rn) == open_before.end())
                     CloseResFile(rn);
                 LM(CurMap) = save_map;
             }
@@ -630,6 +660,67 @@ check_vanddir(INTEGER vref, LONGINT dirid, int descend_count, ConstStr63Param li
         }
     }
     return retval;
+}
+
+/* MacPhoenix: the System file's own fragments. From 8.x the System's
+   Toolbox libraries (AppearanceLib, WindowsLib, IconServicesLib, ...) are
+   PEF containers in its data fork, listed in its 'cfrg' resources (several,
+   by machine; any one will do). */
+static bool
+system_file_spec(FSSpec *fs)
+{
+    FCBPBRec fcb = {};
+    Str255 name;
+    fcb.ioNamePtr = name;
+    fcb.ioRefNum = LM(SysMap);
+    if(PBGetFCBInfo(&fcb, false) != noErr)
+        return false;
+    fs->vRefNum = fcb.ioFCBVRefNum;
+    fs->parID = fcb.ioFCBParID;
+    memcpy(fs->name, name, std::min<int>(name[0], 63) + 1);
+    return true;
+}
+
+static bool
+is_system_file(const FSSpec& fs)
+{
+    FSSpec sys;
+    return system_file_spec(&sys) && same_file(fs, sys);
+}
+
+static OSErr
+check_system_file(ConstStr63Param library, OSType arch, LoadFlags loadflags,
+                  GUEST<ConnectionID> *cidp, GUEST<Ptr> *mainaddrp, Str255 errName)
+{
+    /* The managers Executor is: Apple's replace the ROM's on 8.x and
+       expect its private state. */
+    static const char *const executors[] = {
+        "WindowsLib", "MenusLib", "ControlsLib", "EventsLib", "MacDialogsLib",
+        "ListsLib", "NQD", "MemoryMgr", "Resources", "QuickDrawText",
+    };
+    for(const char *e : executors)
+        if(library[0] == strlen(e) && !strncasecmp((const char *)library + 1, e, library[0]))
+            return fragLibNotFound;
+    FSSpec fs;
+    if(!system_file_spec(&fs))
+        return fragLibNotFound;
+
+    INTEGER save_map = LM(CurMap);
+    LM(CurMap) = LM(SysMap);
+    cfir_t *cfirp = nullptr;
+    for(INTEGER i = 1, n = Count1Resources("cfrg"_4); !cfirp && i <= n; i++)
+        if(Handle h = Get1IndResource("cfrg"_4, i))
+            cfirp = ROMlib_find_cfrg(h, arch, kImportLibraryCFrag, library);
+    LM(CurMap) = save_map;
+    if(!cfirp || CFIR_LOCATION(cfirp) != kOnDiskFlat)
+        return fragLibNotFound;
+    Str63 fragname;
+    memcpy(fragname, CFIR_NAME(cfirp), std::min<int>(CFIR_NAME(cfirp)[0], 63) + 1);
+    fragname[0] = std::min<int>(fragname[0], 63);
+    warning_trace_info("CFM: \"%.*s\" from the System file", library[0], library + 1);
+    return GetDiskFragment(&fs, CFIR_OFFSET_TO_FRAGMENT(cfirp),
+                           CFIR_FRAGMENT_LENGTH(cfirp), fragname, loadflags,
+                           cidp, mainaddrp, errName);
 }
 
 /*
@@ -734,6 +825,10 @@ OSErr Executor::C_GetSharedLibrary(ConstStr63Param library, OSType arch,
                 retval = noErr;
             }
         }
+        /* MacPhoenix: then what the System file has that Executor hasn't. */
+        if(retval != noErr)
+            retval = check_system_file(library, arch, loadflags, cidp,
+                                       mainaddrp, errName);
     }
     return retval;
 }
@@ -1170,13 +1265,7 @@ load_loader_section(const void *addr,
         ib->connectionID = guest_cast<uint32_t>((Ptr)connp);
         ib->libName = name;
         uint32_t arg = guest_cast<uint32_t>((Ptr)ib);
-        OSErr err = arch == "m68k"_4 ? (int16_t)ROMlib_call_cfm68k(tv, &arg)
-                                     : (int16_t)callPPC(tv, { arg });
-        if(err != noErr)
-        {
-            fprintf(stderr, "CFM: init routine of %s: %d\n", o ? o->name.c_str() : "?", err);
-            retval = err;
-        }
+        pending_inits.push_back({ tv, arg, arch, o ? o->name : std::string("?") });
     }
     if(retval == noErr && lihp->termSection != -1)
         if(loaded_fragment *f = find_loaded(connp))
@@ -1385,8 +1474,30 @@ prepare_container(void *addr, const load_origin& origin, GUEST<ConnectionID> *co
     load_origin origin_copy = origin;
     current_origin = &origin_copy; /* the list may grow while we bind */
 
+    ++prepare_depth;
     retval = do_pef_sections(conn, headp, &main_addr, arch);
+    --prepare_depth;
     current_origin = saved_origin;
+    if(prepare_depth == 0)
+    {
+        /* An init routine may load libraries of its own: they are a closure
+           of their own. */
+        std::vector<pending_init> inits = std::move(pending_inits);
+        pending_inits.clear();
+        for(const pending_init& init : inits)
+        {
+            if(retval != noErr)
+                break;
+            uint32_t arg = init.arg;
+            OSErr err = init.arch == "m68k"_4 ? (int16_t)ROMlib_call_cfm68k(init.tv, &arg)
+                                              : (int16_t)callPPC(init.tv, { arg });
+            if(err != noErr)
+            {
+                fprintf(stderr, "CFM: init routine of %s: %d\n", init.name.c_str(), err);
+                retval = err;
+            }
+        }
+    }
 
     fprintf(stderr, "[CFM] %s '%s' (%.4s): %d", origin.where == kInMem ? "memory" : "file",
             origin.name.c_str(), (const char *)&headp->architecture, retval);
@@ -1446,6 +1557,8 @@ OSErr Executor::C_GetDiskFragment(FSSpecPtr fsp, LONGINT offset,
 
     GUEST<INTEGER> rn;
 
+    bool saved_system = loading_system_fragment;
+    loading_system_fragment = is_system_file(*fsp);
     retval = FSpOpenDF(fsp, fsRdPerm, &rn);
     if(retval == noErr)
     {
@@ -1481,6 +1594,7 @@ OSErr Executor::C_GetDiskFragment(FSSpecPtr fsp, LONGINT offset,
         if(retval != noErr && p)
             DisposePtr(p);
     }
+    loading_system_fragment = saved_system;
     return retval;
 }
 

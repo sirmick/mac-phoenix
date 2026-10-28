@@ -319,7 +319,10 @@ static Handle mgetres_helper(resmaphand map, resref *rr, int32_t dlen,
             ReallocateHandle(retval, uncompressed_size + dcmp_offset);
         }
         err = MemError();
-        xxx = *retval + uncompressed_size + dcmp_offset - dlen;
+        /* MacPhoenix: no memory: no handle to read into. */
+        if(err == noErr && (!retval || !*retval))
+            err = memFullErr;
+        xxx = err == noErr ? *retval + uncompressed_size + dcmp_offset - dlen : nullptr;
         if((ROMlib_setreserr(err)) || (ROMlib_setreserr(err = FSReadAll((*map)->resfn, inout(dlen), xxx))))
         {
             if(dcmp_workspace)
