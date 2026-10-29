@@ -112,3 +112,15 @@
     executor: true
     trap: 0xA05A
     executor_extras: ClearD0
+
+# ####
+
+# MacPhoenix: Microseconds for PowerPC callers (InterfaceLib); 68k code
+# gets the trap ($A193, D0/A0: base/emustubs.cpp).
+- only-for: executor
+  function:
+    name: Microseconds
+    args:
+      - name: microTickCount
+        type: UnsignedWide*
+    executor: C_

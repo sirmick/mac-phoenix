@@ -304,6 +304,9 @@ Size _MaxBlock_flags(bool sys_p);REGISTER_FLAG_TRAP(_MaxBlock_flags, MaxBlock, M
 void _PurgeSpace_flags(GUEST<Size> *totalp, GUEST<Size> *contigp, bool sys_p);REGISTER_FLAG_TRAP(_PurgeSpace_flags, PurgeSpace, PurgeSpaceSys, 0xA062, void(GUEST<Size> *, GUEST<Size> *), void(Out<Size, D0>, Out<Size, A0>, TrapBit<SYSBIT>));
 
 
+OSErr C_SysZoneFloatSizes(GUEST<Size> *topFree, GUEST<Size> *growSpace);LIBRARY_FUNCTION(PrivateInterfaceLib, SysZoneFloatSizes, C_SysZoneFloatSizes);
+
+
 OSErr C_MemError();NOTRAP_FUNCTION(MemError);
 
 

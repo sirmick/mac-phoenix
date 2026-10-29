@@ -1005,3 +1005,24 @@
     dispatcher: MenuDispatch
     selector: 0x06FF
     executor: C_
+
+# ####
+
+# MacPhoenix: MenusLib's StandardMDEF (Menus.h, 8.5 and later): the
+# standard menu definition, as MDEF 0. 8.x's MDEF 0 resource and the
+# System's libraries call it; Executor's is its own MDEF 0.
+- function:
+    name: StandardMDEF
+    args:
+      - name: message
+        type: INTEGER
+      - name: theMenu
+        type: MenuHandle
+      - name: menuRect
+        type: Rect*
+      - name: hitPt
+        type: Point
+      - name: whichItem
+        type: INTEGER*
+    library: MenusLib
+    executor: C_

@@ -96,7 +96,7 @@ NOTRAP_FUNCTION2(LMSetSysEvtMask);
 
 // OSEvent IMII-71 (true);
 const LowMemGlobal<QHdr > EventQueue{ 0x14A };
-inline void LMGetEventQueue(QHdr *val) { *val = LM(EventQueue); }
+inline QHdr * LMGetEventQueue() { return &LM(EventQueue); }
 inline void LMSetEventQueue(const QHdr *val) { LM(EventQueue) = *val; }
 NOTRAP_FUNCTION2(LMGetEventQueue);
 NOTRAP_FUNCTION2(LMSetEventQueue);

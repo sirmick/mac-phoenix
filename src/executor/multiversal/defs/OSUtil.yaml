@@ -387,6 +387,7 @@
 - lowmem:
     name: DTQueue
     type: QHdr
+    accessor: pointer
     address: 0xD92
     comment: |
       OSUtil IMV-466 (false);
@@ -681,6 +682,7 @@
     args:
       - name: d
         type: DateTimeRec*
+    executor: true
 
 # ####
 

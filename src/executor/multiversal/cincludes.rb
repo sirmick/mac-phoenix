@@ -458,6 +458,10 @@ class CIncludesGenerator < Generator
     def declare_lowmem(value)
         if value["type"] =~ /^(.*)\[[^\[\]]*\]$/ then
             declare_inline("LMGet" + value["name"], $1 + "*", [], "(#{$1}*)" + hexlit(value["address"]))
+        elsif value["accessor"] == "pointer" then
+            declare_inline("LMGet" + value["name"], value["type"] + "*", [], "(#{value["type"]}*)" + hexlit(value["address"]))
+            declare_inline("LMSet" + value["name"], "void",
+                [{"type" => value["type"] + "*", "name" => "val"}], "*(#{value["type"]}*)" + hexlit(value["address"]) + " = *val")
         else
             expr = "*(#{value["type"]}*)" + hexlit(value["address"])
             declare_inline("LMGet" + value["name"], value["type"], [], expr)

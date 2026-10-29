@@ -33,6 +33,7 @@
 - lowmem:
     name: VBLQueue
     type: QHdr
+    accessor: pointer
     address: 0x160
     comment: |
       VRetraceMgr IMII-352 (true);

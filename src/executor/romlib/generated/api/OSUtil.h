@@ -248,7 +248,7 @@ NOTRAP_FUNCTION2(LMSetMMU32Bit);
 
 // OSUtil IMV-466 (false);
 const LowMemGlobal<QHdr > DTQueue{ 0xD92 };
-inline void LMGetDTQueue(QHdr *val) { *val = LM(DTQueue); }
+inline QHdr * LMGetDTQueue() { return &LM(DTQueue); }
 inline void LMSetDTQueue(const QHdr *val) { LM(DTQueue) = *val; }
 NOTRAP_FUNCTION2(LMGetDTQueue);
 NOTRAP_FUNCTION2(LMSetDTQueue);
@@ -315,7 +315,8 @@ void DateToSeconds(DateTimeRec *d, GUEST<ULONGINT> *s);REGISTER_TRAP2(DateToSeco
 void SecondsToDate(ULONGINT mactime, DateTimeRec *d);REGISTER_TRAP2(SecondsToDate, 0xA9C6, void(D0, A0), SaveA1D1D2);
 
 
-void GetTime(DateTimeRec *d);
+void GetTime(DateTimeRec *d);NOTRAP_FUNCTION2(GetTime);
+
 
 void SetTime(DateTimeRec *d);
 

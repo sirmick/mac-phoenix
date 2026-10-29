@@ -33,7 +33,7 @@ typedef VBLTask *VBLTaskPtr;
 
 // VRetraceMgr IMII-352 (true);
 const LowMemGlobal<QHdr > VBLQueue{ 0x160 };
-inline void LMGetVBLQueue(QHdr *val) { *val = LM(VBLQueue); }
+inline QHdr * LMGetVBLQueue() { return &LM(VBLQueue); }
 inline void LMSetVBLQueue(const QHdr *val) { LM(VBLQueue) = *val; }
 NOTRAP_FUNCTION2(LMGetVBLQueue);
 NOTRAP_FUNCTION2(LMSetVBLQueue);

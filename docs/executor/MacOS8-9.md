@@ -148,24 +148,22 @@ what it called last (unresolved imports answer 0 and log
   unknown selector answers paramErr and pops them, as a Mac's does,
   logged, instead of stopping the session (`traps::mixed_mode_call`).
 
-**Where it is now:** the 8.6 Finder runs: its menu bar (File, Edit,
-View, Special), the desktop pattern and its icons (the startup disk at
-the top right), a black area where a window's Appearance drawing should
-be.
+**Where it is now:** the 8.6 Finder runs and stays up: its menu bar
+(File, Edit, View, Special, the Help and Application menus), the desktop
+pattern and all its icons (both volumes, the aliases, the Trash) with
+their names. No window has opened yet (Appearance drawing to come).
 The 9.0.4 Finder runs as far (no extensions), then says 'The disk ""
 cannot be used, because an error of type -35 occurred'.
 
-Called and still unanswered (8.6): `RegisterAppearanceClient`,
-`GetViewsFont`, `SetThemeTextColor`, `SetThemeBackground`, `StandardMDEF`,
-`SetMenuItemKeyGlyph`, `SetSubmenuParentChoosable`, `PopupWindowEntry`;
-the window calls `GetWindowRegion`, `InvalWindowRect`/`Rgn`,
-`ValidWindowRect`, `SetWindowModified`, `Get`/`SetWindowProxyIcon`,
-`SetWindowProxyFSSpec`; Icon Services' `SetIconDevice` (PrivateInterfaceLib
-alias); `RegisterToolboxListener`,
-`RequestVolumeNotification`, the PPC Toolbox (`PPCOpenSync`,
-`PPCInformAsync`), `InsXTime`, `GetWDInfo`, `CRMSearch`,
-`CallOSTrapUniversalProc`. Then a host crash in `EqualString` with a nil
-string (before the accessors).
+Called and still unanswered (8.6, 2026-10-29): `GetQDGlobals`,
+`QDGet`/`SetPatternOrigin`, `LMGetBrianBits`, `LMGetCurLayer`,
+`IsMenuItemEnabled`, `SetSubmenuParentChoosable`, MenuDispatch $13; the
+window calls `Get`/`Set`/`RemoveWindowSystemProperty`,
+`WindowHasUnicodeTitle`, `SetWindowModified`, `Get`/`SetWindowProxyIcon`,
+`SetWindowProxyFSSpec`; Icon Services' `SetIconDevice`; the PPC Toolbox
+(`PPCOpenSync`, `PPCInformAsync`), `GetWDInfo`, `CRMSearch`, OSDispatch
+$75 (14 argument bytes, after `GetProcessInformation` on the Finder
+itself), a trap called through its address (procInfo $02671822).
 
 ## One Toolbox for 7, 8 and 9
 
@@ -392,6 +390,33 @@ Next, in order:
    Now the Finder stays up, its desktop keeps its icons (the same frame at
    6 s and 12 s), and it plots the startup disk's icon at
    (576,28)-(608,60).
+   That run's icons came from an out-of-memory alert's update, though;
+   without it the desktop stayed empty. Three things (2026-10-29):
+   - `SysZoneFloatSizes` (PrivateInterfaceLib, no trap): the Finder's
+     memory check, before every operation, wants the System heap's
+     largest block or its growth room above ExpandMem+$1AE (Executor's
+     reserve, 64K) plus the request, else "There is not enough memory".
+     A probe on 9.0.4 (G3) settled the two results: the free block at
+     the top of the System heap (not MaxBlock) and how far the heap can
+     grow (about TempFreeMem); either pointer may be nil; returns 0.
+     Executor answers its top free block and `ROMlib_syszone_reserve_left`.
+   - MDEF 63, 8.6's menu definition for every menu: an accelerated
+     resource (a routine descriptor, relative and "needs preparing", over a
+     small PEF fragment importing MenusLib's `StandardMDEF`). Mixed Mode
+     prepared it in place at the first call, and the purgeable resource
+     then moved (the Menu Manager locks it only for the call): the
+     record's transition vector pointed at the old code, and the next
+     CalcMenuSize ran heap data as PowerPC code, the Finder's main thread
+     lost for good, the desktop never redrawn. Mixed Mode now records
+     where it prepared each record and prepares it again where it is
+     found next. `StandardMDEF` is Executor's MDEF 0 (MenusLib).
+   - `LMGetEventQueue` returned a copy of the queue header through an
+     argument (the generated form for a struct), Apple's returns its
+     address (`QHdrPtr LMGetEventQueue(void)`): the Finder's idle code
+     wrote through nil (a host crash). The queue headers' accessors
+     (EventQueue, VBLQueue, DTQueue, DrvQHdr, VCBQHdr, FSQHdr) are
+     `accessor: pointer` now. Also `Microseconds` and `GetTime` for
+     PowerPC callers.
 7. **The Finder running**, with the add-on libraries selectable per
    library: Executor's (once finished) or Apple's from the System file.
    Executor keeps the managers 8.x's System replaces the ROM's with

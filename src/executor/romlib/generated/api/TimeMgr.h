@@ -4,7 +4,7 @@
  *                                 =========                                 *
  *                                                                           *
  * Needs:                                                                    *
- *     MacTypes.h    QElemPtr, INTEGER, LONGINT                              *
+ *     MacTypes.h    QElemPtr, INTEGER, LONGINT, UnsignedWide                *
  *                                                                           *
  *                                                                           *
  *****************************************************************************/
@@ -44,6 +44,9 @@ void RmvTime(QElemPtr taskp);REGISTER_TRAP2(RmvTime, 0xA059, void(A0), ClearD0);
 
 
 void PrimeTime(QElemPtr taskp, LONGINT count);REGISTER_TRAP2(PrimeTime, 0xA05A, void(A0, D0), ClearD0);
+
+
+void C_Microseconds(UnsignedWide *microTickCount);NOTRAP_FUNCTION(Microseconds);
 
 
 } /* namespace Executor */

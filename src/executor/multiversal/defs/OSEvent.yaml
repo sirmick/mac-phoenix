@@ -136,6 +136,7 @@
 - lowmem:
     name: EventQueue
     type: QHdr
+    accessor: pointer
     address: 0x14A
     comment: |
       OSEvent IMII-71 (true);

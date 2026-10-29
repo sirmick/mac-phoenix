@@ -565,6 +565,24 @@
 
 # ####
 
+# MacPhoenix: PrivateInterfaceLib's SysZoneFloatSizes (no trap, not in
+# Apple's headers; the 8.6 Finder's memory check calls it). From a probe
+# on 9.0.4: *topFree is the free block at the top of the System heap (the
+# one growth extends), *growSpace how far the heap can grow; either may be
+# nil; returns 0.
+- function:
+    name: SysZoneFloatSizes
+    return: OSErr
+    args:
+      - name: topFree
+        type: Size*
+      - name: growSpace
+        type: Size*
+    library: PrivateInterfaceLib
+    executor: C_
+
+# ####
+
 - function:
     name: MemError
     return: OSErr

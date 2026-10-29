@@ -342,7 +342,7 @@ NOTRAP_FUNCTION2(LMSetFSVars);
 
 // FileMgr IMIV-182 (true);
 const LowMemGlobal<QHdr > DrvQHdr{ 0x308 };
-inline void LMGetDrvQHdr(QHdr *val) { *val = LM(DrvQHdr); }
+inline QHdr * LMGetDrvQHdr() { return &LM(DrvQHdr); }
 inline void LMSetDrvQHdr(const QHdr *val) { LM(DrvQHdr) = *val; }
 NOTRAP_FUNCTION2(LMGetDrvQHdr);
 NOTRAP_FUNCTION2(LMSetDrvQHdr);
@@ -374,7 +374,7 @@ NOTRAP_FUNCTION2(LMSetDefVCBPtr);
 
 // FileMgr IMIV-178 (true);
 const LowMemGlobal<QHdr > VCBQHdr{ 0x356 };
-inline void LMGetVCBQHdr(QHdr *val) { *val = LM(VCBQHdr); }
+inline QHdr * LMGetVCBQHdr() { return &LM(VCBQHdr); }
 inline void LMSetVCBQHdr(const QHdr *val) { LM(VCBQHdr) = *val; }
 NOTRAP_FUNCTION2(LMGetVCBQHdr);
 NOTRAP_FUNCTION2(LMSetVCBQHdr);
@@ -382,7 +382,7 @@ NOTRAP_FUNCTION2(LMSetVCBQHdr);
 
 // FileMgr IMIV-176 (true);
 const LowMemGlobal<QHdr > FSQHdr{ 0x360 };
-inline void LMGetFSQHdr(QHdr *val) { *val = LM(FSQHdr); }
+inline QHdr * LMGetFSQHdr() { return &LM(FSQHdr); }
 inline void LMSetFSQHdr(const QHdr *val) { LM(FSQHdr) = *val; }
 NOTRAP_FUNCTION2(LMGetFSQHdr);
 NOTRAP_FUNCTION2(LMSetFSQHdr);

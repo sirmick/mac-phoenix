@@ -227,3 +227,11 @@ void Executor::PrimeTime(QElemPtr taskp, LONGINT count)
 {
     ROMlib_PrimeTime(taskp, count);
 }
+
+/* MacPhoenix: Microseconds for PowerPC code (68k: the trap's stub). */
+void Executor::C_Microseconds(UnsignedWide *microTickCount)
+{
+    uint64_t us = (uint64_t)msecs_elapsed() * 1000;
+    microTickCount->hi = us >> 32;
+    microTickCount->lo = (uint32_t)us;
+}

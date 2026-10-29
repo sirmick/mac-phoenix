@@ -385,4 +385,7 @@ OSErr C_GetMenuBarRect(Rect *rect);PASCAL_SUBTRAP(GetMenuBarRect, 0xA825, 0x04FE
 OSErr C_GetMenuTitleRect(INTEGER menuID, Rect *rect);PASCAL_SUBTRAP(GetMenuTitleRect, 0xA825, 0x06FF, MenuDispatch);
 
 
+void C_StandardMDEF(INTEGER message, MenuHandle theMenu, Rect *menuRect, Point hitPt, GUEST<INTEGER> *whichItem);LIBRARY_FUNCTION(MenusLib, StandardMDEF, C_StandardMDEF);
+
+
 } /* namespace Executor */

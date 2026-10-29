@@ -246,7 +246,14 @@ class ExecutorGenerator < Generator
         else
             sz = size_of_type(value["type"])
 
-            if !sz || sz > 4 then
+            if value["accessor"] == "pointer" then
+                # MacPhoenix: Apple's accessors for the queue headers give
+                # their address (QHdrPtr LMGetEventQueue(void)); the setter
+                # copies one in.
+                ptype = decl(value["type"] + "*")
+                @out << "inline #{ptype} LMGet#{value["name"]}() { return &LM(#{value["name"]}); }\n"
+                @out << "inline void LMSet#{value["name"]}(#{decl("const " + value["type"]+"*", "val")}) { LM(#{value["name"]}) = *val; }\n"
+            elsif !sz || sz > 4 then
                 @out << "inline void LMGet#{value["name"]}(#{decl(value["type"]+"*", "val")}) { *val = LM(#{value["name"]}); }\n"
                 @out << "inline void LMSet#{value["name"]}(#{decl("const " + value["type"]+"*", "val")}) { LM(#{value["name"]}) = *val; }\n"
             else

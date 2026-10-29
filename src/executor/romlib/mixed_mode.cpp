@@ -18,6 +18,7 @@
 #include <PowerCore.h>
 #include <cassert>
 #include <algorithm>
+#include <unordered_map>
 
 using namespace Executor;
 
@@ -176,6 +177,16 @@ static uint32_t call_cfm68k_routine(ProcPtr tvector, int nParameters,
     return retval;
 }
 
+/* An accelerated resource's routine record as it was before preparing,
+   and the descriptor's address then, by the main transition vector. */
+struct PreparedRecord
+{
+    uint32_t descriptor;
+    uint32_t procDescriptor;
+    uint16_t routineFlags;
+};
+static std::unordered_map<uint32_t, PreparedRecord> prepared_at;
+
 static uint32_t mode_switch(UniversalProcPtr theProcPtr, ProcInfoType procinfo,
                             ISAType fromISA, uint32_t cfm68kArgs)
 {
@@ -215,26 +226,46 @@ static uint32_t mode_switch(UniversalProcPtr theProcPtr, ProcInfoType procinfo,
        routine descriptor before a PEF container; Mac OS 8's Finder's): its
        record says the fragment is to be prepared, at an offset from the
        descriptor. Prepared at the first call, as Apple's Mixed Mode does,
-       and the record then names the main routine's transition vector. */
-    if(routine->ISA == kPowerPCISA && (routine->routineFlags & kFragmentNeedsPreparing))
+       and the record then names the main routine's transition vector.
+       The prepared code runs in place, and a purgeable resource moves
+       between calls (8.6's MDEF 63; the Menu Manager locks it only for the
+       call): a record found at another address than it was prepared at
+       gets its own values back and is prepared again there. */
+    if(routine->ISA == kPowerPCISA)
     {
         RoutineRecord *rr = const_cast<RoutineRecord *>(routine);
-        uint32_t container = ptr_to_longint(rr->procDescriptor.get());
-        if(rr->routineFlags & kProcDescriptorIsRelative)
-            container += ptr_to_longint(theProcPtr);
-        GUEST<ConnectionID> conn;
-        GUEST<Ptr> main;
-        Str255 err;
-        OSErr e = GetMemFragment(ptr_from_longint<void *>(container), 0, (StringPtr) "\0",
-                                 kReferenceCFrag, &conn, &main, err);
-        if(e != noErr || !main)
+        uint32_t descriptor = ptr_to_longint(theProcPtr);
+        if(!(rr->routineFlags & kFragmentNeedsPreparing))
         {
-            fprintf(stderr, "[Executor] Mixed Mode: preparing the fragment at $%08x failed (%d)\n",
-                    container, e);
-            return 0;
+            auto it = prepared_at.find(ptr_to_longint(rr->procDescriptor.get()));
+            if(it != prepared_at.end() && it->second.descriptor != descriptor)
+            {
+                rr->procDescriptor = ptr_from_longint<ProcPtr>(it->second.procDescriptor);
+                rr->routineFlags = it->second.routineFlags;
+            }
         }
-        rr->procDescriptor = (ProcPtr)main.get();
-        rr->routineFlags = rr->routineFlags & ~(kProcDescriptorIsRelative | kFragmentNeedsPreparing);
+        if(rr->routineFlags & kFragmentNeedsPreparing)
+        {
+            PreparedRecord was = { descriptor, ptr_to_longint(rr->procDescriptor.get()), rr->routineFlags };
+            uint32_t container = was.procDescriptor;
+            if(rr->routineFlags & kProcDescriptorIsRelative)
+                container += descriptor;
+            GUEST<ConnectionID> conn;
+            GUEST<Ptr> main;
+            Str255 err;
+            OSErr e = GetMemFragment(ptr_from_longint<void *>(container), 0, (StringPtr) "\0",
+                                     kReferenceCFrag, &conn, &main, err);
+            if(e != noErr || !main)
+            {
+                fprintf(stderr, "[Executor] Mixed Mode: preparing the fragment at $%08x failed (%d)\n",
+                        container, e);
+                return 0;
+            }
+            rr->procDescriptor = (ProcPtr)main.get();
+            rr->routineFlags = rr->routineFlags & ~(kProcDescriptorIsRelative | kFragmentNeedsPreparing);
+            if(was.routineFlags & kProcDescriptorIsRelative)
+                prepared_at[ptr_to_longint(main.get())] = was;
+        }
     }
 
     procinfo = routine->procInfo;

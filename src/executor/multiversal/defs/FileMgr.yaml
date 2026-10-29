@@ -1055,6 +1055,7 @@
 - lowmem:
     name: DrvQHdr
     type: QHdr
+    accessor: pointer
     address: 0x308
     comment: |
       FileMgr IMIV-182 (true);
@@ -1091,6 +1092,7 @@
 - lowmem:
     name: VCBQHdr
     type: QHdr
+    accessor: pointer
     address: 0x356
     comment: |
       FileMgr IMIV-178 (true);
@@ -1100,6 +1102,7 @@
 - lowmem:
     name: FSQHdr
     type: QHdr
+    accessor: pointer
     address: 0x360
     comment: |
       FileMgr IMIV-176 (true);

@@ -405,6 +405,22 @@ int32_t ROMlib_syszone_reserve_left()
     return (sysheap_limit - 8) - ((Ptr)ZONE_BK_LIM(LM(SysZone)) + MIN_BLOCK_SIZE);
 }
 
+/* PrivateInterfaceLib's SysZoneFloatSizes: the free block at the top of
+   the System heap (what growth extends) and the room it can grow into. */
+OSErr C_SysZoneFloatSizes(GUEST<Size> *topFree, GUEST<Size> *growSpace)
+{
+    THz sys = LM(SysZone);
+    block_header_t *last = ZONE_BK_LIM(sys);
+    Size top = 0;
+    for(block_header_t *b = ZONE_HEAP_DATA(sys); b != last; b = BLOCK_NEXT(b))
+        top = USE(b) == FREE ? top + PSIZE(b) : 0;
+    if(topFree)
+        *topFree = top;
+    if(growSpace)
+        *growSpace = std::max<int32_t>(ROMlib_syszone_reserve_left(), 0);
+    return noErr;
+}
+
 /* pascal long GrowZone(Size cbNeeded): the System heap's grow-zone
    procedure, so an allocation the heap cannot satisfy grows it. */
 static syn68k_addr_t syszone_grow_stub(syn68k_addr_t, void *)

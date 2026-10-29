@@ -841,3 +841,9 @@ void Executor::C_mdef0(INTEGER mess, MenuHandle mh, Rect *rp, Point p,
     HUnlock((Handle)th);
     DisposeHandle((Handle)th);
 }
+
+void Executor::C_StandardMDEF(INTEGER message, MenuHandle theMenu, Rect *menuRect, Point hitPt,
+                              GUEST<INTEGER> *whichItem)
+{
+    C_mdef0(message, theMenu, menuRect, hitPt, whichItem);
+}
