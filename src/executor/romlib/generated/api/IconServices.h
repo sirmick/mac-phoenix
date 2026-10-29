@@ -266,6 +266,10 @@ OSErr C_GetIconRefFromFolder(INTEGER vRefNum, LONGINT parentFolderID, LONGINT fo
 LIBRARY_ALSO(IconServicesLib, GetIconRefFromFolder, InterfaceLib);
 
 
+OSErr C_GetIconRefByName(OSType creator, OSType iconType, GUEST<IconRef> *theIconRef);PASCAL_SUBTRAP(GetIconRefByName, 0xAA75, 0x0006, IconServicesDispatch);
+LIBRARY_ALSO(IconServicesLib, GetIconRefByName, InterfaceLib);
+
+
 OSErr C_RegisterIconRefFromIconFamily(OSType creator, OSType iconType, IconFamilyHandle iconFamily, GUEST<IconRef> *theIconRef);PASCAL_SUBTRAP(RegisterIconRefFromIconFamily, 0xAA75, 0x001C, IconServicesDispatch);
 LIBRARY_ALSO(IconServicesLib, RegisterIconRefFromIconFamily, InterfaceLib);
 

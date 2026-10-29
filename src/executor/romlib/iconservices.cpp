@@ -554,6 +554,25 @@ OSErr Executor::C_GetIconRef(INTEGER vRefNum, OSType creator, OSType iconType, G
     return noErr;
 }
 
+/* MacPhoenix: 8.x's IconServicesLib's GetIconRefByName (private selector
+   $06): an IconRef already registered under the creator/type, or the
+   System's icon of that type (which registers it); the Finder's desktop
+   asks for the Trash and the System for its standard icons this way. */
+OSErr Executor::C_GetIconRefByName(OSType creator, OSType iconType, GUEST<IconRef> *theIconRef)
+{
+    if(!theIconRef)
+        return paramErr;
+    IconRef ref = findRegistered(creator, iconType);
+    if(ref)
+        record(ref)->owners++;
+    else if(creator == "macs"_4)
+        ref = systemIcon(iconType);
+    if(!ref)
+        return noSuchIconErr;
+    *theIconRef = ref;
+    return noErr;
+}
+
 OSErr Executor::C_GetIconRefFromFolder(INTEGER vRefNum, LONGINT parentFolderID, LONGINT folderID,
                                        SignedByte attributes, SignedByte accessPrivileges,
                                        GUEST<IconRef> *theIconRef)

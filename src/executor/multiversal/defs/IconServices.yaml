@@ -590,6 +590,28 @@
 
 # ####
 
+# MacPhoenix: 8.x's IconServicesLib exports this private selector as
+# GetIconRefByName (IconServices.md; not in Apple's headers). It is a
+# lookup among the registered IconRefs only, unlike GetIconRef's fallback
+# to a type's icon; the System's own code uses noSuchIconErr to decide to
+# register icon suites under the name.
+- function:
+    name: GetIconRefByName
+    return: OSErr
+    args:
+      - name: creator
+        type: OSType
+      - name: iconType
+        type: OSType
+      - name: theIconRef
+        type: IconRef*
+    dispatcher: IconServicesDispatch
+    selector: 0x06
+    library: IconServicesLib
+    executor: C_
+
+# ####
+
 - function:
     name: RegisterIconRefFromIconFamily
     return: OSErr

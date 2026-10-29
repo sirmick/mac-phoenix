@@ -149,19 +149,19 @@ what it called last (unresolved imports answer 0 and log
   logged, instead of stopping the session (`traps::mixed_mode_call`).
 
 **Where it is now:** the 8.6 Finder runs: its menu bar (File, Edit,
-View, Special) and the desktop pattern, no disk icons yet (Icon
-Services), a black area where a window's Appearance drawing should be.
+View, Special), the desktop pattern and its icons (the startup disk at
+the top right), a black area where a window's Appearance drawing should
+be.
 The 9.0.4 Finder runs as far (no extensions), then says 'The disk ""
 cannot be used, because an error of type -35 occurred'.
 
-Called and still unanswered (8.6, 36 calls): `RegisterAppearanceClient`,
+Called and still unanswered (8.6): `RegisterAppearanceClient`,
 `GetViewsFont`, `SetThemeTextColor`, `SetThemeBackground`, `StandardMDEF`,
 `SetMenuItemKeyGlyph`, `SetSubmenuParentChoosable`, `PopupWindowEntry`;
 the window calls `GetWindowRegion`, `InvalWindowRect`/`Rgn`,
 `ValidWindowRect`, `SetWindowModified`, `Get`/`SetWindowProxyIcon`,
-`SetWindowProxyFSSpec`; Icon Services' `GetIconRefByName`,
-`GetIconRefFromFolder`, `RegisterIconRefFromIconFamily`, `CompositeIconRef`,
-`PlotIconRef`, `IconRefToRgn`, `SetIconDevice`; `RegisterToolboxListener`,
+`SetWindowProxyFSSpec`; Icon Services' `SetIconDevice` (PrivateInterfaceLib
+alias); `RegisterToolboxListener`,
 `RequestVolumeNotification`, the PPC Toolbox (`PPCOpenSync`,
 `PPCInformAsync`), `InsXTime`, `GetWDInfo`, `CRMSearch`,
 `CallOSTrapUniversalProc`. Then a host crash in `EqualString` with a nil
@@ -365,9 +365,9 @@ Next, in order:
    shared; registering twice is one more owner; unregistering invalidates
    at once; a composite holds its parts), the generic icon for an unknown
    creator/type, paramErr for a missing family element. With it the 8.6
-   Finder stays up (menu bar, desktop pattern); no volume icons yet: it
-   learns of volumes through calls still missing (RequestVolumeNotification,
-   GetIconRefByName, the PPC Toolbox, ...). Also Window Manager 2.0's
+   Finder stays up (menu bar, desktop pattern); it learns of volumes
+   through calls still missing (RequestVolumeNotification, the PPC
+   Toolbox, ...). Also Window Manager 2.0's
    InvalWindowRect/Rgn and ValidWindowRect/Rgn (WindowsLib, found on 8.x
    only).
 
@@ -382,6 +382,16 @@ Next, in order:
    includes the icon), invalidates its desktop window, and draws nothing
    between BeginUpdate and EndUpdate: what it draws on an update is the
    next thing to find. The Trash and the other volume are never drawn.
+   Update (2026-10-29): `GetIconRefByName` was the missing piece (private
+   IconServicesLib selector $06). It answers from the registered IconRefs,
+   and for `'macs'` from the System's icon of that type, registering it;
+   the Finder's desktop code asks for `'trsh'`, the System's startup for
+   `'docu'`, `'fldr'`, `'APPL'` and the rest. With the selector exported
+   but answering `noSuchIconErr` those lookups failed and the Finder quit
+   ~2 s after launch; unresolved it got 0 and kept going without icons.
+   Now the Finder stays up, its desktop keeps its icons (the same frame at
+   6 s and 12 s), and it plots the startup disk's icon at
+   (576,28)-(608,60).
 7. **The Finder running**, with the add-on libraries selectable per
    library: Executor's (once finished) or Apple's from the System file.
    Executor keeps the managers 8.x's System replaces the ROM's with
