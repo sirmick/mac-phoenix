@@ -117,8 +117,10 @@ def run_item(n, item, image, port, out, wait, binary, rom=None, source=None):
     if rom:
         # the ROM machine writes its disk: a fresh copy each item
         subprocess.run(["cp", "--reflink=auto", source, image], check=True)
+        # 640x480 as Executor's screen (8.6 takes the largest mode otherwise)
         args = ["--backend", "kpx", "--core", "mame-ppc", "--jit", "--ram", "128",
-                "--disk", image, "--dismiss-shutdown-dialog", "--bridge", rom]
+                "--max-resolution", "640x480", "--disk", image,
+                "--dismiss-shutdown-dialog", "--bridge", rom]
     else:
         args = ["--backend", "executor", "--executor-system", os.path.basename(image),
                 "--executor-ppc", "--bridge"]
