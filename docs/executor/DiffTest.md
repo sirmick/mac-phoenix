@@ -49,9 +49,24 @@ compares the answers line by line.
 | Probe | Covers |
 |---|---|
 | `appr` | AppearanceLib: Gestalt, clients, brushes and text colours, fonts, metrics, styles, window/button/track/tab regions, the theme collection, the private theme and desktop calls of the 8.6 Appearance control panel, every drawing primitive offscreen at 32 and 8 bits |
+| `ctl` | Control Manager 8: every standard kind (values, features, best rectangle, data sizes by tag), embedding, disposal with subcontrols, keyboard focus, 32-bit values, control data with short buffers; Dialog Manager 8.0: items as controls, AppendDITL, ShortenDITL with embedded items |
+| `menu` | Menu Manager with 8.x's calls: metacharacters, insertion order, marks, styles, command keys and glyphs, item icons by number and handle, CalcMenuSize, hierarchical items, MenusLib's 8.5 and private calls, the menu bar clock |
 
-Planned (docs/executor/MacOS8-9.md): Control Manager 8, Dialog Manager 8,
-MenusLib 8.5, Window Manager 2.0, Font Manager and QuickDraw text, Gestalt/
+What they found on their first runs (fixed): GetThemeSoundMask wrote a long
+too many; GetItemStyle wrote a word into a byte; InsertMenuItem with
+several items didn't reverse them (IMIV-55, as 8.6 does); a window's root
+control didn't count as an embedder (CountSubControls, AutoEmbedControl
+failed on it); classic controls answered -30581 where 8.6 answers -30580,
+and control data calls wrote their size output on errors; GetBestControlRect
+failed for definitions that can't compute one (8.6: noErr, the control's
+rectangle); the Code Fragment Manager's calls weren't exported as
+CodeFragmentMgr; SetMenuItemKeyGlyph took any item; IsMenuItemEnabled,
+SetSubmenuParentChoosable, Get/SetMenuItemModifiers, GetMenuItemKeyGlyph,
+InvalidateAllMenuSizes, InvalidateAllCachedMenuPixels,
+RecalculateAllWindowTitleWidths were missing. What's open is in each
+probe's `expected/` file.
+
+Planned: Window Manager 2.0, Font Manager and QuickDraw text, Gestalt/
 Folder Manager/low memory/Process Manager, the Code Fragment Manager,
 Apple event coercions, PrivateInterfaceLib.
 

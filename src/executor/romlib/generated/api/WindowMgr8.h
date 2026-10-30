@@ -599,4 +599,7 @@ OSStatus C_GetPictureFromFile(FSSpec *file, Ptr outPicture);LIBRARY_FUNCTION(Win
 UInt32 C_GetWindowDoubleClickAction();LIBRARY_FUNCTION(WindowsLib, GetWindowDoubleClickAction, C_GetWindowDoubleClickAction);
 
 
+void C_RecalculateAllWindowTitleWidths();LIBRARY_FUNCTION(WindowsLib, RecalculateAllWindowTitleWidths, C_RecalculateAllWindowTitleWidths);
+
+
 } /* namespace Executor */

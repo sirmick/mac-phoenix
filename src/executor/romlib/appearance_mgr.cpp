@@ -887,9 +887,78 @@ Boolean Executor::C_IsWindowCollapsable(WindowRef window)
 
 /* A command key's glyph (Menus.h kMenu*Glyph): accepted; Executor's menu
    definition draws the command character. */
+namespace
+{
+/* Per item (menu, item): the glyph and modifiers the 8.x calls set. */
+struct ItemKeys
+{
+    SInt16 glyph = 0;
+    UInt8 modifiers = 0;
+};
+std::map<std::pair<uint32_t, int>, ItemKeys> item_keys;
+std::set<uint32_t> parent_choosable;
+
+bool valid_item(MenuRef m, int item)
+{
+    return m && item >= 1 && item <= CountMItems(m);
+}
+}
+
 OSErr Executor::C_SetMenuItemKeyGlyph(MenuRef inMenu, SInt16 inItem, SInt16 inGlyph)
 {
-    return inMenu ? noErr : paramErr;
+    if(!valid_item(inMenu, inItem))
+        return paramErr; /* 8.6 */
+    item_keys[{ US_TO_SYN68K(inMenu), inItem }].glyph = inGlyph;
+    return noErr;
+}
+
+OSErr Executor::C_GetMenuItemKeyGlyph(MenuRef inMenu, SInt16 inItem, GUEST<SInt16> *outGlyph)
+{
+    if(!valid_item(inMenu, inItem) || !outGlyph)
+        return paramErr;
+    auto it = item_keys.find({ US_TO_SYN68K(inMenu), inItem });
+    *outGlyph = it == item_keys.end() ? 0 : it->second.glyph;
+    return noErr;
+}
+
+OSErr Executor::C_SetMenuItemModifiers(MenuRef inMenu, SInt16 inItem, UInt8 inModifiers)
+{
+    if(!valid_item(inMenu, inItem))
+        return paramErr;
+    item_keys[{ US_TO_SYN68K(inMenu), inItem }].modifiers = inModifiers;
+    return noErr;
+}
+
+OSErr Executor::C_GetMenuItemModifiers(MenuRef inMenu, SInt16 inItem, UInt8 *outModifiers)
+{
+    if(!valid_item(inMenu, inItem) || !outModifiers)
+        return paramErr;
+    auto it = item_keys.find({ US_TO_SYN68K(inMenu), inItem });
+    *outModifiers = it == item_keys.end() ? 0 : it->second.modifiers;
+    return noErr;
+}
+
+/* An item is enabled when the menu is and its own bit is (items past 31
+   follow the menu's bit); item 0 is the menu itself. */
+Boolean Executor::C_IsMenuItemEnabled(MenuRef menu, UInt16 item)
+{
+    if(!menu)
+        return false;
+    uint32_t flags = (*menu)->enableFlags;
+    if(!(flags & 1))
+        return false;
+    return item == 0 || item > 31 || (flags & (1u << item));
+}
+
+OSStatus Executor::C_SetSubmenuParentChoosable(MenuRef menu, Boolean inChoosable)
+{
+    if(!menu)
+        return paramErr;
+    if(inChoosable)
+        parent_choosable.insert(US_TO_SYN68K(menu));
+    else
+        parent_choosable.erase(US_TO_SYN68K(menu));
+    return noErr;
 }
 
 OSStatus Executor::C_GetViewsFont(ScriptCode script, StringPtr outFontName, GUEST<SInt16> *outFontSize)

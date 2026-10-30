@@ -1,0 +1,954 @@
+# probe 809a0db64f6a3495fec8ee71bc9bb8b6b6ee9f1238c4a7f87ea175dcad666085
+== kind
+kind.0.new: made
+kind.0.values: 1 0 10
+kind.0.features: err 0 00002240
+kind.0.best: err 0 10,10,30,68 base -6
+kind.0.datasize.text: err -30581 -1515870811
+kind.0.datasize.tedh: err -30581 -1515870811
+kind.0.datasize.font: err 0 24
+kind.0.datasize.mhan: err -30581 -1515870811
+kind.0.datasize.mval: err -30581 -1515870811
+kind.0.datasize.lhan: err -30581 -1515870811
+kind.0.datasize.cont: err -30581 -1515870811
+kind.0.datasize.clrn: err -30581 -1515870811
+kind.0.datasize.prog: err -30581 -1515870811
+kind.0.datasize.indi: err -30581 -1515870811
+kind.0.datasize.pass: err -30581 -1515870811
+kind.0.datasize.kfil: err -30581 -1515870811
+kind.0.datasize.sels: err -30581 -1515870811
+kind.0.datasize.bvtp: err -30581 -1515870811
+kind.0.datasize.bvwt: err -30581 -1515870811
+kind.0.datasize.tabe: err -30581 -1515870811
+kind.0.datasize.tabf: err -30581 -1515870811
+kind.0.datasize.time: err -30581 -1515870811
+kind.0.datasize.cics: err -30581 -1515870811
+kind.0.datasize.kbbh: err -30581 -1515870811
+kind.1.new: made
+kind.1.values: 1 0 10
+kind.1.features: err 0 00002240
+kind.1.best: err 0 10,10,32,57 base -7
+kind.1.datasize.text: err -30581 -1515870811
+kind.1.datasize.tedh: err -30581 -1515870811
+kind.1.datasize.font: err 0 24
+kind.1.datasize.mhan: err -30581 -1515870811
+kind.1.datasize.mval: err -30581 -1515870811
+kind.1.datasize.lhan: err -30581 -1515870811
+kind.1.datasize.cont: err -30581 -1515870811
+kind.1.datasize.clrn: err -30581 -1515870811
+kind.1.datasize.prog: err -30581 -1515870811
+kind.1.datasize.indi: err -30581 -1515870811
+kind.1.datasize.pass: err -30581 -1515870811
+kind.1.datasize.kfil: err -30581 -1515870811
+kind.1.datasize.sels: err -30581 -1515870811
+kind.1.datasize.bvtp: err -30581 -1515870811
+kind.1.datasize.bvwt: err -30581 -1515870811
+kind.1.datasize.tabe: err -30581 -1515870811
+kind.1.datasize.tabf: err -30581 -1515870811
+kind.1.datasize.time: err -30581 -1515870811
+kind.1.datasize.cics: err -30581 -1515870811
+kind.1.datasize.kbbh: err -30581 -1515870811
+kind.2.new: made
+kind.2.values: 1 0 10
+kind.2.features: err 0 00002a40
+kind.2.best: err 0 10,10,32,57 base -7
+kind.2.datasize.text: err -30581 -1515870811
+kind.2.datasize.tedh: err -30581 -1515870811
+kind.2.datasize.font: err 0 24
+kind.2.datasize.mhan: err -30581 -1515870811
+kind.2.datasize.mval: err -30581 -1515870811
+kind.2.datasize.lhan: err -30581 -1515870811
+kind.2.datasize.cont: err -30581 -1515870811
+kind.2.datasize.clrn: err -30581 -1515870811
+kind.2.datasize.prog: err -30581 -1515870811
+kind.2.datasize.indi: err -30581 -1515870811
+kind.2.datasize.pass: err -30581 -1515870811
+kind.2.datasize.kfil: err -30581 -1515870811
+kind.2.datasize.sels: err -30581 -1515870811
+kind.2.datasize.bvtp: err -30581 -1515870811
+kind.2.datasize.bvwt: err -30581 -1515870811
+kind.2.datasize.tabe: err -30581 -1515870811
+kind.2.datasize.tabf: err -30581 -1515870811
+kind.2.datasize.time: err -30581 -1515870811
+kind.2.datasize.cics: err -30581 -1515870811
+kind.2.datasize.kbbh: err -30581 -1515870811
+kind.16.new: made
+kind.16.values: 1 0 10
+kind.16.features: err 0 00002011
+kind.16.best: err 0 10,10,30,110 base 0
+kind.16.datasize.text: err -30580 -1515870811
+kind.16.datasize.tedh: err -30580 -1515870811
+kind.16.datasize.font: err -30580 -1515870811
+kind.16.datasize.mhan: err -30580 -1515870811
+kind.16.datasize.mval: err -30580 -1515870811
+kind.16.datasize.lhan: err -30580 -1515870811
+kind.16.datasize.cont: err -30580 -1515870811
+kind.16.datasize.clrn: err -30580 -1515870811
+kind.16.datasize.prog: err -30580 -1515870811
+kind.16.datasize.indi: err -30580 -1515870811
+kind.16.datasize.pass: err -30580 -1515870811
+kind.16.datasize.kfil: err -30580 -1515870811
+kind.16.datasize.sels: err -30580 -1515870811
+kind.16.datasize.bvtp: err -30580 -1515870811
+kind.16.datasize.bvwt: err -30580 -1515870811
+kind.16.datasize.tabe: err -30580 -1515870811
+kind.16.datasize.tabf: err -30580 -1515870811
+kind.16.datasize.time: err -30580 -1515870811
+kind.16.datasize.cics: err -30580 -1515870811
+kind.16.datasize.kbbh: err -30580 -1515870811
+kind.1008.new: made
+kind.1008.values: 1 0 10
+kind.1008.features: err 0 00002240
+kind.1008.best: err 0 10,10,10,10 base 0
+kind.1008.datasize.text: err 0 0
+kind.1008.datasize.tedh: err 0 0
+kind.1008.datasize.font: err 0 0
+kind.1008.datasize.mhan: err 0 0
+kind.1008.datasize.mval: err 0 0
+kind.1008.datasize.lhan: err 0 0
+kind.1008.datasize.cont: err 0 0
+kind.1008.datasize.clrn: err 0 0
+kind.1008.datasize.prog: err 0 0
+kind.1008.datasize.indi: err 0 0
+kind.1008.datasize.pass: err 0 0
+kind.1008.datasize.kfil: err 0 0
+kind.1008.datasize.sels: err 0 0
+kind.1008.datasize.bvtp: err 0 0
+kind.1008.datasize.bvwt: err 0 0
+kind.1008.datasize.tabe: err 0 0
+kind.1008.datasize.tabf: err 0 0
+kind.1008.datasize.time: err 0 0
+kind.1008.datasize.cics: err 0 0
+kind.1008.datasize.kbbh: err 0 0
+kind.32.new: made
+kind.32.values: 0 0 2
+kind.32.features: err 0 00002240
+kind.32.best: err 0 10,10,35,52 base 0
+kind.32.datasize.text: err -30581 -1515870811
+kind.32.datasize.tedh: err -30581 -1515870811
+kind.32.datasize.font: err 0 24
+kind.32.datasize.mhan: err -30581 -1515870811
+kind.32.datasize.mval: err 0 2
+kind.32.datasize.lhan: err -30581 -1515870811
+kind.32.datasize.cont: err 0 6
+kind.32.datasize.clrn: err -30581 -1515870811
+kind.32.datasize.prog: err -30581 -1515870811
+kind.32.datasize.indi: err -30581 -1515870811
+kind.32.datasize.pass: err -30581 -1515870811
+kind.32.datasize.kfil: err -30581 -1515870811
+kind.32.datasize.sels: err -30581 -1515870811
+kind.32.datasize.bvtp: err -30581 -1515870811
+kind.32.datasize.bvwt: err -30581 -1515870811
+kind.32.datasize.tabe: err -30581 -1515870811
+kind.32.datasize.tabf: err -30581 -1515870811
+kind.32.datasize.time: err -30581 -1515870811
+kind.32.datasize.cics: err -30581 -1515870811
+kind.32.datasize.kbbh: err -30581 -1515870811
+kind.33.new: made
+kind.33.values: 0 0 2
+kind.33.features: err 0 00002240
+kind.33.best: err 0 10,10,35,52 base 0
+kind.33.datasize.text: err -30581 -1515870811
+kind.33.datasize.tedh: err -30581 -1515870811
+kind.33.datasize.font: err 0 24
+kind.33.datasize.mhan: err -30581 -1515870811
+kind.33.datasize.mval: err 0 2
+kind.33.datasize.lhan: err -30581 -1515870811
+kind.33.datasize.cont: err 0 6
+kind.33.datasize.clrn: err -30581 -1515870811
+kind.33.datasize.prog: err -30581 -1515870811
+kind.33.datasize.indi: err -30581 -1515870811
+kind.33.datasize.pass: err -30581 -1515870811
+kind.33.datasize.kfil: err -30581 -1515870811
+kind.33.datasize.sels: err -30581 -1515870811
+kind.33.datasize.bvtp: err -30581 -1515870811
+kind.33.datasize.bvwt: err -30581 -1515870811
+kind.33.datasize.tabe: err -30581 -1515870811
+kind.33.datasize.tabf: err -30581 -1515870811
+kind.33.datasize.time: err -30581 -1515870811
+kind.33.datasize.cics: err -30581 -1515870811
+kind.33.datasize.kbbh: err -30581 -1515870811
+kind.34.new: made
+kind.34.values: 0 0 2
+kind.34.features: err 0 00002240
+kind.34.best: err 0 10,10,35,52 base 0
+kind.34.datasize.text: err -30581 -1515870811
+kind.34.datasize.tedh: err -30581 -1515870811
+kind.34.datasize.font: err 0 24
+kind.34.datasize.mhan: err -30581 -1515870811
+kind.34.datasize.mval: err 0 2
+kind.34.datasize.lhan: err -30581 -1515870811
+kind.34.datasize.cont: err 0 6
+kind.34.datasize.clrn: err -30581 -1515870811
+kind.34.datasize.prog: err -30581 -1515870811
+kind.34.datasize.indi: err -30581 -1515870811
+kind.34.datasize.pass: err -30581 -1515870811
+kind.34.datasize.kfil: err -30581 -1515870811
+kind.34.datasize.sels: err -30581 -1515870811
+kind.34.datasize.bvtp: err -30581 -1515870811
+kind.34.datasize.bvwt: err -30581 -1515870811
+kind.34.datasize.tabe: err -30581 -1515870811
+kind.34.datasize.tabf: err -30581 -1515870811
+kind.34.datasize.time: err -30581 -1515870811
+kind.34.datasize.cics: err -30581 -1515870811
+kind.34.datasize.kbbh: err -30581 -1515870811
+kind.48.new: made
+kind.48.values: 1 0 10
+kind.48.features: err 0 00002001
+kind.48.best: err 0 10,10,30,110 base 0
+kind.48.datasize.text: err -30580 -1515870811
+kind.48.datasize.tedh: err -30580 -1515870811
+kind.48.datasize.font: err -30580 -1515870811
+kind.48.datasize.mhan: err -30580 -1515870811
+kind.48.datasize.mval: err -30580 -1515870811
+kind.48.datasize.lhan: err -30580 -1515870811
+kind.48.datasize.cont: err -30580 -1515870811
+kind.48.datasize.clrn: err -30580 -1515870811
+kind.48.datasize.prog: err -30580 -1515870811
+kind.48.datasize.indi: err -30580 -1515870811
+kind.48.datasize.pass: err -30580 -1515870811
+kind.48.datasize.kfil: err -30580 -1515870811
+kind.48.datasize.sels: err -30580 -1515870811
+kind.48.datasize.bvtp: err -30580 -1515870811
+kind.48.datasize.bvwt: err -30580 -1515870811
+kind.48.datasize.tabe: err -30580 -1515870811
+kind.48.datasize.tabf: err -30580 -1515870811
+kind.48.datasize.time: err -30580 -1515870811
+kind.48.datasize.cics: err -30580 -1515870811
+kind.48.datasize.kbbh: err -30580 -1515870811
+kind.49.new: made
+kind.49.values: 1 0 10
+kind.49.features: err 0 00002401
+kind.49.best: err 0 10,10,30,110 base 0
+kind.49.datasize.text: err -30580 -1515870811
+kind.49.datasize.tedh: err -30580 -1515870811
+kind.49.datasize.font: err -30580 -1515870811
+kind.49.datasize.mhan: err -30580 -1515870811
+kind.49.datasize.mval: err -30580 -1515870811
+kind.49.datasize.lhan: err -30580 -1515870811
+kind.49.datasize.cont: err -30580 -1515870811
+kind.49.datasize.clrn: err -30580 -1515870811
+kind.49.datasize.prog: err -30580 -1515870811
+kind.49.datasize.indi: err -30580 -1515870811
+kind.49.datasize.pass: err -30580 -1515870811
+kind.49.datasize.kfil: err -30580 -1515870811
+kind.49.datasize.sels: err -30580 -1515870811
+kind.49.datasize.bvtp: err -30580 -1515870811
+kind.49.datasize.bvwt: err -30580 -1515870811
+kind.49.datasize.tabe: err -30580 -1515870811
+kind.49.datasize.tabf: err -30580 -1515870811
+kind.49.datasize.time: err -30580 -1515870811
+kind.49.datasize.cics: err -30580 -1515870811
+kind.49.datasize.kbbh: err -30580 -1515870811
+kind.64.new: made
+kind.64.values: 1 0 10
+kind.64.features: err 0 00002040
+kind.64.best: err 0 10,10,30,110 base 0
+kind.64.datasize.text: err -30581 -1515870811
+kind.64.datasize.tedh: err -30581 -1515870811
+kind.64.datasize.font: err 0 24
+kind.64.datasize.mhan: err -30581 -1515870811
+kind.64.datasize.mval: err -30581 -1515870811
+kind.64.datasize.lhan: err -30581 -1515870811
+kind.64.datasize.cont: err -30581 -1515870811
+kind.64.datasize.clrn: err -30581 -1515870811
+kind.64.datasize.prog: err -30581 -1515870811
+kind.64.datasize.indi: err -30581 -1515870811
+kind.64.datasize.pass: err -30581 -1515870811
+kind.64.datasize.kfil: err -30581 -1515870811
+kind.64.datasize.sels: err -30581 -1515870811
+kind.64.datasize.bvtp: err -30581 -1515870811
+kind.64.datasize.bvwt: err -30581 -1515870811
+kind.64.datasize.tabe: err -30581 -1515870811
+kind.64.datasize.tabf: err -30581 -1515870811
+kind.64.datasize.time: err -30581 -1515870811
+kind.64.datasize.cics: err -30581 -1515870811
+kind.64.datasize.kbbh: err -30581 -1515870811
+kind.80.new: made
+kind.80.values: 1 0 10
+kind.80.features: err 0 00000048
+kind.80.best: err 0 10,10,30,110 base 0
+kind.80.datasize.text: err -30581 -1515870811
+kind.80.datasize.tedh: err -30581 -1515870811
+kind.80.datasize.font: err -30581 -1515870811
+kind.80.datasize.mhan: err -30581 -1515870811
+kind.80.datasize.mval: err -30581 -1515870811
+kind.80.datasize.lhan: err -30581 -1515870811
+kind.80.datasize.cont: err -30581 -1515870811
+kind.80.datasize.clrn: err -30581 -1515870811
+kind.80.datasize.prog: err -30581 -1515870811
+kind.80.datasize.indi: err -30581 -1515870811
+kind.80.datasize.pass: err -30581 -1515870811
+kind.80.datasize.kfil: err -30581 -1515870811
+kind.80.datasize.sels: err -30581 -1515870811
+kind.80.datasize.bvtp: err -30581 -1515870811
+kind.80.datasize.bvwt: err -30581 -1515870811
+kind.80.datasize.tabe: err -30581 -1515870811
+kind.80.datasize.tabf: err -30581 -1515870811
+kind.80.datasize.time: err -30581 -1515870811
+kind.80.datasize.cics: err -30581 -1515870811
+kind.80.datasize.kbbh: err -30581 -1515870811
+kind.96.new: made
+kind.96.values: 1 0 10
+kind.96.features: err 0 00002000
+kind.96.best: err 0 10,10,30,110 base 0
+kind.96.datasize.text: err -30580 -1515870811
+kind.96.datasize.tedh: err -30580 -1515870811
+kind.96.datasize.font: err -30580 -1515870811
+kind.96.datasize.mhan: err -30580 -1515870811
+kind.96.datasize.mval: err -30580 -1515870811
+kind.96.datasize.lhan: err -30580 -1515870811
+kind.96.datasize.cont: err -30580 -1515870811
+kind.96.datasize.clrn: err -30580 -1515870811
+kind.96.datasize.prog: err -30580 -1515870811
+kind.96.datasize.indi: err -30580 -1515870811
+kind.96.datasize.pass: err -30580 -1515870811
+kind.96.datasize.kfil: err -30580 -1515870811
+kind.96.datasize.sels: err -30580 -1515870811
+kind.96.datasize.bvtp: err -30580 -1515870811
+kind.96.datasize.bvwt: err -30580 -1515870811
+kind.96.datasize.tabe: err -30580 -1515870811
+kind.96.datasize.tabf: err -30580 -1515870811
+kind.96.datasize.time: err -30580 -1515870811
+kind.96.datasize.cics: err -30580 -1515870811
+kind.96.datasize.kbbh: err -30580 -1515870811
+kind.112.new: made
+kind.112.values: 1 0 10
+kind.112.features: err 0 00000008
+kind.112.best: err 0 10,10,30,110 base 0
+kind.112.datasize.text: err -30580 -1515870811
+kind.112.datasize.tedh: err -30580 -1515870811
+kind.112.datasize.font: err -30580 -1515870811
+kind.112.datasize.mhan: err -30580 -1515870811
+kind.112.datasize.mval: err -30580 -1515870811
+kind.112.datasize.lhan: err -30580 -1515870811
+kind.112.datasize.cont: err -30580 -1515870811
+kind.112.datasize.clrn: err -30580 -1515870811
+kind.112.datasize.prog: err -30580 -1515870811
+kind.112.datasize.indi: err -30580 -1515870811
+kind.112.datasize.pass: err -30580 -1515870811
+kind.112.datasize.kfil: err -30580 -1515870811
+kind.112.datasize.sels: err -30580 -1515870811
+kind.112.datasize.bvtp: err -30580 -1515870811
+kind.112.datasize.bvwt: err -30580 -1515870811
+kind.112.datasize.tabe: err -30580 -1515870811
+kind.112.datasize.tabf: err -30580 -1515870811
+kind.112.datasize.time: err -30580 -1515870811
+kind.112.datasize.cics: err -30580 -1515870811
+kind.112.datasize.kbbh: err -30580 -1515870811
+kind.128.new: made
+kind.128.values: 1 1 10
+kind.128.features: err 0 000220e2
+kind.128.best: err 0 10,10,30,110 base 0
+kind.128.datasize.text: err -30581 -1515870811
+kind.128.datasize.tedh: err -30581 -1515870811
+kind.128.datasize.font: err 0 24
+kind.128.datasize.mhan: err -30581 -1515870811
+kind.128.datasize.mval: err -30581 -1515870811
+kind.128.datasize.lhan: err -30581 -1515870811
+kind.128.datasize.cont: err -30581 -1515870811
+kind.128.datasize.clrn: err -30581 -1515870811
+kind.128.datasize.prog: err -30581 -1515870811
+kind.128.datasize.indi: err -30581 -1515870811
+kind.128.datasize.pass: err -30581 -1515870811
+kind.128.datasize.kfil: err -30581 -1515870811
+kind.128.datasize.sels: err -30581 -1515870811
+kind.128.datasize.bvtp: err -30581 -1515870811
+kind.128.datasize.bvwt: err -30581 -1515870811
+kind.128.datasize.tabe: err -30581 -1515870811
+kind.128.datasize.tabf: err -30581 -1515870811
+kind.128.datasize.time: err -30581 -1515870811
+kind.128.datasize.cics: err -30581 -1515870811
+kind.128.datasize.kbbh: err -30581 -1515870811
+kind.129.new: made
+kind.129.values: 1 1 10
+kind.129.features: err 0 000220e2
+kind.129.best: err 0 10,10,30,110 base 0
+kind.129.datasize.text: err -30581 -1515870811
+kind.129.datasize.tedh: err -30581 -1515870811
+kind.129.datasize.font: err 0 24
+kind.129.datasize.mhan: err -30581 -1515870811
+kind.129.datasize.mval: err -30581 -1515870811
+kind.129.datasize.lhan: err -30581 -1515870811
+kind.129.datasize.cont: err -30581 -1515870811
+kind.129.datasize.clrn: err -30581 -1515870811
+kind.129.datasize.prog: err -30581 -1515870811
+kind.129.datasize.indi: err -30581 -1515870811
+kind.129.datasize.pass: err -30581 -1515870811
+kind.129.datasize.kfil: err -30581 -1515870811
+kind.129.datasize.sels: err -30581 -1515870811
+kind.129.datasize.bvtp: err -30581 -1515870811
+kind.129.datasize.bvwt: err -30581 -1515870811
+kind.129.datasize.tabe: err -30581 -1515870811
+kind.129.datasize.tabf: err -30581 -1515870811
+kind.129.datasize.time: err -30581 -1515870811
+kind.129.datasize.cics: err -30581 -1515870811
+kind.129.datasize.kbbh: err -30581 -1515870811
+kind.144.new: made
+kind.144.values: 1 0 10
+kind.144.features: err 0 00000000
+kind.144.best: err 0 10,10,30,110 base 0
+kind.144.datasize.text: err -30580 -1515870811
+kind.144.datasize.tedh: err -30580 -1515870811
+kind.144.datasize.font: err -30580 -1515870811
+kind.144.datasize.mhan: err -30580 -1515870811
+kind.144.datasize.mval: err -30580 -1515870811
+kind.144.datasize.lhan: err -30580 -1515870811
+kind.144.datasize.cont: err -30580 -1515870811
+kind.144.datasize.clrn: err -30580 -1515870811
+kind.144.datasize.prog: err -30580 -1515870811
+kind.144.datasize.indi: err -30580 -1515870811
+kind.144.datasize.pass: err -30580 -1515870811
+kind.144.datasize.kfil: err -30580 -1515870811
+kind.144.datasize.sels: err -30580 -1515870811
+kind.144.datasize.bvtp: err -30580 -1515870811
+kind.144.datasize.bvwt: err -30580 -1515870811
+kind.144.datasize.tabe: err -30580 -1515870811
+kind.144.datasize.tabf: err -30580 -1515870811
+kind.144.datasize.time: err -30580 -1515870811
+kind.144.datasize.cics: err -30580 -1515870811
+kind.144.datasize.kbbh: err -30580 -1515870811
+kind.160.new: made
+kind.160.values: 1 0 10
+kind.160.features: err 0 00020042
+kind.160.best: err 0 10,10,30,110 base 0
+kind.160.datasize.text: err -30581 -1515870811
+kind.160.datasize.tedh: err -30581 -1515870811
+kind.160.datasize.font: err 0 24
+kind.160.datasize.mhan: err -30581 -1515870811
+kind.160.datasize.mval: err -30581 -1515870811
+kind.160.datasize.lhan: err -30581 -1515870811
+kind.160.datasize.cont: err -30581 -1515870811
+kind.160.datasize.clrn: err -30581 -1515870811
+kind.160.datasize.prog: err -30581 -1515870811
+kind.160.datasize.indi: err -30581 -1515870811
+kind.160.datasize.pass: err -30581 -1515870811
+kind.160.datasize.kfil: err -30581 -1515870811
+kind.160.datasize.sels: err -30581 -1515870811
+kind.160.datasize.bvtp: err -30581 -1515870811
+kind.160.datasize.bvwt: err -30581 -1515870811
+kind.160.datasize.tabe: err -30581 -1515870811
+kind.160.datasize.tabf: err -30581 -1515870811
+kind.160.datasize.time: err -30581 -1515870811
+kind.160.datasize.cics: err -30581 -1515870811
+kind.160.datasize.kbbh: err -30581 -1515870811
+kind.161.new: made
+kind.161.values: 0 0 1
+kind.161.features: err 0 00022042
+kind.161.best: err 0 10,10,30,110 base 0
+kind.161.datasize.text: err -30581 -1515870811
+kind.161.datasize.tedh: err -30581 -1515870811
+kind.161.datasize.font: err 0 24
+kind.161.datasize.mhan: err -30581 -1515870811
+kind.161.datasize.mval: err -30581 -1515870811
+kind.161.datasize.lhan: err -30581 -1515870811
+kind.161.datasize.cont: err -30581 -1515870811
+kind.161.datasize.clrn: err -30581 -1515870811
+kind.161.datasize.prog: err -30581 -1515870811
+kind.161.datasize.indi: err -30581 -1515870811
+kind.161.datasize.pass: err -30581 -1515870811
+kind.161.datasize.kfil: err -30581 -1515870811
+kind.161.datasize.sels: err -30581 -1515870811
+kind.161.datasize.bvtp: err -30581 -1515870811
+kind.161.datasize.bvwt: err -30581 -1515870811
+kind.161.datasize.tabe: err -30581 -1515870811
+kind.161.datasize.tabf: err -30581 -1515870811
+kind.161.datasize.time: err -30581 -1515870811
+kind.161.datasize.cics: err -30581 -1515870811
+kind.161.datasize.kbbh: err -30581 -1515870811
+kind.162.new: made
+kind.162.values: 1 0 10
+kind.162.features: err 0 00022042
+kind.162.best: err 0 10,10,30,110 base 0
+kind.162.datasize.text: err -30581 -1515870811
+kind.162.datasize.tedh: err -30581 -1515870811
+kind.162.datasize.font: err 0 24
+kind.162.datasize.mhan: err 0 0
+kind.162.datasize.mval: err -30581 -1515870811
+kind.162.datasize.lhan: err -30581 -1515870811
+kind.162.datasize.cont: err -30581 -1515870811
+kind.162.datasize.clrn: err -30581 -1515870811
+kind.162.datasize.prog: err -30581 -1515870811
+kind.162.datasize.indi: err -30581 -1515870811
+kind.162.datasize.pass: err -30581 -1515870811
+kind.162.datasize.kfil: err -30581 -1515870811
+kind.162.datasize.sels: err -30581 -1515870811
+kind.162.datasize.bvtp: err -30581 -1515870811
+kind.162.datasize.bvwt: err -30581 -1515870811
+kind.162.datasize.tabe: err -30581 -1515870811
+kind.162.datasize.tabf: err -30581 -1515870811
+kind.162.datasize.time: err -30581 -1515870811
+kind.162.datasize.cics: err -30581 -1515870811
+kind.162.datasize.kbbh: err -30581 -1515870811
+kind.164.new: made
+kind.164.values: 1 0 10
+kind.164.features: err 0 00020042
+kind.164.best: err 0 10,10,30,110 base 0
+kind.164.datasize.text: err -30581 -1515870811
+kind.164.datasize.tedh: err -30581 -1515870811
+kind.164.datasize.font: err 0 24
+kind.164.datasize.mhan: err -30581 -1515870811
+kind.164.datasize.mval: err -30581 -1515870811
+kind.164.datasize.lhan: err -30581 -1515870811
+kind.164.datasize.cont: err -30581 -1515870811
+kind.164.datasize.clrn: err -30581 -1515870811
+kind.164.datasize.prog: err -30581 -1515870811
+kind.164.datasize.indi: err -30581 -1515870811
+kind.164.datasize.pass: err -30581 -1515870811
+kind.164.datasize.kfil: err -30581 -1515870811
+kind.164.datasize.sels: err -30581 -1515870811
+kind.164.datasize.bvtp: err -30581 -1515870811
+kind.164.datasize.bvwt: err -30581 -1515870811
+kind.164.datasize.tabe: err -30581 -1515870811
+kind.164.datasize.tabf: err -30581 -1515870811
+kind.164.datasize.time: err -30581 -1515870811
+kind.164.datasize.cics: err -30581 -1515870811
+kind.164.datasize.kbbh: err -30581 -1515870811
+kind.165.new: made
+kind.165.values: 0 0 1
+kind.165.features: err 0 00022042
+kind.165.best: err 0 10,10,30,110 base 0
+kind.165.datasize.text: err -30581 -1515870811
+kind.165.datasize.tedh: err -30581 -1515870811
+kind.165.datasize.font: err 0 24
+kind.165.datasize.mhan: err -30581 -1515870811
+kind.165.datasize.mval: err -30581 -1515870811
+kind.165.datasize.lhan: err -30581 -1515870811
+kind.165.datasize.cont: err -30581 -1515870811
+kind.165.datasize.clrn: err -30581 -1515870811
+kind.165.datasize.prog: err -30581 -1515870811
+kind.165.datasize.indi: err -30581 -1515870811
+kind.165.datasize.pass: err -30581 -1515870811
+kind.165.datasize.kfil: err -30581 -1515870811
+kind.165.datasize.sels: err -30581 -1515870811
+kind.165.datasize.bvtp: err -30581 -1515870811
+kind.165.datasize.bvwt: err -30581 -1515870811
+kind.165.datasize.tabe: err -30581 -1515870811
+kind.165.datasize.tabf: err -30581 -1515870811
+kind.165.datasize.time: err -30581 -1515870811
+kind.165.datasize.cics: err -30581 -1515870811
+kind.165.datasize.kbbh: err -30581 -1515870811
+kind.176.new: made
+kind.176.values: 0 0 1
+kind.176.features: err 0 00000040
+kind.176.best: err 0 10,10,30,110 base 0
+kind.176.datasize.text: err -30581 -1515870811
+kind.176.datasize.tedh: err -30581 -1515870811
+kind.176.datasize.font: err -30581 -1515870811
+kind.176.datasize.mhan: err -30581 -1515870811
+kind.176.datasize.mval: err -30581 -1515870811
+kind.176.datasize.lhan: err -30581 -1515870811
+kind.176.datasize.cont: err 0 6
+kind.176.datasize.clrn: err -30581 -1515870811
+kind.176.datasize.prog: err -30581 -1515870811
+kind.176.datasize.indi: err -30581 -1515870811
+kind.176.datasize.pass: err -30581 -1515870811
+kind.176.datasize.kfil: err -30581 -1515870811
+kind.176.datasize.sels: err -30581 -1515870811
+kind.176.datasize.bvtp: err -30581 -1515870811
+kind.176.datasize.bvwt: err -30581 -1515870811
+kind.176.datasize.tabe: err -30581 -1515870811
+kind.176.datasize.tabf: err -30581 -1515870811
+kind.176.datasize.time: err -30581 -1515870811
+kind.176.datasize.cics: err -30581 -1515870811
+kind.176.datasize.kbbh: err -30581 -1515870811
+kind.240.new: made
+kind.240.values: 1 0 10
+kind.240.features: err 0 00000278
+kind.240.best: err 0 10,10,33,63 base -3
+kind.240.datasize.text: err -30581 -1515870811
+kind.240.datasize.tedh: err -30581 -1515870811
+kind.240.datasize.font: err 0 24
+kind.240.datasize.mhan: err -30581 -1515870811
+kind.240.datasize.mval: err -30581 -1515870811
+kind.240.datasize.lhan: err -30581 -1515870811
+kind.240.datasize.cont: err -30581 -1515870811
+kind.240.datasize.clrn: err -30581 -1515870811
+kind.240.datasize.prog: err -30581 -1515870811
+kind.240.datasize.indi: err -30581 -1515870811
+kind.240.datasize.pass: err -30581 -1515870811
+kind.240.datasize.kfil: err -30581 -1515870811
+kind.240.datasize.sels: err -30581 -1515870811
+kind.240.datasize.bvtp: err -30581 -1515870811
+kind.240.datasize.bvwt: err -30581 -1515870811
+kind.240.datasize.tabe: err -30581 -1515870811
+kind.240.datasize.tabf: err -30581 -1515870811
+kind.240.datasize.time: err -30581 -1515870811
+kind.240.datasize.cics: err -30581 -1515870811
+kind.240.datasize.kbbh: err -30581 -1515870811
+kind.256.new: made
+kind.256.values: 0 0 10
+kind.256.features: err 0 00000041
+kind.256.best: err 0 10,10,30,110 base 0
+kind.256.datasize.text: err -30581 -1515870811
+kind.256.datasize.tedh: err -30581 -1515870811
+kind.256.datasize.font: err -30581 -1515870811
+kind.256.datasize.mhan: err -30581 -1515870811
+kind.256.datasize.mval: err -30581 -1515870811
+kind.256.datasize.lhan: err -30581 -1515870811
+kind.256.datasize.cont: err -30581 -1515870811
+kind.256.datasize.clrn: err -30581 -1515870811
+kind.256.datasize.prog: err -30581 -1515870811
+kind.256.datasize.indi: err -30581 -1515870811
+kind.256.datasize.pass: err -30581 -1515870811
+kind.256.datasize.kfil: err -30581 -1515870811
+kind.256.datasize.sels: err -30581 -1515870811
+kind.256.datasize.bvtp: err -30581 -1515870811
+kind.256.datasize.bvwt: err -30581 -1515870811
+kind.256.datasize.tabe: err -30581 -1515870811
+kind.256.datasize.tabf: err -30581 -1515870811
+kind.256.datasize.time: err -30581 -1515870811
+kind.256.datasize.cics: err -30581 -1515870811
+kind.256.datasize.kbbh: err -30581 -1515870811
+kind.272.new: made
+kind.272.values: 1 0 10
+kind.272.features: err 0 0001037c
+kind.272.best: err 0 10,10,26,110 base -4
+kind.272.datasize.text: err 0 0
+kind.272.datasize.tedh: err -30581 -1515870811
+kind.272.datasize.font: err 0 4
+kind.272.datasize.mhan: err -30581 -1515870811
+kind.272.datasize.mval: err -30581 -1515870811
+kind.272.datasize.lhan: err -30581 -1515870811
+kind.272.datasize.cont: err -30581 -1515870811
+kind.272.datasize.clrn: err -30581 -1515870811
+kind.272.datasize.prog: err -30581 -1515870811
+kind.272.datasize.indi: err -30581 -1515870811
+kind.272.datasize.pass: err -30581 -1515870811
+kind.272.datasize.kfil: err -30581 -1515870811
+kind.272.datasize.sels: err -30581 -1515870811
+kind.272.datasize.bvtp: err -30581 -1515870811
+kind.272.datasize.bvwt: err -30581 -1515870811
+kind.272.datasize.tabe: err -30581 -1515870811
+kind.272.datasize.tabf: err -30581 -1515870811
+kind.272.datasize.time: err -30581 -1515870811
+kind.272.datasize.cics: err -30581 -1515870811
+kind.272.datasize.kbbh: err -30581 -1515870811
+kind.273.new: made
+kind.273.values: 1 0 10
+kind.273.features: err 0 0001037c
+kind.273.best: err 0 10,10,10,110 base 0
+kind.273.datasize.text: err 0 0
+kind.273.datasize.tedh: err -30581 -1515870811
+kind.273.datasize.font: err 0 4
+kind.273.datasize.mhan: err -30581 -1515870811
+kind.273.datasize.mval: err -30581 -1515870811
+kind.273.datasize.lhan: err -30581 -1515870811
+kind.273.datasize.cont: err -30581 -1515870811
+kind.273.datasize.clrn: err -30581 -1515870811
+kind.273.datasize.prog: err -30581 -1515870811
+kind.273.datasize.indi: err -30581 -1515870811
+kind.273.datasize.pass: err -30581 -1515870811
+kind.273.datasize.kfil: err -30581 -1515870811
+kind.273.datasize.sels: err -30581 -1515870811
+kind.273.datasize.bvtp: err -30581 -1515870811
+kind.273.datasize.bvwt: err -30581 -1515870811
+kind.273.datasize.tabe: err -30581 -1515870811
+kind.273.datasize.tabf: err -30581 -1515870811
+kind.273.datasize.time: err -30581 -1515870811
+kind.273.datasize.cics: err -30581 -1515870811
+kind.273.datasize.kbbh: err -30581 -1515870811
+kind.288.new: made
+kind.288.values: 1 0 10
+kind.288.features: err 0 00000240
+kind.288.best: err 0 10,10,26,110 base -4
+kind.288.datasize.text: err 0 0
+kind.288.datasize.tedh: err -30581 -1515870811
+kind.288.datasize.font: err 0 4
+kind.288.datasize.mhan: err -30581 -1515870811
+kind.288.datasize.mval: err -30581 -1515870811
+kind.288.datasize.lhan: err -30581 -1515870811
+kind.288.datasize.cont: err -30581 -1515870811
+kind.288.datasize.clrn: err -30581 -1515870811
+kind.288.datasize.prog: err -30581 -1515870811
+kind.288.datasize.indi: err -30581 -1515870811
+kind.288.datasize.pass: err -30581 -1515870811
+kind.288.datasize.kfil: err -30581 -1515870811
+kind.288.datasize.sels: err -30581 -1515870811
+kind.288.datasize.bvtp: err -30581 -1515870811
+kind.288.datasize.bvwt: err -30581 -1515870811
+kind.288.datasize.tabe: err -30581 -1515870811
+kind.288.datasize.tabf: err -30581 -1515870811
+kind.288.datasize.time: err -30581 -1515870811
+kind.288.datasize.cics: err -30581 -1515870811
+kind.288.datasize.kbbh: err -30581 -1515870811
+kind.304.new: made
+kind.304.values: 0 0 10
+kind.304.features: err 0 00000042
+kind.304.best: err 0 10,10,30,110 base 0
+kind.304.datasize.text: err -30581 -1515870811
+kind.304.datasize.tedh: err -30581 -1515870811
+kind.304.datasize.font: err -30581 -1515870811
+kind.304.datasize.mhan: err -30581 -1515870811
+kind.304.datasize.mval: err -30581 -1515870811
+kind.304.datasize.lhan: err -30581 -1515870811
+kind.304.datasize.cont: err -30581 -1515870811
+kind.304.datasize.clrn: err -30581 -1515870811
+kind.304.datasize.prog: err -30581 -1515870811
+kind.304.datasize.indi: err -30581 -1515870811
+kind.304.datasize.pass: err -30581 -1515870811
+kind.304.datasize.kfil: err -30581 -1515870811
+kind.304.datasize.sels: err -30581 -1515870811
+kind.304.datasize.bvtp: err -30581 -1515870811
+kind.304.datasize.bvwt: err -30581 -1515870811
+kind.304.datasize.tabe: err -30581 -1515870811
+kind.304.datasize.tabf: err -30581 -1515870811
+kind.304.datasize.time: err -30581 -1515870811
+kind.304.datasize.cics: err -30581 -1515870811
+kind.304.datasize.kbbh: err -30581 -1515870811
+kind.320.new: made
+kind.320.values: 0 0 10
+kind.320.features: err 0 00000040
+kind.320.best: err 0 10,10,30,110 base 0
+kind.320.datasize.text: err -30581 -1515870811
+kind.320.datasize.tedh: err -30581 -1515870811
+kind.320.datasize.font: err -30581 -1515870811
+kind.320.datasize.mhan: err -30581 -1515870811
+kind.320.datasize.mval: err -30581 -1515870811
+kind.320.datasize.lhan: err -30581 -1515870811
+kind.320.datasize.cont: err -30591 -1515870811
+kind.320.datasize.clrn: err -30581 -1515870811
+kind.320.datasize.prog: err -30581 -1515870811
+kind.320.datasize.indi: err -30581 -1515870811
+kind.320.datasize.pass: err -30581 -1515870811
+kind.320.datasize.kfil: err -30581 -1515870811
+kind.320.datasize.sels: err -30581 -1515870811
+kind.320.datasize.bvtp: err -30581 -1515870811
+kind.320.datasize.bvwt: err -30581 -1515870811
+kind.320.datasize.tabe: err -30581 -1515870811
+kind.320.datasize.tabf: err -30581 -1515870811
+kind.320.datasize.time: err -30581 -1515870811
+kind.320.datasize.cics: err -30581 -1515870811
+kind.320.datasize.kbbh: err -30581 -1515870811
+kind.352.new: made
+kind.352.values: 0 0 10
+kind.352.features: err 0 00000174
+kind.352.best: err 0 10,10,30,110 base 0
+kind.352.datasize.text: err -30581 -1515870811
+kind.352.datasize.tedh: err -30581 -1515870811
+kind.352.datasize.font: err 0 24
+kind.352.datasize.mhan: err -30581 -1515870811
+kind.352.datasize.mval: err -30581 -1515870811
+kind.352.datasize.lhan: err 0 4
+kind.352.datasize.cont: err -30581 -1515870811
+kind.352.datasize.clrn: err -30581 -1515870811
+kind.352.datasize.prog: err -30581 -1515870811
+kind.352.datasize.indi: err -30581 -1515870811
+kind.352.datasize.pass: err -30581 -1515870811
+kind.352.datasize.kfil: err -30581 -1515870811
+kind.352.datasize.sels: err -30581 -1515870811
+kind.352.datasize.bvtp: err -30581 -1515870811
+kind.352.datasize.bvwt: err -30581 -1515870811
+kind.352.datasize.tabe: err -30581 -1515870811
+kind.352.datasize.tabf: err -30581 -1515870811
+kind.352.datasize.time: err -30581 -1515870811
+kind.352.datasize.cics: err -30581 -1515870811
+kind.352.datasize.kbbh: err -30581 -1515870811
+kind.368.new: made
+kind.368.values: 1 0 10
+kind.368.features: err 0 00002240
+kind.368.best: err 0 10,10,30,68 base -6
+kind.368.datasize.text: err -30581 -1515870811
+kind.368.datasize.tedh: err -30581 -1515870811
+kind.368.datasize.font: err 0 24
+kind.368.datasize.mhan: err -30581 -1515870811
+kind.368.datasize.mval: err -30581 -1515870811
+kind.368.datasize.lhan: err -30581 -1515870811
+kind.368.datasize.cont: err -30581 -1515870811
+kind.368.datasize.clrn: err -30581 -1515870811
+kind.368.datasize.prog: err -30581 -1515870811
+kind.368.datasize.indi: err -30581 -1515870811
+kind.368.datasize.pass: err -30581 -1515870811
+kind.368.datasize.kfil: err -30581 -1515870811
+kind.368.datasize.sels: err -30581 -1515870811
+kind.368.datasize.bvtp: err -30581 -1515870811
+kind.368.datasize.bvwt: err -30581 -1515870811
+kind.368.datasize.tabe: err -30581 -1515870811
+kind.368.datasize.tabf: err -30581 -1515870811
+kind.368.datasize.time: err -30581 -1515870811
+kind.368.datasize.cics: err -30581 -1515870811
+kind.368.datasize.kbbh: err -30581 -1515870811
+kind.384.new: made
+kind.384.values: 1 0 10
+kind.384.features: err 0 00002011
+kind.384.best: err 0 10,10,30,110 base 0
+kind.384.datasize.text: err -30580 -1515870811
+kind.384.datasize.tedh: err -30580 -1515870811
+kind.384.datasize.font: err -30580 -1515870811
+kind.384.datasize.mhan: err -30580 -1515870811
+kind.384.datasize.mval: err -30580 -1515870811
+kind.384.datasize.lhan: err -30580 -1515870811
+kind.384.datasize.cont: err -30580 -1515870811
+kind.384.datasize.clrn: err -30580 -1515870811
+kind.384.datasize.prog: err -30580 -1515870811
+kind.384.datasize.indi: err -30580 -1515870811
+kind.384.datasize.pass: err -30580 -1515870811
+kind.384.datasize.kfil: err -30580 -1515870811
+kind.384.datasize.sels: err -30580 -1515870811
+kind.384.datasize.bvtp: err -30580 -1515870811
+kind.384.datasize.bvwt: err -30580 -1515870811
+kind.384.datasize.tabe: err -30580 -1515870811
+kind.384.datasize.tabf: err -30580 -1515870811
+kind.384.datasize.time: err -30580 -1515870811
+kind.384.datasize.cics: err -30580 -1515870811
+kind.384.datasize.kbbh: err -30580 -1515870811
+kind.385.new: made
+kind.385.values: 1 0 10
+kind.385.features: err 0 00002011
+kind.385.best: err 0 10,10,30,110 base 0
+kind.385.datasize.text: err -30580 -1515870811
+kind.385.datasize.tedh: err -30580 -1515870811
+kind.385.datasize.font: err -30580 -1515870811
+kind.385.datasize.mhan: err -30580 -1515870811
+kind.385.datasize.mval: err -30580 -1515870811
+kind.385.datasize.lhan: err -30580 -1515870811
+kind.385.datasize.cont: err -30580 -1515870811
+kind.385.datasize.clrn: err -30580 -1515870811
+kind.385.datasize.prog: err -30580 -1515870811
+kind.385.datasize.indi: err -30580 -1515870811
+kind.385.datasize.pass: err -30580 -1515870811
+kind.385.datasize.kfil: err -30580 -1515870811
+kind.385.datasize.sels: err -30580 -1515870811
+kind.385.datasize.bvtp: err -30580 -1515870811
+kind.385.datasize.bvwt: err -30580 -1515870811
+kind.385.datasize.tabe: err -30580 -1515870811
+kind.385.datasize.tabf: err -30580 -1515870811
+kind.385.datasize.time: err -30580 -1515870811
+kind.385.datasize.cics: err -30580 -1515870811
+kind.385.datasize.kbbh: err -30580 -1515870811
+kind.386.new: made
+kind.386.values: 1 0 10
+kind.386.features: err 0 00002411
+kind.386.best: err 0 10,10,30,110 base 0
+kind.386.datasize.text: err -30580 -1515870811
+kind.386.datasize.tedh: err -30580 -1515870811
+kind.386.datasize.font: err -30580 -1515870811
+kind.386.datasize.mhan: err -30580 -1515870811
+kind.386.datasize.mval: err -30580 -1515870811
+kind.386.datasize.lhan: err -30580 -1515870811
+kind.386.datasize.cont: err -30580 -1515870811
+kind.386.datasize.clrn: err -30580 -1515870811
+kind.386.datasize.prog: err -30580 -1515870811
+kind.386.datasize.indi: err -30580 -1515870811
+kind.386.datasize.pass: err -30580 -1515870811
+kind.386.datasize.kfil: err -30580 -1515870811
+kind.386.datasize.sels: err -30580 -1515870811
+kind.386.datasize.bvtp: err -30580 -1515870811
+kind.386.datasize.bvwt: err -30580 -1515870811
+kind.386.datasize.tabe: err -30580 -1515870811
+kind.386.datasize.tabf: err -30580 -1515870811
+kind.386.datasize.time: err -30580 -1515870811
+kind.386.datasize.cics: err -30580 -1515870811
+kind.386.datasize.kbbh: err -30580 -1515870811
+kind.400.new: made
+kind.400.values: 1 0 10
+kind.400.features: err 0 00002260
+kind.400.best: err 0 10,10,10,10 base 0
+kind.400.datasize.text: err 0 0
+kind.400.datasize.tedh: err 0 0
+kind.400.datasize.font: err 0 0
+kind.400.datasize.mhan: err 0 0
+kind.400.datasize.mval: err 0 0
+kind.400.datasize.lhan: err 0 0
+kind.400.datasize.cont: err 0 0
+kind.400.datasize.clrn: err 0 0
+kind.400.datasize.prog: err 0 0
+kind.400.datasize.indi: err 0 0
+kind.400.datasize.pass: err 0 0
+kind.400.datasize.kfil: err 0 0
+kind.400.datasize.sels: err 0 0
+kind.400.datasize.bvtp: err 0 0
+kind.400.datasize.bvwt: err 0 0
+kind.400.datasize.tabe: err 0 0
+kind.400.datasize.tabf: err 0 0
+kind.400.datasize.time: err 0 0
+kind.400.datasize.cics: err 0 0
+kind.400.datasize.kbbh: err 0 0
+kind.416.new: made
+kind.416.values: 1 0 10
+kind.416.features: err 0 00000022
+kind.416.best: err 0 10,10,30,110 base 0
+kind.416.datasize.text: err -30580 -1515870811
+kind.416.datasize.tedh: err -30580 -1515870811
+kind.416.datasize.font: err -30580 -1515870811
+kind.416.datasize.mhan: err -30580 -1515870811
+kind.416.datasize.mval: err -30580 -1515870811
+kind.416.datasize.lhan: err -30580 -1515870811
+kind.416.datasize.cont: err -30580 -1515870811
+kind.416.datasize.clrn: err -30580 -1515870811
+kind.416.datasize.prog: err -30580 -1515870811
+kind.416.datasize.indi: err -30580 -1515870811
+kind.416.datasize.pass: err -30580 -1515870811
+kind.416.datasize.kfil: err -30580 -1515870811
+kind.416.datasize.sels: err -30580 -1515870811
+kind.416.datasize.bvtp: err -30580 -1515870811
+kind.416.datasize.bvwt: err -30580 -1515870811
+kind.416.datasize.tabe: err -30580 -1515870811
+kind.416.datasize.tabf: err -30580 -1515870811
+kind.416.datasize.time: err -30580 -1515870811
+kind.416.datasize.cics: err -30580 -1515870811
+kind.416.datasize.kbbh: err -30580 -1515870811
+== embed
+embed.CreateRootControl: err 0
+embed.CreateRootControl.again: err -30587
+embed.root.count: err 0 3
+embed.EmbedControl.a: err 0
+embed.AutoEmbedControl.b: err 0
+embed.group.count: err 0 2
+embed.root.count.after: err 0 1
+embed.a.super: err 0 group
+embed.group.1: err 0 a
+embed.group.3: err -50
+embed.list.before: 4
+embed.focus.initial: err 0 nil
+embed.Advance: err -30585
+embed.focus.1: err 0 nil
+embed.Advance.2: err -30585
+embed.focus.2: err 0 nil
+embed.Reverse: err -30585
+embed.focus.3: err 0 nil
+embed.SetKeyboardFocus.group: err -30582
+embed.Clear: err 0
+embed.focus.cleared: err 0 nil
+embed.root.count.disposed: err 0 0
+embed.list.disposed: 1
+embed.focus.disposed: err 0 nil
+embed.Advance.disposed: err -30585
+== values
+values.32bit: 70000 0 100000
+values.16bit: 4464 0 1696
+values.after16: 500 500
+values.clamped.low: 0
+values.viewsize: 50
+== data
+data.static.set: err 0
+data.static.get.short: err 0 actual 5
+data.static.get.short.bytes: 68656ca5a5a5a5a5
+data.static.get: err 0 actual 5
+data.static.get.bytes: 68656c6c6fa5a5a5
+data.static.get.badtag: err -30581
+data.edit.set: err 0
+data.edit.get: err 0 actual 5
+data.edit.get.bytes: 776f726c64a5a5a5
+data.edit.tedh: err -30581 actual 5 unset
+== dialog
+dialog.NewFeaturesDialog: made
+dialog.CountDITL: 5
+dialog.root: err 0 set
+dialog.root.count: err 0 5
+dialog.item.1: err 0 control
+dialog.item.2: err 0 control
+dialog.item.3: err 0 control
+dialog.item.4: err 0 control
+dialog.item.5: err 0 control
+dialog.CountDITL.appended: 7
+dialog.appended.6: err 0 control
+dialog.appended.6.embed: err 0
+dialog.appended.7: err 0 control
+dialog.appended.7.embed: err 0
+dialog.group.count: err 0 2
+dialog.CountDITL.shortened: 5
+dialog.group.count.shortened: err 0 0
+dialog.root.count.shortened: err 0 6
+dialog.Advance.shortened: err 0
+dialog.disposed: ok

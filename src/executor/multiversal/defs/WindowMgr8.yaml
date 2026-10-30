@@ -1835,3 +1835,12 @@
     return: UInt32
     library: WindowsLib
     executor: C_
+
+# ####
+
+# After a font change, every window's title width again (the 8.6 Appearance
+# control panel; no arguments at its call sites).
+- function:
+    name: RecalculateAllWindowTitleWidths
+    library: WindowsLib
+    executor: C_

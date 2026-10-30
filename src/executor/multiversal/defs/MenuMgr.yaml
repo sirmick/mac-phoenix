@@ -607,13 +607,16 @@
 
 - function:
     name: GetItemStyle
+    comment: |
+      MacPhoenix: the style is a Style, a byte: 8.6 writes one byte there
+      (tests/guest/difftest menu); a word overwrote the caller's next byte.
     args:
       - name: mh
         type: MenuHandle
       - name: item
         type: INTEGER
       - name: stylep
-        type: INTEGER*
+        type: Style*
     trap: 0xA941
     executor: C_
 
@@ -1181,5 +1184,96 @@
     args:
       - name: inConfig
         type: Ptr
+    library: MenusLib
+    executor: C_
+
+# ####
+
+# MenusLib/AppearanceLib 8.x per-item calls (Menus.h): what the census
+# found 8.6 sessions calling. Modifiers and glyphs are kept per item
+# (Executor's menu definition draws neither yet).
+- function:
+    name: IsMenuItemEnabled
+    return: Boolean
+    args:
+      - name: menu
+        type: MenuRef
+      - name: item
+        type: UInt16
+    library: MenusLib
+    executor: C_
+
+# ####
+
+# Whether choosing a hierarchical item's parent itself is allowed; kept.
+- function:
+    name: SetSubmenuParentChoosable
+    return: OSStatus
+    args:
+      - name: menu
+        type: MenuRef
+      - name: inChoosable
+        type: Boolean
+    library: MenusLib
+    executor: C_
+
+# ####
+
+- function:
+    name: GetMenuItemKeyGlyph
+    return: OSErr
+    args:
+      - name: inMenu
+        type: MenuRef
+      - name: inItem
+        type: SInt16
+      - name: outGlyph
+        type: SInt16*
+    library: AppearanceLib
+    executor: C_
+
+# ####
+
+- function:
+    name: SetMenuItemModifiers
+    return: OSErr
+    args:
+      - name: inMenu
+        type: MenuRef
+      - name: inItem
+        type: SInt16
+      - name: inModifiers
+        type: UInt8
+    library: AppearanceLib
+    executor: C_
+
+# ####
+
+- function:
+    name: GetMenuItemModifiers
+    return: OSErr
+    args:
+      - name: inMenu
+        type: MenuRef
+      - name: inItem
+        type: SInt16
+      - name: outModifiers
+        type: UInt8*
+    library: AppearanceLib
+    executor: C_
+
+# ####
+
+# MenusLib's private calls the 8.6 Appearance control panel makes after a
+# font or theme change (no arguments at its call sites).
+- function:
+    name: InvalidateAllMenuSizes
+    library: MenusLib
+    executor: C_
+
+# ####
+
+- function:
+    name: InvalidateAllCachedMenuPixels
     library: MenusLib
     executor: C_

@@ -6,6 +6,7 @@
 
 #include <base/common.h>
 #include <WindowMgr.h>
+#include <WindowMgr8.h>
 #include <OSUtil.h>
 #include <MemoryMgr.h>
 
@@ -14,6 +15,19 @@
 #include <wind/wind.h>
 
 using namespace Executor;
+
+/* WindowsLib's (8.5): after a font change, every window's title width
+   again (its title is drawn in the Window Manager port's font). */
+void Executor::C_RecalculateAllWindowTitleWidths()
+{
+    ThePortGuard guard(wmgr_port);
+    for(WindowPeek w = LM(WindowList); w; w = WINDOW_NEXT_WINDOW(w))
+        if(WINDOW_TITLE(w))
+        {
+            HLockGuard lock(WINDOW_TITLE(w));
+            WINDOW_TITLE_WIDTH(w) = StringWidth(*WINDOW_TITLE(w));
+        }
+}
 
 void Executor::C_SetWTitle(WindowPtr w, ConstStringPtr t)
 {

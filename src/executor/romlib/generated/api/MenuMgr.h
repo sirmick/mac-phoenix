@@ -7,8 +7,8 @@
  *     MacTypes.h          INTEGER, Handle, LONGINT, Str255,                 *
  *                         ConstStringPtr, ResType, CharParameter,           *
  *                         StringPtr, Boolean, Byte, Rect, OSErr, SInt16,    *
- *                         UInt8, Ptr                                        *
- *     QuickDraw.h         RGBColor                                          *
+ *                         UInt8, Ptr, UInt16                                *
+ *     QuickDraw.h         RGBColor, Style                                   *
  *     DriverServices.h    OSStatus                                          *
  *                                                                           *
  *                                                                           *
@@ -277,7 +277,9 @@ void C_GetItemIcon(MenuHandle mh, INTEGER item, GUEST<INTEGER> *iconp);PASCAL_TR
 void C_SetItemStyle(MenuHandle mh, INTEGER item, INTEGER style);PASCAL_TRAP(SetItemStyle, 0xA942);
 
 
-void C_GetItemStyle(MenuHandle mh, INTEGER item, GUEST<INTEGER> *stylep);PASCAL_TRAP(GetItemStyle, 0xA941);
+// MacPhoenix: the style is a Style, a byte: 8.6 writes one byte there
+// (tests/guest/difftest menu); a word overwrote the caller's next byte.
+void C_GetItemStyle(MenuHandle mh, INTEGER item, Style *stylep);PASCAL_TRAP(GetItemStyle, 0xA941);
 
 
 INTEGER C_CountMItems(MenuHandle mh);PASCAL_TRAP(CountMItems, 0xA950);
@@ -431,6 +433,27 @@ OSStatus C_GetMenuBarClockConfig(Ptr ioConfig);LIBRARY_FUNCTION(MenusLib, GetMen
 
 
 OSStatus C_SetMenuBarClockConfig(Ptr inConfig);LIBRARY_FUNCTION(MenusLib, SetMenuBarClockConfig, C_SetMenuBarClockConfig);
+
+
+Boolean C_IsMenuItemEnabled(MenuRef menu, UInt16 item);LIBRARY_FUNCTION(MenusLib, IsMenuItemEnabled, C_IsMenuItemEnabled);
+
+
+OSStatus C_SetSubmenuParentChoosable(MenuRef menu, Boolean inChoosable);LIBRARY_FUNCTION(MenusLib, SetSubmenuParentChoosable, C_SetSubmenuParentChoosable);
+
+
+OSErr C_GetMenuItemKeyGlyph(MenuRef inMenu, SInt16 inItem, GUEST<SInt16> *outGlyph);LIBRARY_FUNCTION(AppearanceLib, GetMenuItemKeyGlyph, C_GetMenuItemKeyGlyph);
+
+
+OSErr C_SetMenuItemModifiers(MenuRef inMenu, SInt16 inItem, UInt8 inModifiers);LIBRARY_FUNCTION(AppearanceLib, SetMenuItemModifiers, C_SetMenuItemModifiers);
+
+
+OSErr C_GetMenuItemModifiers(MenuRef inMenu, SInt16 inItem, UInt8 *outModifiers);LIBRARY_FUNCTION(AppearanceLib, GetMenuItemModifiers, C_GetMenuItemModifiers);
+
+
+void C_InvalidateAllMenuSizes();LIBRARY_FUNCTION(MenusLib, InvalidateAllMenuSizes, C_InvalidateAllMenuSizes);
+
+
+void C_InvalidateAllCachedMenuPixels();LIBRARY_FUNCTION(MenusLib, InvalidateAllCachedMenuPixels, C_InvalidateAllCachedMenuPixels);
 
 
 } /* namespace Executor */

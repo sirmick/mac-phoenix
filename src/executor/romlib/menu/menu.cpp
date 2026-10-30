@@ -757,12 +757,53 @@ void Executor::C_InsertResMenu(MenuHandle mh, ResType restype, INTEGER after)
 void Executor::C_InsertMenuItem(MenuHandle mh, ConstStringPtr str,
                              INTEGER after) /* IMIV-55 */
 {
-    if(mh)
+    if(!mh)
+        return;
+    /* MacPhoenix: several items (';' or return between them) go in each
+       after `after`, so in reverse order, as IMIV-55 says and 8.6 does
+       (tests/guest/difftest menu). */
+    int start = 1;
+    bool several = false;
+    for(int i = 1; i <= str[0]; i++)
+        if(str[i] == ';' || str[i] == '\r')
+            several = true;
+    if(!several)
+    {
         xInsertResMenu(mh, str, (ResType)0, after);
+        return;
+    }
+    for(int i = 1; i <= str[0] + 1; i++)
+        if(i > str[0] || str[i] == ';' || str[i] == '\r')
+        {
+            Str255 one;
+            one[0] = i - start;
+            memcpy(one + 1, str + start, one[0]);
+            xInsertResMenu(mh, one, (ResType)0, after);
+            start = i + 1;
+        }
 }
 
 #define FIRSTHIER \
     ((muelem *)((char *)(*MENULIST) + (*MENULIST)->muoff) + 2)
+
+/* MenusLib's (8.5): after a theme or font change, every menu in the list
+   (regular and hierarchical) measures itself again. */
+void Executor::C_InvalidateAllMenuSizes()
+{
+    if(!LM(MenuList))
+        return;
+    muelem *mp, *mpend = (*MENULIST)->mulist + (*MENULIST)->muoff / sizeof(muelem);
+    for(mp = (*MENULIST)->mulist; mp != mpend; mp++)
+        dirtymenusize(mp->muhandle);
+    mpend = (*MENULIST)->mulist + HIEROFF / sizeof(muelem);
+    for(mp = FIRSTHIER; mp < mpend; mp++)
+        dirtymenusize(mp->muhandle);
+}
+
+/* Executor keeps no menu pixels. */
+void Executor::C_InvalidateAllCachedMenuPixels()
+{
+}
 
 void Executor::C_InsertMenu(MenuHandle mh, INTEGER before)
 {
@@ -1763,13 +1804,12 @@ void Executor::C_SetItemStyle(MenuHandle mh, INTEGER item, INTEGER style)
     }
 }
 
-void Executor::C_GetItemStyle(MenuHandle mh, INTEGER item,
-                              GUEST<INTEGER> *stylep)
+void Executor::C_GetItemStyle(MenuHandle mh, INTEGER item, Style *stylep)
 {
     mextp mep;
 
     if((mep = ROMlib_mitemtop(mh, item, (StringPtr *)0)))
-        *stylep = (INTEGER)(unsigned char)mep->mstyle;
+        *stylep = mep->mstyle;
 }
 
 INTEGER Executor::C_CountMItems(MenuHandle mh)
