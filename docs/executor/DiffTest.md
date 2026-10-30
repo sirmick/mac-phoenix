@@ -18,6 +18,8 @@ compares the answers line by line.
     contents (bytes, sizes, CRCs), never addresses or times;
   - fill outputs with `SENTINEL` (0xA5) before each call: an output a call
     leaves alone prints as `a5a5...`;
+  - a key with `~` in it is printed for information and not compared
+    (the machine's RAM, free memory);
   - `SECTION("name")`: sections, so a crashed run can resume at the next
     one (`Host:<probe>.start`);
   - `probe_pixels(key, gworld)`: a CRC of an offscreen drawing and, when
@@ -51,6 +53,8 @@ compares the answers line by line.
 | `appr` | AppearanceLib: Gestalt, clients, brushes and text colours, fonts, metrics, styles, window/button/track/tab regions, the theme collection, the private theme and desktop calls of the 8.6 Appearance control panel, every drawing primitive offscreen at 32 and 8 bits |
 | `ctl` | Control Manager 8: every standard kind (values, features, best rectangle, data sizes by tag), embedding, disposal with subcontrols, keyboard focus, 32-bit values, control data with short buffers; Dialog Manager 8.0: items as controls, AppendDITL, ShortenDITL with embedded items |
 | `menu` | Menu Manager with 8.x's calls: metacharacters, insertion order, marks, styles, command keys and glyphs, item icons by number and handle, CalcMenuSize, hierarchical items, MenusLib's 8.5 and private calls, the menu bar clock |
+| `sys` | Gestalt (~120 selectors), FindFolder for each folder type and the folder's name, value-holding low-memory globals, the process's own information, Script Manager variables (system and Roman) |
+| `text` | Font Manager and QuickDraw text: font numbers and names, RealFont, FMSwapFont's output, GetFontInfo, FontMetrics, character widths, StringWidth, MeasureText, TruncString, for 10 fonts x 6 sizes x 9 styles |
 
 What they found on their first runs (fixed): GetThemeSoundMask wrote a long
 too many; GetItemStyle wrote a word into a byte; InsertMenuItem with
@@ -66,9 +70,17 @@ InvalidateAllMenuSizes, InvalidateAllCachedMenuPixels,
 RecalculateAllWindowTitleWidths were missing. What's open is in each
 probe's `expected/` file.
 
-Planned: Window Manager 2.0, Font Manager and QuickDraw text, Gestalt/
-Folder Manager/low memory/Process Manager, the Code Fragment Manager,
-Apple event coercions, PrivateInterfaceLib.
+Open, from `sys` and `text` (their expected files list every key): the
+system font is Charcoal (2002) on 8.6 (`SysFontFam`, Script Manager
+variables) and Chicago in Executor; Charcoal and Monaco 12 aren't real
+fonts to Executor's Font Manager, so 8.6's widths and metrics differ for
+every font; Gestalt selectors 8.6 answers that Executor lacks or answers
+as 7.5 (`'wind'`, `'menu'`, `'mixd'`, `'ppc '`, `'rsrc'`, `'os  '`,
+`'fs  '`, `'snd '`, ...); FindFolder doesn't know `'asup'`, `'cmnu'`,
+`'flnt'`.
+
+Planned: Window Manager 2.0, the Code Fragment Manager, Apple event
+coercions, PrivateInterfaceLib.
 
 ## Related tools
 

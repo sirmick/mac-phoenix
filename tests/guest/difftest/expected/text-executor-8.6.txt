@@ -1,0 +1,16 @@
+# text on Executor (8.6 System) against the G3 (8.6): known differences.
+# Executor's Font Manager doesn't take 8.6's fonts as 8.6 does: Charcoal and Monaco 12
+# aren't real (RealFont false), widths come from other strikes or scaling; per-font
+# metrics and widths differ. key-glob<TAB>reason; narrow these as the Font Manager is fixed.
+font-Charcoal.*	Font Manager: Charcoal's metrics and widths differ from 8.6's
+font-Chicago.*	Font Manager: Chicago's metrics and widths differ from 8.6's
+font-Courier.*	Font Manager: Courier's metrics and widths differ from 8.6's
+font-Geneva.*	Font Manager: Geneva's metrics and widths differ from 8.6's
+font-Helvetica.*	Font Manager: Helvetica's metrics and widths differ from 8.6's
+font-Monaco.*	Font Manager: Monaco's metrics and widths differ from 8.6's
+font-New_York.*	Font Manager: New_York's metrics and widths differ from 8.6's
+font-Palatino.*	Font Manager: Palatino's metrics and widths differ from 8.6's
+font-Symbol.*	Font Manager: Symbol's metrics and widths differ from 8.6's
+font-Times.*	Font Manager: Times's metrics and widths differ from 8.6's
+names.Charcoal.RealFont12	Font Manager: names/real sizes differ from 8.6's
+names.Monaco.RealFont12	Font Manager: names/real sizes differ from 8.6's

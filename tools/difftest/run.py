@@ -61,7 +61,8 @@ def parse(text):
             done = True
         elif ": " in line and not line.startswith(("#", "PASS", "FAIL", "SKIP")):
             k, v = line.split(": ", 1)
-            lines.append((k, v))
+            if "~" not in k:      # "~" keys: information, not compared
+                lines.append((k, v))
     return lines, sections, done
 
 
@@ -173,7 +174,9 @@ def load_expected(path):
         for line in path.read_text().splitlines():
             if line.strip() and not line.startswith("#"):
                 glob, _, reason = line.partition("\t")
-                exp.append((glob.strip(), reason.strip()))
+                # keys may end in spaces (Gestalt 'mmu '): only a line
+                # without a tab is trimmed
+                exp.append((glob if reason else glob.strip(), reason.strip()))
     return exp
 
 
