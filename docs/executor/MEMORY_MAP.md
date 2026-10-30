@@ -233,6 +233,12 @@ Executor follows these rules (`process_layout_partition` in
 `CurrentA5 = partition end - abovea5`, Inside Macintosh's rules, until
 the two open offsets are explained.
 
+On the G3 (a 68k application with SIZE 100K, `tests/guest/partprobe`):
+8.6 makes the partition SIZE preferred + 56K and the stack
+(`CurStackBase - ApplLimit`) `DefltStack` + 16K + about 8 (`DefltStack`
+still reads $6000); 9.0.4 the same with + 68K. Executor takes the rule
+from the System it runs on (`partition_extra()`, `stack_extra()`).
+
 ## Snapshot tooling (on the UAE ROM boot)
 
 - Dump vectors, lowmem and both trap tables; classify each entry by

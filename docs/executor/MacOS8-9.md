@@ -213,6 +213,53 @@ Second run, by looking at the screenshots:
   Communicator, Talkback, the Internet Setup assistants, Memory, Apple
   Menu Options); dimmed static text drawn as hatching (Modem, TCP/IP).
 
+Third run (`~/storage/executor-grid/8.6-r3/`): no host crashes.
+
+* **Partitions** are what 8.6 gives: the SIZE preferred size + 56K, the
+  stack `DefltStack` + 16K (9.0.4: + 68K; 7.5.5 keeps + 16K), measured on
+  the G3 by `tests/guest/partprobe` (ctest `partition_rom_ppc_86`,
+  `partition_executor_86`). With 7.5.5's rule small applications ran out
+  of heap at their first alert: Register StuffIt Expander (100K, a 64K
+  buffer of its own) now shows its alert as on the G3. Where a heap is
+  full anyway, Executor fails as a Mac does instead of crashing:
+  `NewWindow`, `GetCTable`, `NewRgn` answer nil, QuickDraw's region
+  builder and Icon Utilities' scratch fall back to the system heap,
+  `AppendMenu`/`SetMenuItemText` don't write past a menu that can't grow.
+  `--executor-debug allocs` logs every failed allocation (zone size, free)
+  and each partition's layout.
+* **Calls that left their outputs alone.** An unimplemented PowerPC
+  import answers 0, which callers take for noErr with the outputs set:
+  the Appearance panel took stale stack for a desktop pixpat and for a
+  theme variant list, which it then disposed of (one of its own
+  controls). WindowsLib's desktop calls and AppearanceLib's theme calls
+  are Executor's now (signatures from the panel's call sites); Appearance
+  opens, its tabs not drawn right yet (the tab control, panes overlapping).
+* Energy Saver says its extension isn't running (as on a Mac without it);
+  Disk Copy shows its menus (`SetMenuBar`'s copy reused the old master
+  pointer, so the bar looked drawn); Mac OS Setup Assistant and Sherlock
+  start, no window yet.
+* User Profile Manager launches Communicator with an `'appa'` coercion of
+  a `'MOSS'/'prfl'` event (Executor's coercion was an old private format
+  that read only `'odoc'` lists); an application's fragment carries its
+  `'cfrg'` name, which the libraries in Communicator's file import from.
+  Communicator itself still quits: its allocator's pools don't fit in the
+  12.5MB partition once its ~10MB of code is loaded there. Open: whether
+  8.6's Process Manager adds a PowerPC application's code to the
+  partition with virtual memory off (Communicator runs on the G3).
+* Date & Time: the menu bar clock calls (MenusLib, weak imports it makes
+  from 8.2 on) are answered; it now spins in Apple's WindowDefinitions
+  drawing its title (no traps: needs PC sampling).
+
+Still open: Keyboard ("Keyboard Preferences file is in use", after it
+scans the Preferences folder: its 68k code decides why); Memory (no
+window; its RAM Disk trap `$A074`, selectors 9-13, is handled as absent
+by the panel); Network Browser (Apple's Navigation Services calls OS trap
+`$A08E`, selector 1 with a 40-byte block, unknown); StuffIt Expander 6 is
+a Carbon application and the image has no CarbonLib (on a Mac it
+wouldn't open either; Executor should fail the launch with "CarbonLib
+could not be found" rather than stub every import); the rest of the
+list above.
+
 What the first run needed fixed (none of the classic control panels or
 desk accessories opened): the Finder never got the bridge's `'odoc'`
 (Executor's `AESend` dropped events for other processes; and the

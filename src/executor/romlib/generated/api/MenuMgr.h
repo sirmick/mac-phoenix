@@ -7,7 +7,7 @@
  *     MacTypes.h          INTEGER, Handle, LONGINT, Str255,                 *
  *                         ConstStringPtr, ResType, CharParameter,           *
  *                         StringPtr, Boolean, Byte, Rect, OSErr, SInt16,    *
- *                         UInt8                                             *
+ *                         UInt8, Ptr                                        *
  *     QuickDraw.h         RGBColor                                          *
  *     DriverServices.h    OSStatus                                          *
  *                                                                           *
@@ -413,6 +413,24 @@ OSErr C_SetMenuItemIconHandle(MenuRef inMenu, SInt16 inItem, UInt8 inIconType, H
 
 
 OSErr C_GetMenuItemIconHandle(MenuRef inMenu, SInt16 inItem, UInt8 *outIconType, GUEST<Handle> *outIconHandle);LIBRARY_FUNCTION(AppearanceLib, GetMenuItemIconHandle, C_GetMenuItemIconHandle);
+
+
+Boolean C_IsMenuBarClockEnabled();LIBRARY_FUNCTION(MenusLib, IsMenuBarClockEnabled, C_IsMenuBarClockEnabled);
+
+
+OSStatus C_EnableMenuBarClock();LIBRARY_FUNCTION(MenusLib, EnableMenuBarClock, C_EnableMenuBarClock);
+
+
+OSStatus C_DisableMenuBarClock();LIBRARY_FUNCTION(MenusLib, DisableMenuBarClock, C_DisableMenuBarClock);
+
+
+OSStatus C_RefreshMenuBarClock();LIBRARY_FUNCTION(MenusLib, RefreshMenuBarClock, C_RefreshMenuBarClock);
+
+
+OSStatus C_GetMenuBarClockConfig(Ptr ioConfig);LIBRARY_FUNCTION(MenusLib, GetMenuBarClockConfig, C_GetMenuBarClockConfig);
+
+
+OSStatus C_SetMenuBarClockConfig(Ptr inConfig);LIBRARY_FUNCTION(MenusLib, SetMenuBarClockConfig, C_SetMenuBarClockConfig);
 
 
 } /* namespace Executor */

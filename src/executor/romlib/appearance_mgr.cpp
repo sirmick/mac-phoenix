@@ -1033,6 +1033,52 @@ OSStatus Executor::C_InsertMenuItemText(MenuRef menu, ConstStringPtr inString, I
     return LM(MemErr);
 }
 
+/* MenusLib's menu bar clock: kept, not drawn. */
+namespace
+{
+bool clock_enabled;
+uint8_t clock_config[20];
+}
+
+Boolean Executor::C_IsMenuBarClockEnabled()
+{
+    return clock_enabled;
+}
+
+OSStatus Executor::C_EnableMenuBarClock()
+{
+    clock_enabled = true;
+    return noErr;
+}
+
+OSStatus Executor::C_DisableMenuBarClock()
+{
+    clock_enabled = false;
+    return noErr;
+}
+
+OSStatus Executor::C_RefreshMenuBarClock()
+{
+    return noErr;
+}
+
+/* {version word, 20 bytes}: version 0 is the only one. */
+OSStatus Executor::C_GetMenuBarClockConfig(Ptr ioConfig)
+{
+    if(!ioConfig || *(GUEST<int16_t> *)ioConfig != 0)
+        return paramErr;
+    memcpy(ioConfig + 2, clock_config, sizeof clock_config);
+    return noErr;
+}
+
+OSStatus Executor::C_SetMenuBarClockConfig(Ptr inConfig)
+{
+    if(!inConfig || *(GUEST<int16_t> *)inConfig != 0)
+        return paramErr;
+    memcpy(clock_config, inConfig + 2, sizeof clock_config);
+    return noErr;
+}
+
 namespace
 {
 /* Item icons given by handle: kept here (the menu definition draws the

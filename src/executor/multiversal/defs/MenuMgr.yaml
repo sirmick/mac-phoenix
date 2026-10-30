@@ -1124,3 +1124,62 @@
         type: Handle*
     library: AppearanceLib
     executor: C_
+
+# ####
+
+# MenusLib's menu bar clock (8.5; the Date & Time control panel's calls,
+# weak imports it makes once 'sysv' is 8.2 or later; arguments from its call
+# sites): a configuration of a version word (0) and 20 bytes. Executor
+# draws no clock: the configuration and the on/off state are kept and
+# answered.
+- function:
+    name: IsMenuBarClockEnabled
+    return: Boolean
+    library: MenusLib
+    executor: C_
+
+# ####
+
+- function:
+    name: EnableMenuBarClock
+    return: OSStatus
+    library: MenusLib
+    executor: C_
+
+# ####
+
+- function:
+    name: DisableMenuBarClock
+    return: OSStatus
+    library: MenusLib
+    executor: C_
+
+# ####
+
+- function:
+    name: RefreshMenuBarClock
+    return: OSStatus
+    library: MenusLib
+    executor: C_
+
+# ####
+
+- function:
+    name: GetMenuBarClockConfig
+    return: OSStatus
+    args:
+      - name: ioConfig
+        type: Ptr
+    library: MenusLib
+    executor: C_
+
+# ####
+
+- function:
+    name: SetMenuBarClockConfig
+    return: OSStatus
+    args:
+      - name: inConfig
+        type: Ptr
+    library: MenusLib
+    executor: C_
