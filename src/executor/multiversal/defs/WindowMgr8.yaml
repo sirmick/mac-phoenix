@@ -1,0 +1,1768 @@
+# MacPhoenix: MacWindows.h's Mac OS 8 calls (Universal Interfaces 3.4, by
+# tools/multiversal/uih2yaml.py, edited): Window Manager 2.0 (WindowsLib, 8.5)
+# and AppearanceLib's. docs/executor/Appearance.md.
+
+# The Window Manager's errors (MacErrors.h).
+- enum:
+    values:
+      - name: errInvalidWindowPtr
+        value: -5600
+      - name: errUnsupportedWindowAttributesForClass
+        value: -5601
+      - name: errWindowDoesNotHaveProxy
+        value: -5602
+      - name: errInvalidWindowProperty
+        value: -5603
+      - name: errWindowPropertyNotFound
+        value: -5604
+      - name: errUnrecognizedWindowClass
+        value: -5605
+      - name: errCorruptWindowDescription
+        value: -5606
+      - name: errUserWantsToDragWindow
+        value: -5607
+      - name: errWindowsAlreadyInitialized
+        value: -5608
+      - name: errFloatingWindowsNotInitialized
+        value: -5609
+      - name: errWindowRegionCodeInvalid
+        value: -30593
+
+# ####
+
+- typedef:
+    name: PropertyCreator
+    type: OSType
+
+# ####
+
+- typedef:
+    name: PropertyTag
+    type: OSType
+
+# ####
+
+- typedef:
+    name: WindowClass
+    type: UInt32
+
+# ####
+
+- enum:
+    values:
+      - name: kAlertWindowClass
+        value: 1
+      - name: kMovableAlertWindowClass
+        value: 2
+      - name: kModalWindowClass
+        value: 3
+      - name: kMovableModalWindowClass
+        value: 4
+      - name: kFloatingWindowClass
+        value: 5
+      - name: kDocumentWindowClass
+        value: 6
+      - name: kUtilityWindowClass
+        value: 8
+      - name: kHelpWindowClass
+        value: 10
+      - name: kSheetWindowClass
+        value: 11
+      - name: kToolbarWindowClass
+        value: 12
+      - name: kPlainWindowClass
+        value: 13
+      - name: kOverlayWindowClass
+        value: 14
+      - name: kSheetAlertWindowClass
+        value: 15
+      - name: kAltPlainWindowClass
+        value: 16
+      - name: kAllWindowClasses
+        value: "(unsigned long)0xFFFFFFFF"
+
+# ####
+
+- typedef:
+    name: WindowAttributes
+    type: UInt32
+
+# ####
+
+- enum:
+    values:
+      - name: kWindowNoAttributes
+        value: 0
+      - name: kWindowCloseBoxAttribute
+        value: "(1 << 0)"
+      - name: kWindowHorizontalZoomAttribute
+        value: "(1 << 1)"
+      - name: kWindowVerticalZoomAttribute
+        value: "(1 << 2)"
+      - name: kWindowFullZoomAttribute
+        value: "(kWindowVerticalZoomAttribute | kWindowHorizontalZoomAttribute)"
+      - name: kWindowCollapseBoxAttribute
+        value: "(1 << 3)"
+      - name: kWindowResizableAttribute
+        value: "(1 << 4)"
+      - name: kWindowSideTitlebarAttribute
+        value: "(1 << 5)"
+      - name: kWindowNoUpdatesAttribute
+        value: "(1 << 16)"
+      - name: kWindowNoActivatesAttribute
+        value: "(1 << 17)"
+      - name: kWindowOpaqueForEventsAttribute
+        value: "(1 << 18)"
+      - name: kWindowNoShadowAttribute
+        value: "(1 << 21)"
+      - name: kWindowHideOnSuspendAttribute
+        value: "(1 << 24)"
+      - name: kWindowStandardHandlerAttribute
+        value: "(1 << 25)"
+      - name: kWindowHideOnFullScreenAttribute
+        value: "(1 << 26)"
+      - name: kWindowInWindowMenuAttribute
+        value: "(1 << 27)"
+      - name: kWindowLiveResizeAttribute
+        value: "(1 << 28)"
+      - name: kWindowStandardDocumentAttributes
+        value: "(kWindowCloseBoxAttribute | kWindowFullZoomAttribute | kWindowCollapseBoxAttribute | kWindowResizableAttribute)"
+      - name: kWindowStandardFloatingAttributes
+        value: "(kWindowCloseBoxAttribute | kWindowCollapseBoxAttribute)"
+
+# ####
+
+- enum:
+    values:
+      - name: kWindowDefProcType
+        value: "'WDEF'"
+
+# ####
+
+- enum:
+    values:
+      - name: kStandardWindowDefinition
+        value: 0
+      - name: kRoundWindowDefinition
+        value: 1
+      - name: kFloatingWindowDefinition
+        value: 124
+
+# ####
+
+- enum:
+    values:
+      - name: kDocumentWindowVariantCode
+        value: 0
+      - name: kModalDialogVariantCode
+        value: 1
+      - name: kPlainDialogVariantCode
+        value: 2
+      - name: kShadowDialogVariantCode
+        value: 3
+      - name: kMovableModalDialogVariantCode
+        value: 5
+      - name: kAlertVariantCode
+        value: 7
+      - name: kMovableAlertVariantCode
+        value: 9
+      - name: kSideFloaterVariantCode
+        value: 8
+
+# ####
+
+- enum:
+    values:
+      - name: zoomDocProc
+        value: 8
+      - name: zoomNoGrow
+        value: 12
+      - name: floatProc
+        value: 1985
+      - name: floatGrowProc
+        value: 1987
+      - name: floatZoomProc
+        value: 1989
+      - name: floatZoomGrowProc
+        value: 1991
+      - name: floatSideProc
+        value: 1993
+      - name: floatSideGrowProc
+        value: 1995
+      - name: floatSideZoomProc
+        value: 1997
+      - name: floatSideZoomGrowProc
+        value: 1999
+
+# ####
+
+- enum:
+    values:
+      - name: kWindowDocumentDefProcResID
+        value: 64
+      - name: kWindowDialogDefProcResID
+        value: 65
+      - name: kWindowUtilityDefProcResID
+        value: 66
+      - name: kWindowUtilitySideTitleDefProcResID
+        value: 67
+      - name: kWindowSheetDefProcResID
+        value: 68
+      - name: kWindowSimpleDefProcResID
+        value: 69
+      - name: kWindowSheetAlertDefProcResID
+        value: 70
+
+# ####
+
+- enum:
+    values:
+      - name: kWindowDocumentProc
+        value: 1024
+      - name: kWindowGrowDocumentProc
+        value: 1025
+      - name: kWindowVertZoomDocumentProc
+        value: 1026
+      - name: kWindowVertZoomGrowDocumentProc
+        value: 1027
+      - name: kWindowHorizZoomDocumentProc
+        value: 1028
+      - name: kWindowHorizZoomGrowDocumentProc
+        value: 1029
+      - name: kWindowFullZoomDocumentProc
+        value: 1030
+      - name: kWindowFullZoomGrowDocumentProc
+        value: 1031
+
+# ####
+
+- enum:
+    values:
+      - name: kWindowPlainDialogProc
+        value: 1040
+      - name: kWindowShadowDialogProc
+        value: 1041
+      - name: kWindowModalDialogProc
+        value: 1042
+      - name: kWindowMovableModalDialogProc
+        value: 1043
+      - name: kWindowAlertProc
+        value: 1044
+      - name: kWindowMovableAlertProc
+        value: 1045
+
+# ####
+
+- enum:
+    values:
+      - name: kWindowMovableModalGrowProc
+        value: 1046
+
+# ####
+
+- enum:
+    values:
+      - name: kWindowFloatProc
+        value: 1057
+      - name: kWindowFloatGrowProc
+        value: 1059
+      - name: kWindowFloatVertZoomProc
+        value: 1061
+      - name: kWindowFloatVertZoomGrowProc
+        value: 1063
+      - name: kWindowFloatHorizZoomProc
+        value: 1065
+      - name: kWindowFloatHorizZoomGrowProc
+        value: 1067
+      - name: kWindowFloatFullZoomProc
+        value: 1069
+      - name: kWindowFloatFullZoomGrowProc
+        value: 1071
+
+# ####
+
+- enum:
+    values:
+      - name: kWindowFloatSideProc
+        value: 1073
+      - name: kWindowFloatSideGrowProc
+        value: 1075
+      - name: kWindowFloatSideVertZoomProc
+        value: 1077
+      - name: kWindowFloatSideVertZoomGrowProc
+        value: 1079
+      - name: kWindowFloatSideHorizZoomProc
+        value: 1081
+      - name: kWindowFloatSideHorizZoomGrowProc
+        value: 1083
+      - name: kWindowFloatSideFullZoomProc
+        value: 1085
+      - name: kWindowFloatSideFullZoomGrowProc
+        value: 1087
+
+# ####
+
+- enum:
+    values:
+      - name: kWindowSheetProc
+        value: 1088
+      - name: kWindowSheetAlertProc
+        value: 1120
+
+# ####
+
+- enum:
+    values:
+      - name: kWindowSimpleProc
+        value: 1104
+      - name: kWindowSimpleFrameProc
+        value: 1105
+
+# ####
+
+- enum:
+    values:
+      - name: kWindowNoPosition
+        value: 0x0000
+      - name: kWindowDefaultPosition
+        value: 0x0000
+      - name: kWindowCenterMainScreen
+        value: 0x280A
+      - name: kWindowAlertPositionMainScreen
+        value: 0x300A
+      - name: kWindowStaggerMainScreen
+        value: 0x380A
+      - name: kWindowCenterParentWindow
+        value: 0xA80A
+      - name: kWindowAlertPositionParentWindow
+        value: 0xB00A
+      - name: kWindowStaggerParentWindow
+        value: 0xB80A
+      - name: kWindowCenterParentWindowScreen
+        value: 0x680A
+      - name: kWindowAlertPositionParentWindowScreen
+        value: 0x700A
+      - name: kWindowStaggerParentWindowScreen
+        value: 0x780A
+
+# ####
+
+- typedef:
+    name: WindowPositionMethod
+    type: UInt32
+
+# ####
+
+- enum:
+    values:
+      - name: kWindowCenterOnMainScreen
+        value: 0x00000001
+      - name: kWindowCenterOnParentWindow
+        value: 0x00000002
+      - name: kWindowCenterOnParentWindowScreen
+        value: 0x00000003
+      - name: kWindowCascadeOnMainScreen
+        value: 0x00000004
+      - name: kWindowCascadeOnParentWindow
+        value: 0x00000005
+      - name: kWindowCascadeOnParentWindowScreen
+        value: 0x00000006
+      - name: kWindowAlertPositionOnMainScreen
+        value: 0x00000007
+      - name: kWindowAlertPositionOnParentWindow
+        value: 0x00000008
+      - name: kWindowAlertPositionOnParentWindowScreen
+        value: 0x00000009
+
+# ####
+
+- enum:
+    values:
+      - name: kWindowOpaqueRgn
+        value: 35
+
+# ####
+
+- struct:
+    name: GetWindowRegionRec
+    members:
+      - name: winRgn
+        type: RgnHandle
+      - name: regionCode
+        type: WindowRegionCode
+
+# ####
+
+- typedef:
+    name: GetWindowRegionPtr
+    type: GetWindowRegionRec*
+
+# ####
+
+- typedef:
+    name: GetWindowRegionRecPtr
+    type: GetWindowRegionRec*
+
+# ####
+
+- struct:
+    name: SetupWindowProxyDragImageRec
+    members:
+      - name: imageGWorld
+        type: GWorldPtr
+      - name: imageRgn
+        type: RgnHandle
+      - name: outlineRgn
+        type: RgnHandle
+
+# ####
+
+- struct:
+    name: MeasureWindowTitleRec
+    members:
+      - name: fullTitleWidth
+        type: SInt16
+      - name: titleTextWidth
+        type: SInt16
+
+# ####
+
+- typedef:
+    name: MeasureWindowTitleRecPtr
+    type: MeasureWindowTitleRec*
+
+# ####
+
+- struct:
+    name: GetGrowImageRegionRec
+    members:
+      - name: growRect
+        type: Rect
+      - name: growImageRegion
+        type: RgnHandle
+
+# ####
+
+- enum:
+    values:
+      - name: kDialogWindowKind
+        value: 2
+      - name: kApplicationWindowKind
+        value: 8
+
+# ####
+
+- typedef:
+    name: WindowPartCode
+    type: SInt16
+
+# ####
+
+- enum:
+    values:
+      - name: inNoWindow
+        value: 0
+      - name: inCollapseBox
+        value: 11
+      - name: inProxyIcon
+        value: 12
+
+# ####
+
+- typedef:
+    name: WindowDefPartCode
+    type: SInt16
+
+# ####
+
+- enum:
+    values:
+      - name: wInCollapseBox
+        value: 9
+      - name: wInProxyIcon
+        value: 10
+
+# ####
+
+- enum:
+    values:
+      - name: kWindowMsgGetFeatures
+        value: 7
+      - name: kWindowMsgGetRegion
+        value: 8
+
+# ####
+
+- enum:
+    values:
+      - name: kWindowMsgDragHilite
+        value: 9
+      - name: kWindowMsgModified
+        value: 10
+      - name: kWindowMsgDrawInCurrentPort
+        value: 11
+      - name: kWindowMsgSetupProxyDragImage
+        value: 12
+      - name: kWindowMsgStateChanged
+        value: 13
+      - name: kWindowMsgMeasureTitle
+        value: 14
+
+# ####
+
+- enum:
+    values:
+      - name: kWindowMsgGetGrowImageRegion
+        value: 19
+
+# ####
+
+- enum:
+    values:
+      - name: kWindowStateTitleChanged
+        value: "(1 << 0)"
+
+# ####
+
+- enum:
+    values:
+      - name: kWindowCanGrow
+        value: "(1 << 0)"
+      - name: kWindowCanZoom
+        value: "(1 << 1)"
+      - name: kWindowCanCollapse
+        value: "(1 << 2)"
+      - name: kWindowIsModal
+        value: "(1 << 3)"
+      - name: kWindowCanGetWindowRegion
+        value: "(1 << 4)"
+      - name: kWindowIsAlert
+        value: "(1 << 5)"
+      - name: kWindowHasTitleBar
+        value: "(1 << 6)"
+
+# ####
+
+- enum:
+    values:
+      - name: kWindowSupportsDragHilite
+        value: "(1 << 7)"
+      - name: kWindowSupportsModifiedBit
+        value: "(1 << 8)"
+      - name: kWindowCanDrawInCurrentPort
+        value: "(1 << 9)"
+      - name: kWindowCanSetupProxyDragImage
+        value: "(1 << 10)"
+      - name: kWindowCanMeasureTitle
+        value: "(1 << 11)"
+      - name: kWindowWantsDisposeAtProcessDeath
+        value: "(1 << 12)"
+      - name: kWindowSupportsGetGrowImageRegion
+        value: "(1 << 13)"
+      - name: kWindowDefSupportsColorGrafPort
+        value: 0x40000002
+
+# ####
+
+- enum:
+    values:
+      - name: kWindowIsOpaque
+        value: "(1 << 14)"
+
+# ####
+
+- enum:
+    values:
+      - name: kWindowSupportsSetGrowImageRegion
+        value: "(1 << 13)"
+
+# ####
+
+- enum:
+    values:
+      - name: kMouseUpOutOfSlop
+        value: "(long)0x80008000"
+
+# ####
+
+- enum:
+    values:
+      - name: kWindowDefinitionVersionOne
+        value: 1
+      - name: kWindowDefinitionVersionTwo
+        value: 2
+
+# ####
+
+- enum:
+    values:
+      - name: kWindowIsCollapsedState
+        value: "(1 << 0)"
+
+# ####
+
+- enum:
+    values:
+      - name: kStoredWindowSystemTag
+        value: "'appl'"
+      - name: kStoredBasicWindowDescriptionID
+        value: "'sbas'"
+      - name: kStoredWindowPascalTitleID
+        value: "'s255'"
+
+# ####
+
+- typedef:
+    name: WStateDataPtr
+    type: WStateData*
+
+# ####
+
+- typedef:
+    name: WStateDataHandle
+    type: WStateDataPtr*
+
+# ####
+
+- funptr:
+    name: WindowPaintUPP
+    return: OSStatus
+    args:
+      - name: device
+        type: GDHandle
+      - name: qdContext
+        type: GrafPtr
+      - name: window
+        type: WindowRef
+      - name: inClientPaintRgn
+        type: RgnHandle
+      - name: outSystemPaintRgn
+        type: RgnHandle
+      - name: refCon
+        type: void*
+
+# ####
+
+- enum:
+    values:
+      - name: kWindowDefProcPtr
+        value: 0
+      - name: kWindowDefObjectClass
+        value: 1
+      - name: kWindowDefProcID
+        value: 2
+
+# ####
+
+- typedef:
+    name: WindowDefType
+    type: UInt32
+
+# ####
+
+- union:
+    name: WindowDefSpecUnion
+    members:
+      - name: defProc
+        type: WindowDefUPP
+      - name: classRef
+        type: void*
+      - name: procID
+        type: short
+
+# ####
+
+- struct:
+    name: WindowDefSpec
+    members:
+      - name: defType
+        type: WindowDefType
+      - name: u
+        type: WindowDefSpecUnion
+
+# ####
+
+- typedef:
+    name: WindowDefSpecPtr
+    type: WindowDefSpec*
+
+# ####
+
+- function:
+    name: CreateNewWindow
+    return: OSStatus
+    args:
+      - name: windowClass
+        type: WindowClass
+      - name: attributes
+        type: WindowAttributes
+      - name: contentBounds
+        type: const Rect*
+      - name: outWindow
+        type: WindowRef*
+    library: WindowsLib
+
+# ####
+
+- function:
+    name: CreateWindowFromResource
+    return: OSStatus
+    args:
+      - name: resID
+        type: SInt16
+      - name: outWindow
+        type: WindowRef*
+    library: WindowsLib
+
+# ####
+
+- function:
+    name: StoreWindowIntoCollection
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowRef
+      - name: collection
+        type: Collection
+    library: WindowsLib
+
+# ####
+
+- function:
+    name: CreateWindowFromCollection
+    return: OSStatus
+    args:
+      - name: collection
+        type: Collection
+      - name: outWindow
+        type: WindowRef*
+    library: WindowsLib
+
+# ####
+
+- function:
+    name: GetWindowOwnerCount
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowRef
+      - name: outCount
+        type: UInt32*
+    library: WindowsLib
+
+# ####
+
+- function:
+    name: CloneWindow
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowRef
+    library: WindowsLib
+
+# ####
+
+- function:
+    name: GetWindowWidgetHilite
+    return: OSStatus
+    args:
+      - name: inWindow
+        type: WindowRef
+      - name: outHilite
+        type: WindowDefPartCode*
+    library: WindowsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: GetWindowClass
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowRef
+      - name: outClass
+        type: WindowClass*
+    library: WindowsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: GetWindowAttributes
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowRef
+      - name: outAttributes
+        type: WindowAttributes*
+    library: WindowsLib
+    executor: C_
+
+# ####
+
+- typedef:
+    name: WindowModality
+    type: UInt32
+
+# ####
+
+- enum:
+    values:
+      - name: kWindowModalityNone
+        value: 0
+      - name: kWindowModalitySystemModal
+        value: 1
+      - name: kWindowModalityAppModal
+        value: 2
+      - name: kWindowModalityWindowModal
+        value: 3
+
+# ####
+
+- function:
+    name: ShowFloatingWindows
+    return: OSStatus
+    library: WindowsLib
+
+# ####
+
+- function:
+    name: HideFloatingWindows
+    return: OSStatus
+    library: WindowsLib
+
+# ####
+
+- function:
+    name: AreFloatingWindowsVisible
+    return: Boolean
+    library: WindowsLib
+
+# ####
+
+- struct:
+    name: OpaqueWindowGroupRef
+
+- typedef:
+    name: WindowGroupRef
+    type: OpaqueWindowGroupRef*
+
+# ####
+
+- enum:
+    values:
+      - name: windowGroupInvalidErr
+        value: -5616
+
+# ####
+
+- typedef:
+    name: WindowGroupAttributes
+    type: UInt32
+
+# ####
+
+- enum:
+    values:
+      - name: kWindowGroupAttrSelectAsLayer
+        value: "1 << 0"
+      - name: kWindowGroupAttrMoveTogether
+        value: "1 << 1"
+      - name: kWindowGroupAttrLayerTogether
+        value: "1 << 2"
+      - name: kWindowGroupAttrSharedActivation
+        value: "1 << 3"
+      - name: kWindowGroupAttrHideOnCollapse
+        value: "1 << 4"
+
+# ####
+
+- typedef:
+    name: WindowActivationScope
+    type: UInt32
+
+# ####
+
+- enum:
+    values:
+      - name: kWindowActivationScopeNone
+        value: 0
+      - name: kWindowActivationScopeIndependent
+        value: 1
+      - name: kWindowActivationScopeAll
+        value: 2
+
+# ####
+
+- enum:
+    values:
+      - name: kNextWindowGroup
+        value: "true"
+      - name: kPreviousWindowGroup
+        value: "false"
+
+# ####
+
+- typedef:
+    name: WindowGroupContentOptions
+    type: UInt32
+
+# ####
+
+- enum:
+    values:
+      - name: kWindowGroupContentsReturnWindows
+        value: "1 << 0"
+      - name: kWindowGroupContentsRecurse
+        value: "1 << 1"
+      - name: kWindowGroupContentsVisible
+        value: "1 << 2"
+
+# ####
+
+- function:
+    name: SetWindowContentColor
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowRef
+      - name: color
+        type: const RGBColor*
+    library: WindowsLib
+
+# ####
+
+- function:
+    name: GetWindowContentColor
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowRef
+      - name: color
+        type: RGBColor*
+    library: WindowsLib
+
+# ####
+
+- function:
+    name: GetWindowContentPattern
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowRef
+      - name: outPixPat
+        type: PixPatHandle
+    library: WindowsLib
+
+# ####
+
+- function:
+    name: SetWindowContentPattern
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowRef
+      - name: pixPat
+        type: PixPatHandle
+    library: WindowsLib
+
+# ####
+
+- typedef:
+    name: WindowPaintProcOptions
+    type: OptionBits
+
+# ####
+
+- enum:
+    values:
+      - name: kWindowPaintProcOptionsNone
+        value: 0
+
+# ####
+
+- function:
+    name: InstallWindowContentPaintProc
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowRef
+      - name: paintProc
+        type: WindowPaintUPP
+      - name: options
+        type: WindowPaintProcOptions
+      - name: refCon
+        type: void*
+    library: WindowsLib
+
+# ####
+
+- typedef:
+    name: ScrollWindowOptions
+    type: UInt32
+
+# ####
+
+- enum:
+    values:
+      - name: kScrollWindowNoOptions
+        value: 0
+      - name: kScrollWindowInvalidate
+        value: "(1 << 0)"
+      - name: kScrollWindowEraseToPortBackground
+        value: "(1 << 1)"
+
+# ####
+
+- function:
+    name: FrontNonFloatingWindow
+    return: WindowRef
+    library: WindowsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: IsValidWindowPtr
+    return: Boolean
+    args:
+      - name: possibleWindow
+        type: WindowRef
+    library: WindowsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: InitFloatingWindows
+    return: OSStatus
+    library: WindowsLib
+
+# ####
+
+- function:
+    name: GetWindowFeatures
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowRef
+      - name: outFeatures
+        type: UInt32*
+    dispatcher: AppearanceDispatch
+    selector: 0x0013
+    library: AppearanceLib
+    executor: C_
+
+# ####
+
+- function:
+    name: GetWindowStructureWidths
+    return: OSStatus
+    args:
+      - name: inWindow
+        type: WindowRef
+      - name: outRect
+        type: Rect*
+    library: WindowsLib
+
+# ####
+
+- function:
+    name: SetWindowProxyFSSpec
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowRef
+      - name: inFile
+        type: const FSSpec*
+    library: WindowsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: GetWindowProxyFSSpec
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowRef
+      - name: outFile
+        type: FSSpec*
+    library: WindowsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: SetWindowProxyAlias
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowRef
+      - name: alias
+        type: AliasHandle
+    library: WindowsLib
+
+# ####
+
+- function:
+    name: GetWindowProxyAlias
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowRef
+      - name: alias
+        type: AliasHandle*
+    library: WindowsLib
+
+# ####
+
+- function:
+    name: SetWindowProxyCreatorAndType
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowRef
+      - name: fileCreator
+        type: OSType
+      - name: fileType
+        type: OSType
+      - name: vRefNum
+        type: SInt16
+    library: WindowsLib
+
+# ####
+
+- function:
+    name: GetWindowProxyIcon
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowRef
+      - name: outIcon
+        type: IconRef*
+    library: WindowsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: SetWindowProxyIcon
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowRef
+      - name: icon
+        type: IconRef
+    library: WindowsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: RemoveWindowProxy
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowRef
+    library: WindowsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: BeginWindowProxyDrag
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowRef
+      - name: outNewDrag
+        type: DragReference*
+      - name: outDragOutlineRgn
+        type: RgnHandle
+    library: WindowsLib
+
+# ####
+
+- function:
+    name: EndWindowProxyDrag
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowRef
+      - name: theDrag
+        type: DragReference
+    library: WindowsLib
+
+# ####
+
+- function:
+    name: TrackWindowProxyFromExistingDrag
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowRef
+      - name: startPt
+        type: Point
+      - name: drag
+        type: DragReference
+      - name: inDragOutlineRgn
+        type: RgnHandle
+    library: WindowsLib
+
+# ####
+
+- function:
+    name: TrackWindowProxyDrag
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowRef
+      - name: startPt
+        type: Point
+    library: WindowsLib
+
+# ####
+
+- function:
+    name: IsWindowModified
+    return: Boolean
+    args:
+      - name: window
+        type: WindowRef
+    library: WindowsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: SetWindowModified
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowRef
+      - name: modified
+        type: Boolean
+    library: WindowsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: IsWindowPathSelectClick
+    return: Boolean
+    args:
+      - name: window
+        type: WindowRef
+      - name: event
+        type: const EventRecord*
+    library: WindowsLib
+
+# ####
+
+- function:
+    name: WindowPathSelect
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowRef
+      - name: menu
+        type: MenuRef
+      - name: outMenuResult
+        type: SInt32*
+    library: WindowsLib
+
+# ####
+
+- function:
+    name: HiliteWindowFrameForDrag
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowRef
+      - name: hilited
+        type: Boolean
+    library: WindowsLib
+
+# ####
+
+- typedef:
+    name: WindowTransitionEffect
+    type: UInt32
+
+# ####
+
+- enum:
+    values:
+      - name: kWindowZoomTransitionEffect
+        value: 1
+      - name: kWindowSheetTransitionEffect
+        value: 2
+      - name: kWindowSlideTransitionEffect
+        value: 3
+
+# ####
+
+- typedef:
+    name: WindowTransitionAction
+    type: UInt32
+
+# ####
+
+- enum:
+    values:
+      - name: kWindowShowTransitionAction
+        value: 1
+      - name: kWindowHideTransitionAction
+        value: 2
+      - name: kWindowMoveTransitionAction
+        value: 3
+      - name: kWindowResizeTransitionAction
+        value: 4
+
+# ####
+
+- function:
+    name: TransitionWindow
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowRef
+      - name: effect
+        type: WindowTransitionEffect
+      - name: action
+        type: WindowTransitionAction
+      - name: rect
+        type: const Rect*
+    library: WindowsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: GetWindowBounds
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowRef
+      - name: regionCode
+        type: WindowRegionCode
+      - name: globalBounds
+        type: Rect*
+    library: WindowsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: ResizeWindow
+    return: Boolean
+    args:
+      - name: window
+        type: WindowRef
+      - name: startPoint
+        type: Point
+      - name: sizeConstraints
+        type: const Rect*
+      - name: newContentRect
+        type: Rect*
+    library: WindowsLib
+
+# ####
+
+- function:
+    name: SetWindowBounds
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowRef
+      - name: regionCode
+        type: WindowRegionCode
+      - name: globalBounds
+        type: const Rect*
+    library: WindowsLib
+
+# ####
+
+- function:
+    name: RepositionWindow
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowRef
+      - name: parentWindow
+        type: WindowRef
+      - name: method
+        type: WindowPositionMethod
+    library: WindowsLib
+
+# ####
+
+- function:
+    name: MoveWindowStructure
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowRef
+      - name: hGlobal
+        type: short
+      - name: vGlobal
+        type: short
+    library: WindowsLib
+
+# ####
+
+- function:
+    name: IsWindowInStandardState
+    return: Boolean
+    args:
+      - name: window
+        type: WindowRef
+      - name: idealSize
+        type: Point*
+      - name: idealStandardState
+        type: Rect*
+    library: WindowsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: ZoomWindowIdeal
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowRef
+      - name: partCode
+        type: WindowPartCode
+      - name: ioIdealSize
+        type: Point*
+    library: WindowsLib
+
+# ####
+
+- function:
+    name: GetWindowIdealUserState
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowRef
+      - name: userState
+        type: Rect*
+    library: WindowsLib
+
+# ####
+
+- function:
+    name: SetWindowIdealUserState
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowRef
+      - name: userState
+        type: const Rect*
+    library: WindowsLib
+
+# ####
+
+- typedef:
+    name: WindowConstrainOptions
+    type: UInt32
+
+# ####
+
+- enum:
+    values:
+      - name: kWindowConstrainMayResize
+        value: "(1 << 0)"
+      - name: kWindowConstrainMoveRegardlessOfFit
+        value: "(1 << 1)"
+      - name: kWindowConstrainAllowPartial
+        value: "(1 << 2)"
+      - name: kWindowConstrainCalcOnly
+        value: "(1 << 3)"
+      - name: kWindowConstrainStandardOptions
+        value: "kWindowConstrainMoveRegardlessOfFit"
+
+# ####
+
+- function:
+    name: GetWindowProperty
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowRef
+      - name: propertyCreator
+        type: PropertyCreator
+      - name: propertyTag
+        type: PropertyTag
+      - name: bufferSize
+        type: UInt32
+      - name: actualSize
+        type: UInt32*
+      - name: propertyBuffer
+        type: void*
+    library: WindowsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: GetWindowPropertySize
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowRef
+      - name: creator
+        type: PropertyCreator
+      - name: tag
+        type: PropertyTag
+      - name: size
+        type: UInt32*
+    library: WindowsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: SetWindowProperty
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowRef
+      - name: propertyCreator
+        type: PropertyCreator
+      - name: propertyTag
+        type: PropertyTag
+      - name: propertySize
+        type: UInt32
+      - name: propertyBuffer
+        type: void*
+    library: WindowsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: RemoveWindowProperty
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowRef
+      - name: propertyCreator
+        type: PropertyCreator
+      - name: propertyTag
+        type: PropertyTag
+    library: WindowsLib
+    executor: C_
+
+# ####
+
+- enum:
+    values:
+      - name: kWindowPropertyPersistent
+        value: 0x00000001
+
+# ####
+
+- function:
+    name: GetWindowDataHandle
+    return: Handle
+    args:
+      - name: window
+        type: WindowRef
+    library: available
+
+# ####
+
+- function:
+    name: SetWindowDataHandle
+    args:
+      - name: window
+        type: WindowRef
+      - name: data
+        type: Handle
+    library: available
+
+# ####
+
+- function:
+    name: GetWindowZoomFlag
+    return: Boolean
+    args:
+      - name: window
+        type: WindowRef
+    library: available
+
+# ####
+
+- function:
+    name: GetWindowStructureRgn
+    args:
+      - name: window
+        type: WindowRef
+      - name: r
+        type: RgnHandle
+    library: available
+
+# ####
+
+- function:
+    name: GetWindowContentRgn
+    args:
+      - name: window
+        type: WindowRef
+      - name: r
+        type: RgnHandle
+    library: available
+
+# ####
+
+- function:
+    name: GetWindowUpdateRgn
+    args:
+      - name: window
+        type: WindowRef
+      - name: r
+        type: RgnHandle
+    library: available
+
+# ####
+
+- function:
+    name: GetWindowTitleWidth
+    return: SInt16
+    args:
+      - name: window
+        type: WindowRef
+    library: available
+
+# ####
+
+- enum:
+    values:
+      - name: kWindowGroupAttrSelectable
+        value: "kWindowGroupAttrSelectAsLayer"
+      - name: kWindowGroupAttrPositionFixed
+        value: "kWindowGroupAttrMoveTogether"
+      - name: kWindowGroupAttrZOrderFixed
+        value: "kWindowGroupAttrLayerTogether"
+
+# ####
+
+# MacPhoenix: WindowsLib's private calls that 8.6's WindowDefinitions makes
+# (not in MacWindows.h; the arguments from its call sites). The system
+# properties are GetWindowProperty's without a creator: the window
+# definitions keep their title layout and style there ('wdtw', 'wdts', ...).
+- function:
+    name: GetWindowSystemProperty
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowRef
+      - name: tag
+        type: PropertyTag
+      - name: bufferSize
+        type: UInt32
+      - name: actualSize
+        type: UInt32*
+      - name: buffer
+        type: void*
+    library: WindowsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: SetWindowSystemProperty
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowRef
+      - name: tag
+        type: PropertyTag
+      - name: size
+        type: UInt32
+      - name: buffer
+        type: const void*
+    library: WindowsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: RemoveWindowSystemProperty
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowRef
+      - name: tag
+        type: PropertyTag
+    library: WindowsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: WindowHasUnicodeTitle
+    return: Boolean
+    args:
+      - name: window
+        type: WindowRef
+    library: WindowsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: GetWindowTitleLength
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowRef
+      - name: outLength
+        type: UInt32*
+    library: WindowsLib
+    executor: C_
+
+# ####
+
+# Whether a drag over the window has gone far enough to spring it open (the
+# window definitions draw it as the title bar's "dirty" state).
+- function:
+    name: GetWindowGadgetDropThreshold
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowRef
+      - name: outPassed
+        type: Boolean*
+    library: WindowsLib
+    executor: C_
+
+# ####
+
+# Erases a region (global coordinates) of the window's frame with its
+# content colour.
+- function:
+    name: EraseWindowRegion
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowRef
+      - name: region
+        type: RgnHandle
+    library: WindowsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: PostDelayedWindowReshape
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowRef
+    library: WindowsLib
+    executor: C_

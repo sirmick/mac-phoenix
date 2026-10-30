@@ -59,6 +59,13 @@ INTEGER Executor::C_FindControl(Point p, WindowPtr w,
 {
     INTEGER retval;
 
+    /* MacPhoenix: in a window with a root control, the deepest one */
+    ControlHandle hit;
+    if(w && ROMlib_control8_find(w, p, &hit, &retval))
+    {
+        *cp = hit;
+        return retval;
+    }
     retval = w ? find_control_helper(p, WINDOW_CONTROL_LIST(w), cp) : 0;
     if(!retval)
         *cp = 0;
@@ -78,6 +85,10 @@ INTEGER Executor::C_TrackControl(ControlHandle c, Point p,
     Point whereunswapped;
 
     int retval;
+
+    /* MacPhoenix: an 8.x control definition that tracks the mouse itself */
+    if(ROMlib_control8_handles_tracking(c))
+        return ROMlib_control8_track(c, p, a, 0);
 
     CtlCallGuard guard(c);
     partstart = inpart = TestControl(c, p);

@@ -79,6 +79,7 @@ ControlHandle Executor::C_NewControl(WindowPtr wst, const Rect *r, ConstStringPt
         CtlCallGuard guard(retval);
 
         CTLCALL(retval, initCntl, 0);
+        ROMlib_control8_new(retval);
         if(WINDOW_VISIBLE(wst) && vis)
             CTLCALL(retval, drawCntl, 0);
     }
@@ -172,6 +173,7 @@ void Executor::C_DisposeControl(ControlHandle c) /* IMI-321 */
     AuxCtlHandle saveauxh;
 
     HideControl(c);
+    ROMlib_control8_dispose(c); /* its subcontrols first */
     {
         CtlCallGuard guard(c);
 
@@ -198,12 +200,8 @@ void Executor::C_DisposeControl(ControlHandle c) /* IMI-321 */
 
 void Executor::C_KillControls(WindowPtr w) /* IMI-321 */
 {
-    ControlHandle c, t;
-
-    for(c = ((WindowPeek)w)->controlList; c;)
-    {
-        t = c;
-        c = (*c)->nextControl;
-        DisposeControl(t);
-    }
+    /* MacPhoenix: disposing of an embedder disposes of its subcontrols,
+       wherever they are in the list. */
+    while(ControlHandle c = ((WindowPeek)w)->controlList)
+        DisposeControl(c);
 }

@@ -331,8 +331,8 @@ Logging:
   --snapshot-at NAME@SECS    With --deterministic: snapshot SECS virtual seconds after the Finder starts
   --executor-logtraps        Executor logs every trap call to stderr
   --executor-logtraps-nesting N  ... and calls nested N deep in Toolbox callbacks
-  --executor-logtraps-filter LIST  ... only these names (comma-separated wildcards); PowerPC
-                             calls show their caller's address
+  --executor-logtraps-filter LIST  ... only these names (comma-separated wildcards; -NAME leaves
+                             out); PowerPC calls show their caller's address
   --executor-debug OPTS      Executor's own debug options: memcheck (heap checks at every
                              Memory Manager call), allocs (log allocations >= 4K with the
                              calling code), drag (the Drag Manager's dispatch and Finder's

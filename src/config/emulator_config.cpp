@@ -491,7 +491,8 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             printf("                             old/new value, 68k PC and registers, last traps, host stack (Executor)\n");
             printf("  --executor-logtraps-nesting N  ... and calls nested N deep in Toolbox callbacks (default 1)\n");
             printf("  --executor-logtraps-filter LIST  ... only calls whose names match these comma-separated\n");
-            printf("                             wildcards (\"Gestalt,HideWindow,PB*\"): less slowdown\n");
+            printf("                             wildcards (\"Gestalt,HideWindow,PB*\"): less slowdown;\n");
+            printf("                             -NAME leaves calls out (\"-WaitNextEvent,-Get*\")\n");
             printf("  --executor-writable-images Executor mounts disk images read-write (default: read-only)\n");
             printf("  --[no-]executor-ot         Executor answers Open Transport (default: on)\n");
             printf("  --executor-ppc             Executor runs fat applications' PowerPC code (PowerPC-only\n");

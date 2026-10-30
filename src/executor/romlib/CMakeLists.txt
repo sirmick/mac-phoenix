@@ -167,7 +167,7 @@ set(ctl_sources
     #include/ControlMgr.h
     ctl/ctl.h
     ctl/ctlArrows.cpp ctl/ctlDisplay.cpp ctl/ctlIMIV.cpp ctl/ctlInit.cpp ctl/ctlMisc.cpp
-    ctl/ctlMouse.cpp ctl/ctlSet.cpp ctl/ctlSize.cpp ctl/ctlStddef.cpp ctl/ctlPopup.cpp)
+    ctl/ctlMouse.cpp ctl/ctlSet.cpp ctl/ctlSize.cpp ctl/ctlStddef.cpp ctl/ctlPopup.cpp ctl/ctlMgr8.cpp)
 source_group(Controls FILES ${ctl_sources})
 
 set(dial_sources
@@ -353,7 +353,7 @@ set(wind_sources
     
     wind/windColor.cpp wind/windDisplay.cpp wind/windDocdef.cpp
     wind/windInit.cpp wind/windMisc.cpp wind/windMouse.cpp wind/windSize.cpp
-    wind/windUpdate.cpp wind/windRootless.cpp)
+    wind/windUpdate.cpp wind/windRootless.cpp wind/windMgr8.cpp)
 source_group(Windows FILES ${wind_sources})
 
 set(ae_sources
@@ -554,7 +554,7 @@ source_group(MPW FILES ${mpw_sources})
 
 
 set(misc_sources
-  desk.cpp extensions.cpp sysroutines.cpp helppkg.cpp textservices.cpp component.cpp collections.cpp iconservices.cpp appearance_mgr.cpp device.cpp disk.cpp diskinit.cpp dump.cpp
+  desk.cpp extensions.cpp sysroutines.cpp helppkg.cpp textservices.cpp component.cpp collections.cpp iconservices.cpp appearance_mgr.cpp appearance_draw.cpp device.cpp disk.cpp diskinit.cpp dump.cpp
   gestalt.cpp iu.cpp launch.cpp  notify.cpp 
    osutil.cpp pack.cpp scrap.cpp script.cpp segment.cpp serial.cpp hostdisk.cpp
   stdfile.cpp stdfilepkg.cpp romlib_stubs.cpp  toolevent.cpp toolutil.cpp 

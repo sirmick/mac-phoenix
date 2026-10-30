@@ -151,21 +151,28 @@ what it called last (unresolved imports answer 0 and log
 **Where it is now:** the 8.6 Finder runs and stays up: its menu bar
 (File, Edit, View, Special, the Help and Application menus), the desktop
 pattern and all its icons (both volumes, the aliases, the Trash) with
-their names. No window has opened yet: the Appearance Manager is Executor's own now
-(docs/executor/Appearance.md), its drawing and the Control Manager's 8.0
-calls are next.
+their names. Its windows open (2026-10-30): double-clicking the disk
+opens "Macintosh HD" with its folders and "9 items, 302.4 MB available",
+in Apple's WindowDefinitions and ControlDefinitions on Executor's
+Appearance Manager drawing, Window Manager 2.0 and Control Manager 8.0
+(docs/executor/Appearance.md). What it took besides those:
+`VM_GetHoldableBytes` (the Finder sizes its offscreen drawing by it; 0
+threw `memFullErr` and nothing was drawn) and Gestalt `'thds'` bit 2
+(ThreadsLib present): without it the Finder never takes its thread task
+reference, and the thread that fills a window waits on that reference
+forever.
 The 9.0.4 Finder runs as far (no extensions), then says 'The disk ""
 cannot be used, because an error of type -35 occurred'.
 
-Called and still unanswered (8.6, 2026-10-29): `GetQDGlobals`,
+Called and still unanswered (8.6, 2026-10-30): `GetQDGlobals`,
 `QDGet`/`SetPatternOrigin`, `LMGetBrianBits`, `LMGetCurLayer`,
-`IsMenuItemEnabled`, `SetSubmenuParentChoosable`, MenuDispatch $13; the
-window calls `Get`/`Set`/`RemoveWindowSystemProperty`,
-`WindowHasUnicodeTitle`, `SetWindowModified`, `Get`/`SetWindowProxyIcon`,
-`SetWindowProxyFSSpec`; Icon Services' `SetIconDevice`; the PPC Toolbox
-(`PPCOpenSync`, `PPCInformAsync`), `GetWDInfo`, `CRMSearch`, OSDispatch
-$75 (14 argument bytes, after `GetProcessInformation` on the Finder
-itself), a trap called through its address (procInfo $02671822).
+`IsMenuItemEnabled`, `SetSubmenuParentChoosable`, MenuDispatch $13; Icon
+Services' `SetIconDevice`; the PPC Toolbox (`PPCOpenSync`,
+`PPCInformAsync`), `GetWDInfo`, `CRMSearch`, OSDispatch $75 (14 argument
+bytes, after `GetProcessInformation` on the Finder itself), a trap called
+through its address (procInfo $02671822). At startup the Finder also
+writes to a file Executor opened read-only on the host (162 `short write`
+lines, `EBADF`).
 
 ## One Toolbox for 7, 8 and 9
 

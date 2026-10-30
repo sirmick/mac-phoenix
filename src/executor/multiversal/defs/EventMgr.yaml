@@ -118,6 +118,13 @@
 
 # ####
 
+# MacPhoenix: an event's modifiers (Events.h)
+- typedef:
+    name: EventModifiers
+    type: UInt16
+
+# ####
+
 - struct:
     name: EventRecord
     members:

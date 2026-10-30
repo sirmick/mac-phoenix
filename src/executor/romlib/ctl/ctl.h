@@ -72,6 +72,19 @@ extern ControlHandle ROMlib_new_control_at(INTEGER cid, WindowPtr wst,
                                            const Point *topleft);
 #define CTLCALL(c, i, l) ROMlib_ctlcall((c), (i), (l))
 
+/* MacPhoenix: the Control Manager of Mac OS 8 (ctlMgr8.cpp): embedding,
+   the 8.0 messages; what the older calls do with them. */
+extern void ROMlib_control8_new(ControlHandle c);
+extern void ROMlib_control8_dispose(ControlHandle c);
+extern void ROMlib_control8_forget_window(WindowPtr w);
+extern bool ROMlib_control8_embedded(ControlHandle c);
+extern void ROMlib_control8_draw_subs(ControlHandle c);
+extern void ROMlib_control8_show_subs(ControlHandle c, bool show);
+extern bool ROMlib_control8_find(WindowPtr w, Point p, ControlHandle *hit, INTEGER *part);
+extern bool ROMlib_control8_handles_tracking(ControlHandle c);
+extern INTEGER ROMlib_control8_track(ControlHandle c, Point p, ControlActionUPP a,
+                                     EventModifiers modifiers);
+
 class CtlCallGuard : private ThePortGuard
 {
 public:

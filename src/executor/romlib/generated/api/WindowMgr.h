@@ -7,8 +7,8 @@
  *     QuickDraw.h         GrafPtr, CGrafPtr, GrafPort, RgnHandle,           *
  *                         PicHandle, CTabHandle, PixPatHandle               *
  *     MacTypes.h          INTEGER, Boolean, Handle, StringHandle,           *
- *                         LONGINT, Rect, ConstStringPtr, StringPtr,         *
- *                         OSErr, SignedByte, UInt16                         *
+ *                         LONGINT, UInt16, Rect, ConstStringPtr,            *
+ *                         StringPtr, OSErr, SignedByte                      *
  *     EventMgr.h          EventRecord                                       *
  *     DriverServices.h    OSStatus                                          *
  *                                                                           *
@@ -116,6 +116,8 @@ typedef GUEST<ControlPtr> *ControlHandle;
 struct WindowRecord{GUEST_STRUCT;GrafPort port;GUEST<INTEGER> windowKind;Boolean visible;Boolean hilited;Boolean goAwayFlag;Boolean spareFlag;GUEST<RgnHandle> strucRgn;GUEST<RgnHandle> contRgn;GUEST<RgnHandle> updateRgn;GUEST<Handle> windowDefProc;GUEST<Handle> dataHandle;GUEST<StringHandle> titleHandle;GUEST<INTEGER> titleWidth;GUEST<ControlHandle> controlList;GUEST<WindowRecord*> nextWindow;GUEST<PicHandle> windowPic;GUEST<LONGINT> refCon;};static_assert(sizeof(WindowRecord) == 156);void describeStruct(const WindowRecord&, std::ostream&);
 
 typedef WindowRecord *WindowPeek;
+
+typedef UInt16 DragConstraint;
 
 struct WStateData{GUEST_STRUCT;Rect userState;Rect stdState;};static_assert(sizeof(WStateData) == 16);void describeStruct(const WStateData&, std::ostream&);
 

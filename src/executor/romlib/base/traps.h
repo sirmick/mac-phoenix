@@ -653,10 +653,11 @@ public:
 
 void init(bool enableLogging, const std::string& trapFilter = std::string());
 
-/* MacPhoenix: _CodeFragmentDispatch ($AA5A) for 68k code, on a System that
-   only runs on PowerPC Macs (8.0 and later), where CFM is always there;
-   7.x's 68k Mac goes without (traps.cpp). */
-void installCodeFragmentDispatch();
+/* MacPhoenix: the traps of 8.0 and later (traps.cpp): _CodeFragmentDispatch
+   ($AA5A) for 68k code on a System that only runs on PowerPC Macs, where
+   CFM is always there, and the Appearance Manager's ($AA73, $AA74); 7.x's
+   68k Mac goes without. */
+void installSystem8Traps();
 extern std::unordered_map<std::string, traps::Entrypoint*> entrypoints;
 
 }

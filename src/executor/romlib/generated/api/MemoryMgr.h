@@ -307,6 +307,9 @@ void _PurgeSpace_flags(GUEST<Size> *totalp, GUEST<Size> *contigp, bool sys_p);RE
 OSErr C_SysZoneFloatSizes(GUEST<Size> *topFree, GUEST<Size> *growSpace);LIBRARY_FUNCTION(PrivateInterfaceLib, SysZoneFloatSizes, C_SysZoneFloatSizes);
 
 
+int32_t C_VM_GetHoldableBytes();LIBRARY_FUNCTION(PrivateInterfaceLib, VM_GetHoldableBytes, C_VM_GetHoldableBytes);
+
+
 OSErr C_MemError();NOTRAP_FUNCTION(MemError);
 
 

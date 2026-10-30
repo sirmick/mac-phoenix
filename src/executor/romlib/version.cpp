@@ -95,7 +95,7 @@ ROMlib_set_system_version(uint32_t version)
             LM(SysVersion) = version;
             gestalt_set_system_version(version);
             if(version >= 0x0800)
-                traps::installCodeFragmentDispatch();
+                traps::installSystem8Traps();
 
             /* The highlight colour is the one the Color control panel
                saved in extended parameter RAM ($82, 6 bytes; zero, black,

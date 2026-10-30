@@ -583,6 +583,17 @@
 
 # ####
 
+# MacPhoenix: PrivateInterfaceLib's VM_GetHoldableBytes (no trap, not in
+# Apple's headers): the bytes HoldMemory could hold; negative, no limit.
+# The 8.6 Finder sizes its windows' offscreen drawing by it.
+- function:
+    name: VM_GetHoldableBytes
+    return: int32_t
+    library: PrivateInterfaceLib
+    executor: C_
+
+# ####
+
 - function:
     name: MemError
     return: OSErr

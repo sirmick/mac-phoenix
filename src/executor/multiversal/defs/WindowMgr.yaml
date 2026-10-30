@@ -225,6 +225,13 @@
 
 # ####
 
+# MacPhoenix: DragWindow's and the Control Manager's axis (MacWindows.h)
+- typedef:
+    name: DragConstraint
+    type: UInt16
+
+# ####
+
 - struct:
     name: WStateData
     members:

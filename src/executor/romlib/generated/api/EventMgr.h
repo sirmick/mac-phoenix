@@ -4,7 +4,7 @@
  *                                 ==========                                *
  *                                                                           *
  * Needs:                                                                    *
- *     MacTypes.h    INTEGER, LONGINT                                        *
+ *     MacTypes.h    UInt16, INTEGER, LONGINT                                *
  *                                                                           *
  *                                                                           *
  *****************************************************************************/
@@ -79,6 +79,8 @@ enum {rightShiftKey = 8192,
 rightOptionKey = 16384,
 rightControlKey = 32768,
 };
+
+typedef UInt16 EventModifiers;
 
 struct EventRecord{GUEST_STRUCT;GUEST<INTEGER> what;GUEST<LONGINT> message;GUEST<LONGINT> when;GUEST<Point> where;GUEST<INTEGER> modifiers;};static_assert(sizeof(EventRecord) == 16);void describeStruct(const EventRecord&, std::ostream&);
 

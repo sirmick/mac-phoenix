@@ -1896,6 +1896,7 @@
     dispatcher: AppearanceDispatch
     selector: 0x0005
     library: AppearanceLib
+    executor: C_
 
 # ####
 
@@ -1910,6 +1911,7 @@
     dispatcher: AppearanceDispatch
     selector: 0x0006
     library: AppearanceLib
+    executor: C_
 
 # ####
 
@@ -1924,6 +1926,7 @@
     dispatcher: AppearanceDispatch
     selector: 0x0007
     library: AppearanceLib
+    executor: C_
 
 # ####
 
@@ -1938,6 +1941,7 @@
     dispatcher: AppearanceDispatch
     selector: 0x0009
     library: AppearanceLib
+    executor: C_
 
 # ####
 
@@ -1952,6 +1956,7 @@
     dispatcher: AppearanceDispatch
     selector: 0x000A
     library: AppearanceLib
+    executor: C_
 
 # ####
 
@@ -1966,6 +1971,7 @@
     dispatcher: AppearanceDispatch
     selector: 0x000B
     library: AppearanceLib
+    executor: C_
 
 # ####
 
@@ -1980,6 +1986,7 @@
     dispatcher: AppearanceDispatch
     selector: 0x000C
     library: AppearanceLib
+    executor: C_
 
 # ####
 
@@ -1994,6 +2001,7 @@
     dispatcher: AppearanceDispatch
     selector: 0x000D
     library: AppearanceLib
+    executor: C_
 
 # ####
 
@@ -2008,6 +2016,7 @@
     dispatcher: AppearanceDispatch
     selector: 0x000E
     library: AppearanceLib
+    executor: C_
 
 # ####
 
@@ -2022,6 +2031,7 @@
     dispatcher: AppearanceDispatch
     selector: 0x0008
     library: AppearanceLib
+    executor: C_
 
 # ####
 
@@ -2038,6 +2048,7 @@
     dispatcher: AppearanceDispatch
     selector: 0x0022
     library: AppearanceLib
+    executor: C_
 
 # ####
 
@@ -2052,6 +2063,7 @@
     dispatcher: AppearanceDispatch
     selector: 0x0023
     library: AppearanceLib
+    executor: C_
 
 # ####
 
@@ -2288,6 +2300,7 @@
       - name: inState
         type: ThemeDrawState
     library: AppearanceLib
+    executor: C_
 
 # ####
 
@@ -2306,6 +2319,7 @@
       - name: userData
         type: UInt32
     library: AppearanceLib
+    executor: C_
 
 # ####
 
@@ -2322,6 +2336,7 @@
       - name: ioRgn
         type: RgnHandle
     library: AppearanceLib
+    executor: C_
 
 # ####
 
@@ -2427,6 +2442,7 @@
       - name: eraseData
         type: UInt32
     library: AppearanceLib
+    executor: C_
 
 # ####
 
@@ -2441,6 +2457,7 @@
       - name: partHit
         type: ControlPartCode*
     library: AppearanceLib
+    executor: C_
 
 # ####
 
@@ -2453,6 +2470,7 @@
       - name: bounds
         type: Rect*
     library: AppearanceLib
+    executor: C_
 
 # ####
 
@@ -2465,6 +2483,7 @@
       - name: thumbRgn
         type: RgnHandle
     library: AppearanceLib
+    executor: C_
 
 # ####
 
@@ -2477,6 +2496,7 @@
       - name: dragRect
         type: Rect*
     library: AppearanceLib
+    executor: C_
 
 # ####
 
@@ -2493,6 +2513,7 @@
       - name: eraseData
         type: UInt32
     library: AppearanceLib
+    executor: C_
 
 # ####
 
@@ -2507,6 +2528,7 @@
       - name: relativePosition
         type: SInt32*
     library: AppearanceLib
+    executor: C_
 
 # ####
 
@@ -2521,6 +2543,7 @@
       - name: relativePosition
         type: SInt32*
     library: AppearanceLib
+    executor: C_
 
 # ####
 
@@ -2535,6 +2558,7 @@
       - name: value
         type: SInt32*
     library: AppearanceLib
+    executor: C_
 
 # ####
 
@@ -2553,6 +2577,7 @@
       - name: trackBounds
         type: Rect*
     library: AppearanceLib
+    executor: C_
 
 # ####
 
@@ -2571,6 +2596,7 @@
       - name: trackBounds
         type: Rect*
     library: AppearanceLib
+    executor: C_
 
 # ####
 
@@ -2593,6 +2619,7 @@
       - name: partcode
         type: ControlPartCode*
     library: AppearanceLib
+    executor: C_
 
 # ####
 
@@ -2638,6 +2665,7 @@
       - name: titleData
         type: UInt32
     library: AppearanceLib
+    executor: C_
 
 # ####
 
@@ -2658,6 +2686,7 @@
       - name: widget
         type: ThemeTitleBarWidget
     library: AppearanceLib
+    executor: C_
 
 # ####
 
@@ -2680,6 +2709,7 @@
       - name: outRegionHit
         type: WindowRegionCode*
     library: AppearanceLib
+    executor: C_
 
 # ####
 
@@ -2696,6 +2726,7 @@
       - name: attributes
         type: ThemeWindowAttributes
     library: AppearanceLib
+    executor: C_
 
 # ####
 
@@ -2718,6 +2749,7 @@
       - name: inUserData
         type: UInt32
     library: AppearanceLib
+    executor: C_
 
 # ####
 
@@ -2734,6 +2766,7 @@
       - name: outRegion
         type: RgnHandle
     library: AppearanceLib
+    executor: C_
 
 # ####
 
@@ -2750,6 +2783,7 @@
       - name: outBounds
         type: Rect*
     library: AppearanceLib
+    executor: C_
 
 # ####
 
@@ -2766,6 +2800,7 @@
       - name: outBounds
         type: Rect*
     library: AppearanceLib
+    executor: C_
 
 # ####
 
@@ -2778,6 +2813,7 @@
     dispatcher: AppearanceDispatch
     selector: 0x0026
     library: AppearanceLib
+    executor: C_
 
 # ####
 
@@ -2790,6 +2826,7 @@
     dispatcher: AppearanceDispatch
     selector: 0x0027
     library: AppearanceLib
+    executor: C_
 
 # ####
 
@@ -2799,6 +2836,7 @@
     dispatcher: AppearanceDispatch
     selector: 0x0028
     library: AppearanceLib
+    executor: C_
 
 # ####
 
@@ -2829,6 +2867,7 @@
       - name: eraseData
         type: UInt32
     library: AppearanceLib
+    executor: C_
 
 # ####
 
@@ -2849,6 +2888,7 @@
       - name: eraseData
         type: UInt32
     library: AppearanceLib
+    executor: C_
 
 # ####
 
@@ -2958,6 +2998,7 @@
       - name: inColorDev
         type: Boolean
     library: AppearanceLib
+    executor: C_
 
 # ####
 

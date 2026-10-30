@@ -2,8 +2,9 @@
 """uih2yaml.py HEADER.h [--library LIB] [--dispatcher NAME:TRAP]: a Universal
 Interfaces 3.4 header as multiversal YAML (src/executor/multiversal/defs).
 
-The declarations only: enums, typedefs, structs, opaque types, callback types
-(funptr) and functions, with the dispatcher and selector of a function whose
+The declarations only: enums, typedefs, structs (an anonymous union member
+as a union named <Struct>Union), opaque types, callback types (funptr) and
+functions, with the dispatcher and selector of a function whose
 inline is `move.w #sel,D0; _Trap` (THREEWORDINLINE(0x303C, sel, trap)) and the
 library its Availability comment names. Comments are dropped; nothing gets an
 `executor:` key (added by hand as Executor implements each call). The output
@@ -85,6 +86,25 @@ def main():
     def emit(kind, lines):
         out.append((kind, lines))
 
+    # A struct's anonymous union member (`union { ... } u;`) becomes a named
+    # union, <Struct>Union, emitted before the struct, which then has a
+    # member of that type.
+    unions = {}
+
+    def name_unions(m):
+        sname, body = m.group(1), m.group(2)
+        def one(u):
+            members = [' '.join(x.split()) for x in u.group(1).split(';') if x.strip()]
+            lines = ['- union:', f'    name: {sname}Union', '    members:']
+            for mem in members:
+                mm = re.match(r'(.*?)(\w+)$', mem)
+                lines += [f'      - name: {mm.group(2)}', f'        type: {ctype(mm.group(1))}']
+            unions.setdefault(sname, []).append(lines)
+            return f'{sname}Union {u.group(2)};'
+        body = re.sub(r'\bunion\s*\{([^}]*)\}\s*(\w+)\s*;', one, body)
+        return f'struct {sname} {{{body}}};'
+    text = re.sub(r'\bstruct\s+(\w+)\s*\{((?:[^{}]|\{[^{}]*\})*)\}\s*;', name_unions, text)
+
     pos = 0
     item = re.compile(
         r'(?P<enum>\benum\s*\w*\s*\{(?P<ebody>[^}]*)\}\s*;)'
@@ -118,6 +138,8 @@ def main():
                 emit('enum', ['- enum:', '    values:'] +
                      sum(([f'      - name: {n}', f'        value: {yaml_value(v)}'] for n, v in vals), []))
         elif m.group('struct'):
+            for u in unions.get(m.group('sname'), []):
+                emit('union', u)
             lines = ['- struct:', f'    name: {m.group("sname")}', '    members:']
             for mem in m.group('sbody').split(';'):
                 mem = ' '.join(mem.split())

@@ -828,40 +828,52 @@ OSStatus C_SetThemeWindowBackground(WindowRef inWindow, ThemeBrush inBrush, Bool
 LIBRARY_ALSO(AppearanceLib, SetThemeWindowBackground, InterfaceLib);
 
 
-OSStatus DrawThemeWindowHeader(const Rect *inRect, ThemeDrawState inState);TRAP_GLUE(AppearanceLib, DrawThemeWindowHeader, AppearanceDispatch, 0x0005);
+OSStatus C_DrawThemeWindowHeader(const Rect *inRect, ThemeDrawState inState);PASCAL_SUBTRAP(DrawThemeWindowHeader, 0xAA74, 0x0005, AppearanceDispatch);
+LIBRARY_ALSO(AppearanceLib, DrawThemeWindowHeader, InterfaceLib);
 
 
-OSStatus DrawThemeWindowListViewHeader(const Rect *inRect, ThemeDrawState inState);TRAP_GLUE(AppearanceLib, DrawThemeWindowListViewHeader, AppearanceDispatch, 0x0006);
+OSStatus C_DrawThemeWindowListViewHeader(const Rect *inRect, ThemeDrawState inState);PASCAL_SUBTRAP(DrawThemeWindowListViewHeader, 0xAA74, 0x0006, AppearanceDispatch);
+LIBRARY_ALSO(AppearanceLib, DrawThemeWindowListViewHeader, InterfaceLib);
 
 
-OSStatus DrawThemePlacard(const Rect *inRect, ThemeDrawState inState);TRAP_GLUE(AppearanceLib, DrawThemePlacard, AppearanceDispatch, 0x0007);
+OSStatus C_DrawThemePlacard(const Rect *inRect, ThemeDrawState inState);PASCAL_SUBTRAP(DrawThemePlacard, 0xAA74, 0x0007, AppearanceDispatch);
+LIBRARY_ALSO(AppearanceLib, DrawThemePlacard, InterfaceLib);
 
 
-OSStatus DrawThemeEditTextFrame(const Rect *inRect, ThemeDrawState inState);TRAP_GLUE(AppearanceLib, DrawThemeEditTextFrame, AppearanceDispatch, 0x0009);
+OSStatus C_DrawThemeEditTextFrame(const Rect *inRect, ThemeDrawState inState);PASCAL_SUBTRAP(DrawThemeEditTextFrame, 0xAA74, 0x0009, AppearanceDispatch);
+LIBRARY_ALSO(AppearanceLib, DrawThemeEditTextFrame, InterfaceLib);
 
 
-OSStatus DrawThemeListBoxFrame(const Rect *inRect, ThemeDrawState inState);TRAP_GLUE(AppearanceLib, DrawThemeListBoxFrame, AppearanceDispatch, 0x000A);
+OSStatus C_DrawThemeListBoxFrame(const Rect *inRect, ThemeDrawState inState);PASCAL_SUBTRAP(DrawThemeListBoxFrame, 0xAA74, 0x000A, AppearanceDispatch);
+LIBRARY_ALSO(AppearanceLib, DrawThemeListBoxFrame, InterfaceLib);
 
 
-OSStatus DrawThemeFocusRect(const Rect *inRect, Boolean inHasFocus);TRAP_GLUE(AppearanceLib, DrawThemeFocusRect, AppearanceDispatch, 0x000B);
+OSStatus C_DrawThemeFocusRect(const Rect *inRect, Boolean inHasFocus);PASCAL_SUBTRAP(DrawThemeFocusRect, 0xAA74, 0x000B, AppearanceDispatch);
+LIBRARY_ALSO(AppearanceLib, DrawThemeFocusRect, InterfaceLib);
 
 
-OSStatus DrawThemePrimaryGroup(const Rect *inRect, ThemeDrawState inState);TRAP_GLUE(AppearanceLib, DrawThemePrimaryGroup, AppearanceDispatch, 0x000C);
+OSStatus C_DrawThemePrimaryGroup(const Rect *inRect, ThemeDrawState inState);PASCAL_SUBTRAP(DrawThemePrimaryGroup, 0xAA74, 0x000C, AppearanceDispatch);
+LIBRARY_ALSO(AppearanceLib, DrawThemePrimaryGroup, InterfaceLib);
 
 
-OSStatus DrawThemeSecondaryGroup(const Rect *inRect, ThemeDrawState inState);TRAP_GLUE(AppearanceLib, DrawThemeSecondaryGroup, AppearanceDispatch, 0x000D);
+OSStatus C_DrawThemeSecondaryGroup(const Rect *inRect, ThemeDrawState inState);PASCAL_SUBTRAP(DrawThemeSecondaryGroup, 0xAA74, 0x000D, AppearanceDispatch);
+LIBRARY_ALSO(AppearanceLib, DrawThemeSecondaryGroup, InterfaceLib);
 
 
-OSStatus DrawThemeSeparator(const Rect *inRect, ThemeDrawState inState);TRAP_GLUE(AppearanceLib, DrawThemeSeparator, AppearanceDispatch, 0x000E);
+OSStatus C_DrawThemeSeparator(const Rect *inRect, ThemeDrawState inState);PASCAL_SUBTRAP(DrawThemeSeparator, 0xAA74, 0x000E, AppearanceDispatch);
+LIBRARY_ALSO(AppearanceLib, DrawThemeSeparator, InterfaceLib);
 
 
-OSStatus DrawThemeModelessDialogFrame(const Rect *inRect, ThemeDrawState inState);TRAP_GLUE(AppearanceLib, DrawThemeModelessDialogFrame, AppearanceDispatch, 0x0008);
+OSStatus C_DrawThemeModelessDialogFrame(const Rect *inRect, ThemeDrawState inState);PASCAL_SUBTRAP(DrawThemeModelessDialogFrame, 0xAA74, 0x0008, AppearanceDispatch);
+LIBRARY_ALSO(AppearanceLib, DrawThemeModelessDialogFrame, InterfaceLib);
 
 
-OSStatus DrawThemeGenericWell(const Rect *inRect, ThemeDrawState inState, Boolean inFillCenter);TRAP_GLUE(AppearanceLib, DrawThemeGenericWell, AppearanceDispatch, 0x0022);
+OSStatus C_DrawThemeGenericWell(const Rect *inRect, ThemeDrawState inState, Boolean inFillCenter);PASCAL_SUBTRAP(DrawThemeGenericWell, 0xAA74, 0x0022, AppearanceDispatch);
+LIBRARY_ALSO(AppearanceLib, DrawThemeGenericWell, InterfaceLib);
 
 
-OSStatus DrawThemeFocusRegion(RgnHandle inRegion, Boolean inHasFocus);TRAP_GLUE(AppearanceLib, DrawThemeFocusRegion, AppearanceDispatch, 0x0023);
+OSStatus C_DrawThemeFocusRegion(RgnHandle inRegion, Boolean inHasFocus);PASCAL_SUBTRAP(DrawThemeFocusRegion, 0xAA74, 0x0023, AppearanceDispatch);
+LIBRARY_ALSO(AppearanceLib, DrawThemeFocusRegion, InterfaceLib);
 
 
 Boolean C_IsThemeInColor(SInt16 inDepth, Boolean inIsColorDevice);PASCAL_SUBTRAP(IsThemeInColor, 0xAA74, 0x0024, AppearanceDispatch);
@@ -912,10 +924,13 @@ LIBRARY_ALSO(AppearanceLib, GetThemeMenuTitleExtra, InterfaceLib);
 
 
 
+OSStatus C_DrawThemeTabPane(const Rect *inRect, ThemeDrawState inState);LIBRARY_FUNCTION(AppearanceLib, DrawThemeTabPane, C_DrawThemeTabPane);
 
 
+OSStatus C_DrawThemeTab(const Rect *inRect, ThemeTabStyle inStyle, ThemeTabDirection inDirection, ThemeTabTitleDrawUPP labelProc, UInt32 userData);LIBRARY_FUNCTION(AppearanceLib, DrawThemeTab, C_DrawThemeTab);
 
 
+OSStatus C_GetThemeTabRegion(const Rect *inRect, ThemeTabStyle inStyle, ThemeTabDirection inDirection, RgnHandle ioRgn);LIBRARY_FUNCTION(AppearanceLib, GetThemeTabRegion, C_GetThemeTabRegion);
 
 
 OSStatus C_SetThemeCursor(ThemeCursor inCursor);LIBRARY_FUNCTION(AppearanceLib, SetThemeCursor, C_SetThemeCursor);
@@ -939,62 +954,87 @@ OSStatus C_UseThemeFont(ThemeFontID inFontID, ScriptCode inScript);LIBRARY_FUNCT
 OSStatus C_GetThemeFont(ThemeFontID inFontID, ScriptCode inScript, Str255 outFontName, GUEST<SInt16> *outFontSize, Style *outStyle);LIBRARY_FUNCTION(AppearanceLib, GetThemeFont, C_GetThemeFont);
 
 
+OSStatus C_DrawThemeTrack(const ThemeTrackDrawInfo *drawInfo, RgnHandle rgnGhost, ThemeEraseUPP eraseProc, UInt32 eraseData);LIBRARY_FUNCTION(AppearanceLib, DrawThemeTrack, C_DrawThemeTrack);
 
 
+Boolean C_HitTestThemeTrack(const ThemeTrackDrawInfo *drawInfo, Point mousePoint, GUEST<ControlPartCode> *partHit);LIBRARY_FUNCTION(AppearanceLib, HitTestThemeTrack, C_HitTestThemeTrack);
 
 
+OSStatus C_GetThemeTrackBounds(const ThemeTrackDrawInfo *drawInfo, Rect *bounds);LIBRARY_FUNCTION(AppearanceLib, GetThemeTrackBounds, C_GetThemeTrackBounds);
 
 
+OSStatus C_GetThemeTrackThumbRgn(const ThemeTrackDrawInfo *drawInfo, RgnHandle thumbRgn);LIBRARY_FUNCTION(AppearanceLib, GetThemeTrackThumbRgn, C_GetThemeTrackThumbRgn);
 
 
+OSStatus C_GetThemeTrackDragRect(const ThemeTrackDrawInfo *drawInfo, Rect *dragRect);LIBRARY_FUNCTION(AppearanceLib, GetThemeTrackDragRect, C_GetThemeTrackDragRect);
 
 
+OSStatus C_DrawThemeTrackTickMarks(const ThemeTrackDrawInfo *drawInfo, ItemCount numTicks, ThemeEraseUPP eraseProc, UInt32 eraseData);LIBRARY_FUNCTION(AppearanceLib, DrawThemeTrackTickMarks, C_DrawThemeTrackTickMarks);
 
 
+OSStatus C_GetThemeTrackThumbPositionFromOffset(const ThemeTrackDrawInfo *drawInfo, Point thumbOffset, GUEST<SInt32> *relativePosition);LIBRARY_FUNCTION(AppearanceLib, GetThemeTrackThumbPositionFromOffset, C_GetThemeTrackThumbPositionFromOffset);
 
 
+OSStatus C_GetThemeTrackThumbPositionFromRegion(const ThemeTrackDrawInfo *drawInfo, RgnHandle thumbRgn, GUEST<SInt32> *relativePosition);LIBRARY_FUNCTION(AppearanceLib, GetThemeTrackThumbPositionFromRegion, C_GetThemeTrackThumbPositionFromRegion);
 
 
+OSStatus C_GetThemeTrackLiveValue(const ThemeTrackDrawInfo *drawInfo, SInt32 relativePosition, GUEST<SInt32> *value);LIBRARY_FUNCTION(AppearanceLib, GetThemeTrackLiveValue, C_GetThemeTrackLiveValue);
 
 
+OSStatus C_DrawThemeScrollBarArrows(const Rect *bounds, ThemeTrackEnableState enableState, ThemeTrackPressState pressState, Boolean isHoriz, Rect *trackBounds);LIBRARY_FUNCTION(AppearanceLib, DrawThemeScrollBarArrows, C_DrawThemeScrollBarArrows);
 
 
+OSStatus C_GetThemeScrollBarTrackRect(const Rect *bounds, ThemeTrackEnableState enableState, ThemeTrackPressState pressState, Boolean isHoriz, Rect *trackBounds);LIBRARY_FUNCTION(AppearanceLib, GetThemeScrollBarTrackRect, C_GetThemeScrollBarTrackRect);
 
 
+Boolean C_HitTestThemeScrollBarArrows(const Rect *scrollBarBounds, ThemeTrackEnableState enableState, ThemeTrackPressState pressState, Boolean isHoriz, Point ptHit, Rect *trackBounds, GUEST<ControlPartCode> *partcode);LIBRARY_FUNCTION(AppearanceLib, HitTestThemeScrollBarArrows, C_HitTestThemeScrollBarArrows);
 
 
 OSStatus C_GetThemeWindowRegion(ThemeWindowType flavor, const Rect *contRect, ThemeDrawState state, const ThemeWindowMetrics *metrics, ThemeWindowAttributes attributes, WindowRegionCode winRegion, RgnHandle rgn);LIBRARY_FUNCTION(AppearanceLib, GetThemeWindowRegion, C_GetThemeWindowRegion);
 
 
+OSStatus C_DrawThemeWindowFrame(ThemeWindowType flavor, const Rect *contRect, ThemeDrawState state, const ThemeWindowMetrics *metrics, ThemeWindowAttributes attributes, WindowTitleDrawingUPP titleProc, UInt32 titleData);LIBRARY_FUNCTION(AppearanceLib, DrawThemeWindowFrame, C_DrawThemeWindowFrame);
+
+
+OSStatus C_DrawThemeTitleBarWidget(ThemeWindowType flavor, const Rect *contRect, ThemeDrawState state, const ThemeWindowMetrics *metrics, ThemeWindowAttributes attributes, ThemeTitleBarWidget widget);LIBRARY_FUNCTION(AppearanceLib, DrawThemeTitleBarWidget, C_DrawThemeTitleBarWidget);
+
+
+Boolean C_GetThemeWindowRegionHit(ThemeWindowType flavor, const Rect *inContRect, ThemeDrawState state, const ThemeWindowMetrics *metrics, ThemeWindowAttributes inAttributes, Point inPoint, GUEST<WindowRegionCode> *outRegionHit);LIBRARY_FUNCTION(AppearanceLib, GetThemeWindowRegionHit, C_GetThemeWindowRegionHit);
+
+
+OSStatus C_DrawThemeScrollBarDelimiters(ThemeWindowType flavor, const Rect *inContRect, ThemeDrawState state, ThemeWindowAttributes attributes);LIBRARY_FUNCTION(AppearanceLib, DrawThemeScrollBarDelimiters, C_DrawThemeScrollBarDelimiters);
+
+
+OSStatus C_DrawThemeButton(const Rect *inBounds, ThemeButtonKind inKind, const ThemeButtonDrawInfo *inNewInfo, const ThemeButtonDrawInfo *inPrevInfo, ThemeEraseUPP inEraseProc, ThemeButtonDrawUPP inLabelProc, UInt32 inUserData);LIBRARY_FUNCTION(AppearanceLib, DrawThemeButton, C_DrawThemeButton);
+
+
+OSStatus C_GetThemeButtonRegion(const Rect *inBounds, ThemeButtonKind inKind, const ThemeButtonDrawInfo *inNewInfo, RgnHandle outRegion);LIBRARY_FUNCTION(AppearanceLib, GetThemeButtonRegion, C_GetThemeButtonRegion);
+
+
+OSStatus C_GetThemeButtonContentBounds(const Rect *inBounds, ThemeButtonKind inKind, const ThemeButtonDrawInfo *inDrawInfo, Rect *outBounds);LIBRARY_FUNCTION(AppearanceLib, GetThemeButtonContentBounds, C_GetThemeButtonContentBounds);
+
+
+OSStatus C_GetThemeButtonBackgroundBounds(const Rect *inBounds, ThemeButtonKind inKind, const ThemeButtonDrawInfo *inDrawInfo, Rect *outBounds);LIBRARY_FUNCTION(AppearanceLib, GetThemeButtonBackgroundBounds, C_GetThemeButtonBackgroundBounds);
+
+
+OSStatus C_PlayThemeSound(ThemeSoundKind kind);PASCAL_SUBTRAP(PlayThemeSound, 0xAA74, 0x0026, AppearanceDispatch);
+LIBRARY_ALSO(AppearanceLib, PlayThemeSound, InterfaceLib);
+
+
+OSStatus C_BeginThemeDragSound(ThemeDragSoundKind kind);PASCAL_SUBTRAP(BeginThemeDragSound, 0xAA74, 0x0027, AppearanceDispatch);
+LIBRARY_ALSO(AppearanceLib, BeginThemeDragSound, InterfaceLib);
+
+
+OSStatus C_EndThemeDragSound();PASCAL_SUBTRAP(EndThemeDragSound, 0xAA74, 0x0028, AppearanceDispatch);
+LIBRARY_ALSO(AppearanceLib, EndThemeDragSound, InterfaceLib);
 
 
 
 
+OSStatus C_DrawThemeChasingArrows(const Rect *bounds, UInt32 index, ThemeDrawState state, ThemeEraseUPP eraseProc, UInt32 eraseData);LIBRARY_FUNCTION(AppearanceLib, DrawThemeChasingArrows, C_DrawThemeChasingArrows);
 
 
-
-
-
-
-
-
-
-
-
-
-OSStatus PlayThemeSound(ThemeSoundKind kind);TRAP_GLUE(AppearanceLib, PlayThemeSound, AppearanceDispatch, 0x0026);
-
-
-OSStatus BeginThemeDragSound(ThemeDragSoundKind kind);TRAP_GLUE(AppearanceLib, BeginThemeDragSound, AppearanceDispatch, 0x0027);
-
-
-OSStatus EndThemeDragSound();TRAP_GLUE(AppearanceLib, EndThemeDragSound, AppearanceDispatch, 0x0028);
-
-
-
-
-
-
+OSStatus C_DrawThemePopupArrow(const Rect *bounds, ThemeArrowOrientation orientation, ThemePopupArrowSize size, ThemeDrawState state, ThemeEraseUPP eraseProc, UInt32 eraseData);LIBRARY_FUNCTION(AppearanceLib, DrawThemePopupArrow, C_DrawThemePopupArrow);
 
 
 
@@ -1015,6 +1055,7 @@ OSStatus C_SetThemeDrawingState(ThemeDrawingState inState, Boolean inDisposeNow)
 OSStatus C_DisposeThemeDrawingState(ThemeDrawingState inState);LIBRARY_FUNCTION(AppearanceLib, DisposeThemeDrawingState, C_DisposeThemeDrawingState);
 
 
+OSStatus C_ApplyThemeBackground(ThemeBackgroundKind inKind, const Rect *bounds, ThemeDrawState inState, SInt16 inDepth, Boolean inColorDev);LIBRARY_FUNCTION(AppearanceLib, ApplyThemeBackground, C_ApplyThemeBackground);
 
 
 OSStatus C_SetThemeTextColorForWindow(WindowRef window, Boolean isActive, SInt16 depth, Boolean isColorDev);LIBRARY_FUNCTION(AppearanceLib, SetThemeTextColorForWindow, C_SetThemeTextColorForWindow);

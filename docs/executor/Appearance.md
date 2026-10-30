@@ -90,5 +90,47 @@ matching the reference where it measures them:
   (structure, content, update, port), `IsWindowCollapsed`/`Collapsable`
   (false: no collapsing yet), `SetMenuItemKeyGlyph` (accepted).
 
-Next: the drawing calls (System 7's look first), then the Control Manager's
-8.0 calls, so the Finder can open a window.
+## Drawing, windows and controls (2026-10-30)
+
+The 8.6 Finder opens its windows: Apple's WindowDefinitions and
+ControlDefinitions draw them through Executor's calls.
+
+* **Drawing** (`appearance_draw.cpp`, the window frame in
+  `appearance_mgr.cpp`; helpers in `appearance_draw.h`). Executor's look so
+  far: System 7's black outlines and plain boxes in the platinum shapes and
+  grays. `DrawThemeWindowFrame` (outline, shadow, bevelled frame, striped
+  title bar, its boxes, the grow box; the title through the definition's
+  titleProc), `DrawThemeTitleBarWidget`, `GetThemeWindowRegionHit`, the
+  title text and proxy icon regions; tracks (scroll bars, sliders, progress
+  and indeterminate bars: drawing, hit testing, thumb geometry, live
+  values; reference TRACK values), scroll bar arrows, buttons (push, check
+  box, radio, bevel, pop-up, arrow, disclosure, little arrows, list
+  header; reference BUTTON content bounds), pop-up arrows, tabs, chasing
+  arrows, headers, placards, edit text and list box frames, wells, focus
+  rings, separators, group boxes, `ApplyThemeBackground`; the theme sounds
+  are silent (no sound set).
+  On 8.6 a scroll bar's definition draws its arrows itself
+  (`DrawThemeScrollBarArrows`) and gives `DrawThemeTrack` only the track.
+* **Window Manager 2.0** (`wind/windMgr8.cpp`, `WindowMgr8.yaml` from
+  MacWindows.h): `TransitionWindow` (show and hide, no animation),
+  `GetWindowFeatures` (the definition's `kWindowMsgGetFeatures`, else from
+  the procID), `GetWindowAttributes`/`Class`, `IsWindowInStandardState`,
+  properties, the proxy (`FSSpec`, icon), the modified state, and the
+  private calls WindowDefinitions imports (system properties: the property
+  calls without a creator; `GetWindowTitleLength`,
+  `GetWindowGadgetDropThreshold`, `EraseWindowRegion`,
+  `PostDelayedWindowReshape`; their arguments from its call sites, by
+  `tools/macdecode/pef.py --dis`).
+* **Control Manager 8.0** (`ctl/ctlMgr8.cpp`, `ControlMgr8.yaml` from
+  Controls.h, `_ControlDispatch` $AA73): embedding (root control, a user
+  pane; `EmbedControl`, `AutoEmbedControl`, sub and super controls;
+  drawing, showing, hiding, disposing and `FindControl` follow the
+  hierarchy), the 8.0 messages (features, control data, `kControlFontStyleTag`
+  kept by the Control Manager, best rectangles, backgrounds and text
+  colours, tracking by the definition, keyboard focus, idle), activation,
+  32-bit values and view sizes (a 32-bit value counts while the record's
+  16-bit one is still what it was pinned to), properties, and ControlsLib's
+  private system properties.
+
+Next: the control panels and applications of 8.6, one by one; collapsing
+windows (`CollapseWindow`); the platinum look.

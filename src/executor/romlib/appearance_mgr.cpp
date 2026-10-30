@@ -14,17 +14,18 @@
 #include <ToolboxUtil.h>
 #include <MemoryMgr.h>
 #include <WindowMgr.h>
+#include <WindowMgr8.h>
 #include <MenuMgr.h>
 #include <quickdraw/cquick.h>
 #include <wind/wind.h>
+#include "appearance_draw.h"
+#include <base/functions.impl.h>
 #include <set>
 
 using namespace Executor;
 
 namespace
 {
-/* Not in the definitions: MacErrors.h's. */
-constexpr OSStatus errWindowRegionCodeInvalid = -30593;
 
 /* BRUSH -2..48 at depth 32, 8 and 1 (reference-9.0.4.txt); index + 2. */
 const RGBColor brushes[3][51] = {
@@ -212,6 +213,24 @@ const WindowShape window_shapes[] = {
     /* kThemeUtilitySideWindow */
     { true, 4, 14, 5, 5, 14, true, { 3, 3, 8 }, { -23, 3, 8 }, { -12, 3, 8 }, 15, 1 },
 };
+
+/* The title text's rectangle in a title bar ft..ft + title, fl..fr: the
+   metrics' width centred, kept clear of the boxes. */
+Rect title_text_rect(const WindowShape &w, int16_t ft, int16_t fl, int16_t fr,
+                     const ThemeWindowMetrics *metrics, ThemeWindowAttributes attributes)
+{
+    int16_t width = metrics ? (int16_t)metrics->titleWidth : 0;
+    int16_t lo = fl + (w.close.size ? w.close.left + w.close.size + 8 : 8);
+    int16_t hi = fr - (w.zoom.size ? -w.zoom.left + 8 : 8);
+    Rect r;
+    r.top = ft + 3;
+    r.bottom = ft + w.title - 3;
+    r.left = std::max<int16_t>(lo, (fl + fr) / 2 - width / 2);
+    r.right = std::min<int16_t>(hi, r.left + width);
+    if(!(attributes & kThemeWindowHasTitleText))
+        r.right = r.left;
+    return r;
+}
 
 void set_rect_rgn(RgnHandle rgn, int16_t top, int16_t left, int16_t bottom, int16_t right)
 {
@@ -487,9 +506,15 @@ OSStatus Executor::C_GetThemeWindowRegion(ThemeWindowType flavor, const Rect *co
     const WindowShape &w = window_shapes[flavor];
     Rect c = *contRect;
     int16_t ft = c.top - w.top, fl = c.left - w.left, fb = c.bottom + w.bottom, fr = c.right + w.right;
-    auto box = [&](const Box &b) -> OSStatus {
+    /* A box the attributes leave out is an empty region. */
+    auto box = [&](const Box &b, ThemeWindowAttributes needs) -> OSStatus {
         if(!b.size)
             return errWindowRegionCodeInvalid;
+        if(!(attributes & needs))
+        {
+            SetEmptyRgn(rgn);
+            return noErr;
+        }
         int16_t top = b.top < 0 ? fb + b.top : ft + b.top;
         int16_t left = b.left < 0 ? fr + b.left : fl + b.left;
         set_rect_rgn(rgn, top, left, top + b.size, left + b.size);
@@ -548,24 +573,268 @@ OSStatus Executor::C_GetThemeWindowRegion(ThemeWindowType flavor, const Rect *co
                 set_rect_rgn(rgn, ft, fl, ft + w.title, fr - 1);
             return noErr;
         case kWindowCloseBoxRgn:
-            return box(w.close);
+            return box(w.close, kThemeWindowHasCloseBox);
         case kWindowZoomBoxRgn:
-            return box(w.zoom);
+            return box(w.zoom, kThemeWindowHasFullZoom);
         case kWindowCollapseBoxRgn:
-            return box(w.collapse);
+            return box(w.collapse, kThemeWindowHasCollapseBox);
+        case kWindowTitleTextRgn:
+        case kWindowTitleProxyIconRgn:
+        {
+            /* The title centred in the title bar, metrics->titleWidth wide,
+               between the boxes; the proxy icon (16 x 16) left of it. */
+            if(!w.title || w.side_title)
+                return errWindowRegionCodeInvalid;
+            Rect text = title_text_rect(w, ft, fl, fr, metrics, attributes);
+            if(winRegion == kWindowTitleProxyIconRgn)
+                set_rect_rgn(rgn, ft + (w.title - 16) / 2, text.left - 20,
+                             ft + (w.title - 16) / 2 + 16, text.left - 4);
+            else
+                RectRgn(rgn, &text);
+            return noErr;
+        }
         case kWindowGrowRgn:
             if(!w.grow)
                 return errWindowRegionCodeInvalid;
+            if(!(attributes & kThemeWindowHasGrow))
+            {
+                SetEmptyRgn(rgn);
+                return noErr;
+            }
             if(w.grow > 0)
                 set_rect_rgn(rgn, fb - w.grow, fr - w.grow, fb, fr);
             else
                 set_rect_rgn(rgn, c.bottom + w.grow, c.right + w.grow, c.bottom, c.right);
             return noErr;
         default:
-            /* The title text and proxy icon: with a title width in the
-               metrics; not yet. */
             return errWindowRegionCodeInvalid;
     }
+}
+
+namespace
+{
+using namespace appearance;
+
+/* A title bar box (close, zoom, collapse), up or pressed. */
+void draw_widget(const Rect &r, ThemeTitleBarWidget widget, bool pressed)
+{
+    boxFace(r, pressed);
+    if(widget == kThemeWidgetZoomBox)
+        frameGray(Rect{ r.top, r.left, (int16_t)(r.top + 6), (int16_t)(r.left + 6) }, kBlack);
+    else if(widget == kThemeWidgetCollapseBox)
+    {
+        int16_t mid = (r.top + r.bottom) / 2;
+        lineGray(r.left + 1, mid - 1, r.right - 2, mid - 1, kBlack);
+        lineGray(r.left + 1, mid + 1, r.right - 2, mid + 1, kBlack);
+    }
+}
+
+/* The parts of a window type's frame around a content rectangle. */
+struct Frame
+{
+    const WindowShape &w;
+    Rect content, outline; /* the frame without its shadow */
+    int16_t ft, fl, fb, fr;
+
+    Frame(const WindowShape &shape, const Rect &c)
+        : w(shape), content(c)
+    {
+        ft = c.top - w.top;
+        fl = c.left - w.left;
+        fb = c.bottom + w.bottom;
+        fr = c.right + w.right;
+        SetRect(&outline, fl, ft, fr - w.shadow, fb - w.shadow);
+    }
+    bool box(const Box &b, Rect *r) const
+    {
+        if(!b.size)
+            return false;
+        int16_t top = b.top < 0 ? fb + b.top : ft + b.top;
+        int16_t left = b.left < 0 ? fr + b.left : fl + b.left;
+        SetRect(r, left, top, left + b.size, top + b.size);
+        return true;
+    }
+    Rect titleBar() const
+    {
+        Rect r;
+        if(w.side_title)
+            SetRect(&r, fl + 1, ft + 1, fl + w.title, fb - w.shadow - 1);
+        else
+            SetRect(&r, fl + 1, ft + 1, fr - w.shadow - 1, ft + w.title);
+        return r;
+    }
+};
+
+bool widget_rect(const Frame &f, ThemeTitleBarWidget widget, ThemeWindowAttributes attributes, Rect *r)
+{
+    switch(widget)
+    {
+        case kThemeWidgetCloseBox:
+        case kThemeWidgetDirtyCloseBox:
+            return (attributes & kThemeWindowHasCloseBox) && f.box(f.w.close, r);
+        case kThemeWidgetZoomBox:
+            return (attributes & kThemeWindowHasFullZoom) && f.box(f.w.zoom, r);
+        case kThemeWidgetCollapseBox:
+            return (attributes & kThemeWindowHasCollapseBox) && f.box(f.w.collapse, r);
+    }
+    return false;
+}
+}
+
+/* Executor's look: a black outline and drop shadow, the frame in the face
+   gray with a bevel, the content edged in dark gray; an active title bar
+   striped, its boxes drawn, the title's room left clear for the window
+   definition's titleProc. */
+OSStatus Executor::C_DrawThemeWindowFrame(ThemeWindowType flavor, const Rect *contRect,
+                                          ThemeDrawState state, const ThemeWindowMetrics *metrics,
+                                          ThemeWindowAttributes attributes,
+                                          WindowTitleDrawingUPP titleProc, UInt32 titleData)
+{
+    if(!contRect || flavor >= std::size(window_shapes))
+        return paramErr;
+    const WindowShape &w = window_shapes[flavor];
+    Frame f(w, *contRect);
+    bool active = state == kThemeStateActive || state == kThemeStatePressed;
+    {
+        DrawGuard guard;
+        Rect r = f.outline;
+        frameGray(r, kBlack);
+        if(w.shadow)
+        {
+            lineGray(r.left + w.shadow, r.bottom, r.right, r.bottom, kBlack);
+            LineTo(r.right, r.top + w.shadow);
+        }
+        /* the frame between the outline and the content's edge */
+        InsetRect(&r, 1, 1);
+        RgnHandle band = NewRgn(), inner = NewRgn();
+        RectRgn(band, &r);
+        Rect c = *contRect;
+        InsetRect(&c, -1, -1);
+        RectRgn(inner, &c);
+        DiffRgn(band, inner, band);
+        gray(active ? kFace : kLight);
+        PaintRgn(band);
+        DisposeRgn(band);
+        DisposeRgn(inner);
+        if(active && r.right - r.left > 2)
+            bevel(r, kWhite, kShadow);
+        if(c.right - c.left > 0 && (w.top > 1 || w.left > 1))
+            frameGray(c, active ? kDark : kShadow);
+
+        if(w.title)
+        {
+            Rect bar = f.titleBar();
+            Rect text = { 0, 0, 0, 0 };
+            if(!w.side_title)
+                text = title_text_rect(w, f.ft, f.fl, f.fr, metrics, attributes);
+            if(active)
+            {
+                /* the stripes, then the boxes and the title cleared of them */
+                if(w.side_title)
+                    for(int16_t x = bar.left + 3; x < bar.right - 3; x += 2)
+                    {
+                        lineGray(x, bar.top + 2, x, bar.bottom - 3, kWhite);
+                        lineGray(x + 1, bar.top + 3, x + 1, bar.bottom - 2, kShadow);
+                    }
+                else
+                    for(int16_t y = bar.top + 3; y < bar.bottom - 3; y += 2)
+                    {
+                        lineGray(bar.left + 2, y, bar.right - 3, y, kWhite);
+                        lineGray(bar.left + 3, y + 1, bar.right - 2, y + 1, kShadow);
+                    }
+                for(ThemeTitleBarWidget wd : { kThemeWidgetCloseBox, kThemeWidgetZoomBox, kThemeWidgetCollapseBox })
+                {
+                    Rect b;
+                    if(widget_rect(f, wd, attributes, &b))
+                    {
+                        Rect clear = b;
+                        InsetRect(&clear, -2, -2);
+                        fillGray(clear, kFace);
+                        draw_widget(b, wd, false);
+                    }
+                }
+                if(text.right > text.left)
+                {
+                    Rect clear = text;
+                    InsetRect(&clear, -6, 0);
+                    clear.top = bar.top + 1;
+                    clear.bottom = bar.bottom - 1;
+                    fillGray(clear, kFace);
+                }
+            }
+            if(w.grow > 0 && (attributes & kThemeWindowHasGrow) && active)
+            {
+                /* the corner square inside the content, two boxes in it */
+                Rect g = { (int16_t)(contRect->bottom - w.grow + w.bottom), (int16_t)(contRect->right - w.grow + w.right),
+                           contRect->bottom, contRect->right };
+                fillGray(g, kFace);
+                lineGray(g.left - 1, g.top - 1, g.right - 1, g.top - 1, kDark);
+                lineGray(g.left - 1, g.top - 1, g.left - 1, g.bottom - 1, kDark);
+                Rect small = { (int16_t)(g.top + 5), (int16_t)(g.left + 5), (int16_t)(g.top + 11), (int16_t)(g.left + 11) };
+                Rect big = { (int16_t)(g.top + 3), (int16_t)(g.left + 3), (int16_t)(g.top + 9), (int16_t)(g.left + 9) };
+                frameGray(small, kBlack);
+                fillGray(Rect{ (int16_t)(big.top + 1), (int16_t)(big.left + 1), (int16_t)(big.bottom - 1), (int16_t)(big.right - 1) }, kFace);
+                frameGray(big, kBlack);
+            }
+            if(text.right > text.left && titleProc)
+            {
+                SInt16 depth;
+                Boolean color;
+                portDepth(&depth, &color);
+                gray(active ? kBlack : kShadow);
+                titleProc(&text, depth, color, titleData);
+            }
+        }
+    }
+    return noErr;
+}
+
+OSStatus Executor::C_DrawThemeTitleBarWidget(ThemeWindowType flavor, const Rect *contRect,
+                                             ThemeDrawState state, const ThemeWindowMetrics *metrics,
+                                             ThemeWindowAttributes attributes, ThemeTitleBarWidget widget)
+{
+    if(!contRect || flavor >= std::size(window_shapes))
+        return paramErr;
+    Frame f(window_shapes[flavor], *contRect);
+    Rect b;
+    /* asked for, the box is there whatever the attributes say */
+    if(!widget_rect(f, widget, ~0u, &b))
+        return paramErr;
+    DrawGuard guard;
+    draw_widget(b, widget, state == kThemeStatePressed);
+    return noErr;
+}
+
+Boolean Executor::C_GetThemeWindowRegionHit(ThemeWindowType flavor, const Rect *inContRect,
+                                            ThemeDrawState state, const ThemeWindowMetrics *metrics,
+                                            ThemeWindowAttributes inAttributes, Point inPoint,
+                                            GUEST<WindowRegionCode> *outRegionHit)
+{
+    if(!inContRect || flavor >= std::size(window_shapes))
+        return false;
+    RgnHandle rgn = NewRgn();
+    bool hit = false;
+    for(WindowRegionCode code : { kWindowCloseBoxRgn, kWindowZoomBoxRgn, kWindowCollapseBoxRgn,
+                                  kWindowGrowRgn, kWindowContentRgn, kWindowDragRgn })
+    {
+        if(C_GetThemeWindowRegion(flavor, inContRect, state, metrics, inAttributes, code, rgn) == noErr
+           && PtInRgn(inPoint, rgn))
+        {
+            *outRegionHit = code;
+            hit = true;
+            break;
+        }
+    }
+    DisposeRgn(rgn);
+    return hit;
+}
+
+OSStatus Executor::C_DrawThemeScrollBarDelimiters(ThemeWindowType flavor, const Rect *inContRect,
+                                                  ThemeDrawState state, ThemeWindowAttributes attributes)
+{
+    /* The lines where a document window's scroll bars meet its frame:
+       Executor's scroll bars draw their own outlines. */
+    return inContRect ? noErr : paramErr;
 }
 
 /* ── AppearanceLib's window and menu calls (MacWindows.h, Menus.h) ───── */

@@ -13,6 +13,7 @@
 #include <ResourceMgr.h>
 #include <FontMgr.h>
 #include <MemoryMgr.h>
+#include <ctl/ctl.h>
 #include <SegmentLdr.h>
 #include <OSUtil.h>
 #include <OSEvent.h>
@@ -647,6 +648,7 @@ void Executor::C_CloseWindow(WindowPtr w)
  * destroyed already, or it could be DisposeControl or KillControl
  * makes some false assumptions.  More tests need to be written.
  */
+    ROMlib_control8_forget_window(w);
 #if 1
     for(c = WINDOW_CONTROL_LIST(w); c;)
     {
@@ -670,6 +672,7 @@ void Executor::C_CloseWindow(WindowPtr w)
     if(LM(CurDeactive) == w)
         LM(CurDeactive) = 0;
     WINDCALL((WindowPtr)w, wDispose, 0);
+    ROMlib_window8_forget(w);
 
     ROMlib_rootless_update();
 }

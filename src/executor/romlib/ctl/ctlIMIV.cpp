@@ -20,6 +20,7 @@ void Executor::C_Draw1Control(ControlHandle c) /* IMIV-53 */
         CtlCallGuard guard(c);
 
         CTLCALL(c, drawCntl, 0);
+        ROMlib_control8_draw_subs(c);
     }
 }
 
@@ -30,7 +31,7 @@ void Executor::C_UpdateControls(WindowPtr wp, RgnHandle rh) /* IMIV-53 */
     if(!ROMlib_emptyvis)
     {
         for(c = WINDOW_CONTROL_LIST(wp); c; c = CTL_NEXT_CONTROL(c))
-            if(RectInRgn(&CTL_RECT(c), rh))
+            if(!ROMlib_control8_embedded(c) && RectInRgn(&CTL_RECT(c), rh))
                 Draw1Control(c);
     }
 }

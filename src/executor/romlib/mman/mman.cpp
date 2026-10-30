@@ -421,6 +421,15 @@ OSErr C_SysZoneFloatSizes(GUEST<Size> *topFree, GUEST<Size> *growSpace)
     return noErr;
 }
 
+/* PrivateInterfaceLib's VM_GetHoldableBytes: how much memory can be held
+   in physical memory. Without virtual memory all of it: the RAM, LM(MemTop)
+   (the 8.6 Finder needs twice an offscreen's size of it, or abandons
+   drawing a window's contents). */
+int32_t C_VM_GetHoldableBytes()
+{
+    return guest_cast<int32_t>(LM(MemTop));
+}
+
 /* pascal long GrowZone(Size cbNeeded): the System heap's grow-zone
    procedure, so an allocation the heap cannot satisfy grows it. */
 static syn68k_addr_t syszone_grow_stub(syn68k_addr_t, void *)

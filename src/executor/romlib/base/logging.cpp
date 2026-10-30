@@ -71,14 +71,27 @@ static bool globMatch(const char* p, const char* s)
     return false;
 }
 
+// MacPhoenix: a pattern starting with '-' leaves out what it matches; with
+// only such patterns, everything else is logged.
 bool logging::trapLogEnabled(const char* name)
 {
     if(trapFilter.empty())
         return true;
+    bool anyInclude = false, included = false;
     for(const auto& pattern : trapFilter)
-        if(globMatch(pattern.c_str(), name))
-            return true;
-    return false;
+    {
+        if(pattern[0] == '-')
+        {
+            if(globMatch(pattern.c_str() + 1, name))
+                return false;
+        }
+        else
+        {
+            anyInclude = true;
+            included = included || globMatch(pattern.c_str(), name);
+        }
+    }
+    return included || !anyInclude;
 }
 
 bool logging::loggingActive()

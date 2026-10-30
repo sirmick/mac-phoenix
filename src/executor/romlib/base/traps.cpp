@@ -94,13 +94,23 @@ uint32_t traps::Entrypoint::breakPPC(PowerCore& cpu)
 }
 
 
-static syn68k_addr_t cfm_dispatch_entry;
+/* MacPhoenix: Toolbox traps a System has from 8.0 on, _Unimplemented
+   before (68k code tests for a manager by its trap): the Code Fragment
+   Manager's, and the Appearance Manager's and its Control Manager's (on 7.x,
+   a Mac without the Appearance extension). */
+static const uint16_t system8_traps[] = {
+    0xAA5A, /* _CodeFragmentDispatch */
+    0xAA73, /* _ControlDispatch */
+    0xAA74, /* _AppearanceDispatch */
+};
+static syn68k_addr_t system8_entries[std::size(system8_traps)];
 
-void traps::installCodeFragmentDispatch()
+void traps::installSystem8Traps()
 {
-    if(cfm_dispatch_entry
-       && tooltraptable[0xAA5A & 0x3FF] == US_TO_SYN68K((void*)&stub_Unimplemented))
-        tooltraptable[0xAA5A & 0x3FF] = cfm_dispatch_entry;
+    for(size_t i = 0; i < std::size(system8_traps); i++)
+        if(system8_entries[i]
+           && tooltraptable[system8_traps[i] & 0x3FF] == US_TO_SYN68K((void*)&stub_Unimplemented))
+            tooltraptable[system8_traps[i] & 0x3FF] = system8_entries[i];
 }
 
 void traps::init(bool log, const std::string& trapFilter)
@@ -131,8 +141,11 @@ void traps::init(bool log, const std::string& trapFilter)
        that does (it takes a $AA5A that differs from _Unimplemented for the
        Enabler and calls its private selectors -1, -3, $44) shows its own
        "requires the CFM-68K Runtime Enabler" alert. */
-    cfm_dispatch_entry = tooltraptable[0xAA5A & 0x3FF];
-    tooltraptable[0xAA5A & 0x3FF] = US_TO_SYN68K((void*)&stub_Unimplemented);
+    for(size_t i = 0; i < std::size(system8_traps); i++)
+    {
+        system8_entries[i] = tooltraptable[system8_traps[i] & 0x3FF];
+        tooltraptable[system8_traps[i] & 0x3FF] = US_TO_SYN68K((void*)&stub_Unimplemented);
+    }
 
     trap_install_handler(0xA, &alinehandler, (void *)0);
 }

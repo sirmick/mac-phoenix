@@ -71,6 +71,7 @@ void Executor::C_HideControl(ControlHandle c) /* IMI-322 */
             InvalRgn(rh);
             DisposeRgn(rh);
             CTL_VIS(c) = false;
+            ROMlib_control8_show_subs(c, false);
         }
     }
 }
@@ -102,6 +103,7 @@ void Executor::C_ShowControl(ControlHandle c) /* IMI-322 */
 		  DisposeRgn(rh); */
 
             CTLCALL(c, drawCntl, 0);
+            ROMlib_control8_show_subs(c, true);
         }
     }
 }
@@ -137,6 +139,7 @@ void Executor::C_DrawControls(WindowPtr w) /* IMI-322 */
     if(!ROMlib_emptyvis)
     {
         for(c = WINDOW_CONTROL_LIST(w); c; c = CTL_NEXT_CONTROL(c))
-            Draw1Control(c);
+            if(!ROMlib_control8_embedded(c)) /* drawn by their embedders */
+                Draw1Control(c);
     }
 }

@@ -406,6 +406,12 @@ void
 Executor::gestalt_set_system_version(uint32_t version)
 {
     REPLACE_SELECTOR_IN_TABLE(gestaltSystemVersion, version, gtable);
+    /* MacPhoenix: gestaltThreadsLibraryPresent (bit 2) with PowerPC code:
+       an 8.x System's (PowerPC only) and --executor-ppc's, ThreadsLib being
+       Executor's. The 8.6 Finder takes its thread task reference only with
+       it, and its threads wait on that reference (opening a window). */
+    if(version >= 0x0800 || ROMlib_prefer_ppc)
+        REPLACE_SELECTOR_IN_TABLE("thds"_4, 7, gtable);
 }
 
 
