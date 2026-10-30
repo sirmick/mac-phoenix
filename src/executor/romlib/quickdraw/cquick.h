@@ -524,6 +524,8 @@ typedef struct draw_state
     GUEST<int16_t> tx_size;
 } draw_state_t;
 
+/* an old-style pattern into a pixpat: pat1Data and patData (qCGrafPort.cpp) */
+extern void ROMlib_set_pixpat_pattern(PixPatHandle pixpat, const Pattern &pat);
 extern void draw_state_save(draw_state_t *draw_state);
 extern void draw_state_restore(draw_state_t *draw_state);
 

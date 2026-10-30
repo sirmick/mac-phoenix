@@ -275,6 +275,19 @@ Controls item for item); what differs is the drawing: no platinum colours,
 check box and radio titles over a stippled pattern, a cross where 8.6
 draws a check mark.
 
+The titles over dots (2026-10-31): 8.6's ToolboxUtils saves a colour
+port's old-style background pattern from the PixPat's `patData` handle,
+which Executor left empty, and erased every control and group title with
+that handle's block header (General Controls, TCP/IP, Modem: the "dimmed
+static text drawn as hatching"). Executor keeps the 8 bytes there now.
+On the way (`appr`'s `modes` and `title` sections): the arithmetic transfer
+modes on the components' own precision (addOver wrapping, subPin and
+subOver destination minus source), a basic GrafPort's arithmetic modes as
+Boolean ones on any screen, CopyBits from `qd.screenBits` with a GWorld
+current, `GetQDGlobals` (PrivateInterfaceLib: NQD, FontManager,
+TextServices, IconUtils ask for it), and a theme drawing state that owns
+its background instead of a handle the port may dispose of.
+
 Fonts (2026-10-30, the `text` probe: every line as 8.6's). 8.6's system
 font is Charcoal, from the Roman `'itlb'`'s extended record
 (`itlbSysFond`, which also gives the Script Manager's font variables);

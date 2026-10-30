@@ -154,13 +154,13 @@ void Executor::C_PenPat(const Pattern *pp)
 
             old_pen = CPORT_PEN_PIXPAT(theCPort);
             if(PIXPAT_TYPE(old_pen) == pixpat_type_orig)
-                PIXPAT_1DATA(old_pen) = *pp;
+                ROMlib_set_pixpat_pattern(old_pen, *pp);
             else
             {
                 PixPatHandle new_pen = NewPixPat();
 
                 PIXPAT_TYPE(new_pen) = 0;
-                PIXPAT_1DATA(new_pen) = *pp;
+                ROMlib_set_pixpat_pattern(new_pen, *pp);
 
                 PenPixPat(new_pen);
             }

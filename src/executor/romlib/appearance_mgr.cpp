@@ -1263,11 +1263,24 @@ struct SavedDrawingState
 {
     PenState pen;
     RGBColor fore, back;
-    GUEST<PixPatHandle> back_pixpat; /* a colour port's */
-    Pattern back_pat;                /* a black-and-white port's */
+    /* The background as it was, not the port's handle: the port disposes
+       of its old pattern when it gets a new one, and a state restored
+       after that drew with freed memory (the 8.6 control panels' titles
+       over dots: tests/guest/difftest appr). A colour pattern ('ppat') as
+       a copy the state owns until a restore hands it to the port. */
+    GUEST<PixPatHandle> back_pixpat;
+    Pattern back_pat; /* the old-style pattern otherwise */
     GUEST<INTEGER> font, size, mode;
     Style face;
 };
+
+PixPatHandle copy_pixpat(PixPatHandle src)
+{
+    PixPatHandle copy = NewPixPat();
+    if(copy)
+        CopyPixPat(src, copy);
+    return copy;
+}
 }
 
 OSStatus Executor::C_GetThemeDrawingState(GUEST<ThemeDrawingState> *outState)
@@ -1282,7 +1295,15 @@ OSStatus Executor::C_GetThemeDrawingState(GUEST<ThemeDrawingState> *outState)
     GetForeColor(&s->fore);
     GetBackColor(&s->back);
     if(CGrafPort_p(port))
-        s->back_pixpat = CPORT_BK_PIXPAT(port);
+    {
+        PixPatHandle bk = CPORT_BK_PIXPAT(port);
+        if(bk && PIXPAT_TYPE(bk) != pixpat_type_orig)
+            s->back_pixpat = copy_pixpat(bk);
+        else if(bk)
+            s->back_pat = PIXPAT_1DATA(bk);
+        else
+            s->back_pat = qdGlobals().white;
+    }
     else
         s->back_pat = PORT_BK_PAT(port);
     s->font = PORT_TX_FONT(port);
@@ -1302,13 +1323,20 @@ OSStatus Executor::C_SetThemeDrawingState(ThemeDrawingState inState, Boolean inD
     SetPenState(&s->pen);
     RGBForeColor(&s->fore);
     RGBBackColor(&s->back);
-    if(CGrafPort_p(port))
+    if(CGrafPort_p(port) && s->back_pixpat)
     {
-        if(s->back_pixpat)
-            BackPixPat(s->back_pixpat);
+        /* the copy to the port: the state's own when it goes now */
+        PixPatHandle bk = s->back_pixpat;
+        if(inDisposeNow)
+            s->back_pixpat = nullptr;
+        else
+            bk = copy_pixpat(bk);
+        if(bk)
+            BackPixPat(bk);
     }
     else
         BackPat(&s->back_pat);
+    RGBBackColor(&s->back);
     TextFont(s->font);
     TextSize(s->size);
     TextMode(s->mode);
@@ -1322,6 +1350,9 @@ OSStatus Executor::C_DisposeThemeDrawingState(ThemeDrawingState inState)
 {
     if(!inState)
         return paramErr;
+    auto *s = (SavedDrawingState *)inState;
+    if(s->back_pixpat)
+        DisposePixPat(s->back_pixpat);
     DisposePtr((Ptr)inState);
     return noErr;
 }

@@ -1,4 +1,4 @@
-# probe d09e1f2582e50f82d380aafb15be2aa14095dedee4944f362ca7c1e0ea7a6925
+# probe da80026696c7abe9a8135280da8f580cd2cf0b9579c8d51924601edd24b57851
 == gestalt
 gestalt.appr: 0 00000001
 gestalt.apvr: 0 00000110
@@ -1137,6 +1137,52 @@ draw8.windowframe.7: 120x60 depth 8 crc 06154412
 draw8.windowframe.8: 120x60 depth 8 crc 06154412
 draw8.windowframe.9: 120x60 depth 8 crc 06154412
 draw8.windowframe.10: 120x60 depth 8 crc 06154412
+== modes
+modes.32.blend.white: 120x60 depth 32 crc a5005ac2
+modes.32.blend.red: 120x60 depth 32 crc a5005ac2
+modes.32.addPin.white: 120x60 depth 32 crc 17e0964f
+modes.32.addPin.red: 120x60 depth 32 crc 17e0964f
+modes.32.addOver.white: 120x60 depth 32 crc 8df78183
+modes.32.addOver.red: 120x60 depth 32 crc 565e369f
+modes.32.subPin.white: 120x60 depth 32 crc 17e0964f
+modes.32.subPin.red: 120x60 depth 32 crc 8f202efe
+modes.32.transparent.white: 120x60 depth 32 crc a5005ac2
+modes.32.transparent.red: 120x60 depth 32 crc bf2e9ee5
+modes.32.addMax.white: 120x60 depth 32 crc ea4397a7
+modes.32.addMax.red: 120x60 depth 32 crc a5005ac2
+modes.32.subOver.white: 120x60 depth 32 crc dc183701
+modes.32.subOver.red: 120x60 depth 32 crc 8f202efe
+modes.32.adMin.white: 120x60 depth 32 crc a5005ac2
+modes.32.adMin.red: 120x60 depth 32 crc bf2e9ee5
+modes.32.blend-op.white: 120x60 depth 32 crc bc952e7c
+modes.32.blend-op.red: 120x60 depth 32 crc 235b18d8
+modes.8.blend.white: 120x60 depth 8 crc 19ded632
+modes.8.blend.red: 120x60 depth 8 crc 19ded632
+modes.8.addPin.white: 120x60 depth 8 crc cd822ad1
+modes.8.addPin.red: 120x60 depth 8 crc cd822ad1
+modes.8.addOver.white: 120x60 depth 8 crc 19ded632
+modes.8.addOver.red: 120x60 depth 8 crc c06f58c0
+modes.8.subPin.white: 120x60 depth 8 crc cd822ad1
+modes.8.subPin.red: 120x60 depth 8 crc 820fcac4
+modes.8.transparent.white: 120x60 depth 8 crc 19ded632
+modes.8.transparent.red: 120x60 depth 8 crc d962c5f9
+modes.8.addMax.white: 120x60 depth 8 crc f3104c58
+modes.8.addMax.red: 120x60 depth 8 crc 19ded632
+modes.8.subOver.white: 120x60 depth 8 crc 19ded632
+modes.8.subOver.red: 120x60 depth 8 crc 820fcac4
+modes.8.adMin.white: 120x60 depth 8 crc 19ded632
+modes.8.adMin.red: 120x60 depth 8 crc d962c5f9
+modes.8.blend-op.white: 120x60 depth 8 crc fc2a4752
+modes.8.blend-op.red: 120x60 depth 8 crc f3a25b2d
+modes.win.basic: 120x60 depth 32 crc fd7490cc
+modes.win.color: 120x60 depth 32 crc a5005ac2
+modes.screenbits: 120x60 depth 32 crc a5005ac2
+== title
+title.32.geneva9: 120x60 depth 32 crc 981a00ed
+title.32.system: 120x60 depth 32 crc c170c602
+title.8.geneva9: 120x60 depth 8 crc a440980a
+title.8.system: 120x60 depth 8 crc df726a23
+title.screen: 120x60 depth 32 crc 981a00ed
 == unregister
 unregister.Unregister: 0
 unregister.Unregister.again: -30562

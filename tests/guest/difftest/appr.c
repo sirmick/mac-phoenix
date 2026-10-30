@@ -364,6 +364,154 @@ static void end(const char *key)
     DisposeGWorld(gw);
 }
 
+/* QuickDraw's arithmetic transfer modes (blend .. adMin), PaintRect with
+   white and with a mid red over the platinum dialog grey: the 8.6 control
+   panels wash their titles with white in blend mode */
+static void modes(void)
+{
+    static const RGBColor grey = { 0xDDDD, 0xDDDD, 0xDDDD }, white = { 0xFFFF, 0xFFFF, 0xFFFF },
+                          red = { 0xCCCC, 0x3333, 0x3333 }, op = { 0x4000, 0x4000, 0x4000 };
+    Rect b, r;
+    char k[96];
+    int d, m, c;
+    if(!SECTION("modes"))
+        return;
+    for(d = 0; d < 2; d++)
+        for(m = blend; m <= adMin + 1; m++)
+            for(c = 0; c < 2; c++)
+            {
+                begin(depths[d]);
+                SetRect(&b, 0, 0, 120, 60);
+                RGBForeColor(&grey);
+                PaintRect(&b);
+                SetRect(&r, 10, 10, 110, 50);
+                if(m > adMin)
+                    OpColor(&op);
+                PenMode(m > adMin ? blend : m);
+                RGBForeColor(c ? &red : &white);
+                PaintRect(&r);
+                PenNormal();
+                sprintf(k, "%d.%s.%s", depths[d], m > adMin ? "blend-op" : (const char *[]){ "blend", "addPin", "addOver", "subPin", "transparent", "addMax", "subOver", "adMin" }[m - blend], c ? "red" : "white");
+                end(k);
+            }
+    /* the same wash on the screen through a basic GrafPort and a colour
+       one (OpenPort/OpenCPort: the whole screen visible, no window
+       layering), the pixels copied out */
+    for(c = 0; c < 2; c++)
+    {
+        GrafPort port;
+        CGrafPort cport;
+        GrafPtr p = c ? (GrafPtr)&cport : &port, save;
+        GetPort(&save);
+        if(c)
+            OpenCPort(&cport);
+        else
+            OpenPort(&port);
+        SetPort(p);
+        SetRect(&b, 480, 380, 600, 440);
+        RGBForeColor(&grey);
+        PaintRect(&b);
+        SetRect(&r, 490, 390, 590, 430);
+        PenMode(blend);
+        RGBForeColor(&white);
+        PaintRect(&r);
+        PenNormal();
+        ForeColor(blackColor);
+        SetPort(save);
+        if(c)
+            CloseCPort(&cport);
+        else
+            ClosePort(&port);
+        /* read through a colour port's pixmap */
+        OpenCPort(&cport);
+        begin(32);
+        SetRect(&r, 0, 0, 120, 60);
+        CopyBits((BitMap *)*cport.portPixMap, (BitMap *)*GetGWorldPixMap(gw), &b, &r, srcCopy, NULL);
+        sprintf(k, "win.%s", c ? "color" : "basic");
+        end(k);
+        /* and through the screen as a BitMap (qd.screenBits), as older
+           programs copy from it */
+        if(c)
+        {
+            begin(32);
+            CopyBits(&qd.screenBits, (BitMap *)*GetGWorldPixMap(gw), &b, &r, srcCopy, NULL);
+            end("screenbits");
+        }
+        CloseCPort(&cport);
+        SetPort(save);
+    }
+}
+
+/* how the 8.6 control panels (General Controls) draw a control's title:
+   theme background and text colour, a white wash in blend mode over the
+   title's box, the state restored, the string in srcOr */
+static void title(void)
+{
+    static const RGBColor white = { 0xFFFF, 0xFFFF, 0xFFFF }, grey = { 0xDDDD, 0xDDDD, 0xDDDD };
+    Rect b, r;
+    char k[32];
+    int d, f;
+    if(!SECTION("title"))
+        return;
+    for(d = 0; d < 2; d++)
+        for(f = 0; f < 2; f++)
+        {
+            ThemeDrawingState st;
+            begin(depths[d]);
+            SetRect(&b, 0, 0, 120, 60);
+            RGBForeColor(&grey);
+            PaintRect(&b);
+            ForeColor(blackColor);
+            TextFont(f ? 0 : 3);
+            TextSize(f ? 0 : 9);
+            SetThemeBackground(16, depths[d], true);
+            SetThemeTextColor(21, depths[d], true);
+            GetThemeDrawingState(&st);
+            SetRect(&r, 8, 20, 112, 33);
+            PenMode(blend);
+            RGBForeColor(&white);
+            PaintRect(&r);
+            SetThemeDrawingState(st, true);
+            TextMode(srcOr);
+            MoveTo(10, 30);
+            DrawString("\pShow Desktop when");
+            sprintf(k, "%d.%s", depths[d], f ? "system" : "geneva9");
+            end(k);
+        }
+    /* the same on the screen, through a colour port (OpenCPort) */
+    {
+        CGrafPort cport;
+        GrafPtr save;
+        ThemeDrawingState st;
+        GetPort(&save);
+        OpenCPort(&cport);
+        SetPort((GrafPtr)&cport);
+        SetRect(&b, 480, 380, 600, 440);
+        RGBForeColor(&grey);
+        PaintRect(&b);
+        ForeColor(blackColor);
+        TextFont(3);
+        TextSize(9);
+        SetThemeBackground(16, 8, true);
+        SetThemeTextColor(21, 8, true);
+        GetThemeDrawingState(&st);
+        SetRect(&r, 488, 400, 592, 413);
+        PenMode(blend);
+        RGBForeColor(&white);
+        PaintRect(&r);
+        SetThemeDrawingState(st, true);
+        TextMode(srcOr);
+        MoveTo(490, 410);
+        DrawString("\pShow Desktop when");
+        begin(32);
+        SetRect(&r, 0, 0, 120, 60);
+        CopyBits((BitMap *)*cport.portPixMap, (BitMap *)*GetGWorldPixMap(gw), &b, &r, srcCopy, NULL);
+        end("screen");
+        SetPort(save);
+        CloseCPort(&cport);
+    }
+}
+
 static void drawing(void)
 {
     static const ThemeDrawState states[] = { kThemeStateActive, kThemeStateInactive, kThemeStatePressed };
@@ -475,6 +623,8 @@ int main(void)
     shapes();
     theme();
     drawing();
+    modes();
+    title();
     if(SECTION("unregister"))
     {
         RegisterAppearanceClient();   /* sections stand alone (a resumed run) */

@@ -37,3 +37,4 @@ private.GetThemeVariantList.missing	8.6 leaves the output alone on error; Execut
 private.GetThemeSoundMask	8.6's mask is 0x0000000f (the theme's sounds)
 private.GetDesktopPixPat.name	"Mac OS Default" on 8.6; Executor answers ""
 private.GetDesktopPattern.name	"Mac OS Default" on 8.6; Executor answers ""
+title.*.system	the system font (Charcoal) is TrueType scaled without hinting: glyph shapes differ by a pixel here and there
