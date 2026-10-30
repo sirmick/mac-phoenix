@@ -432,8 +432,8 @@ static void sledgehammer_zone(THz zone, bool print_p,
                      (int)PSIZE(block), block);
 
         if(SIZEC(block) > MIN_BLOCK_SIZE)
-            mm_fatal("bad size correction `%d' in block `%p'",
-                     (int)SIZEC(block), block);
+            mm_fatal("bad size correction `%d' in block `%p' (guest $%08X)",
+                     (int)SIZEC(block), block, (unsigned)US_TO_SYN68K(block));
 
         if((int32_t)LSIZE(block) < 0)
             mm_fatal("bad logical block size `%d' in block `%p'",

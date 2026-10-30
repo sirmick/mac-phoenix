@@ -83,7 +83,8 @@ RgnHandle Executor::C_NewRgn()
     RgnHandle h;
 
     h = (RgnHandle)NewHandleClear(RGN_SMALL_SIZE);
-    RGN_SET_SMALL(h);
+    if(h) /* nil with the heap full, as on a Mac */
+        RGN_SET_SMALL(h);
     return h;
 }
 

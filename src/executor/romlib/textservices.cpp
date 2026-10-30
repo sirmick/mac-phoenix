@@ -26,3 +26,13 @@ OSErr Executor::C_TSMInputWindowOp(Ptr record, INTEGER op)
     (void)record, (void)op;
     return paramErr;
 }
+
+OSErr Executor::C_InitTSMAwareApplication()
+{
+    return noErr;
+}
+
+OSErr Executor::C_CloseTSMAwareApplication()
+{
+    return noErr;
+}

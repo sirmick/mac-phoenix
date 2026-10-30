@@ -1042,3 +1042,85 @@
         type: SInt16
     library: AppearanceLib
     executor: C_
+
+# ####
+
+# Menus.h's 8.5 calls (MenusLib): an item from a string taken as it is
+# (no metacharacters).
+- function:
+    name: AppendMenuItemText
+    return: OSStatus
+    args:
+      - name: menu
+        type: MenuRef
+      - name: inString
+        type: ConstStringPtr
+    library: MenusLib
+    executor: C_
+
+# ####
+
+- function:
+    name: InsertMenuItemText
+    return: OSStatus
+    args:
+      - name: menu
+        type: MenuRef
+      - name: inString
+        type: ConstStringPtr
+      - name: afterItem
+        type: INTEGER
+    library: MenusLib
+    executor: C_
+
+# ####
+
+# Menus.h's 8.0 item icons by handle, AppearanceLib's.
+- enum:
+    values:
+      - name: kMenuNoIcon
+        value: 0
+      - name: kMenuIconType
+        value: 1
+      - name: kMenuShrinkIconType
+        value: 2
+      - name: kMenuSmallIconType
+        value: 3
+      - name: kMenuColorIconType
+        value: 4
+      - name: kMenuIconSuiteType
+        value: 5
+      - name: kMenuIconRefType
+        value: 6
+
+- function:
+    name: SetMenuItemIconHandle
+    return: OSErr
+    args:
+      - name: inMenu
+        type: MenuRef
+      - name: inItem
+        type: SInt16
+      - name: inIconType
+        type: UInt8
+      - name: inIconHandle
+        type: Handle
+    library: AppearanceLib
+    executor: C_
+
+# ####
+
+- function:
+    name: GetMenuItemIconHandle
+    return: OSErr
+    args:
+      - name: inMenu
+        type: MenuRef
+      - name: inItem
+        type: SInt16
+      - name: outIconType
+        type: UInt8*
+      - name: outIconHandle
+        type: Handle*
+    library: AppearanceLib
+    executor: C_

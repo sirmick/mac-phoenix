@@ -440,7 +440,16 @@ static void app(ConstStringPtr str, char icon, char marker, char style,
         state = HGetState((Handle)eip->menh);
         HUnlock((Handle)eip->menh);
         SetHandleSize((Handle)eip->menh, newsize);
+        OSErr err = MemError();
         HSetState((Handle)eip->menh, state);
+        if(err != noErr)
+        {
+            /* MacPhoenix: no room: no item, rather than writing past the
+               menu's block. */
+            LM(MemErr) = err;
+            eip->menitem--;
+            return;
+        }
     }
     char *menuop = (char *)(*eip->menh) + eip->menoff;
     const unsigned char *ip = str;
@@ -918,6 +927,12 @@ void Executor::C_SetMenuBar(Handle ml)
     temph = ml;
     HandToHand(&temph);
     LM(MenuList) = temph;
+    /* A new bar, not drawn yet, whatever its handle: the copy often gets
+       the old list's master pointer back, and the process switch that
+       draws the front process's bar took it for the one drawn (Disk Copy
+       6.3.3 sets its bar and never calls DrawMenuBar: 8.6's Process
+       Manager draws it). */
+    ROMlib_menubar_drawn = nullptr;
     ROMlib_install_system_menus();
 }
 
@@ -1636,6 +1651,24 @@ void Executor::C_SetMenuItemText(MenuHandle mh, INTEGER item, ConstStringPtr str
             if(growth > 0)
             {
                 SetHandleSize((Handle)mh, hsize);
+                if(MemError() != noErr)
+                {
+                    /* As app() does for a locked menu; then, still no
+                       room, the item keeps its text (MemError says why)
+                       rather than the move writing past the menu's block
+                       (the 8.6 Appearance control panel's font menus, in
+                       its full heap, broke the next block's header). */
+                    SignedByte state = HGetState((Handle)mh);
+                    HUnlock((Handle)mh);
+                    SetHandleSize((Handle)mh, hsize);
+                    OSErr err = MemError();
+                    HSetState((Handle)mh, state);
+                    if(err != noErr)
+                    {
+                        LM(MemErr) = err;
+                        return;
+                    }
+                }
                 sb = (char *)*mh + start;
                 BlockMoveData((Ptr)sb, (Ptr)sb + growth, (Size)nbyte);
             }

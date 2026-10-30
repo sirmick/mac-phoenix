@@ -6,7 +6,7 @@
  * Needs:                                                                    *
  *     MacTypes.h          SInt16, UInt32, UInt16, UInt8, SInt32, Rect,      *
  *                         OSType, Boolean, ConstStr255Param, ScriptCode,    *
- *                         Str255, StringPtr                                 *
+ *                         Str255, StringPtr, ConstStringPtr, Ptr, Handle    *
  *     Collections.h       Collection                                        *
  *     DriverServices.h    OSStatus                                          *
  *     ProcessMgr.h        ProcessSerialNumber                               *
@@ -918,6 +918,7 @@ OSStatus C_GetThemeMenuTitleExtra(GUEST<SInt16> *outWidth, Boolean inIsSquished)
 LIBRARY_ALSO(AppearanceLib, GetThemeMenuTitleExtra, InterfaceLib);
 
 
+OSStatus C_GetTheme(Collection ioCollection);LIBRARY_FUNCTION(AppearanceLib, GetTheme, C_GetTheme);
 
 
 
@@ -1174,6 +1175,33 @@ kThemeIndeterminateBar = kThemeMediumIndeterminateBar,
 };
 
 OSStatus C_GetViewsFont(ScriptCode script, StringPtr outFontName, GUEST<SInt16> *outFontSize);LIBRARY_FUNCTION(AppearanceLib, GetViewsFont, C_GetViewsFont);
+
+
+OSStatus C_GetSmallSystemFont(ScriptCode script, StringPtr outFontName);LIBRARY_FUNCTION(AppearanceLib, GetSmallSystemFont, C_GetSmallSystemFont);
+
+
+Boolean C_AreThemeSoundsEnabled();LIBRARY_FUNCTION(AppearanceLib, AreThemeSoundsEnabled, C_AreThemeSoundsEnabled);
+
+
+OSStatus C_GetScenario(Collection ioCollection);LIBRARY_FUNCTION(AppearanceLib, GetScenario, C_GetScenario);
+
+
+OSStatus C_GetCurrentTheme(ConstStringPtr themeName, Ptr outThemeFile);LIBRARY_FUNCTION(AppearanceLib, GetCurrentTheme, C_GetCurrentTheme);
+
+
+OSStatus C_GetThemeVariantList(ConstStringPtr themeName, GUEST<Handle> *outList);LIBRARY_FUNCTION(AppearanceLib, GetThemeVariantList, C_GetThemeVariantList);
+
+
+OSStatus C_CountThemeVariants(Handle list, GUEST<SInt16> *outCount);LIBRARY_FUNCTION(AppearanceLib, CountThemeVariants, C_CountThemeVariants);
+
+
+OSStatus C_GetIndThemeVariant(Handle list, SInt16 index, StringPtr outName);LIBRARY_FUNCTION(AppearanceLib, GetIndThemeVariant, C_GetIndThemeVariant);
+
+
+OSStatus C_GetThemeSoundMask(GUEST<UInt32> *outMask);LIBRARY_FUNCTION(AppearanceLib, GetThemeSoundMask, C_GetThemeSoundMask);
+
+
+Boolean C_IsThemeCreditDialogAvailable();LIBRARY_FUNCTION(AppearanceLib, IsThemeCreditDialogAvailable, C_IsThemeCreditDialogAvailable);
 
 
 } /* namespace Executor */

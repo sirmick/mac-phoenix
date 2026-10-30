@@ -189,8 +189,14 @@ int32_t Executor::ROMlib_ctlcall(ControlHandle c, int16_t i, int32_t l)
 
     defproc = CTL_DEFPROC(c);
 
+    /* MacPhoenix: no definition (purged and not reloadable): nothing to
+       call, 0 as from a definition that ignores the message. */
+    if(!defproc)
+        return 0;
     if(*defproc == nullptr)
         LoadResource(defproc);
+    if(*defproc == nullptr)
+        return 0;
 
     cp = (ctlfuncp)*defproc;
 

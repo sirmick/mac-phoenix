@@ -108,8 +108,14 @@ INTEGER Executor::C_Alert(INTEGER id, ModalFilterUPP fp) /* IMI-418 */
                             (StringPtr) "", false, dBoxProc,
                             (WindowPtr)-1, false, 0L, h));
 
+    if(!dp)
+        return -1; /* no memory for it */
+
     if(color_p)
     {
+        /* An 'ictb' alone (Energy Saver's alerts) colours the items, not
+           the window. */
+        if(alert_ctab_res_h)
         {
             ThePortGuard portGuard;
             SetWinColor(DIALOG_WINDOW(dp),

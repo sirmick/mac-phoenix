@@ -4,10 +4,12 @@
  *                                 =========                                 *
  *                                                                           *
  * Needs:                                                                    *
- *     MacTypes.h     INTEGER, Handle, LONGINT, Str255, ConstStringPtr,      *
- *                    ResType, CharParameter, StringPtr, Boolean, Byte,      *
- *                    Rect, OSErr, SInt16                                    *
- *     QuickDraw.h    RGBColor                                               *
+ *     MacTypes.h          INTEGER, Handle, LONGINT, Str255,                 *
+ *                         ConstStringPtr, ResType, CharParameter,           *
+ *                         StringPtr, Boolean, Byte, Rect, OSErr, SInt16,    *
+ *                         UInt8                                             *
+ *     QuickDraw.h         RGBColor                                          *
+ *     DriverServices.h    OSStatus                                          *
  *                                                                           *
  *                                                                           *
  *****************************************************************************/
@@ -20,6 +22,7 @@
 #include <base/lowglobals.h>
 #include "ExMacTypes.h"
 #include "QuickDraw.h"
+#include "DriverServices.h"
 
 #define MODULE_NAME MenuMgr
 #include <base/api-module.h>
@@ -389,6 +392,27 @@ void C_StandardMDEF(INTEGER message, MenuHandle theMenu, Rect *menuRect, Point h
 
 
 OSErr C_SetMenuItemKeyGlyph(MenuRef inMenu, SInt16 inItem, SInt16 inGlyph);LIBRARY_FUNCTION(AppearanceLib, SetMenuItemKeyGlyph, C_SetMenuItemKeyGlyph);
+
+
+OSStatus C_AppendMenuItemText(MenuRef menu, ConstStringPtr inString);LIBRARY_FUNCTION(MenusLib, AppendMenuItemText, C_AppendMenuItemText);
+
+
+OSStatus C_InsertMenuItemText(MenuRef menu, ConstStringPtr inString, INTEGER afterItem);LIBRARY_FUNCTION(MenusLib, InsertMenuItemText, C_InsertMenuItemText);
+
+
+enum {kMenuNoIcon = 0,
+kMenuIconType = 1,
+kMenuShrinkIconType = 2,
+kMenuSmallIconType = 3,
+kMenuColorIconType = 4,
+kMenuIconSuiteType = 5,
+kMenuIconRefType = 6,
+};
+
+OSErr C_SetMenuItemIconHandle(MenuRef inMenu, SInt16 inItem, UInt8 inIconType, Handle inIconHandle);LIBRARY_FUNCTION(AppearanceLib, SetMenuItemIconHandle, C_SetMenuItemIconHandle);
+
+
+OSErr C_GetMenuItemIconHandle(MenuRef inMenu, SInt16 inItem, UInt8 *outIconType, GUEST<Handle> *outIconHandle);LIBRARY_FUNCTION(AppearanceLib, GetMenuItemIconHandle, C_GetMenuItemIconHandle);
 
 
 } /* namespace Executor */

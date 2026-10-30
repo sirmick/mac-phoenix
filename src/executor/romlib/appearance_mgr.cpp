@@ -21,6 +21,10 @@
 #include "appearance_draw.h"
 #include <base/functions.impl.h>
 #include <set>
+#include <map>
+#include <Collections.h>
+#include <ResourceMgr.h>
+#include <MemoryMgr.h>
 
 using namespace Executor;
 
@@ -896,6 +900,239 @@ OSStatus Executor::C_GetViewsFont(ScriptCode script, StringPtr outFontName, GUES
     if(err == noErr && outFontSize)
         *outFontSize = size;
     return err;
+}
+
+/* AppearanceLib's private font call the 8.6 Appearance control panel
+   names its small system font popup with (its two arguments from the
+   call sites: the script, -1, and the name). */
+OSStatus Executor::C_GetSmallSystemFont(ScriptCode script, StringPtr outFontName)
+{
+    return C_GetThemeFont(kThemeSmallSystemFont, script, outFontName, nullptr, nullptr);
+}
+
+/* Executor plays no theme sounds. */
+Boolean Executor::C_AreThemeSoundsEnabled()
+{
+    return false;
+}
+
+/* The current theme's settings (Appearance.h kTheme*Tag) into a
+   collection, as far as Executor has them: name, highlight colour, the
+   fonts, the desktop pattern, sounds and collapse off. */
+OSStatus Executor::C_GetTheme(Collection ioCollection)
+{
+    if(!ioCollection)
+        return paramErr;
+    auto add = [&](OSType tag, const void *data, int32_t size) {
+        return C_AddCollectionItem(ioCollection, tag, 0, size, (Ptr)data);
+    };
+    auto add_str = [&](OSType tag, const unsigned char *str) {
+        return add(tag, str, str[0] + 1);
+    };
+    OSStatus err = add_str(kThemeNameTag, (const unsigned char *)"\016Mac OS Default");
+    RGBColor hilite = LM(HiliteRGB);
+    if(err == noErr)
+        err = add(kThemeHighlightColorTag, &hilite, sizeof hilite);
+    Boolean off = false;
+    if(err == noErr)
+        err = add(kThemeSoundsEnabledTag, &off, sizeof off);
+    if(err == noErr)
+        err = add(kThemeDblClickCollapseTag, &off, sizeof off);
+    if(err == noErr)
+        err = add_str(kThemeSystemFontTag, (const unsigned char *)theme_fonts[kThemeSystemFont].name);
+    if(err == noErr)
+        err = add_str(kThemeSmallSystemFontTag, (const unsigned char *)theme_fonts[kThemeSmallSystemFont].name);
+    if(err == noErr)
+        err = add_str(kThemeViewsFontTag, (const unsigned char *)theme_fonts[kThemeViewsFont].name);
+    GUEST<SInt16> views_size = theme_fonts[kThemeViewsFont].size;
+    if(err == noErr)
+        err = add(kThemeViewsFontSizeTag, &views_size, sizeof views_size);
+    if(err == noErr)
+        if(Handle ppat = GetResource("ppat"_4, deskPatID))
+        {
+            LoadResource(ppat);
+            HLockGuard guard(ppat);
+            err = add(kThemeDesktopPatternTag, *ppat, GetHandleSize(ppat));
+        }
+    return err;
+}
+
+/* AppearanceLib's private GetScenario: the Appearance control panel
+   passes one collection and reads theme items back ('patt', 'patn', ...):
+   the current theme's, as GetTheme gives them. */
+OSStatus Executor::C_GetScenario(Collection ioCollection)
+{
+    return C_GetTheme(ioCollection);
+}
+
+/* Theme files by name: Executor has none (the control panel then lists
+   no variants). Each output is set, as the panel trusts them: with them
+   left alone it took stale stack for a variant list and disposed of one
+   of its own dialog's controls. */
+OSStatus Executor::C_GetCurrentTheme(ConstStringPtr themeName, Ptr outThemeFile)
+{
+    (void)themeName, (void)outThemeFile;
+    return fnfErr;
+}
+
+OSStatus Executor::C_GetThemeVariantList(ConstStringPtr themeName, GUEST<Handle> *outList)
+{
+    (void)themeName;
+    if(outList)
+        *outList = nullptr;
+    return fnfErr;
+}
+
+OSStatus Executor::C_CountThemeVariants(Handle list, GUEST<SInt16> *outCount)
+{
+    if(outCount)
+        *outCount = 0;
+    return list ? noErr : paramErr;
+}
+
+OSStatus Executor::C_GetIndThemeVariant(Handle list, SInt16 index, StringPtr outName)
+{
+    (void)list, (void)index;
+    if(outName)
+        outName[0] = 0;
+    return paramErr;
+}
+
+OSStatus Executor::C_GetThemeSoundMask(GUEST<UInt32> *outMask)
+{
+    if(outMask)
+        outMask[0] = outMask[1] = 0; /* no sounds */
+    return noErr;
+}
+
+Boolean Executor::C_IsThemeCreditDialogAvailable()
+{
+    return false;
+}
+
+/* ── Menu items: Menus.h's 8.x calls ─────────────────────────────────── */
+
+OSStatus Executor::C_AppendMenuItemText(MenuRef menu, ConstStringPtr inString)
+{
+    if(!menu || !inString)
+        return paramErr;
+    AppendMenu(menu, (StringPtr) "\001 ");
+    SetMenuItemText(menu, CountMItems(menu), inString);
+    return LM(MemErr);
+}
+
+OSStatus Executor::C_InsertMenuItemText(MenuRef menu, ConstStringPtr inString, INTEGER afterItem)
+{
+    if(!menu || !inString)
+        return paramErr;
+    INTEGER count = CountMItems(menu);
+    if(afterItem < 0 || afterItem > count)
+        afterItem = count;
+    InsertMenuItem(menu, (StringPtr) "\001 ", afterItem);
+    SetMenuItemText(menu, afterItem + 1, inString);
+    return LM(MemErr);
+}
+
+namespace
+{
+/* Item icons given by handle: kept here (the menu definition draws the
+   'ICON'/'cicn' an item's icon number names, not these). */
+std::map<std::pair<uint32_t, int>, std::pair<UInt8, uint32_t>> item_icons;
+}
+
+OSErr Executor::C_SetMenuItemIconHandle(MenuRef inMenu, SInt16 inItem, UInt8 inIconType,
+                                        Handle inIconHandle)
+{
+    if(!inMenu || inItem < 1 || inItem > CountMItems(inMenu))
+        return paramErr;
+    auto key = std::make_pair(US_TO_SYN68K(inMenu), (int)inItem);
+    if(inIconType == kMenuNoIcon || !inIconHandle)
+        item_icons.erase(key);
+    else
+        item_icons[key] = { inIconType, US_TO_SYN68K(inIconHandle) };
+    return noErr;
+}
+
+OSErr Executor::C_GetMenuItemIconHandle(MenuRef inMenu, SInt16 inItem, UInt8 *outIconType,
+                                        GUEST<Handle> *outIconHandle)
+{
+    if(!inMenu || inItem < 1 || inItem > CountMItems(inMenu))
+        return paramErr;
+    auto it = item_icons.find(std::make_pair(US_TO_SYN68K(inMenu), (int)inItem));
+    if(outIconType)
+        *outIconType = it == item_icons.end() ? kMenuNoIcon : it->second.first;
+    if(outIconHandle)
+        *outIconHandle = it == item_icons.end() ? nullptr : (Handle)SYN68K_TO_US(it->second.second);
+    return noErr;
+}
+
+/* ── The desktop: WindowsLib's private desktop calls (8.5) ───────────── */
+
+/* The signatures from the 8.6 Appearance control panel's call sites: a
+   copy the caller disposes (DisposePixPat), and the pattern's name
+   (either may be nil). */
+OSStatus Executor::C_GetDesktopPixPat(GUEST<PixPatHandle> *outPixPat, StringPtr outName)
+{
+    if(outName)
+        outName[0] = 0;
+    if(!outPixPat)
+        return noErr;
+    *outPixPat = nullptr;
+    PixPatHandle desk = LM(DeskCPat);
+    if(!desk)
+        desk = GetPixPat(deskPatID);
+    if(!desk)
+        return resNotFound;
+    PixPatHandle copy = NewPixPat();
+    if(!copy)
+        return memFullErr;
+    CopyPixPat(desk, copy);
+    *outPixPat = copy;
+    return noErr;
+}
+
+/* The desktop pattern as a 'ppat' resource's data, a handle the caller
+   owns. */
+OSStatus Executor::C_GetDesktopPattern(GUEST<Handle> *outPattern, StringPtr outName)
+{
+    if(outName)
+        outName[0] = 0;
+    if(!outPattern)
+        return noErr;
+    *outPattern = nullptr;
+    Handle ppat = GetResource("ppat"_4, deskPatID);
+    if(!ppat)
+        return resNotFound;
+    LoadResource(ppat);
+    GUEST<Handle> copy = ppat;
+    OSErr err = HandToHand(&copy);
+    if(err == noErr)
+        *outPattern = copy;
+    return err;
+}
+
+/* No desktop picture on any screen: the error the Appearance control
+   panel takes for "none" (it then records 'nopf'). */
+OSStatus Executor::C_GetDesktopPictureForDevice(GDHandle device, FSSpec *outFile, GUEST<UInt32> *outPlacement)
+{
+    (void)device, (void)outFile, (void)outPlacement;
+    return errUnrecognizedWindowClass; /* -5605 */
+}
+
+/* A picture file read for the desktop (a file dropped on the control
+   panel): Executor reads none. The second argument isn't known for sure,
+   so it is left alone. */
+OSStatus Executor::C_GetPictureFromFile(FSSpec *file, Ptr outPicture)
+{
+    (void)file, (void)outPicture;
+    return fnfErr;
+}
+
+/* Double-clicking a title bar does nothing in Executor (1 would be:
+   collapse it). */
+UInt32 Executor::C_GetWindowDoubleClickAction()
+{
+    return 0;
 }
 
 /* ── Drawing state ───────────────────────────────────────────────────── */

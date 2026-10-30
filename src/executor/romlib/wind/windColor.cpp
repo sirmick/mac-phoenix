@@ -168,7 +168,7 @@ void Executor::C_SetWinColor(WindowPtr w, CTabHandle new_w_ctab)
                 ROMlib_window_ctab_release(old);
         }
 
-        if(CGrafPort_p(w))
+        if(CGrafPort_p(w) && new_w_ctab)
         {
             ColorSpec *w_ctab_table;
             RGBColor *color;

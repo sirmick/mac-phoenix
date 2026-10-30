@@ -114,7 +114,11 @@ LONGINT Executor::C_GetScriptVariable(INTEGER script, INTEGER verb)
         return 0;
     auto itlb = [](int offset, bool byte = false) -> LONGINT {
         Handle h = GetResource("itlb"_4, smRoman);
-        if(!h)
+        /* Empty when the caller has SetResLoad(false) (the Keyboard
+           control panel) or it was purged. */
+        if(h && !*h)
+            LoadResource(h);
+        if(!h || !*h)
             return 0;
         return byte ? *(uint8_t *)(*h + offset) : (LONGINT) * (GUEST<INTEGER> *)(*h + offset);
     };

@@ -140,6 +140,8 @@ CTabHandle Executor::C_GetCTable(INTEGER ctab_res_id)
 
             /* #### are we to make a new copy every time? */
             ctab = (CTabHandle)NewHandle(CTAB_STORAGE_FOR_SIZE(ctab_size));
+            if(!ctab)
+                return nullptr; /* MemError says why, as on a Mac */
 
             /* if the color table is b/w, set the seed to be the b/w clut
 	   seed */
@@ -184,6 +186,8 @@ CTabHandle Executor::C_GetCTable(INTEGER ctab_res_id)
                 ctab_handle_size
                     = sizeof(ColorTable) + (sizeof(ColorSpec) * CTAB_SIZE(clut));
                 ctab = (CTabHandle)NewHandle(ctab_handle_size);
+                if(!ctab)
+                    return nullptr;
 
                 BlockMoveData((Ptr)*clut, (Ptr)*ctab,
                               ctab_handle_size);
@@ -199,6 +203,8 @@ CTabHandle Executor::C_GetCTable(INTEGER ctab_res_id)
 
                 ctab_size = (1 << ctab_id) - 1;
                 ctab = (CTabHandle)NewHandle(CTAB_STORAGE_FOR_SIZE(ctab_size));
+                if(!ctab)
+                    return nullptr;
 
                 CTAB_SIZE(ctab) = ctab_size;
                 CTAB_FLAGS(ctab) = CTAB_GDEVICE_BIT;

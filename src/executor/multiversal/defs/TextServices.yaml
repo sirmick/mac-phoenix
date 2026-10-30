@@ -49,3 +49,24 @@
       Selector 22: operations (1-6) on the floating input window's state
       in the TSM globals. paramErr here; the Help Manager takes that as
       "no input window".
+
+# ####
+
+# TextServices.h: an application that handles inline input itself says so
+# (8.x control panels and Sherlock call it first thing). Executor has no
+# input methods: noErr, nothing to do.
+- function:
+    name: InitTSMAwareApplication
+    return: OSErr
+    dispatcher: TextServicesDispatch
+    selector: 0x0014
+    executor: C_
+
+# ####
+
+- function:
+    name: CloseTSMAwareApplication
+    return: OSErr
+    dispatcher: TextServicesDispatch
+    selector: 0x0015
+    executor: C_

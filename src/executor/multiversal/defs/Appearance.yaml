@@ -2266,6 +2266,7 @@
       - name: ioCollection
         type: Collection
     library: AppearanceLib
+    executor: C_
 
 # ####
 
@@ -3294,5 +3295,118 @@
         type: StringPtr
       - name: outFontSize
         type: SInt16*
+    library: AppearanceLib
+    executor: C_
+
+# ####
+
+# MacPhoenix: AppearanceLib's private calls the 8.6 Appearance control panel
+# makes (arguments from its call sites, tools/macdecode/pef.py --dis).
+# The small system font's name for a script (-1: the system's).
+- function:
+    name: GetSmallSystemFont
+    return: OSStatus
+    args:
+      - name: script
+        type: ScriptCode
+      - name: outFontName
+        type: StringPtr
+    library: AppearanceLib
+    executor: C_
+
+# ####
+
+- function:
+    name: AreThemeSoundsEnabled
+    return: Boolean
+    library: AppearanceLib
+    executor: C_
+
+# ####
+
+# The settings of the current scenario (theme) into a collection.
+- function:
+    name: GetScenario
+    return: OSStatus
+    args:
+      - name: ioCollection
+        type: Collection
+    library: AppearanceLib
+    executor: C_
+
+# ####
+
+# A theme file by name: the 8.6 Appearance control panel's calls (arguments
+# from its call sites). Executor has no theme files: every name answers
+# "not found", and the variant calls set their outputs for an empty list.
+- function:
+    name: GetCurrentTheme
+    return: OSStatus
+    args:
+      - name: themeName
+        type: ConstStringPtr
+      - name: outThemeFile
+        type: Ptr
+    library: AppearanceLib
+    executor: C_
+
+# ####
+
+- function:
+    name: GetThemeVariantList
+    return: OSStatus
+    args:
+      - name: themeName
+        type: ConstStringPtr
+      - name: outList
+        type: Handle*
+    library: AppearanceLib
+    executor: C_
+
+# ####
+
+- function:
+    name: CountThemeVariants
+    return: OSStatus
+    args:
+      - name: list
+        type: Handle
+      - name: outCount
+        type: SInt16*
+    library: AppearanceLib
+    executor: C_
+
+# ####
+
+- function:
+    name: GetIndThemeVariant
+    return: OSStatus
+    args:
+      - name: list
+        type: Handle
+      - name: index
+        type: SInt16
+      - name: outName
+        type: StringPtr
+    library: AppearanceLib
+    executor: C_
+
+# ####
+
+# The theme's sound mask (64 bits, read as two longs by the control panel).
+- function:
+    name: GetThemeSoundMask
+    return: OSStatus
+    args:
+      - name: outMask
+        type: UInt32*
+    library: AppearanceLib
+    executor: C_
+
+# ####
+
+- function:
+    name: IsThemeCreditDialogAvailable
+    return: Boolean
     library: AppearanceLib
     executor: C_

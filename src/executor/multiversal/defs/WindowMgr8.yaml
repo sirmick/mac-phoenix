@@ -1766,3 +1766,72 @@
         type: WindowRef
     library: WindowsLib
     executor: C_
+
+# ####
+
+# MacPhoenix: WindowsLib's private desktop calls (8.5), with the arguments
+# the 8.6 Appearance control panel passes (tools/macdecode/pef.py --dis).
+# The desktop pattern: a copy the caller disposes, and its name (either nil).
+- function:
+    name: GetDesktopPixPat
+    return: OSStatus
+    args:
+      - name: outPixPat
+        type: PixPatHandle*
+      - name: outName
+        type: StringPtr
+    library: WindowsLib
+    executor: C_
+
+# ####
+
+# The same as a 'ppat' resource's data.
+- function:
+    name: GetDesktopPattern
+    return: OSStatus
+    args:
+      - name: outPattern
+        type: Handle*
+      - name: outName
+        type: StringPtr
+    library: WindowsLib
+    executor: C_
+
+# ####
+
+# A screen's desktop picture file and its placement; -5605 for none.
+- function:
+    name: GetDesktopPictureForDevice
+    return: OSStatus
+    args:
+      - name: device
+        type: GDHandle
+      - name: outFile
+        type: FSSpec*
+      - name: outPlacement
+        type: UInt32*
+    library: WindowsLib
+    executor: C_
+
+# ####
+
+# A picture file read for the desktop (the second argument is a guess).
+- function:
+    name: GetPictureFromFile
+    return: OSStatus
+    args:
+      - name: file
+        type: FSSpec*
+      - name: outPicture
+        type: Ptr
+    library: WindowsLib
+    executor: C_
+
+# ####
+
+# What double-clicking a title bar does (1: collapses the window).
+- function:
+    name: GetWindowDoubleClickAction
+    return: UInt32
+    library: WindowsLib
+    executor: C_

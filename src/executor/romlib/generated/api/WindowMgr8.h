@@ -5,7 +5,7 @@
  *                                                                           *
  * Needs:                                                                    *
  *     MacTypes.h          OSType, UInt32, SInt16, Rect, Boolean, SInt32,    *
- *                         Handle                                            *
+ *                         Handle, StringPtr, Ptr                            *
  *     QuickDraw.h         RgnHandle, GrafPtr, RGBColor, PixPatHandle        *
  *     WindowMgr.h         WindowRegionCode, WStateData, WindowRef,          *
  *                         WindowDefUPP                                      *
@@ -582,6 +582,21 @@ OSStatus C_EraseWindowRegion(WindowRef window, RgnHandle region);LIBRARY_FUNCTIO
 
 
 OSStatus C_PostDelayedWindowReshape(WindowRef window);LIBRARY_FUNCTION(WindowsLib, PostDelayedWindowReshape, C_PostDelayedWindowReshape);
+
+
+OSStatus C_GetDesktopPixPat(GUEST<PixPatHandle> *outPixPat, StringPtr outName);LIBRARY_FUNCTION(WindowsLib, GetDesktopPixPat, C_GetDesktopPixPat);
+
+
+OSStatus C_GetDesktopPattern(GUEST<Handle> *outPattern, StringPtr outName);LIBRARY_FUNCTION(WindowsLib, GetDesktopPattern, C_GetDesktopPattern);
+
+
+OSStatus C_GetDesktopPictureForDevice(GDHandle device, FSSpec *outFile, GUEST<UInt32> *outPlacement);LIBRARY_FUNCTION(WindowsLib, GetDesktopPictureForDevice, C_GetDesktopPictureForDevice);
+
+
+OSStatus C_GetPictureFromFile(FSSpec *file, Ptr outPicture);LIBRARY_FUNCTION(WindowsLib, GetPictureFromFile, C_GetPictureFromFile);
+
+
+UInt32 C_GetWindowDoubleClickAction();LIBRARY_FUNCTION(WindowsLib, GetWindowDoubleClickAction, C_GetWindowDoubleClickAction);
 
 
 } /* namespace Executor */

@@ -47,4 +47,10 @@ INTEGER C_TSMFindWindow(Point pt, GUEST<WindowPtr> *window);PASCAL_SUBTRAP(TSMFi
 OSErr C_TSMInputWindowOp(Ptr record, INTEGER op);PASCAL_SUBTRAP(TSMInputWindowOp, 0xAA54, 0x0016, TextServicesDispatch);
 
 
+OSErr C_InitTSMAwareApplication();PASCAL_SUBTRAP(InitTSMAwareApplication, 0xAA54, 0x0014, TextServicesDispatch);
+
+
+OSErr C_CloseTSMAwareApplication();PASCAL_SUBTRAP(CloseTSMAwareApplication, 0xAA54, 0x0015, TextServicesDispatch);
+
+
 } /* namespace Executor */

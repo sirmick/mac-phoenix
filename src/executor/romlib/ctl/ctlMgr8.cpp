@@ -280,6 +280,12 @@ void Executor::ROMlib_control8_new(ControlHandle c)
 
 void Executor::ROMlib_control8_dispose(ControlHandle c)
 {
+    /* Focus first: a control with no extras can have it too
+       (SetKeyboardFocus on an old one), and a stale one crashed
+       AdvanceKeyboardFocus (the 8.6 Appearance control panel). */
+    for(auto &f : focus())
+        if(f.second == c)
+            f.second = nullptr;
     ControlExtras *x = findExtras(c);
     if(!x)
         return;
@@ -292,8 +298,6 @@ void Executor::ROMlib_control8_dispose(ControlHandle c)
     WindowPtr w = CTL_OWNER(c);
     if(rootOf(w) == c)
         roots().erase(w);
-    if(focus()[w] == c)
-        focus()[w] = nullptr;
     extrasTable().erase(c);
 }
 

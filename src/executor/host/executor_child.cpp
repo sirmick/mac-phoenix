@@ -17,6 +17,7 @@
 #include "../../drivers/audio/audio_direct.h"
 
 #include <csignal>
+#include <execinfo.h>
 #include <cstdio>
 
 #include "../../core/snapshot.h"
@@ -156,6 +157,11 @@ void crash_snapshot(int sig, siginfo_t *info, void *uctx)
     snprintf(message, sizeof message, "host signal %d at guest pc $%08x, address %p",
              sig, (unsigned)g_platform.cpu_get_pc(), info->si_addr);
     fprintf(stderr, "[Executor] %s: snapshotting\n", message);
+    // The host frames first: a second fault while snapshotting would lose them.
+    void *frames[32];
+    int n = backtrace(frames, 32);
+    fprintf(stderr, "[Executor] host frames (addr2line -f -C -e mac-phoenix):\n");
+    backtrace_symbols_fd(frames, n, 2);
     syn68k_describe_cpu(stderr);
     fatal_snapshot(message);
     struct sigaction& prev = sig == SIGBUS ? prev_bus : prev_segv;

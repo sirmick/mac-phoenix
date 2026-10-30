@@ -18,6 +18,41 @@ class handle_vector
     bool owned_ = false;
 
     static constexpr size_t elem_size = sizeof(GUEST<T>);
+
+    /* MacPhoenix: a handle of `bytes`, in the current heap or, when that
+       is full, the system heap (which grows): QuickDraw's regions are
+       built here, and a small application's heap runs out (Sherlock's
+       930K on 8.6). The caller gets a region it can use and dispose. */
+    static Handle new_handle(size_t bytes)
+    {
+        Handle h = NewHandle(bytes);
+        if(!h)
+        {
+            THz save = LM(TheZone);
+            LM(TheZone) = LM(SysZone);
+            h = NewHandle(bytes);
+            LM(TheZone) = save;
+        }
+        return h;
+    }
+
+    /* handle_ resized to `bytes`, moved to the system heap if it can't
+       grow where it is. */
+    void resize(size_t bytes, size_t keep)
+    {
+        SetHandleSize(handle_, bytes);
+        if(LM(MemErr) == noErr || !owned_)
+            return; /* not ours: the caller holds this handle */
+        THz save = LM(TheZone);
+        LM(TheZone) = LM(SysZone);
+        Handle h = NewHandle(bytes);
+        LM(TheZone) = save;
+        if(!h)
+            return;
+        memcpy(*h, *handle_, keep);
+        DisposeHandle(handle_);
+        handle_ = h;
+    }
 public:
     handle_vector() noexcept = default;
     explicit handle_vector(TypedHandle h) noexcept
@@ -43,7 +78,7 @@ public:
     {
         if(other.handle_)
         {
-            handle_ = NewHandle(offset + elem_size * other.size_);
+            handle_ = new_handle(offset + elem_size * other.size_);
             owned_ = true;
             size_ = other.size_;
             capacity_ = other.size_;
@@ -75,10 +110,15 @@ public:
     TypedHandle release() noexcept
     {
         if(!handle_)
-            return (TypedHandle) NewHandleClear(offset);
-        
+        {
+            Handle h = new_handle(offset);
+            if(h && offset)
+                memset(*h, 0, offset);
+            return (TypedHandle) h;
+        }
+
         if(capacity_ != size_)
-            SetHandleSize(handle_, offset + size_ * elem_size);
+            SetHandleSize(handle_, offset + size_ * elem_size); /* smaller */
         TypedHandle h = (TypedHandle) handle_;
         handle_ = nullptr;
         owned_ = false;
@@ -93,16 +133,17 @@ public:
     {
         if(cap > capacity_)
         {
-            capacity_ = cap;
             if(handle_)
-                SetHandleSize(handle_, offset + capacity_ * elem_size);
+                resize(offset + cap * elem_size, offset + size_ * elem_size);
             else
             {
-                handle_ = NewHandle(offset + capacity_ * elem_size);
+                handle_ = new_handle(offset + cap * elem_size);
                 owned_ = true;
-                if(offset)
+                if(handle_ && offset)
                     memset(*handle_, 0, offset);
             }
+            /* What it got: no room anywhere leaves it as it was. */
+            capacity_ = handle_ ? (GetHandleSize(handle_) - offset) / elem_size : 0;
         }
     }
 
@@ -135,6 +176,8 @@ public:
     {
         if(size_ == capacity_)
             reserve(tight ? capacity_ + 1 : capacity_ + 32 + capacity_/10);
+        if(size_ == capacity_)
+            return; /* no memory: dropped rather than written past the end */
         new(data() + size_) GUEST<T>(x);
         ++size_;
     }

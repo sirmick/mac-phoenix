@@ -276,7 +276,10 @@ void Executor::C_SetDeskCPat(PixPatHandle ph)
     PaintOne((WindowPeek)0, LM(GrayRgn));
 }
 
-static void
+/* MacPhoenix: false, and nothing made, when the heap can't hold the
+   window's regions, its AuxWinRec and title (NewWindow answers nil, as
+   on a Mac with the heap full: a 100K application's first alert). */
+static bool
 ROMlib_new_window_common(WindowPeek w,
                          int allocated_p, int cwindow_p,
                          const Rect *bounds, ConstStringPtr title, Boolean visible_p,
@@ -290,6 +293,25 @@ ROMlib_new_window_common(WindowPeek w,
     save_port = qdGlobals().thePort;
     if(!title)
         title = (StringPtr) ""; /* thank MS Word for pointing this out */
+
+    RgnHandle struct_rgn = NewRgn(), cont_rgn = NewRgn(), update_rgn = NewRgn();
+    t_aux_w = (AuxWinHandle)NewHandle(sizeof(AuxWinRec));
+    GUEST<Handle> title_h = nullptr;
+    PtrToHand((Ptr)title, &title_h, (LONGINT)title[0] + 1);
+    if(!struct_rgn || !cont_rgn || !update_rgn || !t_aux_w || !title_h)
+    {
+        for(RgnHandle r : { struct_rgn, cont_rgn, update_rgn })
+            if(r)
+                DisposeRgn(r);
+        if(t_aux_w)
+            DisposeHandle((Handle)t_aux_w);
+        if(title_h)
+            DisposeHandle(title_h);
+        if(allocated_p)
+            DisposePtr((Ptr)w);
+        LM(MemErr) = memFullErr;
+        return false;
+    }
     if(!behind)
     {
         WINDOW_NEXT_WINDOW(w) = nullptr;
@@ -348,9 +370,9 @@ ROMlib_new_window_common(WindowPeek w,
     WINDOW_GO_AWAY_FLAG(w) = go_away_flag;
     WINDOW_SPARE_FLAG(w) = 0; /* will be used zoombox (wNew) */
     WINDOW_DATA(w) = 0;
-    WINDOW_STRUCT_REGION(w) = NewRgn();
-    WINDOW_CONT_REGION(w) = NewRgn();
-    WINDOW_UPDATE_REGION(w) = NewRgn();
+    WINDOW_STRUCT_REGION(w) = struct_rgn;
+    WINDOW_CONT_REGION(w) = cont_rgn;
+    WINDOW_UPDATE_REGION(w) = update_rgn;
     WINDOW_DEF_PROC(w) = GetResource("WDEF"_4, proc_id >> 4);
     if(!WINDOW_DEF_PROC(w))
     {
@@ -364,7 +386,6 @@ ROMlib_new_window_common(WindowPeek w,
         }
     }
 
-    t_aux_w = (AuxWinHandle)NewHandle(sizeof(AuxWinRec));
     (*t_aux_w)->awNext = LM(AuxWinHead);
     (*t_aux_w)->awOwner = (WindowPtr)w;
     (*t_aux_w)->awCTable = (CTabHandle)GetResource("wctb"_4, 0);
@@ -374,12 +395,7 @@ ROMlib_new_window_common(WindowPeek w,
     (*t_aux_w)->awRefCon = 0;
     LM(AuxWinHead) = t_aux_w;
 
-    {
-        GUEST<Handle> t;
-
-        PtrToHand((Ptr)title, &t, (LONGINT)title[0] + 1);
-        WINDOW_TITLE(w) = guest_cast<StringHandle>(t);
-    }
+    WINDOW_TITLE(w) = guest_cast<StringHandle>(title_h);
 
     if(cwindow_p)
         OpenCPort((CGrafPtr)w);
@@ -424,6 +440,7 @@ ROMlib_new_window_common(WindowPeek w,
     }
 
     SetPort(save_port);
+    return true;
 }
 
 WindowPtr Executor::C_NewWindow(void* window_storage, const Rect *bounds,
@@ -464,9 +481,10 @@ WindowPtr Executor::C_NewWindow(void* window_storage, const Rect *bounds,
     else
         w = (WindowPeek)window_storage;
 
-    ROMlib_new_window_common(w, allocated_p, 0,
-                             bounds, title, visible_p, proc_id, behind,
-                             go_away_flag, ref_con);
+    if(!w || !ROMlib_new_window_common(w, allocated_p, 0,
+                                       bounds, title, visible_p, proc_id, behind,
+                                       go_away_flag, ref_con))
+        return nullptr;
     return (WindowPtr)w;
 }
 
@@ -486,10 +504,11 @@ WindowPtr Executor::C_NewCWindow(void* window_storage, const Rect *bounds,
     else
         w = (WindowPeek)window_storage;
 
-    ROMlib_new_window_common(w, allocated_p, 1,
-                             bounds, title, visible_p, proc_id,
-                             (WindowPtr)behind,
-                             go_away_flag, ref_con);
+    if(!w || !ROMlib_new_window_common(w, allocated_p, 1,
+                                       bounds, title, visible_p, proc_id,
+                                       (WindowPtr)behind,
+                                       go_away_flag, ref_con))
+        return nullptr;
     return (WindowPtr)w;
 }
 
