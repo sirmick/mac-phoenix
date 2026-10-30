@@ -405,6 +405,9 @@ class ExecutorGenerator < Generator
                 @out << "'#{letter.call(fun["return"])}', #{cname});\n"
             elsif fun["raw"] then
                 @out << "LIBRARY_RAW(#{lib}, #{name});\n"
+            elsif not fun["executor"] then
+                # Declared, not implemented yet (Appearance.yaml): not
+                # exported, so an import of it stays unresolved and logged.
             else
                 @out << (fun["return"] or "void") << " " << cname
                 @out << "(" << (args.map {|arg| decl(arg["type"], arg["name"])}).join(", ") << ");"

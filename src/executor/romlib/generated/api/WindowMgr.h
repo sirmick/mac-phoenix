@@ -8,7 +8,7 @@
  *                         PicHandle, CTabHandle, PixPatHandle               *
  *     MacTypes.h          INTEGER, Boolean, Handle, StringHandle,           *
  *                         LONGINT, Rect, ConstStringPtr, StringPtr,         *
- *                         OSErr, SignedByte                                 *
+ *                         OSErr, SignedByte, UInt16                         *
  *     EventMgr.h          EventRecord                                       *
  *     DriverServices.h    OSStatus                                          *
  *                                                                           *
@@ -559,6 +559,35 @@ LIBRARY_ALSO(PrivateInterfaceLib, CheckWindow, InterfaceLib);
 // the window's global content rectangle.
 void C_GetWindowContentRect(WindowPtr window, Rect *r);PASCAL_SUBTRAP(GetWindowContentRect, 0xA829, 0x04F6, LayerDispatch);
 LIBRARY_ALSO(PrivateInterfaceLib, GetWindowContentRect, InterfaceLib);
+
+
+typedef UInt16 WindowRegionCode;
+
+enum {kWindowTitleBarRgn = 0,
+kWindowTitleTextRgn = 1,
+kWindowCloseBoxRgn = 2,
+kWindowZoomBoxRgn = 3,
+kWindowDragRgn = 5,
+kWindowGrowRgn = 6,
+kWindowCollapseBoxRgn = 7,
+kWindowTitleProxyIconRgn = 8,
+kWindowStructureRgn = 32,
+kWindowContentRgn = 33,
+kWindowUpdateRgn = 34,
+kWindowGlobalPortRgn = 40,
+};
+
+OSStatus C_GetWindowRegion(WindowRef window, WindowRegionCode inRegionCode, RgnHandle ioWinRgn);LIBRARY_FUNCTION(AppearanceLib, GetWindowRegion, C_GetWindowRegion);
+
+
+Boolean C_IsWindowCollapsed(WindowRef window);LIBRARY_FUNCTION(AppearanceLib, IsWindowCollapsed, C_IsWindowCollapsed);
+
+
+Boolean C_IsWindowCollapsable(WindowRef window);LIBRARY_FUNCTION(AppearanceLib, IsWindowCollapsable, C_IsWindowCollapsable);
+
+
+
+
 
 
 } /* namespace Executor */

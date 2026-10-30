@@ -6,7 +6,7 @@
  * Needs:                                                                    *
  *     MacTypes.h     INTEGER, Handle, LONGINT, Str255, ConstStringPtr,      *
  *                    ResType, CharParameter, StringPtr, Boolean, Byte,      *
- *                    Rect, OSErr                                            *
+ *                    Rect, OSErr, SInt16                                    *
  *     QuickDraw.h    RGBColor                                               *
  *                                                                           *
  *                                                                           *
@@ -386,6 +386,9 @@ OSErr C_GetMenuTitleRect(INTEGER menuID, Rect *rect);PASCAL_SUBTRAP(GetMenuTitle
 
 
 void C_StandardMDEF(INTEGER message, MenuHandle theMenu, Rect *menuRect, Point hitPt, GUEST<INTEGER> *whichItem);LIBRARY_FUNCTION(MenusLib, StandardMDEF, C_StandardMDEF);
+
+
+OSErr C_SetMenuItemKeyGlyph(MenuRef inMenu, SInt16 inItem, SInt16 inGlyph);LIBRARY_FUNCTION(AppearanceLib, SetMenuItemKeyGlyph, C_SetMenuItemKeyGlyph);
 
 
 } /* namespace Executor */

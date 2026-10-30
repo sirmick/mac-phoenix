@@ -6,7 +6,7 @@
  * Needs:                                                                    *
  *     WindowMgr.h    ControlHandle, WindowPtr                               *
  *     MacTypes.h     Rect, Byte, INTEGER, Handle, LONGINT, Str255,          *
- *                    ConstStringPtr, StringPtr, Boolean                     *
+ *                    SInt16, ConstStringPtr, StringPtr, Boolean             *
  *     QuickDraw.h    cSpecArray, RgnHandle                                  *
  *                                                                           *
  *                                                                           *
@@ -104,6 +104,8 @@ using ControlActionUPP = UPP<void(ControlHandle , int16_t )>;
 struct ControlRecord{GUEST_STRUCT;GUEST<ControlHandle> nextControl;GUEST<WindowPtr> contrlOwner;Rect contrlRect;Byte contrlVis;Byte contrlHilite;GUEST<INTEGER> contrlValue;GUEST<INTEGER> contrlMin;GUEST<INTEGER> contrlMax;GUEST<Handle> contrlDefProc;GUEST<Handle> contrlData;GUEST<ControlActionUPP> contrlAction;GUEST<LONGINT> contrlRfCon;GUEST<Str255> contrlTitle;};static_assert(sizeof(ControlRecord) == 296);void describeStruct(const ControlRecord&, std::ostream&);
 
 struct CtlCTab{GUEST_STRUCT;GUEST<LONGINT> ccSeed;GUEST<INTEGER> ccReserved;GUEST<INTEGER> ctSize;GUEST<cSpecArray> ctTable;};static_assert(sizeof(CtlCTab) == 16);void describeStruct(const CtlCTab&, std::ostream&);
+
+typedef SInt16 ControlPartCode;
 
 typedef CtlCTab *CCTabPtr;
 

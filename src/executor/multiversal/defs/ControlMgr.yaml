@@ -203,6 +203,13 @@
 
 # ####
 
+# MacPhoenix: Controls.h's (8.0) name for a part code.
+- typedef:
+    name: ControlPartCode
+    type: SInt16
+
+# ####
+
 - typedef:
     name: CCTabPtr
     type: CtlCTab*

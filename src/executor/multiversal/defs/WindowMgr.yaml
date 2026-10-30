@@ -1484,3 +1484,98 @@
     library: PrivateInterfaceLib
     executor: C_
 
+# ####
+
+# MacPhoenix: MacWindows.h's (8.0) window region codes, for
+# GetWindowRegion and the theme's window drawing (Appearance.yaml).
+- typedef:
+    name: WindowRegionCode
+    type: UInt16
+
+- enum:
+    values:
+      - name: kWindowTitleBarRgn
+        value: 0
+      - name: kWindowTitleTextRgn
+        value: 1
+      - name: kWindowCloseBoxRgn
+        value: 2
+      - name: kWindowZoomBoxRgn
+        value: 3
+      - name: kWindowDragRgn
+        value: 5
+      - name: kWindowGrowRgn
+        value: 6
+      - name: kWindowCollapseBoxRgn
+        value: 7
+      - name: kWindowTitleProxyIconRgn
+        value: 8
+      - name: kWindowStructureRgn
+        value: 32
+      - name: kWindowContentRgn
+        value: 33
+      - name: kWindowUpdateRgn
+        value: 34
+      - name: kWindowGlobalPortRgn
+        value: 40
+
+# ####
+
+# MacPhoenix: MacWindows.h's 8.0 calls that 8.x's AppearanceLib exports
+# (Appearance.md): a window's regions by code, window collapsing.
+- function:
+    name: GetWindowRegion
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowRef
+      - name: inRegionCode
+        type: WindowRegionCode
+      - name: ioWinRgn
+        type: RgnHandle
+    library: AppearanceLib
+    executor: C_
+
+# ####
+
+- function:
+    name: IsWindowCollapsed
+    return: Boolean
+    args:
+      - name: window
+        type: WindowRef
+    library: AppearanceLib
+    executor: C_
+
+# ####
+
+- function:
+    name: IsWindowCollapsable
+    return: Boolean
+    args:
+      - name: window
+        type: WindowRef
+    library: AppearanceLib
+    executor: C_
+
+# ####
+
+- function:
+    name: CollapseWindow
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowRef
+      - name: collapse
+        type: Boolean
+    library: AppearanceLib
+
+# ####
+
+- function:
+    name: CollapseAllWindows
+    return: OSStatus
+    args:
+      - name: collapse
+        type: Boolean
+    library: AppearanceLib

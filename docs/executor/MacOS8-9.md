@@ -151,7 +151,9 @@ what it called last (unresolved imports answer 0 and log
 **Where it is now:** the 8.6 Finder runs and stays up: its menu bar
 (File, Edit, View, Special, the Help and Application menus), the desktop
 pattern and all its icons (both volumes, the aliases, the Trash) with
-their names. No window has opened yet (Appearance drawing to come).
+their names. No window has opened yet: the Appearance Manager is Executor's own now
+(docs/executor/Appearance.md), its drawing and the Control Manager's 8.0
+calls are next.
 The 9.0.4 Finder runs as far (no extensions), then says 'The disk ""
 cannot be used, because an error of type -35 occurred'.
 

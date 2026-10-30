@@ -1,0 +1,649 @@
+INFO gestalt appr 0 00000001
+INFO gestalt apvr 0 00000111
+INFO IsAppearanceClient before 0
+INFO Register 0
+INFO Register again -30561
+INFO IsAppearanceClient after 1
+INFO IsThemeInColor 32 color 1 mono 1
+INFO IsThemeInColor 8 color 1 mono 1
+INFO IsThemeInColor 1 color 0 mono 0
+BRUSH -3 depth 32 err -30560 rgb 0001 0002 0003
+BRUSH -2 depth 32 err 0 rgb ffff ffff ffff
+BRUSH -1 depth 32 err 0 rgb 0000 0000 0000
+BRUSH 0 depth 32 err -30560 rgb 0001 0002 0003
+BRUSH 1 depth 32 err 0 rgb dddd dddd dddd
+BRUSH 2 depth 32 err 0 rgb dddd dddd dddd
+BRUSH 3 depth 32 err 0 rgb dddd dddd dddd
+BRUSH 4 depth 32 err 0 rgb dddd dddd dddd
+BRUSH 5 depth 32 err 0 rgb dddd dddd dddd
+BRUSH 6 depth 32 err 0 rgb dddd dddd dddd
+BRUSH 7 depth 32 err 0 rgb ffff ffff ffff
+BRUSH 8 depth 32 err 0 rgb ffff ffff ffff
+BRUSH 9 depth 32 err 0 rgb dddd dddd dddd
+BRUSH 10 depth 32 err 0 rgb eeee eeee eeee
+BRUSH 11 depth 32 err 0 rgb ffff ffff ffff
+BRUSH 12 depth 32 err 0 rgb ffff ffff ffff
+BRUSH 13 depth 32 err 0 rgb 0000 0000 0000
+BRUSH 14 depth 32 err 0 rgb 6666 6666 cccc
+BRUSH 15 depth 32 err 0 rgb ffff ffff ffff
+BRUSH 16 depth 32 err 0 rgb ffff ffff ffff
+BRUSH 17 depth 32 err 0 rgb 0000 0000 0000
+BRUSH 18 depth 32 err 0 rgb 5555 5555 5555
+BRUSH 19 depth 32 err 0 rgb 6666 6666 cccc
+BRUSH 20 depth 32 err 0 rgb 0000 0000 0000
+BRUSH 21 depth 32 err 0 rgb ffff ffff ffff
+BRUSH 22 depth 32 err 0 rgb 8888 8888 8888
+BRUSH 23 depth 32 err 0 rgb ffff 0000 0000
+BRUSH 24 depth 32 err 0 rgb 0000 0000 0000
+BRUSH 25 depth 32 err 0 rgb eeee eeee eeee
+BRUSH 26 depth 32 err 0 rgb ffff ffff ffff
+BRUSH 27 depth 32 err 0 rgb 0000 0000 0000
+BRUSH 28 depth 32 err 0 rgb 8888 8888 8888
+BRUSH 29 depth 32 err 0 rgb dddd dddd dddd
+BRUSH 30 depth 32 err 0 rgb dddd dddd dddd
+BRUSH 31 depth 32 err 0 rgb 6666 6666 6666
+BRUSH 32 depth 32 err 0 rgb 7777 7777 7777
+BRUSH 33 depth 32 err 0 rgb dddd dddd dddd
+BRUSH 34 depth 32 err 0 rgb 9999 9999 9999
+BRUSH 35 depth 32 err 0 rgb ffff ffff ffff
+BRUSH 36 depth 32 err 0 rgb dddd dddd dddd
+BRUSH 37 depth 32 err 0 rgb dddd dddd dddd
+BRUSH 38 depth 32 err 0 rgb dddd dddd dddd
+BRUSH 39 depth 32 err 0 rgb dddd dddd dddd
+BRUSH 40 depth 32 err 0 rgb 4444 4444 4444
+BRUSH 41 depth 32 err 0 rgb 8888 8888 8888
+BRUSH 42 depth 32 err 0 rgb 5555 5555 5555
+BRUSH 43 depth 32 err 0 rgb 7777 7777 7777
+BRUSH 44 depth 32 err 0 rgb ffff ffff ffff
+BRUSH 45 depth 32 err 0 rgb 8888 8888 8888
+BRUSH 46 depth 32 err 0 rgb dddd dddd dddd
+BRUSH 47 depth 32 err 0 rgb bbbb bbbb bbbb
+BRUSH 48 depth 32 err 0 rgb ffff ffff c6c6
+BRUSH 49 depth 32 err -30560 rgb 0001 0002 0003
+BRUSH 50 depth 32 err -30560 rgb 0001 0002 0003
+BRUSH 51 depth 32 err -30560 rgb 0001 0002 0003
+BRUSH 52 depth 32 err -30560 rgb 0001 0002 0003
+BRUSH 53 depth 32 err -30560 rgb 0001 0002 0003
+BRUSH 54 depth 32 err -30560 rgb 0001 0002 0003
+BRUSH 55 depth 32 err -30560 rgb 0001 0002 0003
+BRUSH 56 depth 32 err -30560 rgb 0001 0002 0003
+BRUSH 57 depth 32 err -30560 rgb 0001 0002 0003
+BRUSH 58 depth 32 err -30560 rgb 0001 0002 0003
+BRUSH 59 depth 32 err -30560 rgb 0001 0002 0003
+BRUSH 60 depth 32 err -30560 rgb 0001 0002 0003
+BRUSH -3 depth 8 err -30560 rgb 0001 0002 0003
+BRUSH -2 depth 8 err 0 rgb ffff ffff ffff
+BRUSH -1 depth 8 err 0 rgb 0000 0000 0000
+BRUSH 0 depth 8 err -30560 rgb 0001 0002 0003
+BRUSH 1 depth 8 err 0 rgb dddd dddd dddd
+BRUSH 2 depth 8 err 0 rgb dddd dddd dddd
+BRUSH 3 depth 8 err 0 rgb dddd dddd dddd
+BRUSH 4 depth 8 err 0 rgb dddd dddd dddd
+BRUSH 5 depth 8 err 0 rgb dddd dddd dddd
+BRUSH 6 depth 8 err 0 rgb dddd dddd dddd
+BRUSH 7 depth 8 err 0 rgb ffff ffff ffff
+BRUSH 8 depth 8 err 0 rgb ffff ffff ffff
+BRUSH 9 depth 8 err 0 rgb dddd dddd dddd
+BRUSH 10 depth 8 err 0 rgb eeee eeee eeee
+BRUSH 11 depth 8 err 0 rgb ffff ffff ffff
+BRUSH 12 depth 8 err 0 rgb ffff ffff ffff
+BRUSH 13 depth 8 err 0 rgb 0000 0000 0000
+BRUSH 14 depth 8 err 0 rgb 6666 6666 cccc
+BRUSH 15 depth 8 err 0 rgb ffff ffff ffff
+BRUSH 16 depth 8 err 0 rgb ffff ffff ffff
+BRUSH 17 depth 8 err 0 rgb 0000 0000 0000
+BRUSH 18 depth 8 err 0 rgb 5555 5555 5555
+BRUSH 19 depth 8 err 0 rgb 6666 6666 cccc
+BRUSH 20 depth 8 err 0 rgb 0000 0000 0000
+BRUSH 21 depth 8 err 0 rgb ffff ffff ffff
+BRUSH 22 depth 8 err 0 rgb 8888 8888 8888
+BRUSH 23 depth 8 err 0 rgb ffff 0000 0000
+BRUSH 24 depth 8 err 0 rgb 0000 0000 0000
+BRUSH 25 depth 8 err 0 rgb eeee eeee eeee
+BRUSH 26 depth 8 err 0 rgb ffff ffff ffff
+BRUSH 27 depth 8 err 0 rgb 0000 0000 0000
+BRUSH 28 depth 8 err 0 rgb 8888 8888 8888
+BRUSH 29 depth 8 err 0 rgb dddd dddd dddd
+BRUSH 30 depth 8 err 0 rgb dddd dddd dddd
+BRUSH 31 depth 8 err 0 rgb 6666 6666 6666
+BRUSH 32 depth 8 err 0 rgb 7777 7777 7777
+BRUSH 33 depth 8 err 0 rgb dddd dddd dddd
+BRUSH 34 depth 8 err 0 rgb 9999 9999 9999
+BRUSH 35 depth 8 err 0 rgb ffff ffff ffff
+BRUSH 36 depth 8 err 0 rgb dddd dddd dddd
+BRUSH 37 depth 8 err 0 rgb dddd dddd dddd
+BRUSH 38 depth 8 err 0 rgb dddd dddd dddd
+BRUSH 39 depth 8 err 0 rgb dddd dddd dddd
+BRUSH 40 depth 8 err 0 rgb 4444 4444 4444
+BRUSH 41 depth 8 err 0 rgb 8888 8888 8888
+BRUSH 42 depth 8 err 0 rgb 5555 5555 5555
+BRUSH 43 depth 8 err 0 rgb 7777 7777 7777
+BRUSH 44 depth 8 err 0 rgb ffff ffff ffff
+BRUSH 45 depth 8 err 0 rgb 8888 8888 8888
+BRUSH 46 depth 8 err 0 rgb dddd dddd dddd
+BRUSH 47 depth 8 err 0 rgb bbbb bbbb bbbb
+BRUSH 48 depth 8 err 0 rgb ffff ffff c6c6
+BRUSH 49 depth 8 err -30560 rgb 0001 0002 0003
+BRUSH 50 depth 8 err -30560 rgb 0001 0002 0003
+BRUSH 51 depth 8 err -30560 rgb 0001 0002 0003
+BRUSH 52 depth 8 err -30560 rgb 0001 0002 0003
+BRUSH 53 depth 8 err -30560 rgb 0001 0002 0003
+BRUSH 54 depth 8 err -30560 rgb 0001 0002 0003
+BRUSH 55 depth 8 err -30560 rgb 0001 0002 0003
+BRUSH 56 depth 8 err -30560 rgb 0001 0002 0003
+BRUSH 57 depth 8 err -30560 rgb 0001 0002 0003
+BRUSH 58 depth 8 err -30560 rgb 0001 0002 0003
+BRUSH 59 depth 8 err -30560 rgb 0001 0002 0003
+BRUSH 60 depth 8 err -30560 rgb 0001 0002 0003
+BRUSH -3 depth 1 err -30560 rgb 0001 0002 0003
+BRUSH -2 depth 1 err 0 rgb ffff ffff ffff
+BRUSH -1 depth 1 err 0 rgb 0000 0000 0000
+BRUSH 0 depth 1 err -30560 rgb 0001 0002 0003
+BRUSH 1 depth 1 err 0 rgb ffff ffff ffff
+BRUSH 2 depth 1 err 0 rgb ffff ffff ffff
+BRUSH 3 depth 1 err 0 rgb ffff ffff ffff
+BRUSH 4 depth 1 err 0 rgb ffff ffff ffff
+BRUSH 5 depth 1 err 0 rgb ffff ffff ffff
+BRUSH 6 depth 1 err 0 rgb ffff ffff ffff
+BRUSH 7 depth 1 err 0 rgb ffff ffff ffff
+BRUSH 8 depth 1 err 0 rgb ffff ffff ffff
+BRUSH 9 depth 1 err 0 rgb ffff ffff ffff
+BRUSH 10 depth 1 err 0 rgb ffff ffff ffff
+BRUSH 11 depth 1 err 0 rgb ffff ffff ffff
+BRUSH 12 depth 1 err 0 rgb ffff ffff ffff
+BRUSH 13 depth 1 err 0 rgb 0000 0000 0000
+BRUSH 14 depth 1 err 0 rgb 0000 0000 0000
+BRUSH 15 depth 1 err 0 rgb ffff ffff ffff
+BRUSH 16 depth 1 err 0 rgb ffff ffff ffff
+BRUSH 17 depth 1 err 0 rgb 0000 0000 0000
+BRUSH 18 depth 1 err 0 rgb 0000 0000 0000
+BRUSH 19 depth 1 err 0 rgb 0000 0000 0000
+BRUSH 20 depth 1 err 0 rgb 0000 0000 0000
+BRUSH 21 depth 1 err 0 rgb ffff ffff ffff
+BRUSH 22 depth 1 err 0 rgb 0000 0000 0000
+BRUSH 23 depth 1 err 0 rgb 0000 0000 0000
+BRUSH 24 depth 1 err 0 rgb 0000 0000 0000
+BRUSH 25 depth 1 err 0 rgb ffff ffff ffff
+BRUSH 26 depth 1 err 0 rgb ffff ffff ffff
+BRUSH 27 depth 1 err 0 rgb 0000 0000 0000
+BRUSH 28 depth 1 err 0 rgb 0000 0000 0000
+BRUSH 29 depth 1 err 0 rgb ffff ffff ffff
+BRUSH 30 depth 1 err 0 rgb ffff ffff ffff
+BRUSH 31 depth 1 err 0 rgb 0000 0000 0000
+BRUSH 32 depth 1 err 0 rgb ffff ffff ffff
+BRUSH 33 depth 1 err 0 rgb ffff ffff ffff
+BRUSH 34 depth 1 err 0 rgb ffff ffff ffff
+BRUSH 35 depth 1 err 0 rgb ffff ffff ffff
+BRUSH 36 depth 1 err 0 rgb ffff ffff ffff
+BRUSH 37 depth 1 err 0 rgb ffff ffff ffff
+BRUSH 38 depth 1 err 0 rgb ffff ffff ffff
+BRUSH 39 depth 1 err 0 rgb ffff ffff ffff
+BRUSH 40 depth 1 err 0 rgb ffff ffff ffff
+BRUSH 41 depth 1 err 0 rgb ffff ffff ffff
+BRUSH 42 depth 1 err 0 rgb ffff ffff ffff
+BRUSH 43 depth 1 err 0 rgb ffff ffff ffff
+BRUSH 44 depth 1 err 0 rgb ffff ffff ffff
+BRUSH 45 depth 1 err 0 rgb 0000 0000 0000
+BRUSH 46 depth 1 err 0 rgb ffff ffff ffff
+BRUSH 47 depth 1 err 0 rgb 0000 0000 0000
+BRUSH 48 depth 1 err 0 rgb ffff ffff ffff
+BRUSH 49 depth 1 err -30560 rgb 0001 0002 0003
+BRUSH 50 depth 1 err -30560 rgb 0001 0002 0003
+BRUSH 51 depth 1 err -30560 rgb 0001 0002 0003
+BRUSH 52 depth 1 err -30560 rgb 0001 0002 0003
+BRUSH 53 depth 1 err -30560 rgb 0001 0002 0003
+BRUSH 54 depth 1 err -30560 rgb 0001 0002 0003
+BRUSH 55 depth 1 err -30560 rgb 0001 0002 0003
+BRUSH 56 depth 1 err -30560 rgb 0001 0002 0003
+BRUSH 57 depth 1 err -30560 rgb 0001 0002 0003
+BRUSH 58 depth 1 err -30560 rgb 0001 0002 0003
+BRUSH 59 depth 1 err -30560 rgb 0001 0002 0003
+BRUSH 60 depth 1 err -30560 rgb 0001 0002 0003
+TEXT -3 depth 32 err -30563 rgb 0001 0002 0003
+TEXT -2 depth 32 err 0 rgb ffff ffff ffff
+TEXT -1 depth 32 err 0 rgb 0000 0000 0000
+TEXT 0 depth 32 err -30563 rgb 0001 0002 0003
+TEXT 1 depth 32 err 0 rgb 0000 0000 0000
+TEXT 2 depth 32 err 0 rgb 7777 7777 7777
+TEXT 3 depth 32 err 0 rgb 0000 0000 0000
+TEXT 4 depth 32 err 0 rgb 7777 7777 7777
+TEXT 5 depth 32 err 0 rgb 0000 0000 0000
+TEXT 6 depth 32 err 0 rgb 7777 7777 7777
+TEXT 7 depth 32 err 0 rgb 0000 0000 0000
+TEXT 8 depth 32 err 0 rgb 7777 7777 7777
+TEXT 9 depth 32 err 0 rgb 0000 0000 0000
+TEXT 10 depth 32 err 0 rgb 7777 7777 7777
+TEXT 11 depth 32 err 0 rgb ffff ffff ffff
+TEXT 12 depth 32 err 0 rgb 0000 0000 0000
+TEXT 13 depth 32 err 0 rgb 7777 7777 7777
+TEXT 14 depth 32 err 0 rgb ffff ffff ffff
+TEXT 15 depth 32 err 0 rgb 0000 0000 0000
+TEXT 16 depth 32 err 0 rgb 7777 7777 7777
+TEXT 17 depth 32 err 0 rgb ffff ffff ffff
+TEXT 18 depth 32 err 0 rgb 0000 0000 0000
+TEXT 19 depth 32 err 0 rgb 7777 7777 7777
+TEXT 20 depth 32 err 0 rgb ffff ffff ffff
+TEXT 21 depth 32 err 0 rgb 0000 0000 0000
+TEXT 22 depth 32 err 0 rgb 0000 0000 0000
+TEXT 23 depth 32 err 0 rgb 0000 0000 0000
+TEXT 24 depth 32 err 0 rgb 7777 7777 7777
+TEXT 25 depth 32 err 0 rgb 0000 0000 0000
+TEXT 26 depth 32 err 0 rgb 7777 7777 7777
+TEXT 27 depth 32 err 0 rgb 0000 0000 0000
+TEXT 28 depth 32 err 0 rgb 7777 7777 7777
+TEXT 29 depth 32 err 0 rgb 0000 0000 0000
+TEXT 30 depth 32 err 0 rgb 7777 7777 7777
+TEXT 31 depth 32 err 0 rgb 0000 0000 0000
+TEXT 32 depth 32 err 0 rgb ffff ffff ffff
+TEXT 33 depth 32 err 0 rgb 7777 7777 7777
+TEXT 34 depth 32 err 0 rgb 0000 0000 0000
+TEXT 35 depth 32 err 0 rgb ffff ffff ffff
+TEXT 36 depth 32 err 0 rgb 7777 7777 7777
+TEXT 37 depth 32 err 0 rgb 0000 0000 0000
+TEXT 38 depth 32 err 0 rgb 7777 7777 7777
+TEXT 39 depth 32 err 0 rgb 0000 0000 0000
+TEXT 40 depth 32 err 0 rgb 0000 0000 0000
+TEXT 41 depth 32 err 0 rgb ffff ffff ffff
+TEXT 42 depth 32 err 0 rgb 7777 7777 7777
+TEXT 43 depth 32 err 0 rgb 7777 7777 7777
+TEXT 44 depth 32 err 0 rgb ffff ffff ffff
+TEXT 45 depth 32 err 0 rgb 0000 0000 0000
+TEXT 46 depth 32 err 0 rgb 7777 7777 7777
+TEXT 47 depth 32 err 0 rgb 0000 0000 0000
+TEXT 48 depth 32 err -30563 rgb 0001 0002 0003
+TEXT 49 depth 32 err -30563 rgb 0001 0002 0003
+TEXT 50 depth 32 err -30563 rgb 0001 0002 0003
+TEXT 51 depth 32 err -30563 rgb 0001 0002 0003
+TEXT 52 depth 32 err -30563 rgb 0001 0002 0003
+TEXT 53 depth 32 err -30563 rgb 0001 0002 0003
+TEXT 54 depth 32 err -30563 rgb 0001 0002 0003
+TEXT 55 depth 32 err -30563 rgb 0001 0002 0003
+TEXT -3 depth 8 err -30563 rgb 0001 0002 0003
+TEXT -2 depth 8 err 0 rgb ffff ffff ffff
+TEXT -1 depth 8 err 0 rgb 0000 0000 0000
+TEXT 0 depth 8 err -30563 rgb 0001 0002 0003
+TEXT 1 depth 8 err 0 rgb 0000 0000 0000
+TEXT 2 depth 8 err 0 rgb 7777 7777 7777
+TEXT 3 depth 8 err 0 rgb 0000 0000 0000
+TEXT 4 depth 8 err 0 rgb 7777 7777 7777
+TEXT 5 depth 8 err 0 rgb 0000 0000 0000
+TEXT 6 depth 8 err 0 rgb 7777 7777 7777
+TEXT 7 depth 8 err 0 rgb 0000 0000 0000
+TEXT 8 depth 8 err 0 rgb 7777 7777 7777
+TEXT 9 depth 8 err 0 rgb 0000 0000 0000
+TEXT 10 depth 8 err 0 rgb 7777 7777 7777
+TEXT 11 depth 8 err 0 rgb ffff ffff ffff
+TEXT 12 depth 8 err 0 rgb 0000 0000 0000
+TEXT 13 depth 8 err 0 rgb 7777 7777 7777
+TEXT 14 depth 8 err 0 rgb ffff ffff ffff
+TEXT 15 depth 8 err 0 rgb 0000 0000 0000
+TEXT 16 depth 8 err 0 rgb 7777 7777 7777
+TEXT 17 depth 8 err 0 rgb ffff ffff ffff
+TEXT 18 depth 8 err 0 rgb 0000 0000 0000
+TEXT 19 depth 8 err 0 rgb 7777 7777 7777
+TEXT 20 depth 8 err 0 rgb ffff ffff ffff
+TEXT 21 depth 8 err 0 rgb 0000 0000 0000
+TEXT 22 depth 8 err 0 rgb 0000 0000 0000
+TEXT 23 depth 8 err 0 rgb 0000 0000 0000
+TEXT 24 depth 8 err 0 rgb 7777 7777 7777
+TEXT 25 depth 8 err 0 rgb 0000 0000 0000
+TEXT 26 depth 8 err 0 rgb 7777 7777 7777
+TEXT 27 depth 8 err 0 rgb 0000 0000 0000
+TEXT 28 depth 8 err 0 rgb 7777 7777 7777
+TEXT 29 depth 8 err 0 rgb 0000 0000 0000
+TEXT 30 depth 8 err 0 rgb 7777 7777 7777
+TEXT 31 depth 8 err 0 rgb 0000 0000 0000
+TEXT 32 depth 8 err 0 rgb ffff ffff ffff
+TEXT 33 depth 8 err 0 rgb 7777 7777 7777
+TEXT 34 depth 8 err 0 rgb 0000 0000 0000
+TEXT 35 depth 8 err 0 rgb ffff ffff ffff
+TEXT 36 depth 8 err 0 rgb 7777 7777 7777
+TEXT 37 depth 8 err 0 rgb 0000 0000 0000
+TEXT 38 depth 8 err 0 rgb 7777 7777 7777
+TEXT 39 depth 8 err 0 rgb 0000 0000 0000
+TEXT 40 depth 8 err 0 rgb 0000 0000 0000
+TEXT 41 depth 8 err 0 rgb ffff ffff ffff
+TEXT 42 depth 8 err 0 rgb 7777 7777 7777
+TEXT 43 depth 8 err 0 rgb 7777 7777 7777
+TEXT 44 depth 8 err 0 rgb ffff ffff ffff
+TEXT 45 depth 8 err 0 rgb 0000 0000 0000
+TEXT 46 depth 8 err 0 rgb 7777 7777 7777
+TEXT 47 depth 8 err 0 rgb 0000 0000 0000
+TEXT 48 depth 8 err -30563 rgb 0001 0002 0003
+TEXT 49 depth 8 err -30563 rgb 0001 0002 0003
+TEXT 50 depth 8 err -30563 rgb 0001 0002 0003
+TEXT 51 depth 8 err -30563 rgb 0001 0002 0003
+TEXT 52 depth 8 err -30563 rgb 0001 0002 0003
+TEXT 53 depth 8 err -30563 rgb 0001 0002 0003
+TEXT 54 depth 8 err -30563 rgb 0001 0002 0003
+TEXT 55 depth 8 err -30563 rgb 0001 0002 0003
+TEXT -3 depth 1 err -30563 rgb 0001 0002 0003
+TEXT -2 depth 1 err 0 rgb ffff ffff ffff
+TEXT -1 depth 1 err 0 rgb 0000 0000 0000
+TEXT 0 depth 1 err -30563 rgb 0001 0002 0003
+TEXT 1 depth 1 err 0 rgb 0000 0000 0000
+TEXT 2 depth 1 err 0 rgb 0000 0000 0000
+TEXT 3 depth 1 err 0 rgb 0000 0000 0000
+TEXT 4 depth 1 err 0 rgb 0000 0000 0000
+TEXT 5 depth 1 err 0 rgb 0000 0000 0000
+TEXT 6 depth 1 err 0 rgb 0000 0000 0000
+TEXT 7 depth 1 err 0 rgb 0000 0000 0000
+TEXT 8 depth 1 err 0 rgb 0000 0000 0000
+TEXT 9 depth 1 err 0 rgb 0000 0000 0000
+TEXT 10 depth 1 err 0 rgb 0000 0000 0000
+TEXT 11 depth 1 err 0 rgb ffff ffff ffff
+TEXT 12 depth 1 err 0 rgb 0000 0000 0000
+TEXT 13 depth 1 err 0 rgb 0000 0000 0000
+TEXT 14 depth 1 err 0 rgb ffff ffff ffff
+TEXT 15 depth 1 err 0 rgb 0000 0000 0000
+TEXT 16 depth 1 err 0 rgb 0000 0000 0000
+TEXT 17 depth 1 err 0 rgb ffff ffff ffff
+TEXT 18 depth 1 err 0 rgb 0000 0000 0000
+TEXT 19 depth 1 err 0 rgb 0000 0000 0000
+TEXT 20 depth 1 err 0 rgb ffff ffff ffff
+TEXT 21 depth 1 err 0 rgb 0000 0000 0000
+TEXT 22 depth 1 err 0 rgb 0000 0000 0000
+TEXT 23 depth 1 err 0 rgb 0000 0000 0000
+TEXT 24 depth 1 err 0 rgb 0000 0000 0000
+TEXT 25 depth 1 err 0 rgb 0000 0000 0000
+TEXT 26 depth 1 err 0 rgb 0000 0000 0000
+TEXT 27 depth 1 err 0 rgb 0000 0000 0000
+TEXT 28 depth 1 err 0 rgb 0000 0000 0000
+TEXT 29 depth 1 err 0 rgb 0000 0000 0000
+TEXT 30 depth 1 err 0 rgb 0000 0000 0000
+TEXT 31 depth 1 err 0 rgb 0000 0000 0000
+TEXT 32 depth 1 err 0 rgb ffff ffff ffff
+TEXT 33 depth 1 err 0 rgb 0000 0000 0000
+TEXT 34 depth 1 err 0 rgb 0000 0000 0000
+TEXT 35 depth 1 err 0 rgb ffff ffff ffff
+TEXT 36 depth 1 err 0 rgb 0000 0000 0000
+TEXT 37 depth 1 err 0 rgb 0000 0000 0000
+TEXT 38 depth 1 err 0 rgb 0000 0000 0000
+TEXT 39 depth 1 err 0 rgb 0000 0000 0000
+TEXT 40 depth 1 err 0 rgb 0000 0000 0000
+TEXT 41 depth 1 err 0 rgb ffff ffff ffff
+TEXT 42 depth 1 err 0 rgb 0000 0000 0000
+TEXT 43 depth 1 err 0 rgb 0000 0000 0000
+TEXT 44 depth 1 err 0 rgb ffff ffff ffff
+TEXT 45 depth 1 err 0 rgb ffff ffff ffff
+TEXT 46 depth 1 err 0 rgb ffff ffff ffff
+TEXT 47 depth 1 err 0 rgb 0000 0000 0000
+TEXT 48 depth 1 err -30563 rgb 0001 0002 0003
+TEXT 49 depth 1 err -30563 rgb 0001 0002 0003
+TEXT 50 depth 1 err -30563 rgb 0001 0002 0003
+TEXT 51 depth 1 err -30563 rgb 0001 0002 0003
+TEXT 52 depth 1 err -30563 rgb 0001 0002 0003
+TEXT 53 depth 1 err -30563 rgb 0001 0002 0003
+TEXT 54 depth 1 err -30563 rgb 0001 0002 0003
+TEXT 55 depth 1 err -30563 rgb 0001 0002 0003
+INFO GetThemeAccentColors 0 n 8: 0000/eeeeeeeeeeee 0001/ccccccccffff 0002/99999999ffff 0003/66666666cccc 0004/333333339999 0005/000000008888 0006/000000005555 0007/000000000000
+FONT 0 err 0 name Charcoal size 12 style 0
+FONT 1 err 0 name Geneva size 10 style 0
+FONT 2 err 0 name Geneva size 10 style 1
+FONT 3 err 0 name Geneva size 10 style 0
+FONT 4 err -50 name  size -1 style -1
+FONT 5 err -50 name  size -1 style -1
+FONT 6 err -50 name  size -1 style -1
+FONT 7 err -50 name  size -1 style -1
+FONT 8 err -50 name  size -1 style -1
+FONT 100 err -50 name  size -1 style -1
+FONT 101 err -50 name  size -1 style -1
+FONT 102 err -50 name  size -1 style -1
+FONT 103 err -50 name  size -1 style -1
+FONT 104 err -50 name  size -1 style -1
+FONT 105 err -50 name  size -1 style -1
+FONT 106 err -50 name  size -1 style -1
+FONT 107 err -50 name  size -1 style -1
+FONT 108 err -50 name  size -1 style -1
+FONT 200 err -50 name  size -1 style -1
+INFO MenuBarHeight 0 20
+INFO MenuSeparatorHeight 0 6
+INFO MenuItemExtra 0 err 0 h 0 w 4
+INFO MenuItemExtra 1 err 0 h 0 w 28
+INFO MenuItemExtra 2 err 0 h 0 w 4
+INFO MenuItemExtra 3 err 0 h 0 w 4
+INFO MenuTitleExtra 0 13
+INFO MenuTitleExtra squished 0 9
+INFO ThumbStyle 0 1
+INFO ArrowStyle 0 1
+INFO CheckBoxStyle 0 1
+WINREGION type 0 code 0 err 0 bbox 78,94,100,406 size 10
+WINREGION type 0 code 1 err -30593 bbox 0,0,0,0 size 10
+WINREGION type 0 code 2 err 0 bbox 83,99,94,110 size 10
+WINREGION type 0 code 3 err 0 bbox 83,374,94,385 size 10
+WINREGION type 0 code 5 err 0 bbox 78,94,307,407 size 100
+WINREGION type 0 code 6 err 0 bbox 285,385,307,407 size 10
+WINREGION type 0 code 7 err 0 bbox 83,390,94,401 size 10
+WINREGION type 0 code 8 err -30593 bbox 0,0,0,0 size 10
+WINREGION type 0 code 32 err 0 bbox 78,94,307,407 size 44
+WINREGION type 0 code 33 err 0 bbox 100,100,300,400 size 36
+WINREGION type 0 titleWidth120 struct err 0 bbox 78,94,307,407 size 44
+WINREGION type 1 code 0 err -30593 bbox 0,0,0,0 size 10
+WINREGION type 1 code 1 err -30593 bbox 0,0,0,0 size 10
+WINREGION type 1 code 2 err -30593 bbox 0,0,0,0 size 10
+WINREGION type 1 code 3 err -30593 bbox 0,0,0,0 size 10
+WINREGION type 1 code 5 err -30593 bbox 0,0,0,0 size 10
+WINREGION type 1 code 6 err -30593 bbox 0,0,0,0 size 10
+WINREGION type 1 code 7 err -30593 bbox 0,0,0,0 size 10
+WINREGION type 1 code 8 err -30593 bbox 0,0,0,0 size 10
+WINREGION type 1 code 32 err 0 bbox 97,97,304,404 size 44
+WINREGION type 1 code 33 err 0 bbox 100,100,300,400 size 10
+WINREGION type 1 titleWidth120 struct err 0 bbox 97,97,304,404 size 44
+WINREGION type 2 code 0 err 0 bbox 76,97,98,403 size 10
+WINREGION type 2 code 1 err -30593 bbox 0,0,0,0 size 10
+WINREGION type 2 code 2 err 0 bbox 81,102,92,113 size 10
+WINREGION type 2 code 3 err 0 bbox 81,371,92,382 size 10
+WINREGION type 2 code 5 err 0 bbox 76,97,304,404 size 92
+WINREGION type 2 code 6 err 0 bbox 286,386,300,400 size 116
+WINREGION type 2 code 7 err 0 bbox 81,387,92,398 size 10
+WINREGION type 2 code 8 err -30593 bbox 0,0,0,0 size 10
+WINREGION type 2 code 32 err 0 bbox 76,97,304,404 size 44
+WINREGION type 2 code 33 err 0 bbox 100,100,300,400 size 124
+WINREGION type 2 titleWidth120 struct err 0 bbox 76,97,304,404 size 44
+WINREGION type 3 code 0 err -30593 bbox 0,0,0,0 size 10
+WINREGION type 3 code 1 err -30593 bbox 0,0,0,0 size 10
+WINREGION type 3 code 2 err -30593 bbox 0,0,0,0 size 10
+WINREGION type 3 code 3 err -30593 bbox 0,0,0,0 size 10
+WINREGION type 3 code 5 err -30593 bbox 0,0,0,0 size 10
+WINREGION type 3 code 6 err -30593 bbox 0,0,0,0 size 10
+WINREGION type 3 code 7 err -30593 bbox 0,0,0,0 size 10
+WINREGION type 3 code 8 err -30593 bbox 0,0,0,0 size 10
+WINREGION type 3 code 32 err 0 bbox 97,97,304,404 size 44
+WINREGION type 3 code 33 err 0 bbox 100,100,300,400 size 10
+WINREGION type 3 titleWidth120 struct err 0 bbox 97,97,304,404 size 44
+WINREGION type 4 code 0 err 0 bbox 76,97,98,403 size 10
+WINREGION type 4 code 1 err -30593 bbox 0,0,0,0 size 10
+WINREGION type 4 code 2 err 0 bbox 81,102,92,113 size 10
+WINREGION type 4 code 3 err 0 bbox 81,371,92,382 size 10
+WINREGION type 4 code 5 err 0 bbox 76,97,304,404 size 92
+WINREGION type 4 code 6 err 0 bbox 286,386,300,400 size 116
+WINREGION type 4 code 7 err 0 bbox 81,387,92,398 size 10
+WINREGION type 4 code 8 err -30593 bbox 0,0,0,0 size 10
+WINREGION type 4 code 32 err 0 bbox 76,97,304,404 size 44
+WINREGION type 4 code 33 err 0 bbox 100,100,300,400 size 124
+WINREGION type 4 titleWidth120 struct err 0 bbox 76,97,304,404 size 44
+WINREGION type 5 code 0 err -30593 bbox 0,0,0,0 size 10
+WINREGION type 5 code 1 err -30593 bbox 0,0,0,0 size 10
+WINREGION type 5 code 2 err -30593 bbox 0,0,0,0 size 10
+WINREGION type 5 code 3 err -30593 bbox 0,0,0,0 size 10
+WINREGION type 5 code 5 err -30593 bbox 0,0,0,0 size 10
+WINREGION type 5 code 6 err -30593 bbox 0,0,0,0 size 10
+WINREGION type 5 code 7 err -30593 bbox 0,0,0,0 size 10
+WINREGION type 5 code 8 err -30593 bbox 0,0,0,0 size 10
+WINREGION type 5 code 32 err 0 bbox 99,99,301,401 size 10
+WINREGION type 5 code 33 err 0 bbox 100,100,300,400 size 10
+WINREGION type 5 titleWidth120 struct err 0 bbox 99,99,301,401 size 10
+WINREGION type 6 code 0 err -30593 bbox 0,0,0,0 size 10
+WINREGION type 6 code 1 err -30593 bbox 0,0,0,0 size 10
+WINREGION type 6 code 2 err -30593 bbox 0,0,0,0 size 10
+WINREGION type 6 code 3 err -30593 bbox 0,0,0,0 size 10
+WINREGION type 6 code 5 err -30593 bbox 0,0,0,0 size 10
+WINREGION type 6 code 6 err -30593 bbox 0,0,0,0 size 10
+WINREGION type 6 code 7 err -30593 bbox 0,0,0,0 size 10
+WINREGION type 6 code 8 err -30593 bbox 0,0,0,0 size 10
+WINREGION type 6 code 32 err 0 bbox 99,99,303,403 size 44
+WINREGION type 6 code 33 err 0 bbox 100,100,300,400 size 10
+WINREGION type 6 titleWidth120 struct err 0 bbox 99,99,303,403 size 44
+WINREGION type 7 code 0 err 0 bbox 90,96,95,123 size 52
+WINREGION type 7 code 1 err 0 bbox 92,102,93,117 size 10
+WINREGION type 7 code 2 err -30593 bbox 0,0,0,0 size 10
+WINREGION type 7 code 3 err -30593 bbox 0,0,0,0 size 10
+WINREGION type 7 code 5 err 0 bbox 90,96,301,404 size 72
+WINREGION type 7 code 6 err 0 bbox 100,100,116,400 size 36
+WINREGION type 7 code 7 err -30593 bbox 0,0,0,0 size 10
+WINREGION type 7 code 8 err -30593 bbox 0,0,0,0 size 10
+WINREGION type 7 code 32 err 0 bbox 90,96,301,405 size 68
+WINREGION type 7 code 33 err 0 bbox 100,100,300,400 size 48
+WINREGION type 7 titleWidth120 struct err 0 bbox 90,96,301,405 size 68
+WINREGION type 8 code 0 err 0 bbox 86,96,100,404 size 10
+WINREGION type 8 code 1 err -30593 bbox 0,0,0,0 size 10
+WINREGION type 8 code 2 err 0 bbox 89,99,97,107 size 10
+WINREGION type 8 code 3 err 0 bbox 89,382,97,390 size 10
+WINREGION type 8 code 5 err 0 bbox 86,96,305,405 size 100
+WINREGION type 8 code 6 err 0 bbox 290,390,305,405 size 10
+WINREGION type 8 code 7 err 0 bbox 89,393,97,401 size 10
+WINREGION type 8 code 8 err -30593 bbox 0,0,0,0 size 10
+WINREGION type 8 code 32 err 0 bbox 86,96,305,405 size 44
+WINREGION type 8 code 33 err 0 bbox 100,100,300,400 size 36
+WINREGION type 8 titleWidth120 struct err 0 bbox 86,96,305,405 size 44
+WINREGION type 9 code 0 err 0 bbox 96,86,304,100 size 10
+WINREGION type 9 code 1 err -30593 bbox 0,0,0,0 size 10
+WINREGION type 9 code 2 err 0 bbox 99,89,107,97 size 10
+WINREGION type 9 code 3 err 0 bbox 282,89,290,97 size 10
+WINREGION type 9 code 5 err 0 bbox 96,86,305,405 size 112
+WINREGION type 9 code 6 err 0 bbox 290,390,305,405 size 10
+WINREGION type 9 code 7 err 0 bbox 293,89,301,97 size 10
+WINREGION type 9 code 8 err -30593 bbox 0,0,0,0 size 10
+WINREGION type 9 code 32 err 0 bbox 96,86,305,405 size 44
+WINREGION type 9 code 33 err 0 bbox 100,100,300,400 size 36
+WINREGION type 9 titleWidth120 struct err 0 bbox 96,86,305,405 size 44
+WINREGION type 10 code 0 err -50 bbox 0,0,0,0 size 10
+WINREGION type 10 code 1 err -50 bbox 0,0,0,0 size 10
+WINREGION type 10 code 2 err -50 bbox 0,0,0,0 size 10
+WINREGION type 10 code 3 err -50 bbox 0,0,0,0 size 10
+WINREGION type 10 code 5 err -50 bbox 0,0,0,0 size 10
+WINREGION type 10 code 6 err -50 bbox 0,0,0,0 size 10
+WINREGION type 10 code 7 err -50 bbox 0,0,0,0 size 10
+WINREGION type 10 code 8 err -50 bbox 0,0,0,0 size 10
+WINREGION type 10 code 32 err -50 bbox 0,0,0,0 size 10
+WINREGION type 10 code 33 err -50 bbox 0,0,0,0 size 10
+WINREGION type 10 titleWidth120 struct err -50 bbox 0,0,0,0 size 10
+BUTTON 0 region err 0 bbox 20,20,40,100 size 76
+BUTTON 0 content err 0 22,22,38,98
+BUTTON 0 background err 0 20,20,40,100
+BUTTON 0 default region err 0 bbox 17,17,43,103 size 76
+BUTTON 1 region err 0 bbox 20,20,40,100 size 10
+BUTTON 1 content err 0 20,38,40,100
+BUTTON 1 background err 0 20,20,40,100
+BUTTON 1 default region err 0 bbox 20,20,40,100 size 10
+BUTTON 2 region err 0 bbox 20,20,40,100 size 10
+BUTTON 2 content err 0 20,38,40,100
+BUTTON 2 background err 0 20,20,40,100
+BUTTON 2 default region err 0 bbox 20,20,40,100 size 10
+BUTTON 3 region err 0 bbox 20,20,40,100 size 10
+BUTTON 3 content err 0 23,23,37,97
+BUTTON 3 background err 0 20,20,40,100
+BUTTON 3 default region err 0 bbox 20,20,40,100 size 10
+BUTTON 4 region err 0 bbox 20,20,40,42 size 76
+BUTTON 4 content err 0 22,26,38,72
+BUTTON 4 background err 0 20,20,40,100
+BUTTON 4 default region err 0 bbox 20,20,40,42 size 76
+BUTTON 5 region err 0 bbox 20,20,40,100 size 76
+BUTTON 5 content err 0 22,26,38,72
+BUTTON 5 background err 0 20,20,40,100
+BUTTON 5 default region err 0 bbox 20,20,40,100 size 76
+BUTTON 6 region err 0 bbox 20,20,40,100 size 10
+BUTTON 6 content err 0 20,38,40,100
+BUTTON 6 background err 0 20,20,40,100
+BUTTON 6 default region err 0 bbox 20,20,40,100 size 10
+BUTTON 7 region err 0 bbox 20,20,40,100 size 10
+BUTTON 7 content err 0 20,35,40,100
+BUTTON 7 background err 0 20,20,43,33
+BUTTON 7 default region err 0 bbox 20,20,40,100 size 10
+BUTTON 8 region err 0 bbox 20,20,40,100 size 10
+BUTTON 8 content err 0 22,22,38,98
+BUTTON 8 background err 0 20,20,40,100
+BUTTON 8 default region err 0 bbox 20,20,40,100 size 10
+BUTTON 9 region err 0 bbox 20,20,40,100 size 10
+BUTTON 9 content err 0 24,24,36,96
+BUTTON 9 background err 0 20,20,40,100
+BUTTON 9 default region err 0 bbox 20,20,40,100 size 10
+BUTTON 10 region err -50 bbox 0,0,0,0 size 10
+BUTTON 10 content err -50 0,0,0,0
+BUTTON 10 background err -50 0,0,0,0
+BUTTON 10 default region err -50 bbox 0,0,0,0 size 10
+BUTTON 11 region err -50 bbox 0,0,0,0 size 10
+BUTTON 11 content err -50 0,0,0,0
+BUTTON 11 background err -50 0,0,0,0
+BUTTON 11 default region err -50 bbox 0,0,0,0 size 10
+BUTTON 12 region err -50 bbox 0,0,0,0 size 10
+BUTTON 12 content err -50 0,0,0,0
+BUTTON 12 background err -50 0,0,0,0
+BUTTON 12 default region err -50 bbox 0,0,0,0 size 10
+BUTTON 13 region err -50 bbox 0,0,0,0 size 10
+BUTTON 13 content err -50 0,0,0,0
+BUTTON 13 background err -50 0,0,0,0
+BUTTON 13 default region err -50 bbox 0,0,0,0 size 10
+BUTTON 14 region err -50 bbox 0,0,0,0 size 10
+BUTTON 14 content err -50 0,0,0,0
+BUTTON 14 background err -50 0,0,0,0
+BUTTON 14 default region err -50 bbox 0,0,0,0 size 10
+BUTTON 15 region err -50 bbox 0,0,0,0 size 10
+BUTTON 15 content err -50 0,0,0,0
+BUTTON 15 background err -50 0,0,0,0
+BUTTON 15 default region err -50 bbox 0,0,0,0 size 10
+BUTTON 16 region err -50 bbox 0,0,0,0 size 10
+BUTTON 16 content err -50 0,0,0,0
+BUTTON 16 background err -50 0,0,0,0
+BUTTON 16 default region err -50 bbox 0,0,0,0 size 10
+BUTTON 17 region err -50 bbox 0,0,0,0 size 10
+BUTTON 17 content err -50 0,0,0,0
+BUTTON 17 background err -50 0,0,0,0
+BUTTON 17 default region err -50 bbox 0,0,0,0 size 10
+BUTTON 18 region err -50 bbox 0,0,0,0 size 10
+BUTTON 18 content err -50 0,0,0,0
+BUTTON 18 background err -50 0,0,0,0
+BUTTON 18 default region err -50 bbox 0,0,0,0 size 10
+BUTTON 19 region err -50 bbox 0,0,0,0 size 10
+BUTTON 19 content err -50 0,0,0,0
+BUTTON 19 background err -50 0,0,0,0
+BUTTON 19 default region err -50 bbox 0,0,0,0 size 10
+BUTTON 20 region err -50 bbox 0,0,0,0 size 10
+BUTTON 20 content err -50 0,0,0,0
+BUTTON 20 background err -50 0,0,0,0
+BUTTON 20 default region err -50 bbox 0,0,0,0 size 10
+TRACK 0 bounds err 0 0,0,200,16
+TRACK 0 thumb err 0 bbox 0,0,0,0 size 10
+TRACK 0 drag err 0 0,0,200,16
+TRACK 0 live(40) err 0 30
+TRACK 1 bounds err 0 0,0,16,200
+TRACK 1 thumb err 0 bbox 0,0,0,0 size 10
+TRACK 1 drag err 0 0,0,16,200
+TRACK 1 live(40) err 0 30
+TRACK 2 bounds err 0 0,2,16,148
+TRACK 2 thumb err 0 bbox 0,36,16,51 size 112
+TRACK 2 drag err 0 0,5,16,145
+TRACK 2 live(40) err 0 32
+INFO ScrollBarTrackRect vert err 0 0,0,-382,200
+INFO ScrollBarTrackRect horiz err 0 0,0,200,-382
+TAB style 0 err 0 bbox 10,10,31,30 size 124
+TAB style 1 err 0 bbox 10,10,31,30 size 124
+TAB style 2 err 0 bbox 10,10,31,30 size 124
+TAB style 3 err 0 bbox 10,10,34,30 size 124
+GROWBOX dir 0 err 0 100,100,116,116
+GROWBOX small dir 0 err 0 100,84,116,100
+GROWBOX dir 1 err 0 100,100,111,111
+GROWBOX small dir 1 err 0 100,89,111,100
+GROWBOX dir 2 err 0 100,100,111,111
+GROWBOX small dir 2 err 0 100,89,111,100
+GROWBOX dir 3 err 0 100,100,111,111
+GROWBOX small dir 3 err 0 100,89,111,100
+MENUBG type 0 err 0 bbox 49,19,252,202 size 44
+MENUBG type 1 err 0 bbox 49,19,252,202 size 44
+MENUBG type 2 err 0 bbox 49,19,252,202 size 44
+MENUBG type 3 err -50 bbox 0,0,0,0 size 10
+INFO Unregister 0
+INFO Unregister again -30562
+PASS ran
+DONE 0
+PASS: All tests passed
