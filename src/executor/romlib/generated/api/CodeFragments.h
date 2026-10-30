@@ -104,26 +104,40 @@ OSErr C_CFragRegisterFilePrivate(FSSpecPtr file, Boolean flag);PASCAL_SUBTRAP_UN
 
 
 OSErr C_GetDiskFragment(FSSpecPtr fsp, LONGINT offset, LONGINT length, ConstStr63Param fragname, LoadFlags flags, GUEST<ConnectionID> *connp, GUEST<Ptr> *mainAddrp, Str255 errname);PASCAL_SUBTRAP(GetDiskFragment, 0xAA5A, 0x0002, CodeFragmentDispatch);
+LIBRARY_ALSO(InterfaceLib, GetDiskFragment, InterfaceLib);
+LIBRARY_ALSO(CodeFragmentMgr, GetDiskFragment, InterfaceLib);
 
 
 typedef uint8_t SymClass;
 
 OSErr C_FindSymbol(ConnectionID connID, ConstStr255Param symName, GUEST<Ptr> *symAddr, SymClass *symClass);PASCAL_SUBTRAP(FindSymbol, 0xAA5A, 0x0005, CodeFragmentDispatch);
+LIBRARY_ALSO(InterfaceLib, FindSymbol, InterfaceLib);
+LIBRARY_ALSO(CodeFragmentMgr, FindSymbol, InterfaceLib);
 
 
 OSErr C_CloseConnection(GUEST<ConnectionID> *cidp);PASCAL_SUBTRAP(CloseConnection, 0xAA5A, 0x0004, CodeFragmentDispatch);
+LIBRARY_ALSO(InterfaceLib, CloseConnection, InterfaceLib);
+LIBRARY_ALSO(CodeFragmentMgr, CloseConnection, InterfaceLib);
 
 
 OSErr C_GetSharedLibrary(ConstStr63Param library, OSType arch, LoadFlags loadflags, GUEST<ConnectionID> *cidp, GUEST<Ptr> *mainaddrp, Str255 errName);PASCAL_SUBTRAP(GetSharedLibrary, 0xAA5A, 0x0001, CodeFragmentDispatch);
+LIBRARY_ALSO(InterfaceLib, GetSharedLibrary, InterfaceLib);
+LIBRARY_ALSO(CodeFragmentMgr, GetSharedLibrary, InterfaceLib);
 
 
 OSErr C_GetMemFragment(void *addr, uint32_t length, ConstStr63Param fragname, LoadFlags flags, GUEST<ConnectionID> *connp, GUEST<Ptr> *mainAddrp, Str255 errname);PASCAL_SUBTRAP(GetMemFragment, 0xAA5A, 0x0003, CodeFragmentDispatch);
+LIBRARY_ALSO(InterfaceLib, GetMemFragment, InterfaceLib);
+LIBRARY_ALSO(CodeFragmentMgr, GetMemFragment, InterfaceLib);
 
 
 OSErr C_CountSymbols(ConnectionID id, GUEST<LONGINT> *countp);PASCAL_SUBTRAP(CountSymbols, 0xAA5A, 0x0006, CodeFragmentDispatch);
+LIBRARY_ALSO(InterfaceLib, CountSymbols, InterfaceLib);
+LIBRARY_ALSO(CodeFragmentMgr, CountSymbols, InterfaceLib);
 
 
 OSErr C_GetIndSymbol(ConnectionID id, LONGINT index, Str255 name, GUEST<Ptr> *addrp, SymClass *classp);PASCAL_SUBTRAP(GetIndSymbol, 0xAA5A, 0x0007, CodeFragmentDispatch);
+LIBRARY_ALSO(InterfaceLib, GetIndSymbol, InterfaceLib);
+LIBRARY_ALSO(CodeFragmentMgr, GetIndSymbol, InterfaceLib);
 
 
 } /* namespace Executor */

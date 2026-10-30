@@ -3,6 +3,11 @@ what Executor answers (docs/executor/LIBRARIES.md).
 
     tools/macdecode/libraries.py --scan [IMAGE ...]   build the index
     tools/macdecode/libraries.py                       print a summary
+    tools/macdecode/libraries.py --census [--rom ROM] [--system FOLDER]
+        [--logs DIR-OR-LOG ...] [--out FILE.md]
+        the libraries Executor answers: each symbol Apple's export and
+        Executor lacks, ranked by calls seen in session logs (a grid's
+        NNN.log, unimplemented.log) and importers, weak imports flagged
     tools/macdecode/libraries.py --coverage [--rom ROM] [--system FOLDER]
         Executor's exports against Apple's libraries in a Power Mac ROM and
         a System file (an extracted System Folder, Executor's %System form):
@@ -80,11 +85,13 @@ def pef_imports(b, off):
     symtab = L + 56 + 24 * nlib
     out = {}
     for k in range(nlib):
-        no, _, _, cnt, first, _ = struct.unpack_from(">IIIIIB", b, L + 56 + 24 * k)
+        no, _, _, cnt, first, options = struct.unpack_from(">IIIIIB", b, L + 56 + 24 * k)
+        weak_lib = bool(options & 0x40)        # kPEFWeakImportLibMask
         syms = []
         for j in range(first, first + cnt):
             w = struct.unpack_from(">I", b, symtab + 4 * j)[0]
-            syms.append((cstr(b, L + strs + (w & 0xFFFFFF)), (w >> 24) & 0xF))
+            weak = weak_lib or bool(w & 0x80000000)   # kPEFWeakImportSymMask
+            syms.append((cstr(b, L + strs + (w & 0xFFFFFF)), ((w >> 24) & 0xF) | (0x80 if weak else 0)))
         name = cstr(b, L + strs + no)
         if not NAME.match(name) or any(not NAME.match(x) for x, _ in syms[:8]):
             return {}
@@ -168,8 +175,10 @@ def scan_images(images):
                 n += 1
                 for lib, syms in libs.items():
                     for s, c in syms:
-                        e = imports[arch][lib].setdefault(s, {"n": 0, "images": [], "class": CLASS.get(c, c)})
+                        e = imports[arch][lib].setdefault(s, {"n": 0, "weak": 0, "images": [],
+                                                              "class": CLASS.get(c & 0xF, c & 0xF)})
                         e["n"] += 1
+                        e["weak"] += bool(c & 0x80)
                         if Path(img).stem not in e["images"]:
                             e["images"].append(Path(img).stem)
             i += 12
@@ -417,7 +426,84 @@ def coverage(rom, system, index):
               f"{len(used & apple[lib]):9} {len((used & apple[lib]) - have):8}")
 
 
+def calls_seen(logs):
+    """{symbol: (calls, weak-nil, unresolved)} from Executor session logs (the
+    grid's NNN.log, a run's log) and <storage>/executor/unimplemented.log:
+    what programs really called or bound and Executor lacked."""
+    seen = defaultdict(lambda: [0, 0, 0])
+    pats = [(re.compile(r"\[unimplemented\] PowerPC (\w+)"), 0),
+            (re.compile(r"\tPowerPC (\w+)"), 0),
+            (re.compile(r"CFM: weak import (\w+) unresolved"), 1),
+            (re.compile(r"CFM: unresolved import (\w+)"), 2)]
+    for log in logs:
+        try:
+            text = Path(log).read_text(errors="replace")
+        except OSError:
+            continue
+        for pat, k in pats:
+            for m in pat.finditer(text):
+                seen[m.group(1)][k] += 1
+    return seen
+
+
+def census(rom, system, index, logs, out):
+    """The libraries Executor answers itself, each symbol Apple's exports and
+    Executor lacks: how many programs import it (weakly), how often a
+    session called it or bound it to nothing. Markdown, most wanted first."""
+    apple = defaultdict(set)
+    for source in (rom_libraries(rom) if rom else {}, system_libraries(system) if system else {}):
+        for lib, syms in source.items():
+            apple[lib] |= syms
+    if not EXPORTS.exists():
+        sys.exit(f"no {EXPORTS}: run ctest -R executor.Exports")
+    ex = json.loads(EXPORTS.read_text())["pwpc"]
+    imports = index.get("imports", {}).get("pwpc", {}) if index else {}
+    seen = calls_seen(logs)
+    lines = ["# Executor's libraries against Apple's (PowerPC)", "",
+             f"Apple's exports: {rom or '-'} and {system or '-'}. Importers: the disk "
+             "images' containers (libraries.py --scan). Calls: session logs "
+             f"({len(logs)} files): called unimplemented / weak import left nil / "
+             "unresolved at load.", "",
+             "| library | Apple | Executor | missing | missing & imported |",
+             "|---|---:|---:|---:|---:|"]
+    rows_ = []
+    for lib in sorted(ex):
+        if lib not in apple:
+            continue
+        have = set(ex[lib])
+        missing = apple[lib] - have
+        used = imports.get(lib, {})
+        lines.append(f"| {lib} | {len(apple[lib])} | {len(apple[lib] & have)} | {len(missing)} "
+                     f"| {sum(1 for m in missing if m in used)} |")
+        for m in missing:
+            u = used.get(m, {})
+            c = seen.get(m, [0, 0, 0])
+            rows_.append((lib, m, u.get("n", 0), u.get("weak", 0), len(u.get("images", [])), c))
+    rows_.sort(key=lambda r: (-(r[5][0] + r[5][1]), -r[5][2], -r[2], r[0], r[1]))
+    lines += ["", "## Missing symbols, most wanted first", "",
+              "| library | symbol | importers | weak | images | called | weak nil | unresolved |",
+              "|---|---|---:|---:|---:|---:|---:|---:|"]
+    for lib, m, n, weak, imgs, c in rows_:
+        if not (n or any(c)):
+            continue
+        lines.append(f"| {lib} | {m} | {n} | {weak} | {imgs} | {c[0]} | {c[1]} | {c[2]} |")
+    text = "\n".join(lines) + "\n"
+    if out:
+        Path(out).write_text(text)
+        print(out)
+    else:
+        print(text)
+
+
 def main():
+    if "--census" in sys.argv:
+        args = sys.argv[sys.argv.index("--census") + 1:]
+        opt = lambda flag: args[args.index(flag) + 1] if flag in args else None
+        logs = [str(STORAGE / "executor" / "unimplemented.log")]
+        for d in (a for i, a in enumerate(args) if i and args[i - 1] == "--logs"):
+            logs += [str(p) for p in Path(d).glob("*.log")] if Path(d).is_dir() else [d]
+        census(opt("--rom"), opt("--system"), load_index(), logs, opt("--out"))
+        return
     if "--coverage" in sys.argv:
         args = sys.argv[sys.argv.index("--coverage") + 1:]
         opt = lambda flag: args[args.index(flag) + 1] if flag in args else None

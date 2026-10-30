@@ -1022,6 +1022,21 @@ foreach(cell "partition_rom_ppc_86;--backend kpx --core mame-ppc --jit;18490;gue
   )
 endforeach()
 
+# Differential probes (docs/executor/DiffTest.md): each probe's answers on
+# Executor (8.6 System) against the committed G3 8.6 reference, known
+# differences in tests/guest/difftest/expected/. Fails on a new difference.
+foreach(probe appr)
+  add_test(
+    NAME difftest_${probe}_executor_86
+    COMMAND python3 ${CMAKE_SOURCE_DIR}/tools/difftest/run.py ${probe} --no-refresh
+  )
+  set_tests_properties(difftest_${probe}_executor_86 PROPERTIES
+    TIMEOUT 900
+    LABELS "guest;executor"
+    SKIP_RETURN_CODE 77
+  )
+endforeach()
+
 # Thread Manager through Frontier's UserTalk threads (process.cpp).
 add_test(
   NAME threads_executor

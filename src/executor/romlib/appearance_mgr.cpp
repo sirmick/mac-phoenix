@@ -998,10 +998,12 @@ OSStatus Executor::C_GetIndThemeVariant(Handle list, SInt16 index, StringPtr out
     return paramErr;
 }
 
+/* One long (tests/guest/difftest appr: 8.6 writes 4 bytes; the control
+   panel reads the next long as well, its own). */
 OSStatus Executor::C_GetThemeSoundMask(GUEST<UInt32> *outMask)
 {
     if(outMask)
-        outMask[0] = outMask[1] = 0; /* no sounds */
+        *outMask = 0; /* no sounds */
     return noErr;
 }
 

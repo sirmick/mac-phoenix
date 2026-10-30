@@ -1,0 +1,10 @@
+# The differential probes (tools/difftest), built with Retro68 for PowerPC
+# against the Multiversal Interfaces generated from Executor's definitions
+# (MV_OUT) by build-retro68.sh: <probe>PPC.bin each.
+cmake_minimum_required(VERSION 3.16)
+project(DiffTest C)
+set(MV_OUT "" CACHE PATH "make-multiverse.rb -G CIncludes output")
+include_directories(BEFORE "${MV_OUT}/CIncludes" "${CMAKE_CURRENT_SOURCE_DIR}")
+link_directories(BEFORE "${MV_OUT}/libppc")
+add_application(appr appr.c CREATOR "DfAp")
+target_link_libraries(appr AppearanceLib CollectionsLib CFragManager)

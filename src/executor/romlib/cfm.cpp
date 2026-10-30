@@ -881,7 +881,14 @@ symbol_lookup(uint32_t *indexp, GUEST<Ptr> *valp, uint8_t imports[][4],
                 {
                     /* MacPhoenix: a weak library's imports are weak too. */
                     if((flags & 8) || l->weak)   // weak symbol
+                    {
+                        /* Said too: a program that calls a weak import
+                           without checking it jumps to 0 (Date & Time on
+                           8.6, MenusLib's clock calls). */
+                        if(LIB_CID(l))
+                            fprintf(stderr, "CFM: weak import %s unresolved (nil)\n", symbol_name);
                         *valp = kUnresolvedCFragSymbolAddress;
+                    }
                     else
                     {
                         /* MacPhoenix: say so at load time; calling it is

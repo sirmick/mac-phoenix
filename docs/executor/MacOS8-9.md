@@ -250,6 +250,18 @@ Third run (`~/storage/executor-grid/8.6-r3/`): no host crashes.
   from 8.2 on) are answered; it now spins in Apple's WindowDefinitions
   drawing its title (no traps: needs PC sampling).
 
+Differential probes (docs/executor/DiffTest.md) now ask Apple's 8.6
+libraries and Executor's the same questions: `appr` (the Appearance
+Manager) found GetThemeSoundMask writing a long too many into its
+caller's frame, the Code Fragment Manager's calls missing under
+`CodeFragmentMgr` (Retro68's stub library), and the gaps listed in
+`tests/guest/difftest/expected/appr-executor-8.6.txt` (regions Executor
+draws as rectangles, the theme collection's missing items, invalid
+brush and text colour numbers it answers, the platinum drawing). The
+census (`libraries.py --census`) ranks what 8.6 sessions call that
+Executor lacks: GetWDInfo, SetSubmenuParentChoosable, IsMenuItemEnabled,
+GetQDGlobals and the PPC Toolbox first.
+
 Still open: Keyboard ("Keyboard Preferences file is in use", after it
 scans the Preferences folder: its 68k code decides why); Memory (no
 window; its RAM Disk trap `$A074`, selectors 9-13, is handled as absent

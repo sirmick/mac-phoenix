@@ -3393,7 +3393,7 @@
 
 # ####
 
-# The theme's sound mask (64 bits, read as two longs by the control panel).
+# The theme's sound mask (one long: 8.6 writes 4 bytes, tests/guest/difftest).
 - function:
     name: GetThemeSoundMask
     return: OSStatus
