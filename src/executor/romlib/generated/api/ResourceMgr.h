@@ -6,6 +6,7 @@
  * Needs:                                                                    *
  *     MacTypes.h    Boolean, INTEGER, ResType, Handle, ConstStringPtr,      *
  *                   StringPtr, LONGINT, Byte, SignedByte, Ptr, Size         *
+ *     FileMgr.h     FSSpec                                                  *
  *                                                                           *
  *                                                                           *
  *****************************************************************************/
@@ -17,6 +18,7 @@
 #include <iosfwd>
 #include <base/lowglobals.h>
 #include "ExMacTypes.h"
+#include "FileMgr.h"
 
 #define MODULE_NAME ResourceMgr
 #include <base/api-module.h>
@@ -288,12 +290,14 @@ INTEGER C_HomeResFile(Handle res);PASCAL_TRAP(HomeResFile, 0xA9A4);
 void C_UseResFile(INTEGER rn);PASCAL_TRAP(UseResFile, 0xA998);
 
 
-// MacPhoenix. Private in 7.5.5 (selector -1; name is our guess): true of the System file's map and of a map whose file was opened in system mode; ResErr resFNotFound for nil. Apple's Help Manager asks of a balloon resource's home file.
-Boolean C_ResourceMapIsSystem(Handle map);PASCAL_SUBTRAP(ResourceMapIsSystem, 0xA822, 0x02FF, ResourceDispatch);
+// MacPhoenix. Private in 7.5.5 (selector -1; Apple's name from the 8.6 Finder's PrivateInterfaceLib imports): true of the System file's map and of a map whose file was opened in system mode; ResErr resFNotFound for nil. Apple's Help Manager asks of a balloon resource's home file.
+Boolean C_IsThisASystemResourceMap(Handle map);PASCAL_SUBTRAP(IsThisASystemResourceMap, 0xA822, 0x02FF, ResourceDispatch);
+LIBRARY_ALSO(PrivateInterfaceLib, IsThisASystemResourceMap, InterfaceLib);
 
 
-// MacPhoenix. Private in 7.5.5 (name is our guess, tools/macdecode/learned.yaml): the resource map handle of an open resource file, 0 meaning the System file. Apple's version walks the map chain from TopMapHndl and sets ResErr to resFNotFound when the file isn't open. Finder calls it.
-Handle C_GetResourceMapHandle(INTEGER refNum);PASCAL_SUBTRAP(GetResourceMapHandle, 0xA822, 0x0000, ResourceDispatch);
+// MacPhoenix. Private in 7.5.5 (Apple's name from the 8.6 Finder's PrivateInterfaceLib imports): the resource map handle of an open resource file, 0 meaning the System file. Apple's version walks the map chain from TopMapHndl and sets ResErr to resFNotFound when the file isn't open. Finder calls it.
+Handle C_GetMap(INTEGER refNum);PASCAL_SUBTRAP(GetMap, 0xA822, 0x0000, ResourceDispatch);
+LIBRARY_ALSO(PrivateInterfaceLib, GetMap, InterfaceLib);
 
 
 // MacPhoenix. Private in 7.5.5 (name is a guess): the map's attribute byte (offset 23) masked with $1E -- the private bits, not read-only/compact/changed; a nil map sets ResErr to nilHandleErr and returns 0. Finder (opening a disk's saved windows) and the System's HOpenResFile/CloseResFile patches call it.
@@ -317,6 +321,18 @@ Handle C_GetNextFOND(Handle fondHandle);PASCAL_SUBTRAP(GetNextFOND, 0xA822, 0x00
 
 
 using ResourceDecompressionUPP = UPP<void(Ptr source, Ptr dest, Ptr working, Size len)>;
+
+
+SignedByte C_GetOverrideAttributes(Handle map);LIBRARY_FUNCTION(PrivateInterfaceLib, GetOverrideAttributes, C_GetOverrideAttributes);
+
+
+void C_SetOverrideAttributes(Handle map, SignedByte attributes);LIBRARY_FUNCTION(PrivateInterfaceLib, SetOverrideAttributes, C_SetOverrideAttributes);
+
+
+INTEGER C_OpenResFileUnderSystemMap(const FSSpec *spec, SignedByte permission);LIBRARY_FUNCTION(PrivateInterfaceLib, OpenResFileUnderSystemMap, C_OpenResFileUnderSystemMap);
+
+
+void C_CloseResFileUnderSystemMap(INTEGER refNum);LIBRARY_FUNCTION(PrivateInterfaceLib, CloseResFileUnderSystemMap, C_CloseResFileUnderSystemMap);
 
 
 } /* namespace Executor */

@@ -27,6 +27,7 @@ INTEGER Executor::ROMlib_dialog_cancel_item(DialogPtr dialog)
 void Executor::ROMlib_dialog_forget(DialogPtr dialog)
 {
     cancel_items.erase(dialog);
+    ROMlib_dialog8_forget(dialog);
 }
 
 /* The standard filter, called directly (InterfaceLib exports it). */

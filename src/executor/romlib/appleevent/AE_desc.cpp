@@ -328,7 +328,7 @@ aggr_put_nth_desc(Handle aggr_handle,
 
     in_desc_data = DESC_DATA(in_desc);
     in_desc_type = DESC_TYPE(in_desc);
-    size = GetHandleSize(in_desc_data);
+    size = in_desc_data ? GetHandleSize(in_desc_data) : 0; /* typeNull: none */
 
     err = aggr_desc_get_addr(aggr_handle, index, false,
                              (char **)&inline_desc, &size, true, false);
@@ -339,7 +339,8 @@ aggr_put_nth_desc(Handle aggr_handle,
     }
 
     inline_desc->type = in_desc_type;
-    memcpy(inline_desc->data, *in_desc_data, size);
+    if(size)
+        memcpy(inline_desc->data, *in_desc_data, size);
 
     *out_failcode = noErr;
     return true;
@@ -421,7 +422,9 @@ aggr_put_key_desc(Handle aggr_handle,
 
     in_desc_data = DESC_DATA(in_desc);
     in_desc_type = DESC_TYPE(in_desc);
-    size = GetHandleSize(in_desc_data);
+    /* MacPhoenix: a typeNull descriptor has no data handle (an object
+       specifier's null container): an item of no data. */
+    size = in_desc_data ? GetHandleSize(in_desc_data) : 0;
 
     find_key_index(aggr_handle, keyword, attr_p, &index);
 
@@ -432,7 +435,8 @@ aggr_put_key_desc(Handle aggr_handle,
 
     inline_key_desc->key = keyword;
     inline_key_desc->type = in_desc_type;
-    memcpy(inline_key_desc->data, *in_desc_data, size);
+    if(size)
+        memcpy(inline_key_desc->data, *in_desc_data, size);
 
     return true;
 }

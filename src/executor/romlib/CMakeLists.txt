@@ -175,7 +175,7 @@ set(dial_sources
     dial/dial.h
     dial/itm.h
     dial/dialAlert.cpp dial/dialCreate.cpp dial/dialHandle.cpp dial/dialInit.cpp
-    dial/dialManip.cpp dial/dialDispatch.cpp dial/dialItem.cpp)
+    dial/dialManip.cpp dial/dialDispatch.cpp dial/dialItem.cpp dial/dialMgr8.cpp)
 source_group(Dialogs FILES ${dial_sources})
 
 set(file_sources

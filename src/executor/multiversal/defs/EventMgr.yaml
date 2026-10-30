@@ -118,9 +118,15 @@
 
 # ####
 
-# MacPhoenix: an event's modifiers (Events.h)
+# MacPhoenix: an event's modifiers, an event mask (Events.h)
 - typedef:
     name: EventModifiers
+    type: UInt16
+
+# ####
+
+- typedef:
+    name: EventMask
     type: UInt16
 
 # ####

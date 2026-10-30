@@ -685,16 +685,18 @@
 # ####
 
 - function:
-    name: ResourceMapIsSystem
+    name: IsThisASystemResourceMap
     return: Boolean
     args:
       - name: map
         type: Handle
     dispatcher: ResourceDispatch
     selector: 0x02FF
+    library: PrivateInterfaceLib
     executor: C_
     comment: >
-      MacPhoenix. Private in 7.5.5 (selector -1; name is our guess): true
+      MacPhoenix. Private in 7.5.5 (selector -1; Apple's name from the 8.6
+      Finder's PrivateInterfaceLib imports): true
       of the System file's map and of a map whose file was opened in
       system mode; ResErr resFNotFound for nil. Apple's Help Manager asks
       of a balloon resource's home file.
@@ -702,16 +704,18 @@
 # ####
 
 - function:
-    name: GetResourceMapHandle
+    name: GetMap
     return: Handle
     args:
       - name: refNum
         type: INTEGER
     dispatcher: ResourceDispatch
     selector: 0x0000
+    library: PrivateInterfaceLib
     executor: C_
     comment: >
-      MacPhoenix. Private in 7.5.5 (name is our guess, tools/macdecode/learned.yaml):
+      MacPhoenix. Private in 7.5.5 (Apple's name from the 8.6 Finder's
+      PrivateInterfaceLib imports):
       the resource map handle of an open resource file, 0 meaning the System
       file. Apple's version walks the map chain from TopMapHndl and sets
       ResErr to resFNotFound when the file isn't open. Finder calls it.
@@ -827,3 +831,55 @@
       - name: len
         type: Size
     name: ResourceDecompressionUPP
+
+# ####
+
+# MacPhoenix: PrivateInterfaceLib's resource map calls the 8.x Finder makes
+# opening a classic control panel (no trap; arguments from its call sites).
+# A map's override attributes are its attribute byte's private bits
+# (GetResourceMapPrivateFlags).
+- function:
+    name: GetOverrideAttributes
+    return: SignedByte
+    args:
+      - name: map
+        type: Handle
+    library: PrivateInterfaceLib
+    executor: C_
+
+# ####
+
+- function:
+    name: SetOverrideAttributes
+    args:
+      - name: map
+        type: Handle
+      - name: attributes
+        type: SignedByte
+    library: PrivateInterfaceLib
+    executor: C_
+
+# ####
+
+# A resource file opened for the Finder's control panel shell, closed with
+# CloseResFileUnderSystemMap.
+- function:
+    name: OpenResFileUnderSystemMap
+    return: INTEGER
+    args:
+      - name: spec
+        type: const FSSpec*
+      - name: permission
+        type: SignedByte
+    library: PrivateInterfaceLib
+    executor: C_
+
+# ####
+
+- function:
+    name: CloseResFileUnderSystemMap
+    args:
+      - name: refNum
+        type: INTEGER
+    library: PrivateInterfaceLib
+    executor: C_

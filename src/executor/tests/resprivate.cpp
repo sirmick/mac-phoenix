@@ -85,7 +85,7 @@ public:
 
     /* subq.l #4,sp; move.w #ref,-(sp); move.w #$0100,d0; _ResourceDispatch;
        move.l (sp)+,d1 */
-    Handle trap_GetResourceMapHandle(INTEGER ref)
+    Handle trap_GetMap(INTEGER ref)
     {
         uint32_t r = run({ 0x598F, 0x3F3C, (uint16_t)ref, 0x303C, 0x0100, 0xA822, 0x221F });
         return r ? (Handle)SYN68K_TO_US(r) : nullptr;
@@ -113,16 +113,16 @@ public:
 };
 }
 
-TEST_F(ResPrivate, GetResourceMapHandle)
+TEST_F(ResPrivate, GetMap)
 {
     INTEGER ref = open("a");
     ROMlib_setreserr(-1);
-    EXPECT_EQ(map_of(ref), GetResourceMapHandle(ref));
+    EXPECT_EQ(map_of(ref), GetMap(ref));
     EXPECT_EQ(noErr, ResError());
-    EXPECT_EQ(ref, (*(resmaphand)GetResourceMapHandle(ref))->resfn);
+    EXPECT_EQ(ref, (*(resmaphand)GetMap(ref))->resfn);
 
     ROMlib_setreserr(-1);
-    EXPECT_EQ(map_of(ref), trap_GetResourceMapHandle(ref));
+    EXPECT_EQ(map_of(ref), trap_GetMap(ref));
     EXPECT_EQ(noErr, ResError());
 }
 
@@ -131,9 +131,9 @@ TEST_F(ResPrivate, GetResourceMapHandleSystem)
     if(!LM(SysMapHndl))
         GTEST_SKIP() << "no System file in this environment";
     ROMlib_setreserr(-1);
-    EXPECT_EQ(LM(SysMapHndl), GetResourceMapHandle(0));
+    EXPECT_EQ(LM(SysMapHndl), GetMap(0));
     EXPECT_EQ(noErr, ResError());
-    EXPECT_EQ(LM(SysMapHndl), trap_GetResourceMapHandle(0));
+    EXPECT_EQ(LM(SysMapHndl), trap_GetMap(0));
     EXPECT_EQ(noErr, ResError());
 }
 
@@ -141,10 +141,10 @@ TEST_F(ResPrivate, GetResourceMapHandleNotOpen)
 {
     INTEGER ref = open("a");
     INTEGER bogus = ref + 1234;
-    EXPECT_EQ(nullptr, GetResourceMapHandle(bogus));
+    EXPECT_EQ(nullptr, GetMap(bogus));
     EXPECT_EQ(resFNotFound, ResError());
     ROMlib_setreserr(noErr);
-    EXPECT_EQ(nullptr, trap_GetResourceMapHandle(bogus));
+    EXPECT_EQ(nullptr, trap_GetMap(bogus));
     EXPECT_EQ(resFNotFound, ResError());
 }
 
@@ -244,11 +244,11 @@ TEST_F(ResPrivate, GetOverrideMapNotInChain)
     DisposeHandle(notamap);
 }
 
-TEST_F(ResPrivate, ResourceMapIsSystem)
+TEST_F(ResPrivate, IsThisASystemResourceMap)
 {
     INTEGER ref = open("a");
     ROMlib_setreserr(-1);
-    EXPECT_FALSE(ResourceMapIsSystem(map_of(ref)));
+    EXPECT_FALSE(IsThisASystemResourceMap(map_of(ref)));
     EXPECT_EQ(noErr, ResError());
     ROMlib_setreserr(-1);
     EXPECT_EQ(0, trap_byte_of_handle(0x02FF, map_of(ref)));
@@ -257,7 +257,7 @@ TEST_F(ResPrivate, ResourceMapIsSystem)
     if(LM(SysMapHndl))
     {
         ROMlib_setreserr(-1);
-        EXPECT_TRUE(ResourceMapIsSystem(LM(SysMapHndl)));
+        EXPECT_TRUE(IsThisASystemResourceMap(LM(SysMapHndl)));
         EXPECT_EQ(noErr, ResError());
         EXPECT_NE(0, trap_byte_of_handle(0x02FF, LM(SysMapHndl)));
         EXPECT_EQ(noErr, ResError());
@@ -267,7 +267,7 @@ TEST_F(ResPrivate, ResourceMapIsSystem)
 TEST_F(ResPrivate, ResourceMapIsSystemNil)
 {
     ROMlib_setreserr(noErr);
-    EXPECT_FALSE(ResourceMapIsSystem(nullptr));
+    EXPECT_FALSE(IsThisASystemResourceMap(nullptr));
     EXPECT_EQ(resFNotFound, ResError());
     ROMlib_setreserr(noErr);
     EXPECT_EQ(0, trap_byte_of_handle(0x02FF, nullptr));
@@ -282,7 +282,7 @@ TEST_F(ResPrivate, ResourceMapIsSystemSystemMode)
     EndSystemMode();
     ASSERT_TRUE(ROMlib_system_resource_file_p(ref));
     ROMlib_setreserr(-1);
-    EXPECT_TRUE(ResourceMapIsSystem(map_of(ref)));
+    EXPECT_TRUE(IsThisASystemResourceMap(map_of(ref)));
     EXPECT_EQ(noErr, ResError());
     EXPECT_NE(0, trap_byte_of_handle(0x02FF, map_of(ref)));
 }

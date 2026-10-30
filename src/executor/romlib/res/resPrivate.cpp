@@ -11,6 +11,7 @@
 #include <ResourceMgr.h>
 #include <res/resource.h>
 #include <rsys/process.h>
+#include <FileMgr.h>
 
 using namespace Executor;
 
@@ -29,7 +30,7 @@ inline uint8_t attribute_byte(resmaphand map)
 }
 
 /* Selector 0: the map of an open resource file, 0 meaning the System. */
-Handle Executor::C_GetResourceMapHandle(INTEGER refNum)
+Handle Executor::C_GetMap(INTEGER refNum)
 {
     if(refNum == 0)
         refNum = LM(SysMap);
@@ -77,7 +78,7 @@ Handle Executor::C_GetOverrideMap(Handle map)
 
 /* Selector -1: whether a map is the System file's or a file's opened in
    system mode. */
-Boolean Executor::C_ResourceMapIsSystem(Handle map)
+Boolean Executor::C_IsThisASystemResourceMap(Handle map)
 {
     if(!map)
     {
@@ -88,4 +89,37 @@ Boolean Executor::C_ResourceMapIsSystem(Handle map)
     if(map == LM(SysMapHndl))
         return true;
     return ROMlib_system_resource_file_p((*(resmaphand)map)->resfn);
+}
+
+/* PrivateInterfaceLib's (8.x): the 8.6 Finder opens a classic control
+   panel with them. The override attributes are the private bits. */
+SignedByte Executor::C_GetOverrideAttributes(Handle map)
+{
+    return C_GetResourceMapPrivateFlags(map);
+}
+
+void Executor::C_SetOverrideAttributes(Handle map, SignedByte attributes)
+{
+    if(!map)
+    {
+        ROMlib_setreserr(nilHandleErr);
+        return;
+    }
+    resmaphand m = (resmaphand)map;
+    (*m)->resfatr = ((*m)->resfatr & ~private_flags_mask) | (attributes & private_flags_mask);
+    ROMlib_setreserr(noErr);
+}
+
+/* The file opened as FSpOpenResFile does, on top of the chain: its
+   resources come first, then the application's and the System's below.
+   (Apple's puts the map under the System's, for the control panel's
+   resources to be found as the System's are.) */
+INTEGER Executor::C_OpenResFileUnderSystemMap(const FSSpec *spec, SignedByte permission)
+{
+    return FSpOpenResFile((FSSpec *)spec, permission);
+}
+
+void Executor::C_CloseResFileUnderSystemMap(INTEGER refNum)
+{
+    CloseResFile(refNum);
 }

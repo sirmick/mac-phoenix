@@ -17,7 +17,7 @@ attributes (Executor's `resfatr`): Inside Macintosh documents bits 7
 (read-only), 6 (compact) and 5 (changed); the low bits are private.
 ResErr is set through Executor's `ROMlib_setreserr`.
 
-## Selector 0: `Handle GetResourceMapHandle(INTEGER refNum)`
+## Selector 0: `Handle GetMap(INTEGER refNum)`
 
 The resource map of an open resource file.
 
@@ -57,7 +57,7 @@ Examples, chain listed from the top:
 | O1, A, O2, B | O2 |
 | A, O1, C (B not in chain) | nil, resFNotFound |
 
-## Selector -1 (`$02FF`): `Boolean ResourceMapIsSystem(Handle map)`
+## Selector -1 (`$02FF`): `Boolean IsThisASystemResourceMap(Handle map)`
 
 Whether a resource map belongs to the system: the Help Manager asks it of
 the file a balloon's resource came from.

@@ -57,6 +57,9 @@ extern void WINDCALLDESKHOOK(void);
 extern LONGINT ROMlib_windcall(WindowPtr wind, INTEGER mess, LONGINT param);
 /* MacPhoenix: forgets what windMgr8.cpp keeps for a window (CloseWindow) */
 extern void ROMlib_window8_forget(WindowPtr w);
+/* MacPhoenix: PaintOne(nullptr, ...) paints the desktop without making it
+   an update for the desktop layer's owner (DMDrawDesktopRegion) */
+extern bool ROMlib_painting_desktop_only;
 
 #define WINDCALL(w, m, x) ROMlib_windcall((w), (m), (x))
 

@@ -72,6 +72,9 @@ ctest --test-dir build -L executor
 # Executor and Apple's systems (docs/executor/README.md, LIBRARIES.md)
 # Retro68's own AutomatedTests on Executor through LaunchAPPL -e executor:
 # tools/retro68/automated_tests.py (ctest -R retro68_automated_executor)
+# Every control panel and application on an 8.x System image, one per Executor session
+# (screenshots, crashes, unimplemented calls; docs/executor/MacOS8-9.md "The 8.6 grid"):
+tools/executor/grid.py 8.6.img --jobs 3        # -> ~/storage/executor-grid/8.6/grid.md
 # Toolbox selectors/OT functions a session called that Executor lacks: "[unimplemented]"
 # in the log, collected in ~/storage/executor/unimplemented.log (date, app, call)
 

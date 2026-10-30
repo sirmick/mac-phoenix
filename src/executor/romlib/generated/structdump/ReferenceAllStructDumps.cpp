@@ -38,6 +38,7 @@ void registerStructDumps_ControlMgr8();
 void registerStructDumps_DeskMgr();
 void registerStructDumps_DeviceMgr();
 void registerStructDumps_DialogMgr();
+void registerStructDumps_DialogMgr8();
 void registerStructDumps_Disk();
 void registerStructDumps_DiskInit();
 void registerStructDumps_Displays();
@@ -126,6 +127,7 @@ void registerAllStructDumps()
     registerStructDumps_DeskMgr();
     registerStructDumps_DeviceMgr();
     registerStructDumps_DialogMgr();
+    registerStructDumps_DialogMgr8();
     registerStructDumps_Disk();
     registerStructDumps_DiskInit();
     registerStructDumps_Displays();

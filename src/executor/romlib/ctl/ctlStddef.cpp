@@ -426,8 +426,12 @@ LONGINT Executor::C_cdef0(INTEGER var, ControlHandle c, INTEGER mess,
         case autoTrack:
             break;
         default:
-            gui_assert(0); /* die */
-            return 0; /* make gcc -Wall happy */
+            /* MacPhoenix: 0 to what it doesn't know, as a definition does
+               (8.x's Control Manager asks every control for its 8.0
+               messages, kControlMsgTestNewMsgSupport first). */
+            if(draw_p)
+                draw_state_restore(&draw_state);
+            return 0;
     }
 
     if(draw_p)

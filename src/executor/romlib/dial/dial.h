@@ -27,6 +27,8 @@ EXTERN_PASCAL_FUNCTION_PTR(ROMlib_myfilt);
    dialog closes. */
 extern INTEGER ROMlib_dialog_cancel_item(DialogPtr dialog);
 extern void ROMlib_dialog_forget(DialogPtr dialog);
+/* MacPhoenix: what dialMgr8.cpp keeps for a dialog */
+extern void ROMlib_dialog8_forget(DialogPtr dialog);
 
 static_assert(sizeof(icon_item_template_t) == 18);
 }

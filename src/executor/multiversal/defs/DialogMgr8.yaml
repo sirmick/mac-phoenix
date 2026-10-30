@@ -1,0 +1,414 @@
+# MacPhoenix: the Dialog Manager of Mac OS 8 (Dialogs.h, Universal Interfaces
+# 3.4, by tools/multiversal/uih2yaml.py, edited): AppearanceLib's calls (68k:
+# _DialogDispatch) and the dialogs library's (8.5; MacDialogsLib on 8.6, the
+# header's DialogsLib). docs/executor/Appearance.md.
+
+- enum:
+    values:
+      - name: kControlDialogItem
+        value: 4
+      - name: kButtonDialogItem
+        value: "kControlDialogItem | 0"
+      - name: kCheckBoxDialogItem
+        value: "kControlDialogItem | 1"
+      - name: kRadioButtonDialogItem
+        value: "kControlDialogItem | 2"
+      - name: kResourceControlDialogItem
+        value: "kControlDialogItem | 3"
+      - name: kStaticTextDialogItem
+        value: 8
+      - name: kEditTextDialogItem
+        value: 16
+      - name: kIconDialogItem
+        value: 32
+      - name: kPictureDialogItem
+        value: 64
+      - name: kUserDialogItem
+        value: 0
+      - name: kHelpDialogItem
+        value: 1
+      - name: kItemDisableBit
+        value: 128
+
+# ####
+
+- enum:
+    values:
+      - name: kStdOkItemIndex
+        value: 1
+      - name: kStdCancelItemIndex
+        value: 2
+      - name: ok
+        value: "kStdOkItemIndex"
+      - name: cancel
+        value: "kStdCancelItemIndex"
+
+# ####
+
+- enum:
+    values:
+      - name: kStopIcon
+        value: 0
+      - name: kNoteIcon
+        value: 1
+      - name: kCautionIcon
+        value: 2
+
+# ####
+
+- enum:
+    values:
+      - name: kOkItemIndex
+        value: 1
+      - name: kCancelItemIndex
+        value: 2
+
+# ####
+
+- typedef:
+    name: DialogItemIndexZeroBased
+    type: SInt16
+
+# ####
+
+- enum:
+    values:
+      - name: kAlertStopAlert
+        value: 0
+      - name: kAlertNoteAlert
+        value: 1
+      - name: kAlertCautionAlert
+        value: 2
+      - name: kAlertPlainAlert
+        value: 3
+
+# ####
+
+- typedef:
+    name: AlertType
+    type: SInt16
+
+# ####
+
+- enum:
+    values:
+      - name: kAlertDefaultOKText
+        value: -1
+      - name: kAlertDefaultCancelText
+        value: -1
+      - name: kAlertDefaultOtherText
+        value: -1
+
+# ####
+
+- enum:
+    values:
+      - name: kAlertStdAlertOKButton
+        value: 1
+      - name: kAlertStdAlertCancelButton
+        value: 2
+      - name: kAlertStdAlertOtherButton
+        value: 3
+      - name: kAlertStdAlertHelpButton
+        value: 4
+
+# ####
+
+- enum:
+    values:
+      - name: kDialogFlagsUseThemeBackground
+        value: "(1 << 0)"
+      - name: kDialogFlagsUseControlHierarchy
+        value: "(1 << 1)"
+      - name: kDialogFlagsHandleMovableModal
+        value: "(1 << 2)"
+      - name: kDialogFlagsUseThemeControls
+        value: "(1 << 3)"
+
+# ####
+
+- enum:
+    values:
+      - name: kAlertFlagsUseThemeBackground
+        value: "(1 << 0)"
+      - name: kAlertFlagsUseControlHierarchy
+        value: "(1 << 1)"
+      - name: kAlertFlagsAlertIsMovable
+        value: "(1 << 2)"
+      - name: kAlertFlagsUseThemeControls
+        value: "(1 << 3)"
+
+# ####
+
+- enum:
+    values:
+      - name: kDialogFontNoFontStyle
+        value: 0
+      - name: kDialogFontUseFontMask
+        value: 0x0001
+      - name: kDialogFontUseFaceMask
+        value: 0x0002
+      - name: kDialogFontUseSizeMask
+        value: 0x0004
+      - name: kDialogFontUseForeColorMask
+        value: 0x0008
+      - name: kDialogFontUseBackColorMask
+        value: 0x0010
+      - name: kDialogFontUseModeMask
+        value: 0x0020
+      - name: kDialogFontUseJustMask
+        value: 0x0040
+      - name: kDialogFontUseAllMask
+        value: 0x00FF
+      - name: kDialogFontAddFontSizeMask
+        value: 0x0100
+      - name: kDialogFontUseFontNameMask
+        value: 0x0200
+      - name: kDialogFontAddToMetaFontMask
+        value: 0x0400
+
+# ####
+
+- enum:
+    values:
+      - name: kDialogFontUseThemeFontIDMask
+        value: 0x0080
+
+# ####
+
+- struct:
+    name: AlertStdAlertParamRec
+    members:
+      - name: movable
+        type: Boolean
+      - name: helpButton
+        type: Boolean
+      - name: filterProc
+        type: ModalFilterUPP
+      - name: defaultText
+        type: ConstStringPtr
+      - name: cancelText
+        type: ConstStringPtr
+      - name: otherText
+        type: ConstStringPtr
+      - name: defaultButton
+        type: SInt16
+      - name: cancelButton
+        type: SInt16
+      - name: position
+        type: UInt16
+
+# ####
+
+- typedef:
+    name: AlertStdAlertParamPtr
+    type: AlertStdAlertParamRec*
+
+# ####
+
+- enum:
+    values:
+      - name: kHICommandOther
+        value: "'othr'"
+
+# ####
+
+- enum:
+    values:
+      - name: kStdAlertDoNotDisposeSheet
+        value: "1 << 0"
+
+# ####
+
+- function:
+    name: NewFeaturesDialog
+    return: DialogRef
+    args:
+      - name: inStorage
+        type: void*
+      - name: inBoundsRect
+        type: const Rect*
+      - name: inTitle
+        type: ConstStr255Param
+      - name: inIsVisible
+        type: Boolean
+      - name: inProcID
+        type: SInt16
+      - name: inBehind
+        type: WindowRef
+      - name: inGoAwayFlag
+        type: Boolean
+      - name: inRefCon
+        type: SInt32
+      - name: inItemListHandle
+        type: Handle
+      - name: inFlags
+        type: UInt32
+    dispatcher: DialogDispatch
+    selector: 0x110C
+    library: AppearanceLib
+    executor: C_
+
+# ####
+
+- function:
+    name: AutoSizeDialog
+    return: OSErr
+    args:
+      - name: inDialog
+        type: DialogRef
+    dispatcher: DialogDispatch
+    selector: 0x020D
+    library: AppearanceLib
+    executor: C_
+
+# ####
+
+- function:
+    name: StandardAlert
+    return: OSErr
+    args:
+      - name: inAlertType
+        type: AlertType
+      - name: inError
+        type: ConstStr255Param
+      - name: inExplanation
+        type: ConstStr255Param
+      - name: inAlertParam
+        type: const AlertStdAlertParamRec*
+      - name: outItemHit
+        type: SInt16*
+    dispatcher: DialogDispatch
+    selector: 0x090E
+    library: AppearanceLib
+    executor: C_
+
+# ####
+
+- function:
+    name: GetDialogItemAsControl
+    return: OSErr
+    args:
+      - name: inDialog
+        type: DialogRef
+      - name: inItemNo
+        type: SInt16
+      - name: outControl
+        type: ControlRef*
+    dispatcher: DialogDispatch
+    selector: 0x050F
+    library: AppearanceLib
+    executor: C_
+
+# ####
+
+- function:
+    name: MoveDialogItem
+    return: OSErr
+    args:
+      - name: inDialog
+        type: DialogRef
+      - name: inItemNo
+        type: SInt16
+      - name: inHoriz
+        type: SInt16
+      - name: inVert
+        type: SInt16
+    dispatcher: DialogDispatch
+    selector: 0x0510
+    library: AppearanceLib
+    executor: C_
+
+# ####
+
+- function:
+    name: SizeDialogItem
+    return: OSErr
+    args:
+      - name: inDialog
+        type: DialogRef
+      - name: inItemNo
+        type: SInt16
+      - name: inWidth
+        type: SInt16
+      - name: inHeight
+        type: SInt16
+    dispatcher: DialogDispatch
+    selector: 0x0511
+    library: AppearanceLib
+    executor: C_
+
+# ####
+
+- function:
+    name: AppendDialogItemList
+    return: OSErr
+    args:
+      - name: dialog
+        type: DialogRef
+      - name: ditlID
+        type: SInt16
+      - name: method
+        type: DITLMethod
+    dispatcher: DialogDispatch
+    selector: 0x0412
+    library: MacDialogsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: SetDialogTimeout
+    return: OSStatus
+    args:
+      - name: inDialog
+        type: DialogRef
+      - name: inButtonToPress
+        type: SInt16
+      - name: inSecondsToWait
+        type: UInt32
+    library: MacDialogsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: GetDialogTimeout
+    return: OSStatus
+    args:
+      - name: inDialog
+        type: DialogRef
+      - name: outButtonToPress
+        type: SInt16*
+      - name: outSecondsToWait
+        type: UInt32*
+      - name: outSecondsRemaining
+        type: UInt32*
+    library: MacDialogsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: SetModalDialogEventMask
+    return: OSStatus
+    args:
+      - name: inDialog
+        type: DialogRef
+      - name: inMask
+        type: EventMask
+    library: MacDialogsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: GetModalDialogEventMask
+    return: OSStatus
+    args:
+      - name: inDialog
+        type: DialogRef
+      - name: outMask
+        type: EventMask*
+    library: MacDialogsLib
+    executor: C_

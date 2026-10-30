@@ -600,7 +600,7 @@ dispatchers:
     name: ResourceDispatch
     selectors:
       - value: 0xFF
-        name: ResourceMapIsSystem
+        name: IsThisASystemResourceMap
         status: guess
         source: RAM $6CA26; PACK 14 +1426
         comment: >

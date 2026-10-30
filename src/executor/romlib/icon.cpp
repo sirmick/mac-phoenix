@@ -236,6 +236,12 @@ CIconHandle Executor::C_GetCIcon(short icon_id)
     cicon_res_handle = (CIconHandle)ROMlib_getrestid("cicn"_4, icon_id);
     if(cicon_res_handle == nullptr)
         return nullptr;
+    /* MacPhoenix: a purged (or empty) resource: loaded again, nil when it
+       can't be, as for no resource. */
+    if(!*cicon_res_handle)
+        LoadResource((Handle)cicon_res_handle);
+    if(!*cicon_res_handle || GetHandleSize((Handle)cicon_res_handle) < (Size)sizeof(CIcon))
+        return nullptr;
 
     cicon_res = *cicon_res_handle;
     height = RECT_HEIGHT(&cicon_res->iconPMap.bounds);
@@ -244,6 +250,8 @@ CIconHandle Executor::C_GetCIcon(short icon_id)
     new_size = sizeof(CIcon) - sizeof(INTEGER) + mask_data_size + bmap_data_size;
 
     cicon_handle = (CIconHandle)NewHandle(new_size);
+    if(!cicon_handle)
+        return nullptr;
     HLockGuard guard1(cicon_handle), guard2(cicon_res_handle);
 
     CTabPtr tmp_ctab;

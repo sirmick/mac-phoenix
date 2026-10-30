@@ -29,6 +29,8 @@ ControlHandle Executor::C_NewControl(WindowPtr wst, const Rect *r, ConstStringPt
     GUEST<Handle> temph;
 
     retval = (ControlHandle)NewHandle((Size)sizeof(ControlRecord));
+    if(!retval) /* MacPhoenix: no memory, no control */
+        return nullptr;
     temph = GetResource("CDEF"_4, procid >> 4);
     if(!((*retval)->contrlDefProc = temph))
     {

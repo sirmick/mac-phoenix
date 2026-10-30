@@ -174,6 +174,57 @@ through its address (procInfo $02671822). At startup the Finder also
 writes to a file Executor opened read-only on the host (162 `short write`
 lines, `EBADF`).
 
+## The 8.6 grid (2026-10-30)
+
+`tools/executor/grid.py 8.6.img --jobs 3` runs everything on the image
+that can be opened, one item per fresh session on the 8.6 System
+(`--executor-ppc --bridge`, BridgeAgent launching it by path; a control
+panel or desk accessory goes to the Finder as an `'odoc'`, a double-click):
+105 items (control panels, desk accessories, applications, AppleScript
+applets). It records the front process, a screenshot, a crash and the
+calls Executor answered as unimplemented; results in
+`~/storage/executor-grid/8.6/` (`grid.md`, `grid.json`, `NNN.png`,
+`NNN.log`). The screenshots are the verdict: "runs" only means no crash.
+
+Second run, by looking at the screenshots:
+
+* **Work** (their windows, controls drawn): control panels Map,
+  Monitors, Sound, ColorSync, DialAssist, General Controls, Launcher,
+  Modem, Mouse, Numbers, Speech, Startup Disk, TCP/IP, Text; Calculator
+  and Chooser; SimpleText, Note Pad, Scrapbook, SimpleSound, Stickies, Disk
+  First Aid, Drive Setup, Web Sharing, Graphing Calculator, Netscape
+  Import, Address Book Export, DropStuff, Microsoft Internet First Run.
+* **Say what this Mac lacks, as a Mac would:** no Zip drive (Iomega
+  Tools), FM tuner, CD-ROM drive (AppleCD Audio Player), Display Enabler
+  (DigitalColor Meter, Monitors & Sound), QuickTime (MoviePlayer,
+  PictureViewer, QuickTime Settings), the extensions Executor's policy
+  leaves out (Internet Config, Location Manager, Control Strip, Remote
+  Access, AppleTalk; AppleScript for Script Editor and the 31 applets;
+  Extensions Manager's own startup extension, its Gestalt `'8INI'`, which
+  it reports as "must be running System 8.0").
+* **Executor's to fix:** host crashes in Mac OS Setup Assistant, Register
+  StuffIt Expander, Appearance, Energy Saver, Keyboard and Sherlock (an
+  application heap that runs out: unchecked `NewHandle`s in QuickDraw's
+  region code); Network Browser (a trap it finds unimplemented); Internet
+  Explorer and Outlook Express (their shared libraries don't load); File
+  Exchange's preferences, the Users & Groups Data File (File Sharing,
+  Users & Groups); Desktop Printer Utility (error -50); applications that
+  start and show nothing (Disk Copy, StuffIt Expander 6, Netscape
+  Communicator, Talkback, the Internet Setup assistants, Memory, Apple
+  Menu Options); dimmed static text drawn as hatching (Modem, TCP/IP).
+
+What the first run needed fixed (none of the classic control panels or
+desk accessories opened): the Finder never got the bridge's `'odoc'`
+(Executor's `AESend` dropped events for other processes; and the
+Finder's desktop window had endless update events, Executor's
+`DMDrawDesktopRegion` making the desktop an update again while the
+Finder drew it); PrivateInterfaceLib's resource map calls the Finder
+opens a control panel with (`OpenResFileUnderSystemMap`, `GetMap`,
+override attributes); Apple event records with a null descriptor; Gestalt
+`'sysa'` (PowerPC on 8.x) and `NewFatRoutineDescriptor`; the Dialog
+Manager's 8.0 calls (`StandardAlert`, `NewFeaturesDialog`, items as
+controls, `AppendDialogItemList`, timeouts, event masks; DialogMgr8.yaml).
+
 ## One Toolbox for 7, 8 and 9
 
 Executor stays one Toolbox, a superset; it doesn't grow an implementation

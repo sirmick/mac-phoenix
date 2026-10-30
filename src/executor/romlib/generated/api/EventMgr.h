@@ -82,6 +82,8 @@ rightControlKey = 32768,
 
 typedef UInt16 EventModifiers;
 
+typedef UInt16 EventMask;
+
 struct EventRecord{GUEST_STRUCT;GUEST<INTEGER> what;GUEST<LONGINT> message;GUEST<LONGINT> when;GUEST<Point> where;GUEST<INTEGER> modifiers;};static_assert(sizeof(EventRecord) == 16);void describeStruct(const EventRecord&, std::ostream&);
 
 // was LONGINT KeypadMap[2];

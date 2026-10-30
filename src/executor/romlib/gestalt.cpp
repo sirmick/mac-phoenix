@@ -412,6 +412,13 @@ Executor::gestalt_set_system_version(uint32_t version)
        it, and its threads wait on that reference (opening a window). */
     if(version >= 0x0800 || ROMlib_prefer_ppc)
         REPLACE_SELECTOR_IN_TABLE("thds"_4, 7, gtable);
+    /* An 8.x System runs on PowerPC Macs only: a G3, as the G3 the 8.6 and
+       9.0.4 images come from (Microsoft's installers refuse a 68k Mac). */
+    if(version >= 0x0800)
+    {
+        REPLACE_SELECTOR_IN_TABLE(gestaltSysArchitecture, gestaltPowerPC, gtable);
+        REPLACE_SELECTOR_IN_TABLE(gestaltNativeCPUtype, gestaltCPU750, gtable);
+    }
 }
 
 

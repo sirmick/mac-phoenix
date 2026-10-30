@@ -290,6 +290,11 @@ void Executor::C_SaveOld(WindowPeek w)
     CopyRgn(WINDOW_CONT_REGION(w), LM(OldContent));
 }
 
+/* MacPhoenix: the Display Manager's DMDrawDesktopRegion paints the desktop
+   and no more: its caller (the 8.x Finder, inside its own update) draws
+   what is on it. */
+bool Executor::ROMlib_painting_desktop_only = false;
+
 void Executor::C_PaintOne(WindowPeek w, RgnHandle clobbered)
 {
     RgnHandle rh;
@@ -353,7 +358,8 @@ void Executor::C_PaintOne(WindowPeek w, RgnHandle clobbered)
         }
         /* MacPhoenix: what of the desktop was repainted is an update for
            the desktop layer's owner (Finder redraws its desktop icons). */
-        ROMlib_desktop_layer_invalidate(PORT_CLIP_REGION(wmgr_port));
+        if(!ROMlib_painting_desktop_only)
+            ROMlib_desktop_layer_invalidate(PORT_CLIP_REGION(wmgr_port));
     }
 }
 

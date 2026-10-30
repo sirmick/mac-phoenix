@@ -62,12 +62,31 @@ void Executor::C_DisposeRoutineDescriptor(UniversalProcPtr ptr)
     warning_trace_info("");
 }
 
+/* MacPhoenix: two records, the 68k routine's and the PowerPC one's (Mixed
+   Mode calls the PowerPC one; mode_switch). A system that says it runs on
+   PowerPC gets asked for them (8.x's libraries). */
 UniversalProcPtr Executor::C_NewFatRoutineDescriptor(
     ProcPtr m68k, ProcPtr ppc, ProcInfoType info)
 {
-    warning_unimplemented("");
-    *(long *)-1 = -1; /* abort */
-    return nullptr;
+    UniversalProcPtr single = NewRoutineDescriptor(m68k, info, kM68kISA);
+    if(!single)
+        return nullptr;
+    RoutineDescriptor *p = (RoutineDescriptor *)NewPtr(sizeof(RoutineDescriptor) + sizeof(RoutineRecord));
+    if(!p)
+    {
+        DisposePtr((Ptr)single);
+        return nullptr;
+    }
+    BlockMoveData((Ptr)single, (Ptr)p, sizeof(RoutineDescriptor));
+    DisposePtr((Ptr)single);
+    ROMlib_destroy_blocks((syn68k_addr_t)US_TO_SYN68K(&p->goMixedModeTrap), 2, true);
+    p->routineCount = 1;
+    RoutineRecord *records = p->routineRecords;
+    RoutineRecord &r = records[1];
+    r = records[0];
+    r.ISA = kPowerPCISA;
+    r.procDescriptor = ppc;
+    return (UniversalProcPtr)p;
 }
 
 OSErr Executor::C_SaveMixedModeState(void *statep, uint32_t vers)

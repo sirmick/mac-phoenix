@@ -6,6 +6,7 @@
 #include <MemoryMgr.h>
 #include <mman/mman.h>
 #include <quickdraw/cquick.h>
+#include <wind/wind.h>
 #include <vdriver/vdriver.h>
 #include <base/traps.impl.h>
 
@@ -351,16 +352,21 @@ GDHandle Executor::C_DMGetNextScreenDevice(GDHandle theDevice, Boolean activeOnl
     return theDevice ? GetNextDevice(theDevice) : nullptr;
 }
 
+/* MacPhoenix: the desktop painted, not made an update: the 8.x Finder calls
+   it while it updates its desktop window, which then never stopped getting
+   update events (and its Apple events waited behind them). */
 void Executor::C_DMDrawDesktopRegion(RgnHandle globalRgn)
 {
+    ROMlib_painting_desktop_only = true;
     PaintOne(nullptr, globalRgn);
+    ROMlib_painting_desktop_only = false;
 }
 
 void Executor::C_DMDrawDesktopRect(Rect *globalRect)
 {
     RgnHandle rgn = NewRgn();
     RectRgn(rgn, globalRect);
-    PaintOne(nullptr, rgn);
+    DMDrawDesktopRegion(rgn);
     DisposeRgn(rgn);
 }
 

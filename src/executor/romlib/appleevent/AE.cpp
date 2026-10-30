@@ -235,10 +235,11 @@ OSErr Executor::C_AESend(AppleEvent *evt, AppleEvent *reply,
         if(err != noErr)
             AE_RETURN_ERROR(errAEEventNotHandled);
 
-        if(same_process_p)
+        /* MacPhoenix: to another process too (Executor runs several now):
+           the event is posted to it by serial number, as to ourselves, and
+           its AEProcessAppleEvent takes it from there. No reply comes back
+           to a waiting sender yet. */
         {
-            /* we are sending the AppleEvent to ourselves */
-
             if((send_mode & _kAEReplyMask) == kAEWaitReply)
             {
                 /* ### ignoring timeout/receipt requests */
@@ -269,22 +270,20 @@ OSErr Executor::C_AESend(AppleEvent *evt, AppleEvent *reply,
 
                 {
                     HLockGuard guard(desc_data);
-                    err = PostHighLevelEvent(&evt_rec,
-                                             /* #### i dunno */
-                                             nullptr, -1,
-                                             *desc_data, desc_data_size,
-                                             -1);
+                    if(same_process_p)
+                        err = PostHighLevelEvent(&evt_rec,
+                                                 /* #### i dunno */
+                                                 nullptr, -1,
+                                                 *desc_data, desc_data_size,
+                                                 -1);
+                    else
+                        err = PostHighLevelEvent(&evt_rec, (Ptr)target_psn, -1,
+                                                 *desc_data, desc_data_size,
+                                                 0x8000 /* receiverIDisPSN */);
                 }
 
                 AE_RETURN_ERROR(err);
             }
-        }
-        else
-        {
-            /* since there isn't any other processs this could be
-             intended for, panic */
-            warning_unimplemented("AE target not ProcessSerialNumber");
-            AE_RETURN_ERROR((send_mode & _kAEReplyMask) == kAEWaitReply ? errAEEventNotHandled : noErr);
         }
     }
     else
