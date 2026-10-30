@@ -266,6 +266,15 @@ census (`libraries.py --census`) ranks what 8.6 sessions call that
 Executor lacks: GetWDInfo, SetSubmenuParentChoosable, IsMenuItemEnabled,
 GetQDGlobals and the PPC Toolbox first.
 
+Fourth run (`~/storage/executor-grid/8.6-r4/`, 2026-10-30, Charcoal): no
+crashes, results as r3. The same items on the G3
+(`~/storage/executor-grid/8.6-g3/`, `grid.py --rom g3`): 92 run, 13 not in
+front (applets, items that quit at once there too); side by side in
+`8.6-r4/vs-g3.html`. Control panels now lay out as on the G3 (General
+Controls item for item); what differs is the drawing: no platinum colours,
+check box and radio titles over a stippled pattern, a cross where 8.6
+draws a check mark.
+
 Fonts (2026-10-30, the `text` probe: every line as 8.6's). 8.6's system
 font is Charcoal, from the Roman `'itlb'`'s extended record
 (`itlbSysFond`, which also gives the Script Manager's font variables);
