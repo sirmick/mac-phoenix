@@ -248,7 +248,11 @@ Third run (`~/storage/executor-grid/8.6-r3/`): no host crashes.
   partition with virtual memory off (Communicator runs on the G3).
 * Date & Time: the menu bar clock calls (MenusLib, weak imports it makes
   from 8.2 on) are answered; it now spins in Apple's WindowDefinitions
-  drawing its title (no traps: needs PC sampling).
+  drawing its title (no traps: needs PC sampling). With Charcoal (the
+  PC sampler, 2026-10-30): in the System file's GlyphsCache (Apple Type
+  Services, `'cfrg'` 52), section 0 +$14..+$2c, a skip-list search that
+  never meets its end node: the glyph cache ATS keeps isn't set up as 8.6
+  sets it up (FMSharedCaches, FontObjects); its menus show, no window.
 
 Differential probes (docs/executor/DiffTest.md) now ask Apple's 8.6
 libraries and Executor's the same questions: `appr` (the Appearance
@@ -602,3 +606,13 @@ Next, in order:
   --results libprobe.txt --hold-key 56` (Executor: `--backend executor`).
 * The unresolved imports of a session: `CFM: unresolved import NAME` in
   the log; calls to them: `[unimplemented] PowerPC NAME`.
+* `--executor-debug pcsample`: the PowerPC PC at the end of the core's
+  time slices (every 5 ms at most); every 5 s the twelve most frequent
+  addresses as `Fragment sect N+$off (Export+$off)` (cfm.cpp's
+  `ROMlib_cfm_describe`, on CountSymbols/GetIndSymbol). For code that spins
+  without calling the Toolbox; the fragment's container (its `'cfrg'`
+  entry's offset and length) goes to `pef.py --dis`.
+* `tools/executor/grid.py IMAGE --rom g3`: the grid on Apple's code (the
+  ROM machine, a fresh copy of the image per item), the reference
+  screenshots; `grid_compare.py REF EXECUTOR --html FILE` puts the two
+  side by side.

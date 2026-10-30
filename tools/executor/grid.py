@@ -15,6 +15,14 @@ and after a while the grid records the front process, a screenshot, a crash
 the item ran. Results: DIR/grid.json, DIR/grid.md, DIR/<n>.png, DIR/<n>.log.
 
   tools/executor/grid.py 8.6.img --jobs 3 --out ~/storage/executor-grid/8.6
+
+With --rom ROM (g3: ~/storage/roms/g3.rom) the same items run on Apple's
+code instead, the ROM machine (kpx on mame-ppc) booting a fresh copy of the
+image for each: the reference screenshots (default DIR
+executor-grid/<image>-g3). grid_compare.py --html EXECUTOR-DIR REF-DIR
+shows the two side by side.
+
+  tools/executor/grid.py 8.6.img --rom g3 --jobs 2
 """
 import argparse
 import concurrent.futures
@@ -102,14 +110,21 @@ def ended(text):
     return m.group(1) if m else None
 
 
-def run_item(n, item, image, port, out, wait, binary):
+def run_item(n, item, image, port, out, wait, binary, rom=None, source=None):
     path, kind, ftype, creator = item
     log = os.path.join(out, f"{n:03d}.log")
     result = {"n": n, "path": path, "kind": kind, "type": ftype, "creator": creator}
+    if rom:
+        # the ROM machine writes its disk: a fresh copy each item
+        subprocess.run(["cp", "--reflink=auto", source, image], check=True)
+        args = ["--backend", "kpx", "--core", "mame-ppc", "--jit", "--ram", "128",
+                "--disk", image, "--dismiss-shutdown-dialog", "--bridge", rom]
+    else:
+        args = ["--backend", "executor", "--executor-system", os.path.basename(image),
+                "--executor-ppc", "--bridge"]
     with open(log, "wb") as f:
-        proc = subprocess.Popen([binary, "--config", "/dev/null", "--backend", "executor",
-                                 "--executor-system", os.path.basename(image), "--executor-ppc",
-                                 "--bridge", "--port", str(port), "--timeout", str(wait + 150)],
+        proc = subprocess.Popen([binary, "--config", "/dev/null", *args,
+                                 "--port", str(port), "--timeout", str(wait + 150)],
                                 stdout=f, stderr=subprocess.STDOUT, start_new_session=True)
     try:
         for _ in range(30):
@@ -177,8 +192,8 @@ def run_item(n, item, image, port, out, wait, binary):
     return result
 
 
-def markdown(results, image):
-    lines = [f"# {image} on Executor: the grid", "",
+def markdown(results, image, machine="Executor"):
+    lines = [f"# {image} on {machine}: the grid", "",
              "| # | Item | Kind | Result | Front | Unimplemented calls |",
              "|---|------|------|--------|-------|---------------------|"]
     for r in sorted(results, key=lambda r: r["n"]):
@@ -196,12 +211,16 @@ def main():
     ap.add_argument("--out")
     ap.add_argument("--wait", type=int, default=10, help="seconds an item runs before it is looked at")
     ap.add_argument("--port", type=int, default=19600)
+    ap.add_argument("--rom", help="run on a ROM machine instead (g3: the G3 ROM)")
     ap.add_argument("--binary", default=os.environ.get("MACPHOENIX_EMULATOR",
                                                        os.path.join(REPO, "build", "mac-phoenix")))
     opts = ap.parse_args()
     image = opts.image if os.path.isabs(opts.image) else os.path.join(IMAGES, opts.image)
     name = os.path.basename(image).removesuffix(".img")
-    out = opts.out or os.path.join(STORAGE, "executor-grid", name)
+    rom = opts.rom
+    if rom == "g3":
+        rom = os.path.join(STORAGE, "roms", "g3.rom")
+    out = opts.out or os.path.join(STORAGE, "executor-grid", name + ("-g3" if rom else ""))
     os.makedirs(out, exist_ok=True)
 
     items = inventory(image)
@@ -213,6 +232,9 @@ def main():
     # System Folder to its own place and restores it every run.
     copies = []
     for w in range(opts.jobs):
+        if rom:   # made fresh for each item (run_item)
+            copies.append(os.path.join(STORAGE, "tmp", f"grid-{name}-rom-{w}.img"))
+            continue
         copy = os.path.join(IMAGES, f"grid-{name}-{w}.img")
         if not os.path.exists(copy) or os.path.getmtime(copy) < os.path.getmtime(image):
             shutil.copyfile(image, copy)
@@ -224,7 +246,8 @@ def main():
         def job(n, item):
             w = free.pop()
             try:
-                return run_item(n, item, copies[w], opts.port + w, out, opts.wait, opts.binary)
+                return run_item(n, item, copies[w], opts.port + w, out, opts.wait, opts.binary,
+                                rom, image)
             finally:
                 free.append(w)
         futures = [pool.submit(job, n, item) for n, item in enumerate(items, 1)]
@@ -236,7 +259,10 @@ def main():
             with open(os.path.join(out, "grid.json"), "w") as fj:
                 json.dump(sorted(results, key=lambda r: r["n"]), fj, indent=1)
     with open(os.path.join(out, "grid.md"), "w") as f:
-        f.write(markdown(results, name))
+        f.write(markdown(results, name, "the ROM machine" if rom else "Executor"))
+    for c in copies if rom else []:
+        if os.path.exists(c):
+            os.remove(c)
     print(os.path.join(out, "grid.md"))
 
 

@@ -42,6 +42,7 @@ static const struct
     { "drag", ERROR_BIT_MASK(ERROR_DRAG_LOG) },
     { "mactcp", ERROR_BIT_MASK(ERROR_MACTCP_LOG) },
     { "ot", ERROR_BIT_MASK(ERROR_OT_LOG) },
+    { "pcsample", ERROR_BIT_MASK(ERROR_PC_SAMPLE) },
     { "textcheck", ERROR_BIT_MASK(ERROR_TEXT_EDIT_SLAM) },
     { "trace", ERROR_BIT_MASK(ERROR_TRACE_INFO) },
     { "trapfailure", ERROR_BIT_MASK(ERROR_TRAP_FAILURE) },

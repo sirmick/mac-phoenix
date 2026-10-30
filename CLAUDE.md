@@ -344,7 +344,9 @@ Logging:
   --executor-debug OPTS      Executor's own debug options: memcheck (heap checks at every
                              Memory Manager call), allocs (log allocations >= 4K with the
                              calling code), drag (the Drag Manager's dispatch and Finder's
-                             hook calls), fslog, trace, trapfailure, unimplemented, ...
+                             hook calls), pcsample (the PowerPC PC every 5 ms; every 5 s the
+                             top addresses as fragment+offset and nearest export), fslog,
+                             trace, trapfailure, unimplemented, ...
   --watch ADDR[:LEN]         Report every write to guest memory ADDR (Executor, Linux x86-64):
                              old/new value, 68k PC/registers/code, last traps, host stack
 ```

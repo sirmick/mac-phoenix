@@ -4,9 +4,14 @@
 #include <PowerCore.h>
 #include <prefs/prefs.h>
 #include <rsys/process.h>
+#include <rsys/cfm.h>
+#include <error/error.h>
+#include <time/time.h>
 
 #include <algorithm>
 #include <cstring>
+#include <unordered_map>
+#include <vector>
 
 namespace Executor
 {
@@ -29,6 +34,40 @@ void Executor::execute68K(uint32_t addr)
    knows whether r1 is a stack in use. */
 static thread_local int ppcDepth = 0;
 
+/* MacPhoenix: --executor-debug pcsample. The PowerPC PC at the end of a
+   time slice, at most every 5 ms; every 5 s the most frequent addresses
+   and where they are (fragment, section, nearest export). For code that
+   spins without calling the Toolbox, so the trap log can't say where. */
+namespace
+{
+std::unordered_map<uint32_t, uint32_t> pc_samples;
+unsigned long pc_sample_last, pc_report_last;
+uint32_t pc_sample_total;
+
+void pc_sample(PowerCore &, uint32_t pc)
+{
+    unsigned long now = Executor::msecs_elapsed();
+    if(now - pc_sample_last < 5)
+        return;
+    pc_sample_last = now;
+    pc_samples[pc]++;
+    pc_sample_total++;
+    if(!pc_report_last)
+        pc_report_last = now;
+    if(now - pc_report_last < 5000)
+        return;
+    pc_report_last = now;
+    std::vector<std::pair<uint32_t, uint32_t>> top(pc_samples.begin(), pc_samples.end());
+    std::sort(top.begin(), top.end(), [](auto &a, auto &b) { return a.second > b.second; });
+    fprintf(stderr, "[pcsample] %u samples in 5 s\n", (unsigned)pc_sample_total);
+    for(size_t i = 0; i < top.size() && i < 12; i++)
+        fprintf(stderr, "[pcsample] %5.1f%% $%08X %s\n", 100.0 * top[i].second / pc_sample_total,
+                (unsigned)top[i].first, Executor::ROMlib_cfm_describe(top[i].first).c_str());
+    pc_samples.clear();
+    pc_sample_total = 0;
+}
+}
+
 void Executor::executePPC(uint32_t addr)
 {
     currentCPUMode = CPUMode::ppc;
@@ -37,6 +76,8 @@ void Executor::executePPC(uint32_t addr)
        fragment's init routine before the application's main. */
     if(!cpu.syscall)
         cpu.syscall = &builtinlibs::handleSC;
+    if(!cpu.sliceHook && ERROR_ENABLED_P(ERROR_PC_SAMPLE))
+        cpu.sliceHook = &pc_sample;
     cpu.CIA = addr;
     cpu.lr = cpu.exitAddress();
     struct Depth
