@@ -105,6 +105,12 @@ void Executor::canonicalize_bogo_map(const BitMap *bogo_map, PixMap **canonical_
             canonical->vRes = canonical->hRes = 72 << 16;
 
             gd_pmap = GD_PMAP(LM(TheGDevice));
+            /* MacPhoenix: the screen whatever the current device (a
+               GWorld's while copying the screen into it: qd.screenBits;
+               tests/guest/difftest appr, modes.screenbits) */
+            if(canonical->baseAddr != PIXMAP_BASEADDR(gd_pmap) && LM(MainDevice)
+               && canonical->baseAddr == PIXMAP_BASEADDR(GD_PMAP(LM(MainDevice))))
+                gd_pmap = GD_PMAP(LM(MainDevice));
             if(canonical->baseAddr == PIXMAP_BASEADDR(gd_pmap))
             {
                 pixmap_set_pixel_fields(canonical, PIXMAP_PIXEL_SIZE(gd_pmap));

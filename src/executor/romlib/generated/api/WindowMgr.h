@@ -588,6 +588,7 @@ Boolean C_IsWindowCollapsed(WindowRef window);LIBRARY_FUNCTION(AppearanceLib, Is
 Boolean C_IsWindowCollapsable(WindowRef window);LIBRARY_FUNCTION(AppearanceLib, IsWindowCollapsable, C_IsWindowCollapsable);
 
 
+OSStatus C_CollapseWindow(WindowRef window, Boolean collapse);LIBRARY_FUNCTION(AppearanceLib, CollapseWindow, C_CollapseWindow);
 
 
 

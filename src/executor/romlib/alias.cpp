@@ -72,6 +72,16 @@ find_sub_dir(OSType folderType)
         {
             "sdev"_4, "Control Strip Modules",
         },
+        /* MacPhoenix: 8.x's (8.6 makes them at startup) */
+        {
+            "asup"_4, "Application Support",
+        },
+        {
+            "cmnu"_4, "Contextual Menu Items",
+        },
+        {
+            "flnt"_4, "Cleanup At Startup",
+        },
     };
     int i;
     const char *retval;

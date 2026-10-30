@@ -32,6 +32,7 @@
 #include <algorithm>
 #include <cstring>
 #include <vector>
+#include <set>
 
 using namespace Executor;
 
@@ -162,10 +163,32 @@ Handle app_icon_suite()
         }
     }
 
+    /* The application's own bundle and icons are read into its heap (its
+       resource map's zone) just for the copy: those this reads go again
+       afterwards, not those the application has loaded itself. The
+       Process Manager keeps its copy outside the partition; a small
+       application can't spare them (Register StuffIt Expander's 100K ran
+       out in its first alert). */
+    static const ResType bundle_types[] = { "BNDL"_4, "FREF"_4, "ICN#"_4, "icl4"_4,
+                                            "icl8"_4, "ics#"_4, "ics4"_4, "ics8"_4 };
+    auto loaded = [&]() {
+        std::set<uint32_t> in_memory;
+        SetResLoad(false);
+        for(ResType t : bundle_types)
+            for(INTEGER i = Count1Resources(t); i >= 1; i--)
+                if(Handle h = Get1IndResource(t, i); h && *h)
+                    in_memory.insert(US_TO_SYN68K(h));
+        SetResLoad(true);
+        return in_memory;
+    };
+
     INTEGER saved = CurResFile();
     for(INTEGER file : { refnum, (INTEGER)LM(SysMap) })
     {
         UseResFile(file);
+        std::set<uint32_t> before;
+        if(file == refnum)
+            before = loaded();
         INTEGER icon_id;
         Handle found;
         if(bundle_icon(creator, type, &icon_id)
@@ -173,8 +196,13 @@ Handle app_icon_suite()
         {
             suite = copy_suite(found);
             DisposeIconSuite(found, false);
-            break;
         }
+        if(file == refnum)
+            for(uint32_t h : loaded())
+                if(!before.count(h))
+                    ReleaseResource((Handle)SYN68K_TO_US(h));
+        if(suite)
+            break;
     }
     UseResFile(saved);
     return suite;

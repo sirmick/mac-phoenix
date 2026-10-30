@@ -1,0 +1,1188 @@
+# probe da80026696c7abe9a8135280da8f580cd2cf0b9579c8d51924601edd24b57851
+== gestalt
+gestalt.appr: 0 00000001
+gestalt.apvr: 0 00000110
+== client
+client.IsAppearanceClient.before: 0
+client.Register: 0
+client.Register.again: -30561
+client.IsAppearanceClient.after: 1
+== color
+color.IsThemeInColor.32: color 1 mono 1
+color.IsThemeInColor.8: color 1 mono 1
+color.IsThemeInColor.1: color 0 mono 0
+color.brush.-3.32: err -30560 rgb a5a5 a5a5 a5a5
+color.brush.-2.32: err 0 rgb ffff ffff ffff
+color.brush.-1.32: err 0 rgb 0000 0000 0000
+color.brush.0.32: err -30560 rgb a5a5 a5a5 a5a5
+color.brush.1.32: err 0 rgb dddd dddd dddd
+color.brush.2.32: err 0 rgb dddd dddd dddd
+color.brush.3.32: err 0 rgb dddd dddd dddd
+color.brush.4.32: err 0 rgb dddd dddd dddd
+color.brush.5.32: err 0 rgb dddd dddd dddd
+color.brush.6.32: err 0 rgb dddd dddd dddd
+color.brush.7.32: err 0 rgb ffff ffff ffff
+color.brush.8.32: err 0 rgb ffff ffff ffff
+color.brush.9.32: err 0 rgb dddd dddd dddd
+color.brush.10.32: err 0 rgb eeee eeee eeee
+color.brush.11.32: err 0 rgb ffff ffff ffff
+color.brush.12.32: err 0 rgb ffff ffff ffff
+color.brush.13.32: err 0 rgb 0000 0000 0000
+color.brush.14.32: err 0 rgb 6666 6666 cccc
+color.brush.15.32: err 0 rgb ffff ffff ffff
+color.brush.16.32: err 0 rgb ffff ffff ffff
+color.brush.17.32: err 0 rgb 0000 0000 0000
+color.brush.18.32: err 0 rgb 5555 5555 5555
+color.brush.19.32: err 0 rgb 6666 6666 cccc
+color.brush.20.32: err 0 rgb 0000 0000 0000
+color.brush.21.32: err 0 rgb ffff ffff ffff
+color.brush.22.32: err 0 rgb 8888 8888 8888
+color.brush.23.32: err 0 rgb ffff 0000 0000
+color.brush.24.32: err 0 rgb 0000 0000 0000
+color.brush.25.32: err 0 rgb eeee eeee eeee
+color.brush.26.32: err 0 rgb ffff ffff ffff
+color.brush.27.32: err 0 rgb 0000 0000 0000
+color.brush.28.32: err 0 rgb 8888 8888 8888
+color.brush.29.32: err 0 rgb dddd dddd dddd
+color.brush.30.32: err 0 rgb dddd dddd dddd
+color.brush.31.32: err 0 rgb 6666 6666 6666
+color.brush.32.32: err 0 rgb 7777 7777 7777
+color.brush.33.32: err 0 rgb dddd dddd dddd
+color.brush.34.32: err 0 rgb 9999 9999 9999
+color.brush.35.32: err 0 rgb ffff ffff ffff
+color.brush.36.32: err 0 rgb dddd dddd dddd
+color.brush.37.32: err 0 rgb dddd dddd dddd
+color.brush.38.32: err 0 rgb dddd dddd dddd
+color.brush.39.32: err 0 rgb dddd dddd dddd
+color.brush.40.32: err 0 rgb 4444 4444 4444
+color.brush.41.32: err 0 rgb 8888 8888 8888
+color.brush.42.32: err 0 rgb 5555 5555 5555
+color.brush.43.32: err 0 rgb 7777 7777 7777
+color.brush.44.32: err 0 rgb ffff ffff ffff
+color.brush.45.32: err 0 rgb 8888 8888 8888
+color.brush.46.32: err 0 rgb dddd dddd dddd
+color.brush.47.32: err 0 rgb bbbb bbbb bbbb
+color.brush.48.32: err -30560 rgb a5a5 a5a5 a5a5
+color.brush.49.32: err -30560 rgb a5a5 a5a5 a5a5
+color.brush.50.32: err -30560 rgb a5a5 a5a5 a5a5
+color.brush.51.32: err -30560 rgb a5a5 a5a5 a5a5
+color.brush.52.32: err -30560 rgb a5a5 a5a5 a5a5
+color.brush.53.32: err -30560 rgb a5a5 a5a5 a5a5
+color.brush.54.32: err -30560 rgb a5a5 a5a5 a5a5
+color.brush.55.32: err -30560 rgb a5a5 a5a5 a5a5
+color.brush.56.32: err -30560 rgb a5a5 a5a5 a5a5
+color.brush.57.32: err -30560 rgb a5a5 a5a5 a5a5
+color.brush.58.32: err -30560 rgb a5a5 a5a5 a5a5
+color.brush.59.32: err -30560 rgb a5a5 a5a5 a5a5
+color.brush.60.32: err -30560 rgb a5a5 a5a5 a5a5
+color.brush.-3.8: err -30560 rgb a5a5 a5a5 a5a5
+color.brush.-2.8: err 0 rgb ffff ffff ffff
+color.brush.-1.8: err 0 rgb 0000 0000 0000
+color.brush.0.8: err -30560 rgb a5a5 a5a5 a5a5
+color.brush.1.8: err 0 rgb dddd dddd dddd
+color.brush.2.8: err 0 rgb dddd dddd dddd
+color.brush.3.8: err 0 rgb dddd dddd dddd
+color.brush.4.8: err 0 rgb dddd dddd dddd
+color.brush.5.8: err 0 rgb dddd dddd dddd
+color.brush.6.8: err 0 rgb dddd dddd dddd
+color.brush.7.8: err 0 rgb ffff ffff ffff
+color.brush.8.8: err 0 rgb ffff ffff ffff
+color.brush.9.8: err 0 rgb dddd dddd dddd
+color.brush.10.8: err 0 rgb eeee eeee eeee
+color.brush.11.8: err 0 rgb ffff ffff ffff
+color.brush.12.8: err 0 rgb ffff ffff ffff
+color.brush.13.8: err 0 rgb 0000 0000 0000
+color.brush.14.8: err 0 rgb 6666 6666 cccc
+color.brush.15.8: err 0 rgb ffff ffff ffff
+color.brush.16.8: err 0 rgb ffff ffff ffff
+color.brush.17.8: err 0 rgb 0000 0000 0000
+color.brush.18.8: err 0 rgb 5555 5555 5555
+color.brush.19.8: err 0 rgb 6666 6666 cccc
+color.brush.20.8: err 0 rgb 0000 0000 0000
+color.brush.21.8: err 0 rgb ffff ffff ffff
+color.brush.22.8: err 0 rgb 8888 8888 8888
+color.brush.23.8: err 0 rgb ffff 0000 0000
+color.brush.24.8: err 0 rgb 0000 0000 0000
+color.brush.25.8: err 0 rgb eeee eeee eeee
+color.brush.26.8: err 0 rgb ffff ffff ffff
+color.brush.27.8: err 0 rgb 0000 0000 0000
+color.brush.28.8: err 0 rgb 8888 8888 8888
+color.brush.29.8: err 0 rgb dddd dddd dddd
+color.brush.30.8: err 0 rgb dddd dddd dddd
+color.brush.31.8: err 0 rgb 6666 6666 6666
+color.brush.32.8: err 0 rgb 7777 7777 7777
+color.brush.33.8: err 0 rgb dddd dddd dddd
+color.brush.34.8: err 0 rgb 9999 9999 9999
+color.brush.35.8: err 0 rgb ffff ffff ffff
+color.brush.36.8: err 0 rgb dddd dddd dddd
+color.brush.37.8: err 0 rgb dddd dddd dddd
+color.brush.38.8: err 0 rgb dddd dddd dddd
+color.brush.39.8: err 0 rgb dddd dddd dddd
+color.brush.40.8: err 0 rgb 4444 4444 4444
+color.brush.41.8: err 0 rgb 8888 8888 8888
+color.brush.42.8: err 0 rgb 5555 5555 5555
+color.brush.43.8: err 0 rgb 7777 7777 7777
+color.brush.44.8: err 0 rgb ffff ffff ffff
+color.brush.45.8: err 0 rgb 8888 8888 8888
+color.brush.46.8: err 0 rgb dddd dddd dddd
+color.brush.47.8: err 0 rgb bbbb bbbb bbbb
+color.brush.48.8: err -30560 rgb a5a5 a5a5 a5a5
+color.brush.49.8: err -30560 rgb a5a5 a5a5 a5a5
+color.brush.50.8: err -30560 rgb a5a5 a5a5 a5a5
+color.brush.51.8: err -30560 rgb a5a5 a5a5 a5a5
+color.brush.52.8: err -30560 rgb a5a5 a5a5 a5a5
+color.brush.53.8: err -30560 rgb a5a5 a5a5 a5a5
+color.brush.54.8: err -30560 rgb a5a5 a5a5 a5a5
+color.brush.55.8: err -30560 rgb a5a5 a5a5 a5a5
+color.brush.56.8: err -30560 rgb a5a5 a5a5 a5a5
+color.brush.57.8: err -30560 rgb a5a5 a5a5 a5a5
+color.brush.58.8: err -30560 rgb a5a5 a5a5 a5a5
+color.brush.59.8: err -30560 rgb a5a5 a5a5 a5a5
+color.brush.60.8: err -30560 rgb a5a5 a5a5 a5a5
+color.brush.-3.1: err -30560 rgb a5a5 a5a5 a5a5
+color.brush.-2.1: err 0 rgb ffff ffff ffff
+color.brush.-1.1: err 0 rgb 0000 0000 0000
+color.brush.0.1: err -30560 rgb a5a5 a5a5 a5a5
+color.brush.1.1: err 0 rgb ffff ffff ffff
+color.brush.2.1: err 0 rgb ffff ffff ffff
+color.brush.3.1: err 0 rgb ffff ffff ffff
+color.brush.4.1: err 0 rgb ffff ffff ffff
+color.brush.5.1: err 0 rgb ffff ffff ffff
+color.brush.6.1: err 0 rgb ffff ffff ffff
+color.brush.7.1: err 0 rgb ffff ffff ffff
+color.brush.8.1: err 0 rgb ffff ffff ffff
+color.brush.9.1: err 0 rgb ffff ffff ffff
+color.brush.10.1: err 0 rgb ffff ffff ffff
+color.brush.11.1: err 0 rgb ffff ffff ffff
+color.brush.12.1: err 0 rgb ffff ffff ffff
+color.brush.13.1: err 0 rgb 0000 0000 0000
+color.brush.14.1: err 0 rgb 0000 0000 0000
+color.brush.15.1: err 0 rgb ffff ffff ffff
+color.brush.16.1: err 0 rgb ffff ffff ffff
+color.brush.17.1: err 0 rgb 0000 0000 0000
+color.brush.18.1: err 0 rgb 0000 0000 0000
+color.brush.19.1: err 0 rgb 0000 0000 0000
+color.brush.20.1: err 0 rgb 0000 0000 0000
+color.brush.21.1: err 0 rgb ffff ffff ffff
+color.brush.22.1: err 0 rgb 0000 0000 0000
+color.brush.23.1: err 0 rgb 0000 0000 0000
+color.brush.24.1: err 0 rgb 0000 0000 0000
+color.brush.25.1: err 0 rgb ffff ffff ffff
+color.brush.26.1: err 0 rgb ffff ffff ffff
+color.brush.27.1: err 0 rgb 0000 0000 0000
+color.brush.28.1: err 0 rgb 0000 0000 0000
+color.brush.29.1: err 0 rgb ffff ffff ffff
+color.brush.30.1: err 0 rgb ffff ffff ffff
+color.brush.31.1: err 0 rgb 0000 0000 0000
+color.brush.32.1: err 0 rgb ffff ffff ffff
+color.brush.33.1: err 0 rgb ffff ffff ffff
+color.brush.34.1: err 0 rgb ffff ffff ffff
+color.brush.35.1: err 0 rgb ffff ffff ffff
+color.brush.36.1: err 0 rgb ffff ffff ffff
+color.brush.37.1: err 0 rgb ffff ffff ffff
+color.brush.38.1: err 0 rgb ffff ffff ffff
+color.brush.39.1: err 0 rgb ffff ffff ffff
+color.brush.40.1: err 0 rgb ffff ffff ffff
+color.brush.41.1: err 0 rgb ffff ffff ffff
+color.brush.42.1: err 0 rgb ffff ffff ffff
+color.brush.43.1: err 0 rgb ffff ffff ffff
+color.brush.44.1: err 0 rgb ffff ffff ffff
+color.brush.45.1: err 0 rgb 0000 0000 0000
+color.brush.46.1: err 0 rgb ffff ffff ffff
+color.brush.47.1: err 0 rgb 0000 0000 0000
+color.brush.48.1: err -30560 rgb a5a5 a5a5 a5a5
+color.brush.49.1: err -30560 rgb a5a5 a5a5 a5a5
+color.brush.50.1: err -30560 rgb a5a5 a5a5 a5a5
+color.brush.51.1: err -30560 rgb a5a5 a5a5 a5a5
+color.brush.52.1: err -30560 rgb a5a5 a5a5 a5a5
+color.brush.53.1: err -30560 rgb a5a5 a5a5 a5a5
+color.brush.54.1: err -30560 rgb a5a5 a5a5 a5a5
+color.brush.55.1: err -30560 rgb a5a5 a5a5 a5a5
+color.brush.56.1: err -30560 rgb a5a5 a5a5 a5a5
+color.brush.57.1: err -30560 rgb a5a5 a5a5 a5a5
+color.brush.58.1: err -30560 rgb a5a5 a5a5 a5a5
+color.brush.59.1: err -30560 rgb a5a5 a5a5 a5a5
+color.brush.60.1: err -30560 rgb a5a5 a5a5 a5a5
+color.text.-3.32: err -30563 rgb a5a5 a5a5 a5a5
+color.text.-2.32: err 0 rgb ffff ffff ffff
+color.text.-1.32: err 0 rgb 0000 0000 0000
+color.text.0.32: err -30563 rgb a5a5 a5a5 a5a5
+color.text.1.32: err 0 rgb 0000 0000 0000
+color.text.2.32: err 0 rgb 7777 7777 7777
+color.text.3.32: err 0 rgb 0000 0000 0000
+color.text.4.32: err 0 rgb 7777 7777 7777
+color.text.5.32: err 0 rgb 0000 0000 0000
+color.text.6.32: err 0 rgb 7777 7777 7777
+color.text.7.32: err 0 rgb 0000 0000 0000
+color.text.8.32: err 0 rgb 7777 7777 7777
+color.text.9.32: err 0 rgb 0000 0000 0000
+color.text.10.32: err 0 rgb 7777 7777 7777
+color.text.11.32: err 0 rgb ffff ffff ffff
+color.text.12.32: err 0 rgb 0000 0000 0000
+color.text.13.32: err 0 rgb 7777 7777 7777
+color.text.14.32: err 0 rgb ffff ffff ffff
+color.text.15.32: err 0 rgb 0000 0000 0000
+color.text.16.32: err 0 rgb 7777 7777 7777
+color.text.17.32: err 0 rgb ffff ffff ffff
+color.text.18.32: err 0 rgb 0000 0000 0000
+color.text.19.32: err 0 rgb 7777 7777 7777
+color.text.20.32: err 0 rgb ffff ffff ffff
+color.text.21.32: err 0 rgb 0000 0000 0000
+color.text.22.32: err 0 rgb 0000 0000 0000
+color.text.23.32: err 0 rgb 0000 0000 0000
+color.text.24.32: err 0 rgb 7777 7777 7777
+color.text.25.32: err 0 rgb 0000 0000 0000
+color.text.26.32: err 0 rgb 7777 7777 7777
+color.text.27.32: err 0 rgb 0000 0000 0000
+color.text.28.32: err 0 rgb 7777 7777 7777
+color.text.29.32: err 0 rgb 0000 0000 0000
+color.text.30.32: err 0 rgb 7777 7777 7777
+color.text.31.32: err 0 rgb 0000 0000 0000
+color.text.32.32: err 0 rgb ffff ffff ffff
+color.text.33.32: err 0 rgb 7777 7777 7777
+color.text.34.32: err 0 rgb 0000 0000 0000
+color.text.35.32: err 0 rgb ffff ffff ffff
+color.text.36.32: err 0 rgb 7777 7777 7777
+color.text.37.32: err 0 rgb 0000 0000 0000
+color.text.38.32: err 0 rgb 7777 7777 7777
+color.text.39.32: err 0 rgb 0000 0000 0000
+color.text.40.32: err 0 rgb 0000 0000 0000
+color.text.41.32: err 0 rgb ffff ffff ffff
+color.text.42.32: err 0 rgb 7777 7777 7777
+color.text.43.32: err 0 rgb 7777 7777 7777
+color.text.44.32: err 0 rgb ffff ffff ffff
+color.text.45.32: err -30563 rgb a5a5 a5a5 a5a5
+color.text.46.32: err -30563 rgb a5a5 a5a5 a5a5
+color.text.47.32: err -30563 rgb a5a5 a5a5 a5a5
+color.text.48.32: err -30563 rgb a5a5 a5a5 a5a5
+color.text.49.32: err -30563 rgb a5a5 a5a5 a5a5
+color.text.50.32: err -30563 rgb a5a5 a5a5 a5a5
+color.text.51.32: err -30563 rgb a5a5 a5a5 a5a5
+color.text.52.32: err -30563 rgb a5a5 a5a5 a5a5
+color.text.53.32: err -30563 rgb a5a5 a5a5 a5a5
+color.text.54.32: err -30563 rgb a5a5 a5a5 a5a5
+color.text.55.32: err -30563 rgb a5a5 a5a5 a5a5
+color.text.-3.8: err -30563 rgb a5a5 a5a5 a5a5
+color.text.-2.8: err 0 rgb ffff ffff ffff
+color.text.-1.8: err 0 rgb 0000 0000 0000
+color.text.0.8: err -30563 rgb a5a5 a5a5 a5a5
+color.text.1.8: err 0 rgb 0000 0000 0000
+color.text.2.8: err 0 rgb 7777 7777 7777
+color.text.3.8: err 0 rgb 0000 0000 0000
+color.text.4.8: err 0 rgb 7777 7777 7777
+color.text.5.8: err 0 rgb 0000 0000 0000
+color.text.6.8: err 0 rgb 7777 7777 7777
+color.text.7.8: err 0 rgb 0000 0000 0000
+color.text.8.8: err 0 rgb 7777 7777 7777
+color.text.9.8: err 0 rgb 0000 0000 0000
+color.text.10.8: err 0 rgb 7777 7777 7777
+color.text.11.8: err 0 rgb ffff ffff ffff
+color.text.12.8: err 0 rgb 0000 0000 0000
+color.text.13.8: err 0 rgb 7777 7777 7777
+color.text.14.8: err 0 rgb ffff ffff ffff
+color.text.15.8: err 0 rgb 0000 0000 0000
+color.text.16.8: err 0 rgb 7777 7777 7777
+color.text.17.8: err 0 rgb ffff ffff ffff
+color.text.18.8: err 0 rgb 0000 0000 0000
+color.text.19.8: err 0 rgb 7777 7777 7777
+color.text.20.8: err 0 rgb ffff ffff ffff
+color.text.21.8: err 0 rgb 0000 0000 0000
+color.text.22.8: err 0 rgb 0000 0000 0000
+color.text.23.8: err 0 rgb 0000 0000 0000
+color.text.24.8: err 0 rgb 7777 7777 7777
+color.text.25.8: err 0 rgb 0000 0000 0000
+color.text.26.8: err 0 rgb 7777 7777 7777
+color.text.27.8: err 0 rgb 0000 0000 0000
+color.text.28.8: err 0 rgb 7777 7777 7777
+color.text.29.8: err 0 rgb 0000 0000 0000
+color.text.30.8: err 0 rgb 7777 7777 7777
+color.text.31.8: err 0 rgb 0000 0000 0000
+color.text.32.8: err 0 rgb ffff ffff ffff
+color.text.33.8: err 0 rgb 7777 7777 7777
+color.text.34.8: err 0 rgb 0000 0000 0000
+color.text.35.8: err 0 rgb ffff ffff ffff
+color.text.36.8: err 0 rgb 7777 7777 7777
+color.text.37.8: err 0 rgb 0000 0000 0000
+color.text.38.8: err 0 rgb 7777 7777 7777
+color.text.39.8: err 0 rgb 0000 0000 0000
+color.text.40.8: err 0 rgb 0000 0000 0000
+color.text.41.8: err 0 rgb ffff ffff ffff
+color.text.42.8: err 0 rgb 7777 7777 7777
+color.text.43.8: err 0 rgb 7777 7777 7777
+color.text.44.8: err 0 rgb ffff ffff ffff
+color.text.45.8: err -30563 rgb a5a5 a5a5 a5a5
+color.text.46.8: err -30563 rgb a5a5 a5a5 a5a5
+color.text.47.8: err -30563 rgb a5a5 a5a5 a5a5
+color.text.48.8: err -30563 rgb a5a5 a5a5 a5a5
+color.text.49.8: err -30563 rgb a5a5 a5a5 a5a5
+color.text.50.8: err -30563 rgb a5a5 a5a5 a5a5
+color.text.51.8: err -30563 rgb a5a5 a5a5 a5a5
+color.text.52.8: err -30563 rgb a5a5 a5a5 a5a5
+color.text.53.8: err -30563 rgb a5a5 a5a5 a5a5
+color.text.54.8: err -30563 rgb a5a5 a5a5 a5a5
+color.text.55.8: err -30563 rgb a5a5 a5a5 a5a5
+color.text.-3.1: err -30563 rgb a5a5 a5a5 a5a5
+color.text.-2.1: err 0 rgb ffff ffff ffff
+color.text.-1.1: err 0 rgb 0000 0000 0000
+color.text.0.1: err -30563 rgb a5a5 a5a5 a5a5
+color.text.1.1: err 0 rgb 0000 0000 0000
+color.text.2.1: err 0 rgb 0000 0000 0000
+color.text.3.1: err 0 rgb 0000 0000 0000
+color.text.4.1: err 0 rgb 0000 0000 0000
+color.text.5.1: err 0 rgb 0000 0000 0000
+color.text.6.1: err 0 rgb 0000 0000 0000
+color.text.7.1: err 0 rgb 0000 0000 0000
+color.text.8.1: err 0 rgb 0000 0000 0000
+color.text.9.1: err 0 rgb 0000 0000 0000
+color.text.10.1: err 0 rgb 0000 0000 0000
+color.text.11.1: err 0 rgb ffff ffff ffff
+color.text.12.1: err 0 rgb 0000 0000 0000
+color.text.13.1: err 0 rgb 0000 0000 0000
+color.text.14.1: err 0 rgb ffff ffff ffff
+color.text.15.1: err 0 rgb 0000 0000 0000
+color.text.16.1: err 0 rgb 0000 0000 0000
+color.text.17.1: err 0 rgb ffff ffff ffff
+color.text.18.1: err 0 rgb 0000 0000 0000
+color.text.19.1: err 0 rgb 0000 0000 0000
+color.text.20.1: err 0 rgb ffff ffff ffff
+color.text.21.1: err 0 rgb 0000 0000 0000
+color.text.22.1: err 0 rgb 0000 0000 0000
+color.text.23.1: err 0 rgb 0000 0000 0000
+color.text.24.1: err 0 rgb 0000 0000 0000
+color.text.25.1: err 0 rgb 0000 0000 0000
+color.text.26.1: err 0 rgb 0000 0000 0000
+color.text.27.1: err 0 rgb 0000 0000 0000
+color.text.28.1: err 0 rgb 0000 0000 0000
+color.text.29.1: err 0 rgb 0000 0000 0000
+color.text.30.1: err 0 rgb 0000 0000 0000
+color.text.31.1: err 0 rgb 0000 0000 0000
+color.text.32.1: err 0 rgb ffff ffff ffff
+color.text.33.1: err 0 rgb 0000 0000 0000
+color.text.34.1: err 0 rgb 0000 0000 0000
+color.text.35.1: err 0 rgb ffff ffff ffff
+color.text.36.1: err 0 rgb 0000 0000 0000
+color.text.37.1: err 0 rgb 0000 0000 0000
+color.text.38.1: err 0 rgb 0000 0000 0000
+color.text.39.1: err 0 rgb 0000 0000 0000
+color.text.40.1: err 0 rgb 0000 0000 0000
+color.text.41.1: err 0 rgb ffff ffff ffff
+color.text.42.1: err 0 rgb 0000 0000 0000
+color.text.43.1: err 0 rgb 0000 0000 0000
+color.text.44.1: err 0 rgb ffff ffff ffff
+color.text.45.1: err -30563 rgb a5a5 a5a5 a5a5
+color.text.46.1: err -30563 rgb a5a5 a5a5 a5a5
+color.text.47.1: err -30563 rgb a5a5 a5a5 a5a5
+color.text.48.1: err -30563 rgb a5a5 a5a5 a5a5
+color.text.49.1: err -30563 rgb a5a5 a5a5 a5a5
+color.text.50.1: err -30563 rgb a5a5 a5a5 a5a5
+color.text.51.1: err -30563 rgb a5a5 a5a5 a5a5
+color.text.52.1: err -30563 rgb a5a5 a5a5 a5a5
+color.text.53.1: err -30563 rgb a5a5 a5a5 a5a5
+color.text.54.1: err -30563 rgb a5a5 a5a5 a5a5
+color.text.55.1: err -30563 rgb a5a5 a5a5 a5a5
+color.accent.err: 0
+color.accent.size: 72
+color.accent.data: 00000000000000070000eeeeeeeeeeee0001ccccccccffff000299999999ffff000366666666cccc000433333333999900050000000088880006000000005555... (72 bytes, crc 0886a4c0)
+== font
+font.0: err 0 size 12 style 0
+font.0.name: "Charcoal" (8)
+font.1: err 0 size 10 style 0
+font.1.name: "Geneva" (6)
+font.2: err 0 size 10 style 1
+font.2.name: "Geneva" (6)
+font.3: err 0 size 10 style 0
+font.3.name: "Geneva" (6)
+font.4: err -50 size -23131 style -91
+font.5: err -50 size -23131 style -91
+font.6: err -50 size -23131 style -91
+font.7: err -50 size -23131 style -91
+font.8: err -50 size -23131 style -91
+font.100: err -50 size -23131 style -91
+font.101: err -50 size -23131 style -91
+font.102: err -50 size -23131 style -91
+font.103: err -50 size -23131 style -91
+font.104: err -50 size -23131 style -91
+font.105: err -50 size -23131 style -91
+font.106: err -50 size -23131 style -91
+font.107: err -50 size -23131 style -91
+font.108: err -50 size -23131 style -91
+font.200: err -50 size -23131 style -91
+font.bind.GetSmallSystemFont: found
+font.GetSmallSystemFont.err: 0
+font.GetSmallSystemFont.name: "Geneva" (6)
+== metric
+metric.MenuBarHeight: 0 20
+metric.MenuSeparatorHeight: 0 6
+metric.MenuItemExtra.0: err 0 h 0 w 4
+metric.MenuItemExtra.1: err 0 h 0 w 28
+metric.MenuItemExtra.2: err 0 h 0 w 4
+metric.MenuItemExtra.3: err 0 h 0 w 4
+metric.MenuTitleExtra: 0 13
+metric.MenuTitleExtra.squished: 0 9
+metric.ThumbStyle: 0 0
+metric.ArrowStyle: 0 0
+metric.CheckBoxStyle: 0 1
+metric.bind.GetThemeMetric: missing
+== winregion
+winregion.0.0: err 0
+winregion.0.0.rgn: bbox 78,94,100,406 size 10 crc aa1af9aa
+winregion.0.1: err -30593
+winregion.0.1.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+winregion.0.2: err 0
+winregion.0.2.rgn: bbox 83,99,94,110 size 10 crc 762353ba
+winregion.0.3: err 0
+winregion.0.3.rgn: bbox 83,374,94,385 size 10 crc 3cd15645
+winregion.0.5: err 0
+winregion.0.5.rgn: bbox 78,94,307,407 size 100 crc a85b7f3e
+winregion.0.6: err 0
+winregion.0.6.rgn: bbox 285,385,307,407 size 10 crc 123c5ef5
+winregion.0.7: err 0
+winregion.0.7.rgn: bbox 83,390,94,401 size 10 crc 6952167c
+winregion.0.8: err -30593
+winregion.0.8.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+winregion.0.32: err 0
+winregion.0.32.rgn: bbox 78,94,307,407 size 44 crc a66018b2
+winregion.0.33: err 0
+winregion.0.33.rgn: bbox 100,100,300,400 size 36 crc b8311bde
+winregion.1.0: err -30593
+winregion.1.0.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+winregion.1.1: err -30593
+winregion.1.1.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+winregion.1.2: err -30593
+winregion.1.2.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+winregion.1.3: err -30593
+winregion.1.3.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+winregion.1.5: err -30593
+winregion.1.5.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+winregion.1.6: err -30593
+winregion.1.6.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+winregion.1.7: err -30593
+winregion.1.7.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+winregion.1.8: err -30593
+winregion.1.8.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+winregion.1.32: err 0
+winregion.1.32.rgn: bbox 97,97,304,404 size 44 crc 319564c2
+winregion.1.33: err 0
+winregion.1.33.rgn: bbox 100,100,300,400 size 10 crc 05102177
+winregion.2.0: err 0
+winregion.2.0.rgn: bbox 76,97,98,403 size 10 crc 6a134fe9
+winregion.2.1: err -30593
+winregion.2.1.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+winregion.2.2: err 0
+winregion.2.2.rgn: bbox 81,102,92,113 size 10 crc a7d01478
+winregion.2.3: err 0
+winregion.2.3.rgn: bbox 81,371,92,382 size 10 crc 4d28f3ff
+winregion.2.5: err 0
+winregion.2.5.rgn: bbox 76,97,304,404 size 92 crc 6468c745
+winregion.2.6: err 0
+winregion.2.6.rgn: bbox 286,386,300,400 size 116 crc d003cd6f
+winregion.2.7: err 0
+winregion.2.7.rgn: bbox 81,387,92,398 size 10 crc b8a151be
+winregion.2.8: err -30593
+winregion.2.8.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+winregion.2.32: err 0
+winregion.2.32.rgn: bbox 76,97,304,404 size 44 crc 7c8d0204
+winregion.2.33: err 0
+winregion.2.33.rgn: bbox 100,100,300,400 size 124 crc 552cd011
+winregion.3.0: err -30593
+winregion.3.0.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+winregion.3.1: err -30593
+winregion.3.1.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+winregion.3.2: err -30593
+winregion.3.2.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+winregion.3.3: err -30593
+winregion.3.3.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+winregion.3.5: err -30593
+winregion.3.5.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+winregion.3.6: err -30593
+winregion.3.6.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+winregion.3.7: err -30593
+winregion.3.7.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+winregion.3.8: err -30593
+winregion.3.8.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+winregion.3.32: err 0
+winregion.3.32.rgn: bbox 97,97,304,404 size 44 crc 319564c2
+winregion.3.33: err 0
+winregion.3.33.rgn: bbox 100,100,300,400 size 10 crc 05102177
+winregion.4.0: err 0
+winregion.4.0.rgn: bbox 76,97,98,403 size 10 crc 6a134fe9
+winregion.4.1: err -30593
+winregion.4.1.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+winregion.4.2: err 0
+winregion.4.2.rgn: bbox 81,102,92,113 size 10 crc a7d01478
+winregion.4.3: err 0
+winregion.4.3.rgn: bbox 81,371,92,382 size 10 crc 4d28f3ff
+winregion.4.5: err 0
+winregion.4.5.rgn: bbox 76,97,304,404 size 92 crc 6468c745
+winregion.4.6: err 0
+winregion.4.6.rgn: bbox 286,386,300,400 size 116 crc d003cd6f
+winregion.4.7: err 0
+winregion.4.7.rgn: bbox 81,387,92,398 size 10 crc b8a151be
+winregion.4.8: err -30593
+winregion.4.8.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+winregion.4.32: err 0
+winregion.4.32.rgn: bbox 76,97,304,404 size 44 crc 7c8d0204
+winregion.4.33: err 0
+winregion.4.33.rgn: bbox 100,100,300,400 size 124 crc 552cd011
+winregion.5.0: err -30593
+winregion.5.0.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+winregion.5.1: err -30593
+winregion.5.1.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+winregion.5.2: err -30593
+winregion.5.2.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+winregion.5.3: err -30593
+winregion.5.3.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+winregion.5.5: err -30593
+winregion.5.5.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+winregion.5.6: err -30593
+winregion.5.6.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+winregion.5.7: err -30593
+winregion.5.7.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+winregion.5.8: err -30593
+winregion.5.8.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+winregion.5.32: err 0
+winregion.5.32.rgn: bbox 99,99,301,401 size 10 crc 04529948
+winregion.5.33: err 0
+winregion.5.33.rgn: bbox 100,100,300,400 size 10 crc 05102177
+winregion.6.0: err -30593
+winregion.6.0.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+winregion.6.1: err -30593
+winregion.6.1.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+winregion.6.2: err -30593
+winregion.6.2.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+winregion.6.3: err -30593
+winregion.6.3.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+winregion.6.5: err -30593
+winregion.6.5.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+winregion.6.6: err -30593
+winregion.6.6.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+winregion.6.7: err -30593
+winregion.6.7.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+winregion.6.8: err -30593
+winregion.6.8.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+winregion.6.32: err 0
+winregion.6.32.rgn: bbox 99,99,303,403 size 44 crc 0961402e
+winregion.6.33: err 0
+winregion.6.33.rgn: bbox 100,100,300,400 size 10 crc 05102177
+winregion.7.0: err 0
+winregion.7.0.rgn: bbox 90,96,95,123 size 52 crc c61be520
+winregion.7.1: err 0
+winregion.7.1.rgn: bbox 92,102,93,117 size 10 crc c0a8db96
+winregion.7.2: err -30593
+winregion.7.2.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+winregion.7.3: err -30593
+winregion.7.3.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+winregion.7.5: err 0
+winregion.7.5.rgn: bbox 90,96,301,404 size 72 crc 76112aea
+winregion.7.6: err 0
+winregion.7.6.rgn: bbox 100,100,116,400 size 36 crc c0677ba5
+winregion.7.7: err -30593
+winregion.7.7.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+winregion.7.8: err -30593
+winregion.7.8.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+winregion.7.32: err 0
+winregion.7.32.rgn: bbox 90,96,301,405 size 68 crc 0d47a2ea
+winregion.7.33: err 0
+winregion.7.33.rgn: bbox 100,100,300,400 size 48 crc b45c9e8d
+winregion.8.0: err 0
+winregion.8.0.rgn: bbox 86,96,100,404 size 10 crc 0e344cc8
+winregion.8.1: err -30593
+winregion.8.1.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+winregion.8.2: err 0
+winregion.8.2.rgn: bbox 89,99,97,107 size 10 crc 8d0e5ad6
+winregion.8.3: err 0
+winregion.8.3.rgn: bbox 89,382,97,390 size 10 crc 198275c4
+winregion.8.5: err 0
+winregion.8.5.rgn: bbox 86,96,305,405 size 100 crc 6f815a3e
+winregion.8.6: err 0
+winregion.8.6.rgn: bbox 290,390,305,405 size 10 crc 13bde21c
+winregion.8.7: err 0
+winregion.8.7.rgn: bbox 89,393,97,401 size 10 crc 60457c4e
+winregion.8.8: err -30593
+winregion.8.8.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+winregion.8.32: err 0
+winregion.8.32.rgn: bbox 86,96,305,405 size 44 crc c68a06f6
+winregion.8.33: err 0
+winregion.8.33.rgn: bbox 100,100,300,400 size 36 crc 6e605086
+winregion.9.0: err 0
+winregion.9.0.rgn: bbox 96,86,304,100 size 10 crc 9c49b3d2
+winregion.9.1: err -30593
+winregion.9.1.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+winregion.9.2: err 0
+winregion.9.2.rgn: bbox 99,89,107,97 size 10 crc 87ce6c25
+winregion.9.3: err 0
+winregion.9.3.rgn: bbox 282,89,290,97 size 10 crc f5632869
+winregion.9.5: err 0
+winregion.9.5.rgn: bbox 96,86,305,405 size 112 crc d794daae
+winregion.9.6: err 0
+winregion.9.6.rgn: bbox 290,390,305,405 size 10 crc 13bde21c
+winregion.9.7: err 0
+winregion.9.7.rgn: bbox 293,89,301,97 size 10 crc a014baef
+winregion.9.8: err -30593
+winregion.9.8.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+winregion.9.32: err 0
+winregion.9.32.rgn: bbox 96,86,305,405 size 44 crc 5f7ab212
+winregion.9.33: err 0
+winregion.9.33.rgn: bbox 100,100,300,400 size 36 crc 6e605086
+winregion.10.0: err -50
+winregion.10.0.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+winregion.10.1: err -50
+winregion.10.1.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+winregion.10.2: err -50
+winregion.10.2.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+winregion.10.3: err -50
+winregion.10.3.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+winregion.10.5: err -50
+winregion.10.5.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+winregion.10.6: err -50
+winregion.10.6.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+winregion.10.7: err -50
+winregion.10.7.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+winregion.10.8: err -50
+winregion.10.8.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+winregion.10.32: err -50
+winregion.10.32.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+winregion.10.33: err -50
+winregion.10.33.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+== button
+button.0.region: err 0
+button.0.region.rgn: bbox 20,20,40,100 size 76 crc c3109ad5
+button.0.content: err 0 22,22,38,98
+button.0.background: err 0 20,20,40,100
+button.0.default: err 0
+button.0.default.rgn: bbox 17,17,43,103 size 76 crc 9be3b274
+button.1.region: err 0
+button.1.region.rgn: bbox 20,20,40,100 size 10 crc 0cd4d96e
+button.1.content: err 0 20,38,40,100
+button.1.background: err 0 20,20,40,100
+button.1.default: err 0
+button.1.default.rgn: bbox 20,20,40,100 size 10 crc 0cd4d96e
+button.2.region: err 0
+button.2.region.rgn: bbox 20,20,40,100 size 10 crc 0cd4d96e
+button.2.content: err 0 20,38,40,100
+button.2.background: err 0 20,20,40,100
+button.2.default: err 0
+button.2.default.rgn: bbox 20,20,40,100 size 10 crc 0cd4d96e
+button.3.region: err 0
+button.3.region.rgn: bbox 20,20,40,100 size 10 crc 0cd4d96e
+button.3.content: err 0 23,23,37,97
+button.3.background: err 0 20,20,40,100
+button.3.default: err 0
+button.3.default.rgn: bbox 20,20,40,100 size 10 crc 0cd4d96e
+button.4.region: err 0
+button.4.region.rgn: bbox 20,20,40,42 size 76 crc f4016148
+button.4.content: err 0 22,26,38,72
+button.4.background: err 0 20,20,40,100
+button.4.default: err 0
+button.4.default.rgn: bbox 20,20,40,42 size 76 crc f4016148
+button.5.region: err 0
+button.5.region.rgn: bbox 20,20,40,100 size 76 crc c3109ad5
+button.5.content: err 0 22,26,38,72
+button.5.background: err 0 20,20,40,100
+button.5.default: err 0
+button.5.default.rgn: bbox 20,20,40,100 size 76 crc c3109ad5
+button.6.region: err 0
+button.6.region.rgn: bbox 20,20,40,100 size 10 crc 0cd4d96e
+button.6.content: err 0 20,38,40,100
+button.6.background: err 0 20,20,40,100
+button.6.default: err 0
+button.6.default.rgn: bbox 20,20,40,100 size 10 crc 0cd4d96e
+button.7.region: err 0
+button.7.region.rgn: bbox 20,20,40,100 size 10 crc 0cd4d96e
+button.7.content: err 0 20,35,40,100
+button.7.background: err 0 20,20,43,33
+button.7.default: err 0
+button.7.default.rgn: bbox 20,20,40,100 size 10 crc 0cd4d96e
+button.8.region: err 0
+button.8.region.rgn: bbox 20,20,40,100 size 10 crc 0cd4d96e
+button.8.content: err 0 22,22,38,98
+button.8.background: err 0 20,20,40,100
+button.8.default: err 0
+button.8.default.rgn: bbox 20,20,40,100 size 10 crc 0cd4d96e
+button.9.region: err 0
+button.9.region.rgn: bbox 20,20,40,100 size 10 crc 0cd4d96e
+button.9.content: err 0 24,24,36,96
+button.9.background: err 0 20,20,40,100
+button.9.default: err 0
+button.9.default.rgn: bbox 20,20,40,100 size 10 crc 0cd4d96e
+button.10.region: err -50
+button.10.region.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+button.10.content: err -50 -23131,-23131,-23131,-23131
+button.10.background: err -50 -23131,-23131,-23131,-23131
+button.10.default: err -50
+button.10.default.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+button.11.region: err -50
+button.11.region.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+button.11.content: err -50 -23131,-23131,-23131,-23131
+button.11.background: err -50 -23131,-23131,-23131,-23131
+button.11.default: err -50
+button.11.default.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+button.12.region: err -50
+button.12.region.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+button.12.content: err -50 -23131,-23131,-23131,-23131
+button.12.background: err -50 -23131,-23131,-23131,-23131
+button.12.default: err -50
+button.12.default.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+button.13.region: err -50
+button.13.region.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+button.13.content: err -50 -23131,-23131,-23131,-23131
+button.13.background: err -50 -23131,-23131,-23131,-23131
+button.13.default: err -50
+button.13.default.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+button.14.region: err -50
+button.14.region.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+button.14.content: err -50 -23131,-23131,-23131,-23131
+button.14.background: err -50 -23131,-23131,-23131,-23131
+button.14.default: err -50
+button.14.default.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+button.15.region: err -50
+button.15.region.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+button.15.content: err -50 -23131,-23131,-23131,-23131
+button.15.background: err -50 -23131,-23131,-23131,-23131
+button.15.default: err -50
+button.15.default.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+button.16.region: err -50
+button.16.region.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+button.16.content: err -50 -23131,-23131,-23131,-23131
+button.16.background: err -50 -23131,-23131,-23131,-23131
+button.16.default: err -50
+button.16.default.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+button.17.region: err -50
+button.17.region.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+button.17.content: err -50 -23131,-23131,-23131,-23131
+button.17.background: err -50 -23131,-23131,-23131,-23131
+button.17.default: err -50
+button.17.default.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+button.18.region: err -50
+button.18.region.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+button.18.content: err -50 -23131,-23131,-23131,-23131
+button.18.background: err -50 -23131,-23131,-23131,-23131
+button.18.default: err -50
+button.18.default.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+button.19.region: err -50
+button.19.region.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+button.19.content: err -50 -23131,-23131,-23131,-23131
+button.19.background: err -50 -23131,-23131,-23131,-23131
+button.19.default: err -50
+button.19.default.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+button.20.region: err -50
+button.20.region.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+button.20.content: err -50 -23131,-23131,-23131,-23131
+button.20.background: err -50 -23131,-23131,-23131,-23131
+button.20.default: err -50
+button.20.default.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+== track
+track.0.bounds: err 0 0,0,200,16
+track.0.thumb: err 0
+track.0.thumb.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+track.0.drag: err 0 0,0,200,16
+track.0.live40: err 0 22
+track.1.bounds: err 0 0,0,16,200
+track.1.thumb: err 0
+track.1.thumb.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+track.1.drag: err 0 0,0,16,200
+track.1.live40: err 0 22
+track.2.bounds: err 0 0,2,16,148
+track.2.thumb: err 0
+track.2.thumb.rgn: bbox 0,36,16,51 size 112 crc 97f500c0
+track.2.drag: err 0 0,5,16,145
+track.2.live40: err 0 32
+== misc
+misc.tab.0: err 0
+misc.tab.0.rgn: bbox 10,10,31,30 size 124 crc 7c3d06cb
+misc.tab.1: err 0
+misc.tab.1.rgn: bbox 10,10,31,30 size 124 crc 7c3d06cb
+misc.tab.2: err 0
+misc.tab.2.rgn: bbox 10,10,31,30 size 124 crc 7c3d06cb
+misc.tab.3: err 0
+misc.tab.3.rgn: bbox 10,10,34,30 size 124 crc 40019a25
+misc.growbox.0: err 0 100,100,116,116
+misc.growbox.small.0: err 0 100,84,116,100
+misc.growbox.1: err 0 100,100,111,111
+misc.growbox.small.1: err 0 100,89,111,100
+misc.growbox.2: err 0 100,100,111,111
+misc.growbox.small.2: err 0 100,89,111,100
+misc.growbox.3: err 0 100,100,111,111
+misc.growbox.small.3: err 0 100,89,111,100
+misc.menubg.0: err 0
+misc.menubg.0.rgn: bbox 49,19,252,202 size 44 crc fca9682d
+misc.menubg.1: err 0
+misc.menubg.1.rgn: bbox 49,19,252,202 size 44 crc fca9682d
+misc.menubg.2: err 0
+misc.menubg.2.rgn: bbox 49,19,252,202 size 44 crc fca9682d
+misc.menubg.3: err -50
+misc.menubg.3.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+== theme
+theme.GetTheme.err: 0
+theme.GetTheme.count: 17
+theme.item.coll.0.size: 1
+theme.item.coll.0.data: 00
+theme.item.hcol.0.size: 6
+theme.item.hcol.0.data: ccccccccffff
+theme.item.lgsf.0.size: 9
+theme.item.lgsf.0.data: 0843686172636f616c
+theme.item.patn.0.size: 15
+theme.item.patn.0.data: 0e4d6163204f532044656661756c74
+theme.item.patt.0.size: 16822
+theme.item.patt.0.data: 00010000001c0000004e00000000000000000000aa55aa55aa55aa55021449908080000000000080008000040000000000000048000000480000000000080001... (16822 bytes, crc 9f1fec20)
+theme.item.sbar.0.size: 2
+theme.item.sbar.0.data: 0000
+theme.item.sbth.0.size: 2
+theme.item.sbth.0.data: 0000
+theme.item.smoo.0.size: 1
+theme.item.smoo.0.data: 00
+theme.item.smos.0.size: 2
+theme.item.smos.0.data: 000c
+theme.item.smsf.0.size: 7
+theme.item.smsf.0.data: 0647656e657661
+theme.item.smsk.0.size: 4
+theme.item.smsk.0.data: 0000000f
+theme.item.snds.0.size: 1
+theme.item.snds.0.data: 00
+theme.item.sndt.0.size: 16
+theme.item.sndt.0.data: 0f506c6174696e756d20536f756e6473
+theme.item.thme.0.size: 15
+theme.item.thme.0.data: 0e4170706c6520706c6174696e756d
+theme.item.varn.0.size: 9
+theme.item.varn.0.data: 084c6176656e646572
+theme.item.vfnt.0.size: 7
+theme.item.vfnt.0.data: 0647656e657661
+theme.item.vfsz.0.size: 2
+theme.item.vfsz.0.data: 000a
+== private
+private.bind.GetThemeVariantList: found
+private.GetThemeVariantList.missing: err -43 out a5a5a5a5
+private.bind.AreThemeSoundsEnabled: found
+private.AreThemeSoundsEnabled: 0
+private.bind.IsThemeCreditDialogAvailable: found
+private.IsThemeCreditDialogAvailable: 1
+private.bind.GetThemeSoundMask: found
+private.GetThemeSoundMask: err 0 0000000f a5a5a5a5
+private.bind.GetDesktopPixPat: found
+private.GetDesktopPixPat.err: 0
+private.GetDesktopPixPat.name: "Mac OS Default" (14)
+private.GetDesktopPixPat.type: 1
+private.bind.GetDesktopPattern: found
+private.GetDesktopPattern.err: 0
+private.GetDesktopPattern.name: "Mac OS Default" (14)
+private.GetDesktopPattern.size: 16822
+private.GetDesktopPattern.data: 00010000001c0000004e00000000000000000000aa55aa55aa55aa55021449908080000000000080008000040000000000000048000000480000000000080001... (16822 bytes, crc 9f1fec20)
+private.bind.GetDesktopPictureForDevice: found
+private.GetDesktopPictureForDevice.err: -5605
+private.bind.GetWindowDoubleClickAction: found
+private.GetWindowDoubleClickAction: 0
+== draw32
+draw32.button.0.active: 120x60 depth 32 crc 997ec2df
+draw32.button.1.active: 120x60 depth 32 crc 37f09700
+draw32.button.2.active: 120x60 depth 32 crc 86fd3961
+draw32.button.3.active: 120x60 depth 32 crc b33ce8ca
+draw32.button.4.active: 120x60 depth 32 crc 1f653344
+draw32.button.5.active: 120x60 depth 32 crc 26d73afe
+draw32.button.6.active: 120x60 depth 32 crc a485446f
+draw32.button.7.active: 120x60 depth 32 crc 07b91dee
+draw32.button.8.active: 120x60 depth 32 crc 676f4c92
+draw32.button.9.active: 120x60 depth 32 crc 4a338301
+draw32.button.10.active: 120x60 depth 32 crc fd7490cc
+draw32.button.11.active: 120x60 depth 32 crc fd7490cc
+draw32.button.12.active: 120x60 depth 32 crc fd7490cc
+draw32.button.13.active: 120x60 depth 32 crc fd7490cc
+draw32.button.14.active: 120x60 depth 32 crc fd7490cc
+draw32.button.15.active: 120x60 depth 32 crc fd7490cc
+draw32.button.16.active: 120x60 depth 32 crc fd7490cc
+draw32.button.17.active: 120x60 depth 32 crc fd7490cc
+draw32.button.18.active: 120x60 depth 32 crc fd7490cc
+draw32.button.19.active: 120x60 depth 32 crc fd7490cc
+draw32.button.20.active: 120x60 depth 32 crc fd7490cc
+draw32.primarygroup.active: 120x60 depth 32 crc b211cbc4
+draw32.secondarygroup.active: 120x60 depth 32 crc 3d876350
+draw32.edittext.active: 120x60 depth 32 crc 207e2e01
+draw32.listbox.active: 120x60 depth 32 crc 207e2e01
+draw32.well.active: 120x60 depth 32 crc 207e2e01
+draw32.placard.active: 120x60 depth 32 crc 339df131
+draw32.tabpane.active: 120x60 depth 32 crc 4569b482
+draw32.windowheader.active: 120x60 depth 32 crc 339df131
+draw32.tickmark.active: 120x60 depth 32 crc 8a188611
+draw32.separator.active: 120x60 depth 32 crc 9be6a671
+draw32.tab.0.active: 120x60 depth 32 crc bcb6eb4b
+draw32.tab.1.active: 120x60 depth 32 crc 537fb999
+draw32.tab.2.active: 120x60 depth 32 crc 9a9b09b1
+draw32.tab.3.active: 120x60 depth 32 crc 3a0ede4a
+draw32.popuparrow.0.active: 120x60 depth 32 crc 955bef62
+draw32.popuparrow.1.active: 120x60 depth 32 crc a7767fe4
+draw32.growbox.active: 120x60 depth 32 crc 904cff41
+draw32.button.0.inactive: 120x60 depth 32 crc fdea96a7
+draw32.button.1.inactive: 120x60 depth 32 crc 065062ee
+draw32.button.2.inactive: 120x60 depth 32 crc e39611a9
+draw32.button.3.inactive: 120x60 depth 32 crc a7c04f82
+draw32.button.4.inactive: 120x60 depth 32 crc d933fda8
+draw32.button.5.inactive: 120x60 depth 32 crc 6b816c1b
+draw32.button.6.inactive: 120x60 depth 32 crc 58b37d3f
+draw32.button.7.inactive: 120x60 depth 32 crc ae35935c
+draw32.button.8.inactive: 120x60 depth 32 crc a7c04f82
+draw32.button.9.inactive: 120x60 depth 32 crc a7c04f82
+draw32.button.10.inactive: 120x60 depth 32 crc fd7490cc
+draw32.button.11.inactive: 120x60 depth 32 crc fd7490cc
+draw32.button.12.inactive: 120x60 depth 32 crc fd7490cc
+draw32.button.13.inactive: 120x60 depth 32 crc fd7490cc
+draw32.button.14.inactive: 120x60 depth 32 crc fd7490cc
+draw32.button.15.inactive: 120x60 depth 32 crc fd7490cc
+draw32.button.16.inactive: 120x60 depth 32 crc fd7490cc
+draw32.button.17.inactive: 120x60 depth 32 crc fd7490cc
+draw32.button.18.inactive: 120x60 depth 32 crc fd7490cc
+draw32.button.19.inactive: 120x60 depth 32 crc fd7490cc
+draw32.button.20.inactive: 120x60 depth 32 crc fd7490cc
+draw32.primarygroup.inactive: 120x60 depth 32 crc a88f4014
+draw32.secondarygroup.inactive: 120x60 depth 32 crc 865f2817
+draw32.edittext.inactive: 120x60 depth 32 crc ea58fb4d
+draw32.listbox.inactive: 120x60 depth 32 crc ea58fb4d
+draw32.well.inactive: 120x60 depth 32 crc ea58fb4d
+draw32.placard.inactive: 120x60 depth 32 crc 070fc37f
+draw32.tabpane.inactive: 120x60 depth 32 crc 070fc37f
+draw32.windowheader.inactive: 120x60 depth 32 crc 070fc37f
+draw32.tickmark.inactive: 120x60 depth 32 crc 471906c4
+draw32.separator.inactive: 120x60 depth 32 crc a11818b0
+draw32.tab.0.inactive: 120x60 depth 32 crc bcb6eb4b
+draw32.tab.1.inactive: 120x60 depth 32 crc 537fb999
+draw32.tab.2.inactive: 120x60 depth 32 crc 9a9b09b1
+draw32.tab.3.inactive: 120x60 depth 32 crc 3a0ede4a
+draw32.popuparrow.0.inactive: 120x60 depth 32 crc a4d67e5c
+draw32.popuparrow.1.inactive: 120x60 depth 32 crc 56179b26
+draw32.growbox.inactive: 120x60 depth 32 crc 736bd006
+draw32.button.0.pressed: 120x60 depth 32 crc 411ce8ec
+draw32.button.1.pressed: 120x60 depth 32 crc 4c07af38
+draw32.button.2.pressed: 120x60 depth 32 crc c9dab44a
+draw32.button.3.pressed: 120x60 depth 32 crc 639e0a71
+draw32.button.4.pressed: 120x60 depth 32 crc 1dbe1bb4
+draw32.button.5.pressed: 120x60 depth 32 crc 4d83ee92
+draw32.button.6.pressed: 120x60 depth 32 crc 04edfa9b
+draw32.button.7.pressed: 120x60 depth 32 crc 9366f99e
+draw32.button.8.pressed: 120x60 depth 32 crc f7659890
+draw32.button.9.pressed: 120x60 depth 32 crc e176dc2c
+draw32.button.10.pressed: 120x60 depth 32 crc fd7490cc
+draw32.button.11.pressed: 120x60 depth 32 crc fd7490cc
+draw32.button.12.pressed: 120x60 depth 32 crc fd7490cc
+draw32.button.13.pressed: 120x60 depth 32 crc fd7490cc
+draw32.button.14.pressed: 120x60 depth 32 crc fd7490cc
+draw32.button.15.pressed: 120x60 depth 32 crc fd7490cc
+draw32.button.16.pressed: 120x60 depth 32 crc fd7490cc
+draw32.button.17.pressed: 120x60 depth 32 crc fd7490cc
+draw32.button.18.pressed: 120x60 depth 32 crc fd7490cc
+draw32.button.19.pressed: 120x60 depth 32 crc fd7490cc
+draw32.button.20.pressed: 120x60 depth 32 crc fd7490cc
+draw32.primarygroup.pressed: 120x60 depth 32 crc fd7490cc
+draw32.secondarygroup.pressed: 120x60 depth 32 crc fd7490cc
+draw32.edittext.pressed: 120x60 depth 32 crc fd7490cc
+draw32.listbox.pressed: 120x60 depth 32 crc fd7490cc
+draw32.well.pressed: 120x60 depth 32 crc fd7490cc
+draw32.placard.pressed: 120x60 depth 32 crc 25c7443b
+draw32.tabpane.pressed: 120x60 depth 32 crc fd7490cc
+draw32.windowheader.pressed: 120x60 depth 32 crc fd7490cc
+draw32.tickmark.pressed: 120x60 depth 32 crc 471906c4
+draw32.separator.pressed: 120x60 depth 32 crc fd7490cc
+draw32.tab.0.pressed: 120x60 depth 32 crc bcb6eb4b
+draw32.tab.1.pressed: 120x60 depth 32 crc 537fb999
+draw32.tab.2.pressed: 120x60 depth 32 crc 9a9b09b1
+draw32.tab.3.pressed: 120x60 depth 32 crc 3a0ede4a
+draw32.popuparrow.0.pressed: 120x60 depth 32 crc fd7490cc
+draw32.popuparrow.1.pressed: 120x60 depth 32 crc fd7490cc
+draw32.growbox.pressed: 120x60 depth 32 crc 736bd006
+draw32.focusrect: 120x60 depth 32 crc 7d0f0a87
+draw32.menubar: 120x60 depth 32 crc 62716c70
+draw32.menubg.0: 120x60 depth 32 crc ccfea453
+draw32.menubg.1: 120x60 depth 32 crc ccfea453
+draw32.menubg.2: 120x60 depth 32 crc ccfea453
+draw32.menubg.3: 120x60 depth 32 crc fd7490cc
+draw32.menuseparator: 120x60 depth 32 crc a91b4691
+draw32.windowframe.0: 120x60 depth 32 crc fd7490cc
+draw32.windowframe.1: 120x60 depth 32 crc fd7490cc
+draw32.windowframe.2: 120x60 depth 32 crc fd7490cc
+draw32.windowframe.3: 120x60 depth 32 crc fd7490cc
+draw32.windowframe.4: 120x60 depth 32 crc fd7490cc
+draw32.windowframe.5: 120x60 depth 32 crc fd7490cc
+draw32.windowframe.6: 120x60 depth 32 crc fd7490cc
+draw32.windowframe.7: 120x60 depth 32 crc fd7490cc
+draw32.windowframe.8: 120x60 depth 32 crc fd7490cc
+draw32.windowframe.9: 120x60 depth 32 crc fd7490cc
+draw32.windowframe.10: 120x60 depth 32 crc fd7490cc
+== draw8
+draw8.button.0.active: 120x60 depth 8 crc 8431810d
+draw8.button.1.active: 120x60 depth 8 crc a0e67959
+draw8.button.2.active: 120x60 depth 8 crc 55355803
+draw8.button.3.active: 120x60 depth 8 crc ac913373
+draw8.button.4.active: 120x60 depth 8 crc b13085fb
+draw8.button.5.active: 120x60 depth 8 crc 3c94bd17
+draw8.button.6.active: 120x60 depth 8 crc 092fa20c
+draw8.button.7.active: 120x60 depth 8 crc 02a44163
+draw8.button.8.active: 120x60 depth 8 crc 827e31b6
+draw8.button.9.active: 120x60 depth 8 crc fec89d8f
+draw8.button.10.active: 120x60 depth 8 crc 06154412
+draw8.button.11.active: 120x60 depth 8 crc 06154412
+draw8.button.12.active: 120x60 depth 8 crc 06154412
+draw8.button.13.active: 120x60 depth 8 crc 06154412
+draw8.button.14.active: 120x60 depth 8 crc 06154412
+draw8.button.15.active: 120x60 depth 8 crc 06154412
+draw8.button.16.active: 120x60 depth 8 crc 06154412
+draw8.button.17.active: 120x60 depth 8 crc 06154412
+draw8.button.18.active: 120x60 depth 8 crc 06154412
+draw8.button.19.active: 120x60 depth 8 crc 06154412
+draw8.button.20.active: 120x60 depth 8 crc 06154412
+draw8.primarygroup.active: 120x60 depth 8 crc 5e96b580
+draw8.secondarygroup.active: 120x60 depth 8 crc 9ce87604
+draw8.edittext.active: 120x60 depth 8 crc 15ca20c1
+draw8.listbox.active: 120x60 depth 8 crc 15ca20c1
+draw8.well.active: 120x60 depth 8 crc 15ca20c1
+draw8.placard.active: 120x60 depth 8 crc c909ddb2
+draw8.tabpane.active: 120x60 depth 8 crc 6a06802a
+draw8.windowheader.active: 120x60 depth 8 crc c909ddb2
+draw8.tickmark.active: 120x60 depth 8 crc b6f540fa
+draw8.separator.active: 120x60 depth 8 crc dd0d8980
+draw8.tab.0.active: 120x60 depth 8 crc 851490d8
+draw8.tab.1.active: 120x60 depth 8 crc 04f7b349
+draw8.tab.2.active: 120x60 depth 8 crc 369743f7
+draw8.tab.3.active: 120x60 depth 8 crc b3a85449
+draw8.popuparrow.0.active: 120x60 depth 8 crc 4a500fe7
+draw8.popuparrow.1.active: 120x60 depth 8 crc 46f8e9b3
+draw8.growbox.active: 120x60 depth 8 crc f433225d
+draw8.button.0.inactive: 120x60 depth 8 crc 0a25bd30
+draw8.button.1.inactive: 120x60 depth 8 crc a7a2014d
+draw8.button.2.inactive: 120x60 depth 8 crc c4960b1c
+draw8.button.3.inactive: 120x60 depth 8 crc 8af8d670
+draw8.button.4.inactive: 120x60 depth 8 crc 23d35c48
+draw8.button.5.inactive: 120x60 depth 8 crc fa581a21
+draw8.button.6.inactive: 120x60 depth 8 crc 4351eed1
+draw8.button.7.inactive: 120x60 depth 8 crc 52a5db29
+draw8.button.8.inactive: 120x60 depth 8 crc 8af8d670
+draw8.button.9.inactive: 120x60 depth 8 crc 8af8d670
+draw8.button.10.inactive: 120x60 depth 8 crc 06154412
+draw8.button.11.inactive: 120x60 depth 8 crc 06154412
+draw8.button.12.inactive: 120x60 depth 8 crc 06154412
+draw8.button.13.inactive: 120x60 depth 8 crc 06154412
+draw8.button.14.inactive: 120x60 depth 8 crc 06154412
+draw8.button.15.inactive: 120x60 depth 8 crc 06154412
+draw8.button.16.inactive: 120x60 depth 8 crc 06154412
+draw8.button.17.inactive: 120x60 depth 8 crc 06154412
+draw8.button.18.inactive: 120x60 depth 8 crc 06154412
+draw8.button.19.inactive: 120x60 depth 8 crc 06154412
+draw8.button.20.inactive: 120x60 depth 8 crc 06154412
+draw8.primarygroup.inactive: 120x60 depth 8 crc 63223217
+draw8.secondarygroup.inactive: 120x60 depth 8 crc f0ba3629
+draw8.edittext.inactive: 120x60 depth 8 crc 328664fb
+draw8.listbox.inactive: 120x60 depth 8 crc 328664fb
+draw8.well.inactive: 120x60 depth 8 crc 328664fb
+draw8.placard.inactive: 120x60 depth 8 crc 8111c8aa
+draw8.tabpane.inactive: 120x60 depth 8 crc 8111c8aa
+draw8.windowheader.inactive: 120x60 depth 8 crc 8111c8aa
+draw8.tickmark.inactive: 120x60 depth 8 crc fb2ed3c1
+draw8.separator.inactive: 120x60 depth 8 crc baf2982c
+draw8.tab.0.inactive: 120x60 depth 8 crc 851490d8
+draw8.tab.1.inactive: 120x60 depth 8 crc 04f7b349
+draw8.tab.2.inactive: 120x60 depth 8 crc 369743f7
+draw8.tab.3.inactive: 120x60 depth 8 crc b3a85449
+draw8.popuparrow.0.inactive: 120x60 depth 8 crc c7e4a419
+draw8.popuparrow.1.inactive: 120x60 depth 8 crc 3f2e8857
+draw8.growbox.inactive: 120x60 depth 8 crc be265dbf
+draw8.button.0.pressed: 120x60 depth 8 crc 76b6ac3b
+draw8.button.1.pressed: 120x60 depth 8 crc a545adbf
+draw8.button.2.pressed: 120x60 depth 8 crc d9050cbc
+draw8.button.3.pressed: 120x60 depth 8 crc 96e04f4a
+draw8.button.4.pressed: 120x60 depth 8 crc 0d3458b0
+draw8.button.5.pressed: 120x60 depth 8 crc 8dd5b976
+draw8.button.6.pressed: 120x60 depth 8 crc e2c0aec3
+draw8.button.7.pressed: 120x60 depth 8 crc 544607a4
+draw8.button.8.pressed: 120x60 depth 8 crc d1c233e1
+draw8.button.9.pressed: 120x60 depth 8 crc 221bec2c
+draw8.button.10.pressed: 120x60 depth 8 crc 06154412
+draw8.button.11.pressed: 120x60 depth 8 crc 06154412
+draw8.button.12.pressed: 120x60 depth 8 crc 06154412
+draw8.button.13.pressed: 120x60 depth 8 crc 06154412
+draw8.button.14.pressed: 120x60 depth 8 crc 06154412
+draw8.button.15.pressed: 120x60 depth 8 crc 06154412
+draw8.button.16.pressed: 120x60 depth 8 crc 06154412
+draw8.button.17.pressed: 120x60 depth 8 crc 06154412
+draw8.button.18.pressed: 120x60 depth 8 crc 06154412
+draw8.button.19.pressed: 120x60 depth 8 crc 06154412
+draw8.button.20.pressed: 120x60 depth 8 crc 06154412
+draw8.primarygroup.pressed: 120x60 depth 8 crc 06154412
+draw8.secondarygroup.pressed: 120x60 depth 8 crc 06154412
+draw8.edittext.pressed: 120x60 depth 8 crc 06154412
+draw8.listbox.pressed: 120x60 depth 8 crc 06154412
+draw8.well.pressed: 120x60 depth 8 crc 06154412
+draw8.placard.pressed: 120x60 depth 8 crc 4cc814a8
+draw8.tabpane.pressed: 120x60 depth 8 crc 06154412
+draw8.windowheader.pressed: 120x60 depth 8 crc 06154412
+draw8.tickmark.pressed: 120x60 depth 8 crc fb2ed3c1
+draw8.separator.pressed: 120x60 depth 8 crc 06154412
+draw8.tab.0.pressed: 120x60 depth 8 crc 851490d8
+draw8.tab.1.pressed: 120x60 depth 8 crc 04f7b349
+draw8.tab.2.pressed: 120x60 depth 8 crc 369743f7
+draw8.tab.3.pressed: 120x60 depth 8 crc b3a85449
+draw8.popuparrow.0.pressed: 120x60 depth 8 crc 06154412
+draw8.popuparrow.1.pressed: 120x60 depth 8 crc 06154412
+draw8.growbox.pressed: 120x60 depth 8 crc be265dbf
+draw8.focusrect: 120x60 depth 8 crc e186b53f
+draw8.menubar: 120x60 depth 8 crc 8d59b533
+draw8.menubg.0: 120x60 depth 8 crc 575061af
+draw8.menubg.1: 120x60 depth 8 crc 575061af
+draw8.menubg.2: 120x60 depth 8 crc 575061af
+draw8.menubg.3: 120x60 depth 8 crc 06154412
+draw8.menuseparator: 120x60 depth 8 crc 4046675e
+draw8.windowframe.0: 120x60 depth 8 crc 06154412
+draw8.windowframe.1: 120x60 depth 8 crc 06154412
+draw8.windowframe.2: 120x60 depth 8 crc 06154412
+draw8.windowframe.3: 120x60 depth 8 crc 06154412
+draw8.windowframe.4: 120x60 depth 8 crc 06154412
+draw8.windowframe.5: 120x60 depth 8 crc 06154412
+draw8.windowframe.6: 120x60 depth 8 crc 06154412
+draw8.windowframe.7: 120x60 depth 8 crc 06154412
+draw8.windowframe.8: 120x60 depth 8 crc 06154412
+draw8.windowframe.9: 120x60 depth 8 crc 06154412
+draw8.windowframe.10: 120x60 depth 8 crc 06154412
+== modes
+modes.32.blend.white: 120x60 depth 32 crc a5005ac2
+modes.32.blend.red: 120x60 depth 32 crc a5005ac2
+modes.32.addPin.white: 120x60 depth 32 crc 17e0964f
+modes.32.addPin.red: 120x60 depth 32 crc 17e0964f
+modes.32.addOver.white: 120x60 depth 32 crc 8df78183
+modes.32.addOver.red: 120x60 depth 32 crc 565e369f
+modes.32.subPin.white: 120x60 depth 32 crc 17e0964f
+modes.32.subPin.red: 120x60 depth 32 crc 8f202efe
+modes.32.transparent.white: 120x60 depth 32 crc a5005ac2
+modes.32.transparent.red: 120x60 depth 32 crc bf2e9ee5
+modes.32.addMax.white: 120x60 depth 32 crc ea4397a7
+modes.32.addMax.red: 120x60 depth 32 crc a5005ac2
+modes.32.subOver.white: 120x60 depth 32 crc dc183701
+modes.32.subOver.red: 120x60 depth 32 crc 8f202efe
+modes.32.adMin.white: 120x60 depth 32 crc a5005ac2
+modes.32.adMin.red: 120x60 depth 32 crc bf2e9ee5
+modes.32.blend-op.white: 120x60 depth 32 crc bc952e7c
+modes.32.blend-op.red: 120x60 depth 32 crc 235b18d8
+modes.8.blend.white: 120x60 depth 8 crc 19ded632
+modes.8.blend.red: 120x60 depth 8 crc 19ded632
+modes.8.addPin.white: 120x60 depth 8 crc cd822ad1
+modes.8.addPin.red: 120x60 depth 8 crc cd822ad1
+modes.8.addOver.white: 120x60 depth 8 crc 19ded632
+modes.8.addOver.red: 120x60 depth 8 crc c06f58c0
+modes.8.subPin.white: 120x60 depth 8 crc cd822ad1
+modes.8.subPin.red: 120x60 depth 8 crc 820fcac4
+modes.8.transparent.white: 120x60 depth 8 crc 19ded632
+modes.8.transparent.red: 120x60 depth 8 crc d962c5f9
+modes.8.addMax.white: 120x60 depth 8 crc f3104c58
+modes.8.addMax.red: 120x60 depth 8 crc 19ded632
+modes.8.subOver.white: 120x60 depth 8 crc 19ded632
+modes.8.subOver.red: 120x60 depth 8 crc 820fcac4
+modes.8.adMin.white: 120x60 depth 8 crc 19ded632
+modes.8.adMin.red: 120x60 depth 8 crc d962c5f9
+modes.8.blend-op.white: 120x60 depth 8 crc fc2a4752
+modes.8.blend-op.red: 120x60 depth 8 crc f3a25b2d
+modes.win.basic: 120x60 depth 32 crc fd7490cc
+modes.win.color: 120x60 depth 32 crc a5005ac2
+modes.screenbits: 120x60 depth 32 crc a5005ac2
+== title
+title.32.geneva9: 120x60 depth 32 crc 981a00ed
+title.32.system: 120x60 depth 32 crc c170c602
+title.8.geneva9: 120x60 depth 8 crc a440980a
+title.8.system: 120x60 depth 8 crc df726a23
+title.screen: 120x60 depth 32 crc 981a00ed
+== unregister
+unregister.Unregister: 0
+unregister.Unregister.again: -30562

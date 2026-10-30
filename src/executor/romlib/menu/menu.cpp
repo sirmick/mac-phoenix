@@ -440,7 +440,16 @@ static void app(ConstStringPtr str, char icon, char marker, char style,
         state = HGetState((Handle)eip->menh);
         HUnlock((Handle)eip->menh);
         SetHandleSize((Handle)eip->menh, newsize);
+        OSErr err = MemError();
         HSetState((Handle)eip->menh, state);
+        if(err != noErr)
+        {
+            /* MacPhoenix: no room: no item, rather than writing past the
+               menu's block. */
+            LM(MemErr) = err;
+            eip->menitem--;
+            return;
+        }
     }
     char *menuop = (char *)(*eip->menh) + eip->menoff;
     const unsigned char *ip = str;
@@ -748,12 +757,53 @@ void Executor::C_InsertResMenu(MenuHandle mh, ResType restype, INTEGER after)
 void Executor::C_InsertMenuItem(MenuHandle mh, ConstStringPtr str,
                              INTEGER after) /* IMIV-55 */
 {
-    if(mh)
+    if(!mh)
+        return;
+    /* MacPhoenix: several items (';' or return between them) go in each
+       after `after`, so in reverse order, as IMIV-55 says and 8.6 does
+       (tests/guest/difftest menu). */
+    int start = 1;
+    bool several = false;
+    for(int i = 1; i <= str[0]; i++)
+        if(str[i] == ';' || str[i] == '\r')
+            several = true;
+    if(!several)
+    {
         xInsertResMenu(mh, str, (ResType)0, after);
+        return;
+    }
+    for(int i = 1; i <= str[0] + 1; i++)
+        if(i > str[0] || str[i] == ';' || str[i] == '\r')
+        {
+            Str255 one;
+            one[0] = i - start;
+            memcpy(one + 1, str + start, one[0]);
+            xInsertResMenu(mh, one, (ResType)0, after);
+            start = i + 1;
+        }
 }
 
 #define FIRSTHIER \
     ((muelem *)((char *)(*MENULIST) + (*MENULIST)->muoff) + 2)
+
+/* MenusLib's (8.5): after a theme or font change, every menu in the list
+   (regular and hierarchical) measures itself again. */
+void Executor::C_InvalidateAllMenuSizes()
+{
+    if(!LM(MenuList))
+        return;
+    muelem *mp, *mpend = (*MENULIST)->mulist + (*MENULIST)->muoff / sizeof(muelem);
+    for(mp = (*MENULIST)->mulist; mp != mpend; mp++)
+        dirtymenusize(mp->muhandle);
+    mpend = (*MENULIST)->mulist + HIEROFF / sizeof(muelem);
+    for(mp = FIRSTHIER; mp < mpend; mp++)
+        dirtymenusize(mp->muhandle);
+}
+
+/* Executor keeps no menu pixels. */
+void Executor::C_InvalidateAllCachedMenuPixels()
+{
+}
 
 void Executor::C_InsertMenu(MenuHandle mh, INTEGER before)
 {
@@ -918,6 +968,12 @@ void Executor::C_SetMenuBar(Handle ml)
     temph = ml;
     HandToHand(&temph);
     LM(MenuList) = temph;
+    /* A new bar, not drawn yet, whatever its handle: the copy often gets
+       the old list's master pointer back, and the process switch that
+       draws the front process's bar took it for the one drawn (Disk Copy
+       6.3.3 sets its bar and never calls DrawMenuBar: 8.6's Process
+       Manager draws it). */
+    ROMlib_menubar_drawn = nullptr;
     ROMlib_install_system_menus();
 }
 
@@ -1636,6 +1692,24 @@ void Executor::C_SetMenuItemText(MenuHandle mh, INTEGER item, ConstStringPtr str
             if(growth > 0)
             {
                 SetHandleSize((Handle)mh, hsize);
+                if(MemError() != noErr)
+                {
+                    /* As app() does for a locked menu; then, still no
+                       room, the item keeps its text (MemError says why)
+                       rather than the move writing past the menu's block
+                       (the 8.6 Appearance control panel's font menus, in
+                       its full heap, broke the next block's header). */
+                    SignedByte state = HGetState((Handle)mh);
+                    HUnlock((Handle)mh);
+                    SetHandleSize((Handle)mh, hsize);
+                    OSErr err = MemError();
+                    HSetState((Handle)mh, state);
+                    if(err != noErr)
+                    {
+                        LM(MemErr) = err;
+                        return;
+                    }
+                }
                 sb = (char *)*mh + start;
                 BlockMoveData((Ptr)sb, (Ptr)sb + growth, (Size)nbyte);
             }
@@ -1730,13 +1804,12 @@ void Executor::C_SetItemStyle(MenuHandle mh, INTEGER item, INTEGER style)
     }
 }
 
-void Executor::C_GetItemStyle(MenuHandle mh, INTEGER item,
-                              GUEST<INTEGER> *stylep)
+void Executor::C_GetItemStyle(MenuHandle mh, INTEGER item, Style *stylep)
 {
     mextp mep;
 
     if((mep = ROMlib_mitemtop(mh, item, (StringPtr *)0)))
-        *stylep = (INTEGER)(unsigned char)mep->mstyle;
+        *stylep = mep->mstyle;
 }
 
 INTEGER Executor::C_CountMItems(MenuHandle mh)

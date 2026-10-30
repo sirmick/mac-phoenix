@@ -3,6 +3,7 @@
  */
 
 #include <base/common.h>
+#include <vector>
 
 #include <QuickDraw.h>
 #include <DialogMgr.h>
@@ -181,11 +182,21 @@ void Executor::ShortenDITL(DialogPtr dp, int16_t n_items)
             n_items = count;
         first_item_to_dispose = count - n_items;
 
+        /* MacPhoenix: the items go last first. An embedder (a tab
+           control's pane) comes before the items embedded in it, and
+           disposing it disposes them: first-to-last disposed their
+           controls a second time, leaving dead handles in the window's
+           control list (the 8.6 Appearance control panel's tabs). */
+        std::vector<itmp> items;
         for(i = 0; i < count; i++, BUMPIP(itemp))
         {
             if(i == first_item_to_dispose)
                 item_h_size = (char *)itemp - (char *)base_itemp;
-
+            items.push_back(itemp);
+        }
+        for(i = count - 1; i >= 0; i--)
+        {
+            itemp = items[i];
             if(i >= first_item_to_dispose)
             {
                 bool erase_p = false;

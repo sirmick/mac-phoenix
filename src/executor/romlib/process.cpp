@@ -13,6 +13,8 @@
 #include <ToolboxEvent.h>
 
 #include <mman/mman.h>
+#include <error/error.h>
+#include <prefs/prefs.h>
 #include <rsys/cfm.h>
 #include <PowerCore.h>
 #include <rsys/process.h>
@@ -2327,9 +2329,9 @@ OSErr Executor::C_LaunchDeskAccessory(const FSSpec *spec, ConstStringPtr name)
  * boot, see docs/executor/MEMORY_MAP.md):
  *
  *   Process Manager heap: SysZone end .. BufPtr
- *     partition: a locked handle, SIZE preferred size + 16K
+ *     partition: a locked handle, SIZE preferred size + partition_extra()
  *       ApplZone          at the partition start, bkLim = ApplLimit - 24
- *       ApplLimit         = CurStackBase - DefltStack
+ *       ApplLimit         = CurStackBase - DefltStack - stack_extra()
  *       stack             grows down from CurStackBase
  *       A5 globals        belowA5 bytes, from CurStackBase up to CurrentA5
  *       A5 world above A5 abovea5 bytes, to the partition top
@@ -2339,8 +2341,23 @@ OSErr Executor::C_LaunchDeskAccessory(const FSSpec *spec, ConstStringPtr name)
  */
 THz Executor::ROMlib_pm_zone;
 
-/* Measured on 7.5.5: a partition is the SIZE preferred size plus 16K. */
-static const uint32_t partition_extra = 16 * 1024;
+/* What the Process Manager adds to the SIZE preferred size, and to
+   DefltStack for the stack, measured with a 100K application
+   (tests/guest/partprobe): 16K and nothing on 7.5.5 (Quadra), 56K and 16K
+   on 8.6, 68K and 16K on 9.0.4 (G3). 8.x before 8.6 is taken to be 8.6's. */
+static uint32_t partition_extra()
+{
+    if(system_version >= 0x900)
+        return 68 * 1024;
+    if(system_version >= 0x800)
+        return 56 * 1024;
+    return 16 * 1024;
+}
+
+static uint32_t stack_extra()
+{
+    return system_version >= 0x800 ? 16 * 1024 + 8 : 0;
+}
 /* No SIZE resource: Process Manager's default. */
 static const uint32_t default_partition = 512 * 1024;
 
@@ -2394,9 +2411,9 @@ void Executor::process_layout_partition(ConstStringPtr app_name)
 
     GUEST<Size> grow;
     Size avail = MaxMem(&grow);
-    uint32_t want = preferred + partition_extra;
+    uint32_t want = preferred + partition_extra();
     if(want > (uint32_t)avail)
-        want = minimum + partition_extra;
+        want = minimum + partition_extra();
     if(want > (uint32_t)avail)
     {
         warning_unexpected("partition: %u wanted, %d available", want, (int)avail);
@@ -2420,13 +2437,19 @@ void Executor::process_layout_partition(ConstStringPtr app_name)
     Ptr top = p + want;
     LM(CurrentA5) = top - abovea5;
     LM(CurStackBase) = LM(CurrentA5) - belowa5;
-    LM(ApplLimit) = LM(CurStackBase) - (int32_t)LM(DefltStack);
+    LM(ApplLimit) = LM(CurStackBase) - (int32_t)LM(DefltStack) - (int32_t)stack_extra();
     LM(ApplZone) = (THz)p;
     /* Executor keeps HeapEnd 8 above bkLim; this puts bkLim at
        ApplLimit - 24, as 7.5.5 does. */
     LM(HeapEnd) = LM(ApplLimit) - 16;
     InitZone(nullptr, 64, LM(HeapEnd) + 12, (THz)p);
     LM(MemTop) = (Ptr)LM(SysZone)->bkLim + want;
+    if(ERROR_ENABLED_P(ERROR_ALLOC_LOG))
+        fprintf(stderr, "[alloc] partition $%08X, %u bytes (SIZE %u/%u): heap %d, stack %d, "
+                        "below A5 %d, above A5 %d\n",
+                (unsigned)US_TO_SYN68K(p), want, preferred, minimum,
+                (int)((Ptr)LM(ApplLimit) - p), (int)(LM(CurStackBase) - LM(ApplLimit)), belowa5,
+                abovea5);
 }
 
 #define PROCESS_INFO_SERIAL_NUMBER(info) ((info)->processNumber)

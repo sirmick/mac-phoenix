@@ -765,11 +765,17 @@ _NewEmptyHandle_flags(bool sys_p)
 
 /* MacPhoenix: --executor-debug allocs. One line per allocation of 4K or
    more: what, size, zone, result, and whose code asked (the A-line's PC
-   and the return address in the caller's A6 frame, each named). */
+   and the return address in the caller's A6 frame, each named), and every
+   failure with the zone's size and free space. */
 static void log_alloc(const char *what, Size size, THz zone, void *result)
 {
-    if(!ERROR_ENABLED_P(ERROR_ALLOC_LOG) || size < 4096)
+    if(!ERROR_ENABLED_P(ERROR_ALLOC_LOG) || (size < 4096 && result))
         return;
+    /* A failure, whatever its size: how big the zone is and what it has. */
+    if(!result)
+        fprintf(stderr, "[alloc] failed: zone $%08X is %d bytes, %d free\n",
+                (unsigned)US_TO_SYN68K(zone),
+                (int)((uintptr_t)(Ptr)zone->bkLim - (uintptr_t)zone), (int)zone->zcbFree);
     char at[160], caller[160];
     uint32_t pc = currentTrapPC;
     /* Only a guest call has its A-line at currentTrapPC: NewHandle $A122

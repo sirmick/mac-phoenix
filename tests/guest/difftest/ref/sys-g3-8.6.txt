@@ -1,0 +1,247 @@
+# probe d573413bdda21de2d8db70625e4446c064b3527cfd3a510af666b811af7b73a7
+== gestalt
+gestalt.sysv: err 0 00000860
+gestalt.sysa: err 0 00000002
+gestalt.sysu: err 0 01008000
+gestalt.mach: err 0 00000043
+gestalt.proc: err 0 00000003
+gestalt.cput: err 0 00000108
+gestalt.fpu : err 0 00000000
+gestalt.mmu : err 0 00000005
+gestalt.~ram : err 0 08000000
+gestalt.~lram: err 0 08000000
+gestalt.vm  : err 0 00000000
+gestalt.vmbs: err -5551 00000000
+gestalt.qd  : err 0 00000251
+gestalt.qdrw: err 0 0000003f
+gestalt.qdtx: err 0 00000100
+gestalt.appr: err 0 00000001
+gestalt.apvr: err 0 00000110
+gestalt.dict: err 0 00000001
+gestalt.drag: err 0 0000003f
+gestalt.thds: err 0 0000003f
+gestalt.thd#: err -5551 00000000
+gestalt.cfrg: err 0 00000001
+gestalt.cfm : err -5551 00000000
+gestalt.mixd: err 0 00000001
+gestalt.ppcf: err -5551 00000000
+gestalt.ppc : err 0 00001002
+gestalt.ppct: err -5551 00000000
+gestalt.os  : err 0 0003efff
+gestalt.osat: err -5551 00000000
+gestalt.ascv: err 0 01100137
+gestalt.ascr: err 0 00000001
+gestalt.evnt: err 0 00000007
+gestalt.edtn: err 0 00000003
+gestalt.fold: err 0 00000003
+gestalt.font: err 0 00000007
+gestalt.fs  : err 0 000003ff
+gestalt.fxfr: err 0 0000000f
+gestalt.hfs+: err -5551 00000000
+gestalt.help: err 0 80000001
+gestalt.icmp: err 0 00000013
+gestalt.icon: err 0 0000001f
+gestalt.kbd : err 0 00000009
+gestalt.mmap: err -5551 00000000
+gestalt.menu: err 0 00000001
+gestalt.mnu : err -5551 00000000
+gestalt.nlib: err -5551 00000000
+gestalt.nmgr: err 0 00000001
+gestalt.ntrb: err -5551 00000000
+gestalt.otan: err 0 0000001f
+gestalt.otra: err 0 00000067
+gestalt.otvr: err 0 02038000
+gestalt.pclk: err 0 05f5e100
+gestalt.popt: err -5551 00000000
+gestalt.prmp: err -5551 00000000
+gestalt.prcs: err -5551 00000000
+gestalt.prtv: err -5551 00000000
+gestalt.ptch: err -5551 00000000
+gestalt.qtim: err 0 03028000
+gestalt.resr: err -5551 00000000
+gestalt.rsrc: err 0 00000003
+gestalt.scri: err 0 00000860
+gestalt.scrn: err -5551 00000000
+gestalt.sdvr: err -5551 00000000
+gestalt.shut: err 0 00000003
+gestalt.slot: err -5551 00000000
+gestalt.snd : err 0 00001fff
+gestalt.sclk: err -5551 00000000
+gestalt.stdf: err 0 00000017
+gestalt.strm: err 0 0000000b
+gestalt.tbtt: err 0 00000e00
+gestalt.tsmv: err 0 00000150
+gestalt.tsmb: err -5551 00000000
+gestalt.text: err -5551 00000000
+gestalt.teFT: err -5551 00000000
+gestalt.tecv: err -5551 00000000
+gestalt.tmgr: err 0 00000003
+gestalt.tsvr: err -5551 00000000
+gestalt.ucvt: err -5551 00000000
+gestalt.utsk: err -5551 00000000
+gestalt.vers: err 0 00000007
+gestalt.wma.: err 0 00000001
+gestalt.wind: err 0 00000005
+gestalt.xttt: err -5551 00000000
+gestalt.bugx: err 0 84cb9dbf
+gestalt.alis: err 0 0000000b
+gestalt.aete: err -5551 00000000
+gestalt.hdwr: err 0 41680011
+gestalt.romv: err 0 0000077d
+gestalt.rbv : err -5551 00000000
+gestalt.twsr: err -5551 00000000
+gestalt.aevt: err -5551 00000000
+gestalt.ctbx: err -5551 00000000
+gestalt.ctrl: err -5551 00000000
+gestalt.dlgx: err -5551 00000000
+gestalt.fnt#: err -5551 00000000
+gestalt.flst: err -5551 00000000
+gestalt.icmr: err -5551 00000000
+gestalt.icns: err -5551 00000000
+gestalt.inet: err -5551 00000000
+gestalt.mbrk: err -5551 00000000
+gestalt.mpcp: err -5551 00000000
+gestalt.navf: err -5551 00000000
+gestalt.pmgr: err -5551 00000000
+gestalt.pwr : err -5551 00000000
+gestalt.qtvr: err 0 00000007
+gestalt.semp: err -5551 00000000
+gestalt.sysp: err -5551 00000000
+gestalt.tsfa: err -5551 00000000
+== folder
+folder.macs: err 0
+folder.macs.name: "System Folder" (13)
+folder.pref: err 0
+folder.pref.name: "Preferences" (11)
+folder.extn: err 0
+folder.extn.name: "Extensions" (10)
+folder.ctrl: err 0
+folder.ctrl.name: "Control Panels" (14)
+folder.strt: err 0
+folder.strt.name: "Startup Items" (13)
+folder.desk: err 0
+folder.desk.name: "Desktop Folder" (14)
+folder.trsh: err 0
+folder.trsh.name: "Trash" (5)
+folder.empt: err 0
+folder.empt.name: "Trash" (5)
+folder.amnu: err 0
+folder.amnu.name: "Apple Menu Items" (16)
+folder.prnt: err 0
+folder.prnt.name: "PrintMonitor Documents" (22)
+folder.font: err 0
+folder.font.name: "Fonts" (5)
+folder.temp: err -43
+folder.pmsf: err -43
+folder.asup: err 0
+folder.asup.name: "Application Support" (19)
+folder.sprf: err -43
+folder.sdev: err 0
+folder.sdev.name: "Control Strip Modules" (21)
+folder.ctlp: err -43
+folder.cmnu: err 0
+folder.cmnu.name: "Contextual Menu Items" (21)
+folder.flnt: err 0
+folder.flnt.name: "Cleanup At Startup" (18)
+folder.shdf: err 0
+folder.shdf.name: "Shutdown Items" (14)
+folder.shdl: err -43
+folder.vdev: err -43
+folder.ppfd: err -43
+folder.vdfd: err -43
+== lowmem
+lowmem.015a: 0860
+lowmem.018e: 0018
+lowmem.0190: 0006
+lowmem.02f0: 00000020
+lowmem.02f4: 00000020
+lowmem.028e: 3fff
+lowmem.031e: 00000400
+lowmem.0322: 00006000
+lowmem.0984: 0003
+lowmem.0ba6: 07d2
+lowmem.0ba8: 000c
+lowmem.0baa: 0014
+lowmem.0260: 03ff
+lowmem.0262: ffff
+lowmem.08f0: 98c8
+lowmem.08f3: 00
+lowmem.0910: 0f4d616350686f656e69785375697465657264756c657272135101b801c013a1
+lowmem.0a4a: 0000
+lowmem.01fa: ad21
+lowmem.0204: 0002
+lowmem.0206: 6300
+lowmem.0208: 1388
+lowmem.020a: 80cc
+lowmem.020c: e70a2eed
+lowmem.0938: cfff
+lowmem.0a60: 0000
+lowmem.0cca: 3cb4
+lowmem.0da2: cccc
+lowmem.12f0: 0079
+lowmem.0b21: bf
+== process
+process.err: 0
+process.name: "MacPhoenixSuite" (15)
+process.type: APPL DfSy mode 00000080
+process.~size: 1238648 free 1093488
+process.spec.name: "MacPhoenixSuite" (15)
+== script
+script.sm.0: 00000860
+script.sm.2: 00000050
+script.sm.4: 00000001
+script.sm.6: 00000000
+script.sm.8: 00000000
+script.sm.10: 000000ff
+script.sm.12: 00000000
+script.sm.14: 00000000
+script.sm.16: 00127110
+script.sm.18: 00000000
+script.sm.20: 00000000
+script.sm.22: 00000000
+script.sm.24: 00008023
+script.sm.26: 00000000
+script.sm.28: 00226754
+script.sm.30: 00000000
+script.sm.32: 00000000
+script.sm.34: 00000199
+script.sm.36: 00000000
+script.sm.38: 00079e30
+script.sm.40: 00000000
+script.sm.42: 00000000
+script.sm.44: 00000000
+script.sm.46: 00000000
+script.roman.0: 00000710
+script.roman.2: 00000000
+script.roman.4: 000000ff
+script.roman.6: 00000000
+script.roman.8: 00000000
+script.roman.10: 00000000
+script.roman.12: 000007d2
+script.roman.14: 00000003
+script.roman.16: 00000000
+script.roman.18: 00000000
+script.roman.20: 00000000
+script.roman.22: 00000107
+script.roman.24: 00000000
+script.roman.26: 00000000
+script.roman.28: 00000000
+script.roman.30: 00000000
+script.roman.32: 00000000
+script.roman.34: 00000000
+script.roman.36: 50082358
+script.roman.38: 50082344
+script.roman.40: 5a535953
+script.roman.42: 00000ad8
+script.roman.44: 00071610
+script.roman.46: 00000000
+script.roman.48: 00000000
+script.roman.50: 00000000
+script.roman.78: 00040009
+script.roman.80: 0003000c
+script.roman.82: 00030009
+script.roman.84: 07d2000c
+script.roman.86: 0003000c
+script.roman.88: 00030009
+script.roman.90: 0000007f
+script.roman.92: 00000002

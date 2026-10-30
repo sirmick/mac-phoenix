@@ -26,6 +26,10 @@
 # CodeWarrior one (tools/mpw/mpw --toolchain cw build tests/guest/suite -o DIR).
 # --image: boot a copy of another built image (provisioning/images/NAME.json),
 # e.g. dev-7.6.1, whose Extensions have the CFM-68K Runtime Enabler.
+# --host-file PATH: put a file on Host: before the launch (repeatable;
+# tools/difftest's probe.start / probe.dump).
+# --keep-dir DIR: copy the files the guest wrote on Host: to DIR at the end,
+# whatever the outcome (tools/difftest keeps probe logs and pixel dumps).
 # --echo-gateway: on a ROM machine, name net-bridge's echo service
 # (10.0.2.1 port 7) in Host:net_echo.txt, for OTTest.
 # --delete-file: delete a file from the run's copy of the image before the
@@ -60,6 +64,7 @@ OS_VERSION=""
 ROM_OVERRIDE=""
 EXTRA_FLAGS=()
 DELETE_FILES=()
+HOST_FILES=()
 DISMISS=1
 NETWORK="socket"
 SCRIPT_NAME=""
@@ -93,6 +98,8 @@ while [[ $# -gt 0 ]]; do
         --key-on) KEY_ON="$2"; shift 2 ;;
         --hold-key) HOLD_KEY="$2"; shift 2 ;;
         --echo-gateway) ECHO_GATEWAY=1; shift ;;
+        --keep-dir) KEEP_DIR="$2"; shift 2 ;;
+        --host-file) HOST_FILES+=("$2"); shift 2 ;;
         *) echo "Unknown arg: $1"; exit 1 ;;
     esac
 done
@@ -197,6 +204,7 @@ if [[ -n "$SCRIPT_NAME" ]]; then
     python3 "$GUEST_DIR/install_perl_test.py" "$PERL_SCRIPT" "$EXTFS_DIR" "$SCRIPT_NAME"
 else
     python3 "$GUEST_DIR/install_macbinary.py" "$SUITE_APP" "$EXTFS_DIR" MacPhoenixSuite
+    for f in ${HOST_FILES[@]+"${HOST_FILES[@]}"}; do cp "$f" "$EXTFS_DIR"/; done
     printf '%s\r%s\r' "$RESULTS_NAME" "$SECTIONS" > "$EXTFS_DIR/suite.cfg"
 fi
 
@@ -224,6 +232,12 @@ cleanup() {
     if [[ -f "$EXTFS_DIR/$RESULTS_NAME" && ${EXIT_CODE:-1} -ne 0 ]]; then
         echo "--- guest results ---"
         cat "$EXTFS_DIR/$RESULTS_NAME"
+    fi
+    # --keep-dir: what the guest wrote on Host: (results, dumps), also after
+    # a crash or a timeout (tools/difftest).
+    if [[ -n "${KEEP_DIR:-}" && -d "$EXTFS_DIR" ]]; then
+        mkdir -p "$KEEP_DIR"
+        find "$EXTFS_DIR" -maxdepth 1 -type f \( -name '*.txt' -o -name '*.ppm' \) -exec cp {} "$KEEP_DIR"/ \;
     fi
     rm -rf "$EXTFS_DIR"
     if [[ -n "$ETHER_SOCK" ]]; then rm -f "$ETHER_SOCK"; fi

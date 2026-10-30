@@ -999,6 +999,46 @@ foreach(cell IN ITEMS "icons_ppc_executor_761;--backend executor;7.6.1;18990;gue
   )
 endforeach()
 
+# An application's partition (SIZE 100K: preferred + 56K on 8.6, the stack
+# DefltStack + 16K) as the Process Manager lays it out: tests/guest/partprobe,
+# 8.6 on the G3 the reference, Executor on 8.6's System
+# (process_layout_partition).
+foreach(cell "partition_rom_ppc_86;--backend kpx --core mame-ppc --jit;18490;guest;mame"
+             "partition_executor_86;--backend executor --executor-ppc;18492;guest;executor")
+  list(GET cell 0 name)
+  list(GET cell 1 backend)
+  list(GET cell 2 port)
+  list(SUBLIST cell 3 -1 labels)
+  separate_arguments(backend_args UNIX_COMMAND "${backend}")
+  add_test(
+    NAME ${name}
+    COMMAND bash ${TEST_DIR}/test_guest_suite.sh ${backend_args} --image 8.6 --app ${CMAKE_SOURCE_DIR}/tests/guest/partprobe/PartProbe.bin --results part_results.txt --network none --timeout 150 --port ${port}
+  )
+  set_tests_properties(${name} PROPERTIES
+    TIMEOUT 230
+    LABELS "${labels}"
+    SKIP_RETURN_CODE 77
+    ENVIRONMENT "MACEMU_ROM=${TEST_PPC_ROM}"
+  )
+endforeach()
+
+# Differential probes (docs/executor/DiffTest.md): each probe's answers on
+# Executor (8.6 System) against the committed G3 8.6 reference, known
+# differences in tests/guest/difftest/expected/. Fails on a new difference.
+foreach(probe appr ctl menu sys text wind)
+  add_test(
+    NAME difftest_${probe}_executor_86
+    COMMAND python3 ${CMAKE_SOURCE_DIR}/tools/difftest/run.py ${probe} --no-refresh
+  )
+  # one at a time: run.py's sessions for a target share its port
+  set_tests_properties(difftest_${probe}_executor_86 PROPERTIES
+    TIMEOUT 900
+    LABELS "guest;executor"
+    SKIP_RETURN_CODE 77
+    RESOURCE_LOCK difftest_executor
+  )
+endforeach()
+
 # Thread Manager through Frontier's UserTalk threads (process.cpp).
 add_test(
   NAME threads_executor

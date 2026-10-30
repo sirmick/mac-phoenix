@@ -11,6 +11,8 @@
 #include <CodeFragments.h>
 
 #include <math.h>
+#include <algorithm>
+#include <cstring>
 #include <iostream>
 
 using namespace Executor;
@@ -359,25 +361,81 @@ lookup_by_name(const ConnectionID connp,
     return retval;
 }
 
+/* MacPhoenix: a symbol's address, as FindSymbol computes it */
+static Ptr symbol_address(ConnectionID connID, const PEFExportedSymbol *pefs)
+{
+    int section_index = PEFEXS_SECTION_INDEX(pefs);
+    uint32_t val = PEFEXS_SYMBOL_VALUE(pefs);
+    switch(section_index)
+    {
+        case -2: /* absolute address */
+        case -3: /* re-exported */
+            return guest_cast<Ptr>(val);
+        default:
+        {
+            if(section_index < 0 || (uint32_t)section_index >= connID->n_sects)
+                return nullptr;
+            GUEST<void *> sect_start = connID->sects[section_index].start;
+            return val + guest_cast<Ptr>(sect_start);
+        }
+    }
+}
+
+/* MacPhoenix: whether a connection's export tables look whole (in RAM,
+   counts that fit): the PC sampler looks at connections at any moment,
+   some of a process whose heap is going away. */
+bool Executor::ROMlib_cfm_exports_sane(ConnectionID id)
+{
+    if(!id || !id->lihp)
+        return false;
+    PEFLoaderInfoHeader *lihp = id->lihp;
+    uint32_t at = ptr_to_longint(lihp), top = guest_cast<int32_t>(LM(MemTop));
+    uint32_t count = PEFLIH_SYMBOL_COUNT(lihp), power = PEFLIH_HASH_TABLE_POWER(lihp);
+    uint32_t hash = PEFLIH_HASH_OFFSET(lihp), strings = PEFLIH_STRINGS_OFFSET(lihp);
+    if(at >= top || count > 65536 || power > 16 || hash > 0x1000000 || strings > 0x1000000)
+        return false;
+    uint32_t end = hash + 4 * (1u << power) + 4 * count + sizeof(PEFExportedSymbol) * count;
+    return at + end <= top && at + strings <= top;
+}
+
+/* MacPhoenix: the exports in their table's order (Inside Macintosh:
+   PowerPC System Software 3-, CountSymbols and GetIndSymbol, index from 0):
+   the loader section's export key table gives each name's length, the
+   symbol table its class, string and value. */
 OSErr Executor::C_CountSymbols(ConnectionID id, GUEST<LONGINT> *countp)
 {
-    OSErr retval;
-
-    /* TODO */
-    warning_unimplemented("");
-    retval = paramErr;
-    return retval;
+    if(!id || !id->lihp)
+        return fragConnectionIDNotFound;
+    *countp = PEFLIH_SYMBOL_COUNT((PEFLoaderInfoHeader *)id->lihp);
+    return noErr;
 }
 
 OSErr Executor::C_GetIndSymbol(ConnectionID id, LONGINT index, Str255 name,
                                GUEST<Ptr> *addrp, SymClass *classp)
 {
-    OSErr retval;
-
-    /* TODO */
-    warning_unimplemented("");
-    retval = paramErr;
-    return retval;
+    if(!id || !id->lihp)
+        return fragConnectionIDNotFound;
+    PEFLoaderInfoHeader *lihp = id->lihp;
+    if(index < 0 || index >= (LONGINT)PEFLIH_SYMBOL_COUNT(lihp))
+        return fragSymbolNotFound;
+    uint32_t offset = PEFLIH_HASH_OFFSET(lihp)
+        + sizeof(GUEST<uint32_t>) * (1 << PEFLIH_HASH_TABLE_POWER(lihp));
+    auto *export_key_table = (GUEST<uint32_t> *)((char *)lihp + offset);
+    offset += sizeof(GUEST<uint32_t>) * PEFLIH_SYMBOL_COUNT(lihp);
+    auto *symbol_table = (PEFExportedSymbol *)((char *)lihp + offset);
+    const char *strings = (const char *)lihp + PEFLIH_STRINGS_OFFSET(lihp);
+    PEFExportedSymbol *pefs = &symbol_table[index];
+    if(name)
+    {
+        int len = std::min<uint32_t>(export_key_table[index] >> 16, 255);
+        name[0] = len;
+        memcpy(name + 1, SYMBOL_NAME(pefs, strings), len);
+    }
+    if(classp)
+        *classp = *(SymClass *)&PEFEXS_CLASS_AND_NAME(pefs);
+    if(addrp)
+        *addrp = symbol_address(id, pefs);
+    return noErr;
 }
 
 OSErr Executor::C_FindSymbol(ConnectionID connID, ConstStr255Param symName,
@@ -391,30 +449,12 @@ OSErr Executor::C_FindSymbol(ConnectionID connID, ConstStr255Param symName,
         retval = fragSymbolNotFound;
     else
     {
-        int section_index;
-        uint32_t val;
-
         if(symClass)
             *symClass = *(SymClass *)&PEFEXS_CLASS_AND_NAME(pefs);
-        section_index = PEFEXS_SECTION_INDEX(pefs);
-        val = PEFEXS_SYMBOL_VALUE(pefs);
-        switch(section_index)
-        {
-            case -2: /* absolute address */
-                *symAddr = guest_cast<Ptr>(val);
-                break;
-            case -3: /* re-exported */
-                warning_unimplemented("name = '%.*s', val = 0x%x", symName[0],
-                                      symName + 1, val);
-                *symAddr = guest_cast<Ptr>(val);
-                break;
-            default:
-            {
-                GUEST<void*> sect_start = connID->sects[section_index].start;
-                *symAddr = val + guest_cast<Ptr>(sect_start);
-            }
-            break;
-        }
+        if(PEFEXS_SECTION_INDEX(pefs) == -3) /* re-exported */
+            warning_unimplemented("name = '%.*s', val = 0x%x", symName[0],
+                                  symName + 1, (unsigned)PEFEXS_SYMBOL_VALUE(pefs));
+        *symAddr = symbol_address(connID, pefs);
 
         retval = noErr;
     }

@@ -447,69 +447,43 @@ OSErr Executor::C_AECoercePtr(DescType data_type, const void *data_ptr, Size dat
 
 #define AEGetParamDesc AEGetParamDesc
 
+/* MacPhoenix: 'aevt' to 'appa', a launch's AppParameters as the Process
+   Manager takes them (LaunchApplication's launchAppParameters):
+   {EventRecord theMsgEvent, eventRefCon, messageLength, message}, the
+   message the event's data as AESend posts it to another process. Any
+   event: Netscape's User Profile Manager launches Communicator with a
+   'MOSS'/'prfl' that has no direct object (the old coercion read only an
+   'odoc''s list of files, into a format nothing reads any more). */
 static OSErr
 parse_evt(const AppleEvent *evtp, AEDesc *desc_out)
 {
-    OSErr retval;
-    AEDesc d;
+    GUEST<OSType> event_class, event_id;
+    GUEST<DescType> type;
+    GUEST<Size> size;
+    OSErr err = AEGetAttributePtr((AppleEvent *)evtp, keyEventClassAttr, typeType, &type,
+                                  (Ptr)&event_class, sizeof event_class, &size);
+    if(err == noErr)
+        err = AEGetAttributePtr((AppleEvent *)evtp, keyEventIDAttr, typeType, &type,
+                                (Ptr)&event_id, sizeof event_id, &size);
+    if(err != noErr)
+        return err;
 
-    /*
-   * The cast to AppleEvent * of evtp is so the compiler won't complain
-   * about our discarding const.  The problem is AEGetParamDesc doesn't the
-   * thing pointed to by its first argument, but the prototype doesn't show
-   * this.
-   */
-
-    retval = AEGetParamDesc((AppleEvent *)evtp,
-                            keyDirectObject, typeAEList, &d);
-    if(retval == noErr)
-    {
-        LONGINT n;
-        GUEST<LONGINT> n_s;
-
-        retval = AECountItems(&d, &n_s);
-        n = n_s;
-        if(retval == noErr)
-        {
-            Handle h;
-            AppParametersPtr p;
-
-            h = NewHandle(sizeof *p + n * sizeof(FSSpec));
-            if(!h || !(p = (decltype(p))*h))
-                retval = MemError();
-            else
-            {
-                LONGINT l;
-
-                p->magic = APP_PARAMS_MAGIC;
-                p->n_fsspec = n;
-                for(l = 1; retval == noErr && l <= n; ++l)
-                {
-                    AEDesc d2;
-                    GUEST<AEKeyword> keyword;
-
-                    retval = AEGetNthDesc(&d, 1L, typeAlias, &keyword, &d2);
-                    if(retval == noErr)
-                    {
-                        AliasHandle ah;
-                        Boolean wasChanged;
-
-                        ah = (AliasHandle)d2.dataHandle;
-                        retval = ResolveAlias(nullptr, ah, &p->fsspec[l - 1],
-                                              &wasChanged);
-                    }
-                }
-                if(retval != noErr)
-                    DisposeHandle(h);
-                else
-                {
-                    desc_out->descriptorType = "appa"_4;
-                    desc_out->dataHandle = h;
-                }
-            }
-        }
-    }
-    return retval;
+    Handle data = DESC_DATA(evtp);
+    int32_t length = data ? GetHandleSize(data) : 0;
+    enum { header = 16 + 4 + 4 }; /* EventRecord, refcon, length */
+    Handle h = NewHandleClear(header + length);
+    if(!h)
+        return MemError();
+    EventRecord *evt = (EventRecord *)*h;
+    evt->what = kHighLevelEvent;
+    evt->message = (OSType)event_class;
+    memcpy(&evt->where, &event_id, sizeof event_id);
+    *(GUEST<int32_t> *)(*h + 20) = length;
+    if(length)
+        memcpy(*h + header, *data, length);
+    desc_out->descriptorType = "appa"_4;
+    desc_out->dataHandle = h;
+    return noErr;
 }
 
 OSErr Executor::C_AECoerceDesc(AEDesc *desc, DescType result_type,

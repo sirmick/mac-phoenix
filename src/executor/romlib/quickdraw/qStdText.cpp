@@ -15,6 +15,7 @@
 #include <quickdraw/picture.h>
 #include <quickdraw/font.h>
 #include <quickdraw/text.h>
+#include <prefs/prefs.h>
 
 #include <rsys/safe_alloca.h>
 #include <algorithm>
@@ -36,6 +37,10 @@ namespace Executor
 {
 #include "ultable.ctable"
 }
+
+/* the text being drawn is slanted by charblit (italic the strike lacks),
+   and 8.x keeps its bitmap glyphs of no width so (text_helper) */
+static bool slant_text, zero_width_stays;
 
 static void charblit(BitMap *fbmp, BitMap *tbmp, Rect *srect, Rect *drect,
                      INTEGER firsttime) /* INTERNAL */
@@ -71,7 +76,7 @@ static void charblit(BitMap *fbmp, BitMap *tbmp, Rect *srect, Rect *drect,
  * shifted over and shift them back one pixel at a time later.
  * Only do this once (the firsttime)
  */
-    if((PORT_TX_FACE(qdGlobals().thePort) & (int)italic) && firsttime)
+    if(slant_text && firsttime)
     {
         INTEGER temp;
         temp = (numrows) / 2;
@@ -218,7 +223,7 @@ static void charblit(BitMap *fbmp, BitMap *tbmp, Rect *srect, Rect *drect,
             lastmask = 0xFFFFFFFF << (16 - lastmaskend);                      \
     }
 
-    if((PORT_TX_FACE(qdGlobals().thePort) & (int)italic) && firsttime)
+    if(slant_text && firsttime)
     {
         if(!((i = numrows) & 1))
         {
@@ -280,7 +285,7 @@ Executor::text_helper(LONGINT n, Ptr textbufp, GUEST<Point> *nump, GUEST<Point> 
     Fixed hOutputInverse, width, left, misfixwidth, spacewidth;
     Fixed left_begin;
     Fixed space_extra;
-    INTEGER lineabove, linebelow, descent, leftmost;
+    INTEGER lineabove, linebelow, ascent, descent, leftmost;
     INTEGER rightitalicoffset, leftitalicoffset;
     INTEGER fmopstate, widthstate;
     LONGINT retval;
@@ -342,6 +347,10 @@ Executor::text_helper(LONGINT n, Ptr textbufp, GUEST<Point> *nump, GUEST<Point> 
     fmi.denom.h = den.h;
     fmi.denom.v = den.v;
     fmop = FMSwapFont(&fmi);
+    /* italic the strike doesn't have already (Geneva 9 has an italic
+       strike; outlines are slanted here as the outline would be) */
+    slant_text = (PORT_TX_FACE(qdGlobals().thePort) & (int)italic) && !(WIDTHPTR->face & (int)italic);
+    zero_width_stays = system_version >= 0x800 && !ROMlib_outline_strike(fmop->fontHandle);
 
     if(action == text_helper_measure)
     {
@@ -357,22 +366,19 @@ Executor::text_helper(LONGINT n, Ptr textbufp, GUEST<Point> *nump, GUEST<Point> 
         denp->h = WIDTHPTR->hFactor;
         denp->v = WIDTHPTR->hFactor;
         if(finfop)
-        {
-            finfop->ascent = (unsigned short)fmop->ascent;
-            finfop->descent = (unsigned short)fmop->descent;
-            finfop->widMax = (unsigned short)fmop->widMax;
-            finfop->leading = (unsigned short)fmop->leading;
-        }
+            ROMlib_styled_font_info(fmop, finfop);
     }
 
     extra = fmop->extra;
     fixed_extra = FIXED(extra);
     widthstate = HGetState((Handle)LM(WidthTabHandle));
     HLock((Handle)LM(WidthTabHandle));
-    if((PORT_TX_FACE(qdGlobals().thePort) & (int)underline) && fmop->descent < 2)
+    /* FMSwapFont answers the strike's metrics; shadow adds a line above
+       and its width below (GetFontInfo's too) */
+    ascent = fmop->ascent + !!fmop->shadow;
+    descent = fmop->descent + fmop->shadow;
+    if((PORT_TX_FACE(qdGlobals().thePort) & (int)underline) && descent < 2)
         descent = 2;
-    else
-        descent = fmop->descent;
 
     PAUSERECORDING;
     fmopstate = HGetState((Handle)fmop->fontHandle);
@@ -429,12 +435,8 @@ Executor::text_helper(LONGINT n, Ptr textbufp, GUEST<Point> *nump, GUEST<Point> 
     /* SPEEDUP:  make the stylemap be of the same alignment as
      qdGlobals().thePort.portBits when it matters to the blitter */
 
-    rightitalicoffset = ((PORT_TX_FACE(qdGlobals().thePort) & (int)italic)
-                             ? fmop->ascent / 2 - 1
-                             : 0);
-    leftitalicoffset = ((PORT_TX_FACE(qdGlobals().thePort) & (int)italic)
-                            ? descent / 2 + 1
-                            : 0);
+    rightitalicoffset = slant_text ? ascent / 2 - 1 : 0;
+    leftitalicoffset = slant_text ? descent / 2 + 1 : 0;
 
     if(action == text_helper_draw)
     {
@@ -443,7 +445,7 @@ Executor::text_helper(LONGINT n, Ptr textbufp, GUEST<Point> *nump, GUEST<Point> 
 
         stylemap.rowBytes = (strwidth - fp->kernMax + leftitalicoffset + rightitalicoffset + 31) / 32 * 4;
         stylemap.bounds.top = PORT_PEN_LOC(qdGlobals().thePort).v
-                                 - fmop->ascent;
+                                 - ascent;
 #if 0
       stylemap.bounds.bottom =  ( (PORT_PEN_LOC (qdGlobals().thePort).v)
 				   + descent);
@@ -451,9 +453,9 @@ Executor::text_helper(LONGINT n, Ptr textbufp, GUEST<Point> *nump, GUEST<Point> 
         {
             int height;
 
-            height = std::max<int>(fmop->ascent + descent, fp->fRectHeight);
+            height = std::max<int>(ascent + descent, fp->fRectHeight);
             stylemap.bounds.bottom = PORT_PEN_LOC(qdGlobals().thePort).v
-                                        - fmop->ascent + height;
+                                        - ascent + height;
         }
 #endif
         stylemap.bounds.left = PORT_PEN_LOC(qdGlobals().thePort).h
@@ -486,7 +488,12 @@ Executor::text_helper(LONGINT n, Ptr textbufp, GUEST<Point> *nump, GUEST<Point> 
     first = fp->firstChar;
     max = fp->lastChar - fp->firstChar;
     misintwidth = misrect.right - misrect.left;
-    misfixwidth = FIXED(misintwidth);
+    /* the missing glyph advances by its width in the offset/width table,
+       styled like any other */
+    if((wid = widp[max + 1]) != -1)
+        misfixwidth = FIXED((wid & 0xFF) + extra);
+    else
+        misfixwidth = FIXED(misintwidth);
     left = FIXED(PORT_PEN_LOC(qdGlobals().thePort).h) + FIXEDONEHALF;
     left_begin = left;
     widths = WIDTHPTR->tabData;
@@ -537,10 +544,15 @@ Executor::text_helper(LONGINT n, Ptr textbufp, GUEST<Point> *nump, GUEST<Point> 
                 left += width;
             else
             {
+                /* 8.x: a bitmap glyph of no width stays so whatever
+                   the style, and a carriage return has none */
                 if(c == ' ' - fp->firstChar)
                     left += spacewidth;
+                else if((zero_width_stays && !(wid & 0xFF))
+                        || (system_version >= 0x800 && c == '\r' - fp->firstChar))
+                    ;
                 else
-                    left += FIXED((wid & 0xFF) + extra);
+                    left += FIXED(std::max((wid & 0xFF) + extra, 0));
             }
         }
     }
@@ -581,7 +593,7 @@ Executor::text_helper(LONGINT n, Ptr textbufp, GUEST<Point> *nump, GUEST<Point> 
         ASSERT_SAFE(stylemap.baseAddr);
         if(PORT_TX_FACE(qdGlobals().thePort) & (int)underline)
         {
-            p = ((unsigned char *)bmp->baseAddr + BITMAP_ROWBYTES(bmp) * (fmop->ascent + 1));
+            p = ((unsigned char *)bmp->baseAddr + BITMAP_ROWBYTES(bmp) * (ascent + 1));
             for(i = 0; i++ < fmop->ulThick;)
             {
                 carryforward = 0;
@@ -669,7 +681,7 @@ Executor::text_helper(LONGINT n, Ptr textbufp, GUEST<Point> *nump, GUEST<Point> 
         }
 
         drect.top = bmp->bounds.top
-                       - (FixMul((LONGINT)fmop->ascent << 16,
+                       - (FixMul((LONGINT)ascent << 16,
                                  (Fixed)(vOutput - 256) << 8)
                           >> 16);
         drect.left = leftmost;

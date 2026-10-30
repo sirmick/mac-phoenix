@@ -21,6 +21,10 @@
 #include "appearance_draw.h"
 #include <base/functions.impl.h>
 #include <set>
+#include <map>
+#include <Collections.h>
+#include <ResourceMgr.h>
+#include <MemoryMgr.h>
 
 using namespace Executor;
 
@@ -866,14 +870,17 @@ OSStatus Executor::C_GetWindowRegion(WindowRef window, WindowRegionCode inRegion
             return noErr;
         }
         default:
-            return errWindowRegionCodeInvalid;
+            /* the frame's parts, where Executor's definition has them */
+            return ROMlib_window8_part_region(window, inRegionCode, ioWinRgn) ? noErr
+                                                                            : errWindowRegionCodeInvalid;
     }
 }
 
-/* Executor doesn't collapse windows (window shading) yet. */
+/* What CollapseWindow set (windMgr8.cpp); Executor's definitions don't shade
+   a window yet. */
 Boolean Executor::C_IsWindowCollapsed(WindowRef window)
 {
-    return false;
+    return window && ROMlib_window8_collapsed(window);
 }
 
 Boolean Executor::C_IsWindowCollapsable(WindowRef window)
@@ -883,9 +890,78 @@ Boolean Executor::C_IsWindowCollapsable(WindowRef window)
 
 /* A command key's glyph (Menus.h kMenu*Glyph): accepted; Executor's menu
    definition draws the command character. */
+namespace
+{
+/* Per item (menu, item): the glyph and modifiers the 8.x calls set. */
+struct ItemKeys
+{
+    SInt16 glyph = 0;
+    UInt8 modifiers = 0;
+};
+std::map<std::pair<uint32_t, int>, ItemKeys> item_keys;
+std::set<uint32_t> parent_choosable;
+
+bool valid_item(MenuRef m, int item)
+{
+    return m && item >= 1 && item <= CountMItems(m);
+}
+}
+
 OSErr Executor::C_SetMenuItemKeyGlyph(MenuRef inMenu, SInt16 inItem, SInt16 inGlyph)
 {
-    return inMenu ? noErr : paramErr;
+    if(!valid_item(inMenu, inItem))
+        return paramErr; /* 8.6 */
+    item_keys[{ US_TO_SYN68K(inMenu), inItem }].glyph = inGlyph;
+    return noErr;
+}
+
+OSErr Executor::C_GetMenuItemKeyGlyph(MenuRef inMenu, SInt16 inItem, GUEST<SInt16> *outGlyph)
+{
+    if(!valid_item(inMenu, inItem) || !outGlyph)
+        return paramErr;
+    auto it = item_keys.find({ US_TO_SYN68K(inMenu), inItem });
+    *outGlyph = it == item_keys.end() ? 0 : it->second.glyph;
+    return noErr;
+}
+
+OSErr Executor::C_SetMenuItemModifiers(MenuRef inMenu, SInt16 inItem, UInt8 inModifiers)
+{
+    if(!valid_item(inMenu, inItem))
+        return paramErr;
+    item_keys[{ US_TO_SYN68K(inMenu), inItem }].modifiers = inModifiers;
+    return noErr;
+}
+
+OSErr Executor::C_GetMenuItemModifiers(MenuRef inMenu, SInt16 inItem, UInt8 *outModifiers)
+{
+    if(!valid_item(inMenu, inItem) || !outModifiers)
+        return paramErr;
+    auto it = item_keys.find({ US_TO_SYN68K(inMenu), inItem });
+    *outModifiers = it == item_keys.end() ? 0 : it->second.modifiers;
+    return noErr;
+}
+
+/* An item is enabled when the menu is and its own bit is (items past 31
+   follow the menu's bit); item 0 is the menu itself. */
+Boolean Executor::C_IsMenuItemEnabled(MenuRef menu, UInt16 item)
+{
+    if(!menu)
+        return false;
+    uint32_t flags = (*menu)->enableFlags;
+    if(!(flags & 1))
+        return false;
+    return item == 0 || item > 31 || (flags & (1u << item));
+}
+
+OSStatus Executor::C_SetSubmenuParentChoosable(MenuRef menu, Boolean inChoosable)
+{
+    if(!menu)
+        return paramErr;
+    if(inChoosable)
+        parent_choosable.insert(US_TO_SYN68K(menu));
+    else
+        parent_choosable.erase(US_TO_SYN68K(menu));
+    return noErr;
 }
 
 OSStatus Executor::C_GetViewsFont(ScriptCode script, StringPtr outFontName, GUEST<SInt16> *outFontSize)
@@ -896,6 +972,287 @@ OSStatus Executor::C_GetViewsFont(ScriptCode script, StringPtr outFontName, GUES
     if(err == noErr && outFontSize)
         *outFontSize = size;
     return err;
+}
+
+/* AppearanceLib's private font call the 8.6 Appearance control panel
+   names its small system font popup with (its two arguments from the
+   call sites: the script, -1, and the name). */
+OSStatus Executor::C_GetSmallSystemFont(ScriptCode script, StringPtr outFontName)
+{
+    return C_GetThemeFont(kThemeSmallSystemFont, script, outFontName, nullptr, nullptr);
+}
+
+/* Executor plays no theme sounds. */
+Boolean Executor::C_AreThemeSoundsEnabled()
+{
+    return false;
+}
+
+/* The current theme's settings (Appearance.h kTheme*Tag) into a
+   collection, as far as Executor has them: name, highlight colour, the
+   fonts, the desktop pattern, sounds and collapse off. */
+OSStatus Executor::C_GetTheme(Collection ioCollection)
+{
+    if(!ioCollection)
+        return paramErr;
+    auto add = [&](OSType tag, const void *data, int32_t size) {
+        return C_AddCollectionItem(ioCollection, tag, 0, size, (Ptr)data);
+    };
+    auto add_str = [&](OSType tag, const unsigned char *str) {
+        return add(tag, str, str[0] + 1);
+    };
+    OSStatus err = add_str(kThemeNameTag, (const unsigned char *)"\016Mac OS Default");
+    RGBColor hilite = LM(HiliteRGB);
+    if(err == noErr)
+        err = add(kThemeHighlightColorTag, &hilite, sizeof hilite);
+    Boolean off = false;
+    if(err == noErr)
+        err = add(kThemeSoundsEnabledTag, &off, sizeof off);
+    if(err == noErr)
+        err = add(kThemeDblClickCollapseTag, &off, sizeof off);
+    if(err == noErr)
+        err = add_str(kThemeSystemFontTag, (const unsigned char *)theme_fonts[kThemeSystemFont].name);
+    if(err == noErr)
+        err = add_str(kThemeSmallSystemFontTag, (const unsigned char *)theme_fonts[kThemeSmallSystemFont].name);
+    if(err == noErr)
+        err = add_str(kThemeViewsFontTag, (const unsigned char *)theme_fonts[kThemeViewsFont].name);
+    GUEST<SInt16> views_size = theme_fonts[kThemeViewsFont].size;
+    if(err == noErr)
+        err = add(kThemeViewsFontSizeTag, &views_size, sizeof views_size);
+    if(err == noErr)
+        if(Handle ppat = GetResource("ppat"_4, deskPatID))
+        {
+            LoadResource(ppat);
+            HLockGuard guard(ppat);
+            err = add(kThemeDesktopPatternTag, *ppat, GetHandleSize(ppat));
+        }
+    return err;
+}
+
+/* AppearanceLib's private GetScenario: the Appearance control panel
+   passes one collection and reads theme items back ('patt', 'patn', ...):
+   the current theme's, as GetTheme gives them. */
+OSStatus Executor::C_GetScenario(Collection ioCollection)
+{
+    return C_GetTheme(ioCollection);
+}
+
+/* Theme files by name: Executor has none (the control panel then lists
+   no variants). Each output is set, as the panel trusts them: with them
+   left alone it took stale stack for a variant list and disposed of one
+   of its own dialog's controls. */
+OSStatus Executor::C_GetCurrentTheme(ConstStringPtr themeName, Ptr outThemeFile)
+{
+    (void)themeName, (void)outThemeFile;
+    return fnfErr;
+}
+
+OSStatus Executor::C_GetThemeVariantList(ConstStringPtr themeName, GUEST<Handle> *outList)
+{
+    (void)themeName;
+    if(outList)
+        *outList = nullptr;
+    return fnfErr;
+}
+
+OSStatus Executor::C_CountThemeVariants(Handle list, GUEST<SInt16> *outCount)
+{
+    if(outCount)
+        *outCount = 0;
+    return list ? noErr : paramErr;
+}
+
+OSStatus Executor::C_GetIndThemeVariant(Handle list, SInt16 index, StringPtr outName)
+{
+    (void)list, (void)index;
+    if(outName)
+        outName[0] = 0;
+    return paramErr;
+}
+
+/* One long (tests/guest/difftest appr: 8.6 writes 4 bytes; the control
+   panel reads the next long as well, its own). */
+OSStatus Executor::C_GetThemeSoundMask(GUEST<UInt32> *outMask)
+{
+    if(outMask)
+        *outMask = 0; /* no sounds */
+    return noErr;
+}
+
+Boolean Executor::C_IsThemeCreditDialogAvailable()
+{
+    return false;
+}
+
+/* ── Menu items: Menus.h's 8.x calls ─────────────────────────────────── */
+
+OSStatus Executor::C_AppendMenuItemText(MenuRef menu, ConstStringPtr inString)
+{
+    if(!menu || !inString)
+        return paramErr;
+    AppendMenu(menu, (StringPtr) "\001 ");
+    SetMenuItemText(menu, CountMItems(menu), inString);
+    return LM(MemErr);
+}
+
+OSStatus Executor::C_InsertMenuItemText(MenuRef menu, ConstStringPtr inString, INTEGER afterItem)
+{
+    if(!menu || !inString)
+        return paramErr;
+    INTEGER count = CountMItems(menu);
+    if(afterItem < 0 || afterItem > count)
+        afterItem = count;
+    InsertMenuItem(menu, (StringPtr) "\001 ", afterItem);
+    SetMenuItemText(menu, afterItem + 1, inString);
+    return LM(MemErr);
+}
+
+/* MenusLib's menu bar clock: kept, not drawn. */
+namespace
+{
+bool clock_enabled;
+uint8_t clock_config[20];
+}
+
+Boolean Executor::C_IsMenuBarClockEnabled()
+{
+    return clock_enabled;
+}
+
+OSStatus Executor::C_EnableMenuBarClock()
+{
+    clock_enabled = true;
+    return noErr;
+}
+
+OSStatus Executor::C_DisableMenuBarClock()
+{
+    clock_enabled = false;
+    return noErr;
+}
+
+OSStatus Executor::C_RefreshMenuBarClock()
+{
+    return noErr;
+}
+
+/* {version word, 20 bytes}: version 0 is the only one. */
+OSStatus Executor::C_GetMenuBarClockConfig(Ptr ioConfig)
+{
+    if(!ioConfig || *(GUEST<int16_t> *)ioConfig != 0)
+        return paramErr;
+    memcpy(ioConfig + 2, clock_config, sizeof clock_config);
+    return noErr;
+}
+
+OSStatus Executor::C_SetMenuBarClockConfig(Ptr inConfig)
+{
+    if(!inConfig || *(GUEST<int16_t> *)inConfig != 0)
+        return paramErr;
+    memcpy(clock_config, inConfig + 2, sizeof clock_config);
+    return noErr;
+}
+
+namespace
+{
+/* Item icons given by handle: kept here (the menu definition draws the
+   'ICON'/'cicn' an item's icon number names, not these). */
+std::map<std::pair<uint32_t, int>, std::pair<UInt8, uint32_t>> item_icons;
+}
+
+OSErr Executor::C_SetMenuItemIconHandle(MenuRef inMenu, SInt16 inItem, UInt8 inIconType,
+                                        Handle inIconHandle)
+{
+    if(!inMenu || inItem < 1 || inItem > CountMItems(inMenu))
+        return paramErr;
+    auto key = std::make_pair(US_TO_SYN68K(inMenu), (int)inItem);
+    if(inIconType == kMenuNoIcon || !inIconHandle)
+        item_icons.erase(key);
+    else
+        item_icons[key] = { inIconType, US_TO_SYN68K(inIconHandle) };
+    return noErr;
+}
+
+OSErr Executor::C_GetMenuItemIconHandle(MenuRef inMenu, SInt16 inItem, UInt8 *outIconType,
+                                        GUEST<Handle> *outIconHandle)
+{
+    if(!inMenu || inItem < 1 || inItem > CountMItems(inMenu))
+        return paramErr;
+    auto it = item_icons.find(std::make_pair(US_TO_SYN68K(inMenu), (int)inItem));
+    if(outIconType)
+        *outIconType = it == item_icons.end() ? kMenuNoIcon : it->second.first;
+    if(outIconHandle)
+        *outIconHandle = it == item_icons.end() ? nullptr : (Handle)SYN68K_TO_US(it->second.second);
+    return noErr;
+}
+
+/* ── The desktop: WindowsLib's private desktop calls (8.5) ───────────── */
+
+/* The signatures from the 8.6 Appearance control panel's call sites: a
+   copy the caller disposes (DisposePixPat), and the pattern's name
+   (either may be nil). */
+OSStatus Executor::C_GetDesktopPixPat(GUEST<PixPatHandle> *outPixPat, StringPtr outName)
+{
+    if(outName)
+        outName[0] = 0;
+    if(!outPixPat)
+        return noErr;
+    *outPixPat = nullptr;
+    PixPatHandle desk = LM(DeskCPat);
+    if(!desk)
+        desk = GetPixPat(deskPatID);
+    if(!desk)
+        return resNotFound;
+    PixPatHandle copy = NewPixPat();
+    if(!copy)
+        return memFullErr;
+    CopyPixPat(desk, copy);
+    *outPixPat = copy;
+    return noErr;
+}
+
+/* The desktop pattern as a 'ppat' resource's data, a handle the caller
+   owns. */
+OSStatus Executor::C_GetDesktopPattern(GUEST<Handle> *outPattern, StringPtr outName)
+{
+    if(outName)
+        outName[0] = 0;
+    if(!outPattern)
+        return noErr;
+    *outPattern = nullptr;
+    Handle ppat = GetResource("ppat"_4, deskPatID);
+    if(!ppat)
+        return resNotFound;
+    LoadResource(ppat);
+    GUEST<Handle> copy = ppat;
+    OSErr err = HandToHand(&copy);
+    if(err == noErr)
+        *outPattern = copy;
+    return err;
+}
+
+/* No desktop picture on any screen: the error the Appearance control
+   panel takes for "none" (it then records 'nopf'). */
+OSStatus Executor::C_GetDesktopPictureForDevice(GDHandle device, FSSpec *outFile, GUEST<UInt32> *outPlacement)
+{
+    (void)device, (void)outFile, (void)outPlacement;
+    return errUnrecognizedWindowClass; /* -5605 */
+}
+
+/* A picture file read for the desktop (a file dropped on the control
+   panel): Executor reads none. The second argument isn't known for sure,
+   so it is left alone. */
+OSStatus Executor::C_GetPictureFromFile(FSSpec *file, Ptr outPicture)
+{
+    (void)file, (void)outPicture;
+    return fnfErr;
+}
+
+/* Double-clicking a title bar does nothing in Executor (1 would be:
+   collapse it). */
+UInt32 Executor::C_GetWindowDoubleClickAction()
+{
+    return 0;
 }
 
 /* ── Drawing state ───────────────────────────────────────────────────── */
@@ -909,11 +1266,24 @@ struct SavedDrawingState
 {
     PenState pen;
     RGBColor fore, back;
-    GUEST<PixPatHandle> back_pixpat; /* a colour port's */
-    Pattern back_pat;                /* a black-and-white port's */
+    /* The background as it was, not the port's handle: the port disposes
+       of its old pattern when it gets a new one, and a state restored
+       after that drew with freed memory (the 8.6 control panels' titles
+       over dots: tests/guest/difftest appr). A colour pattern ('ppat') as
+       a copy the state owns until a restore hands it to the port. */
+    GUEST<PixPatHandle> back_pixpat;
+    Pattern back_pat; /* the old-style pattern otherwise */
     GUEST<INTEGER> font, size, mode;
     Style face;
 };
+
+PixPatHandle copy_pixpat(PixPatHandle src)
+{
+    PixPatHandle copy = NewPixPat();
+    if(copy)
+        CopyPixPat(src, copy);
+    return copy;
+}
 }
 
 OSStatus Executor::C_GetThemeDrawingState(GUEST<ThemeDrawingState> *outState)
@@ -928,7 +1298,15 @@ OSStatus Executor::C_GetThemeDrawingState(GUEST<ThemeDrawingState> *outState)
     GetForeColor(&s->fore);
     GetBackColor(&s->back);
     if(CGrafPort_p(port))
-        s->back_pixpat = CPORT_BK_PIXPAT(port);
+    {
+        PixPatHandle bk = CPORT_BK_PIXPAT(port);
+        if(bk && PIXPAT_TYPE(bk) != pixpat_type_orig)
+            s->back_pixpat = copy_pixpat(bk);
+        else if(bk)
+            s->back_pat = PIXPAT_1DATA(bk);
+        else
+            s->back_pat = qdGlobals().white;
+    }
     else
         s->back_pat = PORT_BK_PAT(port);
     s->font = PORT_TX_FONT(port);
@@ -948,13 +1326,20 @@ OSStatus Executor::C_SetThemeDrawingState(ThemeDrawingState inState, Boolean inD
     SetPenState(&s->pen);
     RGBForeColor(&s->fore);
     RGBBackColor(&s->back);
-    if(CGrafPort_p(port))
+    if(CGrafPort_p(port) && s->back_pixpat)
     {
-        if(s->back_pixpat)
-            BackPixPat(s->back_pixpat);
+        /* the copy to the port: the state's own when it goes now */
+        PixPatHandle bk = s->back_pixpat;
+        if(inDisposeNow)
+            s->back_pixpat = nullptr;
+        else
+            bk = copy_pixpat(bk);
+        if(bk)
+            BackPixPat(bk);
     }
     else
         BackPat(&s->back_pat);
+    RGBBackColor(&s->back);
     TextFont(s->font);
     TextSize(s->size);
     TextMode(s->mode);
@@ -968,6 +1353,9 @@ OSStatus Executor::C_DisposeThemeDrawingState(ThemeDrawingState inState)
 {
     if(!inState)
         return paramErr;
+    auto *s = (SavedDrawingState *)inState;
+    if(s->back_pixpat)
+        DisposePixPat(s->back_pixpat);
     DisposePtr((Ptr)inState);
     return noErr;
 }

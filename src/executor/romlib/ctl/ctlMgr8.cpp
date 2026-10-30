@@ -123,6 +123,13 @@ UInt32 features(ControlHandle c)
         x.featuresKnown = true;
         x.features = newMessages(c) ? CTLCALL(c, kControlMsgGetFeatures, 0) : 0;
     }
+    /* A window's root control embeds whatever its definition says (on 8.6
+       CountSubControls and AutoEmbedControl work on it; Executor's root,
+       a user pane, answered errControlIsNotEmbedder: tests/guest/difftest
+       ctl). */
+    auto it = roots().find(CTL_OWNER(c));
+    if(it != roots().end() && it->second == c)
+        return x.features | kControlSupportsEmbedding;
     return x.features;
 }
 
@@ -280,6 +287,12 @@ void Executor::ROMlib_control8_new(ControlHandle c)
 
 void Executor::ROMlib_control8_dispose(ControlHandle c)
 {
+    /* Focus first: a control with no extras can have it too
+       (SetKeyboardFocus on an old one), and a stale one crashed
+       AdvanceKeyboardFocus (the 8.6 Appearance control panel). */
+    for(auto &f : focus())
+        if(f.second == c)
+            f.second = nullptr;
     ControlExtras *x = findExtras(c);
     if(!x)
         return;
@@ -292,8 +305,6 @@ void Executor::ROMlib_control8_dispose(ControlHandle c)
     WindowPtr w = CTL_OWNER(c);
     if(rootOf(w) == c)
         roots().erase(w);
-    if(focus()[w] == c)
-        focus()[w] = nullptr;
     extrasTable().erase(c);
 }
 
@@ -509,8 +520,9 @@ OSErr Executor::C_GetBestControlRect(ControlRef inControl, Rect *outRect,
         return errUnknownControl;
     *outRect = CTL_RECT(inControl);
     *outBaseLineOffset = 0;
+    /* A definition that can't say: its own rectangle, noErr (8.6). */
     if(!(features(inControl) & kControlSupportsCalcBestRect))
-        return errMessageNotSupported;
+        return noErr;
     ControlCalcSizeRec rec;
     rec.height = RECT_HEIGHT(&CTL_RECT(inControl));
     rec.width = RECT_WIDTH(&CTL_RECT(inControl));
@@ -841,7 +853,7 @@ OSErr Executor::C_SetControlData(ControlRef inControl, ControlPartCode inPart, R
         return C_SetControlFontStyle(inControl, (const ControlFontStyleRec *)inData);
     }
     if(!(features(inControl) & kControlSupportsDataAccess))
-        return errDataNotSupported;
+        return errMessageNotSupported; /* 8.6, for a definition without data */
     ControlDataAccessRec rec;
     rec.tag = inTagName;
     rec.part = inPart;
@@ -856,6 +868,11 @@ static OSErr getData(ControlHandle c, ControlPartCode part, ResType tag, Size bu
 {
     if(!c)
         return errUnknownControl;
+    /* As 8.6 answers (tests/guest/difftest ctl): a definition without data
+       access, whatever the tag, errMessageNotSupported; the size is only
+       set on success. */
+    if(!(features(c) & kControlSupportsDataAccess))
+        return errMessageNotSupported;
     if(tag == kControlFontStyleTag)
     {
         ControlExtras& x = extras(c);
@@ -867,8 +884,6 @@ static OSErr getData(ControlHandle c, ControlPartCode part, ResType tag, Size bu
             *actualSize = sizeof x.font;
         return noErr;
     }
-    if(!(features(c) & kControlSupportsDataAccess))
-        return errDataNotSupported;
     ControlDataAccessRec rec;
     rec.tag = tag;
     rec.part = part;
@@ -879,7 +894,7 @@ static OSErr getData(ControlHandle c, ControlPartCode part, ResType tag, Size bu
         CtlCallGuard guard(c);
         err = CTLCALL(c, kControlMsgGetData, ptr_to_longint(&rec));
     }
-    if(actualSize)
+    if(actualSize && err == noErr)
         *actualSize = rec.size;
     return err;
 }

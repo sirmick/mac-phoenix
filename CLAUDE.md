@@ -75,6 +75,11 @@ ctest --test-dir build -L executor
 # Every control panel and application on an 8.x System image, one per Executor session
 # (screenshots, crashes, unimplemented calls; docs/executor/MacOS8-9.md "The 8.6 grid"):
 tools/executor/grid.py 8.6.img --jobs 3        # -> ~/storage/executor-grid/8.6/grid.md
+# Differential probes: Apple's 8/9 libraries (G3 ROM) against Executor's, key by key
+# (docs/executor/DiffTest.md; references and expected differences committed):
+tools/difftest/run.py appr [--dump]            # ctest -R difftest_
+tools/macdecode/libraries.py --census --rom ~/storage/roms/g3.rom --system FOLDER --logs GRID-DIR
+tools/executor/grid_compare.py ~/storage/executor-grid/8.6-r2 ~/storage/executor-grid/8.6-r3
 # Toolbox selectors/OT functions a session called that Executor lacks: "[unimplemented]"
 # in the log, collected in ~/storage/executor/unimplemented.log (date, app, call)
 
@@ -339,7 +344,9 @@ Logging:
   --executor-debug OPTS      Executor's own debug options: memcheck (heap checks at every
                              Memory Manager call), allocs (log allocations >= 4K with the
                              calling code), drag (the Drag Manager's dispatch and Finder's
-                             hook calls), fslog, trace, trapfailure, unimplemented, ...
+                             hook calls), pcsample (the PowerPC PC every 5 ms; every 5 s the
+                             top addresses as fragment+offset and nearest export), fslog,
+                             trace, trapfailure, unimplemented, ...
   --watch ADDR[:LEN]         Report every write to guest memory ADDR (Executor, Linux x86-64):
                              old/new value, 68k PC/registers/code, last traps, host stack
 ```

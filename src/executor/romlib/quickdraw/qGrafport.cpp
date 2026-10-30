@@ -295,13 +295,13 @@ void Executor::C_BackPat(const Pattern * pp)
 
         old_bk = CPORT_BK_PIXPAT(theCPort);
         if(old_bk && PIXPAT_TYPE(old_bk) == pixpat_type_orig)
-            PIXPAT_1DATA(old_bk) = *pp;
+            ROMlib_set_pixpat_pattern(old_bk, *pp);
         else
         {
             PixPatHandle new_bk = NewPixPat();
 
             PIXPAT_TYPE(new_bk) = 0;
-            PIXPAT_1DATA(new_bk) = *pp;
+            ROMlib_set_pixpat_pattern(new_bk, *pp);
             BackPixPat(new_bk);
         }
         /*
@@ -323,13 +323,13 @@ void Executor::ROMlib_fill_pat(const Pattern& pp) /* INTERNAL */
 
         old_fill = CPORT_FILL_PIXPAT(theCPort);
         if(PIXPAT_TYPE(old_fill) == pixpat_type_orig)
-            PIXPAT_1DATA(old_fill) = pp;
+            ROMlib_set_pixpat_pattern(old_fill, pp);
         else
         {
             PixPatHandle new_fill = NewPixPat();
 
             PIXPAT_TYPE(new_fill) = 0;
-            PIXPAT_1DATA(new_fill) = pp;
+            ROMlib_set_pixpat_pattern(new_fill, pp);
 
             ROMlib_fill_pixpat(new_fill);
         }
@@ -340,4 +340,12 @@ void Executor::ROMlib_fill_pat(const Pattern& pp) /* INTERNAL */
     }
     else
         PORT_FILL_PAT(qdGlobals().thePort) = pp;
+}
+
+/* MacPhoenix: the current process's QuickDraw globals, whose thePort the
+   long at A5 points to (PrivateInterfaceLib; 8.6's NQD, FontManager,
+   TextServices and IconUtils fragments ask for them). */
+QDGlobalsPtr Executor::C_GetQDGlobals()
+{
+    return &qdGlobals();
 }

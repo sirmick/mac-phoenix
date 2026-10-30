@@ -125,12 +125,18 @@ cfm_launch(Handle cfrg0, OSType desired_arch, FSSpecPtr fsp)
         OSErr err = noErr;
 
         unsigned char empty[] = { 0 };
+        /* MacPhoenix: the application's fragment by its 'cfrg' name:
+           libraries in its file import from it by that name (Netscape
+           Communicator's SmartUpdate, Registry, ... from
+           "NetscapeCommunicator"). */
+        Str63 fragname;
+        memcpy(fragname, CFIR_NAME(cfirp), std::min<int>(CFIR_NAME(cfirp)[0], 63) + 1);
 
         if(CFIR_LOCATION(cfirp) == kOnDiskFlat)
         {
             // #warning were ignoring a lot of the cfir attributes
             err = GetDiskFragment(fsp, CFIR_OFFSET_TO_FRAGMENT(cfirp),
-                            CFIR_FRAGMENT_LENGTH(cfirp), empty,
+                            CFIR_FRAGMENT_LENGTH(cfirp), fragname,
                             kLoadLib,
                             &c_id,
                             &mainAddr,

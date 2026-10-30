@@ -213,6 +213,134 @@ Second run, by looking at the screenshots:
   Communicator, Talkback, the Internet Setup assistants, Memory, Apple
   Menu Options); dimmed static text drawn as hatching (Modem, TCP/IP).
 
+Third run (`~/storage/executor-grid/8.6-r3/`): no host crashes.
+
+* **Partitions** are what 8.6 gives: the SIZE preferred size + 56K, the
+  stack `DefltStack` + 16K (9.0.4: + 68K; 7.5.5 keeps + 16K), measured on
+  the G3 by `tests/guest/partprobe` (ctest `partition_rom_ppc_86`,
+  `partition_executor_86`). With 7.5.5's rule small applications ran out
+  of heap at their first alert: Register StuffIt Expander (100K, a 64K
+  buffer of its own) now shows its alert as on the G3. Where a heap is
+  full anyway, Executor fails as a Mac does instead of crashing:
+  `NewWindow`, `GetCTable`, `NewRgn` answer nil, QuickDraw's region
+  builder and Icon Utilities' scratch fall back to the system heap,
+  `AppendMenu`/`SetMenuItemText` don't write past a menu that can't grow.
+  `--executor-debug allocs` logs every failed allocation (zone size, free)
+  and each partition's layout.
+* **Calls that left their outputs alone.** An unimplemented PowerPC
+  import answers 0, which callers take for noErr with the outputs set:
+  the Appearance panel took stale stack for a desktop pixpat and for a
+  theme variant list, which it then disposed of (one of its own
+  controls). WindowsLib's desktop calls and AppearanceLib's theme calls
+  are Executor's now (signatures from the panel's call sites); Appearance
+  opens, its tabs not drawn right yet (the tab control, panes overlapping).
+* Energy Saver says its extension isn't running (as on a Mac without it);
+  Disk Copy shows its menus (`SetMenuBar`'s copy reused the old master
+  pointer, so the bar looked drawn); Mac OS Setup Assistant and Sherlock
+  start, no window yet.
+* User Profile Manager launches Communicator with an `'appa'` coercion of
+  a `'MOSS'/'prfl'` event (Executor's coercion was an old private format
+  that read only `'odoc'` lists); an application's fragment carries its
+  `'cfrg'` name, which the libraries in Communicator's file import from.
+  Communicator itself still quits: its allocator's pools don't fit in the
+  12.5MB partition once its ~10MB of code is loaded there. Open: whether
+  8.6's Process Manager adds a PowerPC application's code to the
+  partition with virtual memory off (Communicator runs on the G3).
+* Date & Time: the menu bar clock calls (MenusLib, weak imports it makes
+  from 8.2 on) are answered; it now spins in Apple's WindowDefinitions
+  drawing its title (no traps: needs PC sampling). With Charcoal (the
+  PC sampler, 2026-10-30): in the System file's GlyphsCache (Apple Type
+  Services, `'cfrg'` 52), section 0 +$14..+$2c, a skip-list search that
+  never meets its end node: the glyph cache ATS keeps isn't set up as 8.6
+  sets it up (FMSharedCaches, FontObjects); its menus show, no window.
+
+Differential probes (docs/executor/DiffTest.md) now ask Apple's 8.6
+libraries and Executor's the same questions: `appr` (the Appearance
+Manager) found GetThemeSoundMask writing a long too many into its
+caller's frame, the Code Fragment Manager's calls missing under
+`CodeFragmentMgr` (Retro68's stub library), and the gaps listed in
+`tests/guest/difftest/expected/appr-executor-8.6.txt` (regions Executor
+draws as rectangles, the theme collection's missing items, invalid
+brush and text colour numbers it answers, the platinum drawing). The
+census (`libraries.py --census`) ranks what 8.6 sessions call that
+Executor lacks: GetWDInfo, SetSubmenuParentChoosable, IsMenuItemEnabled,
+GetQDGlobals and the PPC Toolbox first.
+
+Fourth run (`~/storage/executor-grid/8.6-r4/`, 2026-10-30, Charcoal): no
+crashes, results as r3. The same items on the G3
+(`~/storage/executor-grid/8.6-g3/`, `grid.py --rom g3`): 92 run, 13 not in
+front (applets, items that quit at once there too); side by side in
+`8.6-r4/vs-g3.html`. Control panels now lay out as on the G3 (General
+Controls item for item); what differs is the drawing: no platinum colours,
+check box and radio titles over a stippled pattern, a cross where 8.6
+draws a check mark.
+
+Window Manager 2.0 (2026-10-31, the `wind` probe): CreateNewWindow and
+the rest of WindowsLib but 'wind' resources, collections and content paint
+procs (wind/windMgr8.cpp), Gestalt `'wind'` 1 from 8.5. CreateNewWindow's
+windows are drawn by Executor's own definitions (document variants, WDEF
+124, dialog boxes): 8.6's platinum WDEFs 64-67 draw their titles through
+Apple Type Services, which spins on Executor (Date & Time). Not yet:
+floating windows as a layer of their own (`'wind'` bit 2), proxy drags and
+the path menu (they answer as for a window without a proxy, or
+errUserWantsToDragWindow), collapsing drawn.
+
+The titles over dots (2026-10-31): 8.6's ToolboxUtils saves a colour
+port's old-style background pattern from the PixPat's `patData` handle,
+which Executor left empty, and erased every control and group title with
+that handle's block header (General Controls, TCP/IP, Modem: the "dimmed
+static text drawn as hatching"). Executor keeps the 8 bytes there now.
+On the way (`appr`'s `modes` and `title` sections): the arithmetic transfer
+modes on the components' own precision (addOver wrapping, subPin and
+subOver destination minus source), a basic GrafPort's arithmetic modes as
+Boolean ones on any screen, CopyBits from `qd.screenBits` with a GWorld
+current, `GetQDGlobals` (PrivateInterfaceLib: NQD, FontManager,
+TextServices, IconUtils ask for it), and a theme drawing state that owns
+its background instead of a handle the port may dispose of.
+
+Fonts (2026-10-30, the `text` probe: every line as 8.6's). 8.6's system
+font is Charcoal, from the Roman `'itlb'`'s extended record
+(`itlbSysFond`, which also gives the Script Manager's font variables);
+Charcoal is TrueType only, and Chicago, Monaco and Palatino have outlines
+for the sizes they have no strike of. Executor scales TrueType now
+(`quickdraw/sfnt.cpp`, from the TrueType Reference Manual: no hinting,
+pixel centres with dropout control): an outline at a size becomes an
+NFNT strike, so QuickDraw draws and measures it as a bitmap font; widths
+come from `'hdmx'`, metrics are 8.6's (descent rounded half down, widMax
+the advance maximum rounded up). The Font Manager looks at every FOND of a
+family (8.6's System file has its own Chicago, Geneva and Monaco FONDs,
+which hid the suitcases' sizes and outlines), takes styles' extra widths
+from the FOND's style property table when its flags say so (Chicago 12
+shadowed is 1 wider, not 2), and FMSwapFont answers the strike's metrics
+with the style in bold/shadow/extra (GetFontInfo adds it). 8.x measures a
+carriage return as 0 and keeps a bitmap glyph of no width so in any style.
+
+Gestalt, FindFolder and the classic controls (2026-10-30, `sys` and
+`ctl`). The per-version table (gestalt.cpp's `since_table`, and
+`gestalt_set_system_version` for selectors 7.x answers too) gives 8.6's
+values where Executor has what they claim: the 8.5 Menu Manager, Mixed
+Mode, partial resources and override maps, the Script Manager at the
+System's version, Apple events with the Object Support Library in the
+System, Gestalt 7, no MFS, HFS Plus volumes (8.1); the extended Time
+Manager and the Notification Manager on every version. Not yet: `'wind'`
+(Window Manager 2.0 isn't complete: SetWindowBounds, WindowPathSelect),
+QuickDraw 2.5 (QDGetPatternOrigin), the Folder Manager's descriptors. An
+8.x startup makes Application Support, Contextual Menu Items and Cleanup
+At Startup, as 8.6 has them. The classic push button, check box and radio
+button take the 8.0 messages as 8.6's do (features, data, best rectangle:
+the font's line plus 4 or 6, title plus 16 or 20, 58 at least for a push
+button).
+
+Still open: Keyboard ("Keyboard Preferences file is in use", after it
+scans the Preferences folder: its 68k code decides why); Memory (no
+window; its RAM Disk trap `$A074`, selectors 9-13, is handled as absent
+by the panel); Network Browser (Apple's Navigation Services calls OS trap
+`$A08E`, selector 1 with a 40-byte block, unknown); StuffIt Expander 6 is
+a Carbon application and the image has no CarbonLib (on a Mac it
+wouldn't open either; Executor should fail the launch with "CarbonLib
+could not be found" rather than stub every import); the rest of the
+list above.
+
 What the first run needed fixed (none of the classic control panels or
 desk accessories opened): the Finder never got the bridge's `'odoc'`
 (Executor's `AESend` dropped events for other processes; and the
@@ -510,3 +638,13 @@ Next, in order:
   --results libprobe.txt --hold-key 56` (Executor: `--backend executor`).
 * The unresolved imports of a session: `CFM: unresolved import NAME` in
   the log; calls to them: `[unimplemented] PowerPC NAME`.
+* `--executor-debug pcsample`: the PowerPC PC at the end of the core's
+  time slices (every 5 ms at most); every 5 s the twelve most frequent
+  addresses as `Fragment sect N+$off (Export+$off)` (cfm.cpp's
+  `ROMlib_cfm_describe`, on CountSymbols/GetIndSymbol). For code that spins
+  without calling the Toolbox; the fragment's container (its `'cfrg'`
+  entry's offset and length) goes to `pef.py --dis`.
+* `tools/executor/grid.py IMAGE --rom g3`: the grid on Apple's code (the
+  ROM machine, a fresh copy of the image per item), the reference
+  screenshots; `grid_compare.py REF EXECUTOR --html FILE` puts the two
+  side by side.

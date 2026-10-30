@@ -1,0 +1,876 @@
+# probe d0f4b836840e06f76716e1ab69ee6496f0dae4ae9cb6415306931c99c73c1104
+== create
+create.1.0: err 0 made
+create.1.0.class: err 0 6
+create.1.0.attributes: err 0 00000000
+create.1.0.features: err 0 00001a38
+create.1.0.widths: err 0 3,3,4,4
+create.1.0.bounds.0: err -30593 0,0,0,0
+create.1.0.region.0: err -30593
+create.1.0.bounds.1: err -30593 0,0,0,0
+create.1.0.region.1: err -30593
+create.1.0.bounds.2: err -30593 0,0,0,0
+create.1.0.region.2: err -30593
+create.1.0.bounds.3: err -30593 0,0,0,0
+create.1.0.region.3: err -30593
+create.1.0.bounds.5: err -30593 0,0,0,0
+create.1.0.region.5: err -30593
+create.1.0.bounds.6: err -30593 0,0,0,0
+create.1.0.region.6: err -30593
+create.1.0.bounds.7: err -30593 0,0,0,0
+create.1.0.region.7: err -30593
+create.1.0.bounds.32: err 0 97,97,254,304
+create.1.0.region.32: bbox 97,97,254,304 size 44 crc 0fdf1249
+create.1.0.bounds.33: err 0 100,100,250,300
+create.1.0.region.33: bbox 100,100,250,300 size 10 crc f67ff037
+create.1.0.bounds.35: err -30593 0,0,0,0
+create.1.0.region.35: err -30593
+create.1.1: err -5601 
+create.1.2: err -5601 
+create.1.3: err -5601 
+create.2.0: err 0 made
+create.2.0.class: err 0 6
+create.2.0.attributes: err 0 00000000
+create.2.0.features: err 0 00001a78
+create.2.0.widths: err 0 24,3,4,4
+create.2.0.bounds.0: err 0 76,97,98,303
+create.2.0.region.0: bbox 76,97,98,303 size 10 crc a8c4b04e
+create.2.0.bounds.1: err -30593 0,0,0,0
+create.2.0.region.1: err -30593
+create.2.0.bounds.2: err -30593 0,0,0,0
+create.2.0.region.2: err -30593
+create.2.0.bounds.3: err -30593 0,0,0,0
+create.2.0.region.3: err -30593
+create.2.0.bounds.5: err 0 76,97,254,304
+create.2.0.region.5: bbox 76,97,254,304 size 60 crc aaa201cd
+create.2.0.bounds.6: err -30593 0,0,0,0
+create.2.0.region.6: err -30593
+create.2.0.bounds.7: err -30593 0,0,0,0
+create.2.0.region.7: err -30593
+create.2.0.bounds.32: err 0 76,97,254,304
+create.2.0.region.32: bbox 76,97,254,304 size 44 crc 42c7748f
+create.2.0.bounds.33: err 0 100,100,250,300
+create.2.0.region.33: bbox 100,100,250,300 size 10 crc f67ff037
+create.2.0.bounds.35: err -30593 0,0,0,0
+create.2.0.region.35: err -30593
+create.2.1: err -5601 
+create.2.2: err -5601 
+create.2.3: err -5601 
+create.3.0: err 0 made
+create.3.0.class: err 0 6
+create.3.0.attributes: err 0 00000000
+create.3.0.features: err 0 00001a18
+create.3.0.widths: err 0 3,3,4,4
+create.3.0.bounds.0: err -30593 0,0,0,0
+create.3.0.region.0: err -30593
+create.3.0.bounds.1: err -30593 0,0,0,0
+create.3.0.region.1: err -30593
+create.3.0.bounds.2: err -30593 0,0,0,0
+create.3.0.region.2: err -30593
+create.3.0.bounds.3: err -30593 0,0,0,0
+create.3.0.region.3: err -30593
+create.3.0.bounds.5: err -30593 0,0,0,0
+create.3.0.region.5: err -30593
+create.3.0.bounds.6: err -30593 0,0,0,0
+create.3.0.region.6: err -30593
+create.3.0.bounds.7: err -30593 0,0,0,0
+create.3.0.region.7: err -30593
+create.3.0.bounds.32: err 0 97,97,254,304
+create.3.0.region.32: bbox 97,97,254,304 size 44 crc 0fdf1249
+create.3.0.bounds.33: err 0 100,100,250,300
+create.3.0.region.33: bbox 100,100,250,300 size 10 crc f67ff037
+create.3.0.bounds.35: err -30593 0,0,0,0
+create.3.0.region.35: err -30593
+create.3.1: err -5601 
+create.3.2: err -5601 
+create.3.3: err -5601 
+create.4.0: err 0 made
+create.4.0.class: err 0 6
+create.4.0.attributes: err 0 00000000
+create.4.0.features: err 0 00001a58
+create.4.0.widths: err 0 24,3,4,4
+create.4.0.bounds.0: err 0 76,97,98,303
+create.4.0.region.0: bbox 76,97,98,303 size 10 crc a8c4b04e
+create.4.0.bounds.1: err -30593 0,0,0,0
+create.4.0.region.1: err -30593
+create.4.0.bounds.2: err -30593 0,0,0,0
+create.4.0.region.2: err -30593
+create.4.0.bounds.3: err -30593 0,0,0,0
+create.4.0.region.3: err -30593
+create.4.0.bounds.5: err 0 76,97,254,304
+create.4.0.region.5: bbox 76,97,254,304 size 60 crc aaa201cd
+create.4.0.bounds.6: err -30593 0,0,0,0
+create.4.0.region.6: err -30593
+create.4.0.bounds.7: err -30593 0,0,0,0
+create.4.0.region.7: err -30593
+create.4.0.bounds.32: err 0 76,97,254,304
+create.4.0.region.32: bbox 76,97,254,304 size 44 crc 42c7748f
+create.4.0.bounds.33: err 0 100,100,250,300
+create.4.0.region.33: bbox 100,100,250,300 size 10 crc f67ff037
+create.4.0.bounds.35: err -30593 0,0,0,0
+create.4.0.region.35: err -30593
+create.4.1: err -5601 
+create.4.2: err -5601 
+create.4.3: err -5601 
+create.5.0: err 0 made
+create.5.0.class: err 0 6
+create.5.0.attributes: err 0 00000000
+create.5.0.features: err 0 00001a54
+create.5.0.widths: err 0 14,4,5,5
+create.5.0.bounds.0: err 0 86,96,100,304
+create.5.0.region.0: bbox 86,96,100,304 size 10 crc df8f2b39
+create.5.0.bounds.1: err -30593 0,0,0,0
+create.5.0.region.1: err -30593
+create.5.0.bounds.2: err -30593 0,0,0,0
+create.5.0.region.2: err -30593
+create.5.0.bounds.3: err -30593 0,0,0,0
+create.5.0.region.3: err -30593
+create.5.0.bounds.5: err 0 86,96,255,305
+create.5.0.region.5: bbox 86,96,255,305 size 60 crc 9189c627
+create.5.0.bounds.6: err -30593 0,0,0,0
+create.5.0.region.6: err -30593
+create.5.0.bounds.7: err -30593 0,0,0,0
+create.5.0.region.7: err -30593
+create.5.0.bounds.32: err 0 86,96,255,305
+create.5.0.region.32: bbox 86,96,255,305 size 44 crc 53560c9c
+create.5.0.bounds.33: err 0 100,100,250,300
+create.5.0.region.33: bbox 100,100,250,300 size 10 crc f67ff037
+create.5.0.bounds.35: err -30593 0,0,0,0
+create.5.0.region.35: err -30593
+create.5.1: err 0 made
+create.5.1.class: err 0 6
+create.5.1.attributes: err 0 0000001f
+create.5.1.features: err 0 00001a57
+create.5.1.widths: err 0 14,4,5,5
+create.5.1.bounds.0: err 0 86,96,100,304
+create.5.1.region.0: bbox 86,96,100,304 size 10 crc df8f2b39
+create.5.1.bounds.1: err -30593 0,0,0,0
+create.5.1.region.1: err -30593
+create.5.1.bounds.2: err -30593 0,0,0,0
+create.5.1.region.2: err -30593
+create.5.1.bounds.3: err -30593 0,0,0,0
+create.5.1.region.3: err -30593
+create.5.1.bounds.5: err 0 86,96,255,305
+create.5.1.region.5: bbox 86,96,255,305 size 60 crc 9189c627
+create.5.1.bounds.6: err -30593 0,0,0,0
+create.5.1.region.6: err -30593
+create.5.1.bounds.7: err -30593 0,0,0,0
+create.5.1.region.7: err -30593
+create.5.1.bounds.32: err 0 86,96,255,305
+create.5.1.region.32: bbox 86,96,255,305 size 44 crc 53560c9c
+create.5.1.bounds.33: err 0 100,100,250,300
+create.5.1.region.33: bbox 100,100,250,300 size 36 crc 6f9cbb73
+create.5.1.bounds.35: err -30593 0,0,0,0
+create.5.1.region.35: err -30593
+create.5.2: err 0 made
+create.5.2.class: err 0 6
+create.5.2.attributes: err 0 00000009
+create.5.2.features: err 0 00001a54
+create.5.2.widths: err 0 14,4,5,5
+create.5.2.bounds.0: err 0 86,96,100,304
+create.5.2.region.0: bbox 86,96,100,304 size 10 crc df8f2b39
+create.5.2.bounds.1: err -30593 0,0,0,0
+create.5.2.region.1: err -30593
+create.5.2.bounds.2: err -30593 0,0,0,0
+create.5.2.region.2: err -30593
+create.5.2.bounds.3: err -30593 0,0,0,0
+create.5.2.region.3: err -30593
+create.5.2.bounds.5: err 0 86,96,255,305
+create.5.2.region.5: bbox 86,96,255,305 size 60 crc 9189c627
+create.5.2.bounds.6: err -30593 0,0,0,0
+create.5.2.region.6: err -30593
+create.5.2.bounds.7: err -30593 0,0,0,0
+create.5.2.region.7: err -30593
+create.5.2.bounds.32: err 0 86,96,255,305
+create.5.2.region.32: bbox 86,96,255,305 size 44 crc 53560c9c
+create.5.2.bounds.33: err 0 100,100,250,300
+create.5.2.region.33: bbox 100,100,250,300 size 10 crc f67ff037
+create.5.2.bounds.35: err -30593 0,0,0,0
+create.5.2.region.35: err -30593
+create.5.3: err 0 made
+create.5.3.class: err 0 6
+create.5.3.attributes: err 0 00000007
+create.5.3.features: err 0 00001a56
+create.5.3.widths: err 0 14,4,5,5
+create.5.3.bounds.0: err 0 86,96,100,304
+create.5.3.region.0: bbox 86,96,100,304 size 10 crc df8f2b39
+create.5.3.bounds.1: err -30593 0,0,0,0
+create.5.3.region.1: err -30593
+create.5.3.bounds.2: err -30593 0,0,0,0
+create.5.3.region.2: err -30593
+create.5.3.bounds.3: err -30593 0,0,0,0
+create.5.3.region.3: err -30593
+create.5.3.bounds.5: err 0 86,96,255,305
+create.5.3.region.5: bbox 86,96,255,305 size 60 crc 9189c627
+create.5.3.bounds.6: err -30593 0,0,0,0
+create.5.3.region.6: err -30593
+create.5.3.bounds.7: err -30593 0,0,0,0
+create.5.3.region.7: err -30593
+create.5.3.bounds.32: err 0 86,96,255,305
+create.5.3.region.32: bbox 86,96,255,305 size 44 crc 53560c9c
+create.5.3.bounds.33: err 0 100,100,250,300
+create.5.3.region.33: bbox 100,100,250,300 size 10 crc f67ff037
+create.5.3.bounds.35: err -30593 0,0,0,0
+create.5.3.region.35: err -30593
+create.6.0: err 0 made
+create.6.0.class: err 0 6
+create.6.0.attributes: err 0 00000000
+create.6.0.features: err 0 00001fd4
+create.6.0.widths: err 0 22,6,7,7
+create.6.0.bounds.0: err 0 78,94,100,306
+create.6.0.region.0: bbox 78,94,100,306 size 10 crc 7ba19e5b
+create.6.0.bounds.1: err -30593 0,0,0,0
+create.6.0.region.1: err -30593
+create.6.0.bounds.2: err -30593 0,0,0,0
+create.6.0.region.2: err -30593
+create.6.0.bounds.3: err -30593 0,0,0,0
+create.6.0.region.3: err -30593
+create.6.0.bounds.5: err 0 78,94,257,307
+create.6.0.region.5: bbox 78,94,257,307 size 60 crc 79516ddb
+create.6.0.bounds.6: err -30593 0,0,0,0
+create.6.0.region.6: err -30593
+create.6.0.bounds.7: err -30593 0,0,0,0
+create.6.0.region.7: err -30593
+create.6.0.bounds.32: err 0 78,94,257,307
+create.6.0.region.32: bbox 78,94,257,307 size 44 crc 6577ec78
+create.6.0.bounds.33: err 0 100,100,250,300
+create.6.0.region.33: bbox 100,100,250,300 size 10 crc f67ff037
+create.6.0.bounds.35: err -30593 0,0,0,0
+create.6.0.region.35: err -30593
+create.6.1: err 0 made
+create.6.1.class: err 0 6
+create.6.1.attributes: err 0 0000001f
+create.6.1.features: err 0 00001fd7
+create.6.1.widths: err 0 22,6,7,7
+create.6.1.bounds.0: err 0 78,94,100,306
+create.6.1.region.0: bbox 78,94,100,306 size 10 crc 7ba19e5b
+create.6.1.bounds.1: err -30593 0,0,0,0
+create.6.1.region.1: err -30593
+create.6.1.bounds.2: err -30593 0,0,0,0
+create.6.1.region.2: err -30593
+create.6.1.bounds.3: err -30593 0,0,0,0
+create.6.1.region.3: err -30593
+create.6.1.bounds.5: err 0 78,94,257,307
+create.6.1.region.5: bbox 78,94,257,307 size 60 crc 79516ddb
+create.6.1.bounds.6: err -30593 0,0,0,0
+create.6.1.region.6: err -30593
+create.6.1.bounds.7: err -30593 0,0,0,0
+create.6.1.region.7: err -30593
+create.6.1.bounds.32: err 0 78,94,257,307
+create.6.1.region.32: bbox 78,94,257,307 size 44 crc 6577ec78
+create.6.1.bounds.33: err 0 100,100,250,300
+create.6.1.region.33: bbox 100,100,250,300 size 36 crc 76197b0f
+create.6.1.bounds.35: err -30593 0,0,0,0
+create.6.1.region.35: err -30593
+create.6.2: err 0 made
+create.6.2.class: err 0 6
+create.6.2.attributes: err 0 00000009
+create.6.2.features: err 0 00001fd4
+create.6.2.widths: err 0 22,6,7,7
+create.6.2.bounds.0: err 0 78,94,100,306
+create.6.2.region.0: bbox 78,94,100,306 size 10 crc 7ba19e5b
+create.6.2.bounds.1: err -30593 0,0,0,0
+create.6.2.region.1: err -30593
+create.6.2.bounds.2: err -30593 0,0,0,0
+create.6.2.region.2: err -30593
+create.6.2.bounds.3: err -30593 0,0,0,0
+create.6.2.region.3: err -30593
+create.6.2.bounds.5: err 0 78,94,257,307
+create.6.2.region.5: bbox 78,94,257,307 size 60 crc 79516ddb
+create.6.2.bounds.6: err -30593 0,0,0,0
+create.6.2.region.6: err -30593
+create.6.2.bounds.7: err -30593 0,0,0,0
+create.6.2.region.7: err -30593
+create.6.2.bounds.32: err 0 78,94,257,307
+create.6.2.region.32: bbox 78,94,257,307 size 44 crc 6577ec78
+create.6.2.bounds.33: err 0 100,100,250,300
+create.6.2.region.33: bbox 100,100,250,300 size 10 crc f67ff037
+create.6.2.bounds.35: err -30593 0,0,0,0
+create.6.2.region.35: err -30593
+create.6.3: err 0 made
+create.6.3.class: err 0 6
+create.6.3.attributes: err 0 00000007
+create.6.3.features: err 0 00001fd6
+create.6.3.widths: err 0 22,6,7,7
+create.6.3.bounds.0: err 0 78,94,100,306
+create.6.3.region.0: bbox 78,94,100,306 size 10 crc 7ba19e5b
+create.6.3.bounds.1: err -30593 0,0,0,0
+create.6.3.region.1: err -30593
+create.6.3.bounds.2: err -30593 0,0,0,0
+create.6.3.region.2: err -30593
+create.6.3.bounds.3: err -30593 0,0,0,0
+create.6.3.region.3: err -30593
+create.6.3.bounds.5: err 0 78,94,257,307
+create.6.3.region.5: bbox 78,94,257,307 size 60 crc 79516ddb
+create.6.3.bounds.6: err -30593 0,0,0,0
+create.6.3.region.6: err -30593
+create.6.3.bounds.7: err -30593 0,0,0,0
+create.6.3.region.7: err -30593
+create.6.3.bounds.32: err 0 78,94,257,307
+create.6.3.region.32: bbox 78,94,257,307 size 44 crc 6577ec78
+create.6.3.bounds.33: err 0 100,100,250,300
+create.6.3.region.33: bbox 100,100,250,300 size 10 crc f67ff037
+create.6.3.bounds.35: err -30593 0,0,0,0
+create.6.3.region.35: err -30593
+create.8.0: err -5605 
+create.8.1: err -5605 
+create.8.2: err -5605 
+create.8.3: err -5605 
+create.10.0: err -5605 
+create.10.1: err -5605 
+create.10.2: err -5605 
+create.10.3: err -5605 
+create.13.0: err -5605 
+create.13.1: err -5605 
+create.13.2: err -5605 
+create.13.3: err -5605 
+== classic
+classic.bw.0: made
+classic.bw.0.class: err 0 6
+classic.bw.0.attributes: err -50 00000000
+classic.bw.0.features: err 0 00001fd5
+classic.bw.0.widths: err 0 22,6,7,7
+classic.bw.0.bounds.0: err 0 78,94,100,306
+classic.bw.0.region.0: bbox 78,94,100,306 size 10 crc 7ba19e5b
+classic.bw.0.bounds.1: err 0 80,178,98,221
+classic.bw.0.region.1: bbox 80,178,98,221 size 10 crc 8c47e10c
+classic.bw.0.bounds.2: err -30593 0,0,0,0
+classic.bw.0.region.2: err -30593
+classic.bw.0.bounds.3: err -30593 0,0,0,0
+classic.bw.0.region.3: err -30593
+classic.bw.0.bounds.5: err 0 78,94,257,307
+classic.bw.0.region.5: bbox 78,94,257,307 size 60 crc 79516ddb
+classic.bw.0.bounds.6: err -30593 0,0,0,0
+classic.bw.0.region.6: err -30593
+classic.bw.0.bounds.7: err -30593 0,0,0,0
+classic.bw.0.region.7: err -30593
+classic.bw.0.bounds.32: err 0 78,94,257,307
+classic.bw.0.region.32: bbox 78,94,257,307 size 44 crc 6577ec78
+classic.bw.0.bounds.33: err 0 100,100,250,300
+classic.bw.0.region.33: bbox 100,100,250,300 size 10 crc f67ff037
+classic.bw.0.bounds.35: err -30593 0,0,0,0
+classic.bw.0.region.35: err -30593
+classic.bw.1: made
+classic.bw.1.class: err 0 6
+classic.bw.1.attributes: err -50 00000000
+classic.bw.1.features: err 0 00001a18
+classic.bw.1.widths: err 0 6,6,7,7
+classic.bw.1.bounds.0: err -30593 0,0,0,0
+classic.bw.1.region.0: err -30593
+classic.bw.1.bounds.1: err -30593 0,0,0,0
+classic.bw.1.region.1: err -30593
+classic.bw.1.bounds.2: err -30593 0,0,0,0
+classic.bw.1.region.2: err -30593
+classic.bw.1.bounds.3: err -30593 0,0,0,0
+classic.bw.1.region.3: err -30593
+classic.bw.1.bounds.5: err -30593 0,0,0,0
+classic.bw.1.region.5: err -30593
+classic.bw.1.bounds.6: err -30593 0,0,0,0
+classic.bw.1.region.6: err -30593
+classic.bw.1.bounds.7: err -30593 0,0,0,0
+classic.bw.1.region.7: err -30593
+classic.bw.1.bounds.32: err 0 94,94,257,307
+classic.bw.1.region.32: bbox 94,94,257,307 size 44 crc 0e74be60
+classic.bw.1.bounds.33: err 0 100,100,250,300
+classic.bw.1.region.33: bbox 100,100,250,300 size 10 crc f67ff037
+classic.bw.1.bounds.35: err -30593 0,0,0,0
+classic.bw.1.region.35: err -30593
+classic.bw.2: made
+classic.bw.2.class: err 0 6
+classic.bw.2.attributes: err -50 00000000
+classic.bw.2.features: err 0 00001a10
+classic.bw.2.widths: err 0 1,1,1,1
+classic.bw.2.bounds.0: err -30593 0,0,0,0
+classic.bw.2.region.0: err -30593
+classic.bw.2.bounds.1: err -30593 0,0,0,0
+classic.bw.2.region.1: err -30593
+classic.bw.2.bounds.2: err -30593 0,0,0,0
+classic.bw.2.region.2: err -30593
+classic.bw.2.bounds.3: err -30593 0,0,0,0
+classic.bw.2.region.3: err -30593
+classic.bw.2.bounds.5: err -30593 0,0,0,0
+classic.bw.2.region.5: err -30593
+classic.bw.2.bounds.6: err -30593 0,0,0,0
+classic.bw.2.region.6: err -30593
+classic.bw.2.bounds.7: err -30593 0,0,0,0
+classic.bw.2.region.7: err -30593
+classic.bw.2.bounds.32: err 0 99,99,251,301
+classic.bw.2.region.32: bbox 99,99,251,301 size 10 crc f73d4808
+classic.bw.2.bounds.33: err 0 100,100,250,300
+classic.bw.2.region.33: bbox 100,100,250,300 size 10 crc f67ff037
+classic.bw.2.bounds.35: err -30593 0,0,0,0
+classic.bw.2.region.35: err -30593
+classic.bw.3: made
+classic.bw.3.class: err 0 6
+classic.bw.3.attributes: err -50 00000000
+classic.bw.3.features: err 0 00001a10
+classic.bw.3.widths: err 0 1,1,3,3
+classic.bw.3.bounds.0: err -30593 0,0,0,0
+classic.bw.3.region.0: err -30593
+classic.bw.3.bounds.1: err -30593 0,0,0,0
+classic.bw.3.region.1: err -30593
+classic.bw.3.bounds.2: err -30593 0,0,0,0
+classic.bw.3.region.2: err -30593
+classic.bw.3.bounds.3: err -30593 0,0,0,0
+classic.bw.3.region.3: err -30593
+classic.bw.3.bounds.5: err -30593 0,0,0,0
+classic.bw.3.region.5: err -30593
+classic.bw.3.bounds.6: err -30593 0,0,0,0
+classic.bw.3.region.6: err -30593
+classic.bw.3.bounds.7: err -30593 0,0,0,0
+classic.bw.3.region.7: err -30593
+classic.bw.3.bounds.32: err 0 99,99,253,303
+classic.bw.3.region.32: bbox 99,99,253,303 size 44 crc 652725e4
+classic.bw.3.bounds.33: err 0 100,100,250,300
+classic.bw.3.region.33: bbox 100,100,250,300 size 10 crc f67ff037
+classic.bw.3.bounds.35: err -30593 0,0,0,0
+classic.bw.3.region.35: err -30593
+classic.bw.4: made
+classic.bw.4.class: err 0 6
+classic.bw.4.attributes: err -50 00000000
+classic.bw.4.features: err 0 00001fd4
+classic.bw.4.widths: err 0 22,6,7,7
+classic.bw.4.bounds.0: err 0 78,94,100,306
+classic.bw.4.region.0: bbox 78,94,100,306 size 10 crc 7ba19e5b
+classic.bw.4.bounds.1: err 0 80,178,98,221
+classic.bw.4.region.1: bbox 80,178,98,221 size 10 crc 8c47e10c
+classic.bw.4.bounds.2: err -30593 0,0,0,0
+classic.bw.4.region.2: err -30593
+classic.bw.4.bounds.3: err -30593 0,0,0,0
+classic.bw.4.region.3: err -30593
+classic.bw.4.bounds.5: err 0 78,94,257,307
+classic.bw.4.region.5: bbox 78,94,257,307 size 60 crc 79516ddb
+classic.bw.4.bounds.6: err -30593 0,0,0,0
+classic.bw.4.region.6: err -30593
+classic.bw.4.bounds.7: err -30593 0,0,0,0
+classic.bw.4.region.7: err -30593
+classic.bw.4.bounds.32: err 0 78,94,257,307
+classic.bw.4.region.32: bbox 78,94,257,307 size 44 crc 6577ec78
+classic.bw.4.bounds.33: err 0 100,100,250,300
+classic.bw.4.region.33: bbox 100,100,250,300 size 10 crc f67ff037
+classic.bw.4.bounds.35: err -30593 0,0,0,0
+classic.bw.4.region.35: err -30593
+classic.bw.8: made
+classic.bw.8.class: err 0 6
+classic.bw.8.attributes: err -50 00000000
+classic.bw.8.features: err 0 00001fd7
+classic.bw.8.widths: err 0 22,6,7,7
+classic.bw.8.bounds.0: err 0 78,94,100,306
+classic.bw.8.region.0: bbox 78,94,100,306 size 10 crc 7ba19e5b
+classic.bw.8.bounds.1: err 0 80,178,98,221
+classic.bw.8.region.1: bbox 80,178,98,221 size 10 crc 8c47e10c
+classic.bw.8.bounds.2: err -30593 0,0,0,0
+classic.bw.8.region.2: err -30593
+classic.bw.8.bounds.3: err -30593 0,0,0,0
+classic.bw.8.region.3: err -30593
+classic.bw.8.bounds.5: err 0 78,94,257,307
+classic.bw.8.region.5: bbox 78,94,257,307 size 60 crc 79516ddb
+classic.bw.8.bounds.6: err -30593 0,0,0,0
+classic.bw.8.region.6: err -30593
+classic.bw.8.bounds.7: err -30593 0,0,0,0
+classic.bw.8.region.7: err -30593
+classic.bw.8.bounds.32: err 0 78,94,257,307
+classic.bw.8.region.32: bbox 78,94,257,307 size 44 crc 6577ec78
+classic.bw.8.bounds.33: err 0 100,100,250,300
+classic.bw.8.region.33: bbox 100,100,250,300 size 10 crc f67ff037
+classic.bw.8.bounds.35: err -30593 0,0,0,0
+classic.bw.8.region.35: err -30593
+classic.bw.12: made
+classic.bw.12.class: err 0 6
+classic.bw.12.attributes: err -50 00000000
+classic.bw.12.features: err 0 00001fd6
+classic.bw.12.widths: err 0 22,6,7,7
+classic.bw.12.bounds.0: err 0 78,94,100,306
+classic.bw.12.region.0: bbox 78,94,100,306 size 10 crc 7ba19e5b
+classic.bw.12.bounds.1: err 0 80,178,98,221
+classic.bw.12.region.1: bbox 80,178,98,221 size 10 crc 8c47e10c
+classic.bw.12.bounds.2: err -30593 0,0,0,0
+classic.bw.12.region.2: err -30593
+classic.bw.12.bounds.3: err -30593 0,0,0,0
+classic.bw.12.region.3: err -30593
+classic.bw.12.bounds.5: err 0 78,94,257,307
+classic.bw.12.region.5: bbox 78,94,257,307 size 60 crc 79516ddb
+classic.bw.12.bounds.6: err -30593 0,0,0,0
+classic.bw.12.region.6: err -30593
+classic.bw.12.bounds.7: err -30593 0,0,0,0
+classic.bw.12.region.7: err -30593
+classic.bw.12.bounds.32: err 0 78,94,257,307
+classic.bw.12.region.32: bbox 78,94,257,307 size 44 crc 6577ec78
+classic.bw.12.bounds.33: err 0 100,100,250,300
+classic.bw.12.region.33: bbox 100,100,250,300 size 10 crc f67ff037
+classic.bw.12.bounds.35: err -30593 0,0,0,0
+classic.bw.12.region.35: err -30593
+classic.bw.5: made
+classic.bw.5.class: err 0 6
+classic.bw.5.attributes: err -50 00000000
+classic.bw.5.features: err 0 00001a58
+classic.bw.5.widths: err 0 27,6,7,7
+classic.bw.5.bounds.0: err 0 73,94,95,306
+classic.bw.5.region.0: bbox 73,94,95,306 size 10 crc 9638aaa4
+classic.bw.5.bounds.1: err 0 75,178,93,221
+classic.bw.5.region.1: bbox 75,178,93,221 size 10 crc c6a98b95
+classic.bw.5.bounds.2: err -30593 0,0,0,0
+classic.bw.5.region.2: err -30593
+classic.bw.5.bounds.3: err -30593 0,0,0,0
+classic.bw.5.region.3: err -30593
+classic.bw.5.bounds.5: err 0 73,94,257,307
+classic.bw.5.region.5: bbox 73,94,257,307 size 60 crc ef864660
+classic.bw.5.bounds.6: err -30593 0,0,0,0
+classic.bw.5.region.6: err -30593
+classic.bw.5.bounds.7: err -30593 0,0,0,0
+classic.bw.5.region.7: err -30593
+classic.bw.5.bounds.32: err 0 73,94,257,307
+classic.bw.5.region.32: bbox 73,94,257,307 size 44 crc 51aee58f
+classic.bw.5.bounds.33: err 0 100,100,250,300
+classic.bw.5.region.33: bbox 100,100,250,300 size 10 crc f67ff037
+classic.bw.5.bounds.35: err -30593 0,0,0,0
+classic.bw.5.region.35: err -30593
+classic.bw.1985: made
+classic.bw.1985.class: err 0 6
+classic.bw.1985.attributes: err -50 00000000
+classic.bw.1985.features: err 0 00001a54
+classic.bw.1985.widths: err 0 16,4,5,5
+classic.bw.1985.bounds.0: err 0 84,96,100,304
+classic.bw.1985.region.0: bbox 84,96,100,304 size 10 crc 48103a10
+classic.bw.1985.bounds.1: err 0 86,180,98,219
+classic.bw.1985.region.1: bbox 86,180,98,219 size 10 crc 89b484a3
+classic.bw.1985.bounds.2: err -30593 0,0,0,0
+classic.bw.1985.region.2: err -30593
+classic.bw.1985.bounds.3: err -30593 0,0,0,0
+classic.bw.1985.region.3: err -30593
+classic.bw.1985.bounds.5: err 0 84,96,255,305
+classic.bw.1985.region.5: bbox 84,96,255,305 size 60 crc 5587cf81
+classic.bw.1985.bounds.6: err -30593 0,0,0,0
+classic.bw.1985.region.6: err -30593
+classic.bw.1985.bounds.7: err -30593 0,0,0,0
+classic.bw.1985.region.7: err -30593
+classic.bw.1985.bounds.32: err 0 84,96,255,305
+classic.bw.1985.region.32: bbox 84,96,255,305 size 44 crc 723df568
+classic.bw.1985.bounds.33: err 0 100,100,250,300
+classic.bw.1985.region.33: bbox 100,100,250,300 size 10 crc f67ff037
+classic.bw.1985.bounds.35: err -30593 0,0,0,0
+classic.bw.1985.region.35: err -30593
+classic.bw.1987: made
+classic.bw.1987.class: err 0 6
+classic.bw.1987.attributes: err -50 00000000
+classic.bw.1987.features: err 0 00001a55
+classic.bw.1987.widths: err 0 16,4,5,5
+classic.bw.1987.bounds.0: err 0 84,96,100,304
+classic.bw.1987.region.0: bbox 84,96,100,304 size 10 crc 48103a10
+classic.bw.1987.bounds.1: err 0 86,180,98,219
+classic.bw.1987.region.1: bbox 86,180,98,219 size 10 crc 89b484a3
+classic.bw.1987.bounds.2: err -30593 0,0,0,0
+classic.bw.1987.region.2: err -30593
+classic.bw.1987.bounds.3: err -30593 0,0,0,0
+classic.bw.1987.region.3: err -30593
+classic.bw.1987.bounds.5: err 0 84,96,255,305
+classic.bw.1987.region.5: bbox 84,96,255,305 size 60 crc 5587cf81
+classic.bw.1987.bounds.6: err -30593 0,0,0,0
+classic.bw.1987.region.6: err -30593
+classic.bw.1987.bounds.7: err -30593 0,0,0,0
+classic.bw.1987.region.7: err -30593
+classic.bw.1987.bounds.32: err 0 84,96,255,305
+classic.bw.1987.region.32: bbox 84,96,255,305 size 44 crc 723df568
+classic.bw.1987.bounds.33: err 0 100,100,250,300
+classic.bw.1987.region.33: bbox 100,100,250,300 size 36 crc 005617ed
+classic.bw.1987.bounds.35: err -30593 0,0,0,0
+classic.bw.1987.region.35: err -30593
+classic.c.0: made
+classic.c.0.class: err 0 6
+classic.c.0.attributes: err -50 00000000
+classic.c.0.features: err 0 00001fd5
+classic.c.0.widths: err 0 22,6,7,7
+classic.c.0.bounds.0: err 0 78,94,100,306
+classic.c.0.region.0: bbox 78,94,100,306 size 10 crc 7ba19e5b
+classic.c.0.bounds.1: err 0 80,178,98,221
+classic.c.0.region.1: bbox 80,178,98,221 size 10 crc 8c47e10c
+classic.c.0.bounds.2: err -30593 0,0,0,0
+classic.c.0.region.2: err -30593
+classic.c.0.bounds.3: err -30593 0,0,0,0
+classic.c.0.region.3: err -30593
+classic.c.0.bounds.5: err 0 78,94,257,307
+classic.c.0.region.5: bbox 78,94,257,307 size 60 crc 79516ddb
+classic.c.0.bounds.6: err -30593 0,0,0,0
+classic.c.0.region.6: err -30593
+classic.c.0.bounds.7: err -30593 0,0,0,0
+classic.c.0.region.7: err -30593
+classic.c.0.bounds.32: err 0 78,94,257,307
+classic.c.0.region.32: bbox 78,94,257,307 size 44 crc 6577ec78
+classic.c.0.bounds.33: err 0 100,100,250,300
+classic.c.0.region.33: bbox 100,100,250,300 size 10 crc f67ff037
+classic.c.0.bounds.35: err -30593 0,0,0,0
+classic.c.0.region.35: err -30593
+classic.c.1: made
+classic.c.1.class: err 0 6
+classic.c.1.attributes: err -50 00000000
+classic.c.1.features: err 0 00001a18
+classic.c.1.widths: err 0 6,6,7,7
+classic.c.1.bounds.0: err -30593 0,0,0,0
+classic.c.1.region.0: err -30593
+classic.c.1.bounds.1: err -30593 0,0,0,0
+classic.c.1.region.1: err -30593
+classic.c.1.bounds.2: err -30593 0,0,0,0
+classic.c.1.region.2: err -30593
+classic.c.1.bounds.3: err -30593 0,0,0,0
+classic.c.1.region.3: err -30593
+classic.c.1.bounds.5: err -30593 0,0,0,0
+classic.c.1.region.5: err -30593
+classic.c.1.bounds.6: err -30593 0,0,0,0
+classic.c.1.region.6: err -30593
+classic.c.1.bounds.7: err -30593 0,0,0,0
+classic.c.1.region.7: err -30593
+classic.c.1.bounds.32: err 0 94,94,257,307
+classic.c.1.region.32: bbox 94,94,257,307 size 44 crc 0e74be60
+classic.c.1.bounds.33: err 0 100,100,250,300
+classic.c.1.region.33: bbox 100,100,250,300 size 10 crc f67ff037
+classic.c.1.bounds.35: err -30593 0,0,0,0
+classic.c.1.region.35: err -30593
+classic.c.2: made
+classic.c.2.class: err 0 6
+classic.c.2.attributes: err -50 00000000
+classic.c.2.features: err 0 00001a10
+classic.c.2.widths: err 0 1,1,1,1
+classic.c.2.bounds.0: err -30593 0,0,0,0
+classic.c.2.region.0: err -30593
+classic.c.2.bounds.1: err -30593 0,0,0,0
+classic.c.2.region.1: err -30593
+classic.c.2.bounds.2: err -30593 0,0,0,0
+classic.c.2.region.2: err -30593
+classic.c.2.bounds.3: err -30593 0,0,0,0
+classic.c.2.region.3: err -30593
+classic.c.2.bounds.5: err -30593 0,0,0,0
+classic.c.2.region.5: err -30593
+classic.c.2.bounds.6: err -30593 0,0,0,0
+classic.c.2.region.6: err -30593
+classic.c.2.bounds.7: err -30593 0,0,0,0
+classic.c.2.region.7: err -30593
+classic.c.2.bounds.32: err 0 99,99,251,301
+classic.c.2.region.32: bbox 99,99,251,301 size 10 crc f73d4808
+classic.c.2.bounds.33: err 0 100,100,250,300
+classic.c.2.region.33: bbox 100,100,250,300 size 10 crc f67ff037
+classic.c.2.bounds.35: err -30593 0,0,0,0
+classic.c.2.region.35: err -30593
+classic.c.3: made
+classic.c.3.class: err 0 6
+classic.c.3.attributes: err -50 00000000
+classic.c.3.features: err 0 00001a10
+classic.c.3.widths: err 0 1,1,3,3
+classic.c.3.bounds.0: err -30593 0,0,0,0
+classic.c.3.region.0: err -30593
+classic.c.3.bounds.1: err -30593 0,0,0,0
+classic.c.3.region.1: err -30593
+classic.c.3.bounds.2: err -30593 0,0,0,0
+classic.c.3.region.2: err -30593
+classic.c.3.bounds.3: err -30593 0,0,0,0
+classic.c.3.region.3: err -30593
+classic.c.3.bounds.5: err -30593 0,0,0,0
+classic.c.3.region.5: err -30593
+classic.c.3.bounds.6: err -30593 0,0,0,0
+classic.c.3.region.6: err -30593
+classic.c.3.bounds.7: err -30593 0,0,0,0
+classic.c.3.region.7: err -30593
+classic.c.3.bounds.32: err 0 99,99,253,303
+classic.c.3.region.32: bbox 99,99,253,303 size 44 crc 652725e4
+classic.c.3.bounds.33: err 0 100,100,250,300
+classic.c.3.region.33: bbox 100,100,250,300 size 10 crc f67ff037
+classic.c.3.bounds.35: err -30593 0,0,0,0
+classic.c.3.region.35: err -30593
+classic.c.4: made
+classic.c.4.class: err 0 6
+classic.c.4.attributes: err -50 00000000
+classic.c.4.features: err 0 00001fd4
+classic.c.4.widths: err 0 22,6,7,7
+classic.c.4.bounds.0: err 0 78,94,100,306
+classic.c.4.region.0: bbox 78,94,100,306 size 10 crc 7ba19e5b
+classic.c.4.bounds.1: err 0 80,178,98,221
+classic.c.4.region.1: bbox 80,178,98,221 size 10 crc 8c47e10c
+classic.c.4.bounds.2: err -30593 0,0,0,0
+classic.c.4.region.2: err -30593
+classic.c.4.bounds.3: err -30593 0,0,0,0
+classic.c.4.region.3: err -30593
+classic.c.4.bounds.5: err 0 78,94,257,307
+classic.c.4.region.5: bbox 78,94,257,307 size 60 crc 79516ddb
+classic.c.4.bounds.6: err -30593 0,0,0,0
+classic.c.4.region.6: err -30593
+classic.c.4.bounds.7: err -30593 0,0,0,0
+classic.c.4.region.7: err -30593
+classic.c.4.bounds.32: err 0 78,94,257,307
+classic.c.4.region.32: bbox 78,94,257,307 size 44 crc 6577ec78
+classic.c.4.bounds.33: err 0 100,100,250,300
+classic.c.4.region.33: bbox 100,100,250,300 size 10 crc f67ff037
+classic.c.4.bounds.35: err -30593 0,0,0,0
+classic.c.4.region.35: err -30593
+classic.c.8: made
+classic.c.8.class: err 0 6
+classic.c.8.attributes: err -50 00000000
+classic.c.8.features: err 0 00001fd7
+classic.c.8.widths: err 0 22,6,7,7
+classic.c.8.bounds.0: err 0 78,94,100,306
+classic.c.8.region.0: bbox 78,94,100,306 size 10 crc 7ba19e5b
+classic.c.8.bounds.1: err 0 80,178,98,221
+classic.c.8.region.1: bbox 80,178,98,221 size 10 crc 8c47e10c
+classic.c.8.bounds.2: err -30593 0,0,0,0
+classic.c.8.region.2: err -30593
+classic.c.8.bounds.3: err -30593 0,0,0,0
+classic.c.8.region.3: err -30593
+classic.c.8.bounds.5: err 0 78,94,257,307
+classic.c.8.region.5: bbox 78,94,257,307 size 60 crc 79516ddb
+classic.c.8.bounds.6: err -30593 0,0,0,0
+classic.c.8.region.6: err -30593
+classic.c.8.bounds.7: err -30593 0,0,0,0
+classic.c.8.region.7: err -30593
+classic.c.8.bounds.32: err 0 78,94,257,307
+classic.c.8.region.32: bbox 78,94,257,307 size 44 crc 6577ec78
+classic.c.8.bounds.33: err 0 100,100,250,300
+classic.c.8.region.33: bbox 100,100,250,300 size 10 crc f67ff037
+classic.c.8.bounds.35: err -30593 0,0,0,0
+classic.c.8.region.35: err -30593
+classic.c.12: made
+classic.c.12.class: err 0 6
+classic.c.12.attributes: err -50 00000000
+classic.c.12.features: err 0 00001fd6
+classic.c.12.widths: err 0 22,6,7,7
+classic.c.12.bounds.0: err 0 78,94,100,306
+classic.c.12.region.0: bbox 78,94,100,306 size 10 crc 7ba19e5b
+classic.c.12.bounds.1: err 0 80,178,98,221
+classic.c.12.region.1: bbox 80,178,98,221 size 10 crc 8c47e10c
+classic.c.12.bounds.2: err -30593 0,0,0,0
+classic.c.12.region.2: err -30593
+classic.c.12.bounds.3: err -30593 0,0,0,0
+classic.c.12.region.3: err -30593
+classic.c.12.bounds.5: err 0 78,94,257,307
+classic.c.12.region.5: bbox 78,94,257,307 size 60 crc 79516ddb
+classic.c.12.bounds.6: err -30593 0,0,0,0
+classic.c.12.region.6: err -30593
+classic.c.12.bounds.7: err -30593 0,0,0,0
+classic.c.12.region.7: err -30593
+classic.c.12.bounds.32: err 0 78,94,257,307
+classic.c.12.region.32: bbox 78,94,257,307 size 44 crc 6577ec78
+classic.c.12.bounds.33: err 0 100,100,250,300
+classic.c.12.region.33: bbox 100,100,250,300 size 10 crc f67ff037
+classic.c.12.bounds.35: err -30593 0,0,0,0
+classic.c.12.region.35: err -30593
+classic.c.5: made
+classic.c.5.class: err 0 6
+classic.c.5.attributes: err -50 00000000
+classic.c.5.features: err 0 00001a58
+classic.c.5.widths: err 0 27,6,7,7
+classic.c.5.bounds.0: err 0 73,94,95,306
+classic.c.5.region.0: bbox 73,94,95,306 size 10 crc 9638aaa4
+classic.c.5.bounds.1: err 0 75,178,93,221
+classic.c.5.region.1: bbox 75,178,93,221 size 10 crc c6a98b95
+classic.c.5.bounds.2: err -30593 0,0,0,0
+classic.c.5.region.2: err -30593
+classic.c.5.bounds.3: err -30593 0,0,0,0
+classic.c.5.region.3: err -30593
+classic.c.5.bounds.5: err 0 73,94,257,307
+classic.c.5.region.5: bbox 73,94,257,307 size 60 crc ef864660
+classic.c.5.bounds.6: err -30593 0,0,0,0
+classic.c.5.region.6: err -30593
+classic.c.5.bounds.7: err -30593 0,0,0,0
+classic.c.5.region.7: err -30593
+classic.c.5.bounds.32: err 0 73,94,257,307
+classic.c.5.region.32: bbox 73,94,257,307 size 44 crc 51aee58f
+classic.c.5.bounds.33: err 0 100,100,250,300
+classic.c.5.region.33: bbox 100,100,250,300 size 10 crc f67ff037
+classic.c.5.bounds.35: err -30593 0,0,0,0
+classic.c.5.region.35: err -30593
+classic.c.1985: made
+classic.c.1985.class: err 0 6
+classic.c.1985.attributes: err -50 00000000
+classic.c.1985.features: err 0 00001a54
+classic.c.1985.widths: err 0 16,4,5,5
+classic.c.1985.bounds.0: err 0 84,96,100,304
+classic.c.1985.region.0: bbox 84,96,100,304 size 10 crc 48103a10
+classic.c.1985.bounds.1: err 0 86,180,98,219
+classic.c.1985.region.1: bbox 86,180,98,219 size 10 crc 89b484a3
+classic.c.1985.bounds.2: err -30593 0,0,0,0
+classic.c.1985.region.2: err -30593
+classic.c.1985.bounds.3: err -30593 0,0,0,0
+classic.c.1985.region.3: err -30593
+classic.c.1985.bounds.5: err 0 84,96,255,305
+classic.c.1985.region.5: bbox 84,96,255,305 size 60 crc 5587cf81
+classic.c.1985.bounds.6: err -30593 0,0,0,0
+classic.c.1985.region.6: err -30593
+classic.c.1985.bounds.7: err -30593 0,0,0,0
+classic.c.1985.region.7: err -30593
+classic.c.1985.bounds.32: err 0 84,96,255,305
+classic.c.1985.region.32: bbox 84,96,255,305 size 44 crc 723df568
+classic.c.1985.bounds.33: err 0 100,100,250,300
+classic.c.1985.region.33: bbox 100,100,250,300 size 10 crc f67ff037
+classic.c.1985.bounds.35: err -30593 0,0,0,0
+classic.c.1985.region.35: err -30593
+classic.c.1987: made
+classic.c.1987.class: err 0 6
+classic.c.1987.attributes: err -50 00000000
+classic.c.1987.features: err 0 00001a55
+classic.c.1987.widths: err 0 16,4,5,5
+classic.c.1987.bounds.0: err 0 84,96,100,304
+classic.c.1987.region.0: bbox 84,96,100,304 size 10 crc 48103a10
+classic.c.1987.bounds.1: err 0 86,180,98,219
+classic.c.1987.region.1: bbox 86,180,98,219 size 10 crc 89b484a3
+classic.c.1987.bounds.2: err -30593 0,0,0,0
+classic.c.1987.region.2: err -30593
+classic.c.1987.bounds.3: err -30593 0,0,0,0
+classic.c.1987.region.3: err -30593
+classic.c.1987.bounds.5: err 0 84,96,255,305
+classic.c.1987.region.5: bbox 84,96,255,305 size 60 crc 5587cf81
+classic.c.1987.bounds.6: err -30593 0,0,0,0
+classic.c.1987.region.6: err -30593
+classic.c.1987.bounds.7: err -30593 0,0,0,0
+classic.c.1987.region.7: err -30593
+classic.c.1987.bounds.32: err 0 84,96,255,305
+classic.c.1987.region.32: bbox 84,96,255,305 size 44 crc 723df568
+classic.c.1987.bounds.33: err 0 100,100,250,300
+classic.c.1987.region.33: bbox 100,100,250,300 size 36 crc 005617ed
+classic.c.1987.bounds.35: err -30593 0,0,0,0
+classic.c.1987.region.35: err -30593
+== bounds
+bounds.SetWindowBounds.content: err 0
+bounds.content: 60,50,200,250
+bounds.structure: 38,44,207,257
+bounds.SetWindowBounds.structure: err 0
+bounds.content.2: 40,40,230,260
+bounds.MoveWindowStructure: err 0
+bounds.structure.moved: 30,20,249,253
+bounds.RepositionWindow.center: err 0
+bounds.structure.centered: 980,1803,1199,2036
+bounds.RepositionWindow.alert: err -50
+bounds.structure.alert: 980,1803,1199,2036
+bounds.IsWindowInStandardState: 0
+bounds.IsWindowInStandardState.state: 1002,1809,1082,1929
+bounds.GetWindowIdealUserState: err 0
+bounds.GetWindowIdealUserState.rect: 0,0,0,0
+bounds.SetWindowIdealUserState: err 0
+bounds.GetWindowIdealUserState.after: 80,70,180,170
+bounds.IsWindowCollapsed: 0
+bounds.CollapseWindow: err 0 1
+bounds.CollapseWindow.back: err 0 0
+== props
+props.GetWindowPropertySize.none: err -5604
+props.SetWindowProperty: err 0
+props.GetWindowPropertySize: err 0 4
+props.GetWindowProperty: err 0 4 12345678
+props.GetWindowProperty.short: err 0 4 1234a5a5
+props.RemoveWindowProperty: err 0
+props.RemoveWindowProperty.again: err 0
+props.IsWindowModified: 1
+props.SetWindowModified: err 0 1
+props.GetWindowContentColor: err -5604 ffff ffff ffff
+props.SetWindowContentColor: err 0 1111 2222 3333
+== floating
+floating.FrontNonFloatingWindow: doc
+floating.FrontWindow: doc
+floating.AreFloatingWindowsVisible: 1
+floating.HideFloatingWindows: err -5609 1 visible 1
+floating.ShowFloatingWindows: err -5609 1 visible 1
+floating.IsValidWindowPtr.doc: 1
+floating.IsValidWindowPtr.nil: 0
+floating.IsValidWindowPtr.bogus: 0
+floating.IsValidWindowPtr.disposed: 0
+== proxy
+proxy.GetWindowProxyFSSpec.none: err -5602
+proxy.SetWindowProxyCreatorAndType: err 0
+proxy.GetWindowProxyFSSpec.typed: err -5602
+proxy.RemoveWindowProxy: err 0
+proxy.RemoveWindowProxy.again: err 0

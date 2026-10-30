@@ -111,10 +111,13 @@ public:
         to_core(p, c);
     }
 
-    void slice_end(cpu::Core &) override
+    void slice_end(cpu::Core &c) override
     {
         if(syn68k_slice_hook)
             syn68k_slice_hook();
+        PowerCore &p = PowerCore::instance();
+        if(p.sliceHook)
+            p.sliceHook(p, c.pc());
     }
 };
 PpcHost ppc_host;

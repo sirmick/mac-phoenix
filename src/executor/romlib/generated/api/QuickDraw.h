@@ -981,5 +981,8 @@ END_EXECUTOR_ONLY
 
 
 
+QDGlobalsPtr C_GetQDGlobals();LIBRARY_FUNCTION(PrivateInterfaceLib, GetQDGlobals, C_GetQDGlobals);
+
+
 
 } /* namespace Executor */

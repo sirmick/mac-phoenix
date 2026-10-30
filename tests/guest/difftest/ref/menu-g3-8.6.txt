@@ -1,0 +1,122 @@
+# probe 1926be27bd461a50fb7c508e035b62d1b5062ceddce31e18b1f3161fc1f377df
+== append
+append.metachars.count: 9
+append.metachars.1.text: "Plain" (5)
+append.metachars.1.attrs: mark 0 cmd 0 style 00 a5 icon 0
+append.metachars.2.text: "Bold" (4)
+append.metachars.2.attrs: mark 0 cmd 0 style 01 a5 icon 0
+append.metachars.3.text: "Icon" (4)
+append.metachars.3.attrs: mark 0 cmd 0 style 00 a5 icon 1
+append.metachars.4.text: "Mark" (4)
+append.metachars.4.attrs: mark 42 cmd 0 style 00 a5 icon 0
+append.metachars.5.text: "Key" (3)
+append.metachars.5.attrs: mark 0 cmd 75 style 00 a5 icon 0
+append.metachars.6.text: "Disabled" (8)
+append.metachars.6.attrs: mark 0 cmd 0 style 00 a5 icon 0
+append.metachars.7.text: "-" (1)
+append.metachars.7.attrs: mark 0 cmd 0 style 00 a5 icon 0
+append.metachars.8.text: "Two" (3)
+append.metachars.8.attrs: mark 0 cmd 84 style 00 a5 icon 0
+append.metachars.9.text: "Three" (5)
+append.metachars.9.attrs: mark 0 cmd 0 style 00 a5 icon 0
+append.metachars.size: 103
+append.metachars.data: ffffffbf0550726f626505506c61696e0000000004426f6c64000000010449636f6e01000000044d61726b00002a00034b6579004b00000844697361626c6564... (93 bytes, crc 5480a239)
+append.enable: ffffffbf
+== text
+text.text.count: 4
+text.text.1.text: "Inserted" (8)
+text.text.1.attrs: mark 0 cmd 0 style 00 a5 icon 0
+text.text.2.text: "After2" (6)
+text.text.2.attrs: mark 0 cmd 0 style 00 a5 icon 0
+text.text.3.text: "ab" (2)
+text.text.3.attrs: mark 0 cmd 0 style 00 a5 icon 0
+text.text.4.text: "AtEnd" (5)
+text.text.4.attrs: mark 0 cmd 0 style 00 a5 icon 0
+text.text.size: 61
+text.text.data: 7fffffff045465787408496e73657274656400000000064166746572320000000002616200000000054174456e640000000000
+text.AppendMenuItemText: 0
+text.InsertMenuItemText: 0
+text.literal.count: 6
+text.literal.1.text: "Inserted" (8)
+text.literal.1.attrs: mark 0 cmd 0 style 00 a5 icon 0
+text.literal.2.text: "^0 meta" (7)
+text.literal.2.attrs: mark 0 cmd 0 style 00 a5 icon 0
+text.literal.3.text: "After2" (6)
+text.literal.3.attrs: mark 0 cmd 0 style 00 a5 icon 0
+text.literal.4.text: "ab" (2)
+text.literal.4.attrs: mark 0 cmd 0 style 00 a5 icon 0
+text.literal.5.text: "AtEnd" (5)
+text.literal.5.attrs: mark 0 cmd 0 style 00 a5 icon 0
+text.literal.6.text: "Literal;/X<B(!" (14)
+text.literal.6.attrs: mark 0 cmd 0 style 00 a5 icon 0
+text.literal.size: 92
+text.literal.data: ffffffff045465787408496e73657274656400000000075e30206d65746100000000064166746572320000000002616200000000054174456e64000000000e4c... (82 bytes, crc 20fa4215)
+== size
+size.size: 216 x 70
+size.size.bold: 216 x 70
+size.MBarHeight: 20
+== marks
+marks.marks.count: 4
+marks.marks.1.text: "a" (1)
+marks.marks.1.attrs: mark 18 cmd 0 style 00 a5 icon 0
+marks.marks.2.text: "b" (1)
+marks.marks.2.attrs: mark 19 cmd 0 style 00 a5 icon 0
+marks.marks.3.text: "c" (1)
+marks.marks.3.attrs: mark 210 cmd 27 style 00 a5 icon 0
+marks.marks.4.text: "d" (1)
+marks.marks.4.attrs: mark 0 cmd 0 style 00 a5 icon 0
+marks.marks.size: 45
+marks.marks.data: fffffffd054d61726b730161000012000162000013000163001bd20001640000000000
+marks.enable: fffffffd
+marks.bind.IsMenuItemEnabled: found
+marks.IsMenuItemEnabled.0: 1
+marks.IsMenuItemEnabled.1: 0
+marks.IsMenuItemEnabled.2: 1
+marks.IsMenuItemEnabled.3: 1
+marks.IsMenuItemEnabled.4: 1
+== glyphs
+glyphs.SetMenuItemKeyGlyph: 0
+glyphs.SetMenuItemKeyGlyph.bad: -50
+glyphs.bind.GetMenuItemKeyGlyph: found
+glyphs.bind.SetMenuItemModifiers: found
+glyphs.bind.GetMenuItemModifiers: found
+glyphs.GetMenuItemKeyGlyph: 0 23
+glyphs.SetMenuItemModifiers: 0
+glyphs.GetMenuItemModifiers: 0 3
+== icons
+icons.SetMenuItemIconHandle: 0
+icons.GetMenuItemIconHandle.2: 0 type 1 same
+icons.GetMenuItemIconHandle.1: 0 type 0 nil
+icons.GetMenuItemIconHandle.bad: -50
+icons.icons.count: 2
+icons.icons.1.text: "a" (1)
+icons.icons.1.attrs: mark 0 cmd 0 style 00 a5 icon 5
+icons.icons.2.text: "b" (1)
+icons.icons.2.attrs: mark 0 cmd 0 style 00 a5 icon 0
+icons.icons.size: 33
+icons.icons.data: ffffffff0549636f6e7301610500000001620000000000
+== hier
+hier.hier.count: 2
+hier.hier.1.text: "Has sub" (7)
+hier.hier.1.attrs: mark 207 cmd 27 style 00 a5 icon 0
+hier.hier.2.text: "Plain" (5)
+hier.hier.2.attrs: mark 0 cmd 0 style 00 a5 icon 0
+hier.hier.size: 44
+hier.hier.data: ffffffff06506172656e740748617320737562001bcf0005506c61696e0000000000
+hier.GetMenuHandle.207: sub
+hier.bind.SetSubmenuParentChoosable: found
+hier.SetSubmenuParentChoosable: 0
+hier.GetMenuHandle.deleted: nil
+== clock
+clock.bind.IsMenuBarClockEnabled: found
+clock.IsMenuBarClockEnabled: 1
+clock.bind.GetMenuBarClockConfig: found
+clock.GetMenuBarClockConfig: 0
+clock.GetMenuBarClockConfig.data: 00005200000000000000000000000001000000000000
+clock.GetMenuBarClockConfig.v1: -50
+clock.bind.EnableMenuBarClock: found
+clock.bind.DisableMenuBarClock: found
+clock.bind.RefreshMenuBarClock: found
+clock.bind.InvalidateAllMenuSizes: found
+clock.bind.InvalidateAllCachedMenuPixels: found
+clock.bind.RecalculateAllWindowTitleWidths: found

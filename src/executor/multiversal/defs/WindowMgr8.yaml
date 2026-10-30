@@ -701,6 +701,7 @@
       - name: outWindow
         type: WindowRef*
     library: WindowsLib
+    executor: C_
 
 # ####
 
@@ -749,6 +750,7 @@
       - name: outCount
         type: UInt32*
     library: WindowsLib
+    executor: C_
 
 # ####
 
@@ -759,6 +761,7 @@
       - name: window
         type: WindowRef
     library: WindowsLib
+    executor: C_
 
 # ####
 
@@ -824,6 +827,7 @@
     name: ShowFloatingWindows
     return: OSStatus
     library: WindowsLib
+    executor: C_
 
 # ####
 
@@ -831,6 +835,7 @@
     name: HideFloatingWindows
     return: OSStatus
     library: WindowsLib
+    executor: C_
 
 # ####
 
@@ -838,6 +843,7 @@
     name: AreFloatingWindowsVisible
     return: Boolean
     library: WindowsLib
+    executor: C_
 
 # ####
 
@@ -930,6 +936,7 @@
       - name: color
         type: const RGBColor*
     library: WindowsLib
+    executor: C_
 
 # ####
 
@@ -942,6 +949,7 @@
       - name: color
         type: RGBColor*
     library: WindowsLib
+    executor: C_
 
 # ####
 
@@ -954,6 +962,7 @@
       - name: outPixPat
         type: PixPatHandle
     library: WindowsLib
+    executor: C_
 
 # ####
 
@@ -966,6 +975,7 @@
       - name: pixPat
         type: PixPatHandle
     library: WindowsLib
+    executor: C_
 
 # ####
 
@@ -1038,6 +1048,7 @@
     name: InitFloatingWindows
     return: OSStatus
     library: WindowsLib
+    executor: C_
 
 # ####
 
@@ -1065,6 +1076,7 @@
       - name: outRect
         type: Rect*
     library: WindowsLib
+    executor: C_
 
 # ####
 
@@ -1103,6 +1115,7 @@
       - name: alias
         type: AliasHandle
     library: WindowsLib
+    executor: C_
 
 # ####
 
@@ -1115,6 +1128,7 @@
       - name: alias
         type: AliasHandle*
     library: WindowsLib
+    executor: C_
 
 # ####
 
@@ -1131,6 +1145,7 @@
       - name: vRefNum
         type: SInt16
     library: WindowsLib
+    executor: C_
 
 # ####
 
@@ -1182,6 +1197,7 @@
       - name: outDragOutlineRgn
         type: RgnHandle
     library: WindowsLib
+    executor: C_
 
 # ####
 
@@ -1194,6 +1210,7 @@
       - name: theDrag
         type: DragReference
     library: WindowsLib
+    executor: C_
 
 # ####
 
@@ -1210,6 +1227,7 @@
       - name: inDragOutlineRgn
         type: RgnHandle
     library: WindowsLib
+    executor: C_
 
 # ####
 
@@ -1222,6 +1240,7 @@
       - name: startPt
         type: Point
     library: WindowsLib
+    executor: C_
 
 # ####
 
@@ -1258,6 +1277,7 @@
       - name: event
         type: const EventRecord*
     library: WindowsLib
+    executor: C_
 
 # ####
 
@@ -1272,6 +1292,7 @@
       - name: outMenuResult
         type: SInt32*
     library: WindowsLib
+    executor: C_
 
 # ####
 
@@ -1284,6 +1305,7 @@
       - name: hilited
         type: Boolean
     library: WindowsLib
+    executor: C_
 
 # ####
 
@@ -1368,6 +1390,7 @@
       - name: newContentRect
         type: Rect*
     library: WindowsLib
+    executor: C_
 
 # ####
 
@@ -1382,6 +1405,7 @@
       - name: globalBounds
         type: const Rect*
     library: WindowsLib
+    executor: C_
 
 # ####
 
@@ -1396,6 +1420,7 @@
       - name: method
         type: WindowPositionMethod
     library: WindowsLib
+    executor: C_
 
 # ####
 
@@ -1410,6 +1435,7 @@
       - name: vGlobal
         type: short
     library: WindowsLib
+    executor: C_
 
 # ####
 
@@ -1439,6 +1465,7 @@
       - name: ioIdealSize
         type: Point*
     library: WindowsLib
+    executor: C_
 
 # ####
 
@@ -1451,6 +1478,7 @@
       - name: userState
         type: Rect*
     library: WindowsLib
+    executor: C_
 
 # ####
 
@@ -1463,6 +1491,7 @@
       - name: userState
         type: const Rect*
     library: WindowsLib
+    executor: C_
 
 # ####
 
@@ -1573,6 +1602,7 @@
       - name: window
         type: WindowRef
     library: available
+    executor: C_
 
 # ####
 
@@ -1584,6 +1614,7 @@
       - name: data
         type: Handle
     library: available
+    executor: C_
 
 # ####
 
@@ -1594,6 +1625,7 @@
       - name: window
         type: WindowRef
     library: available
+    executor: C_
 
 # ####
 
@@ -1605,6 +1637,7 @@
       - name: r
         type: RgnHandle
     library: available
+    executor: C_
 
 # ####
 
@@ -1616,6 +1649,7 @@
       - name: r
         type: RgnHandle
     library: available
+    executor: C_
 
 # ####
 
@@ -1627,6 +1661,7 @@
       - name: r
         type: RgnHandle
     library: available
+    executor: C_
 
 # ####
 
@@ -1637,6 +1672,7 @@
       - name: window
         type: WindowRef
     library: available
+    executor: C_
 
 # ####
 
@@ -1764,5 +1800,83 @@
     args:
       - name: window
         type: WindowRef
+    library: WindowsLib
+    executor: C_
+
+# ####
+
+# MacPhoenix: WindowsLib's private desktop calls (8.5), with the arguments
+# the 8.6 Appearance control panel passes (tools/macdecode/pef.py --dis).
+# The desktop pattern: a copy the caller disposes, and its name (either nil).
+- function:
+    name: GetDesktopPixPat
+    return: OSStatus
+    args:
+      - name: outPixPat
+        type: PixPatHandle*
+      - name: outName
+        type: StringPtr
+    library: WindowsLib
+    executor: C_
+
+# ####
+
+# The same as a 'ppat' resource's data.
+- function:
+    name: GetDesktopPattern
+    return: OSStatus
+    args:
+      - name: outPattern
+        type: Handle*
+      - name: outName
+        type: StringPtr
+    library: WindowsLib
+    executor: C_
+
+# ####
+
+# A screen's desktop picture file and its placement; -5605 for none.
+- function:
+    name: GetDesktopPictureForDevice
+    return: OSStatus
+    args:
+      - name: device
+        type: GDHandle
+      - name: outFile
+        type: FSSpec*
+      - name: outPlacement
+        type: UInt32*
+    library: WindowsLib
+    executor: C_
+
+# ####
+
+# A picture file read for the desktop (the second argument is a guess).
+- function:
+    name: GetPictureFromFile
+    return: OSStatus
+    args:
+      - name: file
+        type: FSSpec*
+      - name: outPicture
+        type: Ptr
+    library: WindowsLib
+    executor: C_
+
+# ####
+
+# What double-clicking a title bar does (1: collapses the window).
+- function:
+    name: GetWindowDoubleClickAction
+    return: UInt32
+    library: WindowsLib
+    executor: C_
+
+# ####
+
+# After a font change, every window's title width again (the 8.6 Appearance
+# control panel; no arguments at its call sites).
+- function:
+    name: RecalculateAllWindowTitleWidths
     library: WindowsLib
     executor: C_

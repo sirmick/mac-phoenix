@@ -83,7 +83,8 @@ RgnHandle Executor::C_NewRgn()
     RgnHandle h;
 
     h = (RgnHandle)NewHandleClear(RGN_SMALL_SIZE);
-    RGN_SET_SMALL(h);
+    if(h) /* nil with the heap full, as on a Mac */
+        RGN_SET_SMALL(h);
     return h;
 }
 
@@ -91,7 +92,13 @@ void Executor::C_OpenRgn()
 {
     RgnHandle rh;
 
+    /* MacPhoenix: no port (before InitGraf: tests/guest/difftest's probes
+       once), or no memory: nothing to record into. */
+    if(!qdGlobals().thePort)
+        return;
     rh = (RgnHandle)NewHandleClear(RGN_SMALL_SIZE + sizeof(INTEGER));
+    if(!rh)
+        return;
 
     RGN_SET_SIZE_AND_SPECIAL(rh, RGN_SMALL_SIZE + sizeof(INTEGER), false);
     /* sentinel */

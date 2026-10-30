@@ -1576,6 +1576,7 @@
       - name: collapse
         type: Boolean
     library: AppearanceLib
+    executor: C_
 
 # ####
 

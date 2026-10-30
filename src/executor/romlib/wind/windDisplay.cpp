@@ -6,6 +6,7 @@
 
 #include <base/common.h>
 #include <WindowMgr.h>
+#include <WindowMgr8.h>
 #include <OSUtil.h>
 #include <MemoryMgr.h>
 
@@ -14,6 +15,19 @@
 #include <wind/wind.h>
 
 using namespace Executor;
+
+/* WindowsLib's (8.5): after a font change, every window's title width
+   again (its title is drawn in the Window Manager port's font). */
+void Executor::C_RecalculateAllWindowTitleWidths()
+{
+    ThePortGuard guard(wmgr_port);
+    for(WindowPeek w = LM(WindowList); w; w = WINDOW_NEXT_WINDOW(w))
+        if(WINDOW_TITLE(w))
+        {
+            HLockGuard lock(WINDOW_TITLE(w));
+            WINDOW_TITLE_WIDTH(w) = StringWidth(*WINDOW_TITLE(w));
+        }
+}
 
 void Executor::C_SetWTitle(WindowPtr w, ConstStringPtr t)
 {
@@ -56,6 +70,10 @@ WindowPtr Executor::C_FrontWindow()
     WindowPtr retval;
 
     retval = (WindowPtr)ROMlib_firstvisible((WindowPtr)LM(WindowList));
+    /* MacPhoenix: Window Manager 2.0's floating windows are a layer of
+       their own; FrontWindow answers the front one below them (8.6) */
+    while(retval && ROMlib_window8_floating_class(retval))
+        retval = (WindowPtr)ROMlib_firstvisible((WindowPtr)WINDOW_NEXT_WINDOW(retval));
     return retval;
 }
 

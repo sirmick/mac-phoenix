@@ -15,10 +15,16 @@
 #include <quickdraw/cquick.h>
 #include <quickdraw/font.h>
 #include <res/resource.h>
+#include <quickdraw/sfnt.h>
+#include <prefs/prefs.h>
+
+#include <vector>
 
 using namespace Executor;
 
 #define MAXTABLES 12
+
+static FHandle at_least_one_fond_entry(INTEGER family);
 
 static void
 reset_myfmi(void)
@@ -45,8 +51,25 @@ void Executor::C_InitFonts() /* IMI-222 */
         beenhere = true;
     }
     LM(ApFontID) = LM(SPFont) + 1;
+    /* the system font is the Roman script's: its extended 'itlb' says
+       Charcoal on 8.x (itlbSysFond, 36), Chicago before */
     LM(SysFontSiz) = 12;
     LM(SysFontFam) = 0;
+    if(Handle itlb = GetResource("itlb"_4, 0))
+    {
+        if(!*itlb)
+            LoadResource(itlb);
+        if(*itlb && GetHandleSize(itlb) >= 40)
+        {
+            INTEGER fond = *(GUEST<INTEGER> *)(*itlb + 36), size = *(GUEST<INTEGER> *)(*itlb + 38);
+            if(fond && at_least_one_fond_entry(fond))
+            {
+                LM(SysFontFam) = fond;
+                if(size > 0)
+                    LM(SysFontSiz) = size;
+            }
+        }
+    }
 #if 0
     /* 95-09-20: PAUP uses a built in font that has fried width tables.
        The bad tables won't hurt us if LM(FractEnable) is not set, so I ran
@@ -388,6 +411,10 @@ static void buildtabdata(howtobuild_t howtobuild, INTEGER extra,
             }
             break;
         case FontInt:
+        {
+            /* (bitmap strikes only: an outline's glyph of no width
+               widens with the style) */
+            bool outline = ROMlib_outline_strike(WIDTHPTR->tabFont);
             WIDTHPTR->usedFam = 0;
             widp = &fp->owTLoc + fp->owTLoc;
             misswidth = FIXED((widp[lastchar - firstchar + 1] & 0xFF) + extra);
@@ -395,13 +422,17 @@ static void buildtabdata(howtobuild_t howtobuild, INTEGER extra,
             {
                 if(c < firstchar || c > lastchar)
                     *p++ = misswidth;
+                else if((width = *widp++) == -1)
+                    *p++ = misswidth;
+                /* 8.x: a glyph of no width stays so whatever the style,
+                   and a carriage return has none (text_helper too) */
+                else if(system_version >= 0x800 && ((!(width & 0xFF) && !outline) || c == '\r'))
+                    *p++ = 0;
                 else
-                {
-                    *p++ = (width = *widp++) == -1 ? misswidth
-                                                        : FIXED((width & 0xFF) + extra);
-                }
+                    *p++ = FIXED(std::max((width & 0xFF) + extra, 0));
             }
             break;
+        }
         case FondFract:
             WIDTHPTR->usedFam = -1;
             hOutputInverse = FixRatio(1 << 8, WIDTHPTR->hOutput);
@@ -541,6 +572,8 @@ static void findclosestfond(FHandle fh, INTEGER size, INTEGER *powerof2p,
     for(p = (fatabentry *)(ip + 1), ep = p + *ip + 1; p < ep; p++)
     {
         newsize = p->size;
+        if(!newsize) /* an outline font ('sfnt') */
+            continue;
         if(newsize < size)
         {
             if(newsize == size / 2)
@@ -567,6 +600,211 @@ static void findclosestfond(FHandle fh, INTEGER size, INTEGER *powerof2p,
     *greaterp = greater == 32767 ? 0 : greater;
 }
 
+
+/* MacPhoenix: a family's FONDs in every open file, top of the chain
+   first. 8.x's System file has FONDs of its own for Chicago, Geneva and
+   Monaco (their 9 and 12 point strikes); the Fonts folder's suitcases have
+   the same families with more sizes and the outlines. */
+template<typename F>
+static FHandle find_fond(INTEGER family, F want)
+{
+    FHandle found = nullptr;
+    INTEGER saved = LM(CurMap);
+    resmaphand map;
+    WALKMAPTOP(map)
+        UseResFile((*map)->resfn);
+        FHandle h = (FHandle)Get1Resource("FOND"_4, family);
+        if(!h)
+            continue;
+        if(!*h)
+            LoadResource((Handle)h);
+        if(*h && want(h))
+        {
+            found = h;
+            break;
+        }
+    EWALKMAP()
+    LM(CurMap) = saved;
+    return found;
+}
+
+/* the font association table */
+static int fond_entries(FHandle fh, fatabentry **first)
+{
+    GUEST<INTEGER> *ip = &(*fh)->ffVersion + 1;
+    *first = (fatabentry *)(ip + 1);
+    return *ip + 1;
+}
+
+static bool fond_has_size(FHandle fh, INTEGER size)
+{
+    fatabentry *p;
+    for(int n = fond_entries(fh, &p); n-- > 0; p++)
+        if(p->size == size)
+            return true;
+    return false;
+}
+
+/* the FOND with a strike of SIZE whose style has most of FACE and nothing
+   else (8.6 takes Geneva 9 italic from the suitcase's italic strike, not
+   the System file's plain one) */
+static FHandle best_fond_with_size(INTEGER family, INTEGER size, INTEGER face)
+{
+    FHandle best = nullptr;
+    int best_bits = -2;
+    find_fond(family, [&](FHandle fh) {
+        fatabentry *p;
+        for(int n = fond_entries(fh, &p); n-- > 0; p++)
+            if(p->size == size)
+            {
+                int bits = (p->style & ~face) ? -1 : countones(p->style);
+                if(bits > best_bits)
+                {
+                    best = fh;
+                    best_bits = bits;
+                }
+            }
+        return false; /* all of them */
+    });
+    return best;
+}
+
+/* the family's outline ('sfnt', size 0 in the table) for FACE: the one
+   whose style has most of FACE and nothing else */
+static Handle fond_outline(FHandle fh, INTEGER face, INTEGER *stylep)
+{
+    Handle found = nullptr;
+    int best = -1;
+    fatabentry *p;
+    int n = fond_entries(fh, &p);
+    for(int i = 0; i < n; i++)
+    {
+        fond_entries(fh, &p); /* GetResource may have moved it */
+        INTEGER size = p[i].size, style = p[i].style, id = p[i].fontresid;
+        if(size || (style & ~face) || countones(style) <= best)
+            continue;
+        /* (whether it's there: outline_strike loads the one it uses) */
+        Boolean resload = LM(ResLoad);
+        SetResLoad(false);
+        Handle h = GetResource("sfnt"_4, id);
+        SetResLoad(resload);
+        if(h)
+        {
+            found = h;
+            best = countones(style);
+            *stylep = style;
+        }
+        if(!*fh)
+            LoadResource((Handle)fh);
+        if(!*fh)
+            break;
+    }
+    return found;
+}
+
+/* Strikes made from outlines (sfnt.cpp), one per outline and size. When
+   there are too many, the oldest go and the width tables made from them
+   stop matching (fSize 0: rebuilt when next asked for). */
+struct OutlineStrike
+{
+    Handle sfnt;
+    INTEGER ppem;
+    Handle strike;
+    SfntMetrics metrics;
+};
+static std::vector<OutlineStrike> outline_strikes;
+enum
+{
+    MAX_OUTLINE_STRIKES = 48
+};
+
+static void retire_outline_strikes(size_t n)
+{
+    Handle wlh = LM(WidthListHand);
+    for(size_t i = 0; i < n && i < outline_strikes.size(); i++)
+    {
+        Handle strike = outline_strikes[i].strike;
+        if(wlh)
+        {
+            GUEST<WHandle> *hp = *WIDTHLISTHAND;
+            int n_entries = GetHandleSize(wlh) / sizeof(GUEST<Handle>);
+            for(int j = 0; j < n_entries; j++)
+            {
+                if(!hp[j] || (LONGINT)hp[j].raw() == (LONGINT)-1)
+                    continue;
+                WPtr wp = *hp[j];
+                if(wp && wp->tabFont == strike && wp != (WPtr)LM(WidthPtr))
+                    wp->fSize = 0;
+            }
+        }
+        if(LM(ROMlib_fmo).fontHandle == strike)
+            reset_myfmi();
+        DisposeHandle(strike);
+    }
+    outline_strikes.erase(outline_strikes.begin(), outline_strikes.begin() + std::min(n, outline_strikes.size()));
+}
+
+static Handle outline_strike(Handle sfnt, INTEGER ppem)
+{
+    for(const OutlineStrike &o : outline_strikes)
+        if(o.sfnt == sfnt && o.ppem == ppem)
+            return o.strike;
+    LoadResource(sfnt);
+    if(!*sfnt)
+        return nullptr;
+    if(outline_strikes.size() >= MAX_OUTLINE_STRIKES)
+        retire_outline_strikes(MAX_OUTLINE_STRIKES / 4);
+    SfntMetrics m;
+    Handle h = ROMlib_sfnt_strike(sfnt, ppem, &m);
+    if(h)
+        outline_strikes.push_back({ sfnt, ppem, h, m });
+    /* the strike is what's used: the outline (70K for Charcoal) may go */
+    HPurge(sfnt);
+    return h;
+}
+
+static const SfntMetrics *outline_metrics(Handle strike)
+{
+    for(const OutlineStrike &o : outline_strikes)
+        if(o.strike == strike)
+            return &o.metrics;
+    return nullptr;
+}
+
+bool Executor::ROMlib_outline_strike(Handle strike)
+{
+    return outline_metrics(strike) != nullptr;
+}
+
+/* The width table's font from FOND's outline at the size (8.x answers
+   sizes it has no strike of from the outline); a size whose strike won't
+   fit an NFNT is drawn from a smaller one, scaled. */
+static bool use_outline(FHandle fond, INTEGER family, FMInput *fmip)
+{
+    INTEGER style = 0;
+    Handle sfnt = fond_outline(fond, fmip->face, &style);
+    if(!sfnt)
+        return false;
+    for(int ppem = std::min<int>(fmip->size, 255); ppem >= 4; ppem = ppem * 3 / 4)
+        if(Handle strike = outline_strike(sfnt, ppem))
+        {
+            WIDTHPTR->fHand = (Handle)fond;
+            WIDTHPTR->fID = family;
+            WIDTHPTR->fSize = ppem;
+            WIDTHPTR->face = style;
+            WIDTHPTR->tabFont = strike;
+            LM(LastFOND) = (FamRecHandle)fond;
+            return true;
+        }
+    return false;
+}
+
+static bool fond_has_outline(FHandle fh)
+{
+    INTEGER style;
+    return fond_outline(fh, 0x7F, &style) != nullptr;
+}
+
 Boolean Executor::C_RealFont(INTEGER fnum, INTEGER sz) /* IMI-223 */
 {
     Handle h;
@@ -578,19 +816,10 @@ Boolean Executor::C_RealFont(INTEGER fnum, INTEGER sz) /* IMI-223 */
         h = GetResource("NFNT"_4, FONTRESID(fnum, sz));
     retval = !!h;
     SetResLoad(true);
+    /* a strike of the size in any of the family's FONDs, or an outline
+       (any size) */
     if(!retval)
-    {
-        FHandle fh;
-
-        fh = (FHandle)GetResource("FOND"_4, fnum);
-        if(fh)
-        {
-            INTEGER powerof2, lesser, greater;
-            findclosestfond(fh, sz, &powerof2, &lesser, &greater);
-            if(powerof2 == sz)
-                retval = true;
-        }
-    }
+        retval = find_fond(fnum, [&](FHandle fh) { return fond_has_size(fh, sz) || fond_has_outline(fh); }) != nullptr;
     return retval;
 }
 
@@ -641,6 +870,8 @@ static INTEGER closestface() /* no args, uses WIDTHPTR */
     for(p = (fatabentry *)(ip + 1), ep = p + *ip + 1;
         p < ep && p->size <= size; p++)
     {
+        if(!p->size) /* an outline font ('sfnt') */
+            continue;
         if(!bestp)
             bestp = p; /* pick something */
         if((p->size == size) && !(p->style & ~want))
@@ -655,6 +886,8 @@ static INTEGER closestface() /* no args, uses WIDTHPTR */
             }
         }
     }
+    if(!bestp)
+        return 0;
     WIDTHPTR->face = bestp->style;
     return bestp->fontresid;
 }
@@ -667,10 +900,9 @@ at_least_one_fond_entry(INTEGER family)
     retval = (FHandle)GetResource("FOND"_4, family);
     if(retval)
     {
-        INTEGER powerof2, lesser, greater;
+        fatabentry *p;
         LoadResource((Handle)retval);
-        findclosestfond(retval, 1, &powerof2, &lesser, &greater);
-        if(greater == 0)
+        if(fond_entries(retval, &p) <= 0)
             retval = 0;
     }
     return retval;
@@ -765,6 +997,19 @@ static void newwidthtable(FMInput *fmip)
         WIDTHPTR->fID = family;
         if(fh)
         {
+            /* 8.x: the strike of the size from whichever of the family's
+               FONDs has one, else the outline, else the nearest strike
+               scaled (OutlinePreferred: the outline first) */
+            INTEGER want = fmip->size;
+            FHandle exact = best_fond_with_size(family, want, fmip->face);
+            if(!exact || C_GetOutlinePreferred())
+            {
+                FHandle outline = find_fond(family, [](FHandle h) { return fond_has_outline(h); });
+                if(outline && use_outline(outline, family, fmip))
+                    break;
+            }
+            if(exact)
+                WIDTHPTR->fHand = (Handle)(fh = exact);
             LM(LastFOND) = (FamRecHandle)fh;
 
             findclosestfond(fh, fmip->size, &powerof2, &lesser, &greater);
@@ -931,18 +1176,53 @@ FMOutPtr Executor::C_FMSwapFont(FMInput *fmip) /* IMI-223 */
             LM(ROMlib_fmo).ulShadow += ftstr.undert[1];
             LM(ROMlib_fmo).ulThick += ftstr.undert[2];
         }
+        /* A FOND whose flags say so (bit 12 set and 13 clear, or bit 13
+           clear with FractEnable) gives the styles' extra widths in its
+           style property table, in 1/4096 em (8.6: Chicago 12 shadowed
+           is 1 wider, not 2) */
+        {
+            FHandle fond = (FHandle)WIDTHPTR->fHand;
+            if(fond && *fond)
+            {
+                INTEGER flags = (*fond)->ffFlags;
+                if(!(flags & 0x2000) && ((flags & 0x1000) || LM(FractEnable)))
+                {
+                    /* an entry of an em or more counts its sign and low 12
+                       bits (8.6: Palatino's condensed, $8155, is -341:
+                       -1 at 9-18 points, -2 at 24) */
+                    LONGINT sum = 0;
+                    for(int i = 0; i < 7; i++)
+                        if(style & (1 << i))
+                        {
+                            INTEGER prop = (*fond)->ffProperty[i + 1];
+                            if(prop <= -4096 || prop >= 4096)
+                                prop = prop < 0 ? -(prop & 0x0FFF) : prop & 0x0FFF;
+                            sum += (LONGINT)prop * fmip->size;
+                        }
+                    LM(ROMlib_fmo).extra = sum >= 0 ? (sum + 2048) / 4096 : -((-sum + 2048) / 4096);
+                }
+            }
+        }
         if(needtobuild)
             buildtable(LM(ROMlib_fmo).extra);
-        /*
-	 * TODO:  examine the stuff below, particularly widMax.  I don't think
-	 *	  widMax will be correct if scaling is disabled and we expand
-	 *	  characters.  This will cause serious trouble when we allocate
-	 *	  too small a bitmap
-	 */
-        LM(ROMlib_fmo).ascent = fp->ascent + !!LM(ROMlib_fmo).shadow;
-        LM(ROMlib_fmo).descent = fp->descent + LM(ROMlib_fmo).shadow;
-        LM(ROMlib_fmo).widMax = fp->widMax + !!LM(ROMlib_fmo).shadow + LM(ROMlib_fmo).shadow + LM(ROMlib_fmo).bold;
-        LM(ROMlib_fmo).leading = fp->leading;
+        /* the strike's own metrics, as 8.6 answers them: the style is in
+           bold/shadow/extra (ROMlib_styled_font_info adds it) */
+        if(const SfntMetrics *m = outline_metrics(WIDTHPTR->tabFont))
+        {
+            /* the outline's, not the strike's (which holds every glyph) */
+            LM(ROMlib_fmo).ascent = m->ascent;
+            LM(ROMlib_fmo).descent = m->descent;
+            LM(ROMlib_fmo).widMax = m->widMax;
+            LM(ROMlib_fmo).leading = m->leading;
+            LM(ROMlib_fmo).italic = 0; /* the outline is slanted */
+        }
+        else
+        {
+            LM(ROMlib_fmo).ascent = fp->ascent;
+            LM(ROMlib_fmo).descent = fp->descent;
+            LM(ROMlib_fmo).widMax = fp->widMax;
+            LM(ROMlib_fmo).leading = fp->leading;
+        }
     }
     else
     {
@@ -954,6 +1234,17 @@ FMOutPtr Executor::C_FMSwapFont(FMInput *fmip) /* IMI-223 */
     HUnlock((Handle)LM(WidthTabHandle));
     LM(LastFOND) = guest_cast<FamRecHandle>(WIDTHPTR->fHand);
     return &LM(ROMlib_fmo);
+}
+
+/* GetFontInfo's metrics for FMSwapFont's answer: shadow adds a line
+   above and its width below, every style's extra widens widMax (condense
+   narrows it); measured on 8.6 */
+void Executor::ROMlib_styled_font_info(const FMOutput *fmop, FontInfo *fip)
+{
+    fip->ascent = fmop->ascent + !!fmop->shadow;
+    fip->descent = fmop->descent + fmop->shadow;
+    fip->widMax = fmop->widMax + fmop->extra;
+    fip->leading = fmop->leading;
 }
 
 #define SCALE(x) FixRatio(x *fmop->numer.v, fmop->denom.v)
@@ -978,10 +1269,12 @@ void Executor::C_FontMetrics(FMetricRec *metrp) /* IMIV-32 */
     /* TODO:  check out qdGlobals().thePort->device and use the FOND stuff if not
 	      going to the screen */
 
-    metrp->ascent = SCALE(fmop->ascent);
-    metrp->descent = SCALE(fmop->descent);
-    metrp->leading = SCALE(fmop->leading);
-    metrp->widMax = SCALE(fmop->widMax);
+    FontInfo fi;
+    ROMlib_styled_font_info(fmop, &fi);
+    metrp->ascent = SCALE(fi.ascent);
+    metrp->descent = SCALE(fi.descent);
+    metrp->leading = SCALE(fi.leading);
+    metrp->widMax = SCALE(fi.widMax);
     metrp->wTabHandle = guest_cast<Handle>(LM(WidthTabHandle));
 }
 

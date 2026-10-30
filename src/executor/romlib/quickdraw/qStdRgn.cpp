@@ -630,7 +630,11 @@ Executor::ROMlib_blt_pn(RgnHandle rh, INTEGER mode)
     if(mode >= hilite || (mode == patXor && !(LM(HiliteMode) & 128)))
         mode = hilite;
 
-    if(bpp == 1 || (!IMV_XFER_MODE_P(mode) && mode != hilite))
+    /* MacPhoenix: a basic GrafPort takes the arithmetic modes as Boolean
+       ones on any screen (8.6: blend paints the pen pattern, as patCopy;
+       tests/guest/difftest appr, modes.win.basic) */
+    if(bpp == 1 || (!IMV_XFER_MODE_P(mode) && mode != hilite)
+       || (IMV_XFER_MODE_P(mode) && !CGrafPort_p(qdGlobals().thePort)))
     {
         /* I have no idea where this table came from.  It's just been
        * passed down from the old black and white blitter.

@@ -207,8 +207,10 @@ static gestaltentry_t gtable[] = {
                                  | (1 << gestaltHasDeepGWorlds)
                                  | (1 << gestaltHasDirectPixMaps)) },
 
+    /* MacPhoenix: the extended Time Manager (InsXTime, which the 8.6
+       Finder uses; time/time.cpp) */
     {
-        gestaltTimeMgrVersion, gestaltStandardTimeMgr,
+        gestaltTimeMgrVersion, 3, /* gestaltExtendedTimeMgr */
     },
     {
         gestaltVersion, 1,
@@ -331,9 +333,19 @@ static gestaltentry_t since_table[] = {
     { "icon"_4, 0x0000001F }, /* Icon Services (8.5) */
     { "cfrg"_4, 0x00000001 }, /* the Code Fragment Manager */
     { "cltn"_4, 0x01108000 }, /* the Collection Manager 1.1 (collections.cpp) */
+    /* measured on the G3 with 8.6 (tests/guest/difftest/sys.c) */
+    { "menu"_4, 0x00000001 }, /* the 8.5 Menu Manager (MenusLib's calls) */
+    { "mixd"_4, 0x00000001 }, /* Mixed Mode */
+    { "rsrc"_4, 0x00000003 }, /* partial resources, override maps */
+    { "nmgr"_4, 0x00000001 }, /* the Notification Manager (notify.cpp) */
+    /* Window Manager 2.0 (wind/windMgr8.cpp); not yet bit 2, floating
+       windows as a layer of their own (8.6: 5) */
+    { "wind"_4, 0x00000001 },
 };
 static const uint16_t since_versions[std::size(since_table)] = {
     0x0800, 0x0800, 0x0850, 0x0800, 0x0800,
+    0x0850, 0x0800, 0x0800, 0x0800,
+    0x0850,
 };
 
 static gestaltentry_t *
@@ -418,6 +430,17 @@ Executor::gestalt_set_system_version(uint32_t version)
     {
         REPLACE_SELECTOR_IN_TABLE(gestaltSysArchitecture, gestaltPowerPC, gtable);
         REPLACE_SELECTOR_IN_TABLE(gestaltNativeCPUtype, gestaltCPU750, gtable);
+        /* as 8.6 answers them on the G3: the Script Manager's version is
+           the System's; Apple events with scripting support and the
+           Object Support Library in the System (ObjectSupportLib's calls
+           are Executor's); Gestalt 7 (GestaltValue & co.); no MFS
+           volumes, HFS Plus ones from 8.1 */
+        REPLACE_SELECTOR_IN_TABLE(gestaltScriptMgrVersion, version, gtable);
+        REPLACE_SELECTOR_IN_TABLE(gestaltAppleEventsAttr, 7, gtable);
+        REPLACE_SELECTOR_IN_TABLE(gestaltVersion, 7, gtable);
+        gestaltentry_t *fs = find_selector_in_table(gestaltFSAttr, gtable, std::size(gtable));
+        if(fs)
+            fs->value |= 1 << 8 | (version >= 0x0810 ? 1 << 9 : 0);
     }
 }
 

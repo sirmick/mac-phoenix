@@ -239,6 +239,10 @@
 
 # ####
 
+# MacPhoenix: the Code Fragment Manager's calls are InterfaceLib's and, as
+# the CFM registers itself (no file holds it), CodeFragmentMgr's: what
+# Retro68's stub library CFragManager binds to (tests/guest/difftest found
+# them stubbed).
 - dispatcher:
     name: CodeFragmentDispatch
     trap: 0xAA5A
@@ -290,6 +294,7 @@
         type: Str255
     dispatcher: CodeFragmentDispatch
     selector: 0x0002
+    library: [InterfaceLib, CodeFragmentMgr]
     executor: C_
 
 # ####
@@ -314,6 +319,7 @@
         type: SymClass*
     dispatcher: CodeFragmentDispatch
     selector: 0x0005
+    library: [InterfaceLib, CodeFragmentMgr]
     executor: C_
 
 # ####
@@ -326,6 +332,7 @@
         type: ConnectionID*
     dispatcher: CodeFragmentDispatch
     selector: 0x0004
+    library: [InterfaceLib, CodeFragmentMgr]
     executor: C_
 
 # ####
@@ -348,6 +355,7 @@
         type: Str255
     dispatcher: CodeFragmentDispatch
     selector: 0x0001
+    library: [InterfaceLib, CodeFragmentMgr]
     executor: C_
 
 # ####
@@ -372,6 +380,7 @@
         type: Str255
     dispatcher: CodeFragmentDispatch
     selector: 0x0003
+    library: [InterfaceLib, CodeFragmentMgr]
     executor: C_
 
 # ####
@@ -386,6 +395,7 @@
         type: LONGINT*
     dispatcher: CodeFragmentDispatch
     selector: 0x0006
+    library: [InterfaceLib, CodeFragmentMgr]
     executor: C_
 
 # ####
@@ -406,4 +416,5 @@
         type: SymClass*
     dispatcher: CodeFragmentDispatch
     selector: 0x0007
+    library: [InterfaceLib, CodeFragmentMgr]
     executor: C_

@@ -3317,6 +3317,19 @@
 
 # ####
 
+# The current process's QuickDraw globals (MacPhoenix): 8.6's own native
+# QuickDraw, Font Manager, Text Services and Icon Utilities fragments ask
+# for them here instead of being given them by InitGraf; answering 0 left
+# them reading their patterns from low memory (the control panels' titles
+# drawn over dots).
+- function:
+    name: GetQDGlobals
+    return: QDGlobalsPtr
+    library: PrivateInterfaceLib
+    executor: C_
+
+# ####
+
 - api: carbon
   function:
     name: GetQDGlobalsScreenBits

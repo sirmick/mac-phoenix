@@ -187,6 +187,56 @@ bool Executor::ROMlib_cfm_ppc_code(uint32_t addr)
     return false;
 }
 
+/* MacPhoenix: where a PowerPC address is, for the PC sampler: "Fragment
+   sect N+$off (Export+$off)", the export the nearest routine at or before
+   it; empty when no loaded fragment's section holds it. */
+std::string Executor::ROMlib_cfm_describe(uint32_t addr)
+{
+    /* newest first: a fragment of a process being torn down may still be
+       listed, over memory a live one has now */
+    for(auto it = loaded.rbegin(); it != loaded.rend(); ++it)
+    {
+        const loaded_fragment& f = *it;
+        if(f.arch != "pwpc"_4 || !f.cid)
+            continue;
+        for(uint32_t i = 0; i < f.cid->n_sects; i++)
+        {
+            const section_info_t& sect = f.cid->sects[i];
+            uint32_t start = ptr_to_longint(sect.start.get());
+            if(addr < start || addr - start >= sect.length)
+                continue;
+            char buf[400];
+            int n = snprintf(buf, sizeof buf, "%s sect %u+$%x", f.origin.name.c_str(), i, addr - start);
+            GUEST<LONGINT> count;
+            std::string best;
+            uint32_t best_at = 0;
+            if(ROMlib_cfm_exports_sane(f.cid) && C_CountSymbols(f.cid, &count) == noErr)
+                for(LONGINT k = 0; k < count; k++)
+                {
+                    Str255 name;
+                    GUEST<Ptr> where;
+                    SymClass cls;
+                    if(C_GetIndSymbol(f.cid, k, name, &where, &cls) != noErr)
+                        continue;
+                    uint32_t at = ptr_to_longint(where.get());
+                    if((cls & 0x0F) == kPEFTVectorSymbol)
+                        at = *(GUEST<uint32_t> *)SYN68K_TO_US(at); /* the code */
+                    else if((cls & 0x0F) != kPEFCodeSymbol)
+                        continue;
+                    if(at <= addr && at >= best_at && at >= start)
+                    {
+                        best_at = at;
+                        best.assign((char *)name + 1, name[0]);
+                    }
+                }
+            if(!best.empty())
+                snprintf(buf + n, sizeof buf - n, " (%s+$%x)", best.c_str(), addr - best_at);
+            return buf;
+        }
+    }
+    return "";
+}
+
 void Executor::ROMlib_cfm_application_start()
 {
     THz zone = LM(ApplZone);
@@ -881,7 +931,14 @@ symbol_lookup(uint32_t *indexp, GUEST<Ptr> *valp, uint8_t imports[][4],
                 {
                     /* MacPhoenix: a weak library's imports are weak too. */
                     if((flags & 8) || l->weak)   // weak symbol
+                    {
+                        /* Said too: a program that calls a weak import
+                           without checking it jumps to 0 (Date & Time on
+                           8.6, MenusLib's clock calls). */
+                        if(LIB_CID(l))
+                            fprintf(stderr, "CFM: weak import %s unresolved (nil)\n", symbol_name);
                         *valp = kUnresolvedCFragSymbolAddress;
+                    }
                     else
                     {
                         /* MacPhoenix: say so at load time; calling it is

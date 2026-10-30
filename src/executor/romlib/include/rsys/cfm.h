@@ -1,6 +1,7 @@
 #pragma once
 
 #include <initializer_list>
+#include <string>
 
 #include <CodeFragments.h>
 #include <PEFBinaryFormat.h>
@@ -105,6 +106,9 @@ extern void ROMlib_cfm_application_start();
 /* MacPhoenix: addr is in a loaded PowerPC fragment's code (a transition
    vector's first word points there). */
 extern bool ROMlib_cfm_ppc_code(uint32_t addr);
+/* "Fragment sect N+$off (Export+$off)" for a PowerPC address, or "" */
+extern std::string ROMlib_cfm_describe(uint32_t addr);
+extern bool ROMlib_cfm_exports_sane(ConnectionID id);
 
 /* CallUniversalProc from CFM-68K code: the routine's arguments start at
    args, 4 bytes each (mixed_mode.cpp). */

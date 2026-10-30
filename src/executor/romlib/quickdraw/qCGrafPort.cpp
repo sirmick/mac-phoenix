@@ -525,6 +525,22 @@ void Executor::C_DisposePixPat(PixPatHandle pixpat_h)
     }
 }
 
+/* MacPhoenix: an old-style pattern's 8 bytes, in pat1Data and as the
+   pattern's data (patData), as QuickDraw keeps them: 8.6's ToolboxUtils
+   saves a port's background from **patData (the control panels' titles
+   were erased with the empty handle's block header, dots). */
+void Executor::ROMlib_set_pixpat_pattern(PixPatHandle pixpat, const Pattern &pat)
+{
+    PIXPAT_1DATA(pixpat) = pat;
+    Handle data = PIXPAT_DATA(pixpat);
+    if(!data)
+        return;
+    if(GetHandleSize(data) != sizeof(Pattern))
+        SetHandleSize(data, sizeof(Pattern));
+    if(*data && GetHandleSize(data) == sizeof(Pattern))
+        memcpy(*data, &PIXPAT_1DATA(pixpat), sizeof(Pattern));
+}
+
 void Executor::C_CopyPixPat(PixPatHandle src, PixPatHandle dst)
 {
     int data_size;

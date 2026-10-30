@@ -464,6 +464,10 @@ void Executor::convert_pixmap_with_IMV_mode(const PixMap *src1, const PixMap *sr
                                       + (r2->top - src2->bounds.top) * src2_rowbytes);
     dst_row_base = (unsigned char *)dst->baseAddr;
 
+    /* The arithmetic modes' precision (ARITH_COMPONENT) */
+    const int comp_shift = bits_per_pixel == 32 ? 8 : bits_per_pixel == 16 ? 11 : 0;
+    const int32_t comp_mask = 0xFFFF >> comp_shift;
+
     /* Fetch the "op color" fields, in case they are needed. */
     op_red = op_color->red;
     op_green = op_color->green;
@@ -588,36 +592,43 @@ void Executor::convert_pixmap_with_IMV_mode(const PixMap *src1, const PixMap *sr
                | ((((b) >> (16 - itab_res)) & itab_res_mask) << (0 * itab_res))]
 
 /* Define macros to actually munge together two RGB's in the right way. */
+/* MacPhoenix: as 8.6 computes them (tests/guest/difftest appr, modes.*):
+   on the destination's components at their own precision (8 bits in 32-bit
+   pixels, 5 in 16-bit ones; RGB for indexed pixels), the subtractions
+   destination minus source, the "Over" modes wrapping, the "Pin" modes
+   pinned at the op colour. src1 is the source, src2 the destination. */
+#define ARITH_COMPONENT(a1, a2, op, expr)                     \
+    ({                                                        \
+        int32_t s_ = (int32_t)((a1) >> comp_shift);           \
+        int32_t d_ = (int32_t)((a2) >> comp_shift);           \
+        int32_t o_ = (int32_t)((op) >> comp_shift);           \
+        (void)o_;                                             \
+        (uint32_t)((expr) & comp_mask) << comp_shift;         \
+    })
 #define ADD_OVER_TRANSFORM(red1, green1, blue1, \
                            red2, green2, blue2, \
                            redr, greenr, bluer) \
-    ((void)(redr = red1 + red2,                 \
-            greenr = green1 + green2,           \
-            bluer = blue1 + blue2))
+    ((void)(redr = ARITH_COMPONENT(red1, red2, op_red, s_ + d_),         \
+            greenr = ARITH_COMPONENT(green1, green2, op_green, s_ + d_), \
+            bluer = ARITH_COMPONENT(blue1, blue2, op_blue, s_ + d_)))
 #define ADD_PIN_TRANSFORM(red1, green1, blue1, \
                           red2, green2, blue2, \
                           redr, greenr, bluer) \
-    ((void)(redr = red1 + red2,                \
-            greenr = green1 + green2,          \
-            bluer = blue1 + blue2,             \
-            redr = std::min(redr, op_red),          \
-            greenr = std::min(greenr, op_green),    \
-            bluer = std::min(bluer, op_blue)))
+    ((void)(redr = ARITH_COMPONENT(red1, red2, op_red, std::min(s_ + d_, o_)),         \
+            greenr = ARITH_COMPONENT(green1, green2, op_green, std::min(s_ + d_, o_)), \
+            bluer = ARITH_COMPONENT(blue1, blue2, op_blue, std::min(s_ + d_, o_))))
 #define SUB_OVER_TRANSFORM(red1, green1, blue1, \
                            red2, green2, blue2, \
                            redr, greenr, bluer) \
-    ((void)(redr = red1 - red2,                 \
-            greenr = green1 - green2,           \
-            bluer = blue1 - blue2))
+    ((void)(redr = ARITH_COMPONENT(red1, red2, op_red, d_ - s_),         \
+            greenr = ARITH_COMPONENT(green1, green2, op_green, d_ - s_), \
+            bluer = ARITH_COMPONENT(blue1, blue2, op_blue, d_ - s_)))
 #define SUB_PIN_TRANSFORM(red1, green1, blue1, \
                           red2, green2, blue2, \
                           redr, greenr, bluer) \
-    ((void)(redr = red1 - red2,                \
-            greenr = green1 - green2,          \
-            bluer = blue1 - blue2,             \
-            redr = std::max(redr, op_red),          \
-            greenr = std::max(greenr, op_green),    \
-            bluer = std::max(bluer, op_blue)))
+    ((void)(redr = ARITH_COMPONENT(red1, red2, op_red, std::max(d_ - s_, o_)),         \
+            greenr = ARITH_COMPONENT(green1, green2, op_green, std::max(d_ - s_, o_)), \
+            bluer = ARITH_COMPONENT(blue1, blue2, op_blue, std::max(d_ - s_, o_))))
 #define AD_MAX_TRANSFORM(red1, green1, blue1, \
                          red2, green2, blue2, \
                          redr, greenr, bluer) \

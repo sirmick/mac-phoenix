@@ -53,7 +53,8 @@ LONGINT &script_var(INTEGER verb)
     if(!script_vars_ready)
     {
         script_vars_ready = true;
-        script_vars[smVersion / 2] = 0x0750;
+        /* 8.x: the System's version (8.6: $0860) */
+        script_vars[smVersion / 2] = system_version >= 0x800 ? system_version : 0x0750;
         script_vars[smEnabled / 2] = 1;
         script_vars[smCharPortionV / 2] = 0x0333;
         script_vars[smRegionCodeV / 2] = 0; /* verUS */
@@ -114,9 +115,19 @@ LONGINT Executor::C_GetScriptVariable(INTEGER script, INTEGER verb)
         return 0;
     auto itlb = [](int offset, bool byte = false) -> LONGINT {
         Handle h = GetResource("itlb"_4, smRoman);
-        if(!h)
+        /* Empty when the caller has SetResLoad(false) (the Keyboard
+           control panel) or it was purged. */
+        if(h && !*h)
+            LoadResource(h);
+        if(!h || !*h)
             return 0;
         return byte ? *(uint8_t *)(*h + offset) : (LONGINT) * (GUEST<INTEGER> *)(*h + offset);
+    };
+    auto itlb_extended = []() {
+        Handle h = GetResource("itlb"_4, smRoman);
+        if(h && !*h)
+            LoadResource(h);
+        return h && *h && GetHandleSize(h) >= 50;
     };
     switch(verb)
     {
@@ -155,23 +166,24 @@ LONGINT Executor::C_GetScriptVariable(INTEGER script, INTEGER verb)
             return itlb(18);
         /* font and size: family in the high word (Script.h numbers these
            78..92; Apple's Standard File sets its dialog's font from
-           smScriptSysFondSize, 84) */
+           smScriptSysFondSize, 84), from the extended 'itlb' (itlbMonoFond
+           and on, 24..49) when it has them */
         case smScriptMonoFondSize: /* Monaco 9 */
-            return 4L << 16 | 9;
-        case smScriptPrefFondSize: /* Geneva 12, status: guess */
-            return 3L << 16 | 12;
+            return itlb_extended() ? itlb(24) << 16 | itlb(26) : 4L << 16 | 9;
+        case smScriptPrefFondSize: /* Geneva 12 */
+            return itlb_extended() ? itlb(28) << 16 | itlb(30) : 3L << 16 | 12;
         case smScriptSmallFondSize: /* Geneva 9 */
-            return 3L << 16 | 9;
-        case smScriptSysFondSize: /* Chicago 12 */
-            return (LONGINT)LM(SysFontFam) << 16 | 12;
+            return itlb_extended() ? itlb(32) << 16 | itlb(34) : 3L << 16 | 9;
+        case smScriptSysFondSize: /* the system font, Chicago or Charcoal 12 */
+            return (LONGINT)LM(SysFontFam) << 16 | LM(SysFontSiz);
         case smScriptAppFondSize: /* Geneva 12 */
-            return (LONGINT)LM(ApFontID) << 16 | 12;
+            return itlb_extended() ? itlb(40) << 16 | itlb(42) : (LONGINT)LM(ApFontID) << 16 | 12;
         case smScriptHelpFondSize: /* Geneva 9 */
-            return 3L << 16 | 9;
+            return itlb_extended() ? itlb(44) << 16 | itlb(46) : 3L << 16 | 9;
         case smScriptValidStyles: /* all of them */
-            return 0x7F;
+            return itlb_extended() ? itlb(48, true) : 0x7F;
         case smScriptAliasStyle:
-            return 0;
+            return itlb_extended() ? itlb(49, true) : 0;
         default:
             warning_unexpected("unhandled selector `%d'", verb);
             return 0;

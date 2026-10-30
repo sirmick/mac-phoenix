@@ -610,10 +610,18 @@ Rect place(const Rect *rect, IconAlignmentType align, const Chosen& c)
 }
 
 /* A rows x rowBytes copy of bits in the current heap (BitMap needs a guest
-   address). */
+   address), or the system heap when that is full: plotting a menu bar's
+   icons mustn't fail in a small application's full heap (Register StuffIt
+   Expander's 100K, in its first InitWindows). Not the system heap first:
+   Frontier, plotting icons all the time, stalls. */
 Ptr copy_bits(const void *bits, int bytes)
 {
     Ptr p = NewPtr(bytes);
+    if(!p)
+    {
+        TheZoneGuard guard(LM(SysZone));
+        p = NewPtr(bytes);
+    }
     if(p)
         memcpy(p, bits, bytes);
     return p;
@@ -788,6 +796,11 @@ OSErr plot(IconSource& src, const Rect *rect, IconAlignmentType align,
     {
         /* colour: label, selection and dimming change the colour table */
         CTabHandle ctab = GetCTable(c.bpp);
+        if(!ctab)
+        {
+            TheZoneGuard guard(LM(SysZone)); /* as copy_bits */
+            ctab = GetCTable(c.bpp);
+        }
         if(!ctab)
         {
             DisposePtr(mask_p);

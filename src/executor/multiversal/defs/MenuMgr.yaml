@@ -607,13 +607,16 @@
 
 - function:
     name: GetItemStyle
+    comment: |
+      MacPhoenix: the style is a Style, a byte: 8.6 writes one byte there
+      (tests/guest/difftest menu); a word overwrote the caller's next byte.
     args:
       - name: mh
         type: MenuHandle
       - name: item
         type: INTEGER
       - name: stylep
-        type: INTEGER*
+        type: Style*
     trap: 0xA941
     executor: C_
 
@@ -1041,4 +1044,236 @@
       - name: inGlyph
         type: SInt16
     library: AppearanceLib
+    executor: C_
+
+# ####
+
+# Menus.h's 8.5 calls (MenusLib): an item from a string taken as it is
+# (no metacharacters).
+- function:
+    name: AppendMenuItemText
+    return: OSStatus
+    args:
+      - name: menu
+        type: MenuRef
+      - name: inString
+        type: ConstStringPtr
+    library: MenusLib
+    executor: C_
+
+# ####
+
+- function:
+    name: InsertMenuItemText
+    return: OSStatus
+    args:
+      - name: menu
+        type: MenuRef
+      - name: inString
+        type: ConstStringPtr
+      - name: afterItem
+        type: INTEGER
+    library: MenusLib
+    executor: C_
+
+# ####
+
+# Menus.h's 8.0 item icons by handle, AppearanceLib's.
+- enum:
+    values:
+      - name: kMenuNoIcon
+        value: 0
+      - name: kMenuIconType
+        value: 1
+      - name: kMenuShrinkIconType
+        value: 2
+      - name: kMenuSmallIconType
+        value: 3
+      - name: kMenuColorIconType
+        value: 4
+      - name: kMenuIconSuiteType
+        value: 5
+      - name: kMenuIconRefType
+        value: 6
+
+- function:
+    name: SetMenuItemIconHandle
+    return: OSErr
+    args:
+      - name: inMenu
+        type: MenuRef
+      - name: inItem
+        type: SInt16
+      - name: inIconType
+        type: UInt8
+      - name: inIconHandle
+        type: Handle
+    library: AppearanceLib
+    executor: C_
+
+# ####
+
+- function:
+    name: GetMenuItemIconHandle
+    return: OSErr
+    args:
+      - name: inMenu
+        type: MenuRef
+      - name: inItem
+        type: SInt16
+      - name: outIconType
+        type: UInt8*
+      - name: outIconHandle
+        type: Handle*
+    library: AppearanceLib
+    executor: C_
+
+# ####
+
+# MenusLib's menu bar clock (8.5; the Date & Time control panel's calls,
+# weak imports it makes once 'sysv' is 8.2 or later; arguments from its call
+# sites): a configuration of a version word (0) and 20 bytes. Executor
+# draws no clock: the configuration and the on/off state are kept and
+# answered.
+- function:
+    name: IsMenuBarClockEnabled
+    return: Boolean
+    library: MenusLib
+    executor: C_
+
+# ####
+
+- function:
+    name: EnableMenuBarClock
+    return: OSStatus
+    library: MenusLib
+    executor: C_
+
+# ####
+
+- function:
+    name: DisableMenuBarClock
+    return: OSStatus
+    library: MenusLib
+    executor: C_
+
+# ####
+
+- function:
+    name: RefreshMenuBarClock
+    return: OSStatus
+    library: MenusLib
+    executor: C_
+
+# ####
+
+- function:
+    name: GetMenuBarClockConfig
+    return: OSStatus
+    args:
+      - name: ioConfig
+        type: Ptr
+    library: MenusLib
+    executor: C_
+
+# ####
+
+- function:
+    name: SetMenuBarClockConfig
+    return: OSStatus
+    args:
+      - name: inConfig
+        type: Ptr
+    library: MenusLib
+    executor: C_
+
+# ####
+
+# MenusLib/AppearanceLib 8.x per-item calls (Menus.h): what the census
+# found 8.6 sessions calling. Modifiers and glyphs are kept per item
+# (Executor's menu definition draws neither yet).
+- function:
+    name: IsMenuItemEnabled
+    return: Boolean
+    args:
+      - name: menu
+        type: MenuRef
+      - name: item
+        type: UInt16
+    library: MenusLib
+    executor: C_
+
+# ####
+
+# Whether choosing a hierarchical item's parent itself is allowed; kept.
+- function:
+    name: SetSubmenuParentChoosable
+    return: OSStatus
+    args:
+      - name: menu
+        type: MenuRef
+      - name: inChoosable
+        type: Boolean
+    library: MenusLib
+    executor: C_
+
+# ####
+
+- function:
+    name: GetMenuItemKeyGlyph
+    return: OSErr
+    args:
+      - name: inMenu
+        type: MenuRef
+      - name: inItem
+        type: SInt16
+      - name: outGlyph
+        type: SInt16*
+    library: AppearanceLib
+    executor: C_
+
+# ####
+
+- function:
+    name: SetMenuItemModifiers
+    return: OSErr
+    args:
+      - name: inMenu
+        type: MenuRef
+      - name: inItem
+        type: SInt16
+      - name: inModifiers
+        type: UInt8
+    library: AppearanceLib
+    executor: C_
+
+# ####
+
+- function:
+    name: GetMenuItemModifiers
+    return: OSErr
+    args:
+      - name: inMenu
+        type: MenuRef
+      - name: inItem
+        type: SInt16
+      - name: outModifiers
+        type: UInt8*
+    library: AppearanceLib
+    executor: C_
+
+# ####
+
+# MenusLib's private calls the 8.6 Appearance control panel makes after a
+# font or theme change (no arguments at its call sites).
+- function:
+    name: InvalidateAllMenuSizes
+    library: MenusLib
+    executor: C_
+
+# ####
+
+- function:
+    name: InvalidateAllCachedMenuPixels
+    library: MenusLib
     executor: C_
