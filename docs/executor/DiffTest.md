@@ -51,10 +51,10 @@ compares the answers line by line.
 | Probe | Covers |
 |---|---|
 | `appr` | AppearanceLib: Gestalt, clients, brushes and text colours, fonts, metrics, styles, window/button/track/tab regions, the theme collection, the private theme and desktop calls of the 8.6 Appearance control panel, every drawing primitive offscreen at 32 and 8 bits |
-| `ctl` | Control Manager 8: every standard kind (values, features, best rectangle, data sizes by tag), embedding, disposal with subcontrols, keyboard focus, 32-bit values, control data with short buffers; Dialog Manager 8.0: items as controls, AppendDITL, ShortenDITL with embedded items |
+| `ctl` | Control Manager 8: every standard kind (values, features, best rectangle, data sizes by tag), the classic definitions' best rectangles by title and font, embedding, disposal with subcontrols, keyboard focus, 32-bit values, control data with short buffers; Dialog Manager 8.0: items as controls, AppendDITL, ShortenDITL with embedded items |
 | `menu` | Menu Manager with 8.x's calls: metacharacters, insertion order, marks, styles, command keys and glyphs, item icons by number and handle, CalcMenuSize, hierarchical items, MenusLib's 8.5 and private calls, the menu bar clock |
 | `sys` | Gestalt (~120 selectors), FindFolder for each folder type and the folder's name, value-holding low-memory globals, the process's own information, Script Manager variables (system and Roman) |
-| `text` | Font Manager and QuickDraw text: font numbers and names, RealFont, FMSwapFont's output, GetFontInfo, FontMetrics, character widths, StringWidth, MeasureText, TruncString, for 10 fonts x 6 sizes x 9 styles |
+| `text` | Font Manager and QuickDraw text: font numbers and names, RealFont, FMSwapFont's output, GetFontInfo, FontMetrics, every character's width, StringWidth, MeasureText, TruncString, for 10 fonts x 6 sizes x 9 styles |
 
 What they found on their first runs (fixed): GetThemeSoundMask wrote a long
 too many; GetItemStyle wrote a word into a byte; InsertMenuItem with
@@ -70,14 +70,29 @@ InvalidateAllMenuSizes, InvalidateAllCachedMenuPixels,
 RecalculateAllWindowTitleWidths were missing. What's open is in each
 probe's `expected/` file.
 
-Open, from `sys` and `text` (their expected files list every key): the
-system font is Charcoal (2002) on 8.6 (`SysFontFam`, Script Manager
-variables) and Chicago in Executor; Charcoal and Monaco 12 aren't real
-fonts to Executor's Font Manager, so 8.6's widths and metrics differ for
-every font; Gestalt selectors 8.6 answers that Executor lacks or answers
-as 7.5 (`'wind'`, `'menu'`, `'mixd'`, `'ppc '`, `'rsrc'`, `'os  '`,
-`'fs  '`, `'snd '`, ...); FindFolder doesn't know `'asup'`, `'cmnu'`,
-`'flnt'`.
+`text` (with every character's width since 2026-10-30) found the Font
+Manager answering 7.5's way or wrongly: no TrueType (8.6's system font,
+Charcoal, is an outline only), the System file's FONDs hiding the Fonts
+folder's, style extras from a fixed table instead of the FOND's, styled
+metrics in FMSwapFont's output, the missing glyph measured by its image;
+it matches 8.6 on every line now (MacOS8-9.md, "Fonts").
+
+`sys` found Gestalt answering 7.5's values on 8.6 and FindFolder not
+knowing 8.x's folders; Executor answers 8.6's now where it has what the
+selector claims (`'menu'`, `'mixd'`, `'rsrc'`, `'nmgr'`, `'scri'`,
+`'evnt'`, `'vers'`, `'tmgr'`, part of `'fs  '`: gestalt.cpp's
+`since_table` and `gestalt_set_system_version`) and makes Application
+Support, Contextual Menu Items and Cleanup At Startup at an 8.x startup.
+`ctl` (best rectangles by title and font since 2026-10-30) found the
+classic push button, check box and radio button not answering the 8.0
+messages; they answer 8.6's features (0x2240, an unnamed bit 13 with
+them), data and best rectangles now.
+
+Open, from `sys`: selectors whose 8.6 answer claims what Executor lacks
+(`'wind'`: Window Manager 2.0; `'qd  '` 2.5; `'fold'`'s folder
+descriptors; `'ppc '`; `'dict'`; QuickTime, AppleScript), or that describe
+the machine. From `ctl`: the popup menu's 8.0 messages, and 8.0 dialogs'
+items as controls.
 
 Planned: Window Manager 2.0, the Code Fragment Manager, Apple event
 coercions, PrivateInterfaceLib.

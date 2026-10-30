@@ -261,6 +261,7 @@ set(qd_sources
     quickdraw/rawblt.h
     quickdraw/gworld.h
     quickdraw/font.h
+    quickdraw/sfnt.h
     quickdraw/picture.h
     quickdraw/region.h
     quickdraw/rgbutil.h
@@ -291,7 +292,7 @@ set(qd_sources
      quickdraw/qPict2.cpp quickdraw/image.cpp
     quickdraw/image_inits.cpp quickdraw/default_ctab_values.cpp
     quickdraw/dcconvert.cpp quickdraw/rgbutil.cpp quickdraw/dcmaketables.cpp
-    quickdraw/fontIMVI.cpp quickdraw/font.cpp
+    quickdraw/fontIMVI.cpp quickdraw/font.cpp quickdraw/sfnt.cpp
     quickdraw/displays.cpp
 )
 

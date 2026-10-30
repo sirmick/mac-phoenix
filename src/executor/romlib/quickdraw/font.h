@@ -46,6 +46,9 @@ extern Fixed font_width_expand(Fixed width, Fixed extra,
                                Fixed hOutputInverse);
 
 extern void ROMlib_shutdown_font_manager(void);
+extern void ROMlib_styled_font_info(const FMOutput *fmop, FontInfo *fip);
+/* a strike made from an outline font (sfnt.cpp) */
+extern bool ROMlib_outline_strike(Handle strike);
 
 static_assert(sizeof(fatabentry) == 6);
 static_assert(sizeof(widentry_t) == 4);

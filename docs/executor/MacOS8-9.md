@@ -262,6 +262,39 @@ census (`libraries.py --census`) ranks what 8.6 sessions call that
 Executor lacks: GetWDInfo, SetSubmenuParentChoosable, IsMenuItemEnabled,
 GetQDGlobals and the PPC Toolbox first.
 
+Fonts (2026-10-30, the `text` probe: every line as 8.6's). 8.6's system
+font is Charcoal, from the Roman `'itlb'`'s extended record
+(`itlbSysFond`, which also gives the Script Manager's font variables);
+Charcoal is TrueType only, and Chicago, Monaco and Palatino have outlines
+for the sizes they have no strike of. Executor scales TrueType now
+(`quickdraw/sfnt.cpp`, from the TrueType Reference Manual: no hinting,
+pixel centres with dropout control): an outline at a size becomes an
+NFNT strike, so QuickDraw draws and measures it as a bitmap font; widths
+come from `'hdmx'`, metrics are 8.6's (descent rounded half down, widMax
+the advance maximum rounded up). The Font Manager looks at every FOND of a
+family (8.6's System file has its own Chicago, Geneva and Monaco FONDs,
+which hid the suitcases' sizes and outlines), takes styles' extra widths
+from the FOND's style property table when its flags say so (Chicago 12
+shadowed is 1 wider, not 2), and FMSwapFont answers the strike's metrics
+with the style in bold/shadow/extra (GetFontInfo adds it). 8.x measures a
+carriage return as 0 and keeps a bitmap glyph of no width so in any style.
+
+Gestalt, FindFolder and the classic controls (2026-10-30, `sys` and
+`ctl`). The per-version table (gestalt.cpp's `since_table`, and
+`gestalt_set_system_version` for selectors 7.x answers too) gives 8.6's
+values where Executor has what they claim: the 8.5 Menu Manager, Mixed
+Mode, partial resources and override maps, the Script Manager at the
+System's version, Apple events with the Object Support Library in the
+System, Gestalt 7, no MFS, HFS Plus volumes (8.1); the extended Time
+Manager and the Notification Manager on every version. Not yet: `'wind'`
+(Window Manager 2.0 isn't complete: SetWindowBounds, WindowPathSelect),
+QuickDraw 2.5 (QDGetPatternOrigin), the Folder Manager's descriptors. An
+8.x startup makes Application Support, Contextual Menu Items and Cleanup
+At Startup, as 8.6 has them. The classic push button, check box and radio
+button take the 8.0 messages as 8.6's do (features, data, best rectangle:
+the font's line plus 4 or 6, title plus 16 or 20, 58 at least for a push
+button).
+
 Still open: Keyboard ("Keyboard Preferences file is in use", after it
 scans the Preferences folder: its 68k code decides why); Memory (no
 window; its RAM Disk trap `$A074`, selectors 9-13, is handled as absent

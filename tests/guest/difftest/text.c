@@ -94,6 +94,24 @@ int main(void)
                     crc = probe_crc32((unsigned char *)widths, sizeof widths, 0);
                     sprintf(kk, "%s.charwidths", k);
                     out(kk, "%08lx w(A)=%d w(i)=%d w(W)=%d", crc, widths['A'], widths['i'], widths['W']);
+                    /* every width: runs of "w*n" (plain), of "+d*n" against
+                       plain (the other styles) */
+                    {
+                        static short plain[256];
+                        char list[1400];
+                        int len = 0, run;
+                        if(styles[y] == 0)
+                            memcpy(plain, widths, sizeof plain);
+                        for(c = 0; c < 256 && len < (int)sizeof list - 16; c += run)
+                        {
+                            int v = styles[y] ? widths[c] - plain[c] : widths[c];
+                            for(run = 1; c + run < 256 && (styles[y] ? widths[c + run] - plain[c + run] : widths[c + run]) == v; run++)
+                                ;
+                            len += sprintf(list + len, run > 1 ? (styles[y] ? " %+d*%d" : " %d*%d") : (styles[y] ? " %+d" : " %d"), v, run);
+                        }
+                        sprintf(kk, "%s.widths", k);
+                        out(kk, "%s", list + 1);
+                    }
                     t[0] = strlen(sample);
                     memcpy(t + 1, sample, t[0]);
                     sprintf(kk, "%s.StringWidth", k);

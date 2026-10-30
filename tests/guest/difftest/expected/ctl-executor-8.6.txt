@@ -1,17 +1,11 @@
 # ctl on Executor (8.6 System) against the G3 (8.6): known differences.
 # key-glob<TAB>reason. Remove a line when Executor matches (run.py lists those).
 
-# 8.6's classic definitions (push button, check box, radio button, popup
-# menu) speak the 8.0 messages: features 0x2240/0x2a40, data tags, best
-# rectangle. Executor's own classic CDEF 0 and popup CDEF don't yet.
-kind.0.*	classic push button: 8.0 features, data and best rect not answered
-kind.1.*	classic check box: 8.0 features, data and best rect not answered
-kind.2.*	classic radio button: 8.0 features, data and best rect not answered
+# 8.6's popup menu definition speaks the 8.0 messages (features, data
+# tags, best rectangle); Executor's popup CDEF doesn't yet (its classic
+# CDEF 0 does).
 kind.1008.*	popup menu: 8.0 features, data, values (8.6 keeps 0..10 until a menu is set)
 kind.*.datasize.font	'font' size per definition (8.6: 4 or none); Executor answers 24 for any data-access control
-kind.32.best	bevel button best width 52 on 8.6, 56 in Executor
-kind.33.best	bevel button best width 52 on 8.6, 56 in Executor
-kind.34.best	bevel button best width 52 on 8.6, 56 in Executor
 kind.*.best	best rectangles of 8.x kinds (images, edit text, clock, ...) differ
 kind.*.features	features of some 8.x kinds differ
 values.16bit	16-bit view of 32-bit values: 8.6 keeps the low word (70000 -> 4464), Executor clamps to 32767

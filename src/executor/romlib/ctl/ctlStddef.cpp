@@ -5,6 +5,7 @@
 #include <base/common.h>
 #include <WindowMgr.h>
 #include <ControlMgr.h>
+#include <ControlMgr8.h>
 #include <QuickDraw.h>
 #include <CQuickDraw.h>
 #include <ToolboxUtil.h>
@@ -12,6 +13,8 @@
 
 #include <ctl/ctl.h>
 #include <quickdraw/cquick.h>
+
+#include <algorithm>
 
 using namespace Executor;
 
@@ -351,6 +354,45 @@ draw_radio(ControlHandle c, int16_t part)
     }
 }
 
+/* 8.6's best rectangles (tests/guest/difftest ctl, Charcoal 12 and,
+   with useWFont, Geneva 9): a push button the title's line and 4, at least
+   58 wide, 16 beside the title; a check box or radio button the line and
+   6, 20 beside the title (16 without one); the baseline that far up from
+   the bottom less the line's descent and leading */
+static void calc_best_rect(INTEGER var, ControlHandle c, ControlCalcSizeRec *rec)
+{
+    GrafPtr port = qdGlobals().thePort;
+    INTEGER font = PORT_TX_FONT(port), size = PORT_TX_SIZE(port);
+    Style face = PORT_TX_FACE(port);
+    if(!(var & useWFont))
+    {
+        TextFont(0);
+        TextSize(0);
+        TextFace(0);
+    }
+    FontInfo fi;
+    GetFontInfo(&fi);
+    Str255 title;
+    memcpy(title, CTL_TITLE(c), CTL_TITLE(c)[0] + 1);
+    INTEGER width = StringWidth(title);
+    PORT_TX_FONT(port) = font;
+    PORT_TX_SIZE(port) = size;
+    PORT_TX_FACE(port) = face;
+    INTEGER line = fi.ascent + fi.descent + fi.leading;
+    if((var & ~useWFont) == (pushButProc & 0xF))
+    {
+        rec->height = line + 4;
+        rec->width = std::max(58, width + 16);
+        rec->baseLine = -(fi.descent + fi.leading + 2);
+    }
+    else
+    {
+        rec->height = line + 6;
+        rec->width = title[0] ? width + 20 : 16;
+        rec->baseLine = -(fi.descent + fi.leading + 3);
+    }
+}
+
 LONGINT Executor::C_cdef0(INTEGER var, ControlHandle c, INTEGER mess,
                           LONGINT param) /* IMI-328 */
 {
@@ -424,6 +466,21 @@ LONGINT Executor::C_cdef0(INTEGER var, ControlHandle c, INTEGER mess,
         case thumbCntl:
         case dragCntl:
         case autoTrack:
+            break;
+        /* MacPhoenix: the 8.0 messages, as 8.6's classic definition
+           answers them (tests/guest/difftest ctl); 8.x's Control Manager
+           asks, a 7.x one never does */
+        case kControlMsgTestNewMsgSupport:
+            return kControlSupportsNewMessages;
+        case kControlMsgGetFeatures:
+            /* bit 13 has no name in Universal Interfaces 3.4; 8.6 sets it */
+            return 1 << 13 | kControlSupportsCalcBestRect | kControlSupportsDataAccess
+                | ((var & ~useWFont) == (radioButProc & 0xF) ? kControlHasRadioBehavior : 0);
+        case kControlMsgGetData:
+        case kControlMsgSetData:
+            return errDataNotSupported; /* the Control Manager has 'font' */
+        case kControlMsgCalcBestRect:
+            calc_best_rect(var, c, ptr_from_longint<ControlCalcSizeRec *>(param));
             break;
         default:
             /* MacPhoenix: 0 to what it doesn't know, as a definition does

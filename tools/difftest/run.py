@@ -152,6 +152,9 @@ def reference(probe, target, binary, out, refresh, no_refresh, dump):
     print(f"  running the reference {target}", flush=True)
     text, crashed = run_full(probe, target, binary, out, dump)
     lines, sections, _ = parse(text)
+    if not sections:
+        # the session never ran the probe (launch failed): no reference
+        sys.exit(f"{target}: the probe didn't run, see {out / target}")
     ref.parent.mkdir(parents=True, exist_ok=True)
     # keep the sections (resume order) and the lines
     out_lines = [f"# probe {want}"]

@@ -71,6 +71,48 @@ static void kinds(void)
     }
 }
 
+/* the classic definitions' best rectangles, by title (its width in the
+   system font alongside) and rectangle height, and with the window's font
+   (useWFont, Geneva 9) */
+static void best_rects(void)
+{
+    static const short classic[] = { 0, 1, 2, 8, 9, 10 };
+    static const char *titles[] = { "", "A", "Title", "Much Longer Title" };
+    int i, t, h;
+    char k[96];
+    if(!SECTION("best"))
+        return;
+    TextFont(3); TextSize(9);
+    for(i = 0; i < (int)(sizeof classic / sizeof classic[0]); i++)
+        for(t = 0; t < (int)(sizeof titles / sizeof titles[0]); t++)
+            for(h = 20; h <= 40; h += 20)
+            {
+                Str255 title;
+                Rect r, best;
+                SInt16 base;
+                OSErr err;
+                ControlHandle c;
+                short w;
+                title[0] = strlen(titles[t]);
+                memcpy(title + 1, titles[t], title[0]);
+                SetRect(&r, 10, 10, 210, 10 + h);
+                c = NewControl(win, &r, title, false, 1, 0, 1, classic[i], 0);
+                if(!c)
+                    continue;
+                TextFont(classic[i] & 8 ? 3 : 0);
+                TextSize(classic[i] & 8 ? 9 : 0);
+                w = StringWidth(title);
+                TextFont(3); TextSize(9);
+                SET(best); SET(base);
+                err = GetBestControlRect(c, &best, &base);
+                sprintf(k, "%d.%d.%d", classic[i], t, h);
+                out(k, "err %d %d,%d,%d,%d base %d (title %d)", err, best.top, best.left,
+                    best.bottom, best.right, base, w);
+                DisposeControl(c);
+            }
+    TextFont(0); TextSize(0);
+}
+
 static int count_list(void)
 {
     int n = 0;
@@ -285,6 +327,7 @@ int main(void)
     probe_open("ctl");
     window();
     kinds();
+    best_rects();
     embedding();
     values();
     data();

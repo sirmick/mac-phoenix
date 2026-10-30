@@ -9,12 +9,10 @@ gestalt.qdrw	Gestalt: 8.6's answer differs or Executor lacks the selector (per-v
 gestalt.dict	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
 gestalt.drag	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
 gestalt.thds	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
-gestalt.mixd	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
 gestalt.ppc 	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
 gestalt.os  	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
 gestalt.ascv	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
 gestalt.ascr	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
-gestalt.evnt	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
 gestalt.edtn	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
 gestalt.fold	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
 gestalt.fs  	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
@@ -22,23 +20,17 @@ gestalt.fxfr	Gestalt: 8.6's answer differs or Executor lacks the selector (per-v
 gestalt.help	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
 gestalt.icmp	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
 gestalt.kbd 	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
-gestalt.menu	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
-gestalt.nmgr	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
 gestalt.otan	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
 gestalt.otra	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
 gestalt.otvr	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
 gestalt.pclk	the machine: Executor presents a Quadra-class 68k Mac with PowerPC, not a G3
 gestalt.qtim	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
-gestalt.rsrc	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
-gestalt.scri	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
 gestalt.shut	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
 gestalt.snd 	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
 gestalt.stdf	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
 gestalt.strm	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
 gestalt.tbtt	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
 gestalt.tsmv	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
-gestalt.tmgr	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
-gestalt.vers	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
 gestalt.wma.	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
 gestalt.wind	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
 gestalt.xttt	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
@@ -47,11 +39,7 @@ gestalt.alis	Gestalt: 8.6's answer differs or Executor lacks the selector (per-v
 gestalt.hdwr	the machine: Executor presents a Quadra-class 68k Mac with PowerPC, not a G3
 gestalt.romv	the machine: Executor presents a Quadra-class 68k Mac with PowerPC, not a G3
 gestalt.qtvr	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
-folder.asup	FindFolder: 8.6's folder exists on the image but Executor's FindFolder doesn't know the type
-folder.cmnu	FindFolder: 8.6's folder exists on the image but Executor's FindFolder doesn't know the type
-folder.flnt	FindFolder: 8.6's folder exists on the image but Executor's FindFolder doesn't know the type
 lowmem.0190	low-memory global differs (state or machine)
-lowmem.0ba6	the system font: Charcoal (2002) on 8.6, Chicago (0) in Executor
 lowmem.0260	low-memory global differs (state or machine)
 lowmem.08f0	low-memory global differs (state or machine)
 lowmem.0910	low-memory global differs (state or machine)
@@ -65,7 +53,6 @@ lowmem.0cca	low-memory global differs (state or machine)
 lowmem.0da2	low-memory global differs (state or machine)
 lowmem.12f0	low-memory global differs (state or machine)
 lowmem.0b21	low-memory global differs (state or machine)
-script.sm.0	Script Manager variables: 8.6's (version 8.6, itl caches, ...) vs Executor's 7.5-era values
 script.sm.2	Script Manager variables: 8.6's (version 8.6, itl caches, ...) vs Executor's 7.5-era values
 script.sm.10	Script Manager variables: 8.6's (version 8.6, itl caches, ...) vs Executor's 7.5-era values
 script.sm.16	Script Manager variables: 8.6's (version 8.6, itl caches, ...) vs Executor's 7.5-era values
@@ -73,14 +60,8 @@ script.sm.24	Script Manager variables: 8.6's (version 8.6, itl caches, ...) vs E
 script.sm.28	Script Manager variables: 8.6's (version 8.6, itl caches, ...) vs Executor's 7.5-era values
 script.sm.34	Script Manager variables: 8.6's (version 8.6, itl caches, ...) vs Executor's 7.5-era values
 script.sm.38	Script Manager variables: 8.6's (version 8.6, itl caches, ...) vs Executor's 7.5-era values
-script.roman.12	the system font: Charcoal (2002) on 8.6, Chicago (0) in Executor
 script.roman.36	Script Manager variables: 8.6's (version 8.6, itl caches, ...) vs Executor's 7.5-era values
 script.roman.38	Script Manager variables: 8.6's (version 8.6, itl caches, ...) vs Executor's 7.5-era values
 script.roman.40	Script Manager variables: 8.6's (version 8.6, itl caches, ...) vs Executor's 7.5-era values
 script.roman.42	Script Manager variables: 8.6's (version 8.6, itl caches, ...) vs Executor's 7.5-era values
 script.roman.44	Script Manager variables: 8.6's (version 8.6, itl caches, ...) vs Executor's 7.5-era values
-script.roman.84	the system font: Charcoal (2002) on 8.6, Chicago (0) in Executor
-script.roman.92	Script Manager variables: 8.6's (version 8.6, itl caches, ...) vs Executor's 7.5-era values
-folder.asup.name	FindFolder: 8.6's folder exists on the image but Executor's FindFolder doesn't know the type
-folder.cmnu.name	FindFolder: 8.6's folder exists on the image but Executor's FindFolder doesn't know the type
-folder.flnt.name	FindFolder: 8.6's folder exists on the image but Executor's FindFolder doesn't know the type

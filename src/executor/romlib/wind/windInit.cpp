@@ -130,7 +130,11 @@ void Executor::C_InitWindows()
         InitMenus();
         if(first_process)
         {
-            LM(DeskPattern) = **ph;
+            /* InitMenus may have purged it (the menu bar's font loaded) */
+            if(ph && !*ph)
+                LoadResource((Handle)ph);
+            if(ph && *ph)
+                LM(DeskPattern) = **ph;
             LM(GrayRgn) = NewRgn();
             ROMLib_InitGrayRgn();
         }

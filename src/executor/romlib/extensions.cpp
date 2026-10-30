@@ -28,6 +28,7 @@
 #include <rsys/component.h>
 #include <sound/sounddriver.h>
 #include <rsys/version.h>
+#include <prefs/prefs.h>
 #include <util/macstrings.h>
 
 #include <cmrc/cmrc.hpp>
@@ -542,6 +543,16 @@ void Executor::ROMlib_load_extensions()
        host program's name there sent the Speech Manager into "enix". */
     memset(LM(CurApName), 0xFF, 32);
     LM(CurApName)[0] = 0;
+
+    /* 8.x has these by the time the Finder starts (the G3's 8.6 finds them
+       without creating; tests/guest/difftest sys) */
+    if(system_version >= 0x0800)
+        for(OSType type : { "asup"_4, "cmnu"_4, "flnt"_4 })
+        {
+            GUEST<INTEGER> vref;
+            GUEST<LONGINT> dirid;
+            FindFolder(-32768 /* kOnSystemDisk */, type, true, &vref, &dirid);
+        }
 
     /* Executor's own components first: the System's of the same types are
        then left out (its 'sdev's stand for sound hardware). */
