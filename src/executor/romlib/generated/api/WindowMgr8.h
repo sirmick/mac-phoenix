@@ -332,6 +332,7 @@ struct WindowDefSpec{GUEST_STRUCT;GUEST<WindowDefType> defType;WindowDefSpecUnio
 
 typedef WindowDefSpec *WindowDefSpecPtr;
 
+OSStatus C_CreateNewWindow(WindowClass windowClass, WindowAttributes attributes, const Rect *contentBounds, GUEST<WindowRef> *outWindow);LIBRARY_FUNCTION(WindowsLib, CreateNewWindow, C_CreateNewWindow);
 
 
 
@@ -340,8 +341,10 @@ typedef WindowDefSpec *WindowDefSpecPtr;
 
 
 
+OSStatus C_GetWindowOwnerCount(WindowRef window, GUEST<UInt32> *outCount);LIBRARY_FUNCTION(WindowsLib, GetWindowOwnerCount, C_GetWindowOwnerCount);
 
 
+OSStatus C_CloneWindow(WindowRef window);LIBRARY_FUNCTION(WindowsLib, CloneWindow, C_CloneWindow);
 
 
 OSStatus C_GetWindowWidgetHilite(WindowRef inWindow, GUEST<WindowDefPartCode> *outHilite);LIBRARY_FUNCTION(WindowsLib, GetWindowWidgetHilite, C_GetWindowWidgetHilite);
@@ -361,10 +364,13 @@ kWindowModalityAppModal = 2,
 kWindowModalityWindowModal = 3,
 };
 
+OSStatus C_ShowFloatingWindows();LIBRARY_FUNCTION(WindowsLib, ShowFloatingWindows, C_ShowFloatingWindows);
 
 
+OSStatus C_HideFloatingWindows();LIBRARY_FUNCTION(WindowsLib, HideFloatingWindows, C_HideFloatingWindows);
 
 
+Boolean C_AreFloatingWindowsVisible();LIBRARY_FUNCTION(WindowsLib, AreFloatingWindowsVisible, C_AreFloatingWindowsVisible);
 
 
 struct OpaqueWindowGroupRef;
@@ -401,12 +407,16 @@ kWindowGroupContentsRecurse = 1 << 1,
 kWindowGroupContentsVisible = 1 << 2,
 };
 
+OSStatus C_SetWindowContentColor(WindowRef window, const RGBColor *color);LIBRARY_FUNCTION(WindowsLib, SetWindowContentColor, C_SetWindowContentColor);
 
 
+OSStatus C_GetWindowContentColor(WindowRef window, RGBColor *color);LIBRARY_FUNCTION(WindowsLib, GetWindowContentColor, C_GetWindowContentColor);
 
 
+OSStatus C_GetWindowContentPattern(WindowRef window, PixPatHandle outPixPat);LIBRARY_FUNCTION(WindowsLib, GetWindowContentPattern, C_GetWindowContentPattern);
 
 
+OSStatus C_SetWindowContentPattern(WindowRef window, PixPatHandle pixPat);LIBRARY_FUNCTION(WindowsLib, SetWindowContentPattern, C_SetWindowContentPattern);
 
 
 typedef OptionBits WindowPaintProcOptions;
@@ -429,6 +439,7 @@ WindowRef C_FrontNonFloatingWindow();LIBRARY_FUNCTION(WindowsLib, FrontNonFloati
 Boolean C_IsValidWindowPtr(WindowRef possibleWindow);LIBRARY_FUNCTION(WindowsLib, IsValidWindowPtr, C_IsValidWindowPtr);
 
 
+OSStatus C_InitFloatingWindows();LIBRARY_FUNCTION(WindowsLib, InitFloatingWindows, C_InitFloatingWindows);
 
 
 EXTERN_DISPATCHER_TRAP(AppearanceDispatch, 0xAA74, D0W);
@@ -436,6 +447,7 @@ OSStatus C_GetWindowFeatures(WindowRef window, GUEST<UInt32> *outFeatures);PASCA
 LIBRARY_ALSO(AppearanceLib, GetWindowFeatures, InterfaceLib);
 
 
+OSStatus C_GetWindowStructureWidths(WindowRef inWindow, Rect *outRect);LIBRARY_FUNCTION(WindowsLib, GetWindowStructureWidths, C_GetWindowStructureWidths);
 
 
 OSStatus C_SetWindowProxyFSSpec(WindowRef window, const FSSpec *inFile);LIBRARY_FUNCTION(WindowsLib, SetWindowProxyFSSpec, C_SetWindowProxyFSSpec);
@@ -444,10 +456,13 @@ OSStatus C_SetWindowProxyFSSpec(WindowRef window, const FSSpec *inFile);LIBRARY_
 OSStatus C_GetWindowProxyFSSpec(WindowRef window, FSSpec *outFile);LIBRARY_FUNCTION(WindowsLib, GetWindowProxyFSSpec, C_GetWindowProxyFSSpec);
 
 
+OSStatus C_SetWindowProxyAlias(WindowRef window, AliasHandle alias);LIBRARY_FUNCTION(WindowsLib, SetWindowProxyAlias, C_SetWindowProxyAlias);
 
 
+OSStatus C_GetWindowProxyAlias(WindowRef window, GUEST<AliasHandle> *alias);LIBRARY_FUNCTION(WindowsLib, GetWindowProxyAlias, C_GetWindowProxyAlias);
 
 
+OSStatus C_SetWindowProxyCreatorAndType(WindowRef window, OSType fileCreator, OSType fileType, SInt16 vRefNum);LIBRARY_FUNCTION(WindowsLib, SetWindowProxyCreatorAndType, C_SetWindowProxyCreatorAndType);
 
 
 OSStatus C_GetWindowProxyIcon(WindowRef window, GUEST<IconRef> *outIcon);LIBRARY_FUNCTION(WindowsLib, GetWindowProxyIcon, C_GetWindowProxyIcon);
@@ -459,12 +474,16 @@ OSStatus C_SetWindowProxyIcon(WindowRef window, IconRef icon);LIBRARY_FUNCTION(W
 OSStatus C_RemoveWindowProxy(WindowRef window);LIBRARY_FUNCTION(WindowsLib, RemoveWindowProxy, C_RemoveWindowProxy);
 
 
+OSStatus C_BeginWindowProxyDrag(WindowRef window, GUEST<DragReference> *outNewDrag, RgnHandle outDragOutlineRgn);LIBRARY_FUNCTION(WindowsLib, BeginWindowProxyDrag, C_BeginWindowProxyDrag);
 
 
+OSStatus C_EndWindowProxyDrag(WindowRef window, DragReference theDrag);LIBRARY_FUNCTION(WindowsLib, EndWindowProxyDrag, C_EndWindowProxyDrag);
 
 
+OSStatus C_TrackWindowProxyFromExistingDrag(WindowRef window, Point startPt, DragReference drag, RgnHandle inDragOutlineRgn);LIBRARY_FUNCTION(WindowsLib, TrackWindowProxyFromExistingDrag, C_TrackWindowProxyFromExistingDrag);
 
 
+OSStatus C_TrackWindowProxyDrag(WindowRef window, Point startPt);LIBRARY_FUNCTION(WindowsLib, TrackWindowProxyDrag, C_TrackWindowProxyDrag);
 
 
 Boolean C_IsWindowModified(WindowRef window);LIBRARY_FUNCTION(WindowsLib, IsWindowModified, C_IsWindowModified);
@@ -473,10 +492,13 @@ Boolean C_IsWindowModified(WindowRef window);LIBRARY_FUNCTION(WindowsLib, IsWind
 OSStatus C_SetWindowModified(WindowRef window, Boolean modified);LIBRARY_FUNCTION(WindowsLib, SetWindowModified, C_SetWindowModified);
 
 
+Boolean C_IsWindowPathSelectClick(WindowRef window, const EventRecord *event);LIBRARY_FUNCTION(WindowsLib, IsWindowPathSelectClick, C_IsWindowPathSelectClick);
 
 
+OSStatus C_WindowPathSelect(WindowRef window, MenuRef menu, GUEST<SInt32> *outMenuResult);LIBRARY_FUNCTION(WindowsLib, WindowPathSelect, C_WindowPathSelect);
 
 
+OSStatus C_HiliteWindowFrameForDrag(WindowRef window, Boolean hilited);LIBRARY_FUNCTION(WindowsLib, HiliteWindowFrameForDrag, C_HiliteWindowFrameForDrag);
 
 
 typedef UInt32 WindowTransitionEffect;
@@ -500,21 +522,28 @@ OSStatus C_TransitionWindow(WindowRef window, WindowTransitionEffect effect, Win
 OSStatus C_GetWindowBounds(WindowRef window, WindowRegionCode regionCode, Rect *globalBounds);LIBRARY_FUNCTION(WindowsLib, GetWindowBounds, C_GetWindowBounds);
 
 
+Boolean C_ResizeWindow(WindowRef window, Point startPoint, const Rect *sizeConstraints, Rect *newContentRect);LIBRARY_FUNCTION(WindowsLib, ResizeWindow, C_ResizeWindow);
 
 
+OSStatus C_SetWindowBounds(WindowRef window, WindowRegionCode regionCode, const Rect *globalBounds);LIBRARY_FUNCTION(WindowsLib, SetWindowBounds, C_SetWindowBounds);
 
 
+OSStatus C_RepositionWindow(WindowRef window, WindowRef parentWindow, WindowPositionMethod method);LIBRARY_FUNCTION(WindowsLib, RepositionWindow, C_RepositionWindow);
 
 
+OSStatus C_MoveWindowStructure(WindowRef window, short hGlobal, short vGlobal);LIBRARY_FUNCTION(WindowsLib, MoveWindowStructure, C_MoveWindowStructure);
 
 
 Boolean C_IsWindowInStandardState(WindowRef window, GUEST<Point> *idealSize, Rect *idealStandardState);LIBRARY_FUNCTION(WindowsLib, IsWindowInStandardState, C_IsWindowInStandardState);
 
 
+OSStatus C_ZoomWindowIdeal(WindowRef window, WindowPartCode partCode, GUEST<Point> *ioIdealSize);LIBRARY_FUNCTION(WindowsLib, ZoomWindowIdeal, C_ZoomWindowIdeal);
 
 
+OSStatus C_GetWindowIdealUserState(WindowRef window, Rect *userState);LIBRARY_FUNCTION(WindowsLib, GetWindowIdealUserState, C_GetWindowIdealUserState);
 
 
+OSStatus C_SetWindowIdealUserState(WindowRef window, const Rect *userState);LIBRARY_FUNCTION(WindowsLib, SetWindowIdealUserState, C_SetWindowIdealUserState);
 
 
 typedef UInt32 WindowConstrainOptions;
@@ -541,18 +570,25 @@ OSStatus C_RemoveWindowProperty(WindowRef window, PropertyCreator propertyCreato
 enum {kWindowPropertyPersistent = 1,
 };
 
+Handle C_GetWindowDataHandle(WindowRef window);LIBRARY_FUNCTION(available, GetWindowDataHandle, C_GetWindowDataHandle);
 
 
+void C_SetWindowDataHandle(WindowRef window, Handle data);LIBRARY_FUNCTION(available, SetWindowDataHandle, C_SetWindowDataHandle);
 
 
+Boolean C_GetWindowZoomFlag(WindowRef window);LIBRARY_FUNCTION(available, GetWindowZoomFlag, C_GetWindowZoomFlag);
 
 
+void C_GetWindowStructureRgn(WindowRef window, RgnHandle r);LIBRARY_FUNCTION(available, GetWindowStructureRgn, C_GetWindowStructureRgn);
 
 
+void C_GetWindowContentRgn(WindowRef window, RgnHandle r);LIBRARY_FUNCTION(available, GetWindowContentRgn, C_GetWindowContentRgn);
 
 
+void C_GetWindowUpdateRgn(WindowRef window, RgnHandle r);LIBRARY_FUNCTION(available, GetWindowUpdateRgn, C_GetWindowUpdateRgn);
 
 
+SInt16 C_GetWindowTitleWidth(WindowRef window);LIBRARY_FUNCTION(available, GetWindowTitleWidth, C_GetWindowTitleWidth);
 
 
 enum {kWindowGroupAttrSelectable = kWindowGroupAttrSelectAsLayer,

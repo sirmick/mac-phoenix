@@ -32,7 +32,7 @@ gestalt.strm	Gestalt: 8.6's answer differs or Executor lacks the selector (per-v
 gestalt.tbtt	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
 gestalt.tsmv	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
 gestalt.wma.	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
-gestalt.wind	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
+gestalt.wind	Window Manager 2.0 is there (1); floating windows aren't yet a layer of their own (8.6: 5, bit 2)
 gestalt.xttt	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
 gestalt.bugx	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
 gestalt.alis	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')

@@ -54,6 +54,7 @@ compares the answers line by line.
 | `ctl` | Control Manager 8: every standard kind (values, features, best rectangle, data sizes by tag), the classic definitions' best rectangles by title and font, embedding, disposal with subcontrols, keyboard focus, 32-bit values, control data with short buffers; Dialog Manager 8.0: items as controls, AppendDITL, ShortenDITL with embedded items |
 | `menu` | Menu Manager with 8.x's calls: metacharacters, insertion order, marks, styles, command keys and glyphs, item icons by number and handle, CalcMenuSize, hierarchical items, MenusLib's 8.5 and private calls, the menu bar clock |
 | `sys` | Gestalt (~120 selectors), FindFolder for each folder type and the folder's name, value-holding low-memory globals, the process's own information, Script Manager variables (system and Roman) |
+| `wind` | Window Manager 2.0: CreateNewWindow for each class and attribute set (class, attributes, features, structure widths, bounds and regions by region code), the classic definitions through the same calls, SetWindowBounds, MoveWindowStructure, RepositionWindow, standard and ideal states, collapsing, properties, the modified state, content colour, floating windows, proxies |
 | `text` | Font Manager and QuickDraw text: font numbers and names, RealFont, FMSwapFont's output, GetFontInfo, FontMetrics, every character's width, StringWidth, MeasureText, TruncString, for 10 fonts x 6 sizes x 9 styles |
 
 What they found on their first runs (fixed): GetThemeSoundMask wrote a long
@@ -94,8 +95,18 @@ descriptors; `'ppc '`; `'dict'`; QuickTime, AppleScript), or that describe
 the machine. From `ctl`: the popup menu's 8.0 messages, and 8.0 dialogs'
 items as controls.
 
-Planned: Window Manager 2.0, the Code Fragment Manager, Apple event
-coercions, PrivateInterfaceLib.
+`wind` (2026-10-31) found most of Window Manager 2.0 missing:
+CreateNewWindow among them, which answered 0 and left the caller holding
+garbage for a window. Executor has 70 of WindowsLib's 74 calls now (not
+'wind' resources, collections, content paint procs), with 8.6's answers:
+CreateNewWindow's classes and the attributes each takes, kDocumentWindowClass
+for every window, the title bar, title and drag regions only, properties
+that remove without error, Window Manager 2.0's floating windows passed
+over by FrontWindow. What stays different is the frame (platinum against
+System 7's) and the screen size.
+
+Planned: the Code Fragment Manager, Apple event coercions,
+PrivateInterfaceLib.
 
 ## Related tools
 

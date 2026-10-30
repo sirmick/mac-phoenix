@@ -57,6 +57,12 @@ extern void WINDCALLDESKHOOK(void);
 extern LONGINT ROMlib_windcall(WindowPtr wind, INTEGER mess, LONGINT param);
 /* MacPhoenix: forgets what windMgr8.cpp keeps for a window (CloseWindow) */
 extern void ROMlib_window8_forget(WindowPtr w);
+/* windMgr8.cpp: CollapseWindow's state; a part of Executor's document
+   frame as GetWindowRegion answers it (false: the window hasn't the part) */
+extern bool ROMlib_window8_collapsed(WindowPtr w);
+extern bool ROMlib_window8_part_region(WindowPtr w, WindowRegionCode code, RgnHandle rgn, bool boxes = false);
+/* a floating window CreateNewWindow made (FrontWindow passes it over) */
+extern bool ROMlib_window8_floating_class(WindowPtr w);
 /* MacPhoenix: PaintOne(nullptr, ...) paints the desktop without making it
    an update for the desktop layer's owner (DMDrawDesktopRegion) */
 extern bool ROMlib_painting_desktop_only;

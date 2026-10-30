@@ -275,6 +275,16 @@ Controls item for item); what differs is the drawing: no platinum colours,
 check box and radio titles over a stippled pattern, a cross where 8.6
 draws a check mark.
 
+Window Manager 2.0 (2026-10-31, the `wind` probe): CreateNewWindow and
+the rest of WindowsLib but 'wind' resources, collections and content paint
+procs (wind/windMgr8.cpp), Gestalt `'wind'` 1 from 8.5. CreateNewWindow's
+windows are drawn by Executor's own definitions (document variants, WDEF
+124, dialog boxes): 8.6's platinum WDEFs 64-67 draw their titles through
+Apple Type Services, which spins on Executor (Date & Time). Not yet:
+floating windows as a layer of their own (`'wind'` bit 2), proxy drags and
+the path menu (they answer as for a window without a proxy, or
+errUserWantsToDragWindow), collapsing drawn.
+
 The titles over dots (2026-10-31): 8.6's ToolboxUtils saves a colour
 port's old-style background pattern from the PixPat's `patData` handle,
 which Executor left empty, and erased every control and group title with

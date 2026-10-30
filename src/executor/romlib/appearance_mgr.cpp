@@ -870,14 +870,17 @@ OSStatus Executor::C_GetWindowRegion(WindowRef window, WindowRegionCode inRegion
             return noErr;
         }
         default:
-            return errWindowRegionCodeInvalid;
+            /* the frame's parts, where Executor's definition has them */
+            return ROMlib_window8_part_region(window, inRegionCode, ioWinRgn) ? noErr
+                                                                            : errWindowRegionCodeInvalid;
     }
 }
 
-/* Executor doesn't collapse windows (window shading) yet. */
+/* What CollapseWindow set (windMgr8.cpp); Executor's definitions don't shade
+   a window yet. */
 Boolean Executor::C_IsWindowCollapsed(WindowRef window)
 {
-    return false;
+    return window && ROMlib_window8_collapsed(window);
 }
 
 Boolean Executor::C_IsWindowCollapsable(WindowRef window)

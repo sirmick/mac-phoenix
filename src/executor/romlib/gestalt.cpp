@@ -338,10 +338,14 @@ static gestaltentry_t since_table[] = {
     { "mixd"_4, 0x00000001 }, /* Mixed Mode */
     { "rsrc"_4, 0x00000003 }, /* partial resources, override maps */
     { "nmgr"_4, 0x00000001 }, /* the Notification Manager (notify.cpp) */
+    /* Window Manager 2.0 (wind/windMgr8.cpp); not yet bit 2, floating
+       windows as a layer of their own (8.6: 5) */
+    { "wind"_4, 0x00000001 },
 };
 static const uint16_t since_versions[std::size(since_table)] = {
     0x0800, 0x0800, 0x0850, 0x0800, 0x0800,
     0x0850, 0x0800, 0x0800, 0x0800,
+    0x0850,
 };
 
 static gestaltentry_t *
