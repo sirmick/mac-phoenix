@@ -15,6 +15,8 @@
 #include <base/functions.impl.h>
 #include "appearance_draw.h"
 #include <algorithm>
+#include <cstring>
+#include <iterator>
 #include <tuple>
 
 using namespace Executor;
@@ -127,8 +129,11 @@ TrackGeometry trackGeometry(const ThemeTrackDrawInfo &info)
     {
         int travel = g.hi(g.drag) - g.lo(g.drag) - g.thumbLength;
         int pos = g.lo(g.drag);
-        if(max > min)
+        if(max > min && g.scrollBar)
             pos += (int64_t)travel * (std::clamp(value, min, max) - (int64_t)min) / ((int64_t)max - min);
+        else if(max > min) /* a slider's rounded (8.6: 37.5 is 38, appr controls.48) */
+            pos += ((int64_t)travel * (std::clamp(value, min, max) - (int64_t)min) * 2 + ((int64_t)max - min))
+                   / (2 * ((int64_t)max - min));
         g.setAxis(g.thumb, pos, pos + g.thumbLength);
     }
     else
@@ -181,6 +186,139 @@ void drawThumb(const TrackGeometry &g, bool pressed)
             else
                 lineGray(g.thumb.left + 4, mid + d, g.thumb.right - 5, mid + d, kDark);
         }
+    }
+}
+
+/* The default appearance's accent ramp, darkest first: progress bars and
+   slider thumbs are shaded in it (appr controls.48/80). */
+const RGBColor accentRamp[] = {
+    { 0x0000, 0x0000, 0x5555 }, { 0x3333, 0x3333, 0x9999 }, { 0x6666, 0x6666, 0xCCCC },
+    { 0x9999, 0x9999, 0xFFFF }, { 0xCCCC, 0xCCCC, 0xFFFF }, { 0xEEEE, 0xEEEE, 0xEEEE },
+};
+
+/* A slider whose thumb points down (horizontal) or right (vertical), as
+   8.6's CDEF 48 makes them; other thumbs stay rectangles. */
+bool pointedThumb(const ThemeTrackDrawInfo &info)
+{
+    return info.kind == kThemeSlider && info.trackInfo.slider.thumbDir == kThemeThumbDownward;
+}
+
+/* Where a pixel of a slider goes: A along the track, C across it, from
+   (a0, c0); a vertical slider is a horizontal one transposed (8.6's
+   track.5 thumb region is track.2's). */
+struct SliderAxes
+{
+    bool horizontal;
+    int a0, c0;
+    void line(int a1, int c1, int a2, int c2, RGBColor col) const
+    {
+        if(horizontal)
+            lineRGB(a0 + a1, c0 + c1, a0 + a2, c0 + c2, col);
+        else
+            lineRGB(c0 + c1, a0 + a1, c0 + c2, a0 + a2, col);
+    }
+    void line(int a1, int c1, int a2, int c2, uint16_t g) const
+    {
+        line(a1, c1, a2, c2, RGBColor{ g, g, g });
+    }
+};
+
+/* The pointed thumb's outline, 15 along and 16 across: a body of 10 (its
+   leading corners cut), then a point narrowing by a pixel each side a
+   row, 3 wide at its tip. Calls SPAN(across, from, to) along it. */
+template<typename F>
+void pointedThumbRows(F span)
+{
+    span(0, 1, 13);
+    for(int c = 1; c < 10; c++)
+        span(c, 0, 14);
+    for(int k = 0; k < 5; k++)
+        span(10 + k, 1 + k, 13 - k);
+    span(15, 6, 8);
+}
+
+/* 8.6's region (appr track.2/5 thumb.rgn, the CRCs). */
+void pointedThumbRgn(const TrackGeometry &g, RgnHandle rgn)
+{
+    SetEmptyRgn(rgn);
+    RgnHandle row = NewRgn();
+    pointedThumbRows([&](int c, int from, int to) {
+        Rect r;
+        if(g.horizontal)
+            SetRect(&r, g.thumb.left + from, g.thumb.top + c, g.thumb.left + to + 1, g.thumb.top + c + 1);
+        else
+            SetRect(&r, g.thumb.left + c, g.thumb.top + from, g.thumb.left + c + 1, g.thumb.top + to + 1);
+        RectRgn(row, &r);
+        UnionRgn(rgn, row, rgn);
+    });
+    DisposeRgn(row);
+}
+
+/* The slider's channel, 6 deep, 3 into the track and its length less 1:
+   a #222 outline with its corners cut (#777 inactive), #aaa inside (#bbb)
+   and, active, a #aaa line over and before it (appr controls.48). */
+void sliderChannel(const TrackGeometry &g, bool active)
+{
+    int len = g.hi(g.bounds) - g.lo(g.bounds) - 2; /* the last pixel along */
+    SliderAxes ax{ g.horizontal, g.lo(g.bounds), g.horizontal ? g.bounds.top + 3 : g.bounds.left + 3 };
+    uint16_t edge = active ? 0x2222 : 0x7777, inside = active ? 0xAAAA : kTrack;
+    if(active)
+    {
+        ax.line(1, 0, len - 1, 0, 0xAAAA);
+        ax.line(0, 1, 0, 4, 0xAAAA);
+        ax.line(1, 1, 1, 1, 0xAAAA);
+        ax.line(len, 1, len, 1, 0xAAAA);
+    }
+    ax.line(2, 1, len - 1, 1, edge);
+    ax.line(2, 5, len - 1, 5, edge);
+    ax.line(1, 2, 1, 4, edge);
+    ax.line(len, 2, len, 4, edge);
+    for(int c = 2; c <= 4; c++)
+        ax.line(2, c, len - 1, c, inside);
+}
+
+/* The pointed thumb: black outline (#777 inactive), shaded in the accent
+   ramp lit from the leading top corner, three grip ridges; pressed a step
+   darker, inactive #ddd and no grip (appr controls.48). */
+void sliderThumb(const TrackGeometry &g, bool active, bool pressed)
+{
+    SliderAxes ax{ g.horizontal, g.lo(g.thumb), g.horizontal ? g.thumb.top : g.thumb.left };
+    int d = pressed ? 1 : 0;
+    auto ramp = [&](int idx) { return active ? accentRamp[std::max(0, idx - d)] : RGBColor{ kFace, kFace, kFace }; };
+    uint16_t outline = active ? kBlack : 0x7777;
+    /* the outline: each row's ends */
+    pointedThumbRows([&](int c, int from, int to) {
+        if(c == 0 || c == 15)
+            ax.line(from, c, to, c, outline);
+        else
+        {
+            ax.line(from, c, from, c, outline);
+            ax.line(to, c, to, c, outline);
+        }
+    });
+    ax.line(1, 1, 1, 1, ramp(5));
+    ax.line(2, 1, 12, 1, ramp(4));
+    ax.line(13, 1, 13, 1, ramp(3));
+    for(int c = 2; c < 10; c++)
+    {
+        ax.line(1, c, 1, c, ramp(4));
+        ax.line(2, c, 12, c, ramp(3));
+        ax.line(13, c, 13, c, ramp(2));
+    }
+    for(int k = 0; k < 5; k++)
+    {
+        int c = 10 + k;
+        ax.line(2 + k, c, 12 - k, c, ramp(k == 4 ? 2 : 3));
+        ax.line(2 + k, c, 2 + k, c, ramp(2));
+        ax.line(12 - k, c, 12 - k, c, ramp(2));
+    }
+    if(!active)
+        return;
+    for(int r = 4; r <= 8; r += 2)
+    {
+        ax.line(r, 3, r, 3, ramp(5));
+        ax.line(r, 4, r, 8, ramp(4));
+        ax.line(r + 1, 4, r + 1, 9, ramp(1));
     }
 }
 
@@ -910,6 +1048,12 @@ OSStatus Executor::C_DrawThemeTrack(const ThemeTrackDrawInfo *drawInfo, RgnHandl
         }
         case kThemeSlider:
         {
+            if(pointedThumb(*drawInfo))
+            {
+                sliderChannel(g, active);
+                sliderThumb(g, active, drawInfo->trackInfo.slider.pressState & kThemeThumbPressed);
+                break;
+            }
             /* a channel 4 across the middle, the thumb over it */
             Rect ch = g.bounds;
             int mid = g.horizontal ? (ch.top + ch.bottom) / 2 : (ch.left + ch.right) / 2;
@@ -1014,7 +1158,9 @@ OSStatus Executor::C_GetThemeTrackThumbRgn(const ThemeTrackDrawInfo *drawInfo, R
     if(isProgress(drawInfo->kind))
         return paramErr; /* no thumb: 8.6 leaves the output alone */
     TrackGeometry g = trackGeometry(*drawInfo);
-    if(g.hasThumb)
+    if(g.hasThumb && pointedThumb(*drawInfo))
+        pointedThumbRgn(g, thumbRgn);
+    else if(g.hasThumb)
         RectRgn(thumbRgn, &g.thumb);
     else
         SetEmptyRgn(thumbRgn);
@@ -1247,6 +1393,88 @@ OSStatus Executor::C_DrawThemePopupArrow(const Rect *bounds, ThemeArrowOrientati
     return noErr;
 }
 
+namespace
+{
+/* A north tab as 8.6 draws it (appr controls.tab80.*, draw*.tab.*): 21
+   rows (a front one 24, down over the pane's edge), its sides stepping out
+   a pixel every 3 rows from 10 in at the top. Each row: the fill across,
+   then the left piece from the left side, then the right piece ending at
+   the right side, drawn over the fill from 12 in from the right (a narrow
+   tab's pieces overlap: the right one wins). Rows as "LEFT|FILL|RIGHT",
+   one hex digit a grey (f white): rows 0-4, then the 3-row steps, the
+   last row, a front tab's 3 more (and how far in each of those starts). */
+struct TabLook
+{
+    const char *top[5], *step[3], *last, *below[3];
+    int belowInset[3];
+};
+
+const TabLook tabLooks[] = {
+    /* kThemeTabNonFront */
+    { { "20|0|", "20a|c|ba00", "2ac|d|80", "2acd|c|b43", "0cd|c|a0" }, { "2ad|c|b43", "0cd|c|80", "0cd|c|a0" },
+      "0ad|c|b40", {} },
+    /* kThemeTabNonFrontPressed */
+    { { "20|0|", "204|4|4430", "244|5|80", "2445|6|743", "045|6|80" }, { "245|6|743", "045|6|80", "045|6|70" },
+      "045|6|740", {} },
+    /* kThemeTabNonFrontInactive */
+    { { "55|5|", "55|d|55", "5|d|5", "5|d|5", "5|d|5" }, { "5|d|5", "5|d|5", "5|d|5" }, "5|d|5", {} },
+    /* kThemeTabFront */
+    { { "20|0|", "20b|c|cb00", "2bc|f|d80", "2bff|e|b42", "0cf|e|d80" }, { "2bf|e|b42", "0cf|e|d80", "0cf|e|d80" },
+      "2bf|e|b40", { "0cf|e|db0", "cc|e|cc", "|e|" }, { 0, 0, 1 } },
+    /* kThemeTabFrontInactive */
+    { { "55|5|", "55|e|55", "5|e|5", "5|e|5", "5|e|5" }, { "5|e|5", "5|e|5", "5|e|5" }, "5|e|5", { "|e|", "|e|", "|e|" } },
+};
+
+constexpr int tabRows = 21, tabFrontRows = 24;
+
+/* How far in a tab's sides are, row R (of the 21). */
+int tabInset(int r)
+{
+    static const int top[] = { 10, 8, 7, 6, 6 };
+    if(r < 5)
+        return top[r];
+    return 5 - (r - 5) / 3;
+}
+
+const char *tabRow(const TabLook &look, int r)
+{
+    if(r < 5)
+        return look.top[r];
+    if(r < tabRows - 1)
+        return look.step[(r - 5) % 3];
+    if(r == tabRows - 1)
+        return look.last;
+    return look.below[r - tabRows];
+}
+
+uint16_t tabGray(char c)
+{
+    int n = c <= '9' ? c - '0' : c - 'a' + 10;
+    return n * 0x1111;
+}
+
+void drawTabNorth(const Rect &bounds, const TabLook &look, int rows)
+{
+    int L = bounds.left, R = bounds.right;
+    for(int r = 0; r < rows; r++)
+    {
+        const char *row = tabRow(look, r);
+        const char *bar1 = strchr(row, '|'), *bar2 = strchr(bar1 + 1, '|');
+        int e = r < tabRows ? tabInset(r) : look.belowInset[r - tabRows], y = bounds.top + r, left = L + e,
+            right = R - 1 - e;
+        uint16_t fill = tabGray(bar1[1]);
+        lineGray(left, y, right, y, fill);
+        for(const char *c = row; c < bar1; c++)
+            lineGray(left + (c - row), y, left + (c - row), y, tabGray(*c));
+        int n = strlen(bar2 + 1);
+        if(R - 12 <= right - n)
+            lineGray(R - 12, y, right - n, y, fill);
+        for(int i = 0; i < n; i++)
+            lineGray(right - n + 1 + i, y, right - n + 1 + i, y, tabGray(bar2[1 + i]));
+    }
+}
+}
+
 OSStatus Executor::C_DrawThemeTab(const Rect *inRect, ThemeTabStyle inStyle, ThemeTabDirection inDirection,
                                   ThemeTabTitleDrawUPP labelProc, UInt32 userData)
 {
@@ -1254,6 +1482,17 @@ OSStatus Executor::C_DrawThemeTab(const Rect *inRect, ThemeTabStyle inStyle, The
         return paramErr;
     bool front = inStyle == kThemeTabFront || inStyle == kThemeTabFrontInactive || inStyle == kThemeTabFrontUnavailable;
     bool active = inStyle == kThemeTabFront || inStyle == kThemeTabNonFront || inStyle == kThemeTabNonFrontPressed;
+    if(inDirection == kThemeTabNorth)
+    {
+        /* the unavailable styles came after 8.6's Appearance: it draws
+           nothing for them (appr controls.tab80.5) */
+        if(inStyle < (int)std::size(tabLooks))
+        {
+            DrawGuard guard;
+            drawTabNorth(*inRect, tabLooks[inStyle], front ? tabFrontRows : tabRows);
+        }
+    }
+    else
     {
         DrawGuard guard;
         Rect r = *inRect;
@@ -1297,7 +1536,25 @@ OSStatus Executor::C_GetThemeTabRegion(const Rect *inRect, ThemeTabStyle inStyle
 {
     if(!inRect || !ioRgn)
         return paramErr;
-    RectRgn(ioRgn, inRect);
+    if(inDirection != kThemeTabNorth)
+    {
+        RectRgn(ioRgn, inRect);
+        return noErr;
+    }
+    /* the tab's pixels, a row at a time (appr misc.tab.*, the CRCs) */
+    bool front = inStyle == kThemeTabFront || inStyle == kThemeTabFrontInactive || inStyle == kThemeTabFrontUnavailable;
+    int L = inRect->left, R = inRect->right;
+    SetEmptyRgn(ioRgn);
+    RgnHandle row = NewRgn();
+    for(int r = 0; r < (front ? tabFrontRows : tabRows); r++)
+    {
+        Rect span;
+        int e = r < tabRows ? tabInset(r) : 0;
+        SetRect(&span, std::min(L + e, R - 12), inRect->top + r, std::max(R - e, L + 12), inRect->top + r + 1);
+        RectRgn(row, &span);
+        UnionRgn(ioRgn, row, ioRgn);
+    }
+    DisposeRgn(row);
     return noErr;
 }
 
