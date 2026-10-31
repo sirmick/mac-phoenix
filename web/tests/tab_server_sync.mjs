@@ -123,7 +123,10 @@ try {
     check(await request(a, 'read', '/executor/note.txt') === null, "Reset in B reaches A's Executor disk");
     check(await head(a) === 'DDDDMARK!', 'the disk change is still there (Reset is the volume only)');
 
-    // Revert in B: the disk as it was, in A too.
+    // Revert in B: the disk as it was, in A too. A's Executor writes the
+    // disk itself (the volume's header, at mounting): those blocks on the
+    // account first, or A, behind, would be asked (and keep its own).
+    check(await until(() => request(a, 'stats').then((s) => s.unsynced === 0), 15000), "A's writes on the account");
     await b.locator('#files a[title^="Revert"]').first().click();
     check(await ready(b), 'Revert in B');
     check(await head(b) !== 'DDDDMARK!', 'B has the disk as it was');

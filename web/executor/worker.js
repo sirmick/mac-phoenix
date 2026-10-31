@@ -321,7 +321,9 @@ self.onmessage = (e) => {
             const remote = overlays.filter((o) => o.image instanceof RemoteImage);
             postMessage({ type: 'reply', id: m.id, result: { ...Module.stats,
                 remoteBytes: remote.reduce((n, o) => n + o.image.fetched, 0),
-                remoteRequests: remote.reduce((n, o) => n + o.image.requests, 0) } });
+                remoteRequests: remote.reduce((n, o) => n + o.image.requests, 0),
+                // blocks not on the account yet (or on their way there)
+                unsynced: overlays.reduce((n, o) => n + o.pending.size, 0) + (Sync.busy ? 1 : 0) } });
         } else if (m.op === 'pixels') {
             // The canvas's own pixels (tests: comparing scales needs more
             // than a screenshot's possible browser-side resampling).
