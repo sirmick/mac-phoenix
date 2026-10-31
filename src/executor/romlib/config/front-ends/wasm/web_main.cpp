@@ -355,7 +355,10 @@ int main(int argc, char **argv)
         else
             c.app = a;
     }
-    c.bpp = 8;
+    /* The depth the System's Macs start in, as natively: 8.x 32 bits, 7.x
+       and Executor's own System 8 (at 8 bits 8.6's desktop pattern maps
+       to one colour of the standard palette, flat lavender). */
+    c.bpp = 0;
     c.ram_mb = 32;
     c.data_dir = "/executor"; /* in memory; Executor makes its System Folder */
     /* Disk images are writable: the page keeps their changes in an overlay
