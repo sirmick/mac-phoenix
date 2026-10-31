@@ -1,4 +1,4 @@
-# probe d500b8bf9a949ffc700195a41880eea27c3120d167ce824cd5b84656219a0f08
+# probe 995b1e32f9a14042bacee69e497b2b26f55a4aade253826daf7d66f85f67fade
 == create
 create.1.0: err 0 made
 create.1.0.class: err 0 6
@@ -1551,3 +1551,9 @@ proxy.SetWindowProxyCreatorAndType: err 0
 proxy.GetWindowProxyFSSpec.typed: err -5602
 proxy.RemoveWindowProxy: err 0
 proxy.RemoveWindowProxy.again: err 0
+== gworld
+gworld.nilPort.device: main
+gworld.nilPort.port: nil
+gworld.nilPort.window.baseAddr: screen
+gworld.windowPort.device: main
+gworld.windowPort.window.baseAddr: screen
