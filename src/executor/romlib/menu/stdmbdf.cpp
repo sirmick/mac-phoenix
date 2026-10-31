@@ -788,3 +788,11 @@ int32_t Executor::C_mbdf0(int16_t sel, int16_t mess, int16_t param1,
     }
     return retval;
 }
+
+/* MenusLib's StandardMBDF: 8.x's MBDF 0 is a PowerPC stub that passes its
+   arguments on to it. */
+LONGINT Executor::C_StandardMBDF(INTEGER selector, INTEGER message,
+                                 INTEGER parameter1, LONGINT parameter2)
+{
+    return C_mbdf0(selector, message, parameter1, parameter2);
+}

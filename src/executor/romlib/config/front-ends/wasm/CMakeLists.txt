@@ -127,3 +127,24 @@ if(NODE_COMMAND)
         LABELS "executor;web" TIMEOUT 240 SKIP_RETURN_CODE 77
         ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM}")
 endif()
+
+# tools/web/server, the private service: its own checks (no browser), then
+# the tab on it: signing in, invitations and sync between two browsers;
+# a large library disk (EXECUTOR_WEB_SYSTEM and its record) read lazily.
+find_program(PYTHON3_COMMAND python3)
+if(PYTHON3_COMMAND)
+    add_test(NAME executor.web.server
+        COMMAND ${PYTHON3_COMMAND} ${PROJECT_SOURCE_DIR}/tools/web/server/test_server.py)
+    set_tests_properties(executor.web.server PROPERTIES LABELS "executor;web" TIMEOUT 60)
+endif()
+if(NODE_COMMAND AND PYTHON3_COMMAND)
+    add_test(NAME executor.web.server_sync
+        COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_server_sync.mjs
+                $<TARGET_FILE_DIR:executor-web>)
+    add_test(NAME executor.web.server_lazy
+        COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_server_lazy.mjs
+                $<TARGET_FILE_DIR:executor-web> ${EXECUTOR_WEB_SYSTEM})
+    set_tests_properties(executor.web.server_sync executor.web.server_lazy PROPERTIES
+        LABELS "executor;web" TIMEOUT 300 SKIP_RETURN_CODE 77
+        ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM}")
+endif()

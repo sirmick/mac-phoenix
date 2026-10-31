@@ -884,26 +884,32 @@ OSStatus C_GetThemeAccentColors(GUEST<CTabHandle> *outColors);PASCAL_SUBTRAP(Get
 LIBRARY_ALSO(AppearanceLib, GetThemeAccentColors, InterfaceLib);
 
 
-OSStatus DrawThemeMenuBarBackground(const Rect *inBounds, ThemeMenuBarState inState, UInt32 inAttributes);TRAP_GLUE(AppearanceLib, DrawThemeMenuBarBackground, AppearanceDispatch, 0x0018);
+OSStatus C_DrawThemeMenuBarBackground(const Rect *inBounds, ThemeMenuBarState inState, UInt32 inAttributes);PASCAL_SUBTRAP(DrawThemeMenuBarBackground, 0xAA74, 0x0018, AppearanceDispatch);
+LIBRARY_ALSO(AppearanceLib, DrawThemeMenuBarBackground, InterfaceLib);
 
 
-OSStatus DrawThemeMenuTitle(const Rect *inMenuBarRect, const Rect *inTitleRect, ThemeMenuState inState, UInt32 inAttributes, MenuTitleDrawingUPP inTitleProc, UInt32 inTitleData);TRAP_GLUE(AppearanceLib, DrawThemeMenuTitle, AppearanceDispatch, 0x0019);
+OSStatus C_DrawThemeMenuTitle(const Rect *inMenuBarRect, const Rect *inTitleRect, ThemeMenuState inState, UInt32 inAttributes, MenuTitleDrawingUPP inTitleProc, UInt32 inTitleData);PASCAL_SUBTRAP(DrawThemeMenuTitle, 0xAA74, 0x0019, AppearanceDispatch);
+LIBRARY_ALSO(AppearanceLib, DrawThemeMenuTitle, InterfaceLib);
 
 
 OSStatus C_GetThemeMenuBarHeight(GUEST<SInt16> *outHeight);PASCAL_SUBTRAP(GetThemeMenuBarHeight, 0xAA74, 0x001A, AppearanceDispatch);
 LIBRARY_ALSO(AppearanceLib, GetThemeMenuBarHeight, InterfaceLib);
 
 
-OSStatus DrawThemeMenuBackground(const Rect *inMenuRect, ThemeMenuType inMenuType);TRAP_GLUE(AppearanceLib, DrawThemeMenuBackground, AppearanceDispatch, 0x001B);
+OSStatus C_DrawThemeMenuBackground(const Rect *inMenuRect, ThemeMenuType inMenuType);PASCAL_SUBTRAP(DrawThemeMenuBackground, 0xAA74, 0x001B, AppearanceDispatch);
+LIBRARY_ALSO(AppearanceLib, DrawThemeMenuBackground, InterfaceLib);
 
 
-OSStatus GetThemeMenuBackgroundRegion(const Rect *inMenuRect, ThemeMenuType menuType, RgnHandle region);TRAP_GLUE(AppearanceLib, GetThemeMenuBackgroundRegion, AppearanceDispatch, 0x001C);
+OSStatus C_GetThemeMenuBackgroundRegion(const Rect *inMenuRect, ThemeMenuType menuType, RgnHandle region);PASCAL_SUBTRAP(GetThemeMenuBackgroundRegion, 0xAA74, 0x001C, AppearanceDispatch);
+LIBRARY_ALSO(AppearanceLib, GetThemeMenuBackgroundRegion, InterfaceLib);
 
 
-OSStatus DrawThemeMenuItem(const Rect *inMenuRect, const Rect *inItemRect, SInt16 inVirtualMenuTop, SInt16 inVirtualMenuBottom, ThemeMenuState inState, ThemeMenuItemType inItemType, MenuItemDrawingUPP inDrawProc, UInt32 inUserData);TRAP_GLUE(AppearanceLib, DrawThemeMenuItem, AppearanceDispatch, 0x001D);
+OSStatus C_DrawThemeMenuItem(const Rect *inMenuRect, const Rect *inItemRect, SInt16 inVirtualMenuTop, SInt16 inVirtualMenuBottom, ThemeMenuState inState, ThemeMenuItemType inItemType, MenuItemDrawingUPP inDrawProc, UInt32 inUserData);PASCAL_SUBTRAP(DrawThemeMenuItem, 0xAA74, 0x001D, AppearanceDispatch);
+LIBRARY_ALSO(AppearanceLib, DrawThemeMenuItem, InterfaceLib);
 
 
-OSStatus DrawThemeMenuSeparator(const Rect *inItemRect);TRAP_GLUE(AppearanceLib, DrawThemeMenuSeparator, AppearanceDispatch, 0x001E);
+OSStatus C_DrawThemeMenuSeparator(const Rect *inItemRect);PASCAL_SUBTRAP(DrawThemeMenuSeparator, 0xAA74, 0x001E, AppearanceDispatch);
+LIBRARY_ALSO(AppearanceLib, DrawThemeMenuSeparator, InterfaceLib);
 
 
 OSStatus C_GetThemeMenuSeparatorHeight(GUEST<SInt16> *outHeight);PASCAL_SUBTRAP(GetThemeMenuSeparatorHeight, 0xAA74, 0x001F, AppearanceDispatch);
