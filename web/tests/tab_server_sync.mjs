@@ -67,6 +67,11 @@ try {
     dialogs(a);
     await a.goto(`${server.url}/`);
     check(a.url().includes('/login'), 'signed out, the tab sends you to sign in');
+    await a.goto(`${server.url}/login?next=${encodeURIComponent('/\\evil.example/')}`);
+    await a.fill('#name', 'owner');
+    await a.fill('#password', OWNER_PASSWORD);
+    await Promise.all([a.waitForURL((u) => !u.pathname.startsWith('/login')), a.click('#go')]);
+    check(a.url().startsWith(`${server.url}/`), "sign-in's next= stays on the site");
     await signIn(a, server.url, 'owner', OWNER_PASSWORD, { query: QUERY });
     check(await ready(a), 'signed in: Executor runs');
     check(await a.locator('#account').textContent() === 'owner', 'the bar says who');
