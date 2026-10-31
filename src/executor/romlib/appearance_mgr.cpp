@@ -19,6 +19,7 @@
 #include <quickdraw/cquick.h>
 #include <wind/wind.h>
 #include "appearance_draw.h"
+#include <rsys/appearance.h>
 #include <base/functions.impl.h>
 #include <set>
 #include <map>
@@ -888,8 +889,8 @@ Boolean Executor::C_IsWindowCollapsable(WindowRef window)
     return false;
 }
 
-/* A command key's glyph (Menus.h kMenu*Glyph): accepted; Executor's menu
-   definition draws the command character. */
+/* A command key's glyph (Menus.h kMenu*Glyph): 8.x's MDEF draws it
+   (menu/stdmdef.cpp) from the System's .Keyboard font. */
 namespace
 {
 /* Per item (menu, item): the glyph and modifiers the 8.x calls set. */
@@ -908,6 +909,12 @@ bool valid_item(MenuRef m, int item)
 {
     return m && item >= 1 && item <= CountMItems(m);
 }
+}
+
+int16_t Executor::ROMlib_menu_item_key_glyph(MenuHandle mh, int item)
+{
+    auto it = item_keys.find({ US_TO_SYN68K(mh), item });
+    return it == item_keys.end() ? 0 : it->second.glyph;
 }
 
 OSErr Executor::C_SetMenuItemKeyGlyph(MenuRef inMenu, SInt16 inItem, SInt16 inGlyph)

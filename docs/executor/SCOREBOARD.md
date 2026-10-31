@@ -171,7 +171,7 @@ Rows with a fault, by owner:
 
 | Disk | App | Code | e86 | g86 | First blocker | Screenshot | Owner |
 |---|---|---|---|---|---|---|---|
-| productivity-system-7 | AppleWorks 5.0.3 ƒ:AppleWorks | fat | runs | runs | (e86: menu bar still drawn as System 7's, not platinum; unimplemented PowerPC OpenWD until wash/fix-prod lands) | e86/prod/001.png | platinum |
+| productivity-system-7 | AppleWorks 5.0.3 ƒ:AppleWorks | fat | runs | runs | (e86: unimplemented PowerPC OpenWD until wash/fix-prod lands) | e86/prod/001.png | platinum |
 | productivity-system-7 | ClarisWorks 4.0v4 ƒ:ClarisWorks | 68k | fails | runs | e86: alert "This copy of ClarisWorks has been modified by another program or virus" at launch, as on 7.6.1 | e86/prod/002.png | fix-prod |
 | dev-tools-system-7 | MPW:MPW Shell | fat | fails | runs | e86: host signal 11 at guest pc $c0f28844, address (nil) | e86/dev/005.png | fix-dev |
 | dev-tools-system-7 | CodeWarrior Pro 4 ƒ:Metrowerks CodeWarrior:CodeWarrior IDE 3.2 | fat | fails | runs | e86: host signal 11 at guest pc $c0f287a0, address 0x30 | e86/dev/001.png | fix-dev |

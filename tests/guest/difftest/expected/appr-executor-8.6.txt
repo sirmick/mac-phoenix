@@ -18,10 +18,7 @@ frames.1024.*	the title's glyphs (Charcoal from Executor's unhinted scaler); the
 frames.1031.*	the title's glyphs (Charcoal from Executor's unhinted scaler); the frame is 8.6's
 frames.5.*	the title's glyphs (Charcoal from Executor's unhinted scaler); the frame is 8.6's
 frames.1043.*	the title's glyphs (Charcoal from Executor's unhinted scaler); the frame is 8.6's
-frames.16.*	the rounded window (rDocProc) isn't drawn platinum yet
-frames.1057.*	floating windows are drawn as document windows (no platinum floating frame yet)
-frames.1059.*	floating windows are drawn as document windows (no platinum floating frame yet)
-frames.1073.*	floating windows are drawn as document windows (no platinum floating frame yet)
+frames.16.*	the title's glyphs (Charcoal from Executor's unhinted scaler); the frame is 8.6's (classic, not platinum, on 8.6 too)
 
 # Colours and styles
 color.brush.48.*	brush 48 is invalid on 8.6 (-30560); Executor answers a colour

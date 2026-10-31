@@ -26,3 +26,14 @@ max_upload_mb = 64          # one request's body
 images = "~/storage/images" # the NAME.img.json records' images are the library
 include = ["*.img"]
 exclude = ["test-*", "grid-*"]
+
+[relay]
+# Executor's MacTCP and Open Transport in the tab: TCP out, UDP with the hosts
+# sent to, DNS on this host's resolver (docs/executor/DIRECTION.md, "The network
+# relay"). Signed-in users only; a relay open to every port is an open proxy.
+enabled = true
+ports = [7, 13, 20, 21, 23, 25, 37, 43, 53, 70, 79, 80, 110, 113, 119, 123, 143,
+         194, 443, 563, 993, 995, 1080, 6667, 8080]   # also "A-B" ranges
+allow_private = false       # true: loopback, private and link-local hosts too
+max_sockets = 32            # per user, all their tabs together
+max_connections = 4         # per user: tabs with the relay open

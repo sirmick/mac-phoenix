@@ -903,7 +903,7 @@ int drcbe_c::execute(code_handle &entry)
 
 			case MAKE_OPCODE_SHORT(OP_SETFMOD, 4, 0):   // SETFMOD src
 				m_state.fmod = PARAM0 & 0x03;
-				std::fesetround(rounding_map[PARAM0 & 0x03]);
+				SET_ROUNDING(m_state.fmod);
 				break;
 
 			case MAKE_OPCODE_SHORT(OP_GETFMOD, 4, 0):   // GETFMOD dst
@@ -932,7 +932,8 @@ int drcbe_c::execute(code_handle &entry)
 			case MAKE_OPCODE_SHORT(OP_RESTORE, 4, 1):   // RESTORE dst
 				m_state = *inst[0].state;
 				flags = m_state.flags &= FLAGS_ALL;
-				std::fesetround(rounding_map[m_state.fmod &= 0x03]);
+				m_state.fmod &= 0x03;
+				SET_ROUNDING(m_state.fmod);
 				break;
 
 
