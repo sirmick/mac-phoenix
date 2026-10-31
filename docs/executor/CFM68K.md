@@ -79,10 +79,23 @@ OS Runtime Architectures*:
 2. **CFM core** (`cfm.cpp`, for PowerPC too):
    - `GetDiskFragment` reads the container at the offset and length given
      (it read the whole data fork, so a fat file's second container never
-     loaded); `kFindLib`, `kLoadNewCopy` honoured.
+     loaded); `kFindLib` (below) and `kLoadNewCopy` honoured.
    - Fragments prepared are listed per application zone, so a library is
      shared by its importers and found again by name or file and offset;
      the list goes with the application (`ROMlib_cfm_process_exit`).
+   - A section whose share kind is global (`kPEFGlobalShare`: 51 of the 70
+     containers in 8.6's System, GlyphsCache, FontManager, ATSSupport,
+     ControlDefinitions, ...) has one instance for the whole system,
+     outside any application heap, relocated by the first preparation
+     only; later preparations, in any application, use it (3870ca3b). A
+     fresh copy per application left the second one's ATS spinning on the
+     first's state.
+   - `kFindLib` only looks. From 8.5 (`'sysv'` >= $0850) a library that no
+     one has connected answers `cfragLibConnErr` (-2817), there or not, as
+     8.6 does (the difftest sys probe's cfm keys); InitFonts and InitMenus
+     (which InitWindows calls) connect Executor's FontManager, MenusLib and
+     WindowsLib, as 8.6's do. Before 8.5 the answer is as it was
+     (1e70b9d7).
    - Search: the application's own file, its folder, the Extensions folder,
      then Executor's libraries (the root and application folders were
      uninitialized TODOs). The application's resource file is not closed
