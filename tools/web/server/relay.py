@@ -366,6 +366,8 @@ class Connection:
             if not s.out and not s.connecting:
                 self.shut(s)
         elif op == CREDIT:
+            if len(body) < 4:
+                raise Closed(1008, "a short CREDIT")
             s.unacked = max(0, s.unacked - struct.unpack(">I", body[:4])[0])
         else:
             raise Closed(1008, f"op {op:#x}")

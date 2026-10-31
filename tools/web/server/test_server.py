@@ -390,6 +390,16 @@ class ServerTest(unittest.TestCase):
             threading.Event().wait(0.1)
         self.assertFalse(self.server.app.relay.sockets.get(1))
 
+    def test_relay_short_credit(self):
+        self.relay_policy()
+        ws = self.relay_open()
+        ws.send(relay.UDP, 1)
+        ws.send(relay.CREDIT, 1, b"\0\0")                # a u32 cut short
+        while (frame := ws.recv_frame())[0] != 0x8:
+            pass
+        self.assertEqual(struct.unpack(">H", frame[2][:2])[0], 1008)
+        ws.s.close()
+
     def test_relay_signed_out(self):
         s = socket.create_connection(("127.0.0.1", self.port), timeout=10)
         s.sendall(b"GET /relay HTTP/1.1\r\nHost: x\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"

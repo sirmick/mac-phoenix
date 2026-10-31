@@ -347,7 +347,9 @@ the server's (`app.py`). Gates: `executor.web.server` (the protocol from a
 Python client: echo with flow control, refusals, the policy, UDP, DNS,
 limits) and `executor.web.relay` (MacPhoenixSuite's network and mactcp
 sections and OTTestRetro68K in the tab against `tests/lib/echo_server.py`).
-Not yet: TLS stripping, WebRTC AppleTalk.
+Not yet (v2): a connect-rate limit (only concurrency is capped now, so a
+signed-in user could scan the allowed public hosts and ports), TLS
+stripping, WebRTC AppleTalk.
 
 ### 5. PPC: MAME's PowerPC recompiler
 
