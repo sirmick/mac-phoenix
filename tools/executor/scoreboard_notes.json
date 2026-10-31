@@ -1,8 +1,4 @@
 {
- "e761|Productivity:ClarisWorks 4.0v4 ƒ:ClarisWorks": {
-  "status": "fails",
-  "blocker": "alert \"This copy of ClarisWorks has been modified by another program or virus\" at launch (disk writable; Quadra shows the Registration Assistant)"
- },
  "e761|Development:THINK C 6.0 ƒ:THINK C:THINK Project Manager": {
   "status": "partial",
   "blocker": "Standard File opens in the boot volume's System Folder, not the application's folder (Quadra: THINK C folder)"
@@ -21,10 +17,6 @@
  },
  "8.6|Productivity:AppleWorks 5.0.3 ƒ:AppleWorks": {
   "owner": "platinum"
- },
- "e86|Productivity:ClarisWorks 4.0v4 ƒ:ClarisWorks": {
-  "status": "fails",
-  "blocker": "alert \"This copy of ClarisWorks has been modified by another program or virus\" at launch, as on 7.6.1"
  },
  "8.6|Productivity:ClarisWorks 4.0v4 ƒ:ClarisWorks": {
   "owner": "fix-prod"
