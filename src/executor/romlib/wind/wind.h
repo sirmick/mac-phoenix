@@ -35,6 +35,12 @@ struct windrestype
 extern LONGINT C_wdef0(INTEGER, WindowPtr, INTEGER, LONGINT);
 extern LONGINT C_wdef16(INTEGER, WindowPtr, INTEGER, LONGINT);
 extern LONGINT C_wdef64(INTEGER, WindowPtr, INTEGER, LONGINT);
+/* set by C_wdef64 round its call of C_wdef0: WDEF 64's growable windows
+   have the grow box in their frame */
+extern bool ROMlib_wdef_grow_in_frame;
+/* ... and WDEF 65's modal and movable modal dialogs and alerts have the
+   thin frame */
+extern bool ROMlib_wdef_thin_dialog;
 
 extern WindowPeek ROMlib_firstvisible(WindowPtr w);
 

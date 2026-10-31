@@ -113,6 +113,38 @@ inline void arrow(const Rect &r, int dir, int size, uint16_t g)
     }
 }
 
+/* ── Platinum window frames (8.x), round a content rectangle in global
+   coordinates, in the current port (the Window Manager's) ── */
+
+struct WindowParts
+{
+    bool close, zoom, collapse;
+    bool grow;      /* the grow box in the content's corner (WDEF 64's) */
+};
+
+/* The rectangle a platinum document window's frame occupies (structure,
+   its shadow included) round content c. */
+Rect documentStructure(const Rect &c);
+
+/* A platinum document window's frame and title (TITLE may be nullptr). */
+void documentFrame(const Rect &c, bool active, const WindowParts &parts, ConstStringPtr title);
+
+/* A platinum modal dialog box's frame (dBoxProc; WDEF 65's modal and
+   alert variants are THIN: 3 pixels against 6). */
+void dialogFrame(const Rect &c, bool active, bool thin);
+/* A movable modal dialog's: a title bar over the same frame. */
+void movableDialogFrame(const Rect &c, bool active, bool thin, ConstStringPtr title);
+/* their structure regions */
+void dialogStructure(const Rect &c, bool thin, RgnHandle rgn, bool titled = false);
+
+/* The grow box alone (DrawGrowIcon on a document window). */
+void documentGrowBox(const Rect &c);
+
+/* Where its boxes are (global), for hit testing. */
+Rect documentCloseBox(const Rect &c);
+Rect documentZoomBox(const Rect &c, const WindowParts &parts);
+Rect documentCollapseBox(const Rect &c);
+
 /* The current port's depth and whether its device is in colour, what the
    definitions' callbacks are told. */
 inline void portDepth(SInt16 *depth, Boolean *color)

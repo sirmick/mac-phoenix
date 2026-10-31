@@ -298,6 +298,19 @@ fgColor/bkColor, pixel values for the port's own device (an 8-bit screen
 copied into a 32-bit GWorld came out as indices); the port's RGB colours
 are used when the depths differ (qPixMapConv.cpp).
 
+Platinum window frames (2026-10-31, `appr` frames): on 8.x WDEF 0 draws
+document windows (with and without grow and zoom; WDEF 64's too, its grow
+box part of the frame and not of the content), modal dialog boxes (6
+pixels; WDEF 65's 3) and movable modal dialogs (a title bar over the same
+frame) as 8.6 does, measured from the G3's pixels (appearance_draw.cpp:
+documentFrame, dialogFrame, movableDialogFrame; regions and hit testing
+in windDocdef.cpp); plain and shadowed dialog boxes stay black when
+inactive. 12 of the probe's 34 frames are 8.6's pixel for pixel, 14 more
+but for the title's glyphs (Charcoal from Executor's unhinted scaler).
+Not yet: floating windows (WDEF 66/67, 124), the rounded window, the
+boxes drawn pressed, the collapse box (it drags), DrawThemeWindowFrame
+itself, the window part regions (Window Manager 2.0's GetWindowRegion).
+
 The titles over dots (2026-10-31): 8.6's ToolboxUtils saves a colour
 port's old-style background pattern from the PixPat's `patData` handle,
 which Executor left empty, and erased every control and group title with

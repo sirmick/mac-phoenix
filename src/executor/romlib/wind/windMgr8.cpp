@@ -227,13 +227,22 @@ LONGINT Executor::C_wdef64(INTEGER varcode, WindowPtr w, INTEGER message, LONGIN
     switch(windowDefID(w))
     {
         case 64: /* + grow 1, vertical zoom 2, horizontal zoom 4 */
-            return C_wdef0(((varcode & 6) ? zoomDocProc : documentProc) | ((varcode & 1) ? 0 : noGrowDocProc),
-                           w, message, param);
+        {
+            ROMlib_wdef_grow_in_frame = true;
+            LONGINT r = C_wdef0(((varcode & 6) ? zoomDocProc : documentProc) | ((varcode & 1) ? 0 : noGrowDocProc),
+                                w, message, param);
+            ROMlib_wdef_grow_in_frame = false;
+            return r;
+        }
         case 65: /* plain, shadow, modal, movable modal, alert, movable alert, movable modal grow */
         {
             static const INTEGER dialog[] = { plainDBox, altDBoxProc, dBoxProc, movableDBoxProc,
                                               dBoxProc, movableDBoxProc, movableDBoxProc };
-            return C_wdef0(dialog[std::min<int>(varcode & 15, 6)], w, message, param);
+            INTEGER classic = dialog[std::min<int>(varcode & 15, 6)];
+            ROMlib_wdef_thin_dialog = classic == dBoxProc || classic == movableDBoxProc;
+            LONGINT r = C_wdef0(classic, w, message, param);
+            ROMlib_wdef_thin_dialog = false;
+            return r;
         }
         default: /* 66, 67: floating + grow 2, vertical zoom 4, horizontal zoom 8 */
             /* (not WDEF 124: on 8.x it hands floating windows to WDEF 66)

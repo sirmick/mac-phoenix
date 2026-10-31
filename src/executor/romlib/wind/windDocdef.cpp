@@ -10,6 +10,8 @@
 
 #include <quickdraw/cquick.h>
 #include <wind/wind.h>
+#include <prefs/prefs.h>
+#include <appearance_draw.h>
 #include <ctl/ctl.h>
 
 #include <quickdraw/image.h>
@@ -724,7 +726,8 @@ void draw_plain_dialog_box(GrafPtr w)
     PenSize(1, 1);
     PenMode(patCopy);
     SetRect(&r, left - 1, top - 1, right + 1, bottom + 1);
-    RGBForeColor(frame_outline);
+    /* MacPhoenix: 8.x's stays black when inactive (the appr probe's frames) */
+    RGBForeColor(system_version >= 0x800 ? &ROMlib_black_rgb_color : frame_outline);
     FrameRect(&r);
 }
 
@@ -741,11 +744,13 @@ void draw_alt_dialog_box(GrafPtr w)
     PenSize(1, 1);
     PenMode(patCopy);
     SetRect(&r, left - 1, top - 1, right + 1, bottom + 1);
-    RGBForeColor(frame_outline);
+    /* MacPhoenix: 8.x's stays black when inactive (the appr probe's frames) */
+    RGBColor *outline = system_version >= 0x800 ? &ROMlib_black_rgb_color : frame_outline;
+    RGBForeColor(outline);
     FrameRect(&r);
 
     PenSize(2, 2);
-    RGBForeColor(frame_outline);
+    RGBForeColor(outline);
     MoveTo(left + 1, bottom + 1);
     LineTo(right + 1, bottom + 1);
     MoveTo(right + 1, top + 1);
@@ -988,6 +993,155 @@ struct draw_save
     LONGINT bk;
 };
 
+/* MacPhoenix: 8.x draws document windows in the platinum look
+   (appearance_draw.cpp; System 7's frame below for the rest). */
+bool Executor::ROMlib_wdef_grow_in_frame;
+bool Executor::ROMlib_wdef_thin_dialog;
+
+static Rect content_global(WindowPeek w)
+{
+    Rect c = PORT_RECT(w);
+    OffsetRect(&c, -PORT_BOUNDS(w).left, -PORT_BOUNDS(w).top);
+    return c;
+}
+
+static appearance::WindowParts platinum_parts(WindowPeek w, int varcode, int zoom_bit)
+{
+    appearance::WindowParts parts;
+    parts.close = WINDOW_GO_AWAY_FLAG(w);
+    parts.zoom = zoom_bit != 0;
+    parts.collapse = true;
+    parts.grow = ROMlib_wdef_grow_in_frame && varcode == documentProc;
+    return parts;
+}
+
+/* the platinum modal (dBoxProc) and movable modal dialogs' messages;
+   false: not one */
+static bool platinum_dialog(WindowPeek w, int varcode, INTEGER message, LONGINT parm, LONGINT *result)
+{
+    if(system_version < 0x800 || (varcode != dBoxProc && varcode != movableDBoxProc))
+        return false;
+    bool titled = varcode == movableDBoxProc;
+    Rect c = content_global(w);
+    *result = 0;
+    switch(message)
+    {
+        case wDraw:
+            if(!WINDOW_VISIBLE(w))
+                return true;
+            if(!titled)
+                appearance::dialogFrame(c, WINDOW_HILITED(w), ROMlib_wdef_thin_dialog);
+            else if(StringHandle th = WINDOW_TITLE(w))
+            {
+                HLockGuard guard(th);
+                appearance::movableDialogFrame(c, WINDOW_HILITED(w), ROMlib_wdef_thin_dialog, *th);
+            }
+            else
+                appearance::movableDialogFrame(c, WINDOW_HILITED(w), ROMlib_wdef_thin_dialog, nullptr);
+            return true;
+        case wCalcRgns:
+            SetRectRgn(WINDOW_CONT_REGION(w), c.left, c.top, c.right, c.bottom);
+            appearance::dialogStructure(c, ROMlib_wdef_thin_dialog, WINDOW_STRUCT_REGION(w), titled);
+            return true;
+        case wHit:
+        {
+            Point p;
+            p.v = HiWord(parm);
+            p.h = LoWord(parm);
+            if(PtInRgn(p, WINDOW_CONT_REGION(w)))
+                *result = wInContent;
+            else if(titled && PtInRgn(p, WINDOW_STRUCT_REGION(w)))
+                *result = wInDrag;
+            else
+                *result = wNoHit;
+            return true;
+        }
+        default:
+            return false;
+    }
+}
+
+/* the platinum document window's messages; false: not one */
+static bool platinum_doc(WindowPeek w, int varcode, int zoom_bit, INTEGER message, LONGINT parm,
+                         LONGINT *result)
+{
+    if(system_version < 0x800 || (varcode != documentProc && varcode != noGrowDocProc))
+        return false;
+    Rect c = content_global(w);
+    appearance::WindowParts parts = platinum_parts(w, varcode, zoom_bit);
+    *result = 0;
+    switch(message)
+    {
+        case wDraw:
+            if(!WINDOW_VISIBLE(w))
+                return true;
+            /* (the boxes aren't drawn pressed yet: wInGoAway & co. draw
+               the frame again) */
+            if(StringHandle th = WINDOW_TITLE(w))
+            {
+                HLockGuard guard(th);
+                appearance::documentFrame(c, WINDOW_HILITED(w), parts, *th);
+            }
+            else
+                appearance::documentFrame(c, WINDOW_HILITED(w), parts, nullptr);
+            return true;
+        case wHit:
+        {
+            Point p;
+            p.v = HiWord(parm);
+            p.h = LoWord(parm);
+            if(varcode == documentProc && WINDOW_HILITED(w) && p.h >= c.right - 15
+               && p.h < c.right && p.v >= c.bottom - 15 && p.v < c.bottom)
+            {
+                *result = wInGrow;
+                return true;
+            }
+            if(PtInRgn(p, WINDOW_CONT_REGION(w)))
+            {
+                *result = wInContent;
+                return true;
+            }
+            if(!PtInRgn(p, WINDOW_STRUCT_REGION(w)))
+            {
+                *result = wNoHit;
+                return true;
+            }
+            *result = wInDrag;
+            if(WINDOW_HILITED(w))
+            {
+                Rect close = appearance::documentCloseBox(c), zoom = appearance::documentZoomBox(c, parts);
+                if(parts.close && PtInRect(p, &close))
+                    *result = wInGoAway;
+                else if(parts.zoom && PtInRect(p, &zoom))
+                    *result = WINDOW_ZOOMED(w) ? wInZoomIn : wInZoomOut;
+                /* the collapse box: dragging until the Window Manager
+                   collapses windows (wInCollapseBox) */
+            }
+            return true;
+        }
+        case wCalcRgns:
+        {
+            RgnHandle s = WINDOW_STRUCT_REGION(w), part = NewRgn();
+            SetRectRgn(WINDOW_CONT_REGION(w), c.left, c.top, c.right, c.bottom);
+            /* WDEF 64's grow box is frame, not content */
+            if(parts.grow)
+            {
+                SetRectRgn(part, c.right - 15, c.bottom - 15, c.right, c.bottom);
+                DiffRgn(WINDOW_CONT_REGION(w), part, WINDOW_CONT_REGION(w));
+            }
+            SetRectRgn(s, c.left - 6, c.top - 22, c.right + 6, c.bottom + 6);
+            SetRectRgn(part, c.right + 6, c.top - 20, c.right + 7, c.bottom + 7);
+            UnionRgn(s, part, s);
+            SetRectRgn(part, c.left - 4, c.bottom + 6, c.right + 7, c.bottom + 7);
+            UnionRgn(s, part, s);
+            DisposeRgn(part);
+            return true;
+        }
+        default: /* wDrawGIcon: below, clipped to the window */
+            return false;
+    }
+}
+
 LONGINT Executor::C_wdef0(INTEGER varcode, WindowPtr window, INTEGER message,
                           LONGINT parm)
 {
@@ -1004,6 +1158,13 @@ LONGINT Executor::C_wdef0(INTEGER varcode, WindowPtr window, INTEGER message,
 
     if(varcode > 4 && varcode != 5)
         varcode &= 3;
+
+    {
+        LONGINT result;
+        if(platinum_doc(w, varcode, zoom_bit, message, parm, &result)
+           || platinum_dialog(w, varcode, message, parm, &result))
+            return result;
+    }
 
     draw_p = (message == wDraw
               || message == wDrawGIcon
@@ -1141,7 +1302,13 @@ LONGINT Executor::C_wdef0(INTEGER varcode, WindowPtr window, INTEGER message,
             SectRgn(PORT_CLIP_REGION(qdGlobals().thePort), temp_rgn,
                     PORT_CLIP_REGION(qdGlobals().thePort));
 
-            if(varcode == documentProc)
+            if(varcode == documentProc && system_version >= 0x800)
+            {
+                /* platinum: the grow box drawn as WDEF 64's frame has it */
+                if(WINDOW_HILITED(w) && !ROMlib_wdef_grow_in_frame)
+                    appearance::documentGrowBox(content_global(w));
+            }
+            else if(varcode == documentProc)
             {
                 if(WINDOW_HILITED(w))
                     draw_grow_icon((GrafPtr)w);

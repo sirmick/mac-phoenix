@@ -956,6 +956,341 @@ OSStatus Executor::C_DrawThemeModelessDialogFrame(const Rect *inRect, ThemeDrawS
 
 /* The theme's sound sets are the Appearance control panel's (none in a
    System without its Sound Sets): silence, as a Mac with "None". */
+/* ── Platinum window frames (8.x) ─────────────────────────────────────────
+   Measured from 8.6's on a G3 (tests/guest/difftest appr, frames): pixel
+   positions relative to the content rectangle (l, t, r, b). */
+
+namespace
+{
+constexpr uint16_t kPlatFace = 0xCCCC, kPlatShade = 0x9999, kPlatBox = 0x8888, kPlatDark = 0x2222,
+                   kPlatStripe = 0x7777, kPlatInactive = 0x5555, kPlatInactiveFace = 0xDDDD;
+
+void pixelGray(int h, int v, uint16_t g)
+{
+    lineGray(h, v, h, v, g);
+}
+
+/* A title-bar box, 13 pixels square at (h, v): an etched ring, a dark
+   frame, a bevel and a face whose shade steps from #999 to white along
+   the diagonal. GLYPH: 0 none (close), 1 zoom, 2 collapse. */
+void titleBox(int h, int v, int glyph)
+{
+    lineGray(h, v, h + 11, v, kPlatBox);
+    lineGray(h, v, h, v + 11, kPlatBox);
+    lineGray(h + 12, v + 1, h + 12, v + 12, kWhite);
+    lineGray(h + 1, v + 12, h + 12, v + 12, kWhite);
+    Rect frame = { (INTEGER)(v + 1), (INTEGER)(h + 1), (INTEGER)(v + 12), (INTEGER)(h + 12) };
+    frameGray(frame, kPlatDark);
+    pixelGray(h + 2, v + 2, kWhite);
+    lineGray(h + 3, v + 2, h + 10, v + 2, kPlatFace);
+    lineGray(h + 2, v + 3, h + 2, v + 10, kPlatFace);
+    lineGray(h + 3, v + 10, h + 10, v + 10, kPlatBox);
+    lineGray(h + 10, v + 3, h + 10, v + 9, kPlatBox);
+    for(int dy = 0; dy < 7; dy++)
+        for(int dx = 0; dx < 7; dx++)
+            pixelGray(h + 3 + dx, v + 3 + dy, (uint16_t)std::min(0xFFFF, 0x9999 + 0x1111 * ((dx + dy) / 2)));
+    if(glyph == 1)
+    {
+        lineGray(h + 7, v + 1, h + 7, v + 7, kPlatDark);
+        lineGray(h + 1, v + 7, h + 7, v + 7, kPlatDark);
+    }
+    else if(glyph == 2)
+    {
+        lineGray(h + 1, v + 5, h + 11, v + 5, kPlatDark);
+        lineGray(h + 1, v + 7, h + 11, v + 7, kPlatDark);
+    }
+}
+
+/* The title-bar stripes from h1 to h2: white rows, and #777 ones a pixel
+   down and right */
+void stripes(int h1, int h2, int top)
+{
+    if(h2 < h1)
+        return;
+    for(int k = 0; k < 6; k++)
+        lineGray(h1, top + 2 * k, h2, top + 2 * k, kWhite);
+    for(int k = 0; k < 6; k++)
+        lineGray(h1 + 1, top + 1 + 2 * k, h2 + 1, top + 1 + 2 * k, kPlatStripe);
+}
+
+/* The grow box in the content's bottom-right corner: a notch of frame
+   with three ridges */
+void growNotch(int r, int b, bool active = true)
+{
+    Rect face = { (INTEGER)(b - 14), (INTEGER)(r - 14), (INTEGER)(b + 2), (INTEGER)(r + 2) };
+    fillGray(face, active ? kPlatFace : kPlatInactiveFace);
+    lineGray(r - 15, b - 15, r, b - 15, active ? kBlack : kPlatInactive);
+    lineGray(r - 15, b - 15, r - 15, b, active ? kBlack : kPlatInactive);
+    if(!active)
+        return;
+    lineGray(r - 14, b - 14, r + 1, b - 14, kWhite);
+    lineGray(r - 14, b - 14, r - 14, b + 1, kWhite);
+    int h0 = r - 14, v0 = b - 14;
+    for(int k = 0; k < 3; k++)
+    {
+        int h = h0 + 2 * k, v = v0 + 2 * k;
+        pixelGray(h + 9, v + 3, kWhite);
+        lineGray(h + 8, v + 3, h + 3, v + 8, kWhite);
+        lineGray(h + 9, v + 4, h + 4, v + 9, kPlatStripe);
+        pixelGray(h + 3, v + 9, 0xAAAA);
+    }
+}
+}
+
+void Executor::appearance::documentGrowBox(const Rect &c)
+{
+    DrawGuard guard;
+    growNotch(c.right, c.bottom);
+}
+
+/* The modal dialog box: an outline (two pixels on the right and bottom,
+   the second inset two from the corners), a bevel (#bbb in, #999 and #555
+   out), white between it and the content; inactive, the outline #555 and
+   a flat #ddd ring. Thin (WDEF 65): the outline 3 pixels out, the bevel
+   against the content. */
+namespace
+{
+/* the dialog frame; a movable modal's (TITLED) has #ddd for the bevel's
+   light and #ccc for the inactive ring */
+void dialogBox(const Rect &c, bool active, bool thin, bool titled)
+{
+    int l = c.left, t = c.top, r = c.right, b = c.bottom;
+    int in = thin ? 3 : 6;          /* the outline's distance top/left */
+    int out = thin ? 2 : 5;         /* and right/bottom (its first pixel) */
+    uint16_t outline = active ? kBlack : kPlatInactive;
+    uint16_t light = titled ? kPlatInactiveFace : 0xBBBB;
+    /* white between the frame and the content */
+    if(!thin)
+    {
+        Rect bands[] = {
+            { (INTEGER)(t - 4), (INTEGER)(l - 4), (INTEGER)t, (INTEGER)(r + 3) },
+            { (INTEGER)b, (INTEGER)(l - 4), (INTEGER)(b + 3), (INTEGER)(r + 3) },
+            { (INTEGER)t, (INTEGER)(l - 4), (INTEGER)b, (INTEGER)l },
+            { (INTEGER)t, (INTEGER)r, (INTEGER)b, (INTEGER)(r + 3) },
+        };
+        for(const Rect &band : bands)
+            fillGray(band, kWhite);
+    }
+    else
+    {
+        lineGray(l - 1, t - 1, r - 1, t - 1, kWhite);
+        lineGray(l - 1, t - 1, l - 1, b - 1, kWhite);
+    }
+    lineGray(l - in, t - in, r + out, t - in, outline);
+    lineGray(l - in, t - in, l - in, b + out, outline);
+    lineGray(r + out, t - in, r + out, b + out, outline);
+    lineGray(l - in, b + out, r + out, b + out, outline);
+    lineGray(r + out + 1, t - in + 2, r + out + 1, b + out + 1, outline);
+    lineGray(l - in + 2, b + out + 1, r + out + 1, b + out + 1, outline);
+    if(active)
+    {
+        lineGray(l - in + 1, t - in + 1, r + out - 1, t - in + 1, light);
+        lineGray(l - in + 1, t - in + 1, l - in + 1, b + out - 1, light);
+        lineGray(r + out - 2, t - in + 3, r + out - 2, b + out - 2, kPlatShade);
+        lineGray(l - in + 3, b + out - 2, r + out - 2, b + out - 2, kPlatShade);
+        pixelGray(r + out - 2, t - in + 2, light);
+        pixelGray(l - in + 2, b + out - 2, light);
+        lineGray(r + out - 1, t - in + 2, r + out - 1, b + out - 1, kPlatInactive);
+        lineGray(l - in + 2, b + out - 1, r + out - 1, b + out - 1, kPlatInactive);
+    }
+    else
+    {
+        uint16_t ring = titled ? kPlatFace : kPlatInactiveFace;
+        Rect rr = { (INTEGER)(t - in + 1), (INTEGER)(l - in + 1), (INTEGER)(b + out), (INTEGER)(r + out) };
+        frameGray(rr, ring);
+        InsetRect(&rr, 1, 1);
+        frameGray(rr, ring);
+    }
+}
+
+/* a window's title in the system font, centred on the frame from L to R,
+   its baseline at V; where it is in *LEFT, *RIGHT */
+void frameTitle(ConstStringPtr title, int L, int R, int v, bool active, int *left, int *right)
+{
+    GUEST<INTEGER> font = PORT_TX_FONT(qdGlobals().thePort), size = PORT_TX_SIZE(qdGlobals().thePort),
+                   mode = PORT_TX_MODE(qdGlobals().thePort);
+    Style face = PORT_TX_FACE(qdGlobals().thePort);
+    TextFont(0);
+    TextSize(0);
+    TextFace(0);
+    TextMode(srcOr);
+    int w = StringWidth(title);
+    *left = (L + R - w) / 2;
+    *right = *left + w;
+    gray(active ? kBlack : kPlatStripe);
+    MoveTo(*left, v);
+    DrawString(title);
+    TextFont(font);
+    TextSize(size);
+    TextFace(face);
+    TextMode(mode);
+}
+}
+
+void Executor::appearance::dialogFrame(const Rect &c, bool active, bool thin)
+{
+    DrawGuard guard;
+    dialogBox(c, active, thin, false);
+}
+
+/* The movable modal dialog: a title bar 21 pixels tall (an outline, a
+   bevel, stripes) whose bottom is the dialog frame's top line. */
+void Executor::appearance::movableDialogFrame(const Rect &c, bool active, bool thin, ConstStringPtr title)
+{
+    DrawGuard guard;
+    dialogBox(c, active, thin, true);
+    int in = thin ? 3 : 6, out = thin ? 2 : 5;
+    int L = c.left - in, R = c.right + out, T = c.top - in - 21;
+    uint16_t outline = active ? kBlack : kPlatInactive;
+    lineGray(L, T, R, T, outline);
+    lineGray(L, T, L, c.top - in, outline);
+    lineGray(R, T, R, c.top - in, outline);
+    lineGray(R + 1, T + 2, R + 1, c.top - in, outline);
+    if(active)
+    {
+        Rect face = { (INTEGER)(T + 2), (INTEGER)(L + 2), (INTEGER)(T + 20), (INTEGER)(R - 1) };
+        fillGray(face, kPlatFace);
+        lineGray(L + 1, T + 1, R - 2, T + 1, kWhite);
+        lineGray(L + 1, T + 1, L + 1, T + 19, kWhite);
+        lineGray(L + 2, T + 20, R - 1, T + 20, kPlatShade);
+        lineGray(R - 1, T + 2, R - 1, T + 20, kPlatShade);
+        pixelGray(R - 1, T + 1, kPlatFace);
+        pixelGray(L + 1, T + 20, kPlatFace);
+    }
+    else
+    {
+        Rect face = { (INTEGER)(T + 1), (INTEGER)(L + 1), (INTEGER)(T + 21), (INTEGER)R };
+        fillGray(face, kPlatInactiveFace);
+    }
+    int left = 0, right = 0;
+    bool hasTitle = title && title[0];
+    if(hasTitle)
+        frameTitle(title, L, R + 1, T + 15, active, &left, &right);
+    if(!active)
+        return;
+    if(hasTitle)
+    {
+        stripes(L + 5, left - 5, T + 4);
+        stripes(right + 2, R - 6, T + 4);
+    }
+    else
+        stripes(L + 5, R - 6, T + 4);
+}
+
+void Executor::appearance::dialogStructure(const Rect &c, bool thin, RgnHandle rgn, bool titled)
+{
+    int in = thin ? 3 : 6, out = thin ? 2 : 5;
+    int top = c.top - in - (titled ? 21 : 0);
+    RgnHandle part = NewRgn();
+    SetRectRgn(rgn, c.left - in, top, c.right + out + 1, c.bottom + out + 1);
+    SetRectRgn(part, c.right + out + 1, top + 2, c.right + out + 2, c.bottom + out + 2);
+    UnionRgn(rgn, part, rgn);
+    SetRectRgn(part, c.left - in + 2, c.bottom + out + 1, c.right + out + 2, c.bottom + out + 2);
+    UnionRgn(rgn, part, rgn);
+    DisposeRgn(part);
+}
+
+Rect Executor::appearance::documentStructure(const Rect &c)
+{
+    return { (INTEGER)(c.top - 22), (INTEGER)(c.left - 6), (INTEGER)(c.bottom + 7), (INTEGER)(c.right + 7) };
+}
+
+Rect Executor::appearance::documentCloseBox(const Rect &c)
+{
+    return { (INTEGER)(c.top - 18), (INTEGER)(c.left - 2), (INTEGER)(c.top - 5), (INTEGER)(c.left + 11) };
+}
+
+Rect Executor::appearance::documentCollapseBox(const Rect &c)
+{
+    return { (INTEGER)(c.top - 18), (INTEGER)(c.right - 11), (INTEGER)(c.top - 5), (INTEGER)(c.right + 2) };
+}
+
+Rect Executor::appearance::documentZoomBox(const Rect &c, const WindowParts &parts)
+{
+    int h = parts.collapse ? c.right - 27 : c.right - 11;
+    return { (INTEGER)(c.top - 18), (INTEGER)h, (INTEGER)(c.top - 5), (INTEGER)(h + 13) };
+}
+
+void Executor::appearance::documentFrame(const Rect &c, bool active, const WindowParts &parts,
+                                         ConstStringPtr title)
+{
+    DrawGuard guard;
+    int l = c.left, t = c.top, r = c.right, b = c.bottom;
+    uint16_t outline = active ? kBlack : kPlatInactive;
+
+    /* the outline and its shadow */
+    Rect outer = { (INTEGER)(t - 22), (INTEGER)(l - 6), (INTEGER)(b + 6), (INTEGER)(r + 6) };
+    frameGray(outer, outline);
+    lineGray(l - 4, b + 6, r + 6, b + 6, outline);
+    lineGray(r + 6, t - 20, r + 6, b + 5, outline);
+
+    /* the face, round the content (which isn't touched: hiliting draws
+       the frame alone) */
+    auto fillFace = [&](uint16_t g) {
+        Rect bands[] = {
+            { (INTEGER)(t - 21), (INTEGER)(l - 5), (INTEGER)(t - 1), (INTEGER)(r + 5) },
+            { (INTEGER)(b + 1), (INTEGER)(l - 5), (INTEGER)(b + 5), (INTEGER)(r + 5) },
+            { (INTEGER)(t - 1), (INTEGER)(l - 5), (INTEGER)(b + 1), (INTEGER)(l - 1) },
+            { (INTEGER)(t - 1), (INTEGER)(r + 1), (INTEGER)(b + 1), (INTEGER)(r + 5) },
+        };
+        for(const Rect &band : bands)
+            fillGray(band, g);
+    };
+    if(active)
+    {
+        fillFace(kPlatFace);
+        lineGray(l - 5, t - 21, r + 3, t - 21, kWhite);
+        lineGray(l - 5, t - 21, l - 5, b + 3, kWhite);
+        lineGray(l - 4, b + 4, r + 4, b + 4, kPlatShade);
+        lineGray(r + 4, t - 20, r + 4, b + 4, kPlatShade);
+        /* the content sunk in a groove */
+        lineGray(l - 2, t - 2, r, t - 2, kPlatShade);
+        lineGray(l - 2, t - 2, l - 2, b, kPlatShade);
+        lineGray(l - 1, b + 1, r + 1, b + 1, kWhite);
+        lineGray(r + 1, t - 1, r + 1, b + 1, kWhite);
+    }
+    else
+        fillFace(kPlatInactiveFace);
+    Rect border = { (INTEGER)(t - 1), (INTEGER)(l - 1), (INTEGER)(b + 1), (INTEGER)(r + 1) };
+    frameGray(border, outline);
+    if(parts.grow)
+        growNotch(r, b, active);
+
+    /* the title, centred on the frame */
+    int titleLeft = 0, titleRight = 0;
+    bool hasTitle = title && title[0];
+    if(hasTitle)
+        frameTitle(title, l - 6, r + 6, t - 7, active, &titleLeft, &titleRight);
+
+    if(!active)
+        return;
+    int boxTop = t - 18;
+    int left = l + 2, right = r + 2;
+    if(parts.close)
+    {
+        titleBox(l - 2, boxTop, 0);
+        left = l + 15;
+    }
+    if(parts.collapse)
+    {
+        titleBox(r - 11, boxTop, 2);
+        right = r - 17;
+    }
+    if(parts.zoom)
+    {
+        Rect z = documentZoomBox(c, parts);
+        titleBox(z.left, boxTop, 1);
+        right = z.left - 6;
+    }
+    if(hasTitle)
+    {
+        stripes(left, titleLeft - 5, boxTop);
+        stripes(titleRight + 2, right, boxTop);
+    }
+    else
+        stripes(left, right, boxTop);
+}
+
 OSStatus Executor::C_PlayThemeSound(ThemeSoundKind kind)
 {
     return noErr;

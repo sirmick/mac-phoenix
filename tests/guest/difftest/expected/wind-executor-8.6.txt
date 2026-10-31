@@ -10,7 +10,6 @@ classic.*.bounds.*	the frame: platinum's title bar, edges and drag region (the w
 classic.*.region.*	the frame: platinum's title bar, edges and drag region (the whole frame) against System 7's
 classic.*.widths	the frame: platinum's edges against System 7's
 classic.*.features	classic procIDs: 8.6 answers the platinum definitions' features (drag hilite, proxy image, title measuring), which Executor's System 7 definitions don't have
-bounds.structure	the frame's widths (structure from content)
 bounds.content.2	the frame's widths (content from structure)
 bounds.structure.moved	the frame's widths
 bounds.structure.centered	the screen: the G3 runs at 3840x2160, Executor at 640x480
