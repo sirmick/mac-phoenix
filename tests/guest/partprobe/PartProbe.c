@@ -11,6 +11,7 @@
 #include <Processes.h>
 #include <Files.h>
 #include <Gestalt.h>
+#include <CodeFragments.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -108,6 +109,34 @@ int main(void)
                code >= (long)sz && code < (long)sz->bkLim, data >= (long)sz && data < (long)sz->bkLim);
         printf("INFO FreeMem %ld, ApplZone size %ld, TempFreeMem %ld\n",
                FreeMem(), (long)z->bkLim - (long)z, TempFreeMem());
+    }
+    /* A fragment's memory comes back when its last connection closes:
+       twenty private copies of this one, each closed again (CodeWarrior
+       IDE prepares and closes each of its plug-ins). */
+    {
+        long free0 = FreeMem(), temp0 = TempFreeMem(), loaded = 0, i;
+        int ok = 1;
+        for(i = 0; i < 20 && ok; i++)
+        {
+            ConnectionID cid = 0;
+            Ptr mainAddr;
+            Str255 err;
+            OSErr e = GetDiskFragment(&spec, 0, kWholeFork, "\pPartProbeCopy", kLoadNewCopy,
+                                      &cid, &mainAddr, err);
+            if(e != noErr)
+            {
+                printf("INFO copy %ld: GetDiskFragment %d\n", i, e);
+                ok = 0;
+                break;
+            }
+            if(i == 0)
+                loaded = (free0 - FreeMem()) + (temp0 - TempFreeMem());
+            CloseConnection(&cid);
+        }
+        printf("INFO copies: one took %ld bytes; FreeMem %ld -> %ld, TempFreeMem %ld -> %ld\n",
+               loaded, free0, FreeMem(), temp0, TempFreeMem());
+        printf("%s fragment copies closed: 20 loaded, memory back (within 32K)\n",
+               ok && free0 - FreeMem() < 32768 && temp0 - TempFreeMem() < 32768 ? "PASS" : "FAIL");
     }
 #endif
     printf("DONE 0\n---\n");

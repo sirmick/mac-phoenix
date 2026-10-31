@@ -64,6 +64,14 @@ struct loaded_fragment
     THz zone;
     uint32_t term;
     bool terminated;
+    /* MacPhoenix: what CloseConnection gives back. Connections to it (the
+       loader's, a share, an importer's closure); the container read from
+       its file (sections used in place point into it); its closure: the
+       libraries it imports, released with it. */
+    uint32_t refs = 1;
+    Ptr image = nullptr;
+    uint32_t image_length = 0;
+    CFragClosureID closure = nullptr;
 };
 
 std::vector<loaded_fragment> loaded;
@@ -571,6 +579,7 @@ check_existing_connections(ConstStr63Param library, OSType arch, LoadFlags loadf
     for(auto& f : loaded)
         if(f.arch == arch && f.zone == zone && same_name(f.origin.name, name))
         {
+            ++f.refs;
             *cidp = f.cid;
             *mainaddrp = main_address(f.cid);
             return noErr;
@@ -883,9 +892,59 @@ OSErr Executor::C_GetSharedLibrary(ConstStr63Param library, OSType arch,
     return retval;
 }
 
+/* MacPhoenix: the last connection to a fragment closed: its termination
+   routine runs, its memory goes back, and the libraries it imports lose a
+   connection (Inside Macintosh: PowerPC System Software, CloseConnection).
+   CodeWarrior IDE prepares each of its plug-ins, asks it what it is and
+   closes it: kept, the thirty-odd filled its heap, and NewThread found no
+   room for the stack it quits without. Executor's own libraries stay. */
+static void close_connection(ConnectionID cid)
+{
+    loaded_fragment *f = find_loaded(cid);
+    if(!f || --f->refs > 0)
+        return;
+    if(f->term && !f->terminated)
+    {
+        f->terminated = true;
+        uint32_t term = f->term;
+        if(f->arch == "m68k"_4)
+            ROMlib_call_cfm68k(term);
+        else
+            callPPC(term, {});
+        f = find_loaded(cid);   /* the routine may have loaded or closed others */
+        if(!f)
+            return;
+    }
+    loaded_fragment gone = *f;
+    loaded.erase(loaded.begin() + (f - loaded.data()));
+
+    uint32_t lo = guest_cast<uint32_t>(gone.image), hi = lo + gone.image_length;
+    if(gone.origin.where == kInMem)
+        lo = guest_cast<uint32_t>(gone.origin.mem), hi = lo + gone.origin.length;
+    for(uint32_t i = 0; i < cid->n_sects; i++)
+    {
+        uint32_t at = guest_cast<uint32_t>((Ptr)(void *)cid->sects[i].start);
+        if(at && (at < lo || at >= hi))
+            DisposePtr((Ptr)(void *)cid->sects[i].start);
+    }
+    if(gone.image)
+        DisposePtr(gone.image);
+    DisposePtr((Ptr)cid);
+    if(CFragClosureID c = gone.closure)
+    {
+        for(uint32_t i = 0; i < N_LIBS(c); i++)
+            if(ConnectionID lib = LIB_CID(&c->libs[i]))
+                close_connection(lib);
+        DisposePtr((Ptr)c);
+    }
+}
+
 OSErr Executor::C_CloseConnection(GUEST<ConnectionID> *cidp)
 {
-    warning_trace_info("cidp = %p, cid = 0x%p", cidp, toHost(*cidp));
+    ConnectionID cid = *cidp;
+    if(!cid)
+        return fragConnectionIDNotFound;
+    close_connection(cid);
     return noErr;
 }
 
@@ -1278,6 +1337,8 @@ load_loader_section(const void *addr,
     symbol_names = (decltype(symbol_names))(loader_section_bytes + PEFLIH_STRINGS_OFFSET(lihp));
 
     closure_id = begin_closure(n_libs, libs, symbol_names, arch);
+    if(loaded_fragment *f = find_loaded(connp))
+        f->closure = closure_id;
 
     for(i = 0, retval = noErr; retval == noErr && i < n_reloc_headers; ++i)
     {
@@ -1521,6 +1582,11 @@ prepare_container(void *addr, const load_origin& origin, GUEST<ConnectionID> *co
         return fragNoMem;
 
     loaded.push_back({ origin, arch, conn, LM(ApplZone), 0, false });
+    if(origin.where == kOnDiskFlat)
+    {
+        loaded.back().image = (Ptr)addr;
+        loaded.back().image_length = origin.length;
+    }
     const load_origin *saved_origin = current_origin;
     load_origin origin_copy = origin;
     current_origin = &origin_copy; /* the list may grow while we bind */
@@ -1598,6 +1664,7 @@ OSErr Executor::C_GetDiskFragment(FSSpecPtr fsp, LONGINT offset,
             if(f.zone == zone && f.origin.where == kOnDiskFlat
                && f.origin.offset == (uint32_t)offset && same_file(f.origin.file, *fsp))
             {
+                ++f.refs;
                 *connp = f.cid;
                 *mainAddrp = main_address(f.cid);
                 return noErr;
