@@ -260,8 +260,10 @@ void EmulatorConfig::merge_json(const QJsonObject& j) {
         }
     }
     if (j.contains("depth")) {
+        // asked for, as --depth is: Executor then starts at it rather than
+        // at its System's own depth (the web UI doesn't send "depth" itself)
         int d = json_utils::get_int(j, "depth");
-        if (valid_depth(d)) screen_depth = (uint32_t)d;
+        if (valid_depth(d)) { screen_depth = (uint32_t)d; screen_depth_set = true; }
     }
     if (j.contains("audio")) audio_enabled = json_utils::get_bool(j, "audio");
     if (j.contains("rom")) {

@@ -227,7 +227,7 @@ std::vector<std::string> EmulatorSubprocess::build_child_args()
     args.push_back("--screen");
     args.push_back(config_->screen_string());
 
-    if (config_->screen_depth != 32) {
+    if (config_->screen_depth != 32 || config_->screen_depth_set) {
         args.push_back("--depth");
         args.push_back(std::to_string(config_->screen_depth));
     }
