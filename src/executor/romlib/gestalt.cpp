@@ -93,8 +93,12 @@ static gestaltentry_t gtable[] = {
     /*  gestaltScriptMgrVersion,	UNKNOWN,*/ /* should return gestaltUnknownErr */
     /*  gestaltSerialAttr,		0,	*/
     {
-        /* MacPhoenix: + gestaltSoundIOMgrPresent (bit 3); no input device. */
-        gestaltSoundAttr, 0x0C08,
+        /* MacPhoenix: + gestaltSoundIOMgrPresent (bit 3); no input device.
+           Stereo output, stereo mixing and 16-bit data (bits 0, 1, 12): the
+           sound sent out is 48 kHz 16-bit stereo, and Sound Manager 3's
+           games check them ("out-of-date Sound Manager": Afterlife, OIDS).
+           The Quadra 650 on 7.6.1 answers $1C7F, input bits included. */
+        gestaltSoundAttr, 0x1C0B,
     },
     {
         gestaltSpeechAttr, 0x0001
