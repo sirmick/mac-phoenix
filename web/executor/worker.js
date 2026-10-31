@@ -73,10 +73,12 @@ self.Module = {
 
 importScripts('overlay.js', 'sync.js');
 
-// An image's overlay is for exactly this version of it (main.js computes
-// the same, for Revert).
+// An image's overlay is for exactly this version of it: its content id
+// when the server said it (ids: name -> id), else its name, size and time
+// (main.js computes the same, for Revert).
+let ids = {};
 function imageKey(f) {
-    return `${f.name}-${f.size}-${f.lastModified}`.replace(/[^\w.-]/g, '_');
+    return (ids[f.name] ? `${f.name}-${ids[f.name]}` : `${f.name}-${f.size}-${f.lastModified}`).replace(/[^\w.-]/g, '_');
 }
 let overlays = [];
 
@@ -260,6 +262,7 @@ async function start(m) {
         args.push('--system', `/uploads/${m.system}`);
     await runtimeReady;
     Sync.enabled = !!m.sync;
+    ids = m.ids || {};
     if (m.volumeKey) {
         await openVolume(m.volumeKey);
         await Sync.volumeDown(volumeDir, m.volumeKey);
@@ -271,7 +274,8 @@ async function start(m) {
     if (images.length) {
         let root = null;
         try { root = await navigator.storage.getDirectory(); } catch { }
-        overlays = await Promise.all(images.map((f) => Overlay.open(root, f.name, f, imageKey(f))));
+        overlays = await Promise.all(images.map((f) => Overlay.open(root, f.name, f, imageKey(f),
+                                                                    (m.legacyKeys || {})[f.name])));
         for (const o of overlays)
             await Sync.overlayDown(o);
         FS.mkdir('/uploads');
@@ -297,6 +301,8 @@ self.onmessage = (e) => {
     } else if (m.type === 'save') {
         // The page is going away, or restarting (it waits for the reply).
         saveVolume(true).then(() => postMessage({ type: 'saved' }));
+    } else if (m.type === 'resolve') {
+        Sync.resolve(m.id, m.keep);
     } else if (m.type === 'input') {
         Module.input.push(...m.events);
     } else if (m.type === 'request') {

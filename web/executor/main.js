@@ -113,6 +113,12 @@ async function readJson(dir, name) {
 
 const LAZY_MIN = 32 << 20;
 
+// A disk's identity, for its overlay's key (overlay.js): the server's
+// content id (X-Image-Id, tools/web/server), name -> id; and the key its
+// overlay had before ids (name, size, download time), to move it from.
+const imageIds = {}, legacyKeys = {};
+const plainKey = (name, size, time) => `${name}-${size}-${time}`.replace(/[^\w.-]/g, '_');
+
 async function fetchDisk(url) {
     const absolute = new URL(url, location.href).href;
     const name = decodeURIComponent(new URL(absolute).pathname.split('/').pop());
@@ -123,25 +129,35 @@ async function fetchDisk(url) {
     const dir = opfs ? await diskCache() : null;
     const key = dir ? await cacheKey(absolute) : null;
     const meta = dir ? await readJson(dir, `${key}.json`) : null;
-    // An image's overlay (overlay.js) is for this version: the server's
-    // time for it (the same in every browser: sync), else its OPFS time.
+    // Its OPFS time kept: without a content id, an image's overlay
+    // (overlay.js) is for this version.
     const cached = async () => {
         const f = await (await dir.getFileHandle(`${key}.img`)).getFile();
         const m = await readJson(dir, `${key}.json`);
-        return new File([f], name, { lastModified: (m && Date.parse(m.lastModified)) || f.lastModified });
+        if (m && m.id)
+            imageIds[name] = m.id;
+        legacyKeys[name] = plainKey(name, f.size, f.lastModified);
+        return new File([f], name, { lastModified: f.lastModified });
     };
 
+    // A Range request for its first byte: a 206 says the server (and any
+    // proxy) gives ranges, and the size.
     const lazy = params.get('lazy');
     if (lazy !== '0') {
-        let head = null;
+        const abort = new AbortController();
+        let probe = null;
         try {
-            head = await fetch(absolute, { method: 'HEAD', cache: 'no-store' });
+            probe = await fetch(absolute, { cache: 'no-store', headers: { Range: 'bytes=0-0' }, signal: abort.signal });
         } catch { }
-        const size = head && head.ok && !head.headers.get('Content-Encoding')
-            && head.headers.get('Accept-Ranges') === 'bytes' && Number(head.headers.get('Content-Length'));
-        if (size && (lazy === '1' || size >= LAZY_MIN))
-            return { name, size, lastModified: Date.parse(head.headers.get('Last-Modified')) || 0,
-                     remote: { url: absolute, etag: head.headers.get('ETag'), key: key || await cacheKey(absolute) } };
+        const range = probe && probe.status === 206 && /^bytes 0-0\/(\d+)$/.exec(probe.headers.get('Content-Range') || '');
+        abort.abort();
+        const size = range && Number(range[1]);
+        if (size && (lazy === '1' || size >= LAZY_MIN)) {
+            if (probe.headers.get('X-Image-Id'))
+                imageIds[name] = probe.headers.get('X-Image-Id');
+            return { name, size, lastModified: Date.parse(probe.headers.get('Last-Modified')) || 0,
+                     remote: { url: absolute, etag: probe.headers.get('ETag'), key: key || await cacheKey(absolute) } };
+        }
     }
 
     let res;
@@ -170,6 +186,8 @@ async function fetchDisk(url) {
             chunks.push(r.value);
             progress(got += r.value.length, total);
         }
+        if (res.headers.get('X-Image-Id'))
+            imageIds[name] = res.headers.get('X-Image-Id');
         return new File(chunks, name);
     }
     // Into OPFS as it arrives; the file is replaced only when complete
@@ -187,7 +205,8 @@ async function fetchDisk(url) {
     }
     const w = await (await dir.getFileHandle(`${key}.json`, { create: true })).createWritable();
     await w.write(JSON.stringify({ url: absolute, name, etag: res.headers.get('ETag'),
-                                   lastModified: res.headers.get('Last-Modified'), size: got }));
+                                   lastModified: res.headers.get('Last-Modified'), size: got,
+                                   id: res.headers.get('X-Image-Id') }));
     await w.close();
     return cached();
 }
@@ -259,7 +278,8 @@ async function fetchDisks() {
 // Disk images are writable through an overlay in OPFS (overlay.js), per
 // exact version of the image (the Worker computes the same key).
 function imageKey(f) {
-    return `${f.name}-${f.size}-${f.lastModified}`.replace(/[^\w.-]/g, '_');
+    return imageIds[f.name] ? `${f.name}-${imageIds[f.name]}`.replace(/[^\w.-]/g, '_')
+                            : plainKey(f.name, f.size, f.lastModified);
 }
 let imageState = {};                // name -> { modified, writable }, from the Worker
 
@@ -326,8 +346,11 @@ async function revert(f) {
         }
     }
     delete imageState[f.name];
+    // Signed in: the account forgets them too, at the start (sync.js), or
+    // at the next one it reaches the server.
     if (account)
-        await fetch(`api/sync/overlays/${imageKey(f)}`, { method: 'DELETE' }).catch(() => {});
+        await (await overlays.getDirectoryHandle(imageKey(f), { create: true }))
+            .getFileHandle('revert', { create: true });
     start();
 }
 
@@ -356,10 +379,16 @@ document.getElementById('reset').addEventListener('click', async () => {
     worker = null;
     if (opfs) {
         const volumes = await (await uploads()).getDirectoryHandle('volumes', { create: true });
-        await volumes.removeEntry(volumeKey(await storedFiles()), { recursive: true }).catch(() => {});
+        const key = volumeKey(await storedFiles());
+        await volumes.removeEntry(key, { recursive: true }).catch(() => {});
+        // The same for Reset as for Revert.
+        if (account) {
+            const w = await (await (await volumes.getDirectoryHandle(key, { create: true }))
+                .getFileHandle('sync.json', { create: true })).createWritable();
+            await w.write(JSON.stringify({ reset: true }));
+            await w.close();
+        }
     }
-    if (account)
-        await fetch(`api/sync/volumes/${volumeKey(await storedFiles())}`, { method: 'DELETE' }).catch(() => {});
     start();
 });
 
@@ -400,6 +429,15 @@ const accountKnown = (async () => {
         a.hidden = false;
     }
 })();
+
+// Sync (sync.js) found changes here and on the account: which to keep.
+function conflictText(m) {
+    const why = m.why === 'before'
+        ? `${m.what} has changes made in this browser before you signed in, and your account has its own.`
+        : `${m.what} was changed in another browser too, since this one last synced.`;
+    return `${why}\n\nOK: keep this browser's (it replaces the account's).\n`
+        + "Cancel: take the account's (this browser's changes are dropped).";
+}
 
 // ---- the Worker ----
 // What changed on Executor's disk, saved before the Worker goes (at most
@@ -456,7 +494,8 @@ async function start() {
 
     const offscreen = canvas.transferControlToOffscreen();
     worker.postMessage({ type: 'start', canvas: offscreen, width, height, files,
-                         system: systemSelect.value, volumeKey: volumeKey(files), sync: !!account },
+                         system: systemSelect.value, volumeKey: volumeKey(files), sync: !!account,
+                         ids: imageIds, legacyKeys },
                        [offscreen]);
     worker.onmessage = (e) => {
         if (mine !== generation)
@@ -483,6 +522,12 @@ async function start() {
             pending.delete(m.id);
             if (resolve)
                 resolve(m.result);
+        } else if (m.type === 'notice') {
+            status.textContent = m.text;
+        } else if (m.type === 'conflict') {
+            worker.postMessage({ type: 'resolve', id: m.id, keep: confirm(conflictText(m)) ? 'mine' : 'account' });
+        } else if (m.type === 'restart') {
+            start();
         } else if (m.type === 'exit') {
             status.textContent = `Executor exited (${m.code})`;
         }

@@ -7,108 +7,201 @@
 // has come down. Volumes (worker.js: Executor's own volume): the manifest
 // with each file's SHA-256, the files the server lacks first.
 //
-// Who wins: what the account has, over changes made here before this
-// browser was signed in; then the last to upload. At start, an overlay or
-// volume changed both here (not uploaded yet: the tab closed first) and
-// on the account since: this browser's, whole (the account's is replaced;
-// a disk's blocks from two browsers would not make one disk).
+// Every upload names the version it is on; the server refuses it when
+// another browser's came in between (409), and so does a start that finds
+// changes both here (not uploaded yet, or made signed out) and on the
+// account: the page asks which to keep (a disk's blocks from two browsers
+// would not make one disk). This browser's replaces the account's in one
+// version (staged, then committed); the account's is taken at the next
+// start (the Worker asks the page to restart). Revert and Reset leave a
+// mark in OPFS (main.js) that is taken to the account at the next start,
+// and stays until it gets there.
 'use strict';
 
 const SYNC_EVERY = 5000;                 // ms between uploads at most
 const SYNC_BATCH = 256;                  // blocks a request (1 MB)
 const SYNC_RECORD = 4 + OVERLAY_BLOCK;
+const VOLUME_NAME = "Executor's disk";
+
+class SyncConflict {
+    constructor(body) { Object.assign(this, body); }
+}
 
 const Sync = {
     enabled: false,
     busy: false,
     last: 0,
+    volumeOff: false,
+    asks: new Map(),                     // id -> resolve, for 'resolve' messages
+    nextAsk: 1,
 
-    async request(method, path, body, json = true) {
+    // 'mine' or 'account', from the page (main.js asks the user).
+    ask(what, why) {
+        const id = this.nextAsk++;
+        return new Promise((resolve) => {
+            this.asks.set(id, resolve);
+            postMessage({ type: 'conflict', id, what, why });
+        });
+    },
+
+    resolve(id, keep) {
+        const r = this.asks.get(id);
+        this.asks.delete(id);
+        if (r)
+            r(keep);
+    },
+
+    async request(method, path, body, { raw = false } = {}) {
         const res = await fetch(`api/sync/${path}`, {
             method, cache: 'no-store', credentials: 'same-origin', body,
             headers: body && !(body instanceof Uint8Array) ? { 'Content-Type': 'application/json' } : {},
         });
+        if (res.status === 401) {
+            this.enabled = false;
+            notice('Signed out: changes are kept in this browser only until you sign in again');
+        }
+        if (res.status === 409)
+            throw new SyncConflict(await res.json());
         if (!res.ok)
             throw new Error(`${method} ${path}: ${res.status}`);
-        return json ? res.json() : res;
+        return raw ? res : res.status === 204 ? null : res.json();
     },
 
     // ---- overlays ----
+    async fetchBlocks(ov, since) {
+        const res = await this.request('GET', `overlays/${ov.key}?since=${since}`, undefined, { raw: true });
+        return { version: Number(res.headers.get('X-Sync-Version')),
+                 reset: res.headers.get('X-Sync-Reset') === '1',
+                 body: new Uint8Array(await res.arrayBuffer()) };
+    },
+
+    apply(ov, body) {
+        for (let i = 0; i + SYNC_RECORD <= body.length; i += SYNC_RECORD) {
+            const block = new DataView(body.buffer, i, 4).getUint32(0, true);
+            if (block * OVERLAY_BLOCK < ov.size)
+                ov.putBlock(block, body.subarray(i + 4, i + SYNC_RECORD));
+        }
+        if (body.length)
+            console.log(`[web] ${ov.name}: ${body.length / SYNC_RECORD} blocks from the account`);
+    },
+
+    // blocks as version base + 1: one request, or staged and committed.
+    // A SyncConflict when base isn't the account's.
+    async upload(ov, blocks, base, replace) {
+        const token = blocks.length > SYNC_BATCH || replace
+            ? Array.from(crypto.getRandomValues(new Uint8Array(12)), (b) => b.toString(16).padStart(2, '0')).join('')
+            : null;
+        let at = 0;
+        const batch = () => {
+            const part = blocks.slice(at, at + SYNC_BATCH);
+            at += part.length;
+            const body = new Uint8Array(part.length * SYNC_RECORD);
+            part.forEach((b, i) => {
+                new DataView(body.buffer, i * SYNC_RECORD, 4).setUint32(0, b, true);
+                body.set(ov.getBlock(b), i * SYNC_RECORD + 4);
+            });
+            return body;
+        };
+        while (blocks.length - at > SYNC_BATCH)
+            await this.request('POST', `overlays/${ov.key}?stage=${token}`, batch());
+        const q = `base=${base}${token ? `&stage=${token}` : ''}${replace ? '&replace=1' : ''}`
+            + `&name=${encodeURIComponent(ov.name)}&size=${ov.size}`;
+        return (await this.request('POST', `overlays/${ov.key}?${q}`, batch())).version;
+    },
+
+    // This browser's overlay as the account's, whole.
+    async replace(ov, base) {
+        for (let attempt = 0; ; attempt++) {
+            ov.pending.clear();                  // a write meanwhile: pending again
+            try {
+                ov.sync = { version: await this.upload(ov, [...ov.map.keys()], base, true), synced: true, adopt: false };
+                ov.saveSync();
+                return;
+            } catch (e) {
+                ov.pending = new Set(ov.map.keys());
+                if (!(e instanceof SyncConflict) || attempt >= 2)
+                    throw e;
+                base = e.version;                // another came in: still ours
+            }
+        }
+    },
+
+    // The account's at the next start; this browser's dropped then.
+    takeAccountsLater(ov) {
+        ov.sync = { version: 0, synced: false, adopt: true };
+        ov.saveSync();
+        postMessage({ type: 'restart' });
+    },
+
     async overlayDown(ov) {
         if (!this.enabled || !ov.writable)
             return;
         try {
-            const since = ov.sync.synced ? ov.sync.version : 0;
-            const res = await this.request('GET', `overlays/${ov.key}?since=${since}`, undefined, false);
-            const version = Number(res.headers.get('X-Sync-Version'));
-            const reset = res.headers.get('X-Sync-Reset') === '1';
-            const body = new Uint8Array(await res.arrayBuffer());
-            const apply = () => {
-                for (let i = 0; i + SYNC_RECORD <= body.length; i += SYNC_RECORD) {
-                    const block = new DataView(body.buffer, i, 4).getUint32(0, true);
-                    if (block * OVERLAY_BLOCK < ov.size)
-                        ov.putBlock(block, body.subarray(i + 4, i + SYNC_RECORD));
+            if (ov.reverted) {                   // Revert, to the account
+                const r = await this.request('DELETE', `overlays/${ov.key}`);
+                await ov.dir.removeEntry('revert');
+                ov.reverted = false;
+                ov.sync = { version: r.version, synced: true, adopt: false };
+                ov.pending = new Set(ov.map.keys());
+                ov.save();
+                return;
+            }
+            const fresh = !ov.sync.synced;
+            const since = fresh ? 0 : ov.sync.version;
+            let got = await this.fetchBlocks(ov, since);
+            if (got.version <= since) {          // nothing new there
+                if (fresh) {
+                    ov.pending = new Set(ov.map.keys());
+                    ov.sync = { version: got.version, synced: true, adopt: false };
                 }
-            };
-            if (!ov.sync.synced) {
-                if (version > 0) {                       // the account's
-                    if (ov.modified)
-                        console.log(`[web] ${ov.name}: this browser's changes replaced by the account's`);
+                ov.save();
+                return;
+            }
+            const local = fresh ? ov.modified : ov.pending.size > 0;
+            let take = ov.sync.adopt || !local;
+            if (!take)
+                take = await this.ask(ov.name, fresh ? 'before' : 'conflict') === 'account';
+            if (take) {
+                if (local || got.reset || ov.sync.adopt) {
                     ov.clear();
-                    apply();
-                } else {                                 // ours, all of them, to the account
-                    ov.pending = new Set(ov.map.keys());
+                    if (since)
+                        got = await this.fetchBlocks(ov, 0);
                 }
-                ov.sync = { version, synced: true };
-            } else if (version > ov.sync.version) {
-                if (ov.pending.size) {
-                    console.log(`[web] ${ov.name}: changed here and on the account: this browser's kept`);
-                    const r = await this.request('DELETE', `overlays/${ov.key}`);
-                    ov.pending = new Set(ov.map.keys());
-                    ov.sync.version = r.version;
-                } else {
-                    if (reset)
-                        ov.clear();
-                    apply();
-                    ov.sync.version = version;
-                }
+                this.apply(ov, got.body);
+                ov.pending.clear();
+                ov.sync = { version: got.version, synced: true, adopt: false };
+            } else {
+                await this.replace(ov, got.version);
             }
             ov.save();
-            const n = body.length / SYNC_RECORD;
-            if (n)
-                console.log(`[web] ${ov.name}: ${n} blocks from the account`);
         } catch (e) {
-            console.log(`[web] ${ov.name}: no sync (${e.message || e})`);
+            ov.syncOff = true;
+            notice(`${ov.name}: not synced this time (${e.message || e.constructor.name})`);
         }
     },
 
     async overlayUp(ov) {
-        while (ov.writable && ov.sync.synced && ov.pending.size) {
-            const take = [...ov.pending].slice(0, SYNC_BATCH);
-            const blocks = take.filter((b) => ov.map.has(b));
-            const body = new Uint8Array(blocks.length * SYNC_RECORD);
-            blocks.forEach((b, i) => {
-                new DataView(body.buffer, i * SYNC_RECORD, 4).setUint32(0, b, true);
-                body.set(ov.getBlock(b), i * SYNC_RECORD + 4);
-            });
-            // Taken now: a write while this uploads makes the block pending again.
-            for (const b of take)
-                ov.pending.delete(b);
-            try {
-                const r = await this.request('POST',
-                    `overlays/${ov.key}?name=${encodeURIComponent(ov.name)}&size=${ov.size}`, body);
-                ov.sync.version = r.version;
-            } catch (e) {
-                for (const b of blocks)
-                    ov.pending.add(b);
+        if (!ov.writable || !ov.sync.synced || ov.sync.adopt || ov.syncOff || !ov.pending.size)
+            return;
+        const taken = [...ov.pending];
+        ov.pending.clear();                      // a write meanwhile: pending again
+        try {
+            ov.sync.version = await this.upload(ov, taken.filter((b) => ov.map.has(b)), ov.sync.version, false);
+        } catch (e) {
+            for (const b of taken)
+                ov.pending.add(b);
+            if (!(e instanceof SyncConflict))
                 throw e;
-            } finally {
-                ov.saveSync();
-            }
+            if (await this.ask(ov.name, 'conflict') === 'mine')
+                await this.replace(ov, e.version);
+            else
+                this.takeAccountsLater(ov);
+        } finally {
+            ov.saveSync();
         }
     },
 
-    // ---- volumes: dir is volumes/KEY in OPFS ----
+    // ---- volumes: dir is volumes/KEY in OPFS; sync.json there ----
     async readJson(dir, name) {
         try {
             return JSON.parse(await (await (await dir.getFileHandle(name)).getFile()).text());
@@ -149,24 +242,36 @@ const Sync = {
         if (!this.enabled || !dir)
             return;
         try {
-            const { version, manifest } = await this.request('GET', `volumes/${key}`);
             const state = await this.readJson(dir, 'sync.json');
+            if (state && state.reset) {          // Reset, to the account
+                const r = await this.request('DELETE', `volumes/${key}`);
+                await this.writeJson(dir, 'sync.json', { version: r.version, digest: null });
+                return;
+            }
+            const { version, manifest } = await this.request('GET', `volumes/${key}`);
+            const since = state ? state.version : 0;
+            if (version <= since) {
+                if (!state)
+                    await this.writeJson(dir, 'sync.json', { version, digest: null });
+                return;
+            }
             const local = await this.readJson(dir, 'manifest.json');
-            const localDigest = local ? await this.digest(await this.serverForm(local, dir)) : null;
-            const dirty = local && (!state || localDigest !== state.digest);
-            const adopt = state ? version > state.version && !dirty : version > 0;
-            if (adopt) {
-                if (local)
-                    console.log(`[web] Executor's disk: the account's (version ${version})`);
+            const localDigest = local && await this.digest(await this.serverForm(local, dir));
+            // Changed here: since the last sync, and not to what the account has.
+            const changed = local && (!state || localDigest !== state.digest)
+                && localDigest !== await this.digest(manifest);
+            let take = (state && state.adopt) || !changed;
+            if (!take)
+                take = await this.ask(VOLUME_NAME, state ? 'conflict' : 'before') === 'account';
+            if (take) {
                 await this.adoptVolume(dir, manifest, local);
                 await this.writeJson(dir, 'sync.json', { version, digest: await this.digest(manifest) });
-            } else if (!state) {
-                await this.writeJson(dir, 'sync.json', { version: 0, digest: null });
-            } else if (version > state.version) {
-                console.log("[web] Executor's disk: changed here and on the account: this browser's kept");
+            } else {                             // ours goes up, on the account's version
+                await this.writeJson(dir, 'sync.json', { version, digest: null });
             }
         } catch (e) {
-            console.log(`[web] Executor's disk: no sync (${e.message || e})`);
+            this.volumeOff = true;
+            notice(`${VOLUME_NAME}: not synced this time (${e.message || e.constructor.name})`);
         }
     },
 
@@ -184,7 +289,7 @@ const Sync = {
         for (const [path, f] of Object.entries(manifest ? manifest.files : {})) {
             let blob = have.get(f.sha);
             if (!blob) {
-                const res = await this.request('GET', `objects/${f.sha}`, undefined, false);
+                const res = await this.request('GET', `objects/${f.sha}`, undefined, { raw: true });
                 blob = `b${next++}`;
                 const w = await (await dir.getFileHandle(blob, { create: true })).createWritable();
                 await w.write(await res.arrayBuffer());
@@ -205,22 +310,39 @@ const Sync = {
 
     async volumeUp(dir, key, saved) {
         const state = await this.readJson(dir, 'sync.json');
-        if (!state || !saved.dirs.length)
+        if (!state || state.adopt || state.reset || this.volumeOff || !saved.dirs.length)
             return;
         const form = await this.serverForm(saved, dir);
         const digest = await this.digest(form);
         if (digest === state.digest)
             return;
-        const { missing } = await this.request('POST', 'objects/missing',
-                                               JSON.stringify({ shas: Object.values(form.files).map((f) => f.sha) }));
-        for (const sha of missing) {
-            const f = Object.values(saved.files).find((x) => x.sha === sha);
-            // A blob the next save already replaced: the next round.
-            const bytes = new Uint8Array(await (await (await dir.getFileHandle(f.blob)).getFile()).arrayBuffer());
-            await this.request('PUT', `objects/${sha}`, bytes, false);
+        let base = state.version;
+        for (let attempt = 0; attempt < 3; attempt++) {
+            const { missing } = await this.request('POST', 'objects/missing',
+                JSON.stringify({ shas: Object.values(form.files).map((f) => f.sha) }));
+            for (const sha of missing) {
+                const f = Object.values(saved.files).find((x) => x.sha === sha);
+                // A blob the next save already replaced: thrown, the next round.
+                const bytes = new Uint8Array(await (await (await dir.getFileHandle(f.blob)).getFile()).arrayBuffer());
+                await this.request('PUT', `objects/${sha}`, bytes);
+            }
+            try {
+                const { version } = await this.request('PUT', `volumes/${key}`, JSON.stringify({ manifest: form, base }));
+                await this.writeJson(dir, 'sync.json', { version, digest });
+                return;
+            } catch (e) {
+                if (!(e instanceof SyncConflict))
+                    throw e;
+                if (e.missing)
+                    continue;                    // collected meanwhile: up again
+                if (await this.ask(VOLUME_NAME, 'conflict') !== 'mine') {
+                    await this.writeJson(dir, 'sync.json', { version: 0, digest: null, adopt: true });
+                    postMessage({ type: 'restart' });
+                    return;
+                }
+                base = e.version;
+            }
         }
-        const { version } = await this.request('PUT', `volumes/${key}`, JSON.stringify({ manifest: form }));
-        await this.writeJson(dir, 'sync.json', { version, digest });
     },
 
     // After a save: what changed, to the account (at most every SYNC_EVERY ms,
@@ -236,7 +358,7 @@ const Sync = {
             if (dir)
                 await this.volumeUp(dir, key, saved);
         } catch (e) {
-            console.log(`[web] sync: ${e.message || e}`);
+            console.log(`[web] sync: ${e.message || e.constructor.name}`);
         } finally {
             this.busy = false;
         }

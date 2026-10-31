@@ -22,8 +22,15 @@
 //
 // Signed in to tools/web/server, an overlay's changes go to the account
 // too (sync.js): `sync` beside data and index keeps what was sent
-// (uint32s: the version the server gave, 1 once synced at all, the count
-// and the numbers of the blocks changed since).
+// (uint32s: the version the server gave, flags (1: synced at all, 2: take
+// the account's at the next start), the count and the numbers of the
+// blocks changed since); `revert` there says Revert hasn't reached the
+// account yet.
+//
+// KEY: a disk from the server is keyed on its content (the server's
+// X-Image-Id: main.js), so its changes survive the image being touched;
+// an upload on its name, size and time. An overlay under a disk's old key
+// (its name, size and download time) is moved to the new one.
 'use strict';
 
 const OVERLAY_BLOCK = 4096;
@@ -51,6 +58,15 @@ class FileImage {
 // (main.js). Without OPFS, or another tab holding the copy: in memory.
 const REMOTE_CHUNK = 256 * 1024;
 const REMOTE_AHEAD = 4;                  // chunks a request, the ones needed or not
+const REMOTE_TIMEOUT = 20000;            // ms a request
+const REMOTE_TRIES = 3;
+
+// A line for the page's status (worker.js).
+function notice(text) {
+    console.log(`[web] ${text}`);
+    if (typeof postMessage === 'function')
+        postMessage({ type: 'notice', text });
+}
 
 class RemoteImage {
     constructor(desc) {
@@ -104,11 +120,29 @@ class RemoteImage {
         const start = first * REMOTE_CHUNK;
         const end = Math.min(this.size, (first + count) * REMOTE_CHUNK);
         const x = new XMLHttpRequest();
-        x.open('GET', this.url, false);
-        x.responseType = 'arraybuffer';
-        x.setRequestHeader('Range', `bytes=${start}-${end - 1}`);
-        x.send();
+        // A stall or a blip: tried again, a few times; the Worker waits
+        // meanwhile (Executor's read is synchronous).
+        for (let attempt = 1; ; attempt++) {
+            x.open('GET', this.url, false);
+            x.responseType = 'arraybuffer';
+            x.timeout = REMOTE_TIMEOUT;
+            x.setRequestHeader('Range', `bytes=${start}-${end - 1}`);
+            try {
+                x.send();
+            } catch (e) {
+                if (attempt < REMOTE_TRIES)
+                    continue;
+                notice(`${this.name}: the server can't be reached (${e.name})`);
+                throw e;
+            }
+            if (x.status === 206 || attempt >= REMOTE_TRIES || (x.status >= 400 && x.status < 500))
+                break;
+        }
+        if (x.status === 401)
+            notice(`Signed out: sign in again to read ${this.name}`);
         const etag = x.getResponseHeader('ETag');
+        // (main.js checked that Range requests get 206: a proxy dropping
+        // Range shows at once, not after the whole image.)
         if (x.status !== 206 || x.response.byteLength !== end - start)
             throw new Error(`bytes ${start}-${end - 1}: HTTP ${x.status}`);
         if (this.etag && etag && etag !== this.etag)
@@ -117,9 +151,12 @@ class RemoteImage {
         this.fetched += bytes.length;
         this.requests++;
         if (this.part) {
+            // The bytes on disk before the map says they are there.
             this.part.write(bytes, { at: start });
+            this.part.flush();
             this.have.fill(1, first, first + count);
             this.haveFile.write(this.have.subarray(first, first + count), { at: first });
+            this.haveFile.flush();
         } else {
             for (let c = 0; c < count; c++)
                 this.memory.set(first + c, bytes.subarray(c * REMOTE_CHUNK, (c + 1) * REMOTE_CHUNK));
@@ -186,29 +223,59 @@ class Overlay {
         this.index = null;
         this.indexDirty = false;
         this.syncFile = null;
-        this.sync = { version: 0, synced: false };
+        this.sync = { version: 0, synced: false, adopt: false };
         this.pending = new Set();       // blocks changed since the last upload
+        this.dir = null;
+        this.reverted = false;          // Revert not on the account yet
     }
 
-    // root: OPFS (none: read-only).
-    static async open(root, name, file, key) {
+    // root: OPFS (none: read-only). legacyKey: the key this image's
+    // overlay may have under the old scheme.
+    static async open(root, name, file, key, legacyKey) {
         const image = file.remote ? await RemoteImage.open(root, file) : new FileImage(file);
         const ov = new Overlay(name, file, key, image);
         if (!root)
             return ov;
         try {
             const overlays = await root.getDirectoryHandle('overlays', { create: true });
-            // Overlays of this image's other versions: theirs, not ours.
+            let exists = false;
+            try {
+                await overlays.getDirectoryHandle(key);
+                exists = true;
+            } catch { }
+            // Overlays of this image's other versions: theirs, not ours;
+            // but this one's under its old key, moved.
             for await (const [dirName, handle] of overlays.entries()) {
                 if (handle.kind !== 'directory' || dirName === key)
                     continue;
+                let meta = null;
                 try {
-                    const meta = JSON.parse(await (await (await handle.getFileHandle('meta.json')).getFile()).text());
-                    if (meta.name === name)
-                        await overlays.removeEntry(dirName, { recursive: true });
+                    meta = JSON.parse(await (await (await handle.getFileHandle('meta.json')).getFile()).text());
                 } catch { }
+                if (!meta || meta.name !== name)
+                    continue;
+                if (dirName === legacyKey && !exists) {
+                    const to = await overlays.getDirectoryHandle(key, { create: true });
+                    for await (const [n, f] of handle.entries()) {
+                        if (f.kind !== 'file' || n === 'meta.json')
+                            continue;
+                        const w = await (await to.getFileHandle(n, { create: true })).createWritable();
+                        await w.write(await f.getFile());
+                        await w.close();
+                    }
+                    exists = true;
+                    console.log(`[web] ${name}: its changes moved to the new key`);
+                } else {
+                    notice(`${name} is another image now: the changes to the earlier one are dropped`);
+                }
+                await overlays.removeEntry(dirName, { recursive: true });
             }
             const dir = await overlays.getDirectoryHandle(key, { create: true });
+            ov.dir = dir;
+            try {
+                await dir.getFileHandle('revert');
+                ov.reverted = true;
+            } catch { }
             const meta = await (await dir.getFileHandle('meta.json', { create: true })).createWritable();
             await meta.write(JSON.stringify({ name, key }));
             await meta.close();
@@ -227,7 +294,7 @@ class Overlay {
             const s = new Uint32Array(ov.syncFile.getSize() >> 2);
             ov.syncFile.read(s, { at: 0 });
             if (s.length >= 3) {
-                ov.sync = { version: s[0], synced: s[1] === 1 };
+                ov.sync = { version: s[0], synced: (s[1] & 1) !== 0, adopt: (s[1] & 2) !== 0 };
                 for (const b of s.subarray(3, 3 + s[2]))
                     ov.pending.add(b);
             }
@@ -328,7 +395,7 @@ class Overlay {
             return;
         const s = new Uint32Array(3 + this.pending.size);
         s[0] = this.sync.version;
-        s[1] = this.sync.synced ? 1 : 0;
+        s[1] = (this.sync.synced ? 1 : 0) | (this.sync.adopt ? 2 : 0);
         s[2] = this.pending.size;
         s.set([...this.pending], 3);
         this.syncFile.truncate(0);
