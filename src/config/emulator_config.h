@@ -149,6 +149,7 @@ struct EmulatorConfig {
     std::string executor_logtraps_filter; // ... only these names (comma-separated wildcards)
     std::string executor_debug;        // Executor's own --debug options ("memcheck,fslog,..."; romlib/error/error.cpp)
     std::string watch;                 // --watch ADDR[:LEN]: write watchpoint on guest memory (Executor; guest_watch.h)
+    std::vector<std::string> executor_ppc_break; // --executor-ppc-break SPEC (repeatable; "on": none yet): PowerPC breakpoints (rsys/ppc_break.h)
     bool executor_writable_images = false; // Executor mounts disk images read-write (test copies)
     bool executor_ot = true;               // Executor answers Open Transport (romlib/opentransport)
     bool executor_ppc = false;             // Executor runs the PowerPC code of fat applications (mame-ppc)

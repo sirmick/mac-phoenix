@@ -425,11 +425,29 @@ int main(void)
         out("new", "size %ld params at %ld attributes %ld parameters %ld", (long)size, hdr[2],
             hdr[3], hdr[4]);
         out("new.end", "%.4s", *h + size - 4);
+        {
+            /* the header's bytes up to the target: where the class and ID are */
+            char hex[3 * 64 + 1];
+            int i, n = size < 64 ? (int)size : 64;
+            for(i = 0; i < n; i++)
+                sprintf(hex + 3 * i, "%02x ", (unsigned char)(*h)[i]);
+            hex[3 * n - 1] = 0;
+            out("new.bytes", "%s", hex);
+        }
         SetHandleSize(h, size + 16);
         BlockMoveData(param, *h + size, 16);
         ((long *)*h)[4] += 1;
         out("appended", "%d", AEGetParamPtr(&evt, 'kocl', typeType, &type, &cls, 4, &size));
         out("appended.value", "%.4s", (char *)&cls);
+        /* BBEdit Lite 6.1 also clears the long at 44 when it builds its
+           'crel' (twice, AEGizmos' stream code): the event keeps its class */
+        ((long *)*h)[11] = 0;
+        cls = 0;
+        out("cleared44", "%d", AEGetAttributePtr(&evt, keyEventClassAttr, typeType, &type, &cls, 4, &size));
+        out("cleared44.class", "%.4s", (char *)&cls);
+        cls = 0;
+        AEGetAttributePtr(&evt, keyEventIDAttr, typeType, &type, &cls, 4, &size);
+        out("cleared44.id", "%.4s", (char *)&cls);
         AEDisposeDesc(&evt);
         AECreateAppleEvent('Test', 'Lay2', &target, kAutoGenerateReturnID, kAnyTransactionID, &evt);
         cls = 'TxtW';

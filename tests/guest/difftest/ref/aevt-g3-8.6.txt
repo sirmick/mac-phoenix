@@ -1,4 +1,4 @@
-# probe 9ca7e600bcf7b11288afc3229bcdfdf3d706613249650a54c56aa9ab0d1a61bb
+# probe 3dd89c9451641ce0d6e6f1518863c29e0c2476ba2f5d379938df7d8d4448d0fb
 == received
 received.install: 0
 received.process: 0
@@ -214,7 +214,11 @@ osl.dispose.cb.token: null
 == layout
 layout.new: size 90 params at 90 attributes 0 parameters 0
 layout.new.end: ;;;;
+layout.new.bytes: 00 00 00 00 00 00 00 00 00 00 00 5a 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 54 65 73 74 4c 61 79 31 00 01 02 b8 70 73
 layout.appended: 0
 layout.appended.value: TxtW
+layout.cleared44: 0
+layout.cleared44.class: Test
+layout.cleared44.id: Lay1
 layout.put: size 106 params at 90 parameters 1
 layout.put.at: kocl

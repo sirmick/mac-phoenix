@@ -396,6 +396,8 @@ set(base_sources
         base/m68kint.h
         base/cpu.h
         base/cpu.cpp    
+        base/ppc_break.cpp
+        include/rsys/ppc_break.h
 
         base/traps.h
         base/traps.impl.h

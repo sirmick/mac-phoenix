@@ -31,6 +31,7 @@
 #include <cstring>
 #include <ctime>
 #include <string>
+#include <thread>
 
 #include "video_modes.h"
 
@@ -242,6 +243,26 @@ int executor_child_main(const config::EmulatorConfig& cfg, IPCBuffer *buf)
     control_ipc_start();
     buf->state = IPC_STATE_RUNNING;
 
+    // /api/executor/ppc-break: answered here, off the guest's threads (the
+    // breakpoints take their own lock), while the guest may be busy.
+    if (!cfg.executor_ppc_break.empty())
+        std::thread([buf] {
+            for (;;) {
+                uint32_t want = IPC_ATOMIC_LOAD(buf->debug_request);
+                if (want != IPC_ATOMIC_LOAD(buf->debug_done)) {
+                    char command[sizeof buf->debug_command];
+                    memcpy(command, buf->debug_command, sizeof command);
+                    command[sizeof command - 1] = '\0';
+                    std::string j = executor_host::ppc_break_command(command);
+                    size_t n = std::min(j.size(), sizeof buf->debug_json - 1);
+                    memcpy(buf->debug_json, j.data(), n);
+                    buf->debug_json[n] = '\0';
+                    IPC_ATOMIC_STORE(buf->debug_done, want);
+                }
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }
+        }).detach();
+
     // POST /api/snapshot: dump guest RAM (guest address 0 up) when the
     // app next asks for events, where the heap is consistent.
     executor_host::set_event_poll_hook([] {
@@ -279,6 +300,7 @@ int executor_child_main(const config::EmulatorConfig& cfg, IPCBuffer *buf)
     c.logtraps_filter = cfg.executor_logtraps_filter;
     c.debug_options = cfg.executor_debug;
     c.watch = cfg.watch;
+    c.ppc_breaks = cfg.executor_ppc_break;
     c.writable_images = cfg.executor_writable_images;
     c.open_transport = cfg.executor_ot;
     c.prefer_ppc = cfg.executor_ppc;
@@ -336,6 +358,7 @@ int executor_direct_main(const config::EmulatorConfig& cfg)
     c.logtraps_filter = cfg.executor_logtraps_filter;
     c.debug_options = cfg.executor_debug;
     c.watch = cfg.watch;
+    c.ppc_breaks = cfg.executor_ppc_break;
     c.writable_images = cfg.executor_writable_images;
     c.open_transport = cfg.executor_ot;
     c.prefer_ppc = cfg.executor_ppc;

@@ -15,6 +15,7 @@
 #include <error/error.h>
 #include <rsys/opentransport.h>
 #include <hidpi/hidpi.h>
+#include <rsys/ppc_break.h>
 
 #include <algorithm>
 #include <atomic>
@@ -160,6 +161,16 @@ int run(const Config& c)
         else
             fprintf(stderr, "[watch] bad --watch '%s' (ADDR[:LEN], hex address, 1-16 bytes)\n", c.watch.c_str());
     }
+    if(!c.ppc_breaks.empty())
+    {
+        Executor::ppc_break_arm();
+        for(const std::string& spec : c.ppc_breaks)
+        {
+            std::string err;
+            if(spec != "on" && !Executor::ppc_break_add(spec, err))
+                fprintf(stderr, "[ppcbreak] %s\n", err.c_str());
+        }
+    }
     running = true;
     int rc = executor_main_entry((int)args.size(), argv.data());
     running = false;
@@ -282,3 +293,8 @@ uint32_t guest_ram_size()
 }
 
 }  // namespace executor_host
+
+std::string executor_host::ppc_break_command(const std::string& command)
+{
+    return Executor::ppc_break_command(command);
+}

@@ -63,6 +63,10 @@ public:
          * comes before shim_start(). */
         for(const Config::MemoryRange &r : config.fast_memory)
             add_fast_memory(memory, r);
+        /* Config::instruction_hook: every block is generated with a call
+         * before each instruction, made while DEBUG_FLAG_CALL_HOOK is set. */
+        if(config.instruction_hook)
+            machine().debug_flags = DEBUG_FLAG_ENABLED;
     }
 
     void add_fast_memory(GuestMemory &memory, Config::MemoryRange r)
@@ -440,6 +444,23 @@ public:
 
     void invalidate(uint32_t addr, uint32_t len) override { dev_.invalidate_code(addr, len); }
 
+    bool set_instruction_hook(InstructionHook hook, void *ctx) override
+    {
+        running_machine &m = dev_.machine();
+        if(!(m.debug_flags & DEBUG_FLAG_ENABLED))
+            return false;
+        hook_ = hook;
+        hook_ctx_ = ctx;
+        dev_.debug()->shim_hook_ctx = this;
+        dev_.debug()->shim_hook = [](void *self, offs_t pc) {
+            MamePpcCore &c = *(MamePpcCore *)self;
+            if(c.hook_)
+                c.hook_(c, (uint32_t)pc, c.hook_ctx_);
+        };
+        m.debug_flags = hook ? (DEBUG_FLAG_ENABLED | DEBUG_FLAG_CALL_HOOK) : DEBUG_FLAG_ENABLED;
+        return true;
+    }
+
     int disassemble(uint32_t addr, char *buf, size_t len) override
     {
         struct Buffer final : util::disasm_interface::data_buffer
@@ -483,6 +504,8 @@ private:
     int depth_ = 0;
     int traced_ = 0;
     bool trace_ = false;   /* Config::trace */
+    InstructionHook hook_ = nullptr;
+    void *hook_ctx_ = nullptr;
     /* The innermost run()'s, per host thread: Executor's processes and
        Thread Manager threads each run guest code on a host thread of their
        own and park inside run(); a run on another host thread must not

@@ -289,6 +289,9 @@ struct Config
     bool exceptions = true;
     /* Log host ops and exceptions to stderr (mame-ppc: --debug-mame-ppc). */
     bool trace = false;
+    /* Generate a call before every instruction, for set_instruction_hook()
+     * (mame-ppc; recompiled code runs slower). Off: the hook is refused. */
+    bool instruction_hook = false;
     /* Guest ranges that are plain mapped memory (one GuestMemory window,
      * no Io), so a recompiling core may load and store them inline
      * instead of through GuestMemory; readonly ranges inline reads only.
@@ -368,6 +371,16 @@ public:
     /* Guest code in [addr, addr + len) changed (JITs and decoded-block
      * caches drop it). */
     virtual void invalidate(uint32_t addr, uint32_t len) { (void)addr; (void)len; }
+
+    /* Called on the core's thread before each instruction, the registers
+     * up to date and pc() the instruction's (null: none). Only on a core
+     * made with Config::instruction_hook; false when the core can't. */
+    using InstructionHook = void (*)(Core &core, uint32_t pc, void *ctx);
+    virtual bool set_instruction_hook(InstructionHook hook, void *ctx)
+    {
+        (void)hook; (void)ctx;
+        return false;
+    }
 
     /* One instruction at addr into buf; returns its length in bytes, or 0
      * when the core has no disassembler. */

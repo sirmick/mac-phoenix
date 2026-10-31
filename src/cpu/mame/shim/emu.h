@@ -775,12 +775,19 @@ template <int HighBits, int Width, int AddrShift, endianness_t Endian> struct me
 class device_memory_interface;
 class device_interface;
 
-/* The debugger's per-device object: there is no debugger here. */
+/* The debugger's per-device object: there is no debugger here. The
+ * recompilers call instruction_hook() before each instruction when the
+ * machine's debug_flags has DEBUG_FLAG_ENABLED as code is generated and
+ * DEBUG_FLAG_CALL_HOOK as it runs: the adapter's shim_hook, if any
+ * (Config::instruction_hook). */
 class device_debug
 {
 public:
-    void instruction_hook(offs_t) {}
+    void instruction_hook(offs_t pc) { if(shim_hook) shim_hook(shim_hook_ctx, pc); }
     void exception_hook(int) {}
+
+    void (*shim_hook)(void *ctx, offs_t pc) = nullptr;
+    void *shim_hook_ctx = nullptr;
 };
 
 class device_t
