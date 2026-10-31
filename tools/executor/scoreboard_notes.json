@@ -89,13 +89,9 @@
   "status": "fails",
   "blocker": "alert \"OIDS requires a newer version of SoundManager (try version 3.0) in order to run properly.\" on black screen (PPC-only, no reference)"
  },
- "e761|Games:SimAnt ƒ:E-Doc 1.0.20": {
-  "status": "partial",
-  "blocker": "Standard File opens in the System Folder; the reference opens the app's folder (SimAnt ƒ, 'SimAnt User's Manual')"
- },
  "e761ppc|Games:SimAnt ƒ:E-Doc 1.0.20": {
   "status": "partial",
-  "blocker": "Standard File opens in the System Folder, not the app's folder; directory popup drawn as a plain box without its arrow, list without icons"
+  "blocker": "Standard File's directory popup drawn as a plain box without its arrow, list without icons"
  },
  "e761|Games:SimFarm ƒ:SimFarm": {
   "status": "fails",
@@ -109,13 +105,9 @@
   "status": "fails",
   "blocker": "desktop only, empty menu bar; the reference's \"You must have the Warcraft II CD in order to run the map editor\" alert never appears (PowerPC exception 7)"
  },
- "e761|Games:Warcraft II 1.22 ƒ:Editors:Warcraft II Sound Editor": {
-  "status": "partial",
-  "blocker": "Standard File opens in the System Folder; the reference opens the app's folder (Editors)"
- },
  "e761ppc|Games:Warcraft II 1.22 ƒ:Editors:Warcraft II Sound Editor": {
   "status": "partial",
-  "blocker": "Standard File opens in the System Folder, not Editors; directory popup drawn without its arrow, list without icons"
+  "blocker": "Standard File's directory popup drawn without its arrow, list without icons"
  },
  "e86|Games:A-Train ƒ:ATrain Editor 1.0Beta": {
   "status": "fails",
@@ -164,10 +156,6 @@
  "e86|Games:Prince of Persia 2 ƒ:Prince of Persia 2": {
   "status": "fails",
   "blocker": "alert: \"Error = 10351 in OpenMohawkRsrcVerify().\""
- },
- "e86|Games:SimAnt ƒ:E-Doc 1.0.20": {
-  "status": "partial",
-  "blocker": "Open dialog starts in the System Folder instead of the SimAnt folder, so 'SimAnt User's Manual' isn't listed"
  },
  "e86|Games:SimAnt ƒ:SimAnt™ Color": {
   "status": "runs",
