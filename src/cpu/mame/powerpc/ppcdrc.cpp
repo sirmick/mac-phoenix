@@ -2154,7 +2154,8 @@ void ppc_device::generate_sequence_instruction(drcuml_block &block, compiler_sta
 	}
 
 	// if we are debugging, call the debugger
-	if (debugger_enabled())
+	// MacPhoenix: or the adapter's instruction hook (Config::instruction_hook)
+	if (debugger_enabled() || (machine().debug_flags & DEBUG_FLAG_ENABLED))
 	{
 		UML_MOV(block, mem(&m_core->pc), desc->pc);                                        // mov     [pc],desc->pc
 		save_fast_iregs(block);                                                        // <save fastregs>
