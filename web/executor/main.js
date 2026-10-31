@@ -33,7 +33,8 @@ const box = document.getElementById('screen-box');
 const status = document.getElementById('status');
 const params = new URLSearchParams(location.search);
 const [width, height] = (params.get('size') || '640x480').split('x').map(Number);
-const scale = Number(params.get('scale')) || window.devicePixelRatio || 1;
+// Executor scales by whole numbers (fractional scales: HiDPI.md phase 6).
+const scale = Math.max(1, Math.round(Number(params.get('scale')) || window.devicePixelRatio || 1));
 
 let worker = null, canvas = null, cursor = null, nextId = 1;
 // Bumped when a restart begins: messages from an older Worker (still
@@ -504,7 +505,7 @@ async function start() {
     box.replaceChildren(canvas);
     fitCanvas();
     attachInput(canvas);
-    cursor = new MacCursor(canvas, () => canvas.width);
+    cursor = new MacCursor(canvas, () => width);
 
     const offscreen = canvas.transferControlToOffscreen();
     worker.postMessage({ type: 'start', canvas: offscreen, width, height, scale, files,
@@ -590,10 +591,12 @@ function send(...events) {
 function attachInput(canvas) {
     const guestPoint = (e) => {
         const r = canvas.getBoundingClientRect();
-        const x = Math.floor((e.clientX - r.left) * canvas.width / r.width);
-        const y = Math.floor((e.clientY - r.top) * canvas.height / r.height);
-        return [Math.max(0, Math.min(canvas.width - 1, x)),
-                Math.max(0, Math.min(canvas.height - 1, y))];
+        // The guest's 1x size: after transferControlToOffscreen the element's
+        // width follows the Worker's (scaled) canvas.
+        const x = Math.floor((e.clientX - r.left) * width / r.width);
+        const y = Math.floor((e.clientY - r.top) * height / r.height);
+        return [Math.max(0, Math.min(width - 1, x)),
+                Math.max(0, Math.min(height - 1, y))];
     };
     canvas.addEventListener('pointermove', (e) => send([1, ...guestPoint(e)]));
     canvas.addEventListener('pointerdown', (e) => {
