@@ -6,6 +6,7 @@
 #include <ProcessMgr.h>
 #include <EventMgr.h>
 #include <functional>
+#include <string>
 #include <vector>
 
 namespace Executor
@@ -74,6 +75,9 @@ struct ROMlib_process_entry
     bool current;
 };
 extern std::vector<ROMlib_process_entry> ROMlib_process_entries();
+/* The front process's name as of its last event call (any thread); empty
+   before the first application's. */
+extern std::string ROMlib_front_process_name();
 /* The process whose signature this is; false if none. */
 extern bool ROMlib_process_with_signature(OSType sig, ProcessSerialNumber *psn);
 

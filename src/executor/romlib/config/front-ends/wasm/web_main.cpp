@@ -36,6 +36,7 @@
 #include <emscripten.h>
 
 #include <cstdint>
+#include <cstdlib>
 #include <filesystem>
 #include <cstdio>
 #include <cstring>
@@ -291,6 +292,8 @@ int main(int argc, char **argv)
         std::string a = argv[i];
         if(a == "--size" && i + 1 < argc)
             sscanf(argv[++i], "%dx%d", &c.width, &c.height);
+        else if(a == "--scale" && i + 1 < argc)
+            c.scale = atof(argv[++i]);
         else if(a == "--disk" && i + 1 < argc)
             c.disks.push_back(argv[++i]);
         else if(a == "--system" && i + 1 < argc)

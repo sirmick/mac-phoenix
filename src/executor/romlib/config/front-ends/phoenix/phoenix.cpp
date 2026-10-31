@@ -149,6 +149,16 @@ void PhoenixVideoDriver::publishRects(const Executor::DirtyRects::Rects& changed
     rectsHook(argb_.data(), argbWidth_, argbHeight_, rects);
 }
 
+/* rectsHook, at the display scale: compose() doesn't report how far
+   outline-glyph padding extended the dirty area, so the whole surface
+   goes out every time (matches scaledFrameHook's own cost on native). */
+void PhoenixVideoDriver::publishScaledRects()
+{
+    lastPublish_ = std::chrono::steady_clock::now();
+    rectsHook(scaled_.data(), scaledWidth_, scaledHeight_,
+              { Rect{ 0, 0, scaledHeight_, scaledWidth_ } });
+}
+
 // Copy the frame, draw the cursor on top, hand it to the host.
 void PhoenixVideoDriver::publish()
 {
@@ -248,9 +258,17 @@ void PhoenixVideoDriver::render(bool full)
     }
     if(rectsHook)
     {
-        if(!rects.empty())
-            updateBuffer(framebuffer_, argb_.data(), argbWidth_, argbHeight_, rects);
-        publishRects(rects, full);
+        if(rects.empty())
+            return;
+        updateBuffer(framebuffer_, argb_.data(), argbWidth_, argbHeight_, rects);
+        if(!scaled_.empty())
+        {
+            hidpi::compose(argb_.data(), argbWidth_, argbHeight_, rects,
+                           scaled_.data(), scaledWidth_, scaledHeight_);
+            publishScaledRects();
+        }
+        else
+            publishRects(rects, full);
         return;
     }
     if(rects.empty())

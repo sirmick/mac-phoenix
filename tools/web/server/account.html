@@ -1,0 +1,70 @@
+<!doctype html>
+<!-- The signed-in user's page (tools/web/server): what is kept for them,
+     sign out; the owner's invitations. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Executor: account</title>
+<style>
+  html, body { margin: 0; background: #333; color: #ccc; font: 13px system-ui, sans-serif; }
+  body { padding: 24px; max-width: 720px; margin: auto; }
+  button { font: inherit; padding: 4px 10px; border: 0; border-radius: 4px; background: #666; color: #fff; cursor: pointer; }
+  table { border-collapse: collapse; margin: 8px 0; }
+  td, th { padding: 2px 10px 2px 0; text-align: left; }
+  a { color: #9cf; }
+  code { user-select: all; }
+</style>
+</head>
+<body>
+<p><a href="/">Back to Executor</a> · signed in as <b id="who"></b> · <button id="logout">Sign out</button></p>
+<h3>Kept for you</h3>
+<p>Changes to disk images and Executor's own disk, for your other browsers.</p>
+<table id="kept"></table>
+<section id="owner" hidden>
+  <h3>Invitations</h3>
+  <button id="invite">New invitation</button> <span id="link"></span>
+  <table id="invites"></table>
+</section>
+<script>
+'use strict';
+const $ = (id) => document.getElementById(id);
+const json = (url, opts) => fetch(url, opts).then((r) => r.ok ? r.json() : Promise.reject(r.status));
+const row = (...cells) => {
+    const tr = document.createElement('tr');
+    for (const c of cells) {
+        const td = document.createElement('td');
+        td.textContent = c;
+        tr.append(td);
+    }
+    return tr;
+};
+async function show() {
+    const me = await json('/api/me').catch(() => { location.href = '/login?next=/account'; });
+    $('who').textContent = me.name;
+    const kept = await json('/api/sync');
+    $('kept').replaceChildren(row('Disk image', 'Version', 'Blocks'),
+        ...kept.overlays.filter((o) => o.blocks).map((o) => row(o.name || o.key, o.version, o.blocks)),
+        row('Executor\'s disk', 'Version', 'Files'),
+        ...kept.volumes.filter((v) => v.files).map((v) => row(v.key, v.version, v.files)));
+    $('owner').hidden = !me.owner;
+    if (me.owner) {
+        const invites = await json('/api/invites');
+        $('invites').replaceChildren(row('Code', 'Until', 'Used by'),
+            ...invites.map((i) => row(i.code, new Date(i.expires * 1000).toLocaleDateString(), i.used_by || '')));
+    }
+}
+$('logout').onclick = async () => {
+    await fetch('/api/logout', { method: 'POST' });
+    location.href = '/login';
+};
+$('invite').onclick = async () => {
+    const { code } = await json('/api/invites', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    const link = document.createElement('code');
+    link.textContent = `${location.origin}/login?invite=${code}`;
+    $('link').replaceChildren(link);
+    show();
+};
+show();
+</script>
+</body>
+</html>

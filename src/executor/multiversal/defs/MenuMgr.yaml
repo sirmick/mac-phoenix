@@ -1032,6 +1032,27 @@
 
 # ####
 
+# MacPhoenix: MenusLib's StandardMBDF (8.5 and later, in no public
+# header): the standard menu bar definition, as MBDF 0. 8.x's MBDF 0
+# resource is PowerPC code that only calls it; Executor's is its own MBDF 0.
+# The arguments are an MBDF's (Inside Macintosh: Toolbox Essentials 3-114).
+- function:
+    name: StandardMBDF
+    return: LONGINT
+    args:
+      - name: selector
+        type: INTEGER
+      - name: message
+        type: INTEGER
+      - name: parameter1
+        type: INTEGER
+      - name: parameter2
+        type: LONGINT
+    library: MenusLib
+    executor: C_
+
+# ####
+
 # MacPhoenix: Menus.h's 8.0 per-item calls, exported by 8.x's AppearanceLib.
 - function:
     name: SetMenuItemKeyGlyph
