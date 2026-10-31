@@ -26,7 +26,7 @@ Visual verdicts and owner overrides: `tools/executor/scoreboard_notes.json`.
 | System | Column | runs | partial | fails |
 |---|---|---|---|---|
 | 7.6.1 | e761 | 73 | 9 | 23 |
-| 7.6.1 | e761ppc | 17 | 3 | 12 |
+| 7.6.1 | e761ppc | 18 | 3 | 11 |
 | 8.6 | e86 | 68 | 6 | 34 |
 
 Gaps in the references and the method:
@@ -61,7 +61,7 @@ Rows with a fault, by owner:
 
 | Disk | App | Code | e761 | e761ppc | q761 | First blocker | Screenshot | Owner |
 |---|---|---|---|---|---|---|---|---|
-| productivity-system-7 | AppleWorks 5.0.3 ƒ:AppleWorks | fat | runs | fails | runs | e761ppc: PowerPC exception 7 at 00000000 (lr 00815470) after unimplemented PowerPC OpenWD | e761ppc/prod/001.png | fix-prod |
+| productivity-system-7 | AppleWorks 5.0.3 ƒ:AppleWorks | fat | runs | runs | runs | (e761ppc: latent: unresolved imports FTActivate, CMListen, CMReset (+103), all Comm Toolbox/LowerText -- not File Manager) | e761ppc/prod/001.png | fix-prod |
 | productivity-system-7 | ClarisWorks 4.0v4 ƒ:ClarisWorks | 68k | fails |  | runs | e761: alert "This copy of ClarisWorks has been modified by another program or virus" at launch (disk writable; Quadra shows the Registration Assistant) | e761/prod/002.png | fix-prod |
 | dev-tools-system-7 | MPW:MPW Shell | fat | runs | fails | runs | e761ppc: host signal 11 at guest pc $c105ef84, address (nil) | e761ppc/dev/003.png | fix-dev |
 | dev-tools-system-7 | CodeWarrior Pro 4 ƒ:Metrowerks CodeWarrior:CodeWarrior IDE 3.2 | fat | fails | fails | fails | e761: not in front; unresolved imports CountDragItemFlavors, WaitMouseMoved, SetDragSendProc (+21) | e761/dev/001.png | fix-dev (ref fails too) |
