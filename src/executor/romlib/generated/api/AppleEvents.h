@@ -153,6 +153,12 @@ using AECoercePtrUPP = UPP<OSErr(DescType data_type, Ptr data, Size data_size, D
 using AECoerceDescUPP = UPP<OSErr(AEDesc *desc, DescType to_type, int32_t refcon, AEDesc *desc_out)>;
 
 
+using AEObjectAccessorUPP = UPP<OSErr(DescType desiredClass, AEDesc *containerToken, DescType containerClass, DescType keyForm, AEDesc *keyData, AEDesc *theToken, int32_t refcon)>;
+
+
+using AEDisposeTokenUPP = UPP<OSErr(AEDesc *token)>;
+
+
 struct AE_hdlr{GUEST_STRUCT;GUEST<void*> fn;GUEST<int32_t> refcon;};void describeStruct(const AE_hdlr&, std::ostream&);
 
 // #### internal
@@ -182,7 +188,7 @@ typedef GUEST<AE_hdlr_table_t> *AE_hdlr_table_ptr;
 
 typedef GUEST<AE_hdlr_table_ptr> *AE_hdlr_table_h;
 
-struct AE_zone_tables{GUEST_STRUCT;GUEST<AE_hdlr_table_h> event_hdlr_table;GUEST<AE_hdlr_table_h> coercion_hdlr_table;GUEST<AE_hdlr_table_h> special_hdlr_table;char pad_1[28];char unknown_appl_value[4];char pad_2[8];GUEST<Handle> unknown_sys_handle;};void describeStruct(const AE_zone_tables&, std::ostream&);
+struct AE_zone_tables{GUEST_STRUCT;GUEST<AE_hdlr_table_h> event_hdlr_table;GUEST<AE_hdlr_table_h> coercion_hdlr_table;GUEST<AE_hdlr_table_h> special_hdlr_table;GUEST<AE_hdlr_table_h> object_accessor_table;GUEST<Handle> object_callbacks;char pad_1[20];char unknown_appl_value[4];char pad_2[8];GUEST<Handle> unknown_sys_handle;};void describeStruct(const AE_zone_tables&, std::ostream&);
 
 // points to a 32byte handle of unknown contents (at least,
 //      sometimes)
@@ -308,6 +314,7 @@ typeAppleEvent = "aevt"_4,
 typeProcessSerialNumber = "psn "_4,
 typeNull = "null"_4,
 typeApplSignature = "sign"_4,
+typeTargetID = "targ"_4,
 typeType = "type"_4,
 typeEnumerated = "enum"_4,
 typeTrue = "true"_4,

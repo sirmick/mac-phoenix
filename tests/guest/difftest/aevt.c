@@ -1,0 +1,446 @@
+/* aevt: Apple events, differential (tools/difftest/run.py aevt): the
+   attributes AECreateAppleEvent puts in an event (return and transaction
+   IDs, source, interaction level, original address) and the ones the
+   Apple Event Manager adds to an event it hands a handler (the 'oapp' the
+   Process Manager sends at launch); AESend to kCurrentProcess (handled
+   before AESend returns, the reply); the Object Support Library's
+   accessor table and callbacks. BBEdit Lite 6.1 needs all three: its
+   '****' handler gives up on an event without 'esrc', it makes its
+   untitled window by sending itself 'core' 'crel', and that handler looks
+   its accessors up. aevt.r: a SIZE that asks for high-level events.
+   Process serial numbers and generated return IDs differ between runs:
+   printed as self/other and generated/not. */
+#include "probe.h"
+#include <AppleEvents.h>
+#include <Processes.h>
+#include <Events.h>
+
+static const OSType attrs[] = {
+    'evcl', 'evid', 'rtid', 'tran', 'addr', 'esrc', 'inte', 'miss', 'optk', 'from', 'timo', 'subj' };
+
+static char hres[48][96];
+static char hkey[48][48];
+static int hn;
+
+static void hout(const char *key, const char *fmt, ...)
+{
+    va_list ap;
+    if(hn >= 48)
+        return;
+    strncpy(hkey[hn], key, sizeof hkey[0] - 1);
+    va_start(ap, fmt);
+    vsprintf(hres[hn], fmt, ap);
+    va_end(ap);
+    hn++;
+}
+
+static void flush_h(void)
+{
+    int i;
+    for(i = 0; i < hn; i++)
+        out(hkey[i], "%s", hres[i]);
+    hn = 0;
+}
+
+static int is_self(const unsigned char *p, long n)
+{
+    ProcessSerialNumber self;
+    Boolean same = false;
+    if(n != sizeof self)
+        return 0;
+    GetCurrentProcess(&self);
+    SameProcess(&self, (const ProcessSerialNumber *)p, &same);
+    return same;
+}
+
+/* one line per attribute: error, type, size, bytes (PSNs as self/other,
+   a generated return ID as generated, a TargetID by its port name) */
+static void dump_attrs(const char *prefix, const AppleEvent *evt, short asked_rtid)
+{
+    int i, j;
+    for(i = 0; i < (int)(sizeof attrs / sizeof attrs[0]); i++)
+    {
+        unsigned char buf[64];
+        DescType type;
+        Size size;
+        char key[48], val[96], *p;
+        OSErr err;
+        memset(buf, SENTINEL, sizeof buf);
+        type = 0xA5A5A5A5;
+        size = 0xA5A5A5A5;
+        err = AEGetAttributePtr(evt, attrs[i], typeWildCard, &type, buf, sizeof buf, &size);
+        sprintf(key, "%s.%.4s", prefix, (char *)&attrs[i]);
+        if(err)
+        {
+            hout(key, "err %d", err);
+            continue;
+        }
+        p = val + sprintf(val, "%.4s %ld ", (char *)&type, (long)size);
+        if(type == typeProcessSerialNumber)
+            sprintf(p, "%s", is_self(buf, size) ? "self" : "other");
+        else if(attrs[i] == 'rtid' && asked_rtid == kAutoGenerateReturnID)
+            sprintf(p, "%s", size == 4 && *(long *)buf != kAutoGenerateReturnID && *(long *)buf != 0
+                       ? "generated" : "not generated");
+        else if(type == typeTargetID)
+            sprintf(p, "port %.*s", buf[6] < 32 ? buf[6] : 32, (char *)buf + 7);  /* name.name */
+        else if(type == typeApplSignature)
+            sprintf(p, "%.4s", (char *)buf);
+        else
+            for(j = 0; j < size && j < 16; j++)
+                p += sprintf(p, "%02x", buf[j]);
+        hout(key, "%s", val);
+    }
+}
+
+static int got_events;
+
+static pascal OSErr handler(const AppleEvent *evt, AppleEvent *reply, long refcon)
+{
+    char prefix[32];
+    DescType type;
+    Size size;
+    OSType cls = 0, id = 0;
+    (void)reply;
+    (void)refcon;
+    AEGetAttributePtr(evt, keyEventClassAttr, typeType, &type, &cls, 4, &size);
+    AEGetAttributePtr(evt, keyEventIDAttr, typeType, &type, &id, 4, &size);
+    sprintf(prefix, "recv%d", got_events++);
+    hout(prefix, "%.4s %.4s", (char *)&cls, (char *)&id);
+    dump_attrs(prefix, evt, 0);
+    {
+        long n = -1;
+        char key[48];
+        sprintf(key, "%s.params", prefix);
+        AECountItems(evt, &n);
+        hout(key, "%ld", n);
+        sprintf(key, "%s.reply", prefix);
+        hout(key, "%.4s", reply ? (char *)&reply->descriptorType : "none");
+    }
+    return noErr;
+}
+
+/* send: handlers for events the probe sends itself; refcon 2's answers an
+   error */
+static int in_send;
+
+static pascal OSErr send_handler(const AppleEvent *evt, AppleEvent *reply, long refcon)
+{
+    char key[48];
+    long n = -1;
+    sprintf(key, "h%ld", refcon);
+    hout(key, "%s", in_send ? "called in AESend" : "called later");
+    dump_attrs(key, evt, kAutoGenerateReturnID);
+    sprintf(key, "h%ld.reply", refcon);
+    if(reply->descriptorType == typeAppleEvent)
+    {
+        long v = 42;
+        AECountItems(reply, &n);
+        hout(key, "aevt params %ld", n);
+        sprintf(key, "h%ld.reply.put", refcon);
+        hout(key, "%d", AEPutParamPtr(reply, keyDirectObject, typeLongInteger, &v, 4));
+    }
+    else
+        hout(key, "%.4s", (char *)&reply->descriptorType);
+    return refcon == 2 ? -1234 : noErr;
+}
+
+static void send_case(int n, OSType id, AESendMode mode)
+{
+    /* kCurrentProcess: dispatched at once (the process's own serial
+       number goes through the queue: on 8.6 AESend then waits out its
+       timeout, -1712) */
+    ProcessSerialNumber self = { 0, kCurrentProcess };
+    AEAddressDesc target;
+    AppleEvent evt, reply;
+    char key[32];
+    OSErr err;
+    AECreateDesc(typeProcessSerialNumber, &self, sizeof self, &target);
+    AECreateAppleEvent('Test', id, &target, kAutoGenerateReturnID, kAnyTransactionID, &evt);
+    memset(&reply, SENTINEL, sizeof reply);
+    in_send = 1;
+    err = AESend(&evt, &reply, mode, kAENormalPriority, kAEDefaultTimeout, NULL, NULL);
+    in_send = 0;
+    flush_h();
+    sprintf(key, "send%d", n);
+    out(key, "%d", err);
+    sprintf(key, "send%d.reply", n);
+    if(reply.descriptorType == typeAppleEvent)
+    {
+        long v = 0, errn = 0, cnt = -1;
+        DescType type;
+        Size size;
+        AECountItems(&reply, &cnt);
+        out(key, "aevt params %ld", cnt);
+        sprintf(key, "send%d.reply.----", n);
+        err = AEGetParamPtr(&reply, keyDirectObject, typeLongInteger, &type, &v, 4, &size);
+        out(key, err ? "err %ld" : "%ld", err ? (long)err : v);
+        sprintf(key, "send%d.reply.errn", n);
+        err = AEGetParamPtr(&reply, keyErrorNumber, typeLongInteger, &type, &errn, 4, &size);
+        out(key, err ? "err %ld" : "%ld", err ? (long)err : errn);
+        sprintf(key, "send%d.reply", n);
+        dump_attrs(key, &reply, kAutoGenerateReturnID);
+        flush_h();
+        {
+            long a = 0, b = 1;
+            AEGetAttributePtr(&evt, keyReturnIDAttr, typeLongInteger, &type, &a, 4, &size);
+            AEGetAttributePtr(&reply, keyReturnIDAttr, typeLongInteger, &type, &b, 4, &size);
+            sprintf(key, "send%d.reply.rtid.same", n);
+            out(key, "%s", a == b ? "yes" : "no");
+        }
+        AEDisposeDesc(&reply);
+    }
+    else
+        out(key, "%.4s", (char *)&reply.descriptorType);
+    AEDisposeDesc(&evt);
+    AEDisposeDesc(&target);
+}
+
+/* osl: the Object Support Library's accessor table and callbacks */
+static pascal OSErr osl_accessor(DescType desiredClass, const AEDesc *container,
+                                 DescType containerClass, DescType form,
+                                 const AEDesc *selectionData, AEDesc *value, long refcon)
+{
+    static int calls;
+    char key[32];
+    (void)container;
+    (void)selectionData;
+    sprintf(key, "accessor%d", ++calls);
+    hout(key, "%.4s in %.4s form %.4s refcon %ld", (char *)&desiredClass,
+         (char *)&containerClass, (char *)&form, refcon);
+    return AECreateDesc(typeLongInteger, &refcon, sizeof refcon, value);
+}
+
+static int disposed;
+
+static pascal OSErr osl_dispose(AEDesc *token)
+{
+    disposed++;
+    hout("dispose", "%.4s", (char *)&token->descriptorType);
+    return AEDisposeDesc(token);
+}
+
+static void osl_call(const char *key, DescType cls, DescType container)
+{
+    AEDesc null_token, data, token;
+    long k = 1;
+    char kk[48];
+    OSErr err;
+    AECreateDesc(typeNull, NULL, 0, &null_token);
+    AECreateDesc(typeLongInteger, &k, sizeof k, &data);
+    memset(&token, SENTINEL, sizeof token);
+    err = AECallObjectAccessor(cls, &null_token, container, 'indx', &data, &token);
+    flush_h();
+    out(key, "%d", err);
+    sprintf(kk, "%s.token", key);
+    if(err == noErr && token.descriptorType == typeLongInteger)
+    {
+        out(kk, "long %ld", **(long **)token.dataHandle);
+        AEDisposeDesc(&token);
+    }
+    else
+        out(kk, "%.4s", (char *)&token.descriptorType);
+    AEDisposeDesc(&data);
+}
+
+static void osl_get(const char *key, DescType cls, DescType container, ProcPtr expect)
+{
+    ProcPtr p = (ProcPtr)0xA5A5A5A5;
+    long refcon = 0xA5A5A5A5;
+    OSErr err = AEGetObjectAccessor(cls, container, &p, &refcon, false);
+    if(err)
+        out(key, "err %d", err);
+    else
+        out(key, "%s refcon %ld", p == expect ? "ours" : "other", refcon);
+}
+
+int main(void)
+{
+    probe_open("aevt");
+    if(SECTION("received"))
+    {
+        /* the launch's 'oapp', through a '****' '****' handler */
+        EventRecord ev;
+        long start = TickCount();
+        AEEventHandlerUPP upp = NewAEEventHandlerUPP(handler);
+        out("install", "%d", AEInstallEventHandler(typeWildCard, typeWildCard, upp, 0, false));
+        while(!got_events && TickCount() - start < 600)
+            if(WaitNextEvent(everyEvent, &ev, 5, NULL) && ev.what == kHighLevelEvent)
+                out("process", "%d", AEProcessAppleEvent(&ev));
+        flush_h();
+        out("events", "%d", got_events);
+        AERemoveEventHandler(typeWildCard, typeWildCard, upp, false);
+    }
+    if(SECTION("created"))
+    {
+        /* AECreateAppleEvent with given IDs, then with the automatic ones */
+        ProcessSerialNumber self;
+        AEAddressDesc target;
+        AppleEvent evt;
+        GetCurrentProcess(&self);
+        AECreateDesc(typeProcessSerialNumber, &self, sizeof self, &target);
+        out("create", "%d", AECreateAppleEvent('Test', 'Evnt', &target, 7, 0x1234, &evt));
+        dump_attrs("given", &evt, 7);
+        flush_h();
+        AEDisposeDesc(&evt);
+        out("create.auto", "%d", AECreateAppleEvent('Test', 'Evnt', &target, kAutoGenerateReturnID,
+                                                    kAnyTransactionID, &evt));
+        dump_attrs("auto", &evt, kAutoGenerateReturnID);
+        flush_h();
+        {
+            /* two automatic return IDs: different? */
+            AppleEvent evt2;
+            long a = 0, b = 0;
+            DescType type;
+            Size size;
+            AECreateAppleEvent('Test', 'Evnt', &target, kAutoGenerateReturnID, kAnyTransactionID, &evt2);
+            AEGetAttributePtr(&evt, keyReturnIDAttr, typeLongInteger, &type, &a, 4, &size);
+            AEGetAttributePtr(&evt2, keyReturnIDAttr, typeLongInteger, &type, &b, 4, &size);
+            out("auto.distinct", "%s", a != b ? "yes" : "no");
+            AEDisposeDesc(&evt2);
+        }
+        {
+            /* as descriptors: missing (BBEdit Lite 6.1 asks for 'optk' as a
+               list on a new event), coerced, as it is */
+            static const struct { OSType key, type; const char *name; } d[] = {
+                { 'optk', 'list', "desc.optk" }, { 'esrc', 'long', "desc.esrc" },
+                { 'evid', typeWildCard, "desc.evid" }, { 'rtid', 'shor', "desc.rtid" } };
+            int i;
+            for(i = 0; i < 4; i++)
+            {
+                AEDesc dd;
+                OSErr e;
+                memset(&dd, 0xFF, sizeof dd);
+                e = AEGetAttributeDesc(&evt, d[i].key, d[i].type, &dd);
+                if(e)
+                    out(d[i].name, "err %d type %.4s handle %s", e, (char *)&dd.descriptorType,
+                        dd.dataHandle ? (dd.dataHandle == (Handle)-1 ? "unchanged" : "set") : "nil");
+                else
+                {
+                    out(d[i].name, "%.4s %ld", (char *)&dd.descriptorType,
+                        dd.dataHandle ? (long)GetHandleSize(dd.dataHandle) : -1L);
+                    AEDisposeDesc(&dd);
+                }
+            }
+        }
+        {
+            /* an attribute put on an event: read back */
+            short v = 2;
+            out("put", "%d", AEPutAttributePtr(&evt, keyEventSourceAttr, typeShortInteger, &v, 2));
+            dump_attrs("put", &evt, kAutoGenerateReturnID);
+            flush_h();
+        }
+        AEDisposeDesc(&evt);
+        AEDisposeDesc(&target);
+        {
+            /* addressed to another application, by signature: the
+               original address and the source */
+            OSType finder = 'MACS';
+            AECreateDesc(typeApplSignature, &finder, sizeof finder, &target);
+            out("create.other", "%d", AECreateAppleEvent('Test', 'Evnt', &target, 9, 0, &evt));
+            dump_attrs("other", &evt, 9);
+            flush_h();
+            AEDisposeDesc(&evt);
+            AEDisposeDesc(&target);
+        }
+    }
+    if(SECTION("send"))
+    {
+        /* AESend to the probe itself: waiting for the reply (BBEdit Lite
+           6.1 makes its untitled window so: 'core' 'crel'), a handler
+           answering an error, no handler, and no reply */
+        AEEventHandlerUPP upp = NewAEEventHandlerUPP(send_handler);
+        AEInstallEventHandler('Test', 'Snd1', upp, 1, false);
+        AEInstallEventHandler('Test', 'Snd2', upp, 2, false);
+        AEInstallEventHandler('Test', 'Snd3', upp, 3, false);
+        send_case(1, 'Snd1', kAEWaitReply | kAECanInteract);
+        send_case(2, 'Snd2', kAEWaitReply | kAECanInteract);
+        send_case(3, 'None', kAEWaitReply | kAECanInteract);
+        send_case(4, 'Snd3', kAENoReply | kAECanInteract);
+    }
+    if(SECTION("osl"))
+    {
+        /* routine descriptors: Mixed Mode takes a bare pointer for 68k
+           code (uppOSLAccessorProcInfo, uppOSLDisposeTokenProcInfo) */
+        ProcPtr acc = (ProcPtr)NewRoutineDescriptor((ProcPtr)osl_accessor, 0x000FFFE0, kPowerPCISA);
+        ProcPtr dispose = (ProcPtr)NewRoutineDescriptor((ProcPtr)osl_dispose, 0x000000E0, kPowerPCISA);
+        AEDesc token;
+        long v = 5;
+        /* AEObjectInit first, as the library asks */
+        OSErr (*init)(void) = (OSErr (*)(void))probe_bind("ObjectSupportLib", "AEObjectInit");
+        if(init)
+            out("init", "%d", init());
+        osl_get("get.none", 'Cls1', 'Cnt1', acc);
+        osl_call("call.none", 'Cls1', 'Cnt1');
+        out("install", "%d", AEInstallObjectAccessor('Cls1', 'Cnt1', acc, 11, false));
+        osl_get("get", 'Cls1', 'Cnt1', acc);
+        osl_get("get.other", 'Cls1', 'Cnt2', acc);
+        osl_call("call", 'Cls1', 'Cnt1');
+        out("install.cls3", "%d", AEInstallObjectAccessor('Cls3', typeWildCard, acc, 33, false));
+        out("install.cnt4", "%d", AEInstallObjectAccessor(typeWildCard, 'Cnt4', acc, 44, false));
+        osl_call("call.cls3", 'Cls3', 'Cnt9');
+        osl_call("call.cnt4", 'Cls9', 'Cnt4');
+        osl_call("call.both", 'Cls3', 'Cnt4');
+        osl_get("get.wild", 'Cls3', 'Cnt9', acc);
+        out("install.wild", "%d", AEInstallObjectAccessor(typeWildCard, typeWildCard, acc, 22, false));
+        osl_call("call.wild", 'Cls2', 'Cnt2');
+        out("remove.wrong", "%d", AERemoveObjectAccessor('Cls1', 'Cnt1', dispose, false));
+        out("remove", "%d", AERemoveObjectAccessor('Cls1', 'Cnt1', acc, false));
+        osl_get("get.removed", 'Cls1', 'Cnt1', acc);
+        out("remove.again", "%d", AERemoveObjectAccessor('Cls1', 'Cnt1', acc, false));
+        AECreateDesc(typeLongInteger, &v, sizeof v, &token);
+        out("dispose.plain", "%d", AEDisposeToken(&token));
+        out("dispose.plain.token", "%.4s", (char *)&token.descriptorType);
+        out("callbacks", "%d", AESetObjectCallbacks(NULL, NULL, dispose, NULL, NULL, NULL, NULL));
+        AECreateDesc(typeLongInteger, &v, sizeof v, &token);
+        out("dispose.cb", "%d", AEDisposeToken(&token));
+        flush_h();
+        out("dispose.cb.calls", "%d", disposed);
+        out("dispose.cb.token", "%.4s", (char *)&token.descriptorType);
+        AESetObjectCallbacks(NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+        AERemoveObjectAccessor('Cls3', typeWildCard, acc, false);
+        AERemoveObjectAccessor(typeWildCard, 'Cnt4', acc, false);
+        AERemoveObjectAccessor(typeWildCard, typeWildCard, acc, false);
+    }
+    if(SECTION("layout"))
+    {
+        /* A new event's handle: its size and the header's parameter offset
+           and counts, and a parameter appended at the end by hand, counted
+           in the header, as BBEdit Lite 6.1 builds its 'crel' (AEGizmos'
+           way): does the Apple Event Manager then find it? */
+        ProcessSerialNumber self;
+        AEAddressDesc target;
+        AppleEvent evt;
+        Handle h;
+        Size size;
+        long *hdr;
+        DescType type;
+        OSType cls = 0;
+        static const long param[4] = { 'kocl', typeType, 4, 'TxtW' };
+        GetCurrentProcess(&self);
+        AECreateDesc(typeProcessSerialNumber, &self, sizeof self, &target);
+        AECreateAppleEvent('Test', 'Lay1', &target, kAutoGenerateReturnID, kAnyTransactionID, &evt);
+        h = evt.dataHandle;
+        size = GetHandleSize(h);
+        hdr = (long *)*h;
+        out("new", "size %ld params at %ld attributes %ld parameters %ld", (long)size, hdr[2],
+            hdr[3], hdr[4]);
+        out("new.end", "%.4s", *h + size - 4);
+        SetHandleSize(h, size + 16);
+        BlockMoveData(param, *h + size, 16);
+        ((long *)*h)[4] += 1;
+        out("appended", "%d", AEGetParamPtr(&evt, 'kocl', typeType, &type, &cls, 4, &size));
+        out("appended.value", "%.4s", (char *)&cls);
+        AEDisposeDesc(&evt);
+        AECreateAppleEvent('Test', 'Lay2', &target, kAutoGenerateReturnID, kAnyTransactionID, &evt);
+        cls = 'TxtW';
+        AEPutParamPtr(&evt, 'kocl', typeType, &cls, 4);
+        h = evt.dataHandle;
+        hdr = (long *)*h;
+        out("put", "size %ld params at %ld parameters %ld", (long)GetHandleSize(h), hdr[2], hdr[4]);
+        out("put.at", "%.4s", *h + hdr[2]);
+        AEDisposeDesc(&evt);
+        AEDisposeDesc(&target);
+    }
+    probe_close();
+    return 0;
+}

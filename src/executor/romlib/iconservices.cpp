@@ -441,6 +441,24 @@ OSErr Executor::C_IconRefToIconFamily(IconRef theIconRef, IconSelectorValue whic
     return noErr;
 }
 
+/* The private NewIconSuiteFromIconRef (IconServices.yaml): through an
+   icon family, as IconRefToIconFamily and IconFamilyToIconSuite. */
+OSErr Executor::C_NewIconSuiteFromIconRef(IconSelectorValue whichIcons, GUEST<Handle> *iconSuite,
+                                          UInt32 reserved, IconRef theIconRef)
+{
+    (void)reserved;
+    if(!iconSuite)
+        return paramErr;
+    *iconSuite = nullptr;
+    GUEST<IconFamilyHandle> family;
+    OSErr err = C_IconRefToIconFamily(theIconRef, whichIcons, &family);
+    if(err != noErr)
+        return err;
+    err = C_IconFamilyToIconSuite(family, whichIcons, iconSuite);
+    DisposeHandle((Handle)(IconFamilyHandle)family);
+    return err;
+}
+
 OSErr Executor::C_IconFamilyToIconSuite(IconFamilyHandle iconFamily, IconSelectorValue whichIcons,
                                         GUEST<Handle> *iconSuite)
 {

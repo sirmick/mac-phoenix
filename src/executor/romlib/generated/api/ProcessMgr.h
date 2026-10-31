@@ -150,8 +150,12 @@ OSErr C_GetProcessInformation(ProcessSerialNumber *serial_number, ProcessInfoPtr
 OSErr C_SameProcess(ProcessSerialNumber *serial_number0, ProcessSerialNumber *serial_number1, Boolean *same_out);PASCAL_SUBTRAP(SameProcess, 0xA88F, 0x003D, OSDispatch);
 
 
-// The inline pushes a long -1 after the PSN pointer (Processes.h: moveq #-1,d0; move.l d0,-(sp)); dummy is that long. Apple's (scod -16463, RAM $29E94 on the reference boot) takes anything else as a layer or window and answers the process owning it (procNotFound if none): the Drag Manager finds a drop target's process that way.
-OSErr C_GetFrontProcess(ProcessSerialNumber *serial_number, int32_t dummy);PASCAL_SUBTRAP(GetFrontProcess, 0xA88F, 0x0039, OSDispatch);
+// The inline pushes a long -1 after the PSN pointer (Processes.h: moveq #-1,d0; move.l d0,-(sp)); dummy is that long. Apple's (scod -16463, RAM $29E94 on the reference boot) takes anything else as a layer or window and answers the process owning it (procNotFound if none): the Drag Manager finds a drop target's process that way. InterfaceLib's export, below, takes the PSN pointer alone.
+OSErr C_GetFrontProcess(ProcessSerialNumber *serial_number, int32_t dummy);PASCAL_SUBTRAP_UNEXPORTED(GetFrontProcess, 0xA88F, 0x0039, OSDispatch);
+
+
+// MacPhoenix: one argument, as the inline's; the second the trap's export took was whatever the caller left in r4 (BBEdit Lite 6.1: -2, taken for a window and read).
+OSErr glue_GetFrontProcess(ProcessSerialNumber *serial_number);LIBRARY_FUNCTION(InterfaceLib, GetFrontProcess, glue_GetFrontProcess);
 
 
 // MacPhoenix (name is a guess; Apple's at RAM $2874A). The layer whose window is under the point, searched from the root (FindWindowInLayer with the root current), nil if none. The Drag Manager's FinderTrackDrag starts from it; the System's GetNextEvent patch routes clicks with it.

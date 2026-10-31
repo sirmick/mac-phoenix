@@ -337,6 +337,38 @@
 
 # ####
 
+- only-for: Executor
+  funptr:
+    return: OSErr
+    args:
+      - name: desiredClass
+        type: DescType
+      - name: containerToken
+        type: AEDesc*
+      - name: containerClass
+        type: DescType
+      - name: keyForm
+        type: DescType
+      - name: keyData
+        type: AEDesc*
+      - name: theToken
+        type: AEDesc*
+      - name: refcon
+        type: int32_t
+    name: AEObjectAccessorUPP
+
+# ####
+
+- only-for: Executor
+  funptr:
+    return: OSErr
+    args:
+      - name: token
+        type: AEDesc*
+    name: AEDisposeTokenUPP
+
+# ####
+
 - struct:
     name: AE_hdlr
     members:
@@ -447,8 +479,14 @@
         type: AE_hdlr_table_h
       - name: special_hdlr_table
         type: AE_hdlr_table_h
+      # MacPhoenix: the Object Support Library's accessor table (made when
+      # first needed) and AESetObjectCallbacks's seven procedures (a handle)
+      - name: object_accessor_table
+        type: AE_hdlr_table_h
+      - name: object_callbacks
+        type: Handle
       - name: pad_1
-        type: char[28]
+        type: char[20]
       - name: unknown_appl_value
         type: char[4]
       - name: pad_2
@@ -759,6 +797,8 @@
         value: "'null'"
       - name: typeApplSignature
         value: "'sign'"
+      - name: typeTargetID
+        value: "'targ'"
       - name: typeType
         value: "'type'"
       - name: typeEnumerated

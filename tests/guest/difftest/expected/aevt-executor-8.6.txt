@@ -1,0 +1,9 @@
+# aevt on Executor (8.6 System) against the G3 (8.6): known differences.
+# key-glob<TAB>reason. Remove a line when Executor matches (run.py lists those).
+
+# A new event: 8.6 keeps the return ID, source, interaction level and
+# original address out of the handle (none inline, 90 bytes); Executor
+# stores them as inline attributes before the ;;;; marker. Parameters
+# still start at the end of a new event, so one appended by hand is found.
+layout.new	the return ID, source, interaction level and original address are inline attributes in Executor
+layout.put	the same four inline attributes: 60 bytes more, parameters from 150

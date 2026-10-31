@@ -215,7 +215,12 @@ Executor::GetWDInfo(INTEGER wd, GUEST<INTEGER> *vrefp, GUEST<LONGINT> *dirp, GUE
     retval = PBGetWDInfo(&wdp, false);
     if(retval == noErr)
     {
-        *vrefp = wdp.ioVRefNum;
+        /* MacPhoenix: the working directory's volume (ioWDVRefNum); this
+           gave back ioVRefNum, the working directory's own number. The 8.6
+           Finder makes its startup disk from GetWDInfo(BootDrive): with
+           the WD number it found no VCB, took the disk for off line and
+           never built the Apple menu. */
+        *vrefp = wdp.ioWDVRefNum;
         *dirp = wdp.ioWDDirID;
         *procp = wdp.ioWDProcID;
     }
