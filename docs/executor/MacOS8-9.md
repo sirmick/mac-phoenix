@@ -164,6 +164,28 @@ forever.
 The 9.0.4 Finder runs as far (no extensions), then says 'The disk ""
 cannot be used, because an error of type -35 occurred'.
 
+Desktop icons (2026-10-31): the aliases show their targets' icons with
+the alias arrow and the volumes their drivers' icons, as on the G3 (Icon
+Services: -16496, Control 22/21, 8.5's system icons from System
+Resources; docs/executor/IconServices.md 1.4.2). Still open: the Trash
+is never put on the desktop (the Finder scans the startup volume, Trash
+folder included, and registers 'trsh' by name, but draws no Trash; a
+Desktop Folder and Trash made before it starts don't change that).
+Also: the "Finder Preferences" copied from the image hold that volume's
+folder IDs; with a Desktop Folder already on Executor's System volume at
+startup the Finder lists the Preferences folder (dir 12) as the desktop.
+Executor's fresh System volume has no Desktop Folder, so the default run
+is right.
+
+AppleScript on 8.6 (2026-10-31, not on in the extension policy yet): its
+INIT runs (CodeFragmentDispatch -2 prepares its PowerPC code; the AE
+private tables with 12-byte values), its 'thng's register as PowerPC
+components (PEF code, main a routine descriptor), Script Editor opens
+(wildcard Apple event dispatch, null targets). Starting it then says
+"Could not initialize the application because of a scripting-system
+(OSA) error": the next thing to find, with `AppleScript @ 8.0` added to
+src/executor/res/extension-policy.txt (8.6's file has no ™).
+
 Called and still unanswered (8.6, 2026-10-30): `GetQDGlobals`,
 `QDGet`/`SetPatternOrigin`, `LMGetBrianBits`, `LMGetCurLayer`,
 `IsMenuItemEnabled`, `SetSubmenuParentChoosable`, MenuDispatch $13; Icon
