@@ -978,8 +978,14 @@ relocate(const PEFLoaderRelocationHeader reloc_headers[],
 
     relocAddress = (uint8_t *)connp->sects[section].start;
     importIndex = 0;
-    sectionC = ptr_to_longint(connp->sects[0].start);
-    sectionD = ptr_to_longint(connp->sects[1].start);
+    /* What a relocation adds: where a section's instance is, less the
+       default address the container's values assume (MPW Shell 3.5's
+       PowerShell: data at $6750). */
+    auto section_base = [connp](int k) -> uint32_t {
+        return ptr_to_longint(connp->sects[k].start) - connp->sects[k].default_address;
+    };
+    sectionC = section_base(0);
+    sectionD = section_base(1);
 
     retval = noErr;
     while(reloc_count-- > 0)
@@ -1082,12 +1088,12 @@ relocate(const PEFLoaderRelocationHeader reloc_headers[],
                                                     guest_cast<uint32_t>(symbol_val));
                             break;
                         case 1:
-                            sectionC = ptr_to_longint(connp->sects[index].start);
+                            sectionC = section_base(index);
                             warning_unimplemented("RelocSmSetSectC not tested much");
                             assert(0);
                             break;
                         case 2:
-                            sectionD = ptr_to_longint(connp->sects[index].start);
+                            sectionD = section_base(index);
                             warning_unimplemented("RelocSmSetSectD not tested much");
                             break;
                         case 3:
@@ -1352,22 +1358,10 @@ do_pef_section(ConnectionID connp, const void *addr,
 
     shp = &sections[i];
 
-#if 1
-    {
-        uint32_t def;
-
-        def = PEFSH_DEFAULT_ADDRESS(shp);
-        if(def)
-            fprintf(stderr, "***def = 0x%x***\n", def);
-    }
-#endif
-
-#if 0
-  default_address = PEFSH_DEFAULT_ADDRESS (shp);
-#else
+    /* MacPhoenix: the instance goes anywhere; relocations make up for a
+       default address other than 0 (relocate, section_base). */
     default_address = 0;
-// #warning defaultAddress ignored -- dont implement without testing
-#endif
+    connp->sects[i].default_address = PEFSH_DEFAULT_ADDRESS(shp);
     total_size = PEFSH_TOTAL_SIZE(shp);
     packed_size = PEFSH_PACKED_SIZE(shp);
     unpacked_size = PEFSH_UNPACKED_SIZE(shp);
