@@ -195,6 +195,72 @@ Apple Menu, Find Original from Alias, Share a Folder, Start File Sharing, Turn
 Sound Off/On, Alert When Folder Changes, Hide/Show Folder Sizes, Synchronize
 Folders.
 
+## Boot disks for the browser
+
+`tools/web/make_boot_disk.py` cuts a small boot disk from a System image for
+the tab (docs/executor/DIRECTION.md, W3). Its rules for every cut: the
+System Folder without MacsBug; of Extensions only the files the extension
+policy allows on the source System's version (its `'vers'` 1, read as
+Executor reads it: `NAME @ 7.6` gated, names compared trimmed), the shared
+libraries CFM finds there and the speech synthesizers (`LIBRARIES`), and the
+Scripting Additions and Voices folders; the volume's top-level files; no
+desktop database. Both sources are plain HFS (8.6's image too), so hfsutils
+reads and writes them and no HFS+ path is needed.
+
+**7.6.1** (`make_boot_disk.py 7.6.1.img boot-7.6.1.img`): 262 MB → 19.6 MB,
+7.6 MB gzipped.
+
+| Dropped | Why |
+|---|---|
+| Extensions not on the policy (Apple Guide and its additions, printer drivers, Desktop Printing, QuickTime™ and its parts, Apple's Open Transport and AppleShare, the Ethernet/Token Ring/video drivers, CFM-68K Runtime Enabler, ColorSync™, WorldScript, Energy Saver Extension, Network Extension, Modem Scripts, Printer Descriptions, ...) | Executor would move them to "Extensions (Disabled)" at startup; Open Transport, CFM and AppleScriptLib are Executor's own; Network Extension is AppleShare browsing (AppleTalk) |
+| Energy Saver | no power management: it says its extension isn't running |
+| AppleTalk, AppleTalk Switch, File Sharing Monitor, Sharing Setup, Users & Groups | AppleTalk only: Executor's Open Transport has TCP only (item 12), so the panel only alerts and file sharing has nothing to run on |
+| QuickTime™ Settings | QuickTime is not until M2 |
+| Apple Extras, Utilities, MacsBug | not System; MacsBug doesn't run on Executor |
+
+Kept and in use: PC Exchange (its INIT runs: the policy's `@ 7.6` is read
+now), the policy's control panels and extensions, ObjectSupportLib,
+MacinTalk 2 and 3 with their voices, Scripting Additions, Apple Menu Items
+(Graphing Calculator: PowerPC only), SimpleText and the About documents.
+
+**8.6** (`make_boot_disk.py 8.6.img boot-8.6.img --keep
+Applications:SimpleText`): 524 MB → 43.9 MB, 17.3 MB gzipped (the System
+file alone is 10.7 MB).
+
+| Dropped | Why |
+|---|---|
+| Extensions not on the policy (Apple Guide, Application Switcher, Contextual Menu Extension, CarbonLib, ColorSync Extension, QuickTime™ and its parts, QuickDraw™ 3D, the Sprocket libraries, Apple's Open Transport, Remote Access and AppleShare, Location Manager Extension, Find By Content, Web Sharing Extension, the printer drivers and folders, Office's and Macromedia's libraries, MRJ, ...) | as for 7.6.1: disabled at startup, or Executor's own; CarbonLib is not there for Executor's CFM (MacOS8-9.md) |
+| MacinTalk Pro's voices (Agnes, Bruce, Victoria and the "high quality" sets, 13 MB) | their synthesizer, MacinTalk Pro, is left out; the MacinTalk 3 voices stay |
+| Energy Saver, Energy Settings | as for 7.6.1 |
+| AppleTalk, AppleTalk Switch, Network Browser, File Sharing, File Sharing Strip, Users & Groups | AppleTalk only (Network Browser: `MPPOpen`; File Sharing and Users & Groups: a paramErr trap in the 8.6 grid) |
+| QuickTime™ Settings | not until M2 |
+| System Folder: Help (12.5 MB), ColorSync Profiles, Internet Search Sites, MS Preference Panels | Mac OS Help is Apple Guide and HTML help; ColorSync's extension is off; Sherlock's sites; Office's panels, not the System's |
+| Applications (but SimpleText), Apple Extras, Internet, Utilities, Assistants, read-me files | not System |
+
+Kept for the M1 targets: AppleScript (the 8.x file; the policy names 7.x's
+"AppleScript™", so it stays off until the policy lists it), Scripting
+Additions and Scripts, Appearance (themes, sounds, desktop pictures) and the
+Appearance control panel, all 26 fonts, Text Encoding Converter, File
+Sharing Library and SOMobjects™ for Mac OS (libraries CFM finds in
+Extensions), Language & Region Support, Contextual Menu Items. Executor
+copies only the nine folders `sideload_system` takes (Preferences, Fonts,
+Apple Menu Items, Extensions, Control Panels, Startup/Launcher/Shutdown
+Items, Control Strip Modules) into its own volume; Appearance, Scripting
+Additions and the rest of the System Folder stay on the disk for now.
+
+On an 8.x System Executor runs fat applications' PowerPC code
+(`version.cpp`; Gestalt says PowerPC there already): the 8.6 Finder's 68k
+code only says it needs a 68k Mac, and the tab can't pass `--executor-ppc`.
+
+Gates, 2026-10-31: both cuts boot to the Finder natively
+(`--executor-system` on the cut; 8.6 without `--executor-ppc`); 7.6.1 in the
+tab too (`executor.web.finder` with `-DEXECUTOR_WEB_SYSTEM=` the cut: the
+Finder in 0.4 s). Open: 8.6 in the tab crashes the page while the Finder's
+PowerPC libraries load (mame-ppc's C back-end under wasm); and
+`executor.web.write` fails on every cut (7.5.5's from the old cutter too, not
+on the full images): the disk's window closes by itself on its first opening,
+so the new folder lands on the desktop.
+
 ## How the triage was run
 
 Use a private copy of each image, so the built images and other people's runs
