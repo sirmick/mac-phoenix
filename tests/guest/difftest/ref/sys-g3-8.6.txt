@@ -1,14 +1,19 @@
-# probe cd7a31d68438fbd1f88cd43d12c9b5d62aa86a55b116ff994be2e27297394fc7
+# probe b4582923104d66d49ed4344e07dfe3576d59b5025ed60212940960251bf0f8f8
 == preload
 preload.CODE: loaded
 preload.PRLD: loaded
 == container
-container.~dataFork: 86578
-container.~codeBlock: 86596
+container.~dataFork: 86731
+container.~codeBlock: 86756
 container.codeBlock: the container
 == partition
-partition.~heap: 1202480 stack 40982 rest 238
+partition.~heap: 1202640 stack 40974 rest 238
 partition.a5world: not reserved
+== video
+video.getGamma.err: 0
+video.getGamma.csParam: unchanged
+video.getGamma.csGTable: version 0 type 0 formula 0 chans 1 count 256 width 8
+video.setGamma.err: 0
 == gestalt
 gestalt.sysv: err 0 00000860
 gestalt.sysa: err 0 00000002
@@ -183,7 +188,7 @@ lowmem.0204: 0002
 lowmem.0206: 6300
 lowmem.0208: 1388
 lowmem.020a: 80cc
-lowmem.020c: e70bc0af
+lowmem.020c: e70bc515
 lowmem.0938: cfff
 lowmem.0a60: 0000
 lowmem.0cca: 3cb4
@@ -194,11 +199,11 @@ lowmem.0b21: bf
 process.err: 0
 process.name: "MacPhoenixSuite" (15)
 process.type: APPL DfSy mode 00000080
-process.~size: 1243700 free 1084928
+process.~size: 1243852 free 1084864
 process.spec.name: "MacPhoenixSuite" (15)
 == script
 script.sm.0: 00000860
-script.sm.2: 0000003e
+script.sm.2: 00000038
 script.sm.4: 00000001
 script.sm.6: 00000000
 script.sm.8: 00000000

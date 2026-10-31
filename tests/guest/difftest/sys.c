@@ -9,6 +9,7 @@
 #include <Files.h>
 #include <Processes.h>
 #include <Script.h>
+#include <Devices.h>
 
 #define SET(x) memset(&(x), SENTINEL, sizeof(x))
 
@@ -109,6 +110,39 @@ int main(void)
         long rest = (long)info.processSize - heap - stack;
         out("~heap", "%ld stack %ld rest %ld", heap, stack, rest);
         out("a5world", "%s", rest >= 256 * 1024 ? "CODE 0's" : "not reserved");
+    }
+    if(SECTION("video"))
+    {
+        /* The main screen's driver: cscGetGamma and cscSetGamma, csParam
+           holding a pointer to a VDGammaRecord (Slithereens' fade). */
+        static struct { Ptr csGTable; } rec;
+        CntrlParam pb;
+        OSErr err;
+        GDHandle gd = GetMainDevice();
+        memset(&pb, 0, sizeof pb);
+        pb.ioCRefNum = (**gd).gdRefNum;
+        pb.csCode = 8;                          /* cscGetGamma */
+        rec.csGTable = (Ptr)0xA5A5A5A5;
+        *(Ptr *)pb.csParam = (Ptr)&rec;
+        err = PBStatusSync((ParmBlkPtr)&pb);
+        out("getGamma.err", "%d", err);
+        out("getGamma.csParam", "%s", *(Ptr *)pb.csParam == (Ptr)&rec ? "unchanged" : "overwritten");
+        if(rec.csGTable == (Ptr)0xA5A5A5A5)
+            out("getGamma.csGTable", "(unset)");
+        else if(!rec.csGTable)
+            out("getGamma.csGTable", "(nil)");
+        else
+        {
+            short *g = (short *)rec.csGTable;
+            out("getGamma.csGTable", "version %d type %d formula %d chans %d count %d width %d",
+                g[0], g[1], g[2], g[3], g[4], g[5]);
+            memset(&pb, 0, sizeof pb);
+            pb.ioCRefNum = (**gd).gdRefNum;
+            pb.csCode = 4;                      /* cscSetGamma, the same table */
+            *(Ptr *)pb.csParam = (Ptr)&rec;
+            err = PBControlSync((ParmBlkPtr)&pb);
+            out("setGamma.err", "%d", err);
+        }
     }
     if(SECTION("gestalt"))
         for(i = 0; i < (int)(sizeof selectors / sizeof selectors[0]); i++)
