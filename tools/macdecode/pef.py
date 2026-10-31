@@ -161,6 +161,15 @@ class PEF:
                 i += 1
         run(0, len(ins))
 
+def toc_of(p):
+    """The TOC: the second word of a TVector (main's; a library without one,
+    its init or term routine's), section-relative before relocation."""
+    for sec, off in ((p.main_sec, p.main_off), (p.init_sec, p.init_off),
+                     (p.term_sec, p.term_off)):
+        if sec >= 0:
+            return u32(p.secs[sec]['data'], off + 4)
+    return None
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('file'); ap.add_argument('--offset', type=lambda x: int(x, 0), default=0)
@@ -184,14 +193,8 @@ def main():
         slots = [(sec, off) for (sec, off), (k, v) in p.slots.items() if k == 'import' and v in idx]
         print('slots', [(s, hex(o)) for s, o in slots])
         # TOC: r2 = the data section's base + main's TOC? find code "lwz rX, d(r2)" with d+toc == slot
-        # The TOC base is the second word of any TVector; take main's.
-        dsec = p.secs[p.main_sec]['data'] if p.main_sec >= 0 else None
-        tocs = set()
-        for (sec, off), (k, v) in p.slots.items():
-            pass
-        if dsec is not None:
-            toc = u32(dsec, p.main_off + 4)
-            tocs.add(toc)
+        toc = toc_of(p)
+        tocs = {toc} if toc is not None else set()
         print('toc', [hex(t) for t in tocs])
         cd = bytes(p.secs[code]['data'])
         for t in tocs:
@@ -228,7 +231,7 @@ def glue_target(p, toc, c, t):
 def dis(p, start, end):
     md = capstone.Cs(capstone.CS_ARCH_PPC, capstone.CS_MODE_32 | capstone.CS_MODE_BIG_ENDIAN)
     c = bytes(p.secs[0]['data'])
-    toc = u32(p.secs[1]['data'], p.main_off + 4)
+    toc = toc_of(p) or 0
     for a in range(start, end, 4):
         got = list(md.disasm(c[a:a+4], a))
         if not got:
