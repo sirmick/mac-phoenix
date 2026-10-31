@@ -10,8 +10,8 @@
 //   menu     its menu bar has menus, and pressing on the second one draws it
 //            (a modal dialog at launch is cancelled first, Cmd-.; games: the
 //            menus are there, full-screen ones hide the bar)
-//   alive    still in front after that (games: after a Return, which gets
-//            past a title screen, and quits at an error alert)
+//   alive    still in front after that, and no alert in front whose text
+//            says something went wrong (an error, "requires", -7004, ...)
 // An application that crashes the tab fails; the next gets a new tab.
 //
 //   node web/tests/tab_site.mjs DIR LIBRARY SYSTEM DISK
@@ -107,6 +107,10 @@ const at = async (x, y) => {
     return [b.x + x * b.width / 640, b.y + y * b.height / 480];
 };
 
+// An alert saying something went wrong (windows' dialog text).
+const DIALOG_KIND = 2;
+const ERROR = /error|sorry|requires?\b|required|cannot|can't|could not|couldn't|unable|not enough|out of memory|newer version|insert the|damaged|modified by|-\d{3,}/i;
+
 const own = async () => ((await request(page, 'windows')) || []).filter((w) => w.visible && w.title !== 'Desktop');
 const key = async (combo) => {
     await page.locator('#screen').focus();
@@ -160,18 +164,23 @@ async function tryApp(app) {
             got.drawn = !!await until(async () => (await own()).length > 0, 8000, 500) || got.drawn;
         }
     }
-    // A game: Return (past a title screen; an error alert's default button
-    // quits it).
-    if (games) {
-        await key('Enter');
-        await page.waitForTimeout(4000);
-    }
-    // Still up: in front, or too busy to answer (a full-screen game).
+    // Still up: in front (or too busy to answer: a full-screen game), and
+    // not showing an error.
     const now = await request(page, 'app');
     got.alive = now === null || now === app.name;
-    const ok = got.drawn && got.menu && got.alive;
+    const front = ((await request(page, 'windows')) || []).find((w) => w.visible);
+    got.front = front ? { title: front.title, kind: front.kind, rect: front.rect } : null;
+    // its text as drawn: ParamText's strings for ^0..^3 (or beside it,
+    // for an application that draws them itself)
+    const params = front && front.params || [];
+    const said = front && front.kind === DIALOG_KIND
+        ? (/\^[0-3]/.test(front.text) ? front.text.replace(/\^([0-3])/g, (_, i) => params[i])
+                                      : [front.text, ...params].filter(Boolean).join('\n')) : '';
+    got.alert = ERROR.test(said) ? said.replace(/\n+/g, ' ') : '';
+    const ok = got.drawn && got.menu && got.alive && !got.alert;
     return { ...got, ok, why: ok ? '' : [!got.drawn && 'nothing drawn', !got.menu && 'no menu',
-                                        !got.alive && `then gone (${now} in front)`].filter(Boolean).join(', ') };
+                                        !got.alive && `then gone (${now} in front)`,
+                                        got.alert && `alert "${got.alert}"`].filter(Boolean).join(', ') };
 }
 
 let finderScreen = null, unexpected = 0;
@@ -208,7 +217,7 @@ try {
             const line = `${mark} ${system} ${app.name}${r.why ? `: ${r.why}` : ''} (scoreboard: ${v || 'no row'})`;
             console.log(line);
             table.push({ system, disk: diskName, app: app.name, result: mark, scoreboard: v, why: r.why || '',
-                         menus: r.menus || [], seconds: Math.round((Date.now() - t0) / 1000) });
+                         menus: r.menus || [], front: r.front || null, seconds: Math.round((Date.now() - t0) / 1000) });
             if (!crashed)
                 await page.locator('#screen').screenshot({ path: path.join(dir, `site-${system}-${app.name.replace(/[^\w.-]+/g, '_')}.png`) })
                     .catch(() => {});
