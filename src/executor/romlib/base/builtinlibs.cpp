@@ -519,12 +519,31 @@ ConnectionID builtinlibs::getBuiltinLib(ConstStr255Param libname, OSType arch)
         return nullptr;
     else
     {
-        /* An application's own StdCLib: a connection per application. */
+        /* An application's own StdCLib: its state starts afresh. */
         if(name == "StdCLib")
             clib::stdclibStart();
-        ConnectionID cid = ROMlib_new_connection(1);
-        cid->lihp = ROMlib_build_pef_hash(it->second.data(), it->second.size());
-        cid->ref_count = 1;
+        /* One connection per library, as for 68k: its exports never move.
+           One per request built the whole export table again in the System
+           heap each time; CodeWarrior IDE's plug-ins, thirty-odd fragments
+           importing InterfaceLib, ran it out, and the next import searched
+           a connection without exports. */
+        static std::unordered_map<std::string, std::pair<ConnectionID, size_t>> connections;
+        auto& [cid, size] = connections[name];
+        if(!cid || size != it->second.size())
+        {
+            PEFLoaderInfoHeader *lihp = ROMlib_build_pef_hash(it->second.data(), it->second.size());
+            if(!lihp)
+                return nullptr;
+            if(!cid)
+                cid = ROMlib_new_connection(1);
+            if(!cid)
+                return nullptr;
+            if(cid->lihp)
+                DisposePtr((Ptr)(PEFLoaderInfoHeader *)cid->lihp);
+            cid->lihp = lihp;
+            cid->ref_count = 1;
+            size = it->second.size();
+        }
         return cid;
     }
 }
