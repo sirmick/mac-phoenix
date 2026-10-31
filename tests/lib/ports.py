@@ -15,7 +15,7 @@ MACPHOENIX_PORT_BASE (a multiple of 1000) overrides; by default each checkout
 gets a slot from a registry shared by every checkout on this box
 (~/.cache/macphoenix/port-bases, "base<TAB>path" lines, under flock): a git
 main tree (/home/mick/src/mac-phoenix) prefers slot 0, base 18000, the
-historical ports; a worktree takes the lowest free slot with nothing
+historical ports; a worktree, or a copy that isn't a git checkout, takes the lowest free slot with nothing
 listening in its range just then (someone's hand-started emulator); entries
 for paths that no longer exist are dropped. Slots are kept below the
 ephemeral range (32768-60999), away from the UI's 11000 and from 19000-19999,
@@ -55,7 +55,7 @@ def _git(root, *args):
 def is_main_tree(root):
     out = _git(root, "rev-parse", "--absolute-git-dir", "--git-common-dir")
     if not out:
-        return True     # not a git checkout (a tarball): the historical ports
+        return False    # a copy of a tree (a reviewer's, a tarball): a range of its own
     git_dir, common = out.splitlines()
     return Path(git_dir).resolve() == (Path(root) / common).resolve()
 

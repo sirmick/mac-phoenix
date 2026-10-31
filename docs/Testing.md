@@ -196,8 +196,8 @@ Each checkout moves the range to its own **port base**
 `MACPHOENIX_PORT_BASE` (a multiple of 1000) sets it. By default each
 checkout gets one from a registry every checkout on the box shares
 (`~/.cache/macphoenix/port-bases`, under `flock`): the main tree takes
-18000 (the historical ports), each git worktree the lowest free base with
-nothing listening in its range at the time (20000, 21000, ... 31000, then
+18000 (the historical ports), each git worktree (or a copy of a tree that
+isn't a git checkout) the lowest free base with nothing listening in its range at the time (20000, 21000, ... 31000, then
 12000-17000, then 61000-64000: below the ephemeral range, away from
 10000-11999), kept for as long as its directory exists. `python3
 tests/lib/ports.py slots` lists them, `ports.py base` the checkout's. A port
