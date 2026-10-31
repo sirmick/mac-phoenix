@@ -74,8 +74,13 @@ if(EXECUTOR_SKIA)
     endif()
     set(SKIA_DIR "$ENV{HOME}/storage/deps/skia-m144-${_skia_target}" CACHE PATH
         "Skia: headers and out/Release-<target>/ (tools/skia/fetch.sh)")
-    find_library(SKIA_LIB skia PATHS "${SKIA_DIR}/out/Release-${_skia_target}" NO_DEFAULT_PATH)
-    find_library(SKIA_FREETYPE_LIB freetype2 PATHS "${SKIA_DIR}/out/Release-${_skia_target}" NO_DEFAULT_PATH)
+    # Emscripten's toolchain file restricts find_library to its own sysroot
+    # (CMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY) unless told otherwise; SKIA_DIR
+    # is outside it either way.
+    find_library(SKIA_LIB skia PATHS "${SKIA_DIR}/out/Release-${_skia_target}"
+        NO_DEFAULT_PATH NO_CMAKE_FIND_ROOT_PATH)
+    find_library(SKIA_FREETYPE_LIB freetype2 PATHS "${SKIA_DIR}/out/Release-${_skia_target}"
+        NO_DEFAULT_PATH NO_CMAKE_FIND_ROOT_PATH)
     if(NOT SKIA_LIB OR NOT SKIA_FREETYPE_LIB OR NOT EXISTS "${SKIA_DIR}/include/core/SkCanvas.h")
         message(FATAL_ERROR "EXECUTOR_SKIA: no Skia in ${SKIA_DIR} (tools/skia/fetch.sh, or -DSKIA_DIR=...)")
     endif()
