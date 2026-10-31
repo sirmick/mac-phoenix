@@ -1380,3 +1380,54 @@
     name: InvalidateAllCachedMenuPixels
     library: MenusLib
     executor: C_
+
+# ####
+
+# InterfaceLib's lowercase C routines (multiversal/executor.rb, declare_cglue):
+# the Pascal routine with C strings, Points by address.
+
+- only-for: Executor
+  function:
+    name: appendmenu
+    cglue: AppendMenu
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: getmenuitemtext
+    cglue: GetMenuItemText
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: insertmenuitem
+    cglue: InsertMenuItem
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: menuselect
+    cglue: MenuSelect
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: newmenu
+    cglue: NewMenu
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: setmenuitemtext
+    cglue: SetMenuItemText
+    library: InterfaceLib

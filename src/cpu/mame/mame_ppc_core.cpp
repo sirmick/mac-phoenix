@@ -47,7 +47,7 @@ class MamePpcDevice final : public ppc750_device
 public:
     MamePpcDevice(const Config &config, GuestMemory &memory)
         : ppc750_device(g_mconfig, "mame-ppc", nullptr, config.clock_hz ? config.clock_hz : 100000000),
-          timers_(config.timers), exceptions_(config.exceptions)
+          timers_(config.timers), exceptions_(config.exceptions), memory_(memory)
     {
         shim_bind_memory(memory);
         /* Config::jit: the native back-end (x86-64 today) or the UML
@@ -106,6 +106,16 @@ public:
         {
             m_core->msr |= MSROEA_FP;
             m_core->pc = srr0;
+            return true;
+        }
+        /* A floating-point or multiple-word access that isn't word-aligned:
+         * a 750 takes an alignment exception, and Mac OS's handler makes the
+         * access in software. Skipped, BBEdit Lite 4.1's setjmp (stmw r13,
+         * stfd f14..f31 into a jmp_buf at an odd address) saved nothing,
+         * and its longjmp ran off into garbage. */
+        if(exception == EXCEPTION_ALIGN && emulate_misaligned(srr0))
+        {
+            m_core->pc = srr0 + 4;
             return true;
         }
         if(exception >= 0 && exception < EXCEPTION_COUNT && logged[exception]++ < 20)
@@ -218,6 +228,91 @@ public:
 private:
     bool timers_;
     bool exceptions_;
+    GuestMemory &memory_;
+
+    /* lmw/stmw, lfs/lfd/stfs/stfd and their update and indexed forms, byte
+     * by byte; false for anything else. */
+    bool emulate_misaligned(uint32_t pc)
+    {
+        uint32_t const op = memory_.read32(pc);
+        unsigned const primary = op >> 26, frt = (op >> 21) & 31, ra = (op >> 16) & 31, rb = (op >> 11) & 31;
+        if(primary == 46 || primary == 47)  /* lmw, stmw */
+        {
+            uint32_t ea = (ra ? m_core->r[ra] : 0) + (int32_t)(int16_t)(op & 0xffff);
+            for(unsigned r = frt; r < 32; r++, ea += 4)
+            {
+                if(primary == 47)
+                    for(unsigned i = 0; i < 4; i++)
+                        memory_.write8(ea + i, (uint8_t)(m_core->r[r] >> (24 - 8 * i)));
+                else
+                    m_core->r[r] = (uint32_t)memory_.read8(ea) << 24 | memory_.read8(ea + 1) << 16
+                        | memory_.read8(ea + 2) << 8 | memory_.read8(ea + 3);
+            }
+            return true;
+        }
+        unsigned kind;          /* 48..55 as the D forms: lfs lfsu lfd lfdu stfs stfsu stfd stfdu */
+        uint32_t ea = ra ? m_core->r[ra] : 0;
+        if(primary >= 48 && primary <= 55)
+        {
+            kind = primary;
+            ea += (int32_t)(int16_t)(op & 0xffff);
+        }
+        else if(primary == 31)
+        {
+            switch((op >> 1) & 0x3ff)
+            {
+                case 535: kind = 48; break; /* lfsx */
+                case 567: kind = 49; break; /* lfsux */
+                case 599: kind = 50; break; /* lfdx */
+                case 631: kind = 51; break; /* lfdux */
+                case 663: kind = 52; break; /* stfsx */
+                case 695: kind = 53; break; /* stfsux */
+                case 727: kind = 54; break; /* stfdx */
+                case 759: kind = 55; break; /* stfdux */
+                default: return false;
+            }
+            ea += m_core->r[rb];
+        }
+        else
+            return false;
+        bool const update = kind & 1, store = kind >= 52, dbl = (kind & 2) != 0;
+        if(update && ra == 0)
+            return false;
+        unsigned const n = dbl ? 8 : 4;
+        if(store)
+        {
+            uint64_t bits;
+            if(dbl)
+                memcpy(&bits, &m_core->f[frt], 8);
+            else
+            {
+                float const f = (float)m_core->f[frt];
+                uint32_t b;
+                memcpy(&b, &f, 4);
+                bits = b;
+            }
+            for(unsigned i = 0; i < n; i++)
+                memory_.write8(ea + i, (uint8_t)(bits >> (8 * (n - 1 - i))));
+        }
+        else
+        {
+            uint64_t bits = 0;
+            for(unsigned i = 0; i < n; i++)
+                bits = bits << 8 | memory_.read8(ea + i);
+            if(dbl)
+                memcpy(&m_core->f[frt], &bits, 8);
+            else
+            {
+                uint32_t const b = (uint32_t)bits;
+                float f;
+                memcpy(&f, &b, 4);
+                m_core->f[frt] = f;
+            }
+        }
+        if(update)
+            m_core->r[ra] = ea;
+        return true;
+    }
 };
 
 class MamePpcCore final : public Core

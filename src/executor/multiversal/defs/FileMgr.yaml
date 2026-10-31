@@ -5879,3 +5879,126 @@
         type: void*
     library: PrivateInterfaceLib
     executor: C_
+
+# ####
+
+# InterfaceLib's lowercase C routines (multiversal/executor.rb, declare_cglue):
+# the Pascal routine with C strings, Points by address.
+
+- only-for: Executor
+  function:
+    name: create
+    cglue: Create
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: eject
+    cglue: Eject
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: flushvol
+    cglue: FlushVol
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: fsdelete
+    cglue: FSDelete
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: fsopen
+    cglue: FSOpen
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: fsrename
+    cglue: Rename
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: getfinfo
+    cglue: GetFInfo
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: getvinfo
+    cglue: GetVInfo
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: getvol
+    cglue: GetVol
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: openrf
+    cglue: OpenRF
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: rstflock
+    cglue: RstFLock
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: setfinfo
+    cglue: SetFInfo
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: setflock
+    cglue: SetFLock
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: setvol
+    cglue: SetVol
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: unmountvol
+    cglue: UnmountVol
+    library: InterfaceLib

@@ -335,4 +335,36 @@ INTEGER C_OpenResFileUnderSystemMap(const FSSpec *spec, SignedByte permission);L
 void C_CloseResFileUnderSystemMap(INTEGER refNum);LIBRARY_FUNCTION(PrivateInterfaceLib, CloseResFileUnderSystemMap, C_CloseResFileUnderSystemMap);
 
 
+inline void cglue_addresource(Handle data, ResType typ, INTEGER id, const char *name) {C_AddResource(data, typ, id, cglue::CString(name));}
+LIBRARY_FUNCTION(InterfaceLib, addresource, cglue_addresource);
+
+
+inline void cglue_createresfile(const char *fn) {C_CreateResFile(cglue::CString(fn));}
+LIBRARY_FUNCTION(InterfaceLib, createresfile, cglue_createresfile);
+
+
+inline Handle cglue_get1namedresource(ResType typ, const char *s) {return C_Get1NamedResource(typ, cglue::CString(s));}
+LIBRARY_FUNCTION(InterfaceLib, get1namedresource, cglue_get1namedresource);
+
+
+inline Handle cglue_getnamedresource(ResType typ, const char *nam) {return C_GetNamedResource(typ, cglue::CString(nam));}
+LIBRARY_FUNCTION(InterfaceLib, getnamedresource, cglue_getnamedresource);
+
+
+inline void cglue_getresinfo(Handle res, GUEST<INTEGER> *id1, GUEST<ResType> *typ, char *name) {C_GetResInfo(res, id1, typ, (StringPtr)name);cglue::p2c(name);}
+LIBRARY_FUNCTION(InterfaceLib, getresinfo, cglue_getresinfo);
+
+
+inline INTEGER cglue_openresfile(const char *fn) {return C_OpenResFile(cglue::CString(fn));}
+LIBRARY_FUNCTION(InterfaceLib, openresfile, cglue_openresfile);
+
+
+inline INTEGER cglue_openrfperm(const char *fn, INTEGER vref, Byte perm) {return C_OpenRFPerm(cglue::CString(fn), vref, perm);}
+LIBRARY_FUNCTION(InterfaceLib, openrfperm, cglue_openrfperm);
+
+
+inline void cglue_setresinfo(Handle res, INTEGER id, const char *name) {C_SetResInfo(res, id, cglue::CString(name));}
+LIBRARY_FUNCTION(InterfaceLib, setresinfo, cglue_setresinfo);
+
+
 } /* namespace Executor */

@@ -22,6 +22,9 @@ struct section_info_t
     GUEST<uint32_t> ref_count;
     GUEST<uint8_t> perms;
     GUEST<uint8_t> pad[3];/* TODO: verifying that it works this way on a Mac. */
+    /* MacPhoenix: the section's PEF defaultAddress: the container's
+       pointers into it are relative to that, not to 0. */
+    GUEST<uint32_t> default_address;
 };
 
 typedef struct CFragConnection
@@ -128,7 +131,7 @@ extern uint32_t ROMlib_cfm68k_call_universal_proc(UniversalProcPtr theProcPtr,
 extern PEFLoaderInfoHeader *ROMlib_build_pef_hash(const map_entry_t table[],
                                                     int count);
 
-static_assert(sizeof(section_info_t) == 16);
+static_assert(sizeof(section_info_t) == 20);
 static_assert(sizeof(CFragConnection) == 28);
 static_assert(sizeof(lib_t) == 16);
 static_assert(sizeof(CFragClosure) == 4);

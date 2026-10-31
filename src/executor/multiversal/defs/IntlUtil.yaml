@@ -778,3 +778,86 @@
         type: "Handle"
     library: InterfaceLib
     executor: glue_IUCompPString
+
+# ####
+
+# InterfaceLib's lowercase C routines (multiversal/executor.rb, declare_cglue):
+# the Pascal routine with C strings, Points by address.
+
+- only-for: Executor
+  function:
+    name: iucomppstring
+    cglue: IUCompPString
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: iucompstring
+    cglue: IUCompString
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: iudatepstring
+    cglue: IUDatePString
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: iudatestring
+    cglue: IUDateString
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: iuequalpstring
+    cglue: IUEqualPString
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: iuequalstring
+    cglue: IUEqualString
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: iuldatestring
+    cglue: IULDateString
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: iultimestring
+    cglue: IULTimeString
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: iutimepstring
+    cglue: IUTimePString
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: iutimestring
+    cglue: IUTimeString
+    library: InterfaceLib

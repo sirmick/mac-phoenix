@@ -593,4 +593,48 @@ OSStatus C_CollapseWindow(WindowRef window, Boolean collapse);LIBRARY_FUNCTION(A
 
 
 
+inline LONGINT cglue_draggrayrgn(RgnHandle rgn, GUEST<Point> *startp, const Rect *limit, const Rect *slop, INTEGER axis, ProcPtr proc) {return C_DragGrayRgn(rgn, *startp, limit, slop, axis, proc);}
+LIBRARY_FUNCTION(InterfaceLib, draggrayrgn, cglue_draggrayrgn);
+
+
+inline void cglue_dragwindow(WindowPtr wp, GUEST<Point> *p, const Rect *rp) {C_DragWindow(wp, *p, rp);}
+LIBRARY_FUNCTION(InterfaceLib, dragwindow, cglue_dragwindow);
+
+
+inline INTEGER cglue_findwindow(GUEST<Point> *p, GUEST<WindowPtr> *wpp) {return C_FindWindow(*p, wpp);}
+LIBRARY_FUNCTION(InterfaceLib, findwindow, cglue_findwindow);
+
+
+inline void cglue_getwtitle(WindowPtr w, char *t) {C_GetWTitle(w, (StringPtr)t);cglue::p2c(t);}
+LIBRARY_FUNCTION(InterfaceLib, getwtitle, cglue_getwtitle);
+
+
+inline LONGINT cglue_growwindow(WindowPtr w, GUEST<Point> *startp, const Rect *rp) {return C_GrowWindow(w, *startp, rp);}
+LIBRARY_FUNCTION(InterfaceLib, growwindow, cglue_growwindow);
+
+
+inline WindowPtr cglue_newcwindow(void *storage, const Rect *arg1, const char *arg2, Boolean arg3, INTEGER arg4, WindowPtr arg5, Boolean arg6, LONGINT arg7) {return C_NewCWindow(storage, arg1, cglue::CString(arg2), arg3, arg4, arg5, arg6, arg7);}
+LIBRARY_FUNCTION(InterfaceLib, newcwindow, cglue_newcwindow);
+
+
+inline WindowPtr cglue_newwindow(void *wst, const Rect *r, const char *title, Boolean vis, INTEGER procid, WindowPtr behind, Boolean gaflag, LONGINT rc) {return C_NewWindow(wst, r, cglue::CString(title), vis, procid, behind, gaflag, rc);}
+LIBRARY_FUNCTION(InterfaceLib, newwindow, cglue_newwindow);
+
+
+inline LONGINT cglue_pinrect(const Rect *r, GUEST<Point> *p) {return C_PinRect(r, *p);}
+LIBRARY_FUNCTION(InterfaceLib, pinrect, cglue_pinrect);
+
+
+inline void cglue_setwtitle(WindowPtr w, const char *t) {C_SetWTitle(w, cglue::CString(t));}
+LIBRARY_FUNCTION(InterfaceLib, setwtitle, cglue_setwtitle);
+
+
+inline Boolean cglue_trackbox(WindowPtr wp, GUEST<Point> *pt, INTEGER part) {return C_TrackBox(wp, *pt, part);}
+LIBRARY_FUNCTION(InterfaceLib, trackbox, cglue_trackbox);
+
+
+inline Boolean cglue_trackgoaway(WindowPtr w, GUEST<Point> *p) {return C_TrackGoAway(w, *p);}
+LIBRARY_FUNCTION(InterfaceLib, trackgoaway, cglue_trackgoaway);
+
+
 } /* namespace Executor */

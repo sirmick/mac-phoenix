@@ -144,7 +144,10 @@
                 "selector": { "type": "integer" },
                 "file_trap": { "oneOf": [ {"type":"string"}, {"type":"boolean"}] },
                 "comment": { "type": "string" },
-                "old_name": { "type": "string" }
+                "old_name": { "type": "string" },
+                "cglue": { "type": "string" },
+                "cstring-in": { "type": "string" },
+                "cstring-inout": { "type": "string" }
             },
             "additionalProperties": false,
             "required": [ "name" ]
