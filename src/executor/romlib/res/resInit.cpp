@@ -19,6 +19,7 @@
 #include <FileMgr.h>
 #include <AliasMgr.h>
 
+#include <algorithm>
 #include <cstring>
 
 using namespace Executor;
@@ -28,14 +29,14 @@ using namespace Executor;
    by `InitWindows ()' */
 bool Executor::system_file_version_skew_p = false;
 
-/* MacPhoenix: as System 7.1 and later, open the font files in the Fonts
-   folder read-only and chain their maps directly below the System file's,
-   in catalog order (so the first file ends up last, as on a real boot). */
-static void open_font_files()
+/* MacPhoenix: open a folder's files of the given types read-only and chain
+   their maps directly below the System file's, in catalog order (so the
+   first file ends up last, as on a real boot). */
+static void open_below_system(OSType folder, std::initializer_list<OSType> types)
 {
     GUEST<INTEGER> vref;
     GUEST<LONGINT> dirid;
-    if(FindFolder(-32768 /* kOnSystemDisk */, "font"_4, false, &vref, &dirid) != noErr)
+    if(FindFolder(-32768 /* kOnSystemDisk */, folder, false, &vref, &dirid) != noErr)
         return;
     INTEGER saved = LM(CurMap);
     for(INTEGER i = 1;; i++)
@@ -52,7 +53,7 @@ static void open_font_files()
         if(pb.hFileInfo.ioFlAttrib & ATTRIB_ISADIR)
             continue;
         OSType type = pb.hFileInfo.ioFlFndrInfo.fdType;
-        if(type != "FFIL"_4 && type != "ffil"_4 && type != "tfil"_4)
+        if(std::find(types.begin(), types.end(), type) == types.end())
             continue;
         if(HOpenResFile(vref, dirid, name, fsRdPerm) == -1)
             continue;
@@ -92,7 +93,12 @@ INTEGER Executor::C_InitResources()
     LM(SysMapHndl) = LM(TopMapHndl);
     ROMlib_resTypesChanged();
     SetResLoad(true);
-    open_font_files();
+    /* as System 7.1 and later: the font files in the Fonts folder */
+    open_below_system("font"_4, { "FFIL"_4, "ffil"_4, "tfil"_4 });
+    /* 8.5 and later: "System Resources" in the System Folder, which holds
+       the icons Icon Services shows (the badges, 8.5's colour icons), the
+       Navigation Services and Appearance dialogs, ... */
+    open_below_system("macs"_4, { "zsyr"_4 });
 
     /*
     TODO: decide whether to re-instate a system file version check

@@ -438,7 +438,8 @@ bool sideload_system(const std::string& image, const std::string& data_dir,
     fs::path sys = fs::path(data_dir) / "System Folder";
     fs::create_directories(sys);
     bool finder = false;
-    static const std::vector<const char *> files = { "System", "Finder" };
+    /* MacPhoenix: and 8.5's "System Resources" (icons, dialogs) */
+    static const std::vector<const char *> files = { "System", "Finder", "System Resources" };
     /* MacPhoenix: Launcher Items too (the Launcher control panel's buttons,
        aliases to applications; it opened empty), Shutdown Items, and
        Control Strip Modules (Control Strip's modules) */
