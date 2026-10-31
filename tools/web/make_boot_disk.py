@@ -190,7 +190,7 @@ def plan(disk, allowed, keep=()):
         path = sysf + b":" + name
         folders.append(path)
         if name == b"Extensions":
-            tree(path, keep_file=lambda n: trimmed(n) in allowed or n in libraries,
+            tree(path, keep_file=lambda n: trimmed(n) in allowed or trimmed(n) in libraries,
                  keep_folder=lambda n: n in EXTENSION_FOLDERS)
         else:
             tree(path)
