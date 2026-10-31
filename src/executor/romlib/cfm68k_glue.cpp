@@ -97,8 +97,12 @@ OSErr register_trap(uint16_t trap, uint32_t d0, void *pb)
 
 /* ---- strings ------------------------------------------------------------ */
 
+/* A nil string is the one at address 0, empty on a Mac: converted in
+   place, nil returned (MPW Shell's c2pstr after a failed PBGetCatInfo). */
 StringPtr glue_c2pstr(char *s)
 {
+    if(!s)
+        return nullptr;
     size_t n = std::min<size_t>(strlen(s), 255);
     memmove(s + 1, s, n);
     s[0] = n;
@@ -107,6 +111,8 @@ StringPtr glue_c2pstr(char *s)
 
 char *glue_p2cstr(StringPtr s)
 {
+    if(!s)
+        return nullptr;
     size_t n = s[0];
     memmove(s, s + 1, n);
     s[n] = 0;
