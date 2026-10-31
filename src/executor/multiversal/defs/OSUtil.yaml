@@ -750,6 +750,22 @@
 
 # ####
 
+- only-for: Executor
+  function:
+    name: GetTrapVector
+    return: Ptr
+    args:
+      - name: trapWord
+        type: uint16_t
+    library: InterfaceLib
+    executor: glue_GetTrapVector
+    comment: |
+      The trap dispatch table's slot for a trap word (a UniversalProcPtr *):
+      Mac OS Easy Open's PowerPC Translation library reads $ABFC's
+      dispatcher through it.
+
+# ####
+
 - function:
     name: NGetTrapAddress
     return: ProcPtr

@@ -663,6 +663,9 @@ void init(bool enableLogging, const std::string& trapFilter = std::string());
    CFM is always there, and the Appearance Manager's ($AA73, $AA74); 7.x's
    68k Mac goes without. */
 void installSystem8Traps();
+/* ... and $AA5A alone, for 7.x with PowerPC code (--executor-ppc), where
+   CFM is there too: Mac OS Easy Open's INIT gives it its PowerPC library */
+void installCodeFragmentDispatch();
 extern std::unordered_map<std::string, traps::Entrypoint*> entrypoints;
 
 }

@@ -387,7 +387,12 @@ find_selector_in_table(OSType selector, gestaltentry_t table[],
 
     if(!retval && table == gtable)
         for(size_t j = 0; j < std::size(since_table); j++)
-            if(since_table[j].selector == selector && system_version >= since_versions[j])
+            if(since_table[j].selector == selector
+               && (system_version >= since_versions[j]
+                   /* CFM with PowerPC code on 7.x (--executor-ppc), as on a
+                      Power Mac (Mac OS Easy Open registers its PowerPC
+                      library with it) */
+                   || (selector == "cfrg"_4 && ROMlib_prefer_ppc)))
                 retval = &since_table[j];
 
     return retval;

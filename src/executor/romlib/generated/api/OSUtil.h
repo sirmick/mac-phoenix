@@ -6,8 +6,8 @@
  * Needs:                                                                    *
  *     MacTypes.h       Byte, INTEGER, LONGINT, Boolean, SignedByte,         *
  *                      QElemPtr, OSErr, Handle, ConstStringPtr,             *
- *                      StringPtr, ULONGINT, QHdrPtr, Str255,                *
- *                      ConstStr255Param, Ptr                                *
+ *                      StringPtr, ULONGINT, QHdrPtr, Ptr, Str255,           *
+ *                      ConstStr255Param                                     *
  *     VRetraceMgr.h    VBLTask                                              *
  *     FileMgr.h        ParamBlockRec, DrvQEl, VCB                           *
  *     OSEvent.h        EvQEl                                                *
@@ -332,6 +332,12 @@ void Enqueue(QElemPtr e, QHdrPtr h);REGISTER_TRAP2(Enqueue, 0xA96F, void(A0, A1)
 
 
 OSErr Dequeue(QElemPtr e, QHdrPtr h);REGISTER_TRAP2(Dequeue, 0xA96E, D0(A0, A1), SaveA1D1D2);
+
+
+// The trap dispatch table's slot for a trap word (a UniversalProcPtr *):
+// Mac OS Easy Open's PowerPC Translation library reads $ABFC's
+// dispatcher through it.
+Ptr glue_GetTrapVector(uint16_t trapWord);LIBRARY_FUNCTION(InterfaceLib, GetTrapVector, glue_GetTrapVector);
 
 
 // extern LONGINT GetTrapAddress(INTEGER n); // 68K in emustubs, not supported on ppc
