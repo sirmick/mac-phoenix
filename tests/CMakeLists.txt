@@ -1187,12 +1187,14 @@ foreach(probe appr ctl menu sys text wind)
     NAME difftest_${probe}_executor_86
     COMMAND python3 ${CMAKE_SOURCE_DIR}/tools/difftest/run.py ${probe} --no-refresh
   )
-  # one at a time: run.py's sessions for a target share its port
+  # one at a time: run.py's sessions for a target share its port and out
+  # dir (another run on it, outside this ctest: waited for, 300 s)
   set_tests_properties(difftest_${probe}_executor_86 PROPERTIES
-    TIMEOUT 900
+    TIMEOUT 1200
     LABELS "guest;executor"
     SKIP_RETURN_CODE 77
     RESOURCE_LOCK difftest_executor
+    ENVIRONMENT "DIFFTEST_LOCK_TIMEOUT=300"
   )
 endforeach()
 

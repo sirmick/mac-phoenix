@@ -47,6 +47,12 @@ compares the answers line by line.
   run, extra lines, and expected entries that now match (remove them). With
   `--dump`, a side-by-side PNG of each differing drawing.
   `--accept` appends the current differences with reason "TODO".
+- **Runs side by side**: a git worktree's reports go to
+  `<storage>/difftest/wt-<name>/<probe>/` and its sessions use its own ports
+  ([Testing.md](../Testing.md#ports)), so worktrees don't meet; a second run
+  on the same directory waits for the first's `.lock` (saying whose), up to
+  `DIFFTEST_LOCK_TIMEOUT` seconds (1800). `DIFFTEST_NO_SKIP=1` turns a
+  target that can't run (exit 77) into a failure.
 
 ## Probes
 
