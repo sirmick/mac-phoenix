@@ -19,6 +19,7 @@
 #include <prefs/prefs.h>
 
 #include <vector>
+#include <rsys/cfm.h>
 
 using namespace Executor;
 
@@ -38,6 +39,8 @@ void Executor::C_InitFonts() /* IMI-222 */
 {
     static Boolean beenhere = false;
     GUEST<THz> saveZone;
+
+    ROMlib_cfm_toolbox_library("FontManager");
 
     if(!beenhere)
     {

@@ -1,7 +1,8 @@
 /* sys: what a program asks the system first, differential
    (tools/difftest/run.py sys): Gestalt selectors, FindFolder for each
    folder type (and the folder's name), value-holding low-memory globals,
-   the process's own information, Script Manager variables. Machine-specific
+   the process's own information, Script Manager variables, which libraries
+   the Code Fragment Manager finds without preparing them. Machine-specific
    answers (RAM, free memory) are keys with "~": shown, not compared. */
 #include "probe.h"
 #include <Gestalt.h>
@@ -9,6 +10,7 @@
 #include <Files.h>
 #include <Processes.h>
 #include <Script.h>
+#include <CodeFragments.h>
 
 #define SET(x) memset(&(x), SENTINEL, sizeof(x))
 
@@ -118,6 +120,32 @@ int main(void)
         {
             sprintf(k, "roman.%d", sverbs[i]);
             out(k, "%08lx", (long)GetScriptVariable(smRoman, sverbs[i]));
+        }
+    }
+    if(SECTION("cfm"))
+    {
+        /* kFindLib: 0 for a library connected to this process (its
+           imports), cfragLibConnErr for one that is there but not
+           connected, cfragNoLibraryErr for none; connected once prepared */
+        static const char *const libs[] = {
+            "InterfaceLib", "AppearanceLib", "WindowsLib", "MenusLib", "ControlsLib",
+            "FontManager", "DialogsLib", "NoSuchLibrary" };
+        for(i = 0; i < (int)(sizeof libs / sizeof libs[0]); i++)
+        {
+            Str255 name, err;
+            ConnectionID conn;
+            Ptr main;
+            OSErr e;
+            name[0] = strlen(libs[i]);
+            memcpy(name + 1, libs[i], name[0]);
+            sprintf(k, "find.%s", libs[i]);
+            out(k, "%d", GetSharedLibrary(name, kPowerPCArch, kFindLib, &conn, &main, err));
+            if(strcmp(libs[i], "AppearanceLib"))
+                continue;
+            e = GetSharedLibrary(name, kPowerPCArch, kReferenceCFrag, &conn, &main, err);
+            out("load.AppearanceLib", "%d", e);
+            sprintf(k, "find.after.%s", libs[i]);
+            out(k, "%d", GetSharedLibrary(name, kPowerPCArch, kFindLib, &conn, &main, err));
         }
     }
     probe_close();

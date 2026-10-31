@@ -104,6 +104,10 @@ extern uint32_t ROMlib_call_cfm68k(uint32_t tvector, std::initializer_list<uint3
 extern void ROMlib_cfm_terminate();
 extern void ROMlib_cfm_process_exit(uint32_t part_lo, uint32_t part_hi);
 extern void ROMlib_cfm_application_start();
+/* MacPhoenix: a Toolbox manager initialized (InitFonts, InitWindows,
+   InitMenus): from 8.5 the library it is in (FontManager, WindowsLib,
+   MenusLib) is connected to the application, so kFindLib finds it. */
+extern void ROMlib_cfm_toolbox_library(const char *library);
 /* MacPhoenix: addr is in a loaded PowerPC fragment's code (a transition
    vector's first word points there). */
 extern bool ROMlib_cfm_ppc_code(uint32_t addr);

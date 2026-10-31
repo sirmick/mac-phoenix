@@ -893,12 +893,33 @@ find_library(ConstStr63Param library, OSType arch, GUEST<ConnectionID> *cidp,
     }
     if(err == noErr)
         return noErr;
+    /* 8.6 answers cfragLibConnErr for any library not connected, there or
+       not (LibProbe, the sys probe's cfm keys: DialogsLib, NoSuchLibrary);
+       before 8.5 not checked, as it was */
+    if((uint16_t)LM(SysVersion) >= 0x0850)
+        return fragLibConnErr;
     if(err == fragConnectionIDNotFound || builtinlibs::haveBuiltinLib(library, arch))
         return fragLibConnErr;
     err = check_system_file(library, arch, kFindLib, cidp, mainaddrp, errName);
     if(err == noErr)
         return noErr;
     return err == fragConnectionIDNotFound ? fragLibConnErr : fragLibNotFound;
+}
+
+/* On 8.6 InitFonts, InitWindows and InitMenus prepare the native library
+   their manager is in, in the application's context: kFindLib finds
+   FontManager, WindowsLib and MenusLib once they have run (the sys probe),
+   not before (LibProbe). */
+void Executor::ROMlib_cfm_toolbox_library(const char *library)
+{
+    if((uint16_t)LM(SysVersion) < 0x0850)
+        return;
+    Str63 name;
+    name[0] = strlen(library);
+    memcpy(name + 1, library, name[0]);
+    GUEST<ConnectionID> cid;
+    GUEST<Ptr> mainaddr;
+    connect_builtin(name, "pwpc"_4, &cid, &mainaddr);
 }
 
 /*

@@ -1,4 +1,4 @@
-# probe d573413bdda21de2d8db70625e4446c064b3527cfd3a510af666b811af7b73a7
+# probe bb3d7994128b33b352f7c47a293b6ccd54af48fba25dc27f6dc2ceb12e57161e
 == gestalt
 gestalt.sysv: err 0 00000860
 gestalt.sysa: err 0 00000002
@@ -173,7 +173,7 @@ lowmem.0204: 0002
 lowmem.0206: 6300
 lowmem.0208: 1388
 lowmem.020a: 80cc
-lowmem.020c: e70a2eed
+lowmem.020c: e70bb3d8
 lowmem.0938: cfff
 lowmem.0a60: 0000
 lowmem.0cca: 3cb4
@@ -184,11 +184,11 @@ lowmem.0b21: bf
 process.err: 0
 process.name: "MacPhoenixSuite" (15)
 process.type: APPL DfSy mode 00000080
-process.~size: 1238648 free 1093488
+process.~size: 1238800 free 1093424
 process.spec.name: "MacPhoenixSuite" (15)
 == script
 script.sm.0: 00000860
-script.sm.2: 00000050
+script.sm.2: 00000038
 script.sm.4: 00000001
 script.sm.6: 00000000
 script.sm.8: 00000000
@@ -245,3 +245,14 @@ script.roman.86: 0003000c
 script.roman.88: 00030009
 script.roman.90: 0000007f
 script.roman.92: 00000002
+== cfm
+cfm.find.InterfaceLib: 0
+cfm.find.AppearanceLib: -2817
+cfm.load.AppearanceLib: 0
+cfm.find.after.AppearanceLib: 0
+cfm.find.WindowsLib: 0
+cfm.find.MenusLib: 0
+cfm.find.ControlsLib: -2817
+cfm.find.FontManager: 0
+cfm.find.DialogsLib: -2817
+cfm.find.NoSuchLibrary: -2817
