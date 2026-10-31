@@ -1,4 +1,4 @@
-# probe 1def8ff8bd557ec58b5dfb5390dec44ec8403dcc9e878e10f7f9bdfc86877293
+# probe 8b5d8ec94f433fca1f92ba23a7ac163d0449403db0e1b40c1028efbc68a60e21
 == gestalt
 gestalt.appr: 0 00000001
 gestalt.apvr: 0 00000110
@@ -7,6 +7,95 @@ client.IsAppearanceClient.before: 0
 client.Register: 0
 client.Register.again: -30561
 client.IsAppearanceClient.after: 1
+== controls
+controls.0.push.active: 68x28 depth 32 crc 72ad5f0a
+controls.0.push.inactive: 68x28 depth 32 crc 74430085
+controls.0.push.pressed: 68x28 depth 32 crc 6040e27a
+controls.1.check.active: 68x24 depth 32 crc 54d98a5b
+controls.1.check.inactive: 68x24 depth 32 crc cad2dce4
+controls.1.check.pressed: 68x24 depth 32 crc e2a9c9bb
+controls.1.check.value1: 68x24 depth 32 crc 61617fb7
+controls.1.check.value2: 68x24 depth 32 crc d31b4a28
+controls.2.radio.active: 68x24 depth 32 crc 9fc7bdc1
+controls.2.radio.inactive: 68x24 depth 32 crc 9c368f74
+controls.2.radio.pressed: 68x24 depth 32 crc e1c84186
+controls.2.radio.value1: 68x24 depth 32 crc 77b8d2d2
+controls.2.radio.value2: 68x24 depth 32 crc 9604090e
+controls.16.vscroll.active: 24x108 depth 32 crc 8dd98411
+controls.16.vscroll.inactive: 24x108 depth 32 crc 96b1f275
+controls.16.vscroll.pressed20: 24x108 depth 32 crc 5efb33d1
+controls.16.vscroll.pressed21: 24x108 depth 32 crc 411be2a9
+controls.16.vscroll.pressed22: 24x108 depth 32 crc 8dd98411
+controls.16.vscroll.pressed23: 24x108 depth 32 crc 8dd98411
+controls.16.vscroll.pressed129: 24x108 depth 32 crc b6e6f44a
+controls.16.hscroll.active: 108x24 depth 32 crc 74eb331e
+controls.16.hscroll.inactive: 108x24 depth 32 crc ab38fbf9
+controls.16.hscroll.pressed20: 108x24 depth 32 crc 67bac80c
+controls.16.hscroll.pressed21: 108x24 depth 32 crc 92e35280
+controls.16.hscroll.pressed22: 108x24 depth 32 crc 74eb331e
+controls.16.hscroll.pressed23: 108x24 depth 32 crc 74eb331e
+controls.16.hscroll.pressed129: 108x24 depth 32 crc ad8a781a
+controls.1008.popup.active: 108x28 depth 32 crc 798c75d3
+controls.1008.popup.inactive: 108x28 depth 32 crc 4c075f3d
+controls.368.push.active: 68x28 depth 32 crc 72ad5f0a
+controls.368.push.inactive: 68x28 depth 32 crc 74430085
+controls.368.push.pressed: 68x28 depth 32 crc 6040e27a
+controls.369.check.active: 68x24 depth 32 crc 54d98a5b
+controls.369.check.inactive: 68x24 depth 32 crc cad2dce4
+controls.369.check.pressed: 68x24 depth 32 crc e2a9c9bb
+controls.369.check.value1: 68x24 depth 32 crc 61617fb7
+controls.369.check.value2: 68x24 depth 32 crc d31b4a28
+controls.370.radio.active: 68x24 depth 32 crc 9fc7bdc1
+controls.370.radio.inactive: 68x24 depth 32 crc 9c368f74
+controls.370.radio.pressed: 68x24 depth 32 crc e1c84186
+controls.370.radio.value1: 68x24 depth 32 crc 77b8d2d2
+controls.370.radio.value2: 68x24 depth 32 crc 9604090e
+controls.384.vscroll.active: 24x108 depth 32 crc 8dd98411
+controls.384.vscroll.inactive: 24x108 depth 32 crc 96b1f275
+controls.384.vscroll.pressed20: 24x108 depth 32 crc 5efb33d1
+controls.384.vscroll.pressed21: 24x108 depth 32 crc 411be2a9
+controls.384.vscroll.pressed22: 24x108 depth 32 crc 8dd98411
+controls.384.vscroll.pressed23: 24x108 depth 32 crc 8dd98411
+controls.384.vscroll.pressed129: 24x108 depth 32 crc b6e6f44a
+controls.400.popup.active: 108x28 depth 32 crc 798c75d3
+controls.400.popup.inactive: 108x28 depth 32 crc 4c075f3d
+controls.32.bevel.active: 48x38 depth 32 crc 942e2ea8
+controls.32.bevel.inactive: 48x38 depth 32 crc 123eb5e4
+controls.32.bevel.pressed: 48x38 depth 32 crc 4b817502
+controls.32.bevel.value1: 48x38 depth 32 crc 4b817502
+controls.33.bevel.active: 48x38 depth 32 crc 1e7556b7
+controls.33.bevel.inactive: 48x38 depth 32 crc 123eb5e4
+controls.33.bevel.pressed: 48x38 depth 32 crc aa7baa39
+controls.33.bevel.value1: 48x38 depth 32 crc aa7baa39
+controls.34.bevel.active: 48x38 depth 32 crc f58e22d8
+controls.34.bevel.inactive: 48x38 depth 32 crc 123eb5e4
+controls.34.bevel.pressed: 48x38 depth 32 crc 6daacf91
+controls.34.bevel.value1: 48x38 depth 32 crc 6daacf91
+controls.48.slider.active: 108x28 depth 32 crc 0a3957c3
+controls.48.slider.inactive: 108x28 depth 32 crc 44f90801
+controls.48.slider.pressed: 108x28 depth 32 crc da263575
+controls.64.triangle.active: 20x20 depth 32 crc fe158122
+controls.64.triangle.inactive: 20x20 depth 32 crc 40e433b1
+controls.64.triangle.value1: 20x20 depth 32 crc 89871b73
+controls.80.progress.active: 108x22 depth 32 crc d7c48176
+controls.80.progress.inactive: 108x22 depth 32 crc 80eb28e7
+controls.96.arrows.active: 21x31 depth 32 crc 7c882aa1
+controls.96.arrows.inactive: 21x31 depth 32 crc 85b20d91
+controls.96.arrows.pressed: 21x31 depth 32 crc 347bf38a
+controls.144.separator.active: 108x10 depth 32 crc a6a2a76b
+controls.144.separator.inactive: 108x10 depth 32 crc ac0c68b8
+controls.160.group.active: 108x68 depth 32 crc 467eaf9d
+controls.160.group.inactive: 108x68 depth 32 crc 09365ab3
+controls.224.placard.active: 108x28 depth 32 crc 4de48d13
+controls.224.placard.inactive: 108x28 depth 32 crc 4d440258
+controls.336.header.active: 108x28 depth 32 crc 4de48d13
+controls.336.header.inactive: 108x28 depth 32 crc 4d440258
+controls.tab80.0: 120x60 depth 32 crc a9be4214
+controls.tab80.1: 120x60 depth 32 crc 9c9bb020
+controls.tab80.2: 120x60 depth 32 crc d58c98ce
+controls.tab80.3: 120x60 depth 32 crc 30b2c5cb
+controls.tab80.4: 120x60 depth 32 crc 194bf792
+controls.tab80.5: 120x60 depth 32 crc fd7490cc
 == color
 color.IsThemeInColor.32: color 1 mono 1
 color.IsThemeInColor.8: color 1 mono 1

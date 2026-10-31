@@ -401,11 +401,15 @@
 # ####
 
 - lowmem:
-    name: ROMlib_myfmi
+    name: CurFMInput
     type: FMInput
     address: 0x988
+    library: PrivateInterfaceLib
     comment: |
-      FontMgr ToolEqu.a (true);
+      FontMgr ToolEqu.a (true); the Font Manager's last input record. Its
+      accessors copy it out and in and are PrivateInterfaceLib's (8.6's
+      ControlDefinitions sets family and size to -1 with them, to make the
+      next font swap start afresh).
 
 # ####
 

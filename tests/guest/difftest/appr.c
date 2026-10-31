@@ -10,6 +10,8 @@
 #include <Processes.h>
 #include <Fonts.h>
 #include <Collections.h>
+#include <Controls.h>
+#include <Menus.h>
 
 #define SET(x) memset(&(x), SENTINEL, sizeof(x))
 
@@ -649,6 +651,142 @@ static void frames(void)
     DisposeWindow(backing);
 }
 
+/* Controls as programs get them: real controls of the classic and the
+   Appearance definitions (procIDs) in a window on the screen, active,
+   inactive (hilite 255), pressed (the part a click hilites) and at their
+   values (max 1 or 2: check boxes, radio buttons, bevels, triangles),
+   copied out with 4 pixels round them; no titles (the glyphs
+   aren't what is compared). Then DrawThemeTab at a tab's usual width. */
+struct ctl
+{
+    short proc, w, h, min, max, value, part;
+    const char *name;
+};
+
+static void copy_out(const char *key, const Rect *local)
+{
+    CGrafPort screen;
+    GWorldPtr g;
+    GrafPtr save;
+    Rect from = *local, to;
+    LocalToGlobal((Point *)&from.top);
+    LocalToGlobal((Point *)&from.bottom);
+    InsetRect(&from, -4, -4);
+    SetRect(&to, 0, 0, from.right - from.left, from.bottom - from.top);
+    GetPort(&save);
+    OpenCPort(&screen);
+    NewGWorld(&g, 32, &to, NULL, NULL, 0);
+    LockPixels(GetGWorldPixMap(g));
+    SetPort((GrafPtr)&screen);
+    CopyBits((BitMap *)*screen.portPixMap, (BitMap *)*GetGWorldPixMap(g), &from, &to, srcCopy, NULL);
+    SetPort(save);
+    CloseCPort(&screen);
+    probe_pixels(key, g);
+    DisposeGWorld(g);
+}
+
+static void controls(void)
+{
+    static const struct ctl ctls[] = {
+        { 0, 60, 20, 0, 0, 0, 10, "push" },
+        { 1, 60, 16, 0, 2, 0, 11, "check" },
+        { 2, 60, 16, 0, 2, 0, 12, "radio" },
+        { 16, 16, 100, 0, 100, 30, 0, "vscroll" },
+        { 16, 100, 16, 0, 100, 30, 0, "hscroll" },
+        { 1008, 100, 20, 200, 0, 0, 0, "popup" },
+        { 368, 60, 20, 0, 0, 0, 10, "push" },
+        { 369, 60, 16, 0, 2, 0, 11, "check" },
+        { 370, 60, 16, 0, 2, 0, 12, "radio" },
+        { 384, 16, 100, 0, 100, 30, 0, "vscroll" },
+        { 400, 100, 20, 200, 0, 0, 0, "popup" },
+        { 32, 40, 30, 0, 1, 0, 10, "bevel" },
+        { 33, 40, 30, 0, 1, 0, 10, "bevel" },
+        { 34, 40, 30, 0, 1, 0, 10, "bevel" },
+        { 48, 100, 20, 0, 10, 5, 129, "slider" },
+        { 64, 12, 12, 0, 1, 0, 0, "triangle" },
+        { 80, 100, 14, 0, 100, 50, 0, "progress" },
+        { 96, 13, 23, 0, 10, 5, 20, "arrows" },
+        { 144, 100, 2, 0, 0, 0, 0, "separator" },
+        { 160, 100, 60, 0, 0, 0, 0, "group" },
+        { 224, 100, 20, 0, 0, 0, 0, "placard" },
+        { 336, 100, 20, 0, 0, 0, 0, "header" },
+    };
+    static const short scrollParts[] = { 20, 21, 22, 23, 129 };
+    Rect back, b, port;
+    WindowRef w;
+    MenuHandle m;
+    char k[48];
+    int i, j;
+    if(!SECTION("controls"))
+        return;
+    RegisterAppearanceClient();
+    m = NewMenu(200, "\p");
+    AppendMenu(m, "\p ");
+    InsertMenu(m, -1);
+    SetRect(&back, 0, 40, 400, 240);
+    w = NewCWindow(NULL, &back, "\p", true, plainDBox, (WindowRef)-1, false, 0);
+    SetPort((GrafPtr)w);
+    port = ((GrafPtr)w)->portRect;
+    BackColor(whiteColor);
+    for(i = 0; i < (int)(sizeof ctls / sizeof ctls[0]); i++)
+    {
+        const struct ctl *c = &ctls[i];
+        ControlHandle h;
+        SetRect(&b, 20, 20, 20 + c->w, 20 + c->h);
+        EraseRect(&port);
+        h = NewControl(w, &b, "\p", true, c->value, c->min, c->max, c->proc, 0);
+        sprintf(k, "%d.%s", c->proc, c->name);
+        if(!h)
+        {
+            out(k, "nil");
+            continue;
+        }
+        Draw1Control(h);
+        sprintf(k, "%d.%s.active", c->proc, c->name);
+        copy_out(k, &b);
+        HiliteControl(h, 255);
+        sprintf(k, "%d.%s.inactive", c->proc, c->name);
+        copy_out(k, &b);
+        HiliteControl(h, 0);
+        if(c->proc == 16 || c->proc == 384)
+            for(j = 0; j < (int)(sizeof scrollParts / sizeof scrollParts[0]); j++)
+            {
+                HiliteControl(h, scrollParts[j]);
+                sprintf(k, "%d.%s.pressed%d", c->proc, c->name, scrollParts[j]);
+                copy_out(k, &b);
+                HiliteControl(h, 0);
+            }
+        else if(c->part)
+        {
+            HiliteControl(h, c->part);
+            sprintf(k, "%d.%s.pressed", c->proc, c->name);
+            copy_out(k, &b);
+            HiliteControl(h, 0);
+        }
+        if(c->max >= 1 && c->max <= 2)
+            for(j = 1; j <= c->max; j++)
+            {
+                SetControlValue(h, j);
+                sprintf(k, "%d.%s.value%d", c->proc, c->name, j);
+                copy_out(k, &b);
+            }
+        DisposeControl(h);
+    }
+    DisposeWindow(w);
+    DeleteMenu(200);
+    DisposeMenu(m);
+    /* tabs 80 wide, every style */
+    for(i = 0; i <= 5; i++)
+    {
+        Rect tb;
+        SetRect(&tb, 10, 10, 90, 50);
+        begin(32);
+        DrawThemeTab(&tb, i, kThemeTabNorth, NULL, 0);
+        sprintf(k, "tab80.%d", i);
+        end(k);
+    }
+}
+
 int main(void)
 {
     long v;
@@ -669,6 +807,11 @@ int main(void)
         out("Register.again", "%d", (int)RegisterAppearanceClient());
         out("IsAppearanceClient.after", "%d", IsAppearanceClient(&psn));
     }
+    /* controls first: NewControl's accelerated CDEFs (8.6's own 384/400)
+       share Mixed Mode's prepared-fragment cache (mixed_mode.cpp) with
+       everything drawing()/frames() exercises afterward; run while that
+       cache is still fresh (docs/executor/DiffTest.md). */
+    controls();
     colours();
     fonts();
     metrics();

@@ -9,9 +9,11 @@
 #include <ControlMgr.h>
 #include <MemoryMgr.h>
 #include <ToolboxUtil.h>
+#include <Appearance.h>
 
 #include <quickdraw/cquick.h>
 #include <ctl/ctl.h>
+#include <prefs/prefs.h>
 
 #include <quickdraw/image.h>
 #include <wind/wind.h>
@@ -684,6 +686,46 @@ restore(const save_t *sp)
     DisposeHandle((Handle)sp->cp.portPixMap);
 }
 
+/* MacPhoenix: on 8.x CDEF 1/16 (and 8.6's own 384) scroll bars draw via
+   DrawThemeTrack/DrawThemeScrollBarArrows (tests/guest/difftest appr,
+   controls.16/.384). No viewSize: 8.6's ThumbStyle metric defaults to 0
+   (non-proportional), so the thumb is DrawThemeTrack's fixed size. */
+static bool platinum()
+{
+    return system_version >= 0x800;
+}
+
+static void draw_theme_scrollbar(ControlHandle c)
+{
+    Rect r = CTL_RECT(c);
+    bool horizontal = !SB_VERT_P(RECT_HEIGHT(&r), RECT_WIDTH(&r));
+    int hilite = CTL_HILITE(c);
+    ThemeTrackPressState press = 0;
+    switch(hilite)
+    {
+        case inUpButton: press = kThemeLeftOutsideArrowPressed; break;
+        case inDownButton: press = kThemeRightOutsideArrowPressed; break;
+        case inPageUp: press = kThemeLeftTrackPressed; break;
+        case inPageDown: press = kThemeRightTrackPressed; break;
+        case inThumb: press = kThemeThumbPressed; break;
+    }
+    ThemeTrackDrawInfo info = {};
+    info.kind = kThemeScrollBar;
+    info.min = CTL_MIN(c);
+    info.max = CTL_MAX(c);
+    info.value = CTL_VALUE(c);
+    info.attributes = kThemeTrackShowThumb | (horizontal ? kThemeTrackHorizontal : 0);
+    info.enableState = hilite == 255 ? kThemeTrackInactive
+                        : CTL_MIN(c) < CTL_MAX(c) ? kThemeTrackActive : kThemeTrackNothingToScroll;
+    info.trackInfo.scrollbar.pressState = press;
+    EraseRect(&r);
+    /* the arrows carve the track down from the full bounds (trackBounds
+       out): DrawThemeTrack's own geometry needs that, not the full rect,
+       or the thumb's position and the track panels encroach on them. */
+    C_DrawThemeScrollBarArrows(&r, info.enableState, press, horizontal, &info.bounds);
+    C_DrawThemeTrack(&info, nullptr, nullptr, 0);
+}
+
 LONGINT Executor::C_cdef16(INTEGER var, ControlHandle c, INTEGER mess,
                            LONGINT param) /* IMI-328 */
 {
@@ -721,6 +763,12 @@ LONGINT Executor::C_cdef16(INTEGER var, ControlHandle c, INTEGER mess,
                && SectRect(&(*PORT_VIS_REGION(qdGlobals().thePort))->rgnBBox,
                            &(*c)->contrlRect, &r))
             {
+                if(platinum())
+                {
+                    draw_theme_scrollbar(c);
+                    break;
+                }
+
                 validate_colors_for_control(c);
 
                 GetPenState(&ps);

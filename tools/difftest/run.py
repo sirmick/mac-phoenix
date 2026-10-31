@@ -83,7 +83,7 @@ def name_dumps(probe, keep):
             p.replace(keep / f"{probe}-{comment[2:].strip().decode('mac_roman')}.ppm")
 
 
-def run_target(probe, target, binary, keep, dump, start=None, timeout=150):
+def run_target(probe, target, binary, keep, dump, start=None, timeout=400):
     """One run; the kept files' log text ('' if none)."""
     args, env = TARGETS[target]
     if not port_free(PORTS[target]):
