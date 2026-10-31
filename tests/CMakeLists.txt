@@ -361,6 +361,19 @@ set_tests_properties(clib_rom_ppc PROPERTIES
   ENVIRONMENT "MACEMU_ROM=${TEST_PPC_ROM}"
 )
 
+# PowerPC breakpoints and traces in an Executor session (--executor-ppc-break,
+# /api/executor/ppc-break; docs/executor/PPCTrace.md): CLibTest, a routine
+# breakpoint from the command line and a fragment one over the API.
+add_test(
+  NAME ppc_break_executor
+  COMMAND bash ${TEST_DIR}/test_executor_ppc_break.sh $<TARGET_FILE:mac-phoenix> 18472
+)
+set_tests_properties(ppc_break_executor PROPERTIES
+  TIMEOUT 200
+  LABELS "guest;executor"
+  SKIP_RETURN_CODE 77
+)
+
 # The same for CFM-68K (CLibTest68K: SC -model cfmflat + ILink on NuStdCLib
 # and NuIntEnv, StdCLib's CFM-68K halves; MathLib's checks are PowerPC-only):
 # Executor's StdCLib, and Apple's NuStdCLib on the Quadra with the CFM-68K

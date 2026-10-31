@@ -40,6 +40,7 @@ struct Config
     std::string logtraps_filter; // --logtraps-filter: only these names (wildcards)
     std::string debug_options; // Executor's --debug string ("memcheck,...")
     std::string watch;         // --watch ADDR[:LEN]: report every write to guest memory
+    std::vector<std::string> ppc_breaks; // --executor-ppc-break SPECs ("on": none, armed for the API)
     bool writable_images = false; // disk images read-write (default: read-only)
     bool open_transport = true;   // answer Open Transport (opentransport/)
     bool prefer_ppc = false;      // run fat applications' PowerPC code (mame-ppc)
@@ -104,5 +105,9 @@ void get_registers(uint32_t d[8], uint32_t a[8]);
 // host from guest_ram() (the host address of guest address 0).
 const uint8_t *guest_ram();
 uint32_t guest_ram_size();
+
+// PowerPC breakpoints (--executor-ppc-break, /api/executor/ppc-break):
+// "add SPEC", "remove SPEC" ("all"), "list [SINCE]"; JSON. Any thread.
+std::string ppc_break_command(const std::string& command);
 
 }  // namespace executor_host

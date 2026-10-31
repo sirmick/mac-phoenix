@@ -14,6 +14,10 @@ namespace Executor
     namespace builtinlibs
     {
         uint32_t handleSC(PowerCore& cpu);
+        /* MacPhoenix: the routine whose system call op is at opPC, or null */
+        const char *callbackName(uint32_t opPC);
+        /* ... and the system call ops of the routines of that name */
+        std::vector<uint32_t> callbackAddresses(const std::string& name);
 
         void addPPCEntrypoint(const char *library, const char *function, std::function<uint32_t (PowerCore&)> code);
 

@@ -65,7 +65,7 @@ extern "C" {
 /* ── Constants ───────────────────────────────────────────────────── */
 
 #define IPC_VIDEO_MAGIC 0x4D504850  /* "MPHP" */
-#define IPC_VERSION 3
+#define IPC_VERSION 4
 
 /* Must cover the per-axis max of every mode in
  * src/common/include/video_modes.h (mp::video::kMaxWidth_Ppc /
@@ -268,6 +268,15 @@ typedef struct IPCBuffer {
     IPC_ATOMIC_UINT32 text_done;
     char text_query[128];
     char text_json[262144];
+
+    /* Executor's PowerPC breakpoints (/api/executor/ppc-break,
+     * rsys/ppc_break.h), the same way: the parent writes debug_command
+     * ("add SPEC", "remove SPEC", "list [SINCE]") and bumps debug_request;
+     * the child answers in debug_json and sets debug_done. */
+    IPC_ATOMIC_UINT32 debug_request;
+    IPC_ATOMIC_UINT32 debug_done;
+    char debug_command[512];
+    char debug_json[262144];
 
     /* The bridge trap's request slot (both sides write their halves). */
     IPCBridgeSlot bridge;
