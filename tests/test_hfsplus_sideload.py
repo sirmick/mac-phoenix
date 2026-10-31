@@ -14,6 +14,7 @@ import gzip
 import json
 import os
 import shutil
+import socket
 import struct
 import subprocess
 import sys
@@ -50,7 +51,9 @@ def main():
         # The System is copied out when the machine starts; the stand-in
         # System doesn't run, the copy is all this looks at.
         sysdir = os.path.join(storage, "executor-systems", "longnames.img.clean", "System Folder")
-        port = 19600 + os.getpid() % 300
+        with socket.socket() as probe:          # a free port (pid-based ones collided)
+            probe.bind(("127.0.0.1", 0))
+            port = probe.getsockname()[1]
         proc = subprocess.Popen([args.emulator, "--config", "/dev/null", "--storage-dir", storage,
                                  "--backend", "executor", "--executor-system", "longnames.img",
                                  "--headless-http", "--port", str(port), "--timeout", "60"],

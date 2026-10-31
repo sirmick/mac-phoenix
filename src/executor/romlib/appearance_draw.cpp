@@ -121,10 +121,23 @@ TrackGeometry trackGeometry(const ThemeTrackDrawInfo &info)
     return g;
 }
 
+/* A scroll bar's own face: boxFace's bevel, but kTrack (not kShadow) along
+   the shaded edge - measured from the G3 (appr controls.16/.384). Used for
+   the arrow boxes, the thumb, and the page above/below it. */
+void scrollFace(const Rect &r, uint16_t fill, bool pressed)
+{
+    frameGray(r, kBlack);
+    Rect in = r;
+    InsetRect(&in, 1, 1);
+    fillGray(in, pressed ? kShadow : fill);
+    if(!pressed && in.right - in.left > 2 && in.bottom - in.top > 2)
+        bevel(in, kWhite, kTrack);
+}
+
 /* An arrow box, its arrow pointing away from the track. */
 void drawArrowBox(const Rect &r, int dir, bool pressed, bool enabled)
 {
-    boxFace(r, pressed, true);
+    scrollFace(r, kFace, pressed);
     arrow(r, dir, 7, enabled ? kBlack : kShadow);
 }
 
@@ -153,6 +166,52 @@ void drawThumb(const TrackGeometry &g, bool pressed)
             else
                 lineGray(g.thumb.left + 4, mid + d, g.thumb.right - 5, mid + d, kDark);
         }
+    }
+}
+
+/* A scroll bar's thumb and the page above/below it: three panels, each
+   scrollFace's own frame+fill+bevel (not one continuous track) - measured
+   from the G3 (appr controls.16/.384); the thumb's tint is the accent
+   colour (the same blue C_DrawThemeTrack's progress bar fills with). */
+void drawScrollTrack(const TrackGeometry &g, bool pressed)
+{
+    RGBColor accent = { 0x9999, 0x9999, 0xFFFF };
+    if(!g.hasThumb)
+    {
+        scrollFace(g.track, kFace, false);
+        return;
+    }
+    Rect pageLo = g.track, pageHi = g.track;
+    g.setAxis(pageLo, g.lo(g.track), g.lo(g.thumb));
+    g.setAxis(pageHi, g.hi(g.thumb), g.hi(g.track));
+    auto page = [](const Rect &pr) {
+        frameGray(pr, kBlack);
+        Rect in = pr;
+        InsetRect(&in, 1, 1);
+        fillGray(in, 0xAAAA);
+        if(in.right - in.left > 2 && in.bottom - in.top > 2)
+            bevel(in, kShadow, kTrack);
+    };
+    if(g.lo(pageLo) < g.hi(pageLo))
+        page(pageLo);
+    if(g.lo(pageHi) < g.hi(pageHi))
+        page(pageHi);
+    frameGray(g.thumb, kBlack);
+    Rect in = g.thumb;
+    InsetRect(&in, 1, 1);
+    RGBForeColor(&accent);
+    PaintRect(&in);
+    if(!pressed && in.right - in.left > 2 && in.bottom - in.top > 2)
+    {
+        RGBColor lit = { 0xCCCC, 0xCCCC, 0xFFFF }, shade = { 0x6666, 0x6666, 0xCCCC };
+        RGBForeColor(&lit);
+        MoveTo(in.left, in.bottom - 2);
+        LineTo(in.left, in.top);
+        LineTo(in.right - 2, in.top);
+        RGBForeColor(&shade);
+        MoveTo(in.right - 1, in.top + 1);
+        LineTo(in.right - 1, in.bottom - 1);
+        LineTo(in.left + 1, in.bottom - 1);
     }
 }
 
@@ -218,130 +277,503 @@ Rect buttonContent(const Rect &b, ThemeButtonKind kind)
     return r;
 }
 
+/* The kinds 8.6 and 9.0.4 draw; the others answer paramErr (reference
+   BUTTON 10-20) and draw nothing. */
 bool knownButton(ThemeButtonKind kind)
 {
-    return kind <= kThemeListHeaderButton || kind == kThemeSmallCheckBox
-           || kind == kThemeSmallRadioButton || kind == kThemeRoundedBevelButton;
+    return kind <= kThemeLargeBevelButton;
 }
 
-/* A check box's or radio button's mark box: 12 square, vertically
-   centred at the left. */
-Rect markBox(const Rect &b, int size = 12)
+/* ── Platinum buttons, measured from 8.6's on a G3 (appr draw32.button.*,
+   bounds 10,10 - 34,100; the same at 8 bits) ── */
+
+/* The gray with hex digit n in each place: grey(0xd) is #dddddd. */
+constexpr uint16_t grey(int n) { return 0x1111 * n; }
+
+void pixel(int h, int v, uint16_t g)
 {
-    int top = (b.top + b.bottom - size) / 2;
-    Rect r = { (int16_t)top, b.left, (int16_t)(top + size), (int16_t)(b.left + size) };
-    return r;
+    lineGray(h, v, h, v, g);
+}
+
+/* Inclusive runs. */
+void hrun(int h1, int h2, int v, uint16_t g)
+{
+    if(h2 >= h1)
+        lineGray(h1, v, h2, v, g);
+}
+
+void vrun(int h, int v1, int v2, uint16_t g)
+{
+    if(v2 >= v1)
+        lineGray(h, v1, h, v2, g);
+}
+
+/* A bevel's ring: TL along the top and the left, BR along the bottom and
+   the right, X on the two pixels where they meet (top right, bottom left). */
+struct Ring
+{
+    uint8_t tl, br, x;
+};
+
+/* Ring K of r (0 its outline), square. */
+void squareRing(const Rect &r, int k, Ring c)
+{
+    int L = r.left + k, T = r.top + k, R = r.right - 1 - k, B = r.bottom - 1 - k;
+    hrun(L, R - 1, T, grey(c.tl));
+    vrun(L, T + 1, B - 1, grey(c.tl));
+    pixel(R, T, grey(c.x));
+    pixel(L, B, grey(c.x));
+    vrun(R, T + 1, B, grey(c.br));
+    hrun(L + 1, R - 1, B, grey(c.br));
+}
+
+/* A bevel: its rings from the outline in, then the face. */
+void bevelBox(const Rect &r, std::initializer_list<Ring> rings, int face)
+{
+    Rect in = r;
+    InsetRect(&in, rings.size(), rings.size());
+    fillGray(in, grey(face));
+    int k = 0;
+    for(Ring c : rings)
+        squareRing(r, k++, c);
+}
+
+/* A push button's outline, corners cut three pixels deep: OUTER at their
+   ends (#222 against black; inactive, the outline's own). */
+void roundOutline(const Rect &r, uint16_t line, uint16_t outer)
+{
+    int L = r.left, T = r.top, R = r.right - 1, B = r.bottom - 1;
+    hrun(L + 3, R - 3, T, line);
+    hrun(L + 3, R - 3, B, line);
+    vrun(L, T + 3, B - 3, line);
+    vrun(R, T + 3, B - 3, line);
+    pixel(L + 1, T + 1, line);
+    pixel(R - 1, T + 1, line);
+    pixel(L + 1, B - 1, line);
+    pixel(R - 1, B - 1, line);
+    for(int h : { L + 2, R - 2 })
+        for(int v : { T, B })
+            pixel(h, v, outer);
+    for(int h : { L, R })
+        for(int v : { T + 2, B - 2 })
+            pixel(h, v, outer);
+}
+
+/* The two up and down arrows of an arrow button (and a popup's arrow
+   part), 7 wide, centred on h. */
+void upDownArrows(int h, int vMid, uint16_t g)
+{
+    for(int i = 0; i < 4; i++)
+    {
+        hrun(h - i, h + i, vMid - 5 + i, g);
+        hrun(h - i, h + i, vMid + 4 - i, g);
+    }
+}
+
+/* One arrow of 7, pointing up or down, its tip at (h, tip). */
+void smallArrow(int h, int tip, bool up, uint16_t g)
+{
+    for(int i = 0; i < 4; i++)
+        hrun(h - i, h + i, up ? tip + i : tip - i, g);
+}
+
+enum class Look
+{
+    active,
+    pressed,
+    inactive
+};
+
+Look lookOf(ThemeDrawState state)
+{
+    switch(state)
+    {
+        case kThemeStateInactive:
+        case kThemeStateUnavailable:
+        case kThemeStateUnavailableInactive:
+            return Look::inactive;
+        case kThemeStatePressedUp:
+        case kThemeStatePressedDown:
+            return Look::pressed;
+        default:
+            return Look::active;
+    }
+}
+
+void pushButton(const Rect &b, Look look)
+{
+    int L = b.left, T = b.top, R = b.right - 1, B = b.bottom - 1;
+    if(look == Look::inactive)
+    {
+        fillGray(Rect{ (INTEGER)(T + 1), (INTEGER)(L + 1), (INTEGER)B, (INTEGER)R }, grey(0xd));
+        roundOutline(b, grey(8), grey(8));
+        return;
+    }
+    bool p = look == Look::pressed;
+    /* the face, then the rings over it: the first follows the corners,
+       its ends E1 (top and left) and E2 (right and bottom); the second is
+       square, BR2 in its bottom-right corner; the third shows only there
+       and in the top left */
+    int tl1 = p ? 4 : 0xd, br1 = p ? 8 : 7, e1 = p ? 4 : 0xb, e2 = p ? 7 : 0xb;
+    Ring ring2 = p ? Ring{ 5, 7, 6 } : Ring{ 0xf, 0xa, 0xd };
+    int br2 = p ? 8 : 7, tl3 = p ? 5 : 0xf, br3 = p ? 7 : 0xa;
+    Rect in = b;
+    InsetRect(&in, 3, 3);
+    fillGray(in, grey(p ? 6 : 0xd));
+    hrun(L + 2, R - 2, T + 1, grey(tl1));
+    vrun(L + 1, T + 2, B - 2, grey(tl1));
+    vrun(R - 1, T + 2, B - 2, grey(br1));
+    hrun(L + 2, R - 2, B - 1, grey(br1));
+    for(Point e : { Point{ (INTEGER)(T + 1), (INTEGER)(L + 2) }, Point{ (INTEGER)(T + 1), (INTEGER)(R - 2) },
+                    Point{ (INTEGER)(T + 2), (INTEGER)(L + 1) }, Point{ (INTEGER)(B - 2), (INTEGER)(L + 1) } })
+        pixel(e.h, e.v, grey(e1));
+    pixel(R - 1, T + 2, grey(e2));
+    pixel(L + 2, B - 1, grey(e2));
+    squareRing(b, 2, ring2);
+    if(p)
+        pixel(L + 2, T + 2, grey(4));
+    pixel(R - 2, B - 2, grey(br2));
+    pixel(L + 3, T + 3, grey(tl3));
+    pixel(R - 3, B - 3, grey(br3));
+    roundOutline(b, grey(0), grey(2));
+}
+
+/* An arrow button's body (and a popup button's arrow part) over [L, R]:
+   corners cut one pixel deep */
+void arrowBody(int L, int T, int R, int B, Look look)
+{
+    if(look == Look::inactive)
+    {
+        fillGray(Rect{ (INTEGER)(T + 1), (INTEGER)(L + 1), (INTEGER)B, (INTEGER)R }, grey(0xd));
+        return;
+    }
+    bool p = look == Look::pressed;
+    fillGray(Rect{ (INTEGER)(T + 3), (INTEGER)(L + 3), (INTEGER)(B - 2), (INTEGER)(R - 2) }, grey(p ? 6 : 0xd));
+    /* ring 1 */
+    hrun(L + 2, R - 3, T + 1, grey(p ? 4 : 0xd));
+    pixel(R - 2, T + 1, grey(p ? 4 : 0xb));
+    vrun(L + 1, T + 2, B - 2, grey(p ? 4 : 0xd));
+    vrun(R - 1, T + 2, B - 2, grey(p ? 8 : 7));
+    if(!p)
+        pixel(R - 1, T + 2, grey(0xa));
+    hrun(L + 2, R - 2, B - 1, grey(p ? 8 : 7));
+    /* ring 2 */
+    hrun(L + 2, R - 3, T + 2, grey(p ? 5 : 0xf));
+    pixel(R - 2, T + 2, grey(p ? 6 : 0xd));
+    vrun(L + 2, T + 3, B - 3, grey(p ? 5 : 0xf));
+    pixel(L + 2, B - 2, grey(p ? 6 : 0xd));
+    vrun(R - 2, T + 3, B - 3, grey(p ? 7 : 0xa));
+    hrun(L + 3, R - 3, B - 2, grey(p ? 7 : 0xa));
+    pixel(R - 2, B - 2, grey(p ? 8 : 7));
+}
+
+void arrowButton(const Rect &b, Look look)
+{
+    int L = b.left, T = b.top, R = L + 21, B = b.bottom - 1;
+    uint16_t line = grey(look == Look::inactive ? 8 : 0);
+    arrowBody(L, T, R, B, look);
+    hrun(L + 2, R - 2, T, line);
+    hrun(L + 2, R - 2, B, line);
+    vrun(L, T + 2, B - 2, line);
+    vrun(R, T + 2, B - 2, line);
+    for(int h : { L + 1, R - 1 })
+        for(int v : { T + 1, B - 1 })
+            pixel(h, v, line);
+    if(look == Look::inactive)
+        pixel(L, T + 1, grey(0xa));
+    pixel(L, B - 1, grey(look == Look::pressed ? 7 : 0xa));
+    upDownArrows((L + R + 1) / 2 - 1, (T + B + 1) / 2, look == Look::pressed ? kWhite : line);
+}
+
+/* A popup button: a push button's left end and an arrow part of 22 at
+   the right, a line between */
+void popupButton(const Rect &b, Look look)
+{
+    int L = b.left, T = b.top, R = b.right - 1, B = b.bottom - 1, A = b.right - 22;
+    bool p = look == Look::pressed;
+    if(look == Look::inactive)
+    {
+        fillGray(Rect{ (INTEGER)(T + 1), (INTEGER)(L + 1), (INTEGER)B, (INTEGER)R }, grey(0xd));
+        vrun(A, T + 1, B - 1, grey(0xa));
+    }
+    else
+    {
+        fillGray(Rect{ (INTEGER)(T + 2), (INTEGER)(L + 2), (INTEGER)(B - 1), (INTEGER)A }, grey(p ? 6 : 0xd));
+        hrun(L + 2, A - 1, T + 1, grey(p ? 5 : 0xf));
+        vrun(L + 1, T + 2, B - 2, grey(p ? 5 : 0xf));
+        if(p)
+            pixel(L + 2, T + 2, grey(5));
+        hrun(L + 2, A - 1, B - 1, grey(p ? 7 : 0xa));
+        arrowBody(A, T, R, B, look);
+        /* the arrow part's ring 1 runs on over the line, its left side
+           a column in */
+        pixel(A, T + 1, grey(p ? 6 : 0xd));
+        vrun(A, T + 2, B - 1, grey(p ? 7 : 0xa));
+        vrun(A + 1, T + 1, B - 2, grey(p ? 4 : 0xd));
+        pixel(A + 1, B - 1, grey(p ? 4 : 0xb));
+    }
+    roundOutline(b, grey(look == Look::inactive ? 8 : 0), grey(look == Look::inactive ? 8 : 2));
+    upDownArrows((A + R + 1) / 2 - 1, (T + B + 1) / 2,
+                 p ? kWhite : grey(look == Look::inactive ? 8 : 0));
+}
+
+/* A check box's or radio button's 12 square, two in from the left,
+   centred down the bounds */
+Rect markBox(const Rect &b)
+{
+    int top = (b.top + b.bottom - 12) / 2;
+    return Rect{ (INTEGER)top, (INTEGER)(b.left + 2), (INTEGER)(top + 12), (INTEGER)(b.left + 14) };
+}
+
+void checkBox(const Rect &b, Look look, ThemeButtonValue value)
+{
+    Rect r = markBox(b);
+    switch(look)
+    {
+        case Look::active:
+            bevelBox(r, { { 0, 0, 0 }, { 0xf, 8, 0xd } }, 0xd);
+            break;
+        case Look::pressed:
+            bevelBox(r, { { 0, 0, 0 }, { 5, 9, 7 } }, 7);
+            break;
+        case Look::inactive:
+            bevelBox(r, { { 8, 8, 8 } }, 0xd);
+            break;
+    }
+    uint16_t ink = grey(look == Look::inactive ? 8 : 0);
+    int L = r.left, T = r.top;
+    if(value == kThemeButtonOn)
+    {
+        /* a tick, two pixels thick, out over the top right corner
+           (8.6's is anti-aliased: an approximation) */
+        for(int k = 0; k < 2; k++)
+        {
+            lineGray(L + 2, T + 5 + k, L + 5, T + 8 + k, ink);
+            lineGray(L + 5, T + 8 + k, L + 11, T + 2 + k, ink);
+        }
+        if(look != Look::inactive)
+        {
+            lineGray(L + 6, T + 9, L + 12, T + 3, grey(7));
+            lineGray(L + 6, T + 10, L + 12, T + 4, grey(0xa));
+        }
+    }
+    else if(value == kThemeButtonMixed)
+    {
+        /* a bar of two rows, its shadow right and below */
+        hrun(L + 3, L + 8, T + 5, ink);
+        hrun(L + 3, L + 8, T + 6, ink);
+        if(look != Look::inactive)
+        {
+            vrun(L + 9, T + 5, T + 6, grey(0xa));
+            hrun(L + 4, L + 9, T + 7, grey(0xa));
+        }
+    }
+}
+
+/* A radio button: a sphere lit from the top left, its shade stepping
+   along the diagonal (the ring just inside the outline darker), in a
+   round outline whose ends soften */
+void radioButton(const Rect &b, Look look, ThemeButtonValue value)
+{
+    Rect r = markBox(b);
+    /* by h + v from the box's corner: inside, and on the rim */
+    static const uint8_t litIn[] = { 0xf, 0xf, 0xf, 0xf, 0xf, 0xf, 0xe, 0xf, 0xf, 0xe, 0xe, 0xd, 0xd, 0xb, 0xb, 0xa, 0xa };
+    static const uint8_t litRim[] = { 0xd, 0xd, 0xd, 0xd, 0xb, 0xd, 0xd, 0xd, 0xb, 0xb, 0xd, 8, 0xb, 0xb, 8, 8, 8, 8, 8, 8 };
+    static const uint8_t darkIn[] = { 4, 4, 4, 4, 4, 4, 5, 5, 6, 6, 7, 7, 7, 8, 8, 9, 9 };
+    static const uint8_t darkRim[] = { 4, 4, 4, 4, 4, 4, 4, 4, 4, 6, 6, 7, 7, 9, 9, 9, 9, 0xb, 0xb, 0xb };
+    bool p = look == Look::pressed;
+    const uint8_t *in = p ? darkIn : litIn, *rim = p ? darkRim : litRim;
+    for(int y = 1; y < 11; y++)
+        for(int x = 1; x < 11; x++)
+        {
+            /* the pixel's centre from the box's, in half pixels */
+            int dx = 2 * x - 11, dy = 2 * y - 11, d2 = dx * dx + dy * dy;
+            if(d2 >= 100)
+                continue;
+            int s = x + y;
+            int g = look == Look::inactive ? 0xd : d2 >= 64 ? rim[s] : in[std::min(s, 16)];
+            if(look == Look::active && s == 9 && d2 >= 50)
+                g = 0xf; /* the highlight's ends, out to the rim */
+            pixel(r.left + x, r.top + y, grey(g));
+        }
+    /* the outline: runs of 4 across the top, bottom and sides, two
+       pixels at a time round the corners; the pixels where it turns take
+       the shade beside them (by corner: top left, top right, bottom left,
+       bottom right) */
+    uint16_t line = grey(look == Look::inactive ? 8 : 0);
+    int L = r.left, T = r.top;
+    hrun(L + 4, L + 7, T, line);
+    hrun(L + 4, L + 7, T + 11, line);
+    vrun(L, T + 4, T + 7, line);
+    vrun(L + 11, T + 4, T + 7, line);
+    struct Turn
+    {
+        int8_t h, v;            /* in the top-left corner; mirrored */
+        uint8_t lit[4], dark[4];
+    };
+    static const Turn turns[] = {
+        { 4, 0, { 4, 4, 4, 4 }, { 2, 2, 4, 4 } },  /* the runs' ends */
+        { 0, 4, { 4, 4, 4, 4 }, { 2, 4, 2, 4 } },
+        { 3, 1, { 5, 4, 5, 4 }, { 0, 4, 4, 5 } },
+        { 1, 3, { 5, 4, 5, 4 }, { 0, 4, 2, 5 } },
+        { 2, 1, { 0, 0, 0, 0 }, { 2, 0, 2, 0 } },
+        { 1, 2, { 0, 0, 0, 0 }, { 2, 0, 4, 0 } },
+    };
+    for(const Turn &t : turns)
+        for(int c = 0; c < 4; c++)
+        {
+            int h = c & 1 ? 11 - t.h : t.h, v = c & 2 ? 11 - t.v : t.v;
+            pixel(L + h, T + v, look == Look::inactive ? line : grey((p ? t.dark : t.lit)[c]));
+        }
+    if(value == kThemeButtonOn)
+    {
+        /* a dot of 6 (8.6 also darkens the sphere round it: not yet) */
+        Rect dot = { (INTEGER)(T + 3), (INTEGER)(L + 3), (INTEGER)(T + 9), (INTEGER)(L + 9) };
+        gray(line);
+        PaintOval(&dot);
+    }
+    else if(value == kThemeButtonMixed)
+    {
+        hrun(L + 3, L + 8, T + 5, line);
+        hrun(L + 3, L + 8, T + 6, line);
+    }
+}
+
+/* A disclosure triangle, 7 by 11, pointing right (or down: the same
+   turned), in the accent colours with a shadow below right */
+void disclosureTriangle(const Rect &b, Look look, ThemeButtonValue value)
+{
+    int L = b.left + 4, T = (b.top + b.bottom - 11) / 2;
+    bool down = value == kThemeDisclosureDown;
+    RGBColor lit = { 0xCCCC, 0xCCCC, 0xFFFF }, face = { 0x9999, 0x9999, 0xFFFF },
+             shade = { 0x6666, 0x6666, 0xCCCC }, pressed = { 0x3333, 0x3333, 0x9999 };
+    /* (i, j): j across the triangle's base (0-10), i out from it (0-5) */
+    auto plot = [&](int i, int j, RGBColor &c) {
+        RGBForeColor(&c);
+        int h = down ? b.left + 2 + j : L + i, v = down ? (b.top + b.bottom - 7) / 2 + i : T + j;
+        MoveTo(h, v);
+        LineTo(h, v);
+    };
+    RGBColor black = { 0, 0, 0 }, inactive = { 0xAAAA, 0xAAAA, 0xAAAA }, s1 = { 0x8888, 0x8888, 0x8888 },
+             s2 = { 0xBBBB, 0xBBBB, 0xBBBB };
+    for(int j = 0; j <= 10; j++)
+    {
+        int len = j <= 5 ? j : 10 - j; /* the far edge's i */
+        for(int i = 0; i <= len; i++)
+        {
+            RGBColor *c;
+            if(look == Look::inactive)
+                c = &inactive;
+            else if(i == 0 || i == len)
+                c = &black;
+            else if(look == Look::pressed)
+                c = &pressed;
+            else if(i == 1 && j >= 5 && i == len - 1)
+                c = &face;
+            else if(i == 1)
+                c = &lit;
+            else if(j >= 5 && i == len - 1)
+                c = &shade;
+            else
+                c = &face;
+            plot(i, j, *c);
+        }
+        if(look == Look::active && j >= 6)
+        {
+            plot(len + 1, j, s1);
+            plot(len + 2, j, s2);
+        }
+    }
+    if(look == Look::active)
+        plot(1, 11, s2);
+}
+
+/* The little arrows: two halves of 13 by 12, the line between shared */
+void incDecButton(const Rect &b, ThemeDrawState state)
+{
+    Look look = lookOf(state);
+    int L = b.left, T = b.top, R = L + 12, M = T + 11, B = T + 22;
+    uint16_t line = grey(look == Look::inactive ? 8 : 0);
+    for(int half = 0; half < 2; half++)
+    {
+        int t = half ? M : T, bt = half ? B : M;
+        bool p = look == Look::pressed && (state == kThemeStatePressedDown) == (half == 1);
+        Rect r = { (INTEGER)(t + 1), (INTEGER)(L + 1), (INTEGER)bt, (INTEGER)R };
+        if(look == Look::inactive)
+            fillGray(r, grey(0xd));
+        else if(p)
+            bevelBox(r, { { 5, 9, 7 } }, 7);
+        else
+            bevelBox(r, { { 0xf, 0xa, 0xd } }, 0xd);
+        smallArrow((L + R) / 2, half ? bt - 4 : t + 4, !half, p ? kWhite : line);
+    }
+    hrun(L + 1, R - 1, T, line);
+    hrun(L, R, M, line);
+    hrun(L + 1, R - 1, B, line);
+    vrun(L, T + 1, B - 1, line);
+    vrun(R, T + 1, B - 1, line);
 }
 
 void drawButton(const Rect &b, ThemeButtonKind kind, const ThemeButtonDrawInfo &info)
 {
-    bool active = info.state != kThemeStateInactive && info.state != kThemeStateUnavailable
-                  && info.state != kThemeStateUnavailableInactive;
-    bool pressed = info.state == kThemeStatePressed;
-    uint16_t ink = active ? kBlack : kShadow;
+    Look look = lookOf(info.state);
     switch(kind)
     {
         case kThemePushButton:
-        {
-            Rect r = b;
-            gray(pressed ? kShadow : kFace);
-            PaintRoundRect(&r, 8, 8);
-            gray(ink);
-            FrameRoundRect(&r, 8, 8);
+            pushButton(b, look);
             if(info.adornment & kThemeAdornmentDefault)
             {
+                Rect r = b;
                 InsetRect(&r, -4, -4);
                 PenSize(3, 3);
-                FrameRoundRect(&r, 16, 16);
+                frameGray(r, grey(look == Look::inactive ? 8 : 0));
                 PenSize(1, 1);
             }
             break;
-        }
         case kThemeCheckBox:
-        case kThemeSmallCheckBox:
-        {
-            Rect r = markBox(b, kind == kThemeSmallCheckBox ? 10 : 12);
-            fillGray(r, pressed ? kShadow : kWhite);
-            frameGray(r, ink);
-            if(info.value == kThemeButtonOn)
-            {
-                lineGray(r.left + 2, r.top + 2, r.right - 3, r.bottom - 3, ink);
-                lineGray(r.right - 3, r.top + 2, r.left + 2, r.bottom - 3, ink);
-            }
-            else if(info.value == kThemeButtonMixed)
-                lineGray(r.left + 2, (r.top + r.bottom) / 2, r.right - 3, (r.top + r.bottom) / 2, ink);
+            checkBox(b, look, info.value);
             break;
-        }
         case kThemeRadioButton:
-        case kThemeSmallRadioButton:
-        {
-            Rect r = markBox(b, kind == kThemeSmallRadioButton ? 10 : 12);
-            gray(pressed ? kShadow : kWhite);
-            PaintOval(&r);
-            gray(ink);
-            FrameOval(&r);
-            if(info.value == kThemeButtonOn)
-            {
-                InsetRect(&r, 3, 3);
-                PaintOval(&r);
-            }
-            else if(info.value == kThemeButtonMixed)
-                lineGray(r.left + 3, (r.top + r.bottom) / 2, r.right - 4, (r.top + r.bottom) / 2, ink);
+            radioButton(b, look, info.value);
             break;
-        }
-        case kThemeBevelButton:
         case kThemeSmallBevelButton:
+        case kThemeMediumBevelButton:
         case kThemeLargeBevelButton:
-        case kThemeRoundedBevelButton:
-            boxFace(b, pressed || info.value == kThemeButtonOn, active);
-            break;
-        case kThemeListHeaderButton:
         {
-            /* a list view's column title: the sorted one darker */
-            Rect r = b;
-            fillGray(r, info.value == kThemeButtonOn || pressed ? kTrack : kFace);
-            bevel(r, kWhite, kShadow);
-            lineGray(r.left, r.bottom - 1, r.right - 1, r.bottom - 1, kDark);
-            lineGray(r.right - 1, r.top, r.right - 1, r.bottom - 1, kDark);
+            bool on = info.value == kThemeButtonOn;
+            if(look == Look::inactive)
+                bevelBox(b, { { 0xa, 9, 0xa } }, 0xd);
+            else if(look == Look::pressed || on)
+            {
+                if(kind == kThemeSmallBevelButton)
+                    bevelBox(b, { { 1, 4, 2 }, { 5, 0xa, 7 } }, 8);
+                else if(kind == kThemeMediumBevelButton)
+                    bevelBox(b, { { 1, 4, 2 }, { 4, 0xb, 7 }, { 6, 9, 8 } }, 8);
+                else
+                    bevelBox(b, { { 1, 4, 2 }, { 3, 0xb, 4 }, { 4, 0xa, 7 }, { 6, 9, 8 } }, 8);
+            }
+            else if(kind == kThemeSmallBevelButton)
+                bevelBox(b, { { 6, 3, 5 }, { 0xf, 8, 0xc } }, 0xc);
+            else if(kind == kThemeMediumBevelButton)
+                bevelBox(b, { { 6, 3, 5 }, { 0xc, 7, 0xa }, { 0xf, 9, 0xc } }, 0xc);
+            else
+                bevelBox(b, { { 6, 3, 5 }, { 0xc, 5, 0xa }, { 0xe, 7, 0xb }, { 0xf, 9, 0xc } }, 0xc);
             break;
         }
         case kThemePopupButton:
-        {
-            Rect r = b;
-            fillGray(r, pressed ? kShadow : kFace);
-            frameGray(r, ink);
-            Rect a = r;
-            a.left = r.right - 22;
-            lineGray(a.left, r.top + 1, a.left, r.bottom - 2, kShadow);
-            arrow(a, kThemeArrowDown, 7, ink);
+            popupButton(b, look);
             break;
-        }
         case kThemeArrowButton:
-            arrow(b, kThemeArrowDown, 7, ink);
+            arrowButton(b, look);
             break;
         case kThemeDisclosureButton:
-        {
-            Rect r = markBox(b, 12);
-            int dir = info.value == kThemeDisclosureDown ? kThemeArrowDown
-                                                        : (info.value == kThemeDisclosureLeft ? kThemeArrowLeft : kThemeArrowRight);
-            arrow(r, dir, 9, pressed ? kShadow : ink);
+            disclosureTriangle(b, look, info.value);
             break;
-        }
         case kThemeIncDecButton:
-        {
-            /* two halves, up and down, 13 x 23 (reference background) */
-            Rect r = { b.top, b.left, (int16_t)(b.top + 23), (int16_t)(b.left + 13) };
-            Rect up = r, down = r;
-            up.bottom = down.top = r.top + 12;
-            up.bottom++;
-            boxFace(up, pressed && info.value == kThemeButtonOn, active);
-            boxFace(down, pressed && info.value != kThemeButtonOn, active);
-            arrow(up, kThemeArrowUp, 5, ink);
-            arrow(down, kThemeArrowDown, 5, ink);
+            incDecButton(b, info.state);
             break;
-        }
     }
-    if(active && (info.adornment & kThemeAdornmentFocus))
+    if(look != Look::inactive && (info.adornment & kThemeAdornmentFocus))
     {
         Rect f = b;
         InsetRect(&f, -2, -2);
@@ -380,12 +812,15 @@ OSStatus Executor::C_DrawThemeTrack(const ThemeTrackDrawInfo *drawInfo, RgnHandl
         case kThemeSmallScrollBar:
         {
             ThemeTrackPressState press = drawInfo->trackInfo.scrollbar.pressState;
-            Rect t = g.track;
-            frameGray(t, active || drawInfo->enableState == kThemeTrackNothingToScroll ? kBlack : kShadow);
-            InsetRect(&t, 1, 1);
-            fillGray(t, g.hasThumb ? kTrack : kLight);
-            if(g.hasThumb)
-                drawThumb(g, press & kThemeThumbPressed);
+            if(active && g.hasThumb)
+                drawScrollTrack(g, press & kThemeThumbPressed);
+            else
+            {
+                Rect t = g.track;
+                frameGray(t, active || drawInfo->enableState == kThemeTrackNothingToScroll ? kBlack : kShadow);
+                InsetRect(&t, 1, 1);
+                fillGray(t, kLight);
+            }
             break;
         }
         case kThemeSlider:
@@ -682,11 +1117,35 @@ OSStatus Executor::C_DrawThemePopupArrow(const Rect *bounds, ThemeArrowOrientati
 {
     if(!bounds)
         return paramErr;
-    static const int widths[] = { 7, 5, 9 }; /* kThemeArrow7pt, 5pt, 9pt */
+    /* at the bounds' top left, 3 or 5 across (8.6: kThemeArrow5pt,
+       kThemeArrow9pt), not drawn pressed */
+    Look look = lookOf(state);
     DrawGuard guard;
     eraseWith(eraseProc, *bounds, eraseData);
-    arrow(*bounds, orientation, size < 3 ? widths[size] : 7,
-          state == kThemeStateActive || state == kThemeStatePressed ? kBlack : kShadow);
+    if(look == Look::pressed)
+        return noErr;
+    int width = size == 1 ? 5 : 3, rows = (width + 1) / 2;
+    uint16_t g = grey(look == Look::inactive ? 7 : 0);
+    int h = bounds->left, v = bounds->top;
+    for(int i = 0; i < rows; i++)
+    {
+        int a = i, b = width - 1 - i;
+        switch(orientation)
+        {
+            case kThemeArrowUp:
+                hrun(h + a, h + b, v + rows - 1 - i, g);
+                break;
+            case kThemeArrowLeft:
+                vrun(h + rows - 1 - i, v + a, v + b, g);
+                break;
+            case kThemeArrowRight:
+                vrun(h + i, v + a, v + b, g);
+                break;
+            default:
+                hrun(h + a, h + b, v + i, g);
+                break;
+        }
+    }
     return noErr;
 }
 
@@ -724,12 +1183,14 @@ OSStatus Executor::C_DrawThemeTabPane(const Rect *inRect, ThemeDrawState inState
 {
     if(!inRect)
         return paramErr;
+    Look look = lookOf(inState);
+    if(look == Look::pressed)
+        return noErr;
     DrawGuard guard;
-    Rect r = *inRect;
-    fillGray(r, kFace);
-    frameGray(r, inState == kThemeStateActive ? kBlack : kShadow);
-    InsetRect(&r, 1, 1);
-    bevel(r, kWhite, kShadow);
+    if(look == Look::inactive)
+        bevelBox(*inRect, { { 5, 5, 5 } }, 0xe);
+    else
+        bevelBox(*inRect, { { 0, 0, 0 }, { 0xc, 9, 0xd }, { 0xf, 0xb, 0xe } }, 0xe);
     return noErr;
 }
 
@@ -777,49 +1238,48 @@ OSStatus Executor::C_ApplyThemeBackground(ThemeBackgroundKind inKind, const Rect
 
 namespace
 {
-bool isActive(ThemeDrawState s)
-{
-    return s == kThemeStateActive || s == kThemeStatePressed;
-}
-
-/* A gray band with a bevel and a dark line along its bottom: a window
-   header, a list view's header, a placard. */
-OSStatus band(const Rect *r, ThemeDrawState state, bool pressed)
+/* A window header or a placard: a bevelled band in a black outline;
+   inactive, gray on a lighter face. A placard is drawn pressed too. */
+OSStatus band(const Rect *r, ThemeDrawState state, bool canPress)
 {
     if(!r)
         return paramErr;
+    Look look = lookOf(state);
+    if(look == Look::pressed && !canPress)
+        return noErr;
     DrawGuard guard;
-    Rect b = *r;
-    fillGray(b, pressed ? kShadow : (isActive(state) ? kFace : kLight));
-    if(isActive(state) && !pressed)
-        bevel(b, kWhite, kShadow);
-    lineGray(b.left, b.bottom - 1, b.right - 1, b.bottom - 1, isActive(state) ? kDark : kShadow);
+    if(look == Look::inactive)
+        bevelBox(*r, { { 5, 5, 5 } }, 0xe);
+    else if(look == Look::pressed)
+        bevelBox(*r, { { 0, 0, 0 }, { 5, 0xa, 8 } }, 8);
+    else
+        bevelBox(*r, { { 0, 0, 0 }, { 0xf, 0xa, 0xd } }, 0xd);
     return noErr;
 }
 
-/* A sunken frame just outside r: dark above and left, white below and
-   right (edit text, list boxes, wells). */
+/* A sunken frame just outside r (edit text, list boxes, wells): black
+   with a gray above and left; inactive, #555 in a light ring. */
 OSStatus sunken(const Rect *r, ThemeDrawState state)
 {
     if(!r)
         return paramErr;
+    Look look = lookOf(state);
+    if(look == Look::pressed)
+        return noErr;
     DrawGuard guard;
     Rect f = *r;
-    InsetRect(&f, -1, -1);
-    frameGray(f, isActive(state) ? kBlack : kShadow);
-    InsetRect(&f, -1, -1);
-    lineGray(f.left, f.bottom - 1, f.left, f.top, kShadow);
-    LineTo(f.right - 1, f.top);
-    lineGray(f.right - 1, f.top + 1, f.right - 1, f.bottom - 1, kWhite);
-    LineTo(f.left + 1, f.bottom - 1);
+    InsetRect(&f, -2, -2);
+    if(look == Look::inactive)
+    {
+        squareRing(f, 0, { 0xd, 0xd, 0xd });
+        squareRing(f, 1, { 5, 5, 5 });
+    }
+    else
+    {
+        squareRing(f, 0, { 8, 0xf, 0xf });
+        squareRing(f, 1, { 0, 0, 0 });
+    }
     return noErr;
-}
-
-/* An etched line pair (separators, group boxes). */
-void etched(int h1, int v1, int h2, int v2, bool active)
-{
-    lineGray(h1, v1, h2, v2, active ? kShadow : kLight);
-    lineGray(h1 + (v1 == v2 ? 0 : 1), v1 + (v1 == v2 ? 1 : 0), h2 + (v1 == v2 ? 0 : 1), v2 + (v1 == v2 ? 1 : 0), kWhite);
 }
 }
 
@@ -835,12 +1295,7 @@ OSStatus Executor::C_DrawThemeWindowListViewHeader(const Rect *inRect, ThemeDraw
 
 OSStatus Executor::C_DrawThemePlacard(const Rect *inRect, ThemeDrawState inState)
 {
-    if(!inRect)
-        return paramErr;
-    band(inRect, inState, inState == kThemeStatePressed);
-    DrawGuard guard;
-    frameGray(*inRect, isActive(inState) ? kBlack : kShadow);
-    return noErr;
+    return band(inRect, inState, true);
 }
 
 OSStatus Executor::C_DrawThemeEditTextFrame(const Rect *inRect, ThemeDrawState inState)
@@ -857,7 +1312,7 @@ OSStatus Executor::C_DrawThemeGenericWell(const Rect *inRect, ThemeDrawState inS
 {
     if(!inRect)
         return paramErr;
-    if(inFillCenter)
+    if(inFillCenter && lookOf(inState) != Look::pressed)
     {
         DrawGuard guard;
         fillGray(*inRect, kWhite);
@@ -865,30 +1320,29 @@ OSStatus Executor::C_DrawThemeGenericWell(const Rect *inRect, ThemeDrawState inS
     return sunken(inRect, inState);
 }
 
+/* A two-pixel ring of the accent colour three outside the rectangle, its
+   outer corners left out */
 OSStatus Executor::C_DrawThemeFocusRect(const Rect *inRect, Boolean inHasFocus)
 {
     if(!inRect)
         return paramErr;
     DrawGuard guard;
+    RGBColor c = { 0x6666, 0x6666, 0xCCCC };
+    if(!inHasFocus)
+        GetBackColor(&c); /* off again: the background back under the ring */
+    RGBForeColor(&c);
     Rect f = *inRect;
     InsetRect(&f, -3, -3);
-    PenSize(2, 2);
-    if(inHasFocus)
-    {
-        RGBColor accent = { 0x6666, 0x6666, 0xCCCC };
-        RGBForeColor(&accent);
-        FrameRect(&f);
-    }
-    else
-    {
-        /* off again: the background back under the ring */
-        PenMode(patCopy);
-        PenPat(&qdGlobals().white);
-        RGBColor back;
-        GetBackColor(&back);
-        RGBForeColor(&back);
-        FrameRect(&f);
-    }
+    MoveTo(f.left + 1, f.top);
+    LineTo(f.right - 2, f.top);
+    MoveTo(f.left + 1, f.bottom - 1);
+    LineTo(f.right - 2, f.bottom - 1);
+    MoveTo(f.left, f.top + 1);
+    LineTo(f.left, f.bottom - 2);
+    MoveTo(f.right - 1, f.top + 1);
+    LineTo(f.right - 1, f.bottom - 2);
+    InsetRect(&f, 1, 1);
+    FrameRect(&f);
     return noErr;
 }
 
@@ -900,42 +1354,98 @@ OSStatus Executor::C_DrawThemeFocusRegion(RgnHandle inRegion, Boolean inHasFocus
     return C_DrawThemeFocusRect(&r, inHasFocus);
 }
 
+/* A line down (or across) the middle and a light one beside it, a pixel
+   along: #888 and white; inactive, #bbb and #ddd */
 OSStatus Executor::C_DrawThemeSeparator(const Rect *inRect, ThemeDrawState inState)
 {
     if(!inRect)
         return paramErr;
+    Look look = lookOf(inState);
+    if(look == Look::pressed)
+        return noErr;
     DrawGuard guard;
     const Rect &r = *inRect;
+    uint16_t dark = grey(look == Look::inactive ? 0xb : 8), light = grey(look == Look::inactive ? 0xd : 0xf);
     if(r.right - r.left >= r.bottom - r.top)
-        etched(r.left, r.top, r.right - 1, r.top, isActive(inState));
+    {
+        int v = (r.top + r.bottom) / 2;
+        hrun(r.left + 1, r.right - 1, v + 1, light);
+        hrun(r.left, r.right - 2, v, dark);
+    }
     else
-        etched(r.left, r.top, r.left, r.bottom - 1, isActive(inState));
+    {
+        int h = (r.left + r.right) / 2;
+        vrun(h + 1, r.top + 1, r.bottom - 1, light);
+        vrun(h, r.top, r.bottom - 2, dark);
+    }
     return noErr;
 }
 
+/* A group box: a #888 frame with a white one a pixel down and right
+   under it (primary), or only #888 above and left (secondary);
+   inactive, #bbb and #ddd */
 OSStatus Executor::C_DrawThemePrimaryGroup(const Rect *inRect, ThemeDrawState inState)
 {
     if(!inRect)
         return paramErr;
+    Look look = lookOf(inState);
+    if(look == Look::pressed)
+        return noErr;
     DrawGuard guard;
     Rect r = *inRect;
-    r.right--;
-    r.bottom--;
-    frameGray(r, isActive(inState) ? kShadow : kLight);
-    OffsetRect(&r, 1, 1);
-    gray(kWhite);
-    MoveTo(r.left, r.bottom - 1);
-    LineTo(r.left, r.top);
-    LineTo(r.right - 1, r.top);
-    MoveTo(r.right - 1, r.top);
-    LineTo(r.right - 1, r.bottom - 1);
-    LineTo(r.left, r.bottom - 1);
+    r.left++;
+    r.top++;
+    frameGray(r, grey(look == Look::inactive ? 0xd : 0xf));
+    OffsetRect(&r, -1, -1);
+    frameGray(r, grey(look == Look::inactive ? 0xb : 8));
     return noErr;
 }
 
 OSStatus Executor::C_DrawThemeSecondaryGroup(const Rect *inRect, ThemeDrawState inState)
 {
-    return C_DrawThemePrimaryGroup(inRect, inState);
+    if(!inRect)
+        return paramErr;
+    Look look = lookOf(inState);
+    if(look == Look::pressed)
+        return noErr;
+    DrawGuard guard;
+    if(look == Look::inactive)
+        squareRing(*inRect, 0, { 0xb, 0xb, 0xf });
+    else
+        squareRing(*inRect, 0, { 8, 0xf, 0xf });
+    return noErr;
+}
+
+/* A slider's tick: 6 long, a #888 shadow below and at its end;
+   inactive (and pressed), #777 alone */
+OSStatus Executor::C_DrawThemeTickMark(const Rect *bounds, ThemeDrawState state)
+{
+    if(!bounds)
+        return paramErr;
+    DrawGuard guard;
+    int h = bounds->left + 1, v = bounds->top + 1;
+    bool vertical = bounds->bottom - bounds->top > bounds->right - bounds->left;
+    if(lookOf(state) != Look::active)
+    {
+        if(vertical)
+            vrun(h, v, v + 5, grey(7));
+        else
+            hrun(h, h + 5, v, grey(7));
+        return noErr;
+    }
+    if(vertical)
+    {
+        vrun(h, v, v + 5, grey(0));
+        vrun(h + 1, v, v + 6, grey(8));
+        pixel(h, v + 6, grey(8));
+    }
+    else
+    {
+        hrun(h, h + 5, v, grey(0));
+        hrun(h, h + 6, v + 1, grey(8));
+        pixel(h + 6, v, grey(8));
+    }
+    return noErr;
 }
 
 OSStatus Executor::C_DrawThemeModelessDialogFrame(const Rect *inRect, ThemeDrawState inState)
@@ -948,7 +1458,7 @@ OSStatus Executor::C_DrawThemeModelessDialogFrame(const Rect *inRect, ThemeDrawS
     frameGray(r, kBlack);
     InsetRect(&r, 1, 1);
     PenSize(2, 2);
-    frameGray(r, isActive(inState) ? kFace : kLight);
+    frameGray(r, lookOf(inState) != Look::inactive ? kFace : kLight);
     return noErr;
 }
 
