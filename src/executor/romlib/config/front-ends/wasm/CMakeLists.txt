@@ -95,3 +95,11 @@ if(NODE_COMMAND)
         LABELS "executor;web" TIMEOUT 240 SKIP_RETURN_CODE 77
         ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM}")
 endif()
+
+# tools/web/server, the private service: its own checks (no browser).
+find_program(PYTHON3_COMMAND python3)
+if(PYTHON3_COMMAND)
+    add_test(NAME executor.web.server
+        COMMAND ${PYTHON3_COMMAND} ${PROJECT_SOURCE_DIR}/tools/web/server/test_server.py)
+    set_tests_properties(executor.web.server PROPERTIES LABELS "executor;web" TIMEOUT 60)
+endif()
