@@ -16,6 +16,7 @@
  *
  *   app              the current application's name (CurApName)
  *   windows          its windows: title, global bounds, visible
+ *   menus            its menu bar: each menu's title and left edge
  *   launch PATH      LaunchApplication of "Volume:Folder:App"; its OSErr
  *
  * The Worker answers 'read' and 'write' itself: files in the module's
@@ -31,6 +32,7 @@
 #include <ProcessMgr.h>
 #include <SegmentLdr.h>
 #include <wind/wind.h>
+#include <menu/menu.h>
 #include <util/macstrings.h>
 
 #include <emscripten.h>
@@ -189,6 +191,27 @@ std::string windows_json()
     return out + "]";
 }
 
+std::string menus_json()
+{
+    std::string out = "[";
+    if(LM(MenuList))
+    {
+        muelem *mp = (*MENULIST)->mulist;
+        muelem *end = mp + (*MENULIST)->muoff / sizeof(muelem);
+        for(; mp != end; mp++)
+        {
+            MenuHandle mh = mp->muhandle;
+            if(!mh)
+                continue;
+            if(out.size() > 1)
+                out += ",";
+            out += "{\"title\":" + json_string(pstring((const unsigned char *)MI_DATA(mh)))
+                   + ",\"left\":" + std::to_string((int)mp->muleft) + "}";
+        }
+    }
+    return out + "]";
+}
+
 /* The page's UTF-8 as the Mac's MacRoman (file names: "ƒ", "™", ...). */
 mac_string macRoman(const std::string &utf8)
 {
@@ -238,6 +261,8 @@ void on_event_poll()
             reply = json_string(LM(CurApName)[0] <= 31 ? pstring(LM(CurApName)) : "");
         else if(op == "windows")
             reply = windows_json();
+        else if(op == "menus")
+            reply = menus_json();
         else if(op == "launch")
             reply = std::to_string(launch(arg));
         else
