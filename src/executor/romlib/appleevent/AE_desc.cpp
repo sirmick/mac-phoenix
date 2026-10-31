@@ -148,27 +148,6 @@ OSErr aggr_desc_get_addr(Handle aggr_desc_h,
         AE_RETURN_ERROR(errAEIllegalIndex);
     }
 
-    if(!attribute_p
-       && ATTRIBUTE_COUNT(aggr_desc_h) != typeAEList
-       && ATTRIBUTE_COUNT(aggr_desc_h) != typeAERecord
-       && index == 1
-       && !info.count)
-    {
-        int aggr_desc_size;
-
-        aggr_desc_size = GetHandleSize(aggr_desc_h);
-        SetHandleSize(aggr_desc_h, aggr_desc_size + 2);
-
-        {
-            GUEST<int16_t> *t;
-
-            aggr_desc_p = (char *)*aggr_desc_h;
-            t = (GUEST<int16_t> *)(aggr_desc_p + aggr_desc_size);
-            /* ';;' */
-            t[0] = 0x3b3b;
-        }
-    }
-
     /* compute the offset of the desc we are interested in */
     desc_offset(aggr_desc_h, index, &info,
                 &offset);
@@ -704,11 +683,19 @@ OSErr Executor::C_AECreateAppleEvent(AEEventClass event_class,
     target_type = target ? (DescType)DESC_TYPE(target) : typeNull;
     target_size = target_data ? GetHandleSize(target_data) : 0;
 
-    event_size = sizeof *event_data + target_size + 10;
+    /* MacPhoenix: 'aevt', the version and the whole ';;;;' marker, the
+       parameters from the end of the handle on, as Apple's Apple Event
+       Manager lays a new event out. The marker was half written (';;',
+       the rest added with the first parameter) and the parameters were
+       taken from two bytes past the end: BBEdit Lite 6.1 appends its
+       'crel' event's 'kocl' at the end of the handle itself (counting it
+       in the header) and its handler then found no parameters (-1708,
+       no untitled window). */
+    event_size = sizeof *event_data + target_size + 12;
     event_data = (ae_header_t *)alloca(event_size);
     memset(event_data, '\000', event_size);
 
-    event_data->param_offset = event_size + 2;
+    event_data->param_offset = event_size;
 
     event_data->event_class = event_class;
     event_data->event_id = event_id;
@@ -727,14 +714,7 @@ OSErr Executor::C_AECreateAppleEvent(AEEventClass event_class,
         t[1] = 0x00010001;
     }
 
-    {
-        GUEST<int16_t> *t;
-
-        t = (GUEST<int16_t> *)((char *)event_data + sizeof *event_data + target_size + 8);
-
-        /* ';;' */
-        t[0] = 0x3b3b;
-    }
+    *(GUEST<OSType> *)((char *)event_data + sizeof *event_data + target_size + 8) = ";;;;"_4;
 
     OSErr err = AECreateDesc(typeAppleEvent, event_data, event_size, evt_out);
     if(err != noErr)
