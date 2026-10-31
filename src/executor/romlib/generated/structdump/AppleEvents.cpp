@@ -75,6 +75,8 @@ void describeStruct(const AE_zone_tables& x, std::ostream& os)
     logging::logField(os, "event_hdlr_table", x.event_hdlr_table);
     logging::logField(os, "coercion_hdlr_table", x.coercion_hdlr_table);
     logging::logField(os, "special_hdlr_table", x.special_hdlr_table);
+    logging::logField(os, "object_accessor_table", x.object_accessor_table);
+    logging::logField(os, "object_callbacks", x.object_callbacks);
     logging::logField(os, "pad_1", x.pad_1);
     logging::logField(os, "unknown_appl_value", x.unknown_appl_value);
     logging::logField(os, "pad_2", x.pad_2);

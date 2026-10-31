@@ -12,6 +12,7 @@
 #include <error/system_error.h>
 #include <mman/mman.h>
 #include "apple_events.h"
+#include <base/functions.impl.h>
 
 using namespace Executor;
 
@@ -391,14 +392,21 @@ OSErr Executor::C_AEInstallCoercionHandler(
     hdlr.fn = (void *)hdlr_fn;
     hdlr.refcon = refcon;
 
-    err = hdlr_table_elt(table, &selector, &hdlr, true, &elt);
+    /* MacPhoenix: the same pair again replaces the entry (another
+       handler was added after it and never found) */
+    err = hdlr_table_elt(table, &selector, nullptr, false, &elt);
+    if(err != noErr)
+        err = hdlr_table_elt(table, &selector, &hdlr, true, &elt);
     if(err != noErr)
         AE_RETURN_ERROR(err);
 
     /* warning: `elt' is a pointer into an unlocked handle */
     elt->hdlr = hdlr;
 
-    /* #### elt->flag = from_type_is_desc_p */
+    /* MacPhoenix: whether the handler takes a descriptor, in the entry's
+       spare long (AECoerceDesc read an unset flag and called handlers
+       either way) */
+    elt->pad_2 = from_type_is_desc_p ? 1 : 0;
 
     AE_RETURN_ERROR(noErr);
 }
@@ -427,7 +435,8 @@ OSErr Executor::C_AEGetCoercionHandler(DescType from_type, DescType to_type,
     *hdlr_out = guest_cast<AECoerceDescUPP>(elt->hdlr.fn);
     *refcon_out = elt->hdlr.refcon;
 
-    /* #### *from_type_is_desc_p_out = elt->flag; */
+    if(from_type_is_desc_p_out)
+        *from_type_is_desc_p_out = elt->pad_2 == 1;
 
     AE_RETURN_ERROR(noErr);
 }
@@ -521,4 +530,159 @@ OSErr Executor::C_AERemoveSpecialHandler(
 
     /* #### fail if `hdlr' is not the currently installed handler? */
     AE_RETURN_ERROR(_AE_hdlr_delete(table, 0, &selector));
+}
+
+/* MacPhoenix: the Object Support Library's accessor table and callbacks,
+   as 8.6's ObjectSupportLib keeps them (difftest aevt, G3). An accessor
+   is found by desired class and container type, wildcards allowed;
+   AECallObjectAccessor takes the container type from the container token
+   (its containerClass argument goes to the accessor as it is) and tries
+   the exact entry, then the class with any container, any class in the
+   container, then any in any. AEGetObjectAccessor and removing take the
+   exact entry. BBEdit Lite 6.1's 'crel' handler looks up the accessors
+   it installed. */
+
+static AE_hdlr_table_h object_accessor_table(bool system_p, bool create_p)
+{
+    AE_zone_tables_h zone_tables = get_zone_tables(system_p);
+    AE_hdlr_table_h table = (*zone_tables)->object_accessor_table;
+    if(!table && create_p)
+    {
+        TheZoneGuard guard(system_p ? LM(SysZone) : LM(ApplZone));
+        GUEST<AE_hdlr_table_h> table_s;
+        if(_AE_hdlr_table_alloc(16, 0x80008, 0, false, &table_s) == noErr)
+        {
+            table = table_s;
+            (*get_zone_tables(system_p))->object_accessor_table = table;
+        }
+    }
+    return table;
+}
+
+OSErr Executor::C_AEInstallObjectAccessor(DescType desiredClass, DescType containerType,
+                                          ProcPtr theAccessor, LONGINT refcon,
+                                          Boolean isSysHandler)
+{
+    if(!theAccessor)
+        AE_RETURN_ERROR(paramErr);
+    AE_hdlr_table_h table = object_accessor_table(isSysHandler, true);
+    if(!table)
+        AE_RETURN_ERROR(memFullErr);
+    AE_hdlr_selector_t selector;
+    selector.sel0 = desiredClass;
+    selector.sel1 = containerType;
+    AE_hdlr_t hdlr;
+    hdlr.fn = (void *)theAccessor;
+    hdlr.refcon = refcon;
+    AE_hdlr_table_elt_t *elt;
+    /* the same pair again replaces the entry */
+    OSErr err = hdlr_table_elt(table, &selector, nullptr, false, &elt);
+    if(err != noErr)
+        err = hdlr_table_elt(table, &selector, &hdlr, true, &elt);
+    if(err != noErr)
+        AE_RETURN_ERROR(err);
+    elt->hdlr = hdlr;
+    AE_RETURN_ERROR(noErr);
+}
+
+OSErr Executor::C_AEGetObjectAccessor(DescType desiredClass, DescType containerType,
+                                      GUEST<ProcPtr> *theAccessor,
+                                      GUEST<LONGINT> *accessorRefcon, Boolean isSysHandler)
+{
+    AE_hdlr_table_h table = object_accessor_table(isSysHandler, false);
+    AE_hdlr_selector_t selector;
+    selector.sel0 = desiredClass;
+    selector.sel1 = containerType;
+    AE_hdlr_table_elt_t *elt;
+    if(!table || hdlr_table_elt(table, &selector, nullptr, false, &elt) != noErr)
+        AE_RETURN_ERROR(errAEAccessorNotFound);
+    *theAccessor = guest_cast<ProcPtr>(elt->hdlr.fn);
+    *accessorRefcon = elt->hdlr.refcon;
+    AE_RETURN_ERROR(noErr);
+}
+
+OSErr Executor::C_AERemoveObjectAccessor(DescType desiredClass, DescType containerType,
+                                         ProcPtr theAccessor, Boolean isSysHandler)
+{
+    AE_hdlr_table_h table = object_accessor_table(isSysHandler, false);
+    AE_hdlr_selector_t selector;
+    selector.sel0 = desiredClass;
+    selector.sel1 = containerType;
+    AE_hdlr_t hdlr;
+    hdlr.fn = (void *)theAccessor;
+    hdlr.refcon = 0;
+    AE_hdlr_table_elt_t *elt;
+    if(!table || hdlr_table_elt(table, &selector, &hdlr, false, &elt) != noErr)
+        AE_RETURN_ERROR(errAEAccessorNotFound);
+    AE_RETURN_ERROR(_AE_hdlr_delete(table, 0, &selector));
+}
+
+OSErr Executor::C_AECallObjectAccessor(DescType desiredClass, AEDesc *containerToken,
+                                       DescType containerClass, DescType keyForm,
+                                       AEDesc *keyData, AEDesc *theToken)
+{
+    DescType container_type = containerToken ? (DescType)DESC_TYPE(containerToken) : typeNull;
+    const DescType classes[] = { desiredClass, desiredClass, typeWildCard, typeWildCard };
+    const DescType containers[] = { container_type, typeWildCard, container_type, typeWildCard };
+    for(bool system_p : { false, true })
+    {
+        AE_hdlr_table_h table = object_accessor_table(system_p, false);
+        if(!table)
+            continue;
+        for(int i = 0; i < 4; i++)
+        {
+            AE_hdlr_selector_t selector;
+            selector.sel0 = classes[i];
+            selector.sel1 = containers[i];
+            AE_hdlr_table_elt_t *elt;
+            if(hdlr_table_elt(table, &selector, nullptr, false, &elt) != noErr)
+                continue;
+            AEObjectAccessorUPP accessor = guest_cast<AEObjectAccessorUPP>(elt->hdlr.fn);
+            int32_t refcon = elt->hdlr.refcon;
+            AE_RETURN_ERROR(accessor(desiredClass, containerToken, containerClass, keyForm,
+                                     keyData, theToken, refcon));
+        }
+    }
+    AE_RETURN_ERROR(errAEAccessorNotFound);
+}
+
+/* the callbacks: compare, count, dispose token, get mark token, mark,
+   adjust marks, get error descriptor (nil: none) */
+enum { kDisposeTokenCallback = 2, kObjectCallbacks = 7 };
+
+OSErr Executor::C_AESetObjectCallbacks(ProcPtr myCompareProc, ProcPtr myCountProc,
+                                       ProcPtr myDisposeTokenProc, ProcPtr myGetMarkTokenProc,
+                                       ProcPtr myMarkProc, ProcPtr myAdjustMarksProc,
+                                       ProcPtr myGetErrDescProc)
+{
+    AE_zone_tables_h zone_tables = get_zone_tables(false);
+    Handle h = (*zone_tables)->object_callbacks;
+    if(!h)
+    {
+        TheZoneGuard guard(LM(ApplZone));
+        h = NewHandleClear(kObjectCallbacks * sizeof(GUEST<ProcPtr>));
+        if(!h)
+            AE_RETURN_ERROR(memFullErr);
+        (*get_zone_tables(false))->object_callbacks = h;
+    }
+    const ProcPtr procs[kObjectCallbacks] = { myCompareProc, myCountProc, myDisposeTokenProc,
+                                              myGetMarkTokenProc, myMarkProc, myAdjustMarksProc,
+                                              myGetErrDescProc };
+    GUEST<ProcPtr> *slots = (GUEST<ProcPtr> *)*h;
+    for(int i = 0; i < kObjectCallbacks; i++)
+        slots[i] = procs[i];
+    AE_RETURN_ERROR(noErr);
+}
+
+/* The application's dispose callback if it set one, else AEDisposeDesc. */
+OSErr Executor::C_AEDisposeToken(AEDesc *theToken)
+{
+    Handle h = (*get_zone_tables(false))->object_callbacks;
+    ProcPtr dispose = h ? (ProcPtr)((GUEST<ProcPtr> *)*h)[kDisposeTokenCallback] : nullptr;
+    if(dispose)
+    {
+        AEDisposeTokenUPP proc = guest_cast<AEDisposeTokenUPP>((void *)dispose);
+        AE_RETURN_ERROR(proc(theToken));
+    }
+    AE_RETURN_ERROR(AEDisposeDesc(theToken));
 }

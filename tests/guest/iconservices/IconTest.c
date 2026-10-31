@@ -17,6 +17,7 @@
 #include <Resources.h>
 #include <Processes.h>
 #include <Devices.h>
+#include <CodeFragments.h>
 #include <Finder.h>
 #include <Script.h>
 #include <Gestalt.h>
@@ -335,6 +336,45 @@ int main(void)
         err = IconFamilyToIconSuite(fam, svAllAvailableData, &suite);
         check("family to suite", err == noErr && suite != NULL, "err", err);
         DisposeHandle(h);
+    }
+    {
+        /* IconServicesLib's private NewIconSuiteFromIconRef, by name: the
+           8.6 Finder makes the Apple menu items' icons with it (which
+           icons, the suite, 0, the IconRef) */
+        typedef OSErr (*NewSuiteProc)(IconSelectorValue, Handle *, UInt32, IconRef);
+        ConnectionID conn;
+        Ptr main, sym = NULL;
+        SymClass cls;
+        Str255 msg;
+        Handle s = NULL, ics = NULL;
+        err = GetSharedLibrary("\pIconServicesLib", kPowerPCArch, kReferenceCFrag, &conn, &main, msg);
+        if(err == noErr)
+            err = FindSymbol(conn, "\pNewIconSuiteFromIconRef", &sym, &cls);
+        printf("INFO NewIconSuiteFromIconRef: err %d\n", err);
+        if(err == noErr && sym)
+        {
+            err = ((NewSuiteProc)sym)(svSmall1Bit | svSmall8Bit, &s, 0, folder);
+            if(err == noErr && s)
+                GetIconFromSuite(&ics, s, 'ics#');
+            check("NewIconSuiteFromIconRef: small icons of the folder", err == noErr && s && ics,
+                  "err", err);
+            ics = NULL;
+            if(err == noErr && s)
+                GetIconFromSuite(&ics, s, 'ICN#');
+            check("NewIconSuiteFromIconRef: only the icons asked for", !ics, "ICN#", 1);
+            if(s)
+                DisposeIconSuite(s, true);
+            s = NULL;
+            err = ((NewSuiteProc)sym)(-1, &s, 0, folder);
+            ics = NULL;
+            if(err == noErr && s)
+                GetIconFromSuite(&ics, s, 'ICN#');
+            check("NewIconSuiteFromIconRef(-1): all of them", err == noErr && s && ics, "err", err);
+            if(s)
+                DisposeIconSuite(s, true);
+        }
+        else
+            check("NewIconSuiteFromIconRef exported", 0, "err", err);
     }
 
     /* ---- registering a family ---- */

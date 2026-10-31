@@ -1,0 +1,220 @@
+# probe 9ca7e600bcf7b11288afc3229bcdfdf3d706613249650a54c56aa9ab0d1a61bb
+== received
+received.install: 0
+received.process: 0
+received.recv0: aevt oapp
+received.recv0.evcl: type 4 61657674
+received.recv0.evid: type 4 6f617070
+received.recv0.rtid: long 4 00000000
+received.recv0.tran: err -1701
+received.recv0.addr: targ 252 port MacOS
+received.recv0.esrc: shor 2 0003
+received.recv0.inte: shor 2 0020
+received.recv0.miss: err -1701
+received.recv0.optk: err -1701
+received.recv0.from: targ 252 port MacOS
+received.recv0.timo: err -1701
+received.recv0.subj: err -1701
+received.recv0.params: 0
+received.recv0.reply: null
+received.events: 1
+== created
+created.create: 0
+created.given.evcl: type 4 54657374
+created.given.evid: type 4 45766e74
+created.given.rtid: long 4 00000007
+created.given.tran: long 4 00001234
+created.given.addr: psn  8 self
+created.given.esrc: shor 2 0002
+created.given.inte: shor 2 0020
+created.given.miss: err -1701
+created.given.optk: err -1701
+created.given.from: psn  8 self
+created.given.timo: err -1701
+created.given.subj: err -1701
+created.create.auto: 0
+created.auto.evcl: type 4 54657374
+created.auto.evid: type 4 45766e74
+created.auto.rtid: long 4 generated
+created.auto.tran: err -1701
+created.auto.addr: psn  8 self
+created.auto.esrc: shor 2 0002
+created.auto.inte: shor 2 0020
+created.auto.miss: err -1701
+created.auto.optk: err -1701
+created.auto.from: psn  8 self
+created.auto.timo: err -1701
+created.auto.subj: err -1701
+created.auto.distinct: yes
+created.desc.optk: err -1701 type null handle nil
+created.desc.esrc: long 4
+created.desc.evid: type 4
+created.desc.rtid: err -1700 type null handle nil
+created.put: 0
+created.put.evcl: type 4 54657374
+created.put.evid: type 4 45766e74
+created.put.rtid: long 4 generated
+created.put.tran: err -1701
+created.put.addr: psn  8 self
+created.put.esrc: shor 2 0002
+created.put.inte: shor 2 0020
+created.put.miss: err -1701
+created.put.optk: err -1701
+created.put.from: psn  8 self
+created.put.timo: err -1701
+created.put.subj: err -1701
+created.create.other: 0
+created.other.evcl: type 4 54657374
+created.other.evid: type 4 45766e74
+created.other.rtid: long 4 00000009
+created.other.tran: err -1701
+created.other.addr: sign 4 MACS
+created.other.esrc: shor 2 0000
+created.other.inte: shor 2 0020
+created.other.miss: err -1701
+created.other.optk: err -1701
+created.other.from: sign 4 MACS
+created.other.timo: err -1701
+created.other.subj: err -1701
+== send
+send.h1: called in AESend
+send.h1.evcl: type 4 54657374
+send.h1.evid: type 4 536e6431
+send.h1.rtid: long 4 generated
+send.h1.tran: err -1701
+send.h1.addr: psn  8 self
+send.h1.esrc: shor 2 0001
+send.h1.inte: shor 2 0020
+send.h1.miss: err -1701
+send.h1.optk: err -1701
+send.h1.from: psn  8 self
+send.h1.timo: err -1701
+send.h1.subj: err -1701
+send.h1.reply: aevt params 0
+send.h1.reply.put: 0
+send.send1: 0
+send.send1.reply: aevt params 1
+send.send1.reply.----: 42
+send.send1.reply.errn: err -1701
+send.send1.reply.evcl: type 4 61657674
+send.send1.reply.evid: type 4 616e7372
+send.send1.reply.rtid: long 4 generated
+send.send1.reply.tran: err -1701
+send.send1.reply.addr: psn  8 self
+send.send1.reply.esrc: shor 2 0001
+send.send1.reply.inte: shor 2 0020
+send.send1.reply.miss: err -1701
+send.send1.reply.optk: err -1701
+send.send1.reply.from: psn  8 self
+send.send1.reply.timo: err -1701
+send.send1.reply.subj: err -1701
+send.send1.reply.rtid.same: yes
+send.h2: called in AESend
+send.h2.evcl: type 4 54657374
+send.h2.evid: type 4 536e6432
+send.h2.rtid: long 4 generated
+send.h2.tran: err -1701
+send.h2.addr: psn  8 self
+send.h2.esrc: shor 2 0001
+send.h2.inte: shor 2 0020
+send.h2.miss: err -1701
+send.h2.optk: err -1701
+send.h2.from: psn  8 self
+send.h2.timo: err -1701
+send.h2.subj: err -1701
+send.h2.reply: aevt params 0
+send.h2.reply.put: 0
+send.send2: -1234
+send.send2.reply: aevt params 2
+send.send2.reply.----: 42
+send.send2.reply.errn: -1234
+send.send2.reply.evcl: type 4 61657674
+send.send2.reply.evid: type 4 616e7372
+send.send2.reply.rtid: long 4 generated
+send.send2.reply.tran: err -1701
+send.send2.reply.addr: psn  8 self
+send.send2.reply.esrc: shor 2 0001
+send.send2.reply.inte: shor 2 0020
+send.send2.reply.miss: err -1701
+send.send2.reply.optk: err -1701
+send.send2.reply.from: psn  8 self
+send.send2.reply.timo: err -1701
+send.send2.reply.subj: err -1701
+send.send2.reply.rtid.same: yes
+send.send3: -1708
+send.send3.reply: aevt params 1
+send.send3.reply.----: err -1701
+send.send3.reply.errn: -1708
+send.send3.reply.evcl: type 4 61657674
+send.send3.reply.evid: type 4 616e7372
+send.send3.reply.rtid: long 4 generated
+send.send3.reply.tran: err -1701
+send.send3.reply.addr: psn  8 self
+send.send3.reply.esrc: shor 2 0001
+send.send3.reply.inte: shor 2 0020
+send.send3.reply.miss: err -1701
+send.send3.reply.optk: err -1701
+send.send3.reply.from: psn  8 self
+send.send3.reply.timo: err -1701
+send.send3.reply.subj: err -1701
+send.send3.reply.rtid.same: yes
+send.h3: called in AESend
+send.h3.evcl: type 4 54657374
+send.h3.evid: type 4 536e6433
+send.h3.rtid: long 4 generated
+send.h3.tran: err -1701
+send.h3.addr: psn  8 self
+send.h3.esrc: shor 2 0001
+send.h3.inte: shor 2 0020
+send.h3.miss: err -1701
+send.h3.optk: err -1701
+send.h3.from: psn  8 self
+send.h3.timo: err -1701
+send.h3.subj: err -1701
+send.h3.reply: null
+send.send4: 0
+send.send4.reply: null
+== osl
+osl.bind.AEObjectInit: found
+osl.init: 0
+osl.get.none: err -1723
+osl.call.none: -1723
+osl.call.none.token: ����
+osl.install: 0
+osl.get: ours refcon 11
+osl.get.other: err -1723
+osl.call: -1723
+osl.call.token: ����
+osl.install.cls3: 0
+osl.install.cnt4: 0
+osl.accessor1: Cls3 in Cnt9 form indx refcon 33
+osl.call.cls3: 0
+osl.call.cls3.token: long 33
+osl.call.cnt4: -1723
+osl.call.cnt4.token: ����
+osl.accessor2: Cls3 in Cnt4 form indx refcon 33
+osl.call.both: 0
+osl.call.both.token: long 33
+osl.get.wild: err -1723
+osl.install.wild: 0
+osl.accessor3: Cls2 in Cnt2 form indx refcon 22
+osl.call.wild: 0
+osl.call.wild.token: long 22
+osl.remove.wrong: -1723
+osl.remove: 0
+osl.get.removed: err -1723
+osl.remove.again: -1723
+osl.dispose.plain: 0
+osl.dispose.plain.token: null
+osl.callbacks: 0
+osl.dispose.cb: 0
+osl.dispose: long
+osl.dispose.cb.calls: 1
+osl.dispose.cb.token: null
+== layout
+layout.new: size 90 params at 90 attributes 0 parameters 0
+layout.new.end: ;;;;
+layout.appended: 0
+layout.appended.value: TxtW
+layout.put: size 106 params at 90 parameters 1
+layout.put.at: kocl

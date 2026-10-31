@@ -167,10 +167,15 @@ cannot be used, because an error of type -35 occurred'.
 Desktop icons (2026-10-31): the aliases show their targets' icons with
 the alias arrow and the volumes their drivers' icons, as on the G3 (Icon
 Services: -16496, Control 22/21, 8.5's system icons from System
-Resources; docs/executor/IconServices.md 1.4.2). Still open: the Trash
-is never put on the desktop (the Finder scans the startup volume, Trash
-folder included, and registers 'trsh' by name, but draws no Trash; a
-Desktop Folder and Trash made before it starts don't change that).
+Resources; docs/executor/IconServices.md 1.4.2). The Trash and the
+Apple menu's items (2026-10-31): the Finder makes its startup disk from
+GetWDInfo(BootDrive) (BootDrive is a working directory on 8.6 too,
+difftest sys "boot") and finds its VCB by that volume reference number;
+Executor's GetWDInfo gave back the working directory's own number, so
+the startup disk had no VCB, counted as off line (drive 0), and the
+Finder neither put its Trash on the desktop nor filled the Apple menu
+(AddAppleMenuItem never called). Still open there: the items' small
+icons and Apple Menu Options' submenus (the G3 shows both).
 Also: the "Finder Preferences" copied from the image hold that volume's
 folder IDs; with a Desktop Folder already on Executor's System volume at
 startup the Finder lists the Preferences folder (dir 12) as the desktop.

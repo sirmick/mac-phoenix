@@ -4,8 +4,8 @@
  *                               ==============                              *
  *                                                                           *
  * Needs:                                                                    *
- *     MacTypes.h         OSType, LONGINT, OSErr, Handle, INTEGER,           *
- *                        SignedByte, Boolean, Rect                          *
+ *     MacTypes.h         OSType, LONGINT, OSErr, Handle, UInt32,            *
+ *                        INTEGER, SignedByte, Boolean, Rect                 *
  *     CodeFragments.h    InitBlock                                          *
  *     Iconutil.h         IconSelectorValue, IconAlignmentType,              *
  *                        IconTransformType                                  *
@@ -228,6 +228,9 @@ LIBRARY_ALSO(IconServicesLib, IconRefToIconFamily, InterfaceLib);
 
 OSErr C_IconFamilyToIconSuite(IconFamilyHandle iconFamily, IconSelectorValue whichIcons, GUEST<Handle> *iconSuite);PASCAL_SUBTRAP(IconFamilyToIconSuite, 0xAA75, 0x0025, IconServicesDispatch);
 LIBRARY_ALSO(IconServicesLib, IconFamilyToIconSuite, InterfaceLib);
+
+
+OSErr C_NewIconSuiteFromIconRef(IconSelectorValue whichIcons, GUEST<Handle> *iconSuite, UInt32 reserved, IconRef theIconRef);LIBRARY_FUNCTION(IconServicesLib, NewIconSuiteFromIconRef, C_NewIconSuiteFromIconRef);
 
 
 OSErr C_IconSuiteToIconFamily(Handle iconSuite, IconSelectorValue whichIcons, GUEST<IconFamilyHandle> *iconFamily);PASCAL_SUBTRAP(IconSuiteToIconFamily, 0xAA75, 0x0026, IconServicesDispatch);

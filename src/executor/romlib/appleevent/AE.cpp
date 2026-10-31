@@ -19,6 +19,7 @@
 #include <mman/mman.h>
 #include <commandline/flags.h>
 #include <base/functions.impl.h>
+#include <base/traps.h>
 
 namespace Executor
 {
@@ -27,6 +28,103 @@ bool send_application_open_aevt_p;
 using namespace Executor;
 
 /* dispatching apple events */
+
+/* MacPhoenix: the application's table, then the system's; in each the
+   exact entry, then the wildcard ones (8.6's Script Editor installs only
+   '****' '****' and gets its 'oapp' there) */
+static OSErr find_handler(AEEventClass event_class, AEEventID event_id,
+                          GUEST<AEEventHandlerUPP> *hdlr_s, GUEST<int32_t> *refcon_s)
+{
+    OSErr err = errAEHandlerNotFound;
+    for(bool system_p : { false, true })
+        for(int i = 0; i < 4 && err != noErr; i++)
+            err = AEGetEventHandler(i & 2 ? typeWildCard : event_class, i & 1 ? typeWildCard : event_id,
+                                    hdlr_s, refcon_s, system_p);
+    return err;
+}
+
+/* MacPhoenix: AESend to kCurrentProcess, as 8.6's Apple Event Manager
+   does it (difftest aevt, G3): the handler is called at once, before
+   AESend returns, with kAEDirectCall as the event's source. Waiting for
+   the reply, the handler gets one to fill: 'aevt' 'ansr' with the
+   event's return ID; an error it answers (-1708 when there is no
+   handler) goes in the reply as 'errn' and is AESend's result. Without
+   a reply, the reply is a null descriptor. BBEdit Lite 6.1 makes its
+   untitled window by sending itself 'core' 'crel' and waiting. */
+static OSErr send_direct(AppleEvent *evt, AppleEvent *reply, bool want_reply)
+{
+    GUEST<AEEventClass> class_s;
+    GUEST<AEEventID> id_s;
+    GUEST<DescType> dummy_type;
+    GUEST<Size> dummy_size;
+    OSErr err = AEGetAttributePtr(evt, keyEventClassAttr, typeType, &dummy_type, &class_s,
+                                  sizeof class_s, &dummy_size);
+    if(err == noErr)
+        err = AEGetAttributePtr(evt, keyEventIDAttr, typeType, &dummy_type, &id_s, sizeof id_s,
+                                &dummy_size);
+    if(err != noErr)
+        return err;
+    AEEventClass event_class = class_s;
+    AEEventID event_id = id_s;
+
+    AppleEvent *copy = (AppleEvent *)alloca(sizeof *copy);
+    err = AEDuplicateDesc(evt, copy);
+    if(err != noErr)
+        return err;
+    GUEST<int16_t> direct_s = kAEDirectCall;
+    AEPutAttributePtr(copy, keyEventSourceAttr, typeShortInteger, &direct_s, sizeof direct_s);
+
+    AppleEvent *answer = (AppleEvent *)alloca(sizeof *answer);
+    DESC_TYPE(answer) = typeNull;
+    DESC_DATA(answer) = nullptr;
+    if(want_reply)
+    {
+        GUEST<int32_t> rtid_s = 0;
+        GUEST<DescType> type;
+        GUEST<Size> size;
+        AEGetAttributePtr(copy, keyReturnIDAttr, typeLongInteger, &type, &rtid_s, sizeof rtid_s, &size);
+        ProcessSerialNumber self = { 0, kCurrentProcess };
+        AEAddressDesc *target = (AEAddressDesc *)alloca(sizeof *target);
+        AECreateDesc(typeProcessSerialNumber, (Ptr)&self, sizeof self, target);
+        err = AECreateAppleEvent(kCoreEventClass, kAEAnswer, target, 0, kAnyTransactionID, answer);
+        AEDisposeDesc(target);
+        if(err != noErr)
+        {
+            AEDisposeDesc(copy);
+            return err;
+        }
+        AEPutAttributePtr(answer, keyReturnIDAttr, typeLongInteger, &rtid_s, sizeof rtid_s);
+        AEPutAttributePtr(answer, keyEventSourceAttr, typeShortInteger, &direct_s, sizeof direct_s);
+    }
+
+    GUEST<AEEventHandlerUPP> hdlr_s;
+    GUEST<int32_t> refcon_s;
+    OSErr retval;
+    if(find_handler(event_class, event_id, &hdlr_s, &refcon_s) != noErr)
+        retval = errAEEventNotHandled;
+    else
+    {
+        AEEventHandlerUPP hdlr = hdlr_s;
+        retval = hdlr(copy, answer, (int32_t)refcon_s);
+    }
+    AEDisposeDesc(copy);
+
+    if(want_reply && retval != noErr)
+    {
+        GUEST<Size> size;
+        GUEST<DescType> type;
+        if(AESizeOfParam(answer, keyErrorNumber, &type, &size) != noErr)
+        {
+            GUEST<int32_t> errn_s = retval;
+            AEPutParamPtr(answer, keyErrorNumber, typeLongInteger, &errn_s, sizeof errn_s);
+        }
+    }
+    if(reply)
+        *reply = *answer;
+    else
+        AEDisposeDesc(answer);
+    return retval;
+}
 
 OSErr Executor::C_AEProcessAppleEvent(EventRecord *evtrec)
 {
@@ -83,14 +181,15 @@ OSErr Executor::C_AEProcessAppleEvent(EventRecord *evtrec)
        are lists or records aren't decoded yet. */
     if(evt_data_size >= 12 && *(GUEST<OSType> *)*evt_data == "aevt"_4)
     {
-        ProcessSerialNumber self;
-        GetCurrentProcess(&self);
+        /* its address is the sender, a TargetID, as 8.6's Apple Event
+           Manager gives it (difftest aevt: the launch's 'oapp') */
         AEAddressDesc *target = (AEAddressDesc *)alloca(sizeof *target);
-        AECreateDesc(typeProcessSerialNumber, (Ptr)&self, sizeof self, target);
+        AECreateDesc(typeTargetID, (Ptr)&dummy_target_id, sizeof dummy_target_id, target);
         AppleEvent *rebuilt = (AppleEvent *)alloca(sizeof *rebuilt);
         GUEST<uint32_t> id;
         memcpy(&id, &evtrec->where, sizeof id);
-        err = AECreateAppleEvent(evtrec->message, (uint32_t)id, target, -1, -1, rebuilt);
+        err = AECreateAppleEvent(evtrec->message, (uint32_t)id, target, 0, kAnyTransactionID,
+                                 rebuilt);
         AEDisposeDesc(target);
         if(err != noErr)
         {
@@ -145,14 +244,24 @@ OSErr Executor::C_AEProcessAppleEvent(EventRecord *evtrec)
     }
     AEEventID event_id = event_id_s;
 
-    /* MacPhoenix: the application's table, then the system's; in each the
-       exact entry, then the wildcard ones (8.6's Script Editor installs
-       only '****' '****' and gets its 'oapp' there) */
-    err = errAEHandlerNotFound;
-    for(bool system_p : { false, true })
-        for(int i = 0; i < 4 && err != noErr; i++)
-            err = AEGetEventHandler(i & 2 ? typeWildCard : event_class, i & 1 ? typeWildCard : event_id,
-                                    &hdlr_s, &refcon_s, system_p);
+    /* MacPhoenix: what the Apple Event Manager records about a received
+       event (difftest aevt, G3): its source, kAESameProcess or
+       kAELocalProcess (the launch's 'oapp' comes from the system
+       process), and the sender as the original address, a TargetID.
+       AcceptHighLevelEvent gives the sender's serial number as the
+       session ID. */
+    {
+        ProcessSerialNumber self;
+        GetCurrentProcess(&self);
+        GUEST<int16_t> source_s = dummy_target_id.sessionID == (int32_t)self.lowLongOfPSN
+                                      ? kAESameProcess
+                                      : kAELocalProcess;
+        AEPutAttributePtr(evt, keyEventSourceAttr, typeShortInteger, &source_s, sizeof source_s);
+        AEPutAttributePtr(evt, keyOriginalAddressAttr, typeTargetID, &dummy_target_id,
+                          sizeof dummy_target_id);
+    }
+
+    err = find_handler(event_class, event_id, &hdlr_s, &refcon_s);
     if(err != noErr)
     {
         AEDisposeDesc(evt);
@@ -162,20 +271,13 @@ OSErr Executor::C_AEProcessAppleEvent(EventRecord *evtrec)
     int32_t refcon = refcon_s;
 
     {
+        /* MacPhoenix: the reply is a null descriptor for an event that
+           wants none (8.6, difftest aevt: the launch's 'oapp'). No sender
+           here waits for a reply (AESend refuses kAEWaitReply and
+           kAEQueueReply), so every event is one of those. */
         AppleEvent *reply = (AppleEvent *)alloca(sizeof *reply);
-        AEDesc *target = (AEDesc *)alloca(sizeof *target);
-        ProcessSerialNumber psn;
-
-        GetCurrentProcess(&psn);
-
-        err = AECreateDesc(typeProcessSerialNumber,
-                           (Ptr)&psn, sizeof psn, target);
-
-        /* create a reply apple event.  currently unused */
-        err = AECreateAppleEvent(kCoreEventClass, kAEAnswer,
-                                 target,
-                                 /* dummy */ -1, /* dummy */ -1,
-                                 reply);
+        DESC_TYPE(reply) = typeNull;
+        DESC_DATA(reply) = nullptr;
 
         retval = hdlr(evt, reply, refcon);
         AEDisposeDesc(reply);
@@ -213,8 +315,13 @@ OSErr Executor::C_AESend(AppleEvent *evt, AppleEvent *reply,
     DescType target_type = target_type_s;
     Size target_size = target_size_s;
 
-    if(err != noErr)
-        AE_RETURN_ERROR(err);
+    /* MacPhoenix: no reply until one comes (8.6: null after a send
+       without one) */
+    if(reply)
+    {
+        DESC_TYPE(reply) = typeNull;
+        DESC_DATA(reply) = nullptr;
+    }
 
     err = AEGetAttributePtr(evt, keyEventClassAttr,
                             typeType, &dummy_type,
@@ -228,6 +335,12 @@ OSErr Executor::C_AESend(AppleEvent *evt, AppleEvent *reply,
                             (Ptr)&event_id, sizeof event_id, &dummy_size);
     if(err != noErr)
         AE_RETURN_ERROR(err);
+
+    if(target_type == keyProcessSerialNumber
+       && target_size == sizeof *target_psn
+       && target_psn->highLongOfPSN == 0 && target_psn->lowLongOfPSN == kCurrentProcess
+       && (send_mode & _kAEReplyMask) != kAEQueueReply)
+        AE_RETURN_ERROR(send_direct(evt, reply, (send_mode & _kAEReplyMask) == kAEWaitReply));
 
     if(target_type == keyProcessSerialNumber
        && target_size == sizeof *target_psn)
@@ -489,6 +602,37 @@ parse_evt(const AppleEvent *evtp, AEDesc *desc_out)
     return noErr;
 }
 
+/* MacPhoenix: the Apple Event Manager's own coercions between the integer
+   types, after the installed handlers: 'shor' to 'long', and 'long' to
+   'shor' when the value fits (8.6, difftest aevt: an 'esrc' read as a
+   long; a return ID read as a short is errAECoercionFail). */
+static bool coerce_integer(AEDesc *desc, DescType result_type, AEDesc *desc_out)
+{
+    DescType from = DESC_TYPE(desc);
+    Handle h = DESC_DATA(desc);
+    if(!h)
+        return false;
+    Size size = GetHandleSize(h);
+    int32_t v;
+    if(from == typeShortInteger && size == 2)
+        v = *(GUEST<int16_t> *)*h;
+    else if(from == typeLongInteger && size == 4)
+        v = *(GUEST<int32_t> *)*h;
+    else
+        return false;
+    if(result_type == typeLongInteger)
+    {
+        GUEST<int32_t> out = v;
+        return AECreateDesc(typeLongInteger, &out, sizeof out, desc_out) == noErr;
+    }
+    if(result_type == typeShortInteger && v >= INT16_MIN && v <= INT16_MAX)
+    {
+        GUEST<int16_t> out = v;
+        return AECreateDesc(typeShortInteger, &out, sizeof out, desc_out) == noErr;
+    }
+    return false;
+}
+
 OSErr Executor::C_AECoerceDesc(AEDesc *desc, DescType result_type,
                                AEDesc *desc_out)
 {
@@ -496,7 +640,7 @@ OSErr Executor::C_AECoerceDesc(AEDesc *desc, DescType result_type,
     GUEST<int32_t> refcon_s;
     AECoerceDescUPP coercion_hdlr;
     int32_t refcon;
-    GUEST<Boolean> is_desc_hdlr_p;
+    GUEST<Boolean> is_desc_hdlr_p = false;
     DescType desc_type;
     OSErr err;
 
@@ -526,7 +670,11 @@ OSErr Executor::C_AECoerceDesc(AEDesc *desc, DescType result_type,
                                    &is_desc_hdlr_p,
                                    true);
         if(err != noErr)
+        {
+            if(coerce_integer(desc, result_type, desc_out))
+                AE_RETURN_ERROR(noErr);
             goto fail;
+        }
     }
 
     /* swap things to a normal state */
@@ -574,65 +722,13 @@ OSErr Executor::C_AEManagerInfo(AEKeyword keyWord, GUEST<LONGINT> *resultp)
     return paramErr;
 }
 
-/* stubs added by Cliff after reading documentation on Apple's web site */
-
-OSErr Executor::C_AEDisposeToken(AEDesc *theToken)
-{
-    warning_unimplemented("");
-    return noErr;
-}
+/* stubs added by Cliff after reading documentation on Apple's web site;
+   MacPhoenix: the accessor table, AECallObjectAccessor, the callbacks and
+   AEDisposeToken are in AE_hdlr.cpp */
 
 OSErr Executor::C_AEResolve(AEDesc *objectSpecifier, INTEGER callbackFlags,
                              AEDesc *theToken)
 {
-    warning_unimplemented("");
-    return noErr;
-}
-
-OSErr Executor::C_AERemoveObjectAccessor(
-    DescType desiredClass, DescType containerType, ProcPtr theAccessor,
-    Boolean isSysHandler)
-{
-    warning_unimplemented("");
-    return noErr;
-}
-
-OSErr Executor::C_AEInstallObjectAccessor(
-    DescType desiredClass, DescType containerType, ProcPtr theAccessor,
-    LONGINT refcon, Boolean isSysHandler)
-{
-    warning_unimplemented("");
-    return noErr;
-}
-
-OSErr Executor::C_AEGetObjectAccessor(DescType desiredClass,
-                                      DescType containerType,
-                                      GUEST<ProcPtr> *theAccessor,
-                                      GUEST<LONGINT> *accessorRefcon,
-                                      Boolean isSysHandler)
-{
-    warning_unimplemented("");
-    return noErr;
-}
-
-OSErr Executor::C_AECallObjectAccessor(DescType desiredClass,
-                                       AEDesc *containerToken,
-                                       DescType containerClass,
-                                       DescType keyForm, AEDesc *keyData,
-                                       AEDesc *theToken)
-{
-    warning_unimplemented("");
-    return noErr;
-}
-
-OSErr Executor::C_AESetObjectCallbacks(ProcPtr myCompareProc,
-                                       ProcPtr myCountProc,
-                                       ProcPtr myDisposeTokenProc,
-                                       ProcPtr myGetMarkTokenProc,
-                                       ProcPtr myMarkProc,
-                                       ProcPtr myAdjustMarksProc,
-                                       ProcPtr myGetErrDescProc)
-{
-    warning_unimplemented("");
+    traps::log_unimplemented("AEResolve");
     return noErr;
 }
