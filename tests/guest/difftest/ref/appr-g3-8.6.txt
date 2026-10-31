@@ -1,4 +1,4 @@
-# probe f92ecf101bbd4f53cdbcf9c6563eadd8b124fead0c35097237f209e5a952cfbf
+# probe 04d5e3d80da8f5987fa60f28ddc2cfaa2994568b63d53dc08ad4db7b6f368f1a
 == gestalt
 gestalt.appr: 0 00000001
 gestalt.apvr: 0 00000110
@@ -37,6 +37,12 @@ controls.16.hscroll.pressed23: 108x24 depth 32 crc 74eb331e
 controls.16.hscroll.pressed129: 108x24 depth 32 crc ad8a781a
 controls.1008.popup.active: 108x28 depth 32 crc 798c75d3
 controls.1008.popup.inactive: 108x28 depth 32 crc 4c075f3d
+controls.1008.popup10.active: 108x28 depth 32 crc c20422be
+controls.1008.popup10.inactive: 108x28 depth 32 crc 1a2e4f95
+controls.1009.popupfixed.active: 108x28 depth 32 crc cf67f98d
+controls.1009.popupfixed.inactive: 108x28 depth 32 crc 996a6fef
+controls.1008.popuptitle.active: 168x28 depth 32 crc 8a02c4bd
+controls.1008.popuptitle.inactive: 168x28 depth 32 crc 8283e06d
 controls.368.push.active: 68x28 depth 32 crc 72ad5f0a
 controls.368.push.inactive: 68x28 depth 32 crc 74430085
 controls.368.push.pressed: 68x28 depth 32 crc 6040e27a
