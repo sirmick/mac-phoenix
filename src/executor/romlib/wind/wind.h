@@ -75,6 +75,10 @@ extern bool ROMlib_window8_collapsed(WindowPtr w);
 /* 8.x: a mouse-down in a window's collapse box, which the system tracks
    and answers (CollapseWindow) for every application: true if it was one */
 extern bool ROMlib_window8_collapse_click(Point p);
+/* the structure and content its definition makes (invisible windows too;
+   EXPANDED: a collapsed window's as if it weren't) */
+extern void ROMlib_window8_definition_regions(WindowPtr w, RgnHandle structure, RgnHandle content,
+                                              bool expanded = false);
 extern bool ROMlib_window8_part_region(WindowPtr w, WindowRegionCode code, RgnHandle rgn, bool boxes = false);
 /* a floating window CreateNewWindow made (FrontWindow passes it over) */
 extern bool ROMlib_window8_floating_class(WindowPtr w);

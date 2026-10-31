@@ -844,10 +844,9 @@ OSStatus Executor::C_DrawThemeScrollBarDelimiters(ThemeWindowType flavor, const 
 
 /* ── AppearanceLib's window and menu calls (MacWindows.h, Menus.h) ───── */
 
-/* A window's regions in global coordinates, from the Window Manager's
-   record: the structure, the content, the update region, the port. The
-   parts a window definition knows (title bar, boxes) need its
-   kWindowMsgGetRegion, not yet. */
+/* A window's regions in global coordinates: the structure and content its
+   definition makes, the update region, the port; the frame's parts as
+   Executor's definitions have them (windMgr8.cpp). */
 OSStatus Executor::C_GetWindowRegion(WindowRef window, WindowRegionCode inRegionCode, RgnHandle ioWinRgn)
 {
     if(!window || !ioWinRgn)
@@ -855,10 +854,10 @@ OSStatus Executor::C_GetWindowRegion(WindowRef window, WindowRegionCode inRegion
     switch(inRegionCode)
     {
         case kWindowStructureRgn:
-            CopyRgn(WINDOW_STRUCT_REGION(window), ioWinRgn);
+            ROMlib_window8_definition_regions(window, ioWinRgn, nullptr);
             return noErr;
         case kWindowContentRgn:
-            CopyRgn(WINDOW_CONT_REGION(window), ioWinRgn);
+            ROMlib_window8_definition_regions(window, nullptr, ioWinRgn);
             return noErr;
         case kWindowUpdateRgn:
             CopyRgn(WINDOW_UPDATE_REGION(window), ioWinRgn);
@@ -877,8 +876,7 @@ OSStatus Executor::C_GetWindowRegion(WindowRef window, WindowRegionCode inRegion
     }
 }
 
-/* What CollapseWindow set (windMgr8.cpp); Executor's definitions don't shade
-   a window yet. */
+/* What CollapseWindow set (windMgr8.cpp) */
 Boolean Executor::C_IsWindowCollapsed(WindowRef window)
 {
     return window && ROMlib_window8_collapsed(window);
@@ -886,7 +884,8 @@ Boolean Executor::C_IsWindowCollapsed(WindowRef window)
 
 Boolean Executor::C_IsWindowCollapsable(WindowRef window)
 {
-    return false;
+    GUEST<UInt32> features = 0;
+    return window && C_GetWindowFeatures(window, &features) == noErr && (features & kWindowCanCollapse);
 }
 
 /* A command key's glyph (Menus.h kMenu*Glyph): 8.x's MDEF draws it
