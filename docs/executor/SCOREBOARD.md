@@ -173,13 +173,13 @@ Rows with a fault, by owner:
 |---|---|---|---|---|---|---|---|
 | productivity-system-7 | AppleWorks 5.0.3 ƒ:AppleWorks | fat | fails | runs | e86: no menu titles, no New Document dialog: unimplemented PowerPC StandardMBDF (G3: New Document dialog) | e86/prod/001.png | platinum |
 | productivity-system-7 | ClarisWorks 4.0v4 ƒ:ClarisWorks | 68k | fails | runs | e86: alert "This copy of ClarisWorks has been modified by another program or virus" at launch, as on 7.6.1 | e86/prod/002.png | fix-prod |
-| dev-tools-system-7 | MPW:MPW Shell | fat | fails | runs | e86: host signal 11 at guest pc $c105ef84, address (nil) | e86/dev/005.png | fix-dev |
-| dev-tools-system-7 | CodeWarrior Pro 4 ƒ:Metrowerks CodeWarrior:CodeWarrior IDE 3.2 | fat | fails | runs | e86: host signal 11 at guest pc $c105eee0, address 0x30 | e86/dev/001.png | fix-dev |
-| dev-tools-system-7 | THINK C 6.0 ƒ:THINK C:THINK Project Manager | 68k | fails | runs | e86: TranslationDispatch selector $24: no size in the selector, session stopped (called from $555f6) | e86/dev/006.png | fix-dev |
-| dev-tools-system-7 | Languages ƒ:THINK Pascal 4.5d4 ƒ:Think Pascal:THINK Pascal 4.5d4:THINK Pascal 4.5 | 68k | fails | runs | e86: TranslationDispatch selector $24: no size in the selector, session stopped (called from $555f6) | e86/dev/004.png | fix-dev |
-| dev-tools-system-7 | Languages ƒ:HyperCard 2.4.1 ƒ:HyperCard | 68k | fails | runs | e86: fatal: failed assertion `unknown_1 == 16' (AE_hdlr.cpp:165) | e86/dev/002.png | fix-86 |
-| dev-tools-system-7 | Languages ƒ:MacPerl 5.2.0r4 ƒ:MacPerl | fat | runs | runs | (e86: unimplemented PowerPC equalstring) | e86/dev/003.png |  |
-| dev-tools-system-7 | Tools ƒ:ResEdit 2.1.3 ƒ:ResEdit 2.1.3:ResEdit | 68k | fails | runs | e86: ResourceDispatch selector $7: no size in the selector, session stopped (called from $3ba8b76) | e86/dev/008.png | fix-86 |
+| dev-tools-system-7 | MPW:MPW Shell | fat | fails | runs | e86: host signal 11 at guest pc $c0f27844, address (nil) | e86/dev/005.png | fix-dev |
+| dev-tools-system-7 | CodeWarrior Pro 4 ƒ:Metrowerks CodeWarrior:CodeWarrior IDE 3.2 | fat | fails | runs | e86: host signal 11 at guest pc $c0f277a0, address 0x30 | e86/dev/001.png | fix-dev |
+| dev-tools-system-7 | THINK C 6.0 ƒ:THINK C:THINK Project Manager | 68k | fails | runs | e86: TranslationDispatch selector $24: no size in the selector, session stopped (called from $55a76) | e86/dev/006.png | fix-dev |
+| dev-tools-system-7 | Languages ƒ:THINK Pascal 4.5d4 ƒ:Think Pascal:THINK Pascal 4.5d4:THINK Pascal 4.5 | 68k | fails | runs | e86: TranslationDispatch selector $24: no size in the selector, session stopped (called from $55a76) | e86/dev/004.png | fix-dev |
+| dev-tools-system-7 | Languages ƒ:HyperCard 2.4.1 ƒ:HyperCard | 68k | fails | runs | e86: Pack8 selector $830: no size in the selector, session stopped (called from $3c06e74) | e86/dev/002.png | fix-86 |
+| dev-tools-system-7 | Languages ƒ:MacPerl 5.2.0r4 ƒ:MacPerl | fat | fails | runs | e86: TranslationDispatch selector $24: no size in the selector, session stopped (called from $55a76) | e86/dev/003.png | fix-86 |
+| dev-tools-system-7 | Tools ƒ:ResEdit 2.1.3 ƒ:ResEdit 2.1.3:ResEdit | 68k | runs | runs | (e86: unimplemented ResourceDispatch selector $7 (D0 $00000007, 0 parameter bytes): answered paramErr) | e86/dev/008.png |  |
 | dev-tools-system-7 | Tools ƒ:BBEdit Lite 4.1 ƒ:BBEdit Lite 4.1 | fat | fails | runs | e86: alert "There is not enough memory to complete this command" at launch (G3: untitled window) | e86/dev/007.png | fix-dev |
 | dev-tools-macos-8-9 | MPW:MPW Shell | fat | fails | runs | e86: PowerPC exception 7 at 00000000 (lr 034c2f54) | e86/dev89/002.png | fix-dev |
 | dev-tools-macos-8-9 | Languages ƒ:MacPerl 5.6.1r2 ƒ:MacPerl | ppc | runs | runs | (e86: unimplemented PowerPC ICStart) | e86/dev89/001.png |  |
