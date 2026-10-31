@@ -115,7 +115,11 @@ public:
        if that is the stack). */
     bool isPatched() const
     {
-        return trapno && tooltraptable && originalFunction && tableEntry() != originalFunction;
+        /* _Unimplemented's own entry is not a patch: Executor leaves
+           $AA5A so on 7.x without PowerPC code (traps.cpp), and a library
+           call (CFM's, by stack selector) still reaches Executor's routine */
+        return trapno && tooltraptable && originalFunction && tableEntry() != originalFunction
+            && tableEntry() != tooltraptable[0xA89F & 0x3FF];
     }
     syn68k_addr_t tableEntry() const
     {
