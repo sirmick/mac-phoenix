@@ -6,6 +6,7 @@
 /* Forward declarations in ToolboxEvent.h (DO NOT DELETE THIS LINE) */
 
 #include <base/common.h>
+#include <wind/wind.h>
 #include <rsys/process.h>
 #include <rsys/opentransport.h>
 #include <QuickDraw.h>
@@ -440,6 +441,12 @@ static Boolean doevent(INTEGER em, EventRecord *evt,
 done:
     ALLOCAEND
     TRACE(31);
+    /* MacPhoenix: 8.x's collapse box, the system's for every application */
+    if(retval && remflag && evt->what == mouseDown && ROMlib_window8_collapse_click(evt->where.get()))
+    {
+        evt->what = nullEvent;
+        retval = false;
+    }
     if(SystemEvent(evt))
     {
         TRACE(32);

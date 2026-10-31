@@ -5,9 +5,11 @@
 #ifdef EXECUTOR
 #include <ResourceMgr.h>
 #include <FileMgr.h>
+#include <ToolboxUtil.h>
 #else
 #include <Resources.h>
 #include <Files.h>
+#include <TextUtils.h>
 #endif
 
 class ResourceTest : public testing::Test
@@ -179,6 +181,33 @@ TEST_F(ResourceTest, Modify1)
     ASSERT_EQ(0xABABABAB, *(GUEST<uint32_t>*)*h1);
     ASSERT_EQ(0xFEEDFACE, *(GUEST<uint32_t>*)*h2);
 }
+/* An index outside the list gives the empty string and writes nothing
+   more, as on the Macs (tests/guest/strprobe; the count is big-endian: AppleWorks 5 asks for one string past its
+   list and passes a buffer smaller than 256 bytes). */
+TEST_F(ResourceTest, GetIndStringOutOfRange)
+{
+    static const unsigned char list[] = { 0, 2, 3, 'o', 'n', 'e', 3, 't', 'w', 'o' };
+    Handle h = NewHandle(sizeof list);
+    ASSERT_NE(nullptr, h);
+    memcpy(*h, list, sizeof list);
+    AddResource(h, 'STR#', 128, PSTR(""));
+    EXPECT_EQ(noErr, ResError());
+
+    Str255 s;
+    memset(s, 0xAA, sizeof s);
+    GetIndString(s, 128, 2);
+    EXPECT_EQ(3, s[0]);
+    EXPECT_EQ(0, memcmp(s + 1, "two", 3));
+
+    for(short index : { 3, 0, -1 })
+    {
+        memset(s, 0xAA, sizeof s);
+        GetIndString(s, 128, index);
+        EXPECT_EQ(0, s[0]) << index;
+        EXPECT_EQ(0xAA, s[1]) << index;
+    }
+}
+
 /* The standard color tables are ROM resources: RGetResource finds them
    (PC Exchange's start-up icon asks for 'clut' 8). */
 TEST(Resources, RGetResourceROMClut)

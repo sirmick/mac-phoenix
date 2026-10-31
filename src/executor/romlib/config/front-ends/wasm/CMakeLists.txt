@@ -112,6 +112,20 @@ if(NODE_COMMAND)
         ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM};TMPDIR=${CMAKE_CURRENT_BINARY_DIR}")
 endif()
 
+# A PowerPC application in the tab: AppleWorks 5.0.3 on the same 8.6, up
+# with its windows (it once jumped to 0 here: GetIndString past a list).
+set(EXECUTOR_WEB_PPC_APPLEWORKS "$ENV{HOME}/storage/images/productivity-system-7.img" CACHE FILEPATH
+    "Image with AppleWorks 5.0.3 for executor.web.ppc_appleworks")
+if(NODE_COMMAND)
+    add_test(NAME executor.web.ppc_appleworks
+        COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_ppc.mjs
+                $<TARGET_FILE_DIR:executor-web> ${PROJECT_SOURCE_DIR}/tests/guest ${EXECUTOR_WEB_SYSTEM_PPC}
+                ${EXECUTOR_WEB_PPC_APPLEWORKS} "Productivity:AppleWorks 5.0.3 ƒ:AppleWorks")
+    set_tests_properties(executor.web.ppc_appleworks PROPERTIES
+        LABELS "executor;web" TIMEOUT 400 SKIP_RETURN_CODE 77
+        ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM};TMPDIR=${CMAKE_CURRENT_BINARY_DIR};TAB_NO_HELLO=1")
+endif()
+
 # HiDPI (docs/executor/HiDPI.md): the same Finder booted at ?scale=1 and
 # ?scale=2, checking the 2x run actually redraws text from outlines
 # rather than the browser (or Skia) upscaling the 1x canvas -- a real
@@ -146,5 +160,17 @@ if(NODE_COMMAND AND PYTHON3_COMMAND)
                 $<TARGET_FILE_DIR:executor-web> ${EXECUTOR_WEB_SYSTEM})
     set_tests_properties(executor.web.server_sync executor.web.server_lazy PROPERTIES
         LABELS "executor;web" TIMEOUT 300 SKIP_RETURN_CODE 77
+        ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM}")
+endif()
+
+# The network relay: MacPhoenixSuite's network and mactcp sections and
+# OTTestRetro68K in the tab, through tools/web/server's /relay to an echo
+# server on this host (tests/lib/echo_server.py).
+if(NODE_COMMAND AND PYTHON3_COMMAND)
+    add_test(NAME executor.web.relay
+        COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_relay.mjs
+                $<TARGET_FILE_DIR:executor-web> ${PROJECT_SOURCE_DIR}/tests/guest)
+    set_tests_properties(executor.web.relay PROPERTIES
+        LABELS "executor;web" TIMEOUT 400 SKIP_RETURN_CODE 77
         ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM}")
 endif()

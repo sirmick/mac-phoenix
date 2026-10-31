@@ -13,7 +13,7 @@
  },
  "e86|Productivity:AppleWorks 5.0.3 ƒ:AppleWorks": {
   "status": "runs",
-  "blocker": "menu bar still drawn as System 7's, not platinum; unimplemented PowerPC OpenWD until wash/fix-prod lands"
+  "blocker": "unimplemented PowerPC OpenWD until wash/fix-prod lands"
  },
  "8.6|Productivity:AppleWorks 5.0.3 ƒ:AppleWorks": {
   "owner": "platinum"

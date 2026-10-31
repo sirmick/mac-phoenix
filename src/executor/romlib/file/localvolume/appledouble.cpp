@@ -1,4 +1,5 @@
 #include "appledouble.h"
+#include "itemcache.h"
 #include "plain.h"
 
 #include <algorithm>
@@ -30,11 +31,19 @@ bool AppleDoubleItemFactory::isHidden(const fs::directory_entry& e)
 ItemPtr AppleDoubleItemFactory::createItemForDirEntry(ItemCache& itemcache, CNID parID, CNID cnid,
     const fs::directory_entry& e, mac_string_view macname)
 {
-    if(fs::is_regular_file(e.path()))
+    if(e.is_regular_file())
     {
         for(auto scheme : { AppleDoubleScheme::percent, AppleDoubleScheme::dotunderscore })
         {
-            if(fs::is_regular_file(makeADPath(scheme, e.path())))
+            fs::path adpath = makeADPath(scheme, e.path());
+            /* Same-folder sidecar: the current cacheDirectory() scan
+               already has every name here, so most files (no sidecar)
+               skip the stat entirely; a name match still confirms it's a
+               regular file (the scan doesn't track type, just presence). */
+            auto known = itemcache.siblingExistsInScan(e.path().parent_path(), adpath.filename().string());
+            if(known == false)
+                continue;
+            if(fs::is_regular_file(adpath))
                 return std::make_shared<AppleDoubleFileItem>(scheme, itemcache, parID, cnid, e.path(), macname);
         }
     }
@@ -117,7 +126,7 @@ void AppleDoubleFileItem::moveItem(const fs::path& newPath, mac_string_view newN
 ItemPtr AppleSingleItemFactory::createItemForDirEntry(ItemCache& itemcache, CNID parID, CNID cnid,
     const fs::directory_entry& e, mac_string_view macname)
 {
-    if(!fs::is_regular_file(e.path()))
+    if(!e.is_regular_file())
         return nullptr;
     GUEST<uint64_t> magic = 0;
     fs::ifstream(e.path(), std::ios::binary).read((char*)&magic, 8);

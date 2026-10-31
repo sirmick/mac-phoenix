@@ -127,7 +127,7 @@ size_t MacResourceFork::write(size_t offset, void *p, size_t n)
 ItemPtr MacItemFactory::createItemForDirEntry(ItemCache& itemcache, CNID parID, CNID cnid,
     const fs::directory_entry& e, mac_string_view macname)
 {
-    if(fs::is_regular_file(e.path()))
+    if(e.is_regular_file())
     {
         const char *fn = e.path().string().c_str();
         if(getxattr(fn, XATTR_FINDERINFO_NAME, nullptr, 0, 0, 0) > 0

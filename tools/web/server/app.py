@@ -23,7 +23,7 @@
         POST   objects/missing        { shas } -> { missing }
         PUT    objects/SHA, GET objects/SHA
         GET    (nothing after sync/)  what is kept: { overlays, volumes }
-    /relay            WebSocket, the relay's (relay.py: a stub)
+    /relay            WebSocket: the tab's sockets (relay.py, [relay])
 
 Everything but /login and its API needs a session (the cookie), unless
 the configuration makes the page public; sync always does. Writes and
@@ -79,6 +79,7 @@ class App:
         self.ids = library.Ids(os.path.join(data, "image-ids.json"))
         self.failures = {}                  # ("address" | "name", value) -> times
         self.failures_lock = threading.Lock()
+        self.relay = relay.Relay(cfg["relay"])
 
     def _recent(self, key, now):
         return [t for t in self.failures.get(key, []) if t > now - LOGIN_WINDOW]
@@ -463,7 +464,7 @@ def relay_ws(h):
     if not relay.upgrade(h):
         raise HttpError(400, "a WebSocket endpoint")
     h.close_connection = True
-    relay.handle(h.connection, h.user)
+    h.app.relay.handle(h.connection, h.user)
 
 
 class Server(http.server.ThreadingHTTPServer):

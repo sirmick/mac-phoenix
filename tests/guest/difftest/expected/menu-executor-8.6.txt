@@ -1,7 +1,5 @@
 # menu on Executor (8.6 System) against the G3 (8.6): known differences.
 # key-glob<TAB>reason. Remove a line when Executor matches (run.py lists those).
 text.text.data	DeleteMenuItem: 8.6 shifts a 0 into enableFlags' top bit, Executor a 1 (check 7.x before changing)
-size.size	menu metrics: 8.6's platinum MDEF (216x70), Executor's System 7 one (208x80)
-size.size.bold	menu metrics, as size.size (8.6 doesn't widen for a bold item)
 clock.IsMenuBarClockEnabled	8.6's image has the menu bar clock on; Executor draws none and answers off
 clock.GetMenuBarClockConfig.data	8.6's clock configuration (the user's); Executor keeps zeros until set
