@@ -596,18 +596,12 @@ void Executor::C_SetGWorld(CGrafPtr port, GDHandle graphics_device)
     }
     else
     {
-        if(graphics_device)
-            LM(TheGDevice) = graphics_device;
-        else
-        {
-            PixMapHandle gd_pixmap;
-
-            gd_pixmap = GD_PMAP(LM(MainDevice));
-
-            if(port
-               && (PIXMAP_BASEADDR(gd_pixmap) == PORT_BASEADDR(port)))
-                LM(TheGDevice) = LM(MainDevice);
-        }
+        /* MacPhoenix: a nil device is the main one, whatever the port (nil
+           included), as on 8.6 (difftest wind gworld); it was left alone
+           unless the port drew on the screen, so after SetGWorld(gw, nil)
+           and SetGWorld(nil, nil) the GWorld's device stayed current and
+           Mars Rising's window opened on it, drawn off screen. */
+        LM(TheGDevice) = graphics_device ? graphics_device : LM(MainDevice);
     }
 
     theCPort = port;
