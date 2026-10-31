@@ -606,6 +606,39 @@ int main(void)
     }
     if(SECTION("heap"))
         probe_heap();
+    if(SECTION("boot"))
+    {
+        /* BootDrive ($210): a volume reference number or a working
+           directory's? The 8.6 Finder looks the startup disk's VCB up by
+           vcbVRefNum. */
+        short bd = *(short *)0x210, vref = 0;
+        long dir = 0;
+        QHdrPtr q = GetVCBQHdr();
+        VCB *v;
+        WDPBRec wd;
+        int found = 0;
+        for(v = (VCB *)q->qHead; v; v = (VCB *)v->qLink)
+            if(v->vcbVRefNum == bd)
+                found = 1;
+        out("bootdrive.vcb", "%s", found ? "found by vcbVRefNum" : "no VCB with that vcbVRefNum");
+        FindFolder(kOnSystemDisk, kSystemFolderType, false, &vref, &dir);
+        out("bootdrive.is.system.vref", "%s", bd == vref ? "yes" : "no");
+        memset(&wd, 0, sizeof wd);
+        wd.ioVRefNum = bd;
+        out("bootdrive.wdinfo", "%d", PBGetWDInfoSync(&wd));
+        out("bootdrive.wdinfo.dir", "%s", wd.ioWDDirID == dir ? "System Folder"
+                                          : wd.ioWDDirID == 2 ? "root" : "other");
+        out("bootdrive.wdinfo.vref", "%s", wd.ioWDVRefNum == vref ? "the system volume" : "other");
+        {
+            /* GetWDInfo gives the working directory's volume: the 8.6
+               Finder makes its startup disk from GetWDInfo(BootDrive) */
+            short gv = 0;
+            long gd = 0, gp = 0;
+            out("getwdinfo", "%d", GetWDInfo(bd, &gv, &gd, &gp));
+            out("getwdinfo.vref", "%s", gv == vref ? "the system volume" : gv == bd ? "the WD number" : "other");
+            out("getwdinfo.dir", "%s", gd == dir ? "System Folder" : "other");
+        }
+    }
     probe_close();
     return 0;
 }
