@@ -1662,6 +1662,45 @@ TEST_F(FileTest, MakeFSSpec)
 }
 
 #ifdef EXECUTOR
+#include <Finder.h>
+#endif
+
+// The desktop database's refnum is an open path on its volume: PBGetFCBInfo
+// lists it, and its mark and EOF can be asked like any file's. Executor's is
+// an FCB with no file behind it; on a host folder these calls faulted
+// (FSGetForkCBInfo iterating the volume's paths, STRAGGLERS 57).
+TEST_F(FileTest, DesktopDBPath)
+{
+    DTPBRec dt;
+    memset(&dt, 0, sizeof(dt));
+    dt.ioVRefNum = vRefNum;
+    PBDTGetPath(&dt);
+    ASSERT_EQ(noErr, dt.ioResult);
+    short dtRef = dt.ioDTRefNum;
+
+    bool listed = false;
+    for(short i = 1; i < 100; i++)
+    {
+        FCBPBRec fpb;
+        memset(&fpb, 0, sizeof(fpb));
+        fpb.ioVRefNum = vRefNum;
+        fpb.ioFCBIndx = i;
+        if(PBGetFCBInfoSync(&fpb) != noErr)
+            break;
+        listed |= fpb.ioRefNum == dtRef;
+    }
+    EXPECT_TRUE(listed);
+
+    ParamBlockRec pb;
+    memset(&pb, 0, sizeof(pb));
+    pb.ioParam.ioRefNum = dtRef;
+    EXPECT_EQ(noErr, PBGetFPosSync(&pb));
+    memset(&pb, 0, sizeof(pb));
+    pb.ioParam.ioRefNum = dtRef;
+    EXPECT_EQ(noErr, PBGetEOFSync(&pb));
+}
+
+#ifdef EXECUTOR
 #include <AliasMgr.h>
 #else
 #include <Aliases.h>

@@ -17,8 +17,10 @@ try {
 const types = { '.html': 'text/html', '.js': 'text/javascript', '.wasm': 'application/wasm' };
 
 // Headless Chromium (CHROMIUM=PATH, or playwright's own).
+// CHROMIUM_ARGS: extra switches, space-separated (--enable-logging=stderr, say).
 export function launch() {
-    return chromium.launch(process.env.CHROMIUM ? { executablePath: process.env.CHROMIUM } : {});
+    const args = process.env.CHROMIUM_ARGS ? process.env.CHROMIUM_ARGS.split(' ') : [];
+    return chromium.launch(process.env.CHROMIUM ? { executablePath: process.env.CHROMIUM, args } : { args });
 }
 
 // A page of browser (a context of its own: its own OPFS), its errors and
@@ -26,13 +28,13 @@ export function launch() {
 export async function newPage(browser, { log = true, tag = '' } = {}) {
     const context = await browser.newContext({ viewport: { width: 800, height: 640 } });
     const page = await context.newPage();
-    page.on('pageerror', (e) => console.log(`[page error${tag}]`, e.message));
+    page.on('pageerror', (e) => console.log(`[page error${tag}]`, e.stack || e.message));
     if (log)
         page.on('worker', (w) => w.on('console', (m) => console.log(`[worker${tag}]`, m.text())));
     return page;
 }
 
-export async function open(dir, { log = true } = {}) {
+export async function open(dir, { log = true, query = '' } = {}) {
     const server = http.createServer((req, res) => {
         const f = path.join(dir, decodeURIComponent(new URL(req.url, 'http://x').pathname));
         fs.readFile(f, (err, data) => {
@@ -43,10 +45,11 @@ export async function open(dir, { log = true } = {}) {
     }).listen(0);
     const browser = await launch();
     const page = await browser.newPage({ viewport: { width: 800, height: 640 } });
-    page.on('pageerror', (e) => console.log('[page error]', e.message));
+    page.on('pageerror', (e) => console.log('[page error]', e.stack || e.message));
+    page.on('crash', () => console.log('[page crashed]'));
     if (log)
         page.on('worker', (w) => w.on('console', (m) => console.log('[worker]', m.text())));
-    await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
+    await page.goto(`http://127.0.0.1:${server.address().port}/index.html${query ? `?${query}` : ''}`);
     const close = async () => { await browser.close(); server.close(); };
     return { page, close };
 }

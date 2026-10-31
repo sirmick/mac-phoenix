@@ -9,6 +9,7 @@
 #include <mman/mman_private.h>
 #include <hfs/hfs.h>
 #include <file/file.h>
+#include <rsys/process.h>
 #include <vdriver/vdriver.h>
 #include <rsys/toolevent.h>
 #include <error/error.h>
@@ -207,6 +208,16 @@ std::string current_app_name()
 {
     if(!running)
         return {};
+    // The front process; CurApName names whichever process runs at this
+    // frame (the agent's, while an application quits)
+    std::string front = ROMlib_front_process_name();
+    if(!front.empty())
+    {
+        for(char& ch : front)
+            if((uint8_t)ch < 0x20 || (uint8_t)ch >= 0x7F)
+                ch = '?';
+        return front;
+    }
     // CurApName ($910): Pascal string, max 31 chars.
     const uint8_t *p = (const uint8_t *)SYN68K_TO_US(0x910);
     if(p[0] > 31)
