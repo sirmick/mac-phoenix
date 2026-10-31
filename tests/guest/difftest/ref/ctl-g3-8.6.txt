@@ -1,4 +1,4 @@
-# probe 7632bbfb253e91c06262b26b84bd8ccc030a9d0ac3f013ae907b71eaf9ac2272
+# probe fb972371ff9662e0672eb8b0295cc18d7051384e6d5afb05d266c6cfe71bb3e3
 == kind
 kind.0.new: made
 kind.0.values: 1 0 10
@@ -627,7 +627,7 @@ kind.272.datasize.kbbh: err -30581 -1515870811
 kind.273.new: made
 kind.273.values: 1 0 10
 kind.273.features: err 0 0001037c
-kind.273.best: err 0 10,10,10,110 base 0
+kind.273.best: err 0 10,10,26,110 base -4
 kind.273.datasize.text: err 0 0
 kind.273.datasize.tedh: err -30581 -1515870811
 kind.273.datasize.font: err 0 4

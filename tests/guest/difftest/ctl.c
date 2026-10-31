@@ -30,6 +30,25 @@ static void window(void)
     root = NULL;
 }
 
+/* The password edit text (273) shares its dialog's TextEdit record: 8.6's
+   definition takes DialogRecord.textH from its owner and measures it for
+   the best rectangle. In a plain window that reads past the window record,
+   whatever is there (on Executor once a stale word, which it then took for
+   a handle), so that kind is made in a dialog with no items. */
+static DialogPtr dialog_owner(void)
+{
+    static DialogPtr dlg;
+    if(!dlg)
+    {
+        Rect r;
+        Handle items = NewHandleClear(2);
+        **(short **)items = -1;
+        SetRect(&r, 40, 60, 440, 360);
+        dlg = NewDialog(NULL, &r, "\p", false, documentProc, (WindowPtr)-1, false, 0, items);
+    }
+    return dlg;
+}
+
 static void kinds(void)
 {
     int i, t;
@@ -44,7 +63,8 @@ static void kinds(void)
         ControlHandle c;
         OSErr err;
         SetRect(&r, 10, 10, 110, 30);
-        c = NewControl(win, &r, "\pTitle", false, 1, 0, 10, procs[i], 0);
+        c = NewControl(procs[i] == 273 ? (WindowPtr)dialog_owner() : win,
+                       &r, "\pTitle", false, 1, 0, 10, procs[i], 0);
         sprintf(k, "%d.new", procs[i]);
         out(k, "%s", c ? "made" : "nil");
         if(!c)
