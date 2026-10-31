@@ -3356,8 +3356,12 @@
         type: LONGINT*
       - name: procp
         type: LONGINT*
+    executor: true
     comment: |
-      NOTRAP_FUNCTION2(HDelete);
+      MacPhoenix: missing `executor: true` left this declared but never
+      exported, so PowerPC code importing it by name (Finder) got the
+      generic unresolved-import stub instead of hfsWorkingdir.cpp's
+      GetWDInfo.
 
 # ####
 
