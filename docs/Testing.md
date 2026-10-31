@@ -203,7 +203,11 @@ range at the time (20000, 21000, ... 31000, then 12000-17000, then
 long as its directory exists. `python3 tests/lib/ports.py slots` lists
 them, `ports.py base` the checkout's. A port outside 18000-18999 is taken
 as already mapped (or asked for on purpose) and left alone. An emulator
-started by hand: :11000, or 19000-19999, which no checkout is given.
+started by hand: :11000, or 19000-19999, which no checkout is given. A
+script whose port something already listens on fails at once (`FAIL: port N
+is in use by pid ...`): a session left over from a run ctest killed (an MPW
+service outlives its script) would otherwise hold the test up until its
+timeout.
 
 ### Guest tests and the bridge
 

@@ -103,7 +103,7 @@ while [[ $# -gt 0 ]]; do
         *) echo "Unknown arg: $1"; exit 1 ;;
     esac
 done
-source "$(dirname "$0")/lib/ports.sh"; PORT=$(mp_port "$PORT")  # per-worktree (docs/Testing.md)
+source "$(dirname "$0")/lib/ports.sh"; PORT=$(mp_port "$PORT") || exit 1  # per-worktree (docs/Testing.md)
 
 # --arch was deprecated; backend determines arch. Derive ARCH from BACKEND for
 # the ROM/RAM/disk selection logic only (not passed to the binary).
