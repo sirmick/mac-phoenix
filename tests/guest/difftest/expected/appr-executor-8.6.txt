@@ -11,12 +11,6 @@ draw32.growbox.*	the grow box isn't drawn platinum yet (GetThemeStandaloneGrowBo
 draw8.growbox.*	the grow box isn't drawn platinum yet (GetThemeStandaloneGrowBoxBounds unimplemented)
 draw32.windowframe.*	DrawThemeWindowFrame draws nothing into a GWorld on 8.6; Executor draws the frame
 draw8.windowframe.*	DrawThemeWindowFrame draws nothing into a GWorld on 8.6; Executor draws the frame
-draw32.menubar	the menu bar isn't drawn platinum yet
-draw8.menubar	the menu bar isn't drawn platinum yet
-draw32.menubg.*	menu backgrounds aren't drawn platinum yet
-draw8.menubg.*	menu backgrounds aren't drawn platinum yet
-draw32.menuseparator	the menu separator isn't drawn platinum yet
-draw8.menuseparator	the menu separator isn't drawn platinum yet
 frames.0.*	the title's glyphs (Charcoal from Executor's unhinted scaler); the frame is 8.6's
 frames.4.*	the title's glyphs (Charcoal from Executor's unhinted scaler); the frame is 8.6's
 frames.8.*	the title's glyphs (Charcoal from Executor's unhinted scaler); the frame is 8.6's
@@ -45,7 +39,6 @@ button.5.*	bevel/round button regions are shapes on 8.6, rectangles in Executor
 track.*.live40	live value: 8.6 maps the thumb position differently (22 vs 30)
 track.2.thumb.rgn	slider thumb is a shape on 8.6, a rectangle in Executor
 misc.tab.*	tab regions: 8.6's are the tab shape (width from the title), Executor's the whole rect
-misc.menubg.*	menu background regions: shapes on 8.6
 misc.growbox.*	GetThemeStandaloneGrowBoxBounds not implemented (output left alone)
 
 # The theme collection and the private calls
