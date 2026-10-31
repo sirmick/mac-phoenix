@@ -105,6 +105,20 @@ gestalt32BitSysZone = 1,
 gestalt32BitCapable = 2,
 };
 
+enum {gestaltStereoCapability = 0,
+gestaltStereoMixing = 2,
+gestaltSoundIOMgrPresent = 3,
+gestaltBuiltInSoundInput = 4,
+gestaltHasSoundInputDevice = 5,
+gestaltPlayAndRecord = 6,
+gestalt16BitSoundIO = 7,
+gestaltStereoInput = 8,
+gestaltLineLevelInput = 9,
+gestaltSndPlayDoubleBuffer = 10,
+gestaltMultiChannels = 11,
+gestalt16BitAudioSupport = 12,
+};
+
 // gestaltHardwareAttr return values
 enum {gestaltHasVIA1 = 0,
 gestaltHasVIA2 = 1,
