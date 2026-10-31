@@ -1457,13 +1457,14 @@ void SetPtrSize(Ptr p, Size newsize)
     MM_SLAM("exit");
 }
 
+/* A zone header in guest memory. A block's zone field is whatever the
+   word before it holds when a program passes a pointer that isn't a block:
+   natively reading through it touches some host memory, in wasm it traps
+   and the tab is gone. */
 static bool
 legit_addr_p(void *addr)
 {
-    bool retval;
-
-    retval = true; /* all addresses are valid for now */
-    return retval;
+    return syn68k_is_guest_mapped((uintptr_t)addr, sizeof(Zone));
 }
 
 static bool
@@ -1507,6 +1508,9 @@ THz PtrZone(Ptr p)
 
     if(!legit_zone_p(zone))
     {
+        if(!legit_addr_p(zone))
+            fprintf(stderr, "[mm] PtrZone($%08X): not a block, its zone word $%08X is outside memory\n",
+                    (unsigned)ptr_to_longint(p), (unsigned)(uint32_t)block->location_u);
         SET_MEM_ERR(memWZErr); /* not sure what this should be */
         return nullptr;
     }

@@ -245,6 +245,8 @@ async function start(m) {
                   ...images.flatMap((f) => ['--disk', `/uploads/${f.name}`])];
     if (m.system && images.some((f) => f.name === m.system))
         args.push('--system', `/uploads/${m.system}`);
+    if (m.ppc)
+        args.push('--ppc');
     await runtimeReady;
     if (m.volumeKey) {
         await openVolume(m.volumeKey);

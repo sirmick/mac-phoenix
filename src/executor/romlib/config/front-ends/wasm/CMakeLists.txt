@@ -95,3 +95,19 @@ if(NODE_COMMAND)
         LABELS "executor;web" TIMEOUT 240 SKIP_RETURN_CODE 77
         ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM}")
 endif()
+
+# W4: PowerPC in the tab on Apple's 8.6 System (an HFS+ image, the page's
+# System choice and PowerPC box): the Finder, a disk's window, PPCHello;
+# prints the times (web/tests/tab_ppc.mjs). Skips without the image. The
+# browser profile (its OPFS holds the uploaded image) in the build tree,
+# not a tmpfs /tmp.
+set(EXECUTOR_WEB_SYSTEM_PPC "$ENV{HOME}/storage/images/8.6.img" CACHE FILEPATH
+    "Mac OS 8.x System image for executor.web.ppc")
+if(NODE_COMMAND)
+    add_test(NAME executor.web.ppc
+        COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_ppc.mjs
+                $<TARGET_FILE_DIR:executor-web> ${PROJECT_SOURCE_DIR}/tests/guest ${EXECUTOR_WEB_SYSTEM_PPC})
+    set_tests_properties(executor.web.ppc PROPERTIES
+        LABELS "executor;web" TIMEOUT 300 SKIP_RETURN_CODE 77
+        ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM};TMPDIR=${CMAKE_CURRENT_BINARY_DIR}")
+endif()
