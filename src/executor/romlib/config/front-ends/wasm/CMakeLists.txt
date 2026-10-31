@@ -148,3 +148,27 @@ if(NODE_COMMAND AND PYTHON3_COMMAND)
         LABELS "executor;web" TIMEOUT 300 SKIP_RETURN_CODE 77
         ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM}")
 endif()
+
+# The assembled site (docs/executor/WebSite.md): every target application on
+# its library disk (tools/web/make_library.py's, EXECUTOR_WEB_LIBRARY),
+# opened from tools/web/server's library on each of the site's systems and
+# used a moment; docs/executor/SCOREBOARD.md says which are expected to fail
+# yet (web/tests/tab_site.mjs). Long (a reload and a launch an
+# application), so label site, not executor: ctest -L site. Skip without
+# the library.
+set(EXECUTOR_WEB_LIBRARY "$ENV{HOME}/storage/web-library" CACHE PATH
+    "tools/web/make_library.py's output, for the executor.web.site cells")
+if(NODE_COMMAND AND PYTHON3_COMMAND)
+    foreach(cell "7.6.1 productivity" "7.6.1 development" "7.6.1 games-68k"
+                 "8.6 productivity" "8.6 development" "8.6 games-ppc")
+        separate_arguments(cell)
+        list(GET cell 0 system)
+        list(GET cell 1 disk)
+        add_test(NAME executor.web.site.${system}.${disk}
+            COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_site.mjs
+                    $<TARGET_FILE_DIR:executor-web> ${EXECUTOR_WEB_LIBRARY} ${system} ${disk}.img)
+        set_tests_properties(executor.web.site.${system}.${disk} PROPERTIES
+            LABELS "web;site" TIMEOUT 1800 SKIP_RETURN_CODE 77
+            ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM};TMPDIR=${CMAKE_CURRENT_BINARY_DIR}")
+    endforeach()
+endif()
