@@ -133,14 +133,21 @@ hdlr_table_elt(AE_hdlr_table_h table,
     {
         n_elts++;
 
+        /* AE_hdlr_table_alloc's capacity argument reserves room up front
+           (HyperCard preallocates for 175/105 handlers); only grow the
+           handle once the reservation is used up. */
+        int32_t n_bytes = sizeof(AE_hdlr_table_t) + n_elts * sizeof(AE_hdlr_table_elt_t);
+        if(n_bytes > AE_TABLE_N_ALLOCATED_BYTES(table))
+        {
+            SetHandleSize((Handle)table, n_bytes);
+
+            if(LM(MemErr) != noErr)
+                AE_RETURN_ERROR(LM(MemErr));
+
+            AE_TABLE_N_ALLOCATED_BYTES(table) = n_bytes;
+        }
+
         AE_TABLE_N_ELTS(table) = n_elts;
-
-        SetHandleSize((Handle)table,
-                      (sizeof(AE_hdlr_table_t)
-                       + n_elts * sizeof(AE_hdlr_table_elt_t)));
-
-        if(LM(MemErr) != noErr)
-            AE_RETURN_ERROR(LM(MemErr));
 
         elts = AE_TABLE_ELTS(table);
         elt = &elts[n_elts - 1];
@@ -156,25 +163,29 @@ hdlr_table_elt(AE_hdlr_table_h table,
     AE_RETURN_ERROR(errAEHandlerNotFound);
 }
 
-OSErr Executor::C__AE_hdlr_table_alloc(int32_t unknown_1, int32_t unknown_2,
+OSErr Executor::C__AE_hdlr_table_alloc(int32_t n_elts, int32_t unknown_2,
                                        int32_t unknown_3, int8_t unknown_p,
                                        GUEST<AE_hdlr_table_h> *table_return)
 {
     AE_hdlr_table_h table;
 
-    gui_assert(unknown_1 == 16);
     gui_assert(unknown_2 == 0x80008);
     gui_assert(unknown_3 == 0);
 
     /* #### unknown_p is currently ignored */
 
-    /* #### actual initial allocation size is probably a function of the
-     first argument */
-    table = (AE_hdlr_table_h)NewHandleClear(52);
+    /* n_elts is the initial capacity to reserve, not an element count
+       (the table starts out empty either way): the ROM always passes 16,
+       HyperCard 2.4.1 preallocates room for 175 and 105 handlers so its
+       many AE_hdlr_install calls don't grow the handle one element at a
+       time. hdlr_table_elt() below only resizes once this reservation
+       is used up. */
+    int32_t n_bytes = sizeof(AE_hdlr_table_t) + n_elts * sizeof(AE_hdlr_table_elt_t);
+    table = (AE_hdlr_table_h)NewHandleClear(n_bytes);
     if(LM(MemErr) != noErr)
         AE_RETURN_ERROR(LM(MemErr));
 
-    AE_TABLE_N_ALLOCATED_BYTES(table) = 52;
+    AE_TABLE_N_ALLOCATED_BYTES(table) = n_bytes;
     AE_TABLE_N_ELTS(table) = 0;
 
     *table_return = table;

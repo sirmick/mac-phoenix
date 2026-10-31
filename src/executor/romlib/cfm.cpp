@@ -77,6 +77,17 @@ struct loaded_fragment
 std::vector<loaded_fragment> loaded;
 const load_origin *current_origin;
 
+/* MacPhoenix: Executor's own libraries GetSharedLibrary has connected an
+   application to (its imports, its own calls), which kFindLib finds. */
+struct builtin_connection
+{
+    std::string name;
+    OSType arch;
+    ConnectionID cid;
+    THz zone;
+};
+std::vector<builtin_connection> builtin_connections;
+
 /* MacPhoenix: init routines run once the whole closure is prepared, as
    Apple's CFM does: libraries that import each other (8.x's ToolboxUtils,
    AppearanceLib, PreferencesLib, ...) are all relocated before any of them
@@ -91,6 +102,25 @@ struct pending_init
 std::vector<pending_init> pending_inits;
 int prepare_depth;
 
+/* MacPhoenix: the instances of sections whose share kind is global
+   (kPEFGlobalShare): one for the whole system, as Apple's CFM keeps them,
+   whichever process prepares the container. 8.6's FontObjectsGlobals and
+   GlyphsCache keep the font object and glyph cache lists there; given a
+   fresh copy per application, the second application's ATS walked the
+   first's skip list to an end node it no longer recognised, and spun
+   (docs/executor/MacOS8-9.md). Relocated by the first preparation only.
+   Containers in files only: an in-memory one has no lasting identity. */
+struct global_section
+{
+    FSSpec file;
+    uint32_t offset;
+    int index;
+    void *start;
+    uint32_t length;
+    bool relocated;
+};
+std::vector<global_section> global_sections;
+
 bool same_name(const std::string& a, const std::string& b)
 {
     return a.size() == b.size() && !strncasecmp(a.data(), b.data(), a.size());
@@ -100,6 +130,19 @@ bool same_file(const FSSpec& a, const FSSpec& b)
 {
     return a.vRefNum == b.vRefNum && a.parID == b.parID
         && EqualString(a.name, b.name, false, true);
+}
+
+/* The system's instance of section index of the container being prepared,
+   if it has one yet. */
+global_section *find_global_section(int index)
+{
+    const load_origin *o = current_origin;
+    if(!o || o->where != kOnDiskFlat)
+        return nullptr;
+    for(global_section& g : global_sections)
+        if(g.index == index && g.offset == o->offset && same_file(g.file, o->file))
+            return &g;
+    return nullptr;
 }
 
 loaded_fragment *find_loaded(ConnectionID cid)
@@ -176,6 +219,11 @@ void Executor::ROMlib_cfm_process_exit(uint32_t part_lo, uint32_t part_hi)
             uint32_t z = US_TO_SYN68K((void *)f.zone);
             return z >= part_lo && z < part_hi;
         }), loaded.end());
+    builtin_connections.erase(std::remove_if(builtin_connections.begin(), builtin_connections.end(),
+        [&](const builtin_connection& b) {
+            uint32_t z = US_TO_SYN68K((void *)b.zone);
+            return z >= part_lo && z < part_hi;
+        }), builtin_connections.end());
 }
 
 bool Executor::ROMlib_cfm_ppc_code(uint32_t addr)
@@ -250,6 +298,8 @@ void Executor::ROMlib_cfm_application_start()
     THz zone = LM(ApplZone);
     loaded.erase(std::remove_if(loaded.begin(), loaded.end(),
         [&](const loaded_fragment& f) { return f.zone == zone; }), loaded.end());
+    builtin_connections.erase(std::remove_if(builtin_connections.begin(), builtin_connections.end(),
+        [&](const builtin_connection& b) { return b.zone == zone; }), builtin_connections.end());
 }
 
 /* MacPhoenix: memory for a fragment: the application heap, else
@@ -262,10 +312,23 @@ void Executor::ROMlib_cfm_application_start()
    that it doesn't fill the heap of the application that happens to load
    it. */
 static bool loading_system_fragment;
+/* A global section outlives the process that prepares it: never in its
+   heap. */
+static bool loading_global_section;
 
 static Ptr
 cfm_new_ptr(Size n)
 {
+    if(loading_global_section)
+    {
+        Ptr p = nullptr;
+        if(ROMlib_pm_zone)
+        {
+            TheZoneGuard guard(ROMlib_pm_zone);
+            p = NewPtr(n);
+        }
+        return p ? p : NewPtrSys(n);
+    }
     Ptr p = loading_system_fragment ? nullptr : NewPtr(n);
     if(!p && ROMlib_pm_zone)
     {
@@ -685,8 +748,10 @@ check_vanddir(INTEGER vref, LONGINT dirid, int descend_count, ConstStr63Param li
     pb.hFileInfo.ioVRefNum = vref;
     err = noErr;
     errcount = 0;
+    /* kFindLib: fragConnectionIDNotFound is a file that has the library,
+       not prepared; it ends the search as a find does. */
     for(dirindex = 1;
-        retval != noErr && err != fnfErr && errcount != 3;
+        retval != noErr && retval != fragConnectionIDNotFound && err != fnfErr && errcount != 3;
         dirindex++)
     {
         pb.hFileInfo.ioFDirIndex = dirindex;
@@ -782,6 +847,90 @@ check_system_file(ConstStr63Param library, OSType arch, LoadFlags loadflags,
                            cidp, mainaddrp, errName);
 }
 
+/* MacPhoenix: one of Executor's own libraries, connected to the current
+   application. */
+static OSErr
+connect_builtin(ConstStr63Param library, OSType arch, GUEST<ConnectionID> *cidp,
+                GUEST<Ptr> *mainaddrp)
+{
+    ConnectionID cid = builtinlibs::getBuiltinLib(library, arch);
+    if(!cid)
+        return fragLibNotFound;
+    std::string name = pstr(library);
+    if(std::none_of(builtin_connections.begin(), builtin_connections.end(),
+                    [&](const builtin_connection& b) {
+                        return b.arch == arch && b.zone == LM(ApplZone) && same_name(b.name, name);
+                    }))
+        builtin_connections.push_back({ name, arch, cid, LM(ApplZone) });
+    *cidp = cid;
+    *mainaddrp = nullptr;
+    return noErr;
+}
+
+/* MacPhoenix: GetSharedLibrary's kFindLib, past the files prepared for this
+   application: a library connected to it is found; one that is there but
+   not connected answers cfragLibConnErr; only one that isn't there at all
+   fragLibNotFound. So LibProbe finds on the G3 with 8.6: InterfaceLib 0,
+   AppearanceLib, WindowsLib, MenusLib & co. -2817, DialogsLib -2804; BBEdit
+   Lite 6.1 asks that way whether the Appearance Manager is there. */
+static OSErr
+find_library(ConstStr63Param library, OSType arch, GUEST<ConnectionID> *cidp,
+             GUEST<Ptr> *mainaddrp, Str255 errName)
+{
+    std::string name = pstr(library);
+    for(const builtin_connection& b : builtin_connections)
+        if(b.arch == arch && b.zone == LM(ApplZone) && same_name(b.name, name))
+        {
+            *cidp = b.cid;
+            *mainaddrp = nullptr;
+            return noErr;
+        }
+    /* the files, with kFindLib: noErr prepared, fragConnectionIDNotFound
+       there but not prepared */
+    OSErr err = check_file(ROMlib_exevrefnum, 0, ROMlib_exefname, false, library, arch,
+                           kFindLib, cidp, mainaddrp, errName);
+    if(err != noErr && err != fragConnectionIDNotFound)
+        err = check_vanddir(ROMlib_exevrefnum, 0, 0, library, arch, kFindLib, cidp,
+                            mainaddrp, errName);
+    if(err != noErr && err != fragConnectionIDNotFound)
+    {
+        GUEST<INTEGER> vref;
+        GUEST<LONGINT> dirid;
+        if(FindFolder(0, kExtensionFolderType, false, &vref, &dirid) == noErr)
+            err = check_vanddir(vref, dirid, 1, library, arch, kFindLib, cidp, mainaddrp,
+                                errName);
+    }
+    if(err == noErr)
+        return noErr;
+    /* 8.6 answers cfragLibConnErr for any library not connected, there or
+       not (LibProbe, the sys probe's cfm keys: DialogsLib, NoSuchLibrary);
+       before 8.5 not checked, as it was */
+    if((uint16_t)LM(SysVersion) >= 0x0850)
+        return fragLibConnErr;
+    if(err == fragConnectionIDNotFound || builtinlibs::haveBuiltinLib(library, arch))
+        return fragLibConnErr;
+    err = check_system_file(library, arch, kFindLib, cidp, mainaddrp, errName);
+    if(err == noErr)
+        return noErr;
+    return err == fragConnectionIDNotFound ? fragLibConnErr : fragLibNotFound;
+}
+
+/* On 8.6 InitFonts, InitWindows and InitMenus prepare the native library
+   their manager is in, in the application's context: kFindLib finds
+   FontManager, WindowsLib and MenusLib once they have run (the sys probe),
+   not before (LibProbe). */
+void Executor::ROMlib_cfm_toolbox_library(const char *library)
+{
+    if((uint16_t)LM(SysVersion) < 0x0850)
+        return;
+    Str63 name;
+    name[0] = strlen(library);
+    memcpy(name + 1, library, name[0]);
+    GUEST<ConnectionID> cid;
+    GUEST<Ptr> mainaddr;
+    connect_builtin(name, "pwpc"_4, &cid, &mainaddr);
+}
+
 /*
  * This sort of implements the "Searching for Import Libraries" algorithm
  * described on 1-17 and 1-18 of the Mac Runtime Architectures manual.  The
@@ -823,29 +972,21 @@ OSErr Executor::C_GetSharedLibrary(ConstStr63Param library, OSType arch,
             return noErr;
         }
     if(retval == fragLibNotFound && loadflags == kFindLib)
-        return fragLibNotFound;
+        return find_library(library, arch, cidp, mainaddrp, errName);
     /* MacPhoenix: libraries whose routines Executor answers itself, as it
        does Open Transport, before Apple's own: the 68k ObjectSupportLib
        runs its 'proc' resources against the AppleEvent Manager's private
        selectors (docs/executor/CFM68K.md). */
     if(retval == fragLibNotFound && arch == "m68k"_4
-       && EqualString(library, (StringPtr) "\020ObjectSupportLib", false, true))
-        if(ConnectionID cid = builtinlibs::getBuiltinLib(library, arch))
-        {
-            *cidp = cid;
-            *mainaddrp = nullptr;
-            return noErr;
-        }
+       && EqualString(library, (StringPtr) "\020ObjectSupportLib", false, true)
+       && connect_builtin(library, arch, cidp, mainaddrp) == noErr)
+        return noErr;
     /* ... and, Open Transport on, OT's PowerPC libraries (OpenTransport.yaml:
        OTClientLib & co.): Apple's files need Apple's OT kernel. */
     if(retval == fragLibNotFound && arch == "pwpc"_4 && ROMlib_open_transport
-       && ROMlib_ot_library(std::string((const char *)library + 1, library[0])))
-        if(ConnectionID cid = builtinlibs::getBuiltinLib(library, arch))
-        {
-            *cidp = cid;
-            *mainaddrp = nullptr;
-            return noErr;
-        }
+       && ROMlib_ot_library(std::string((const char *)library + 1, library[0]))
+       && connect_builtin(library, arch, cidp, mainaddrp) == noErr)
+        return noErr;
     if(retval == fragLibNotFound)
     {
         retval = check_file(ROMlib_exevrefnum, 0, ROMlib_exefname, false,
@@ -877,12 +1018,7 @@ OSErr Executor::C_GetSharedLibrary(ConstStr63Param library, OSType arch,
                 //retval = ROMlib_GetInterfaceLib(library, arch, loadflags, cidp,
                 //                                mainaddrp, errName);
                 printf("InterfaceLib\n");*/
-            if(ConnectionID cid = builtinlibs::getBuiltinLib(library, arch))
-            {
-                *cidp = cid;
-                *mainaddrp = nullptr;
-                retval = noErr;
-            }
+            retval = connect_builtin(library, arch, cidp, mainaddrp);
         }
         /* MacPhoenix: then what the System file has that Executor hasn't. */
         if(retval != noErr)
@@ -1345,9 +1481,15 @@ load_loader_section(const void *addr,
         uint32_t reloc_count;
         uint8_t(*reloc_instrs)[2];
 
+        /* a global section was relocated by its first preparation */
+        global_section *g = find_global_section(PEFRLH_SECTION_INDEX(&reloc_headers[i]));
+        if(g && g->relocated)
+            continue;
         reloc_count = PEFRLH_RELOC_COUNT(&reloc_headers[i]);
         reloc_instrs = (decltype(reloc_instrs))(relocation_area
                                                 + PEFRLH_FIRST_RELOC_OFFSET(&reloc_headers[i]));
+        if(g)
+            g->relocated = true;
         retval = relocate(reloc_headers,
                           PEFRLH_SECTION_INDEX(&reloc_headers[i]),
                           reloc_count,
@@ -1430,7 +1572,25 @@ do_pef_section(ConnectionID connp, const void *addr,
     share_kind = PEFSH_SHARE_KIND(shp);
     alignment = PEFSH_ALIGNMENT(shp);
 
-    switch(PEFSH_SECTION_KIND(shp))
+    int kind = PEFSH_SECTION_KIND(shp);
+    bool global = share_kind == kPEFGlobalShare && current_origin
+        && current_origin->where == kOnDiskFlat
+        && (kind == kPEFUnpackedDataSection || kind == kPEFPatternDataSection
+            || kind == kPEFExecutableDataSection);
+    if(global)
+    {
+        if(global_section *g = find_global_section(i))
+        {
+            connp->sects[i].start = g->start;
+            connp->sects[i].length = g->length;
+            connp->sects[i].perms = readable_section | writable_section
+                | (kind == kPEFExecutableDataSection ? executable_section : 0);
+            return noErr;
+        }
+        loading_global_section = true;
+    }
+
+    switch(kind)
     {
         case kPEFCodeSection:
             connp->sects[i].perms = readable_section | executable_section;
@@ -1473,6 +1633,14 @@ do_pef_section(ConnectionID connp, const void *addr,
             break;
     }
 
+    if(global)
+    {
+        loading_global_section = false;
+        if(retval == noErr)
+            global_sections.push_back({ current_origin->file, current_origin->offset, i,
+                                        connp->sects[i].start.get(), connp->sects[i].length,
+                                        false });
+    }
     return retval;
 }
 

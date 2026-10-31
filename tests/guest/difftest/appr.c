@@ -618,13 +618,33 @@ static void drawing(void)
         for(i = 0; i <= 10; i++)
         {
             Rect cont;
+            OSStatus err;
             SetRect(&cont, 10, 25, 110, 55);
             begin(depths[d]);
-            DrawThemeWindowFrame(i, &cont, kThemeStateActive, NULL,
-                                 kThemeWindowHasCloseBox | kThemeWindowHasFullZoom | kThemeWindowHasCollapseBox,
-                                 NULL, 0);
+            err = DrawThemeWindowFrame(i, &cont, kThemeStateActive, NULL,
+                                       kThemeWindowHasCloseBox | kThemeWindowHasFullZoom | kThemeWindowHasCollapseBox,
+                                       NULL, 0);
             sprintf(k, "windowframe.%d", i);
             end(k);
+            sprintf(k, "windowframe.%d.err", i);
+            out(k, "%d", (int)err);
+        }
+        /* ... with the metrics (title width and height as GetThemeWindowRegion
+           takes them) */
+        for(i = 0; i <= 10; i++)
+        {
+            Rect cont;
+            OSStatus err;
+            ThemeWindowMetrics wm = { sizeof(ThemeWindowMetrics), 0, 0, 0, 0, 0 };
+            SetRect(&cont, 10, 25, 110, 55);
+            begin(depths[d]);
+            err = DrawThemeWindowFrame(i, &cont, kThemeStateActive, &wm,
+                                       kThemeWindowHasCloseBox | kThemeWindowHasFullZoom | kThemeWindowHasCollapseBox,
+                                       NULL, 0);
+            sprintf(k, "windowframe.metrics.%d", i);
+            end(k);
+            sprintf(k, "windowframe.metrics.%d.err", i);
+            out(k, "%d", (int)err);
         }
     }
 }
@@ -632,22 +652,63 @@ static void drawing(void)
 /* Window frames as programs get them: windows of the classic and the
    Appearance definitions (procIDs) on the screen, active and then
    unhilited, the frame copied out. A plain dialog box behind them hides
-   the desktop (its pattern isn't what is compared). */
+   the desktop (its pattern isn't what is compared). Active, the close,
+   zoom and collapse boxes pressed too: the window's definition called
+   with wDraw and the part, as TrackBox does (and again, and the whole
+   frame, to let go); and collapsed (CollapseWindow). */
+static void frame_out(const char *key)
+{
+    static Rect from = { 50, 20, 150, 220 };   /* the frame and some white round it */
+    static Rect to = { 0, 0, 100, 200 };
+    CGrafPort screen;
+    GWorldPtr g;
+    GrafPtr save;
+    GetPort(&save);
+    OpenCPort(&screen);
+    NewGWorld(&g, 32, &to, NULL, NULL, 0);
+    LockPixels(GetGWorldPixMap(g));
+    SetPort((GrafPtr)&screen);
+    CopyBits((BitMap *)*screen.portPixMap, (BitMap *)*GetGWorldPixMap(g), &from, &to, srcCopy, NULL);
+    SetPort(save);
+    CloseCPort(&screen);
+    probe_pixels(key, g);
+    DisposeGWorld(g);
+}
+
+static void wdef_draw(WindowRef w, long part)
+{
+    Handle def = ((WindowPeek)w)->windowDefProc;
+    GrafPtr save;
+    CGrafPtr wm;
+    RgnHandle clip = NewRgn();
+    GetPort(&save);
+    GetCWMgrPort(&wm);
+    SetPort((GrafPtr)wm);
+    GetClip(clip);
+    SetClip(GetGrayRgn());
+    HLock(def);
+    InvokeWindowDefUPP(GetWVariant(w), w, wDraw, part, (WindowDefUPP)*def);
+    HUnlock(def);
+    SetClip(clip);
+    DisposeRgn(clip);
+    SetPort(save);
+}
+
 static void frames(void)
 {
     static const short procs[] = { 0, 1, 2, 3, 4, 5, 8, 16, 1024, 1031, 1040, 1041, 1042, 1043,
-                                   1057, 1059, 1073 };
-    Rect back, b, from, to;
+                                   1057, 1059, 1073, 1061, 1075 };
+    static const short parts[] = { wInGoAway, wInZoomOut, wInCollapseBox };
+    Rect back, b;
     WindowRef backing, w;
     char k[48];
-    int i, active;
+    int i, j, active;
+    OSStatus err;
     if(!SECTION("frames"))
         return;
     SetRect(&back, 0, 40, 400, 240);
     backing = NewCWindow(NULL, &back, "\p", true, plainDBox, (WindowRef)-1, false, 0);
     SetRect(&b, 40, 80, 200, 130);           /* content: 160 x 50 */
-    SetRect(&from, 20, 50, 220, 150);        /* the frame and some white round it */
-    SetRect(&to, 0, 0, 200, 100);
     for(i = 0; i < (int)(sizeof procs / sizeof procs[0]); i++)
     {
         w = NewCWindow(NULL, &b, "\pFrame", true, procs[i], (WindowRef)-1, true, 0);
@@ -659,22 +720,33 @@ static void frames(void)
         }
         for(active = 1; active >= 0; active--)
         {
-            CGrafPort screen;
-            GWorldPtr g;
-            GrafPtr save;
-            GetPort(&save);
             if(!active)
                 HiliteWindow(w, false);
-            OpenCPort(&screen);
-            NewGWorld(&g, 32, &to, NULL, NULL, 0);
-            LockPixels(GetGWorldPixMap(g));
-            SetPort((GrafPtr)&screen);
-            CopyBits((BitMap *)*screen.portPixMap, (BitMap *)*GetGWorldPixMap(g), &from, &to, srcCopy, NULL);
-            SetPort(save);
-            CloseCPort(&screen);
             sprintf(k, "%d.%s", procs[i], active ? "active" : "inactive");
-            probe_pixels(k, g);
-            DisposeGWorld(g);
+            frame_out(k);
+            if(!active)
+                continue;
+            for(j = 0; j < 3; j++)
+            {
+                wdef_draw(w, parts[j]);
+                sprintf(k, "%d.pressed%d", procs[i], parts[j]);
+                frame_out(k);
+                wdef_draw(w, parts[j]);
+                wdef_draw(w, 0);
+            }
+            /* collapsed to the title bar (the windows that can) and back */
+            err = CollapseWindow(w, true);
+            if(err == noErr)
+            {
+                sprintf(k, "%d.collapsed", procs[i]);
+                frame_out(k);
+                CollapseWindow(w, false);
+            }
+            else
+            {
+                sprintf(k, "%d.collapse", procs[i]);
+                out(k, "%d", (int)err);
+            }
         }
         DisposeWindow(w);
     }

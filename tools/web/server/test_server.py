@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
 """tools/web/server's own checks: ranges, accounts, the library, sync, the
-relay stub (ctest executor.web.server; no browser needed).
+relay (ctest executor.web.server; no browser needed).
 
     python3 tools/web/server/test_server.py
 """
 import base64
+import contextlib
 import hashlib
 import http.client
 import json
 import os
 import shutil
 import socket
+import sqlite3
 import struct
 import sys
 import tempfile
@@ -18,7 +20,7 @@ import threading
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from server import app, config, static  # noqa: E402
+from server import app, backup, config, relay, static  # noqa: E402
 
 
 class ServerTest(unittest.TestCase):
@@ -262,25 +264,265 @@ class ServerTest(unittest.TestCase):
             app_.cfg["server"]["trusted_proxies"] = []
             app_.failures.clear()
 
-    def test_relay_stub(self):
+    # ---- the relay ----
+    def relay_open(self, origin=None):
+        """A WebSocket on /relay; its first message (HELLO) checked."""
         cookie = self.login()
-        s = socket.create_connection(("127.0.0.1", self.port))
+        s = socket.create_connection(("127.0.0.1", self.port), timeout=10)
         key = base64.b64encode(os.urandom(16)).decode()
+        extra = f"Origin: {origin}\r\n" if origin else ""
+        s.sendall((f"GET /relay HTTP/1.1\r\nHost: 127.0.0.1:{self.port}\r\nUpgrade: websocket\r\n"
+                   f"Connection: Upgrade\r\nSec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\n"
+                   f"{extra}Cookie: {cookie}\r\n\r\n").encode())
+        head = b""
+        while b"\r\n\r\n" not in head:
+            head += s.recv(1)
+        self.assertIn(b"101", head.split(b"\r\n")[0])
+        accept = base64.b64encode(hashlib.sha1((key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").encode()).digest())
+        self.assertIn(b"Sec-WebSocket-Accept: " + accept, head)
+        ws = WS(s)
+        op, id, body = ws.recv()
+        self.assertEqual((op, id), (relay.HELLO, 0))
+        self.assertEqual(struct.unpack(">H", body[:2])[0], relay.VERSION)
+        return ws
+
+    def relay_policy(self, **cfg):
+        c = dict(config.DEFAULTS["relay"], ports=["1-65535"], allow_private=True)
+        c.update(cfg)
+        self.server.app.relay = relay.Relay(c)
+
+    def test_relay_tcp(self):
+        self.relay_policy()
+        echo = Echo()
+        ws = self.relay_open(origin=f"http://127.0.0.1:{self.port}")
+        ws.send(relay.CONNECT, 7, struct.pack(">IH", 0x7F000001, echo.port))
+        self.assertEqual(ws.recv()[:2], (relay.CONNECTED, 7))
+        ws.send(relay.SEND, 7, b"hello relay")
+        got, acked = b"", 0
+        while len(got) < 11 or acked < 11:
+            op, id, body = ws.recv()
+            self.assertEqual(id, 7)
+            if op == relay.ACK:
+                acked += struct.unpack(">I", body)[0]
+            else:
+                self.assertEqual(op, relay.DATA)
+                got += body
+        self.assertEqual(got, b"hello relay")
+        ws.send(relay.CREDIT, 7, struct.pack(">I", len(got)))
+        # More than a window, credited as it comes: flow control both ways.
+        big = os.urandom(3 * relay.WINDOW)
+        sent, got, acked = 0, b"", 0
+        while len(got) < len(big):
+            if sent < len(big) and sent - acked < relay.WINDOW:
+                n = min(relay.WINDOW - (sent - acked), 16384, len(big) - sent)
+                ws.send(relay.SEND, 7, big[sent:sent + n])
+                sent += n
+                continue
+            op, id, body = ws.recv()
+            if op == relay.ACK:
+                acked += struct.unpack(">I", body)[0]
+            elif op == relay.DATA:
+                got += body
+                ws.send(relay.CREDIT, 7, struct.pack(">I", len(body)))
+        self.assertEqual(got, big)
+        # Our FIN: the echo server closes, EOF.
+        ws.send(relay.SHUTDOWN, 7)
+        while (op := ws.recv()[0]) == relay.ACK:
+            pass
+        self.assertEqual(op, relay.EOF)
+        ws.send(relay.CLOSE, 7, b"\0")
+        # Refused, denied (a port off the list, a private host).
+        free = socket.socket()
+        free.bind(("127.0.0.1", 0))
+        port = free.getsockname()[1]
+        free.close()
+        ws.send(relay.CONNECT, 8, struct.pack(">IH", 0x7F000001, port))
+        self.assertEqual(ws.recv(), (relay.ERROR, 8, bytes([relay.REFUSED])))
+        ws.send(relay.CLOSE, 8, b"\0")
+        ws.close()
+        echo.stop()
+        self.relay_policy(ports=[80, "8000-8001"], allow_private=False)
+        ws = self.relay_open()
+        ws.send(relay.CONNECT, 1, struct.pack(">IH", 0x7F000001, 80))         # loopback
+        self.assertEqual(ws.recv(), (relay.ERROR, 1, bytes([relay.DENIED])))
+        ws.send(relay.CONNECT, 2, struct.pack(">IH", 0xC0A80001, 8001))       # 192.168.0.1
+        self.assertEqual(ws.recv(), (relay.ERROR, 2, bytes([relay.DENIED])))
+        ws.send(relay.CONNECT, 3, struct.pack(">IH", 0x08080808, 25))         # a port off the list
+        self.assertEqual(ws.recv(), (relay.ERROR, 3, bytes([relay.DENIED])))
+        ws.close()
+
+    def test_relay_udp_dns_limits(self):
+        self.relay_policy(max_sockets=2, max_connections=1)
+        echo = Echo()
+        ws = self.relay_open()
+        ws.send(relay.UDP, 1)
+        ws.send(relay.SENDTO, 1, struct.pack(">IH", 0x7F000001, echo.port) + b"a datagram")
+        self.assertEqual(ws.recv(), (relay.DATAFROM, 1, struct.pack(">IH", 0x7F000001, echo.port) + b"a datagram"))
+        ws.send(relay.LOOKUP, 5, b"localhost")
+        op, id, body = ws.recv()
+        self.assertEqual((op, id, body[0]), (relay.ADDRS, 5, 0))
+        self.assertIn(struct.pack(">I", 0x7F000001), [body[i:i + 4] for i in range(1, len(body), 4)])
+        ws.send(relay.LOOKUP, 6, b"no-such-host.invalid")
+        self.assertEqual(ws.recv()[:2], (relay.ADDRS, 6))
+        # Two sockets per user: a third is refused; a second WebSocket too.
+        ws.send(relay.UDP, 2)
+        ws.send(relay.UDP, 3)
+        self.assertEqual(ws.recv(), (relay.ERROR, 3, bytes([relay.TOO_MANY])))
+        s = socket.create_connection(("127.0.0.1", self.port), timeout=10)
+        cookie = self.login()
         s.sendall((f"GET /relay HTTP/1.1\r\nHost: x\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
-                   f"Sec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\nCookie: {cookie}\r\n\r\n").encode())
+                   f"Sec-WebSocket-Key: eA==\r\nCookie: {cookie}\r\n\r\n").encode())
         data = b""
-        while b"\x88" not in data.split(b"\r\n\r\n", 1)[-1] or b"\r\n\r\n" not in data:
+        while not data.endswith(b"too many relay connections"):
             chunk = s.recv(4096)
             if not chunk:
                 break
             data += chunk
+        self.assertIn(b"\x88", data)
         s.close()
-        head, frame = data.split(b"\r\n\r\n", 1)
-        self.assertIn(b"101", head.split(b"\r\n")[0])
-        accept = base64.b64encode(hashlib.sha1((key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").encode()).digest())
-        self.assertIn(b"Sec-WebSocket-Accept: " + accept, head)
-        self.assertEqual(frame[0], 0x88)
-        self.assertEqual(struct.unpack(">H", frame[2:4])[0], 1013)
+        # A frame without a mask ends the connection (1002); its sockets go.
+        ws.s.sendall(bytes([0x82, 5]) + struct.pack(">BI", relay.CLOSE, 1))
+        op, _, body = ws.recv_frame()
+        self.assertEqual((op, struct.unpack(">H", body[:2])[0]), (0x8, 1002))
+        ws.s.close()
+        echo.stop()
+        for _ in range(50):
+            if not self.server.app.relay.sockets.get(1):
+                break
+            threading.Event().wait(0.1)
+        self.assertFalse(self.server.app.relay.sockets.get(1))
+
+    def test_relay_short_credit(self):
+        self.relay_policy()
+        ws = self.relay_open()
+        ws.send(relay.UDP, 1)
+        ws.send(relay.CREDIT, 1, b"\0\0")                # a u32 cut short
+        while (frame := ws.recv_frame())[0] != 0x8:
+            pass
+        self.assertEqual(struct.unpack(">H", frame[2][:2])[0], 1008)
+        ws.s.close()
+
+    def test_relay_signed_out(self):
+        s = socket.create_connection(("127.0.0.1", self.port), timeout=10)
+        s.sendall(b"GET /relay HTTP/1.1\r\nHost: x\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+                  b"Sec-WebSocket-Key: eA==\r\n\r\n")
+        self.assertIn(b"401", s.recv(4096).split(b"\r\n")[0])
+        s.close()
+
+    def test_backup(self):
+        cookie = self.login()
+        rec = struct.pack("<I", 3) + b"b" * 4096
+        r, data = self.request("POST", "/api/sync/overlays/backup-x?base=0&name=a.img&size=1048576", rec, cookie=cookie)
+        self.assertEqual(r.status, 200)
+        blob = b"an object"
+        sha = hashlib.sha256(blob).hexdigest()
+        self.assertEqual(self.request("PUT", f"/api/sync/objects/{sha}", blob, cookie=cookie)[0].status, 204)
+        dest = os.path.join(self.tmp, "backup")
+        data_dir = self.server.app.cfg["server"]["data"]
+        dbs, objects = backup.backup(data_dir, dest)
+        self.assertGreaterEqual(dbs, 2)                      # accounts + the owner's sync
+        self.assertGreaterEqual(objects, 1)
+        self.assertEqual(backup.backup(data_dir, dest)[1], 0)    # again: nothing new
+        with contextlib.closing(sqlite3.connect(os.path.join(dest, "accounts.sqlite"))) as db:
+            self.assertIn("owner", [n for (n,) in db.execute("select name from users")])
+        found = [os.path.join(r, f) for r, _, fs in os.walk(os.path.join(dest, "users")) for f in fs]
+        self.assertTrue(any(f.endswith(sha) for f in found))
+        with contextlib.closing(sqlite3.connect(next(f for f in found if f.endswith("sync.sqlite")))) as db:
+            self.assertEqual(db.execute("select count(*) from blocks where key = 'backup-x'").fetchone()[0], 1)
+
+
+class WS:
+    """The tab's end of /relay: masked frames out, relay messages in."""
+    def __init__(self, s):
+        self.s = s
+        self.buf = b""
+
+    def send(self, op, id, body=b""):
+        payload = struct.pack(">BI", op, id) + body
+        mask = os.urandom(4)
+        n = len(payload)
+        head = bytes([0x82, 0x80 | n]) if n < 126 else (
+            struct.pack(">BBH", 0x82, 0x80 | 126, n) if n < 65536 else struct.pack(">BBQ", 0x82, 0x80 | 127, n))
+        self.s.sendall(head + mask + bytes(b ^ mask[i % 4] for i, b in enumerate(payload)))
+
+    def read(self, n):
+        while len(self.buf) < n:
+            chunk = self.s.recv(65536)
+            if not chunk:
+                raise EOFError
+            self.buf += chunk
+        data, self.buf = self.buf[:n], self.buf[n:]
+        return data
+
+    def recv_frame(self):
+        b0, b1 = self.read(2)
+        n = b1 & 0x7F
+        if n == 126:
+            n = struct.unpack(">H", self.read(2))[0]
+        elif n == 127:
+            n = struct.unpack(">Q", self.read(8))[0]
+        return b0 & 0x0F, None, self.read(n)
+
+    def recv(self):
+        """The next relay message: (op, id, body); pings skipped."""
+        while True:
+            opcode, _, payload = self.recv_frame()
+            if opcode == 0x2:
+                op, id = struct.unpack(">BI", payload[:5])
+                return op, id, payload[5:]
+            if opcode == 0x8:
+                raise EOFError(payload)
+
+    def close(self):
+        mask = os.urandom(4)
+        self.s.sendall(bytes([0x88, 0x80]) + mask)
+        try:
+            while self.recv_frame()[0] != 0x8:
+                pass
+        except EOFError:
+            pass
+        self.s.close()
+
+
+class Echo:
+    """TCP and UDP echo on one loopback port (tests/lib/echo_server.py's, in a thread)."""
+    def __init__(self):
+        self.tcp = socket.socket()
+        self.tcp.bind(("127.0.0.1", 0))
+        self.port = self.tcp.getsockname()[1]
+        self.udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.udp.bind(("127.0.0.1", self.port))
+        self.tcp.listen(4)
+        self.running = True
+        threading.Thread(target=self.tcp_loop, daemon=True).start()
+        threading.Thread(target=self.udp_loop, daemon=True).start()
+
+    def tcp_loop(self):
+        while self.running:
+            try:
+                c, _ = self.tcp.accept()
+            except OSError:
+                return
+            threading.Thread(target=self.serve, args=(c,), daemon=True).start()
+
+    @staticmethod
+    def serve(c):
+        with c:
+            while data := c.recv(65536):
+                c.sendall(data)
+
+    def udp_loop(self):
+        while self.running:
+            try:
+                data, addr = self.udp.recvfrom(65536)
+            except OSError:
+                return
+            self.udp.sendto(data, addr)
+
+    def stop(self):
+        self.running = False
+        self.tcp.close()
+        self.udp.close()
 
 
 if __name__ == "__main__":

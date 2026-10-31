@@ -112,6 +112,20 @@ if(NODE_COMMAND)
         ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM};TMPDIR=${CMAKE_CURRENT_BINARY_DIR}")
 endif()
 
+# A PowerPC application in the tab: AppleWorks 5.0.3 on the same 8.6, up
+# with its windows (it once jumped to 0 here: GetIndString past a list).
+set(EXECUTOR_WEB_PPC_APPLEWORKS "$ENV{HOME}/storage/images/productivity-system-7.img" CACHE FILEPATH
+    "Image with AppleWorks 5.0.3 for executor.web.ppc_appleworks")
+if(NODE_COMMAND)
+    add_test(NAME executor.web.ppc_appleworks
+        COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_ppc.mjs
+                $<TARGET_FILE_DIR:executor-web> ${PROJECT_SOURCE_DIR}/tests/guest ${EXECUTOR_WEB_SYSTEM_PPC}
+                ${EXECUTOR_WEB_PPC_APPLEWORKS} "Productivity:AppleWorks 5.0.3 ƒ:AppleWorks")
+    set_tests_properties(executor.web.ppc_appleworks PROPERTIES
+        LABELS "executor;web" TIMEOUT 400 SKIP_RETURN_CODE 77
+        ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM};TMPDIR=${CMAKE_CURRENT_BINARY_DIR};TAB_NO_HELLO=1")
+endif()
+
 # HiDPI (docs/executor/HiDPI.md): the same Finder booted at ?scale=1 and
 # ?scale=2, checking the 2x run actually redraws text from outlines
 # rather than the browser (or Skia) upscaling the 1x canvas -- a real
@@ -124,7 +138,7 @@ if(NODE_COMMAND)
         COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_hidpi.mjs
                 $<TARGET_FILE_DIR:executor-web> ${EXECUTOR_WEB_HIDPI_SYSTEM})
     set_tests_properties(executor.web.hidpi PROPERTIES
-        LABELS "executor;web" TIMEOUT 240 SKIP_RETURN_CODE 77
+        LABELS "executor;web;site" TIMEOUT 240 SKIP_RETURN_CODE 77
         ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM}")
 endif()
 
@@ -147,4 +161,40 @@ if(NODE_COMMAND AND PYTHON3_COMMAND)
     set_tests_properties(executor.web.server_sync executor.web.server_lazy PROPERTIES
         LABELS "executor;web" TIMEOUT 300 SKIP_RETURN_CODE 77
         ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM}")
+endif()
+
+# The network relay: MacPhoenixSuite's network and mactcp sections and
+# OTTestRetro68K in the tab, through tools/web/server's /relay to an echo
+# server on this host (tests/lib/echo_server.py).
+if(NODE_COMMAND AND PYTHON3_COMMAND)
+    add_test(NAME executor.web.relay
+        COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_relay.mjs
+                $<TARGET_FILE_DIR:executor-web> ${PROJECT_SOURCE_DIR}/tests/guest)
+    set_tests_properties(executor.web.relay PROPERTIES
+        LABELS "executor;web" TIMEOUT 400 SKIP_RETURN_CODE 77
+        ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM}")
+endif()
+
+# The assembled site (docs/executor/WebSite.md): every target application on
+# its library disk (tools/web/make_library.py's, EXECUTOR_WEB_LIBRARY),
+# opened from tools/web/server's library on each of the site's systems and
+# used a moment; docs/executor/SCOREBOARD.md says which are expected to fail
+# yet (web/tests/tab_site.mjs). Long (a reload and a launch an
+# application), so label site, not executor: ctest -L site. Skip without
+# the library.
+set(EXECUTOR_WEB_LIBRARY "$ENV{HOME}/storage/web-library" CACHE PATH
+    "tools/web/make_library.py's output, for the executor.web.site cells")
+if(NODE_COMMAND AND PYTHON3_COMMAND)
+    foreach(cell "7.6.1 productivity" "7.6.1 development" "7.6.1 games-68k"
+                 "8.6 productivity" "8.6 development" "8.6 games-ppc")
+        separate_arguments(cell)
+        list(GET cell 0 system)
+        list(GET cell 1 disk)
+        add_test(NAME executor.web.site.${system}.${disk}
+            COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_site.mjs
+                    $<TARGET_FILE_DIR:executor-web> ${EXECUTOR_WEB_LIBRARY} ${system} ${disk}.img)
+        set_tests_properties(executor.web.site.${system}.${disk} PROPERTIES
+            LABELS "web;site" TIMEOUT 1800 SKIP_RETURN_CODE 77
+            ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM};TMPDIR=${CMAKE_CURRENT_BINARY_DIR}")
+    endforeach()
 endif()

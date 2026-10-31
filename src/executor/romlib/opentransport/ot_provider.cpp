@@ -701,7 +701,7 @@ uint32_t ot_bind(const Call &c)
        an address or listens binds now. */
     if((have_addr && (sin.sin_port || sin.sin_addr.s_addr)) || qlen || p->kind == Kind::UDP)
     {
-        if(::bind(fd, (struct sockaddr *)&sin, sizeof sin) < 0)
+        if(hostnet::bind(fd, (struct sockaddr *)&sin, sizeof sin) < 0)
         {
             int e = errno;
             hostnet::close(fd);
@@ -893,7 +893,7 @@ void finish_connect_lookups()
             sin.sin_port = htons(l.port);
             sin.sin_addr.s_addr = htonl(l.ip);
             OT_LOG("connect %08x to %s:%u\n", p->ref, inet_ntoa(sin.sin_addr), l.port);
-            if(::connect(p->fd, (struct sockaddr *)&sin, sizeof sin) == 0 || errno == EINPROGRESS)
+            if(hostnet::connect(p->fd, (struct sockaddr *)&sin, sizeof sin) == 0 || errno == EINPROGRESS)
             {
                 p->connecting = true;
                 continue;
@@ -960,7 +960,7 @@ uint32_t ot_connect(const Call &c)
     OT_LOG("connect %08x to %s:%u%s%s\n", p->ref, inet_ntoa(sin.sin_addr),
            ntohs(sin.sin_port), p->async ? " async" : "", p->blocking ? " blocking" : "");
     p->look = 0;
-    int r = ::connect(p->fd, (struct sockaddr *)&sin, sizeof sin);
+    int r = hostnet::connect(p->fd, (struct sockaddr *)&sin, sizeof sin);
     if(r < 0 && errno != EINPROGRESS)
     {
         int e = errno;

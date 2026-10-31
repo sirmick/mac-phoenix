@@ -86,11 +86,17 @@ try {
 
     const b = await newPage(browser, { log: false, tag: ' B' });
     dialogs(b);
+    const opened = await diskVersion(a);
     await signIn(b, server.url, 'owner', OWNER_PASSWORD, { query: QUERY });
     check(await ready(b), 'another browser: Executor runs');
     check(await request(b, 'read', '/executor/note.txt') === 'from browser A',
           "the file on Executor's disk is there");
     check(await head(b) === 'SYNCMARK!', "the disk's change is there");
+    // Mounting writes the volume's header back as it was: not a change, so
+    // nothing goes up (another browser on the disk would be behind).
+    await b.waitForTimeout(7000);                       // past SYNC_EVERY
+    check(await diskVersion(b) === opened && (await request(b, 'stats')).unsynced === 0,
+          'opening the disk changes nothing on the account');
 
     const c = await newPage(browser, { log: false, tag: ' C' });
     dialogs(c);
@@ -129,8 +135,8 @@ try {
     check(await head(a) === 'DDDDMARK!', 'the disk change is still there (Reset is the volume only)');
 
     // Revert in B: the disk as it was, in A too. A's Executor writes the
-    // disk itself (the volume's header, at mounting): those blocks on the
-    // account first, or A, behind, would be asked (and keep its own).
+    // volume's header back at mounting, unchanged: no change of A's
+    // (overlay.js), so A, behind, isn't asked (it would keep its own).
     check(await until(() => request(a, 'stats').then((s) => s.unsynced === 0), 15000), "A's writes on the account");
     await b.locator('#files a[title^="Revert"]').first().click();
     check(await ready(b), 'Revert in B');

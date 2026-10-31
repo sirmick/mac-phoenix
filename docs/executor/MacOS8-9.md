@@ -267,6 +267,14 @@ Third run (`~/storage/executor-grid/8.6-r3/`): no host crashes.
   Services, `'cfrg'` 52), section 0 +$14..+$2c, a skip-list search that
   never meets its end node: the glyph cache ATS keeps isn't set up as 8.6
   sets it up (FMSharedCaches, FontObjects); its menus show, no window.
+  Two causes (2026-10-31): each application got its own copy of the ATS
+  libraries' global-share data (CFM now prepares those sections once per
+  system), and Apple's FontManager library, loaded beside Executor's Font
+  Manager, kept its own WidthListHand, which Executor's FMSwapFont then
+  trimmed under it. The FontManager library's exports are now Executor's
+  (`quickdraw/fontmgr85.cpp`, FontMgr.yaml; the text probe's `fm` keys):
+  Apple's never runs, Date & Time opens its window, and the appr probe's
+  controls run after its window frames without the crash.
 
 Differential probes (docs/executor/DiffTest.md) now ask Apple's 8.6
 libraries and Executor's the same questions: `appr` (the Appearance
@@ -305,8 +313,8 @@ WDEF 64-67 and spun in ATS drawing its title. Executor serves WDEFs 64-67
 itself now (resource-policy.txt; the entry `wdef64`, windMgr8.cpp), the
 window keeping its WDEF and variant for GetWVariant and GetWindowFeatures,
 drawn by WDEF 0's document frames and dialog boxes; floating ones (66,
-67) as document frames until Executor has a floating definition (8.6's
-WDEF 124 hands them back to WDEF 66). Found with them: CopyBits into a
+67) by their own platinum frame (8.6's WDEF 124 hands them back to WDEF
+66). Found with them: CopyBits into a
 16- or 32-bit pixmap colourised with the current colour port's
 fgColor/bkColor, pixel values for the port's own device (an 8-bit screen
 copied into a 32-bit GWorld came out as indices); the port's RGB colours
@@ -321,9 +329,68 @@ documentFrame, dialogFrame, movableDialogFrame; regions and hit testing
 in windDocdef.cpp); plain and shadowed dialog boxes stay black when
 inactive. 12 of the probe's 34 frames are 8.6's pixel for pixel, 14 more
 but for the title's glyphs (Charcoal from Executor's unhinted scaler).
-Not yet: floating windows (WDEF 66/67, 124), the rounded window, the
-boxes drawn pressed, the collapse box (it drags), DrawThemeWindowFrame
-itself, the window part regions (Window Manager 2.0's GetWindowRegion).
+Floating windows (WDEF 66 and 67, 124's through 66; appearance_draw.cpp
+floatingFrame, windDocdef.cpp ROMlib_wdef_floating): a 16-pixel title
+bar, 10-pixel close, zoom and collapse boxes, stripes of dots on a
+3-pixel grid, the title in the small emphasized system font (Geneva 10
+bold), a 10-pixel grow box in the frame; 67's bar on the left, 14 wide,
+untitled; 1057, 1059, 1061, 1073 and 1075 are 8.6's pixel for pixel. The
+rounded window (procID 16) is classic on 8.6 too, its close box a pixel
+further left than 7.x's document window's: the frame is 8.6's, the title
+glyphs aren't. 8.6's platinum WDEFs draw nothing pressed for wDraw with a
+part code (the probe's `pressed` keys equal the active frame; only the
+rounded window inverts its close box) unless the button is down in the
+box. Measured from real clicks on the G3, a pressed document box keeps
+its ring and frame and has a darker ramp inside (#444 to #bbb, its right
+and bottom edges no lighter than #999); TrackBox redraws the box
+unpressed when the button comes up inside (IM I-288). Collapsing
+(CollapseWindow, and a click in the collapse box, which 8.6 answers for
+every application, one without an inCollapseBox case too): the title
+bar alone, the outline closing under it; windows that can't collapse
+get errMessageNotSupported (`appr` frames.N.collapsed / .collapse:
+floating ones 8.6's pixel for pixel, document ones but for the title
+glyphs). Window Manager 2.0's regions (`wind`) come from the
+definitions' geometry, invisible windows too: the title bar along the
+structure's top (22 deep; a floating window's down to the content), the
+title text 2 inside it and a pixel short of its width, the drag region
+the whole frame less the content's rectangle (a classic movable dialog's
+inner frame too; none collapsed); boxes, grow and collapse box have no
+region. CreateNewWindow makes WDEF 64-67 windows on 8.x, every procID
+window is kDocumentWindowClass with no attributes (paramErr), and the
+features carry the platinum definitions' bits. CreateNewWindow's
+floating windows have a 14-deep bar (the boxes a pixel nearer the
+content). DrawThemeWindowFrame (`appr` draw*.windowframe*) answers
+paramErr and draws nothing without metrics, as 8.6; with them it draws
+the definitions' frames: document, dialog, movable dialog (a document
+bar's boxes and stripes when the attributes ask), the alerts' edges and
+movable bar tinted red (#ff9999/#ff6666, face #ffcccc), plain and shadow
+outlines, the utility windows' 14-deep bars (the side one without a
+collapse box; full zoom's glyph a corner): all 8.6's pixel for pixel but
+the popup window. Not yet: a pressed floating box, the popup window's
+frame, the movable grow dialog's grow corner.
+
+Platinum menus (2026-10-31, `appr` draw*.menu*, and the Finder's File,
+Edit, View and Special menus on the G3). 8.x's MBDF 0 is a 68k loader for
+MBDF 63, PowerPC code that passes its arguments on to MenusLib's
+StandardMBDF; Executor exports that as its own MBDF 0 (as StandardMDEF is
+its MDEF 0), so AppleWorks 5.0.3 got its menu titles. AppearanceLib's
+menu calls draw platinum (appearance_draw.cpp: the bar with its rounded,
+shaded top corners, selected bar and titles in the default appearance's
+#6666cc/#333399/#000088, menu backgrounds with their outline and #222
+shadow and its region, items, hierarchical arrows, separators): every
+menu key of the probe is 8.6's pixel for pixel. On 8.x Executor's MBDF
+and MDEF 0 draw through them, laid out as 8.6's: titles StringWidth + 13
+(the Apple menu 27, the System's colour apple, icon family -16386), a
+menu's outline under its title's left and a submenu 4 in from its item's
+right, items 16 high and separators 6, the mark at 2, the text at 21, the
+command key's mark 33 from the right, a menu as wide as text + 31 (+ 63
+with a command key or submenu); titles and items black, #777 disabled,
+white selected. The Finder's four menus have 8.6's geometry exactly; the
+glyphs are 1 pixel to the right (the scaler, as the window titles). A
+SetMenuItemKeyGlyph glyph is drawn after the ⌘ as its character in the
+System's .Keyboard font (FOND 98; the Finder's Move To Trash: ⌘⌫). Not
+yet: SetMenuItemModifiers' marks (kept, not drawn), scroll arrows in a
+long menu, popup menus' own look, the menu bar clock.
 
 The titles over dots (2026-10-31): 8.6's ToolboxUtils saves a colour
 port's old-style background pattern from the PixPat's `patData` handle,

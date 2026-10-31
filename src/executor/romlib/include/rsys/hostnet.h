@@ -6,8 +6,9 @@
  *
  *   posix  host sockets and the host's resolver (host/posix/net.cpp)
  *   none   no network: sockets fail with ENETDOWN, lookups with EAI_FAIL,
- *          no host threads (host/none/net.cpp); what the wasm build has
- *          until the socket relay exists
+ *          no host threads (host/none/net.cpp)
+ *   wasm   the tab's own sockets, out through tools/web/server's relay
+ *          (host/wasm/net.cpp; DIRECTION.md, "The network relay")
  *
  * Sockets are POSIX-shaped: descriptors, sockaddrs and flags as
  * <sys/socket.h> has them, so a backend is a relay of the same calls. */
@@ -76,7 +77,8 @@ void run_detached(std::function<void()> work);
  * interrupt when one is ready or the deadline passes; then waits for the
  * next set() (the interrupt's service ends in one) before looking again,
  * so a ready socket nobody reads is not a busy loop. posix: a host thread,
- * started at the first set() with something to wait for. */
+ * started at the first set() with something to wait for; wasm: looked at
+ * after each yield to the browser. */
 class Watcher
 {
 public:

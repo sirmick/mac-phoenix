@@ -4,6 +4,7 @@
     tools/web/server --config FILE adduser NAME [--owner]    password on stdin, or asked
     tools/web/server --config FILE passwd NAME | deluser NAME | users
     tools/web/server --config FILE invite [--days N]         prints the code (/login?invite=CODE)
+    tools/web/server --config FILE backup DEST               the data directory, while it runs (backup.py)
 
 The configuration: server.example.toml. The first account is the owner's
 (adduser --owner); the owner invites the others, from /account or here.
@@ -16,7 +17,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from server import app, config  # noqa: E402
+from server import app, backup, config  # noqa: E402
 
 
 def password(args):
@@ -46,6 +47,7 @@ def main():
     sub.add_parser("deluser").add_argument("name")
     sub.add_parser("users")
     sub.add_parser("invite").add_argument("--days", type=int, default=7)
+    sub.add_parser("backup").add_argument("dest")
     args = ap.parse_args()
 
     overrides = {"server": {k: getattr(args, k, None) for k in ("port", "bind", "site", "data")}}
@@ -59,6 +61,10 @@ def main():
             server.serve_forever()
         except KeyboardInterrupt:
             pass
+        return
+    if cmd == "backup":
+        dbs, objects = backup.backup(cfg["server"]["data"], os.path.expanduser(args.dest))
+        print(f"{args.dest}: {dbs} databases, {objects} new objects")
         return
     accounts = app.App(cfg).accounts
     try:

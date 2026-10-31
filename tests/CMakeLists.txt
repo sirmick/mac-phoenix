@@ -1056,6 +1056,35 @@ foreach(cell "cglue_rom_ppc_86;--backend kpx --core mame-ppc --jit;18504;mame"
   )
 endforeach()
 
+# GetIndString and GetIndPattern given an index outside the list, an empty
+# list, a missing one: tests/guest/strprobe. The Macs are the reference
+# (the Quadra with 7.6.1 through Apple's 68k glue, the G3 with 8.6 through
+# InterfaceLib; the same answers), Executor's own from PowerPC code.
+foreach(cell "strprobe_rom_761;;StrProbe.bin;--os-version 7.6.1;${TEST_ROM};19500;guest"
+             "strprobe_rom_ppc_86;--backend kpx --core mame-ppc --jit;StrProbePPC.bin;--image 8.6;${TEST_PPC_ROM};19502;guest;mame"
+             "strprobe_ppc_executor_86;--backend executor --executor-ppc;StrProbePPC.bin;--image 8.6;;19504;guest;executor"
+             "strprobe_ppc_executor_761;--backend executor;StrProbePPC.bin;--os-version 7.6.1;;19506;guest;761;executor")
+  list(GET cell 0 name)
+  list(GET cell 1 backend)
+  list(GET cell 2 app)
+  list(GET cell 3 disk)
+  list(GET cell 4 rom)
+  list(GET cell 5 port)
+  list(SUBLIST cell 6 -1 labels)
+  separate_arguments(backend_args UNIX_COMMAND "${backend}")
+  separate_arguments(disk_args UNIX_COMMAND "${disk}")
+  add_test(
+    NAME ${name}
+    COMMAND bash ${TEST_DIR}/test_guest_suite.sh ${backend_args} ${disk_args} --app ${CMAKE_SOURCE_DIR}/tests/guest/strprobe/${app} --results str_results.txt --network none --timeout 150 --port ${port}
+  )
+  set_tests_properties(${name} PROPERTIES
+    TIMEOUT 230
+    LABELS "${labels}"
+    SKIP_RETURN_CODE 77
+    ENVIRONMENT "MACEMU_ROM=${rom}"
+  )
+endforeach()
+
 # Differential probes (docs/executor/DiffTest.md): each probe's answers on
 # Executor (8.6 System) against the committed G3 8.6 reference, known
 # differences in tests/guest/difftest/expected/. Fails on a new difference.

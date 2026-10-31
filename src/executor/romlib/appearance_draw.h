@@ -64,6 +64,13 @@ inline void lineGray(int h1, int v1, int h2, int v2, uint16_t g)
     LineTo(h2, v2);
 }
 
+inline void lineRGB(int h1, int v1, int h2, int v2, RGBColor c)
+{
+    RGBForeColor(&c);
+    MoveTo(h1, v1);
+    LineTo(h2, v2);
+}
+
 /* Light along the top and left inside r, shade along the bottom and right. */
 inline void bevel(const Rect &r, uint16_t lit, uint16_t shade)
 {
@@ -120,20 +127,25 @@ struct WindowParts
 {
     bool close, zoom, collapse;
     bool grow;      /* the grow box in the content's corner (WDEF 64's) */
+    bool collapsed = false; /* the title bar alone (CollapseWindow) */
 };
 
 /* The rectangle a platinum document window's frame occupies (structure,
    its shadow included) round content c. */
 Rect documentStructure(const Rect &c);
+/* ... and its structure region (collapsed: the title bar's) */
+void documentStructureRgn(const Rect &c, bool collapsed, RgnHandle rgn);
 
 /* A platinum document window's frame and title (TITLE may be nullptr). */
 void documentFrame(const Rect &c, bool active, const WindowParts &parts, ConstStringPtr title);
 
 /* A platinum modal dialog box's frame (dBoxProc; WDEF 65's modal and
    alert variants are THIN: 3 pixels against 6). */
-void dialogFrame(const Rect &c, bool active, bool thin);
+/* ALERT: DrawThemeWindowFrame's alert flavours, their edges red (8.6) */
+void dialogFrame(const Rect &c, bool active, bool thin, bool alert = false);
 /* A movable modal dialog's: a title bar over the same frame. */
-void movableDialogFrame(const Rect &c, bool active, bool thin, ConstStringPtr title);
+void movableDialogFrame(const Rect &c, bool active, bool thin, ConstStringPtr title,
+                        const WindowParts *parts = nullptr, bool alert = false);
 /* their structure regions */
 void dialogStructure(const Rect &c, bool thin, RgnHandle rgn, bool titled = false);
 
@@ -144,6 +156,29 @@ void documentGrowBox(const Rect &c);
 Rect documentCloseBox(const Rect &c);
 Rect documentZoomBox(const Rect &c, const WindowParts &parts);
 Rect documentCollapseBox(const Rect &c);
+/* One of its boxes (WHICH: 0 close, 1 zoom, 2 collapse) alone, pressed
+   or not (TrackBox's wDraw with the part). */
+void documentBox(const Rect &c, const WindowParts &parts, int which, bool pressed);
+
+/* A platinum floating window (WDEF 66; 67's SIDE variant has its title
+   bar on the left, untitled): the frame, its structure, its boxes. */
+struct FloatParts
+{
+    bool close, zoom, collapse, grow, side;
+    int zoomKind; /* WDEF 66's variant bits: 4 vertical, 8 horizontal, 12 both */
+    bool collapsed = false; /* the title bar alone (CollapseWindow) */
+    /* a 14-deep top bar, the boxes a pixel nearer the content
+       (DrawThemeWindowFrame's utility window, CreateNewWindow's floating
+       windows on 8.6) */
+    bool thin = false;
+};
+void floatingFrame(const Rect &c, bool active, const FloatParts &parts, ConstStringPtr title);
+void floatingStructure(const Rect &c, const FloatParts &parts, RgnHandle rgn);
+Rect floatingCloseBox(const Rect &c, const FloatParts &parts);
+Rect floatingCollapseBox(const Rect &c, const FloatParts &parts);
+Rect floatingZoomBox(const Rect &c, const FloatParts &parts);
+/* the grow box, frame not content (its corner of the content) */
+Rect floatingGrowBox(const Rect &c);
 
 /* The current port's depth and whether its device is in colour, what the
    definitions' callbacks are told. */

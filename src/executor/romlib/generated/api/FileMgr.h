@@ -751,8 +751,12 @@ OSErr HRename(INTEGER vref, LONGINT dirid, ConstStringPtr src, ConstStringPtr ds
 OSErr HDelete(INTEGER vref, LONGINT dirid, ConstStringPtr name);NOTRAP_FUNCTION2(HDelete);
 
 
-// NOTRAP_FUNCTION2(HDelete);
-OSErr GetWDInfo(INTEGER wd, GUEST<INTEGER> *vrefp, GUEST<LONGINT> *dirp, GUEST<LONGINT> *procp);
+// MacPhoenix: missing `executor: true` left this declared but never
+// exported, so PowerPC code importing it by name (Finder) got the
+// generic unresolved-import stub instead of hfsWorkingdir.cpp's
+// GetWDInfo.
+OSErr GetWDInfo(INTEGER wd, GUEST<INTEGER> *vrefp, GUEST<LONGINT> *dirp, GUEST<LONGINT> *procp);NOTRAP_FUNCTION2(GetWDInfo);
+
 
 
 

@@ -265,7 +265,7 @@ int executor_child_main(const config::EmulatorConfig& cfg, IPCBuffer *buf)
     executor_host::Config c;
     c.width = cfg.screen_width;
     c.height = cfg.screen_height;
-    c.bpp = 8;
+    c.bpp = cfg.screen_depth_set ? (int)cfg.screen_depth : 0;
     c.ram_mb = (int)cfg.ram_mb;
     c.data_dir = cfg.executor_data_dir.empty() ? expand_home(cfg.storage_dir) + "/executor"
                                                : expand_home(cfg.executor_data_dir);

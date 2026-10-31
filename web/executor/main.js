@@ -22,7 +22,7 @@
 // and no AudioWorklet: uploads last the visit, sound is off.
 //
 // Automation: window.executor.request(op, arg) -> Promise. At the running
-// application's next event call (web_main.cpp): 'app', 'windows', 'launch'
+// application's next event call (web_main.cpp): 'app', 'windows', 'menus', 'launch'
 // "Volume:Folder:App". At once, by the Worker: 'read' PATH (text or null),
 // 'write' [PATH, TEXT], 'list' PATH (names or null); Executor's own volume
 // is /executor, its "Host" volume /host.
@@ -509,7 +509,7 @@ async function start() {
     const offscreen = canvas.transferControlToOffscreen();
     worker.postMessage({ type: 'start', canvas: offscreen, width, height, scale, files,
                          system: systemSelect.value, ppc: ppcBox.checked,
-                         volumeKey: volumeKey(files), sync: !!account,
+                         volumeKey: volumeKey(files), sync: !!account, relay: !!account,
                          ids: imageIds, legacyKeys },
                        [offscreen]);
     worker.onmessage = (e) => {

@@ -39,6 +39,72 @@ int main(void)
             sprintf(k, "%s.FontToScript", names[f]);
             out(k, "%d", FontToScript(num));
         }
+    /* 8.5's FontManager library: anti-aliasing switch, ink bounds, font
+       info without the port */
+    if(SECTION("fm"))
+    {
+        typedef OSStatus (*SetAAProc)(Boolean, SInt16);
+        typedef Boolean (*IsAAProc)(SInt16 *);
+        typedef void (*BoundsProc)(short, const void *, Rect *);
+        typedef OSErr (*FetchProc)(SInt16, SInt16, SInt16, FontInfo *);
+        SetAAProc setAA = (SetAAProc)probe_bind("FontManager", "SetAntiAliasedTextEnabled");
+        IsAAProc isAA = (IsAAProc)probe_bind("FontManager", "IsAntiAliasedTextEnabled");
+        BoundsProc bounds = (BoundsProc)probe_bind("FontManager", "QDTextBounds");
+        FetchProc fetch = (FetchProc)probe_bind("FontManager", "FetchFontInfo");
+        static const char *texts[] = { "Hello", "gjpqy", "ii", " ", "" };
+        static const struct { short font, size; Style face; } fonts[] = {
+            { 3, 9, 0 }, { 0, 12, 0 }, { 20, 24, italic }, { 4, 10, bold }, { 999, 12, 0 }
+        };
+        if(isAA && setAA)
+        {
+            short min, was_min;
+            Boolean was;
+            SET(was_min);
+            was = isAA(&was_min);
+            out("aa.initial", "%d min %d", was, was_min);
+            out("aa.set_on9", "%d", (int)setAA(true, 9));
+            SET(min);
+            out("aa.on9", "%d min %d", isAA(&min), min);
+            out("aa.set_off12", "%d", (int)setAA(false, 12));
+            SET(min);
+            out("aa.off12", "%d min %d", isAA(&min), min);
+            out("aa.set_on0", "%d", (int)setAA(true, 0));
+            SET(min);
+            out("aa.on0", "%d min %d", isAA(&min), min);
+            setAA(was, was_min);
+        }
+        if(bounds)
+            for(f = 0; f < 4; f++)
+            {
+                TextFont(fonts[f].font); TextSize(fonts[f].size); TextFace(fonts[f].face);
+                for(c = 0; c < (int)(sizeof texts / sizeof texts[0]); c++)
+                {
+                    Rect r;
+                    MoveTo(f ? 10 : 0, f ? 20 : 0);
+                    SET(r);
+                    bounds(strlen(texts[c]), texts[c], &r);
+                    sprintf(k, "bounds.%d.%d.%d.%s", fonts[f].font, fonts[f].size, fonts[f].face, texts[c]);
+                    out_rect(k, &r);
+                }
+            }
+        TextFont(0); TextSize(0); TextFace(0);
+        if(fetch)
+            for(f = 0; f < (int)(sizeof fonts / sizeof fonts[0]); f++)
+            {
+                FontInfo fi;
+                OSErr err;
+                SET(fi);
+                err = fetch(fonts[f].font, fonts[f].size, fonts[f].face, &fi);
+                sprintf(k, "fetch.%d.%d.%d", fonts[f].font, fonts[f].size, fonts[f].face);
+                out(k, "%d: %d %d %d %d", err, fi.ascent, fi.descent, fi.widMax, fi.leading);
+            }
+        {
+            FontInfo fi;
+            GetFontInfo(&fi);
+            out("fetch.port", "font %d size %d face %d: %d %d", qd.thePort->txFont, qd.thePort->txSize,
+                qd.thePort->txFace, fi.ascent, fi.widMax);
+        }
+    }
     for(f = 0; f < (int)(sizeof names / sizeof names[0]); f++)
     {
         Str255 n;

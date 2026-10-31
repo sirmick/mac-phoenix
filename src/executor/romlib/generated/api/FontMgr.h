@@ -4,10 +4,11 @@
  *                                 =========                                 *
  *                                                                           *
  * Needs:                                                                    *
- *     MacTypes.h     Fixed, Handle, INTEGER, LONGINT, Boolean, Byte,        *
- *                    SignedByte, StringPtr, ConstStringPtr, OSErr, Ptr,     *
- *                    Rect                                                   *
- *     QuickDraw.h    Style                                                  *
+ *     MacTypes.h          Fixed, Handle, INTEGER, LONGINT, Boolean,         *
+ *                         Byte, SignedByte, StringPtr, ConstStringPtr,      *
+ *                         OSErr, Ptr, Rect, SInt16                          *
+ *     QuickDraw.h         Style, FontInfo                                   *
+ *     DriverServices.h    OSStatus                                          *
  *                                                                           *
  *                                                                           *
  *****************************************************************************/
@@ -20,6 +21,7 @@
 #include <base/lowglobals.h>
 #include "ExMacTypes.h"
 #include "QuickDraw.h"
+#include "DriverServices.h"
 
 #define MODULE_NAME FontMgr
 #include <base/api-module.h>
@@ -337,6 +339,18 @@ Boolean C_GetPreserveGlyph();PASCAL_SUBTRAP(GetPreserveGlyph, 0xA854, 0x000B, Fo
 
 
 OSErr C_FlushFonts();PASCAL_SUBTRAP(FlushFonts, 0xA854, 0x000C, FontDispatch);
+
+
+OSStatus C_SetAntiAliasedTextEnabled(Boolean iEnable, SInt16 iMinFontSize);LIBRARY_FUNCTION(FontManager, SetAntiAliasedTextEnabled, C_SetAntiAliasedTextEnabled);
+
+
+Boolean C_IsAntiAliasedTextEnabled(GUEST<SInt16> *oMinFontSize);LIBRARY_FUNCTION(FontManager, IsAntiAliasedTextEnabled, C_IsAntiAliasedTextEnabled);
+
+
+void C_QDTextBounds(INTEGER byteCount, const void *textAddr, Rect *bounds);LIBRARY_FUNCTION(FontManager, QDTextBounds, C_QDTextBounds);
+
+
+OSErr C_FetchFontInfo(SInt16 fontID, SInt16 fontSize, SInt16 fontStyle, FontInfo *info);LIBRARY_FUNCTION(FontManager, FetchFontInfo, C_FetchFontInfo);
 
 
 INTEGER glue_GetSysFont();LIBRARY_FUNCTION(InterfaceLib, GetSysFont, glue_GetSysFont);

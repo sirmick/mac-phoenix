@@ -452,6 +452,29 @@ std::map<std::string, std::vector<std::string>> builtinlibs::exportTable(OSType 
     return out;
 }
 
+/* MacPhoenix: whether getBuiltinLib would answer libname, without making
+   a connection (GetSharedLibrary's kFindLib). */
+bool builtinlibs::haveBuiltinLib(ConstStr255Param libname, OSType arch)
+{
+    addLazyEntrypoints();
+
+    std::string name(libname + 1, libname + 1 + libname[0]);
+    if(arch == "m68k"_4)
+    {
+        if(std::find(std::begin(interfacelib_aliases68k), std::end(interfacelib_aliases68k), name)
+           != std::end(interfacelib_aliases68k))
+            return true;
+        if(name == "NuStdCLib" || name == "NuIntEnv")
+            name = "StdCLib";
+        if(name != "InterfaceLib")
+            addAlsoExports(builtins68k, name);
+        return builtins68k.count(name) != 0;
+    }
+    if(name != "InterfaceLib")
+        addAlsoExports(builtins, name);
+    return libraryInThisSystem(name) && builtins.count(name) != 0;
+}
+
 ConnectionID builtinlibs::getBuiltinLib(ConstStr255Param libname, OSType arch)
 {
     addLazyEntrypoints();

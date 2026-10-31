@@ -341,11 +341,14 @@ static gestaltentry_t since_table[] = {
     /* Window Manager 2.0 (wind/windMgr8.cpp); not yet bit 2, floating
        windows as a layer of their own (8.6: 5) */
     { "wind"_4, 0x00000001 },
+    /* QuickDraw Text 1.0 (gestaltQDTextVersion, 8.5's): its FontManager
+       library is Executor's (quickdraw/fontmgr85.cpp) */
+    { "qdtx"_4, 0x00000100 },
 };
 static const uint16_t since_versions[std::size(since_table)] = {
     0x0800, 0x0800, 0x0850, 0x0800, 0x0800,
     0x0850, 0x0800, 0x0800, 0x0800,
-    0x0850,
+    0x0850, 0x0850,
 };
 
 static gestaltentry_t *
