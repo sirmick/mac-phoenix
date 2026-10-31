@@ -5,9 +5,14 @@
 //                    OPFS (disk-cache/) and revalidated on later visits
 //                    with its ETag, so it downloads once
 //   ?system=NAME     run on that image's System and Finder
+//   ?lazy=1|0        read ?disk= images as they are needed, or download them
+//                    whole (default: lazily from LAZY_MIN up, when the
+//                    server takes Range requests and sends them uncompressed)
 // library.json beside the page (optional) offers more disks: [{ title,
 // url, note }]; the ones picked are remembered (localStorage) and loaded
 // like ?disk=.
+// Served by tools/web/server, signed in (api/me): the overlays and
+// Executor's own volume are synced with the account (sync.js).
 // Outside a secure context (plain http to another host) there is no OPFS
 // and no AudioWorklet: uploads last the visit, sound is off.
 //
@@ -81,6 +86,9 @@ async function remove(name) {
         await (await uploads()).removeEntry(name).catch(() => {});
 }
 
+// A large ?disk= is not downloaded first: the Worker reads it as Executor
+// needs it (overlay.js: RemoteImage), and keeps what it read. Smaller ones,
+// or compressed ones (the server's NAME.gz):
 // ?disk=URL: downloaded once into OPFS (disk-cache/: the image and a .json
 // with its URL and ETag), revalidated on later visits (304: the copy is
 // current), mounted from there: disk-backed, never whole in memory. If the
@@ -103,6 +111,8 @@ async function readJson(dir, name) {
     }
 }
 
+const LAZY_MIN = 32 << 20;
+
 async function fetchDisk(url) {
     const absolute = new URL(url, location.href).href;
     const name = decodeURIComponent(new URL(absolute).pathname.split('/').pop());
@@ -113,11 +123,26 @@ async function fetchDisk(url) {
     const dir = opfs ? await diskCache() : null;
     const key = dir ? await cacheKey(absolute) : null;
     const meta = dir ? await readJson(dir, `${key}.json`) : null;
-    // Its OPFS time kept: an image's overlay (overlay.js) is for this version.
+    // An image's overlay (overlay.js) is for this version: the server's
+    // time for it (the same in every browser: sync), else its OPFS time.
     const cached = async () => {
         const f = await (await dir.getFileHandle(`${key}.img`)).getFile();
-        return new File([f], name, { lastModified: f.lastModified });
+        const m = await readJson(dir, `${key}.json`);
+        return new File([f], name, { lastModified: (m && Date.parse(m.lastModified)) || f.lastModified });
     };
+
+    const lazy = params.get('lazy');
+    if (lazy !== '0') {
+        let head = null;
+        try {
+            head = await fetch(absolute, { method: 'HEAD', cache: 'no-store' });
+        } catch { }
+        const size = head && head.ok && !head.headers.get('Content-Encoding')
+            && head.headers.get('Accept-Ranges') === 'bytes' && Number(head.headers.get('Content-Length'));
+        if (size && (lazy === '1' || size >= LAZY_MIN))
+            return { name, size, lastModified: Date.parse(head.headers.get('Last-Modified')) || 0,
+                     remote: { url: absolute, etag: head.headers.get('ETag'), key: key || await cacheKey(absolute) } };
+    }
 
     let res;
     try {
@@ -301,6 +326,8 @@ async function revert(f) {
         }
     }
     delete imageState[f.name];
+    if (account)
+        await fetch(`api/sync/overlays/${imageKey(f)}`, { method: 'DELETE' }).catch(() => {});
     start();
 }
 
@@ -331,6 +358,8 @@ document.getElementById('reset').addEventListener('click', async () => {
         const volumes = await (await uploads()).getDirectoryHandle('volumes', { create: true });
         await volumes.removeEntry(volumeKey(await storedFiles()), { recursive: true }).catch(() => {});
     }
+    if (account)
+        await fetch(`api/sync/volumes/${volumeKey(await storedFiles())}`, { method: 'DELETE' }).catch(() => {});
     start();
 });
 
@@ -355,6 +384,22 @@ function showSystems(files) {
         ...files.filter((f) => IMAGE.test(f.name)).map((f) => new Option(f.name, f.name)));
     systemSelect.value = [...systemSelect.options].some((o) => o.value === want) ? want : '';
 }
+
+// ---- the account (tools/web/server): { name, owner }, or null ----
+let account = null;
+const accountKnown = (async () => {
+    if (!opfs)
+        return;
+    try {
+        const res = await fetch('api/me', { cache: 'no-store' });
+        account = res.ok ? await res.json() : null;
+    } catch { }
+    const a = document.getElementById('account');
+    if (account) {
+        a.textContent = account.name;
+        a.hidden = false;
+    }
+})();
 
 // ---- the Worker ----
 // What changed on Executor's disk, saved before the Worker goes (at most
@@ -393,6 +438,7 @@ async function start() {
     // The Worker loads the module while the disks still download.
     worker = new Worker('worker.js');
     await disksFetched;
+    await accountKnown;
     const files = await storedFiles();
     showFiles(files);
     showSystems(files);
@@ -410,7 +456,8 @@ async function start() {
 
     const offscreen = canvas.transferControlToOffscreen();
     worker.postMessage({ type: 'start', canvas: offscreen, width, height, files,
-                         system: systemSelect.value, volumeKey: volumeKey(files) }, [offscreen]);
+                         system: systemSelect.value, volumeKey: volumeKey(files), sync: !!account },
+                       [offscreen]);
     worker.onmessage = (e) => {
         if (mine !== generation)
             return;

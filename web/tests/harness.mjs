@@ -16,6 +16,22 @@ try {
 
 const types = { '.html': 'text/html', '.js': 'text/javascript', '.wasm': 'application/wasm' };
 
+// Headless Chromium (CHROMIUM=PATH, or playwright's own).
+export function launch() {
+    return chromium.launch(process.env.CHROMIUM ? { executablePath: process.env.CHROMIUM } : {});
+}
+
+// A page of browser (a context of its own: its own OPFS), its errors and
+// the Worker's console shown.
+export async function newPage(browser, { log = true, tag = '' } = {}) {
+    const context = await browser.newContext({ viewport: { width: 800, height: 640 } });
+    const page = await context.newPage();
+    page.on('pageerror', (e) => console.log(`[page error${tag}]`, e.message));
+    if (log)
+        page.on('worker', (w) => w.on('console', (m) => console.log(`[worker${tag}]`, m.text())));
+    return page;
+}
+
 export async function open(dir, { log = true } = {}) {
     const server = http.createServer((req, res) => {
         const f = path.join(dir, decodeURIComponent(new URL(req.url, 'http://x').pathname));
@@ -25,7 +41,7 @@ export async function open(dir, { log = true } = {}) {
             res.end(data);
         });
     }).listen(0);
-    const browser = await chromium.launch(process.env.CHROMIUM ? { executablePath: process.env.CHROMIUM } : {});
+    const browser = await launch();
     const page = await browser.newPage({ viewport: { width: 800, height: 640 } });
     page.on('pageerror', (e) => console.log('[page error]', e.message));
     if (log)

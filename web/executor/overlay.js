@@ -14,18 +14,170 @@
 //
 // OVERLAYFS mounts them for Executor: reads take each block from the
 // overlay if changed, else from the image (runs of unchanged blocks in one
-// FileReaderSync slice); writes go to the overlay.
+// read); writes go to the overlay.
+//
+// The image is a File (FileImage: an upload, a downloaded copy), or one on
+// the server read as it is needed (RemoteImage): a large disk mounts
+// before it has downloaded.
+//
+// Signed in to tools/web/server, an overlay's changes go to the account
+// too (sync.js): `sync` beside data and index keeps what was sent
+// (uint32s: the version the server gave, 1 once synced at all, the count
+// and the numbers of the blocks changed since).
 'use strict';
 
 const OVERLAY_BLOCK = 4096;
+
+class FileImage {
+    constructor(file) {
+        this.file = file;
+        this.size = file.size;
+        this.reader = new FileReaderSync();
+    }
+
+    read(pos, length) {
+        return new Uint8Array(this.reader.readAsArrayBuffer(this.file.slice(pos, pos + length)));
+    }
+
+    slice(start, end) { return this.file.slice(start, end); }
+}
+
+// A disk image on the server, read by Range requests (synchronous
+// XMLHttpRequests: Workers may, and Emscripten's filesystem calls are
+// synchronous) in 256 KB chunks, kept in OPFS as they arrive:
+// disk-cache/KEY.part (the image, sparse), KEY.have (a byte a chunk) and
+// KEY.part.json (its URL and ETag: another ETag, another image, the copy
+// starts again). desc: { name, size, lastModified, remote: { url, etag, key } }
+// (main.js). Without OPFS, or another tab holding the copy: in memory.
+const REMOTE_CHUNK = 256 * 1024;
+const REMOTE_AHEAD = 4;                  // chunks a request, the ones needed or not
+
+class RemoteImage {
+    constructor(desc) {
+        this.name = desc.name;
+        this.size = desc.size;
+        this.url = desc.remote.url;
+        this.etag = desc.remote.etag;
+        this.chunks = Math.ceil(this.size / REMOTE_CHUNK);
+        this.have = new Uint8Array(this.chunks);
+        this.part = null;                // sync access handles; null: memory
+        this.haveFile = null;
+        this.memory = new Map();         // chunk -> bytes, without them
+        this.fetched = 0;                // bytes, and requests, for 'stats'
+        this.requests = 0;
+    }
+
+    static async open(root, desc) {
+        const img = new RemoteImage(desc);
+        if (!root)
+            return img;
+        const key = desc.remote.key;
+        try {
+            const dir = await root.getDirectoryHandle('disk-cache', { create: true });
+            let meta = null;
+            try {
+                meta = JSON.parse(await (await (await dir.getFileHandle(`${key}.part.json`)).getFile()).text());
+            } catch { }
+            if (!meta || meta.etag !== img.etag || meta.size !== img.size) {
+                for (const n of [`${key}.part`, `${key}.have`])
+                    await dir.removeEntry(n).catch(() => {});
+                const w = await (await dir.getFileHandle(`${key}.part.json`, { create: true })).createWritable();
+                await w.write(JSON.stringify({ url: img.url, etag: img.etag, size: img.size }));
+                await w.close();
+            }
+            img.part = await (await dir.getFileHandle(`${key}.part`, { create: true })).createSyncAccessHandle();
+            img.haveFile = await (await dir.getFileHandle(`${key}.have`, { create: true })).createSyncAccessHandle();
+            img.haveFile.read(img.have, { at: 0 });
+        } catch (e) {
+            console.log(`[web] ${desc.name}: the downloaded part in memory only (${e.message || e})`);
+            if (img.part)
+                img.part.close();
+            img.part = img.haveFile = null;
+            img.have.fill(0);
+        }
+        const n = img.have.reduce((a, b) => a + b, 0);
+        console.log(`[web] ${desc.name}: ${(img.size / 1e6).toFixed(0)} MB on the server, ${n} of ${img.chunks} chunks here`);
+        return img;
+    }
+
+    fetchChunks(first, count) {
+        const start = first * REMOTE_CHUNK;
+        const end = Math.min(this.size, (first + count) * REMOTE_CHUNK);
+        const x = new XMLHttpRequest();
+        x.open('GET', this.url, false);
+        x.responseType = 'arraybuffer';
+        x.setRequestHeader('Range', `bytes=${start}-${end - 1}`);
+        x.send();
+        const etag = x.getResponseHeader('ETag');
+        if (x.status !== 206 || x.response.byteLength !== end - start)
+            throw new Error(`bytes ${start}-${end - 1}: HTTP ${x.status}`);
+        if (this.etag && etag && etag !== this.etag)
+            throw new Error('the image changed on the server');
+        const bytes = new Uint8Array(x.response);
+        this.fetched += bytes.length;
+        this.requests++;
+        if (this.part) {
+            this.part.write(bytes, { at: start });
+            this.have.fill(1, first, first + count);
+            this.haveFile.write(this.have.subarray(first, first + count), { at: first });
+        } else {
+            for (let c = 0; c < count; c++)
+                this.memory.set(first + c, bytes.subarray(c * REMOTE_CHUNK, (c + 1) * REMOTE_CHUNK));
+            this.have.fill(1, first, first + count);
+        }
+    }
+
+    read(pos, length) {
+        const out = new Uint8Array(length);
+        const last = Math.floor((pos + length - 1) / REMOTE_CHUNK);
+        for (let c = Math.floor(pos / REMOTE_CHUNK); c <= last; c++) {
+            if (!this.have[c]) {
+                // This chunk and the missing ones after it: the rest of this
+                // read, or a few ahead.
+                let n = 1;
+                while (c + n < this.chunks && !this.have[c + n] && (c + n <= last || n < REMOTE_AHEAD))
+                    n++;
+                this.fetchChunks(c, n);
+            }
+        }
+        if (this.part) {
+            this.part.read(out, { at: pos });
+            return out;
+        }
+        for (let at = 0; at < length;) {
+            const c = Math.floor((pos + at) / REMOTE_CHUNK);
+            const off = pos + at - c * REMOTE_CHUNK;
+            const piece = this.memory.get(c).subarray(off, off + length - at);
+            out.set(piece, at);
+            at += piece.length;
+        }
+        return out;
+    }
+
+    // All of [start, end): a download of the image reads the rest.
+    slice(start, end) {
+        const parts = [];
+        for (let p = start; p < end; p += 4 << 20)
+            parts.push(this.read(p, Math.min(4 << 20, end - p)));
+        return new Blob(parts);
+    }
+
+    flush() {
+        if (this.part) {
+            this.part.flush();
+            this.haveFile.flush();
+        }
+    }
+}
 
 // Emscripten's errno values.
 const EIO = 29, EINVAL = 28, ENOENT = 44, EPERM = 63, EROFS = 69;
 
 class Overlay {
-    constructor(name, file, key) {
+    constructor(name, file, key, image) {
         this.name = name;
-        this.file = file;
+        this.file = file;               // a File, or a remote image's description
+        this.image = image || new FileImage(file);
         this.key = key;
         this.size = file.size;
         this.map = new Map();           // block -> slot
@@ -33,11 +185,17 @@ class Overlay {
         this.data = null;               // sync access handles; null: read-only
         this.index = null;
         this.indexDirty = false;
-        this.reader = new FileReaderSync();
+        this.syncFile = null;
+        this.sync = { version: 0, synced: false };
+        this.pending = new Set();       // blocks changed since the last upload
     }
 
+    // root: OPFS (none: read-only).
     static async open(root, name, file, key) {
-        const ov = new Overlay(name, file, key);
+        const image = file.remote ? await RemoteImage.open(root, file) : new FileImage(file);
+        const ov = new Overlay(name, file, key, image);
+        if (!root)
+            return ov;
         try {
             const overlays = await root.getDirectoryHandle('overlays', { create: true });
             // Overlays of this image's other versions: theirs, not ours.
@@ -65,11 +223,20 @@ class Overlay {
                     ov.nextSlot = Math.max(ov.nextSlot, pairs[i + 1] + 1);
                 }
             }
+            ov.syncFile = await (await dir.getFileHandle('sync', { create: true })).createSyncAccessHandle();
+            const s = new Uint32Array(ov.syncFile.getSize() >> 2);
+            ov.syncFile.read(s, { at: 0 });
+            if (s.length >= 3) {
+                ov.sync = { version: s[0], synced: s[1] === 1 };
+                for (const b of s.subarray(3, 3 + s[2]))
+                    ov.pending.add(b);
+            }
         } catch (e) {
             console.log(`[web] ${name}: read-only (${e.message || e})`);
-            if (ov.data)
-                ov.data.close();
-            ov.data = ov.index = null;
+            for (const h of [ov.data, ov.index, ov.syncFile])
+                if (h)
+                    h.close();
+            ov.data = ov.index = ov.syncFile = null;
         }
         return ov;
     }
@@ -97,7 +264,7 @@ class Overlay {
             while (end < pos + length && !this.map.has(end / OVERLAY_BLOCK))
                 end += OVERLAY_BLOCK;
             const n = Math.min(end, pos + length) - p;
-            out.set(new Uint8Array(this.reader.readAsArrayBuffer(this.file.slice(p, p + n))), at);
+            out.set(this.image.read(p, n), at);
             at += n;
         }
         return out;
@@ -116,8 +283,7 @@ class Overlay {
                 const start = block * OVERLAY_BLOCK;
                 const buf = new Uint8Array(OVERLAY_BLOCK);
                 if (n < OVERLAY_BLOCK)
-                    buf.set(new Uint8Array(this.reader.readAsArrayBuffer(
-                        this.file.slice(start, Math.min(start + OVERLAY_BLOCK, this.size)))));
+                    buf.set(this.image.read(start, Math.min(OVERLAY_BLOCK, this.size - start)));
                 buf.set(bytes.subarray(at, at + n), off);
                 slot = this.nextSlot++;
                 this.data.write(buf, { at: slot * OVERLAY_BLOCK });
@@ -126,12 +292,54 @@ class Overlay {
             } else {
                 this.data.write(bytes.subarray(at, at + n), { at: slot * OVERLAY_BLOCK + off });
             }
+            this.pending.add(block);
             at += n;
         }
     }
 
+    // A whole block (from the account: sync.js).
+    putBlock(block, bytes) {
+        let slot = this.map.get(block);
+        if (slot === undefined) {
+            slot = this.nextSlot++;
+            this.map.set(block, slot);
+            this.indexDirty = true;
+        }
+        this.data.write(bytes, { at: slot * OVERLAY_BLOCK });
+    }
+
+    getBlock(block) {
+        const buf = new Uint8Array(OVERLAY_BLOCK);
+        this.data.read(buf, { at: this.map.get(block) * OVERLAY_BLOCK });
+        return buf;
+    }
+
+    // No changes: the image as it is.
+    clear() {
+        this.map.clear();
+        this.nextSlot = 0;
+        this.pending.clear();
+        this.data.truncate(0);
+        this.indexDirty = true;
+    }
+
+    saveSync() {
+        if (!this.syncFile)
+            return;
+        const s = new Uint32Array(3 + this.pending.size);
+        s[0] = this.sync.version;
+        s[1] = this.sync.synced ? 1 : 0;
+        s[2] = this.pending.size;
+        s.set([...this.pending], 3);
+        this.syncFile.truncate(0);
+        this.syncFile.write(s, { at: 0 });
+        this.syncFile.flush();
+    }
+
     // The block index to OPFS, and both files flushed.
     save() {
+        if (this.image.flush)
+            this.image.flush();
         if (!this.writable)
             return;
         if (this.indexDirty) {
@@ -147,6 +355,7 @@ class Overlay {
         }
         this.data.flush();
         this.index.flush();
+        this.saveSync();
     }
 
     // The image as it is now: the original's slices and the changed blocks.
@@ -160,7 +369,7 @@ class Overlay {
                 continue;
             const start = b * OVERLAY_BLOCK;
             if (clean < start)
-                parts.push(this.file.slice(clean, start));
+                parts.push(this.image.slice(clean, start));
             const n = Math.min(OVERLAY_BLOCK, this.size - start);
             const buf = new Uint8Array(n);
             this.data.read(buf, { at: slot * OVERLAY_BLOCK });
@@ -168,7 +377,7 @@ class Overlay {
             clean = start + n;
         }
         if (clean < this.size)
-            parts.push(this.file.slice(clean, this.size));
+            parts.push(this.image.slice(clean, this.size));
         return new Blob(parts, { type: 'application/octet-stream' });
     }
 }

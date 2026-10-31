@@ -8,7 +8,12 @@
 // writable through a copy-on-write overlay in OPFS (overlay.js: OVERLAYFS
 // at /uploads; the images themselves are never written); anything else (an
 // application in MacBinary) is copied into Executor's own volume, in
-// "executor:Uploads".
+// "executor:Uploads". A disk image on the server (main.js: a large one)
+// comes as a description, read as needed (overlay.js: RemoteImage).
+//
+// Signed in to tools/web/server: the overlays and the volume are synced
+// with the account (sync.js), down before they are mounted, up after
+// saves.
 'use strict';
 
 let canvas = null, ctx = null;
@@ -66,7 +71,7 @@ self.Module = {
     },
 };
 
-importScripts('overlay.js');
+importScripts('overlay.js', 'sync.js');
 
 // An image's overlay is for exactly this version of it (main.js computes
 // the same, for Revert).
@@ -126,9 +131,10 @@ const VOLUME = '/executor';
 // Check", which it makes at startup and deletes at Shut Down; a tab never
 // shuts down, and restored it would bring up the improper-shutdown alert.
 const NOT_KEPT = new Set([`${VOLUME}/Uploads`, `${VOLUME}/Shutdown Check`, `${VOLUME}/%Shutdown Check`]);
-let volumeDir = null, saved = { dirs: [], files: {} }, nextBlob = 1, saving = false;
+let volumeDir = null, volumeKey = '', saved = { dirs: [], files: {} }, nextBlob = 1, saving = false;
 
 async function openVolume(key) {
+    volumeKey = key;
     try {
         const root = await navigator.storage.getDirectory();
         const volumes = await root.getDirectoryHandle('volumes', { create: true });
@@ -187,7 +193,13 @@ function reportImages() {
         name: o.name, modified: o.modified, writable: o.writable })) });
 }
 
-async function saveVolume() {
+// now: the page is going away, sync without waiting for the next round.
+async function saveVolume(now = false) {
+    await saveLocally();
+    await Sync.up(overlays, volumeDir, volumeKey, saved, now);
+}
+
+async function saveLocally() {
     for (const o of overlays) {
         try { o.save(); } catch (e) { console.log(`[web] saving ${o.name}'s changes: ${e}`); }
     }
@@ -207,10 +219,11 @@ async function saveVolume() {
                 continue;
             }
             const blob = `b${nextBlob++}`;
+            const data = FS.readFile(path);
             const w = await (await volumeDir.getFileHandle(blob, { create: true })).createWritable();
-            await w.write(FS.readFile(path));
+            await w.write(data);
             await w.close();
-            files[path] = { ...f, blob };
+            files[path] = { ...f, blob, sha: Sync.enabled ? await Sync.sha256(data) : undefined };
             if (old)
                 stale.push(old.blob);
             changed = true;
@@ -246,8 +259,10 @@ async function start(m) {
     if (m.system && images.some((f) => f.name === m.system))
         args.push('--system', `/uploads/${m.system}`);
     await runtimeReady;
+    Sync.enabled = !!m.sync;
     if (m.volumeKey) {
         await openVolume(m.volumeKey);
+        await Sync.volumeDown(volumeDir, m.volumeKey);
         const n = await restoreVolume();
         if (n)
             console.log(`[web] restored ${n} files of the saved volume`);
@@ -256,9 +271,9 @@ async function start(m) {
     if (images.length) {
         let root = null;
         try { root = await navigator.storage.getDirectory(); } catch { }
-        overlays = await Promise.all(images.map((f) => root
-            ? Overlay.open(root, f.name, f, imageKey(f))
-            : new Overlay(f.name, f, imageKey(f))));      // no OPFS: read-only
+        overlays = await Promise.all(images.map((f) => Overlay.open(root, f.name, f, imageKey(f))));
+        for (const o of overlays)
+            await Sync.overlayDown(o);
         FS.mkdir('/uploads');
         FS.mount(OVERLAYFS, { overlays }, '/uploads');
         reportImages();
@@ -281,7 +296,7 @@ self.onmessage = (e) => {
         start(m);
     } else if (m.type === 'save') {
         // The page is going away, or restarting (it waits for the reply).
-        saveVolume().then(() => postMessage({ type: 'saved' }));
+        saveVolume(true).then(() => postMessage({ type: 'saved' }));
     } else if (m.type === 'input') {
         Module.input.push(...m.events);
     } else if (m.type === 'request') {
@@ -293,7 +308,10 @@ self.onmessage = (e) => {
                 o.save();
             postMessage({ type: 'reply', id: m.id, result: o ? o.blob() : null });
         } else if (m.op === 'stats') {
-            postMessage({ type: 'reply', id: m.id, result: { ...Module.stats } });
+            const remote = overlays.filter((o) => o.image instanceof RemoteImage);
+            postMessage({ type: 'reply', id: m.id, result: { ...Module.stats,
+                remoteBytes: remote.reduce((n, o) => n + o.image.fetched, 0),
+                remoteRequests: remote.reduce((n, o) => n + o.image.requests, 0) } });
         } else if (m.op === 'list') {
             let names = null;
             try { names = FS.readdir(m.arg).filter((n) => n !== '.' && n !== '..'); } catch { }
