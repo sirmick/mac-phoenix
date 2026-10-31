@@ -57,12 +57,12 @@ TOOL=tests/guest/ot/OTTest.bin
 export MPW_STATE=$(mktemp -d ${TMPDIR:-/tmp}/ottest.XXXXXX)
 export MPW_PORT=$PORT
 export MPW_OS=$OS_VERSION
-export MPW_SYSTEM="test-ot${CORE:+-$CORE}${NO_ASLM:+-noaslm}-$OS_VERSION.img"
+export MPW_SYSTEM="test-ot${CORE:+-$CORE}${NO_ASLM:+-noaslm}-$OS_VERSION-$$.img"   # per run: worktrees run it at once
 cleanup() {
     $MPW stop
     [[ -n "${ECHO_PID:-}" ]] && kill "$ECHO_PID" 2>/dev/null
     [[ -n "${KEEP_LOG:-}" ]] && cp "$MPW_STATE/emulator.log" "$KEEP_LOG"
-    rm -rf "$MPW_STATE" "$STORAGE/images/$MPW_SYSTEM" \
+    rm -rf "$MPW_STATE" "$STORAGE/images/$MPW_SYSTEM" "$STORAGE/images/$MPW_SYSTEM.json" \
         "$STORAGE/executor-systems/$MPW_SYSTEM" "$STORAGE/executor-systems/$MPW_SYSTEM.clean"
 }
 trap cleanup EXIT
