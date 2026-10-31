@@ -63,3 +63,14 @@ TEST_F(UnknownSelector, ScriptUtil)
     uint32_t d1 = run({ 0x3F3C, 0x7777, 0x3F3C, 0x0007, 0x2F3C, 0x8202, 0xFF00, 0xA8B5, 0x321F });
     EXPECT_EQ(0, d1 & 0xFFFF);
 }
+
+/* subq.w #2,sp (result space); move.w #$5555,-(sp) (one word of params);
+   move.w #$0107,d0 (selector 7, one parameter word); _ResourceDispatch;
+   move.w (sp)+,d1 -- the signed low byte of D0 is the selector, the high
+   byte the parameter size in words (ResourceMgr.yaml's ResourceDispatch
+   dispatcher comment) */
+TEST_F(UnknownSelector, ResourceDispatchWords)
+{
+    uint32_t d1 = run({ 0x554F, 0x3F3C, 0x5555, 0x303C, 0x0107, 0xA822, 0x321F });
+    EXPECT_EQ(0xFFCE, d1 & 0xFFFF) << "paramErr";
+}

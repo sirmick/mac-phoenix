@@ -180,8 +180,7 @@ namespace
    is the size of the parameters (in words for most managers, in bytes for
    the Palette Manager's), and a selector outside its table gets them
    popped and paramErr in the word on top: the result, for the functions
-   that have one. ResourceDispatch's older selectors carry no size, so it
-   isn't here. */
+   that have one. */
 struct D0SizedDispatcher
 {
     const char *name;
@@ -192,6 +191,11 @@ const D0SizedDispatcher d0_sized[] = {
     { "PaletteDispatch", 1, 8 }, { "MenuDispatch", 2, 8 },   { "ThreadDispatch", 2, 8 },
     { "LayerDispatch", 2, 8 },   { "DisplayDispatch", 2, 8 }, { "GestaltValueDispatch", 2, 8 },
     { "DialogDispatch", 2, 8 },
+    /* ResourceMgr.yaml's ResourceDispatch dispatcher comment: the signed
+       low byte of D0 is the selector, the high byte the parameter size in
+       words (documented selectors bypass this, registered with their own
+       C++ signatures; only an unregistered one reaches this table). */
+    { "ResourceDispatch", 2, 8 },
     /* the Sound Manager's: $ssccgggg, ss the parameter words, cc the
        selector, gggg the part (GetSysBeepVolume $02240018) */
     { "SoundDispatch", 2, 24 },
