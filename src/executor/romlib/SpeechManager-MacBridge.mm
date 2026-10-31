@@ -167,7 +167,12 @@ static dispatch_block_t initSpeechBlock= ^{
 Executor::NumVersion MacBridge::SpeechManagerVersion (void)
 {
   ::NumVersion theVers = ::SpeechManagerVersion();
-  return theVers.majorRev << 24 | theVers.minorAndBugRev << 16 | theVers.stage << 8 | theVers.nonRelRev;
+  Executor::NumVersion ret;
+  ret.majorRev = theVers.majorRev;
+  ret.minorAndBugRev = theVers.minorAndBugRev;
+  ret.stage = theVers.stage;
+  ret.nonRelRev = theVers.nonRelRev;
+  return ret;
 }
 
 int16_t MacBridge::SpeechBusy (void)
