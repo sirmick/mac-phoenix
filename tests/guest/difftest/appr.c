@@ -597,6 +597,58 @@ static void drawing(void)
     }
 }
 
+/* Window frames as programs get them: windows of the classic and the
+   Appearance definitions (procIDs) on the screen, active and then
+   unhilited, the frame copied out. A plain dialog box behind them hides
+   the desktop (its pattern isn't what is compared). */
+static void frames(void)
+{
+    static const short procs[] = { 0, 1, 2, 3, 4, 5, 8, 16, 1024, 1031, 1040, 1041, 1042, 1043,
+                                   1057, 1059, 1073 };
+    Rect back, b, from, to;
+    WindowRef backing, w;
+    char k[48];
+    int i, active;
+    if(!SECTION("frames"))
+        return;
+    SetRect(&back, 0, 40, 400, 240);
+    backing = NewCWindow(NULL, &back, "\p", true, plainDBox, (WindowRef)-1, false, 0);
+    SetRect(&b, 40, 80, 200, 130);           /* content: 160 x 50 */
+    SetRect(&from, 20, 50, 220, 150);        /* the frame and some white round it */
+    SetRect(&to, 0, 0, 200, 100);
+    for(i = 0; i < (int)(sizeof procs / sizeof procs[0]); i++)
+    {
+        w = NewCWindow(NULL, &b, "\pFrame", true, procs[i], (WindowRef)-1, true, 0);
+        if(!w)
+        {
+            sprintf(k, "%d", procs[i]);
+            out(k, "nil");
+            continue;
+        }
+        for(active = 1; active >= 0; active--)
+        {
+            CGrafPort screen;
+            GWorldPtr g;
+            GrafPtr save;
+            GetPort(&save);
+            if(!active)
+                HiliteWindow(w, false);
+            OpenCPort(&screen);
+            NewGWorld(&g, 32, &to, NULL, NULL, 0);
+            LockPixels(GetGWorldPixMap(g));
+            SetPort((GrafPtr)&screen);
+            CopyBits((BitMap *)*screen.portPixMap, (BitMap *)*GetGWorldPixMap(g), &from, &to, srcCopy, NULL);
+            SetPort(save);
+            CloseCPort(&screen);
+            sprintf(k, "%d.%s", procs[i], active ? "active" : "inactive");
+            probe_pixels(k, g);
+            DisposeGWorld(g);
+        }
+        DisposeWindow(w);
+    }
+    DisposeWindow(backing);
+}
+
 int main(void)
 {
     long v;
@@ -623,6 +675,7 @@ int main(void)
     shapes();
     theme();
     drawing();
+    frames();
     modes();
     title();
     if(SECTION("unregister"))

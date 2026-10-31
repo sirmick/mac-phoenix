@@ -5,6 +5,7 @@
 # platinum theme comes later (docs/executor/MacOS8-9.md "One Toolbox").
 draw32.*	platinum look not drawn yet
 draw8.*	platinum look not drawn yet
+frames.*	platinum window frames not drawn yet (Executor's definitions draw System 7's)
 
 # Colours and styles
 color.brush.48.*	brush 48 is invalid on 8.6 (-30560); Executor answers a colour

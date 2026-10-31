@@ -285,6 +285,19 @@ floating windows as a layer of their own (`'wind'` bit 2), proxy drags and
 the path menu (they answer as for a window without a proxy, or
 errUserWantsToDragWindow), collapsing drawn.
 
+The Appearance procIDs (2026-10-31, the `appr` probe's `frames`): a window
+of procID 1024-1087 (NewWindow, NewCWindow, 'WIND' resources) ran 8.6's
+WDEF 64-67 and spun in ATS drawing its title. Executor serves WDEFs 64-67
+itself now (resource-policy.txt; the entry `wdef64`, windMgr8.cpp), the
+window keeping its WDEF and variant for GetWVariant and GetWindowFeatures,
+drawn by WDEF 0's document frames and dialog boxes; floating ones (66,
+67) as document frames until Executor has a floating definition (8.6's
+WDEF 124 hands them back to WDEF 66). Found with them: CopyBits into a
+16- or 32-bit pixmap colourised with the current colour port's
+fgColor/bkColor, pixel values for the port's own device (an 8-bit screen
+copied into a 32-bit GWorld came out as indices); the port's RGB colours
+are used when the depths differ (qPixMapConv.cpp).
+
 The titles over dots (2026-10-31): 8.6's ToolboxUtils saves a colour
 port's old-style background pattern from the PixPat's `patData` handle,
 which Executor left empty, and erased every control and group title with

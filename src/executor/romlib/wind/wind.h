@@ -34,6 +34,7 @@ struct windrestype
 
 extern LONGINT C_wdef0(INTEGER, WindowPtr, INTEGER, LONGINT);
 extern LONGINT C_wdef16(INTEGER, WindowPtr, INTEGER, LONGINT);
+extern LONGINT C_wdef64(INTEGER, WindowPtr, INTEGER, LONGINT);
 
 extern WindowPeek ROMlib_firstvisible(WindowPtr w);
 

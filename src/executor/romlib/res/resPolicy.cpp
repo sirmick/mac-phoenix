@@ -102,6 +102,11 @@ void parse_builtin()
             builtin[{ type, id }].assign(d + 4, d + 4 + len);
         }
     }
+    /* the Appearance Manager's WDEFs 64-67 (8.0): Executor's own entry
+       ($28 in the table behind vector $58, init.cpp), as WDEF 0's */
+    static const uint8_t wdef64[] = { 0x20, 0x78, 0x00, 0x58, 0x20, 0x68, 0x00, 0x28, 0x4E, 0xD0 };
+    for(int id = 64; id <= 67; id++)
+        builtin[{ be32((const uint8_t *)"WDEF"), id }].assign(wdef64, wdef64 + sizeof wdef64);
 }
 
 void load()

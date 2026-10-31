@@ -13,6 +13,8 @@
 #include <MemoryMgr.h>
 #include <quickdraw/cquick.h>
 #include <wind/wind.h>
+#include <base/functions.impl.h>
+#include <algorithm>
 #include <map>
 #include <vector>
 
@@ -212,6 +214,33 @@ std::map<uint32_t, bool>& floatingProcesses()
     static std::map<uint32_t, bool> table; /* -> floating windows visible */
     return table;
 }
+}
+
+/* MacPhoenix: the Appearance Manager's WDEFs 64-67 (procIDs 1024-1087,
+   8.0), as Executor's definitions: 8.6's own draw their titles through
+   Apple Type Services, which spins on Executor (MacOS8-9.md). The window
+   keeps its WDEF and variant (GetWVariant, GetWindowFeatures answer as
+   8.6's); drawing, hit testing and regions go to WDEF 0 with the variant
+   meaning the same frame. */
+LONGINT Executor::C_wdef64(INTEGER varcode, WindowPtr w, INTEGER message, LONGINT param)
+{
+    switch(windowDefID(w))
+    {
+        case 64: /* + grow 1, vertical zoom 2, horizontal zoom 4 */
+            return C_wdef0(((varcode & 6) ? zoomDocProc : documentProc) | ((varcode & 1) ? 0 : noGrowDocProc),
+                           w, message, param);
+        case 65: /* plain, shadow, modal, movable modal, alert, movable alert, movable modal grow */
+        {
+            static const INTEGER dialog[] = { plainDBox, altDBoxProc, dBoxProc, movableDBoxProc,
+                                              dBoxProc, movableDBoxProc, movableDBoxProc };
+            return C_wdef0(dialog[std::min<int>(varcode & 15, 6)], w, message, param);
+        }
+        default: /* 66, 67: floating + grow 2, vertical zoom 4, horizontal zoom 8 */
+            /* (not WDEF 124: on 8.x it hands floating windows to WDEF 66)
+               a document frame until Executor has a floating one */
+            return C_wdef0(((varcode & 12) ? zoomDocProc : documentProc) | ((varcode & 2) ? 0 : noGrowDocProc),
+                           w, message, param);
+    }
 }
 
 static bool floating_window_p(WindowPtr w);

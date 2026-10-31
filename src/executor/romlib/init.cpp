@@ -209,6 +209,7 @@ PASCAL_FUNCTION_PTR(mbdf0);
 PASCAL_FUNCTION_PTR(snth5);
 PASCAL_FUNCTION_PTR(wdef0);
 PASCAL_FUNCTION_PTR(wdef16);
+PASCAL_FUNCTION_PTR(wdef64);
 PASCAL_FUNCTION_PTR(unixmount);
 
 void Executor::InitLowMem()
@@ -244,7 +245,8 @@ void Executor::InitLowMem()
         guest_cast<LONGINT>(&mbdf0),
         guest_cast<LONGINT>(&snth5),
         guest_cast<LONGINT>(&unixmount),
-        guest_cast<LONGINT>(&cdef1008)
+        guest_cast<LONGINT>(&cdef1008),
+        guest_cast<LONGINT>(&wdef64)    /* $28: WDEF 64-67, resPolicy.cpp */
     };
 
     const LowMemGlobal<Ptr> magic_vector { 0x58 }; 

@@ -189,7 +189,14 @@ void Executor::ROMlib_fg_bk(uint32_t *fg_pixel_out, uint32_t *bk_pixel_out,
     current_port = qdGlobals().thePort;
     if(CGrafPort_p(current_port))
     {
-        if(indirect_p)
+        /* MacPhoenix: a direct destination (16/32 bits) whose depth isn't
+           the port's: fgColor/bkColor are pixel values of the port's own
+           device (index 255 for black on an 8-bit screen), so the RGB
+           colours, as for an indexed one (the screen copied into a 32-bit
+           GWorld with the screen's port current came out as indices:
+           tests/guest/difftest appr, frames) */
+        int port_depth = PIXMAP_PIXEL_SIZE(CPORT_PIXMAP(current_port));
+        if(indirect_p || port_depth != (rgb_spec ? rgb_spec->bpp : port_depth))
         {
             fg_rgb = CPORT_RGB_FG_COLOR(current_port);
             fg_pixel = pixel_from_rgb(&fg_rgb, rgb_spec);

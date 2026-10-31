@@ -72,6 +72,17 @@ def port_free(port):
         return s.connect_ex(("127.0.0.1", port)) != 0
 
 
+def name_dumps(probe, keep):
+    """The probe's pixel dumps (PROBE-<crc>.ppm, the key on the comment
+    line) renamed PROBE-<section>.<key>.ppm."""
+    for p in keep.glob(f"{probe}-????????.ppm"):
+        with open(p, "rb") as f:
+            f.readline()
+            comment = f.readline()
+        if comment.startswith(b"# "):
+            p.replace(keep / f"{probe}-{comment[2:].strip().decode('mac_roman')}.ppm")
+
+
 def run_target(probe, target, binary, keep, dump, start=None, timeout=150):
     """One run; the kept files' log text ('' if none)."""
     args, env = TARGETS[target]
@@ -103,6 +114,7 @@ def run_target(probe, target, binary, keep, dump, start=None, timeout=150):
     if re.search(r"^SKIP", log.read_text(errors="replace"), re.M):
         print(f"  {target}: skipped ({log})")
         sys.exit(77)
+    name_dumps(probe, keep)
     p = keep / f"{probe}.txt"
     return p.read_text(errors="replace") if p.exists() else ""
 
