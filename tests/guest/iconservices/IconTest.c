@@ -1,8 +1,8 @@
 /*
  * IconTest.c -- Icon Services from PowerPC code (IconServicesLib): system
  * icons by creator and type, owners, icons for a file, a folder and the
- * volume, registering a family, families and suites, hit testing,
- * regions, composites. On Executor, iconservices.cpp; on the G3 with
+ * volume (its driver's media icon), alias files' icons, registering a
+ * family, families and suites, hit testing, regions, composites. On Executor, iconservices.cpp; on the G3 with
  * 9.0.4, Apple's. One line per check, "PASS name" or "FAIL name: why";
  * "INFO" lines say what was seen; then "---", in Host:icon_results.txt
  * (tests/test_guest_suite.sh --results icon_results.txt). Built with
@@ -16,6 +16,10 @@
 #include <Quickdraw.h>
 #include <Resources.h>
 #include <Processes.h>
+#include <Devices.h>
+#include <Finder.h>
+#include <Script.h>
+#include <Gestalt.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -88,6 +92,178 @@ static void sysIcon(OSType type, IconRef *out)
         char name[32];
         sprintf(name, "system icon %s", t);
         check(name, err == noErr && *out != NULL && IsValidIconRef(*out), "err", err);
+    }
+}
+
+/* The black-and-white icon of a ref (the 128 bytes before the mask). */
+static int refICN(IconRef ref, unsigned char *out)
+{
+    IconFamilyHandle fam = NULL;
+    Handle h;
+    int ok = 0;
+    if(IconRefToIconFamily(ref, svAllAvailableData, &fam) != noErr || !fam)
+        return 0;
+    h = NewHandle(0);
+    if(GetIconFamilyData(fam, 'ICN#', h) == noErr && GetHandleSize(h) >= 128)
+    {
+        memcpy(out, *h, 128);
+        ok = 1;
+    }
+    DisposeHandle(h);
+    DisposeHandle((Handle)fam);
+    return ok;
+}
+
+/* The volume's icon and its driver's: Control 21 (drive icon) and 22
+   (media icon) give an ICN# with its mask. */
+static void volumeIcon(short vref, IconRef ref)
+{
+    HParamBlockRec vpb;
+    ParamBlockRec cpb;
+    unsigned char icn[128];
+    int code, have = refICN(ref, icn);
+    memset(&vpb, 0, sizeof vpb);
+    vpb.volumeParam.ioVRefNum = vref;
+    PBHGetVInfoSync(&vpb);
+    for(code = 21; code <= 22; code++)
+    {
+        OSErr err;
+        Ptr icon;
+        memset(&cpb, 0, sizeof cpb);
+        cpb.cntrlParam.ioVRefNum = vpb.volumeParam.ioVDrvInfo;
+        cpb.cntrlParam.ioCRefNum = vpb.volumeParam.ioVDRefNum;
+        cpb.cntrlParam.csCode = code;
+        err = PBControlSync(&cpb);
+        icon = *(Ptr *)cpb.cntrlParam.csParam;
+        printf("INFO volume driver Control %d: err %d, the volume's icon is it %d\n", code, err,
+               err == noErr && icon && have && memcmp(icon, icn, 128) == 0);
+    }
+    {
+        /* what the volume shows: the driver's media icon, else its drive icon */
+        Ptr want = NULL;
+        for(code = 22; code >= 21 && !want; code--)
+        {
+            memset(&cpb, 0, sizeof cpb);
+            cpb.cntrlParam.ioVRefNum = vpb.volumeParam.ioVDrvInfo;
+            cpb.cntrlParam.ioCRefNum = vpb.volumeParam.ioVDRefNum;
+            cpb.cntrlParam.csCode = code;
+            if(PBControlSync(&cpb) == noErr)
+                want = *(Ptr *)cpb.cntrlParam.csParam;
+        }
+        if(want)
+            check("the volume's icon is its driver's", have && memcmp(want, icn, 128) == 0, "have", have);
+    }
+}
+
+/* A file with icon families at the IDs given (0: none), its Finder flags. */
+static void makeIconFile(FSSpec *spec, short vref, long dirID, ConstStr255Param name, OSType type,
+                         unsigned short flags, short id1, unsigned char fill1, short id2, unsigned char fill2)
+{
+    FInfo fi;
+    short rn, i;
+    FSMakeFSSpec(vref, dirID, name, spec);
+    FSpDelete(spec);
+    FSpCreateResFile(spec, 'ITst', type, smSystemScript);
+    rn = FSpOpenResFile(spec, fsRdWrPerm);
+    for(i = 0; i < 2; i++)
+    {
+        short id = i ? id2 : id1;
+        unsigned char fill = i ? fill2 : fill1;
+        Handle h;
+        if(!id)
+            continue;
+        h = NewHandle(256);
+        memset(*h, fill, 128);
+        memset(*h + 128, 0xFF, 128);
+        AddResource(h, 'ICN#', id, "\p");
+    }
+    CloseResFile(rn);
+    FSpGetFInfo(spec, &fi);
+    fi.fdFlags |= flags;
+    FSpSetFInfo(spec, &fi);
+}
+
+/* What GetIconRefFromFile gives for the file: 1 its first family, 2 its
+   second, 0 neither. */
+static int whichIcon(FSSpec *spec, unsigned char fill1, unsigned char fill2)
+{
+    IconRef ref = NULL;
+    SInt16 label;
+    unsigned char icn[128];
+    int which = 0;
+    if(GetIconRefFromFile(spec, &ref, &label) == noErr && ref)
+    {
+        if(refICN(ref, icn))
+            which = icn[0] == fill1 && icn[127] == fill1 ? 1 : icn[0] == fill2 && icn[127] == fill2 ? 2 : 0;
+        ReleaseIconRef(ref);
+    }
+    return which;
+}
+
+/* An alias file keeps its target's icon at -16496 (the Finder copies it
+   there when it makes the alias), a custom icon is at -16455. 9.0.4: with
+   kHasCustomIcon, -16455, else -16496, alias or not; without it, neither. */
+static void aliasIcons(short vref, long dirID)
+{
+    FSSpec spec;
+    int w;
+    makeIconFile(&spec, vref, dirID, "\pIconTest alias", 'adrp', kIsAlias | kHasCustomIcon, -16496, 0xA5, 0, 0);
+    w = whichIcon(&spec, 0xA5, 0xC3);
+    printf("INFO alias with its icon at -16496: %d\n", w);
+    check("an alias file's icon (-16496)", w == 1, "which", w);
+    FSpDelete(&spec);
+    makeIconFile(&spec, vref, dirID, "\pIconTest alias 2", 'adrp', kIsAlias | kHasCustomIcon, -16455, 0x5A, -16496,
+                 0xA5);
+    w = whichIcon(&spec, 0x5A, 0xA5);
+    printf("INFO alias with -16455 and -16496: %d\n", w);
+    check("-16455 before -16496", w == 1, "which", w);
+    FSpDelete(&spec);
+    makeIconFile(&spec, vref, dirID, "\pIconTest file -16496", 'TEXT', kHasCustomIcon, -16496, 0xA5, 0, 0);
+    w = whichIcon(&spec, 0xA5, 0xC3);
+    printf("INFO a file (no alias) with its icon at -16496: %d\n", w);
+    check("a file's icon at -16496 (no alias)", w == 1, "which", w);
+    FSpDelete(&spec);
+    makeIconFile(&spec, vref, dirID, "\pIconTest alias 3", 'adrp', kIsAlias, -16496, 0xA5, 0, 0);
+    w = whichIcon(&spec, 0xA5, 0xC3);
+    printf("INFO alias without kHasCustomIcon, icon at -16496: %d\n", w);
+    check("without kHasCustomIcon, no custom icon", w == 0, "which", w);
+    FSpDelete(&spec);
+}
+
+/* 8.5 and later: the badges are icons of their own (the Finder composites
+   an alias's icon with 'abdg'), not some other system icon. */
+static void badges(void)
+{
+    static const OSType types[] = { 'abdg', 'lbdg', 'mbdg', 'sbdg', 'scrp' };
+    unsigned char suit[128], icn[128];
+    long sysv = 0;
+    IconRef ref = NULL;
+    int i;
+    Gestalt(gestaltSystemVersion, &sysv);
+    if(sysv < 0x0850)
+    {
+        printf("INFO badges: System %lx, before 8.5\n", sysv);
+        return;
+    }
+    if(GetIconRef(kOnSystemDisk, kSystemIconsCreator, kGenericSuitcaseIcon, &ref) != noErr || !refICN(ref, suit))
+        memset(suit, 0, sizeof suit);
+    if(ref)
+        ReleaseIconRef(ref);
+    for(i = 0; i < 5; i++)
+    {
+        char name[40], t[5];
+        OSErr err;
+        int have = 0;
+        ref = NULL;
+        err = GetIconRef(kOnSystemDisk, kSystemIconsCreator, types[i], &ref);
+        if(err == noErr && ref)
+        {
+            have = refICN(ref, icn);
+            ReleaseIconRef(ref);
+        }
+        tagstr(t, types[i]);
+        sprintf(name, "badge %s: its own large icon", t);
+        check(name, err == noErr && have && memcmp(icn, suit, 128) != 0, "err", err);
     }
 }
 
@@ -243,8 +419,13 @@ int main(void)
         err = GetIconRefFromFile(&dirSpec, &ref, &label);
         printf("INFO the volume's root: err %d ref %d\n", err, ref != NULL);
         if(err == noErr)
+        {
+            volumeIcon(vref, ref);
             ReleaseIconRef(ref);
+        }
     }
+    aliasIcons(vref, dirID);
+    badges();
 
     /* ---- hit testing, regions ---- */
     pt.v = 16;

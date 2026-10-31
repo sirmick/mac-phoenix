@@ -978,18 +978,21 @@ endforeach()
 
 # Icon Services from PowerPC code (IconServicesLib) by IconTest
 # (tests/guest/iconservices, Retro68): Executor's (iconservices.cpp), and
-# Apple's on the G3 with 9.0.4.
-foreach(cell IN ITEMS "icons_ppc_executor_761;--backend executor;7.6.1;18990;guest;761;executor"
-                      "icons_rom_ppc_904;--backend kpx --core mame-ppc --jit;9.0.4;18992;guest;mame")
+# Apple's on the G3 with 9.0.4 and 8.6; on 8.6 also Executor's with 8.6's System.
+foreach(cell IN ITEMS "icons_ppc_executor_761;--backend executor;--os-version 7.6.1;18990;guest;761;executor"
+                      "icons_rom_ppc_904;--backend kpx --core mame-ppc --jit;--os-version 9.0.4;18992;guest;mame"
+                      "icons_ppc_executor_86;--backend executor --executor-ppc;--image 8.6;18994;guest;executor"
+                      "icons_rom_ppc_86;--backend kpx --core mame-ppc --jit;--image 8.6;18996;guest;mame")
   list(GET cell 0 name)
   list(GET cell 1 backend)
   list(GET cell 2 os)
   list(GET cell 3 port)
   list(SUBLIST cell 4 -1 labels)
   separate_arguments(backend_args UNIX_COMMAND "${backend}")
+  separate_arguments(os_args UNIX_COMMAND "${os}")
   add_test(
     NAME ${name}
-    COMMAND bash ${TEST_DIR}/test_guest_suite.sh ${backend_args} --os-version ${os} --app ${CMAKE_SOURCE_DIR}/tests/guest/iconservices/IconTestPPC.bin --results icon_results.txt --network none --timeout 150 --port ${port}
+    COMMAND bash ${TEST_DIR}/test_guest_suite.sh ${backend_args} ${os_args} --app ${CMAKE_SOURCE_DIR}/tests/guest/iconservices/IconTestPPC.bin --results icon_results.txt --network none --timeout 150 --port ${port}
   )
   set_tests_properties(${name} PROPERTIES
     TIMEOUT 230
