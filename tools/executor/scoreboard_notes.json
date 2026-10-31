@@ -73,13 +73,9 @@
   "status": "fails",
   "blocker": "alert \"Sorry - you need to install the QuickTime 3.0 or later\"; ref shows main menu"
  },
- "e761|Games:Exile III 1.0.3 ƒ:Exile III (fat) v1.0.3": {
-  "status": "fails",
-  "blocker": "\"Fatal error. qPict2.cpp:53; in 'Executor::OSErr Executor::C_GetPictInfo(PicHandle, PictInfo*, int16_t, int16_t, int16_t, int16_t)' unimplemented\" (Restart)"
- },
  "e761ppc|Games:Exile III 1.0.3 ƒ:Exile III (fat) v1.0.3": {
   "status": "fails",
-  "blocker": "just the desktop (File menu only), game not in front"
+  "blocker": "not in front; unimplemented PowerPC HGetVol"
  },
  "e761|Games:Monkey Island 2 ƒ:LeChuck's Revenge": {
   "status": "fails",

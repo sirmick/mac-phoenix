@@ -25,7 +25,7 @@ Visual verdicts and owner overrides: `tools/executor/scoreboard_notes.json`.
 
 | System | Column | runs | partial | fails |
 |---|---|---|---|---|
-| 7.6.1 | e761 | 75 | 7 | 23 |
+| 7.6.1 | e761 | 76 | 7 | 22 |
 | 7.6.1 | e761ppc | 17 | 3 | 12 |
 | 8.6 | e86 | 69 | 5 | 34 |
 
@@ -103,7 +103,7 @@ Rows with a fault, by owner:
 | games | Exile 2.0.1 ƒ:Exile v2.0.1 | 68k | runs |  | runs |  | e761/games/030.png |  |
 | games | Exile II 2.0.3 ƒ:Exile II Editor v2.0.1 | 68k | runs |  | runs |  | e761/games/031.png |  |
 | games | Exile II 2.0.3 ƒ:Exile II v2.0.3 | 68k | runs |  | runs |  | e761/games/032.png |  |
-| games | Exile III 1.0.3 ƒ:Exile III (fat) v1.0.3 | fat | fails | fails | runs | e761: "Fatal error. qPict2.cpp:53; in 'Executor::OSErr Executor::C_GetPictInfo(PicHandle, PictInfo*, int16_t, int16_t, int16_t, int16_t)' unimplemented" (Restart) | e761/games/033.png | fix-games |
+| games | Exile III 1.0.3 ƒ:Exile III (fat) v1.0.3 | fat | runs | fails | runs | e761ppc: not in front; unimplemented PowerPC HGetVol | e761ppc/games/012.png | fix-games |
 | games | Exile III 1.0.3 ƒ:Exile III Editor v1.0.2 | 68k | runs |  | runs |  | e761/games/034.png |  |
 | games | Flashback 1.0 ƒ:Flashback | fat | runs | runs | runs | (e761ppc: latent: unresolved imports GetWDInfo, MIDISignOut, MIDISignIn (+4)) | e761ppc/games/013.png |  |
 | games | Glider PRO 1.1.2 ƒ:Glider PRO™ | fat | runs | runs | runs? | (e761: front process unknown) | e761/games/036.png |  |
