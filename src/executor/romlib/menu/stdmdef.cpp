@@ -16,6 +16,10 @@
 #include <quickdraw/cquick.h>
 #include <wind/wind.h>
 #include <rsys/helppkg.h>
+#include <prefs/prefs.h>
+#include <Appearance.h>
+#include <FontMgr.h>
+#include <rsys/appearance.h>
 #include <algorithm>
 
 using namespace Executor;
@@ -157,6 +161,28 @@ static Boolean iskeyequiv(struct table::tableentry *tp)
     return retval;
 }
 
+/* MacPhoenix: 8.x's menus are platinum (AppearanceLib's menu calls,
+   appearance_draw.cpp), laid out as 8.6's on a G3: 6-pixel separators,
+   the mark 2 in from the left and the text 21, the
+   command key's mark 33 in from the right, menus as wide as their
+   widest item needs; black, #777 when disabled,
+   white when selected. */
+enum
+{
+    kPlatSeparatorHeight = 6,
+    kPlatTextIndent = 21,
+    kPlatCommandRoom = 33,
+    /* the room after an item's text: without a command key (or a
+       submenu), with one (the key's 33 and 9 before it) */
+    kPlatRightMargin = 10,
+    kPlatCommandWidth = 42,
+};
+
+static bool platinum_menus()
+{
+    return system_version >= 0x800;
+}
+
 void size_menu(MenuHandle mh, tablePtr tablep)
 {
     struct table::tableentry *tp, *ep;
@@ -170,13 +196,15 @@ void size_menu(MenuHandle mh, tablePtr tablep)
         icon_info_t icon_info;
         int w;
 
-        w = checksize + 2;
+        w = platinum_menus() ? kPlatTextIndent : checksize + 2;
 
         get_icon_info(tp->options, &icon_info, false);
         w += icon_info.width;
 
         height += tp[1].top - tp[0].top;
-        TextFace(tp->options->mstyle);
+        /* 8.x measures every item in the plain face (the menu probe's
+           size.bold) */
+        TextFace(platinum_menus() ? 0 : tp->options->mstyle);
         /* MacPhoenix: widths as a 7.5.5 boot draws them (File, Special and
            Apple menus measured): text plus a 10-pixel margin, room for the
            command key only on items that have one (or a submenu arrow),
@@ -187,9 +215,14 @@ void size_menu(MenuHandle mh, tablePtr tablep)
                  + TextWidth((Ptr)tp->name, 1 + kApplePlaceholder, tp->name[0] - kApplePlaceholder);
         else
             w += StringWidth(tp->name);
-        w += kMenuRightMargin;
-        if(iskeyequiv(tp) || tp->options->mkeyeq == 0x1B)
-            w += 2 * cloversize + 2;
+        if(platinum_menus())
+            w += iskeyequiv(tp) || tp->options->mkeyeq == 0x1B ? kPlatCommandWidth : kPlatRightMargin;
+        else
+        {
+            w += kMenuRightMargin;
+            if(iskeyequiv(tp) || tp->options->mkeyeq == 0x1B)
+                w += 2 * cloversize + 2;
+        }
         if(height < max_height)
             actual_height = height;
         if(width < w)
@@ -324,6 +357,91 @@ static void erasearrow(Rect *rp, tablePtr tablep, Boolean upordown)
     EraseRect(&r);
 }
 
+static void platinum_item(Rect *rp, struct table::tableentry *tp, int item, MenuHandle mh,
+                          bool selected, bool active, bool divider)
+{
+    bool hier = tp->options->mkeyeq == 0x1B;
+    Rect ir = *rp;
+    ir.top = tp[0].top + LM(TopMenuItem);
+    ir.bottom = tp[1].top + LM(TopMenuItem);
+    ThemeMenuState state = selected ? kThemeMenuSelected : active ? kThemeMenuActive : kThemeMenuDisabled;
+    DrawThemeMenuItem(rp, &ir, rp->top, rp->bottom, divider ? kThemeMenuActive : state,
+                      hier && !divider ? kThemeMenuItemHierarchical : kThemeMenuItemPlain, nullptr, 0);
+    if(divider)
+    {
+        DrawThemeMenuSeparator(&ir);
+        return;
+    }
+    static RGBColor disabled = { 0x7777, 0x7777, 0x7777 };
+    RGBForeColor(selected ? &ROMlib_white_rgb_color : active ? &ROMlib_black_rgb_color : &disabled);
+    PORT_TX_MODE(qdGlobals().thePort) = srcOr;
+
+    icon_info_t icon_info;
+    bool draw_icon_p = get_icon_info(tp->options, &icon_info, true);
+    Handle apple_suite = ROMlib_apple_menu_icon(mh, item);
+    int v = ir.top + ascent;
+    if(draw_icon_p)
+        v += (icon_info.height - lineheight) / 2;
+    else if(apple_suite)
+        v += (kAppleItemHeight - lineheight) / 2;
+
+    if(tp->options->mmarker && !hier)
+    {
+        MoveTo(rp->left + 2, v);
+        DrawChar(tp->options->mmarker);
+    }
+    if(draw_icon_p)
+    {
+        Rect r;
+        r.top = ir.top + ICON_PAD / 2;
+        r.left = rp->left + kPlatTextIndent;
+        r.bottom = r.top + (icon_info.height - ICON_PAD);
+        r.right = r.left + (icon_info.width - ICON_PAD);
+        if(icon_info.color_icon_p)
+            PlotCIcon(&r, (CIconHandle)icon_info.icon);
+        else
+            PlotIcon(&r, icon_info.icon);
+    }
+    MoveTo(rp->left + kPlatTextIndent + icon_info.width, v);
+    TextFace(tp->options->mstyle);
+    if(apple_suite)
+    {
+        Rect r;
+        r.left = rp->left + kPlatTextIndent;
+        r.top = ir.top + (kAppleItemHeight - 16) / 2;
+        r.right = r.left + 16;
+        r.bottom = r.top + 16;
+        PlotIconSuite(&r, atNone, selected ? ttSelected : ttNone, apple_suite);
+        Move(kAppleItemTextIndent, 0);
+        DrawText((Ptr)tp->name, 1 + kApplePlaceholder, tp->name[0] - kApplePlaceholder);
+    }
+    else
+        DrawString(tp->name);
+    TextFace(0);
+    if(iskeyequiv(tp))
+    {
+        MoveTo(rp->right - kPlatCommandRoom, v);
+        DrawChar(commandMark);
+        /* a SetMenuItemKeyGlyph glyph is its character in the System's
+           .Keyboard font (the Finder's Move To Trash: delete) */
+        if(int16_t glyph = ROMlib_menu_item_key_glyph(mh, item))
+        {
+            static const unsigned char name[] = "\011.Keyboard";
+            GUEST<INTEGER> keyboard;
+            GetFNum(name, &keyboard);
+            INTEGER font = PORT_TX_FONT(qdGlobals().thePort);
+            TextFont(keyboard ? INTEGER(keyboard) : font);
+            DrawChar(glyph);
+            TextFont(font);
+        }
+        else
+            DrawChar(tp->options->mkeyeq);
+    }
+    cleanup_icon_info(&icon_info);
+    RGBForeColor(&ROMlib_black_rgb_color);
+    RGBBackColor(&ROMlib_white_rgb_color);
+}
+
 static void
 draw_item(Rect *rp, struct table::tableentry *tp, int32_t bit, int item, MenuHandle mh,
           int invert_p)
@@ -346,6 +464,12 @@ draw_item(Rect *rp, struct table::tableentry *tp, int32_t bit, int item, MenuHan
     bit |= 1;
     active_p = !((MI_ENABLE_FLAGS(mh) & bit) != bit
                  || divider_p);
+
+    if(platinum_menus())
+    {
+        platinum_item(rp, tp, item, mh, invert_p, active_p, divider_p);
+        return;
+    }
 
     top = tp[0].top + LM(TopMenuItem);
     bottom = tp[1].top + LM(TopMenuItem);
@@ -808,7 +932,10 @@ void Executor::C_mdef0(INTEGER mess, MenuHandle mh, Rect *rp, Point p,
         get_icon_info(tabp->options, &icon_info, false);
         if(ROMlib_apple_menu_icon(mh, tabp - tp->entry + 1))
             icon_info.height = kAppleItemHeight;
-        v += icon_info.height ? std::max<INTEGER>(icon_info.height, lineheight) : lineheight;
+        if(platinum_menus() && tabp->name[0] && tabp->name[1] == '-')
+            v += kPlatSeparatorHeight;
+        else
+            v += icon_info.height ? std::max<INTEGER>(icon_info.height, lineheight) : lineheight;
     }
     tabp->top = v;
     LM(AtMenuBottom) = LM(TopMenuItem) + v;
