@@ -894,6 +894,8 @@ OSErr Executor::C_SndDoCommand(SndChannelPtr chanp, SndCommand *cmdp,
 {
     OSErr retval;
 
+    if(!chanp || !cmdp)
+        return badChannel;
 #if 1
     if(!cmdp)
         warning_sound_log("cmdp = nullptr");
@@ -959,6 +961,11 @@ OSErr Executor::C_SndDoImmediate(SndChannelPtr chanp, SndCommand *cmdp)
 {
     OSErr retval;
     SndCommand cmd;
+
+    /* MacPhoenix: no channel, as SndDisposeChannel says (Mars Rising
+       quiets the channel it never got) */
+    if(!chanp || !cmdp)
+        return badChannel;
 
     switch(ROMlib_PretendSound)
     {
