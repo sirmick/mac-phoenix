@@ -13,10 +13,19 @@ browser and synced to their account (`web/executor/sync.js`).
 
 ```bash
 source ~/emsdk/emsdk_env.sh
-emcmake cmake -B build-wasm -DCMAKE_BUILD_TYPE=Release   # -DEXECUTOR_SKIA=ON ... for ?scale=2 (HiDPI.md)
+tools/skia/build-wasm.sh                                 # once: Skia for wasm, ~/storage/deps/skia-m144-wasm-wasm
+emcmake cmake -B build-wasm -DCMAKE_BUILD_TYPE=Release -DEXECUTOR_SKIA=ON -DEXECUTOR_NET=wasm
 cmake --build build-wasm -j2
 tools/web/make_site.sh /srv/executor-web/site            # the page, the module, .gz copies
 ```
+
+The site's module is built with Skia (`-DEXECUTOR_SKIA=ON`, HiDPI.md):
+the tab draws at the screen's `devicePixelRatio` (`?scale=N` to choose),
+and at 2 text is drawn from outlines, sharp, rather than the 1x screen
+scaled up. Without it the module is 4 MB smaller (1.3 MB gzipped) and
+text at 2x is blurred; `make_site.sh` warns. `-DEXECUTOR_NET=wasm` is the default for new build directories
+(networking through the server's `/relay`); an older `build-wasm` keeps
+the `none` it was configured with until it is given again.
 
 `make_site.sh` copies what the page needs out of the build tree, so a
 rebuild doesn't change the running site until it is run again. Nothing
@@ -198,6 +207,9 @@ ctest --test-dir build-wasm -L site            # EXECUTOR_WEB_LIBRARY=~/storage/
 SITE_APPS=MacPerl ctest --test-dir build-wasm -R site.8.6.development -V
 ```
 
-Labelled `site`, not `executor` (about 20 minutes for the six cells); a
+`executor.web.hidpi` (the Finder at scale 1 and 2, text redrawn from
+outlines at 2: fails without Skia) is labelled `site` too, so the run
+checks the module is the site's. Labelled `site`, not `executor` (about
+20 minutes for the six cells); a
 screenshot an application lands in the build tree
 (`site-SYSTEM-APP.png`).

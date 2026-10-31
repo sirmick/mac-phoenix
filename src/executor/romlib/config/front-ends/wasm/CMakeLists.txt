@@ -138,7 +138,7 @@ if(NODE_COMMAND)
         COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_hidpi.mjs
                 $<TARGET_FILE_DIR:executor-web> ${EXECUTOR_WEB_HIDPI_SYSTEM})
     set_tests_properties(executor.web.hidpi PROPERTIES
-        LABELS "executor;web" TIMEOUT 240 SKIP_RETURN_CODE 77
+        LABELS "executor;web;site" TIMEOUT 240 SKIP_RETURN_CODE 77
         ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM}")
 endif()
 
