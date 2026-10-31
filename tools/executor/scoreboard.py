@@ -92,6 +92,8 @@ def cmd_run(opts):
                 cmd += ["--skip-creator", c]
             for x in EXCLUDE:
                 cmd += ["--exclude", x]
+        if col == "q761" and st in ("games", "classic", "gppc"):
+            cmd += ["--depth", "8"]   # as on Executor: many games run only in 256 colours
         print(f"== {col}/{st}", flush=True)
         subprocess.run(cmd)
 
@@ -116,7 +118,7 @@ def session_log(col, st, r):
             lines = lines[i + 1:]
             break
     end = next((l for l in lines if re.search(
-        r"session stopped|host signal|guest exited|SysError\(", l)), None)
+        r"session stopped|host signal|guest exited|SysError\(|\] fatal: ", l)), None)
     if end:
         end = re.sub(r"^\[\w+\] |: snapshotting$", "", end)
     return lines, end
@@ -142,12 +144,22 @@ def verdict(r, col, st):
     if missing:
         imports = "unresolved imports %s%s" % (", ".join(missing[:3]),
                                                " (+%d)" % (len(missing) - 3) if len(missing) > 3 else "")
+    if end and "fatal: " in end:   # Executor's fatal error dialog, the program in front
+        return "fails", re.sub(r" \(([\w.]+:\d+), .*", r" (\1)", end)
+    ppc = next((l for l in lines if l.startswith("[mame-ppc] exception")), None)
     if res == "runs":
         calls = r.get("unimplemented") or []
+        if ppc:   # PowerPC code gone astray, the program still in front
+            m = re.match(r"\[mame-ppc\] (exception \d+ at \w+).*?(lr \w+)", ppc)
+            return "fails", "PowerPC %s (%s)" % m.groups() + (
+                " after unimplemented " + calls[0] if calls else "")
         if calls:
             return "partial", "unimplemented " + calls[0]
         # imports never called don't stop anything: a note, not a fault
         return "runs", "latent: " + imports if missing else ""
+    if res == "not in front" and r.get("front") is None:
+        # /api/app had no answer (full-screen games): the screenshot decides
+        return "runs?", "front process unknown"
     if res == "not in front" and missing:
         return "fails", "not in front; " + imports
     if res == "crashed":
@@ -166,13 +178,18 @@ def cmd_table(opts):
             notes = json.load(f)
     lines = []
     total = {}
+    faults761 = {}   # path -> the 7.6.1 row's blocker, without the column
+    owners = {}      # (system, owner package) -> rows
     for system in ("7.6.1", "8.6"):
+        if system not in opts.systems:
+            lines += [f"## {system}", "", "Pending.", ""]
+            continue
         cols = [c for c, (s, _) in COLUMNS.items() if s == system]
         ecols = [c for c in cols if c.startswith("e")]
         rcol = [c for c in cols if not c.startswith("e")][0]
         lines += [f"## {system}", "",
-                  "| App | Code | " + " | ".join(cols) + " | First blocker | Screenshot | Owner |",
-                  "|---|---|" + "---|" * len(cols) + "---|---|---|"]
+                  "| Disk | App | Code | " + " | ".join(cols) + " | First blocker | Screenshot | Owner |",
+                  "|---|---|---|" + "---|" * len(cols) + "---|---|---|"]
         for st in SYSTEM_SETS[system]:
             disk, paths, owner = SETS[st]
             grids = {c: load(c, st) for c in cols}
@@ -186,7 +203,7 @@ def cmd_table(opts):
             for p in seen:
                 any_r = next(g[p] for g in grids.values() if g and p in g)
                 code = any_r.get("code", "")
-                cells, blocker, shot = [], "", ""
+                cells, blocker, shot, worst = [], "", "", 0
                 for c in cols:
                     r = (grids[c] or {}).get(p)
                     if r is None and c == "q761" and code == "ppc":
@@ -199,49 +216,78 @@ def cmd_table(opts):
                     if note:
                         v = note.get("status", v)
                         b = note.get("blocker", b)
+                    elif f"{c}/{st}" in notes.get("_reviewed", []) and r is not None:
+                        # screenshots checked against the reference, nothing wrong
+                        # seen: what the log says stays a note (crashes stay fails)
+                        v = "runs" if v in ("partial", "runs?") else v
                     cells.append(v)
-                    if c in ecols:
-                        total.setdefault((system, c), {}).setdefault(v, 0)
-                        total[(system, c)][v] += 1
-                    if c in ecols and b and (not blocker or blocker.startswith("(")) \
-                            and (v in ("partial", "fails") or not blocker):
-                        blocker = f"{c}: {b}" if v in ("partial", "fails") else f"({c}: {b})"
-                    if c in ecols and r and not shot:
+                    if c not in ecols:
+                        continue
+                    total.setdefault((system, c), {}).setdefault(v, 0)
+                    total[(system, c)][v] += 1
+                    # the worst column's blocker; a note on a running one in brackets
+                    rank = {"fails": 3, "partial": 2}.get(v, 1 if b else 0)
+                    if rank > worst:
+                        worst = rank
+                        blocker = f"{c}: {b}" if rank > 1 else f"({c}: {b})"
+                        if r:
+                            shot = os.path.join(c, st, "%03d.png" % r["n"])
+                    if r and not shot:
                         shot = os.path.join(c, st, "%03d.png" % r["n"])
                 ref = cells[cols.index(rcol)]
+                fault = blocker.split(": ", 1)[-1]
+                if system == "7.6.1" and worst > 1:
+                    faults761[p] = fault
                 row_owner = notes.get(f"{system}|{p}", {}).get("owner")
                 if not row_owner:
-                    if not blocker:
+                    if worst < 2:
                         row_owner = ""
-                    elif system == "8.6" and owner != "fix-games":
+                    elif system == "8.6" and owner != "fix-games" and faults761.get(p) != fault:
                         row_owner = "fix-86"
                     else:
                         row_owner = owner
-                    if ref == "fails" and blocker:
+                    if ref == "fails" and worst > 1:
                         row_owner += " (ref fails too)"
+                if row_owner:
+                    pkg = row_owner.split()[0]
+                    owners[(system, pkg)] = owners.get((system, pkg), 0) + 1
                 leaf = p.split(":", 1)[1]
-                lines.append(f"| {leaf} | {code} | " + " | ".join(cells) +
+                lines.append(f"| {disk.removesuffix('.img')} | {leaf} | {code} | " + " | ".join(cells) +
                              f" | {blocker.replace('|', '/')} | {shot} | {row_owner} |")
         lines.append("")
     head = ["# Executor scoreboard", "",
             "The target applications on Executor (Apple's 7.6.1 and 8.6 System Folders)",
             "beside the ROM machines running the same System and application disk",
-            "(`tools/executor/scoreboard.py`; grids, screenshots and logs under",
-            "`~/storage/executor-grid/m1/<column>/<set>/`, screenshot paths relative to it).",
+            "(`tools/executor/scoreboard.py run` / `table`; grids, screenshots and logs under",
+            "`~/storage/executor-grid/m1/<column>/<disk set>/`, screenshot paths relative to",
+            "it; `scoreboard.py sheets` puts the columns side by side in `m1/sheets/`).",
             "",
             "Columns: **e761** Executor on 7.6.1, 68k code (`--no-ppc`); **e761ppc** the same",
-            "with `--executor-ppc`, fat applications only; **q761** Quadra 650 ROM + boot copy",
-            "of 7.6.1; **e86** Executor on 8.6 (`--executor-ppc`); **g86** G3 ROM + 8.6.",
-            "Each application is launched by BridgeAgent from the Finder and looked at after",
-            "20 s: **runs** (in front, no unimplemented calls, screen checked against the",
-            "reference), **partial** (in front, but unimplemented calls or a drawing fault),",
-            "**fails** (crash, SysError, launch error or never in front).",
-            "Owners: fix-prod, fix-dev, fix-games, fix-86 (8.x-only), platinum (8.x frames",
-            "and controls).", "", "| System | Column | runs | partial | fails |",
+            "with `--executor-ppc`, fat applications only; **q761** Quadra 650 ROM + a fresh",
+            "copy of 7.6.1 (games at `--depth 8`, as Executor's screen); **e86** Executor on",
+            "8.6 (`--executor-ppc`); **g86** G3 ROM + 8.6. Every session gets a fresh, writable",
+            "copy of the application disk. BridgeAgent launches the application from the",
+            "Finder; 20 s later the grid takes a screenshot and reads the log.",
+            "",
+            "**runs**: the screen matches the reference's (checked by eye, sheet by sheet).",
+            "**partial**: up, but drawn wrong or a wrong behaviour seen (or, unchecked, an",
+            "unimplemented call logged). **fails**: crash, fatal error, SysError, an alert the",
+            "reference doesn't show, or never up. A note in brackets is what the log says about",
+            "a program that runs (unimplemented calls, CFM imports left unresolved, exceptions).",
+            "**First blocker**: the worst Executor column's. **Owner**: fix-prod, fix-dev,",
+            "fix-games by disk; fix-86 for faults on 8.6 only; platinum for 8.x frames, menus",
+            "and controls; \"(ref fails too)\" when the ROM machine doesn't run it either.",
+            "Visual verdicts and owner overrides: `tools/executor/scoreboard_notes.json`.",
+            "", "| System | Column | runs | partial | fails |",
             "|---|---|---|---|---|"]
     for (system, c), t in total.items():
+        if c == "e761ppc":
+            t = {k: v for k, v in t.items() if k}   # not fat: no cell
         head.append(f"| {system} | {c} | {t.get('runs', 0)} | {t.get('partial', 0)} | "
                     f"{t.get('fails', 0)} |")
+    head += ["", "Rows with a fault, by owner:", "", "| System | Owner | rows |", "|---|---|---|"]
+    for (system, pkg), k in sorted(owners.items()):
+        head.append(f"| {system} | {pkg} | {k} |")
     with open(opts.doc, "w") as f:
         f.write("\n".join(head + [""] + lines))
     print(opts.doc)
@@ -292,6 +338,7 @@ def main():
     r.add_argument("--wait", type=int, default=20)
     t = sub.add_parser("table")
     t.add_argument("--doc", default=DOC)
+    t.add_argument("--systems", nargs="*", default=["7.6.1", "8.6"])
     sh = sub.add_parser("sheets")
     sh.add_argument("--only", nargs="*")
     opts = ap.parse_args()

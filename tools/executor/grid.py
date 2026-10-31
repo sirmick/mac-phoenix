@@ -29,7 +29,7 @@ instead, the System image only booting: a fresh copy of the disk is mounted
 beside it for each item, writable on Executor too
 (--executor-writable-images). --rom quadra is the
 68k ROM machine (Quadra 650 ROM). --no-ppc runs Executor without
---executor-ppc. Each item records its code ("68k", "ppc", "fat": CODE and
+--executor-ppc; --depth 8 starts the Quadra in 256 colours. Each item records its code ("68k", "ppc", "fat": CODE and
 cfrg resources); --code fat keeps the applications with both. --path names
 items exactly, --skip-creator and --exclude leave some out.
 
@@ -157,7 +157,7 @@ def syserror(text):
 
 
 def run_item(n, item, image, port, out, wait, binary, rom=None, source=None, disks=(),
-             ppc=True):
+             ppc=True, depth=None):
     path, kind, ftype, creator, code = item
     log = os.path.join(out, f"{n:03d}.log")
     result = {"n": n, "path": path, "kind": kind, "type": ftype, "creator": creator,
@@ -172,11 +172,13 @@ def run_item(n, item, image, port, out, wait, binary, rom=None, source=None, dis
             extra += ["--disk", copy]
         if os.path.basename(rom).startswith("quadra"):
             args = ["--backend", "uae", "--ram", "64", "--disk", image, *extra,
+                    *(["--depth", str(depth)] if depth else []),
                     "--dismiss-shutdown-dialog", "--bridge", rom]
         else:
             # 640x480 as Executor's screen (8.6 takes the largest mode otherwise)
             args = ["--backend", "kpx", "--core", "mame-ppc", "--jit", "--ram", "128",
                     "--max-resolution", "640x480", "--disk", image, *extra,
+                    *(["--depth", str(depth)] if depth else []),
                     "--dismiss-shutdown-dialog", "--bridge", rom]
     else:
         # writable, as on the ROM machine (applications write preferences,
@@ -285,6 +287,8 @@ def main():
     ap.add_argument("--disk", action="append", default=[],
                     help="application disk: its items instead of the System image's")
     ap.add_argument("--no-ppc", action="store_true", help="Executor without --executor-ppc")
+    ap.add_argument("--depth", type=int, help="the 68k ROM machine's starting colour depth "
+                    "(8 for games that run only in 256 colours)")
     ap.add_argument("--code", help="only these kinds of code (comma-separated: 68k,ppc,fat)")
     ap.add_argument("--path", action="append", default=[], help="an item by its full path")
     ap.add_argument("--skip-creator", action="append", default=[],
@@ -338,7 +342,7 @@ def main():
             w = free.pop()
             try:
                 return run_item(n, item, copies[w], opts.port + w, out, opts.wait, opts.binary,
-                                rom, image, disks, not opts.no_ppc)
+                                rom, image, disks, not opts.no_ppc, opts.depth)
             finally:
                 free.append(w)
         futures = [pool.submit(job, n, item) for n, item in enumerate(items, 1)]
