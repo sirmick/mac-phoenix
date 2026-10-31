@@ -46,14 +46,74 @@ OSErr Executor::C_NewPictInfo(GUEST<PictInfoID> *pict_info_id, int16_t verb,
 #endif
 }
 
+/* The PICT format has no explicit "this is version 1" marker; a version 2
+   picture starts (right after the 10-byte picSize/picFrame header) with the
+   1-byte opVersion opcode, 0x11. */
+static int16_t pict_version(PicHandle pic_h)
+{
+    if(GetHandleSize((Handle)pic_h) >= 11)
+    {
+        const unsigned char *bytes = (const unsigned char *)*pic_h;
+        if(bytes[10] == 0x11)
+            return 2;
+    }
+    return 1;
+}
+
 OSErr Executor::C_GetPictInfo(PicHandle pic_h, PictInfo *pict_info,
-                              int16_t verb, int16_t color_version,
+                              int16_t verb, int16_t colors_requested,
                               int16_t color_pick_method, int16_t version)
 {
-    gui_fatal("unimplemented");
-#if !defined(LETGCCWAIL)
-    return paramErr;
-#endif
+    if(!pic_h || !pict_info)
+        return paramErr;
+
+    Rect frame = (*pic_h)->picFrame;
+    if(RECT_WIDTH(&frame) <= 0 || RECT_HEIGHT(&frame) <= 0)
+        return paramErr;
+
+    memset(pict_info, '\000', sizeof *pict_info);
+
+    OSErr err = noErr;
+    if(colors_requested > 0)
+    {
+        GUEST<CGrafPtr> save_port;
+        GUEST<GDHandle> save_device;
+        GUEST<GWorldPtr> gw;
+
+        C_GetGWorld(&save_port, &save_device);
+        gw = nullptr;
+        err = C_NewGWorld(&gw, 32, &frame, nullptr, nullptr, (GWorldFlags)0);
+        if(err == noErr && (GWorldPtr)gw)
+        {
+            PixMapHandle pm = GetGWorldPixMap((GWorldPtr)gw);
+            LockPixels(pm);
+            C_SetGWorld((CGrafPtr)(GWorldPtr)gw, nullptr);
+            DrawPicture(pic_h, &frame);
+            C_SetGWorld((CGrafPtr)save_port, (GDHandle)save_device);
+
+            /* Render the picture into a true-colour offscreen and run the
+               same popular-colour census GetPixMapInfo does on it: not
+               pixel-perfect (depth/colours as actually encoded in the
+               PICT's own opcodes are lost once everything's been drawn at
+               32 bits), but a real analysis of what the picture draws,
+               not a guess. */
+            err = C_GetPixMapInfo(pm, pict_info, verb, colors_requested,
+                                  color_pick_method, version);
+
+            UnlockPixels(pm);
+            C_DisposeGWorld((GWorldPtr)gw);
+        }
+    }
+
+    if(err == noErr)
+    {
+        pict_info->version = pict_version(pic_h);
+        pict_info->hRes = 0x00480000;   /* 72.0, the common case */
+        pict_info->vRes = 0x00480000;
+        pict_info->depth = pict_info->uniqueColors > 2 ? 8 : 1;
+        pict_info->sourceRect = frame;
+    }
+    return err;
 }
 
 inline void INDIRECT_PIXEL_TO_RGB(
