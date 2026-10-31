@@ -638,7 +638,13 @@ INTEGER Executor::C_HOpenResFile(INTEGER vref, LONGINT dirid, ConstStringPtr fn,
             return -1;
         }
 
-        cpb.hFileInfo.ioNamePtr = (StringPtr)fn;
+        /* MacPhoenix: a copy, as for PBHGetVInfo: PBGetCatInfo writes a
+           name back (the directory's, for an empty one), and the caller's
+           is constant: MPW Shell's was in a heap block "\pDevelopment",
+           the volume's name, ran past. */
+        Str255 cat_name;
+        str255assign(cat_name, fn);
+        cpb.hFileInfo.ioNamePtr = (StringPtr)cat_name;
         cpb.hFileInfo.ioVRefNum = vref;
         cpb.hFileInfo.ioFDirIndex = 0;
         cpb.hFileInfo.ioDirID = dirid;
