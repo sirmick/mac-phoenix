@@ -577,10 +577,12 @@ set_tests_properties(listcell_executor PROPERTIES
 # AppleWorks 5.0.3 on Executor's 7.6.1: a word-processing document made,
 # saved on the Host volume, opened again and saved (tests/test_appleworks.py),
 # with its 68k code and with its PowerPC code.
+set(_aw_68k_args)
+set(_aw_ppc_args --ppc)
 foreach(_aw IN ITEMS 68k ppc)
   add_test(
     NAME appleworks_executor_761_${_aw}
-    COMMAND ${Python3_EXECUTABLE} ${TEST_DIR}/test_appleworks.py --system 7.6.1 $<$<STREQUAL:${_aw},ppc>:--ppc>
+    COMMAND ${Python3_EXECUTABLE} ${TEST_DIR}/test_appleworks.py --system 7.6.1 ${_aw_${_aw}_args}
   )
   set_tests_properties(appleworks_executor_761_${_aw} PROPERTIES
     TIMEOUT 400
