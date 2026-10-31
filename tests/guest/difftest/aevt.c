@@ -401,6 +401,46 @@ int main(void)
         AERemoveObjectAccessor(typeWildCard, 'Cnt4', acc, false);
         AERemoveObjectAccessor(typeWildCard, typeWildCard, acc, false);
     }
+    if(SECTION("layout"))
+    {
+        /* A new event's handle: its size and the header's parameter offset
+           and counts, and a parameter appended at the end by hand, counted
+           in the header, as BBEdit Lite 6.1 builds its 'crel' (AEGizmos'
+           way): does the Apple Event Manager then find it? */
+        ProcessSerialNumber self;
+        AEAddressDesc target;
+        AppleEvent evt;
+        Handle h;
+        Size size;
+        long *hdr;
+        DescType type;
+        OSType cls = 0;
+        static const long param[4] = { 'kocl', typeType, 4, 'TxtW' };
+        GetCurrentProcess(&self);
+        AECreateDesc(typeProcessSerialNumber, &self, sizeof self, &target);
+        AECreateAppleEvent('Test', 'Lay1', &target, kAutoGenerateReturnID, kAnyTransactionID, &evt);
+        h = evt.dataHandle;
+        size = GetHandleSize(h);
+        hdr = (long *)*h;
+        out("new", "size %ld params at %ld attributes %ld parameters %ld", (long)size, hdr[2],
+            hdr[3], hdr[4]);
+        out("new.end", "%.4s", *h + size - 4);
+        SetHandleSize(h, size + 16);
+        BlockMoveData(param, *h + size, 16);
+        ((long *)*h)[4] += 1;
+        out("appended", "%d", AEGetParamPtr(&evt, 'kocl', typeType, &type, &cls, 4, &size));
+        out("appended.value", "%.4s", (char *)&cls);
+        AEDisposeDesc(&evt);
+        AECreateAppleEvent('Test', 'Lay2', &target, kAutoGenerateReturnID, kAnyTransactionID, &evt);
+        cls = 'TxtW';
+        AEPutParamPtr(&evt, 'kocl', typeType, &cls, 4);
+        h = evt.dataHandle;
+        hdr = (long *)*h;
+        out("put", "size %ld params at %ld parameters %ld", (long)GetHandleSize(h), hdr[2], hdr[4]);
+        out("put.at", "%.4s", *h + hdr[2]);
+        AEDisposeDesc(&evt);
+        AEDisposeDesc(&target);
+    }
     probe_close();
     return 0;
 }
