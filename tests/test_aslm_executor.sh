@@ -133,6 +133,12 @@ status() { tr -d '\r\n ' <"$EXTFS_DIR/$1.status"; }
 echo "=== Shared Library Manager Test (Executor, MPW) ==="
 echo "Image: $IMAGE  Port: $PORT  Core: ${CORE:-default}"
 
+# Another emulator on the port would answer for ours (and its BridgeAgent
+# look like ours, "Booting... ok" at once).
+if curl -sf --max-time 2 "http://localhost:$PORT/api/status" >/dev/null 2>&1; then
+    echo "FAIL: port $PORT is taken (another emulator answers there)"; exit 1
+fi
+
 EXTRA_FLAGS=(--executor-system "$IMAGE_NAME" --executor-writable-images)
 [[ -n "$CORE" ]] && EXTRA_FLAGS+=(--core "$CORE")
 "$BINARY" --backend executor --timeout "$((TIMEOUT + 10))" \
