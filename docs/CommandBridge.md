@@ -139,7 +139,10 @@ last report is under a second old, else from a peek at `CurApName`, which
 is whichever process runs at that tick (BridgeAgent itself about half the
 time). No recent report means the agent isn't getting time, an application
 in a modal loop that doesn't yield (ZTerm's serial port alert), and then
-the peek knows better. A reset, or the agent quitting (`AGENT_HELLO` 0),
+the peek knows better. On Executor the peek is the Process Manager's front
+process (as of its last event call), not `CurApName`: under load a report
+goes stale while an application quits, and the agent's name there let a
+test take the application for gone. A reset, or the agent quitting (`AGENT_HELLO` 0),
 drops it.
 
 ### History

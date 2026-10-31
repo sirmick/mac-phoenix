@@ -1030,6 +1030,7 @@ OSStatus C_EndThemeDragSound();PASCAL_SUBTRAP(EndThemeDragSound, 0xAA74, 0x0028,
 LIBRARY_ALSO(AppearanceLib, EndThemeDragSound, InterfaceLib);
 
 
+OSStatus C_DrawThemeTickMark(const Rect *bounds, ThemeDrawState state);LIBRARY_FUNCTION(AppearanceLib, DrawThemeTickMark, C_DrawThemeTickMark);
 
 
 OSStatus C_DrawThemeChasingArrows(const Rect *bounds, UInt32 index, ThemeDrawState state, ThemeEraseUPP eraseProc, UInt32 eraseData);LIBRARY_FUNCTION(AppearanceLib, DrawThemeChasingArrows, C_DrawThemeChasingArrows);

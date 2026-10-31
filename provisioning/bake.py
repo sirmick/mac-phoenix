@@ -103,7 +103,7 @@ import macfetch  # noqa: E402
 import snapshot  # noqa: E402
 from containers import MAC_EPOCH, Volume, macbinary_to_files, mr, named, open_container, take  # noqa: E402
 import guest as guest_mod  # noqa: E402
-from guest import Guest, watch_url  # noqa: E402
+from guest import Guest, free_port, watch_url  # noqa: E402
 from populate_disk import build_macbinary  # noqa: E402
 from snapshot import Hfs  # noqa: E402
 
@@ -933,13 +933,6 @@ def merge(bake, parts, out, key, log=print):
     log(f"{out}: {len(meta['items'])} items, {len(meta['system'])} System Folder entries, machines {meta['machines']}")
     shutil.rmtree(work, ignore_errors=True)
     return out
-
-
-def free_port():
-    import socket
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
 
 
 def base_deps(os_name, seen=None):

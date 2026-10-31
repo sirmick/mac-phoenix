@@ -30,6 +30,7 @@
 #include <QuickDraw.h>
 #include <vector>
 #include <algorithm>
+#include <mutex>
 
 using namespace Executor;
 #include <AppleEvents.h>
@@ -189,6 +190,19 @@ static process_info_t *pending_front;
 /* Layers, front first: whose windows are in front of whose. */
 static std::vector<process_info_t *> layer_order;
 static process_info_t *front_process;
+/* The front process's name for the host's video thread (/api/app): copied
+   at event calls and when a process ends, as CurApName at a frame names
+   whichever process runs then (the agent, while an application quits). */
+static std::mutex front_name_mutex;
+static std::string front_name;
+static void publish_front_name()
+{
+    std::string name;
+    if(front_process && front_process->state != process_info_t::dead)
+        name.assign((const char *)front_process->name + 1, front_process->name[0]);
+    std::lock_guard<std::mutex> lk(front_name_mutex);
+    front_name = name;
+}
 /* 7.5.5 numbers processes from $2000 (Jigsaw launched by Finder: $2001). */
 static uint32_t next_free_psn = 0x2000;
 
@@ -1296,6 +1310,12 @@ static void reap_dead()
     reap_list.clear();
 }
 
+std::string Executor::ROMlib_front_process_name()
+{
+    std::lock_guard<std::mutex> lk(front_name_mutex);
+    return front_name;
+}
+
 std::vector<ROMlib_process_entry> Executor::ROMlib_process_entries()
 {
     std::vector<ROMlib_process_entry> out;
@@ -1557,6 +1577,7 @@ static void exit_current()
         next->died_pending = true;
         next->died = me->serial_number;
     }
+    publish_front_name();
     hand_baton(next);
 }
 
@@ -1667,6 +1688,7 @@ void Executor::ROMlib_process_event_hook(INTEGER mask)
     if(!me)
         return;
     me->event_mask = mask;
+    publish_front_name();
     if(switch_hold > 0)
         return;
     quit_all_step();

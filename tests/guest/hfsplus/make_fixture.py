@@ -67,7 +67,7 @@ def main():
     ap.add_argument("blank")
     ap.add_argument("out")
     ap.add_argument("--work")
-    ap.add_argument("--port", type=int, default=19400 + os.getpid() % 500)
+    ap.add_argument("--port", type=int, default=guest.free_port())
     args = ap.parse_args()
 
     rom = guest.roms(STORAGE)["kpx"]

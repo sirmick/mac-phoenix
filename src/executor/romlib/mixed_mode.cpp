@@ -278,7 +278,7 @@ static uint32_t mode_switch(UniversalProcPtr theProcPtr, ProcInfoType procinfo,
         }
         if(rr->routineFlags & kFragmentNeedsPreparing)
         {
-            PreparedRecord was = { descriptor, ptr_to_longint(rr->procDescriptor.get()), rr->routineFlags };
+            PreparedRecord was = { descriptor, (uint32_t)ptr_to_longint(rr->procDescriptor.get()), rr->routineFlags };
             uint32_t container = was.procDescriptor;
             if(rr->routineFlags & kProcDescriptorIsRelative)
                 container += descriptor;

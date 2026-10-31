@@ -29,9 +29,9 @@ static FHandle at_least_one_fond_entry(INTEGER family);
 static void
 reset_myfmi(void)
 {
-    LM(ROMlib_myfmi).family = -1;
-    LM(ROMlib_myfmi).size = -1;
-    LM(ROMlib_myfmi).face = -1;
+    LM(CurFMInput).family = -1;
+    LM(CurFMInput).size = -1;
+    LM(CurFMInput).face = -1;
 }
 
 void Executor::C_InitFonts() /* IMI-222 */
@@ -263,7 +263,7 @@ static Boolean widthlistmatch(FMInput *fmip)
 
 /* MacPhoenix: is WidthTabHandle still one of the listed tables (WidthPtr
    then where it is now)? WidthTabHandle and the last request
-   (ROMlib_myfmi) are switched per process (7.5.5's 'lmem' -16458), but the
+   (CurFMInput) are switched per process (7.5.5's 'lmem' -16458), but the
    list is shared, so another process may have disposed of this process's
    table to make room for one of its own: the request still matches, the
    handle is gone. */
@@ -1140,12 +1140,12 @@ FMOutPtr Executor::C_FMSwapFont(FMInput *fmip) /* IMI-223 */
         fmip->family = LM(SysFontFam);
     }
 
-    if(!width_table_listed() || fmip->family != LM(ROMlib_myfmi).family || fmip->size != LM(ROMlib_myfmi).size || fmip->face != LM(ROMlib_myfmi).face || fmip->device != LM(ROMlib_myfmi).device || fmip->numer.h != LM(ROMlib_myfmi).numer.h || fmip->numer.v != LM(ROMlib_myfmi).numer.v || fmip->denom.h != LM(ROMlib_myfmi).denom.h || fmip->denom.v != LM(ROMlib_myfmi).denom.v || WIDTHPTR->fSize == -1 || WIDTHPTR->fSize == 0 || (fmip->needBits && !LM(ROMlib_myfmi).needBits))
+    if(!width_table_listed() || fmip->family != LM(CurFMInput).family || fmip->size != LM(CurFMInput).size || fmip->face != LM(CurFMInput).face || fmip->device != LM(CurFMInput).device || fmip->numer.h != LM(CurFMInput).numer.h || fmip->numer.v != LM(CurFMInput).numer.v || fmip->denom.h != LM(CurFMInput).denom.h || fmip->denom.v != LM(CurFMInput).denom.v || WIDTHPTR->fSize == -1 || WIDTHPTR->fSize == 0 || (fmip->needBits && !LM(CurFMInput).needBits))
     {
         if((needtobuild = !widthlistmatch(fmip)))
             newwidthtable(fmip);
 
-        LM(ROMlib_myfmi) = *fmip;
+        LM(CurFMInput) = *fmip;
         LM(ROMlib_fmo).errNum = 0;
         LM(ROMlib_fmo).bold = 0;
         LM(ROMlib_fmo).italic = 0;

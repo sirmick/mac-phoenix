@@ -43,9 +43,22 @@ static Ptr hle_data(HighLevelEventMsgPtr m)
     return (Ptr)m + sizeof(HighLevelEventMsg);
 }
 
-/* event q element currently being processed, and its sender (per process) */
+/* event q element currently being processed, and its sender (per process).
+   MacPhoenix: it is ours to dispose of only once taken off the queue; a
+   look without removing (EventAvail, WaitNextEvent's peek) borrows the
+   queue's message, which the next event call disposed of while it was
+   still queued: the application got whatever the System heap put there
+   next (SimpleText's 'odoc' at launch, now and then). */
 static HighLevelEventMsgPtr current_hle_msg;
+static bool current_hle_owned;
 static ProcessSerialNumber current_hle_from;
+
+/* A queued message is going away: not current any more if borrowed. */
+static void hle_disown(HighLevelEventMsgPtr m)
+{
+    if(current_hle_msg == m && !current_hle_owned)
+        current_hle_msg = nullptr;
+}
 
 static bool for_current(const hle_q_elt_t *t)
 {
@@ -70,6 +83,7 @@ void Executor::ROMlib_hle_forget(const ProcessSerialNumber *psn)
         if(t->to.highLongOfPSN == psn->highLongOfPSN && t->to.lowLongOfPSN == psn->lowLongOfPSN)
         {
             *pp = t->next;
+            hle_disown(t->hle_msg);
             DisposePtr((Ptr)t->hle_msg);
             DisposePtr((Ptr)t);
         }
@@ -82,7 +96,9 @@ void Executor::hle_init(void)
 {
     hle_q = nullptr;
     current_hle_msg = nullptr;
+    current_hle_owned = false;
     ROMlib_process_register_state(&current_hle_msg, sizeof current_hle_msg);
+    ROMlib_process_register_state(&current_hle_owned, sizeof current_hle_owned);
     ROMlib_process_register_state(&current_hle_from, sizeof current_hle_from);
     /* Whether this process still has its opening Apple event to get. */
     ROMlib_process_register_state(&send_application_open_aevt_p, sizeof send_application_open_aevt_p);
@@ -91,6 +107,7 @@ void Executor::hle_init(void)
 void Executor::hle_reinit(void)
 {
     current_hle_msg = nullptr;
+    current_hle_owned = false;
 }
 
 void Executor::hle_reset(void)
@@ -98,9 +115,11 @@ void Executor::hle_reset(void)
     if(current_hle_msg == nullptr)
         return;
 
-    DisposePtr((Ptr)current_hle_msg);
+    if(current_hle_owned)
+        DisposePtr((Ptr)current_hle_msg);
 
     current_hle_msg = nullptr;
+    current_hle_owned = false;
 }
 
 bool Executor::hle_get_event(EventRecord *evt, bool remflag)
@@ -118,6 +137,7 @@ bool Executor::hle_get_event(EventRecord *evt, bool remflag)
         }
 
         current_hle_msg = t->hle_msg;
+        current_hle_owned = remflag;
         current_hle_from = t->from;
         *evt = current_hle_msg->theMsgEvent;
 
@@ -202,15 +222,19 @@ Boolean Executor::C_GetSpecificHighLevelEvent(
            (Apple's Apple Event Manager does, for its replies): that reads
            the message being offered. */
         HighLevelEventMsgPtr saved_msg = current_hle_msg;
+        bool saved_owned = current_hle_owned;
         ProcessSerialNumber saved_from = current_hle_from;
         current_hle_msg = t->hle_msg;
+        current_hle_owned = false;
         current_hle_from = t->from;
         bool took = fn(data, t->hle_msg, sender);
         current_hle_msg = saved_msg;
+        current_hle_owned = saved_owned;
         current_hle_from = saved_from;
         if(took)
         {
             *prev = t->next;
+            hle_disown(t->hle_msg);
             DisposePtr((Ptr)t->hle_msg);
             DisposePtr((Ptr)t);
             taken = true;
