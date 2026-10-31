@@ -2682,6 +2682,13 @@ OSErr Executor::C_GetFrontProcess(ProcessSerialNumber *serial_number, int32_t du
     return noErr;
 }
 
+/* InterfaceLib's GetFrontProcess, for PowerPC and CFM-68K code: the PSN
+   pointer alone, the front process. */
+OSErr Executor::glue_GetFrontProcess(ProcessSerialNumber *serial_number)
+{
+    return C_GetFrontProcess(serial_number, -1);
+}
+
 /* Takes effect at the front process's next event call, as on 7.5.5. */
 OSErr Executor::C_SetFrontProcess(ProcessSerialNumber *serial_number)
 {
