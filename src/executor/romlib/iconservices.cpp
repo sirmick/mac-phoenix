@@ -349,8 +349,79 @@ IconRef iconFor(INTEGER vRefNum, uint32_t creator, uint32_t type)
     IconRecord rec;
     if(creator != "macs"_4 && desktopIcons(rec, vRefNum, creator, type))
         return registerRecord(creator, type, std::move(rec));
+    /* the other volumes' databases (the G3's 8.6 finds Sherlock's icon,
+       on the System disk, asked on Host:: IconTest) */
+    if(creator != "macs"_4)
+    {
+        HParamBlockRec vpb = {};
+        vpb.volumeParam.ioVRefNum = vRefNum;
+        INTEGER self = PBHGetVInfo(&vpb, false) == noErr ? (INTEGER)vpb.volumeParam.ioVRefNum : 0;
+        for(INTEGER i = 1;; i++)
+        {
+            vpb = {};
+            vpb.volumeParam.ioVolIndex = i;
+            if(PBHGetVInfo(&vpb, false) != noErr)
+                break;
+            INTEGER v = vpb.volumeParam.ioVRefNum;
+            if(v != self && desktopIcons(rec, v, creator, type))
+                return registerRecord(creator, type, std::move(rec));
+        }
+    }
     /* Nobody's: the generic icon. */
     return systemIcon(type == "APPL"_4 ? "APPL"_4 : "docu"_4);
+}
+
+/* An alias file without an icon of its own: its kind's icon, by the
+   alias's type (Finder.h's alias types), not its target's (IconTest on
+   the G3's 8.6: an 'fdrp' alias to Control Panels shows a plain folder).
+   An application's alias is its creator's application; an alias of a
+   document has the document's type, so it needs nothing here. A 'badg'
+   override (the Apple menu's Favorites) is not applied here either. */
+IconRef aliasIcon(INTEGER vRefNum, uint32_t creator, uint32_t type)
+{
+    static const std::pair<uint32_t, uint32_t> kinds[] = {
+        { "fdrp"_4, "fldr"_4 }, { "faet"_4, "fldr"_4 }, { "fapn"_4, "fldr"_4 },
+        { "fact"_4, "ctrl"_4 }, { "faex"_4, "extn"_4 }, { "fapf"_4, "pref"_4 },
+        { "fasy"_4, "macs"_4 }, { "faam"_4, "amnu"_4 }, { "fast"_4, "strt"_4 },
+        { "fadr"_4, "dbox"_4 }, { "fash"_4, "shfl"_4 }, { "famn"_4, "mntd"_4 },
+        { "drop"_4, "dbox"_4 }, { "trsh"_4, "trsh"_4 }, { "hdsk"_4, "hdsk"_4 },
+        { "flpy"_4, "flpy"_4 }, { "srvr"_4, "srvr"_4 }, { "cddr"_4, "cddr"_4 },
+    };
+    if(type == "adrp"_4)
+        return iconFor(vRefNum, creator, "APPL"_4);
+    for(const auto& [alias, icon] : kinds)
+        if(alias == type)
+            return systemIcon(icon);
+    return nullptr;
+}
+
+/* A file's custom badge ('badg' kCustomBadgeResourceID, when the extended
+   Finder flags say kExtendedFlagHasCustomBadge): its override type and
+   creator replace the file's own icon (the Apple menu's Favorites alias:
+   'favs'/'macs'; IconTest on the G3's 8.6). The badges proper, drawn
+   over the icon, are not done. */
+IconRef badgeOverride(FSSpec *file)
+{
+    INTEGER save = CurResFile();
+    INTEGER rn = FSpOpenResFile(file, fsRdPerm);
+    if(rn == -1)
+        return nullptr;
+    uint32_t type = 0, creator = 0;
+    if(Handle h = Get1Resource("badg"_4, -16455))
+    {
+        LoadResource(h);
+        if(*h && GetHandleSize(h) >= 28)
+        {
+            const GUEST<uint32_t> *p = (const GUEST<uint32_t> *)((char *)*h + 20);
+            type = p[0];
+            creator = p[1];
+        }
+    }
+    CloseResFile(rn);
+    UseResFile(save);
+    if(!type)
+        return nullptr;
+    return iconFor(file->vRefNum, creator, type);
 }
 
 /* A file's custom icon (kHasCustomIcon): ID kCustomIconResource, -16455,
@@ -609,8 +680,15 @@ OSErr Executor::C_GetIconRefFromFile(const FSSpec *theFile, GUEST<IconRef> *theI
     {
         if(custom)
             ref = customIcon(const_cast<FSSpec *>(theFile));
+        uint32_t creator = pb.hFileInfo.ioFlFndrInfo.fdCreator, type = pb.hFileInfo.ioFlFndrInfo.fdType;
+        const uint8_t *xinfo = (const uint8_t *)&pb.hFileInfo.ioFlXFndrInfo;
+        uint16_t xflags = xinfo[8] << 8 | xinfo[9];
+        if(!ref && (xflags & 0x8100) == 0x0100 /* kExtendedFlagHasCustomBadge, flags valid */)
+            ref = badgeOverride(const_cast<FSSpec *>(theFile));
+        if(!ref && (flags & 0x8000) /* kIsAlias */)
+            ref = aliasIcon(theFile->vRefNum, creator, type);
         if(!ref)
-            ref = iconFor(theFile->vRefNum, pb.hFileInfo.ioFlFndrInfo.fdCreator, pb.hFileInfo.ioFlFndrInfo.fdType);
+            ref = iconFor(theFile->vRefNum, creator, type);
     }
     if(!ref)
         return noSuchIconErr;
