@@ -21,6 +21,7 @@
 
 #include <quickdraw/xdblt.h>
 #include <quickdraw/srcblt.h>
+#include <quickdraw/gworld.h>
 #include <vdriver/dirtyrect.h>
 
 using namespace Executor;
@@ -653,6 +654,46 @@ Executor::ROMlib_blt_pn(RgnHandle rh, INTEGER mode)
     }
 }
 
+namespace
+{
+/* MacPhoenix: a port whose pixmap's baseAddr is a handle (pmVersion says
+   so: a copy of an unlocked GWorld's pixmap) is drawn into through it, the
+   handle locked meanwhile, as QuickDraw does; was drawn into at the master
+   pointer, over the heap (Mars Rising's 640x480 PaintRect). */
+class PortPixelsGuard
+{
+    PixMapHandle pm = nullptr;
+    Handle h = nullptr;
+    SignedByte state = 0;
+
+public:
+    PortPixelsGuard()
+    {
+        GrafPtr port = qdGlobals().thePort;
+        if(!CGrafPort_p(port))
+            return;
+        PixMapHandle p = CPORT_PIXMAP(port);
+        if(!p || PIXMAP_VERSION(p) != gw_pm_version_handle)
+            return;
+        Handle ph = (Handle)PIXMAP_BASEADDR(p);
+        if(!ROMlib_live_handle_p(ph))
+            return;
+        pm = p;
+        h = ph;
+        state = HGetState(h);
+        HLock(h);
+        PIXMAP_BASEADDR(pm) = *h;
+    }
+    ~PortPixelsGuard()
+    {
+        if(!pm)
+            return;
+        PIXMAP_BASEADDR(pm) = (Ptr)h;
+        HSetState(h, state);
+    }
+};
+}
+
 void Executor::C_StdRgn(GrafVerb verb, RgnHandle rgn)
 {
     RgnHandle rh;
@@ -660,6 +701,8 @@ void Executor::C_StdRgn(GrafVerb verb, RgnHandle rgn)
 
     if(!rgn || EmptyRgn(rgn))
         return;
+
+    PortPixelsGuard pixels_guard;
 
     if((*rgn)->rgnSize & 0x8000)
     {

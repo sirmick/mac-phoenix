@@ -275,6 +275,7 @@ QDErr Executor::C_NewGWorld(GUEST<GWorldPtr> *graphics_world_out,
             gw_pixmap_baseaddr = NewHandle(0);
         PIXMAP_BASEADDR(gw_pixmap)
             = (Ptr)gw_pixmap_baseaddr;
+        PIXMAP_VERSION(gw_pixmap) = gw_pm_version_handle;
 
         PORT_RECT(graphics_world) = PIXMAP_BOUNDS(gw_pixmap) = *bounds;
     }
@@ -314,6 +315,7 @@ Boolean Executor::C_LockPixels(PixMapHandle pixels)
         /* lock the baseaddr handle memory */
         HSetState(pixels_baseaddr_h, HGetState(pixels_baseaddr_h) | LOCKBIT);
         PIXMAP_BASEADDR(pixels) = *pixels_baseaddr_h;
+        PIXMAP_VERSION(pixels) = gw_pm_version_locked;
 
         HSetState((Handle)pixels, HGetState((Handle)pixels) | LOCKBIT);
     }
@@ -346,6 +348,7 @@ void Executor::C_UnlockPixels(PixMapHandle pixels)
             HSetState(pixels_baseaddr_h,
                       HGetState(pixels_baseaddr_h) & ~LOCKBIT);
             PIXMAP_BASEADDR(pixels) = (Ptr)pixels_baseaddr_h;
+            PIXMAP_VERSION(pixels) = gw_pm_version_handle;
 
             HSetState((Handle)pixels, HGetState((Handle)pixels) & ~LOCKBIT);
         }
