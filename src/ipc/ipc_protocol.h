@@ -207,7 +207,11 @@ typedef struct IPCBuffer {
     uint32_t width;
     uint32_t height;
     uint32_t pixel_format;           /* IPC_PIXFMT_* */
-    uint32_t _reserved;
+    /* The frames' scale over the Mac's screen, in thousandths (0 or 1000:
+     * the same; Executor's --executor-scale, docs/executor/HiDPI.md).
+     * Above 1000, each frame is followed in its slot by the 1x one,
+     * base_width x base_height, packed the same way. */
+    uint32_t scale_milli;
 
     /* Triple buffer indices (atomic for cross-process safety) */
     IPC_ATOMIC_UINT32 write_index;   /* child writes here (0–2) */
@@ -215,12 +219,10 @@ typedef struct IPCBuffer {
     IPC_ATOMIC_UINT64 frame_count;   /* monotonic, for new-frame detection */
     uint64_t timestamp_us;
 
-    /* Reserved (was the eventfd handle pre-3b; now notification rides
-     * a separate QLocalSocket and the SHM struct doesn't carry an fd
-     * across the parent/child boundary). Kept zero-initialized so an
-     * old parent attaching to a new child doesn't see junk. */
-    int32_t _reserved_was_eventfd;
-    int32_t _reserved_pad;
+    /* The 1x frame's size when scale_milli is above 1000 (these were
+     * the eventfd handle and padding before phase 3b). */
+    uint32_t base_width;
+    uint32_t base_height;
 
     /* Boot progress (child writes, parent reads for /api/status) */
     char boot_phase[32];

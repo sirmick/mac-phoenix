@@ -49,6 +49,10 @@ extern void ROMlib_shutdown_font_manager(void);
 extern void ROMlib_styled_font_info(const FMOutput *fmop, FontInfo *fip);
 /* a strike made from an outline font (sfnt.cpp) */
 extern bool ROMlib_outline_strike(Handle strike);
+/* the outline ('sfnt') of FAMILY in any open file whose style has most of
+   FACE and nothing else, its style in *STYLEP; nullptr if it has none. The
+   handle may be empty (not loaded). */
+extern Handle ROMlib_family_outline(INTEGER family, INTEGER face, INTEGER *stylep);
 
 static_assert(sizeof(fatabentry) == 6);
 static_assert(sizeof(widentry_t) == 4);

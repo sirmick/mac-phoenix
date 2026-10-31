@@ -5,6 +5,7 @@
 #include <SoundMgr.h>
 #include <MemoryMgr.h>
 #include <prefs/prefs.h>
+#include <hidpi/hidpi.h>
 
 #include <algorithm>
 #include <chrono>
@@ -15,6 +16,8 @@ using namespace Executor;
 
 PhoenixVideoDriver::Options PhoenixVideoDriver::options;
 std::function<void(const uint32_t *, int, int)> PhoenixVideoDriver::frameHook;
+std::function<void(const uint32_t *, int, int, const uint32_t *, int, int)>
+    PhoenixVideoDriver::scaledFrameHook;
 std::function<void(const uint32_t *, int, int, const std::vector<PhoenixVideoDriver::Rect>&)>
     PhoenixVideoDriver::rectsHook;
 std::atomic<int> PhoenixVideoDriver::cursorX{0}, PhoenixVideoDriver::cursorY{0};
@@ -149,7 +152,7 @@ void PhoenixVideoDriver::publishRects(const Executor::DirtyRects::Rects& changed
 // Copy the frame, draw the cursor on top, hand it to the host.
 void PhoenixVideoDriver::publish()
 {
-    if(!frameHook)
+    if(!frameHook && !(scaledFrameHook && !scaled_.empty()))
         return;
     composed_ = argb_;
     int cx = cursorX.load(), cy = cursorY.load();
@@ -180,7 +183,11 @@ void PhoenixVideoDriver::publish()
     lastCursorX_ = cx;
     lastCursorY_ = cy;
     lastPublish_ = std::chrono::steady_clock::now();
-    frameHook(composed_.data(), argbWidth_, argbHeight_);
+    if(scaledFrameHook && !scaled_.empty())
+        scaledFrameHook(scaled_.data(), scaledWidth_, scaledHeight_,
+                        composed_.data(), argbWidth_, argbHeight_);
+    else
+        frameHook(composed_.data(), argbWidth_, argbHeight_);
 }
 
 bool PhoenixVideoDriver::setMode(int width, int height, int bpp, bool)
@@ -198,6 +205,13 @@ bool PhoenixVideoDriver::setMode(int width, int height, int bpp, bool)
     argb_.assign((size_t)width * height, 0xFF000000);
     argbWidth_ = width;
     argbHeight_ = height;
+    scaled_.clear();
+    scaledWidth_ = scaledHeight_ = 0;
+    if(hidpi::active())
+    {
+        hidpi::scaled_size(width, height, &scaledWidth_, &scaledHeight_);
+        scaled_.assign((size_t)scaledWidth_ * scaledHeight_, 0xFF000000);
+    }
     return true;
 }
 
@@ -248,6 +262,9 @@ void PhoenixVideoDriver::render(bool full)
     }
 
     updateBuffer(framebuffer_, argb_.data(), argbWidth_, argbHeight_, rects);
+    if(!scaled_.empty())
+        hidpi::compose(argb_.data(), argbWidth_, argbHeight_, rects,
+                       scaled_.data(), scaledWidth_, scaledHeight_);
     publish();
 }
 

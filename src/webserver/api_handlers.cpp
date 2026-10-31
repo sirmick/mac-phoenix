@@ -965,8 +965,9 @@ Response APIRouter::handle_config_save(const Request& req) {
     return Response::json("{\"success\": true}");
 }
 
+static std::string get_query_param(const std::string& query, const std::string& key);
+
 Response APIRouter::handle_screenshot(const Request& req) {
-    (void)req;
 
     if (!ctx_->video_output) {
         Response resp;
@@ -994,7 +995,29 @@ Response APIRouter::handle_screenshot(const Request& req) {
     std::vector<uint32_t> pixels(
         std::size_t(mp::video::kMaxWidth_Ppc) * mp::video::kMaxHeight_Ppc);
 
-    if (!ctx_->video_output->snapshot_frame(pixels.data(), &width, &height, &format)) {
+    // ?scale=1: the Mac's own pixels when the frames are at a display
+    // scale (Executor's --executor-scale; the 1x frame follows the scaled
+    // one in its IPC slot). The frames as they are otherwise.
+    bool base_frame = false;
+    if (get_query_param(req.query, "scale") == "1" && ctx_->subprocess) {
+        std::shared_lock<std::shared_mutex> shm_lock(g_ipc_shm_mutex);
+        const IPCBuffer* buf = ctx_->subprocess->ipc_client()->shm();
+        if (buf && buf->scale_milli > 1000 && buf->base_width && buf->base_height
+            && IPC_ATOMIC_LOAD(buf->frame_count) > 0) {
+            uint32_t idx = IPC_ATOMIC_LOAD(buf->ready_index) % IPC_NUM_BUFFERS;
+            width = (int)buf->base_width;
+            height = (int)buf->base_height;
+            size_t offset = (size_t)buf->width * buf->height * 4;
+            if (offset + (size_t)width * height * 4 <= IPC_FRAME_SIZE
+                && (size_t)width * height <= pixels.size()) {
+                std::memcpy(pixels.data(), buf->frames[idx] + offset, (size_t)width * height * 4);
+                format = buf->pixel_format == IPC_PIXFMT_BGRA ? PIXFMT_BGRA : PIXFMT_ARGB;
+                base_frame = true;
+            }
+        }
+    }
+
+    if (!base_frame && !ctx_->video_output->snapshot_frame(pixels.data(), &width, &height, &format)) {
         Response resp;
         resp.set_status(503, "Service Unavailable");
         resp.set_body("{\"error\": \"No frame available yet\"}");

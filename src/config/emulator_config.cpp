@@ -5,6 +5,7 @@
 #include "emulator_config.h"
 #include "json_utils.h"
 #include "bridge_paths.h"
+#include <algorithm>
 #include <cstring>
 #include <cstdlib>
 #include <cstdio>
@@ -486,7 +487,8 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             printf("  --executor-debug OPTS      Executor's own debug options, comma-separated: memcheck (heap\n");
             printf("                             consistency checks at every Memory Manager call, slow), allocs\n");
             printf("                             (allocations >= 4K and the code that asked), pcsample (where\n");
-            printf("                             PowerPC code spends its time, every 5 s), fslog,\n");
+            printf("                             PowerPC code spends its time, every 5 s), hidpi (the text\n");
+            printf("                             --executor-scale redraws, and what became of it), fslog,\n");
             printf("                             trace, trapfailure, unimplemented, unexpected, errno, sound, all\n");
             printf("  --watch ADDR[:LEN]         Report every write to guest memory ADDR (hex; LEN 1-16, default 4):\n");
             printf("                             old/new value, 68k PC and registers, last traps, host stack (Executor)\n");
@@ -498,6 +500,8 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             printf("  --[no-]executor-ot         Executor answers Open Transport (default: on)\n");
             printf("  --executor-ppc             Executor runs fat applications' PowerPC code (PowerPC-only\n");
             printf("                             applications always run it; default: off)\n");
+            printf("  --executor-scale X         Executor's display scale (2: text drawn from outlines at\n");
+            printf("                             twice the size; 1x for programs; needs -DEXECUTOR_SKIA=ON)\n");
             printf("\nCPU:\n");
             printf("  --backend NAME             uae | kpx | executor\n");
             printf("                             (default: uae)\n");
@@ -680,6 +684,10 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
         }
         if (strcmp(argv[i], "--executor-ppc") == 0) {
             config.executor_ppc = true; argv[i] = nullptr; continue;
+        }
+        if (strcmp(argv[i], "--executor-scale") == 0 && i + 1 < argc) {
+            config.executor_scale = std::clamp(atof(argv[i + 1]), 1.0, 4.0);
+            argv[i] = argv[i + 1] = nullptr; i++; continue;
         }
         if (strcmp(argv[i], "--executor-writable-images") == 0) {
             config.executor_writable_images = true; argv[i] = nullptr; continue;

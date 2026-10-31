@@ -805,6 +805,12 @@ static bool fond_has_outline(FHandle fh)
     return fond_outline(fh, 0x7F, &style) != nullptr;
 }
 
+Handle Executor::ROMlib_family_outline(INTEGER family, INTEGER face, INTEGER *stylep)
+{
+    FHandle fh = find_fond(family, [](FHandle fh) { return fond_has_outline(fh); });
+    return fh ? fond_outline(fh, face, stylep) : nullptr;
+}
+
 Boolean Executor::C_RealFont(INTEGER fnum, INTEGER sz) /* IMI-223 */
 {
     Handle h;

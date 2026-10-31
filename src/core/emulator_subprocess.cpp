@@ -157,6 +157,10 @@ std::vector<std::string> EmulatorSubprocess::build_child_args()
     if (config_->executor_ppc) {
         args.push_back("--executor-ppc");
     }
+    if (config_->executor_scale > 1.0) {
+        args.push_back("--executor-scale");
+        args.push_back(std::to_string(config_->executor_scale));
+    }
     args.push_back("--core");
     args.push_back(config_->cpu_core);
     if (config_->backend_string() == "executor") {

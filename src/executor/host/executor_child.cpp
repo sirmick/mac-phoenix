@@ -73,6 +73,8 @@ void set_phase(const char *phase)
     g_buf->boot_phase[sizeof(g_buf->boot_phase) - 1] = 0;
 }
 
+void finish_frame();
+
 void publish_frame(const uint32_t *pixels, int w, int h)
 {
     if (!g_buf)
@@ -85,6 +87,36 @@ void publish_frame(const uint32_t *pixels, int w, int h)
     memcpy(dst, pixels, (size_t)w * h * 4);
     g_buf->width = w;
     g_buf->height = h;
+    g_buf->scale_milli = 0;
+    finish_frame();
+}
+
+/* At a display scale (--executor-scale): the presentation surface, and the
+   1x frame behind it in the slot (/api/screenshot?scale=1). */
+void publish_scaled_frame(const uint32_t *scaled, int sw, int sh, const uint32_t *base, int w, int h)
+{
+    if (!g_buf)
+        return;
+    /* (the parent's frames are sized for the largest PPC mode then) */
+    if ((size_t)sw * sh * 4 + (size_t)w * h * 4 > IPC_FRAME_SIZE || sw > mp::video::kMaxWidth_Ppc
+        || sh > mp::video::kMaxHeight_Ppc) {
+        publish_frame(base, w, h);
+        return;
+    }
+    uint32_t idx = IPC_ATOMIC_LOAD(g_buf->write_index);
+    uint8_t *dst = g_buf->frames[idx];
+    memcpy(dst, scaled, (size_t)sw * sh * 4);
+    memcpy(dst + (size_t)sw * sh * 4, base, (size_t)w * h * 4);
+    g_buf->width = sw;
+    g_buf->height = sh;
+    g_buf->base_width = w;
+    g_buf->base_height = h;
+    g_buf->scale_milli = (uint32_t)((double)sw / w * 1000 + 0.5);
+    finish_frame();
+}
+
+void finish_frame()
+{
     // Executor renders 0xAARRGGBB words: bytes B,G,R,A on little-endian.
     g_buf->pixel_format = IPC_PIXFMT_BGRA;
 
@@ -251,6 +283,13 @@ int executor_child_main(const config::EmulatorConfig& cfg, IPCBuffer *buf)
     c.open_transport = cfg.executor_ot;
     c.prefer_ppc = cfg.executor_ppc;
     c.on_frame = publish_frame;
+    c.scale = cfg.executor_scale;
+    c.on_frame_scaled = publish_scaled_frame;
+#if EXECUTOR_HIDPI
+    /* known before the first frame: the parent sends it with the cursor */
+    if (c.scale > 1.0)
+        buf->scale_milli = (uint32_t)(c.scale * 1000 + 0.5);
+#endif
     // The cursor is the page's to draw (client/cursor.js): never in the
     // frames; its image goes to the parent through the IPC buffer.
     c.on_cursor = [](const uint8_t data[32], const uint8_t mask[32], int hot_x, int hot_y,

@@ -148,6 +148,7 @@ struct EmulatorConfig {
     bool executor_writable_images = false; // Executor mounts disk images read-write (test copies)
     bool executor_ot = true;               // Executor answers Open Transport (romlib/opentransport)
     bool executor_ppc = false;             // Executor runs the PowerPC code of fat applications (mame-ppc)
+    double executor_scale = 1.0;           // Executor's display scale (docs/executor/HiDPI.md; needs EXECUTOR_SKIA)
     std::string cpu_core = "uae";      // CPU core for the backend's architecture: 68k "uae", "mame-68k"; ppc "kpx", "mame-ppc"
 
     // System

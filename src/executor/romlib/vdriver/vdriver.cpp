@@ -252,6 +252,23 @@ void VideoDriver::commitRootlessRegion()
     rootlessRegionDirty_ = false;
 }
 
+uint32_t VideoDriver::pixelARGB(uint32_t raw) const
+{
+    switch(framebuffer_.bpp)
+    {
+        case 16:
+        {
+            auto fiveToEight = [](uint32_t x) { return (x << 3) | (x >> 2); };
+            return 0xFF000000 | (fiveToEight((raw >> 10) & 31) << 16)
+                | (fiveToEight((raw >> 5) & 31) << 8) | fiveToEight(raw & 31);
+        }
+        case 32:
+            return raw | 0xFF000000;
+        default:
+            return colors_[raw & 0xFF];
+    }
+}
+
 template<int depth>
 struct IndexedPixelGetter
 {

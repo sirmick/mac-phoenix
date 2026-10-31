@@ -148,6 +148,10 @@ public:
     bool isGrayscale() { return framebuffer_.grayscale; }
     bool isRootless() { return framebuffer_.rootless; }
 
+    // MacPhoenix: a framebuffer pixel's value (bpp() bits) as 0xAARRGGBB,
+    // as updateBuffer converts it.
+    uint32_t pixelARGB(uint32_t raw) const;
+
 protected:
     IEventListener *callbacks_ = nullptr;
 

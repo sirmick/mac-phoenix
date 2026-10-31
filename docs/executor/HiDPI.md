@@ -8,7 +8,8 @@ while programs keep seeing the 640x480-style 1x screen they were written
 for. The ROM machines can't do this: their QuickDraw is Apple's code in
 ROM.
 
-Status: design (2026-10-31). Nothing is implemented.
+Status: phase 1 (text on the screen) implemented, 2026-10-31: see
+"Phase 1, as built" at the end. The rest is design.
 
 ## The idea in one paragraph
 
@@ -266,3 +267,134 @@ FreeType is FTL (BSD-style) when used through Skia.
 - Owning ATSUI's rendering (also the Date & Time hang).
 - Cost of Skia at full redraw rates on the CPU back-end; when to use the
   GPU.
+
+## Phase 1, as built (2026-10-31)
+
+### Building and running
+
+Skia is optional and off by default: `tools/skia/fetch.sh` fetches the
+prebuilt static Skia of JetBrains' skia-pack (release `m144-e2e6623374-4`,
+SHA-256 pinned in the script) into `~/storage/deps/skia-m144-linux-x64`, where
+`-DEXECUTOR_SKIA=ON` looks for it (`-DSKIA_DIR=...` otherwise). It links
+`libskia.a` and Skia's own `libfreetype2.a` (FreeType, FTL; static and not
+exported, so the system's FreeType that Qt loads is untouched); the binary
+grows by about 6 MB. Building Skia ourselves (GN, depot_tools, a vendored
+subset) was not needed: skia-pack also has `linux-Release-arm64` (for
+`tools/xarch` builds; `fetch.sh arm64`) and `wasm-Release-wasm` static
+libraries built with Emscripten (`fetch.sh wasm`), which the wasm build
+could link instead of CanvasKit (CanvasKit is Skia's JavaScript API; we
+draw from C++, so the static libraries are what we'd want; whether their
+Emscripten version links with ours is untried).
+
+```
+tools/skia/fetch.sh && cmake -B build -DEXECUTOR_SKIA=ON && cmake --build build -j4
+./build/mac-phoenix --backend executor --executor-system 8.6.img --executor-ppc --executor-scale 2
+curl -o 2x.png localhost:11000/api/screenshot           # the presentation surface
+curl -o 1x.png 'localhost:11000/api/screenshot?scale=1' # the Mac's own pixels
+```
+
+`--executor-debug hidpi` logs each piece of text StdText draws on the screen
+and what became of it (recorded, replaced, or left 1x and why).
+
+### The pieces
+
+- `romlib/hidpi/hidpi.h`: the interface; inline no-ops without
+  `EXECUTOR_SKIA`, so QuickDraw's code has no `#if`s.
+- `romlib/hidpi/hidpi.cpp` (emulator thread): `text_helper`
+  (quickdraw/qStdText.cpp) hands over, for text drawn on the screen port
+  at 1:1 (no numer/denom scaling), each character with the pen position
+  the 1x layout gives it, the font the Font Manager chose (`WidthTable`
+  `fID`, size, face), and StdBits' call as a function. Around that call the
+  framebuffer's rows under its rectangle are copied (before, after): a
+  **run**. The family's outline is found through the Font Manager's own
+  search (`ROMlib_family_outline`, every FOND of the family) and copied
+  out of the guest once per font; an outline the Font Manager hadn't
+  loaded is loaded and emptied again, its error globals put back.
+- `romlib/hidpi/hidpi_skia.cpp` (render thread; no Executor headers): for
+  each rectangle the video driver redraws, the 1x pixels scaled up
+  (nearest neighbour; pixel edges `ceil(x * scale)`, so fractional scales
+  work), then each run over that rectangle that is still on the screen:
+  the pixels its 1x text changed back to what they were before it, then its
+  glyphs from the outline (anti-aliased, slight hinting, subpixel
+  positions) at ppem = size x scale, clipped to the port's vis and clip
+  regions (1x, scaled) and a pixel round the run.
+- `PhoenixVideoDriver` keeps the presentation surface beside the 1x frame
+  and composes it after each conversion; `executor_child` publishes both
+  in the IPC slot (the surface, then the 1x frame: `scale_milli`,
+  `base_width`, `base_height` in `IPCBuffer`). The parent sizes its video
+  frames for the largest mode then, divides the page's absolute mouse
+  positions by the scale, sends the scale with the cursor image (the page
+  draws the cursor at the Mac's size), and `/api/screenshot?scale=1`
+  answers the 1x frame.
+
+### Runs and staleness
+
+A run is shown while the screen still has what it left: the pixels it
+changed, and a pixel round them (a selected label's black box erased under
+its white srcBic text changes only those), or for srcCopy its whole box.
+What draws over a run without being text (an erase, a highlight, a window
+moving over it) makes it stale and the 1x pixels show; text drawn over a
+run updates what the run left (it is drawn after it). A run that a later
+one draws again glyph for glyph is replaced, the later one taking its
+"before" where its text is still underneath: TextEdit erases and draws the
+whole line again at each keystroke, and the two drawn together darkened
+the anti-aliasing; the caret blinking over a run is enough to make it
+stale, so replacement looks at stale runs too. srcXor drawn twice in the
+same place (erasing itself) removes both. At most 4096 runs; stale ones go
+when text is drawn over them.
+
+Text modes: srcOr, srcBic (the text in the background colour: selected
+icon labels), srcCopy (the box filled first), grayishTextOr (grey, the
+foreground and background colours mixed, instead of the dither), srcXor
+(aliased glyphs inverting the surface). The others stay 1x. Styles: bold
+as QuickDraw makes it (the glyph again `FMOutput.bold` pixels to the
+right, at the device's pixels: Skia's embolden was far lighter than
+QuickDraw's bold), italic as a skew of 0.25, underline at the baseline + 1,
+`ulThick` thick, outline and shadow as strokes. An outline of the style
+asked for is used when the family has one.
+
+Each glyph is **centred in its 1x advance**: a bitmap strike's
+proportions aren't the outline's (Geneva 12's i, l and j are wide cells in
+the strike and thin glyphs in the outline, so placed at the pen they left
+uneven gaps, "qui ck").
+
+### What it looks like (2026-10-31, 8.6 and 7.5.5 at 2x)
+
+- **Menus** (titles and items, dimmed items as grey, command-key glyphs),
+  window titles (Charcoal on 8.6), the BridgeAgent window, **General
+  Controls** (Geneva 9 and 9 bold), **SimpleText** (Geneva 12 in plain,
+  bold, italic, underline), dialogs: from outlines.
+- **7.5.5's Finder** draws its windows on the screen: icon labels and the
+  window headers are from outlines too. **8.6's Finder** draws window
+  contents offscreen and copies them: they stay 1x (GWorld shadows,
+  phase 4). The desktop's labels are drawn on the screen in both.
+- **Chicago** looks almost the same at 2x: its TrueType outline is drawn in
+  pixel steps like the bitmap. Charcoal, Geneva, New York and Monaco gain
+  the most.
+- Not covered (1x): transfer modes other than the five above, text scaled
+  by numer/denom (pictures), runs with a character the outline lacks,
+  bitmap-only families (no substitution table yet), everything drawn
+  offscreen.
+- Proportions: outline glyphs centred in bitmap advances read well;
+  scaling glyphs to fill the advance wasn't needed. Synthesised italic
+  (QuickDraw slants about the strike's bottom, Skia about the baseline) is
+  shifted by about descent/2 pixels from the 1x one, inside the run's box.
+- Clipping: runs are clipped to the 1x vis and clip regions, scaled
+  (staircase edges at 2x: region twins are phase 2); no overflow past
+  window edges was seen.
+- `/api/text`, `/api/ui`, measurement, hit testing: unchanged (the 1x truth).
+
+### Open after phase 1
+
+- Text through GWorlds (8.6's Finder windows, most modern programs):
+  phase 4's shadows.
+- Selection highlighting (InvertRect over text) and other non-text drawing
+  over text show the 1x text until it is drawn again.
+- A substitute outline for bitmap-only families; ATSUI (8.6's
+  WindowDefinitions titles: Executor draws its own titles today).
+- The render thread's cost: every redrawn rectangle is scaled and its runs
+  drawn again (no cache of drawn runs). Measured (`--executor-debug hidpi`
+  prints it every 5 s) on 8.6 at 640x480 x 2, typing in SimpleText and
+  opening General Controls: at most 1.3 ms a frame, 30-40 ms per 5 s
+  (under 1% of a core), 25-44 runs on the screen. The GPU back-end can
+  wait.

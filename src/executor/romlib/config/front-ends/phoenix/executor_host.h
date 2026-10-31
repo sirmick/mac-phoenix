@@ -52,6 +52,13 @@ struct Config
     // cursor included. Called on the thread that called run().
     std::function<void(const uint32_t *pixels, int width, int height)> on_frame;
 
+    // The display scale (docs/executor/HiDPI.md; 1: off; with
+    // EXECUTOR_SKIA only). Above 1, frames go to on_frame_scaled instead:
+    // the presentation surface (sw x sh) and the 1x frame.
+    double scale = 1.0;
+    std::function<void(const uint32_t *scaled, int sw, int sh,
+                       const uint32_t *base, int width, int height)> on_frame_scaled;
+
     // The cursor, for the host to draw itself (set: it is never in the
     // frames): 16x16, 1 bit a pixel, rows MSB first; data the black
     // pixels, mask where it is opaque; the hot spot; shown. On every change,

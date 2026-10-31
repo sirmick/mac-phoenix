@@ -65,6 +65,10 @@ npx playwright test
 # ctest -R 'clib_|guest_suite_ppc_executor'):
 ./build/mac-phoenix --backend executor --executor-system 7.5.5.img --executor-ppc
 ctest --test-dir build -L executor
+# High-resolution screen (docs/executor/HiDPI.md; phase 1: text from outlines over
+# the 1x screen scaled up): Skia, prebuilt, off by default
+tools/skia/fetch.sh && cmake -B build -DEXECUTOR_SKIA=ON
+./build/mac-phoenix --backend executor --executor-system 8.6.img --executor-ppc --executor-scale 2
 # Executor's API definitions (src/executor/multiversal/defs) are also Retro68's
 # Multiversal Interfaces: ctest -R multiversal_retro68 builds a program against
 # the C headers they generate, ctest -R retro68_ runs RetroTest (tests/guest/retro68,
@@ -283,6 +287,9 @@ Machine:
   --[no-]executor-ot         Executor answers Open Transport (default: on)
   --executor-ppc             Executor runs fat apps' PowerPC code on mame-ppc (PowerPC-only
                              apps always do; InterfaceLib only so far; default: off)
+  --executor-scale X         Executor's display scale (docs/executor/HiDPI.md; -DEXECUTOR_SKIA=ON):
+                             frames X times the Mac's screen, programs still see 1x;
+                             /api/screenshot?scale=1 the 1x screen (default: 1)
 
 CPU:
   --backend NAME             uae | kpx | executor
@@ -345,7 +352,8 @@ Logging:
                              Memory Manager call), allocs (log allocations >= 4K with the
                              calling code), drag (the Drag Manager's dispatch and Finder's
                              hook calls), pcsample (the PowerPC PC every 5 ms; every 5 s the
-                             top addresses as fragment+offset and nearest export), fslog,
+                             top addresses as fragment+offset and nearest export), hidpi (the
+                             text --executor-scale redraws from outlines), fslog,
                              trace, trapfailure, unimplemented, ...
   --watch ADDR[:LEN]         Report every write to guest memory ADDR (Executor, Linux x86-64):
                              old/new value, 68k PC/registers/code, last traps, host stack

@@ -2957,11 +2957,14 @@ class MacPhoenixClient {
         if (!this.macCursors) {
             if (msg.none)
                 return;
-            const guestWidth = (el) => () => this.currentScreenWidth
-                || (el.videoWidth || el.width || 640);
+            // (in Mac pixels: frames at a display scale are wider)
+            const guestWidth = (el) => () => (this.currentScreenWidth
+                || (el.videoWidth || el.width || 640)) / (this.frameScale || 1);
             this.macCursors = [this.video, this.canvas].filter(Boolean)
                 .map((el) => new MacCursor(el, guestWidth(el)));
         }
+        if (!msg.none)
+            this.frameScale = msg.scale || 1;   // frame pixels a Mac pixel (Executor --executor-scale)
         for (const c of this.macCursors) {
             if (msg.none)
                 c.release();

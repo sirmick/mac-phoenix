@@ -35,6 +35,12 @@ public:
     // cursor composited in. Pixels are 0xAARRGGBB (BGRA bytes on LE).
     static std::function<void(const uint32_t *argb, int width, int height)> frameHook;
 
+    // Instead, at a display scale above 1 (hidpi.h, --executor-scale): the
+    // presentation surface (SCALED, sw x sh) and the 1x frame it was made
+    // from (BASE, cursor composited as for frameHook).
+    static std::function<void(const uint32_t *scaled, int sw, int sh,
+                              const uint32_t *base, int width, int height)> scaledFrameHook;
+
     // Instead (wasm): only what changed. The frame without the cursor, and
     // the rectangles that changed since the last call, the cursor's old and
     // new boxes among them (a resize: the whole frame); drawCursor() puts
@@ -94,6 +100,8 @@ private:
     std::mutex frameMutex_;          // guards argb_ and its size
     std::vector<uint32_t> argb_;
     int argbWidth_ = 0, argbHeight_ = 0;
+    std::vector<uint32_t> scaled_;   // the presentation surface (hidpi.h), if any
+    int scaledWidth_ = 0, scaledHeight_ = 0;
 
     std::mutex wakeMutex_;
     std::condition_variable wake_;

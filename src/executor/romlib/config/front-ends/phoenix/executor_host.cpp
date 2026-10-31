@@ -13,6 +13,7 @@
 #include <rsys/toolevent.h>
 #include <error/error.h>
 #include <rsys/opentransport.h>
+#include <hidpi/hidpi.h>
 
 #include <algorithm>
 #include <atomic>
@@ -94,6 +95,11 @@ int run(const Config& c)
     PhoenixVideoDriver::cursorX = c.width / 2;
     PhoenixVideoDriver::cursorY = c.height / 2;
     PhoenixVideoDriver::frameHook = c.on_frame;
+    hidpi::set_scale(c.scale);
+    if(hidpi::active())
+        PhoenixVideoDriver::scaledFrameHook = c.on_frame_scaled;
+    else if(c.scale > 1.0)
+        fprintf(stderr, "[Executor] --executor-scale: built without Skia (-DEXECUTOR_SKIA=ON), 1x\n");
     if(c.on_cursor)
         PhoenixVideoDriver::cursorHook = [f = c.on_cursor](const PhoenixVideoDriver::Cursor &k) {
             f(k.data, k.mask, k.hotX, k.hotY, k.visible);
