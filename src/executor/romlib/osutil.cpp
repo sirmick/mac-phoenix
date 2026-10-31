@@ -630,7 +630,12 @@ static void setdefaults()
     LM(SPKbd) = 0x63;
     LM(SPVolCtl) = 3;
     LM(SPClikCaret) = 0x88;
-    LM(SPMisc2) = 0x4C;
+    /* MacPhoenix: Inside Macintosh's $4C, and bit 7, the colour desktop
+       pattern ('ppat' 16): a G3 with 8.6 has $CC (the sys probe's
+       lowmem.020a) and, its PRAM zapped, draws 8.6's colour pattern; with
+       the bit clear Executor drew the black-and-white 'PAT ' 16, a
+       checkerboard on 8.6. */
+    LM(SPMisc2) = 0xCC;
 }
 
 static OSErr openparam(GUEST<INTEGER> *rnp)

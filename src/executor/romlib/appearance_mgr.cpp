@@ -897,6 +897,9 @@ struct ItemKeys
 {
     SInt16 glyph = 0;
     UInt8 modifiers = 0;
+    SInt16 hier_id = 0;      /* SetMenuItemHierarchicalID's; 0: none set */
+    bool encoding_set = false;
+    TextEncoding encoding = 0;
 };
 std::map<std::pair<uint32_t, int>, ItemKeys> item_keys;
 std::set<uint32_t> parent_choosable;
@@ -944,6 +947,55 @@ OSErr Executor::C_GetMenuItemModifiers(MenuRef inMenu, SInt16 inItem, UInt8 *out
         return paramErr;
     auto it = item_keys.find({ US_TO_SYN68K(inMenu), inItem });
     *outModifiers = it == item_keys.end() ? 0 : it->second.modifiers;
+    return noErr;
+}
+
+/* 8.6 keeps the ID apart from the item's command and mark; an item with
+   none set answers its mark when its command is hMenuCmd. Executor's
+   menus still open a submenu by command and mark only. */
+OSErr Executor::C_SetMenuItemHierarchicalID(MenuRef inMenu, SInt16 inItem, SInt16 inHierID)
+{
+    if(!valid_item(inMenu, inItem))
+        return paramErr;
+    item_keys[{ US_TO_SYN68K(inMenu), inItem }].hier_id = inHierID;
+    return noErr;
+}
+
+OSErr Executor::C_GetMenuItemHierarchicalID(MenuRef inMenu, SInt16 inItem, GUEST<SInt16> *outHierID)
+{
+    if(!valid_item(inMenu, inItem) || !outHierID)
+        return paramErr;
+    auto it = item_keys.find({ US_TO_SYN68K(inMenu), inItem });
+    if(it != item_keys.end() && it->second.hier_id)
+    {
+        *outHierID = it->second.hier_id;
+        return noErr;
+    }
+    GUEST<CharParameter> cmd, mark;
+    GetItemCmd(inMenu, inItem, &cmd);
+    GetItemMark(inMenu, inItem, &mark);
+    *outHierID = cmd == 0x1B ? (SInt16)mark : 0; /* hMenuCmd */
+    return noErr;
+}
+
+/* -2 (smCurrentScript) until set */
+OSErr Executor::C_SetMenuItemTextEncoding(MenuRef inMenu, SInt16 inItem, TextEncoding inScriptID)
+{
+    if(!valid_item(inMenu, inItem))
+        return paramErr;
+    ItemKeys& k = item_keys[{ US_TO_SYN68K(inMenu), inItem }];
+    k.encoding = inScriptID;
+    k.encoding_set = true;
+    return noErr;
+}
+
+OSErr Executor::C_GetMenuItemTextEncoding(MenuRef inMenu, SInt16 inItem, GUEST<TextEncoding> *outScriptID)
+{
+    if(!valid_item(inMenu, inItem) || !outScriptID)
+        return paramErr;
+    auto it = item_keys.find({ US_TO_SYN68K(inMenu), inItem });
+    *outScriptID = it != item_keys.end() && it->second.encoding_set ? it->second.encoding
+                                                                    : (TextEncoding)-2;
     return noErr;
 }
 

@@ -1285,6 +1285,70 @@
 
 # ####
 
+# An item's submenu ID and text encoding (8.5). 8.6 keeps a set ID apart
+# from the item's command and mark (they stay 0), and answers the mark of
+# an item whose command is hMenuCmd; an item's encoding starts as -2
+# (smCurrentScript); a bad item is paramErr (the menu probe's item85 keys).
+- function:
+    name: SetMenuItemHierarchicalID
+    return: OSErr
+    args:
+      - name: inMenu
+        type: MenuRef
+      - name: inItem
+        type: SInt16
+      - name: inHierID
+        type: SInt16
+    library: AppearanceLib
+    executor: C_
+
+# ####
+
+- function:
+    name: GetMenuItemHierarchicalID
+    return: OSErr
+    args:
+      - name: inMenu
+        type: MenuRef
+      - name: inItem
+        type: SInt16
+      - name: outHierID
+        type: SInt16*
+    library: AppearanceLib
+    executor: C_
+
+# ####
+
+- function:
+    name: SetMenuItemTextEncoding
+    return: OSErr
+    args:
+      - name: inMenu
+        type: MenuRef
+      - name: inItem
+        type: SInt16
+      - name: inScriptID
+        type: TextEncoding
+    library: AppearanceLib
+    executor: C_
+
+# ####
+
+- function:
+    name: GetMenuItemTextEncoding
+    return: OSErr
+    args:
+      - name: inMenu
+        type: MenuRef
+      - name: inItem
+        type: SInt16
+      - name: outScriptID
+        type: TextEncoding*
+    library: AppearanceLib
+    executor: C_
+
+# ####
+
 # MenusLib's private calls the 8.6 Appearance control panel makes after a
 # font or theme change (no arguments at its call sites).
 - function:

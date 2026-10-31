@@ -25,6 +25,8 @@ expected (exit status 1), what's missing, and expected entries that now
 match (to remove). A crash leaves a partial log: the run is resumed from
 the section after the last one started (Host:PROBE.start), as often as it
 takes; the crashed sections are reported.
+
+Ports 19700, 19710, 19720 (by target); $DIFFTEST_PORT_BASE moves them.
 """
 import argparse
 import fnmatch
@@ -48,7 +50,10 @@ TARGETS = {
     "executor-8.6": (["--backend", "executor", "--executor-ppc", "--image", "8.6"], {}),
 }
 REFERENCE = {"executor-8.6": "g3-8.6"}
-PORTS = {"g3-8.6": 19700, "g3-9.0.4": 19710, "executor-8.6": 19720}
+# $DIFFTEST_PORT_BASE moves them (another run, or someone else's emulator,
+# holding the defaults)
+PORT_BASE = int(os.environ.get("DIFFTEST_PORT_BASE", "19700"))
+PORTS = {"g3-8.6": PORT_BASE, "g3-9.0.4": PORT_BASE + 10, "executor-8.6": PORT_BASE + 20}
 
 
 def parse(text):

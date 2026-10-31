@@ -253,6 +253,14 @@ Third run (`~/storage/executor-grid/8.6-r3/`): no host crashes.
   Services, `'cfrg'` 52), section 0 +$14..+$2c, a skip-list search that
   never meets its end node: the glyph cache ATS keeps isn't set up as 8.6
   sets it up (FMSharedCaches, FontObjects); its menus show, no window.
+  Two causes (2026-10-31): each application got its own copy of the ATS
+  libraries' global-share data (CFM now prepares those sections once per
+  system), and Apple's FontManager library, loaded beside Executor's Font
+  Manager, kept its own WidthListHand, which Executor's FMSwapFont then
+  trimmed under it. The FontManager library's exports are now Executor's
+  (`quickdraw/fontmgr85.cpp`, FontMgr.yaml; the text probe's `fm` keys):
+  Apple's never runs, Date & Time opens its window, and the appr probe's
+  controls run after its window frames without the crash.
 
 Differential probes (docs/executor/DiffTest.md) now ask Apple's 8.6
 libraries and Executor's the same questions: `appr` (the Appearance
