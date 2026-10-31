@@ -3,16 +3,21 @@
 users/ID/ in the data directory: sync.sqlite and objects/.
 
 Overlays (overlay.js: a disk image's changed 4 KB blocks), by the
-overlay's key (the image's name, size and time): every upload is a new
-version of the overlay and its blocks carry it, so a browser that has
-version V asks for the blocks newer than V. Deleting an overlay (Revert)
-is a version too, the reset: a browser older than it drops its own
-blocks first.
+overlay's key (the image's name and content id, or for an upload its
+name, size and time): every upload is a new version of the overlay and
+its blocks carry it, so a browser that has version V asks for the blocks
+newer than V. An upload names the version it is on (base): another one
+since, from another browser, and it is refused (409, with the version)
+and the browser chooses whose to keep. Large uploads are staged in
+batches and committed as one version; a replace (the whole overlay, the
+blocks not in it dropped) too. Deleting an overlay (Revert) is a
+version, the reset: a browser older than it drops its own blocks first.
 
 Volumes (worker.js: Executor's own volume, per System choice): a
-manifest, { dirs, files: { path: { size, mtime, sha } } }, versioned the
-same way; the files' contents are objects by SHA-256, shared by every
-volume of the user, uploaded before the manifest that names them.
+manifest, { dirs, files: { path: { size, mtime, sha } } }, versioned and
+based the same way; the files' contents are objects by SHA-256, shared
+by every volume of the user, uploaded before the manifest that names
+them (409 { missing } otherwise).
 """
 import hashlib
 import json
@@ -27,9 +32,11 @@ BLOCK = 4096
 RECORD = 4 + BLOCK                      # block number (uint32 LE), the block
 KEY = re.compile(r"[\w.-]{1,200}")
 SHA = re.compile(r"[0-9a-f]{64}")
+TOKEN = re.compile(r"[\w-]{8,64}")
 # Objects no manifest names are deleted after this long (an upload in
-# progress names them only when it ends).
+# progress names them only when it ends); staged blocks never committed too.
 ORPHAN_AGE = 3600
+STAGE_AGE = 86400
 
 SCHEMA = """
 pragma journal_mode = wal;
@@ -41,6 +48,9 @@ create table if not exists blocks (
     primary key (key, block));
 create table if not exists volumes (
     key text primary key, version integer not null default 0, manifest text);
+create table if not exists staged (
+    token text not null, key text not null, block integer not null, data blob not null,
+    created integer not null, primary key (token, block));
 """
 
 
@@ -55,6 +65,12 @@ def check_key(key):
     if not KEY.fullmatch(key or ""):
         raise SyncError(400, "bad key")
     return key
+
+
+def records(body):
+    if len(body) % RECORD:
+        raise SyncError(400, "records are 4 + 4096 bytes")
+    return ((struct.unpack_from("<I", body, i)[0], body[i + 4:i + RECORD]) for i in range(0, len(body), RECORD))
 
 
 class UserSync:
@@ -90,20 +106,42 @@ class UserSync:
                 db.close()
         return version, reset > since, count, rows()
 
-    def overlay_put(self, key, name, size, body):
+    def overlay_stage(self, key, token, body):
+        """Blocks for a commit to come (overlay_put with the token)."""
         check_key(key)
-        if len(body) % RECORD:
-            raise SyncError(400, "records are 4 + 4096 bytes")
+        if not TOKEN.fullmatch(token or ""):
+            raise SyncError(400, "bad stage token")
+        now = int(time.time())
         with self.lock, self.db:
-            version = self._overlay(self.db, key)[0] + 1
+            self.db.executemany("insert or replace into staged values (?, ?, ?, ?, ?)",
+                                ((token, key, b, data, now) for b, data in records(body)))
+
+    def overlay_put(self, key, base, body, name=None, size=None, token=None, replace=False):
+        """A new version from base: body's blocks and the staged ones
+        (token); replace: they are all of it. 409 if base isn't current."""
+        check_key(key)
+        if token is not None and not TOKEN.fullmatch(token):
+            raise SyncError(400, "bad stage token")
+        recs = list(records(body))
+        with self.lock, self.db:
+            current = self._overlay(self.db, key)[0]
+            if base != current:          # (its staged blocks age out)
+                raise SyncError(409, "changed since", version=current)
+            version = current + 1
             self.db.execute("insert into overlays (key, name, size, version) values (?, ?, ?, ?)"
                             " on conflict (key) do update set version = excluded.version,"
                             " name = coalesce(excluded.name, name), size = coalesce(excluded.size, size)",
                             (key, name, size, version))
-            self.db.executemany(
-                "insert or replace into blocks values (?, ?, ?, ?)",
-                ((key, struct.unpack_from("<I", body, i)[0], version, body[i + 4:i + RECORD])
-                 for i in range(0, len(body), RECORD)))
+            if replace:
+                self.db.execute("delete from blocks where key = ?", (key,))
+                self.db.execute("update overlays set reset = ? where key = ?", (version, key))
+            if token:
+                self.db.execute("insert or replace into blocks select key, block, ?, data from staged"
+                                " where token = ? and key = ?", (version, token, key))
+                self.db.execute("delete from staged where token = ?", (token,))
+            self.db.executemany("insert or replace into blocks values (?, ?, ?, ?)",
+                                ((key, b, version, data) for b, data in recs))
+            self.db.execute("delete from staged where created < ?", (int(time.time()) - STAGE_AGE,))
         return version
 
     def overlay_delete(self, key):
@@ -125,7 +163,9 @@ class UserSync:
             return 0, None
         return row[0], json.loads(row[1]) if row[1] else None
 
-    def volume_put(self, key, manifest):
+    def volume_put(self, key, manifest, base):
+        """A new version from base (409 { version } if it isn't current;
+        409 { missing } for objects not uploaded)."""
         check_key(key)
         if (not isinstance(manifest, dict) or not isinstance(manifest.get("dirs"), list)
                 or not isinstance(manifest.get("files"), dict)):
@@ -135,12 +175,16 @@ class UserSync:
             if not isinstance(f, dict) or not SHA.fullmatch(str(f.get("sha", ""))):
                 raise SyncError(400, "every file needs its sha")
             shas.add(f["sha"])
-        missing = self.objects_missing(shas)
-        if missing:
-            raise SyncError(409, "objects missing", missing=missing)
+        # Under the lock: the collector can't delete what this names.
         with self.lock, self.db:
             row = self.db.execute("select version from volumes where key = ?", (key,)).fetchone()
-            version = (row[0] if row else 0) + 1
+            current = row[0] if row else 0
+            if base != current:
+                raise SyncError(409, "changed since", version=current)
+            missing = self.objects_missing(shas)
+            if missing:
+                raise SyncError(409, "objects missing", missing=missing, version=current)
+            version = current + 1
             self.db.execute("insert or replace into volumes values (?, ?, ?)", (key, version, json.dumps(manifest)))
         self._collect()
         return version
@@ -171,20 +215,21 @@ class UserSync:
         tmp = f"{path}.{threading.get_ident()}.tmp"
         with open(tmp, "wb") as f:
             f.write(data)
-        os.replace(tmp, path)
+        with self.lock:                  # new (or again): young, not collected
+            os.replace(tmp, path)
 
     def _collect(self):
+        old = time.time() - ORPHAN_AGE
+        top = os.path.join(self.root, "objects")
         with self.lock:
             named = set()
             for (m,) in self.db.execute("select manifest from volumes where manifest is not null"):
                 named.update(f["sha"] for f in json.loads(m)["files"].values())
-        old = time.time() - ORPHAN_AGE
-        top = os.path.join(self.root, "objects")
-        for sub in os.listdir(top):
-            for name in os.listdir(os.path.join(top, sub)):
-                p = os.path.join(top, sub, name)
-                if name not in named and os.stat(p).st_mtime < old:
-                    os.unlink(p)
+            for sub in os.listdir(top):
+                for name in os.listdir(os.path.join(top, sub)):
+                    p = os.path.join(top, sub, name)
+                    if SHA.fullmatch(name) and name not in named and os.stat(p).st_mtime < old:
+                        os.unlink(p)
 
     def summary(self):
         with self.lock:

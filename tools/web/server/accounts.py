@@ -15,6 +15,8 @@ import time
 NAME = re.compile(r"[A-Za-z0-9_.-]{1,32}")
 MIN_PASSWORD = 8
 SCRYPT = dict(n=1 << 14, r=8, p=1)
+# A hash takes 16 MB and some 50 ms: two at a time, the rest wait.
+HASHING = threading.BoundedSemaphore(2)
 
 SCHEMA = """
 create table if not exists users (
@@ -30,7 +32,8 @@ create table if not exists sessions (
 
 def hash_password(password):
     salt = secrets.token_bytes(16)
-    h = hashlib.scrypt(password.encode(), salt=salt, dklen=32, **SCRYPT)
+    with HASHING:
+        h = hashlib.scrypt(password.encode(), salt=salt, dklen=32, **SCRYPT)
     return f"scrypt${SCRYPT['n']}${SCRYPT['r']}${SCRYPT['p']}${salt.hex()}${h.hex()}"
 
 
@@ -39,11 +42,22 @@ def check_password(password, stored):
         kind, n, r, p, salt, h = stored.split("$")
         if kind != "scrypt":
             return False
-        got = hashlib.scrypt(password.encode(), salt=bytes.fromhex(salt), dklen=len(h) // 2,
-                             n=int(n), r=int(r), p=int(p))
+        with HASHING:
+            got = hashlib.scrypt(password.encode(), salt=bytes.fromhex(salt), dklen=len(h) // 2,
+                                 n=int(n), r=int(r), p=int(p))
         return hmac.compare_digest(got.hex(), h)
     except ValueError:
         return False
+
+
+_dummy = []
+
+
+def dummy_hash():
+    """A hash to check against for a name nobody has: the same time either way."""
+    if not _dummy:
+        _dummy.append(hash_password(secrets.token_hex(16)))
+    return _dummy[0]
 
 
 def _digest(token):
@@ -57,6 +71,7 @@ class Accounts:
         self.lock = threading.Lock()
         with self.lock, self.db:
             self.db.executescript(SCHEMA)
+        dummy_hash()
 
     @staticmethod
     def _user(row):
@@ -71,18 +86,20 @@ class Accounts:
 
     def add_user(self, name, password, owner=False):
         self.check_new(name, password)
+        hashed = hash_password(password)          # outside the lock: it takes a while
         with self.lock, self.db:
             try:
                 cur = self.db.execute("insert into users (name, hash, owner, created) values (?, ?, ?, ?)",
-                                      (name, hash_password(password), int(owner), int(time.time())))
+                                      (name, hashed, int(owner), int(time.time())))
             except sqlite3.IntegrityError:
                 raise ValueError(f"{name} exists already")
         return {"id": cur.lastrowid, "name": name, "owner": owner}
 
     def set_password(self, name, password):
         self.check_new(name, password)
+        hashed = hash_password(password)
         with self.lock, self.db:
-            cur = self.db.execute("update users set hash = ? where name = ?", (hash_password(password), name))
+            cur = self.db.execute("update users set hash = ? where name = ?", (hashed, name))
             if not cur.rowcount:
                 raise ValueError(f"no user {name}")
             # Signed out everywhere.
@@ -105,7 +122,7 @@ class Accounts:
         with self.lock:
             row = self.db.execute("select * from users where name = ?", (name,)).fetchone()
         if not row:
-            check_password(password, hash_password("x" * MIN_PASSWORD))   # the same time either way
+            check_password(password, dummy_hash())
             return None
         return self._user(row) if check_password(password, row["hash"]) else None
 
@@ -145,8 +162,14 @@ class Accounts:
         return [{"code": r["code"], "created": r["created"], "expires": r["expires"],
                  "used_by": r["used_name"]} for r in rows]
 
+    def invite_valid(self, code):
+        with self.lock:
+            return self.db.execute("select 1 from invites where code = ? and used_by is null and expires >= ?",
+                                   (code or "", int(time.time()))).fetchone() is not None
+
     def register(self, code, name, password):
         self.check_new(name, password)
+        hashed = hash_password(password)
         with self.lock, self.db:
             row = self.db.execute("select * from invites where code = ? and used_by is null and expires >= ?",
                                   (code or "", int(time.time()))).fetchone()
@@ -154,7 +177,7 @@ class Accounts:
                 raise ValueError("that invitation is not valid (used, expired or mistyped)")
             try:
                 cur = self.db.execute("insert into users (name, hash, owner, created) values (?, ?, 0, ?)",
-                                      (name, hash_password(password), int(time.time())))
+                                      (name, hashed, int(time.time())))
             except sqlite3.IntegrityError:
                 raise ValueError(f"{name} is taken")
             self.db.execute("update invites set used_by = ? where code = ?", (cur.lastrowid, code))

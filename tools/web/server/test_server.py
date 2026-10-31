@@ -78,11 +78,12 @@ class ServerTest(unittest.TestCase):
         self.assertEqual(static.parse_range("bytes=990-5000", 1000), (990, 1000))
         self.assertEqual(static.parse_range("bytes=1000-", 1000), "unsatisfiable")
         self.assertIsNone(static.parse_range("bytes=0-1,5-6", 1000))
+        self.assertIsNone(static.parse_range("bytes=5-3", 1000))
 
     def test_signed_out(self):
         r, _ = self.request("GET", "/")
         self.assertEqual(r.status, 302)
-        self.assertEqual(r.getheader("Location"), "/login?next=/")
+        self.assertEqual(r.getheader("Location"), "/login?next=%2F")
         for path in ("/main.js", "/library.json", "/disks/a.img", "/api/sync", "/api/me"):
             self.assertEqual(self.request("GET", path)[0].status, 401, path)
         self.assertEqual(self.request("GET", "/login")[0].status, 200)
@@ -108,6 +109,8 @@ class ServerTest(unittest.TestCase):
         self.assertEqual(r.getheader("Content-Range"), f"bytes 4096-8191/{len(self.disk)}")
         self.assertEqual(data, self.disk[4096:8192])
         etag = r.getheader("ETag")
+        ident = hashlib.sha256(self.disk).hexdigest()[:24]
+        self.assertEqual((etag, r.getheader("X-Image-Id")), (f'"{ident}"', ident))
         r, data = self.request("GET", "/disks/a.img", headers={"Range": "bytes=0-9", "If-Range": '"other"'},
                                cookie=cookie)
         self.assertEqual((r.status, len(data)), (200, len(self.disk)))
@@ -127,6 +130,10 @@ class ServerTest(unittest.TestCase):
         cookie = r.getheader("Set-Cookie").split(";")[0]
         self.assertIn("HttpOnly", r.getheader("Set-Cookie"))
         self.assertIn("SameSite=Strict", r.getheader("Set-Cookie"))
+        self.assertNotIn("Secure", r.getheader("Set-Cookie"))           # http://127.0.0.1
+        r, _ = self.request("POST", "/api/login", {"name": "carol", "password": "carol-password"},
+                            headers={"Host": "executor.example"})
+        self.assertIn("; Secure", r.getheader("Set-Cookie"))           # anywhere else
         r, data = self.request("GET", "/api/me", cookie=cookie)
         self.assertEqual(json.loads(data), {"name": "carol", "owner": False})
         self.assertEqual(self.request("POST", "/api/invites", {}, cookie=cookie)[0].status, 403)
@@ -142,25 +149,37 @@ class ServerTest(unittest.TestCase):
     def test_overlay_sync(self):
         cookie = self.login()
         rec = lambda b, byte: struct.pack("<I", b) + bytes([byte]) * 4096
-        r, data = self.request("POST", "/api/sync/overlays/a.img-1-2?name=a.img&size=1048576",
-                               rec(0, 1) + rec(7, 2), cookie=cookie)
+        post = lambda q, body: self.request("POST", f"/api/sync/overlays/a.img-x?{q}", body, cookie=cookie)
+        self.assertEqual(post("", rec(0, 1))[0].status, 400)                    # no base
+        r, data = post("base=0&name=a.img&size=1048576", rec(0, 1) + rec(7, 2))
         v1 = json.loads(data)["version"]
-        r, data = self.request("POST", "/api/sync/overlays/a.img-1-2", rec(7, 3) + rec(9, 4), cookie=cookie)
+        self.assertEqual(v1, 1)
+        r, data = post("base=0", rec(7, 9))                                      # another browser, behind
+        self.assertEqual((r.status, json.loads(data)["version"]), (409, v1))
+        r, data = post(f"base={v1}", rec(7, 3) + rec(9, 4))
         v2 = json.loads(data)["version"]
-        self.assertEqual(v2, v1 + 1)
-        r, data = self.request("GET", "/api/sync/overlays/a.img-1-2?since=0", cookie=cookie)
+        r, data = self.request("GET", "/api/sync/overlays/a.img-x?since=0", cookie=cookie)
         self.assertEqual(r.getheader("X-Sync-Version"), str(v2))
         got = {struct.unpack_from("<I", data, i)[0]: data[i + 4] for i in range(0, len(data), 4100)}
         self.assertEqual(got, {0: 1, 7: 3, 9: 4})
-        r, data = self.request("GET", f"/api/sync/overlays/a.img-1-2?since={v1}", cookie=cookie)
+        r, data = self.request("GET", f"/api/sync/overlays/a.img-x?since={v1}", cookie=cookie)
         self.assertEqual(len(data), 2 * 4100)               # 7 and 9
-        r, data = self.request("POST", "/api/sync/overlays/a.img-1-2", b"short", cookie=cookie)
-        self.assertEqual(r.status, 400)
-        r, data = self.request("DELETE", "/api/sync/overlays/a.img-1-2", cookie=cookie)
+        self.assertEqual(post(f"base={v2}", b"short")[0].status, 400)
+        # A replace, staged: nothing shows until the commit, then only its blocks.
+        self.assertEqual(post("stage=token-1234", rec(1, 5))[0].status, 204)
+        r, data = self.request("GET", f"/api/sync/overlays/a.img-x?since={v2}", cookie=cookie)
+        self.assertEqual(data, b"")
+        r, data = post(f"base={v2}&stage=token-1234&replace=1", rec(2, 6))
         v3 = json.loads(data)["version"]
-        r, data = self.request("GET", f"/api/sync/overlays/a.img-1-2?since={v2}", cookie=cookie)
+        r, data = self.request("GET", f"/api/sync/overlays/a.img-x?since={v2}", cookie=cookie)
+        self.assertEqual(r.getheader("X-Sync-Reset"), "1")
+        got = {struct.unpack_from("<I", data, i)[0]: data[i + 4] for i in range(0, len(data), 4100)}
+        self.assertEqual(got, {1: 5, 2: 6})
+        r, data = self.request("DELETE", "/api/sync/overlays/a.img-x", cookie=cookie)
+        v4 = json.loads(data)["version"]
+        r, data = self.request("GET", f"/api/sync/overlays/a.img-x?since={v3}", cookie=cookie)
         self.assertEqual((r.getheader("X-Sync-Reset"), data), ("1", b""))
-        r, data = self.request("GET", f"/api/sync/overlays/a.img-1-2?since={v3}", cookie=cookie)
+        r, data = self.request("GET", f"/api/sync/overlays/a.img-x?since={v4}", cookie=cookie)
         self.assertEqual(r.getheader("X-Sync-Reset"), "0")
 
     def test_volume_sync(self):
@@ -168,15 +187,19 @@ class ServerTest(unittest.TestCase):
         blob = b"kept across browsers"
         sha = hashlib.sha256(blob).hexdigest()
         manifest = {"dirs": ["/executor"], "files": {"/executor/note": {"size": len(blob), "mtime": 5, "sha": sha}}}
-        r, data = self.request("PUT", "/api/sync/volumes/own", {"manifest": manifest}, cookie=cookie)
+        self.assertEqual(self.request("PUT", "/api/sync/volumes/own", {"manifest": manifest},
+                                      cookie=cookie)[0].status, 400)            # no base
+        r, data = self.request("PUT", "/api/sync/volumes/own", {"manifest": manifest, "base": 0}, cookie=cookie)
         self.assertEqual((r.status, json.loads(data)["missing"]), (409, [sha]))
         r, data = self.request("POST", "/api/sync/objects/missing", {"shas": [sha]}, cookie=cookie)
         self.assertEqual(json.loads(data)["missing"], [sha])
         self.assertEqual(self.request("PUT", f"/api/sync/objects/{sha}", b"other", cookie=cookie)[0].status, 400)
         self.assertEqual(self.request("PUT", f"/api/sync/objects/{sha}", blob, cookie=cookie)[0].status, 204)
-        r, data = self.request("PUT", "/api/sync/volumes/own", {"manifest": manifest}, cookie=cookie)
+        r, data = self.request("PUT", "/api/sync/volumes/own", {"manifest": manifest, "base": 0}, cookie=cookie)
         self.assertEqual(r.status, 200)
         version = json.loads(data)["version"]
+        r, data = self.request("PUT", "/api/sync/volumes/own", {"manifest": manifest, "base": 0}, cookie=cookie)
+        self.assertEqual((r.status, json.loads(data)["version"]), (409, version))   # behind
         r, data = self.request("GET", "/api/sync/volumes/own", cookie=cookie)
         self.assertEqual(json.loads(data), {"version": version, "manifest": manifest})
         self.assertEqual(self.request("GET", f"/api/sync/objects/{sha}", cookie=cookie)[1], blob)
@@ -190,6 +213,54 @@ class ServerTest(unittest.TestCase):
         r, data = self.request("DELETE", "/api/sync/volumes/own", cookie=cookie)
         r, data = self.request("GET", "/api/sync/volumes/own", cookie=cookie)
         self.assertEqual(json.loads(data), {"version": version + 1, "manifest": None})
+
+    def raw(self, text):
+        s = socket.create_connection(("127.0.0.1", self.port))
+        s.sendall(text.encode("latin1"))
+        data = b""
+        while chunk := s.recv(65536):
+            data += chunk
+        s.close()
+        return data
+
+    def test_hostile_requests(self):
+        # A negative or bad length: 400, the connection closed (not a hang or a read of everything).
+        for length in ("-1", "abc"):
+            data = self.raw(f"POST /api/login HTTP/1.1\r\nHost: x\r\nContent-Length: {length}\r\n\r\n")
+            self.assertIn(b" 400 ", data.split(b"\r\n")[0])
+        # Signed out, a large body is refused before it is read.
+        r, _ = self.request("POST", "/api/login", b"x" * (100 << 10), headers={"Content-Type": "application/json"})
+        self.assertEqual(r.status, 413)
+        # CR/LF in the path can't make headers.
+        data = self.raw("GET /a%0d%0aSet-Cookie:%20evil=1.html HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n")
+        head = data.split(b"\r\n\r\n")[0]
+        self.assertNotIn(b"\r\nSet-Cookie: evil", head)
+        self.assertIn(b"Location: /login?next=%2Fa%0D%0ASet-Cookie", head)
+        # ../ however spelled stays in the site.
+        cookie = self.login()
+        for path in ("/%2e%2e/data/accounts.sqlite", "/..%2fdata/accounts.sqlite", "/%2e%2e%2f%2e%2e/etc/passwd"):
+            self.assertEqual(self.request("GET", path, cookie=cookie)[0].status, 404, path)
+        # The relay, from another site.
+        r, _ = self.request("GET", "/relay", headers={"Origin": "https://elsewhere.example", "Upgrade": "websocket",
+                                                       "Sec-WebSocket-Key": "x"}, cookie=cookie)
+        self.assertEqual(r.status, 403)
+
+    def test_login_limits(self):
+        app_ = self.server.app
+        app_.cfg["server"]["trusted_proxies"] = ["127.0.0.1"]
+        try:
+            for i in range(10):                         # one client behind the proxy
+                self.request("POST", "/api/login", {"name": "nobody", "password": "wrong-password"},
+                             headers={"X-Forwarded-For": "203.0.113.5"})
+            r, _ = self.request("POST", "/api/login", {"name": "owner", "password": "owner-password"},
+                                headers={"X-Forwarded-For": "203.0.113.5"})
+            self.assertEqual(r.status, 429)
+            r, _ = self.request("POST", "/api/login", {"name": "owner", "password": "owner-password"},
+                                headers={"X-Forwarded-For": "203.0.113.6"})
+            self.assertEqual(r.status, 200)              # another one is not
+        finally:
+            app_.cfg["server"]["trusted_proxies"] = []
+            app_.failures.clear()
 
     def test_relay_stub(self):
         cookie = self.login()

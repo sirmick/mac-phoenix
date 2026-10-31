@@ -11,10 +11,14 @@
         GET    overlays/KEY?since=V   blocks newer than V: records of block
                                       number (uint32 LE) + 4 KB; X-Sync-Version,
                                       X-Sync-Reset: 1 when it was deleted since V
-        POST   overlays/KEY?name=&size=  records -> { version }
+        POST   overlays/KEY?stage=T   records kept for a commit with T
+        POST   overlays/KEY?base=V[&stage=T][&replace=1][&name=&size=]
+                                      records (and T's) as version V+1 -> { version };
+                                      409 { version } when V isn't current
         DELETE overlays/KEY           Revert -> { version }
         GET    volumes/KEY            { version, manifest }
-        PUT    volumes/KEY            { manifest } -> { version } (409 { missing })
+        PUT    volumes/KEY            { manifest, base } -> { version }
+                                      (409 { version } or { missing })
         DELETE volumes/KEY            Reset -> { version }
         POST   objects/missing        { shas } -> { missing }
         PUT    objects/SHA, GET objects/SHA
@@ -22,9 +26,16 @@
     /relay            WebSocket, the relay's (relay.py: a stub)
 
 Everything but /login and its API needs a session (the cookie), unless
-the configuration makes the page public; sync always does. Writes from
-another site are refused (Origin, Sec-Fetch-Site; the cookie is
-SameSite=Strict too).
+the configuration makes the page public; sync always does. Writes and
+/relay from another site are refused (Origin against Host, and
+Sec-Fetch-Site; the cookie is SameSite=Strict too). Behind a reverse
+proxy: pass Host through (nginx: proxy_set_header Host $host), and name
+the proxy in trusted_proxies so X-Forwarded-For gives the address the
+sign-in limits count.
+
+Limits: requests' bodies (64 KB signed out, max_upload_mb signed in), a
+connection idle 60 s, MAX_CONNECTIONS at once, two password hashes at
+a time (accounts.py), failed sign-ins per address and per name.
 """
 import http.cookies
 import http.server
@@ -34,7 +45,7 @@ import posixpath
 import re
 import threading
 import time
-from urllib.parse import parse_qs, unquote, urlsplit
+from urllib.parse import parse_qs, quote, unquote, urlsplit
 
 from . import accounts as accounts_mod
 from . import library, relay, static
@@ -43,7 +54,12 @@ from .sync import SyncError, SyncStore
 HERE = os.path.dirname(os.path.abspath(__file__))
 COOKIE = "executor_session"
 LOGIN_FAILURES = 10                     # per address in LOGIN_WINDOW s, then 429
+LOGIN_FAILURES_NAME = 20                # per name
 LOGIN_WINDOW = 600
+SIGNED_OUT_BODY = 64 << 10
+MAX_CONNECTIONS = 64
+IDLE = 60                               # s a connection may wait for a request
+LOCAL = ("localhost", "127.0.0.1", "::1")
 
 
 class HttpError(Exception):
@@ -60,20 +76,26 @@ class App:
         os.makedirs(data, exist_ok=True)
         self.accounts = accounts_mod.Accounts(os.path.join(data, "accounts.sqlite"))
         self.sync = SyncStore(data)
-        self.failures = {}
+        self.ids = library.Ids(os.path.join(data, "image-ids.json"))
+        self.failures = {}                  # ("address" | "name", value) -> times
         self.failures_lock = threading.Lock()
 
-    def note_failure(self, address):
-        now = time.time()
-        with self.failures_lock:
-            times = [t for t in self.failures.get(address, []) if t > now - LOGIN_WINDOW]
-            times.append(now)
-            self.failures[address] = times
+    def _recent(self, key, now):
+        return [t for t in self.failures.get(key, []) if t > now - LOGIN_WINDOW]
 
-    def too_many_failures(self, address):
+    def note_failure(self, address, name):
         now = time.time()
         with self.failures_lock:
-            return len([t for t in self.failures.get(address, []) if t > now - LOGIN_WINDOW]) >= LOGIN_FAILURES
+            for key in (("address", address), ("name", name)):
+                self.failures[key] = self._recent(key, now) + [now]
+            if len(self.failures) > 1000:
+                self.failures = {k: v for k in list(self.failures) if (v := self._recent(k, now))}
+
+    def too_many_failures(self, address, name):
+        now = time.time()
+        with self.failures_lock:
+            return (len(self._recent(("address", address), now)) >= LOGIN_FAILURES
+                    or len(self._recent(("name", name), now)) >= LOGIN_FAILURES_NAME)
 
 
 ROUTES = []
@@ -89,6 +111,7 @@ def route(method, pattern, auth=True):
 class Handler(http.server.BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
     server_version = "ExecutorWeb/1"
+    timeout = IDLE
     app: App = None
 
     def log_message(self, fmt, *args):
@@ -108,10 +131,18 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.send_header("Referrer-Policy", "same-origin")
         super().end_headers()
 
+    def content_length(self):
+        v = self.headers.get("Content-Length") or "0"
+        if not v.isdigit():                 # negative, or not a number
+            self.close_connection = True
+            raise HttpError(400, "bad Content-Length")
+        return int(v)
+
     def body(self):
         if self._body is None:
-            n = int(self.headers.get("Content-Length") or 0)
-            if n > self.app.cfg["server"]["max_upload_mb"] << 20:
+            n = self.content_length()
+            limit = self.app.cfg["server"]["max_upload_mb"] << 20 if self.user else SIGNED_OUT_BODY
+            if n > limit:
                 self.close_connection = True
                 raise HttpError(413, "too large")
             self._body = self.rfile.read(n) if n else b""
@@ -143,6 +174,23 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def redirect(self, to):
         self.send_bytes(302, b"", "text/plain", [("Location", to)])
 
+    def address(self):
+        """The client's address: X-Forwarded-For's, through trusted proxies."""
+        trusted = self.app.cfg["server"]["trusted_proxies"]
+        addr = self.client_address[0]
+        if addr in trusted:
+            for hop in reversed([a.strip() for a in self.headers.get("X-Forwarded-For", "").split(",") if a.strip()]):
+                addr = hop
+                if hop not in trusted:
+                    break
+        return addr
+
+    def secure(self):
+        v = self.app.cfg["server"]["secure_cookies"]
+        if v == "auto":                     # but on this machine (plain http)
+            return urlsplit("//" + (self.headers.get("Host") or "")).hostname not in LOCAL
+        return bool(v)
+
     def cookie(self):
         c = http.cookies.SimpleCookie()
         try:
@@ -153,7 +201,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def set_cookie(self, token, days):
         attrs = ["Path=/", "HttpOnly", "SameSite=Strict"]
-        if self.app.cfg["server"]["secure_cookies"]:
+        if self.secure():
             attrs.append("Secure")
         attrs.append(f"Max-Age={int(days * 86400)}" if token else "Max-Age=0")
         return ("Set-Cookie", f"{COOKIE}={token or ''}; " + "; ".join(attrs))
@@ -175,6 +223,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         try:
             if method in ("POST", "PUT", "DELETE") and not self.same_origin():
                 raise HttpError(403, "not from this site")
+            self.content_length()
             for m, pattern, fn, auth in ROUTES:
                 match = pattern.fullmatch(path)
                 if match and (m == method or (m == "GET" and method == "HEAD")):
@@ -194,7 +243,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.close_connection = True
             return
         # Keep-alive: the rest of a body no route read.
-        if self._body is None and int(self.headers.get("Content-Length") or 0):
+        if self._body is None and self.headers.get("Content-Length", "0") != "0":
             self.close_connection = True
 
     def static(self, path):
@@ -204,13 +253,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
             norm = posixpath.join(norm, "index.html")
         if not self.user and not self.app.cfg["server"]["public"]:
             if norm.endswith(".html"):
-                return self.redirect("/login?next=" + (path or "/"))
+                return self.redirect("/login?next=" + quote(path or "/", safe=""))
             raise HttpError(401, "sign in first")
         f = os.path.join(site, norm.lstrip("/"))
         if not site or not os.path.realpath(f).startswith(os.path.realpath(site) + os.sep):
             raise HttpError(404, "not found")
         if os.path.isdir(f):
-            return self.redirect(path.rstrip("/") + "/")
+            return self.redirect(quote(path.rstrip("/") + "/"))
         if not os.path.isfile(f):
             raise HttpError(404, "not found")
         static.send_file(self, f, head=self.command == "HEAD")
@@ -236,13 +285,14 @@ def me(h):
 
 @route("POST", "/api/login", auth=False)
 def login(h):
-    address = h.client_address[0]
-    if h.app.too_many_failures(address):
-        raise HttpError(429, "too many attempts: try again later")
+    address = h.address()
     b = h.json_body()
-    user = h.app.accounts.check(str(b.get("name", "")), str(b.get("password", "")))
+    name = str(b.get("name", ""))
+    if h.app.too_many_failures(address, name):
+        raise HttpError(429, "too many attempts: try again later")
+    user = h.app.accounts.check(name, str(b.get("password", "")))
     if not user:
-        h.app.note_failure(address)
+        h.app.note_failure(address, name)
         raise HttpError(401, "wrong name or password")
     days = h.app.cfg["server"]["session_days"]
     h.send_json(200, {"name": user["name"]}, [h.set_cookie(h.app.accounts.new_session(user["id"], days), days)])
@@ -256,7 +306,13 @@ def logout(h):
 
 @route("POST", "/api/register", auth=False)
 def register(h):
+    address = h.address()
+    if h.app.too_many_failures(address, ""):
+        raise HttpError(429, "too many attempts: try again later")
     b = h.json_body()
+    if not h.app.accounts.invite_valid(str(b.get("invite", ""))):
+        h.app.note_failure(address, "")
+        raise HttpError(400, "that invitation is not valid (used, expired or mistyped)")
     user = h.app.accounts.register(str(b.get("invite", "")), str(b.get("name", "")), str(b.get("password", "")))
     days = h.app.cfg["server"]["session_days"]
     h.send_json(200, {"name": user["name"]}, [h.set_cookie(h.app.accounts.new_session(user["id"], days), days)])
@@ -303,7 +359,8 @@ def disk(h, name):
     path = library.find(*lib_args(h), name)
     if not path:
         raise HttpError(404, "not in the library")
-    static.send_file(h, path, head=h.command == "HEAD")
+    ident = h.app.ids.get(path)
+    static.send_file(h, path, head=h.command == "HEAD", tag=ident, headers=[("X-Image-Id", ident)])
 
 
 # ---- sync ----
@@ -335,8 +392,16 @@ def overlay_get(h, key):
 
 @route("POST", "/api/sync/overlays/([^/]+)")
 def overlay_post(h, key):
+    s = user_sync(h)
+    if "base" not in h.query:
+        if "stage" not in h.query:
+            raise HttpError(400, "base (the version this is on) or stage")
+        s.overlay_stage(key, h.query["stage"], h.body())
+        return h.send_bytes(204, b"")
     size = h.query.get("size")
-    version = user_sync(h).overlay_put(key, h.query.get("name"), int(size) if size else None, h.body())
+    version = s.overlay_put(key, int(h.query["base"]), h.body(), name=h.query.get("name"),
+                            size=int(size) if size else None, token=h.query.get("stage"),
+                            replace=h.query.get("replace") == "1")
     h.send_json(200, {"version": version})
 
 
@@ -353,7 +418,10 @@ def volume_get(h, key):
 
 @route("PUT", "/api/sync/volumes/([^/]+)")
 def volume_put(h, key):
-    h.send_json(200, {"version": user_sync(h).volume_put(key, h.json_body().get("manifest"))})
+    b = h.json_body()
+    if not isinstance(b.get("base"), int):
+        raise HttpError(400, "base: the version this is on")
+    h.send_json(200, {"version": user_sync(h).volume_put(key, b.get("manifest"), b["base"])})
 
 
 @route("DELETE", "/api/sync/volumes/([^/]+)")
@@ -390,6 +458,8 @@ def object_get(h, sha):
 # ---- the relay ----
 @route("GET", "/relay")
 def relay_ws(h):
+    if not h.same_origin():
+        raise HttpError(403, "not from this site")
     if not relay.upgrade(h):
         raise HttpError(400, "a WebSocket endpoint")
     h.close_connection = True
@@ -402,5 +472,22 @@ class Server(http.server.ThreadingHTTPServer):
     def __init__(self, cfg, quiet=False):
         self.app = App(cfg)
         self.quiet = quiet
+        self.slots = threading.BoundedSemaphore(MAX_CONNECTIONS)
         handler = type("BoundHandler", (Handler,), {"app": self.app})
         super().__init__((cfg["server"]["bind"], cfg["server"]["port"]), handler)
+        c = cfg["library"]
+        self.app.ids.warm([os.path.join(c["images"], d["name"])
+                           for d in library.catalog(c["images"], c["include"], c["exclude"])])
+
+    # A thread a connection, MAX_CONNECTIONS at most: the rest are closed.
+    def process_request(self, request, client_address):
+        if not self.slots.acquire(blocking=False):
+            self.shutdown_request(request)
+            return
+        super().process_request(request, client_address)
+
+    def process_request_thread(self, request, client_address):
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            self.slots.release()

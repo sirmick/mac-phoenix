@@ -10,7 +10,8 @@ DEFAULTS = {
         "site": "",                      # the tab: index.html, worker.js, executor-web.wasm, ...
         "data": "~/storage/executor-web",  # accounts and every user's synced data
         "public": False,                 # true: the page without signing in (sync still needs it)
-        "secure_cookies": False,         # true behind HTTPS
+        "secure_cookies": "auto",        # Secure but for localhost; true behind HTTPS
+        "trusted_proxies": [],           # addresses whose X-Forwarded-For is believed
         "session_days": 30,
         "max_upload_mb": 64,             # one request's body
     },

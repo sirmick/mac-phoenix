@@ -2,9 +2,10 @@
 
 For a request for NAME, when NAME.gz exists and the browser accepts gzip,
 NAME.gz goes out with Content-Encoding: gzip and NAME's type, and
-X-Decoded-Length says NAME's size (the page's download progress). Every
-file has an ETag (its size and time) and Last-Modified; a matching
-If-None-Match gets 304. A Range request (one range; If-Range, when sent,
+X-Decoded-Length says NAME's size (the page's download progress), and
+Vary: Accept-Encoding. Every file has an ETag (its size and time in ns,
+or the caller's: a disk's content, library.py; "-gz" on the compressed
+copy's) and Last-Modified; a matching If-None-Match gets 304. A Range request (one range; If-Range, when sent,
 must match) gets those bytes of NAME itself, never of NAME.gz: the tab
 reads large disk images that way, block by block (overlay.js).
 """
@@ -23,7 +24,7 @@ def guess_type(path):
 
 
 def etag_of(st):
-    return f'"{st.st_size:x}-{int(st.st_mtime):x}"'
+    return f'{st.st_size:x}-{st.st_mtime_ns:x}'
 
 
 def parse_range(header, size):
@@ -39,18 +40,31 @@ def parse_range(header, size):
             return "unsatisfiable"
         return max(0, size - n), size
     start = int(first)
-    end = min(size, int(last) + 1) if last else size
-    if start >= size or end <= start:
+    if last and int(last) < start:
+        return None                         # not a range: ignored
+    if start >= size:
         return "unsatisfiable"
-    return start, end
+    return start, min(size, int(last) + 1) if last else size
 
 
-def send_file(h, path, head=False):
-    """Answers h (a BaseHTTPRequestHandler) with the file at path."""
+def send_file(h, path, head=False, tag=None, headers=()):
+    """Answers h (a BaseHTTPRequestHandler) with the file at path; tag: its
+    ETag's value (default: its size and time); headers: more to send."""
     st = os.stat(path)
-    etag = etag_of(st)
+    gz = path + ".gz"
+    has_gz = os.path.isfile(gz)
+    rng = None
+    if h.headers.get("Range"):
+        rng = parse_range(h.headers["Range"], st.st_size)
+    gzipped = rng is None and has_gz and "gzip" in h.headers.get("Accept-Encoding", "")
+    tag = tag or etag_of(st)
+    etag = f'"{tag}-gz"' if gzipped else f'"{tag}"'
     validators = [("ETag", etag), ("Last-Modified", h.date_time_string(st.st_mtime)),
-                  ("Accept-Ranges", "bytes")]
+                  ("Accept-Ranges", "bytes"), *headers]
+    if has_gz:
+        validators.append(("Vary", "Accept-Encoding"))
+    if rng is not None and h.headers.get("If-Range") and h.headers["If-Range"].strip() != f'"{tag}"':
+        rng = None                          # another version: all of it
     if etag in [t.strip() for t in h.headers.get("If-None-Match", "").split(",")]:
         h.send_response(304)
         for k, v in validators:
@@ -58,11 +72,6 @@ def send_file(h, path, head=False):
         h.send_header("Content-Length", "0")
         h.end_headers()
         return
-    rng = None
-    if h.headers.get("Range"):
-        if_range = h.headers.get("If-Range")
-        if not if_range or if_range.strip() == etag:
-            rng = parse_range(h.headers["Range"], st.st_size)
     if rng == "unsatisfiable":
         h.send_response(416)
         h.send_header("Content-Range", f"bytes */{st.st_size}")
@@ -71,9 +80,6 @@ def send_file(h, path, head=False):
             h.send_header(k, v)
         h.end_headers()
         return
-    gz = path + ".gz"
-    gzipped = (rng is None and os.path.isfile(gz)
-               and "gzip" in h.headers.get("Accept-Encoding", ""))
     with open(gz if gzipped else path, "rb") as f:
         length = os.fstat(f.fileno()).st_size
         start, end = rng or (0, length)
