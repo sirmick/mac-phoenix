@@ -128,7 +128,7 @@ class PEF:
                         elif sub == 2:
                             put('sec', st['code']); st['addr'] += 4; put('sec', st['data']); st['addr'] += 8
                         elif sub == 3: put('sec', st['code']); st['addr'] += 4; put('sec', st['data']); st['addr'] += 4
-                        elif sub == 4: put('sec', st['data']); st['addr'] += 4
+                        elif sub == 4: put('sec', st['data']); st['addr'] += 8   # VTable8: then skips 4
                         elif sub == 5: put('import', st['imp']); st['imp'] += 1; st['addr'] += 4
                         else: raise ValueError('group %d' % sub)
                 elif h >> 13 == 3:
