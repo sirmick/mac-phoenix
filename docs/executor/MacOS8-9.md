@@ -343,9 +343,17 @@ the whole frame less the content's rectangle (a classic movable dialog's
 inner frame too; none collapsed); boxes, grow and collapse box have no
 region. CreateNewWindow makes WDEF 64-67 windows on 8.x, every procID
 window is kDocumentWindowClass with no attributes (paramErr), and the
-features carry the platinum definitions' bits. Not yet: a pressed
-floating box, DrawThemeWindowFrame itself, CreateNewWindow's 14-deep
-floating frame, the movable grow dialog's grow corner.
+features carry the platinum definitions' bits. CreateNewWindow's
+floating windows have a 14-deep bar (the boxes a pixel nearer the
+content). DrawThemeWindowFrame (`appr` draw*.windowframe*) answers
+paramErr and draws nothing without metrics, as 8.6; with them it draws
+the definitions' frames: document, dialog, movable dialog (a document
+bar's boxes and stripes when the attributes ask), the alerts' edges and
+movable bar tinted red (#ff9999/#ff6666, face #ffcccc), plain and shadow
+outlines, the utility windows' 14-deep bars (the side one without a
+collapse box; full zoom's glyph a corner): all 8.6's pixel for pixel but
+the popup window. Not yet: a pressed floating box, the popup window's
+frame, the movable grow dialog's grow corner.
 
 Platinum menus (2026-10-31, `appr` draw*.menu*, and the Finder's File,
 Edit, View and Special menus on the G3). 8.x's MBDF 0 is a 68k loader for

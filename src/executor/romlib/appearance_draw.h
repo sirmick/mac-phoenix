@@ -64,6 +64,13 @@ inline void lineGray(int h1, int v1, int h2, int v2, uint16_t g)
     LineTo(h2, v2);
 }
 
+inline void lineRGB(int h1, int v1, int h2, int v2, RGBColor c)
+{
+    RGBForeColor(&c);
+    MoveTo(h1, v1);
+    LineTo(h2, v2);
+}
+
 /* Light along the top and left inside r, shade along the bottom and right. */
 inline void bevel(const Rect &r, uint16_t lit, uint16_t shade)
 {
@@ -134,9 +141,11 @@ void documentFrame(const Rect &c, bool active, const WindowParts &parts, ConstSt
 
 /* A platinum modal dialog box's frame (dBoxProc; WDEF 65's modal and
    alert variants are THIN: 3 pixels against 6). */
-void dialogFrame(const Rect &c, bool active, bool thin);
+/* ALERT: DrawThemeWindowFrame's alert flavours, their edges red (8.6) */
+void dialogFrame(const Rect &c, bool active, bool thin, bool alert = false);
 /* A movable modal dialog's: a title bar over the same frame. */
-void movableDialogFrame(const Rect &c, bool active, bool thin, ConstStringPtr title);
+void movableDialogFrame(const Rect &c, bool active, bool thin, ConstStringPtr title,
+                        const WindowParts *parts = nullptr, bool alert = false);
 /* their structure regions */
 void dialogStructure(const Rect &c, bool thin, RgnHandle rgn, bool titled = false);
 
@@ -158,6 +167,10 @@ struct FloatParts
     bool close, zoom, collapse, grow, side;
     int zoomKind; /* WDEF 66's variant bits: 4 vertical, 8 horizontal, 12 both */
     bool collapsed = false; /* the title bar alone (CollapseWindow) */
+    /* a 14-deep top bar, the boxes a pixel nearer the content
+       (DrawThemeWindowFrame's utility window, CreateNewWindow's floating
+       windows on 8.6) */
+    bool thin = false;
 };
 void floatingFrame(const Rect &c, bool active, const FloatParts &parts, ConstStringPtr title);
 void floatingStructure(const Rect &c, const FloatParts &parts, RgnHandle rgn);
