@@ -14,6 +14,8 @@ Set aside, as they depend on the machine rather than the calls:
   - on the writable volumes, what 9.0.4's Finder makes when they mount (its
     Desktop files, Trash...): the volume's counts, free space and next ID,
     and so the CNIDs in the classic short names ("#17");
+  - the Blank fixture's creation date, which FSRefTest called "now" on
+    9.0.4 (within a day of the clock), and prints as a number since;
   - on the HFS volume, what Executor's HFS code does otherwise: it
     allocates by the clump (4 KB) where 9.0.4's fork calls allocate blocks
     (physical lengths), and it takes ':' in a name for a path separator,
@@ -29,9 +31,11 @@ it or tests-7.5.5.
 """
 import argparse
 import difflib
+import gzip
 import os
 import re
 import shutil
+import struct
 import subprocess
 import sys
 import tempfile
@@ -44,13 +48,24 @@ ORACLE = os.path.join(ROOT, "tests", "guest", "hfsplus", "oracle-9.0.4", "fsreft
 HOST_EXPECTED = os.path.join(ROOT, "tests", "guest", "hfsplus", "executor-host-folder.txt")
 
 
+def fixture_created(stem):
+    """an HFS+ fixture's createDate (its volume header, Technote 1150)"""
+    with gzip.open(os.path.join(ROOT, "src", "executor", "tests", "fixtures", "hfsplus", stem + ".img.gz")) as f:
+        return struct.unpack(">I", f.read(1024 + 20)[1024 + 16:])[0]
+
+
 def normalize(text):
+    # Blank's creation date is the fixture's: FSRefTest says "now" for a
+    # date within a day of the clock, as it was when 9.0.4's output was made
+    blank_created = re.compile(r"^(  getvolumeinfo -> 0 .* cr )(now|%d)$" % fixture_created("blank-64m"))
     out, section = [], None
     for line in text.splitlines():
         m = re.match(r"VOLUME (\S+)", line)
         if m:
             section = m.group(1)
         line = re.sub(r'^(    u"Desktop D[BF]" flags )0088', r"\g<1>0000", line)
+        if section == "Blank":
+            line = blank_created.sub(r"\1(the fixture's)", line)
         if section in ("Blank", "untitled"):
             line = re.sub(r" files \d+ folders \d+ (total \d+) free \d+ blk (\d+)/(\d+)/\d+ (clumps \S+) nextid \d+",
                           r" \1 blk \2/\3 \4", line)
