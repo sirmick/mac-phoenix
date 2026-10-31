@@ -574,6 +574,22 @@ set_tests_properties(listcell_executor PROPERTIES
   SKIP_RETURN_CODE 77
 )
 
+# AppleWorks 5.0.3 on Executor's 7.6.1: a word-processing document made,
+# saved on the Host volume, opened again and saved (tests/test_appleworks.py),
+# with its 68k code and with its PowerPC code.
+foreach(_aw IN ITEMS 68k ppc)
+  add_test(
+    NAME appleworks_executor_761_${_aw}
+    COMMAND ${Python3_EXECUTABLE} ${TEST_DIR}/test_appleworks.py --system 7.6.1 $<$<STREQUAL:${_aw},ppc>:--ppc>
+  )
+  set_tests_properties(appleworks_executor_761_${_aw} PROPERTIES
+    TIMEOUT 400
+    LABELS "guest;executor"
+    SKIP_RETURN_CODE 77
+    ENVIRONMENT "MACPHOENIX_EMULATOR=$<TARGET_FILE:mac-phoenix>"
+  )
+endforeach()
+
 # Host keystrokes (/api/keypress) reach the front application (the suite).
 add_test(
   NAME keyboard_guest
