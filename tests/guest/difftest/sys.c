@@ -39,6 +39,77 @@ int main(void)
     int i;
     char k[64];
     probe_open("sys");
+    if(SECTION("preload"))
+    {
+        /* The probe's own resources marked preload (sys.r): in memory
+           already when it starts? A fat application's 68k segments are
+           often marked so (Exile III). */
+        static const struct { ResType type; short id; const char *key; } rs[] = {
+            { 'CODE', 2, "CODE" }, { 'PRLD', 128, "PRLD" } };
+        for(i = 0; i < 2; i++)
+        {
+            Handle h;
+            SetResLoad(false);
+            h = Get1Resource(rs[i].type, rs[i].id);
+            SetResLoad(true);
+            out(rs[i].key, "%s", !h ? "missing" : *h ? "loaded" : "not loaded");
+        }
+    }
+    if(SECTION("container"))
+    {
+        /* Where CFM put the probe's code: the heap block holding main's
+           code, against the data fork (the whole container) — does it
+           keep the container, or the code section alone? */
+        ProcessSerialNumber psn = { 0, kCurrentProcess };
+        ProcessInfoRec info;
+        FSSpec spec;
+        short ref;
+        long eof = 0;
+        Ptr code = *(Ptr *)main, b;
+        THz z = ApplicationZone();
+        memset(&info, 0, sizeof info);
+        info.processInfoLength = sizeof info;
+        info.processAppSpec = &spec;
+        if(GetProcessInformation(&psn, &info) == noErr && FSpOpenDF(&spec, fsRdPerm, &ref) == noErr)
+        {
+            GetEOF(ref, &eof);
+            FSClose(ref);
+        }
+        out("~dataFork", "%ld", eof);
+        for(b = (Ptr)&z->heapData; b < z->bkLim;)
+        {
+            long size = *(long *)(b + 4);
+            if(size < 12)
+                break;
+            if(code >= b + 12 && code < b + size)
+                break;
+            b += size;
+        }
+        if(b < z->bkLim && *(long *)(b + 4) >= 12)
+        {
+            long size = *(long *)(b + 4) - 12;
+            out("~codeBlock", "%ld", size);
+            out("codeBlock", "%s", size >= eof ? "the container" : "smaller than the container");
+        }
+        else
+            out("codeBlock", "outside the application heap");
+    }
+    if(SECTION("partition"))
+    {
+        /* The partition beyond the heap and the stack: the A5 world. The
+           probe's CODE 0 asks for 256K above A5 (sys.r); does a PowerPC
+           launch reserve it, as a fat application's 68k launch would? */
+        ProcessSerialNumber psn = { 0, kCurrentProcess };
+        ProcessInfoRec info;
+        long heap = (long)LMGetApplLimit() - (long)ApplicationZone();
+        long stack = (long)LMGetCurStackBase() - (long)LMGetApplLimit();
+        memset(&info, 0, sizeof info);
+        info.processInfoLength = sizeof info;
+        GetProcessInformation(&psn, &info);
+        long rest = (long)info.processSize - heap - stack;
+        out("~heap", "%ld stack %ld rest %ld", heap, stack, rest);
+        out("a5world", "%s", rest >= 256 * 1024 ? "CODE 0's" : "not reserved");
+    }
     if(SECTION("gestalt"))
         for(i = 0; i < (int)(sizeof selectors / sizeof selectors[0]); i++)
         {
