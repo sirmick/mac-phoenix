@@ -74,3 +74,16 @@ TEST_F(UnknownSelector, ResourceDispatchWords)
     uint32_t d1 = run({ 0x554F, 0x3F3C, 0x5555, 0x303C, 0x0107, 0xA822, 0x321F });
     EXPECT_EQ(0xFFCE, d1 & 0xFFFF) << "paramErr";
 }
+
+/* subq.w #6,sp (2 bytes result + 4 bytes the pea below points into);
+   pea.l 2(sp) (one 4-byte pointer argument); moveq #$24,d0;
+   _TranslationDispatch -- THINK C's, THINK Pascal's and MacPerl's launches
+   on 8.6 all reach this exact sequence (base/traps.cpp's comment); the
+   callee pops only its own 4-byte argument, so the test cleans up the
+   other 4 bytes of its own reservation itself, same as the real caller
+   would. move.w (sp)+,d1 reads the 2-byte result. */
+TEST_F(UnknownSelector, TranslationDispatchSelector24)
+{
+    uint32_t d1 = run({ 0x5D4F, 0x486F, 0x0002, 0x7024, 0xABFC, 0x321F, 0x584F });
+    EXPECT_EQ(0xF42F, d1 & 0xFFFF) << "noTranslationPathErr";
+}

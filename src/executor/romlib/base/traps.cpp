@@ -255,6 +255,26 @@ uint32_t Executor::traps::unknown_selector_68k(const char *trap_name, uint32_t s
         EM_D0 = (uint32_t)-50;
         return ret;
     }
+    if(strcmp(trap_name, "TranslationDispatch") == 0 && sel == 0x24)
+    {
+        /* Selector $24's own call site (disassembled at the resident System
+           code THINK C's, THINK Pascal's and MacPerl's launches all go
+           through, its address varying run to run): subq.w #6,sp;
+           pea.l 2(sp); moveq #$24,d0; _TranslationDispatch -- one 4-byte
+           pointer argument, with 2 bytes reserved below it on the stack
+           for a word result. What the routine is for isn't known (no
+           public name covers it); GetFlavorTranslation's own stand-in
+           for a System without Mac OS Easy Open (drag.cpp) answers the
+           same way. */
+        snprintf(what, sizeof what,
+                 "TranslationDispatch selector $24 (4 argument bytes): answered noTranslationPathErr");
+        log_unimplemented(what);
+        syn68k_addr_t ret = POPADDR();
+        EM_A7 += 4;
+        WRITEUW(EM_A7, (uint16_t)-3025); /* noTranslationPathErr */
+        EM_D0 = (uint32_t)-3025;
+        return ret;
+    }
     snprintf(what, sizeof what, "%s selector $%x: no size in the selector, session stopped (called from $%x)",
              trap_name, (unsigned)sel, (unsigned)READUL(EM_A7));
     log_unimplemented(what);
