@@ -63,7 +63,8 @@ struct PpcMachine
     TestHost host;
     std::unique_ptr<cpu::Core> core;
 
-    PpcMachine(const uint32_t *program, size_t words, bool jit, bool fast = false) : ram(cpu::GuestMemory::PAGE_BYTES)
+    PpcMachine(const uint32_t *program, size_t words, bool jit, bool fast = false, bool exceptions = true)
+        : ram(cpu::GuestMemory::PAGE_BYTES)
     {
         mem.map(0, ram.size(), ram.data());
         for(size_t i = 0; i < words; i++)
@@ -72,6 +73,7 @@ struct PpcMachine
         config.arch = cpu::Arch::PPC;
         config.model = 750;
         config.jit = jit;
+        config.exceptions = exceptions;
         if(fast)
             config.fast_memory = { { 0, (uint32_t)ram.size(), false } };
         core = cpu::create_mame_ppc(config, mem, host);
@@ -123,6 +125,41 @@ static int test_ppc(bool jit)
     CHECK(n == 4);
     CHECK(strstr(buf, "addi") != nullptr);
     return 0;
+}
+
+/* A double stored to and loaded from an address that isn't word-aligned:
+ * the 750 takes an alignment exception, which the installer completes in
+ * software (as Mac OS's handler does; BBEdit Lite 4.1's setjmp).
+ * lfd f1,0x3000(0) ; addi r3,r0,0x2001 ; stfd f1,0(r3) ; lfd f2,0(r3) ;
+ * stfdu f2,4(r3) ; stfd f2,0x3010(0) ; host op 0 */
+static void test_ppc_misaligned_fp(bool jit)
+{
+    static const uint32_t prog[] = { 0xC8203000, 0x38602001, 0xD8230000, 0xC8430000,
+                                     0xDC430004, 0xD8403010, 0x18000000 };
+    PpcMachine p(prog, 7, jit, false, false);   /* as Executor and the kpx machine */
+    if(!p.core)
+        return;
+    p.core->reset();
+    p.mem.write32(0x3000, 0x400921FB);   /* pi */
+    p.mem.write32(0x3004, 0x54442D18);
+    p.core->set_pc(0x1000);
+    CHECK(p.core->run() == cpu::StopReason::HostOp);
+    CHECK(p.mem.read8(0x2001) == 0x40 && p.mem.read8(0x2004) == 0xFB && p.mem.read8(0x2008) == 0xFB);
+    CHECK(p.mem.read32(0x3010) == 0x400921FB && p.mem.read32(0x3014) == 0x54442D18);
+    CHECK(p.mem.read8(0x2005) == 0x40 && p.mem.read8(0x200C) == 0x18);   /* stfdu at 0x2005 */
+    CHECK(p.core->reg(cpu::ppc::GPR0 + 3) == 0x2005);
+
+    /* ... and stmw/lmw: addi r30,r0,0x1234 ; addi r31,r0,0x5678 ;
+     * addi r3,r0,0x2402 ; stmw r30,0(r3) ; addi r30,r0,0 ; addi r31,r0,0 ;
+     * lmw r30,0(r3) ; host op 0 */
+    static const uint32_t prog2[] = { 0x3BC01234, 0x3BE05678, 0x38602402, 0xBFC30000,
+                                      0x3BC00000, 0x3BE00000, 0xBBC30000, 0x18000000 };
+    PpcMachine q(prog2, 8, jit, false, false);
+    q.core->reset();
+    q.core->set_pc(0x1000);
+    CHECK(q.core->run() == cpu::StopReason::HostOp);
+    CHECK(q.mem.read8(0x2404) == 0x12 && q.mem.read8(0x2405) == 0x34 && q.mem.read8(0x2409) == 0x78);
+    CHECK(q.core->reg(cpu::ppc::GPR0 + 30) == 0x1234 && q.core->reg(cpu::ppc::GPR0 + 31) == 0x5678);
 }
 
 /* --bench [N]: N million (default 1) iterations of lwz/addi/stw/addic./bne
@@ -244,6 +281,8 @@ int main(int argc, char **argv)
 
     test_ppc(false);
     test_ppc(true);
+    test_ppc_misaligned_fp(false);
+    test_ppc_misaligned_fp(true);
 
     if(failures)
     {
