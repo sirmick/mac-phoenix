@@ -5,6 +5,8 @@
 //                    OPFS (disk-cache/) and revalidated on later visits
 //                    with its ETag, so it downloads once
 //   ?system=NAME     run on that image's System and Finder
+//   ?ppc             run fat applications' PowerPC code (the PowerPC box;
+//                    PowerPC-only applications always run theirs)
 // library.json beside the page (optional) offers more disks: [{ title,
 // url, note }]; the ones picked are remembered (localStorage) and loaded
 // like ?disk=.
@@ -349,6 +351,14 @@ systemSelect.addEventListener('change', () => {
     start();
 });
 
+// Fat applications' PowerPC code (mac-phoenix's --executor-ppc), remembered.
+const ppcBox = document.getElementById('ppc');
+ppcBox.checked = params.has('ppc') || localStorage.getItem('executor-ppc') === '1';
+ppcBox.addEventListener('change', () => {
+    localStorage.setItem('executor-ppc', ppcBox.checked ? '1' : '0');
+    start();
+});
+
 function showSystems(files) {
     const want = params.get('system') || localStorage.getItem('executor-system') || '';
     systemSelect.replaceChildren(new Option("Executor's own", ''),
@@ -410,7 +420,8 @@ async function start() {
 
     const offscreen = canvas.transferControlToOffscreen();
     worker.postMessage({ type: 'start', canvas: offscreen, width, height, files,
-                         system: systemSelect.value, volumeKey: volumeKey(files) }, [offscreen]);
+                         system: systemSelect.value, ppc: ppcBox.checked,
+                         volumeKey: volumeKey(files) }, [offscreen]);
     worker.onmessage = (e) => {
         if (mine !== generation)
             return;

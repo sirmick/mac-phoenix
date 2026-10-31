@@ -276,11 +276,12 @@ void on_yield()
 
 }
 
-/* web_main [--size WxH] [--disk IMAGE]... [--system IMAGE] [APP]: the
+/* web_main [--size WxH] [--disk IMAGE]... [--system IMAGE] [--ppc] [APP]: the
  * screen size, disk images to mount (read-only), the image whose System
  * Folder to run on (Apple's System and Finder: copied into Executor's
- * volume, and the Finder started), and an application to start instead of
- * Executor's Browser or the Finder (paths in the module's filesystem). */
+ * volume, and the Finder started), fat applications' PowerPC code run (as
+ * --executor-ppc), and an application to start instead of Executor's
+ * Browser or the Finder (paths in the module's filesystem). */
 int main(int argc, char **argv)
 {
     executor_host::Config c;
@@ -294,6 +295,8 @@ int main(int argc, char **argv)
             c.disks.push_back(argv[++i]);
         else if(a == "--system" && i + 1 < argc)
             system_image = argv[++i];
+        else if(a == "--ppc")
+            c.prefer_ppc = true;  /* fat applications' PowerPC code too */
         else
             c.app = a;
     }
