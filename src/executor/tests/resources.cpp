@@ -181,8 +181,8 @@ TEST_F(ResourceTest, Modify1)
     ASSERT_EQ(0xABABABAB, *(GUEST<uint32_t>*)*h1);
     ASSERT_EQ(0xFEEDFACE, *(GUEST<uint32_t>*)*h2);
 }
-/* An index past the list's count gives the empty string and writes nothing
-   more (the count is big-endian: AppleWorks 5 asks for one string past its
+/* An index outside the list gives the empty string and writes nothing
+   more, as on the Macs (tests/guest/strprobe; the count is big-endian: AppleWorks 5 asks for one string past its
    list and passes a buffer smaller than 256 bytes). */
 TEST_F(ResourceTest, GetIndStringOutOfRange)
 {
@@ -199,10 +199,13 @@ TEST_F(ResourceTest, GetIndStringOutOfRange)
     EXPECT_EQ(3, s[0]);
     EXPECT_EQ(0, memcmp(s + 1, "two", 3));
 
-    memset(s, 0xAA, sizeof s);
-    GetIndString(s, 128, 3);
-    EXPECT_EQ(0, s[0]);
-    EXPECT_EQ(0xAA, s[1]);
+    for(short index : { 3, 0, -1 })
+    {
+        memset(s, 0xAA, sizeof s);
+        GetIndString(s, 128, index);
+        EXPECT_EQ(0, s[0]) << index;
+        EXPECT_EQ(0xAA, s[1]) << index;
+    }
 }
 
 /* The standard color tables are ROM resources: RGetResource finds them
