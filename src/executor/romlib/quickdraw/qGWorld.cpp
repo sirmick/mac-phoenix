@@ -601,7 +601,7 @@ void Executor::C_SetGWorld(CGrafPtr port, GDHandle graphics_device)
            unless the port drew on the screen, so after SetGWorld(gw, nil)
            and SetGWorld(nil, nil) the GWorld's device stayed current and
            Mars Rising's window opened on it, drawn off screen. */
-        LM(TheGDevice) = graphics_device ? graphics_device : LM(MainDevice);
+        LM(TheGDevice) = graphics_device ? graphics_device : (GDHandle)LM(MainDevice);
     }
 
     theCPort = port;
