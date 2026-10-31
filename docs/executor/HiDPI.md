@@ -283,8 +283,34 @@ subset) was not needed: skia-pack also has `linux-Release-arm64` (for
 `tools/xarch` builds; `fetch.sh arm64`) and `wasm-Release-wasm` static
 libraries built with Emscripten (`fetch.sh wasm`), which the wasm build
 could link instead of CanvasKit (CanvasKit is Skia's JavaScript API; we
-draw from C++, so the static libraries are what we'd want; whether their
-Emscripten version links with ours is untried).
+draw from C++, so the static libraries are what we'd want).
+
+**wasm link: blocked, not just untried (2026-10-31).** `-DEXECUTOR_SKIA=ON`
+now configures `build-wasm` cleanly (the `find_library()` calls needed
+`NO_CMAKE_FIND_ROOT_PATH`: Emscripten's toolchain file restricts
+`find_library` to its own sysroot otherwise), but the link fails:
+`libskia.a`'s FreeType/libpng objects are undefined on `__wasm_longjmp`/
+`__c_longjmp`. skia-pack's wasm build was compiled with clang 21 using
+Emscripten's newer wasm-native setjmp/longjmp (`-sSUPPORT_LONGJMP=wasm`,
+paired with `-fwasm-exceptions`); our emsdk (clang 23, `~/emsdk`) defaults
+to the older JS-polyfill SjLj, paired with the JS-polyfill exception model
+we already build the rest of Executor's wasm target with. Passing
+`-sSUPPORT_LONGJMP=wasm` at link time alone just moves the break (our own
+`romlib` objects that call `setjmp`/`longjmp`, e.g. `launch.cpp`, were
+compiled expecting the old runtime's `emscripten_longjmp`, and the
+Emscripten `libc++.a` picked for the new mode is missing symbols the old
+one didn't need either) — recompiling with the matching compile-time flag
+makes `clang++` refuse the combination outright (`'-wasm-enable-sjlj' not
+allowed with '-enable-emscripten-cxx-exceptions'`), because the new
+longjmp model requires the new wasm-exceptions model too. Matching it for
+real means switching Executor's *whole* wasm build from the JS-polyfill
+exception model to `-fwasm-exceptions`, not a Skia-local flag — a
+cross-cutting change to how every `throw`/`catch` in the wasm build
+codegens, worth its own decision rather than a side effect of HiDPI.
+Until that's decided (or a toolchain matching skia-pack's clang 21 is
+pinned alongside `~/emsdk` for this one link), the wasm tab builds and
+runs with `-DEXECUTOR_SKIA=OFF` only: `hidpi::*` stays the inline no-op
+from `hidpi.h`, and HiDPI phase 1 is native/arm64-only.
 
 ```
 tools/skia/fetch.sh && cmake -B build -DEXECUTOR_SKIA=ON && cmake --build build -j4
