@@ -88,6 +88,9 @@ struct EmulatorConfig {
     // in; the guest can still switch in Monitors. Games that only run in
     // 256 colours want 8.
     uint32_t screen_depth = 32;
+    // CLI-only: --depth given. Executor starts 8.x Systems at 32 bits and
+    // 7.x at 8, as Macs do, unless asked.
+    bool screen_depth_set = false;
     bool screenshots = false;          // CLI-only: dump PPM frames to /tmp
 
     // Audio

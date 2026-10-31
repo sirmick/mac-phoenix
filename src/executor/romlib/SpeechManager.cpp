@@ -22,7 +22,7 @@ NumVersion Executor::C_SpeechManagerVersion()
     return MacBridge::SpeechManagerVersion();
 #else
     warning_unimplemented("");
-    return 0;
+    return NumVersion {};
 #endif
 }
 

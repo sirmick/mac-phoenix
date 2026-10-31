@@ -258,7 +258,7 @@ finalStage = 128,
 };
 
 struct DriverType{GUEST_STRUCT;GUEST<Str31> nameInfoStr; // must match the device's "name" in the Name Registry
-GUEST<NumVersion> version;};static_assert(sizeof(DriverType) == 36);void describeStruct(const DriverType&, std::ostream&);
+NumVersion version;};static_assert(sizeof(DriverType) == 36);void describeStruct(const DriverType&, std::ostream&);
 
 typedef DriverType *DriverTypePtr;
 
@@ -275,7 +275,7 @@ struct DriverOSRuntime{GUEST_STRUCT;GUEST<RuntimeOptions> driverRuntime;GUEST<St
 
 typedef DriverOSRuntime *DriverOSRuntimePtr;
 
-struct DriverServiceInfo{GUEST_STRUCT;GUEST<OSType> serviceCategory;GUEST<OSType> serviceType;GUEST<NumVersion> serviceVersion;};static_assert(sizeof(DriverServiceInfo) == 12);void describeStruct(const DriverServiceInfo&, std::ostream&);
+struct DriverServiceInfo{GUEST_STRUCT;GUEST<OSType> serviceCategory;GUEST<OSType> serviceType;NumVersion serviceVersion;};static_assert(sizeof(DriverServiceInfo) == 12);void describeStruct(const DriverServiceInfo&, std::ostream&);
 
 typedef DriverServiceInfo *DriverServiceInfoPtr;
 

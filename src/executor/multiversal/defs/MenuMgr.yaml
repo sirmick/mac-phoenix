@@ -608,8 +608,10 @@
 - function:
     name: GetItemStyle
     comment: |
-      MacPhoenix: the style is a Style, a byte: 8.6 writes one byte there
-      (tests/guest/difftest menu); a word overwrote the caller's next byte.
+      MacPhoenix: through the trap the style is Pascal's VAR Style, a word
+      with the style in its low byte (the Quadra 650 ROM, tests/guest/itemstyle;
+      AppleWorks 5's command keys read it so). InterfaceLib's export, below,
+      writes one byte, as 8.6's does (tests/guest/difftest menu).
     args:
       - name: mh
         type: MenuHandle
@@ -619,6 +621,22 @@
         type: Style*
     trap: 0xA941
     executor: C_
+    export: false
+
+# ####
+
+- only-for: Executor
+  function:
+    name: GetItemStyle
+    args:
+      - name: mh
+        type: MenuHandle
+      - name: item
+        type: INTEGER
+      - name: stylep
+        type: Style*
+    library: InterfaceLib
+    executor: glue_GetItemStyle
 
 # ####
 
@@ -1280,6 +1298,70 @@
         type: SInt16
       - name: outModifiers
         type: UInt8*
+    library: AppearanceLib
+    executor: C_
+
+# ####
+
+# An item's submenu ID and text encoding (8.5). 8.6 keeps a set ID apart
+# from the item's command and mark (they stay 0), and answers the mark of
+# an item whose command is hMenuCmd; an item's encoding starts as -2
+# (smCurrentScript); a bad item is paramErr (the menu probe's item85 keys).
+- function:
+    name: SetMenuItemHierarchicalID
+    return: OSErr
+    args:
+      - name: inMenu
+        type: MenuRef
+      - name: inItem
+        type: SInt16
+      - name: inHierID
+        type: SInt16
+    library: AppearanceLib
+    executor: C_
+
+# ####
+
+- function:
+    name: GetMenuItemHierarchicalID
+    return: OSErr
+    args:
+      - name: inMenu
+        type: MenuRef
+      - name: inItem
+        type: SInt16
+      - name: outHierID
+        type: SInt16*
+    library: AppearanceLib
+    executor: C_
+
+# ####
+
+- function:
+    name: SetMenuItemTextEncoding
+    return: OSErr
+    args:
+      - name: inMenu
+        type: MenuRef
+      - name: inItem
+        type: SInt16
+      - name: inScriptID
+        type: TextEncoding
+    library: AppearanceLib
+    executor: C_
+
+# ####
+
+- function:
+    name: GetMenuItemTextEncoding
+    return: OSErr
+    args:
+      - name: inMenu
+        type: MenuRef
+      - name: inItem
+        type: SInt16
+      - name: outScriptID
+        type: TextEncoding*
     library: AppearanceLib
     executor: C_
 

@@ -190,6 +190,11 @@ QDErr Executor::C_NewGWorld(GUEST<GWorldPtr> *graphics_world_out,
             return MemError();
 
         PIXMAP_BASEADDR(gd_pixmap) = (Ptr)gd_pixmap_baseaddr;
+        /* MacPhoenix: the device's pixmap keeps the handle (locking the
+           GWorld's pixels doesn't change it) and says so, as on 8.6: a
+           window opened while this device is current copies it
+           (difftest sys gworld.window: Mars Rising). */
+        PIXMAP_VERSION(gd_pixmap) = gw_pm_version_handle;
 
         PIXMAP_BOUNDS(gd_pixmap) = *bounds;
         if(depth > 8)
@@ -275,6 +280,7 @@ QDErr Executor::C_NewGWorld(GUEST<GWorldPtr> *graphics_world_out,
             gw_pixmap_baseaddr = NewHandle(0);
         PIXMAP_BASEADDR(gw_pixmap)
             = (Ptr)gw_pixmap_baseaddr;
+        PIXMAP_VERSION(gw_pixmap) = gw_pm_version_handle;
 
         PORT_RECT(graphics_world) = PIXMAP_BOUNDS(gw_pixmap) = *bounds;
     }
@@ -291,6 +297,46 @@ QDErr Executor::C_NewGWorld(GUEST<GWorldPtr> *graphics_world_out,
 
     qdGlobals().thePort = save_portX;
     return noErr;
+}
+
+bool Executor::ROMlib_lock_handle_base(PixMapHandle pmh, PixMap *pm, handle_base_lock *l)
+{
+    l->h = nullptr;
+    if(!pm || pm->pmVersion != gw_pm_version_handle)
+        return false;
+    Handle h = (Handle)pm->baseAddr;
+    if(!ROMlib_live_handle_p(h) || !*h)
+        return false;
+    l->pmh = pmh;
+    l->pm = pm;
+    l->h = h;
+    /* a GWorld's pixels: its pixmap's baseAddr is the handle (unlocked)
+       or their pointer (locked) */
+    gw_info_t *gw = lookup_gw_info_by_gw_pixmap_baseaddr(h);
+    if(!gw)
+        gw = lookup_gw_info_by_gw_pixmap_baseaddr(*h);
+    l->gw_pixmap = gw ? gw->gw_pixmap : nullptr;
+    if(l->gw_pixmap)
+        LockPixels(l->gw_pixmap);
+    else
+    {
+        l->state = HGetState(h);
+        HLock(h);
+    }
+    (pmh ? (PixMap *)*pmh : pm)->baseAddr = *h;
+    return true;
+}
+
+void Executor::ROMlib_unlock_handle_base(handle_base_lock *l)
+{
+    if(!l->h)
+        return;
+    if(l->gw_pixmap)
+        UnlockPixels(l->gw_pixmap);
+    else
+        HSetState(l->h, l->state);
+    (l->pmh ? (PixMap *)*l->pmh : l->pm)->baseAddr = (Ptr)l->h;
+    l->h = nullptr;
 }
 
 Boolean Executor::C_LockPixels(PixMapHandle pixels)
@@ -314,6 +360,7 @@ Boolean Executor::C_LockPixels(PixMapHandle pixels)
         /* lock the baseaddr handle memory */
         HSetState(pixels_baseaddr_h, HGetState(pixels_baseaddr_h) | LOCKBIT);
         PIXMAP_BASEADDR(pixels) = *pixels_baseaddr_h;
+        PIXMAP_VERSION(pixels) = gw_pm_version_locked;
 
         HSetState((Handle)pixels, HGetState((Handle)pixels) | LOCKBIT);
     }
@@ -346,6 +393,7 @@ void Executor::C_UnlockPixels(PixMapHandle pixels)
             HSetState(pixels_baseaddr_h,
                       HGetState(pixels_baseaddr_h) & ~LOCKBIT);
             PIXMAP_BASEADDR(pixels) = (Ptr)pixels_baseaddr_h;
+            PIXMAP_VERSION(pixels) = gw_pm_version_handle;
 
             HSetState((Handle)pixels, HGetState((Handle)pixels) & ~LOCKBIT);
         }

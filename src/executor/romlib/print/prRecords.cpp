@@ -50,6 +50,11 @@ void Executor::C_PrintDefault(THPrint hPrint)
        I've filled in the values by hand to be what I suspect the
        LaserWriter we're using wants */
 
+    /* MacPhoenix: no handle, nothing to fill in. SimFarm calls it with
+       the nil it keeps when PrOpen failed (no printer chosen): on a Mac no
+       driver is open then and nothing touches it. */
+    if(!hPrint || !*hPrint)
+        return;
     memset(*hPrint, 0, sizeof(TPrint));
     (*hPrint)->iPrVersion = ROMlib_PrDrvrVers;
 

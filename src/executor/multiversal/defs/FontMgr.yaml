@@ -705,6 +705,65 @@
 
 # ####
 
+# 8.5's FontManager library (the System's 'cfrg'): Executor's own, so
+# PowerPC code reaches Executor's Font Manager and Apple's library, which
+# keeps a Font Manager of its own (WidthListHand, its caches), never runs.
+
+- function:
+    name: SetAntiAliasedTextEnabled
+    return: OSStatus
+    args:
+      - name: iEnable
+        type: Boolean
+      - name: iMinFontSize
+        type: SInt16
+    library: FontManager
+    executor: C_
+
+# ####
+
+- function:
+    name: IsAntiAliasedTextEnabled
+    return: Boolean
+    args:
+      - name: oMinFontSize
+        type: SInt16*
+    library: FontManager
+    executor: C_
+
+# ####
+
+- function:
+    name: QDTextBounds
+    args:
+      - name: byteCount
+        type: INTEGER
+      - name: textAddr
+        type: const void*
+      - name: bounds
+        type: Rect*
+    library: FontManager
+    executor: C_
+
+# ####
+
+- function:
+    name: FetchFontInfo
+    return: OSErr
+    args:
+      - name: fontID
+        type: SInt16
+      - name: fontSize
+        type: SInt16
+      - name: fontStyle
+        type: SInt16
+      - name: info
+        type: FontInfo*
+    library: FontManager
+    executor: C_
+
+# ####
+
 # InterfaceLib exports with no trap (Executor's glue, cfm68k_glue.cpp):
 # for PowerPC and CFM-68K code. Only for Executor until the C side has
 # 68k glue for them.

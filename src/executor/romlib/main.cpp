@@ -479,6 +479,12 @@ int executor_main_entry(int argc, char **argv)
             
             ROMlib_set_system_version(system_version);
 
+            /* MacPhoenix: no --bpp: the depth the System's Macs start in.
+               A G3 with 8.6 starts at 32 bits (the sys probe's screen keys),
+               7.x Macs here at 8. */
+            if(!flag_bpp && (uint16_t)LM(SysVersion) >= 0x0800)
+                ROMlib_set_initial_depth(32);
+
             {
                 bool keyboard_set_failed = false;
 

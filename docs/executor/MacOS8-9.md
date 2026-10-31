@@ -253,6 +253,14 @@ Third run (`~/storage/executor-grid/8.6-r3/`): no host crashes.
   Services, `'cfrg'` 52), section 0 +$14..+$2c, a skip-list search that
   never meets its end node: the glyph cache ATS keeps isn't set up as 8.6
   sets it up (FMSharedCaches, FontObjects); its menus show, no window.
+  Two causes (2026-10-31): each application got its own copy of the ATS
+  libraries' global-share data (CFM now prepares those sections once per
+  system), and Apple's FontManager library, loaded beside Executor's Font
+  Manager, kept its own WidthListHand, which Executor's FMSwapFont then
+  trimmed under it. The FontManager library's exports are now Executor's
+  (`quickdraw/fontmgr85.cpp`, FontMgr.yaml; the text probe's `fm` keys):
+  Apple's never runs, Date & Time opens its window, and the appr probe's
+  controls run after its window frames without the crash.
 
 Differential probes (docs/executor/DiffTest.md) now ask Apple's 8.6
 libraries and Executor's the same questions: `appr` (the Appearance
@@ -317,10 +325,35 @@ rounded window (procID 16) is classic on 8.6 too, its close box a pixel
 further left than 7.x's document window's: the frame is 8.6's, the title
 glyphs aren't. 8.6's platinum WDEFs draw nothing pressed for wDraw with a
 part code (the probe's `pressed` keys equal the active frame; only the
-rounded window inverts its close box): the pressed look needs a real
-click on the G3 to measure. Not yet: the boxes drawn pressed, the
-collapse box (it drags), DrawThemeWindowFrame itself, the window part
-regions (Window Manager 2.0's GetWindowRegion).
+rounded window inverts its close box) unless the button is down in the
+box. Measured from real clicks on the G3, a pressed document box keeps
+its ring and frame and has a darker ramp inside (#444 to #bbb, its right
+and bottom edges no lighter than #999); TrackBox redraws the box
+unpressed when the button comes up inside (IM I-288). Collapsing
+(CollapseWindow, and a click in the collapse box, which 8.6 answers for
+every application, one without an inCollapseBox case too): the title
+bar alone, the outline closing under it; windows that can't collapse
+get errMessageNotSupported (`appr` frames.N.collapsed / .collapse:
+floating ones 8.6's pixel for pixel, document ones but for the title
+glyphs). Window Manager 2.0's regions (`wind`) come from the
+definitions' geometry, invisible windows too: the title bar along the
+structure's top (22 deep; a floating window's down to the content), the
+title text 2 inside it and a pixel short of its width, the drag region
+the whole frame less the content's rectangle (a classic movable dialog's
+inner frame too; none collapsed); boxes, grow and collapse box have no
+region. CreateNewWindow makes WDEF 64-67 windows on 8.x, every procID
+window is kDocumentWindowClass with no attributes (paramErr), and the
+features carry the platinum definitions' bits. CreateNewWindow's
+floating windows have a 14-deep bar (the boxes a pixel nearer the
+content). DrawThemeWindowFrame (`appr` draw*.windowframe*) answers
+paramErr and draws nothing without metrics, as 8.6; with them it draws
+the definitions' frames: document, dialog, movable dialog (a document
+bar's boxes and stripes when the attributes ask), the alerts' edges and
+movable bar tinted red (#ff9999/#ff6666, face #ffcccc), plain and shadow
+outlines, the utility windows' 14-deep bars (the side one without a
+collapse box; full zoom's glyph a corner): all 8.6's pixel for pixel but
+the popup window. Not yet: a pressed floating box, the popup window's
+frame, the movable grow dialog's grow corner.
 
 Platinum menus (2026-10-31, `appr` draw*.menu*, and the Finder's File,
 Edit, View and Special menus on the G3). 8.x's MBDF 0 is a 68k loader for

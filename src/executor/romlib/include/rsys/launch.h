@@ -7,6 +7,8 @@
  *
 
  */
+#include <string>
+
 namespace Executor
 {
 extern uint32_t ROMlib_version_long;
@@ -19,6 +21,7 @@ typedef enum {
     launch_damaged,
     launch_compressed_ge7,
     launch_compressed_lt7,
+    launch_cfm_failed, /* the application's fragment didn't prepare */
 } launch_failure_t;
 
 struct vers_t
@@ -30,6 +33,8 @@ struct vers_t
 };
 
 extern launch_failure_t ROMlib_launch_failure;
+/* launch_cfm_failed: what the Finder says (MacRoman) */
+extern std::string ROMlib_launch_failure_message;
 extern INTEGER ROMlib_exevrefnum;
 
 static_assert(sizeof(vers_t) == 8);

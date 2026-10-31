@@ -1176,8 +1176,9 @@ bool Executor::ROMlib_wdef_floating(WindowPtr window, bool close, bool grow, int
     if(system_version < 0x800)
         return false;
     Rect c = content_global(w);
+    /* CreateNewWindow's floating windows: the 14-deep bar (8.6) */
     appearance::FloatParts parts = { close && (bool)WINDOW_GO_AWAY_FLAG(w), zoom != 0, true, grow, side, zoom,
-                                     ROMlib_window8_collapsed(window) };
+                                     ROMlib_window8_collapsed(window), ROMlib_window8_floating_class(window) };
     *result = 0;
     switch(message)
     {

@@ -274,6 +274,7 @@ typedef struct
     ((pb).ioNamePtr && ((pb).ioFDirIndex != 0 || !(pb).ioNamePtr[0]))
 
 extern StringPtr ROMlib_exefname;
+extern void ROMlib_SFSaveDisk_update(INTEGER vrefnum, Str255 filename);
 
 
 extern OSErr ROMlib_maperrno(void);

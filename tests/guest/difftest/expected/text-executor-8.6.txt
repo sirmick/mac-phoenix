@@ -1,3 +1,6 @@
 # text on Executor (8.6 System) against the G3 (8.6): known differences.
-# None: Executor's Font Manager answers as 8.6's for every font, size and style the
+# Executor's Font Manager answers as 8.6's for every font, size and style the
 # probe asks (outline fonts through quickdraw/sfnt.cpp). key-glob<TAB>reason.
+fm.bounds.0.12.0.gjpqy	QDTextBounds: Executor's is the ink drawn; 8.6's is the glyphs' image boxes (Chicago's y a column wider than its ink)
+fm.bounds.20.24.2.*	QDTextBounds of italic text: 8.6's from the glyph boxes and the slant, Executor's the ink drawn
+fm.bounds.4.10.1.*	QDTextBounds of bold text: 8.6's from the glyph boxes and the bold extra, Executor's the ink drawn

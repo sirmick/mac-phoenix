@@ -1499,6 +1499,34 @@
 # ####
 
 - function:
+    name: HGetVol
+    return: OSErr
+    args:
+      - name: voln
+        type: StringPtr
+      - name: vrn
+        type: INTEGER*
+      - name: dirid
+        type: LONGINT*
+    executor: true
+
+# ####
+
+- function:
+    name: HSetVol
+    return: OSErr
+    args:
+      - name: voln
+        type: ConstStringPtr
+      - name: vrn
+        type: INTEGER
+      - name: dirid
+        type: LONGINT
+    executor: true
+
+# ####
+
+- function:
     name: FlushVol
     return: OSErr
     args:
@@ -3356,8 +3384,38 @@
         type: LONGINT*
       - name: procp
         type: LONGINT*
+    executor: true
     comment: |
-      NOTRAP_FUNCTION2(HDelete);
+      MacPhoenix: missing `executor: true` left this declared but never
+      exported, so PowerPC code importing it by name (Finder) got the
+      generic unresolved-import stub instead of hfsWorkingdir.cpp's
+      GetWDInfo.
+
+# ####
+
+- function:
+    name: OpenWD
+    return: OSErr
+    args:
+      - name: vref
+        type: INTEGER
+      - name: dirid
+        type: LONGINT
+      - name: procid
+        type: LONGINT
+      - name: wdrefp
+        type: INTEGER*
+    executor: true
+
+# ####
+
+- function:
+    name: CloseWD
+    return: OSErr
+    args:
+      - name: wdrefnum
+        type: INTEGER
+    executor: true
 
 # ####
 

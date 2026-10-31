@@ -9,8 +9,8 @@ draw32.tab.*	tabs aren't drawn platinum yet (DrawThemeTab)
 draw8.tab.*	tabs aren't drawn platinum yet (DrawThemeTab)
 draw32.growbox.*	the grow box isn't drawn platinum yet (GetThemeStandaloneGrowBoxBounds unimplemented)
 draw8.growbox.*	the grow box isn't drawn platinum yet (GetThemeStandaloneGrowBoxBounds unimplemented)
-draw32.windowframe.*	DrawThemeWindowFrame draws nothing into a GWorld on 8.6; Executor draws the frame
-draw8.windowframe.*	DrawThemeWindowFrame draws nothing into a GWorld on 8.6; Executor draws the frame
+draw32.windowframe.metrics.7	DrawThemeWindowFrame's popup window (a tab with rounded corners over a gradient frame): Executor's own look
+draw8.windowframe.metrics.7	DrawThemeWindowFrame's popup window (a tab with rounded corners over a gradient frame): Executor's own look
 frames.0.*	the title's glyphs (Charcoal from Executor's unhinted scaler); the frame is 8.6's
 frames.4.*	the title's glyphs (Charcoal from Executor's unhinted scaler); the frame is 8.6's
 frames.8.*	the title's glyphs (Charcoal from Executor's unhinted scaler); the frame is 8.6's

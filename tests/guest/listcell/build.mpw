@@ -1,0 +1,8 @@
+# build.mpw — ListCellTest, a 68k application: LNextCell past the last cell.
+# products: ListCellTest
+Delete -i ListCellTest
+SC listcell.c -o listcell.c.o
+Link -t APPL -c 'MPlc' -model near listcell.c.o ∂
+	"{Libraries}MacRuntime.o" "{Libraries}IntEnv.o" "{CLibraries}StdCLib.o" "{Libraries}Interface.o" ∂
+	-o ListCellTest
+Rez -a listcell.r -o ListCellTest

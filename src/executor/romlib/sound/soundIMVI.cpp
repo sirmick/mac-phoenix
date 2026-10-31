@@ -49,9 +49,19 @@ OSErr Executor::C_SndManagerStatus(INTEGER length, SMStatusPtr statusp)
     return ROMlib_PretendSound == soundpretend ? noErr : notEnoughHardware;
 }
 
-NumVersion Executor::C_SndSoundManagerVersion()
+static NumVersion num_version(uint32_t v)
 {
     NumVersion ret;
+    ret.majorRev = v >> 24;
+    ret.minorAndBugRev = v >> 16;
+    ret.stage = v >> 8;
+    ret.nonRelRev = v;
+    return ret;
+}
+
+NumVersion Executor::C_SndSoundManagerVersion()
+{
+    uint32_t ret;
 
     warning_sound_log("");
     switch(ROMlib_PretendSound)
@@ -61,21 +71,22 @@ NumVersion Executor::C_SndSoundManagerVersion()
             break;
         case soundpretend:
         case soundon:
-            ret = 0x03030303; /* FIXME; need to get this right */
+            /* MacPhoenix: 3.2.1 final, as 7.6.1 has (was 3.0.3, stage 3) */
+            ret = 0x03218000;
             break;
         default:
             gui_abort();
             ret = 0;
     }
 
-    return ret;
+    return num_version(ret);
 }
 
 NumVersion Executor::C_MACEVersion()
 {
     /* #warning MACEVersion not implemented */
     warning_sound_log("");
-    return ROMlib_PretendSound == soundpretend ? 0x2000000 : 0;
+    return num_version(ROMlib_PretendSound == soundpretend ? 0x2000000 : 0);
 }
 
 /* MacPhoenix: the Sound Input Manager is there (Gestalt 'snd ' bit 3: Apple's
@@ -91,7 +102,7 @@ enum
 NumVersion Executor::C_SPBVersion()
 {
     warning_sound_log("");
-    return ROMlib_PretendSound == soundoff ? 0 : 0x1000000;
+    return num_version(ROMlib_PretendSound == soundoff ? 0 : 0x1000000);
 }
 
 OSErr Executor::C_SndStartFilePlay(SndChannelPtr chanp, INTEGER refnum,

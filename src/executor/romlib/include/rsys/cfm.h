@@ -40,7 +40,8 @@ enum
     fragSymbolNotFound = -2802,
     fragLibNotFound = -2804,
     cfragFragmentFormatErr = -2806,
-    fragNoMem = -2809
+    fragNoMem = -2809,
+    fragLibConnErr = -2817 /* cfragLibConnErr: there, not connected to this process */
 };
 
 struct lib_t
@@ -85,6 +86,11 @@ extern char *ROMlib_p2cstr(StringPtr str);
 extern cfir_t *ROMlib_find_cfrg(Handle cfrg, OSType arch, uint8_t type,
                                 ConstStr255Param name);
 
+/* MacPhoenix: the fragment an application with this 'cfrg' 0 (nil: none)
+   and CODE 0 (or not) starts through: 'pwpc', 'm68k' (CFM-68K), or 0 for
+   its CODE 0 launch (classic 68k). */
+extern OSType ROMlib_cfm_launch_arch(Handle cfrg0, bool have_code0);
+
 
 extern ConnectionID ROMlib_new_connection(uint32_t n_sects);
 
@@ -103,6 +109,10 @@ extern uint32_t ROMlib_call_cfm68k(uint32_t tvector, std::initializer_list<uint3
 extern void ROMlib_cfm_terminate();
 extern void ROMlib_cfm_process_exit(uint32_t part_lo, uint32_t part_hi);
 extern void ROMlib_cfm_application_start();
+/* MacPhoenix: a Toolbox manager initialized (InitFonts, InitWindows,
+   InitMenus): from 8.5 the library it is in (FontManager, WindowsLib,
+   MenusLib) is connected to the application, so kFindLib finds it. */
+extern void ROMlib_cfm_toolbox_library(const char *library);
 /* MacPhoenix: addr is in a loaded PowerPC fragment's code (a transition
    vector's first word points there). */
 extern bool ROMlib_cfm_ppc_code(uint32_t addr);

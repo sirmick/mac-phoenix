@@ -25,9 +25,9 @@ Visual verdicts and owner overrides: `tools/executor/scoreboard_notes.json`.
 
 | System | Column | runs | partial | fails |
 |---|---|---|---|---|
-| 7.6.1 | e761 | 72 | 10 | 23 |
-| 7.6.1 | e761ppc | 17 | 3 | 12 |
-| 8.6 | e86 | 67 | 7 | 34 |
+| 7.6.1 | e761 | 77 | 7 | 21 |
+| 7.6.1 | e761ppc | 18 | 3 | 11 |
+| 8.6 | e86 | 70 | 5 | 33 |
 
 Gaps in the references and the method:
 
@@ -48,11 +48,11 @@ Rows with a fault, by owner:
 |---|---|---|
 | 7.6.1 | fix-dev | 5 |
 | 7.6.1 | fix-games | 26 |
-| 7.6.1 | fix-prod | 2 |
+| 7.6.1 | fix-prod | 1 |
 | 7.6.1 | — | 5 |
-| 8.6 | fix-86 | 6 |
+| 8.6 | fix-86 | 5 |
 | 8.6 | fix-dev | 6 |
-| 8.6 | fix-games | 23 |
+| 8.6 | fix-games | 21 |
 | 8.6 | fix-prod | 1 |
 | 8.6 | platinum | 1 |
 | 8.6 | — | 4 |
@@ -61,8 +61,8 @@ Rows with a fault, by owner:
 
 | Disk | App | Code | e761 | e761ppc | q761 | First blocker | Screenshot | Owner |
 |---|---|---|---|---|---|---|---|---|
-| productivity-system-7 | AppleWorks 5.0.3 ƒ:AppleWorks | fat | runs | fails | runs | e761ppc: PowerPC exception 7 at 00000000 (lr 00815470) after unimplemented PowerPC OpenWD | e761ppc/prod/001.png | fix-prod |
-| productivity-system-7 | ClarisWorks 4.0v4 ƒ:ClarisWorks | 68k | fails |  | runs | e761: alert "This copy of ClarisWorks has been modified by another program or virus" at launch (disk writable; Quadra shows the Registration Assistant) | e761/prod/002.png | fix-prod |
+| productivity-system-7 | AppleWorks 5.0.3 ƒ:AppleWorks | fat | runs | runs | runs | (e761ppc: latent: unresolved imports FTActivate, CMListen, CMReset (+103), all Comm Toolbox/LowerText -- not File Manager) | e761ppc/prod/001.png | fix-prod |
+| productivity-system-7 | ClarisWorks 4.0v4 ƒ:ClarisWorks | 68k | runs |  | runs |  | e761/prod/002.png |  |
 | dev-tools-system-7 | MPW:MPW Shell | fat | runs | fails | runs | e761ppc: host signal 11 at guest pc $c105ef84, address (nil) | e761ppc/dev/003.png | fix-dev |
 | dev-tools-system-7 | CodeWarrior Pro 4 ƒ:Metrowerks CodeWarrior:CodeWarrior IDE 3.2 | fat | fails | fails | fails | e761: not in front; unresolved imports CountDragItemFlavors, WaitMouseMoved, SetDragSendProc (+21) | e761/dev/001.png | fix-dev (ref fails too) |
 | dev-tools-system-7 | THINK C 6.0 ƒ:THINK C:THINK Project Manager | 68k | partial |  | runs | e761: Standard File opens in the boot volume's System Folder, not the application's folder (Quadra: THINK C folder) | e761/dev/006.png | fix-dev |
@@ -103,7 +103,7 @@ Rows with a fault, by owner:
 | games | Exile 2.0.1 ƒ:Exile v2.0.1 | 68k | runs |  | runs |  | e761/games/030.png |  |
 | games | Exile II 2.0.3 ƒ:Exile II Editor v2.0.1 | 68k | runs |  | runs |  | e761/games/031.png |  |
 | games | Exile II 2.0.3 ƒ:Exile II v2.0.3 | 68k | runs |  | runs |  | e761/games/032.png |  |
-| games | Exile III 1.0.3 ƒ:Exile III (fat) v1.0.3 | fat | fails | fails | runs | e761: "Fatal error. qPict2.cpp:53; in 'Executor::OSErr Executor::C_GetPictInfo(PicHandle, PictInfo*, int16_t, int16_t, int16_t, int16_t)' unimplemented" (Restart) | e761/games/033.png | fix-games |
+| games | Exile III 1.0.3 ƒ:Exile III (fat) v1.0.3 | fat | runs | fails | runs | e761ppc: not in front; unimplemented PowerPC HGetVol | e761ppc/games/012.png | fix-games |
 | games | Exile III 1.0.3 ƒ:Exile III Editor v1.0.2 | 68k | runs |  | runs |  | e761/games/034.png |  |
 | games | Flashback 1.0 ƒ:Flashback | fat | runs | runs | runs | (e761ppc: latent: unresolved imports GetWDInfo, MIDISignOut, MIDISignIn (+4)) | e761ppc/games/013.png |  |
 | games | Glider PRO 1.1.2 ƒ:Glider PRO™ | fat | runs | runs | runs? | (e761: front process unknown) | e761/games/036.png |  |
@@ -125,7 +125,7 @@ Rows with a fault, by owner:
 | games | Populous II ƒ:MacPopulousII:MacPopulousII (SC) | 68k | runs |  | fails |  | e761/games/052.png |  |
 | games | Prince of Persia 2 ƒ:Prince of Persia 2 | 68k | runs |  | runs |  | e761/games/053.png |  |
 | games | Prince of Persia ƒ:Prince of Persia | 68k | runs |  | runs |  | e761/games/054.png |  |
-| games | SimAnt ƒ:E-Doc 1.0.20 | fat | partial | partial | runs | e761: Standard File opens in the System Folder; the reference opens the app's folder (SimAnt ƒ, 'SimAnt User's Manual') | e761/games/055.png | fix-games |
+| games | SimAnt ƒ:E-Doc 1.0.20 | fat | runs | partial | runs | e761ppc: Standard File's directory popup drawn as a plain box without its arrow, list without icons | e761ppc/games/019.png | fix-games |
 | games | SimAnt ƒ:SimAnt™ Color | 68k | runs |  | fails | (e761: front process unknown) | e761/games/056.png |  |
 | games | SimCity 2000® Collection ƒ:SimCity 2000® 1.2 | fat | runs | runs | runs? | (e761: front process unknown) | e761/games/057.png |  |
 | games | SimCity 2000® Collection ƒ:Urban Renewal Kit | fat | runs | runs | runs |  | e761/games/058.png |  |
@@ -139,7 +139,7 @@ Rows with a fault, by owner:
 | games | Swoop 1.0.2 ƒ:Swoop | 68k | runs |  | runs |  | e761/games/066.png |  |
 | games | The Secret of Monkey Island ƒ:Monkey Island | 68k | runs |  | runs |  | e761/games/067.png |  |
 | games | Warcraft II 1.22 ƒ:Editors:Warcraft II Map Editor | fat | runs | fails | fails | e761ppc: desktop only, empty menu bar; the reference's "You must have the Warcraft II CD in order to run the map editor" alert never appears (PowerPC exception 7) | e761ppc/games/023.png | fix-games (ref fails too) |
-| games | Warcraft II 1.22 ƒ:Editors:Warcraft II Sound Editor | fat | partial | partial | runs | e761: Standard File opens in the System Folder; the reference opens the app's folder (Editors) | e761/games/069.png | fix-games |
+| games | Warcraft II 1.22 ƒ:Editors:Warcraft II Sound Editor | fat | runs | partial | runs | e761ppc: Standard File's directory popup drawn without its arrow, list without icons | e761ppc/games/024.png | fix-games |
 | games | Warcraft II 1.22 ƒ:Warcraft II v.1.22 | 68k | runs |  | runs |  | e761/games/070.png |  |
 | games | Wolfenstein 3D 1.0.2 ƒ:Wolfenstein 3D™ | fat | runs | runs | runs? | (e761: front process unknown) | e761/games/071.png |  |
 | games-classic | Airborne! ƒ:Airborne! | 68k | fails |  | runs | e761: Fatal error alert: "init.cpp:147: in 'syn68k_addr_t unhandled_trap(syn68k_addr_t, void*)' Fatal error: unhandled trap 14 at pc 0x3C0AE88 (Format error)" | e761/classic/001.png | fix-games |
@@ -172,14 +172,14 @@ Rows with a fault, by owner:
 | Disk | App | Code | e86 | g86 | First blocker | Screenshot | Owner |
 |---|---|---|---|---|---|---|---|
 | productivity-system-7 | AppleWorks 5.0.3 ƒ:AppleWorks | fat | runs | runs | (e86: unimplemented PowerPC OpenWD until wash/fix-prod lands) | e86/prod/001.png | platinum |
-| productivity-system-7 | ClarisWorks 4.0v4 ƒ:ClarisWorks | 68k | fails | runs | e86: alert "This copy of ClarisWorks has been modified by another program or virus" at launch, as on 7.6.1 | e86/prod/002.png | fix-prod |
-| dev-tools-system-7 | MPW:MPW Shell | fat | fails | runs | e86: host signal 11 at guest pc $c105ef84, address (nil) | e86/dev/005.png | fix-dev |
-| dev-tools-system-7 | CodeWarrior Pro 4 ƒ:Metrowerks CodeWarrior:CodeWarrior IDE 3.2 | fat | fails | runs | e86: host signal 11 at guest pc $c105eee0, address 0x30 | e86/dev/001.png | fix-dev |
-| dev-tools-system-7 | THINK C 6.0 ƒ:THINK C:THINK Project Manager | 68k | fails | runs | e86: TranslationDispatch selector $24: no size in the selector, session stopped (called from $555f6) | e86/dev/006.png | fix-dev |
-| dev-tools-system-7 | Languages ƒ:THINK Pascal 4.5d4 ƒ:Think Pascal:THINK Pascal 4.5d4:THINK Pascal 4.5 | 68k | fails | runs | e86: TranslationDispatch selector $24: no size in the selector, session stopped (called from $555f6) | e86/dev/004.png | fix-dev |
-| dev-tools-system-7 | Languages ƒ:HyperCard 2.4.1 ƒ:HyperCard | 68k | fails | runs | e86: fatal: failed assertion `unknown_1 == 16' (AE_hdlr.cpp:165) | e86/dev/002.png | fix-86 |
+| productivity-system-7 | ClarisWorks 4.0v4 ƒ:ClarisWorks | 68k | runs | runs |  | e86/prod/002.png | fix-prod |
+| dev-tools-system-7 | MPW:MPW Shell | fat | fails | runs | e86: host signal 11 at guest pc $c0f28844, address (nil) | e86/dev/005.png | fix-dev |
+| dev-tools-system-7 | CodeWarrior Pro 4 ƒ:Metrowerks CodeWarrior:CodeWarrior IDE 3.2 | fat | fails | runs | e86: host signal 11 at guest pc $c0f287a0, address 0x30 | e86/dev/001.png | fix-dev |
+| dev-tools-system-7 | THINK C 6.0 ƒ:THINK C:THINK Project Manager | 68k | fails | runs | e86: TranslationDispatch selector $20: no size in the selector, session stopped (called from $56f9e) | e86/dev/006.png | fix-dev |
+| dev-tools-system-7 | Languages ƒ:THINK Pascal 4.5d4 ƒ:Think Pascal:THINK Pascal 4.5d4:THINK Pascal 4.5 | 68k | fails | runs | e86: TranslationDispatch selector $20: no size in the selector, session stopped (called from $56f9e) | e86/dev/004.png | fix-dev |
+| dev-tools-system-7 | Languages ƒ:HyperCard 2.4.1 ƒ:HyperCard | 68k | fails | runs | e86: Pack8 selector $830: no size in the selector, session stopped (called from $3c06e74) | e86/dev/002.png | fix-86 |
 | dev-tools-system-7 | Languages ƒ:MacPerl 5.2.0r4 ƒ:MacPerl | fat | runs | runs | (e86: unimplemented PowerPC equalstring) | e86/dev/003.png |  |
-| dev-tools-system-7 | Tools ƒ:ResEdit 2.1.3 ƒ:ResEdit 2.1.3:ResEdit | 68k | fails | runs | e86: ResourceDispatch selector $7: no size in the selector, session stopped (called from $3ba8b76) | e86/dev/008.png | fix-86 |
+| dev-tools-system-7 | Tools ƒ:ResEdit 2.1.3 ƒ:ResEdit 2.1.3:ResEdit | 68k | runs | runs | (e86: unimplemented ResourceDispatch selector $7 (D0 $00000007, 0 parameter bytes): answered paramErr) | e86/dev/008.png |  |
 | dev-tools-system-7 | Tools ƒ:BBEdit Lite 4.1 ƒ:BBEdit Lite 4.1 | fat | fails | runs | e86: alert "There is not enough memory to complete this command" at launch (G3: untitled window) | e86/dev/007.png | fix-dev |
 | dev-tools-macos-8-9 | MPW:MPW Shell | fat | fails | runs | e86: PowerPC exception 7 at 00000000 (lr 034c2f54) | e86/dev89/002.png | fix-dev |
 | dev-tools-macos-8-9 | Languages ƒ:MacPerl 5.6.1r2 ƒ:MacPerl | ppc | runs | runs | (e86: unimplemented PowerPC ICStart) | e86/dev89/001.png |  |
@@ -238,7 +238,7 @@ Rows with a fault, by owner:
 | games | Populous II ƒ:MacPopulousII:MacPopulousII (SC) | 68k | runs | fails |  | e86/games/052.png |  |
 | games | Prince of Persia 2 ƒ:Prince of Persia 2 | 68k | fails | fails | e86: alert: "Error = 10351 in OpenMohawkRsrcVerify()." | e86/games/053.png | fix-86 (ref fails too) |
 | games | Prince of Persia ƒ:Prince of Persia | 68k | runs | fails |  | e86/games/054.png |  |
-| games | SimAnt ƒ:E-Doc 1.0.20 | fat | partial | runs | e86: Open dialog starts in the System Folder instead of the SimAnt folder, so 'SimAnt User's Manual' isn't listed | e86/games/055.png | fix-games |
+| games | SimAnt ƒ:E-Doc 1.0.20 | fat | runs | runs |  | e86/games/055.png |  |
 | games | SimAnt ƒ:SimAnt™ Color | 68k | runs | runs? | (e86: asks for 16 colours: Executor's screen is 8-bit; the Quadra at 256 colours asks the same) | e86/games/056.png |  |
 | games | SimCity 2000® Collection ƒ:SimCity 2000® 1.2 | fat | runs | fails | (e86: front process unknown) | e86/games/057.png |  |
 | games | SimCity 2000® Collection ƒ:Urban Renewal Kit | fat | runs | fails |  | e86/games/058.png |  |
@@ -251,7 +251,7 @@ Rows with a fault, by owner:
 | games | Spectre 1.1 ƒ:Spectre 1.1 | 68k | runs | fails |  | e86/games/065.png |  |
 | games | Swoop 1.0.2 ƒ:Swoop | 68k | runs | fails |  | e86/games/066.png |  |
 | games | The Secret of Monkey Island ƒ:Monkey Island | 68k | runs | fails |  | e86/games/067.png |  |
-| games | Warcraft II 1.22 ƒ:Editors:Warcraft II Map Editor | fat | fails | runs | e86: just the desktop, no app (PowerPC exception 7 after unimplemented UpperText); reference shows "You must have the WarCraft II CD in order to run the map editor" | e86/games/068.png | fix-games |
+| games | Warcraft II 1.22 ƒ:Editors:Warcraft II Map Editor | fat | fails | runs | e86: just the desktop, no app (PowerPC exception 7 loop after several more unimplemented PowerPC calls); reference shows "You must have the WarCraft II CD in order to run the map editor" | e86/games/068.png | fix-games |
 | games | Warcraft II 1.22 ƒ:Editors:Warcraft II Sound Editor | fat | runs | fails |  | e86/games/069.png |  |
 | games | Warcraft II 1.22 ƒ:Warcraft II v.1.22 | 68k | runs | fails |  | e86/games/070.png |  |
 | games | Wolfenstein 3D 1.0.2 ƒ:Wolfenstein 3D™ | fat | runs | fails | (e86: front process unknown) | e86/games/071.png |  |

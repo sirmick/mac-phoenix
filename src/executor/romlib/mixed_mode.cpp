@@ -34,6 +34,8 @@ UniversalProcPtr Executor::C_NewRoutineDescriptor(
         RoutineDescriptor *p;
 
         p = (RoutineDescriptor *)NewPtr(sizeof *p);
+        if(!p)
+            return nullptr;
         p->goMixedModeTrap = MIXED_MODE_TRAP;
         ROMlib_destroy_blocks((syn68k_addr_t)
                                   US_TO_SYN68K(&p->goMixedModeTrap),
@@ -210,6 +212,17 @@ static uint32_t mode_switch(UniversalProcPtr theProcPtr, ProcInfoType procinfo,
                             ISAType fromISA, uint32_t cfm68kArgs)
 {
     // Step 1/5: Figure out what routine we are calling
+
+    if(!theProcPtr)
+    {
+        /* MacPhoenix: a nil UniversalProcPtr, usually one a caller never
+           checked after NewRoutineDescriptor/NewFatRoutineDescriptor
+           answered nil under heap pressure. A real Mac would fault the
+           same way the caller does on real hardware, but Executor's
+           fault would take the whole host process down with it. */
+        fprintf(stderr, "[Executor] Mixed Mode: CallUniversalProc of a nil UniversalProcPtr\n");
+        return 0;
+    }
 
     RoutineRecord m68kroutine = {};
     const RoutineRecord* routine = nullptr;

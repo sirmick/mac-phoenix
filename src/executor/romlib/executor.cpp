@@ -44,7 +44,7 @@
 using namespace Executor;
 
 
-static void SFSaveDisk_Update(INTEGER vrefnum, Str255 filename)
+void Executor::ROMlib_SFSaveDisk_update(INTEGER vrefnum, Str255 filename)
 {
     ParamBlockRec pbr;
     Str255 save_name;
@@ -139,7 +139,7 @@ void Executor::executor_main()
 
     wdpb.ioVRefNum = hpb.hFileInfo.ioVRefNum;
     wdpb.ioWDDirID = hpb.hFileInfo.ioFlParID;
-    SFSaveDisk_Update(hpb.hFileInfo.ioVRefNum, fName);
+    ROMlib_SFSaveDisk_update(hpb.hFileInfo.ioVRefNum, fName);
     LM(CurDirStore) = hpb.hFileInfo.ioFlParID;
     wdpb.ioWDProcID = "Xctr"_4;
     wdpb.ioNamePtr = 0;

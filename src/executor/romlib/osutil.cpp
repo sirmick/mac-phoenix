@@ -15,6 +15,7 @@
 #include <TimeMgr.h>
 #include <MenuMgr.h>
 #include <ToolboxEvent.h>
+#include <IntlUtil.h>
 
 #include <mman/mman.h>
 #include <base/trapglue.h>
@@ -321,6 +322,18 @@ void Executor::ROMlib_UprString(StringPtr s, Boolean diac, INTEGER len)
 void Executor::UpperString(StringPtr s, Boolean diac)
 {
     ROMlib_UprString(s + 1, diac, (INTEGER)(unsigned char)s[0]);
+}
+
+/* MacPhoenix: a raw-buffer uppercase, the PowerPC InterfaceLib export apps
+   like Warcraft II's map editor call directly (no 68k trap for it in the
+   test corpus). `script' picked case-mapping rules per-script on a real
+   Mac; Executor's case-folding tables only cover MacRoman, so it's
+   ignored here the same way the rest of Executor assumes MacRoman text. */
+void Executor::UpperText(Ptr textPtr, LONGINT length, INTEGER script)
+{
+    if(length > 0)
+        ROMlib_UprString((StringPtr)textPtr, false,
+                         (INTEGER)(length > 32767 ? 32767 : length));
 }
 
 void Executor::GetDateTime(GUEST<ULONGINT> *mactimepointer)
@@ -630,7 +643,12 @@ static void setdefaults()
     LM(SPKbd) = 0x63;
     LM(SPVolCtl) = 3;
     LM(SPClikCaret) = 0x88;
-    LM(SPMisc2) = 0x4C;
+    /* MacPhoenix: Inside Macintosh's $4C, and bit 7, the colour desktop
+       pattern ('ppat' 16): a G3 with 8.6 has $CC (the sys probe's
+       lowmem.020a) and, its PRAM zapped, draws 8.6's colour pattern; with
+       the bit clear Executor drew the black-and-white 'PAT ' 16, a
+       checkerboard on 8.6. */
+    LM(SPMisc2) = 0xCC;
 }
 
 static OSErr openparam(GUEST<INTEGER> *rnp)

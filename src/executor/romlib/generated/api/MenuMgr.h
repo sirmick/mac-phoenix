@@ -10,6 +10,7 @@
  *                         UInt8, Ptr, UInt16                                *
  *     QuickDraw.h         RGBColor, Style                                   *
  *     DriverServices.h    OSStatus                                          *
+ *     FileMgr.h           TextEncoding                                      *
  *                                                                           *
  *                                                                           *
  *****************************************************************************/
@@ -23,6 +24,7 @@
 #include "ExMacTypes.h"
 #include "QuickDraw.h"
 #include "DriverServices.h"
+#include "FileMgr.h"
 
 #define MODULE_NAME MenuMgr
 #include <base/api-module.h>
@@ -277,9 +279,14 @@ void C_GetItemIcon(MenuHandle mh, INTEGER item, GUEST<INTEGER> *iconp);PASCAL_TR
 void C_SetItemStyle(MenuHandle mh, INTEGER item, INTEGER style);PASCAL_TRAP(SetItemStyle, 0xA942);
 
 
-// MacPhoenix: the style is a Style, a byte: 8.6 writes one byte there
-// (tests/guest/difftest menu); a word overwrote the caller's next byte.
-void C_GetItemStyle(MenuHandle mh, INTEGER item, Style *stylep);PASCAL_TRAP(GetItemStyle, 0xA941);
+// MacPhoenix: through the trap the style is Pascal's VAR Style, a word
+// with the style in its low byte (the Quadra 650 ROM, tests/guest/itemstyle;
+// AppleWorks 5's command keys read it so). InterfaceLib's export, below,
+// writes one byte, as 8.6's does (tests/guest/difftest menu).
+void C_GetItemStyle(MenuHandle mh, INTEGER item, Style *stylep);PASCAL_TRAP_UNEXPORTED(GetItemStyle, 0xA941);
+
+
+void glue_GetItemStyle(MenuHandle mh, INTEGER item, Style *stylep);LIBRARY_FUNCTION(InterfaceLib, GetItemStyle, glue_GetItemStyle);
 
 
 INTEGER C_CountMItems(MenuHandle mh);PASCAL_TRAP(CountMItems, 0xA950);
@@ -451,6 +458,18 @@ OSErr C_SetMenuItemModifiers(MenuRef inMenu, SInt16 inItem, UInt8 inModifiers);L
 
 
 OSErr C_GetMenuItemModifiers(MenuRef inMenu, SInt16 inItem, UInt8 *outModifiers);LIBRARY_FUNCTION(AppearanceLib, GetMenuItemModifiers, C_GetMenuItemModifiers);
+
+
+OSErr C_SetMenuItemHierarchicalID(MenuRef inMenu, SInt16 inItem, SInt16 inHierID);LIBRARY_FUNCTION(AppearanceLib, SetMenuItemHierarchicalID, C_SetMenuItemHierarchicalID);
+
+
+OSErr C_GetMenuItemHierarchicalID(MenuRef inMenu, SInt16 inItem, GUEST<SInt16> *outHierID);LIBRARY_FUNCTION(AppearanceLib, GetMenuItemHierarchicalID, C_GetMenuItemHierarchicalID);
+
+
+OSErr C_SetMenuItemTextEncoding(MenuRef inMenu, SInt16 inItem, TextEncoding inScriptID);LIBRARY_FUNCTION(AppearanceLib, SetMenuItemTextEncoding, C_SetMenuItemTextEncoding);
+
+
+OSErr C_GetMenuItemTextEncoding(MenuRef inMenu, SInt16 inItem, GUEST<TextEncoding> *outScriptID);LIBRARY_FUNCTION(AppearanceLib, GetMenuItemTextEncoding, C_GetMenuItemTextEncoding);
 
 
 void C_InvalidateAllMenuSizes();LIBRARY_FUNCTION(MenusLib, InvalidateAllMenuSizes, C_InvalidateAllMenuSizes);

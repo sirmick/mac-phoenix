@@ -3,3 +3,5 @@
 text.text.data	DeleteMenuItem: 8.6 shifts a 0 into enableFlags' top bit, Executor a 1 (check 7.x before changing)
 clock.IsMenuBarClockEnabled	8.6's image has the menu bar clock on; Executor draws none and answers off
 clock.GetMenuBarClockConfig.data	8.6's clock configuration (the user's); Executor keeps zeros until set
+dirty.CheckItem	8.6's MDEF makes the item with an icon number taller (66), Executor's not
+dirty.DisableItem	as dirty.CheckItem

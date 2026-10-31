@@ -93,8 +93,12 @@ static gestaltentry_t gtable[] = {
     /*  gestaltScriptMgrVersion,	UNKNOWN,*/ /* should return gestaltUnknownErr */
     /*  gestaltSerialAttr,		0,	*/
     {
-        /* MacPhoenix: + gestaltSoundIOMgrPresent (bit 3); no input device. */
-        gestaltSoundAttr, 0x0C08,
+        /* MacPhoenix: + gestaltSoundIOMgrPresent (bit 3); no input device.
+           Stereo output, stereo mixing and 16-bit data (bits 0, 1, 12): the
+           sound sent out is 48 kHz 16-bit stereo, and Sound Manager 3's
+           games check them ("out-of-date Sound Manager": Afterlife, OIDS).
+           The Quadra 650 on 7.6.1 answers $1C7F, input bits included. */
+        gestaltSoundAttr, 0x1C0B,
     },
     {
         gestaltSpeechAttr, 0x0001
@@ -341,11 +345,14 @@ static gestaltentry_t since_table[] = {
     /* Window Manager 2.0 (wind/windMgr8.cpp); not yet bit 2, floating
        windows as a layer of their own (8.6: 5) */
     { "wind"_4, 0x00000001 },
+    /* QuickDraw Text 1.0 (gestaltQDTextVersion, 8.5's): its FontManager
+       library is Executor's (quickdraw/fontmgr85.cpp) */
+    { "qdtx"_4, 0x00000100 },
 };
 static const uint16_t since_versions[std::size(since_table)] = {
     0x0800, 0x0800, 0x0850, 0x0800, 0x0800,
     0x0850, 0x0800, 0x0800, 0x0800,
-    0x0850,
+    0x0850, 0x0850,
 };
 
 static gestaltentry_t *
@@ -387,7 +394,12 @@ find_selector_in_table(OSType selector, gestaltentry_t table[],
 
     if(!retval && table == gtable)
         for(size_t j = 0; j < std::size(since_table); j++)
-            if(since_table[j].selector == selector && system_version >= since_versions[j])
+            if(since_table[j].selector == selector
+               && (system_version >= since_versions[j]
+                   /* CFM with PowerPC code on 7.x (--executor-ppc), as on a
+                      Power Mac (Mac OS Easy Open registers its PowerPC
+                      library with it) */
+                   || (selector == "cfrg"_4 && ROMlib_prefer_ppc)))
                 retval = &since_table[j];
 
     return retval;
