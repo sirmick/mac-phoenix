@@ -8,11 +8,16 @@
 //                    OPFS (disk-cache/) and revalidated on later visits
 //                    with its ETag, so it downloads once
 //   ?system=NAME     run on that image's System and Finder
+//   ?lazy=1|0        read ?disk= images as they are needed, or download them
+//                    whole (default: lazily from LAZY_MIN up, when the
+//                    server takes Range requests and sends them uncompressed)
 //   ?ppc             run fat applications' PowerPC code (the PowerPC box;
 //                    PowerPC-only applications always run theirs)
 // library.json beside the page (optional) offers more disks: [{ title,
 // url, note }]; the ones picked are remembered (localStorage) and loaded
 // like ?disk=.
+// Served by tools/web/server, signed in (api/me): the overlays and
+// Executor's own volume are synced with the account (sync.js).
 // Outside a secure context (plain http to another host) there is no OPFS
 // and no AudioWorklet: uploads last the visit, sound is off.
 //
@@ -87,6 +92,9 @@ async function remove(name) {
         await (await uploads()).removeEntry(name).catch(() => {});
 }
 
+// A large ?disk= is not downloaded first: the Worker reads it as Executor
+// needs it (overlay.js: RemoteImage), and keeps what it read. Smaller ones,
+// or compressed ones (the server's NAME.gz):
 // ?disk=URL: downloaded once into OPFS (disk-cache/: the image and a .json
 // with its URL and ETag), revalidated on later visits (304: the copy is
 // current), mounted from there: disk-backed, never whole in memory. If the
@@ -109,6 +117,14 @@ async function readJson(dir, name) {
     }
 }
 
+const LAZY_MIN = 32 << 20;
+
+// A disk's identity, for its overlay's key (overlay.js): the server's
+// content id (X-Image-Id, tools/web/server), name -> id; and the key its
+// overlay had before ids (name, size, download time), to move it from.
+const imageIds = {}, legacyKeys = {};
+const plainKey = (name, size, time) => `${name}-${size}-${time}`.replace(/[^\w.-]/g, '_');
+
 async function fetchDisk(url) {
     const absolute = new URL(url, location.href).href;
     const name = decodeURIComponent(new URL(absolute).pathname.split('/').pop());
@@ -119,11 +135,36 @@ async function fetchDisk(url) {
     const dir = opfs ? await diskCache() : null;
     const key = dir ? await cacheKey(absolute) : null;
     const meta = dir ? await readJson(dir, `${key}.json`) : null;
-    // Its OPFS time kept: an image's overlay (overlay.js) is for this version.
+    // Its OPFS time kept: without a content id, an image's overlay
+    // (overlay.js) is for this version.
     const cached = async () => {
         const f = await (await dir.getFileHandle(`${key}.img`)).getFile();
+        const m = await readJson(dir, `${key}.json`);
+        if (m && m.id)
+            imageIds[name] = m.id;
+        legacyKeys[name] = plainKey(name, f.size, f.lastModified);
         return new File([f], name, { lastModified: f.lastModified });
     };
+
+    // A Range request for its first byte: a 206 says the server (and any
+    // proxy) gives ranges, and the size.
+    const lazy = params.get('lazy');
+    if (lazy !== '0') {
+        const abort = new AbortController();
+        let probe = null;
+        try {
+            probe = await fetch(absolute, { cache: 'no-store', headers: { Range: 'bytes=0-0' }, signal: abort.signal });
+        } catch { }
+        const range = probe && probe.status === 206 && /^bytes 0-0\/(\d+)$/.exec(probe.headers.get('Content-Range') || '');
+        abort.abort();
+        const size = range && Number(range[1]);
+        if (size && (lazy === '1' || size >= LAZY_MIN)) {
+            if (probe.headers.get('X-Image-Id'))
+                imageIds[name] = probe.headers.get('X-Image-Id');
+            return { name, size, lastModified: Date.parse(probe.headers.get('Last-Modified')) || 0,
+                     remote: { url: absolute, etag: probe.headers.get('ETag'), key: key || await cacheKey(absolute) } };
+        }
+    }
 
     let res;
     try {
@@ -151,6 +192,8 @@ async function fetchDisk(url) {
             chunks.push(r.value);
             progress(got += r.value.length, total);
         }
+        if (res.headers.get('X-Image-Id'))
+            imageIds[name] = res.headers.get('X-Image-Id');
         return new File(chunks, name);
     }
     // Into OPFS as it arrives; the file is replaced only when complete
@@ -168,7 +211,8 @@ async function fetchDisk(url) {
     }
     const w = await (await dir.getFileHandle(`${key}.json`, { create: true })).createWritable();
     await w.write(JSON.stringify({ url: absolute, name, etag: res.headers.get('ETag'),
-                                   lastModified: res.headers.get('Last-Modified'), size: got }));
+                                   lastModified: res.headers.get('Last-Modified'), size: got,
+                                   id: res.headers.get('X-Image-Id') }));
     await w.close();
     return cached();
 }
@@ -240,7 +284,8 @@ async function fetchDisks() {
 // Disk images are writable through an overlay in OPFS (overlay.js), per
 // exact version of the image (the Worker computes the same key).
 function imageKey(f) {
-    return `${f.name}-${f.size}-${f.lastModified}`.replace(/[^\w.-]/g, '_');
+    return imageIds[f.name] ? `${f.name}-${imageIds[f.name]}`.replace(/[^\w.-]/g, '_')
+                            : plainKey(f.name, f.size, f.lastModified);
 }
 let imageState = {};                // name -> { modified, writable }, from the Worker
 
@@ -307,6 +352,11 @@ async function revert(f) {
         }
     }
     delete imageState[f.name];
+    // Signed in: the account forgets them too, at the start (sync.js), or
+    // at the next one it reaches the server.
+    if (account)
+        await (await overlays.getDirectoryHandle(imageKey(f), { create: true }))
+            .getFileHandle('revert', { create: true });
     start();
 }
 
@@ -335,7 +385,15 @@ document.getElementById('reset').addEventListener('click', async () => {
     worker = null;
     if (opfs) {
         const volumes = await (await uploads()).getDirectoryHandle('volumes', { create: true });
-        await volumes.removeEntry(volumeKey(await storedFiles()), { recursive: true }).catch(() => {});
+        const key = volumeKey(await storedFiles());
+        await volumes.removeEntry(key, { recursive: true }).catch(() => {});
+        // The same for Reset as for Revert.
+        if (account) {
+            const w = await (await (await volumes.getDirectoryHandle(key, { create: true }))
+                .getFileHandle('sync.json', { create: true })).createWritable();
+            await w.write(JSON.stringify({ reset: true }));
+            await w.close();
+        }
     }
     start();
 });
@@ -368,6 +426,31 @@ function showSystems(files) {
     systemSelect.replaceChildren(new Option("Executor's own", ''),
         ...files.filter((f) => IMAGE.test(f.name)).map((f) => new Option(f.name, f.name)));
     systemSelect.value = [...systemSelect.options].some((o) => o.value === want) ? want : '';
+}
+
+// ---- the account (tools/web/server): { name, owner }, or null ----
+let account = null;
+const accountKnown = (async () => {
+    if (!opfs)
+        return;
+    try {
+        const res = await fetch('api/me', { cache: 'no-store' });
+        account = res.ok ? await res.json() : null;
+    } catch { }
+    const a = document.getElementById('account');
+    if (account) {
+        a.textContent = account.name;
+        a.hidden = false;
+    }
+})();
+
+// Sync (sync.js) found changes here and on the account: which to keep.
+function conflictText(m) {
+    const why = m.why === 'before'
+        ? `${m.what} has changes made in this browser before you signed in, and your account has its own.`
+        : `${m.what} was changed in another browser too, since this one last synced.`;
+    return `${why}\n\nOK: keep this browser's (it replaces the account's).\n`
+        + "Cancel: take the account's (this browser's changes are dropped).";
 }
 
 // ---- the Worker ----
@@ -407,6 +490,7 @@ async function start() {
     // The Worker loads the module while the disks still download.
     worker = new Worker('worker.js');
     await disksFetched;
+    await accountKnown;
     const files = await storedFiles();
     showFiles(files);
     showSystems(files);
@@ -425,7 +509,9 @@ async function start() {
     const offscreen = canvas.transferControlToOffscreen();
     worker.postMessage({ type: 'start', canvas: offscreen, width, height, scale, files,
                          system: systemSelect.value, ppc: ppcBox.checked,
-                         volumeKey: volumeKey(files) }, [offscreen]);
+                         volumeKey: volumeKey(files), sync: !!account, relay: !!account,
+                         ids: imageIds, legacyKeys },
+                       [offscreen]);
     worker.onmessage = (e) => {
         if (mine !== generation)
             return;
@@ -451,6 +537,12 @@ async function start() {
             pending.delete(m.id);
             if (resolve)
                 resolve(m.result);
+        } else if (m.type === 'notice') {
+            status.textContent = m.text;
+        } else if (m.type === 'conflict') {
+            worker.postMessage({ type: 'resolve', id: m.id, keep: confirm(conflictText(m)) ? 'mine' : 'account' });
+        } else if (m.type === 'restart') {
+            start();
         } else if (m.type === 'exit') {
             status.textContent = `Executor exited (${m.code})`;
         }

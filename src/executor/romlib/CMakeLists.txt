@@ -636,11 +636,15 @@ set(sources ${base_sources} ${mman_sources} ${vdriver_sources}
     ${include_sources})
 
 # MacPhoenix: the host network edge (include/rsys/hostnet.h): host sockets,
-# or none (MacTCP and Open Transport answer with errors; no host threads).
-set(EXECUTOR_NET posix CACHE STRING "Executor's network backend: posix | none")
-set_property(CACHE EXECUTOR_NET PROPERTY STRINGS posix none)
-if(NOT EXECUTOR_NET MATCHES "^(posix|none)$")
-    message(FATAL_ERROR "EXECUTOR_NET must be posix or none, not ${EXECUTOR_NET}")
+# none (MacTCP and Open Transport answer with errors; no host threads), or
+# wasm (the tab's sockets, over tools/web/server's relay).
+set(EXECUTOR_NET posix CACHE STRING "Executor's network backend: posix | none | wasm")
+set_property(CACHE EXECUTOR_NET PROPERTY STRINGS posix none wasm)
+if(NOT EXECUTOR_NET MATCHES "^(posix|none|wasm)$")
+    message(FATAL_ERROR "EXECUTOR_NET must be posix, none or wasm, not ${EXECUTOR_NET}")
+endif()
+if(EXECUTOR_NET STREQUAL "wasm" AND NOT EMSCRIPTEN)
+    message(FATAL_ERROR "EXECUTOR_NET=wasm is for the WebAssembly build")
 endif()
 
 add_library(romlib ${sources}

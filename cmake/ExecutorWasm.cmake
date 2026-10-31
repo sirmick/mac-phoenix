@@ -7,13 +7,13 @@
 #
 # One source tree, two builds: this is the same romlib, CPU facade and
 # MAME cores as the native build, with the host edges' wasm sides
-# (cpu/host/wasm, EXECUTOR_NET=none) and mame-ppc's C back-end only. None
+# (cpu/host/wasm, EXECUTOR_NET=wasm: the relay) and mame-ppc's C back-end only. None
 # of mac-phoenix's parent (Qt, the web server, WebRTC), net-bridge, the
 # ROM machines, UAE or asmjit.
 # =============================================================================
 
 set(BUILD_EXECUTOR ON)
-set(EXECUTOR_NET none CACHE STRING "Executor's network backend: posix | none")
+set(EXECUTOR_NET wasm CACHE STRING "Executor's network backend: posix | none | wasm")
 
 # No hardening flags here; the native build's helper is a no-op.
 function(phoenix_exempt_from_hardening target)

@@ -311,6 +311,29 @@ Not yet: floating windows (WDEF 66/67, 124), the rounded window, the
 boxes drawn pressed, the collapse box (it drags), DrawThemeWindowFrame
 itself, the window part regions (Window Manager 2.0's GetWindowRegion).
 
+Platinum menus (2026-10-31, `appr` draw*.menu*, and the Finder's File,
+Edit, View and Special menus on the G3). 8.x's MBDF 0 is a 68k loader for
+MBDF 63, PowerPC code that passes its arguments on to MenusLib's
+StandardMBDF; Executor exports that as its own MBDF 0 (as StandardMDEF is
+its MDEF 0), so AppleWorks 5.0.3 got its menu titles. AppearanceLib's
+menu calls draw platinum (appearance_draw.cpp: the bar with its rounded,
+shaded top corners, selected bar and titles in the default appearance's
+#6666cc/#333399/#000088, menu backgrounds with their outline and #222
+shadow and its region, items, hierarchical arrows, separators): every
+menu key of the probe is 8.6's pixel for pixel. On 8.x Executor's MBDF
+and MDEF 0 draw through them, laid out as 8.6's: titles StringWidth + 13
+(the Apple menu 27, the System's colour apple, icon family -16386), a
+menu's outline under its title's left and a submenu 4 in from its item's
+right, items 16 high and separators 6, the mark at 2, the text at 21, the
+command key's mark 33 from the right, a menu as wide as text + 31 (+ 63
+with a command key or submenu); titles and items black, #777 disabled,
+white selected. The Finder's four menus have 8.6's geometry exactly; the
+glyphs are 1 pixel to the right (the scaler, as the window titles). A
+SetMenuItemKeyGlyph glyph is drawn after the ⌘ as its character in the
+System's .Keyboard font (FOND 98; the Finder's Move To Trash: ⌘⌫). Not
+yet: SetMenuItemModifiers' marks (kept, not drawn), scroll arrows in a
+long menu, popup menus' own look, the menu bar clock.
+
 The titles over dots (2026-10-31): 8.6's ToolboxUtils saves a colour
 port's old-style background pattern from the PixPat's `patData` handle,
 which Executor left empty, and erased every control and group title with

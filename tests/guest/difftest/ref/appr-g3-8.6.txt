@@ -1,4 +1,4 @@
-# probe 8b5d8ec94f433fca1f92ba23a7ac163d0449403db0e1b40c1028efbc68a60e21
+# probe 4b65e9fd81067e206c38ab933ed2b2bd92e12996cb632e968774c974f4ed392d
 == gestalt
 gestalt.appr: 0 00000001
 gestalt.apvr: 0 00000110
@@ -1082,6 +1082,16 @@ draw32.menubg.1: 120x60 depth 32 crc ccfea453
 draw32.menubg.2: 120x60 depth 32 crc ccfea453
 draw32.menubg.3: 120x60 depth 32 crc fd7490cc
 draw32.menuseparator: 120x60 depth 32 crc a91b4691
+draw32.menubar.selected: 120x60 depth 32 crc a9ba78f6
+draw32.menutitle.active: 120x60 depth 32 crc 0fec211d
+draw32.menuitem.active: 120x60 depth 32 crc 16a1216d
+draw32.menuitem.hier.active: 120x60 depth 32 crc f1bd4873
+draw32.menutitle.selected: 120x60 depth 32 crc 7ce8b8f9
+draw32.menuitem.selected: 120x60 depth 32 crc ecbea006
+draw32.menuitem.hier.selected: 120x60 depth 32 crc 62836166
+draw32.menutitle.disabled: 120x60 depth 32 crc 0fec211d
+draw32.menuitem.disabled: 120x60 depth 32 crc 16a1216d
+draw32.menuitem.hier.disabled: 120x60 depth 32 crc cb9e4b8b
 draw32.windowframe.0: 120x60 depth 32 crc fd7490cc
 draw32.windowframe.1: 120x60 depth 32 crc fd7490cc
 draw32.windowframe.2: 120x60 depth 32 crc fd7490cc
@@ -1215,6 +1225,16 @@ draw8.menubg.1: 120x60 depth 8 crc 575061af
 draw8.menubg.2: 120x60 depth 8 crc 575061af
 draw8.menubg.3: 120x60 depth 8 crc 06154412
 draw8.menuseparator: 120x60 depth 8 crc 4046675e
+draw8.menubar.selected: 120x60 depth 8 crc 66596ad0
+draw8.menutitle.active: 120x60 depth 8 crc b5bb4c5c
+draw8.menuitem.active: 120x60 depth 8 crc 30617d2b
+draw8.menuitem.hier.active: 120x60 depth 8 crc 131c4361
+draw8.menutitle.selected: 120x60 depth 8 crc 514df3b1
+draw8.menuitem.selected: 120x60 depth 8 crc 417e16fb
+draw8.menuitem.hier.selected: 120x60 depth 8 crc e47a839c
+draw8.menutitle.disabled: 120x60 depth 8 crc b5bb4c5c
+draw8.menuitem.disabled: 120x60 depth 8 crc 30617d2b
+draw8.menuitem.hier.disabled: 120x60 depth 8 crc 042b8393
 draw8.windowframe.0: 120x60 depth 8 crc 06154412
 draw8.windowframe.1: 120x60 depth 8 crc 06154412
 draw8.windowframe.2: 120x60 depth 8 crc 06154412
