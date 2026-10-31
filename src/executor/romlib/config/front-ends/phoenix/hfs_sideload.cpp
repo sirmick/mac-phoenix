@@ -243,10 +243,12 @@ private:
             uint32_t parent = be32(key + 2);
             Entry e;
             e.name.assign((const char *)key + 7, std::min<int>(key[6], 31));
-            if(data[0] == 1 && room >= 10)       // a folder
+            if(data[0] == 1 && room >= 54)       // a folder
             {
                 e.folder = true;
                 e.id = be32(data + 6);
+                memcpy(e.finfo, data + 22, 16);  // DInfo
+                memcpy(e.fxinfo, data + 38, 16); // DXInfo
             }
             else if(data[0] == 2 && room >= 98)  // a file
             {
@@ -408,12 +410,27 @@ void copyFile(Source& v, const Entry& e, const fs::path& folder)
     write(folder / ("%" + leaf.string()), appledouble(e, v.rsrcFork(e)), mod);
 }
 
+/* A folder's Finder info (DInfo, DXInfo) where Executor's local volume
+   keeps it: ".finf/NAME" beside the folder. Its flags matter: Apple Menu
+   Options' Recent Applications folder shows its custom icon ("Icon\r")
+   only with kHasCustomIcon. */
+void writeFolderInfo(const Entry& e, const fs::path& parent)
+{
+    fs::create_directories(parent / ".finf");
+    std::vector<uint8_t> info(e.finfo, e.finfo + 16);
+    info.insert(info.end(), e.fxinfo, e.fxinfo + 16);
+    write(parent / ".finf" / hostName(e.name), info, std::time(nullptr));
+}
+
 void copyTree(Source& v, uint32_t dirID, const fs::path& folder)
 {
     fs::create_directories(folder);
     for(const Entry& e : v.children(dirID))
         if(e.folder)
+        {
             copyTree(v, e.id, folder / hostName(e.name));
+            writeFolderInfo(e, folder);
+        }
         else
             copyFile(v, e, folder);
 }
@@ -455,7 +472,10 @@ bool sideload_system(const std::string& image, const std::string& data_dir,
         if(!want)
             continue;
         if(e.folder)
+        {
             copyTree(v, e.id, sys / hostName(e.name));
+            writeFolderInfo(e, sys);
+        }
         else
         {
             copyFile(v, e, sys);
