@@ -48,6 +48,8 @@ EXTENSION_FOLDERS = {b"Scripting Additions", b"Voices"}
 # the provisioning record: not copied.
 TOP_SKIP = {b"Desktop DB", b"Desktop DF", b"Desktop", b"Snapshot Info"}
 SYSTEM_FOLDER_SKIP = {b"MacsBug"}
+# The Finder's own folders, made empty and invisible as on the source.
+FINDER_FOLDERS = [b"Desktop Folder", b"Trash"]
 # Extensions files that run no code at startup but are found there: CFM's
 # shared libraries (docs/executor/MacOS8-9.md, "Where the libraries come
 # from") and 8.x's AppleScript (the policy names 7.x's "AppleScript™").
@@ -149,6 +151,9 @@ class Writer:
         tmp.write_bytes(macbinary)
         self.run("hcopy", "-m", str(tmp), b":" + path)
 
+    def hide(self, path):
+        self.run("hattrib", "+i", b":" + path)
+
     def bless(self, path):
         self.run("hattrib", "-b", b":" + path)
 
@@ -243,6 +248,9 @@ def main():
         w = Writer(out)
         try:
             w.format(size, label)
+            for path in FINDER_FOLDERS:
+                w.mkdir(path)
+                w.hide(path)
             for path in folders:
                 w.mkdir(path)
             for path, blob in blobs.items():
