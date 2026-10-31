@@ -82,6 +82,34 @@ struct pending_init
 };
 std::vector<pending_init> pending_inits;
 int prepare_depth;
+/* the library whose absence failed the last preparation (errName) */
+std::string missing_library;
+
+/* The fragments in a Power Mac ROM's library table ('nlib' ROM resources;
+   the G3's, tools/macdecode/libraries.py rom_libraries): always there on a
+   Mac. */
+bool rom_library(const char *name)
+{
+    static const char *const names[] = {
+        "ATAManager", "ATIUtils", "DSLGlobalsLib", "DriverLoaderLib",
+        "DriverServicesLib", "FMSwapFont", "FontDispatch", "InterfaceLib",
+        "InterruptTreeHeathrow", "Math64Lib", "MathLib", "MemoryMgr",
+        "MotherBoardHAL", "NQD", "NameRegistryLib", "PCILib", "PowerMgrLib",
+        "PrivateInterfaceLib", "QuickdrawLib", "QuickdrawText", "Resources",
+        "SoundLib", "StdCLib", "StdText", "VideoServicesGlobals",
+        "VideoServicesLib",
+    };
+    for(const char *n : names)
+        if(!strcasecmp(n, name))
+            return true;
+    return false;
+}
+
+void set_err_name(Str255 errname)
+{
+    errname[0] = std::min<size_t>(missing_library.size(), 255);
+    memcpy(errname + 1, missing_library.data(), errname[0]);
+}
 
 bool same_name(const std::string& a, const std::string& b)
 {
@@ -712,6 +740,79 @@ check_vanddir(INTEGER vref, LONGINT dirid, int descend_count, ConstStr63Param li
     return retval;
 }
 
+/* MacPhoenix: whether a file in the folder (and its folders, descend_count
+   deep) lists the library in its 'cfrg', of whatever type: only looks. A
+   library there that Executor doesn't load (QuickTime™ PowerPlug's
+   QuickTimeLib, QuickTime being off) is one the Mac would have. */
+static bool
+library_in_folder(INTEGER vref, LONGINT dirid, int descend_count, ConstStr63Param library,
+                  OSType arch)
+{
+    CInfoPBRec pb;
+    Str255 s;
+    pb.hFileInfo.ioNamePtr = &s[0];
+    pb.hFileInfo.ioVRefNum = vref;
+    for(INTEGER dirindex = 1;; dirindex++)
+    {
+        pb.hFileInfo.ioFDirIndex = dirindex;
+        pb.hFileInfo.ioDirID = dirid;
+        if(PBGetCatInfo(&pb, false) != noErr)
+            return false;
+        if(pb.hFileInfo.ioFlAttrib & ATTRIB_ISADIR)
+        {
+            if(descend_count > 0
+               && library_in_folder(vref, pb.hFileInfo.ioDirID, descend_count - 1, library, arch))
+                return true;
+            continue;
+        }
+        FSSpec fs;
+        if(FSMakeFSSpec(vref, dirid, s, &fs) != noErr)
+            continue;
+        INTEGER save_map = LM(CurMap);
+        std::vector<INTEGER> open_before;
+        resmaphand map;
+        WALKMAPTOP(map)
+            open_before.push_back((*map)->resfn);
+        EWALKMAP()
+        INTEGER rn = FSpOpenResFile(&fs, fsRdPerm);
+        if(rn == -1)
+            continue;
+        Handle cfrg0 = Get1Resource("cfrg"_4, 0);
+        bool found = cfrg0 && ROMlib_find_cfrg(cfrg0, arch, kImportLibraryCFrag, library);
+        if(std::find(open_before.begin(), open_before.end(), rn) == open_before.end())
+            CloseResFile(rn);
+        LM(CurMap) = save_map;
+        if(found)
+            return true;
+    }
+}
+
+/* ... in Extensions, or in "Extensions (Disabled)", where Executor's
+   extension policy keeps every file that runs code at startup it doesn't
+   list (romlib/extensions.cpp): there on the Mac. */
+static bool
+library_in_extensions(const char *name, OSType arch)
+{
+    Str63 library;
+    library[0] = std::min<size_t>(strlen(name), 63);
+    memcpy(library + 1, name, library[0]);
+    GUEST<INTEGER> vref;
+    GUEST<LONGINT> dirid;
+    if(FindFolder(0, kExtensionFolderType, false, &vref, &dirid) == noErr
+       && library_in_folder(vref, dirid, 1, library, arch))
+        return true;
+    if(FindFolder(0, kSystemFolderType, false, &vref, &dirid) != noErr)
+        return false;
+    Str255 disabled;
+    memcpy(disabled, "\025Extensions (Disabled)", 22);
+    CInfoPBRec pb = {};
+    pb.hFileInfo.ioNamePtr = disabled;
+    pb.hFileInfo.ioVRefNum = vref;
+    pb.hFileInfo.ioDirID = dirid;
+    return PBGetCatInfo(&pb, false) == noErr && (pb.hFileInfo.ioFlAttrib & ATTRIB_ISADIR)
+        && library_in_folder(vref, pb.hFileInfo.ioDirID, 1, library, arch);
+}
+
 /* MacPhoenix: the System file's own fragments. From 8.x the System's
    Toolbox libraries (AppearanceLib, WindowsLib, IconServicesLib, ...) are
    PEF containers in its data fork, listed in its 'cfrg' resources (several,
@@ -1273,6 +1374,29 @@ load_loader_section(const void *addr,
 
     closure_id = begin_closure(n_libs, libs, symbol_names, arch);
 
+    /* MacPhoenix: a library that isn't there fails the preparation, as on
+       a Mac (cfragNoLibraryErr, errName the library), unless it is imported
+       weakly, is one a Power Mac's ROM has (Executor stands in for the
+       ROM) or is in the Extensions folder but not loaded (QuickTime off):
+       what the Mac would have is answered by stubs, as before.
+       InputSprocket USB on a G3 without USBManagerLib is skipped by
+       InputSprocketLib, not run with USB calls that answer noErr and set
+       nothing. */
+    for(i = 0; i < n_libs; ++i)
+        if(!LIB_CID(&closure_id->libs[i]) && !closure_id->libs[i].weak
+           && !rom_library(symbol_names + PEFIL_NAME_OFFSET(&libs[i]))
+           && !library_in_extensions(symbol_names + PEFIL_NAME_OFFSET(&libs[i]), arch))
+        {
+            missing_library = symbol_names + PEFIL_NAME_OFFSET(&libs[i]);
+            std::string who = "?";
+            if(current_origin)
+                who = !current_origin->name.empty() || current_origin->where != kOnDiskFlat
+                    ? current_origin->name : pstr(current_origin->file.name);
+            fprintf(stderr, "CFM: library %s not found: %s not prepared\n",
+                    missing_library.c_str(), who.c_str());
+            return fragLibNotFound;
+        }
+
     for(i = 0, retval = noErr; retval == noErr && i < n_reloc_headers; ++i)
     {
         uint32_t reloc_count;
@@ -1583,7 +1707,10 @@ OSErr Executor::C_GetMemFragment(void *addr, uint32_t length, ConstStr63Param fr
     origin.mem = (Ptr)addr;
     origin.length = length;
     origin.name = pstr(fragname);
-    return prepare_container(addr, origin, connp, mainAddrp);
+    OSErr retval = prepare_container(addr, origin, connp, mainAddrp);
+    if(retval == fragLibNotFound && errname)
+        set_err_name(errname);
+    return retval;
 }
 
 
@@ -1650,6 +1777,8 @@ OSErr Executor::C_GetDiskFragment(FSSpecPtr fsp, LONGINT offset,
         }
         if(retval != noErr && p)
             DisposePtr(p);
+        if(retval == fragLibNotFound && errname)
+            set_err_name(errname);
     }
     loading_system_fragment = saved_system;
     return retval;
