@@ -92,6 +92,25 @@ if(EXECUTOR_SKIA)
     target_compile_definitions(romlib PUBLIC EXECUTOR_HIDPI=1)
     # FreeType inside Skia is its own static copy (FTL), not the system's
     target_link_libraries(romlib ${SKIA_LIB} ${SKIA_FREETYPE_LIB})
+    # FreeType's BUILD.gn always depends on libpng (for color-emoji glyphs)
+    # and that in turn on zlib; skcms is Skia's own color-management
+    # support. The native/arm64 prebuilt's link gets these transitively
+    # from the system zlib/libpng that Qt already needs (CLAUDE.md); the
+    # wasm build has no such thing linked in, so tools/skia/build-wasm.sh's
+    # output needs them listed explicitly (harmless, if present but
+    # unreferenced: a static archive only pulls the object files a symbol
+    # reference actually needs).
+    find_library(SKIA_PNG_LIB png PATHS "${SKIA_DIR}/out/Release-${_skia_target}"
+        NO_DEFAULT_PATH NO_CMAKE_FIND_ROOT_PATH)
+    find_library(SKIA_ZLIB_LIB zlib PATHS "${SKIA_DIR}/out/Release-${_skia_target}"
+        NO_DEFAULT_PATH NO_CMAKE_FIND_ROOT_PATH)
+    find_library(SKIA_SKCMS_LIB skcms PATHS "${SKIA_DIR}/out/Release-${_skia_target}"
+        NO_DEFAULT_PATH NO_CMAKE_FIND_ROOT_PATH)
+    foreach(_extra SKIA_PNG_LIB SKIA_ZLIB_LIB SKIA_SKCMS_LIB)
+        if(${_extra})
+            target_link_libraries(romlib ${${_extra}})
+        endif()
+    endforeach()
     message(STATUS "Executor: high-resolution rendering with Skia from ${SKIA_DIR}")
 endif()
 phoenix_exempt_from_hardening(romlib)
