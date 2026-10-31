@@ -398,6 +398,9 @@ OSErr C_GetMenuTitleRect(INTEGER menuID, Rect *rect);PASCAL_SUBTRAP(GetMenuTitle
 void C_StandardMDEF(INTEGER message, MenuHandle theMenu, Rect *menuRect, Point hitPt, GUEST<INTEGER> *whichItem);LIBRARY_FUNCTION(MenusLib, StandardMDEF, C_StandardMDEF);
 
 
+LONGINT C_StandardMBDF(INTEGER selector, INTEGER message, INTEGER parameter1, LONGINT parameter2);LIBRARY_FUNCTION(MenusLib, StandardMBDF, C_StandardMBDF);
+
+
 OSErr C_SetMenuItemKeyGlyph(MenuRef inMenu, SInt16 inItem, SInt16 inGlyph);LIBRARY_FUNCTION(AppearanceLib, SetMenuItemKeyGlyph, C_SetMenuItemKeyGlyph);
 
 
