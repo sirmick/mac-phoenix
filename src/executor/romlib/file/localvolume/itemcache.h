@@ -5,6 +5,9 @@
 #include <memory>
 #include <chrono>
 #include <list>
+#include <optional>
+#include <set>
+#include <string>
 #include <unordered_map>
 #include <stdint.h>
 
@@ -36,6 +39,14 @@ class ItemCache
     };
     std::list<CachedDirectory> cachedDirectories_;
 
+    /* MacPhoenix: the names cacheDirectory() just listed in one directory
+       (valid only during that call's createItemForDirEntry loop): a
+       factory's "does a same-folder sidecar exist" check (AppleDouble's
+       %name/._name) is a set lookup instead of a fresh stat per file, the
+       File Manager's biggest cost on Emscripten's JS MEMFS. */
+    fs::path scanDir_;
+    std::set<std::string> scanNames_;
+
     void cleanDirectoryCache();
 public:
     ItemCache(fs::path root, mac_string_view volumeName,
@@ -51,6 +62,11 @@ public:
 
 
     void cacheDirectory(DirectoryItemPtr item);
+    /* Whether `filename` is a (non-hidden) entry of `dir`, if `dir` is the
+       directory cacheDirectory() is currently scanning; nullopt (not "no
+       such file") when the scan info isn't there or is for another
+       directory, so callers fall back to a real stat themselves. */
+    std::optional<bool> siblingExistsInScan(const fs::path& dir, const std::string& filename) const;
     ItemPtr lookup(DirectoryItemPtr dir, mac_string_view name);
     void flushDirectoryCache(DirectoryItemPtr item);
     void flushDirectoryCache(CNID dirID);

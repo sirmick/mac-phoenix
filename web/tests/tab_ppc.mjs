@@ -23,6 +23,11 @@ if (!system || !fs.existsSync(system)) {
     console.log(`SKIP: no System image (${system || 'none given'})`);
     process.exit(77);
 }
+for (const a of apps)
+    if (!fs.existsSync(a.image)) {
+        console.log(`SKIP: no image ${a.image}`);
+        process.exit(77);
+    }
 const { page, close } = await open(dir, { log: !!process.env.TAB_LOG });
 let failed = 0;
 const check = (ok, what) => {
@@ -126,7 +131,9 @@ for (const [i, app] of apps.entries()) {
     const front = await until(() => request(page, 'app').then((a) => a === name), 120000, 50);
     const q = await quietAfter(n, 120000, 2000);
     times[name] = { front_s: front ? secs(t0) : null, quiet_s: q ? +((q - t0) / 1000).toFixed(2) : null };
-    console.log(`${name}: launch ${r}, front ${front}, windows ${JSON.stringify(await request(page, 'windows'))}`);
+    const ws = await request(page, 'windows');
+    console.log(`${name}: launch ${r}, front ${front}, windows ${JSON.stringify(ws)}`);
+    check(r === 0 && front && ws && ws.some((w) => w.visible), `${name} in front with a window`);
     await page.locator('#screen').screenshot({ path: path.join(dir, `tab_ppc_app${i}.png`) });
 }
 
