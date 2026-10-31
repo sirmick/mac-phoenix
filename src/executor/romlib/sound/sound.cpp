@@ -427,7 +427,7 @@ OSErr Executor::C_SndNewChannel(GUEST<SndChannelPtr> *chanpp, INTEGER synth,
             }
             chanp->nextChan = allchans;
             allchans = chanp;
-            chanp->firstMod = (Ptr)NewPtr(sizeof(ModifierStub));
+            chanp->firstMod = (Ptr)NewPtrClear(sizeof(ModifierStub));
             SND_CHAN_TIME(chanp) = 0;
             SND_CHAN_CURRENT_START(chanp) = 0;
             {
@@ -758,9 +758,13 @@ do_current_db(SndChannelPtr chanp, HungerInfo info)
     unsigned char *sp;
 
     dbhp = SND_CHAN_DBHP(chanp);
-    dbp = dbhp->dbhBufferPtr[SND_CHAN_CURRENT_DB(chanp)];
+    /* MacPhoenix: a header or buffer pointer that is nil (Mars Rising: the
+       header's memory reused once its sound is over) is a buffer that isn't
+       ready, as a Mac reading low memory there finds it; was a host crash
+       at interrupt time. */
+    dbp = dbhp ? (SndDoubleBuffer *)dbhp->dbhBufferPtr[SND_CHAN_CURRENT_DB(chanp)] : nullptr;
 
-    if(!(dbp->dbFlags & dbBufferReady))
+    if(!dbp || !(dbp->dbFlags & dbBufferReady))
     {
         /* This buffer isn't ready */
         warning_sound_log("notready");
