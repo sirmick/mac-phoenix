@@ -19,6 +19,7 @@
 #include <ResourceMgr.h>
 
 #include <rsys/cfm.h>
+#include <base/traps.h>
 #include <rsys/opentransport.h>
 #include <PEFBinaryFormat.h>
 #include <file/file.h>
@@ -1863,4 +1864,35 @@ Executor::ROMlib_find_cfrg(Handle cfrg, OSType arch, uint8_t type, ConstStr255Pa
 OSErr Executor::C_CFragRegisterFilePrivate(FSSpecPtr file, Boolean flag)
 {
     return noErr;
+}
+
+/* MacPhoenix: CodeFragmentDispatch -2 (CodeFragments.yaml): a fragment by a
+   CFM 2 locator, from 68k code (8.6's AppleScript INIT). The data fork
+   kind ({kind.l = 1, FSSpecPtr, offset.l, length.l}) as GetDiskFragment;
+   the others, and other architectures, not here. */
+OSErr Executor::C_CFragPrepareLocatorPrivate(int32_t options, Ptr locator, ConstStr63Param fragname,
+                                             LoadFlags flags, OSType arch, GUEST<ConnectionID> *connp,
+                                             GUEST<Ptr> *mainAddrp, Ptr flagp, Str255 errname)
+{
+    if(!locator || !connp || !mainAddrp)
+        return paramErr;
+    if(flagp)
+        *flagp = 0;
+    if(errname)
+        errname[0] = 0;
+    int32_t kind = *(GUEST<int32_t> *)locator;
+    if(arch != "pwpc"_4 || kind != 1 /* kDataForkCFragLocator */)
+    {
+        char what[120];
+        snprintf(what, sizeof what, "CFragPrepareLocatorPrivate: locator kind %d, architecture '%.4s'",
+                 kind, (const char *)&arch);
+        traps::log_unimplemented(what);
+        return paramErr;
+    }
+    FSSpecPtr fsp = *(GUEST<FSSpecPtr> *)(locator + 4);
+    int32_t offset = *(GUEST<int32_t> *)(locator + 8);
+    int32_t length = *(GUEST<int32_t> *)(locator + 12);
+    if(!fsp)
+        return paramErr;
+    return C_GetDiskFragment(fsp, offset, length, fragname, flags, connp, mainAddrp, errname);
 }

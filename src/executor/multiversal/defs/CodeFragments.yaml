@@ -272,6 +272,42 @@
 
 # ####
 
+# A private selector (-2) that 8.6's AppleScript INIT (68k) calls to
+# prepare its PowerPC code: a CFM 2 locator (its kind, 1 for a data fork,
+# then the FSSpec, offset and length), the fragment's name, the load flags,
+# the architecture; the connection, main address, a byte and the error
+# name back, then the OSErr (Pascal order; options is 1 there). Executor
+# prepares it as GetDiskFragment does. The name is ours.
+- only-for: Executor
+  function:
+    name: CFragPrepareLocatorPrivate
+    return: OSErr
+    args:
+      - name: options
+        type: int32_t
+      - name: locator
+        type: Ptr
+      - name: fragname
+        type: ConstStr63Param
+      - name: flags
+        type: LoadFlags
+      - name: arch
+        type: OSType
+      - name: connp
+        type: ConnectionID*
+      - name: mainAddrp
+        type: Ptr*
+      - name: flagp
+        type: Ptr
+      - name: errname
+        type: Str255
+    dispatcher: CodeFragmentDispatch
+    selector: 0xFFFE
+    executor: C_
+    export: false
+
+# ####
+
 - function:
     name: GetDiskFragment
     return: OSErr

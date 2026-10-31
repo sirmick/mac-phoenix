@@ -5,7 +5,7 @@
  *                                                                           *
  * Needs:                                                                    *
  *     MacTypes.h    OSType, Ptr, Boolean, INTEGER, StringPtr, OSErr,        *
- *                   LONGINT, ConstStr63Param, Str255, ConstStr255Param      *
+ *                   ConstStr63Param, Str255, LONGINT, ConstStr255Param      *
  *     FileMgr.h     FSSpecPtr                                               *
  *                                                                           *
  *                                                                           *
@@ -101,6 +101,9 @@ DISPATCHER_TRAP(CodeFragmentDispatch, 0xAA5A, StackW);
 
 
 OSErr C_CFragRegisterFilePrivate(FSSpecPtr file, Boolean flag);PASCAL_SUBTRAP_UNEXPORTED(CFragRegisterFilePrivate, 0xAA5A, 0xFFEC, CodeFragmentDispatch);
+
+
+OSErr C_CFragPrepareLocatorPrivate(int32_t options, Ptr locator, ConstStr63Param fragname, LoadFlags flags, OSType arch, GUEST<ConnectionID> *connp, GUEST<Ptr> *mainAddrp, Ptr flagp, Str255 errname);PASCAL_SUBTRAP_UNEXPORTED(CFragPrepareLocatorPrivate, 0xAA5A, 0xFFFE, CodeFragmentDispatch);
 
 
 OSErr C_GetDiskFragment(FSSpecPtr fsp, LONGINT offset, LONGINT length, ConstStr63Param fragname, LoadFlags flags, GUEST<ConnectionID> *connp, GUEST<Ptr> *mainAddrp, Str255 errname);PASCAL_SUBTRAP(GetDiskFragment, 0xAA5A, 0x0002, CodeFragmentDispatch);
