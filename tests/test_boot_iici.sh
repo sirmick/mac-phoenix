@@ -28,6 +28,7 @@ while [[ $# -gt 0 ]]; do
         *) echo "Unknown arg: $1"; exit 1 ;;
     esac
 done
+source "$(dirname "$0")/lib/ports.sh"; PORT=$(mp_port "$PORT")  # per-worktree (docs/Testing.md)
 
 [[ -x "$BINARY" ]] || { echo "SKIP: binary not found: $BINARY"; exit 77; }
 [[ -f "$ROM" ]] || { echo "SKIP: IIci ROM not found: $ROM (set MACEMU_IICI_ROM)"; exit 77; }

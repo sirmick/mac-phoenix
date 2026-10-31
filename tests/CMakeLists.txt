@@ -1154,10 +1154,10 @@ endforeach()
 # list, a missing one: tests/guest/strprobe. The Macs are the reference
 # (the Quadra with 7.6.1 through Apple's 68k glue, the G3 with 8.6 through
 # InterfaceLib; the same answers), Executor's own from PowerPC code.
-foreach(cell "strprobe_rom_761;;StrProbe.bin;--os-version 7.6.1;${TEST_ROM};19500;guest"
-             "strprobe_rom_ppc_86;--backend kpx --core mame-ppc --jit;StrProbePPC.bin;--image 8.6;${TEST_PPC_ROM};19502;guest;mame"
-             "strprobe_ppc_executor_86;--backend executor --executor-ppc;StrProbePPC.bin;--image 8.6;;19504;guest;executor"
-             "strprobe_ppc_executor_761;--backend executor;StrProbePPC.bin;--os-version 7.6.1;;19506;guest;761;executor")
+foreach(cell "strprobe_rom_761;;StrProbe.bin;--os-version 7.6.1;${TEST_ROM};18560;guest"
+             "strprobe_rom_ppc_86;--backend kpx --core mame-ppc --jit;StrProbePPC.bin;--image 8.6;${TEST_PPC_ROM};18562;guest;mame"
+             "strprobe_ppc_executor_86;--backend executor --executor-ppc;StrProbePPC.bin;--image 8.6;;18564;guest;executor"
+             "strprobe_ppc_executor_761;--backend executor;StrProbePPC.bin;--os-version 7.6.1;;18566;guest;761;executor")
   list(GET cell 0 name)
   list(GET cell 1 backend)
   list(GET cell 2 app)

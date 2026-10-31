@@ -32,6 +32,7 @@ while [[ $# -gt 0 ]]; do
         *) echo "Unknown arg: $1"; exit 1 ;;
     esac
 done
+source "$(dirname "$0")/lib/ports.sh"; PORT=$(mp_port "$PORT")  # per-worktree (docs/Testing.md)
 
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$PROJECT_ROOT"

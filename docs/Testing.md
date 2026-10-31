@@ -176,10 +176,32 @@ Tests run in parallel (`ctest -j4`) with their own disk copies (above) and,
 with `--network socket`, their own net-bridge
 (`socket:$TMPDIR/mac-ether-test-PID.sock`; plain `socket` would join the
 shared `/tmp/mac-ether.sock` every running MacPhoenix uses). Each test
-has its own fixed port in the 18080-18442 range (`guest_builds_current`
-also uses the next one), away from a running emulator on :11000 and from
-Playwright's 18094. A new test needs a port no other uses:
+has its own fixed port (below), so `ctest -j` in one checkout never binds a
+port twice, and two checkouts never share one.
+
+### Ports
+
+Every port a test binds is named in one nominal range, **18000-18999**
+(`tests/CMakeLists.txt`'s `--port N`, the scripts' defaults,
+`tools/difftest/run.py`'s 18600/18610/18620, Playwright's 18094;
+`guest_builds_current` also uses the next one), away from a running
+emulator on :11000. A new test needs a nominal port no other uses:
 `ctest --show-only=json-v1` lists the commands.
+
+Each checkout moves the range to its own **port base**
+(`tests/lib/ports.py`, sourced by the scripts as `tests/lib/ports.sh`):
+
+    actual = MACPHOENIX_PORT_BASE + (nominal - 18000)
+
+`MACPHOENIX_PORT_BASE` (a multiple of 1000) sets it. By default each
+checkout gets a slot from a registry every checkout on the box shares
+(`~/.cache/macphoenix/port-slots`, under `flock`): the main tree takes base
+18000 (the historical ports), each git worktree the lowest free slot
+(19000, 20000, ... 31000, then 12000-17000, then 61000-64000: below the
+ephemeral range, away from 10000-11999), kept for as long as its directory
+exists. `python3 tests/lib/ports.py slots` lists them, `ports.py base` the
+checkout's. A port outside 18000-18999 is taken as already mapped (or asked
+for on purpose) and left alone.
 
 ### Guest tests and the bridge
 

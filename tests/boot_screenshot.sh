@@ -21,6 +21,7 @@ while [[ $# -gt 0 ]]; do
         *) EXTRA+=("$1"); shift ;;   # anything else goes to the emulator
     esac
 done
+source "$(dirname "$0")/lib/ports.sh"; PORT=$(mp_port "$PORT")  # per-worktree (docs/Testing.md)
 HERE="$(cd "$(dirname "$0")" && pwd)"
 BACKEND=(--backend uae)
 if [[ $PPC == 1 ]]; then
