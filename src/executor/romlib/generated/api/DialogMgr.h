@@ -355,4 +355,28 @@ int32_t C_DialogMenuState();PASCAL_SUBTRAP(DialogMenuState, 0xAA68, 0x00FF, Dial
 void C_DialogMenuStateApply(int32_t state);PASCAL_SUBTRAP(DialogMenuStateApply, 0xAA68, 0x02FE, DialogDispatch);
 
 
+inline INTEGER cglue_finddialogitem(DialogPtr dp, GUEST<Point> *pt) {return C_FindDialogItem(dp, *pt);}
+LIBRARY_FUNCTION(InterfaceLib, finddialogitem, cglue_finddialogitem);
+
+
+inline void cglue_getdialogitemtext(Handle item, char *text) {C_GetDialogItemText(item, (StringPtr)text);cglue::p2c(text);}
+LIBRARY_FUNCTION(InterfaceLib, getdialogitemtext, cglue_getdialogitemtext);
+
+
+inline DialogPtr cglue_newcolordialog(void *arg0, const Rect *arg1, const char *arg2, Boolean arg3, INTEGER arg4, WindowPtr arg5, Boolean arg6, LONGINT arg7, Handle arg8) {return C_NewColorDialog(arg0, arg1, cglue::CString(arg2), arg3, arg4, arg5, arg6, arg7, arg8);}
+LIBRARY_FUNCTION(InterfaceLib, newcolordialog, cglue_newcolordialog);
+
+
+inline DialogPtr cglue_newdialog(void *dst, const Rect *r, const char *tit, Boolean vis, INTEGER procid, WindowPtr behind, Boolean gaflag, LONGINT rc, Handle items) {return C_NewDialog(dst, r, cglue::CString(tit), vis, procid, behind, gaflag, rc, items);}
+LIBRARY_FUNCTION(InterfaceLib, newdialog, cglue_newdialog);
+
+
+inline void cglue_paramtext(const char *p0, const char *p1, const char *p2, const char *p3) {C_ParamText(cglue::CString(p0), cglue::CString(p1), cglue::CString(p2), cglue::CString(p3));}
+LIBRARY_FUNCTION(InterfaceLib, paramtext, cglue_paramtext);
+
+
+inline void cglue_setdialogitemtext(Handle item, const char *text) {C_SetDialogItemText(item, cglue::CString(text));}
+LIBRARY_FUNCTION(InterfaceLib, setdialogitemtext, cglue_setdialogitemtext);
+
+
 } /* namespace Executor */

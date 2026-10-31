@@ -44,4 +44,12 @@ OSErr C_DIVerify(INTEGER dn);PASCAL_SUBTRAP(DIVerify, 0xA9E9, 0x0008, Pack2);
 OSErr C_DIZero(INTEGER dn, StringPtr vname);PASCAL_SUBTRAP(DIZero, 0xA9E9, 0x000A, Pack2);
 
 
+inline INTEGER cglue_dibadmount(GUEST<Point> *pt, LONGINT evtmess) {return C_DIBadMount(*pt, evtmess);}
+LIBRARY_FUNCTION(InterfaceLib, dibadmount, cglue_dibadmount);
+
+
+inline OSErr cglue_dizero(INTEGER dn, const char *vname) {return C_DIZero(dn, cglue::CString(vname));}
+LIBRARY_FUNCTION(InterfaceLib, dizero, cglue_dizero);
+
+
 } /* namespace Executor */

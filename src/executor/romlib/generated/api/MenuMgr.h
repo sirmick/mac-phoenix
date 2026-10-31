@@ -459,4 +459,28 @@ void C_InvalidateAllMenuSizes();LIBRARY_FUNCTION(MenusLib, InvalidateAllMenuSize
 void C_InvalidateAllCachedMenuPixels();LIBRARY_FUNCTION(MenusLib, InvalidateAllCachedMenuPixels, C_InvalidateAllCachedMenuPixels);
 
 
+inline void cglue_appendmenu(MenuHandle mh, const char *str) {C_AppendMenu(mh, cglue::CString(str));}
+LIBRARY_FUNCTION(InterfaceLib, appendmenu, cglue_appendmenu);
+
+
+inline void cglue_getmenuitemtext(MenuHandle mh, INTEGER item, char *str) {C_GetMenuItemText(mh, item, (StringPtr)str);cglue::p2c(str);}
+LIBRARY_FUNCTION(InterfaceLib, getmenuitemtext, cglue_getmenuitemtext);
+
+
+inline void cglue_insertmenuitem(MenuHandle mh, const char *str, INTEGER after) {C_InsertMenuItem(mh, cglue::CString(str), after);}
+LIBRARY_FUNCTION(InterfaceLib, insertmenuitem, cglue_insertmenuitem);
+
+
+inline LONGINT cglue_menuselect(GUEST<Point> *p) {return C_MenuSelect(*p);}
+LIBRARY_FUNCTION(InterfaceLib, menuselect, cglue_menuselect);
+
+
+inline MenuHandle cglue_newmenu(INTEGER mid, const char *str) {return C_NewMenu(mid, cglue::CString(str));}
+LIBRARY_FUNCTION(InterfaceLib, newmenu, cglue_newmenu);
+
+
+inline void cglue_setmenuitemtext(MenuHandle mh, INTEGER item, const char *str) {C_SetMenuItemText(mh, item, cglue::CString(str));}
+LIBRARY_FUNCTION(InterfaceLib, setmenuitemtext, cglue_setmenuitemtext);
+
+
 } /* namespace Executor */

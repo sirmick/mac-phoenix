@@ -569,3 +569,94 @@
     dispatcher: Pack0
     selector: 0x003C
     executor: C_
+
+# ####
+
+# InterfaceLib's lowercase C routines (multiversal/executor.rb, declare_cglue):
+# the Pascal routine with C strings, Points by address.
+
+- only-for: Executor
+  function:
+    name: laddtocell
+    cglue: LAddToCell
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: lcellsize
+    cglue: LCellSize
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: lclick
+    cglue: LClick
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: lclrcell
+    cglue: LClrCell
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: ldraw
+    cglue: LDraw
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: lgetcell
+    cglue: LGetCell
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: lgetcelldatalocation
+    cglue: LGetCellDataLocation
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: lnew
+    cglue: LNew
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: lrect
+    cglue: LRect
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: lsetcell
+    cglue: LSetCell
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: lsetselect
+    cglue: LSetSelect
+    library: InterfaceLib

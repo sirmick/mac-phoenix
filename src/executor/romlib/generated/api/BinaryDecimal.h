@@ -30,4 +30,12 @@ void C_NumToString(LONGINT l, StringPtr s);REGISTER_SUBTRAP(NumToString, 0xA9EE,
 void C_StringToNum(ConstStringPtr s, GUEST<LONGINT> *lp);REGISTER_SUBTRAP(StringToNum, 0xA9EE, 0x0001, Pack7, void(A0, Out<LONGINT, D0>));
 
 
+inline void cglue_numtostring(LONGINT l, char *s) {C_NumToString(l, (StringPtr)s);cglue::p2c(s);}
+LIBRARY_FUNCTION(InterfaceLib, numtostring, cglue_numtostring);
+
+
+inline void cglue_stringtonum(const char *s, GUEST<LONGINT> *lp) {C_StringToNum(cglue::CString(s), lp);}
+LIBRARY_FUNCTION(InterfaceLib, stringtonum, cglue_stringtonum);
+
+
 } /* namespace Executor */

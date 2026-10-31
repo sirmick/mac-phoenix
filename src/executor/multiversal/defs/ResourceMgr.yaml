@@ -883,3 +883,70 @@
         type: INTEGER
     library: PrivateInterfaceLib
     executor: C_
+
+# ####
+
+# InterfaceLib's lowercase C routines (multiversal/executor.rb, declare_cglue):
+# the Pascal routine with C strings, Points by address.
+
+- only-for: Executor
+  function:
+    name: addresource
+    cglue: AddResource
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: createresfile
+    cglue: CreateResFile
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: get1namedresource
+    cglue: Get1NamedResource
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: getnamedresource
+    cglue: GetNamedResource
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: getresinfo
+    cglue: GetResInfo
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: openresfile
+    cglue: OpenResFile
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: openrfperm
+    cglue: OpenRFPerm
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: setresinfo
+    cglue: SetResInfo
+    library: InterfaceLib

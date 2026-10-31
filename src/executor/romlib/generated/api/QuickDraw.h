@@ -985,4 +985,56 @@ QDGlobalsPtr C_GetQDGlobals();LIBRARY_FUNCTION(PrivateInterfaceLib, GetQDGlobals
 
 
 
+inline void cglue_addpt(GUEST<Point> *src, GUEST<Point> *dst) {C_AddPt(*src, dst);}
+LIBRARY_FUNCTION(InterfaceLib, addpt, cglue_addpt);
+
+
+inline void cglue_drawstring(const char *s) {C_DrawString(cglue::CString(s));}
+LIBRARY_FUNCTION(InterfaceLib, drawstring, cglue_drawstring);
+
+
+inline Boolean cglue_equalpt(GUEST<Point> *p1, GUEST<Point> *p2) {return C_EqualPt(*p1, *p2);}
+LIBRARY_FUNCTION(InterfaceLib, equalpt, cglue_equalpt);
+
+
+inline void cglue_pt2rect(GUEST<Point> *p1, GUEST<Point> *p2, Rect *dest) {C_Pt2Rect(*p1, *p2, dest);}
+LIBRARY_FUNCTION(InterfaceLib, pt2rect, cglue_pt2rect);
+
+
+inline Boolean cglue_ptinrect(GUEST<Point> *p, const Rect *r) {return C_PtInRect(*p, r);}
+LIBRARY_FUNCTION(InterfaceLib, ptinrect, cglue_ptinrect);
+
+
+inline Boolean cglue_ptinrgn(GUEST<Point> *p, RgnHandle rh) {return C_PtInRgn(*p, rh);}
+LIBRARY_FUNCTION(InterfaceLib, ptinrgn, cglue_ptinrgn);
+
+
+inline void cglue_pttoangle(const Rect *rp, GUEST<Point> *p, GUEST<INTEGER> *angle) {C_PtToAngle(rp, *p, angle);}
+LIBRARY_FUNCTION(InterfaceLib, pttoangle, cglue_pttoangle);
+
+
+inline void cglue_shieldcursor(Rect *rp, GUEST<Point> *p) {C_ShieldCursor(rp, *p);}
+LIBRARY_FUNCTION(InterfaceLib, shieldcursor, cglue_shieldcursor);
+
+
+inline void cglue_stdline(GUEST<Point> *p) {C_StdLine(*p);}
+LIBRARY_FUNCTION(InterfaceLib, stdline, cglue_stdline);
+
+
+inline void cglue_stdtext(INTEGER n, Ptr textbufp, GUEST<Point> *num, GUEST<Point> *den) {C_StdText(n, textbufp, *num, *den);}
+LIBRARY_FUNCTION(InterfaceLib, stdtext, cglue_stdtext);
+
+
+inline INTEGER cglue_stringwidth(const char *s) {return C_StringWidth(cglue::CString(s));}
+LIBRARY_FUNCTION(InterfaceLib, stringwidth, cglue_stringwidth);
+
+
+inline void cglue_stuffhex(Ptr p, const char *s) {C_StuffHex(p, cglue::CString(s));}
+LIBRARY_FUNCTION(InterfaceLib, stuffhex, cglue_stuffhex);
+
+
+inline void cglue_subpt(GUEST<Point> *src, GUEST<Point> *dst) {C_SubPt(*src, dst);}
+LIBRARY_FUNCTION(InterfaceLib, subpt, cglue_subpt);
+
+
 } /* namespace Executor */

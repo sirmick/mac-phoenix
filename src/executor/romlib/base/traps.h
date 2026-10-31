@@ -1,6 +1,7 @@
 #pragma once
 
 #include <base/functions.h>
+#include <base/cglue.h>
 #include <syn68k_public.h>
 
 #include <stdint.h>

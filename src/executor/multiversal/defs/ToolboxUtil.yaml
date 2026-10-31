@@ -553,3 +553,38 @@
         type: extended80*
     trap: 0xA846
     executor: C_
+
+# ####
+
+# InterfaceLib's lowercase C routines (multiversal/executor.rb, declare_cglue):
+# the Pascal routine with C strings, Points by address.
+
+- only-for: Executor
+  function:
+    name: deltapoint
+    cglue: DeltaPoint
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: getindstring
+    cglue: GetIndString
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: newstring
+    cglue: NewString
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: setstring
+    cglue: SetString
+    library: InterfaceLib

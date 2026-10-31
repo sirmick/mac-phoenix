@@ -208,4 +208,8 @@ OSErr KillIO(INTEGER rn);NOTRAP_FUNCTION2(KillIO);
 DCtlHandle GetDCtlEntry(INTEGER rn);NOTRAP_FUNCTION2(GetDCtlEntry);
 
 
+inline OSErr cglue_opendriver(const char *name, GUEST<INTEGER> *rnp) {return OpenDriver(cglue::CString(name), rnp);}
+LIBRARY_FUNCTION(InterfaceLib, opendriver, cglue_opendriver);
+
+
 } /* namespace Executor */

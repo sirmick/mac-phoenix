@@ -744,3 +744,22 @@
         type: "INTEGER"
     library: InterfaceLib
     executor: glue_LMSetSysFontSize
+
+# ####
+
+# InterfaceLib's lowercase C routines (multiversal/executor.rb, declare_cglue):
+# the Pascal routine with C strings, Points by address.
+
+- only-for: Executor
+  function:
+    name: getfnum
+    cglue: GetFNum
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: getfontname
+    cglue: GetFontName
+    library: InterfaceLib

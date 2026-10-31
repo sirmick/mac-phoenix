@@ -207,4 +207,44 @@ INTEGER glue_IUEqualPString(ConstStringPtr a, ConstStringPtr b, Handle arg3);LIB
 INTEGER glue_IUCompPString(ConstStringPtr a, ConstStringPtr b, Handle arg3);LIBRARY_FUNCTION(InterfaceLib, IUCompPString, glue_IUCompPString);
 
 
+inline INTEGER cglue_iucomppstring(const char *a, const char *b, Handle arg3) {return glue_IUCompPString(cglue::CString(a), cglue::CString(b), arg3);}
+LIBRARY_FUNCTION(InterfaceLib, iucomppstring, cglue_iucomppstring);
+
+
+inline INTEGER cglue_iucompstring(const char *str1, const char *str2) {return IUCompString(cglue::CString(str1), cglue::CString(str2));}
+LIBRARY_FUNCTION(InterfaceLib, iucompstring, cglue_iucompstring);
+
+
+inline void cglue_iudatepstring(LONGINT date, DateForm form, char *p, Handle h) {C_IUDatePString(date, form, (StringPtr)p, h);cglue::p2c(p);}
+LIBRARY_FUNCTION(InterfaceLib, iudatepstring, cglue_iudatepstring);
+
+
+inline void cglue_iudatestring(LONGINT date, DateForm form, char *p) {C_IUDateString(date, form, (StringPtr)p);cglue::p2c(p);}
+LIBRARY_FUNCTION(InterfaceLib, iudatestring, cglue_iudatestring);
+
+
+inline INTEGER cglue_iuequalpstring(const char *a, const char *b, Handle arg3) {return glue_IUEqualPString(cglue::CString(a), cglue::CString(b), arg3);}
+LIBRARY_FUNCTION(InterfaceLib, iuequalpstring, cglue_iuequalpstring);
+
+
+inline INTEGER cglue_iuequalstring(const char *str1, const char *str2) {return IUEqualString(cglue::CString(str1), cglue::CString(str2));}
+LIBRARY_FUNCTION(InterfaceLib, iuequalstring, cglue_iuequalstring);
+
+
+inline void cglue_iuldatestring(GUEST<LongDateTime> *datetimep, DateForm longflag, char *result, Handle intlhand) {C_IULDateString(datetimep, longflag, (StringPtr)result, intlhand);cglue::p2c(result);}
+LIBRARY_FUNCTION(InterfaceLib, iuldatestring, cglue_iuldatestring);
+
+
+inline void cglue_iultimestring(GUEST<LongDateTime> *datetimep, Boolean wantseconds, char *result, Handle intlhand) {C_IULTimeString(datetimep, wantseconds, (StringPtr)result, intlhand);cglue::p2c(result);}
+LIBRARY_FUNCTION(InterfaceLib, iultimestring, cglue_iultimestring);
+
+
+inline void cglue_iutimepstring(LONGINT date, Boolean secs, char *p, Handle h) {C_IUTimePString(date, secs, (StringPtr)p, h);cglue::p2c(p);}
+LIBRARY_FUNCTION(InterfaceLib, iutimepstring, cglue_iutimepstring);
+
+
+inline void cglue_iutimestring(LONGINT date, Boolean secs, char *p) {C_IUTimeString(date, secs, (StringPtr)p);cglue::p2c(p);}
+LIBRARY_FUNCTION(InterfaceLib, iutimestring, cglue_iutimestring);
+
+
 } /* namespace Executor */

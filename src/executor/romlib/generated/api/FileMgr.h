@@ -1160,4 +1160,64 @@ OSErr C_RequestVolumeNotification(UniversalProcPtr notifyProc, void *refCon);LIB
 OSErr C_DeclineVolumeNotification(UniversalProcPtr notifyProc, void *refCon);LIBRARY_FUNCTION(PrivateInterfaceLib, DeclineVolumeNotification, C_DeclineVolumeNotification);
 
 
+inline OSErr cglue_create(const char *filen, INTEGER vrn, OSType creator, OSType filtyp) {return Create(cglue::CString(filen), vrn, creator, filtyp);}
+LIBRARY_FUNCTION(InterfaceLib, create, cglue_create);
+
+
+inline OSErr cglue_eject(const char *voln, INTEGER vrn) {return Eject(cglue::CString(voln), vrn);}
+LIBRARY_FUNCTION(InterfaceLib, eject, cglue_eject);
+
+
+inline OSErr cglue_flushvol(const char *voln, INTEGER vrn) {return FlushVol(cglue::CString(voln), vrn);}
+LIBRARY_FUNCTION(InterfaceLib, flushvol, cglue_flushvol);
+
+
+inline OSErr cglue_fsdelete(const char *filen, INTEGER vrn) {return FSDelete(cglue::CString(filen), vrn);}
+LIBRARY_FUNCTION(InterfaceLib, fsdelete, cglue_fsdelete);
+
+
+inline OSErr cglue_fsopen(const char *filen, INTEGER vrn, GUEST<INTEGER> *rn) {return FSOpen(cglue::CString(filen), vrn, rn);}
+LIBRARY_FUNCTION(InterfaceLib, fsopen, cglue_fsopen);
+
+
+inline OSErr cglue_fsrename(const char *filen, INTEGER vrn, const char *newf) {return Rename(cglue::CString(filen), vrn, cglue::CString(newf));}
+LIBRARY_FUNCTION(InterfaceLib, fsrename, cglue_fsrename);
+
+
+inline OSErr cglue_getfinfo(const char *filen, INTEGER vrn, FInfo *fndrinfo) {return GetFInfo(cglue::CString(filen), vrn, fndrinfo);}
+LIBRARY_FUNCTION(InterfaceLib, getfinfo, cglue_getfinfo);
+
+
+inline OSErr cglue_getvinfo(INTEGER drv, char *voln, GUEST<INTEGER> *vrn, GUEST<LONGINT> *freeb) {OSErr ret = GetVInfo(drv, (StringPtr)voln, vrn, freeb);cglue::p2c(voln);return ret;}
+LIBRARY_FUNCTION(InterfaceLib, getvinfo, cglue_getvinfo);
+
+
+inline OSErr cglue_getvol(char *voln, GUEST<INTEGER> *vrn) {OSErr ret = GetVol((StringPtr)voln, vrn);cglue::p2c(voln);return ret;}
+LIBRARY_FUNCTION(InterfaceLib, getvol, cglue_getvol);
+
+
+inline OSErr cglue_openrf(const char *filen, INTEGER vrn, GUEST<INTEGER> *rn) {return OpenRF(cglue::CString(filen), vrn, rn);}
+LIBRARY_FUNCTION(InterfaceLib, openrf, cglue_openrf);
+
+
+inline OSErr cglue_rstflock(const char *filen, INTEGER vrn) {return RstFLock(cglue::CString(filen), vrn);}
+LIBRARY_FUNCTION(InterfaceLib, rstflock, cglue_rstflock);
+
+
+inline OSErr cglue_setfinfo(const char *filen, INTEGER vrn, FInfo *fndrinfo) {return SetFInfo(cglue::CString(filen), vrn, fndrinfo);}
+LIBRARY_FUNCTION(InterfaceLib, setfinfo, cglue_setfinfo);
+
+
+inline OSErr cglue_setflock(const char *filen, INTEGER vrn) {return SetFLock(cglue::CString(filen), vrn);}
+LIBRARY_FUNCTION(InterfaceLib, setflock, cglue_setflock);
+
+
+inline OSErr cglue_setvol(const char *voln, INTEGER vrn) {return SetVol(cglue::CString(voln), vrn);}
+LIBRARY_FUNCTION(InterfaceLib, setvol, cglue_setvol);
+
+
+inline OSErr cglue_unmountvol(const char *voln, INTEGER vrn) {return UnmountVol(cglue::CString(voln), vrn);}
+LIBRARY_FUNCTION(InterfaceLib, unmountvol, cglue_unmountvol);
+
+
 } /* namespace Executor */
