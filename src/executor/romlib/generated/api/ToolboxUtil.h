@@ -173,6 +173,18 @@ extern Fract X2Frac(Extended *xp);
 END_EXECUTOR_ONLY
 
 
+double glue_Fix2X(Fixed x);LIBRARY_FUNCTION(InterfaceLib, Fix2X, glue_Fix2X);
+
+
+Fixed glue_X2Fix(double x);LIBRARY_FUNCTION(InterfaceLib, X2Fix, glue_X2Fix);
+
+
+double glue_Frac2X(Fract x);LIBRARY_FUNCTION(InterfaceLib, Frac2X, glue_Frac2X);
+
+
+Fract glue_X2Frac(double x);LIBRARY_FUNCTION(InterfaceLib, X2Frac, glue_X2Frac);
+
+
 Fixed C_R_X2Fix(GUEST<extended80> *x);PASCAL_TRAP(R_X2Fix, 0xA844);
 
 

@@ -25,9 +25,9 @@ Visual verdicts and owner overrides: `tools/executor/scoreboard_notes.json`.
 
 | System | Column | runs | partial | fails |
 |---|---|---|---|---|
-| 7.6.1 | e761 | 72 | 10 | 23 |
-| 7.6.1 | e761ppc | 17 | 3 | 12 |
-| 8.6 | e86 | 68 | 7 | 33 |
+| 7.6.1 | e761 | 73 | 10 | 22 |
+| 7.6.1 | e761ppc | 18 | 3 | 11 |
+| 8.6 | e86 | 69 | 7 | 32 |
 
 Gaps in the references and the method:
 
@@ -48,7 +48,7 @@ Rows with a fault, by owner:
 |---|---|---|
 | 7.6.1 | fix-dev | 5 |
 | 7.6.1 | fix-games | 26 |
-| 7.6.1 | fix-prod | 2 |
+| 7.6.1 | fix-prod | 1 |
 | 7.6.1 | — | 5 |
 | 8.6 | fix-86 | 5 |
 | 8.6 | fix-dev | 6 |
@@ -61,8 +61,8 @@ Rows with a fault, by owner:
 
 | Disk | App | Code | e761 | e761ppc | q761 | First blocker | Screenshot | Owner |
 |---|---|---|---|---|---|---|---|---|
-| productivity-system-7 | AppleWorks 5.0.3 ƒ:AppleWorks | fat | runs | fails | runs | e761ppc: PowerPC exception 7 at 00000000 (lr 00815470) after unimplemented PowerPC OpenWD | e761ppc/prod/001.png | fix-prod |
-| productivity-system-7 | ClarisWorks 4.0v4 ƒ:ClarisWorks | 68k | fails |  | runs | e761: alert "This copy of ClarisWorks has been modified by another program or virus" at launch (disk writable; Quadra shows the Registration Assistant) | e761/prod/002.png | fix-prod |
+| productivity-system-7 | AppleWorks 5.0.3 ƒ:AppleWorks | fat | runs | runs | runs | (e761ppc: latent: unresolved imports FTActivate, CMListen, CMReset (+103), all Comm Toolbox/LowerText -- not File Manager) | e761ppc/prod/001.png | fix-prod |
+| productivity-system-7 | ClarisWorks 4.0v4 ƒ:ClarisWorks | 68k | runs |  | runs |  | e761/prod/002.png |  |
 | dev-tools-system-7 | MPW:MPW Shell | fat | runs | fails | runs | e761ppc: host signal 11 at guest pc $c105ef84, address (nil) | e761ppc/dev/003.png | fix-dev |
 | dev-tools-system-7 | CodeWarrior Pro 4 ƒ:Metrowerks CodeWarrior:CodeWarrior IDE 3.2 | fat | fails | fails | fails | e761: not in front; unresolved imports CountDragItemFlavors, WaitMouseMoved, SetDragSendProc (+21) | e761/dev/001.png | fix-dev (ref fails too) |
 | dev-tools-system-7 | THINK C 6.0 ƒ:THINK C:THINK Project Manager | 68k | partial |  | runs | e761: Standard File opens in the boot volume's System Folder, not the application's folder (Quadra: THINK C folder) | e761/dev/006.png | fix-dev |
@@ -172,7 +172,7 @@ Rows with a fault, by owner:
 | Disk | App | Code | e86 | g86 | First blocker | Screenshot | Owner |
 |---|---|---|---|---|---|---|---|
 | productivity-system-7 | AppleWorks 5.0.3 ƒ:AppleWorks | fat | runs | runs | (e86: unimplemented PowerPC OpenWD until wash/fix-prod lands) | e86/prod/001.png | platinum |
-| productivity-system-7 | ClarisWorks 4.0v4 ƒ:ClarisWorks | 68k | fails | runs | e86: alert "This copy of ClarisWorks has been modified by another program or virus" at launch, as on 7.6.1 | e86/prod/002.png | fix-prod |
+| productivity-system-7 | ClarisWorks 4.0v4 ƒ:ClarisWorks | 68k | runs | runs |  | e86/prod/002.png | fix-prod |
 | dev-tools-system-7 | MPW:MPW Shell | fat | fails | runs | e86: host signal 11 at guest pc $c0f28844, address (nil) | e86/dev/005.png | fix-dev |
 | dev-tools-system-7 | CodeWarrior Pro 4 ƒ:Metrowerks CodeWarrior:CodeWarrior IDE 3.2 | fat | fails | runs | e86: host signal 11 at guest pc $c0f287a0, address 0x30 | e86/dev/001.png | fix-dev |
 | dev-tools-system-7 | THINK C 6.0 ƒ:THINK C:THINK Project Manager | 68k | fails | runs | e86: TranslationDispatch selector $20: no size in the selector, session stopped (called from $56f9e) | e86/dev/006.png | fix-dev |

@@ -511,6 +511,12 @@ OSErr GetVol(StringPtr voln, GUEST<INTEGER> *vrn);NOTRAP_FUNCTION2(GetVol);
 OSErr SetVol(ConstStringPtr voln, INTEGER vrn);NOTRAP_FUNCTION2(SetVol);
 
 
+OSErr HGetVol(StringPtr voln, GUEST<INTEGER> *vrn, GUEST<LONGINT> *dirid);NOTRAP_FUNCTION2(HGetVol);
+
+
+OSErr HSetVol(ConstStringPtr voln, INTEGER vrn, LONGINT dirid);NOTRAP_FUNCTION2(HSetVol);
+
+
 OSErr FlushVol(ConstStringPtr voln, INTEGER vrn);NOTRAP_FUNCTION2(FlushVol);
 
 
@@ -756,6 +762,12 @@ OSErr HDelete(INTEGER vref, LONGINT dirid, ConstStringPtr name);NOTRAP_FUNCTION2
 // generic unresolved-import stub instead of hfsWorkingdir.cpp's
 // GetWDInfo.
 OSErr GetWDInfo(INTEGER wd, GUEST<INTEGER> *vrefp, GUEST<LONGINT> *dirp, GUEST<LONGINT> *procp);NOTRAP_FUNCTION2(GetWDInfo);
+
+
+OSErr OpenWD(INTEGER vref, LONGINT dirid, LONGINT procid, GUEST<INTEGER> *wdrefp);NOTRAP_FUNCTION2(OpenWD);
+
+
+OSErr CloseWD(INTEGER wdrefnum);NOTRAP_FUNCTION2(CloseWD);
 
 
 

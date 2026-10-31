@@ -615,6 +615,58 @@ OSErr Executor::SetVol(ConstStringPtr voln, INTEGER vrn) /* IMIV-107 */
     return (PBSetVol(&pbr, 0));
 }
 
+OSErr Executor::OpenWD(INTEGER vref, LONGINT dirid, LONGINT procid,
+                        GUEST<INTEGER> *wdrefp) /* IMIV-146 */
+{
+    WDPBRec wpb;
+    OSErr retval;
+
+    memset(&wpb, 0, sizeof wpb);
+    wpb.ioVRefNum = vref;
+    wpb.ioWDDirID = dirid;
+    wpb.ioWDProcID = procid;
+    retval = PBOpenWD(&wpb, false);
+    if(retval == noErr)
+        *wdrefp = wpb.ioWDVRefNum;
+    return retval;
+}
+
+OSErr Executor::HGetVol(StringPtr voln, GUEST<INTEGER> *vrn, GUEST<LONGINT> *dirid) /* IMIV-146 */
+{
+    WDPBRec wpb;
+    OSErr retval;
+
+    memset(&wpb, 0, sizeof wpb);
+    wpb.ioNamePtr = voln;
+    retval = PBHGetVol(&wpb, false);
+    if(retval == noErr)
+    {
+        *vrn = wpb.ioVRefNum;
+        *dirid = wpb.ioWDDirID;
+    }
+    return retval;
+}
+
+OSErr Executor::HSetVol(ConstStringPtr voln, INTEGER vrn, LONGINT dirid) /* IMIV-146 */
+{
+    WDPBRec wpb;
+
+    memset(&wpb, 0, sizeof wpb);
+    wpb.ioNamePtr = (StringPtr)voln;
+    wpb.ioVRefNum = vrn;
+    wpb.ioWDDirID = dirid;
+    return PBHSetVol(&wpb, false);
+}
+
+OSErr Executor::CloseWD(INTEGER wdrefnum) /* IMIV-146 */
+{
+    WDPBRec wpb;
+
+    memset(&wpb, 0, sizeof wpb);
+    wpb.ioVRefNum = wdrefnum;
+    return PBCloseWD(&wpb, false);
+}
+
 OSErr Executor::FlushVol(ConstStringPtr voln, INTEGER vrn) /* IMIV-108 */
 {
     ParamBlockRec pbr;

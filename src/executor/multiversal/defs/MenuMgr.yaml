@@ -608,8 +608,10 @@
 - function:
     name: GetItemStyle
     comment: |
-      MacPhoenix: the style is a Style, a byte: 8.6 writes one byte there
-      (tests/guest/difftest menu); a word overwrote the caller's next byte.
+      MacPhoenix: through the trap the style is Pascal's VAR Style, a word
+      with the style in its low byte (the Quadra 650 ROM, tests/guest/itemstyle;
+      AppleWorks 5's command keys read it so). InterfaceLib's export, below,
+      writes one byte, as 8.6's does (tests/guest/difftest menu).
     args:
       - name: mh
         type: MenuHandle
@@ -619,6 +621,22 @@
         type: Style*
     trap: 0xA941
     executor: C_
+    export: false
+
+# ####
+
+- only-for: Executor
+  function:
+    name: GetItemStyle
+    args:
+      - name: mh
+        type: MenuHandle
+      - name: item
+        type: INTEGER
+      - name: stylep
+        type: Style*
+    library: InterfaceLib
+    executor: glue_GetItemStyle
 
 # ####
 

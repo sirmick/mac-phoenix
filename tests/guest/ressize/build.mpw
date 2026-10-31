@@ -1,0 +1,8 @@
+# build.mpw — ResSizeTest, a 68k application: SizeResource and MaxSizeRsrc.
+# products: ResSizeTest
+Delete -i ResSizeTest
+SC ressize.c -o ressize.c.o
+Link -t APPL -c 'MPrs' -model near ressize.c.o ∂
+	"{Libraries}MacRuntime.o" "{Libraries}IntEnv.o" "{CLibraries}StdCLib.o" "{Libraries}Interface.o" ∂
+	-o ResSizeTest
+Rez -a ressize.r -o ResSizeTest

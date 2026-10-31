@@ -641,6 +641,12 @@ check_existing_connections(ConstStr63Param library, OSType arch, LoadFlags loadf
     return fragLibNotFound;
 }
 
+/* MacPhoenix: the file registry (Mac OS Runtime Architectures, 1-17):
+   files with fragments that CodeFragmentDispatch's private selector -20
+   names, searched after the Extensions folder (Mac OS Easy Open's control
+   panel holds the PowerPC "Translation" library). */
+static std::vector<FSSpec> registered_files;
+
 static OSErr
 check_file(INTEGER vref, LONGINT dirid, Str255 file, bool shlb_test_p,
            ConstStr63Param library, OSType arch, LoadFlags loadflags,
@@ -997,6 +1003,14 @@ OSErr Executor::C_GetSharedLibrary(ConstStr63Param library, OSType arch,
                 retval = check_vanddir(extensions_vref, extensions_dirid, 1,
                                        library, arch, loadflags, cidp,
                                        mainaddrp, errName);
+        }
+
+        for(size_t i = 0; retval != noErr && i < registered_files.size(); ++i)
+        {
+            Str255 name;
+            memcpy(name, registered_files[i].name, registered_files[i].name[0] + 1);
+            retval = check_file(registered_files[i].vRefNum, registered_files[i].parID, name,
+                                false, library, arch, loadflags, cidp, mainaddrp, errName);
         }
 
         if(retval != noErr)
@@ -1859,8 +1873,14 @@ Executor::ROMlib_find_cfrg(Handle cfrg, OSType arch, uint8_t type, ConstStr255Pa
 
 /* MacPhoenix: CodeFragmentDispatch's private selector -20
    (CodeFragments.yaml): a file with fragments, from an extension's INIT
-   (8.x's Color Picker); the Extensions folder is searched anyway. */
+   (8.x's Color Picker, Mac OS Easy Open), into the file registry. */
 OSErr Executor::C_CFragRegisterFilePrivate(FSSpecPtr file, Boolean flag)
 {
+    warning_trace_info("CFM: file registry: \"%.*s\" (flag %d)", file->name[0], (char *)file->name + 1, flag);
+    for(const FSSpec &f : registered_files)
+        if(f.vRefNum == file->vRefNum && f.parID == file->parID
+           && EqualString(f.name, file->name, false, true))
+            return noErr;
+    registered_files.push_back(*file);
     return noErr;
 }
