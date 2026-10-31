@@ -1804,7 +1804,20 @@ void Executor::C_SetItemStyle(MenuHandle mh, INTEGER item, INTEGER style)
     }
 }
 
+/* MacPhoenix: through the trap Pascal's VAR Style is a word, the style in
+   its low byte, as the Quadra's ROM writes it (tests/guest/itemstyle):
+   AppleWorks 5 passes a word and keeps the low byte. */
 void Executor::C_GetItemStyle(MenuHandle mh, INTEGER item, Style *stylep)
+{
+    mextp mep;
+
+    if((mep = ROMlib_mitemtop(mh, item, (StringPtr *)0)))
+        *(GUEST<INTEGER> *)stylep = (uint8_t)mep->mstyle;
+}
+
+/* InterfaceLib's GetItemStyle for PowerPC and CFM-68K code: one byte, a C
+   Style, as 8.6's (tests/guest/difftest menu). */
+void Executor::glue_GetItemStyle(MenuHandle mh, INTEGER item, Style *stylep)
 {
     mextp mep;
 

@@ -513,6 +513,11 @@ public:
 #define COMMA ,
 #define PASCAL_TRAP(NAME, TRAP) \
     CREATE_FUNCTION_WRAPPER(NAME, &C_##NAME, (#NAME, "InterfaceLib"), TrapFunction<decltype(C_##NAME) COMMA &C_##NAME COMMA TRAP>)
+/* MacPhoenix: the trap only, its InterfaceLib export another routine
+   (`export: false`: GetItemStyle's VAR Style is a word through the trap,
+   a byte from InterfaceLib). */
+#define PASCAL_TRAP_UNEXPORTED(NAME, TRAP) \
+    CREATE_FUNCTION_WRAPPER(NAME, &C_##NAME, (#NAME), TrapFunction<decltype(C_##NAME) COMMA &C_##NAME COMMA TRAP>)
 #define REGISTER_TRAP(NAME, TRAP, ...) \
     CREATE_FUNCTION_WRAPPER(NAME, &C_##NAME, (#NAME, "InterfaceLib"), TrapFunction<decltype(C_##NAME) COMMA &C_##NAME COMMA TRAP COMMA callconv::Register<__VA_ARGS__>>)
 #define REGISTER_TRAP2(NAME, TRAP, ...) \

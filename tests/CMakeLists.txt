@@ -525,6 +525,30 @@ set_tests_properties(ressize_executor PROPERTIES
   SKIP_RETURN_CODE 77
 )
 
+# GetItemStyle through the trap writes a word, the style in its low byte
+# (AppleWorks 5's command keys): tests/guest/itemstyle. The ROM machine is
+# the reference.
+add_test(
+  NAME itemstyle_guest
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --os-version 7.6.1 --app ${CMAKE_SOURCE_DIR}/tests/guest/itemstyle/ItemStyleTest.bin --results itemstyle_test.txt --network none --timeout 90 --port 18464
+)
+set_tests_properties(itemstyle_guest PROPERTIES
+  TIMEOUT 130
+  LABELS "guest"
+  SKIP_RETURN_CODE 77
+  ENVIRONMENT "MACEMU_ROM=${TEST_ROM}"
+)
+
+add_test(
+  NAME itemstyle_executor
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --backend executor --os-version 7.6.1 --app ${CMAKE_SOURCE_DIR}/tests/guest/itemstyle/ItemStyleTest.bin --results itemstyle_test.txt --network none --timeout 150 --port 18466
+)
+set_tests_properties(itemstyle_executor PROPERTIES
+  TIMEOUT 200
+  LABELS "guest;executor"
+  SKIP_RETURN_CODE 77
+)
+
 # Host keystrokes (/api/keypress) reach the front application (the suite).
 add_test(
   NAME keyboard_guest
