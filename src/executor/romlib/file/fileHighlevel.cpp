@@ -621,6 +621,7 @@ OSErr Executor::OpenWD(INTEGER vref, LONGINT dirid, LONGINT procid,
     WDPBRec wpb;
     OSErr retval;
 
+    memset(&wpb, 0, sizeof wpb);
     wpb.ioVRefNum = vref;
     wpb.ioWDDirID = dirid;
     wpb.ioWDProcID = procid;
@@ -635,6 +636,7 @@ OSErr Executor::HGetVol(StringPtr voln, GUEST<INTEGER> *vrn, GUEST<LONGINT> *dir
     WDPBRec wpb;
     OSErr retval;
 
+    memset(&wpb, 0, sizeof wpb);
     wpb.ioNamePtr = voln;
     retval = PBHGetVol(&wpb, false);
     if(retval == noErr)
@@ -649,6 +651,7 @@ OSErr Executor::HSetVol(ConstStringPtr voln, INTEGER vrn, LONGINT dirid) /* IMIV
 {
     WDPBRec wpb;
 
+    memset(&wpb, 0, sizeof wpb);
     wpb.ioNamePtr = (StringPtr)voln;
     wpb.ioVRefNum = vrn;
     wpb.ioWDDirID = dirid;
@@ -659,6 +662,7 @@ OSErr Executor::CloseWD(INTEGER wdrefnum) /* IMIV-146 */
 {
     WDPBRec wpb;
 
+    memset(&wpb, 0, sizeof wpb);
     wpb.ioVRefNum = wdrefnum;
     return PBCloseWD(&wpb, false);
 }
