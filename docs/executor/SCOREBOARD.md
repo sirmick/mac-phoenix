@@ -70,7 +70,7 @@ Rows with a fault, by owner:
 | dev-tools-system-7 | Languages ƒ:HyperCard 2.4.1 ƒ:HyperCard | 68k | runs |  | runs |  | e761/dev/002.png |  |
 | dev-tools-system-7 | Languages ƒ:MacPerl 5.2.0r4 ƒ:MacPerl | fat | runs | runs | runs | (e761ppc: unimplemented PowerPC PPCInit) | e761ppc/dev/002.png |  |
 | dev-tools-system-7 | Tools ƒ:ResEdit 2.1.3 ƒ:ResEdit 2.1.3:ResEdit | 68k | runs |  | runs |  | e761/dev/008.png |  |
-| dev-tools-system-7 | Tools ƒ:BBEdit Lite 4.1 ƒ:BBEdit Lite 4.1 | fat | runs | fails | runs | e761ppc: PowerPC exception 6 at 03bdd494 (lr 03b9ead8) | e761ppc/dev/004.png | fix-dev |
+| dev-tools-system-7 | Tools ƒ:BBEdit Lite 4.1 ƒ:BBEdit Lite 4.1 | fat | runs | runs | runs | (e761ppc: latent: unresolved imports LMGetGNEFilter, X2Fix) | e761ppc/dev/004.png |  |
 | games | A-Train ƒ:A-Train | 68k | runs |  | fails |  | e761/games/001.png |  |
 | games | A-Train ƒ:AT Construction Set | 68k | runs |  | fails |  | e761/games/002.png |  |
 | games | A-Train ƒ:ATrain Editor 1.0Beta | 68k | runs |  | runs |  | e761/games/003.png |  |
