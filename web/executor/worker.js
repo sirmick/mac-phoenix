@@ -243,6 +243,8 @@ async function start(m) {
     const others = m.files.filter((f) => !IMAGE.test(f.name));
     const args = ['--size', `${m.width}x${m.height}`,
                   ...images.flatMap((f) => ['--disk', `/uploads/${f.name}`])];
+    if (m.scale && m.scale !== 1)
+        args.push('--scale', `${m.scale}`);
     if (m.system && images.some((f) => f.name === m.system))
         args.push('--system', `/uploads/${m.system}`);
     await runtimeReady;

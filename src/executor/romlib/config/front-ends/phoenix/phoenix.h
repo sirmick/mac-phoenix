@@ -93,6 +93,7 @@ private:
     void render(bool full);
     void publish();
     void publishRects(const Executor::DirtyRects::Rects& changed, bool full);
+    void publishScaledRects();  // rectsHook, the whole scaled_ surface
     Rect cursorBox(int x, int y) const;  // its 16x16 box at a pointer position
     void cursorChanged();                // cursorHook, if set (lock not held)
     void writePPM(const std::string& path);

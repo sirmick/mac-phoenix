@@ -1,6 +1,9 @@
 // The page side: keep uploads in OPFS, start the Worker with them, hand it
 // a canvas, send it input. Query string:
 //   ?size=WxH        the screen (default 640x480)
+//   ?scale=N         render at N times the screen, text from outlines
+//                    (docs/executor/HiDPI.md; default: devicePixelRatio,
+//                    EXECUTOR_SKIA builds only)
 //   ?disk=URL        a disk image to fetch and mount (repeatable); kept in
 //                    OPFS (disk-cache/) and revalidated on later visits
 //                    with its ETag, so it downloads once
@@ -23,6 +26,7 @@ const box = document.getElementById('screen-box');
 const status = document.getElementById('status');
 const params = new URLSearchParams(location.search);
 const [width, height] = (params.get('size') || '640x480').split('x').map(Number);
+const scale = Number(params.get('scale')) || window.devicePixelRatio || 1;
 
 let worker = null, canvas = null, cursor = null, nextId = 1;
 // Bumped when a restart begins: messages from an older Worker (still
@@ -409,7 +413,7 @@ async function start() {
     cursor = new MacCursor(canvas, () => canvas.width);
 
     const offscreen = canvas.transferControlToOffscreen();
-    worker.postMessage({ type: 'start', canvas: offscreen, width, height, files,
+    worker.postMessage({ type: 'start', canvas: offscreen, width, height, scale, files,
                          system: systemSelect.value, volumeKey: volumeKey(files) }, [offscreen]);
     worker.onmessage = (e) => {
         if (mine !== generation)
