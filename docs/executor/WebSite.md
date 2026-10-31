@@ -36,8 +36,13 @@ with `grep EXECUTOR_NET build-wasm/CMakeCache.txt`.
 rebuild doesn't change the running site until it is run again. Nothing
 else is needed: the tab needs no cross-origin isolation headers, but it
 does need a secure context (HTTPS, or `localhost`) for OPFS, where it
-keeps disks and changes; over plain http to another host it runs with
-nothing kept.
+keeps disks and changes. Over plain http to another host (the server by
+its LAN address) it runs with nothing kept, and says so above the screen:
+library disks are read as needed into memory (at most 128 MB of each, the
+chunks read longest ago dropped), disks are writable through overlays in
+memory, Executor's own disk is in memory, and all of it lasts until
+Executor restarts (adding a disk restarts it); no sound
+(`executor.web.insecure` runs the site so).
 
 ## The library
 

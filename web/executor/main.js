@@ -19,7 +19,9 @@
 // Served by tools/web/server, signed in (api/me): the overlays and
 // Executor's own volume are synced with the account (sync.js).
 // Outside a secure context (plain http to another host) there is no OPFS
-// and no AudioWorklet: uploads last the visit, sound is off.
+// and no AudioWorklet: uploads, library disks (read as needed, held in
+// memory) and changes to them and to Executor's volume last while
+// Executor runs, sound is off; the page says so (#insecure).
 //
 // Automation: window.executor.request(op, arg) -> Promise. At the running
 // application's next event call (web_main.cpp): 'app', 'windows', 'menus', 'launch'
@@ -30,6 +32,7 @@
 'use strict';
 
 const box = document.getElementById('screen-box');
+document.getElementById('insecure').hidden = window.isSecureContext;
 const status = document.getElementById('status');
 const params = new URLSearchParams(location.search);
 const [width, height] = (params.get('size') || '640x480').split('x').map(Number);
@@ -163,7 +166,7 @@ async function fetchDisk(url) {
             if (probe.headers.get('X-Image-Id'))
                 imageIds[name] = probe.headers.get('X-Image-Id');
             return { name, size, lastModified: Date.parse(probe.headers.get('Last-Modified')) || 0,
-                     remote: { url: absolute, etag: probe.headers.get('ETag'), key: key || await cacheKey(absolute) } };
+                     remote: { url: absolute, etag: probe.headers.get('ETag'), key } };
         }
     }
 
@@ -305,7 +308,9 @@ async function showFiles(files) {
         const st = imageState[f.name];
         s.textContent = f.name + (st && st.modified ? ' •' : '');
         if (st)
-            s.title = st.modified ? 'changed (kept in this browser; the original is untouched)'
+            s.title = st.inMemory ? (st.modified ? 'changed (until Executor restarts: not a secure page; the original is untouched)'
+                                                 : 'writable (changes last until Executor restarts: not a secure page)')
+                    : st.modified ? 'changed (kept in this browser; the original is untouched)'
                     : st.writable ? 'writable' : 'read-only (open in another tab?)';
         if (IMAGE.test(f.name)) {
             s.append(link('⤓', 'Download the image as it is now', () => download(f.name)));
@@ -341,6 +346,11 @@ async function revert(f) {
     if (worker)
         worker.terminate();
     worker = null;
+    delete imageState[f.name];
+    if (!opfs) {
+        start();                    // its changes were the Worker's
+        return;
+    }
     const overlays = await (await uploads()).getDirectoryHandle('overlays', { create: true });
     for (let i = 0; i < 20; i++) {                  // until the old Worker lets go
         try {
@@ -352,7 +362,6 @@ async function revert(f) {
             await new Promise((r) => setTimeout(r, 100));
         }
     }
-    delete imageState[f.name];
     // Signed in: the account forgets them too, at the start (sync.js), or
     // at the next one it reaches the server.
     if (account)
@@ -523,7 +532,7 @@ async function start() {
         } else if (m.type === 'images') {
             const before = JSON.stringify(imageState);
             for (const i of m.images)
-                imageState[i.name] = { modified: i.modified, writable: i.writable };
+                imageState[i.name] = { modified: i.modified, writable: i.writable, inMemory: i.inMemory };
             if (JSON.stringify(imageState) !== before)
                 storedFiles().then(showFiles);
         } else if (m.type === 'cursor') {
@@ -570,7 +579,8 @@ function fitCanvas() {
     if (!canvas)
         return;
     const dpr = window.devicePixelRatio || 1;
-    const bar = document.getElementById('bar').offsetHeight + document.getElementById('status').offsetHeight + 32;
+    const bar = document.getElementById('bar').offsetHeight + document.getElementById('status').offsetHeight
+        + document.getElementById('insecure').offsetHeight + 32;
     const fit = Math.min(window.innerWidth * dpr / width, (window.innerHeight - bar) * dpr / height);
     const scale = Math.max(1, Math.floor(fit));     // device pixels a guest pixel
     canvas.style.width = `${width * scale / dpr}px`;

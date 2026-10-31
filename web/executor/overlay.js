@@ -31,9 +31,56 @@
 // X-Image-Id: main.js), so its changes survive the image being touched;
 // an upload on its name, size and time. An overlay under a disk's old key
 // (its name, size and download time) is moved to the new one.
+//
+// Without OPFS (a page outside a secure context: plain http to another
+// host) an overlay's data and index are in memory (MemoryHandle): the
+// image is writable, its changes last while this Worker runs.
 'use strict';
 
 const OVERLAY_BLOCK = 4096;
+
+// A FileSystemSyncAccessHandle's calls on a growable buffer in memory.
+class MemoryHandle {
+    constructor() {
+        this.bytes = new Uint8Array(0);
+        this.size = 0;
+    }
+
+    view(buf) { return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength); }
+
+    read(buf, { at }) {
+        const out = this.view(buf);
+        const n = Math.max(0, Math.min(out.length, this.size - at));
+        out.set(this.bytes.subarray(at, at + n));
+        out.fill(0, n);
+        return n;
+    }
+
+    write(buf, { at }) {
+        const src = this.view(buf);
+        const end = at + src.length;
+        if (end > this.bytes.length) {
+            const grown = new Uint8Array(Math.max(end, this.bytes.length * 2, 1 << 16));
+            grown.set(this.bytes.subarray(0, this.size));
+            this.bytes = grown;
+        }
+        this.bytes.set(src, at);
+        this.size = Math.max(this.size, end);
+        return src.length;
+    }
+
+    getSize() { return this.size; }
+
+    truncate(n) {
+        if (n < this.size)
+            this.bytes.fill(0, n, this.size);
+        this.size = n;
+    }
+
+    flush() { }
+
+    close() { }
+}
 
 class FileImage {
     constructor(file) {
@@ -57,11 +104,14 @@ class FileImage {
 // disk-cache/KEY.part (the image, sparse), KEY.have (a byte a chunk) and
 // KEY.part.json (its URL and ETag: another ETag, another image, the copy
 // starts again). desc: { name, size, lastModified, remote: { url, etag, key } }
-// (main.js). Without OPFS, or another tab holding the copy: in memory.
+// (main.js). Without OPFS, or another tab holding the copy: in memory, at
+// most REMOTE_MEMORY bytes of it, the chunks read longest ago dropped (and
+// read again if needed).
 const REMOTE_CHUNK = 256 * 1024;
 const REMOTE_AHEAD = 4;                  // chunks a request, the ones needed or not
 const REMOTE_TIMEOUT = 20000;            // ms a request
 const REMOTE_TRIES = 3;
+const REMOTE_MEMORY = 128 << 20;
 
 // A line for the page's status (worker.js).
 function notice(text) {
@@ -80,7 +130,7 @@ class RemoteImage {
         this.have = new Uint8Array(this.chunks);
         this.part = null;                // sync access handles; null: memory
         this.haveFile = null;
-        this.memory = new Map();         // chunk -> bytes, without them
+        this.memory = new Map();         // chunk -> bytes, without them; oldest read first
         this.fetched = 0;                // bytes, and requests, for 'stats'
         this.requests = 0;
     }
@@ -161,8 +211,14 @@ class RemoteImage {
             this.haveFile.flush();
         } else {
             for (let c = 0; c < count; c++)
-                this.memory.set(first + c, bytes.subarray(c * REMOTE_CHUNK, (c + 1) * REMOTE_CHUNK));
+                this.memory.set(first + c, bytes.slice(c * REMOTE_CHUNK, (c + 1) * REMOTE_CHUNK));
             this.have.fill(1, first, first + count);
+            for (const [c] of this.memory) {
+                if (this.memory.size * REMOTE_CHUNK <= REMOTE_MEMORY)
+                    break;
+                this.memory.delete(c);
+                this.have[c] = 0;
+            }
         }
     }
 
@@ -186,7 +242,10 @@ class RemoteImage {
         for (let at = 0; at < length;) {
             const c = Math.floor((pos + at) / REMOTE_CHUNK);
             const off = pos + at - c * REMOTE_CHUNK;
-            const piece = this.memory.get(c).subarray(off, off + length - at);
+            const chunk = this.memory.get(c);
+            this.memory.delete(c);               // the newest read now
+            this.memory.set(c, chunk);
+            const piece = chunk.subarray(off, off + length - at);
             out.set(piece, at);
             at += piece.length;
         }
@@ -238,15 +297,20 @@ class Overlay {
         this.pending = new Set();       // blocks changed since the last upload
         this.dir = null;
         this.reverted = false;          // Revert not on the account yet
+        this.inMemory = false;          // no OPFS: kept while the Worker runs
     }
 
-    // root: OPFS (none: read-only). legacyKey: the key this image's
-    // overlay may have under the old scheme.
+    // root: OPFS (none: the changes in memory). legacyKey: the key this
+    // image's overlay may have under the old scheme.
     static async open(root, name, file, key, legacyKey) {
         const image = file.remote ? await RemoteImage.open(root, file) : new FileImage(file);
         const ov = new Overlay(name, file, key, image);
-        if (!root)
+        if (!root) {
+            ov.data = new MemoryHandle();
+            ov.index = new MemoryHandle();
+            ov.inMemory = true;
             return ov;
+        }
         try {
             const overlays = await root.getDirectoryHandle('overlays', { create: true });
             let exists = false;
