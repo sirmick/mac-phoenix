@@ -156,6 +156,47 @@ int main(void)
             }
             DisposeGWorld(gw);
         }
+
+        /* A window made while a GWorld's device is current (SetGWorld(gw,
+           nil), then NewCWindow: Mars Rising), the GWorld's pixels
+           unlocked and locked: the device then, where the pixmap points. */
+        for(i = 0; i < 2; i++)
+        {
+            GWorldPtr gw = NULL;
+            Rect r = { 0, 0, 64, 64 }, wr = { 100, 100, 164, 164 };
+            CGrafPtr savePort;
+            GDHandle saveDev;
+            const char *when = i ? "locked" : "unlocked";
+            if(NewGWorld(&gw, 8, &r, NULL, NULL, 0) != noErr || !gw)
+                continue;
+            PixMapHandle gpm = GetGWorldPixMap(gw);
+            if(i == 1)
+                LockPixels(gpm);
+            GetGWorld(&savePort, &saveDev);
+            SetGWorld(gw, NULL);
+            WindowPtr w = NewCWindow(NULL, &wr, "\p", false, documentProc, (WindowPtr)-1, false, 0);
+            sprintf(k, "window.%s.device", when);
+            out(k, "%s", GetGDevice() == GetMainDevice() ? "main"
+                : GetGDevice() == GetGWorldDevice(gw) ? "gworld's" : "other");
+            SetGWorld(savePort, saveDev);
+            if(w)
+            {
+                PixMapHandle wpm = ((CGrafPtr)w)->portPixMap;
+                Ptr base = (**wpm).baseAddr, pix = GetPixBaseAddr(gpm);
+                sprintf(k, "window.%s.baseAddr", when);
+                out(k, "%s", base == (**(**GetMainDevice()).gdPMap).baseAddr ? "screen"
+                    : base == pix ? "gworld's pixels"
+                    : base && *(Ptr *)base == pix ? "handle to gworld's pixels" : "other");
+                sprintf(k, "window.%s.pixelSize", when);
+                out(k, "%d", (**wpm).pixelSize);
+                sprintf(k, "window.%s.pmVersion", when);
+                out(k, "%d", (**wpm).pmVersion);
+                sprintf(k, "window.%s.bounds", when);
+                out_rect(k, &(**wpm).bounds);
+                DisposeWindow(w);
+            }
+            DisposeGWorld(gw);
+        }
     }
     probe_close();
     return 0;

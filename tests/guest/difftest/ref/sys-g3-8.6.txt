@@ -1,4 +1,4 @@
-# probe 04fb5828974581bb8bfa877d970049edfe1dfa01300a6e44f3acc95468b6c984
+# probe 6dba2b3d4a4c65d209f79b277e35d51f1a7492fb4a67b8ee89fcac79d9084d7d
 == gestalt
 gestalt.sysv: err 0 00000860
 gestalt.sysa: err 0 00000002
@@ -173,7 +173,7 @@ lowmem.0204: 0002
 lowmem.0206: 6300
 lowmem.0208: 1388
 lowmem.020a: 80cc
-lowmem.020c: e70bb8e9
+lowmem.020c: e70bbd7e
 lowmem.0938: cfff
 lowmem.0a60: 0000
 lowmem.0cca: 3cb4
@@ -184,11 +184,11 @@ lowmem.0b21: bf
 process.err: 0
 process.name: "MacPhoenixSuite" (15)
 process.type: APPL DfSy mode 00000080
-process.~size: 1242972 free 1093424
+process.~size: 1243308 free 1093344
 process.spec.name: "MacPhoenixSuite" (15)
 == script
 script.sm.0: 00000860
-script.sm.2: 0000003e
+script.sm.2: 00000048
 script.sm.4: 00000001
 script.sm.6: 00000000
 script.sm.8: 00000000
@@ -286,3 +286,13 @@ gworld.4.locked.state: 00000080
 gworld.4.unlocked.baseAddr: handle to pixels
 gworld.4.unlocked.pmVersion: 2
 gworld.4.unlocked.state: 00000000
+gworld.window.unlocked.device: gworld's
+gworld.window.unlocked.baseAddr: handle to gworld's pixels
+gworld.window.unlocked.pixelSize: 8
+gworld.window.unlocked.pmVersion: 2
+gworld.window.unlocked.bounds: -100,-100,-36,-36
+gworld.window.locked.device: gworld's
+gworld.window.locked.baseAddr: handle to gworld's pixels
+gworld.window.locked.pixelSize: 8
+gworld.window.locked.pmVersion: 2
+gworld.window.locked.bounds: -100,-100,-36,-36
