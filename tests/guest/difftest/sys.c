@@ -38,6 +38,267 @@ static const long lowmem[][2] = {   /* address, size */
     { 0x1FA, 2 }, { 0x204, 2 }, { 0x206, 2 }, { 0x208, 2 }, { 0x20A, 2 }, { 0x20C, 4 },
     { 0x938, 2 }, { 0xA60, 2 }, { 0xCCA, 2 }, { 0xDA2, 2 }, { 0x12F0, 2 }, { 0xB21, 1 } };
 
+/* ---- heap: where the Memory Manager puts a nonrelocatable block and what
+   it moves, purges or asks the grow-zone procedure for to make room
+   (Slithereens' sounds: HLockHi, NewPtr, HUnlock, HPurge per sound left
+   its pointers among the sounds on Executor). Each case runs in a zone of
+   its own (InitZone in a block of the application heap), so the layout is
+   the same on both machines; results are kept while the zone is current
+   and printed after: printf allocates. */
+#define ZSIZE (256L * 1024)
+static Ptr zmem;
+static THz zone, appzone;
+static long gz_calls, gz_need;
+static int gz_purged_first;   /* the purgeable handle was already purged */
+static Handle gz_watch;
+static char hres[64][80];
+static char hkey[64][48];
+static int hn;
+
+static pascal long probe_gz(Size cbNeeded)
+{
+    gz_calls++;
+    gz_need = cbNeeded;
+    if(gz_watch && gz_calls == 1)
+        gz_purged_first = *gz_watch == NULL;
+    return 0;
+}
+
+static void hout(const char *key, const char *fmt, ...)
+{
+    va_list ap;
+    if(hn >= 64)
+        return;
+    strncpy(hkey[hn], key, sizeof hkey[0] - 1);
+    va_start(ap, fmt);
+    vsprintf(hres[hn], fmt, ap);
+    va_end(ap);
+    hn++;
+}
+
+static void zbegin(void)
+{
+    SetZone(appzone);
+    InitZone(NULL, 64, zmem + ZSIZE, (THz)zmem);
+    zone = (THz)zmem;
+    SetZone(zone);
+}
+
+static const char *where(Ptr p, Ptr q)
+{
+    return !p || !q ? "nil" : p < q ? "below" : "above";
+}
+
+static void probe_heap(void)
+{
+    int i;
+    GrowZoneUPP gzupp = NewGrowZoneUPP(probe_gz);
+    appzone = GetZone();
+    zmem = NewPtr(ZSIZE);
+    if(!zmem)
+    {
+        out("zone", "no memory");
+        return;
+    }
+    hn = 0;
+    {
+        /* An unlocked handle at the bottom of the zone: the pointer goes
+           below it and the handle moves up? */
+        Handle h;
+        Ptr was, p;
+        zbegin();
+        h = NewHandle(8192);
+        was = *h;
+        p = NewPtr(1024);
+        hout("unlocked.ptr", "%s the handle", where(p, *h));
+        hout("unlocked.handle", "%s", *h == was ? "stayed" : "moved");
+        /* moved just past the pointer, or to the top of the zone? */
+        hout("unlocked.to", "%s", *h - (p + GetPtrSize(p)) < 64 ? "next to the pointer"
+             : zmem + ZSIZE - (*h + GetHandleSize(h)) < 64 ? "the top of the zone" : "between");
+        hout("~unlocked.at", "was %ld now %ld ptr %ld", (long)(was - zmem), (long)(*h - zmem),
+             (long)(p - zmem));
+        /* locked: it stays, the pointer goes above it */
+        zbegin();
+        h = NewHandle(8192);
+        HLock(h);
+        was = *h;
+        p = NewPtr(1024);
+        hout("locked.ptr", "%s the handle", where(p, *h));
+        hout("locked.handle", "%s", *h == was ? "stayed" : "moved");
+        /* purgeable, room to move it: moved or purged? */
+        zbegin();
+        h = NewHandle(8192);
+        HPurge(h);
+        was = *h;
+        p = NewPtr(1024);
+        hout("purgeable.ptr", "%s the handle", where(p, *h));
+        hout("purgeable.handle", "%s", !*h ? "purged" : *h == was ? "stayed" : "moved");
+    }
+    {
+        /* An unlocked handle too big to move above the pointer: the free
+           space above it is smaller than it. */
+        Handle h;
+        Ptr was, p;
+        long f;
+        zbegin();
+        f = zone->zcbFree;
+        h = NewHandle(f * 6 / 10);
+        was = *h;
+        p = NewPtr(f * 3 / 10);
+        hout("nomove.ptr", "%s", p ? where(p, *h) : "failed");
+        hout("nomove.handle", "%s", *h == was ? "stayed" : "moved");
+        hout("~nomove.at", "was %ld now %ld ptr %ld", (long)(was - zmem), (long)(*h - zmem),
+             (long)(p - zmem));
+        hout("nomove.err", "%d", MemError());
+        /* the same, purgeable */
+        zbegin();
+        h = NewHandle(f * 6 / 10);
+        HPurge(h);
+        was = *h;
+        p = NewPtr(f * 3 / 10);
+        hout("nomove.purgeable.ptr", "%s", p ? (*h ? where(p, *h) : "handle purged") : "failed");
+        hout("nomove.purgeable.handle", "%s", !*h ? "purged" : *h == was ? "stayed" : "moved");
+    }
+    {
+        /* Free space split by an unlocked handle; a pointer bigger than
+           either piece but smaller than both. */
+        Handle low, h;
+        Ptr was, p;
+        long f;
+        zbegin();
+        f = zone->zcbFree;
+        low = NewHandle(f * 4 / 10);
+        h = NewHandle(f / 10);
+        DisposeHandle(low);
+        was = *h;
+        p = NewPtr(f * 7 / 10);
+        hout("split.ptr", "%s", p ? where(p, *h) : "failed");
+        hout("split.handle", "%s", *h == was ? "stayed" : "moved");
+        hout("split.err", "%d", MemError());
+        /* the same with the handle locked: no room anywhere */
+        zbegin();
+        low = NewHandle(f * 4 / 10);
+        h = NewHandle(f / 10);
+        HLock(h);
+        DisposeHandle(low);
+        p = NewPtr(f * 7 / 10);
+        hout("split.locked.ptr", "%s", p ? where(p, *h) : "failed");
+        hout("split.locked.err", "%d", MemError());
+    }
+    {
+        /* Purgeable blocks on both sides of a locked one, room for the
+           pointer only once one of them is purged: which goes? */
+        Handle lo, hi, l;
+        Ptr p;
+        long f;
+        zbegin();
+        f = zone->zcbFree;
+        lo = NewHandle(f * 45 / 100);
+        HPurge(lo);
+        l = NewHandle(4096);
+        HLock(l);
+        hi = NewHandle(f * 45 / 100);
+        HPurge(hi);
+        p = NewPtr(f * 4 / 10);
+        hout("inway.ptr", "%s the locked block", p ? where(p, *l) : "failed");
+        hout("inway.low", "%s", *lo ? "kept" : "purged");
+        hout("inway.high", "%s", *hi ? "kept" : "purged");
+        /* A purgeable block under a locked one, room above it: purged to
+           put the pointer low, or the pointer above? */
+        zbegin();
+        lo = NewHandle(f / 2);
+        HPurge(lo);
+        l = NewHandle(4096);
+        HLock(l);
+        p = NewPtr(f * 4 / 10);
+        hout("purgeOrHigher.ptr", "%s the locked block", p ? where(p, *l) : "failed");
+        hout("purgeOrHigher.low", "%s", *lo ? "kept" : "purged");
+        /* the same with the lower block unlocked, not purgeable: room
+           neither below (it can't move past the locked block) nor... above */
+        zbegin();
+        lo = NewHandle(f / 2);
+        l = NewHandle(4096);
+        HLock(l);
+        p = NewPtr(f * 4 / 10);
+        hout("stuck.ptr", "%s the locked block", p ? where(p, *l) : "failed");
+    }
+    {
+        /* The grow-zone procedure: called only once compacting and purging
+           haven't made room? A locked and a purgeable handle; a pointer
+           that fits once the purgeable one is gone, then one that never
+           fits. */
+        Handle hp, hl;
+        Ptr p;
+        long f;
+        zbegin();
+        SetGrowZone(gzupp);
+        f = zone->zcbFree;
+        hl = NewHandle(f * 3 / 10);
+        HLock(hl);
+        hp = NewHandle(f * 3 / 10);
+        HPurge(hp);
+        gz_calls = 0;
+        gz_watch = hp;
+        gz_purged_first = -1;
+        p = NewPtr(f * 6 / 10);
+        hout("gz.fits.ptr", "%s", p ? "ok" : "failed");
+        hout("gz.fits.calls", "%ld", gz_calls);
+        hout("gz.fits.purged", "%s", !*hp ? "yes" : "no");
+        if(p)
+            DisposePtr(p);
+        gz_calls = 0;
+        gz_purged_first = -1;
+        hp = NewHandle(1024);
+        HPurge(hp);
+        gz_watch = hp;
+        p = NewPtr(ZSIZE);
+        hout("gz.never.ptr", "%s", p ? "ok" : "failed");
+        hout("gz.never.err", "%d", MemError());
+        hout("gz.never.called", "%s", gz_calls ? "yes" : "no");
+        hout("~gz.never.calls", "%ld", gz_calls);
+        hout("gz.never.purgedBeforeGz", "%s", gz_purged_first < 0 ? "-" : gz_purged_first ? "yes" : "no");
+        hout("gz.never.need", "%s", gz_need >= ZSIZE ? "at least the request" : "less than the request");
+        hout("~gz.never.need", "%ld", gz_need);
+        gz_watch = NULL;
+    }
+    {
+        /* Slithereens' sounds: HLockHi, NewPtr, HUnlock, HPurge, five
+           times; where the pointers end up. */
+        Handle h[5];
+        Ptr p[5];
+        int adjacent = 1, below = 1, purged = 0, j;
+        zbegin();
+        for(i = 0; i < 5; i++)
+        {
+            h[i] = NewHandle(12000 + 1000 * i);
+            HNoPurge(h[i]);
+            HLockHi(h[i]);
+            p[i] = NewPtr(13000 + 1000 * i);
+            HUnlock(h[i]);
+            HPurge(h[i]);
+        }
+        for(i = 0; i < 5; i++)
+        {
+            if(i && (!p[i] || !p[i - 1] || p[i] < p[i - 1]
+                     || p[i] - p[i - 1] > GetPtrSize(p[i - 1]) + 32))
+                adjacent = 0;
+            for(j = 0; j < 5; j++)
+                if(*h[j] && p[i] > *h[j])
+                    below = 0;
+            if(!*h[i])
+                purged++;
+        }
+        hout("sounds.ptrs", "%s", p[4] ? "ok" : "failed");
+        hout("sounds.adjacent", "%s", adjacent ? "yes" : "no");
+        hout("sounds.belowHandles", "%s", below ? "yes" : "no");
+        hout("sounds.purged", "%d", purged);
+    }
+    SetZone(appzone);
+    for(i = 0; i < hn; i++)
+        out(hkey[i], "%s", hres[i]);
+    DisposePtr(zmem);
+}
+
 int main(void)
 {
     int i;
@@ -343,6 +604,8 @@ int main(void)
             out(k, "%d", GetSharedLibrary(name, kPowerPCArch, kFindLib, &conn, &main, err));
         }
     }
+    if(SECTION("heap"))
+        probe_heap();
     probe_close();
     return 0;
 }

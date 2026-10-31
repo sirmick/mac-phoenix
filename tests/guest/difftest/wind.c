@@ -276,6 +276,58 @@ static void proxy(void)
     DisposeWindow(w);
 }
 
+/* SetGWorld with a nil device after a GWorld (Mars Rising: SetGWorld(gw,
+   nil), SetGWorld(nil, nil), then NewCWindow): the device then, and the
+   pixmap of a window opened next. */
+static const char *device_name(GDHandle d, GWorldPtr gw)
+{
+    return !d ? "nil" : d == GetMainDevice() ? "main" : d == GetGWorldDevice(gw) ? "gworld's" : "other";
+}
+
+static void gworld(void)
+{
+    GWorldPtr gw = NULL;
+    Rect r = { 0, 0, 64, 64 }, wr = { 100, 100, 164, 164 };
+    CGrafPtr savePort, port;
+    GDHandle saveDev, dev;
+    WindowPtr w, other;
+    int i;
+    if(!SECTION("gworld"))
+        return;
+    if(NewGWorld(&gw, 8, &r, NULL, NULL, 0) != noErr || !gw)
+        return;
+    GetGWorld(&savePort, &saveDev);
+    other = NewCWindow(NULL, &wr, "\p", false, documentProc, (WindowPtr)-1, false, 0);
+    for(i = 0; i < 2; i++)
+    {
+        const char *what = i ? "windowPort" : "nilPort";
+        char k[64];
+        SetGWorld(gw, NULL);
+        SetGWorld(i ? (CGrafPtr)other : NULL, NULL);
+        GetGWorld(&port, &dev);
+        sprintf(k, "%s.device", what);
+        out(k, "%s", device_name(GetGDevice(), gw));
+        if(!i)
+        {
+            sprintf(k, "%s.port", what);
+            out(k, "%s", !port ? "nil" : port == (CGrafPtr)gw ? "gworld" : "other");
+        }
+        w = NewCWindow(NULL, &wr, "\p", false, documentProc, (WindowPtr)-1, false, 0);
+        SetGWorld(savePort, saveDev);
+        if(w)
+        {
+            PixMapHandle wpm = ((CGrafPtr)w)->portPixMap;
+            sprintf(k, "%s.window.baseAddr", what);
+            out(k, "%s", (**wpm).baseAddr == (**(**GetMainDevice()).gdPMap).baseAddr ? "screen" : "other");
+            DisposeWindow(w);
+        }
+    }
+    SetGWorld(savePort, saveDev);
+    if(other)
+        DisposeWindow(other);
+    DisposeGWorld(gw);
+}
+
 int main(void)
 {
     probe_open("wind");
@@ -285,6 +337,7 @@ int main(void)
     props();
     floating();
     proxy();
+    gworld();
     probe_close();
     return 0;
 }
