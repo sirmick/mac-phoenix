@@ -218,4 +218,4 @@ checks the module is the site's. Labelled `site`, not `executor` (about
 20 minutes for the six cells). The canvas after each application's checks,
 and the Finder's first, are saved as PNGs in `~/storage/tmp/site/shots/`
 (`SYSTEM-APP.png`, `SITE_SHOTS=DIR` elsewhere); `SITE_DPR=2` runs the page
-at devicePixelRatio 2, so they are the 2x canvas.
+at devicePixelRatio 2, so they are the 2x canvas (`SYSTEM-APP@2x.png`).

@@ -28,7 +28,8 @@
 // line an application. SITE_LOG=1: the Worker's console. The canvas as
 // it is after each application's checks (and the Finder's, first) goes
 // to SITE_SHOTS (default ~/storage/tmp/site/shots) as SYSTEM-NAME.png;
-// SITE_DPR=2: the page at devicePixelRatio 2 (the tab draws at 2x).
+// SITE_DPR=2: the page at devicePixelRatio 2 (the tab draws at 2x), shots
+// SYSTEM-NAME@2x.png.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -87,6 +88,7 @@ const sample = (page, box = [0, 0, 640, 480]) => Promise.race([page.evaluate(asy
 // The canvas's own pixels as a PNG (at the page's scale), in the shots
 // directory.
 const SHOTS = process.env.SITE_SHOTS || path.join(os.homedir(), 'storage/tmp/site/shots');
+const DPR = Number(process.env.SITE_DPR) || 1;
 async function shot(name) {
     const png = await Promise.race([page.evaluate(async () => {
         const p = await executor.request('pixels');
@@ -101,7 +103,8 @@ async function shot(name) {
     if (!png)
         return;
     fs.mkdirSync(SHOTS, { recursive: true });
-    fs.writeFileSync(path.join(SHOTS, `${system}-${name.replace(/[^\w.-]+/g, '_')}.png`), Buffer.from(png, 'base64'));
+    const at = DPR === 1 ? '' : `@${DPR}x`;              // runs at other scales keep theirs
+    fs.writeFileSync(path.join(SHOTS, `${system}-${name.replace(/[^\w.-]+/g, '_')}${at}.png`), Buffer.from(png, 'base64'));
 }
 const changed = (a, b) => !a || !b ? 0 : a.reduce((n, v, i) => n + (Math.abs(v - b[i]) > 8), 0) / a.length;
 
@@ -115,7 +118,7 @@ let page = null, crashed = false;
 async function openTab() {
     if (page)
         await page.context().close().catch(() => {});
-    page = await newPage(browser, { log: !!process.env.SITE_LOG, scale: Number(process.env.SITE_DPR) || 1 });
+    page = await newPage(browser, { log: !!process.env.SITE_LOG, scale: DPR });
     page.on('dialog', (d) => d.accept());
     page.on('crash', () => { crashed = true; });
     crashed = false;
