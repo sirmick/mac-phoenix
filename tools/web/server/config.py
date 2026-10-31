@@ -14,6 +14,8 @@ DEFAULTS = {
         "trusted_proxies": [],           # addresses whose X-Forwarded-For is believed
         "session_days": 30,
         "max_upload_mb": 64,             # one request's body
+        "tls_cert": "",                  # PEM certificate (chain): serve HTTPS directly,
+        "tls_key": "",                   # without a proxy (e.g. a self-signed one on a LAN)
     },
     "library": {
         "images": "~/storage/images",

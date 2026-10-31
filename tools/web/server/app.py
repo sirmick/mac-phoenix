@@ -476,6 +476,15 @@ class Server(http.server.ThreadingHTTPServer):
         self.slots = threading.BoundedSemaphore(MAX_CONNECTIONS)
         handler = type("BoundHandler", (Handler,), {"app": self.app})
         super().__init__((cfg["server"]["bind"], cfg["server"]["port"]), handler)
+        srv = cfg["server"]
+        if srv.get("tls_cert"):
+            import ssl
+            ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+            ctx.load_cert_chain(os.path.expanduser(srv["tls_cert"]),
+                                os.path.expanduser(srv.get("tls_key") or srv["tls_cert"]))
+            # The handshake happens in the connection's thread (first read), not in accept().
+            self.socket = ctx.wrap_socket(self.socket, server_side=True,
+                                          do_handshake_on_connect=False)
         c = cfg["library"]
         self.app.ids.warm([os.path.join(c["images"], d["name"])
                            for d in library.catalog(c["images"], c["include"], c["exclude"])])
