@@ -266,7 +266,11 @@ static void launchchain(ConstStringPtr fName, INTEGER vRefNum, Boolean resetmemo
         wdpb.ioVRefNum = fsp->vRefNum;
         wdpb.ioWDDirID = fsp->parID;
     }
-    /* Do not do this -- Loser does it SFSaveDisk_Update (vRefNum, fName); */
+    /* Set the new process's current directory (SFSaveDisk/CurDirStore) to
+       its own folder, the way the Process Manager does, so Standard File
+       defaults to it instead of whatever launched before. */
+    ROMlib_SFSaveDisk_update(wdpb.ioVRefNum, (StringPtr)fName);
+    LM(CurDirStore) = wdpb.ioWDDirID;
     wdpb.ioWDProcID = "Xctr"_4;
     wdpb.ioNamePtr = 0;
     PBOpenWD(&wdpb, false);
