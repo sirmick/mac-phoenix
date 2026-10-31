@@ -25,9 +25,9 @@ Visual verdicts and owner overrides: `tools/executor/scoreboard_notes.json`.
 
 | System | Column | runs | partial | fails |
 |---|---|---|---|---|
-| 7.6.1 | e761 | 73 | 9 | 23 |
+| 7.6.1 | e761 | 72 | 10 | 23 |
 | 7.6.1 | e761ppc | 17 | 3 | 12 |
-| 8.6 | e86 | 68 | 6 | 34 |
+| 8.6 | e86 | 67 | 7 | 34 |
 
 Gaps in the references and the method:
 
@@ -47,12 +47,12 @@ Rows with a fault, by owner:
 | System | Owner | rows |
 |---|---|---|
 | 7.6.1 | fix-dev | 5 |
-| 7.6.1 | fix-games | 25 |
+| 7.6.1 | fix-games | 26 |
 | 7.6.1 | fix-prod | 2 |
 | 7.6.1 | — | 5 |
 | 8.6 | fix-86 | 6 |
 | 8.6 | fix-dev | 6 |
-| 8.6 | fix-games | 22 |
+| 8.6 | fix-games | 23 |
 | 8.6 | fix-prod | 1 |
 | 8.6 | platinum | 1 |
 | 8.6 | — | 4 |
@@ -162,7 +162,7 @@ Rows with a fault, by owner:
 | games-classic | SimCity 1.3c ƒ:TerrainEdit1.1 | 68k | fails |  | fails | e761: desktop only (menu bar shows just File), same as reference | e761/classic/018.png | — (the same on the Quadra) |
 | games-classic | Spaceward Ho! 3.0.1 ƒ:Spaceward Ho! 3.0.1 | 68k | runs |  | runs |  | e761/classic/019.png |  |
 | games-ppc | EV Nova 1.0.10 ƒ:EV Nova | fat | partial | partial | fails | e761: only a File menu over the desktop, no game window | e761/gppc/001.png | fix-games (ref fails too) |
-| games-ppc | Ferazel's Wand 1.0.3 ƒ:Ferazel's Wand | ppc | runs |  | n/a | (e761: latent: unresolved imports UpperString, SleepQRemove, SleepQInstall) | e761/gppc/002.png |  |
+| games-ppc | Ferazel's Wand 1.0.3 ƒ:Ferazel's Wand | ppc | partial |  | n/a | e761: wants its CD: alert "Please insert the Ferazel's Wand CD and try again." at launch, as on the G3 (no CD image in the set) | e761/gppc/002.png | fix-games |
 | games-ppc | Mars Rising 1.0.2 ƒ:Mars Rising | ppc | fails |  | n/a | e761: alert: "InputSprocket Not Loaded: Sorry, but I couldn't initialise Apple's InputSprocket Shared Library..." | e761/gppc/003.png | fix-games |
 | games-ppc | Master of Orion II ƒ:Master of Orion II:MOO II | ppc | fails |  | n/a | e761: desktop only, empty menu bar, no game window | e761/gppc/004.png | fix-games |
 | games-ppc | Slithereens 1.0.1 ƒ:Slithereens | fat | fails | fails | fails | e761: green error dialog: "-7004 main" (Quit) | e761/gppc/005.png | fix-games (ref fails too) |
@@ -275,7 +275,7 @@ Rows with a fault, by owner:
 | games-classic | SimCity 1.3c ƒ:TerrainEdit1.1 | 68k | partial | fails | e86: app in front with only a File menu, no window | e86/classic/018.png | — (the same on the ROM machines) |
 | games-classic | Spaceward Ho! 3.0.1 ƒ:Spaceward Ho! 3.0.1 | 68k | runs | runs |  | e86/classic/019.png |  |
 | games-ppc | EV Nova 1.0.10 ƒ:EV Nova | fat | partial | fails | e86: only a File menu over the desktop, no game window | e86/gppc/001.png | fix-games (ref fails too) |
-| games-ppc | Ferazel's Wand 1.0.3 ƒ:Ferazel's Wand | ppc | runs | fails | (e86: latent: unresolved imports UpperString, SleepQRemove, SleepQInstall) | e86/gppc/002.png |  |
+| games-ppc | Ferazel's Wand 1.0.3 ƒ:Ferazel's Wand | ppc | partial | fails | e86: wants its CD: alert "Please insert the Ferazel's Wand CD and try again." at launch, as on the G3 (no CD image in the set) | e86/gppc/002.png | fix-games |
 | games-ppc | Mars Rising 1.0.2 ƒ:Mars Rising | ppc | fails | fails | e86: crashed, blank screen | e86/gppc/003.png | fix-games (ref fails too) |
 | games-ppc | Master of Orion II ƒ:Master of Orion II:MOO II | ppc | fails | fails | e86: alert: "Unable to activate the context. -50" | e86/gppc/004.png | fix-games (ref fails too) |
 | games-ppc | Slithereens 1.0.1 ƒ:Slithereens | fat | fails | fails | e86: crashed, blank screen | e86/gppc/005.png | fix-games (ref fails too) |
