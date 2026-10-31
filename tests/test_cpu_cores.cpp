@@ -125,13 +125,13 @@ static int test_ppc(bool jit)
     return 0;
 }
 
-/* --bench: a million iterations of lwz/addi/stw/addic./bne (5M
- * instructions) on each back-end, with and without inline memory. Prints
- * millions of guest instructions a second. */
-static void bench_ppc(bool jit, bool fast)
+/* --bench [N]: N million (default 1) iterations of lwz/addi/stw/addic./bne
+ * (5N million instructions) on each back-end, with and without inline
+ * memory. Prints millions of guest instructions a second. */
+static void bench_ppc(bool jit, bool fast, unsigned millions)
 {
-    static const uint32_t prog[] = {
-        0x3CA00010,  /* addis r5,r0,0x10   (1M iterations) */
+    uint32_t prog[] = {
+        0x3CA00000 | (millions << 4),  /* addis r5,r0,N*0x10   (N*1M iterations) */
         0x38802000,  /* addi r4,r0,0x2000 */
         0x80640000,  /* loop: lwz r3,0(r4) */
         0x38630001,  /* addi r3,r3,1 */
@@ -147,7 +147,7 @@ static void bench_ppc(bool jit, bool fast)
     p.core->run();
     double s = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
     printf("bench ppc %-11s %-6s: %u iterations, %.3f s, %.1f MIPS\n", jit ? "native" : "uml-interp",
-           fast ? "inline" : "calls", p.mem.read32(0x2000), s, 5.0 / s);
+           fast ? "inline" : "calls", p.mem.read32(0x2000), s, 5.0 * millions / s);
 }
 
 struct Machine
@@ -179,9 +179,12 @@ int main(int argc, char **argv)
 {
     if(argc > 1 && strcmp(argv[1], "--bench") == 0)
     {
+        unsigned millions = argc > 2 ? (unsigned)atoi(argv[2]) : 1;
+        if(millions < 1 || millions > 0xfff)
+            millions = 1;
         for(int jit = 0; jit < 2; jit++)
             for(int fast = 0; fast < 2; fast++)
-                bench_ppc(jit, fast);
+                bench_ppc(jit, fast, millions);
         return 0;
     }
     /* A: d0 = 5 + 1; B: d0 = -1, d1 = 0x1234 via memory. */

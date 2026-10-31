@@ -93,6 +93,12 @@ ROMlib_set_system_version(uint32_t version)
             }
             system_version = version;
             LM(SysVersion) = version;
+            /* An 8.x System runs on PowerPC Macs only, where fat
+               applications run their PowerPC code: 8.6's Finder's 68k code
+               only says it needs a 68k Mac (as without --executor-ppc,
+               which the browser tab has no way to give). */
+            if(version >= 0x0800)
+                ROMlib_prefer_ppc = true;
             gestalt_set_system_version(version);
             if(version >= 0x0800)
                 traps::installSystem8Traps();
