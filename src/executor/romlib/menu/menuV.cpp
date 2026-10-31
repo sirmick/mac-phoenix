@@ -66,8 +66,7 @@ void Executor::C_SetItemCmd(MenuHandle mh, INTEGER item, CharParameter cmd)
            8.6 does (the menu probe's dirty keys): PowerPlant sets command
            keys while menuProc still holds the MDEF's ID (BBEdit Lite
            6.1's Mercutio menus), and calling it then aborted. */
-        (*mh)->menuWidth = -1;
-        (*mh)->menuHeight = -1;
+        ROMlib_dirty_menu_size(mh);
     }
 }
 

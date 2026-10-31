@@ -8,6 +8,7 @@
 
 #include <base/builtinlibs.h>
 
+#include <algorithm>
 #include <fstream>
 #include <string>
 
@@ -42,6 +43,33 @@ TEST(Exports, NoInternalNames)
         for(const auto& [library, names] : builtinlibs::exportTable(arch))
             for(const std::string& name : names)
                 EXPECT_FALSE(internal_name(name)) << library << " exports " << name;
+}
+
+static bool exported(OSType arch, const std::string& library, const std::string& name)
+{
+    auto table = builtinlibs::exportTable(arch);
+    auto it = table.find(library);
+    return it != table.end() && std::find(it->second.begin(), it->second.end(), name) != it->second.end();
+}
+
+/* 6f9b9c02: GetWDInfo and the Comm Toolbox queue calls had working
+   routines but weren't exported: code importing them by name (the 8.6
+   Finder) got the unresolved-import stub, which answers 0. */
+TEST(Exports, WorkingDirectoryAndCommToolbox)
+{
+    for(OSType arch : { "pwpc"_4, "m68k"_4 })
+        for(const char *name : { "GetWDInfo", "CRMGetCRMVersion", "CRMGetHeader", "CRMInstall", "CRMRemove",
+                                 "CRMSearch" })
+            EXPECT_TRUE(exported(arch, "InterfaceLib", name)) << name;
+}
+
+/* 806e33c6: YieldToAnyThread is ThreadsLib's, as Apple's is; Apple's
+   InterfaceLib doesn't export it (a4e71219 exported it from both and was
+   reverted). */
+TEST(Exports, YieldToAnyThreadFromThreadsLib)
+{
+    EXPECT_TRUE(exported("pwpc"_4, "ThreadsLib", "YieldToAnyThread"));
+    EXPECT_FALSE(exported("pwpc"_4, "InterfaceLib", "YieldToAnyThread"));
 }
 
 TEST(Exports, WriteTable)

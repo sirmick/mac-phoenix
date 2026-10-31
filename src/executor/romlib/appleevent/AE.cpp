@@ -145,15 +145,18 @@ OSErr Executor::C_AEProcessAppleEvent(EventRecord *evtrec)
     }
     AEEventID event_id = event_id_s;
 
-    err = AEGetEventHandler(event_class, event_id, &hdlr_s, &refcon_s, false);
+    /* MacPhoenix: the application's table, then the system's; in each the
+       exact entry, then the wildcard ones (8.6's Script Editor installs
+       only '****' '****' and gets its 'oapp' there) */
+    err = errAEHandlerNotFound;
+    for(bool system_p : { false, true })
+        for(int i = 0; i < 4 && err != noErr; i++)
+            err = AEGetEventHandler(i & 2 ? typeWildCard : event_class, i & 1 ? typeWildCard : event_id,
+                                    &hdlr_s, &refcon_s, system_p);
     if(err != noErr)
     {
-        err = AEGetEventHandler(event_class, event_id, &hdlr_s, &refcon_s, true);
-        if(err != noErr)
-        {
-            AEDisposeDesc(evt);
-            AE_RETURN_ERROR(err);
-        }
+        AEDisposeDesc(evt);
+        AE_RETURN_ERROR(err);
     }
     hdlr = hdlr_s;
     int32_t refcon = refcon_s;

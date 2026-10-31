@@ -3,7 +3,8 @@
 
     tools/macdecode/sideload_system.py IMAGE DATA_DIR [FILE...]
 
-Copies ":System Folder:<FILE>" (default: System, Finder and every file in
+Copies ":System Folder:<FILE>" (default: System, Finder, System Resources
+(8.5 and later) and every file in
 Preferences, Fonts, Apple Menu Items, Extensions, Control Panels and
 Startup Items, sub-folders included; FILE may be
 a sub-path like "Preferences:Finder Preferences")
@@ -67,6 +68,9 @@ def main():
 
     try:
         defaults = ["System", "Finder"]
+        # 8.5 and later keep icons and dialogs in "System Resources"
+        if b"System Resources" in d0.files(b"System Folder"):
+            defaults.append("System Resources")
         for folder in ("Preferences", "Fonts", "Apple Menu Items", "Extensions",
                        "Control Panels", "Startup Items"):
             try:

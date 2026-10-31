@@ -50,6 +50,12 @@ struct ComponentParameters{GUEST_STRUCT;uint8_t flags;uint8_t paramSize;GUEST<IN
 void *data_CallComponentUPP(); DATA_EXPORT(InterfaceLib, "InterfaceLib", CallComponentUPP, data_CallComponentUPP);
 
 
+ComponentResult C_CallComponentFunction(ComponentParameters *params, UniversalProcPtr func);LIBRARY_FUNCTION(InterfaceLib, CallComponentFunction, C_CallComponentFunction);
+
+
+ComponentResult C_CallComponentFunctionWithStorage(Handle storage, ComponentParameters *params, UniversalProcPtr func);LIBRARY_FUNCTION(InterfaceLib, CallComponentFunctionWithStorage, C_CallComponentFunctionWithStorage);
+
+
 using ComponentRoutineUPP = UPP<ComponentResult(ComponentParameters *cp, Handle componentStorage)>;
 
 

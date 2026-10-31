@@ -51,7 +51,6 @@ typedef LONGINT (*mbarhookp)(Rect *rp);
 #define CALLMENUHOOK(fp) ROMlib_CALLMENUHOOK((menuhookp)(fp))
 #define CALLMBARHOOK(arg, fp) ROMlib_CALLMBARHOOK(arg, (mbarhookp)(fp))
 
-static void dirtymenusize(MenuHandle);
 static Boolean findroot(INTEGER menuid, INTEGER *root_unswp);
 static inline void ROMlib_CALLMENUHOOK(menuhookp fp);
 static inline LONGINT ROMlib_CALLMBARHOOK(Rect *rp, mbarhookp fp);
@@ -63,7 +62,7 @@ static Boolean mtoggle(INTEGER mid, highstate h);
 static MenuHandle menunumtomh(INTEGER mid, INTEGER *sixp);
 static MenuHandle itemishierarchical(MenuHandle, INTEGER, INTEGER *);
 
-static void dirtymenusize(MenuHandle mh)
+void Executor::ROMlib_dirty_menu_size(MenuHandle mh)
 {
     if(mh)
     {
@@ -543,7 +542,7 @@ void Executor::C_AppendMenu(MenuHandle mh, ConstStringPtr str)
         }
         if(tempstr[0])
             app(tempstr, icon, marker, style, keyequiv, disflag, &endinf);
-        dirtymenusize(mh);
+        ROMlib_dirty_menu_size(mh);
     }
 }
 
@@ -633,7 +632,7 @@ void Executor::C_AppendResMenu(MenuHandle mh, ResType restype)
         HUnlock(temph);
         DisposeHandle(temph);
         SetResLoad(true); /* IMI-353 says to do this. */
-        dirtymenusize(mh);
+        ROMlib_dirty_menu_size(mh);
     }
     /* FIXME - IMI-353 says to call SetResLoad(true), but we only do
    * this "if (mh)".
@@ -687,7 +686,7 @@ void Executor::C_DeleteMenuItem(MenuHandle mh, INTEGER item) /* IMIV-56 */
                 (*mh)->enableFlags = (((*mh)->enableFlags >> 1) & ~unchangedmask) | ((*mh)->enableFlags & unchangedmask) | 0x80000000;
             }
         }
-        dirtymenusize(mh);
+        ROMlib_dirty_menu_size(mh);
     }
 }
 
@@ -746,7 +745,7 @@ static void xInsertResMenu(MenuHandle mh, ConstStringPtr str, ResType restype,
 	/* CalcMenuSize shouldn't be called */
 	CalcMenuSize(mh);
 #else
-            dirtymenusize(mh);
+            ROMlib_dirty_menu_size(mh);
 #endif
             DisposeHandle(h);
         }
@@ -799,10 +798,10 @@ void Executor::C_InvalidateAllMenuSizes()
         return;
     muelem *mp, *mpend = (*MENULIST)->mulist + (*MENULIST)->muoff / sizeof(muelem);
     for(mp = (*MENULIST)->mulist; mp != mpend; mp++)
-        dirtymenusize(mp->muhandle);
+        ROMlib_dirty_menu_size(mp->muhandle);
     mpend = (*MENULIST)->mulist + HIEROFF / sizeof(muelem);
     for(mp = FIRSTHIER; mp < mpend; mp++)
-        dirtymenusize(mp->muhandle);
+        ROMlib_dirty_menu_size(mp->muhandle);
 }
 
 /* Executor keeps no menu pixels. */
@@ -1726,7 +1725,7 @@ void Executor::C_SetMenuItemText(MenuHandle mh, INTEGER item, ConstStringPtr str
             }
         }
         str255assign((char *)*mh + soff, str);
-        dirtymenusize(mh);
+        ROMlib_dirty_menu_size(mh);
     }
 }
 
@@ -1786,7 +1785,7 @@ void Executor::C_SetItemIcon(MenuHandle mh, INTEGER item, Byte icon)
     if((mep = ROMlib_mitemtop(mh, item, (StringPtr *)0)))
     {
         mep->micon = icon;
-        dirtymenusize(mh);
+        ROMlib_dirty_menu_size(mh);
     }
 }
 
@@ -1805,7 +1804,7 @@ void Executor::C_SetItemStyle(MenuHandle mh, INTEGER item, INTEGER style)
     if((mep = ROMlib_mitemtop(mh, item, (StringPtr *)0)))
     {
         mep->mstyle = style;
-        dirtymenusize(mh);
+        ROMlib_dirty_menu_size(mh);
     }
 }
 

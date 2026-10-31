@@ -103,6 +103,13 @@ void Executor::AE_reinit(void)
     info->appl_zone_tables = zone_tables;
 }
 
+/* MacPhoenix: an entry's value size (_AE_hdlr_table_alloc's) */
+static int32_t value_size(AE_hdlr_table_h table)
+{
+    int32_t sizes = (*table)->pad_2[0];
+    return sizes ? (uint32_t)sizes >> 16 : sizeof(AE_hdlr_t);
+}
+
 static OSErr
 hdlr_table_elt(AE_hdlr_table_h table,
                AE_hdlr_selector_t *selector, AE_hdlr_t *hdlr,
@@ -169,8 +176,17 @@ OSErr Executor::C__AE_hdlr_table_alloc(int32_t n_elts, int32_t unknown_2,
 {
     AE_hdlr_table_h table;
 
-    gui_assert(unknown_2 == 0x80008);
-    gui_assert(unknown_3 == 0);
+    /* MacPhoenix: unknown_2 is the entries' sizes, value << 16 | key: the
+       handler tables' are 8 and 8 (class and ID; handler and refcon); 8.6's
+       AppleScript INIT asks 12-byte values (and unknown_p 1). An entry
+       holds a key of up to 8 bytes and a value of up to 12. */
+    int32_t key_size = unknown_2 & 0xFFFF, value_size = (uint32_t)unknown_2 >> 16;
+    if(key_size == 0 || key_size > 8 || value_size == 0 || value_size > 12 || unknown_3 != 0)
+    {
+        fprintf(stderr, "[Executor] _AE_hdlr_table_alloc: entries of %d-byte keys and %d-byte values, "
+                        "unknown_3 %d: answered paramErr\n", key_size, value_size, unknown_3);
+        AE_RETURN_ERROR(paramErr);
+    }
 
     /* #### unknown_p is currently ignored */
 
@@ -187,6 +203,7 @@ OSErr Executor::C__AE_hdlr_table_alloc(int32_t n_elts, int32_t unknown_2,
 
     AE_TABLE_N_ALLOCATED_BYTES(table) = n_bytes;
     AE_TABLE_N_ELTS(table) = 0;
+    (*table)->pad_2[0] = unknown_2;
 
     *table_return = table;
     AE_RETURN_ERROR(noErr);
@@ -209,7 +226,7 @@ OSErr Executor::C__AE_hdlr_delete(AE_hdlr_table_h table, int32_t unknown_1,
     n_elts = AE_TABLE_N_ELTS(table);
     elt_offset = elt - elts;
 
-    memmove(&elts[elt_offset + 1], &elts[elt_offset],
+    memmove(&elts[elt_offset], &elts[elt_offset + 1],
             (n_elts - elt_offset - 1) * sizeof *elts);
 
     AE_TABLE_N_ELTS(table) = n_elts - 1;
@@ -230,7 +247,7 @@ OSErr Executor::C__AE_hdlr_lookup(AE_hdlr_table_h table, int32_t unknown_1,
     if(err != noErr)
         AE_RETURN_ERROR(err);
 
-    *hdlr_return = elt->hdlr;
+    memcpy(hdlr_return, &elt->hdlr, value_size(table));
     AE_RETURN_ERROR(noErr);
 }
 
@@ -243,11 +260,14 @@ OSErr Executor::C__AE_hdlr_install(AE_hdlr_table_h table, int32_t unknown_1,
 
     gui_assert(unknown_1 == 0);
 
-    err = hdlr_table_elt(table, selector, hdlr, true, &elt);
+    /* MacPhoenix: a table of other values (AppleScript's): the key's entry,
+       whatever its value */
+    bool handlers = value_size(table) == sizeof(AE_hdlr_t);
+    err = hdlr_table_elt(table, selector, handlers ? hdlr : nullptr, true, &elt);
     if(err != noErr)
         AE_RETURN_ERROR(err);
 
-    elt->hdlr = *hdlr;
+    memcpy(&elt->hdlr, hdlr, value_size(table));
     AE_RETURN_ERROR(noErr);
 }
 

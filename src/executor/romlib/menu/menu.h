@@ -43,6 +43,9 @@ extern int32_t C_mbdf0(int16_t, int16_t, int16_t, int32_t);
 #define SIZEOFMINFO (sizeof(MenuInfo) - sizeof(Str255) + 1)
 
 extern mextp ROMlib_mitemtop(MenuHandle mh, INTEGER item, StringPtr *ssp);
+/* MacPhoenix: mark a menu's size to be computed when next needed (-1 in
+   menuWidth and menuHeight), as 8.6 does for the calls that change it */
+extern void ROMlib_dirty_menu_size(MenuHandle mh);
 extern INTEGER ROMlib_mentosix(INTEGER mid);
 extern LONGINT ROMlib_menuhelper(MenuHandle mh, Rect *saver, LONGINT where,
                                  Boolean ispopup, INTEGER ndisplayed);
