@@ -161,6 +161,15 @@ if(NODE_COMMAND AND PYTHON3_COMMAND)
     set_tests_properties(executor.web.server_sync executor.web.server_lazy PROPERTIES
         LABELS "executor;web" TIMEOUT 300 SKIP_RETURN_CODE 77
         ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM}")
+    # The site (make_site.sh) from a page that isn't a secure context (no
+    # OPFS): disks read into memory, writable there, a 50 MB library disk
+    # opened with a double-click at devicePixelRatio 1.5.
+    add_test(NAME executor.web.insecure
+        COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_insecure.mjs
+                ${CMAKE_BINARY_DIR} ${EXECUTOR_WEB_SYSTEM})
+    set_tests_properties(executor.web.insecure PROPERTIES
+        LABELS "executor;web" TIMEOUT 300 SKIP_RETURN_CODE 77
+        ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM};TMPDIR=${CMAKE_CURRENT_BINARY_DIR}")
 endif()
 
 # The network relay: MacPhoenixSuite's network and mactcp sections and
