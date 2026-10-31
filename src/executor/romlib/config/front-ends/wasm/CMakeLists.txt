@@ -148,3 +148,15 @@ if(NODE_COMMAND AND PYTHON3_COMMAND)
         LABELS "executor;web" TIMEOUT 300 SKIP_RETURN_CODE 77
         ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM}")
 endif()
+
+# The network relay: MacPhoenixSuite's network and mactcp sections and
+# OTTestRetro68K in the tab, through tools/web/server's /relay to an echo
+# server on this host (tests/lib/echo_server.py).
+if(NODE_COMMAND AND PYTHON3_COMMAND)
+    add_test(NAME executor.web.relay
+        COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_relay.mjs
+                $<TARGET_FILE_DIR:executor-web> ${PROJECT_SOURCE_DIR}/tests/guest)
+    set_tests_properties(executor.web.relay PROPERTIES
+        LABELS "executor;web" TIMEOUT 400 SKIP_RETURN_CODE 77
+        ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM}")
+endif()

@@ -20,6 +20,15 @@ DEFAULTS = {
         "include": ["*.img"],
         "exclude": [],
     },
+    "relay": {
+        "enabled": True,
+        # Destination ports (ints, "A-B" ranges): the classic Internet services.
+        "ports": [7, 13, 20, 21, 23, 25, 37, 43, 53, 70, 79, 80, 110, 113, 119, 123, 143,
+                  194, 443, 563, 993, 995, 1080, 6667, 8080],
+        "allow_private": False,          # true: loopback, private and link-local hosts too
+        "max_sockets": 32,               # per user, all their tabs together
+        "max_connections": 4,            # per user: tabs with the relay open
+    },
 }
 
 

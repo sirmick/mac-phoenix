@@ -9,6 +9,10 @@
 
 using namespace Executor;
 
+/* host/wasm/net.cpp's, when the build has it (EXECUTOR_NET=wasm): what
+ * came from the relay meanwhile, into the sockets. */
+extern "C" void executor_hostnet_pump() __attribute__((weak));
+
 namespace
 {
 void (*yield_hook)();
@@ -19,6 +23,8 @@ void yield(int ms)
 {
     emscripten_sleep(ms);
     last_yield = hostidle::Clock::now();
+    if(executor_hostnet_pump)
+        executor_hostnet_pump();
     if(yield_hook)
         yield_hook();
 }
