@@ -245,8 +245,14 @@ LONGINT Executor::C_wdef64(INTEGER varcode, WindowPtr w, INTEGER message, LONGIN
             return r;
         }
         default: /* 66, 67: floating + grow 2, vertical zoom 4, horizontal zoom 8 */
+        {
             /* (not WDEF 124: on 8.x it hands floating windows to WDEF 66)
-               a document frame until Executor has a floating one */
+               platinum on 8.x (67: the title bar on the left); the rest
+               (wGrow & co.) as a document window */
+            LONGINT r;
+            if(ROMlib_wdef_floating(w, true, varcode & 2, varcode & 12, windowDefID(w) == 67, message, param, &r))
+                return r;
+        }
             return C_wdef0(((varcode & 12) ? zoomDocProc : documentProc) | ((varcode & 2) ? 0 : noGrowDocProc),
                            w, message, param);
     }

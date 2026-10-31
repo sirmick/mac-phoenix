@@ -47,10 +47,15 @@ void ItemCache::cacheDirectory(DirectoryItemPtr dir)
     cachedDirectories_.push_back({dir, std::chrono::steady_clock::now()});
 
     std::vector<fs::directory_entry> entries;
+    scanDir_ = dir->path();
+    scanNames_.clear();
     try
     {
         for(const auto& e : fs::directory_iterator(dir->path()))
         {
+            /* All names, hidden ones (AppleDouble's %name/._name sidecars,
+               ...) included: siblingExistsInScan() answers for those too. */
+            scanNames_.insert(e.path().filename().string());
             if(!itemFactory_->isHidden(e))
                 entries.push_back(e);
         }
@@ -65,7 +70,7 @@ void ItemCache::cacheDirectory(DirectoryItemPtr dir)
         // ignoring this error makes inaccessible directories look empty,
         // which is not perfect, either.
     }
-    
+
     std::vector<CNIDMapper::Mapping> mappings =
         cnidMapper_->mapDirectoryContents(dir->cnid(), std::move(entries));
 
@@ -86,12 +91,22 @@ void ItemCache::cacheDirectory(DirectoryItemPtr dir)
 
         if(!item)
             continue;
-        
+
         items.push_back(item);
         items_.emplace(m.cnid, item);
     }
 
+    scanDir_.clear();
+    scanNames_.clear();
+
     dir->populateCache(std::move(items));
+}
+
+std::optional<bool> ItemCache::siblingExistsInScan(const fs::path& dir, const std::string& filename) const
+{
+    if(scanDir_.empty() || dir != scanDir_)
+        return std::nullopt;
+    return scanNames_.count(filename) != 0;
 }
 
 /* MacPhoenix: an item by name in dir. A folder's listing is cached for

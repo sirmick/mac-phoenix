@@ -301,6 +301,14 @@ enum box_flag
     go_away_box_flag,
 };
 
+/* MacPhoenix: the close box's left from the content's; 8.6's rounded
+   window (WDEF 16) has it a pixel further left than the document
+   window's (appr frames.16; 7.x's rounded window not checked) */
+static int go_away_offset()
+{
+    return rounded_window_p && system_version >= 0x800 ? 7 : 8;
+}
+
 void toggle_box_active(enum box_flag which_box, Point origin)
 {
     Rect dst_rect;
@@ -379,7 +387,7 @@ void toggle_go_away_box(GrafPtr w)
 {
     Point origin;
 
-    origin.h = PORT_RECT(w).left - PORT_BOUNDS(w).left + 8;
+    origin.h = PORT_RECT(w).left - PORT_BOUNDS(w).left + go_away_offset();
     origin.v = PORT_RECT(w).top - PORT_BOUNDS(w).top - 16;
 
     toggle_box_active(go_away_box_flag, origin);
@@ -522,7 +530,7 @@ void draw_go_away(int h, int v)
         RGBBackColor(&ROMlib_white_rgb_color);
     }
 
-    SetRect(&r, h + 8, v - 16, h + 21, v - 3);
+    SetRect(&r, h + go_away_offset(), v - 16, h + go_away_offset() + 13, v - 3);
 
     image_copy(go_away, rounded_window_p ? 0 : color_p, &r, srcCopy);
 }
@@ -1142,6 +1150,73 @@ static bool platinum_doc(WindowPeek w, int varcode, int zoom_bit, INTEGER messag
     }
 }
 
+bool Executor::ROMlib_wdef_floating(WindowPtr window, bool close, bool grow, int zoom, bool side,
+                                    INTEGER message, LONGINT parm, LONGINT *result)
+{
+    WindowPeek w = (WindowPeek)window;
+    if(system_version < 0x800)
+        return false;
+    Rect c = content_global(w);
+    appearance::FloatParts parts = { close && (bool)WINDOW_GO_AWAY_FLAG(w), zoom != 0, true, grow, side, zoom };
+    *result = 0;
+    switch(message)
+    {
+        case wDraw:
+            if(!WINDOW_VISIBLE(w))
+                return true;
+            if(StringHandle th = WINDOW_TITLE(w))
+            {
+                HLockGuard guard(th);
+                appearance::floatingFrame(c, WINDOW_HILITED(w), parts, *th);
+            }
+            else
+                appearance::floatingFrame(c, WINDOW_HILITED(w), parts, nullptr);
+            return true;
+        case wDrawGIcon: /* the frame has the grow box */
+            return true;
+        case wHit:
+        {
+            Point p;
+            p.v = HiWord(parm);
+            p.h = LoWord(parm);
+            Rect growBox = appearance::floatingGrowBox(c);
+            if(grow && WINDOW_HILITED(w) && PtInRect(p, &growBox))
+                *result = wInGrow;
+            else if(PtInRgn(p, WINDOW_CONT_REGION(w)))
+                *result = wInContent;
+            else if(!PtInRgn(p, WINDOW_STRUCT_REGION(w)))
+                *result = wNoHit;
+            else
+            {
+                *result = wInDrag;
+                Rect closeBox = appearance::floatingCloseBox(c, parts),
+                     zoomBox = appearance::floatingZoomBox(c, parts);
+                if(WINDOW_HILITED(w) && parts.close && PtInRect(p, &closeBox))
+                    *result = wInGoAway;
+                else if(WINDOW_HILITED(w) && parts.zoom && PtInRect(p, &zoomBox))
+                    *result = WINDOW_ZOOMED(w) ? wInZoomIn : wInZoomOut;
+            }
+            return true;
+        }
+        case wCalcRgns:
+        {
+            SetRectRgn(WINDOW_CONT_REGION(w), c.left, c.top, c.right, c.bottom);
+            if(grow)
+            {
+                RgnHandle part = NewRgn();
+                Rect growBox = appearance::floatingGrowBox(c);
+                RectRgn(part, &growBox);
+                DiffRgn(WINDOW_CONT_REGION(w), part, WINDOW_CONT_REGION(w));
+                DisposeRgn(part);
+            }
+            appearance::floatingStructure(c, side, WINDOW_STRUCT_REGION(w));
+            return true;
+        }
+        default:
+            return false;
+    }
+}
+
 LONGINT Executor::C_wdef0(INTEGER varcode, WindowPtr window, INTEGER message,
                           LONGINT parm)
 {
@@ -1406,7 +1481,7 @@ hit_rounded_doc(GrafPtr w, LONGINT param)
         if(p.h >= left - 1 && p.h < right + 1 && p.v >= top - 19 && p.v < top)
         {
             if(WINDOW_GO_AWAY_FLAG(w)
-               && p.h > left + 8 && p.h < left + 20
+               && p.h > left + go_away_offset() && p.h < left + go_away_offset() + 12
                && p.v > top - 16 && p.v < top - 4)
                 return wInGoAway;
             else

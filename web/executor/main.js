@@ -509,7 +509,7 @@ async function start() {
     const offscreen = canvas.transferControlToOffscreen();
     worker.postMessage({ type: 'start', canvas: offscreen, width, height, scale, files,
                          system: systemSelect.value, ppc: ppcBox.checked,
-                         volumeKey: volumeKey(files), sync: !!account,
+                         volumeKey: volumeKey(files), sync: !!account, relay: !!account,
                          ids: imageIds, legacyKeys },
                        [offscreen]);
     worker.onmessage = (e) => {
