@@ -1719,8 +1719,10 @@ void pixelGray(int h, int v, uint16_t g)
 
 /* A title-bar box, 13 pixels square at (h, v): an etched ring, a dark
    frame, a bevel and a face whose shade steps from #999 to white along
-   the diagonal. GLYPH: 0 none (close), 1 zoom, 2 collapse. */
-void titleBox(int h, int v, int glyph)
+   the diagonal; PRESSED (8.6 while the button is down in it), the inside
+   a darker ramp, #444 to #bbb, its right and bottom edges no lighter
+   than #999. GLYPH: 0 none (close), 1 zoom, 2 collapse. */
+void titleBox(int h, int v, int glyph, bool pressed = false)
 {
     lineGray(h, v, h + 11, v, kPlatBox);
     lineGray(h, v, h, v + 11, kPlatBox);
@@ -1728,14 +1730,28 @@ void titleBox(int h, int v, int glyph)
     lineGray(h + 1, v + 12, h + 12, v + 12, kWhite);
     Rect frame = { (INTEGER)(v + 1), (INTEGER)(h + 1), (INTEGER)(v + 12), (INTEGER)(h + 12) };
     frameGray(frame, kPlatDark);
-    pixelGray(h + 2, v + 2, kWhite);
-    lineGray(h + 3, v + 2, h + 10, v + 2, kPlatFace);
-    lineGray(h + 2, v + 3, h + 2, v + 10, kPlatFace);
-    lineGray(h + 3, v + 10, h + 10, v + 10, kPlatBox);
-    lineGray(h + 10, v + 3, h + 10, v + 9, kPlatBox);
-    for(int dy = 0; dy < 7; dy++)
-        for(int dx = 0; dx < 7; dx++)
-            pixelGray(h + 3 + dx, v + 3 + dy, (uint16_t)std::min(0xFFFF, 0x9999 + 0x1111 * ((dx + dy) / 2)));
+    if(pressed)
+    {
+        for(int j = 0; j < 9; j++)
+            for(int i = 0; i < 9; i++)
+            {
+                uint16_t g = 0x4444 + 0x1111 * ((i + j) / 2);
+                if(i == 8 || j == 8)
+                    g = std::min<uint16_t>(g, kPlatShade);
+                pixelGray(h + 2 + i, v + 2 + j, g);
+            }
+    }
+    else
+    {
+        pixelGray(h + 2, v + 2, kWhite);
+        lineGray(h + 3, v + 2, h + 10, v + 2, kPlatFace);
+        lineGray(h + 2, v + 3, h + 2, v + 10, kPlatFace);
+        lineGray(h + 3, v + 10, h + 10, v + 10, kPlatBox);
+        lineGray(h + 10, v + 3, h + 10, v + 9, kPlatBox);
+        for(int dy = 0; dy < 7; dy++)
+            for(int dx = 0; dx < 7; dx++)
+                pixelGray(h + 3 + dx, v + 3 + dy, (uint16_t)std::min(0xFFFF, 0x9999 + 0x1111 * ((dx + dy) / 2)));
+    }
     if(glyph == 1)
     {
         lineGray(h + 7, v + 1, h + 7, v + 7, kPlatDark);
@@ -1942,6 +1958,20 @@ Rect Executor::appearance::documentStructure(const Rect &c)
     return { (INTEGER)(c.top - 22), (INTEGER)(c.left - 6), (INTEGER)(c.bottom + 7), (INTEGER)(c.right + 7) };
 }
 
+/* The outline and shadow; collapsed, the outline closes under the title
+   bar (t - 1) and the shadow follows it (8.6 on a G3) */
+void Executor::appearance::documentStructureRgn(const Rect &c, bool collapsed, RgnHandle rgn)
+{
+    int bottom = collapsed ? c.top - 6 : (int)c.bottom;
+    RgnHandle part = NewRgn();
+    SetRectRgn(rgn, c.left - 6, c.top - 22, c.right + 6, bottom + 6);
+    SetRectRgn(part, c.right + 6, c.top - 20, c.right + 7, bottom + 7);
+    UnionRgn(rgn, part, rgn);
+    SetRectRgn(part, c.left - 4, bottom + 6, c.right + 7, bottom + 7);
+    UnionRgn(rgn, part, rgn);
+    DisposeRgn(part);
+}
+
 Rect Executor::appearance::documentCloseBox(const Rect &c)
 {
     return { (INTEGER)(c.top - 18), (INTEGER)(c.left - 2), (INTEGER)(c.top - 5), (INTEGER)(c.left + 11) };
@@ -1958,50 +1988,97 @@ Rect Executor::appearance::documentZoomBox(const Rect &c, const WindowParts &par
     return { (INTEGER)(c.top - 18), (INTEGER)h, (INTEGER)(c.top - 5), (INTEGER)(h + 13) };
 }
 
+void Executor::appearance::documentBox(const Rect &c, const WindowParts &parts, int which, bool pressed)
+{
+    DrawGuard guard;
+    switch(which)
+    {
+        case 0:
+        {
+            Rect r = documentCloseBox(c);
+            titleBox(r.left, r.top, 0, pressed);
+            break;
+        }
+        case 1:
+        {
+            Rect r = documentZoomBox(c, parts);
+            titleBox(r.left, r.top, 1, pressed);
+            break;
+        }
+        case 2:
+        {
+            Rect r = documentCollapseBox(c);
+            titleBox(r.left, r.top, 2, pressed);
+            break;
+        }
+    }
+}
+
 void Executor::appearance::documentFrame(const Rect &c, bool active, const WindowParts &parts,
                                          ConstStringPtr title)
 {
     DrawGuard guard;
     int l = c.left, t = c.top, r = c.right, b = c.bottom;
     uint16_t outline = active ? kBlack : kPlatInactive;
-
-    /* the outline and its shadow */
-    Rect outer = { (INTEGER)(t - 22), (INTEGER)(l - 6), (INTEGER)(b + 6), (INTEGER)(r + 6) };
-    frameGray(outer, outline);
-    lineGray(l - 4, b + 6, r + 6, b + 6, outline);
-    lineGray(r + 6, t - 20, r + 6, b + 5, outline);
-
-    /* the face, round the content (which isn't touched: hiliting draws
-       the frame alone) */
-    auto fillFace = [&](uint16_t g) {
-        Rect bands[] = {
-            { (INTEGER)(t - 21), (INTEGER)(l - 5), (INTEGER)(t - 1), (INTEGER)(r + 5) },
-            { (INTEGER)(b + 1), (INTEGER)(l - 5), (INTEGER)(b + 5), (INTEGER)(r + 5) },
-            { (INTEGER)(t - 1), (INTEGER)(l - 5), (INTEGER)(b + 1), (INTEGER)(l - 1) },
-            { (INTEGER)(t - 1), (INTEGER)(r + 1), (INTEGER)(b + 1), (INTEGER)(r + 5) },
-        };
-        for(const Rect &band : bands)
-            fillGray(band, g);
-    };
-    if(active)
+    if(parts.collapsed)
     {
-        fillFace(kPlatFace);
-        lineGray(l - 5, t - 21, r + 3, t - 21, kWhite);
-        lineGray(l - 5, t - 21, l - 5, b + 3, kWhite);
-        lineGray(l - 4, b + 4, r + 4, b + 4, kPlatShade);
-        lineGray(r + 4, t - 20, r + 4, b + 4, kPlatShade);
-        /* the content sunk in a groove */
-        lineGray(l - 2, t - 2, r, t - 2, kPlatShade);
-        lineGray(l - 2, t - 2, l - 2, b, kPlatShade);
-        lineGray(l - 1, b + 1, r + 1, b + 1, kWhite);
-        lineGray(r + 1, t - 1, r + 1, b + 1, kWhite);
+        /* the title bar alone: the frame's outline and bevel closing
+           under it, the content and its groove gone */
+        b = t - 6;
+        Rect outer = { (INTEGER)(t - 22), (INTEGER)(l - 6), (INTEGER)(b + 6), (INTEGER)(r + 6) };
+        frameGray(outer, outline);
+        lineGray(l - 4, b + 6, r + 6, b + 6, outline);
+        lineGray(r + 6, t - 20, r + 6, b + 5, outline);
+        Rect face = { (INTEGER)(t - 21), (INTEGER)(l - 5), (INTEGER)(b + 5), (INTEGER)(r + 5) };
+        fillGray(face, active ? kPlatFace : kPlatInactiveFace);
+        if(active)
+        {
+            lineGray(l - 5, t - 21, r + 3, t - 21, kWhite);
+            lineGray(l - 5, t - 21, l - 5, b + 3, kWhite);
+            lineGray(l - 4, b + 4, r + 4, b + 4, kPlatShade);
+            lineGray(r + 4, t - 20, r + 4, b + 4, kPlatShade);
+        }
     }
     else
-        fillFace(kPlatInactiveFace);
-    Rect border = { (INTEGER)(t - 1), (INTEGER)(l - 1), (INTEGER)(b + 1), (INTEGER)(r + 1) };
-    frameGray(border, outline);
-    if(parts.grow)
-        growNotch(r, b, active);
+    {
+        /* the outline and its shadow */
+        Rect outer = { (INTEGER)(t - 22), (INTEGER)(l - 6), (INTEGER)(b + 6), (INTEGER)(r + 6) };
+        frameGray(outer, outline);
+        lineGray(l - 4, b + 6, r + 6, b + 6, outline);
+        lineGray(r + 6, t - 20, r + 6, b + 5, outline);
+
+        /* the face, round the content (which isn't touched: hiliting draws
+           the frame alone) */
+        auto fillFace = [&](uint16_t g) {
+            Rect bands[] = {
+                { (INTEGER)(t - 21), (INTEGER)(l - 5), (INTEGER)(t - 1), (INTEGER)(r + 5) },
+                { (INTEGER)(b + 1), (INTEGER)(l - 5), (INTEGER)(b + 5), (INTEGER)(r + 5) },
+                { (INTEGER)(t - 1), (INTEGER)(l - 5), (INTEGER)(b + 1), (INTEGER)(l - 1) },
+                { (INTEGER)(t - 1), (INTEGER)(r + 1), (INTEGER)(b + 1), (INTEGER)(r + 5) },
+            };
+            for(const Rect &band : bands)
+                fillGray(band, g);
+        };
+        if(active)
+        {
+            fillFace(kPlatFace);
+            lineGray(l - 5, t - 21, r + 3, t - 21, kWhite);
+            lineGray(l - 5, t - 21, l - 5, b + 3, kWhite);
+            lineGray(l - 4, b + 4, r + 4, b + 4, kPlatShade);
+            lineGray(r + 4, t - 20, r + 4, b + 4, kPlatShade);
+            /* the content sunk in a groove */
+            lineGray(l - 2, t - 2, r, t - 2, kPlatShade);
+            lineGray(l - 2, t - 2, l - 2, b, kPlatShade);
+            lineGray(l - 1, b + 1, r + 1, b + 1, kWhite);
+            lineGray(r + 1, t - 1, r + 1, b + 1, kWhite);
+        }
+        else
+            fillFace(kPlatInactiveFace);
+        Rect border = { (INTEGER)(t - 1), (INTEGER)(l - 1), (INTEGER)(b + 1), (INTEGER)(r + 1) };
+        frameGray(border, outline);
+        if(parts.grow)
+            growNotch(r, b, active);
+    }
 
     /* the title, centred on the frame */
     int titleLeft = 0, titleRight = 0;
@@ -2046,10 +2123,13 @@ void Executor::appearance::documentFrame(const Rect &c, bool active, const Windo
 namespace
 {
 /* the outline's corners (inclusive) */
-Rect floatOutline(const Rect &c, bool side)
+Rect floatOutline(const Rect &c, bool side, bool collapsed = false)
 {
-    return { (INTEGER)(c.top - (side ? 4 : 16)), (INTEGER)(c.left - (side ? 14 : 4)), (INTEGER)(c.bottom + 3),
-             (INTEGER)(c.right + 3) };
+    /* collapsed, the outline closes under the title bar (beside a side
+       one): 8.6 on a G3 */
+    return { (INTEGER)(c.top - (side ? 4 : 16)), (INTEGER)(c.left - (side ? 14 : 4)),
+             (INTEGER)(collapsed && !side ? c.top - 1 : c.bottom + 3),
+             (INTEGER)(collapsed && side ? c.left - 1 : c.right + 3) };
 }
 
 /* A floating window's box, 10 pixels square at (h, v): titleBox's ring,
@@ -2155,9 +2235,9 @@ Rect Executor::appearance::floatingGrowBox(const Rect &c)
     return { (INTEGER)(c.bottom - 10), (INTEGER)(c.right - 10), c.bottom, c.right };
 }
 
-void Executor::appearance::floatingStructure(const Rect &c, bool side, RgnHandle rgn)
+void Executor::appearance::floatingStructure(const Rect &c, const FloatParts &parts, RgnHandle rgn)
 {
-    Rect o = floatOutline(c, side);
+    Rect o = floatOutline(c, parts.side, parts.collapsed);
     RgnHandle part = NewRgn();
     SetRectRgn(rgn, o.left, o.top, o.right + 1, o.bottom + 1);
     SetRectRgn(part, o.right + 1, o.top + 2, o.right + 2, o.bottom + 2);
@@ -2172,7 +2252,7 @@ void Executor::appearance::floatingFrame(const Rect &c, bool active, const Float
 {
     DrawGuard guard;
     int l = c.left, t = c.top, r = c.right, b = c.bottom;
-    Rect o = floatOutline(c, parts.side);
+    Rect o = floatOutline(c, parts.side, parts.collapsed);
     int L = o.left, T = o.top, R = o.right, B = o.bottom;
     uint16_t outline = active ? kBlack : kPlatInactive;
 
@@ -2182,31 +2262,45 @@ void Executor::appearance::floatingFrame(const Rect &c, bool active, const Float
     lineGray(R + 1, T + 2, R + 1, B + 1, outline);
     lineGray(L + 2, B + 1, R + 1, B + 1, outline);
 
-    /* the face round the content */
-    Rect bands[] = {
-        { (INTEGER)(T + 1), (INTEGER)(L + 1), (INTEGER)(t - 1), (INTEGER)R },
-        { (INTEGER)(b + 1), (INTEGER)(L + 1), (INTEGER)B, (INTEGER)R },
-        { (INTEGER)(t - 1), (INTEGER)(L + 1), (INTEGER)(b + 1), (INTEGER)(l - 1) },
-        { (INTEGER)(t - 1), (INTEGER)(r + 1), (INTEGER)(b + 1), (INTEGER)R },
-    };
-    for(const Rect &band : bands)
-        fillGray(band, active ? kPlatFace : kPlatInactiveFace);
+    /* the face round the content (collapsed: the bar alone) */
+    if(parts.collapsed)
+    {
+        Rect face = { (INTEGER)(T + 1), (INTEGER)(L + 1), (INTEGER)B, (INTEGER)R };
+        fillGray(face, active ? kPlatFace : kPlatInactiveFace);
+    }
+    else
+    {
+        Rect bands[] = {
+            { (INTEGER)(T + 1), (INTEGER)(L + 1), (INTEGER)(t - 1), (INTEGER)R },
+            { (INTEGER)(b + 1), (INTEGER)(L + 1), (INTEGER)B, (INTEGER)R },
+            { (INTEGER)(t - 1), (INTEGER)(L + 1), (INTEGER)(b + 1), (INTEGER)(l - 1) },
+            { (INTEGER)(t - 1), (INTEGER)(r + 1), (INTEGER)(b + 1), (INTEGER)R },
+        };
+        for(const Rect &band : bands)
+            fillGray(band, active ? kPlatFace : kPlatInactiveFace);
+    }
     if(active)
     {
         lineGray(L + 1, T + 1, R - 2, T + 1, kWhite);
         lineGray(L + 1, T + 1, L + 1, B - 2, kWhite);
         lineGray(R - 1, T + 2, R - 1, B - 1, kPlatShade);
         lineGray(L + 2, B - 1, R - 1, B - 1, kPlatShade);
+    }
+    if(active && !parts.collapsed)
+    {
         /* the content sunk in a groove */
         lineGray(l - 2, t - 2, r, t - 2, kPlatShade);
         lineGray(l - 2, t - 2, l - 2, b, kPlatShade);
         lineGray(l - 1, b + 1, r + 1, b + 1, kWhite);
         lineGray(r + 1, t - 1, r + 1, b + 1, kWhite);
     }
-    Rect border = { (INTEGER)(t - 1), (INTEGER)(l - 1), (INTEGER)(b + 1), (INTEGER)(r + 1) };
-    frameGray(border, outline);
+    if(!parts.collapsed)
+    {
+        Rect border = { (INTEGER)(t - 1), (INTEGER)(l - 1), (INTEGER)(b + 1), (INTEGER)(r + 1) };
+        frameGray(border, outline);
+    }
 
-    if(parts.grow)
+    if(parts.grow && !parts.collapsed)
     {
         if(active)
         {

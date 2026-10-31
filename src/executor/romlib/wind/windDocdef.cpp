@@ -6,6 +6,8 @@
 #include <QuickDraw.h>
 #include <CQuickDraw.h>
 #include <WindowMgr.h>
+#include <ToolboxEvent.h>
+#include <WindowMgr8.h>
 #include <ToolboxUtil.h>
 
 #include <quickdraw/cquick.h>
@@ -1020,6 +1022,7 @@ static appearance::WindowParts platinum_parts(WindowPeek w, int varcode, int zoo
     parts.zoom = zoom_bit != 0;
     parts.collapse = true;
     parts.grow = ROMlib_wdef_grow_in_frame && varcode == documentProc;
+    parts.collapsed = ROMlib_window8_collapsed((WindowPtr)w);
     return parts;
 }
 
@@ -1083,8 +1086,24 @@ static bool platinum_doc(WindowPeek w, int varcode, int zoom_bit, INTEGER messag
         case wDraw:
             if(!WINDOW_VISIBLE(w))
                 return true;
-            /* (the boxes aren't drawn pressed yet: wInGoAway & co. draw
-               the frame again) */
+            /* TrackBox's: the box alone, pressed while the button is down
+               in it (8.6 draws it unpressed otherwise, whatever the call) */
+            if(parm == wInGoAway || parm == wInZoomIn || parm == wInZoomOut || parm == wInCollapseBox)
+            {
+                if(!WINDOW_HILITED(w))
+                    return true;
+                int which = parm == wInGoAway ? 0 : parm == wInCollapseBox ? 2 : 1;
+                if((which == 0 && !parts.close) || (which == 1 && !parts.zoom))
+                    return true;
+                GUEST<Point> gp;
+                C_GetMouse(&gp);
+                Point mp = gp.get();
+                LONGINT hit;
+                platinum_doc(w, varcode, zoom_bit, wHit, ((LONGINT)mp.v << 16) | (uint16_t)mp.h, &hit);
+                bool pressed = C_Button() && (hit == parm || (which == 1 && (hit == wInZoomIn || hit == wInZoomOut)));
+                appearance::documentBox(c, parts, which, pressed);
+                return true;
+            }
             if(StringHandle th = WINDOW_TITLE(w))
             {
                 HLockGuard guard(th);
@@ -1098,7 +1117,7 @@ static bool platinum_doc(WindowPeek w, int varcode, int zoom_bit, INTEGER messag
             Point p;
             p.v = HiWord(parm);
             p.h = LoWord(parm);
-            if(varcode == documentProc && WINDOW_HILITED(w) && p.h >= c.right - 15
+            if(varcode == documentProc && WINDOW_HILITED(w) && !parts.collapsed && p.h >= c.right - 15
                && p.h < c.right && p.v >= c.bottom - 15 && p.v < c.bottom)
             {
                 *result = wInGrow;
@@ -1122,26 +1141,26 @@ static bool platinum_doc(WindowPeek w, int varcode, int zoom_bit, INTEGER messag
                     *result = wInGoAway;
                 else if(parts.zoom && PtInRect(p, &zoom))
                     *result = WINDOW_ZOOMED(w) ? wInZoomIn : wInZoomOut;
-                /* the collapse box: dragging until the Window Manager
-                   collapses windows (wInCollapseBox) */
+                else if(Rect collapse = appearance::documentCollapseBox(c); PtInRect(p, &collapse))
+                    *result = wInCollapseBox;
             }
             return true;
         }
         case wCalcRgns:
         {
-            RgnHandle s = WINDOW_STRUCT_REGION(w), part = NewRgn();
-            SetRectRgn(WINDOW_CONT_REGION(w), c.left, c.top, c.right, c.bottom);
+            RgnHandle part = NewRgn();
+            /* collapsed: no content */
+            if(parts.collapsed)
+                SetEmptyRgn(WINDOW_CONT_REGION(w));
+            else
+                SetRectRgn(WINDOW_CONT_REGION(w), c.left, c.top, c.right, c.bottom);
             /* WDEF 64's grow box is frame, not content */
-            if(parts.grow)
+            if(parts.grow && !parts.collapsed)
             {
                 SetRectRgn(part, c.right - 15, c.bottom - 15, c.right, c.bottom);
                 DiffRgn(WINDOW_CONT_REGION(w), part, WINDOW_CONT_REGION(w));
             }
-            SetRectRgn(s, c.left - 6, c.top - 22, c.right + 6, c.bottom + 6);
-            SetRectRgn(part, c.right + 6, c.top - 20, c.right + 7, c.bottom + 7);
-            UnionRgn(s, part, s);
-            SetRectRgn(part, c.left - 4, c.bottom + 6, c.right + 7, c.bottom + 7);
-            UnionRgn(s, part, s);
+            appearance::documentStructureRgn(c, parts.collapsed, WINDOW_STRUCT_REGION(w));
             DisposeRgn(part);
             return true;
         }
@@ -1157,7 +1176,8 @@ bool Executor::ROMlib_wdef_floating(WindowPtr window, bool close, bool grow, int
     if(system_version < 0x800)
         return false;
     Rect c = content_global(w);
-    appearance::FloatParts parts = { close && (bool)WINDOW_GO_AWAY_FLAG(w), zoom != 0, true, grow, side, zoom };
+    appearance::FloatParts parts = { close && (bool)WINDOW_GO_AWAY_FLAG(w), zoom != 0, true, grow, side, zoom,
+                                     ROMlib_window8_collapsed(window) };
     *result = 0;
     switch(message)
     {
@@ -1180,7 +1200,7 @@ bool Executor::ROMlib_wdef_floating(WindowPtr window, bool close, bool grow, int
             p.v = HiWord(parm);
             p.h = LoWord(parm);
             Rect growBox = appearance::floatingGrowBox(c);
-            if(grow && WINDOW_HILITED(w) && PtInRect(p, &growBox))
+            if(grow && WINDOW_HILITED(w) && !parts.collapsed && PtInRect(p, &growBox))
                 *result = wInGrow;
             else if(PtInRgn(p, WINDOW_CONT_REGION(w)))
                 *result = wInContent;
@@ -1190,18 +1210,25 @@ bool Executor::ROMlib_wdef_floating(WindowPtr window, bool close, bool grow, int
             {
                 *result = wInDrag;
                 Rect closeBox = appearance::floatingCloseBox(c, parts),
-                     zoomBox = appearance::floatingZoomBox(c, parts);
+                     zoomBox = appearance::floatingZoomBox(c, parts),
+                     collapseBox = appearance::floatingCollapseBox(c, parts);
                 if(WINDOW_HILITED(w) && parts.close && PtInRect(p, &closeBox))
                     *result = wInGoAway;
                 else if(WINDOW_HILITED(w) && parts.zoom && PtInRect(p, &zoomBox))
                     *result = WINDOW_ZOOMED(w) ? wInZoomIn : wInZoomOut;
+                else if(WINDOW_HILITED(w) && PtInRect(p, &collapseBox))
+                    *result = wInCollapseBox;
             }
             return true;
         }
         case wCalcRgns:
         {
-            SetRectRgn(WINDOW_CONT_REGION(w), c.left, c.top, c.right, c.bottom);
-            if(grow)
+            /* collapsed: no content */
+            if(parts.collapsed)
+                SetEmptyRgn(WINDOW_CONT_REGION(w));
+            else
+                SetRectRgn(WINDOW_CONT_REGION(w), c.left, c.top, c.right, c.bottom);
+            if(grow && !parts.collapsed)
             {
                 RgnHandle part = NewRgn();
                 Rect growBox = appearance::floatingGrowBox(c);
@@ -1209,7 +1236,7 @@ bool Executor::ROMlib_wdef_floating(WindowPtr window, bool close, bool grow, int
                 DiffRgn(WINDOW_CONT_REGION(w), part, WINDOW_CONT_REGION(w));
                 DisposeRgn(part);
             }
-            appearance::floatingStructure(c, side, WINDOW_STRUCT_REGION(w));
+            appearance::floatingStructure(c, parts, WINDOW_STRUCT_REGION(w));
             return true;
         }
         default:
@@ -1380,7 +1407,7 @@ LONGINT Executor::C_wdef0(INTEGER varcode, WindowPtr window, INTEGER message,
             if(varcode == documentProc && system_version >= 0x800)
             {
                 /* platinum: the grow box drawn as WDEF 64's frame has it */
-                if(WINDOW_HILITED(w) && !ROMlib_wdef_grow_in_frame)
+                if(WINDOW_HILITED(w) && !ROMlib_wdef_grow_in_frame && !ROMlib_window8_collapsed((WindowPtr)w))
                     appearance::documentGrowBox(content_global(w));
             }
             else if(varcode == documentProc)
