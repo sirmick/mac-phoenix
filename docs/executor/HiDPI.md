@@ -454,3 +454,37 @@ uneven gaps, "qui ck").
   opening General Controls: at most 1.3 ms a frame, 30-40 ms per 5 s
   (under 1% of a core), 25-44 runs on the screen. The GPU back-end can
   wait.
+
+### The wasm tab
+
+Built with `tools/skia/build-wasm.sh` (above) and `--scale` on
+`executor-web`'s own argv (`web/executor/main.js`'s `?scale=`, default
+`devicePixelRatio`; `web/executor/worker.js` passes it through).
+`PhoenixVideoDriver::render()`'s `rectsHook` branch (wasm's only path)
+now calls `hidpi::compose()` and publishes the whole `scaled_` surface
+through the same `rectsHook` every time (`compose()` doesn't report how
+far outline-glyph padding extended the dirty area, and this matches
+`scaledFrameHook`'s own full-frame-every-publish cost on native, not a
+regression). `guestPoint()`'s mouse mapping needed no change: the
+canvas element's `width`/`height` IDL attributes freeze at the 1x size
+before `transferControlToOffscreen()` detaches the backing buffer that
+resizes to the scaled dimensions in the Worker.
+
+Gate: `ctest -R executor.web.hidpi` (needs a Playwright-capable
+`EXECUTOR_WEB_NODE_PATH`; `web/tests/tab_hidpi.mjs`). Boots the same
+7.6.1 Finder at `?scale=1` and `?scale=2`, and checks the 2x run's menu
+bar actually differs from a naive nearest-neighbor doubling of the 1x
+run by more than a sliver -- the plain-upscale look that not calling
+`hidpi::compose()` would silently produce otherwise. Measured on this
+box: canvas backing buffer doubles correctly (640x480 to 1280x960); 2.8-2.9%
+of the menu bar's pixels differ from the naive upscale (antialiasing and
+hinting at the glyph edges, which a bitmap blow-up has none of); the
+Worker's own per-frame draw cost (`Module.stats`, the 'stats' request)
+goes from about 0.1-0.14 ms/frame at scale=1 to 2.9-3.8 ms/frame at
+scale=2 -- noticeably higher than native's 1.3 ms worst case above,
+likely wasm's slower Skia raster path plus `compose()`'s full-surface
+republish on every change rather than the dirty rectangle alone;
+unoptimized (this was the first run through, not a target to chase
+yet). Module size (Release, gzipped over the wire): 59.8 MB/5.39 MB
+without Skia, 63.8 MB/6.67 MB with it -- about 4.0 MB/1.27 MB gzipped
+for HiDPI in this minimal configuration.
