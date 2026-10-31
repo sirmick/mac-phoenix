@@ -121,10 +121,23 @@ TrackGeometry trackGeometry(const ThemeTrackDrawInfo &info)
     return g;
 }
 
+/* A scroll bar's own face: boxFace's bevel, but kTrack (not kShadow) along
+   the shaded edge - measured from the G3 (appr controls.16/.384). Used for
+   the arrow boxes, the thumb, and the page above/below it. */
+void scrollFace(const Rect &r, uint16_t fill, bool pressed)
+{
+    frameGray(r, kBlack);
+    Rect in = r;
+    InsetRect(&in, 1, 1);
+    fillGray(in, pressed ? kShadow : fill);
+    if(!pressed && in.right - in.left > 2 && in.bottom - in.top > 2)
+        bevel(in, kWhite, kTrack);
+}
+
 /* An arrow box, its arrow pointing away from the track. */
 void drawArrowBox(const Rect &r, int dir, bool pressed, bool enabled)
 {
-    boxFace(r, pressed, true);
+    scrollFace(r, kFace, pressed);
     arrow(r, dir, 7, enabled ? kBlack : kShadow);
 }
 
@@ -153,6 +166,52 @@ void drawThumb(const TrackGeometry &g, bool pressed)
             else
                 lineGray(g.thumb.left + 4, mid + d, g.thumb.right - 5, mid + d, kDark);
         }
+    }
+}
+
+/* A scroll bar's thumb and the page above/below it: three panels, each
+   scrollFace's own frame+fill+bevel (not one continuous track) - measured
+   from the G3 (appr controls.16/.384); the thumb's tint is the accent
+   colour (the same blue C_DrawThemeTrack's progress bar fills with). */
+void drawScrollTrack(const TrackGeometry &g, bool pressed)
+{
+    RGBColor accent = { 0x9999, 0x9999, 0xFFFF };
+    if(!g.hasThumb)
+    {
+        scrollFace(g.track, kFace, false);
+        return;
+    }
+    Rect pageLo = g.track, pageHi = g.track;
+    g.setAxis(pageLo, g.lo(g.track), g.lo(g.thumb));
+    g.setAxis(pageHi, g.hi(g.thumb), g.hi(g.track));
+    auto page = [](const Rect &pr) {
+        frameGray(pr, kBlack);
+        Rect in = pr;
+        InsetRect(&in, 1, 1);
+        fillGray(in, 0xAAAA);
+        if(in.right - in.left > 2 && in.bottom - in.top > 2)
+            bevel(in, kShadow, kTrack);
+    };
+    if(g.lo(pageLo) < g.hi(pageLo))
+        page(pageLo);
+    if(g.lo(pageHi) < g.hi(pageHi))
+        page(pageHi);
+    frameGray(g.thumb, kBlack);
+    Rect in = g.thumb;
+    InsetRect(&in, 1, 1);
+    RGBForeColor(&accent);
+    PaintRect(&in);
+    if(!pressed && in.right - in.left > 2 && in.bottom - in.top > 2)
+    {
+        RGBColor lit = { 0xCCCC, 0xCCCC, 0xFFFF }, shade = { 0x6666, 0x6666, 0xCCCC };
+        RGBForeColor(&lit);
+        MoveTo(in.left, in.bottom - 2);
+        LineTo(in.left, in.top);
+        LineTo(in.right - 2, in.top);
+        RGBForeColor(&shade);
+        MoveTo(in.right - 1, in.top + 1);
+        LineTo(in.right - 1, in.bottom - 1);
+        LineTo(in.left + 1, in.bottom - 1);
     }
 }
 
@@ -753,12 +812,15 @@ OSStatus Executor::C_DrawThemeTrack(const ThemeTrackDrawInfo *drawInfo, RgnHandl
         case kThemeSmallScrollBar:
         {
             ThemeTrackPressState press = drawInfo->trackInfo.scrollbar.pressState;
-            Rect t = g.track;
-            frameGray(t, active || drawInfo->enableState == kThemeTrackNothingToScroll ? kBlack : kShadow);
-            InsetRect(&t, 1, 1);
-            fillGray(t, g.hasThumb ? kTrack : kLight);
-            if(g.hasThumb)
-                drawThumb(g, press & kThemeThumbPressed);
+            if(active && g.hasThumb)
+                drawScrollTrack(g, press & kThemeThumbPressed);
+            else
+            {
+                Rect t = g.track;
+                frameGray(t, active || drawInfo->enableState == kThemeTrackNothingToScroll ? kBlack : kShadow);
+                InsetRect(&t, 1, 1);
+                fillGray(t, kLight);
+            }
             break;
         }
         case kThemeSlider:
