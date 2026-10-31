@@ -197,13 +197,13 @@ Each checkout moves the range to its own **port base**
 checkout gets one from a registry every checkout on the box shares
 (`~/.cache/macphoenix/port-bases`, under `flock`): the main tree takes
 18000 (the historical ports), each git worktree (or a copy of a tree that
-isn't a git checkout) the lowest free base with nothing listening in its range at the time (20000, 21000, ... 31000, then
-12000-17000, then 61000-64000: below the ephemeral range, away from
-10000-11999), kept for as long as its directory exists. `python3
-tests/lib/ports.py slots` lists them, `ports.py base` the checkout's. A port
-outside 18000-18999 is taken as already mapped (or asked for on purpose)
-and left alone. An emulator started by hand: :11000, or 19000-19999, which
-no checkout is given.
+isn't a git checkout) the lowest free base with nothing listening in its
+range at the time (20000, 21000, ... 31000, then 12000-17000, then
+61000-64000: below the ephemeral range, away from 10000-11999), kept for as
+long as its directory exists. `python3 tests/lib/ports.py slots` lists
+them, `ports.py base` the checkout's. A port outside 18000-18999 is taken
+as already mapped (or asked for on purpose) and left alone. An emulator
+started by hand: :11000, or 19000-19999, which no checkout is given.
 
 ### Guest tests and the bridge
 
