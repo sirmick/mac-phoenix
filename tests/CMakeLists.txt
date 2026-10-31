@@ -1067,6 +1067,28 @@ foreach(cell IN ITEMS "collections_ppc_executor_761;--backend executor;7.6.1;189
   )
 endforeach()
 
+# Apple Menu Options' submenus on 8.6 (its INIT, in an 'APPC' control
+# panel): the Apple menu held down on Control Panels shows a submenu. The
+# G3 the reference, Executor on 8.6's System.
+foreach(cell IN ITEMS "applemenu_submenus_executor_86;--backend executor;18184;guest;executor"
+                      "applemenu_submenus_rom_ppc_86;--backend kpx --core mame-ppc --jit;18186;guest;mame")
+  list(GET cell 0 name)
+  list(GET cell 1 backend)
+  list(GET cell 2 port)
+  list(SUBLIST cell 3 -1 labels)
+  separate_arguments(backend_args UNIX_COMMAND "${backend}")
+  add_test(
+    NAME ${name}
+    COMMAND bash ${TEST_DIR}/test_apple_menu_submenus.sh ${backend_args} --timeout 120 --port ${port}
+  )
+  set_tests_properties(${name} PROPERTIES
+    TIMEOUT 180
+    LABELS "${labels}"
+    SKIP_RETURN_CODE 77
+    ENVIRONMENT "MACEMU_ROM=${TEST_PPC_ROM}"
+  )
+endforeach()
+
 # Icon Services from PowerPC code (IconServicesLib) by IconTest
 # (tests/guest/iconservices, Retro68): Executor's (iconservices.cpp), and
 # Apple's on the G3 with 9.0.4 and 8.6; on 8.6 also Executor's with 8.6's System.
