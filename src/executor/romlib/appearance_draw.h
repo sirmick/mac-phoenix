@@ -145,6 +145,21 @@ Rect documentCloseBox(const Rect &c);
 Rect documentZoomBox(const Rect &c, const WindowParts &parts);
 Rect documentCollapseBox(const Rect &c);
 
+/* A platinum floating window (WDEF 66; 67's SIDE variant has its title
+   bar on the left, untitled): the frame, its structure, its boxes. */
+struct FloatParts
+{
+    bool close, zoom, collapse, grow, side;
+    int zoomKind; /* WDEF 66's variant bits: 4 vertical, 8 horizontal, 12 both */
+};
+void floatingFrame(const Rect &c, bool active, const FloatParts &parts, ConstStringPtr title);
+void floatingStructure(const Rect &c, bool side, RgnHandle rgn);
+Rect floatingCloseBox(const Rect &c, const FloatParts &parts);
+Rect floatingCollapseBox(const Rect &c, const FloatParts &parts);
+Rect floatingZoomBox(const Rect &c, const FloatParts &parts);
+/* the grow box, frame not content (its corner of the content) */
+Rect floatingGrowBox(const Rect &c);
+
 /* The current port's depth and whether its device is in colour, what the
    definitions' callbacks are told. */
 inline void portDepth(SInt16 *depth, Boolean *color)
