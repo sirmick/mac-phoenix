@@ -158,8 +158,8 @@
   "blocker": "alert: \"OIDS requires a newer version of SoundManager (try version 3.0) in order to run properly.\""
  },
  "e86|Games:Pararena 2.06 ƒ:Pararena 2.06M": {
-  "status": "partial",
-  "blocker": "depth prompt the reference doesn't show: \"Pararena requires that the monitor display either 16, or 2-colors (black & white). Which would you like?\" (reference shows the title screen)"
+  "status": "runs",
+  "blocker": "asks for 16 colours: Executor's screen is 8-bit; the Quadra at 256 colours asks the same"
  },
  "e86|Games:Prince of Persia 2 ƒ:Prince of Persia 2": {
   "status": "fails",
@@ -170,8 +170,8 @@
   "blocker": "Open dialog starts in the System Folder instead of the SimAnt folder, so 'SimAnt User's Manual' isn't listed"
  },
  "e86|Games:SimAnt ƒ:SimAnt™ Color": {
-  "status": "partial",
-  "blocker": "depth prompt the reference doesn't show: \"SimAnt™ runs radically faster in 16-color mode. Click on \"Set Now!\" for best performance.\" (reference shows the Select a Game screen)"
+  "status": "runs",
+  "blocker": "asks for 16 colours: Executor's screen is 8-bit; the Quadra at 256 colours asks the same"
  },
  "e86|Games:SimFarm ƒ:SimFarm": {
   "status": "fails",
@@ -433,5 +433,258 @@
  },
  "7.6.1|Classic Games:Beyond Dark Castle 1.1 ƒ:Beyond Dark Castle Editor ": {
   "owner": "— (the same on the Quadra)"
+ },
+ "g86|Games:Afterlife 1.0 ƒ:Afterlife": {
+  "status": "fails",
+  "blocker": "alert: \"Afterlife has detected that you are running an out-of-date Apple CD-ROM driver that is incompatible with Afterlife.\""
+ },
+ "g86|Games:Apeiron 1.0.2 ƒ:Apeiron": {
+  "status": "fails",
+  "blocker": "alert: \"Monitor Tool could not be opened. This program requires a color-capable Macintosh with a 256 color monitor that is 13\" or larger (640x480 or larger).\""
+ },
+ "g86|Games:Ares 1.2.0 ƒ:Ares": {
+  "status": "fails",
+  "blocker": "alert: \"Error: Couldn't find a large enough device of the minimum pixel depth.\""
+ },
+ "g86|Games:Barrack 1.0.4 ƒ:Barrack": {
+  "status": "fails",
+  "blocker": "alert: \"Error 8: Sorry, your system does not support the minimum color requirements 640x480 @ 8-bit.\""
+ },
+ "g86|Games:Bubble Trouble 1.0.1 ƒ:Bubble Trouble": {
+  "status": "fails",
+  "blocker": "alert: \"Sorry, but the music drivers couldn't be initialised. Try increasing Bubble Trouble's memory allocation. Error ID: -7\""
+ },
+ "g86|Games:Chiral 1.0.4 ƒ:Chiral": {
+  "status": "fails",
+  "blocker": "alert: \"Monitor Tool could not be opened. This program requires a color-capable Macintosh with a 256 color monitor.\""
+ },
+ "g86|Games:Chiral 1.0.4 ƒ:Chiral Basics": {
+  "status": "fails",
+  "blocker": "alert: \"Couldn't open the Monitor Tool.\""
+ },
+ "g86|Games:Civilization II ƒ:Civ II Map Editor": {
+  "status": "fails",
+  "blocker": "alert: \"Civ II Map Editor requires a computer capable of displaying 256 colors.\""
+ },
+ "g86|Games:Civilization II ƒ:Civilization II": {
+  "status": "fails",
+  "blocker": "alert: \"Civilization II requires a computer capable of displaying 256 colors.\""
+ },
+ "g86|Games:Civilization II ƒ:Civilization II Files:Civilopedia:Civilopedia": {
+  "status": "fails",
+  "blocker": "all-black screen (possibly still loading)"
+ },
+ "g86|Games:Cythera 1.0.4 ƒ:Cythera": {
+  "status": "fails",
+  "blocker": "256-colour prompt: \"This game runs faster in 256 colors. Would you like to automatically switch at startup?\""
+ },
+ "g86|Games:Digital Messiah ƒ:Digital Messiah 2.0": {
+  "status": "fails",
+  "blocker": "alert: \"Your MAIN monitor must be set to 256 (8-bit) color graphics in order to use Digital Messiah v.1.0.\""
+ },
+ "g86|Games:Escape Velocity 1.0.5 ƒ:Escape Velocity": {
+  "status": "fails",
+  "blocker": "alert: \"Sorry, an error occured while trying to open the Monitor Tool. ID = -3\""
+ },
+ "g86|Games:EV Override 1.0.2 ƒ:EV Override": {
+  "status": "fails",
+  "blocker": "alert: \"Sorry, an error occured while trying to open the Monitor Tool. ID = -3\""
+ },
+ "g86|Games:Exile 2.0.1 ƒ:Exile Editor v1.1.2:Exile.editor v1.1.2": {
+  "status": "fails",
+  "blocker": "256-colour prompt: \"Unfortunately, this game requires 8-bit Color Quickdraw to run optimally. It may work with less, albeit unaesthetically. Do you wish to try?\""
+ },
+ "g86|Games:Exile 2.0.1 ƒ:Exile v2.0.1": {
+  "status": "fails",
+  "blocker": "256-colour prompt: \"Unfortunately, this game requires 8-bit Color Quickdraw to run optimally...\""
+ },
+ "g86|Games:Exile II 2.0.3 ƒ:Exile II Editor v2.0.1": {
+  "status": "fails",
+  "blocker": "256-colour prompt: \"Unfortunately, this game requires 8-bit Color Quickdraw to run optimally...\""
+ },
+ "g86|Games:Exile II 2.0.3 ƒ:Exile II v2.0.3": {
+  "status": "fails",
+  "blocker": "256-colour prompt: \"Unfortunately, this game requires 8-bit Color Quickdraw to run optimally...\""
+ },
+ "g86|Games:Exile III 1.0.3 ƒ:Exile III (fat) v1.0.3": {
+  "status": "fails",
+  "blocker": "256-colour prompt: \"Unfortunately, this game requires 8-bit Color Quickdraw to run optimally. It might work with less, or it might not work at all. Do you wish to try?\""
+ },
+ "g86|Games:Exile III 1.0.3 ƒ:Exile III Editor v1.0.2": {
+  "status": "fails",
+  "blocker": "256-colour prompt: \"Unfortunately, this program requires 8-bit Color Quickdraw to run optimally...\""
+ },
+ "g86|Games:Flashback 1.0 ƒ:Flashback": {
+  "status": "fails",
+  "blocker": "alert: \"Flashback only runs in 256 color mode.\""
+ },
+ "g86|Games:Glider PRO 1.1.2 ƒ:Glider PRO™": {
+  "status": "fails",
+  "blocker": "alert: \"Need Color Monitor: Glider PRO runs only in 16 shades of gray or 256 colors. None of the monitors hooked up to this Mac are capable of either of these modes. (program error = 13)\""
+ },
+ "g86|Games:Lemmings 1.5.2 ƒ:Lemmings": {
+  "status": "fails",
+  "blocker": "alert: \"Lemmings only runs in 256 color mode, or Black and White.\""
+ },
+ "g86|Games:Maelstrom 1.4.2 ƒ:Maelstrom": {
+  "status": "fails",
+  "blocker": "alert: \"Maelstrom requires that you have a monitor that can display 256 colors; sorry about that...\""
+ },
+ "g86|Games:Marathon 1.2 ƒ:Marathon v1.2": {
+  "status": "fails",
+  "blocker": "alert: \"Marathon couldn't allocate enough sound channels to play sound because there isn't enough free system memory available (try giving Marathon less memory). ID = -1856\""
+ },
+ "g86|Games:Marathon 2 ƒ:Marathon 2": {
+  "status": "fails",
+  "blocker": "alert: \"Marathon couldn't allocate enough sound channels to play sound because there isn't enough free system memory available (try giving Marathon less memory). ID = -1856\""
+ },
+ "g86|Games:Marathon Infinity 1.5 ƒ:Marathon ∞ 1.5": {
+  "status": "fails",
+  "blocker": "alert: \"Marathon couldn't allocate enough sound channels to play sound because there isn't enough free system memory available (try giving Marathon less memory). ID = -1856\""
+ },
+ "g86|Games:Monkey Island 2 ƒ:LeChuck's Revenge": {
+  "status": "fails",
+  "blocker": "alert: \"I'm sorry, Monkey 2 runs only in 256 color mode. Please use the Control Panel to change the color mode.\""
+ },
+ "g86|Games:Oids 2.0.1 ƒ:OIDS": {
+  "status": "fails",
+  "blocker": "alert: \"OIDS cannot run on any screen in your system. OIDS Error #0\""
+ },
+ "g86|Games:Pathways into Darkness 1.1 ƒ:Pathways ƒ:Pathways Into Darkness": {
+  "status": "fails",
+  "blocker": "alert: \"Sorry, Pathways into Darkness requires a monitor which can be set to 256 colors or grays. ID= 0\""
+ },
+ "g86|Games:Populous II ƒ:MacPopulousII:MacPopulousII": {
+  "status": "fails",
+  "blocker": "game not in front, Finder only"
+ },
+ "g86|Games:Populous II ƒ:MacPopulousII:MacPopulousII (Mono)": {
+  "status": "fails",
+  "blocker": "game not in front, Finder only"
+ },
+ "g86|Games:Populous II ƒ:MacPopulousII:MacPopulousII (SC)": {
+  "status": "fails",
+  "blocker": "game not in front, Finder only"
+ },
+ "g86|Games:Prince of Persia 2 ƒ:Prince of Persia 2": {
+  "status": "fails",
+  "blocker": "alert: \"Requires System 6.0.7 or higher, with 256 colors and 32 Bit QuickDraw installed.\""
+ },
+ "g86|Games:Prince of Persia ƒ:Prince of Persia": {
+  "status": "fails",
+  "blocker": "alert: \"Prince of Persia only runs in Black and White, 4 color mode, 16 color mode or 256 color mode.\""
+ },
+ "g86|Games:SimCity 2000® Collection ƒ:SimCity 2000® 1.2": {
+  "status": "fails",
+  "blocker": "alert: \"SimCity 2000® Needs 256 Colors to Operate. This Application is Unable to Set Your Monitor to 256 Colors/Greys and Must Instead Quit.\""
+ },
+ "g86|Games:SimCity 2000® Collection ƒ:Urban Renewal Kit": {
+  "status": "fails",
+  "blocker": "alert: \"SimCity 2000™ Needs 256 Colors to Operate. This Application is Unable to Set Your Monitor to 256 Colors/Greys and Must Instead Quit.\""
+ },
+ "g86|Games:SimEarth 2.0 ƒ:SimEarth Color": {
+  "status": "fails",
+  "blocker": "system error: \"Sorry, a system error occurred. 'SimEarth Color' error type 10\""
+ },
+ "g86|Games:SimFarm ƒ:SimFarm": {
+  "status": "fails",
+  "blocker": "alert: \"SimFarm requires either a 256 color or monochrome monitor to run.\""
+ },
+ "g86|Games:SimLife 1.0.1 ƒ:SimLife™ Color": {
+  "status": "fails",
+  "blocker": "alert: \"Warning: SimLife™ Color needs 16 colors to run, but this machine supports fewer colors. Please consider running the monochrome version of SimLife™ instead.\""
+ },
+ "g86|Games:SimTower 1.2 ƒ:SimTower": {
+  "status": "fails",
+  "blocker": "alert: \"SimTower requires 256 color mode.\""
+ },
+ "g86|Games:Spectre 1.1 ƒ:Spectre 1.1": {
+  "status": "fails",
+  "blocker": "alert: \"Spectre requires a monitor in 1, 4 or 8 bit mode (2, 16, or 256 colors/grays).\""
+ },
+ "g86|Games:Swoop 1.0.2 ƒ:Swoop": {
+  "status": "fails",
+  "blocker": "alert: \"Sorry, but Swoop could not find an appropriate monitor to use. It requires a screen capable of 640x480 pixels in 256 colours.\""
+ },
+ "g86|Games:The Secret of Monkey Island ƒ:Monkey Island": {
+  "status": "fails",
+  "blocker": "alert: \"I'm sorry, Monkey Island runs only in 256 color mode. Please use the Control Panel to change the color mode.\""
+ },
+ "g86|Games:Warcraft II 1.22 ƒ:Editors:Warcraft II Sound Editor": {
+  "status": "fails",
+  "blocker": "alert: \"Can not continue because a Mac OS error occured. -1856\""
+ },
+ "g86|Games:Warcraft II 1.22 ƒ:Warcraft II v.1.22": {
+  "status": "fails",
+  "blocker": "alert: \"Sorry, Warcraft II requires a 13 inch color display. The display must be capable of 256 colors at a resolution of 640x480 or higher.\""
+ },
+ "g86|Games:Wolfenstein 3D 1.0.2 ƒ:Wolfenstein 3D™": {
+  "status": "fails",
+  "blocker": "alert: \"No color-capable monitors are connected to this system.\""
+ },
+ "g86|Classic Games:Apache Strike 1.2 ƒ:Apache Strike": {
+  "status": "fails",
+  "blocker": "depth prompt: \"To run Apache Strike, set the screen to 2 Colors/Grays in the Control Panel.\""
+ },
+ "g86|Classic Games:Beyond Dark Castle 1.1 ƒ:Beyond Dark Castle": {
+  "status": "fails",
+  "blocker": "depth prompt: \"You must set the main screen to two colors (using the Control Panel) before running Beyond Dark Castle.\""
+ },
+ "g86|Classic Games:Beyond Dark Castle 1.1 ƒ:Beyond Dark Castle Editor ": {
+  "status": "fails",
+  "blocker": "launch failed, Finder only"
+ },
+ "g86|Classic Games:Dark Castle ƒ:Dark Castle": {
+  "status": "fails",
+  "blocker": "depth prompt: \"You must set the main screen to two colors (using the Control Panel) before running Dark Castle.\""
+ },
+ "g86|Classic Games:Glider 4.0.4 ƒ:Editor 1.01": {
+  "status": "fails",
+  "blocker": "depth prompt: \"Room Editor requires 2-color (black & white) or 16-color mode...\" (Executor shows the same prompt)"
+ },
+ "g86|Classic Games:Glider 4.0.4 ƒ:Glider™": {
+  "status": "fails",
+  "blocker": "depth prompt: \"Glider requires 2-color (black & white) or 16-color mode...\" (Executor shows the same prompt)"
+ },
+ "g86|Classic Games:Rescue! 2.0.4 ƒ:Rescue! 2.0.4": {
+  "status": "fails",
+  "blocker": "blank screen (not in front)"
+ },
+ "g86|Classic Games:SimCity 1.3c ƒ:SimCity 1.3c": {
+  "status": "fails",
+  "blocker": "Finder in front (not in front)"
+ },
+ "g86|Classic Games:SimCity 1.3c ƒ:TerrainEdit1.1": {
+  "status": "fails",
+  "blocker": "Finder in front (not in front)"
+ },
+ "g86|Games PPC:EV Nova 1.0.10 ƒ:EV Nova": {
+  "status": "fails",
+  "blocker": "alert: \"Sorry, an error occurred while configuring the monitor.\""
+ },
+ "g86|Games PPC:Ferazel's Wand 1.0.3 ƒ:Ferazel's Wand": {
+  "status": "fails",
+  "blocker": "alert: \"Please insert the Ferazel's Wand CD and try again.\" (Executor shows the same)"
+ },
+ "g86|Games PPC:Mars Rising 1.0.2 ƒ:Mars Rising": {
+  "status": "fails",
+  "blocker": "depth prompt: \"Sorry, but Mars Rising requires a monitor capable of displaying at least 640x480 pixels with 256 colors.\""
+ },
+ "g86|Games PPC:Master of Orion II ƒ:Master of Orion II:MOO II": {
+  "status": "fails",
+  "blocker": "alert: \"Unable to find a suitable device.\""
+ },
+ "g86|Games PPC:Slithereens 1.0.1 ƒ:Slithereens": {
+  "status": "fails",
+  "blocker": "alert: \"I could not find an acceptable monitor to play Slithereens on. Sorry.\""
+ },
+ "8.6|Classic Games:SimCity 1.3c ƒ:SimCity 1.3c": {
+  "owner": "— (the same on the ROM machines)"
+ },
+ "8.6|Classic Games:SimCity 1.3c ƒ:TerrainEdit1.1": {
+  "owner": "— (the same on the ROM machines)"
+ },
+ "8.6|Classic Games:Beyond Dark Castle 1.1 ƒ:Beyond Dark Castle Editor ": {
+  "owner": "— (the same on the ROM machines)"
  }
 }

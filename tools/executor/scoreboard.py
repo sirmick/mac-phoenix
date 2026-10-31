@@ -242,7 +242,7 @@ def cmd_table(opts):
                 if not row_owner:
                     if worst < 2:
                         row_owner = ""
-                    elif system == "8.6" and owner != "fix-games" and faults761.get(p) != fault:
+                    elif system == "8.6" and p not in faults761:   # fine on 7.6.1
                         row_owner = "fix-86"
                     else:
                         row_owner = owner
@@ -285,6 +285,17 @@ def cmd_table(opts):
             t = {k: v for k, v in t.items() if k}   # not fat: no cell
         head.append(f"| {system} | {c} | {t.get('runs', 0)} | {t.get('partial', 0)} | "
                     f"{t.get('fails', 0)} |")
+    head += ["", "Gaps in the references and the method:", "",
+             "- The G3 starts in millions of colours and has no `--depth` (the PPC video",
+             "  driver publishes 32-bit modes only, `src/cpu/kpx/video_ppc.cpp`), so many",
+             "  games refuse to start there (g86 *fails*, \"needs 256 colours\"); their e86",
+             "  verdicts are judged on their own.",
+             "- Silicon Beach's black-and-white games (Dark Castle & co.) want a 1-bit screen:",
+             "  the Quadra at 256 colours shows their alert; Executor crashes or stays blank.",
+             "- Executor 8.6's desktop (no desktop picture, sparse Finder icons, no Control",
+             "  Strip) is not counted against any row.",
+             "- Full-screen games often leave `/api/app` without an answer; the screenshot",
+             "  decides (\"runs?\" where it wasn't checked)."]
     head += ["", "Rows with a fault, by owner:", "", "| System | Owner | rows |", "|---|---|---|"]
     for (system, pkg), k in sorted(owners.items()):
         head.append(f"| {system} | {pkg} | {k} |")
