@@ -136,7 +136,9 @@ else()
                                                       EXECUTOR_HFSX_BLANK="${HFSX_BLANK}")
     if(EMSCRIPTEN)
         # Under node: the host's files, as natively.
-        target_link_options(executor_tests PRIVATE -sNODERAWFS=1)
+        target_link_options(executor_tests PRIVATE -sNODERAWFS=1
+            -sINITIAL_MEMORY=64MB)  # -DEXECUTOR_SKIA=ON's static data needs
+                                     # more than wasm-ld's 16 MB default
     endif()
     target_compile_definitions(executor_tests PRIVATE -DEXECUTOR)
     # The export tables, for tools/macdecode/libraries.py (exports.cpp).
