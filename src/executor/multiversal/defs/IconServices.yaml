@@ -439,6 +439,27 @@
 
 # ####
 
+# IconServicesLib's private export: an icon suite with an IconRef's
+# icons, those of whichIcons (-1: all). The 8.6 Finder makes the Apple
+# menu items' small icons so (AddAppleMenuItem's suite; its two call
+# sites pass these arguments, the third 0). Names are guesses.
+- function:
+    name: NewIconSuiteFromIconRef
+    return: OSErr
+    args:
+      - name: whichIcons
+        type: IconSelectorValue
+      - name: iconSuite
+        type: Handle*
+      - name: reserved
+        type: UInt32
+      - name: theIconRef
+        type: IconRef
+    library: IconServicesLib
+    executor: C_
+
+# ####
+
 - function:
     name: IconSuiteToIconFamily
     return: OSErr
