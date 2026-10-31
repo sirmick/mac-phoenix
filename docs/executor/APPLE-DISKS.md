@@ -255,11 +255,18 @@ code only says it needs a 68k Mac, and the tab can't pass `--executor-ppc`.
 Gates, 2026-10-31: both cuts boot to the Finder natively
 (`--executor-system` on the cut; 8.6 without `--executor-ppc`); 7.6.1 in the
 tab too (`executor.web.finder` with `-DEXECUTOR_WEB_SYSTEM=` the cut: the
-Finder in 0.4 s). Open: 8.6 in the tab crashes the page while the Finder's
-PowerPC libraries load (mame-ppc's C back-end under wasm); and
-`executor.web.write` fails on every cut (7.5.5's from the old cutter too, not
-on the full images): the disk's window closes by itself on its first opening,
-so the new folder lands on the desktop.
+Finder in 0.4 s), and `executor.web.write` on the 7.5.5 and 7.6.1 cuts. Open:
+8.6 in the tab crashes the page while the Finder's PowerPC libraries load
+(mame-ppc's C back-end under wasm).
+
+A cut has no desktop database (the source's is keyed by its file IDs).
+Executor builds an HFS volume's database from its catalog then, and keeps
+none on the volume; the Finder used to be told it was new and rebuilt it
+after it was up, at every boot, and closed a window of the volume opened
+meanwhile when the rebuild ended (`executor.web.write` failed on every cut).
+The database Executor builds now counts as a rebuilt one (`finder.cpp`
+`openDB`), with the icons of every file with a bundle, as the Finder's
+rebuild collects them.
 
 ## How the triage was run
 
