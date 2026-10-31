@@ -292,7 +292,7 @@ set(qd_sources
      quickdraw/qPict2.cpp quickdraw/image.cpp
     quickdraw/image_inits.cpp quickdraw/default_ctab_values.cpp
     quickdraw/dcconvert.cpp quickdraw/rgbutil.cpp quickdraw/dcmaketables.cpp
-    quickdraw/fontIMVI.cpp quickdraw/font.cpp quickdraw/sfnt.cpp
+    quickdraw/fontIMVI.cpp quickdraw/font.cpp quickdraw/fontmgr85.cpp quickdraw/sfnt.cpp
     quickdraw/displays.cpp
 )
 
