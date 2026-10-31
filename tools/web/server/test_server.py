@@ -431,6 +431,90 @@ class ServerTest(unittest.TestCase):
             self.assertEqual(db.execute("select count(*) from blocks where key = 'backup-x'").fetchone()[0], 1)
 
 
+@unittest.skipUnless(shutil.which("openssl"), "no openssl to make a certificate")
+class TlsTest(unittest.TestCase):
+    """[server] tls_cert/tls_key: HTTPS directly, a self-signed certificate
+    made here; the handshake in the connection's thread, so a client that
+    never finishes one (or speaks plain http) holds up no one else."""
+    @classmethod
+    def setUpClass(cls):
+        import subprocess
+        cls.tmp = tempfile.mkdtemp(prefix="executor-web-tls-")
+        site = os.path.join(cls.tmp, "site")
+        images = os.path.join(cls.tmp, "images")
+        os.makedirs(site)
+        os.makedirs(images)
+        with open(os.path.join(site, "index.html"), "w") as f:
+            f.write("<p>tab</p>")
+        cls.disk = bytes(range(256)) * 256            # 64 KB
+        with open(os.path.join(images, "a.img"), "wb") as f:
+            f.write(cls.disk)
+        with open(os.path.join(images, "a.img.json"), "w") as f:
+            json.dump({"title": "Disk A"}, f)
+        cls.cert, key = os.path.join(cls.tmp, "tls.crt"), os.path.join(cls.tmp, "tls.key")
+        subprocess.run(["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1",
+                        "-subj", "/CN=127.0.0.1", "-addext", "subjectAltName=IP:127.0.0.1",
+                        "-keyout", key, "-out", cls.cert], check=True, capture_output=True)
+        cfg = config.load(None, {"server": {"port": 0, "site": site, "data": os.path.join(cls.tmp, "data"),
+                                            "tls_cert": cls.cert, "tls_key": key},
+                                 "library": {"images": images}})
+        cls.server = app.Server(cfg, quiet=True)
+        cls.port = cls.server.server_address[1]
+        threading.Thread(target=cls.server.serve_forever, daemon=True).start()
+        cls.server.app.accounts.add_user("owner", "owner-password", owner=True)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.server.shutdown()
+        shutil.rmtree(cls.tmp)
+
+    def request(self, method, path, body=None, headers=None):
+        import ssl
+        ctx = ssl.create_default_context(cafile=self.cert)    # verified against the certificate
+        c = http.client.HTTPSConnection("127.0.0.1", self.port, context=ctx, timeout=10)
+        h = dict(headers or {})
+        if isinstance(body, dict):
+            body = json.dumps(body).encode()
+            h["Content-Type"] = "application/json"
+        c.request(method, path, body, h)
+        r = c.getresponse()
+        data = r.read()
+        c.close()
+        return r, data
+
+    def test_https(self):
+        r, _ = self.request("GET", "/")
+        self.assertEqual((r.status, r.getheader("Location")), (302, "/login?next=%2F"))
+        # Signed in by another host's name (a LAN address): the cookie is Secure.
+        r, _ = self.request("POST", "/api/login", {"name": "owner", "password": "owner-password"},
+                            headers={"Host": f"192.168.1.20:{self.port}", "Origin": f"https://192.168.1.20:{self.port}"})
+        self.assertEqual(r.status, 200)
+        self.assertIn("Secure", r.getheader("Set-Cookie"))
+        cookie = r.getheader("Set-Cookie").split(";")[0]
+        r, data = self.request("GET", "/", headers={"Cookie": cookie})
+        self.assertEqual((r.status, data), (200, b"<p>tab</p>"))
+        r, data = self.request("GET", "/disks/a.img", headers={"Cookie": cookie, "Range": "bytes=100-199"})
+        self.assertEqual((r.status, data), (206, self.disk[100:200]))
+
+    def test_stalled_and_plain_clients(self):
+        # One connected and silent (no ClientHello), one speaking plain http:
+        # HTTPS requests are answered meanwhile; the plain one is closed, not hung.
+        silent = socket.create_connection(("127.0.0.1", self.port))
+        plain = socket.create_connection(("127.0.0.1", self.port), timeout=10)
+        try:
+            plain.sendall(b"GET / HTTP/1.1\r\nHost: x\r\n\r\n")
+            for _ in range(3):
+                self.assertEqual(self.request("GET", "/login")[0].status, 200)
+            got = b""
+            with contextlib.suppress(ConnectionError):
+                while chunk := plain.recv(4096):
+                    got += chunk
+            self.assertNotIn(b"<p>tab</p>", got)
+        finally:
+            silent.close()
+            plain.close()
+
+
 class WS:
     """The tab's end of /relay: masked frames out, relay messages in."""
     def __init__(self, s):

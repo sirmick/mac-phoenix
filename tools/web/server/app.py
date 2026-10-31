@@ -43,6 +43,7 @@ import json
 import os
 import posixpath
 import re
+import sys
 import threading
 import time
 from urllib.parse import parse_qs, quote, unquote, urlsplit
@@ -501,3 +502,14 @@ class Server(http.server.ThreadingHTTPServer):
             super().process_request_thread(request, client_address)
         finally:
             self.slots.release()
+
+    # A client that drops the connection, or fails the TLS handshake (plain
+    # http to the HTTPS port, a certificate it refuses): a line, not a traceback.
+    def handle_error(self, request, client_address):
+        import ssl
+        e = sys.exc_info()[1]
+        if isinstance(e, (ssl.SSLError, ConnectionError, TimeoutError)):
+            if not self.quiet:
+                print(f"{client_address[0]}: {type(e).__name__}: {e}", file=sys.stderr, flush=True)
+            return
+        super().handle_error(request, client_address)
