@@ -167,9 +167,15 @@ LONGINT Executor::ROMlib_SizeResource(Handle res, Boolean usehandle)
 
 LONGINT Executor::C_GetResourceSizeOnDisk(Handle res)
 {
-    /* MacPhoenix: the length stored on disk (for a compressed resource, its
-       compressed size), not the loaded handle's size. Finder 7.5 compares
-       this with the uncompressed size to decide whether to decompress the
-       code it reads straight from its resource fork. */
-    return ROMlib_SizeResource(res, false);
+    /* MacPhoenix: for a resource that isn't loaded, the length stored on
+       disk (for a compressed resource, its compressed size): Finder 7.5
+       compares this with the uncompressed size to decide whether to
+       decompress the code it reads straight from its resource fork. A
+       loaded resource answers its handle's size, as on a Mac
+       (tests/guest/ressize): ClarisWorks 4 sums this over its CODE
+       resources, whose loaded segments hold unpacked code. */
+    LONGINT size = ROMlib_SizeResource(res, false);
+    if(size >= 0 && *res)
+        size = GetHandleSize(res);
+    return size;
 }

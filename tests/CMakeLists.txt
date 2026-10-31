@@ -501,6 +501,30 @@ set_tests_properties(notify_executor PROPERTIES
   SKIP_RETURN_CODE 77
 )
 
+# SizeResource and MaxSizeRsrc for resources loaded and not (a loaded one
+# answers its handle's size: ClarisWorks 4's launch check): tests/guest/ressize.
+# The ROM machine is the reference.
+add_test(
+  NAME ressize_guest
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --os-version 7.6.1 --app ${CMAKE_SOURCE_DIR}/tests/guest/ressize/ResSizeTest.bin --results ressize_test.txt --network none --timeout 90 --port 18460
+)
+set_tests_properties(ressize_guest PROPERTIES
+  TIMEOUT 130
+  LABELS "guest"
+  SKIP_RETURN_CODE 77
+  ENVIRONMENT "MACEMU_ROM=${TEST_ROM}"
+)
+
+add_test(
+  NAME ressize_executor
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --backend executor --os-version 7.6.1 --app ${CMAKE_SOURCE_DIR}/tests/guest/ressize/ResSizeTest.bin --results ressize_test.txt --network none --timeout 150 --port 18462
+)
+set_tests_properties(ressize_executor PROPERTIES
+  TIMEOUT 200
+  LABELS "guest;executor"
+  SKIP_RETURN_CODE 77
+)
+
 # Host keystrokes (/api/keypress) reach the front application (the suite).
 add_test(
   NAME keyboard_guest
