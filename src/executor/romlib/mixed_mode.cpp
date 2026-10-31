@@ -362,6 +362,7 @@ static uint32_t mode_switch(UniversalProcPtr theProcPtr, ProcInfoType procinfo,
             break;
         case kPascalStackBased:
         case kCStackBased:
+        case kThinkCStackBased: /* MacPhoenix: as C's (AppleWorks 5's MDEF from PowerPC GetMenu) */
             for(uint32_t field = 6; field <= 30; field += 2)
             {
                 uint32_t argsize = (procinfo >> field) & 0x3;
@@ -501,6 +502,7 @@ static uint32_t mode_switch(UniversalProcPtr theProcPtr, ProcInfoType procinfo,
                 break;
 
             case kCStackBased:
+            case kThinkCStackBased:
                 for(int i = nParameters-1; i >= firstStackParam; i--)
                     pusharg(paramSizes[i], paramValues[i]);
                 break;
