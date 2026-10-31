@@ -1,4 +1,5 @@
 #include "appledouble.h"
+#include "itemcache.h"
 #include "plain.h"
 
 #include <algorithm>
@@ -34,7 +35,15 @@ ItemPtr AppleDoubleItemFactory::createItemForDirEntry(ItemCache& itemcache, CNID
     {
         for(auto scheme : { AppleDoubleScheme::percent, AppleDoubleScheme::dotunderscore })
         {
-            if(fs::is_regular_file(makeADPath(scheme, e.path())))
+            fs::path adpath = makeADPath(scheme, e.path());
+            /* Same-folder sidecar: the current cacheDirectory() scan
+               already has every name here, so most files (no sidecar)
+               skip the stat entirely; a name match still confirms it's a
+               regular file (the scan doesn't track type, just presence). */
+            auto known = itemcache.siblingExistsInScan(e.path().parent_path(), adpath.filename().string());
+            if(known == false)
+                continue;
+            if(fs::is_regular_file(adpath))
                 return std::make_shared<AppleDoubleFileItem>(scheme, itemcache, parID, cnid, e.path(), macname);
         }
     }
