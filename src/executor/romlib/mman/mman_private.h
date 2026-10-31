@@ -158,6 +158,10 @@ extern OSErr ROMlib_relalloc(Size, block_header_t **);
 extern void ROMlib_setupblock(block_header_t *, uint32_t, short, Handle, ...);
 extern void ROMlib_freeblock(block_header_t *);
 extern bool ROMlib_makespace(block_header_t **, uint32_t);
+/* MacPhoenix: ResrvMem's room for SIZE bytes (header included) in TheZone,
+   as low as it can be made (mmansubr.cpp): a free block of at least SIZE
+   bytes, or nullptr. */
+extern block_header_t *ROMlib_reserve(uint32_t size);
 extern bool ROMlib_locked(block_header_t *);
 extern void ROMlib_moveblock(block_header_t *, block_header_t *, uint32_t);
 /* MacPhoenix: MoveHHi's move (mmansubr.cpp). Returns a MemErr value. */
