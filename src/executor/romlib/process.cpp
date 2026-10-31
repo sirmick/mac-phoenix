@@ -191,7 +191,9 @@ static process_info_t *pending_front;
 static std::vector<process_info_t *> layer_order;
 static process_info_t *front_process;
 /* The front process's name for the host's video thread (/api/app): copied
-   at event calls and when a process ends, as CurApName at a frame names
+   at event calls, when a process comes to the front (one that never makes
+   an event call, Exile polling Button(), is still the front one) and when
+   a process ends, as CurApName at a frame names
    whichever process runs then (the agent, while an application quits). */
 static std::mutex front_name_mutex;
 static std::string front_name;
@@ -1647,6 +1649,7 @@ static void bring_to_front(process_info_t *q)
                 UnionRgn(WINDOW_STRUCT_REGION(w), covered, covered);
     raise_layer(q);
     front_process = q;
+    publish_front_name();
     q->modal_front = false;
     q->raised = covered;
     q->activate_pending = true;
@@ -1719,6 +1722,7 @@ void Executor::ROMlib_process_event_hook(INTEGER mask)
         step_back(me);
         raise_layer(p);
         front_process = p;
+        publish_front_name();
         switch_to(p);
         return;
     }
