@@ -189,12 +189,15 @@ NOTRAP_FUNCTION2(LMGetApFontID);
 NOTRAP_FUNCTION2(LMSetApFontID);
 
 
-// FontMgr ToolEqu.a (true);
-const LowMemGlobal<FMInput > ROMlib_myfmi{ 0x988 };
-inline void LMGetROMlib_myfmi(FMInput *val) { *val = LM(ROMlib_myfmi); }
-inline void LMSetROMlib_myfmi(const FMInput *val) { LM(ROMlib_myfmi) = *val; }
-NOTRAP_FUNCTION2(LMGetROMlib_myfmi);
-NOTRAP_FUNCTION2(LMSetROMlib_myfmi);
+// FontMgr ToolEqu.a (true); the Font Manager's last input record. Its
+// accessors copy it out and in and are PrivateInterfaceLib's (8.6's
+// ControlDefinitions sets family and size to -1 with them, to make the
+// next font swap start afresh).
+const LowMemGlobal<FMInput > CurFMInput{ 0x988 };
+inline void LMGetCurFMInput(FMInput *val) { *val = LM(CurFMInput); }
+inline void LMSetCurFMInput(const FMInput *val) { LM(CurFMInput) = *val; }
+LIBRARY_FUNCTION(PrivateInterfaceLib, LMGetCurFMInput, LMGetCurFMInput);
+LIBRARY_FUNCTION(PrivateInterfaceLib, LMSetCurFMInput, LMSetCurFMInput);
 
 
 // FontMgr Private.a (true);

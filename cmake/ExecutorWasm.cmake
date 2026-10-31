@@ -37,3 +37,15 @@ enable_testing()
 add_subdirectory(src/cpu/mame)
 add_subdirectory(src/cpu/core)
 add_subdirectory(src/executor)
+
+# The cores' unit test, and its --bench under node (W4: drcbec in wasm
+# against the native back-ends).
+add_executable(test_cpu_cores
+  tests/test_cpu_cores.cpp
+  src/cpu/core/guest_memory.cpp
+  src/common/platform_glue.cpp)
+target_include_directories(test_cpu_cores PRIVATE src/cpu/core src/common/include)
+target_link_libraries(test_cpu_cores PRIVATE mame_m68k mame_ppc)
+target_compile_features(test_cpu_cores PRIVATE cxx_std_17)
+add_test(NAME cpu_cores COMMAND test_cpu_cores)
+set_tests_properties(cpu_cores PROPERTIES TIMEOUT 30 LABELS "unit;mame")

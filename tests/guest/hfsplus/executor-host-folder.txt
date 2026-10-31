@@ -19,16 +19,16 @@ WRITE
   create with info -> 0 flags 0000 cr - md 3000000100 fndr 54455854747478740000000000000000
   create with nodeflags -> -48
   setcataloginfo -> 0 cr - bk - fndr 4150504C73696D700000000000000000
-  lock -> -50 flags 0000 delete locked -> 0 unlock -> -43 flags 0000
-  set valence -> -43
-  set sizes -> -43
+  lock -> 0 flags 0001 delete locked -> -45 unlock -> 0 flags 0000
+  set valence -> -1405
+  set sizes -> -1405
   rename long -> -1410 old ref -> 0 u"Fork file" file
-  rename case only -> -43
-  rename onto existing -> -43
-  rename empty -> -43
-  move into folder -> -43 old ref -> -43
+  rename case only -> 0 -> 0 u"SHORT" file
+  rename onto existing -> -48
+  rename empty -> -48
+  move into folder -> 0 -> 0 u"SHORT" file old ref -> 0 u"SHORT" file
   move folder into itself -> -122
-  move into a file -> -43
+  move into a file -> -1407
   create sub sub -> 0 spec "Sub sub" -> 0 u"Sub sub" dir
   move folder into its child -> -122
 FORKS write

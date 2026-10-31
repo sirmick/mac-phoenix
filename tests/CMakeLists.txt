@@ -1002,9 +1002,12 @@ endforeach()
 # An application's partition (SIZE 100K: preferred + 56K on 8.6, the stack
 # DefltStack + 16K) as the Process Manager lays it out: tests/guest/partprobe,
 # 8.6 on the G3 the reference, Executor on 8.6's System
-# (process_layout_partition).
+# (process_layout_partition). The _default cell leaves out --executor-ppc:
+# on an 8.x System Executor runs fat applications' PowerPC code by itself
+# (version.cpp), the Finder's first of all.
 foreach(cell "partition_rom_ppc_86;--backend kpx --core mame-ppc --jit;18490;guest;mame"
-             "partition_executor_86;--backend executor --executor-ppc;18492;guest;executor")
+             "partition_executor_86;--backend executor --executor-ppc;18492;guest;executor"
+             "partition_executor_86_default;--backend executor;18494;guest;executor")
   list(GET cell 0 name)
   list(GET cell 1 backend)
   list(GET cell 2 port)
