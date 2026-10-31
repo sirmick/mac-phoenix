@@ -657,9 +657,8 @@ Executor::ROMlib_blt_pn(RgnHandle rh, INTEGER mode)
 namespace
 {
 /* MacPhoenix: a port whose pixmap's baseAddr is a handle (pmVersion says
-   so: a copy of an unlocked GWorld's pixmap) is drawn into through it, the
-   handle locked meanwhile, as QuickDraw does; was drawn into at the master
-   pointer, over the heap (Mars Rising's 640x480 PaintRect). */
+   so) is drawn into through it (ROMlib_lock_handle_base); was drawn into
+   at the master pointer, over the heap (Mars Rising's 640x480 PaintRect). */
 class PortPixelsGuard
 {
     PixMapHandle pm = nullptr;
@@ -670,26 +669,15 @@ public:
     PortPixelsGuard()
     {
         GrafPtr port = qdGlobals().thePort;
-        if(!CGrafPort_p(port))
+        if(!CGrafPort_p(port) || !CPORT_PIXMAP(port))
             return;
-        PixMapHandle p = CPORT_PIXMAP(port);
-        if(!p || PIXMAP_VERSION(p) != gw_pm_version_handle)
-            return;
-        Handle ph = (Handle)PIXMAP_BASEADDR(p);
-        if(!ROMlib_live_handle_p(ph))
-            return;
-        pm = p;
-        h = ph;
-        state = HGetState(h);
-        HLock(h);
-        PIXMAP_BASEADDR(pm) = *h;
+        pm = CPORT_PIXMAP(port);
+        h = ROMlib_lock_handle_base(*pm, &state);
     }
     ~PortPixelsGuard()
     {
-        if(!pm)
-            return;
-        PIXMAP_BASEADDR(pm) = (Ptr)h;
-        HSetState(h, state);
+        if(h)
+            ROMlib_unlock_handle_base(*pm, h, state);
     }
 };
 }

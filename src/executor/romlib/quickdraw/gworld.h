@@ -32,5 +32,13 @@ extern gw_info_t *lookup_gw_info_by_gw_pixmap(PixMapHandle);
 extern gw_info_t *lookup_gw_info_by_gw_pixmap_baseaddr(void *);
 
 extern gw_info_t *lookup_gw_info_by_gw_gd_pixmap(PixMapHandle);
+
+/* MacPhoenix: a pixmap whose pmVersion says its baseAddr is a handle (a
+   copy of a GWorld's or of its device's pixmap: a window opened while the
+   GWorld's device is current, Mars Rising) is drawn through it, as
+   QuickDraw does. Lock: the handle locked, baseAddr its pointer meanwhile;
+   returns the handle, or nil when baseAddr isn't one. Unlock puts it back. */
+extern Handle ROMlib_lock_handle_base(PixMap *pm, SignedByte *state);
+extern void ROMlib_unlock_handle_base(PixMap *pm, Handle h, SignedByte state);
 }
 #endif /* !_GWORLD_H_ */

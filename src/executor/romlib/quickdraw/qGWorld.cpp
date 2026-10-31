@@ -190,6 +190,11 @@ QDErr Executor::C_NewGWorld(GUEST<GWorldPtr> *graphics_world_out,
             return MemError();
 
         PIXMAP_BASEADDR(gd_pixmap) = (Ptr)gd_pixmap_baseaddr;
+        /* MacPhoenix: the device's pixmap keeps the handle (locking the
+           GWorld's pixels doesn't change it) and says so, as on 8.6: a
+           window opened while this device is current copies it
+           (difftest sys gworld.window: Mars Rising). */
+        PIXMAP_VERSION(gd_pixmap) = gw_pm_version_handle;
 
         PIXMAP_BOUNDS(gd_pixmap) = *bounds;
         if(depth > 8)
@@ -292,6 +297,25 @@ QDErr Executor::C_NewGWorld(GUEST<GWorldPtr> *graphics_world_out,
 
     qdGlobals().thePort = save_portX;
     return noErr;
+}
+
+Handle Executor::ROMlib_lock_handle_base(PixMap *pm, SignedByte *state)
+{
+    if(!pm || pm->pmVersion != gw_pm_version_handle)
+        return nullptr;
+    Handle h = (Handle)pm->baseAddr;
+    if(!ROMlib_live_handle_p(h) || !*h)
+        return nullptr;
+    *state = HGetState(h);
+    HLock(h);
+    pm->baseAddr = *h;
+    return h;
+}
+
+void Executor::ROMlib_unlock_handle_base(PixMap *pm, Handle h, SignedByte state)
+{
+    pm->baseAddr = (Ptr)h;
+    HSetState(h, state);
 }
 
 Boolean Executor::C_LockPixels(PixMapHandle pixels)
