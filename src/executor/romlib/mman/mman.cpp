@@ -1362,7 +1362,11 @@ void DisposePtr(Ptr p)
             ROMlib_freeblock(block);
         }
         else
+        {
+            /* Not a block: PtrZone's memWZErr stands. */
             warning_unexpected("");
+            return;
+        }
     }
     SET_MEM_ERR(noErr);
     MM_SLAM("exit");

@@ -41,6 +41,11 @@ extern bool ROMlib_wdef_grow_in_frame;
 /* ... and WDEF 65's modal and movable modal dialogs and alerts have the
    thin frame */
 extern bool ROMlib_wdef_thin_dialog;
+/* WDEF 66/67's platinum floating windows (8.x; ZOOM: the variant's zoom
+   bits, 4 vertical, 8 horizontal): the message's result in
+   *RESULT, or false for C_wdef0's document window to answer */
+extern bool ROMlib_wdef_floating(WindowPtr w, bool close, bool grow, int zoom, bool side,
+                                 INTEGER message, LONGINT parm, LONGINT *result);
 
 extern WindowPeek ROMlib_firstvisible(WindowPtr w);
 

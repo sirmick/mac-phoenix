@@ -430,7 +430,7 @@ void MacBinaryFileItem::setInfo(ItemInfo info)
 ItemPtr MacBinaryItemFactory::createItemForDirEntry(ItemCache& itemcache, CNID parID, CNID cnid,
     const fs::directory_entry& e, mac_string_view macname)
 {
-    if(!fs::is_regular_file(e.path()))
+    if(!e.is_regular_file())
         return nullptr;
     if(!isMacBinaryFile(e.path()))
         return nullptr;

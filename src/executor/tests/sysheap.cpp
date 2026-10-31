@@ -2,6 +2,7 @@
 
 #include <MemoryMgr.h>
 #include <mman/mman.h>
+#include <mman/mman_private.h>
 
 using namespace Executor;
 
@@ -31,4 +32,20 @@ TEST(SysHeap, GrowthIsBounded)
     int32_t got = ROMlib_grow_syszone(1);
     EXPECT_EQ(got, left >= 64 * 1024 ? 64 * 1024 : 0);
     EXPECT_EQ(ROMlib_syszone_reserve_left(), left - got);
+}
+
+/* A pointer whose block header names no zone (8.6's Finder disposes one)
+   is left alone, and MemError says memWZErr, as for a free block. */
+TEST(SysHeap, DisposePtrNotABlock)
+{
+    Ptr p = NewPtrClear(64);
+    ASSERT_NE(nullptr, p);
+    Ptr fake = p + 32;
+    block_header_t *b = POINTER_TO_BLOCK(fake);
+    b->flags = 0x40; /* nonrelocatable */
+    b->location_u = 0x71017101;
+    DisposePtr(fake);
+    EXPECT_EQ(memWZErr, MemError());
+    DisposePtr(p);
+    EXPECT_EQ(noErr, MemError());
 }

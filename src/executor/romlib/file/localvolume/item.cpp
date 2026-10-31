@@ -77,7 +77,7 @@ void Item::setInfo(ItemInfo info)
 ItemPtr DirectoryItemFactory::createItemForDirEntry(ItemCache& itemcache, CNID parID, CNID cnid,
     const fs::directory_entry& e, mac_string_view macname)
 {
-    if(fs::is_directory(e.path()))
+    if(e.is_directory())
     {
         return std::make_shared<DirectoryItem>(itemcache, parID, cnid, e.path(), macname);
     }
