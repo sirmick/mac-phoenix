@@ -174,8 +174,17 @@ difftest sys "boot") and finds its VCB by that volume reference number;
 Executor's GetWDInfo gave back the working directory's own number, so
 the startup disk had no VCB, counted as off line (drive 0), and the
 Finder neither put its Trash on the desktop nor filled the Apple menu
-(AddAppleMenuItem never called). Still open there: the items' small
-icons and Apple Menu Options' submenus (the G3 shows both).
+(AddAppleMenuItem never called). Apple Menu Options' submenus: on 8.x it
+is an 'APPC' (a control panel that is an application), and the loader
+ran INITs of INIT/cdev/RDEV/fext files only; it runs 'APPC' ones now
+when allowed (extensions.cpp; ctest applemenu_submenus_*). The items'
+icons as on the G3: an alias without a custom icon shows its kind's icon
+by its type ('fact' Control Panels, 'faet' a folder, 'adrp' its
+creator's application), not its target's; a 'badg' override with
+kExtendedFlagHasCustomBadge (Favorites); applications' icons from any
+volume's desktop database; and folders keep their Finder info when the
+System Folder is copied out (Recent Applications' custom icon). IconTest
+checks them on the G3 and Executor.
 Also: the "Finder Preferences" copied from the image hold that volume's
 folder IDs; with a Desktop Folder already on Executor's System volume at
 startup the Finder lists the Preferences folder (dir 12) as the desktop.
