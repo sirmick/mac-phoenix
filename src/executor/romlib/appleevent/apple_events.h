@@ -76,7 +76,12 @@ typedef struct ae_header
     GUEST<uint32_t> param_offset;
     GUEST<uint32_t> attribute_count;
     GUEST<uint32_t> param_count;
-    GUEST<char[26]> pad_1;
+    /* MacPhoenix: 30 bytes, as 8.6 lays an event out: the class at 50, the
+       ID at 54, the target at 62 (difftest aevt, layout.new.bytes; it was
+       26). BBEdit Lite 6.1 clears the long at 44 as it builds its 'crel'
+       (AEGizmos' way), which took the class's first half here: 'core'
+       became '\0\0re', and its handler answered -1708. */
+    GUEST<char[30]> pad_1;
     GUEST<AEEventClass> event_class;
     GUEST<AEEventID> event_id;
     GUEST<uint32_t> unknown_3;
@@ -102,6 +107,6 @@ typedef struct subdesc_info
 static_assert(sizeof(inline_desc_t) == 8);
 static_assert(sizeof(inline_key_desc_t) == 12);
 static_assert(sizeof(list_header_t) == 24);
-static_assert(sizeof(ae_header_t) == 66);
+static_assert(sizeof(ae_header_t) == 70);
 }
 #endif /* !defined (__rsys_apple_events_h__) */
