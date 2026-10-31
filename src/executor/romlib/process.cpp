@@ -191,7 +191,9 @@ static process_info_t *pending_front;
 static std::vector<process_info_t *> layer_order;
 static process_info_t *front_process;
 /* The front process's name for the host's video thread (/api/app): copied
-   at event calls and when a process ends, as CurApName at a frame names
+   at event calls, when a process comes to the front (one that never makes
+   an event call, Exile polling Button(), is still the front one) and when
+   a process ends, as CurApName at a frame names
    whichever process runs then (the agent, while an application quits). */
 static std::mutex front_name_mutex;
 static std::string front_name;
@@ -1647,6 +1649,7 @@ static void bring_to_front(process_info_t *q)
                 UnionRgn(WINDOW_STRUCT_REGION(w), covered, covered);
     raise_layer(q);
     front_process = q;
+    publish_front_name();
     q->modal_front = false;
     q->raised = covered;
     q->activate_pending = true;
@@ -1719,6 +1722,7 @@ void Executor::ROMlib_process_event_hook(INTEGER mask)
         step_back(me);
         raise_layer(p);
         front_process = p;
+        publish_front_name();
         switch_to(p);
         return;
     }
@@ -2391,7 +2395,7 @@ static uint32_t stack_extra()
 static uint32_t powerpc_fragment_extra(ConstStringPtr app_name)
 {
     Handle cfrg0 = Get1Resource("cfrg"_4, 0);
-    if(!cfrg0 || ROMlib_application_cfm_arch(cfrg0, Get1Resource("CODE"_4, 0) != nullptr) != "pwpc"_4)
+    if(!cfrg0 || ROMlib_cfm_launch_arch(cfrg0, Get1Resource("CODE"_4, 0) != nullptr) != "pwpc"_4)
         return 0;
     cfir_t *cfirp = ROMlib_find_cfrg(cfrg0, "pwpc"_4, kApplicationCFrag, (StringPtr) "");
     if(!cfirp || CFIR_LOCATION(cfirp) != kOnDiskFlat)
@@ -2450,7 +2454,13 @@ void Executor::process_layout_partition(ConstStringPtr app_name)
             preferred = (*size)->pref_size;
             minimum = (*size)->min_size;
         }
-        if(Handle code0 = Get1Resource("CODE"_4, 0))
+        /* A fat application started as PowerPC gets no A5 world from its
+           CODE 0, as on 8.6 (difftest sys partition: Exile III's 411K
+           of 68k globals left its heap too small for a GWorld). */
+        Handle code0 = Get1Resource("CODE"_4, 0);
+        if(code0 && ROMlib_cfm_launch_arch(Get1Resource("cfrg"_4, 0), true) == "pwpc"_4)
+            code0 = nullptr;
+        if(code0)
         {
             auto lp = (GUEST<int32_t> *)*code0;
             abovea5 = lp[0];

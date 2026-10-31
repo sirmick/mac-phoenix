@@ -326,12 +326,18 @@
     args:
       - name: evmask
         type: INTEGER
+    executor: true
+    comment: |
+      MacPhoenix: exported (osevent.cpp had it; without `executor: true`
+      PowerPC imports got the unresolved-import stub: Marathon Infinity,
+      Mars Rising, Slithereens, Cythera).
 
 # ####
 
 - function:
     name: GetEvQHdr
     return: QHdrPtr
+    executor: true
 
 # ####
 

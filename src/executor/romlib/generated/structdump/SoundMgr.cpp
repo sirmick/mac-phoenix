@@ -120,6 +120,16 @@ void describeStruct(const _SCSTATUS& x, std::ostream& os)
     os << "}";
 }
 
+void describeStruct(const NumVersion& x, std::ostream& os)
+{
+    os << "NumVersion{";
+    logging::logField(os, "majorRev", x.majorRev);
+    logging::logField(os, "minorAndBugRev", x.minorAndBugRev);
+    logging::logField(os, "stage", x.stage);
+    logging::logField(os, "nonRelRev", x.nonRelRev);
+    os << "}";
+}
+
 void describeStruct(const SoundComponentData& x, std::ostream& os)
 {
     os << "SoundComponentData{";
@@ -196,6 +206,10 @@ void dump__SCSTATUS(std::ostream& os, const void* p)
 {
     describeStruct(*(const _SCSTATUS*)p, os);
 }
+void dump_NumVersion(std::ostream& os, const void* p)
+{
+    describeStruct(*(const NumVersion*)p, os);
+}
 void dump_SoundComponentData(std::ostream& os, const void* p)
 {
     describeStruct(*(const SoundComponentData*)p, os);
@@ -221,6 +235,7 @@ void registerStructDumps_SoundMgr()
         { "SndDoubleBuffer", sizeof(SndDoubleBuffer), &dump_SndDoubleBuffer },
         { "SndDoubleBufferHeader", sizeof(SndDoubleBufferHeader), &dump_SndDoubleBufferHeader },
         { "_SCSTATUS", sizeof(_SCSTATUS), &dump__SCSTATUS },
+        { "NumVersion", sizeof(NumVersion), &dump_NumVersion },
         { "SoundComponentData", sizeof(SoundComponentData), &dump_SoundComponentData },
         { "SoundParamBlock", sizeof(SoundParamBlock), &dump_SoundParamBlock },
         { "SoundInfoList", sizeof(SoundInfoList), &dump_SoundInfoList },

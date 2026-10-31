@@ -564,7 +564,10 @@ class ExecutorGenerator < Generator
                 else
                 end
             else
-                @out << "PASCAL_TRAP(#{name}, #{hexlit(trap)});\n"
+                # `export: false`: the trap only; InterfaceLib's export is
+                # another definition's routine (GetItemStyle's).
+                @out << (fun["export"] == false ? "PASCAL_TRAP_UNEXPORTED(" : "PASCAL_TRAP(")
+                @out << "#{name}, #{hexlit(trap)});\n"
             end
         else
             @out << "NOTRAP_FUNCTION#{two}(#{name});\n"

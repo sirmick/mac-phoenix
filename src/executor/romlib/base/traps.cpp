@@ -113,6 +113,15 @@ void traps::installSystem8Traps()
             tooltraptable[system8_traps[i] & 0x3FF] = system8_entries[i];
 }
 
+/* ... and, with PowerPC code on a 7.x System (--executor-ppc: a Power
+   Mac's CFM), _CodeFragmentDispatch alone. */
+void traps::installCodeFragmentDispatch()
+{
+    if(system8_entries[0]
+       && tooltraptable[0xAA5A & 0x3FF] == US_TO_SYN68K((void*)&stub_Unimplemented))
+        tooltraptable[0xAA5A & 0x3FF] = system8_entries[0];
+}
+
 void traps::init(bool log, const std::string& trapFilter)
 {
     logging::setEnabled(log);

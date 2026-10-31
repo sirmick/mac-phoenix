@@ -137,6 +137,9 @@ INTEGER C_IUMagIDString(Ptr ptr1, Ptr ptr2, INTEGER len1, INTEGER len2);PASCAL_S
 INTEGER IUEqualString(ConstStringPtr str1, ConstStringPtr str2);LIBRARY_FUNCTION(InterfaceLib, IUEqualString, IUEqualString);
 
 
+void UpperText(Ptr textPtr, LONGINT length, INTEGER script);LIBRARY_FUNCTION(InterfaceLib, UpperText, UpperText);
+
+
 void C_IUMystery(Ptr arg1, Ptr arg2, INTEGER arg3, INTEGER arg4);PASCAL_SUBTRAP(IUMystery, 0xA9ED, 0x0012, Pack6);
 
 

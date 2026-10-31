@@ -1291,8 +1291,12 @@ Ptr _NewPtr_flags(Size size, bool sys_p, bool clear_p)
 
     ZONE_ALLOC_PTR(current_zone) = nullptr;
 
-    ReserveMem(size);
-    if(ROMlib_relalloc(size, &b))
+    /* MacPhoenix: in the room ResrvMem makes (the lowest it can), not
+       wherever the rover is after it: the moves leave the rover above the
+       room. relalloc only if there is none (its compaction and purging
+       can't find more, but it's what Executor did). */
+    b = ROMlib_reserve(size);
+    if(!b && ROMlib_relalloc(size, &b))
     {
         ROMlib_report_alloc_failure(current_zone, size - HDRSIZE, "NewPtr");
 #if 0
@@ -1758,14 +1762,11 @@ repeat:
     return amtfree;
 }
 
+/* MacPhoenix: ROMlib_reserve (mmansubr.cpp) makes the room, as low as it
+   can, moving, purging and calling the grow-zone procedure in a Mac's
+   order. */
 void _ResrvMem_flags(Size needed, bool sys_p)
 {
-    GUEST<THz> save_zone;
-    THz current_zone;
-    block_header_t *b;
-    long avail;
-    bool already_maxed_p;
-
     MM_SLAM("entry");
 
     if(needed <= 0)
@@ -1774,49 +1775,13 @@ void _ResrvMem_flags(Size needed, bool sys_p)
         return;
     }
 
-    save_zone = LM(TheZone);
+    GUEST<THz> save_zone = LM(TheZone);
     if(sys_p)
         LM(TheZone) = LM(SysZone);
-    current_zone = LM(TheZone);
-    already_maxed_p = false;
-
-again:
-    for(b = ZONE_HEAP_DATA(current_zone);
-        b != ZONE_BK_LIM(current_zone);
-        b = BLOCK_NEXT(b))
-    {
-        if(PSIZE(b) < MIN_BLOCK_SIZE)
-            HEAP_DEATH();
-
-        if(ROMlib_makespace(&b, needed))
-        {
-            LM(TheZone) = save_zone;
-            MM_SLAM("exit");
-            SET_MEM_ERR(noErr);
-            return;
-        }
-    }
-
-    GUEST<Size> free_s;
-    avail = MaxMem(&free_s);
-    Size free = free_s;
-    if(avail >= needed && !already_maxed_p)
-    {
-        already_maxed_p = true;
-        goto again;
-    }
-    if(free >= needed)
-    {
-        /* relalloc will do the actual extension. */
-        LM(TheZone) = save_zone;
-        MM_SLAM("exit");
-        SET_MEM_ERR(noErr);
-        return;
-    }
-
+    block_header_t *b = ROMlib_reserve(needed);
     LM(TheZone) = save_zone;
     MM_SLAM("exit");
-    SET_MEM_ERR(memFullErr);
+    SET_MEM_ERR(b ? noErr : memFullErr);
 }
 
 void _PurgeMem_flags(Size sizeneeded, bool sys_p)

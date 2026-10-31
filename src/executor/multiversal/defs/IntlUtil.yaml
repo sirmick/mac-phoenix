@@ -413,6 +413,22 @@
 
 # ####
 
+# MacPhoenix: a PowerPC-only InterfaceLib export (no 68k apps in the test
+# corpus call it via a trap), used to uppercase a raw text run in place.
+- function:
+    name: UpperText
+    args:
+      - name: textPtr
+        type: Ptr
+      - name: length
+        type: LONGINT
+      - name: script
+        type: INTEGER
+    library: InterfaceLib
+    executor: UpperText
+
+# ####
+
 - function:
     name: IUMystery
     args:

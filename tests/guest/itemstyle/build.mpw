@@ -1,0 +1,8 @@
+# build.mpw — ItemStyleTest, a 68k application: GetItemStyle through the trap.
+# products: ItemStyleTest
+Delete -i ItemStyleTest
+SC itemstyle.c -o itemstyle.c.o
+Link -t APPL -c 'MPis' -model near itemstyle.c.o ∂
+	"{Libraries}MacRuntime.o" "{Libraries}IntEnv.o" "{CLibraries}StdCLib.o" "{Libraries}Interface.o" ∂
+	-o ItemStyleTest
+Rez -a itemstyle.r -o ItemStyleTest
