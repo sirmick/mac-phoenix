@@ -298,7 +298,8 @@ Boolean EqualString(ConstStringPtr s1, ConstStringPtr s2, Boolean casesig, Boole
 
 void ROMlib_UprString(StringPtr s, Boolean diac, INTEGER len);
 
-void UpperString(StringPtr s, Boolean diac);
+void UpperString(StringPtr s, Boolean diac);LIBRARY_FUNCTION(InterfaceLib, UpperString, UpperString);
+
 
 void GetDateTime(GUEST<ULONGINT> *mactimepointer);NOTRAP_FUNCTION2(GetDateTime);
 
@@ -445,6 +446,22 @@ void glue_FlushInstructionCache();LIBRARY_FUNCTION(InterfaceLib, FlushInstructio
 
 
 void glue_FlushDataCache();LIBRARY_FUNCTION(InterfaceLib, FlushDataCache, glue_FlushDataCache);
+
+
+inline void cglue_debugstr(const char *p) {C_DebugStr(cglue::CString(p));}
+LIBRARY_FUNCTION(InterfaceLib, debugstr, cglue_debugstr);
+
+
+inline Boolean cglue_equalstring(const char *s1, const char *s2, Boolean casesig, Boolean diacsig) {return EqualString(cglue::CString(s1), cglue::CString(s2), casesig, diacsig);}
+LIBRARY_FUNCTION(InterfaceLib, equalstring, cglue_equalstring);
+
+
+inline INTEGER cglue_relstring(const char *s1, const char *s2, Boolean casesig, Boolean diacsig) {return RelString(cglue::CString(s1), cglue::CString(s2), casesig, diacsig);}
+LIBRARY_FUNCTION(InterfaceLib, relstring, cglue_relstring);
+
+
+inline void cglue_upperstring(char *s, Boolean diac) {cglue::c2p(s);UpperString((StringPtr)s, diac);cglue::p2c(s);}
+LIBRARY_FUNCTION(InterfaceLib, upperstring, cglue_upperstring);
 
 
 } /* namespace Executor */

@@ -65,12 +65,16 @@ struct loaded_fragment
     THz zone;
     uint32_t term;
     bool terminated;
-    /* the container it was prepared from (sections that aren't copied
-       stay in it); owned: read in by GetDiskFragment */
-    Ptr container;
-    uint32_t container_size;
-    bool owns_container;
-    CFragClosureID closure; /* its imports, bound */
+    /* MacPhoenix: what CloseConnection gives back. Connections to it (the
+       loader's, a share, an importer's closure); the container it was
+       prepared from (sections used in place point into it), given back
+       with it when read in by GetDiskFragment; its closure: the libraries
+       it imports, released with it. */
+    uint32_t refs = 1;
+    Ptr image = nullptr;
+    uint32_t image_length = 0;
+    bool owns_image = false;
+    CFragClosureID closure = nullptr;
 };
 
 std::vector<loaded_fragment> loaded;
@@ -670,6 +674,7 @@ check_existing_connections(ConstStr63Param library, OSType arch, LoadFlags loadf
     for(auto& f : loaded)
         if(f.arch == arch && f.zone == zone && same_name(f.origin.name, name))
         {
+            ++f.refs;
             *cidp = f.cid;
             *mainaddrp = main_address(f.cid);
             return noErr;
@@ -1142,9 +1147,57 @@ OSErr Executor::C_GetSharedLibrary(ConstStr63Param library, OSType arch,
     return retval;
 }
 
+/* MacPhoenix: the last connection to a fragment closed: its termination
+   routine runs, its memory goes back, and the libraries it imports lose a
+   connection (Inside Macintosh: PowerPC System Software, CloseConnection).
+   CodeWarrior IDE prepares each of its plug-ins, asks it what it is and
+   closes it: kept, the thirty-odd filled its heap, and NewThread found no
+   room for the stack it quits without. Executor's own libraries stay. */
+static void close_connection(ConnectionID cid)
+{
+    loaded_fragment *f = find_loaded(cid);
+    if(!f || --f->refs > 0)
+        return;
+    if(f->term && !f->terminated)
+    {
+        f->terminated = true;
+        uint32_t term = f->term;
+        if(f->arch == "m68k"_4)
+            ROMlib_call_cfm68k(term);
+        else
+            callPPC(term, {});
+        f = find_loaded(cid);   /* the routine may have loaded or closed others */
+        if(!f)
+            return;
+    }
+    loaded_fragment gone = *f;
+    loaded.erase(loaded.begin() + (f - loaded.data()));
+
+    uint32_t lo = guest_cast<uint32_t>(gone.image), hi = lo + gone.image_length;
+    for(uint32_t i = 0; i < cid->n_sects; i++)
+    {
+        uint32_t at = guest_cast<uint32_t>((Ptr)(void *)cid->sects[i].start);
+        if(at && (at < lo || at >= hi))
+            DisposePtr((Ptr)(void *)cid->sects[i].start);
+    }
+    if(gone.owns_image)
+        DisposePtr(gone.image);
+    DisposePtr((Ptr)cid);
+    if(CFragClosureID c = gone.closure)
+    {
+        for(uint32_t i = 0; i < N_LIBS(c); i++)
+            if(ConnectionID lib = LIB_CID(&c->libs[i]))
+                close_connection(lib);
+        DisposePtr((Ptr)c);
+    }
+}
+
 OSErr Executor::C_CloseConnection(GUEST<ConnectionID> *cidp)
 {
-    warning_trace_info("cidp = %p, cid = 0x%p", cidp, toHost(*cidp));
+    ConnectionID cid = *cidp;
+    if(!cid)
+        return fragConnectionIDNotFound;
+    close_connection(cid);
     return noErr;
 }
 
@@ -1237,8 +1290,14 @@ relocate(const PEFLoaderRelocationHeader reloc_headers[],
 
     relocAddress = (uint8_t *)connp->sects[section].start;
     importIndex = 0;
-    sectionC = ptr_to_longint(connp->sects[0].start);
-    sectionD = ptr_to_longint(connp->sects[1].start);
+    /* What a relocation adds: where a section's instance is, less the
+       default address the container's values assume (MPW Shell 3.5's
+       PowerShell: data at $6750). */
+    auto section_base = [connp](int k) -> uint32_t {
+        return ptr_to_longint(connp->sects[k].start) - connp->sects[k].default_address;
+    };
+    sectionC = section_base(0);
+    sectionD = section_base(1);
 
     retval = noErr;
     while(reloc_count-- > 0)
@@ -1341,12 +1400,12 @@ relocate(const PEFLoaderRelocationHeader reloc_headers[],
                                                     guest_cast<uint32_t>(symbol_val));
                             break;
                         case 1:
-                            sectionC = ptr_to_longint(connp->sects[index].start);
+                            sectionC = section_base(index);
                             warning_unimplemented("RelocSmSetSectC not tested much");
                             assert(0);
                             break;
                         case 2:
-                            sectionD = ptr_to_longint(connp->sects[index].start);
+                            sectionD = section_base(index);
                             warning_unimplemented("RelocSmSetSectD not tested much");
                             break;
                         case 3:
@@ -1642,22 +1701,10 @@ do_pef_section(ConnectionID connp, const void *addr,
 
     shp = &sections[i];
 
-#if 1
-    {
-        uint32_t def;
-
-        def = PEFSH_DEFAULT_ADDRESS(shp);
-        if(def)
-            fprintf(stderr, "***def = 0x%x***\n", def);
-    }
-#endif
-
-#if 0
-  default_address = PEFSH_DEFAULT_ADDRESS (shp);
-#else
+    /* MacPhoenix: the instance goes anywhere; relocations make up for a
+       default address other than 0 (relocate, section_base). */
     default_address = 0;
-// #warning defaultAddress ignored -- dont implement without testing
-#endif
+    connp->sects[i].default_address = PEFSH_DEFAULT_ADDRESS(shp);
     total_size = PEFSH_TOTAL_SIZE(shp);
     packed_size = PEFSH_PACKED_SIZE(shp);
     unpacked_size = PEFSH_UNPACKED_SIZE(shp);
@@ -1821,37 +1868,27 @@ release_init_block(uint32_t arg)
     DisposePtr((Ptr)ib);
 }
 
-static void
-release_fragment(const loaded_fragment& f)
-{
-    ConnectionID conn = f.cid;
-    for(uint32_t i = 0; i < conn->n_sects; i++)
-    {
-        Ptr start = (Ptr)conn->sects[i].start;
-        if(start && (start < f.container || start >= f.container + f.container_size))
-            DisposePtr(start);
-    }
-    if(f.owns_container)
-        DisposePtr(f.container);
-    DisposePtr((Ptr)f.closure);
-    DisposePtr((Ptr)conn);
-}
-
+/* A preparation that failed gives back what it loaded through
+   CloseConnection's path: the fragment's connection closed, its closure's
+   libraries lose theirs (the ones loaded for it go, Executor's own and
+   ones already prepared stay). No termination routine runs: the ones
+   initialised were terminated already. */
 static void
 release_fragments(const std::vector<ConnectionID>& cids, const char *why)
 {
+    std::vector<std::string> names;
     for(ConnectionID cid : cids)
     {
-        auto it = std::find_if(loaded.begin(), loaded.end(),
-                               [&](const loaded_fragment& f) { return f.cid == cid; });
-        if(it == loaded.end())
-            continue;
-        if(it->cid != cids.front())
-            fprintf(stderr, "CFM: %s released (%s not prepared)\n",
-                    it->origin.name.c_str(), why);
-        release_fragment(*it);
-        loaded.erase(it);
+        loaded_fragment *f = find_loaded(cid);
+        names.push_back(f ? f->origin.name : "");
+        if(f)
+            f->terminated = true;
     }
+    close_connection(cids.front());
+    for(size_t i = 1; i < cids.size(); i++)
+        if(!find_loaded(cids[i]))
+            fprintf(stderr, "CFM: %s released (%s not prepared)\n",
+                    names[i].c_str(), why);
 }
 
 /* MacPhoenix: prepares the container at addr, named and placed as origin
@@ -1892,8 +1929,9 @@ prepare_container(void *addr, const load_origin& origin, GUEST<ConnectionID> *co
 
     size_t loaded_mark = loaded.size();
     size_t init_mark = pending_inits.size();
-    loaded.push_back({ origin, arch, conn, LM(ApplZone), 0, false,
-                       (Ptr)addr, origin.length, false, nullptr });
+    loaded.push_back({ origin, arch, conn, LM(ApplZone), 0, false });
+    loaded.back().image = (Ptr)addr;
+    loaded.back().image_length = origin.length;
     const load_origin *saved_origin = current_origin;
     load_origin origin_copy = origin;
     current_origin = &origin_copy; /* the list may grow while we bind */
@@ -2003,6 +2041,7 @@ OSErr Executor::C_GetDiskFragment(FSSpecPtr fsp, LONGINT offset,
             if(f.zone == zone && f.origin.where == kOnDiskFlat
                && f.origin.offset == (uint32_t)offset && same_file(f.origin.file, *fsp))
             {
+                ++f.refs;
                 *connp = f.cid;
                 *mainAddrp = main_address(f.cid);
                 return noErr;
@@ -2048,7 +2087,7 @@ OSErr Executor::C_GetDiskFragment(FSSpecPtr fsp, LONGINT offset,
             retval = prepare_container(p, origin, connp, mainAddrp);
             if(retval == noErr)
                 if(loaded_fragment *f = find_loaded(*connp))
-                    f->owns_container = true;
+                    f->owns_image = true;
         }
         if(retval != noErr && p)
             DisposePtr(p);

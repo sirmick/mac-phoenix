@@ -365,4 +365,12 @@ INTEGER glue_LMGetSysFontSize();LIBRARY_FUNCTION(InterfaceLib, LMGetSysFontSize,
 void glue_LMSetSysFontSize(INTEGER size);LIBRARY_FUNCTION(InterfaceLib, LMSetSysFontSize, glue_LMSetSysFontSize);
 
 
+inline void cglue_getfnum(const char *fnam, GUEST<INTEGER> *fnum) {C_GetFNum(cglue::CString(fnam), fnum);}
+LIBRARY_FUNCTION(InterfaceLib, getfnum, cglue_getfnum);
+
+
+inline void cglue_getfontname(INTEGER fnum, char *fnam) {C_GetFontName(fnum, (StringPtr)fnam);cglue::p2c(fnam);}
+LIBRARY_FUNCTION(InterfaceLib, getfontname, cglue_getfontname);
+
+
 } /* namespace Executor */

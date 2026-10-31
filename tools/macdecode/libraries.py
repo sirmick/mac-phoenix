@@ -292,8 +292,10 @@ def definition_exports():
                 how = ("ot" if fn.get("aslm") else "raw" if fn.get("raw")
                        else "component" if fn.get("dispatcher") in component_dispatchers else "typed")
                 for one in lib if isinstance(lib, list) else [lib]:
+                    # a lowercase C routine (`cglue:`): Executor's cglue_NAME
+                    impl = fn.get("executor") or (fn.get("cglue") and "cglue_" + fn["name"])
                     out[one][fn["name"]] = {"how": how, "file": f.stem,
-                                            "aslm": fn.get("aslm"), "executor": fn.get("executor")}
+                                            "aslm": fn.get("aslm"), "executor": impl}
             elif fn.get("executor") and item.get("api") != "carbon":
                 out["InterfaceLib"].setdefault(fn["name"], {"how": "trap", "file": f.stem,
                                                             "aslm": None, "executor": fn.get("executor")})

@@ -482,24 +482,29 @@ ConnectionID builtinlibs::getBuiltinLib(ConstStr255Param libname, OSType arch)
     std::string name(libname + 1, libname + 1 + libname[0]);
     if(arch == "m68k"_4)
     {
-        if(std::find(std::begin(interfacelib_aliases68k), std::end(interfacelib_aliases68k), name)
-           != std::end(interfacelib_aliases68k))
+        /* MacPhoenix: the aliases are answered from InterfaceLib's table,
+           with what each exports under its own name merged in (DragLib's
+           and ThreadsLib's calls, PrivateInterfaceLib's accessors: `library:`
+           on a lowmem entry). All of them before InterfaceLib's connection
+           is made: its hash is a copy of the table, made once, and an
+           application imports InterfaceLib before DragLib. */
+        static bool merged = false;
+        if(!merged)
         {
-            /* MacPhoenix: answered from InterfaceLib's table, with what the
-               library exports under its own name merged in (PrivateInterface-
-               Lib's accessors: `library:` on a lowmem entry). */
-            static std::set<std::string> merged;
-            if(merged.insert(name).second)
+            merged = true;
+            for(const char *alias : interfacelib_aliases68k)
             {
-                addAlsoExports(builtins68k, name);
+                addAlsoExports(builtins68k, alias);
                 auto& into = builtins68k["InterfaceLib"];
-                for(const map_entry_t& e : builtins68k[name])
+                for(const map_entry_t& e : builtins68k[alias])
                     if(std::none_of(into.begin(), into.end(),
                                     [&](const map_entry_t& i) { return !strcmp(i.symbol_name, e.symbol_name); }))
                         into.push_back(e);
             }
-            name = "InterfaceLib";
         }
+        if(std::find(std::begin(interfacelib_aliases68k), std::end(interfacelib_aliases68k), name)
+           != std::end(interfacelib_aliases68k))
+            name = "InterfaceLib";
         /* MPW's CFM-68K programs import StdCLib as two libraries (the
            Enabler's): NuStdCLib (string, ctype, printf, time, ...) and
            NuIntEnv (stdio's files, errno, exit, signal, PL strings). One
@@ -537,12 +542,31 @@ ConnectionID builtinlibs::getBuiltinLib(ConstStr255Param libname, OSType arch)
         return nullptr;
     else
     {
-        /* An application's own StdCLib: a connection per application. */
+        /* An application's own StdCLib: its state starts afresh. */
         if(name == "StdCLib")
             clib::stdclibStart();
-        ConnectionID cid = ROMlib_new_connection(1);
-        cid->lihp = ROMlib_build_pef_hash(it->second.data(), it->second.size());
-        cid->ref_count = 1;
+        /* One connection per library, as for 68k: its exports never move.
+           One per request built the whole export table again in the System
+           heap each time; CodeWarrior IDE's plug-ins, thirty-odd fragments
+           importing InterfaceLib, ran it out, and the next import searched
+           a connection without exports. */
+        static std::unordered_map<std::string, std::pair<ConnectionID, size_t>> connections;
+        auto& [cid, size] = connections[name];
+        if(!cid || size != it->second.size())
+        {
+            PEFLoaderInfoHeader *lihp = ROMlib_build_pef_hash(it->second.data(), it->second.size());
+            if(!lihp)
+                return nullptr;
+            if(!cid)
+                cid = ROMlib_new_connection(1);
+            if(!cid)
+                return nullptr;
+            if(cid->lihp)
+                DisposePtr((Ptr)(PEFLoaderInfoHeader *)cid->lihp);
+            cid->lihp = lihp;
+            cid->ref_count = 1;
+            size = it->second.size();
+        }
         return cid;
     }
 }

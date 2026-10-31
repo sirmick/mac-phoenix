@@ -225,4 +225,32 @@ typedef ControlHandle ControlRef;
 using ControlDefUPP = UPP<LONGINT(INTEGER varCode, ControlHandle theControl, INTEGER message, LONGINT param)>;
 
 
+inline void cglue_dragcontrol(ControlHandle c, GUEST<Point> *p, const Rect *limit, const Rect *slop, INTEGER axis) {C_DragControl(c, *p, limit, slop, axis);}
+LIBRARY_FUNCTION(InterfaceLib, dragcontrol, cglue_dragcontrol);
+
+
+inline INTEGER cglue_findcontrol(GUEST<Point> *p, WindowPtr w, GUEST<ControlHandle> *cp) {return C_FindControl(*p, w, cp);}
+LIBRARY_FUNCTION(InterfaceLib, findcontrol, cglue_findcontrol);
+
+
+inline void cglue_getcontroltitle(ControlHandle c, char *t) {C_GetControlTitle(c, (StringPtr)t);cglue::p2c(t);}
+LIBRARY_FUNCTION(InterfaceLib, getcontroltitle, cglue_getcontroltitle);
+
+
+inline ControlHandle cglue_newcontrol(WindowPtr wst, const Rect *r, const char *title, Boolean vis, INTEGER value, INTEGER min, INTEGER max, INTEGER procid, LONGINT rc) {return C_NewControl(wst, r, cglue::CString(title), vis, value, min, max, procid, rc);}
+LIBRARY_FUNCTION(InterfaceLib, newcontrol, cglue_newcontrol);
+
+
+inline void cglue_setcontroltitle(ControlHandle c, const char *t) {C_SetControlTitle(c, cglue::CString(t));}
+LIBRARY_FUNCTION(InterfaceLib, setcontroltitle, cglue_setcontroltitle);
+
+
+inline INTEGER cglue_testcontrol(ControlHandle c, GUEST<Point> *p) {return C_TestControl(c, *p);}
+LIBRARY_FUNCTION(InterfaceLib, testcontrol, cglue_testcontrol);
+
+
+inline INTEGER cglue_trackcontrol(ControlHandle c, GUEST<Point> *p, ControlActionUPP a) {return C_TrackControl(c, *p, a);}
+LIBRARY_FUNCTION(InterfaceLib, trackcontrol, cglue_trackcontrol);
+
+
 } /* namespace Executor */

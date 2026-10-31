@@ -63,14 +63,14 @@ Rows with a fault, by owner:
 |---|---|---|---|---|---|---|---|---|
 | productivity-system-7 | AppleWorks 5.0.3 ƒ:AppleWorks | fat | runs | runs | runs | (e761ppc: latent: unresolved imports FTActivate, CMListen, CMReset (+103), all Comm Toolbox/LowerText -- not File Manager) | e761ppc/prod/001.png | fix-prod |
 | productivity-system-7 | ClarisWorks 4.0v4 ƒ:ClarisWorks | 68k | runs |  | runs |  | e761/prod/002.png |  |
-| dev-tools-system-7 | MPW:MPW Shell | fat | runs | fails | runs | e761ppc: host signal 11 at guest pc $c105ef84, address (nil) | e761ppc/dev/003.png | fix-dev |
-| dev-tools-system-7 | CodeWarrior Pro 4 ƒ:Metrowerks CodeWarrior:CodeWarrior IDE 3.2 | fat | fails | fails | fails | e761: not in front; unresolved imports CountDragItemFlavors, WaitMouseMoved, SetDragSendProc (+21) | e761/dev/001.png | fix-dev (ref fails too) |
+| dev-tools-system-7 | MPW:MPW Shell | fat | runs | runs | runs | (e761ppc: unimplemented PowerPC LMSetHpChk) | e761ppc/dev/003.png |  |
+| dev-tools-system-7 | CodeWarrior Pro 4 ƒ:Metrowerks CodeWarrior:CodeWarrior IDE 3.2 | fat | fails | runs | fails | e761: not in front (front: BridgeAgent.bin) | e761/dev/001.png | fix-dev (ref fails too) |
 | dev-tools-system-7 | THINK C 6.0 ƒ:THINK C:THINK Project Manager | 68k | partial |  | runs | e761: Standard File opens in the boot volume's System Folder, not the application's folder (Quadra: THINK C folder) | e761/dev/006.png | fix-dev |
 | dev-tools-system-7 | Languages ƒ:THINK Pascal 4.5d4 ƒ:Think Pascal:THINK Pascal 4.5d4:THINK Pascal 4.5 | 68k | partial |  | runs | e761: Standard File opens in the boot volume's System Folder, not the application's folder (Quadra: THINK Pascal 4.5d4 folder) | e761/dev/004.png | fix-dev |
 | dev-tools-system-7 | Languages ƒ:HyperCard 2.4.1 ƒ:HyperCard | 68k | runs |  | runs |  | e761/dev/002.png |  |
-| dev-tools-system-7 | Languages ƒ:MacPerl 5.2.0r4 ƒ:MacPerl | fat | runs | runs | runs | (e761ppc: unimplemented PowerPC equalstring) | e761ppc/dev/002.png |  |
+| dev-tools-system-7 | Languages ƒ:MacPerl 5.2.0r4 ƒ:MacPerl | fat | runs | runs | runs | (e761ppc: unimplemented PowerPC PPCInit) | e761ppc/dev/002.png |  |
 | dev-tools-system-7 | Tools ƒ:ResEdit 2.1.3 ƒ:ResEdit 2.1.3:ResEdit | 68k | runs |  | runs |  | e761/dev/008.png |  |
-| dev-tools-system-7 | Tools ƒ:BBEdit Lite 4.1 ƒ:BBEdit Lite 4.1 | fat | runs | fails | runs | e761ppc: host signal 11 at guest pc $c105eee0, address (nil) | e761ppc/dev/004.png | fix-dev |
+| dev-tools-system-7 | Tools ƒ:BBEdit Lite 4.1 ƒ:BBEdit Lite 4.1 | fat | runs | runs | runs | (e761ppc: latent: unresolved imports LMGetGNEFilter, X2Fix) | e761ppc/dev/004.png |  |
 | games | A-Train ƒ:A-Train | 68k | runs |  | fails |  | e761/games/001.png |  |
 | games | A-Train ƒ:AT Construction Set | 68k | runs |  | fails |  | e761/games/002.png |  |
 | games | A-Train ƒ:ATrain Editor 1.0Beta | 68k | runs |  | runs |  | e761/games/003.png |  |
@@ -173,15 +173,15 @@ Rows with a fault, by owner:
 |---|---|---|---|---|---|---|---|
 | productivity-system-7 | AppleWorks 5.0.3 ƒ:AppleWorks | fat | runs | runs | (e86: unimplemented PowerPC OpenWD until wash/fix-prod lands) | e86/prod/001.png | platinum |
 | productivity-system-7 | ClarisWorks 4.0v4 ƒ:ClarisWorks | 68k | runs | runs |  | e86/prod/002.png | fix-prod |
-| dev-tools-system-7 | MPW:MPW Shell | fat | fails | runs | e86: host signal 11 at guest pc $c0f28844, address (nil) | e86/dev/005.png | fix-dev |
-| dev-tools-system-7 | CodeWarrior Pro 4 ƒ:Metrowerks CodeWarrior:CodeWarrior IDE 3.2 | fat | fails | runs | e86: host signal 11 at guest pc $c0f287a0, address 0x30 | e86/dev/001.png | fix-dev |
-| dev-tools-system-7 | THINK C 6.0 ƒ:THINK C:THINK Project Manager | 68k | fails | runs | e86: TranslationDispatch selector $20: no size in the selector, session stopped (called from $56f9e) | e86/dev/006.png | fix-dev |
-| dev-tools-system-7 | Languages ƒ:THINK Pascal 4.5d4 ƒ:Think Pascal:THINK Pascal 4.5d4:THINK Pascal 4.5 | 68k | fails | runs | e86: TranslationDispatch selector $20: no size in the selector, session stopped (called from $56f9e) | e86/dev/004.png | fix-dev |
+| dev-tools-system-7 | MPW:MPW Shell | fat | runs | runs | (e86: unimplemented PowerPC LMSetHpChk) | e86/dev/005.png |  |
+| dev-tools-system-7 | CodeWarrior Pro 4 ƒ:Metrowerks CodeWarrior:CodeWarrior IDE 3.2 | fat | runs | runs | (e86: unimplemented PowerPC MPPOpen) | e86/dev/001.png |  |
+| dev-tools-system-7 | THINK C 6.0 ƒ:THINK C:THINK Project Manager | 68k | fails | runs | e86: TranslationDispatch selector $24: no size in the selector, session stopped (called from $555f6) | e86/dev/006.png | fix-dev |
+| dev-tools-system-7 | Languages ƒ:THINK Pascal 4.5d4 ƒ:Think Pascal:THINK Pascal 4.5d4:THINK Pascal 4.5 | 68k | fails | runs | e86: TranslationDispatch selector $24: no size in the selector, session stopped (called from $555f6) | e86/dev/004.png | fix-dev |
 | dev-tools-system-7 | Languages ƒ:HyperCard 2.4.1 ƒ:HyperCard | 68k | fails | runs | e86: Pack8 selector $830: no size in the selector, session stopped (called from $3c06e74) | e86/dev/002.png | fix-86 |
 | dev-tools-system-7 | Languages ƒ:MacPerl 5.2.0r4 ƒ:MacPerl | fat | runs | runs | (e86: unimplemented PowerPC equalstring) | e86/dev/003.png |  |
 | dev-tools-system-7 | Tools ƒ:ResEdit 2.1.3 ƒ:ResEdit 2.1.3:ResEdit | 68k | runs | runs | (e86: unimplemented ResourceDispatch selector $7 (D0 $00000007, 0 parameter bytes): answered paramErr) | e86/dev/008.png |  |
 | dev-tools-system-7 | Tools ƒ:BBEdit Lite 4.1 ƒ:BBEdit Lite 4.1 | fat | fails | runs | e86: alert "There is not enough memory to complete this command" at launch (G3: untitled window) | e86/dev/007.png | fix-dev |
-| dev-tools-macos-8-9 | MPW:MPW Shell | fat | fails | runs | e86: PowerPC exception 7 at 00000000 (lr 034c2f54) | e86/dev89/002.png | fix-dev |
+| dev-tools-macos-8-9 | MPW:MPW Shell | fat | runs | runs | (e86: unimplemented PowerPC MPPOpen) | e86/dev89/002.png |  |
 | dev-tools-macos-8-9 | Languages ƒ:MacPerl 5.6.1r2 ƒ:MacPerl | ppc | runs | runs | (e86: unimplemented PowerPC ICStart) | e86/dev89/001.png |  |
 | dev-tools-macos-8-9 | Tools ƒ:BBEdit Lite 6.1.2 ƒ:BBEdit Lite 6.1 | fat | fails | runs | e86: not in front; unresolved imports RealScript, Font2RealScript, DeactivateTSMDocument (+13) | e86/dev89/003.png | fix-86 |
 | games | A-Train ƒ:A-Train | 68k | runs | runs |  | e86/games/001.png |  |

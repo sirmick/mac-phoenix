@@ -457,3 +457,14 @@
       - name: rn
         type: INTEGER
     executor: true
+
+# ####
+
+# InterfaceLib's lowercase C routines (multiversal/executor.rb, declare_cglue):
+# the Pascal routine with C strings, Points by address.
+
+- only-for: Executor
+  function:
+    name: opendriver
+    cglue: OpenDriver
+    library: InterfaceLib

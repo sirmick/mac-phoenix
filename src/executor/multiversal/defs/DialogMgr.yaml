@@ -996,3 +996,54 @@
       MacPhoenix (name is a guess): DialogDispatch -2, which pops the state
       from DialogMenuState and adjusts the menu's enable flags left on the
       stack under it (a modal dialog's menus). A no-op here.
+
+# ####
+
+# InterfaceLib's lowercase C routines (multiversal/executor.rb, declare_cglue):
+# the Pascal routine with C strings, Points by address.
+
+- only-for: Executor
+  function:
+    name: finddialogitem
+    cglue: FindDialogItem
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: getdialogitemtext
+    cglue: GetDialogItemText
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: newcolordialog
+    cglue: NewColorDialog
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: newdialog
+    cglue: NewDialog
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: paramtext
+    cglue: ParamText
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: setdialogitemtext
+    cglue: SetDialogItemText
+    library: InterfaceLib

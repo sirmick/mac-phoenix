@@ -153,4 +153,48 @@ void C_LCellSize(Point csize, ListHandle list);PASCAL_SUBTRAP(LCellSize, 0xA9E7,
 Boolean C_LGetSelect(Boolean next, GUEST<Cell> *cellp, ListHandle list);PASCAL_SUBTRAP(LGetSelect, 0xA9E7, 0x003C, Pack0);
 
 
+inline void cglue_laddtocell(Ptr dp, INTEGER dl, GUEST<Cell> *cell, ListHandle list) {C_LAddToCell(dp, dl, *cell, list);}
+LIBRARY_FUNCTION(InterfaceLib, laddtocell, cglue_laddtocell);
+
+
+inline void cglue_lcellsize(GUEST<Point> *csize, ListHandle list) {C_LCellSize(*csize, list);}
+LIBRARY_FUNCTION(InterfaceLib, lcellsize, cglue_lcellsize);
+
+
+inline Boolean cglue_lclick(GUEST<Point> *pt, INTEGER mods, ListHandle list) {return C_LClick(*pt, mods, list);}
+LIBRARY_FUNCTION(InterfaceLib, lclick, cglue_lclick);
+
+
+inline void cglue_lclrcell(GUEST<Cell> *cell, ListHandle list) {C_LClrCell(*cell, list);}
+LIBRARY_FUNCTION(InterfaceLib, lclrcell, cglue_lclrcell);
+
+
+inline void cglue_ldraw(GUEST<Cell> *cell, ListHandle list) {C_LDraw(*cell, list);}
+LIBRARY_FUNCTION(InterfaceLib, ldraw, cglue_ldraw);
+
+
+inline void cglue_lgetcell(Ptr dp, GUEST<INTEGER> *dlp, GUEST<Cell> *cell, ListHandle list) {C_LGetCell(dp, dlp, *cell, list);}
+LIBRARY_FUNCTION(InterfaceLib, lgetcell, cglue_lgetcell);
+
+
+inline void cglue_lgetcelldatalocation(GUEST<INTEGER> *offsetp, GUEST<INTEGER> *lenp, GUEST<Cell> *cell, ListHandle list) {C_LGetCellDataLocation(offsetp, lenp, *cell, list);}
+LIBRARY_FUNCTION(InterfaceLib, lgetcelldatalocation, cglue_lgetcelldatalocation);
+
+
+inline ListHandle cglue_lnew(const Rect *rview, const Rect *bounds, GUEST<Point> *csize, INTEGER proc, WindowPtr wind, Boolean draw, Boolean grow, Boolean scrollh, Boolean scrollv) {return C_LNew(rview, bounds, *csize, proc, wind, draw, grow, scrollh, scrollv);}
+LIBRARY_FUNCTION(InterfaceLib, lnew, cglue_lnew);
+
+
+inline void cglue_lrect(Rect *cellrect, GUEST<Cell> *cell, ListHandle list) {C_LRect(cellrect, *cell, list);}
+LIBRARY_FUNCTION(InterfaceLib, lrect, cglue_lrect);
+
+
+inline void cglue_lsetcell(Ptr dp, INTEGER dl, GUEST<Cell> *cell, ListHandle list) {C_LSetCell(dp, dl, *cell, list);}
+LIBRARY_FUNCTION(InterfaceLib, lsetcell, cglue_lsetcell);
+
+
+inline void cglue_lsetselect(Boolean setit, GUEST<Cell> *cell, ListHandle list) {C_LSetSelect(setit, *cell, list);}
+LIBRARY_FUNCTION(InterfaceLib, lsetselect, cglue_lsetselect);
+
+
 } /* namespace Executor */

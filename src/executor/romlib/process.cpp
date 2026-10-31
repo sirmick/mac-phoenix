@@ -2380,6 +2380,34 @@ static uint32_t stack_extra()
 {
     return system_version >= 0x800 ? 16 * 1024 + 8 : 0;
 }
+
+/* A PowerPC application's fragment: with virtual memory off the Code
+   Fragment Manager loads its code and data into the application heap, and
+   the Process Manager adds the fragment's length to the partition, and
+   28K (7.6.1) or 50K (8.6, 9.0.4) more on top of partition_extra()
+   (tests/guest/partprobe's PartProbePPC on the G3, fragments of 60K and
+   584K). The fragment's length is its 'cfrg' entry's, or the data fork's
+   from its offset. */
+static uint32_t powerpc_fragment_extra(ConstStringPtr app_name)
+{
+    Handle cfrg0 = Get1Resource("cfrg"_4, 0);
+    if(!cfrg0 || ROMlib_cfm_launch_arch(cfrg0, Get1Resource("CODE"_4, 0) != nullptr) != "pwpc"_4)
+        return 0;
+    cfir_t *cfirp = ROMlib_find_cfrg(cfrg0, "pwpc"_4, kApplicationCFrag, (StringPtr) "");
+    if(!cfirp || CFIR_LOCATION(cfirp) != kOnDiskFlat)
+        return 0;
+    uint32_t length = CFIR_FRAGMENT_LENGTH(cfirp);
+    if(length == 0)
+    {
+        ParamBlockRec pb = {};
+        pb.fileParam.ioNamePtr = (StringPtr)app_name;
+        if(PBGetFInfo(&pb, false) == noErr
+           && (uint32_t)pb.fileParam.ioFlLgLen > (uint32_t)CFIR_OFFSET_TO_FRAGMENT(cfirp))
+            length = pb.fileParam.ioFlLgLen - CFIR_OFFSET_TO_FRAGMENT(cfirp);
+    }
+    /* Rounded up: the G3 gives a 584347-byte fragment 584348. */
+    return ((length + 3) & ~3u) + (system_version >= 0x800 ? 50 * 1024 : 28 * 1024);
+}
 /* No SIZE resource: Process Manager's default. */
 static const uint32_t default_partition = 512 * 1024;
 
@@ -2398,6 +2426,7 @@ void Executor::process_layout_partition(ConstStringPtr app_name)
     uint32_t preferred = default_partition;
     uint32_t minimum = default_partition;
     int32_t abovea5 = 4, belowa5 = 0; /* no CODE 0 (PowerPC): A5 at the top */
+    uint32_t fragment = 0;
 
     process_bootstrap();
     process_info_t *me = current_process_info;
@@ -2433,15 +2462,16 @@ void Executor::process_layout_partition(ConstStringPtr app_name)
             abovea5 = lp[0];
             belowa5 = lp[1];
         }
+        fragment = powerpc_fragment_extra(app_name);
         CloseResFile(rn);
     }
     SetZone(ROMlib_pm_zone);
 
     GUEST<Size> grow;
     Size avail = MaxMem(&grow);
-    uint32_t want = preferred + partition_extra();
+    uint32_t want = preferred + partition_extra() + fragment;
     if(want > (uint32_t)avail)
-        want = minimum + partition_extra();
+        want = minimum + partition_extra() + fragment;
     if(want > (uint32_t)avail)
     {
         warning_unexpected("partition: %u wanted, %d available", want, (int)avail);

@@ -25,3 +25,22 @@
     executor: C_
     dispatcher: Pack7
     selector: 0x0001
+
+# ####
+
+# InterfaceLib's lowercase C routines (multiversal/executor.rb, declare_cglue):
+# the Pascal routine with C strings, Points by address.
+
+- only-for: Executor
+  function:
+    name: numtostring
+    cglue: NumToString
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: stringtonum
+    cglue: StringToNum
+    library: InterfaceLib

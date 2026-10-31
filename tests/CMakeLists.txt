@@ -1098,22 +1098,53 @@ endforeach()
 # 8.6 on the G3 the reference, Executor on 8.6's System
 # (process_layout_partition). The _default cell leaves out --executor-ppc:
 # on an 8.x System Executor runs fat applications' PowerPC code by itself
-# (version.cpp), the Finder's first of all.
-foreach(cell "partition_rom_ppc_86;--backend kpx --core mame-ppc --jit;18490;guest;mame"
-             "partition_executor_86;--backend executor --executor-ppc;18492;guest;executor"
-             "partition_executor_86_default;--backend executor;18494;guest;executor")
+# (version.cpp), the Finder's first of all. The _fragment cells run
+# PartProbePPC: a PowerPC application's partition grows by its fragment's
+# length (+ 28K on 7.6.1, + 50K on 8.6), the fragment loaded into its heap.
+foreach(cell "partition_rom_ppc_86;--backend kpx --core mame-ppc --jit;8.6;PartProbe;18490;guest;mame"
+             "partition_executor_86;--backend executor --executor-ppc;8.6;PartProbe;18492;guest;executor"
+             "partition_executor_86_default;--backend executor;8.6;PartProbe;18494;guest;executor"
+             "partition_fragment_rom_ppc_86;--backend kpx --core mame-ppc --jit;8.6;PartProbePPC;18496;guest;mame"
+             "partition_fragment_executor_86;--backend executor --executor-ppc;8.6;PartProbePPC;18498;guest;executor"
+             "partition_fragment_rom_ppc_761;--backend kpx --core mame-ppc --jit;7.6.1;PartProbePPC;18500;guest;mame"
+             "partition_fragment_executor_761;--backend executor --executor-ppc;7.6.1;PartProbePPC;18502;guest;executor")
   list(GET cell 0 name)
   list(GET cell 1 backend)
-  list(GET cell 2 port)
-  list(SUBLIST cell 3 -1 labels)
+  list(GET cell 2 image)
+  list(GET cell 3 app)
+  list(GET cell 4 port)
+  list(SUBLIST cell 5 -1 labels)
   separate_arguments(backend_args UNIX_COMMAND "${backend}")
   add_test(
     NAME ${name}
-    COMMAND bash ${TEST_DIR}/test_guest_suite.sh ${backend_args} --image 8.6 --app ${CMAKE_SOURCE_DIR}/tests/guest/partprobe/PartProbe.bin --results part_results.txt --network none --timeout 150 --port ${port}
+    COMMAND bash ${TEST_DIR}/test_guest_suite.sh ${backend_args} --image ${image} --app ${CMAKE_SOURCE_DIR}/tests/guest/partprobe/${app}.bin --results part_results.txt --network none --timeout 150 --port ${port}
   )
   set_tests_properties(${name} PROPERTIES
     TIMEOUT 230
     LABELS "${labels}"
+    SKIP_RETURN_CODE 77
+    ENVIRONMENT "MACEMU_ROM=${TEST_PPC_ROM}"
+  )
+endforeach()
+
+# InterfaceLib's lowercase C routines (numtostring, getindstring, ptinrect,
+# sfputfile, ...; `cglue:` in the definitions) against their Pascal
+# routines: tests/guest/cglueprobe, 8.6 on the G3 the reference. Return
+# answers sfputfile's dialog.
+foreach(cell "cglue_rom_ppc_86;--backend kpx --core mame-ppc --jit;18504;mame"
+             "cglue_executor_86;--backend executor --executor-ppc;18506;executor")
+  list(GET cell 0 name)
+  list(GET cell 1 backend)
+  list(GET cell 2 port)
+  list(GET cell 3 label)
+  separate_arguments(backend_args UNIX_COMMAND "${backend}")
+  add_test(
+    NAME ${name}
+    COMMAND bash ${TEST_DIR}/test_guest_suite.sh ${backend_args} --image 8.6 --app ${CMAKE_SOURCE_DIR}/tests/guest/cglueprobe/CGlueProbePPC.bin --results cglue_results.txt --key-on "WAITING sfputfile:36" --network none --timeout 150 --port ${port}
+  )
+  set_tests_properties(${name} PROPERTIES
+    TIMEOUT 230
+    LABELS "guest;${label}"
     SKIP_RETURN_CODE 77
     ENVIRONMENT "MACEMU_ROM=${TEST_PPC_ROM}"
   )

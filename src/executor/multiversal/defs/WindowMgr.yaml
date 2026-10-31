@@ -1587,3 +1587,94 @@
       - name: collapse
         type: Boolean
     library: AppearanceLib
+
+# ####
+
+# InterfaceLib's lowercase C routines (multiversal/executor.rb, declare_cglue):
+# the Pascal routine with C strings, Points by address.
+
+- only-for: Executor
+  function:
+    name: draggrayrgn
+    cglue: DragGrayRgn
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: dragwindow
+    cglue: DragWindow
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: findwindow
+    cglue: FindWindow
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: getwtitle
+    cglue: GetWTitle
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: growwindow
+    cglue: GrowWindow
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: newcwindow
+    cglue: NewCWindow
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: newwindow
+    cglue: NewWindow
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: pinrect
+    cglue: PinRect
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: setwtitle
+    cglue: SetWTitle
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: trackbox
+    cglue: TrackBox
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: trackgoaway
+    cglue: TrackGoAway
+    library: InterfaceLib
