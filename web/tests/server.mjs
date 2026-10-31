@@ -27,7 +27,7 @@ export async function startServer(site, { images = '', include = ['*.img'], rela
     const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'executor-web-'));
     const port = await freePort();
     const conf = path.join(scratch, 'server.toml');
-    fs.writeFileSync(conf, `[server]\nport = ${port}\nsite = ${JSON.stringify(site)}\n`
+    fs.writeFileSync(conf, `[server]\nport = ${port}\nsite = ${JSON.stringify(path.resolve(site))}\n`
         + `data = ${JSON.stringify(path.join(scratch, 'data'))}\n`
         + `[library]\nimages = ${JSON.stringify(images)}\ninclude = ${JSON.stringify(include)}\n`
         + (relay ? `[relay]\n${relay}\n` : ''));

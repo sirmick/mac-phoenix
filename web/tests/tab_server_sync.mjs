@@ -67,6 +67,11 @@ try {
     dialogs(a);
     await a.goto(`${server.url}/`);
     check(a.url().includes('/login'), 'signed out, the tab sends you to sign in');
+    await a.goto(`${server.url}/login?next=${encodeURIComponent('/\\evil.example/')}`);
+    await a.fill('#name', 'owner');
+    await a.fill('#password', OWNER_PASSWORD);
+    await Promise.all([a.waitForURL((u) => !u.pathname.startsWith('/login')), a.click('#go')]);
+    check(a.url().startsWith(`${server.url}/`), "sign-in's next= stays on the site");
     await signIn(a, server.url, 'owner', OWNER_PASSWORD, { query: QUERY });
     check(await ready(a), 'signed in: Executor runs');
     check(await a.locator('#account').textContent() === 'owner', 'the bar says who');
@@ -123,7 +128,10 @@ try {
     check(await request(a, 'read', '/executor/note.txt') === null, "Reset in B reaches A's Executor disk");
     check(await head(a) === 'DDDDMARK!', 'the disk change is still there (Reset is the volume only)');
 
-    // Revert in B: the disk as it was, in A too.
+    // Revert in B: the disk as it was, in A too. A's Executor writes the
+    // disk itself (the volume's header, at mounting): those blocks on the
+    // account first, or A, behind, would be asked (and keep its own).
+    check(await until(() => request(a, 'stats').then((s) => s.unsynced === 0), 15000), "A's writes on the account");
     await b.locator('#files a[title^="Revert"]').first().click();
     check(await ready(b), 'Revert in B');
     check(await head(b) !== 'DDDDMARK!', 'B has the disk as it was');

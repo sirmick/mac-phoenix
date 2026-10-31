@@ -55,8 +55,10 @@ $('form').onsubmit = async (e) => {
         $('error').textContent = (await res.json().catch(() => ({}))).error || res.statusText;
         return;
     }
-    const next = params.get('next') || '/';
-    location.href = next.startsWith('/') && !next.startsWith('//') ? next : '/';
+    // Back where the server sent us from: this site only (the browser
+    // reads '/\host' as '//host', so the parsed URL's origin decides).
+    const next = new URL(params.get('next') || '/', location.origin);
+    location.href = next.origin === location.origin ? next.pathname + next.search + next.hash : '/';
 };
 </script>
 </body>
