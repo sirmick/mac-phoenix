@@ -108,11 +108,14 @@ OSErr set_gamma(Ptr table)
     }
     if(gamma_table)
     {
+        /* one channel when the three are the same, as 8.6's driver
+           answers with the standard gamma (difftest sys video) */
+        bool one = !memcmp(gamma_rgb[0], gamma_rgb[1], 256) && !memcmp(gamma_rgb[0], gamma_rgb[2], 256);
         GammaTblHeader *h = (GammaTblHeader *)gamma_table;
-        h->gChanCnt = 3;
+        h->gChanCnt = one ? 1 : 3;
         h->gDataCnt = 256;
         h->gDataWidth = 8;
-        memcpy(gamma_table + sizeof(GammaTblHeader), gamma_rgb, sizeof gamma_rgb);
+        memcpy(gamma_table + sizeof(GammaTblHeader), gamma_rgb, one ? 256 : sizeof gamma_rgb);
     }
     return noErr;
 }
@@ -200,7 +203,12 @@ static OSErr C_ROMlib_videoctl(ParmBlkPtr pb, DCtlPtr dce)
             return set_entries(pb);
         case cscSetGamma:
         {
-            OSErr err = set_gamma((Ptr)*(GUEST<Ptr> *)pb->cntrlParam.csParam);
+            /* MacPhoenix: csParam holds a pointer to a VDGammaRecord, as
+               for the other video calls (difftest sys video) */
+            VDGammaRecord *r = param<VDGammaRecord>(pb);
+            if(!r)
+                return paramErr;
+            OSErr err = set_gamma(r->csGTable);
             if(err == noErr)
                 push_colors();
             return err;
@@ -254,8 +262,16 @@ static OSErr C_ROMlib_videostatus(ParmBlkPtr pb, DCtlPtr dce)
             *(uint8_t *)param<uint8_t>(pb) = 0;     /* colour; interrupts on */
             return noErr;
         case cscGetGamma:
-            *(GUEST<Ptr> *)pb->cntrlParam.csParam = gamma_table;
-            return gamma_table ? noErr : statusErr;
+        {
+            /* MacPhoenix: into the VDGammaRecord csParam points to; was
+               written over csParam itself (Slithereens' fade read its
+               record's stale pointer, then failed with -7004) */
+            VDGammaRecord *r = param<VDGammaRecord>(pb);
+            if(!r || !gamma_table)
+                return statusErr;
+            r->csGTable = gamma_table;
+            return noErr;
+        }
         case cscGetDefaultMode:
             *(uint8_t *)param<uint8_t>(pb) = current_mode();
             return noErr;
