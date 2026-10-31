@@ -20,6 +20,7 @@
   #files a { color: #f88; margin-left: 4px; cursor: pointer; }
   #bar select { background: #444; color: #eee; border: 0; font: inherit; }
   #account { color: #9cf; }
+  #insecure { background: #543; color: #fda; border-radius: 4px; padding: 4px 10px; max-width: 640px; }
   /* Sized by main.js: a whole number of device pixels a guest pixel. */
   canvas { background: #000; image-rendering: pixelated; outline: none; }
 </style>
@@ -37,6 +38,10 @@
   <button id="reset" title="Forget what was saved on Executor's disk for this System">Reset</button>
   <a id="account" href="account" hidden title="Signed in: changes are kept for your other browsers too"></a>
 </div>
+<div id="insecure" hidden>Not a secure page (HTTPS, or this computer's own address):
+  nothing is kept in this browser. Disks are read as needed and held in memory; changes to
+  them and to Executor's disk last until Executor restarts (download a changed disk with ⤓).
+  No sound.</div>
 <div id="screen-box"></div>
 <div id="status">Loading Executor…</div>
 <script src="keys.js"></script>

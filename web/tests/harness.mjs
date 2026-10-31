@@ -17,9 +17,10 @@ try {
 const types = { '.html': 'text/html', '.js': 'text/javascript', '.wasm': 'application/wasm' };
 
 // Headless Chromium (CHROMIUM=PATH, or playwright's own).
-// CHROMIUM_ARGS: extra switches, space-separated (--enable-logging=stderr, say).
-export function launch() {
-    const args = process.env.CHROMIUM_ARGS ? process.env.CHROMIUM_ARGS.split(' ') : [];
+// CHROMIUM_ARGS: extra switches, space-separated (--enable-logging=stderr, say);
+// args: the test's own.
+export function launch({ args: own = [] } = {}) {
+    const args = [...own, ...(process.env.CHROMIUM_ARGS ? process.env.CHROMIUM_ARGS.split(' ') : [])];
     return chromium.launch(process.env.CHROMIUM ? { executablePath: process.env.CHROMIUM, args } : { args });
 }
 

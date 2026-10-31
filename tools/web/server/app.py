@@ -43,6 +43,7 @@ import json
 import os
 import posixpath
 import re
+import sys
 import threading
 import time
 from urllib.parse import parse_qs, quote, unquote, urlsplit
@@ -476,6 +477,15 @@ class Server(http.server.ThreadingHTTPServer):
         self.slots = threading.BoundedSemaphore(MAX_CONNECTIONS)
         handler = type("BoundHandler", (Handler,), {"app": self.app})
         super().__init__((cfg["server"]["bind"], cfg["server"]["port"]), handler)
+        srv = cfg["server"]
+        if srv.get("tls_cert"):
+            import ssl
+            ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+            ctx.load_cert_chain(os.path.expanduser(srv["tls_cert"]),
+                                os.path.expanduser(srv.get("tls_key") or srv["tls_cert"]))
+            # The handshake happens in the connection's thread (first read), not in accept().
+            self.socket = ctx.wrap_socket(self.socket, server_side=True,
+                                          do_handshake_on_connect=False)
         c = cfg["library"]
         self.app.ids.warm([os.path.join(c["images"], d["name"])
                            for d in library.catalog(c["images"], c["include"], c["exclude"])])
@@ -492,3 +502,14 @@ class Server(http.server.ThreadingHTTPServer):
             super().process_request_thread(request, client_address)
         finally:
             self.slots.release()
+
+    # A client that drops the connection, or fails the TLS handshake (plain
+    # http to the HTTPS port, a certificate it refuses): a line, not a traceback.
+    def handle_error(self, request, client_address):
+        import ssl
+        e = sys.exc_info()[1]
+        if isinstance(e, (ssl.SSLError, ConnectionError, TimeoutError)):
+            if not self.quiet:
+                print(f"{client_address[0]}: {type(e).__name__}: {e}", file=sys.stderr, flush=True)
+            return
+        super().handle_error(request, client_address)
