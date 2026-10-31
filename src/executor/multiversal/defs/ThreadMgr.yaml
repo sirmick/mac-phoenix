@@ -351,7 +351,7 @@
 
 # ####
 
-# InterfaceLib exports with no trap (Executor's glue, cfm68k_glue.cpp):
+# ThreadsLib's exports with no trap (Executor's glue, cfm68k_glue.cpp):
 # for PowerPC and CFM-68K code. Only for Executor until the C side has
 # 68k glue for them.
 
@@ -359,5 +359,5 @@
   function:
     name: YieldToAnyThread
     return: "OSErr"
-    library: InterfaceLib
+    library: ThreadsLib
     executor: glue_YieldToAnyThread
