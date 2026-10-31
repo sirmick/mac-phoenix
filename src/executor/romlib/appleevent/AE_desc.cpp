@@ -766,6 +766,16 @@ OSErr Executor::C_AEDuplicateDesc(AEDesc *src, AEDesc *dst)
 
     src_data = DESC_DATA(src);
 
+    /* MacPhoenix: a descriptor without data (the null descriptor,
+       AEInitializeDesc's) is copied as it is; BBEdit Lite 6.1 duplicates
+       one at startup. */
+    if(!src_data)
+    {
+        DESC_TYPE(dst) = DESC_TYPE(src);
+        DESC_DATA(dst) = nullptr;
+        AE_RETURN_ERROR(noErr);
+    }
+
     {
         HLockGuard guard(src_data);
         err = AECreateDesc(DESC_TYPE(src),
