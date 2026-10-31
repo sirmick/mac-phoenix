@@ -20,6 +20,7 @@ disks). Each grid run uses --jobs 2.
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 
@@ -103,16 +104,54 @@ def load(col, st):
         return None
 
 
-def verdict(r, col):
+def session_log(col, st, r):
+    """(the session's log lines after the launch, the line that ended it)."""
+    try:
+        with open(os.path.join(OUT, col, st, "%03d.log" % r["n"]), encoding="latin-1") as f:
+            lines = f.read().splitlines()
+    except OSError:
+        return [], None
+    for i, line in enumerate(lines):
+        if "POST /api/launch" in line:
+            lines = lines[i + 1:]
+            break
+    end = next((l for l in lines if re.search(
+        r"session stopped|host signal|guest exited|SysError\(", l)), None)
+    if end:
+        end = re.sub(r"^\[\w+\] |: snapshotting$", "", end)
+    return lines, end
+
+
+def unresolved(lines):
+    """The CFM imports (not weak) Executor could not resolve after the launch."""
+    names = []
+    for line in lines:
+        m = re.match(r"CFM: unresolved import (\S+)", line)
+        if m and m.group(1) not in names:
+            names.append(m.group(1))
+    return names
+
+
+def verdict(r, col, st):
     """(runs|partial|fails|n/a, blocker) of one grid result."""
     if r is None:
         return "—", ""
     res = r["result"]
+    lines, end = session_log(col, st, r) if col.startswith("e") else ([], None)
+    missing = unresolved(lines)
+    if missing:
+        imports = "unresolved imports %s%s" % (", ".join(missing[:3]),
+                                               " (+%d)" % (len(missing) - 3) if len(missing) > 3 else "")
     if res == "runs":
         calls = r.get("unimplemented") or []
-        return ("partial", "unimplemented " + calls[0]) if calls else ("runs", "")
+        if calls:
+            return "partial", "unimplemented " + calls[0]
+        # imports never called don't stop anything: a note, not a fault
+        return "runs", "latent: " + imports if missing else ""
+    if res == "not in front" and missing:
+        return "fails", "not in front; " + imports
     if res == "crashed":
-        return "fails", r.get("syserror") or r.get("ended") or "crashed"
+        return "fails", end or r.get("syserror") or r.get("ended") or "crashed"
     if res == "not in front":
         return "fails", "not in front (front: %s)" % (r.get("front") or "?")
     if res == "launch failed":
@@ -155,7 +194,7 @@ def cmd_table(opts):
                     elif r is None and c == "e761ppc" and code != "fat":
                         v, b = "", ""
                     else:
-                        v, b = verdict(r, c)
+                        v, b = verdict(r, c, st)
                     note = notes.get(f"{c}|{p}")
                     if note:
                         v = note.get("status", v)
@@ -164,8 +203,9 @@ def cmd_table(opts):
                     if c in ecols:
                         total.setdefault((system, c), {}).setdefault(v, 0)
                         total[(system, c)][v] += 1
-                    if c in ecols and not blocker and v in ("partial", "fails") and b:
-                        blocker = f"{c}: {b}"
+                    if c in ecols and b and (not blocker or blocker.startswith("(")) \
+                            and (v in ("partial", "fails") or not blocker):
+                        blocker = f"{c}: {b}" if v in ("partial", "fails") else f"({c}: {b})"
                     if c in ecols and r and not shot:
                         shot = os.path.join(c, st, "%03d.png" % r["n"])
                 ref = cells[cols.index(rcol)]
@@ -207,6 +247,42 @@ def cmd_table(opts):
     print(opts.doc)
 
 
+def cmd_sheets(opts):
+    """Contact sheets: per application, every column's screenshot side by side
+    (half size), 4 applications to a sheet, in OUT/sheets/."""
+    from PIL import Image, ImageDraw
+    os.makedirs(os.path.join(OUT, "sheets"), exist_ok=True)
+    for system, sets in SYSTEM_SETS.items():
+        cols = [c for c, (s_, _) in COLUMNS.items() if s_ == system]
+        for st in sets:
+            if opts.only and st not in opts.only:
+                continue
+            grids = {c: load(c, st) or {} for c in cols}
+            paths = []
+            for c in cols:
+                paths += [p for p in grids[c] if p not in paths]
+            for k in range(0, len(paths), 4):
+                sheet = Image.new("RGB", (320 * len(cols), 260 * len(paths[k:k + 4])), "white")
+                d = ImageDraw.Draw(sheet)
+                for row, p in enumerate(paths[k:k + 4]):
+                    for i, c in enumerate(cols):
+                        r = grids[c].get(p)
+                        y = row * 260
+                        label = f"{c}: {r['result'] if r else '-'}"
+                        if r:
+                            png = os.path.join(OUT, c, st, "%03d.png" % r["n"])
+                            try:
+                                sheet.paste(Image.open(png).convert("RGB").resize((320, 240)),
+                                            (320 * i, y + 20))
+                            except OSError:   # none, or the session died writing it
+                                pass
+                        d.text((320 * i + 4, y + 4), label + "  " + p.rsplit(":", 1)[-1][:28],
+                               fill="black")
+                name = f"{system}-{st}-{k // 4 + 1:02d}.png"
+                sheet.save(os.path.join(OUT, "sheets", name))
+                print(name)
+
+
 def main():
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -216,8 +292,10 @@ def main():
     r.add_argument("--wait", type=int, default=20)
     t = sub.add_parser("table")
     t.add_argument("--doc", default=DOC)
+    sh = sub.add_parser("sheets")
+    sh.add_argument("--only", nargs="*")
     opts = ap.parse_args()
-    {"run": cmd_run, "table": cmd_table}[opts.cmd](opts)
+    {"run": cmd_run, "table": cmd_table, "sheets": cmd_sheets}[opts.cmd](opts)
 
 
 if __name__ == "__main__":

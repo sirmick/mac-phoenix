@@ -25,8 +25,9 @@ shows the two side by side.
   tools/executor/grid.py 8.6.img --rom g3 --jobs 2
 
 With --disk APPDISK (repeatable) the items are that disk's applications
-instead, the System image only booting: the disk is mounted beside it
-(Executor reads it, the ROM machine gets a fresh copy). --rom quadra is the
+instead, the System image only booting: a fresh copy of the disk is mounted
+beside it for each item, writable on Executor too
+(--executor-writable-images). --rom quadra is the
 68k ROM machine (Quadra 650 ROM). --no-ppc runs Executor without
 --executor-ppc. Each item records its code ("68k", "ppc", "fat": CODE and
 cfrg resources); --code fat keeps the applications with both. --path names
@@ -178,8 +179,15 @@ def run_item(n, item, image, port, out, wait, binary, rom=None, source=None, dis
                     "--max-resolution", "640x480", "--disk", image, *extra,
                     "--dismiss-shutdown-dialog", "--bridge", rom]
     else:
+        # writable, as on the ROM machine (applications write preferences,
+        # registration and themselves to their disk): fresh copies each item
         for d in disks:
-            extra += ["--disk", d]
+            copy = os.path.join(STORAGE, "tmp", os.path.basename(image).removesuffix(".img")
+                                + "-" + os.path.basename(d))
+            subprocess.run(["cp", "--reflink=auto", d, copy], check=True)
+            extra += ["--disk", copy]
+        if extra:
+            extra.append("--executor-writable-images")
         args = ["--backend", "executor", "--executor-system", os.path.basename(image),
                 *extra, *(["--executor-ppc"] if ppc else []), "--bridge"]
     with open(log, "wb") as f:
@@ -343,8 +351,9 @@ def main():
                 json.dump(sorted(results, key=lambda r: r["n"]), fj, indent=1)
     with open(os.path.join(out, "grid.md"), "w") as f:
         f.write(markdown(results, name, "the ROM machine" if rom else "Executor"))
-    for c in copies if rom else []:
-        for f in [c] + [c.removesuffix(".img") + "-" + os.path.basename(d) for d in disks]:
+    for c in copies:
+        tmp = os.path.join(STORAGE, "tmp", os.path.basename(c).removesuffix(".img"))
+        for f in ([c] if rom else []) + [tmp + "-" + os.path.basename(d) for d in disks]:
             if os.path.exists(f):
                 os.remove(f)
     print(os.path.join(out, "grid.md"))
