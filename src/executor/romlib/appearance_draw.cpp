@@ -67,6 +67,12 @@ TrackGeometry scrollBarGeometry(const Rect &bounds, bool horizontal, bool arrows
     return g;
 }
 
+bool isProgress(ThemeTrackKind kind)
+{
+    return kind == kThemeMediumProgressBar || kind == kThemeLargeProgressBar || kind == kThemeMediumIndeterminateBar
+           || kind == kThemeLargeIndeterminateBar;
+}
+
 TrackGeometry trackGeometry(const ThemeTrackDrawInfo &info)
 {
     bool horizontal = info.attributes & kThemeTrackHorizontal;
@@ -86,9 +92,17 @@ TrackGeometry trackGeometry(const ThemeTrackDrawInfo &info)
         g.hasThumb = (info.attributes & kThemeTrackShowThumb) && max > min
                      && info.enableState == kThemeTrackActive && g.thumbLength < length;
     }
+    else if(isProgress(info.kind))
+    {
+        /* progress bars: the bounds themselves (8.6: track.3/4) */
+        g = TrackGeometry{};
+        g.horizontal = horizontal;
+        g.bounds = g.track = g.drag = info.bounds;
+        g.hasThumb = false;
+    }
     else
     {
-        /* sliders and progress bars: inset 2 across (reference TRACK 2), the
+        /* sliders: 16 across, inset 2 along (reference TRACK 2), the
            thumb travelling 5 in from the ends */
         g = TrackGeometry{};
         g.horizontal = horizontal;
@@ -798,6 +812,76 @@ void eraseWith(ThemeEraseUPP proc, const Rect &r, UInt32 data)
 
 /* ── Tracks ──────────────────────────────────────────────────────────── */
 
+namespace
+{
+/* A determinate horizontal progress bar in BOUNDS, as 8.6 draws CDEF 80
+   (tests/guest/difftest appr controls.80.*): the bar a pixel short of
+   the bounds' right and bottom, a #aaa line over and left of a black
+   frame; the done part a tube in the accent ramp (#005 #339 #66c #99f
+   #ccf #eee), lit from the top, its right end darkening, a black line
+   where it ends; the rest grey, sunk. Inactive: #555 frame and line,
+   #99f done, #ccc rest. */
+void progressBar(const Rect &bounds, int32_t min, int32_t max, int32_t value, bool active)
+{
+    static const RGBColor ramp[] = {
+        { 0x0000, 0x0000, 0x5555 }, { 0x3333, 0x3333, 0x9999 }, { 0x6666, 0x6666, 0xCCCC },
+        { 0x9999, 0x9999, 0xFFFF }, { 0xCCCC, 0xCCCC, 0xFFFF }, { 0xEEEE, 0xEEEE, 0xEEEE },
+    };
+    int L = bounds.left, T = bounds.top, R = bounds.right - 2, B = bounds.bottom - 2; /* inclusive */
+    int fx = L + 2 + (int)((int64_t)(R - 1 - (L + 2) + 1) * (std::clamp(value, min, max) - (int64_t)min) / ((int64_t)max - min));
+    uint16_t frame = active ? kBlack : 0x5555;
+    if(active)
+    {
+        lineGray(L, T, R, T, 0xAAAA);
+        lineGray(L, T, L, B, 0xAAAA);
+    }
+    Rect f = { (INTEGER)(T + 1), (INTEGER)(L + 1), (INTEGER)(B + 1), (INTEGER)(R + 1) };
+    frameGray(f, frame);
+    if(!active)
+    {
+        RGBColor done = { 0x9999, 0x9999, 0xFFFF };
+        RGBForeColor(&done);
+        Rect d = { (INTEGER)(T + 2), (INTEGER)(L + 2), (INTEGER)(B - 0), (INTEGER)fx };
+        PaintRect(&d);
+        fillGray(Rect{ (INTEGER)(T + 2), (INTEGER)(fx + 1), (INTEGER)B, (INTEGER)R }, 0xCCCC);
+        lineGray(fx, T + 2, fx, B - 1, frame);
+        return;
+    }
+    /* the done part, row by row (r 0 at the top) */
+    int rows = B - 1 - (T + 2) + 1;
+    for(int r = 0; r < rows; r++)
+    {
+        int mid = std::max(0, 5 - std::abs(r - 4));
+        if(r == rows - 1)
+            mid = 0;
+        int y = T + 2 + r;
+        if(fx - 1 >= L + 2)
+            lineRGB(L + 2, y, fx - 1, y, ramp[mid]);
+        auto px = [&](int x, int idx) {
+            if(x >= L + 2 && x < fx)
+                lineRGB(x, y, x, y, ramp[idx]);
+        };
+        px(L + 3, std::min(5, mid + 1));
+        px(L + 2, 2);
+        px(fx - 3, std::min(mid, 4));
+        px(fx - 2, r < 2 ? mid : std::min(mid, 1));
+        px(fx - 1, r == 0 ? 1 : 0);
+    }
+    lineGray(fx, T + 2, fx, B - 1, kBlack);
+    /* the rest: sunk */
+    if(fx + 1 <= R - 1)
+    {
+        lineGray(fx + 1, T + 2, fx + 1, B - 1, 0x5555);
+        fillGray(Rect{ (INTEGER)(T + 3), (INTEGER)(fx + 2), (INTEGER)(B - 1), (INTEGER)(R - 1) }, 0xBBBB);
+        lineGray(fx + 2, T + 2, R - 2, T + 2, 0x8888);
+        lineGray(fx + 2, T + 2, fx + 2, B - 1, 0x8888);
+        lineGray(R - 1, T + 2, R - 1, T + 2, 0xBBBB);
+        lineGray(R - 1, T + 3, R - 1, B - 1, 0xDDDD);
+        lineGray(fx + 3, B - 1, R - 1, B - 1, 0xDDDD);
+    }
+}
+}
+
 OSStatus Executor::C_DrawThemeTrack(const ThemeTrackDrawInfo *drawInfo, RgnHandle rgnGhost,
                                     ThemeEraseUPP eraseProc, UInt32 eraseData)
 {
@@ -841,7 +925,14 @@ OSStatus Executor::C_DrawThemeTrack(const ThemeTrackDrawInfo *drawInfo, RgnHandl
         }
         default:
         {
-            /* progress bars: the done part in the accent colour */
+            /* progress bars: horizontal determinate ones platinum, the rest
+               the done part in the accent colour */
+            if((drawInfo->kind == kThemeMediumProgressBar || drawInfo->kind == kThemeLargeProgressBar)
+               && g.horizontal && drawInfo->max > drawInfo->min)
+            {
+                progressBar(g.bounds, drawInfo->min, drawInfo->max, drawInfo->value, active);
+                break;
+            }
             Rect r = g.bounds;
             frameGray(r, active ? kBlack : kShadow);
             InsetRect(&r, 1, 1);
@@ -920,6 +1011,8 @@ OSStatus Executor::C_GetThemeTrackThumbRgn(const ThemeTrackDrawInfo *drawInfo, R
 {
     if(!drawInfo || !thumbRgn)
         return paramErr;
+    if(isProgress(drawInfo->kind))
+        return paramErr; /* no thumb: 8.6 leaves the output alone */
     TrackGeometry g = trackGeometry(*drawInfo);
     if(g.hasThumb)
         RectRgn(thumbRgn, &g.thumb);
@@ -932,6 +1025,8 @@ OSStatus Executor::C_GetThemeTrackDragRect(const ThemeTrackDrawInfo *drawInfo, R
 {
     if(!drawInfo || !dragRect)
         return paramErr;
+    if(isProgress(drawInfo->kind))
+        return paramErr; /* no thumb: 8.6 leaves the output alone */
     *dragRect = trackGeometry(*drawInfo).drag;
     return noErr;
 }
@@ -962,6 +1057,8 @@ OSStatus Executor::C_GetThemeTrackLiveValue(const ThemeTrackDrawInfo *drawInfo, 
 {
     if(!drawInfo || !value)
         return paramErr;
+    if(isProgress(drawInfo->kind))
+        return paramErr; /* no thumb: 8.6 leaves the output alone */
     TrackGeometry g = trackGeometry(*drawInfo);
     int32_t min = drawInfo->min, max = drawInfo->max;
     int travel = g.hi(g.drag) - g.lo(g.drag) - g.thumbLength;

@@ -188,17 +188,23 @@ static void shapes(void)
     if(SECTION("track"))
     {
         int t;
-        for(t = 0; t < 3; t++)
+        /* 0 1 scroll bars, 2 a slider, 3 4 progress bars (determinate,
+           indeterminate), 5 a vertical slider */
+        for(t = 0; t < 6; t++)
         {
+            static const ThemeTrackKind kinds[] = { kThemeScrollBar, kThemeScrollBar, kThemeSlider,
+                kThemeMediumProgressBar, kThemeMediumIndeterminateBar, kThemeSlider };
             ThemeTrackDrawInfo d;
             memset(&d, 0, sizeof d);
-            d.kind = t == 2 ? kThemeSlider : kThemeScrollBar;
-            if(t == 1) SetRect(&d.bounds, 0, 0, 200, 16); else if(t == 0) SetRect(&d.bounds, 0, 0, 16, 200); else SetRect(&d.bounds, 0, 0, 150, 18);
+            d.kind = kinds[t];
+            if(t == 1) SetRect(&d.bounds, 0, 0, 200, 16); else if(t == 0) SetRect(&d.bounds, 0, 0, 16, 200);
+            else if(t == 3 || t == 4) SetRect(&d.bounds, 0, 0, 100, 14);
+            else if(t == 5) SetRect(&d.bounds, 0, 0, 18, 150); else SetRect(&d.bounds, 0, 0, 150, 18);
             d.min = 0; d.max = 100; d.value = 25;
-            d.attributes = t ? kThemeTrackHorizontal : 0;
+            d.attributes = t && t != 5 ? kThemeTrackHorizontal : 0;
             d.enableState = kThemeTrackActive;
             d.trackInfo.scrollbar.viewsize = 50;
-            if(t == 2) d.trackInfo.slider.thumbDir = kThemeThumbDownward;
+            if(t == 2 || t == 5) d.trackInfo.slider.thumbDir = kThemeThumbDownward;
             SET(o); err = GetThemeTrackBounds(&d, &o);
             sprintf(k, "%d.bounds", t); out(k, "err %d %d,%d,%d,%d", (int)err, o.top, o.left, o.bottom, o.right);
             SetEmptyRgn(r); err = GetThemeTrackThumbRgn(&d, r);
