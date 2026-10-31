@@ -482,13 +482,33 @@ void checkBox(const Rect &b, Look look, ThemeButtonValue value)
             break;
     }
     uint16_t ink = grey(look == Look::inactive ? 8 : 0);
+    int L = r.left, T = r.top;
     if(value == kThemeButtonOn)
     {
-        lineGray(r.left + 3, r.top + 3, r.right - 4, r.bottom - 4, ink);
-        lineGray(r.right - 4, r.top + 3, r.left + 3, r.bottom - 4, ink);
+        /* a tick, two pixels thick, out over the top right corner
+           (8.6's is anti-aliased: an approximation) */
+        for(int k = 0; k < 2; k++)
+        {
+            lineGray(L + 2, T + 5 + k, L + 5, T + 8 + k, ink);
+            lineGray(L + 5, T + 8 + k, L + 11, T + 2 + k, ink);
+        }
+        if(look != Look::inactive)
+        {
+            lineGray(L + 6, T + 9, L + 12, T + 3, grey(7));
+            lineGray(L + 6, T + 10, L + 12, T + 4, grey(0xa));
+        }
     }
     else if(value == kThemeButtonMixed)
-        hrun(r.left + 3, r.right - 4, (r.top + r.bottom) / 2 - 1, ink);
+    {
+        /* a bar of two rows, its shadow right and below */
+        hrun(L + 3, L + 8, T + 5, ink);
+        hrun(L + 3, L + 8, T + 6, ink);
+        if(look != Look::inactive)
+        {
+            vrun(L + 9, T + 5, T + 6, grey(0xa));
+            hrun(L + 4, L + 9, T + 7, grey(0xa));
+        }
+    }
 }
 
 /* A radio button: a sphere lit from the top left, its shade stepping
@@ -548,13 +568,16 @@ void radioButton(const Rect &b, Look look, ThemeButtonValue value)
         }
     if(value == kThemeButtonOn)
     {
-        Rect dot = r;
-        InsetRect(&dot, 3, 3);
+        /* a dot of 6 (8.6 also darkens the sphere round it: not yet) */
+        Rect dot = { (INTEGER)(T + 3), (INTEGER)(L + 3), (INTEGER)(T + 9), (INTEGER)(L + 9) };
         gray(line);
         PaintOval(&dot);
     }
     else if(value == kThemeButtonMixed)
-        hrun(r.left + 3, r.right - 4, (r.top + r.bottom) / 2 - 1, line);
+    {
+        hrun(L + 3, L + 8, T + 5, line);
+        hrun(L + 3, L + 8, T + 6, line);
+    }
 }
 
 /* A disclosure triangle, 7 by 11, pointing right (or down: the same
