@@ -249,7 +249,17 @@ Third run (`~/storage/executor-grid/8.6-r3/`): no host crashes.
   50K more (8.6, 9.0.4; 28K on 7.6.1), the Code Fragment Manager loading
   code and data into the application heap (`tests/guest/partprobe`'s
   PartProbePPC on the G3, ctest `partition_fragment_*`); Executor does
-  the same (process.cpp `powerpc_fragment_extra`).
+  the same (process.cpp `powerpc_fragment_extra`). CloseConnection gives
+  a fragment's memory back when its last connection closes (PartProbePPC
+  loads and closes 20 copies of itself): CodeWarrior IDE 3.2 prepares
+  each of its plug-ins, asks it what it is and closes it, and quit when
+  NewThread found no room left for its stack.
+* THINK C 6 and THINK Pascal 4.5 on 8.6 stop in Standard File: the
+  System's PowerPC "Translation" library (loaded for the Finder) says
+  Gestalt 'xlat', and 8.6's PACK 3 then calls `$ABFC` selectors $24 (one
+  `long *`: GetTranslationManagerStatus?) and $20. On a Mac the 68k
+  dispatcher reaches the library's exports; Executor's own dispatcher
+  (TranslationMgr.yaml) knows only the Drag Manager's selector. Open.
 * Date & Time: the menu bar clock calls (MenusLib, weak imports it makes
   from 8.2 on) are answered; it now spins in Apple's WindowDefinitions
   drawing its title (no traps: needs PC sampling). With Charcoal (the
