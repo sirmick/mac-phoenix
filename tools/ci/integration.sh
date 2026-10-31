@@ -53,6 +53,7 @@ if ! flock -n 9; then
 fi
 ln -sfn "runs/$STAMP" "$CI/latest"
 SUMMARY="$RUN/summary.md"
+touch "$RUN/.start"     # reports newer than this are the run's
 STATUS=0
 T0=$(date +%s)
 log() { echo "[$(date +%H:%M:%S)] $*"; }
@@ -120,6 +121,8 @@ suite() {   # name builddir label env...: ctest, a row, failures listed
         echo "### $name: failed"
         echo
         sed -n '/The following tests FAILED:/,$p' "$out" | grep -E '^\s+[0-9]+ - ' | sed 's/^\s*/- /'
+        # the checks that failed, as the tests print them
+        grep -E '^ *FAIL[: ]' "$out" | sort -u | head -40 | sed 's/^ */  - /'
         echo
         echo "### $name: skipped"
         echo
@@ -150,7 +153,7 @@ if has native; then
             echo "### difftests"
             echo
             for r in "$HOME/storage/difftest/wt-integration"/*/report-executor-8.6.md; do
-                [[ -e "$r" && "$r" -nt "$RUN/summary.md" ]] || continue
+                [[ -e "$r" && "$r" -nt "$RUN/.start" ]] || continue
                 echo "- $(basename "$(dirname "$r")"): $(sed -n 3p "$r") ($r)"
             done
         } >> "$RUN/details.md"
@@ -181,6 +184,6 @@ fi
     echo "Total $(mins $(( $(date +%s) - T0 ))): $( (( STATUS )) && echo FAILED || echo passed)."
     [[ -e "$RUN/details.md" ]] && cat "$RUN/details.md"
 } >> "$SUMMARY"
-rm -f "$RUN/details.md"
+rm -f "$RUN/details.md" "$RUN/.start"
 log "summary: $SUMMARY"
 exit $STATUS
