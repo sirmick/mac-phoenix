@@ -10,6 +10,9 @@
 //   menu     its menu bar has menus, and pressing on the second one draws it
 //            (a modal dialog at launch is cancelled first, Cmd-.; games: the
 //            menus are there, full-screen ones hide the bar)
+//   alive    still in front after that (games: after a Return, which gets
+//            past a title screen, and quits at an error alert)
+// An application that crashes the tab fails; the next gets a new tab.
 //
 //   node web/tests/tab_site.mjs DIR LIBRARY SYSTEM DISK
 //
@@ -81,8 +84,20 @@ const changed = (a, b) => !a || !b ? 0 : a.reduce((n, v, i) => n + (Math.abs(v -
 
 const server = await startServer(dir, { images: library, include: [boot, diskName] });
 const browser = await launch();
-const page = await newPage(browser, { log: !!process.env.SITE_LOG });
-page.on('dialog', (d) => d.accept());
+const query = `?disk=disks/${encodeURIComponent(boot)}&disk=disks/${encodeURIComponent(diskName)}`
+    + `&system=${encodeURIComponent(boot)}${system === '8.6' ? '&ppc=1' : ''}`;
+// A tab signed in on the System with the disk; a new one (a browser
+// context of its own) when an application crashed the last.
+let page = null, crashed = false;
+async function openTab() {
+    if (page)
+        await page.context().close().catch(() => {});
+    page = await newPage(browser, { log: !!process.env.SITE_LOG });
+    page.on('dialog', (d) => d.accept());
+    page.on('crash', () => { crashed = true; });
+    crashed = false;
+    await signIn(page, server.url, 'owner', OWNER_PASSWORD, { query });
+}
 const finder = async () => {
     await firstFrame(page, 120000);
     return until(() => request(page, 'app').then((a) => a === 'Finder'), 180000, 500);
@@ -145,16 +160,24 @@ async function tryApp(app) {
             got.drawn = !!await until(async () => (await own()).length > 0, 8000, 500) || got.drawn;
         }
     }
-    const ok = got.drawn && got.menu;
-    return { ...got, ok, why: ok ? '' : [!got.drawn && 'nothing drawn', !got.menu && 'no menu'].filter(Boolean).join(', ') };
+    // A game: Return (past a title screen; an error alert's default button
+    // quits it).
+    if (games) {
+        await key('Enter');
+        await page.waitForTimeout(4000);
+    }
+    // Still up: in front, or too busy to answer (a full-screen game).
+    const now = await request(page, 'app');
+    got.alive = now === null || now === app.name;
+    const ok = got.drawn && got.menu && got.alive;
+    return { ...got, ok, why: ok ? '' : [!got.drawn && 'nothing drawn', !got.menu && 'no menu',
+                                        !got.alive && `then gone (${now} in front)`].filter(Boolean).join(', ') };
 }
 
 let finderScreen = null, unexpected = 0;
 const table = [];
 try {
-    const query = `?disk=disks/${encodeURIComponent(boot)}&disk=disks/${encodeURIComponent(diskName)}`
-        + `&system=${encodeURIComponent(boot)}${system === '8.6' ? '&ppc=1' : ''}`;
-    await signIn(page, server.url, 'owner', OWNER_PASSWORD, { query });
+    await openTab();
     if (!await finder()) {
         console.log(`FAIL the Finder on ${boot}`);
         await page.locator('#screen').screenshot({ path: path.join(dir, `site-${system}-finder.png`) });
@@ -162,7 +185,10 @@ try {
     } else {
         for (const [n, app] of apps.entries()) {
             if (n) {
-                await page.reload();
+                if (crashed)
+                    await openTab();
+                else
+                    await page.reload();
                 if (!await finder()) {
                     console.log(`FAIL the Finder again before ${app.name}`);
                     unexpected++;
@@ -183,7 +209,9 @@ try {
             console.log(line);
             table.push({ system, disk: diskName, app: app.name, result: mark, scoreboard: v, why: r.why || '',
                          menus: r.menus || [], seconds: Math.round((Date.now() - t0) / 1000) });
-            await page.locator('#screen').screenshot({ path: path.join(dir, `site-${system}-${app.name.replace(/[^\w.-]+/g, '_')}.png`) });
+            if (!crashed)
+                await page.locator('#screen').screenshot({ path: path.join(dir, `site-${system}-${app.name.replace(/[^\w.-]+/g, '_')}.png`) })
+                    .catch(() => {});
         }
     }
 } finally {
