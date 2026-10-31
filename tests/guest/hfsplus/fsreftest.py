@@ -39,7 +39,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--machine", choices=["9.0.4", "executor"], required=True)
     ap.add_argument("--out", required=True)
-    ap.add_argument("--port", type=int, default=19500 + os.getpid() % 400)
+    ap.add_argument("--port", type=int, default=guest.free_port())
     ap.add_argument("--dump", default=os.path.join(ROOT, "build", "src", "executor", "romlib", "hfsplus_dump"))
     ap.add_argument("--bin", default=os.path.join(HERE, "FSRefTest.bin"),
                     help="the FSRefTest to run (FSRefTestPPC.bin: the PowerPC one)")
