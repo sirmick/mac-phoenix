@@ -686,9 +686,11 @@ OSErr Executor::C_AECreateAppleEvent(AEEventClass event_class,
     int target_size, event_size;
     ae_header_t *event_data;
 
-    target_data = DESC_DATA(target);
-    target_type = DESC_TYPE(target);
-    target_size = GetHandleSize(target_data);
+    /* MacPhoenix: a null target (typeNull, no data: 8.6's AppleScript
+       makes its events so) is an event without one */
+    target_data = target ? (Handle)DESC_DATA(target) : nullptr;
+    target_type = target ? (DescType)DESC_TYPE(target) : typeNull;
+    target_size = target_data ? GetHandleSize(target_data) : 0;
 
     event_size = sizeof *event_data + target_size + 10;
     event_data = (ae_header_t *)alloca(event_size);
@@ -701,7 +703,8 @@ OSErr Executor::C_AECreateAppleEvent(AEEventClass event_class,
 
     event_data->target.size = target_size;
     event_data->target.type = target_type;
-    memcpy(&event_data->target.data[0], *target_data, target_size);
+    if(target_size)
+        memcpy(&event_data->target.data[0], *target_data, target_size);
 
     {
         GUEST<int32_t> *t;
