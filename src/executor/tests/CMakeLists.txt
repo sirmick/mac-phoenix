@@ -135,8 +135,9 @@ else()
                                                       EXECUTOR_HFSPLUS_BLANK="${HFSPLUS_BLANK}"
                                                       EXECUTOR_HFSX_BLANK="${HFSX_BLANK}")
     if(EMSCRIPTEN)
-        # Under node: the host's files, as natively. Its static data and the
-        # 8MB stack outgrew the default 16MB initial memory.
+        # Under node: the host's files, as natively. Its static data (more
+        # with -DEXECUTOR_SKIA=ON) and the 8MB stack outgrew the default
+        # 16MB initial memory.
         target_link_options(executor_tests PRIVATE -sNODERAWFS=1 -sINITIAL_MEMORY=64MB)
     endif()
     target_compile_definitions(executor_tests PRIVATE -DEXECUTOR)

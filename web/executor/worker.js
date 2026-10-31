@@ -243,6 +243,8 @@ async function start(m) {
     const others = m.files.filter((f) => !IMAGE.test(f.name));
     const args = ['--size', `${m.width}x${m.height}`,
                   ...images.flatMap((f) => ['--disk', `/uploads/${f.name}`])];
+    if (m.scale && m.scale !== 1)
+        args.push('--scale', `${m.scale}`);
     if (m.system && images.some((f) => f.name === m.system))
         args.push('--system', `/uploads/${m.system}`);
     if (m.ppc)
@@ -296,6 +298,13 @@ self.onmessage = (e) => {
             postMessage({ type: 'reply', id: m.id, result: o ? o.blob() : null });
         } else if (m.op === 'stats') {
             postMessage({ type: 'reply', id: m.id, result: { ...Module.stats } });
+        } else if (m.op === 'pixels') {
+            // The canvas's own pixels (tests: comparing scales needs more
+            // than a screenshot's possible browser-side resampling).
+            const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            postMessage({ type: 'reply', id: m.id,
+                         result: { width: canvas.width, height: canvas.height, data: img.data } },
+                        [img.data.buffer]);
         } else if (m.op === 'list') {
             let names = null;
             try { names = FS.readdir(m.arg).filter((n) => n !== '.' && n !== '..'); } catch { }

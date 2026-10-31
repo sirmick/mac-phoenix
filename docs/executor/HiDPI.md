@@ -283,8 +283,64 @@ subset) was not needed: skia-pack also has `linux-Release-arm64` (for
 `tools/xarch` builds; `fetch.sh arm64`) and `wasm-Release-wasm` static
 libraries built with Emscripten (`fetch.sh wasm`), which the wasm build
 could link instead of CanvasKit (CanvasKit is Skia's JavaScript API; we
-draw from C++, so the static libraries are what we'd want; whether their
-Emscripten version links with ours is untried).
+draw from C++, so the static libraries are what we'd want).
+
+**wasm link: skia-pack's prebuilt doesn't link; build Skia ourselves
+instead (2026-10-31).** `-DEXECUTOR_SKIA=ON` configures `build-wasm`
+cleanly (the `find_library()` calls needed `NO_CMAKE_FIND_ROOT_PATH`:
+Emscripten's toolchain file restricts `find_library` to its own sysroot
+otherwise), but linking skia-pack's wasm package fails: `libskia.a`'s
+FreeType/libpng objects are undefined on `__wasm_longjmp`/`__c_longjmp`.
+skia-pack's wasm build was compiled with clang 21 using Emscripten's newer
+wasm-native setjmp/longjmp (`-sSUPPORT_LONGJMP=wasm`, paired with
+`-fwasm-exceptions`); our emsdk (clang 23, `~/emsdk`) defaults to the
+older JS-polyfill SjLj, paired with the JS-polyfill exception model we
+already build the rest of Executor's wasm target with. Passing
+`-sSUPPORT_LONGJMP=wasm` at link time alone just moves the break (our own
+`romlib` objects that call `setjmp`/`longjmp`, e.g. `launch.cpp`, were
+compiled expecting the old runtime's `emscripten_longjmp`, and the
+Emscripten `libc++.a` picked for the new mode is missing symbols the old
+one didn't need either); matching it at compile time too makes `clang++`
+refuse the combination outright (`'-wasm-enable-sjlj' not allowed with
+'-enable-emscripten-cxx-exceptions'`), because the new longjmp model
+requires the new wasm-exceptions model too — not a Skia-local flag, but a
+switch of Executor's *whole* wasm build's exception model (Asyncify,
+which our process switching relies on, doesn't support `-fwasm-exceptions`
+either, so that path is closed).
+
+So: `tools/skia/build-wasm.sh`, beside `fetch.sh`, builds Skia from
+source with *our* emsdk instead of using the prebuilt. A minimal config
+for what phase 1 actually needs — core, paths, fonts/glyphs from
+outlines (FreeType), raster backend — with no GPU, no image codecs
+(decoding isn't needed: fonts arrive as bytes already in memory, handed
+to Skia via `SkData`), no SVG/shaping/ICU. The one surprise: FreeType's
+own `BUILD.gn` depends on libpng (for color-emoji glyph support)
+unconditionally, and libpng on zlib, regardless of codec flags — those
+three stay, built minimally too (no codec use otherwise). GN
+(`bin/fetch-gn`, a direct download, no `depot_tools`/CIPD needed) and
+three `git fetch --depth 1` clones at DEPS-pinned commits (Skia itself
+pinned to `fetch.sh`'s same `m144-e2e6623374-4` revision; FreeType,
+libpng, zlib at the commits Skia's `DEPS` pins for it) are the only
+inputs; `ninja -j3 skia` builds in about 90 seconds. The script writes
+its output into `fetch.sh`'s own wasm destination
+(`~/storage/deps/skia-m144-wasm-wasm`), same directory layout, so
+`-DEXECUTOR_SKIA=ON`'s existing `SKIA_DIR` default picks it up with no
+further CMake changes for path resolution — `tools/skia/fetch.sh wasm`
+is superseded for this target; run `build-wasm.sh` instead. One addition
+*was* needed in `CMakeLists.txt`: the native/arm64 prebuilt's extra
+FreeType dependencies (libpng, zlib, skcms) get their symbols for free
+from the system zlib/libpng that Qt already links; the wasm build links
+no such thing, so `libpng`/`zlib`/`skcms` are now found and linked
+explicitly alongside `libskia`/`libfreetype2` (harmless if unreferenced:
+a static archive only pulls in the object files a symbol reference
+actually needs).
+
+Built this way, `executor-web.wasm` (Release, `source
+~/emsdk/emsdk_env.sh && emcmake cmake -B build-wasm -DEXECUTOR_SKIA=ON
+-DCMAKE_BUILD_TYPE=Release && cmake --build build-wasm -j3 --target
+executor-web`) is 63.8 MB (6.67 MB gzipped) versus 59.8 MB (5.39 MB
+gzipped) with `-DEXECUTOR_SKIA=OFF` — Skia costs about 4.0 MB
+uncompressed, 1.27 MB gzipped, in this minimal configuration.
 
 ```
 tools/skia/fetch.sh && cmake -B build -DEXECUTOR_SKIA=ON && cmake --build build -j4
@@ -398,3 +454,37 @@ uneven gaps, "qui ck").
   opening General Controls: at most 1.3 ms a frame, 30-40 ms per 5 s
   (under 1% of a core), 25-44 runs on the screen. The GPU back-end can
   wait.
+
+### The wasm tab
+
+Built with `tools/skia/build-wasm.sh` (above) and `--scale` on
+`executor-web`'s own argv (`web/executor/main.js`'s `?scale=`, default
+`devicePixelRatio`; `web/executor/worker.js` passes it through).
+`PhoenixVideoDriver::render()`'s `rectsHook` branch (wasm's only path)
+now calls `hidpi::compose()` and publishes the whole `scaled_` surface
+through the same `rectsHook` every time (`compose()` doesn't report how
+far outline-glyph padding extended the dirty area, and this matches
+`scaledFrameHook`'s own full-frame-every-publish cost on native, not a
+regression). `guestPoint()`'s mouse mapping needed no change: the
+canvas element's `width`/`height` IDL attributes freeze at the 1x size
+before `transferControlToOffscreen()` detaches the backing buffer that
+resizes to the scaled dimensions in the Worker.
+
+Gate: `ctest -R executor.web.hidpi` (needs a Playwright-capable
+`EXECUTOR_WEB_NODE_PATH`; `web/tests/tab_hidpi.mjs`). Boots the same
+7.6.1 Finder at `?scale=1` and `?scale=2`, and checks the 2x run's menu
+bar actually differs from a naive nearest-neighbor doubling of the 1x
+run by more than a sliver -- the plain-upscale look that not calling
+`hidpi::compose()` would silently produce otherwise. Measured on this
+box: canvas backing buffer doubles correctly (640x480 to 1280x960); 2.8-2.9%
+of the menu bar's pixels differ from the naive upscale (antialiasing and
+hinting at the glyph edges, which a bitmap blow-up has none of); the
+Worker's own per-frame draw cost (`Module.stats`, the 'stats' request)
+goes from about 0.1-0.14 ms/frame at scale=1 to 2.9-3.8 ms/frame at
+scale=2 -- noticeably higher than native's 1.3 ms worst case above,
+likely wasm's slower Skia raster path plus `compose()`'s full-surface
+republish on every change rather than the dirty rectangle alone;
+unoptimized (this was the first run through, not a target to chase
+yet). Module size (Release, gzipped over the wire): 59.8 MB/5.39 MB
+without Skia, 63.8 MB/6.67 MB with it -- about 4.0 MB/1.27 MB gzipped
+for HiDPI in this minimal configuration.

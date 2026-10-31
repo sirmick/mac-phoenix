@@ -16,7 +16,7 @@ try {
 
 const types = { '.html': 'text/html', '.js': 'text/javascript', '.wasm': 'application/wasm' };
 
-export async function open(dir, { log = true } = {}) {
+export async function open(dir, { log = true, query = '' } = {}) {
     const server = http.createServer((req, res) => {
         const f = path.join(dir, decodeURIComponent(new URL(req.url, 'http://x').pathname));
         fs.readFile(f, (err, data) => {
@@ -33,7 +33,7 @@ export async function open(dir, { log = true } = {}) {
     page.on('crash', () => console.log('[page crashed]'));
     if (log)
         page.on('worker', (w) => w.on('console', (m) => console.log('[worker]', m.text())));
-    await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
+    await page.goto(`http://127.0.0.1:${server.address().port}/index.html${query ? `?${query}` : ''}`);
     const close = async () => { await browser.close(); server.close(); };
     return { page, close };
 }
