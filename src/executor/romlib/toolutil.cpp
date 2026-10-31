@@ -694,6 +694,30 @@ Fract Executor::X2Frac(Extended *xp) /* IMIV-65 */
 }
 
 
+/* MacPhoenix: InterfaceLib's, a PowerPC double for an Extended
+   (ToolboxUtil.yaml) */
+double Executor::glue_Fix2X(Fixed x)
+{
+    return Fix2X(x);
+}
+
+Fixed Executor::glue_X2Fix(double x)
+{
+    Extended e = x;
+    return X2Fix(&e);
+}
+
+double Executor::glue_Frac2X(Fract x)
+{
+    return Frac2X(x);
+}
+
+Fract Executor::glue_X2Frac(double x)
+{
+    Extended e = x;
+    return X2Frac(&e);
+}
+
 void Executor::R_Fix2X(void *dummyretpc, Fixed x, extended80 *ret) /* INTERNAL */
 {
 #if 0
