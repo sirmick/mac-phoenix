@@ -40,7 +40,8 @@ enum
     fragSymbolNotFound = -2802,
     fragLibNotFound = -2804,
     cfragFragmentFormatErr = -2806,
-    fragNoMem = -2809
+    fragNoMem = -2809,
+    fragLibConnErr = -2817 /* cfragLibConnErr: there, not connected to this process */
 };
 
 struct lib_t

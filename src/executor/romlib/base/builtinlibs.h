@@ -81,6 +81,7 @@ namespace Executor
         void checkASLMRawEntrypoints();
 
         ConnectionID getBuiltinLib(ConstStr255Param libname, OSType arch = "pwpc"_4);
+        bool haveBuiltinLib(ConstStr255Param libname, OSType arch);
 
         /* MacPhoenix: every library's exports, by name, as CFM binds them
            ("pwpc" or "m68k"), the libraries' added entries included
