@@ -585,6 +585,36 @@ static void drawing(void)
             begin(depths[d]); DrawThemeMenuBackground(&b, i); sprintf(k, "menubg.%d", i); end(k);
         }
         begin(depths[d]); DrawThemeMenuSeparator(&b); end("menuseparator");
+        {
+            /* a 20-pixel bar as the MBDF has it: selected, and with a
+               title in each state; a menu's item in each state */
+            static const ThemeMenuState ms[] = { kThemeMenuActive, kThemeMenuSelected, kThemeMenuDisabled };
+            static const char *mn[] = { "active", "selected", "disabled" };
+            Rect bar, t, m, it;
+            SetRect(&bar, 8, 8, 112, 28);
+            begin(depths[d]); DrawThemeMenuBarBackground(&bar, kThemeMenuBarSelected, 0); end("menubar.selected");
+            for(i = 0; i < 3; i++)
+            {
+                SetRect(&t, 30, 8, 70, 28);
+                begin(depths[d]);
+                DrawThemeMenuBarBackground(&bar, kThemeMenuBarNormal, 0);
+                DrawThemeMenuTitle(&bar, &t, ms[i], 0, NULL, 0);
+                sprintf(k, "menutitle.%s", mn[i]);
+                end(k);
+                SetRect(&m, 8, 8, 112, 52);
+                SetRect(&it, 9, 20, 111, 38);
+                begin(depths[d]);
+                DrawThemeMenuBackground(&m, kThemeMenuTypePullDown);
+                DrawThemeMenuItem(&m, &it, 8, 52, ms[i], kThemeMenuItemPlain, NULL, 0);
+                sprintf(k, "menuitem.%s", mn[i]);
+                end(k);
+                begin(depths[d]);
+                DrawThemeMenuBackground(&m, kThemeMenuTypePullDown);
+                DrawThemeMenuItem(&m, &it, 8, 52, ms[i], kThemeMenuItemHierarchical, NULL, 0);
+                sprintf(k, "menuitem.hier.%s", mn[i]);
+                end(k);
+            }
+        }
         for(i = 0; i <= 10; i++)
         {
             Rect cont;
