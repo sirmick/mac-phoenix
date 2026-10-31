@@ -11,6 +11,7 @@
 #include <Processes.h>
 #include <Script.h>
 #include <CodeFragments.h>
+#include <Quickdraw.h>
 
 #define SET(x) memset(&(x), SENTINEL, sizeof(x))
 
@@ -121,6 +122,17 @@ int main(void)
             sprintf(k, "roman.%d", sverbs[i]);
             out(k, "%08lx", (long)GetScriptVariable(smRoman, sverbs[i]));
         }
+    }
+    /* the screen the system starts on: depth and size (8.6 on the G3 at
+       640x480; Executor starts 8.x Systems as it does) */
+    if(SECTION("screen"))
+    {
+        GDHandle gd = GetMainDevice();
+        PixMapHandle pm = (**gd).gdPMap;
+        Rect r = (**gd).gdRect;
+        out("main.depth", "%d", (**pm).pixelSize);
+        out("main.~rect", "%d,%d,%d,%d", r.top, r.left, r.bottom, r.right);
+        out("main.type", "%d", (**pm).pixelType);
     }
     if(SECTION("cfm"))
     {
