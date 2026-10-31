@@ -160,7 +160,7 @@ void Executor::C_GetIndString(StringPtr s, INTEGER sid, INTEGER index)
 
     retval = GetResource("STR#"_4, sid);
     LoadResource(retval);
-    if(ResError() != noErr || *(INTEGER *)*retval < index)
+    if(ResError() != noErr || *(GUEST<INTEGER> *)*retval < index)
     {
         s[0] = 0;
         /*-->*/ return;
@@ -445,7 +445,7 @@ void Executor::GetIndPattern(Byte *op, INTEGER plistid, INTEGER index)
 
     retval = GetResource("PAT#"_4, plistid);
     LoadResource(retval);
-    if(ResError() != noErr || *(INTEGER *)*retval < index)
+    if(ResError() != noErr || *(GUEST<INTEGER> *)*retval < index)
     {
         return;
     }
