@@ -162,20 +162,40 @@ cfm_launch(Handle cfrg0, OSType desired_arch, FSSpecPtr fsp)
             id = CFIR_FRAGMENT_LENGTH(cfirp);
             h = GetResource(typ, id);
             HLock(h);
-            GetMemFragment(*h, GetHandleSize(h), empty, kLoadLib,
-                           &c_id, &mainAddr, errName);
+            err = GetMemFragment(*h, GetHandleSize(h), empty, kLoadLib,
+                                 &c_id, &mainAddr, errName);
 
             fprintf(stderr, "Memory leak from segmented fragment\n");
+        }
+        /* MacPhoenix: a fragment that doesn't prepare (a library not
+           found: Slithereens without InputSprocket) isn't launched; the
+           Finder's words go to the log, and without the Process Manager to
+           the alert the Finder's InitWindows shows. (A process on its own
+           thread ends with no alert: the next InitWindows is another
+           application's. A Mac's Finder shows it; LaunchApplication from
+           an application only answers an error.) */
+        if(err != noErr || !mainAddr)
+        {
+            std::string msg = "The application \xD2"
+                + std::string((const char *)LM(CurApName) + 1, LM(CurApName)[0])
+                + "\xD3 could not be opened because ";
+            if(err == fragLibNotFound)
+                msg += "\xD2" + std::string((const char *)errName + 1, errName[0])
+                    + "\xD3 could not be found.";
+            else
+                msg += "of an error (" + std::to_string(err) + ").";
+            fprintf(stderr, "[Executor] launch failed: %s\n", msg.c_str());
+            if(!ROMlib_process_has_thread())
+            {
+                ROMlib_launch_failure = launch_cfm_failed;
+                ROMlib_launch_failure_message = msg;
+            }
+            C_ExitToShell();
         }
         if(desired_arch == "m68k"_4)
         {
             /* MacPhoenix: CFM-68K (docs/executor/CFM68K.md): the main
                routine's transition vector, on the 68k CPU. */
-            if(err != noErr || !mainAddr)
-            {
-                ROMlib_launch_failure = launch_cfm_requiring;
-                C_ExitToShell();
-            }
             uint32_t tv = guest_cast<uint32_t>(mainAddr);
             if(base::Debugger::instance)
                 base::Debugger::instance->initProcess(*ptr_from_longint<GUEST<uint32_t> *>(tv));
@@ -218,6 +238,7 @@ cfm_launch(Handle cfrg0, OSType desired_arch, FSSpecPtr fsp)
 }
 
 launch_failure_t Executor::ROMlib_launch_failure = launch_no_failure;
+std::string Executor::ROMlib_launch_failure_message;
 INTEGER Executor::ROMlib_exevrefnum;
 
 static void launchchain(ConstStringPtr fName, INTEGER vRefNum, Boolean resetmemory,
