@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include <unordered_map>
 #include <functional>
+#include <type_traits>
 #include <string>
 
 class PowerCore;
@@ -121,6 +122,13 @@ public:
         return (trapno & TOOLBIT) ? tooltraptable[trapno & 0x3FF] : ostraptable[trapno & 0xFF];
     }
     virtual bool putSelector(uint32_t sel) const = 0;
+    /* 2 or 4: the selector is a word or long pushed after the arguments
+       (Pack3's: Apple's PACK 3 then answers InterfaceLib's Standard File
+       calls, as on a Power Mac); 0: none such */
+    virtual int stackSelectorBytes() const = 0;
+    /* false: library calls with a stack selector stay with Executor's
+       routines though the trap is patched (8.x's PACK 3, stdfilepkg.cpp) */
+    bool stackSelectorLibraryCalls = true;
 protected:
     syn68k_addr_t originalFunction = 0;
     struct SelectorEntry
@@ -140,6 +148,7 @@ public:
     virtual void init() override;
     virtual void addSelector(uint32_t sel, Entrypoint* entrypoint, std::function<syn68k_addr_t(syn68k_addr_t)> handler) override;
     virtual bool putSelector(uint32_t sel) const override;
+    virtual int stackSelectorBytes() const override;
 
     using GenericDispatcherTrap::GenericDispatcherTrap;
 };
@@ -219,6 +228,18 @@ private:
     }
 };
 
+/* MacPhoenix: a library call into a patched dispatcher whose selector is
+   on the stack: the arguments, then the selector, as the inline glue
+   leaves them (Pascal routines only). */
+template<typename Ret, typename CallConv, typename... Args>
+Ret callWithStackSelector(const GenericDispatcherTrap& dispatcher, uint32_t selector, Args... args)
+{
+    void *entry = SYN68K_TO_US(dispatcher.tableEntry());
+    if(dispatcher.stackSelectorBytes() == 2)
+        return (UPP<Ret (Args..., uint16_t), CallConv>(entry))(args..., (uint16_t)selector);
+    return (UPP<Ret (Args..., uint32_t), CallConv>(entry))(args..., selector);
+}
+
 template<typename F, F* fptr, int trapno, uint32_t selector, typename CallConv = callconv::Pascal>
 class SubTrapFunction {};
 
@@ -234,6 +255,10 @@ protected:
     {
         if(dispatcher.isPatched() && dispatcher.putSelector(selector))
             return (UPP<Ret (Args...), CallConv>(SYN68K_TO_US(dispatcher.tableEntry())))(args...);
+        if constexpr(std::is_same_v<CallConv, callconv::Pascal>)
+            if(dispatcher.isPatched() && dispatcher.stackSelectorBytes()
+               && dispatcher.stackSelectorLibraryCalls)
+                return callWithStackSelector<Ret, CallConv, Args...>(dispatcher, selector, args...);
         return fptr(args...);
     }
 private:
