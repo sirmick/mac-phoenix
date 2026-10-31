@@ -273,6 +273,82 @@ to use (RAM + 64KB tail, a 16–32MB pool) behind the memory host edge.
 
 Then networking (the relay, WebRTC AppleTalk), HiDPI, C4.
 
+#### The network relay
+
+The tab's MacTCP and Open Transport are the native C++ over
+`rsys/hostnet.h`; in the tab that header's backend is
+`host/wasm/net.cpp` (`EXECUTOR_NET=wasm`, the wasm build's default), a
+table of the tab's own sockets. What leaves the tab goes over one
+WebSocket to `/relay` on `tools/web/server` (`relay.py`), opened at the
+first socket that needs it, signed in only (the page tells the Worker,
+`web/executor/net.js`; served elsewhere, or under node, `available()` is
+false). What stays in the tab:
+
+* **Listeners.** `bind`/`listen`/`accept` are the tab's; the relay never
+  listens (a public relay can't take connections for its users, and a
+  relay behind NAT couldn't). A connect to our own address (10.0.2.15,
+  what `ipctlGetAddr` and OT's interface report), or to 127/8 where a
+  socket of the tab has the port, is a pair of sockets here: MacTCP's
+  passive open and OT's `OTListen`/`OTAccept` with a client in the same
+  tab (the suite's `mactcp_passive`, OTTest's `tcp_listen`) work.
+* **Loopback nobody here has** goes to the relay, which takes 127.0.0.1
+  as its own host's and refuses it (as every private address) unless
+  `allow_private`. The tests' echo server is on the relay's host so.
+* UDP to our address with no socket on the port is lost; to another tab
+  socket it is delivered here.
+
+Waiting is yielding: messages arrive while the module yields to the
+browser; each yield (`host/wasm/idle.cpp`) pumps them into the sockets and
+looks at the `hostnet::Watcher`s (no thread: a watcher's interrupt is
+raised from there, or at once when a call in the tab makes its socket
+ready), and `poll`, lookups and blocking sockets yield until done.
+`run_detached` runs its work at once, waiting the same way.
+
+**Protocol** (version 1). One binary WebSocket message is one message:
+`op` (u8), `id` (u32), the op's fields; big-endian, addresses IPv4 as
+u32. `id` is the tab's: a socket's from `CONNECT`/`UDP` to `CLOSE`, a
+lookup's to its answer.
+
+| Tab → relay | Fields | |
+|---|---|---|
+| `0x01 CONNECT` | addr, port (u16) | TCP out; `CONNECTED` or `ERROR` |
+| `0x02 UDP` | | a UDP socket (the relay binds a port) |
+| `0x03 SEND` | bytes | TCP data; at most `window` unacknowledged |
+| `0x04 SENDTO` | addr, port, bytes | a datagram (dropped if the policy refuses it) |
+| `0x05 SHUTDOWN` | | our FIN, after what was sent |
+| `0x06 CLOSE` | flags (u8; 1: reset) | frees the id; also after `ERROR` |
+| `0x07 CREDIT` | n (u32) | n more bytes of `DATA` taken |
+| `0x10 LOOKUP` | name | A records → `ADDRS` |
+| `0x11 REVERSE` | addr | its name → `NAME` |
+| `0x12 QUERY` | class (u16), type (u16), name | `res_query` → `ANSWER` (the reply, wire format) |
+
+| Relay → tab | Fields | |
+|---|---|---|
+| `0x80 HELLO` | version (u16), max sockets (u16), window (u32) | first, id 0 |
+| `0x81 CONNECTED` | | |
+| `0x83 DATA` | bytes | at most `window` not yet credited |
+| `0x84 DATAFROM` | addr, port, bytes | only from hosts the socket sent to |
+| `0x85 EOF` | | the peer's FIN |
+| `0x86 ERROR` | code (u8) | the socket is dead: 1 refused, 2 network unreachable, 3 host unreachable, 4 timed out, 5 reset, 6 not allowed (policy), 7 too many sockets, 8 other |
+| `0x87 ACK` | n (u32) | n bytes of `SEND` written to the peer |
+| `0x90 ADDRS` | code (u8), addrs | code: 0 found, 1 no such name, 2 try again, 3 failed |
+| `0x91 NAME` | code, name | |
+| `0x92 ANSWER` | code, reply | |
+
+Flow control is the window both ways (64 KB a socket): the relay reads
+from a peer only while the tab has room, and holds no more than a window
+of the tab's. The relay pings every 30 s and drops a connection silent for
+90; a protocol error closes it (1008), its sockets with it. Policy
+(`[relay]`, `server.example.toml`): destination ports from an allow-list
+(the classic services by default), no private, loopback, link-local,
+multicast or broadcast hosts unless `allow_private`, `max_sockets` a user
+across their tabs, `max_connections` WebSockets a user; the Origin must be
+the server's (`app.py`). Gates: `executor.web.server` (the protocol from a
+Python client: echo with flow control, refusals, the policy, UDP, DNS,
+limits) and `executor.web.relay` (MacPhoenixSuite's network and mactcp
+sections and OTTestRetro68K in the tab against `tests/lib/echo_server.py`).
+Not yet: TLS stripping, WebRTC AppleTalk.
+
 ### 5. PPC: MAME's PowerPC recompiler
 
 Decided 2026-10-10. Upstream Executor's PowerCore has no licence and did
