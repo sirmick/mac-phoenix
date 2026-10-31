@@ -205,6 +205,23 @@ int main(void)
         same_str("getresinfo name", buf, ps);
         same_num("getresinfo id", sa, sb);
     }
+    /* HOpenResFile with an empty name (a directory's): the name is the
+       caller's constant, left as it was (MPW Shell's is one byte at the end
+       of a heap block). */
+    {
+        unsigned char name[16];
+        CInfoPBRec pb;
+        memset(name, 0xA5, sizeof name);
+        name[0] = 0;
+        memset(&pb, 0, sizeof pb);
+        pb.dirInfo.ioNamePtr = NULL;
+        pb.dirInfo.ioFDirIndex = -1;
+        pb.dirInfo.ioDrDirID = 0;
+        PBGetCatInfoSync(&pb);                  /* the default directory */
+        sa = HOpenResFile(0, pb.dirInfo.ioDrDirID, name, fsRdPerm);
+        printf("INFO HOpenResFile empty name: %d, ResError %d\n", sa, ResError());
+        same_num("HOpenResFile name bytes", name[0] == 0 && name[1] == 0xA5 && name[15] == 0xA5, 1);
+    }
     fflush(stdout);
 
     /* sfputfile: the prompt and name C strings, the reply's fName a
