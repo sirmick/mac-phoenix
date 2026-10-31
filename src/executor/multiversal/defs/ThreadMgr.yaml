@@ -353,12 +353,11 @@
 
 # InterfaceLib exports with no trap (Executor's glue, cfm68k_glue.cpp):
 # for PowerPC and CFM-68K code. Only for Executor until the C side has
-# 68k glue for them. ThreadsLib exports YieldToAnyThread too (8.x's; BBEdit
-# Lite 6.1 imports it from there, weak, and calls it unchecked).
+# 68k glue for them.
 
 - only-for: Executor
   function:
     name: YieldToAnyThread
     return: "OSErr"
-    library: [InterfaceLib, ThreadsLib]
+    library: InterfaceLib
     executor: glue_YieldToAnyThread

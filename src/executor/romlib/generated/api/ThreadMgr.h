@@ -139,7 +139,6 @@ OSErr C_GetSpecificFreeThreadCount(LONGINT threadStyle, LONGINT stackSize, GUEST
 LIBRARY_ALSO(ThreadsLib, GetSpecificFreeThreadCount, InterfaceLib);
 
 
-LIBRARY_ALSO(ThreadsLib, YieldToAnyThread, InterfaceLib);
 OSErr glue_YieldToAnyThread();LIBRARY_FUNCTION(InterfaceLib, YieldToAnyThread, glue_YieldToAnyThread);
 
 
