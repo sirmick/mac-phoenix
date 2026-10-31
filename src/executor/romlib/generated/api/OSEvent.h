@@ -175,9 +175,14 @@ Boolean GetOSEvent(INTEGER evmask, EventRecord *eventp);REGISTER_TRAP2(GetOSEven
 Boolean OSEventAvail(INTEGER evmask, EventRecord *eventp);REGISTER_TRAP2(OSEventAvail, 0xA030, D0Minus1Boolean(D0, A0));
 
 
-void SetEventMask(INTEGER evmask);
+// MacPhoenix: exported (osevent.cpp had it; without `executor: true`
+// PowerPC imports got the unresolved-import stub: Marathon Infinity,
+// Mars Rising, Slithereens, Cythera).
+void SetEventMask(INTEGER evmask);NOTRAP_FUNCTION2(SetEventMask);
 
-QHdrPtr GetEvQHdr();
+
+QHdrPtr GetEvQHdr();NOTRAP_FUNCTION2(GetEvQHdr);
+
 
 EvQEl* geteventelem();
 
