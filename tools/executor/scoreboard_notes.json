@@ -167,7 +167,7 @@
  },
  "e86|Games:Warcraft II 1.22 ƒ:Editors:Warcraft II Map Editor": {
   "status": "fails",
-  "blocker": "just the desktop, no app (PowerPC exception 7 after unimplemented UpperText); reference shows \"You must have the WarCraft II CD in order to run the map editor\""
+  "blocker": "just the desktop, no app (PowerPC exception 7 loop after several more unimplemented PowerPC calls); reference shows \"You must have the WarCraft II CD in order to run the map editor\""
  },
  "_reviewed": [
   "e761/classic",

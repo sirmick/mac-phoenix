@@ -251,7 +251,7 @@ Rows with a fault, by owner:
 | games | Spectre 1.1 ƒ:Spectre 1.1 | 68k | runs | fails |  | e86/games/065.png |  |
 | games | Swoop 1.0.2 ƒ:Swoop | 68k | runs | fails |  | e86/games/066.png |  |
 | games | The Secret of Monkey Island ƒ:Monkey Island | 68k | runs | fails |  | e86/games/067.png |  |
-| games | Warcraft II 1.22 ƒ:Editors:Warcraft II Map Editor | fat | fails | runs | e86: just the desktop, no app (PowerPC exception 7 after unimplemented UpperText); reference shows "You must have the WarCraft II CD in order to run the map editor" | e86/games/068.png | fix-games |
+| games | Warcraft II 1.22 ƒ:Editors:Warcraft II Map Editor | fat | fails | runs | e86: just the desktop, no app (PowerPC exception 7 loop after several more unimplemented PowerPC calls); reference shows "You must have the WarCraft II CD in order to run the map editor" | e86/games/068.png | fix-games |
 | games | Warcraft II 1.22 ƒ:Editors:Warcraft II Sound Editor | fat | runs | fails |  | e86/games/069.png |  |
 | games | Warcraft II 1.22 ƒ:Warcraft II v.1.22 | 68k | runs | fails |  | e86/games/070.png |  |
 | games | Wolfenstein 3D 1.0.2 ƒ:Wolfenstein 3D™ | fat | runs | fails | (e86: front process unknown) | e86/games/071.png |  |
