@@ -109,6 +109,13 @@ journalctl --user -u executor-web     # its log (--quiet: errors only)
 
 ## HTTPS in front
 
+The page needs a secure context (HTTPS, or localhost) for OPFS: without it
+large library disks, saved changes and sound don't work. On a LAN without a
+proxy, the server can serve HTTPS itself: set `tls_cert`/`tls_key` in
+`[server]` (a self-signed certificate whose subjectAltName has the address;
+the browser asks once to accept it).
+
+
 The server speaks plain HTTP on 127.0.0.1; a reverse proxy has the
 certificate. It must pass `Host` through (the server checks a write's
 `Origin` against it), add `X-Forwarded-For`, pass WebSocket upgrades

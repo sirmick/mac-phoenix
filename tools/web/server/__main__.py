@@ -56,7 +56,8 @@ def main():
     if cmd == "serve":
         server = app.Server(cfg, quiet=args.quiet)
         host, port = server.server_address[:2]
-        print(f"Serving {cfg['server']['site'] or '(no site)'} on http://{host}:{port}/", flush=True)
+        scheme = 'https' if cfg['server'].get('tls_cert') else 'http'
+        print(f"Serving {cfg['server']['site'] or '(no site)'} on {scheme}://{host}:{port}/", flush=True)
         try:
             server.serve_forever()
         except KeyboardInterrupt:
