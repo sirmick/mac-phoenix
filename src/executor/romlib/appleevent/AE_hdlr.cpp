@@ -11,6 +11,7 @@
 
 #include <error/system_error.h>
 #include <mman/mman.h>
+#include <base/traps.h>
 #include "apple_events.h"
 
 using namespace Executor;
@@ -162,7 +163,12 @@ OSErr Executor::C__AE_hdlr_table_alloc(int32_t unknown_1, int32_t unknown_2,
 {
     AE_hdlr_table_h table;
 
-    gui_assert(unknown_1 == 16);
+    /* HyperCard 2.4.1 calls with a different unknown_1 (the real Mac's
+       initial allocation size is apparently a function of it, per the
+       #### below); until that relationship is known, don't crash on it. */
+    if(unknown_1 != 16)
+        traps::log_unimplemented(std::string("AE_hdlr_table_alloc unknown_1=")
+                                  + std::to_string(unknown_1));
     gui_assert(unknown_2 == 0x80008);
     gui_assert(unknown_3 == 0);
 

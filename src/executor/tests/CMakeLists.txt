@@ -49,6 +49,7 @@ set(NATIVE_TEST_SOURCES
         localvolume_macbinary.cpp
         typeselect.cpp datetime.cpp numformat.cpp textedit.cpp sysheap.cpp
         sysroutines.cpp resprivate.cpp unknownselectors.cpp dialogs.cpp
+        aehdlr.cpp
         hfsplus_unicode.cpp hfsplus_volume.cpp
         exports.cpp
         # Native-only: drives the .IPP driver through the Device Manager.
