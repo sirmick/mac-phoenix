@@ -109,6 +109,28 @@ LONGINT Executor::ROMlib_creator;
 uint32_t Executor::ROMlib_version_long;
 
 
+OSType Executor::ROMlib_cfm_launch_arch(Handle cfrg0, bool have_code0)
+{
+    bool havePowerPCCode = cfrg0
+            && ROMlib_find_cfrg(cfrg0, "pwpc"_4,
+                                kApplicationCFrag, (StringPtr) "");
+
+    /* MacPhoenix: a CFM-68K application (docs/executor/CFM68K.md) starts
+       through Executor's Code Fragment Manager, not its CODE 0 launch stub;
+       a fat one does unless PowerPC code is preferred. */
+    bool have68kFragment = cfrg0
+            && ROMlib_find_cfrg(cfrg0, "m68k"_4,
+                                kApplicationCFrag, (StringPtr) "");
+
+    if(havePowerPCCode && ROMlib_prefer_ppc)
+        return "pwpc"_4;
+    if(have68kFragment)
+        return "m68k"_4;
+    if(havePowerPCCode && !have_code0)
+        return "pwpc"_4;
+    return 0;
+}
+
 static void
 cfm_launch(Handle cfrg0, OSType desired_arch, FSSpecPtr fsp)
 {
@@ -162,20 +184,40 @@ cfm_launch(Handle cfrg0, OSType desired_arch, FSSpecPtr fsp)
             id = CFIR_FRAGMENT_LENGTH(cfirp);
             h = GetResource(typ, id);
             HLock(h);
-            GetMemFragment(*h, GetHandleSize(h), empty, kLoadLib,
-                           &c_id, &mainAddr, errName);
+            err = GetMemFragment(*h, GetHandleSize(h), empty, kLoadLib,
+                                 &c_id, &mainAddr, errName);
 
             fprintf(stderr, "Memory leak from segmented fragment\n");
+        }
+        /* MacPhoenix: a fragment that doesn't prepare (a library not
+           found: Slithereens without InputSprocket) isn't launched; the
+           Finder's words go to the log, and without the Process Manager to
+           the alert the Finder's InitWindows shows. (A process on its own
+           thread ends with no alert: the next InitWindows is another
+           application's. A Mac's Finder shows it; LaunchApplication from
+           an application only answers an error.) */
+        if(err != noErr || !mainAddr)
+        {
+            std::string msg = "The application \xD2"
+                + std::string((const char *)LM(CurApName) + 1, LM(CurApName)[0])
+                + "\xD3 could not be opened because ";
+            if(err == fragLibNotFound)
+                msg += "\xD2" + std::string((const char *)errName + 1, errName[0])
+                    + "\xD3 could not be found.";
+            else
+                msg += "of an error (" + std::to_string(err) + ").";
+            fprintf(stderr, "[Executor] launch failed: %s\n", msg.c_str());
+            if(!ROMlib_process_has_thread())
+            {
+                ROMlib_launch_failure = launch_cfm_failed;
+                ROMlib_launch_failure_message = msg;
+            }
+            C_ExitToShell();
         }
         if(desired_arch == "m68k"_4)
         {
             /* MacPhoenix: CFM-68K (docs/executor/CFM68K.md): the main
                routine's transition vector, on the 68k CPU. */
-            if(err != noErr || !mainAddr)
-            {
-                ROMlib_launch_failure = launch_cfm_requiring;
-                C_ExitToShell();
-            }
             uint32_t tv = guest_cast<uint32_t>(mainAddr);
             if(base::Debugger::instance)
                 base::Debugger::instance->initProcess(*ptr_from_longint<GUEST<uint32_t> *>(tv));
@@ -218,6 +260,7 @@ cfm_launch(Handle cfrg0, OSType desired_arch, FSSpecPtr fsp)
 }
 
 launch_failure_t Executor::ROMlib_launch_failure = launch_no_failure;
+std::string Executor::ROMlib_launch_failure_message;
 INTEGER Executor::ROMlib_exevrefnum;
 
 static void launchchain(ConstStringPtr fName, INTEGER vRefNum, Boolean resetmemory,
@@ -266,7 +309,11 @@ static void launchchain(ConstStringPtr fName, INTEGER vRefNum, Boolean resetmemo
         wdpb.ioVRefNum = fsp->vRefNum;
         wdpb.ioWDDirID = fsp->parID;
     }
-    /* Do not do this -- Loser does it SFSaveDisk_Update (vRefNum, fName); */
+    /* Set the new process's current directory (SFSaveDisk/CurDirStore) to
+       its own folder, the way the Process Manager does, so Standard File
+       defaults to it instead of whatever launched before. */
+    ROMlib_SFSaveDisk_update(wdpb.ioVRefNum, (StringPtr)fName);
+    LM(CurDirStore) = wdpb.ioWDDirID;
     wdpb.ioWDProcID = "Xctr"_4;
     wdpb.ioNamePtr = 0;
     PBOpenWD(&wdpb, false);
@@ -322,24 +369,7 @@ static void launchchain(ConstStringPtr fName, INTEGER vRefNum, Boolean resetmemo
     code0 = Get1Resource("CODE"_4, 0);
     cfrg0 = Get1Resource("cfrg"_4, 0);
 
-    bool havePowerPCCode = cfrg0
-            && ROMlib_find_cfrg(cfrg0, "pwpc"_4,
-                                kApplicationCFrag, (StringPtr) "");
-
-    /* MacPhoenix: a CFM-68K application (docs/executor/CFM68K.md) starts
-       through Executor's Code Fragment Manager, not its CODE 0 launch stub;
-       a fat one does unless PowerPC code is preferred. */
-    bool have68kFragment = cfrg0
-            && ROMlib_find_cfrg(cfrg0, "m68k"_4,
-                                kApplicationCFrag, (StringPtr) "");
-
-    OSType cfm_arch = 0;
-    if(havePowerPCCode && ROMlib_prefer_ppc)
-        cfm_arch = "pwpc"_4;
-    else if(have68kFragment)
-        cfm_arch = "m68k"_4;
-    else if(havePowerPCCode && !code0)
-        cfm_arch = "pwpc"_4;
+    OSType cfm_arch = ROMlib_cfm_launch_arch(cfrg0, code0 != nullptr);
     if(cfm_arch)
         code0 = nullptr;
 

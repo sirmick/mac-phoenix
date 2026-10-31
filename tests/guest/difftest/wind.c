@@ -83,10 +83,13 @@ static void create(void)
 }
 
 /* the classic definitions: document, dialog box, plain, alt dialog, no
-   grow, zoom, movable modal, floating (WDEF 124) */
+   grow, zoom, movable modal, floating (WDEF 124); and the Appearance
+   Manager's (WDEF 64-67): document, the dialogs, floating, side floating */
 static void classic(void)
 {
-    static const short procs[] = { 0, 1, 2, 3, 4, 8, 12, 5, 1985, 1987 };
+    static const short procs[] = { 0, 1, 2, 3, 4, 8, 12, 5, 1985, 1987,
+                                   1024, 1031, 1040, 1041, 1042, 1043, 1044, 1045, 1046,
+                                   1057, 1071, 1073, 1075 };
     int i, color;
     char k[96];
     Rect b;
@@ -152,10 +155,19 @@ static void bounds(void)
     out("SetWindowIdealUserState", "err %ld", (long)err);
     SET(r); GetWindowIdealUserState(w, &r); out_rect("GetWindowIdealUserState.after", &r);
     out("IsWindowCollapsed", "%d", (int)IsWindowCollapsed(w));
+    out("IsWindowCollapsable", "%d", (int)IsWindowCollapsable(w));
     err = CollapseWindow(w, true);
     out("CollapseWindow", "err %ld %d", (long)err, (int)IsWindowCollapsed(w));
+    /* collapsed: the title bar alone */
+    describe("collapsed", w);
     err = CollapseWindow(w, false);
     out("CollapseWindow.back", "err %ld %d", (long)err, (int)IsWindowCollapsed(w));
+    /* SetWindowBounds by the structure, the window shown */
+    ShowWindow(w);
+    SetRect(&r, 40, 40, 260, 230);
+    err = SetWindowBounds(w, kWindowStructureRgn, &r);
+    out("SetWindowBounds.structure.visible", "err %ld", (long)err);
+    SET(r); GetWindowBounds(w, kWindowContentRgn, &r); out_rect("content.visible", &r);
     DisposeWindow(w);
 }
 

@@ -6,12 +6,11 @@
  * Needs:                                                                    *
  *     MacTypes.h       Byte, INTEGER, LONGINT, Boolean, SignedByte,         *
  *                      QElemPtr, OSErr, Handle, ConstStringPtr,             *
- *                      StringPtr, ULONGINT, QHdrPtr, Str255,                *
- *                      ConstStr255Param, Ptr                                *
+ *                      StringPtr, ULONGINT, QHdrPtr, Ptr, Str255,           *
+ *                      ConstStr255Param                                     *
  *     VRetraceMgr.h    VBLTask                                              *
  *     FileMgr.h        ParamBlockRec, DrvQEl, VCB                           *
  *     OSEvent.h        EvQEl                                                *
- *     MixedMode.h      UniversalProcPtr                                     *
  *                                                                           *
  *                                                                           *
  *****************************************************************************/
@@ -26,7 +25,6 @@
 #include "VRetraceMgr.h"
 #include "FileMgr.h"
 #include "OSEvent.h"
-#include "MixedMode.h"
 
 #define MODULE_NAME OSUtil
 #include <base/api-module.h>
@@ -336,13 +334,16 @@ void Enqueue(QElemPtr e, QHdrPtr h);REGISTER_TRAP2(Enqueue, 0xA96F, void(A0, A1)
 OSErr Dequeue(QElemPtr e, QHdrPtr h);REGISTER_TRAP2(Dequeue, 0xA96E, D0(A0, A1), SaveA1D1D2);
 
 
+// The trap dispatch table's slot for a trap word (a UniversalProcPtr *):
+// Mac OS Easy Open's PowerPC Translation library reads $ABFC's
+// dispatcher through it.
+Ptr glue_GetTrapVector(uint16_t trapWord);LIBRARY_FUNCTION(InterfaceLib, GetTrapVector, glue_GetTrapVector);
+
+
 // extern LONGINT GetTrapAddress(INTEGER n); // 68K in emustubs, not supported on ppc
 // extern void SetTrapAddress(LONGINT addr,
 // INTEGER n);
 ProcPtr C_NGetTrapAddress(uint16_t n, TrapType ttype);NOTRAP_FUNCTION(NGetTrapAddress);
-
-
-UniversalProcPtr C_GetTrapVector(uint16_t trapNumber);LIBRARY_FUNCTION(InterfaceLib, GetTrapVector, C_GetTrapVector);
 
 
 void C_NSetTrapAddress(ProcPtr addr, uint16_t n, TrapType ttype);NOTRAP_FUNCTION(NSetTrapAddress);

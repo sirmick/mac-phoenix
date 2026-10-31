@@ -148,7 +148,9 @@ typedef _SCSTATUS *SCStatusPtr;
 
 typedef void *SMStatusPtr;
 
-typedef LONGINT NumVersion;
+// A structure, not a long: PowerPC code gets it back through a hidden
+// pointer (Mac OS Runtime Architectures, routine calling conventions).
+struct NumVersion{GUEST_STRUCT;uint8_t majorRev;uint8_t minorAndBugRev;uint8_t stage;uint8_t nonRelRev;};static_assert(sizeof(NumVersion) == 4);void describeStruct(const NumVersion&, std::ostream&);
 
 typedef void *AudioSelectionPtr;
 

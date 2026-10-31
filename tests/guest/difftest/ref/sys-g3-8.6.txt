@@ -1,4 +1,19 @@
-# probe 5c3d28471a1104386a2aacbbc6b8a9802fc2085adb468ffea1a9e4033a2a3884
+# probe 0576a667f9b29f6c6c3bc0f485da1831d9bfb41bd64aa40136fc52e280a566e7
+== preload
+preload.CODE: loaded
+preload.PRLD: loaded
+== container
+container.~dataFork: 90993
+container.~codeBlock: 91012
+container.codeBlock: the container
+== partition
+partition.~heap: 1206896 stack 40982 rest 238
+partition.a5world: not reserved
+== video
+video.getGamma.err: 0
+video.getGamma.csParam: unchanged
+video.getGamma.csGTable: version 0 type 0 formula 0 chans 1 count 256 width 8
+video.setGamma.err: 0
 == gestalt
 gestalt.sysv: err 0 00000860
 gestalt.sysa: err 0 00000002
@@ -173,7 +188,7 @@ lowmem.0204: 0002
 lowmem.0206: 6300
 lowmem.0208: 1388
 lowmem.020a: 80cc
-lowmem.020c: e70bbbe2
+lowmem.020c: e70bd1f6
 lowmem.0938: cfff
 lowmem.0a60: 0000
 lowmem.0cca: 3cb4
@@ -184,11 +199,11 @@ lowmem.0b21: bf
 process.err: 0
 process.name: "MacPhoenixSuite" (15)
 process.type: APPL DfSy mode 00000080
-process.~size: 1238868 free 1093408
+process.~size: 1248116 free 1084800
 process.spec.name: "MacPhoenixSuite" (15)
 == script
 script.sm.0: 00000860
-script.sm.2: 000000b0
+script.sm.2: 00000042
 script.sm.4: 00000001
 script.sm.6: 00000000
 script.sm.8: 00000000
@@ -245,6 +260,57 @@ script.roman.86: 0003000c
 script.roman.88: 00030009
 script.roman.90: 0000007f
 script.roman.92: 00000002
+== gworld
+gworld.0.err: 0
+gworld.0.new.baseAddr: handle to pixels
+gworld.0.new.pmVersion: 2
+gworld.0.new.state: 00000000
+gworld.0.locked.baseAddr: pixels
+gworld.0.locked.pmVersion: 1
+gworld.0.locked.state: 00000080
+gworld.0.unlocked.baseAddr: handle to pixels
+gworld.0.unlocked.pmVersion: 2
+gworld.0.unlocked.state: 00000000
+gworld.1.err: 0
+gworld.1.new.baseAddr: handle to pixels
+gworld.1.new.pmVersion: 2
+gworld.1.new.state: 00000040
+gworld.1.locked.baseAddr: pixels
+gworld.1.locked.pmVersion: 1
+gworld.1.locked.state: 000000c0
+gworld.1.unlocked.baseAddr: handle to pixels
+gworld.1.unlocked.pmVersion: 2
+gworld.1.unlocked.state: 00000040
+gworld.8.err: 0
+gworld.8.new.baseAddr: handle to pixels
+gworld.8.new.pmVersion: 2
+gworld.8.new.state: 00000000
+gworld.8.locked.baseAddr: pixels
+gworld.8.locked.pmVersion: 1
+gworld.8.locked.state: 00000080
+gworld.8.unlocked.baseAddr: handle to pixels
+gworld.8.unlocked.pmVersion: 2
+gworld.8.unlocked.state: 00000000
+gworld.4.err: 0
+gworld.4.new.baseAddr: handle to pixels
+gworld.4.new.pmVersion: 2
+gworld.4.new.state: 00000000
+gworld.4.locked.baseAddr: pixels
+gworld.4.locked.pmVersion: 1
+gworld.4.locked.state: 00000080
+gworld.4.unlocked.baseAddr: handle to pixels
+gworld.4.unlocked.pmVersion: 2
+gworld.4.unlocked.state: 00000000
+gworld.window.unlocked.device: gworld's
+gworld.window.unlocked.baseAddr: handle to gworld's pixels
+gworld.window.unlocked.pixelSize: 8
+gworld.window.unlocked.pmVersion: 2
+gworld.window.unlocked.bounds: -100,-100,-36,-36
+gworld.window.locked.device: gworld's
+gworld.window.locked.baseAddr: handle to gworld's pixels
+gworld.window.locked.pixelSize: 8
+gworld.window.locked.pmVersion: 2
+gworld.window.locked.bounds: -100,-100,-36,-36
 == screen
 screen.main.depth: 32
 screen.main.~rect: 0,0,2160,3840

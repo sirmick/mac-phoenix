@@ -695,11 +695,72 @@ OSStatus Executor::C_DrawThemeWindowFrame(ThemeWindowType flavor, const Rect *co
                                           ThemeWindowAttributes attributes,
                                           WindowTitleDrawingUPP titleProc, UInt32 titleData)
 {
-    if(!contRect || flavor >= std::size(window_shapes))
+    /* no metrics: paramErr, nothing drawn (8.6) */
+    if(!contRect || !metrics || flavor >= std::size(window_shapes))
         return paramErr;
     const WindowShape &w = window_shapes[flavor];
     Frame f(w, *contRect);
     bool active = state == kThemeStateActive || state == kThemeStatePressed;
+    /* the platinum frames the window definitions draw (appearance_draw.cpp),
+       the title left to titleProc */
+    bool close = attributes & kThemeWindowHasCloseBox, collapse = attributes & kThemeWindowHasCollapseBox;
+    int zoom = ((attributes & kThemeWindowHasVerticalZoom) ? 4 : 0) | ((attributes & kThemeWindowHasHorizontalZoom) ? 8 : 0);
+    switch(flavor)
+    {
+        case kThemeDocumentWindow:
+            appearance::documentFrame(*contRect, active, { close, zoom != 0, collapse, false }, nullptr);
+            break;
+        case kThemeDialogWindow:
+        case kThemeAlertWindow:
+            appearance::dialogFrame(*contRect, active, true, flavor == kThemeAlertWindow);
+            break;
+        case kThemeMovableDialogWindow:
+        case kThemeMovableAlertWindow:
+        {
+            appearance::WindowParts parts = { close, zoom != 0, collapse, false };
+            appearance::movableDialogFrame(*contRect, active, true, nullptr, &parts,
+                                           flavor == kThemeMovableAlertWindow);
+            break;
+        }
+        case kThemePlainDialogWindow:
+        case kThemeShadowDialogWindow:
+        {
+            /* a black outline round the content; the shadowed one's shadow
+               2 deep, 2 in from the corners (8.6) */
+            DrawGuard guard;
+            const Rect &c = *contRect;
+            Rect outline = { (INTEGER)(c.top - 1), (INTEGER)(c.left - 1), (INTEGER)(c.bottom + 1), (INTEGER)(c.right + 1) };
+            frameGray(outline, kBlack);
+            if(flavor == kThemeShadowDialogWindow)
+            {
+                fillGray(Rect{ (INTEGER)(c.top + 1), (INTEGER)(c.right + 1), (INTEGER)(c.bottom + 3), (INTEGER)(c.right + 3) }, kBlack);
+                fillGray(Rect{ (INTEGER)(c.bottom + 1), (INTEGER)(c.left + 1), (INTEGER)(c.bottom + 3), (INTEGER)(c.right + 3) }, kBlack);
+            }
+            break;
+        }
+        case kThemeUtilityWindow:
+        case kThemeUtilitySideWindow:
+            /* (the side one has no collapse box: 8.6) */
+            appearance::floatingFrame(*contRect, active,
+                                      { close, zoom != 0, collapse && flavor != kThemeUtilitySideWindow, false,
+                                        flavor == kThemeUtilitySideWindow, zoom,
+                                        false, true },
+                                      nullptr);
+            break;
+        default:
+            goto executor_look;
+    }
+    if(Rect text = title_text_rect(w, f.ft, f.fl, f.fr, metrics, attributes);
+       text.right > text.left && titleProc && !w.side_title)
+    {
+        SInt16 depth;
+        Boolean color;
+        portDepth(&depth, &color);
+        gray(active ? kBlack : kShadow);
+        titleProc(&text, depth, color, titleData);
+    }
+    return noErr;
+executor_look:
     {
         DrawGuard guard;
         Rect r = f.outline;
@@ -844,10 +905,9 @@ OSStatus Executor::C_DrawThemeScrollBarDelimiters(ThemeWindowType flavor, const 
 
 /* ── AppearanceLib's window and menu calls (MacWindows.h, Menus.h) ───── */
 
-/* A window's regions in global coordinates, from the Window Manager's
-   record: the structure, the content, the update region, the port. The
-   parts a window definition knows (title bar, boxes) need its
-   kWindowMsgGetRegion, not yet. */
+/* A window's regions in global coordinates: the structure and content its
+   definition makes, the update region, the port; the frame's parts as
+   Executor's definitions have them (windMgr8.cpp). */
 OSStatus Executor::C_GetWindowRegion(WindowRef window, WindowRegionCode inRegionCode, RgnHandle ioWinRgn)
 {
     if(!window || !ioWinRgn)
@@ -855,10 +915,10 @@ OSStatus Executor::C_GetWindowRegion(WindowRef window, WindowRegionCode inRegion
     switch(inRegionCode)
     {
         case kWindowStructureRgn:
-            CopyRgn(WINDOW_STRUCT_REGION(window), ioWinRgn);
+            ROMlib_window8_definition_regions(window, ioWinRgn, nullptr);
             return noErr;
         case kWindowContentRgn:
-            CopyRgn(WINDOW_CONT_REGION(window), ioWinRgn);
+            ROMlib_window8_definition_regions(window, nullptr, ioWinRgn);
             return noErr;
         case kWindowUpdateRgn:
             CopyRgn(WINDOW_UPDATE_REGION(window), ioWinRgn);
@@ -877,8 +937,7 @@ OSStatus Executor::C_GetWindowRegion(WindowRef window, WindowRegionCode inRegion
     }
 }
 
-/* What CollapseWindow set (windMgr8.cpp); Executor's definitions don't shade
-   a window yet. */
+/* What CollapseWindow set (windMgr8.cpp) */
 Boolean Executor::C_IsWindowCollapsed(WindowRef window)
 {
     return window && ROMlib_window8_collapsed(window);
@@ -886,7 +945,8 @@ Boolean Executor::C_IsWindowCollapsed(WindowRef window)
 
 Boolean Executor::C_IsWindowCollapsable(WindowRef window)
 {
-    return false;
+    GUEST<UInt32> features = 0;
+    return window && C_GetWindowFeatures(window, &features) == noErr && (features & kWindowCanCollapse);
 }
 
 /* A command key's glyph (Menus.h kMenu*Glyph): 8.x's MDEF draws it

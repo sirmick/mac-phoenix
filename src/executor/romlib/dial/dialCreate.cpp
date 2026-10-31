@@ -364,13 +364,14 @@ DialogPtr Executor::C_GetNewDialog(INTEGER id, void* dst,
     bool color_p;
 
     dialog_res_h = (dlogh)ROMlib_getrestid("DLOG"_4, id);
+    if(!dialog_res_h)
+        return nullptr;
 
     dialog_item_list_res_h = ROMlib_getrestid("DITL"_4,
                                               (*dialog_res_h)->dlgditl);
-    HandToHand(inout(dialog_item_list_res_h));
-
-    if(!dialog_res_h || !dialog_item_list_res_h)
+    if(!dialog_item_list_res_h)
         return nullptr;
+    HandToHand(inout(dialog_item_list_res_h));
 
     dialog_ctab_res_h = ROMlib_getrestid("dctb"_4, id);
     item_ctab_res_h = ROMlib_getrestid("ictb"_4, id);

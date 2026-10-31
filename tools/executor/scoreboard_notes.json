@@ -1,8 +1,4 @@
 {
- "e761|Productivity:ClarisWorks 4.0v4 ƒ:ClarisWorks": {
-  "status": "fails",
-  "blocker": "alert \"This copy of ClarisWorks has been modified by another program or virus\" at launch (disk writable; Quadra shows the Registration Assistant)"
- },
  "e761|Development:THINK C 6.0 ƒ:THINK C:THINK Project Manager": {
   "status": "partial",
   "blocker": "Standard File opens in the boot volume's System Folder, not the application's folder (Quadra: THINK C folder)"
@@ -21,10 +17,6 @@
  },
  "8.6|Productivity:AppleWorks 5.0.3 ƒ:AppleWorks": {
   "owner": "platinum"
- },
- "e86|Productivity:ClarisWorks 4.0v4 ƒ:ClarisWorks": {
-  "status": "fails",
-  "blocker": "alert \"This copy of ClarisWorks has been modified by another program or virus\" at launch, as on 7.6.1"
  },
  "8.6|Productivity:ClarisWorks 4.0v4 ƒ:ClarisWorks": {
   "owner": "fix-prod"
@@ -73,13 +65,9 @@
   "status": "fails",
   "blocker": "alert \"Sorry - you need to install the QuickTime 3.0 or later\"; ref shows main menu"
  },
- "e761|Games:Exile III 1.0.3 ƒ:Exile III (fat) v1.0.3": {
-  "status": "fails",
-  "blocker": "\"Fatal error. qPict2.cpp:53; in 'Executor::OSErr Executor::C_GetPictInfo(PicHandle, PictInfo*, int16_t, int16_t, int16_t, int16_t)' unimplemented\" (Restart)"
- },
  "e761ppc|Games:Exile III 1.0.3 ƒ:Exile III (fat) v1.0.3": {
   "status": "fails",
-  "blocker": "just the desktop (File menu only), game not in front"
+  "blocker": "not in front; unimplemented PowerPC HGetVol"
  },
  "e761|Games:Monkey Island 2 ƒ:LeChuck's Revenge": {
   "status": "fails",
@@ -89,13 +77,9 @@
   "status": "fails",
   "blocker": "alert \"OIDS requires a newer version of SoundManager (try version 3.0) in order to run properly.\" on black screen (PPC-only, no reference)"
  },
- "e761|Games:SimAnt ƒ:E-Doc 1.0.20": {
-  "status": "partial",
-  "blocker": "Standard File opens in the System Folder; the reference opens the app's folder (SimAnt ƒ, 'SimAnt User's Manual')"
- },
  "e761ppc|Games:SimAnt ƒ:E-Doc 1.0.20": {
   "status": "partial",
-  "blocker": "Standard File opens in the System Folder, not the app's folder; directory popup drawn as a plain box without its arrow, list without icons"
+  "blocker": "Standard File's directory popup drawn as a plain box without its arrow, list without icons"
  },
  "e761|Games:SimFarm ƒ:SimFarm": {
   "status": "fails",
@@ -109,13 +93,9 @@
   "status": "fails",
   "blocker": "desktop only, empty menu bar; the reference's \"You must have the Warcraft II CD in order to run the map editor\" alert never appears (PowerPC exception 7)"
  },
- "e761|Games:Warcraft II 1.22 ƒ:Editors:Warcraft II Sound Editor": {
-  "status": "partial",
-  "blocker": "Standard File opens in the System Folder; the reference opens the app's folder (Editors)"
- },
  "e761ppc|Games:Warcraft II 1.22 ƒ:Editors:Warcraft II Sound Editor": {
   "status": "partial",
-  "blocker": "Standard File opens in the System Folder, not Editors; directory popup drawn without its arrow, list without icons"
+  "blocker": "Standard File's directory popup drawn without its arrow, list without icons"
  },
  "e86|Games:A-Train ƒ:ATrain Editor 1.0Beta": {
   "status": "fails",
@@ -165,10 +145,6 @@
   "status": "fails",
   "blocker": "alert: \"Error = 10351 in OpenMohawkRsrcVerify().\""
  },
- "e86|Games:SimAnt ƒ:E-Doc 1.0.20": {
-  "status": "partial",
-  "blocker": "Open dialog starts in the System Folder instead of the SimAnt folder, so 'SimAnt User's Manual' isn't listed"
- },
  "e86|Games:SimAnt ƒ:SimAnt™ Color": {
   "status": "runs",
   "blocker": "asks for 16 colours: Executor's screen is 8-bit; the Quadra at 256 colours asks the same"
@@ -183,7 +159,7 @@
  },
  "e86|Games:Warcraft II 1.22 ƒ:Editors:Warcraft II Map Editor": {
   "status": "fails",
-  "blocker": "just the desktop, no app (PowerPC exception 7 after unimplemented UpperText); reference shows \"You must have the WarCraft II CD in order to run the map editor\""
+  "blocker": "just the desktop, no app (PowerPC exception 7 loop after several more unimplemented PowerPC calls); reference shows \"You must have the WarCraft II CD in order to run the map editor\""
  },
  "_reviewed": [
   "e761/classic",
@@ -686,5 +662,13 @@
  },
  "8.6|Classic Games:Beyond Dark Castle 1.1 ƒ:Beyond Dark Castle Editor ": {
   "owner": "— (the same on the ROM machines)"
+ },
+ "e761|Games PPC:Ferazel's Wand 1.0.3 ƒ:Ferazel's Wand": {
+  "status": "partial",
+  "blocker": "wants its CD: alert \"Please insert the Ferazel's Wand CD and try again.\" at launch, as on the G3 (no CD image in the set)"
+ },
+ "e86|Games PPC:Ferazel's Wand 1.0.3 ƒ:Ferazel's Wand": {
+  "status": "partial",
+  "blocker": "wants its CD: alert \"Please insert the Ferazel's Wand CD and try again.\" at launch, as on the G3 (no CD image in the set)"
  }
 }

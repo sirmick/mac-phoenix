@@ -21,6 +21,8 @@
 #include <MemoryMgr.h>
 #include <Package.h>
 #include <ResourceMgr.h>
+#include <StdFilePkg.h>
+#include <prefs/prefs.h>
 
 #include <cstdio>
 #include <cstring>
@@ -72,6 +74,12 @@ void Executor::ROMlib_install_standard_file()
     HNoPurge(h);
     HLock(h);
     tooltraptable[0xA9EA & 0x3FF] = US_TO_SYN68K(code);
+    /* PowerPC (and CFM-68K) applications' Standard File calls reach the
+       package too, as InterfaceLib's do on a Power Mac; on 8.x not yet:
+       8.x's PACK 3 calls the Translation Manager when Gestalt 'xlat' says
+       it is there (the System's Translation library registers it), and
+       Executor has no dispatcher for it behind $ABFC (MacOS8-9.md). */
+    Pack3.stackSelectorLibraryCalls = system_version < 0x0800;
     installed = true;
 }
 

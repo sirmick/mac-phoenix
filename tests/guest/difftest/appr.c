@@ -618,13 +618,33 @@ static void drawing(void)
         for(i = 0; i <= 10; i++)
         {
             Rect cont;
+            OSStatus err;
             SetRect(&cont, 10, 25, 110, 55);
             begin(depths[d]);
-            DrawThemeWindowFrame(i, &cont, kThemeStateActive, NULL,
-                                 kThemeWindowHasCloseBox | kThemeWindowHasFullZoom | kThemeWindowHasCollapseBox,
-                                 NULL, 0);
+            err = DrawThemeWindowFrame(i, &cont, kThemeStateActive, NULL,
+                                       kThemeWindowHasCloseBox | kThemeWindowHasFullZoom | kThemeWindowHasCollapseBox,
+                                       NULL, 0);
             sprintf(k, "windowframe.%d", i);
             end(k);
+            sprintf(k, "windowframe.%d.err", i);
+            out(k, "%d", (int)err);
+        }
+        /* ... with the metrics (title width and height as GetThemeWindowRegion
+           takes them) */
+        for(i = 0; i <= 10; i++)
+        {
+            Rect cont;
+            OSStatus err;
+            ThemeWindowMetrics wm = { sizeof(ThemeWindowMetrics), 0, 0, 0, 0, 0 };
+            SetRect(&cont, 10, 25, 110, 55);
+            begin(depths[d]);
+            err = DrawThemeWindowFrame(i, &cont, kThemeStateActive, &wm,
+                                       kThemeWindowHasCloseBox | kThemeWindowHasFullZoom | kThemeWindowHasCollapseBox,
+                                       NULL, 0);
+            sprintf(k, "windowframe.metrics.%d", i);
+            end(k);
+            sprintf(k, "windowframe.metrics.%d.err", i);
+            out(k, "%d", (int)err);
         }
     }
 }

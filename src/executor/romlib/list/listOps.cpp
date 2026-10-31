@@ -215,7 +215,7 @@ Boolean Executor::C_LGetSelect(Boolean next, GUEST<Cell> *cellp,
         if(!(ip = ROMlib_getoffp(c, list)))
         {
             temp.h = 0;
-            temp.h = cellp->v + 1;
+            temp.v = cellp->v + 1;
             ip = ROMlib_getoffp(temp, list);
         }
         if(!ip)

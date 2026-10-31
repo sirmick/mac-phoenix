@@ -29,8 +29,10 @@ namespace traps
 namespace selectors
 {
 /* MacPhoenix: inRegister and put: how a library call made through a
-   patched dispatcher's table entry passes the selector (in a register
-   only; a stack selector's calls go to Executor's routine). */
+   patched dispatcher's table entry passes the selector; stackBytes: a
+   whole selector word or long pushed after the arguments, as the inline
+   glue does (move.w #sel,-(sp); _Pack3), 0 for a register one or one
+   with other bits in its word (those calls go to Executor's routine). */
 template <uint32_t mask>
 struct D0
 {
@@ -38,6 +40,7 @@ struct D0
     static uint32_t get() { return EM_D0 & mask; }
     static void commit() {}
     static constexpr bool inRegister = true;
+    static constexpr int stackBytes = 0;
     static void put(uint32_t sel) { EM_D0 = (EM_D0 & ~mask) | (sel & mask); }
 };
 template <uint32_t mask>
@@ -47,6 +50,7 @@ struct D1
     static uint32_t get() { return EM_D1 & mask; }
     static void commit() {}
     static constexpr bool inRegister = true;
+    static constexpr int stackBytes = 0;
     static void put(uint32_t sel) { EM_D1 = (EM_D1 & ~mask) | (sel & mask); }
 };
 
@@ -56,6 +60,7 @@ struct StackWMasked
 {
     static const uint32_t selectorMask = mask;
     static constexpr bool inRegister = false;
+    static constexpr int stackBytes = mask == 0xFFFF ? 2 : 0;
     static void put(uint32_t) {}
     static uint32_t get() { return READUW(EM_A7 + 4) & mask; }
     static void commit()
@@ -71,6 +76,7 @@ struct StackLMasked
 {
     static const uint32_t selectorMask = mask;
     static constexpr bool inRegister = false;
+    static constexpr int stackBytes = mask == 0xFFFFFFFF ? 4 : 0;
     static void put(uint32_t) {}
     static uint32_t get() { return READUL(EM_A7 + 4) & mask; }
     static void commit()
@@ -85,6 +91,7 @@ struct StackWLookahead
 {
     static const uint32_t selectorMask = mask;
     static constexpr bool inRegister = false;
+    static constexpr int stackBytes = 0;
     static void put(uint32_t) {}
     static uint32_t get() { return READUW(EM_A7 + 4) & mask; }
     static void commit() {}
@@ -158,6 +165,9 @@ void ASLMFunction<Ret (Args...), fptr>::init()
 template<typename Ret, typename... Args>
 Ret TrapGlue<Ret (Args...)>::call(Args... args) const
 {
+    if(dispatcher->isPatched() && !dispatcher->putSelector(selector)
+       && dispatcher->stackSelectorBytes() && dispatcher->stackSelectorLibraryCalls)
+        return callWithStackSelector<Ret, callconv::Pascal, Args...>(*dispatcher, selector, args...);
     if(!dispatcher->isPatched() || !dispatcher->putSelector(selector))
     {
         log_unimplemented(std::string("library glue ") + name + " (" + library
@@ -417,6 +427,12 @@ bool DispatcherTrap<SelectorConvention>::putSelector(uint32_t sel) const
         return true;
     }
     return false;
+}
+
+template<class SelectorConvention>
+int DispatcherTrap<SelectorConvention>::stackSelectorBytes() const
+{
+    return SelectorConvention::stackBytes;
 }
 
 template<typename Trap, typename Ret, typename... Args, bool... flags>

@@ -501,6 +501,97 @@ set_tests_properties(notify_executor PROPERTIES
   SKIP_RETURN_CODE 77
 )
 
+# SizeResource and MaxSizeRsrc for resources loaded and not (a loaded one
+# answers its handle's size: ClarisWorks 4's launch check): tests/guest/ressize.
+# The ROM machine is the reference.
+add_test(
+  NAME ressize_guest
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --os-version 7.6.1 --app ${CMAKE_SOURCE_DIR}/tests/guest/ressize/ResSizeTest.bin --results ressize_test.txt --network none --timeout 90 --port 18460
+)
+set_tests_properties(ressize_guest PROPERTIES
+  TIMEOUT 130
+  LABELS "guest"
+  SKIP_RETURN_CODE 77
+  ENVIRONMENT "MACEMU_ROM=${TEST_ROM}"
+)
+
+add_test(
+  NAME ressize_executor
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --backend executor --os-version 7.6.1 --app ${CMAKE_SOURCE_DIR}/tests/guest/ressize/ResSizeTest.bin --results ressize_test.txt --network none --timeout 150 --port 18462
+)
+set_tests_properties(ressize_executor PROPERTIES
+  TIMEOUT 200
+  LABELS "guest;executor"
+  SKIP_RETURN_CODE 77
+)
+
+# GetItemStyle through the trap writes a word, the style in its low byte
+# (AppleWorks 5's command keys): tests/guest/itemstyle. The ROM machine is
+# the reference.
+add_test(
+  NAME itemstyle_guest
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --os-version 7.6.1 --app ${CMAKE_SOURCE_DIR}/tests/guest/itemstyle/ItemStyleTest.bin --results itemstyle_test.txt --network none --timeout 90 --port 18464
+)
+set_tests_properties(itemstyle_guest PROPERTIES
+  TIMEOUT 130
+  LABELS "guest"
+  SKIP_RETURN_CODE 77
+  ENVIRONMENT "MACEMU_ROM=${TEST_ROM}"
+)
+
+add_test(
+  NAME itemstyle_executor
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --backend executor --os-version 7.6.1 --app ${CMAKE_SOURCE_DIR}/tests/guest/itemstyle/ItemStyleTest.bin --results itemstyle_test.txt --network none --timeout 150 --port 18466
+)
+set_tests_properties(itemstyle_executor PROPERTIES
+  TIMEOUT 200
+  LABELS "guest;executor"
+  SKIP_RETURN_CODE 77
+)
+
+# LNextCell always leaves the advanced cell, h back to 0 past a row's end,
+# with or without a next one (AppleWorks 5's Define Database Fields counts
+# selected cells until LGetSelect finds none): tests/guest/listcell. The ROM
+# machine is the reference.
+add_test(
+  NAME listcell_guest
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --os-version 7.6.1 --app ${CMAKE_SOURCE_DIR}/tests/guest/listcell/ListCellTest.bin --results listcell_test.txt --network none --timeout 90 --port 18468
+)
+set_tests_properties(listcell_guest PROPERTIES
+  TIMEOUT 130
+  LABELS "guest"
+  SKIP_RETURN_CODE 77
+  ENVIRONMENT "MACEMU_ROM=${TEST_ROM}"
+)
+
+add_test(
+  NAME listcell_executor
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --backend executor --os-version 7.6.1 --app ${CMAKE_SOURCE_DIR}/tests/guest/listcell/ListCellTest.bin --results listcell_test.txt --network none --timeout 150 --port 18470
+)
+set_tests_properties(listcell_executor PROPERTIES
+  TIMEOUT 200
+  LABELS "guest;executor"
+  SKIP_RETURN_CODE 77
+)
+
+# AppleWorks 5.0.3 on Executor's 7.6.1: a word-processing document made,
+# saved on the Host volume, opened again and saved (tests/test_appleworks.py),
+# with its 68k code and with its PowerPC code.
+set(_aw_68k_args)
+set(_aw_ppc_args --ppc)
+foreach(_aw IN ITEMS 68k ppc)
+  add_test(
+    NAME appleworks_executor_761_${_aw}
+    COMMAND ${Python3_EXECUTABLE} ${TEST_DIR}/test_appleworks.py --system 7.6.1 ${_aw_${_aw}_args}
+  )
+  set_tests_properties(appleworks_executor_761_${_aw} PROPERTIES
+    TIMEOUT 400
+    LABELS "guest;executor"
+    SKIP_RETURN_CODE 77
+    ENVIRONMENT "MACPHOENIX_EMULATOR=$<TARGET_FILE:mac-phoenix>"
+  )
+endforeach()
+
 # Host keystrokes (/api/keypress) reach the front application (the suite).
 add_test(
   NAME keyboard_guest

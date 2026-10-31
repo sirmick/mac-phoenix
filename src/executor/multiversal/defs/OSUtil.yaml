@@ -750,6 +750,22 @@
 
 # ####
 
+- only-for: Executor
+  function:
+    name: GetTrapVector
+    return: Ptr
+    args:
+      - name: trapWord
+        type: uint16_t
+    library: InterfaceLib
+    executor: glue_GetTrapVector
+    comment: |
+      The trap dispatch table's slot for a trap word (a UniversalProcPtr *):
+      Mac OS Easy Open's PowerPC Translation library reads $ABFC's
+      dispatcher through it.
+
+# ####
+
 - function:
     name: NGetTrapAddress
     return: ProcPtr
@@ -762,21 +778,6 @@
       extern LONGINT GetTrapAddress(INTEGER n); // 68K in emustubs, not supported on ppc
       extern void SetTrapAddress(LONGINT addr,
       INTEGER n);
-    executor: C_
-
-# ####
-
-# InterfaceLib's GetTrapVector (8.x; 8.6's AppleScript calls it, then
-# CallUniversalProc on the result): a trap's address by its trap word, a
-# Toolbox trap when bit 11 is set, as NGetTrapAddress gives it.
-- only-for: executor
-  function:
-    name: GetTrapVector
-    return: UniversalProcPtr
-    args:
-      - name: trapNumber
-        type: uint16_t
-    library: InterfaceLib
     executor: C_
 
 # ####

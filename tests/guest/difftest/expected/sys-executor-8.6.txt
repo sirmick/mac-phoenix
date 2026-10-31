@@ -65,3 +65,6 @@ script.roman.38	Script Manager variables: 8.6's (version 8.6, itl caches, ...) v
 script.roman.40	Script Manager variables: 8.6's (version 8.6, itl caches, ...) vs Executor's 7.5-era values
 script.roman.42	Script Manager variables: 8.6's (version 8.6, itl caches, ...) vs Executor's 7.5-era values
 script.roman.44	Script Manager variables: 8.6's (version 8.6, itl caches, ...) vs Executor's 7.5-era values
+gworld.1.new.state	pixPurge: 8.6 makes the pixels purgeable at NewGWorld (pixelsPurgeable); Executor not yet: LockPixels and the blitters would draw through purged pixels
+gworld.1.locked.state	pixPurge: 8.6 makes the pixels purgeable at NewGWorld (pixelsPurgeable); Executor not yet: LockPixels and the blitters would draw through purged pixels
+gworld.1.unlocked.state	pixPurge: 8.6 makes the pixels purgeable at NewGWorld (pixelsPurgeable); Executor not yet: LockPixels and the blitters would draw through purged pixels

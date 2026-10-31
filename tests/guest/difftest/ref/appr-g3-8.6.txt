@@ -1,4 +1,4 @@
-# probe ce906bb52676cee6b0baf1ec2551689a8bea7db867b9b43b66ef214cc70edff6
+# probe f92ecf101bbd4f53cdbcf9c6563eadd8b124fead0c35097237f209e5a952cfbf
 == gestalt
 gestalt.appr: 0 00000001
 gestalt.apvr: 0 00000110
@@ -1093,16 +1093,49 @@ draw32.menutitle.disabled: 120x60 depth 32 crc 0fec211d
 draw32.menuitem.disabled: 120x60 depth 32 crc 16a1216d
 draw32.menuitem.hier.disabled: 120x60 depth 32 crc cb9e4b8b
 draw32.windowframe.0: 120x60 depth 32 crc fd7490cc
+draw32.windowframe.0.err: -50
 draw32.windowframe.1: 120x60 depth 32 crc fd7490cc
+draw32.windowframe.1.err: -50
 draw32.windowframe.2: 120x60 depth 32 crc fd7490cc
+draw32.windowframe.2.err: -50
 draw32.windowframe.3: 120x60 depth 32 crc fd7490cc
+draw32.windowframe.3.err: -50
 draw32.windowframe.4: 120x60 depth 32 crc fd7490cc
+draw32.windowframe.4.err: -50
 draw32.windowframe.5: 120x60 depth 32 crc fd7490cc
+draw32.windowframe.5.err: -50
 draw32.windowframe.6: 120x60 depth 32 crc fd7490cc
+draw32.windowframe.6.err: -50
 draw32.windowframe.7: 120x60 depth 32 crc fd7490cc
+draw32.windowframe.7.err: -50
 draw32.windowframe.8: 120x60 depth 32 crc fd7490cc
+draw32.windowframe.8.err: -50
 draw32.windowframe.9: 120x60 depth 32 crc fd7490cc
+draw32.windowframe.9.err: -50
 draw32.windowframe.10: 120x60 depth 32 crc fd7490cc
+draw32.windowframe.10.err: -50
+draw32.windowframe.metrics.0: 120x60 depth 32 crc f4f41a77
+draw32.windowframe.metrics.0.err: 0
+draw32.windowframe.metrics.1: 120x60 depth 32 crc d505b49b
+draw32.windowframe.metrics.1.err: 0
+draw32.windowframe.metrics.2: 120x60 depth 32 crc cbaa1c6e
+draw32.windowframe.metrics.2.err: 0
+draw32.windowframe.metrics.3: 120x60 depth 32 crc de9dcb2b
+draw32.windowframe.metrics.3.err: 0
+draw32.windowframe.metrics.4: 120x60 depth 32 crc e711a031
+draw32.windowframe.metrics.4.err: 0
+draw32.windowframe.metrics.5: 120x60 depth 32 crc 9d8a7bc4
+draw32.windowframe.metrics.5.err: 0
+draw32.windowframe.metrics.6: 120x60 depth 32 crc c749705d
+draw32.windowframe.metrics.6.err: 0
+draw32.windowframe.metrics.7: 120x60 depth 32 crc 1d159d1f
+draw32.windowframe.metrics.7.err: 0
+draw32.windowframe.metrics.8: 120x60 depth 32 crc 8de632d5
+draw32.windowframe.metrics.8.err: 0
+draw32.windowframe.metrics.9: 120x60 depth 32 crc b86f7496
+draw32.windowframe.metrics.9.err: 0
+draw32.windowframe.metrics.10: 120x60 depth 32 crc fd7490cc
+draw32.windowframe.metrics.10.err: -50
 == draw8
 draw8.button.0.active: 120x60 depth 8 crc 8431810d
 draw8.button.1.active: 120x60 depth 8 crc a0e67959
@@ -1236,16 +1269,49 @@ draw8.menutitle.disabled: 120x60 depth 8 crc b5bb4c5c
 draw8.menuitem.disabled: 120x60 depth 8 crc 30617d2b
 draw8.menuitem.hier.disabled: 120x60 depth 8 crc 042b8393
 draw8.windowframe.0: 120x60 depth 8 crc 06154412
+draw8.windowframe.0.err: -50
 draw8.windowframe.1: 120x60 depth 8 crc 06154412
+draw8.windowframe.1.err: -50
 draw8.windowframe.2: 120x60 depth 8 crc 06154412
+draw8.windowframe.2.err: -50
 draw8.windowframe.3: 120x60 depth 8 crc 06154412
+draw8.windowframe.3.err: -50
 draw8.windowframe.4: 120x60 depth 8 crc 06154412
+draw8.windowframe.4.err: -50
 draw8.windowframe.5: 120x60 depth 8 crc 06154412
+draw8.windowframe.5.err: -50
 draw8.windowframe.6: 120x60 depth 8 crc 06154412
+draw8.windowframe.6.err: -50
 draw8.windowframe.7: 120x60 depth 8 crc 06154412
+draw8.windowframe.7.err: -50
 draw8.windowframe.8: 120x60 depth 8 crc 06154412
+draw8.windowframe.8.err: -50
 draw8.windowframe.9: 120x60 depth 8 crc 06154412
+draw8.windowframe.9.err: -50
 draw8.windowframe.10: 120x60 depth 8 crc 06154412
+draw8.windowframe.10.err: -50
+draw8.windowframe.metrics.0: 120x60 depth 8 crc 0af50bd6
+draw8.windowframe.metrics.0.err: 0
+draw8.windowframe.metrics.1: 120x60 depth 8 crc d514159a
+draw8.windowframe.metrics.1.err: 0
+draw8.windowframe.metrics.2: 120x60 depth 8 crc 91f3a32d
+draw8.windowframe.metrics.2.err: 0
+draw8.windowframe.metrics.3: 120x60 depth 8 crc ec583a29
+draw8.windowframe.metrics.3.err: 0
+draw8.windowframe.metrics.4: 120x60 depth 8 crc 3250e2e3
+draw8.windowframe.metrics.4.err: 0
+draw8.windowframe.metrics.5: 120x60 depth 8 crc 5fa0bd45
+draw8.windowframe.metrics.5.err: 0
+draw8.windowframe.metrics.6: 120x60 depth 8 crc 06db78de
+draw8.windowframe.metrics.6.err: 0
+draw8.windowframe.metrics.7: 120x60 depth 8 crc 9f90887a
+draw8.windowframe.metrics.7.err: 0
+draw8.windowframe.metrics.8: 120x60 depth 8 crc 7b96f60b
+draw8.windowframe.metrics.8.err: 0
+draw8.windowframe.metrics.9: 120x60 depth 8 crc 1d2beefc
+draw8.windowframe.metrics.9.err: 0
+draw8.windowframe.metrics.10: 120x60 depth 8 crc 06154412
+draw8.windowframe.metrics.10.err: -50
 == frames
 frames.0.active: 200x100 depth 32 crc 7b5a5694
 frames.0.pressed4: 200x100 depth 32 crc 7b5a5694

@@ -24,9 +24,9 @@ export function launch() {
 }
 
 // A page of browser (a context of its own: its own OPFS), its errors and
-// the Worker's console shown.
-export async function newPage(browser, { log = true, tag = '' } = {}) {
-    const context = await browser.newContext({ viewport: { width: 800, height: 640 } });
+// the Worker's console shown; scale: its devicePixelRatio.
+export async function newPage(browser, { log = true, tag = '', scale = 1 } = {}) {
+    const context = await browser.newContext({ viewport: { width: 800, height: 640 }, deviceScaleFactor: scale });
     const page = await context.newPage();
     page.on('pageerror', (e) => console.log(`[page error${tag}]`, e.stack || e.message));
     if (log)

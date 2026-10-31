@@ -65,6 +65,12 @@ struct loaded_fragment
     THz zone;
     uint32_t term;
     bool terminated;
+    /* the container it was prepared from (sections that aren't copied
+       stay in it); owned: read in by GetDiskFragment */
+    Ptr container;
+    uint32_t container_size;
+    bool owns_container;
+    CFragClosureID closure; /* its imports, bound */
 };
 
 std::vector<loaded_fragment> loaded;
@@ -91,9 +97,38 @@ struct pending_init
     uint32_t arg;
     OSType arch;
     std::string name;
+    ConnectionID cid;
 };
 std::vector<pending_init> pending_inits;
 int prepare_depth;
+/* the library whose absence failed the last preparation (errName) */
+std::string missing_library;
+
+/* The fragments in a Power Mac ROM's library table ('nlib' ROM resources;
+   the G3's, tools/macdecode/libraries.py rom_libraries): always there on a
+   Mac. */
+bool rom_library(const char *name)
+{
+    static const char *const names[] = {
+        "ATAManager", "ATIUtils", "DSLGlobalsLib", "DriverLoaderLib",
+        "DriverServicesLib", "FMSwapFont", "FontDispatch", "InterfaceLib",
+        "InterruptTreeHeathrow", "Math64Lib", "MathLib", "MemoryMgr",
+        "MotherBoardHAL", "NQD", "NameRegistryLib", "PCILib", "PowerMgrLib",
+        "PrivateInterfaceLib", "QuickdrawLib", "QuickdrawText", "Resources",
+        "SoundLib", "StdCLib", "StdText", "VideoServicesGlobals",
+        "VideoServicesLib",
+    };
+    for(const char *n : names)
+        if(!strcasecmp(n, name))
+            return true;
+    return false;
+}
+
+void set_err_name(Str255 errname)
+{
+    errname[0] = std::min<size_t>(missing_library.size(), 255);
+    memcpy(errname + 1, missing_library.data(), errname[0]);
+}
 
 /* MacPhoenix: the instances of sections whose share kind is global
    (kPEFGlobalShare): one for the whole system, as Apple's CFM keeps them,
@@ -642,6 +677,12 @@ check_existing_connections(ConstStr63Param library, OSType arch, LoadFlags loadf
     return fragLibNotFound;
 }
 
+/* MacPhoenix: the file registry (Mac OS Runtime Architectures, 1-17):
+   files with fragments that CodeFragmentDispatch's private selector -20
+   names, searched after the Extensions folder (Mac OS Easy Open's control
+   panel holds the PowerPC "Translation" library). */
+static std::vector<FSSpec> registered_files;
+
 static OSErr
 check_file(INTEGER vref, LONGINT dirid, Str255 file, bool shlb_test_p,
            ConstStr63Param library, OSType arch, LoadFlags loadflags,
@@ -776,6 +817,79 @@ check_vanddir(INTEGER vref, LONGINT dirid, int descend_count, ConstStr63Param li
         }
     }
     return retval;
+}
+
+/* MacPhoenix: whether a file in the folder (and its folders, descend_count
+   deep) lists the library in its 'cfrg', of whatever type: only looks. A
+   library there that Executor doesn't load (QuickTime™ PowerPlug's
+   QuickTimeLib, QuickTime being off) is one the Mac would have. */
+static bool
+library_in_folder(INTEGER vref, LONGINT dirid, int descend_count, ConstStr63Param library,
+                  OSType arch)
+{
+    CInfoPBRec pb;
+    Str255 s;
+    pb.hFileInfo.ioNamePtr = &s[0];
+    pb.hFileInfo.ioVRefNum = vref;
+    for(INTEGER dirindex = 1;; dirindex++)
+    {
+        pb.hFileInfo.ioFDirIndex = dirindex;
+        pb.hFileInfo.ioDirID = dirid;
+        if(PBGetCatInfo(&pb, false) != noErr)
+            return false;
+        if(pb.hFileInfo.ioFlAttrib & ATTRIB_ISADIR)
+        {
+            if(descend_count > 0
+               && library_in_folder(vref, pb.hFileInfo.ioDirID, descend_count - 1, library, arch))
+                return true;
+            continue;
+        }
+        FSSpec fs;
+        if(FSMakeFSSpec(vref, dirid, s, &fs) != noErr)
+            continue;
+        INTEGER save_map = LM(CurMap);
+        std::vector<INTEGER> open_before;
+        resmaphand map;
+        WALKMAPTOP(map)
+            open_before.push_back((*map)->resfn);
+        EWALKMAP()
+        INTEGER rn = FSpOpenResFile(&fs, fsRdPerm);
+        if(rn == -1)
+            continue;
+        Handle cfrg0 = Get1Resource("cfrg"_4, 0);
+        bool found = cfrg0 && ROMlib_find_cfrg(cfrg0, arch, kImportLibraryCFrag, library);
+        if(std::find(open_before.begin(), open_before.end(), rn) == open_before.end())
+            CloseResFile(rn);
+        LM(CurMap) = save_map;
+        if(found)
+            return true;
+    }
+}
+
+/* ... in Extensions, or in "Extensions (Disabled)", where Executor's
+   extension policy keeps every file that runs code at startup it doesn't
+   list (romlib/extensions.cpp): there on the Mac. */
+static bool
+library_in_extensions(const char *name, OSType arch)
+{
+    Str63 library;
+    library[0] = std::min<size_t>(strlen(name), 63);
+    memcpy(library + 1, name, library[0]);
+    GUEST<INTEGER> vref;
+    GUEST<LONGINT> dirid;
+    if(FindFolder(0, kExtensionFolderType, false, &vref, &dirid) == noErr
+       && library_in_folder(vref, dirid, 1, library, arch))
+        return true;
+    if(FindFolder(0, kSystemFolderType, false, &vref, &dirid) != noErr)
+        return false;
+    Str255 disabled;
+    memcpy(disabled, "\025Extensions (Disabled)", 22);
+    CInfoPBRec pb = {};
+    pb.hFileInfo.ioNamePtr = disabled;
+    pb.hFileInfo.ioVRefNum = vref;
+    pb.hFileInfo.ioDirID = dirid;
+    return PBGetCatInfo(&pb, false) == noErr && (pb.hFileInfo.ioFlAttrib & ATTRIB_ISADIR)
+        && library_in_folder(vref, pb.hFileInfo.ioDirID, 1, library, arch);
 }
 
 /* MacPhoenix: the System file's own fragments. From 8.x the System's
@@ -998,6 +1112,14 @@ OSErr Executor::C_GetSharedLibrary(ConstStr63Param library, OSType arch,
                 retval = check_vanddir(extensions_vref, extensions_dirid, 1,
                                        library, arch, loadflags, cidp,
                                        mainaddrp, errName);
+        }
+
+        for(size_t i = 0; retval != noErr && i < registered_files.size(); ++i)
+        {
+            Str255 name;
+            memcpy(name, registered_files[i].name, registered_files[i].name[0] + 1);
+            retval = check_file(registered_files[i].vRefNum, registered_files[i].parID, name,
+                                false, library, arch, loadflags, cidp, mainaddrp, errName);
         }
 
         if(retval != noErr)
@@ -1409,6 +1531,31 @@ load_loader_section(const void *addr,
     symbol_names = (decltype(symbol_names))(loader_section_bytes + PEFLIH_STRINGS_OFFSET(lihp));
 
     closure_id = begin_closure(n_libs, libs, symbol_names, arch);
+    if(loaded_fragment *f = find_loaded(connp))
+        f->closure = closure_id;
+
+    /* MacPhoenix: a library that isn't there fails the preparation, as on
+       a Mac (cfragNoLibraryErr, errName the library), unless it is imported
+       weakly, is one a Power Mac's ROM has (Executor stands in for the
+       ROM) or is in the Extensions folder but not loaded (QuickTime off):
+       what the Mac would have is answered by stubs, as before.
+       InputSprocket USB on a G3 without USBManagerLib is skipped by
+       InputSprocketLib, not run with USB calls that answer noErr and set
+       nothing. */
+    for(i = 0; i < n_libs; ++i)
+        if(!LIB_CID(&closure_id->libs[i]) && !closure_id->libs[i].weak
+           && !rom_library(symbol_names + PEFIL_NAME_OFFSET(&libs[i]))
+           && !library_in_extensions(symbol_names + PEFIL_NAME_OFFSET(&libs[i]), arch))
+        {
+            missing_library = symbol_names + PEFIL_NAME_OFFSET(&libs[i]);
+            std::string who = "?";
+            if(current_origin)
+                who = !current_origin->name.empty() || current_origin->where != kOnDiskFlat
+                    ? current_origin->name : pstr(current_origin->file.name);
+            fprintf(stderr, "CFM: library %s not found: %s not prepared\n",
+                    missing_library.c_str(), who.c_str());
+            return fragLibNotFound;
+        }
 
     for(i = 0, retval = noErr; retval == noErr && i < n_reloc_headers; ++i)
     {
@@ -1465,7 +1612,7 @@ load_loader_section(const void *addr,
         ib->connectionID = guest_cast<uint32_t>((Ptr)connp);
         ib->libName = name;
         uint32_t arg = guest_cast<uint32_t>((Ptr)ib);
-        pending_inits.push_back({ tv, arg, arch, o ? o->name : std::string("?") });
+        pending_inits.push_back({ tv, arg, arch, o ? o->name : std::string("?"), connp });
     }
     if(retval == noErr && lihp->termSection != -1)
         if(loaded_fragment *f = find_loaded(connp))
@@ -1659,6 +1806,54 @@ Executor::ROMlib_new_connection(uint32_t n_sects)
     return retval;
 }
 
+/* MacPhoenix: a preparation that fails leaves nothing behind, as on a
+   Mac: the fragments it prepared (the container itself and every library
+   its closure loaded new) are released and their init routines never run,
+   so a later load prepares them again rather than finding them half done.
+   InitBlocks are the init routines' arguments (load_loader_section). */
+static void
+release_init_block(uint32_t arg)
+{
+    InitBlock *ib = (InitBlock *)SYN68K_TO_US(arg);
+    if(ib->fragLocator.where == kOnDiskFlat)
+        DisposePtr((Ptr)ib->fragLocator.u.onDisk.fileSpec);
+    DisposePtr((Ptr)ib->libName);
+    DisposePtr((Ptr)ib);
+}
+
+static void
+release_fragment(const loaded_fragment& f)
+{
+    ConnectionID conn = f.cid;
+    for(uint32_t i = 0; i < conn->n_sects; i++)
+    {
+        Ptr start = (Ptr)conn->sects[i].start;
+        if(start && (start < f.container || start >= f.container + f.container_size))
+            DisposePtr(start);
+    }
+    if(f.owns_container)
+        DisposePtr(f.container);
+    DisposePtr((Ptr)f.closure);
+    DisposePtr((Ptr)conn);
+}
+
+static void
+release_fragments(const std::vector<ConnectionID>& cids, const char *why)
+{
+    for(ConnectionID cid : cids)
+    {
+        auto it = std::find_if(loaded.begin(), loaded.end(),
+                               [&](const loaded_fragment& f) { return f.cid == cid; });
+        if(it == loaded.end())
+            continue;
+        if(it->cid != cids.front())
+            fprintf(stderr, "CFM: %s released (%s not prepared)\n",
+                    it->origin.name.c_str(), why);
+        release_fragment(*it);
+        loaded.erase(it);
+    }
+}
+
 /* MacPhoenix: prepares the container at addr, named and placed as origin
    says, and lists it before its imports are bound (a library that imports
    its importer finds it). */
@@ -1695,7 +1890,10 @@ prepare_container(void *addr, const load_origin& origin, GUEST<ConnectionID> *co
     if(!conn)
         return fragNoMem;
 
-    loaded.push_back({ origin, arch, conn, LM(ApplZone), 0, false });
+    size_t loaded_mark = loaded.size();
+    size_t init_mark = pending_inits.size();
+    loaded.push_back({ origin, arch, conn, LM(ApplZone), 0, false,
+                       (Ptr)addr, origin.length, false, nullptr });
     const load_origin *saved_origin = current_origin;
     load_origin origin_copy = origin;
     current_origin = &origin_copy; /* the list may grow while we bind */
@@ -1704,16 +1902,28 @@ prepare_container(void *addr, const load_origin& origin, GUEST<ConnectionID> *co
     retval = do_pef_sections(conn, headp, &main_addr, arch);
     --prepare_depth;
     current_origin = saved_origin;
-    if(prepare_depth == 0)
+
+    /* this preparation's fragments: this one first, then its closure's */
+    std::vector<ConnectionID> closure;
+    for(size_t i = loaded_mark; i < loaded.size(); i++)
+        closure.push_back(loaded[i].cid);
+    if(retval != noErr)
+    {
+        for(size_t i = init_mark; i < pending_inits.size(); i++)
+            release_init_block(pending_inits[i].arg);
+        pending_inits.resize(init_mark);
+    }
+    else if(prepare_depth == 0)
     {
         /* An init routine may load libraries of its own: they are a closure
-           of their own. */
+           of their own. One that fails fails the preparation: the fragments
+           already initialised are terminated, last first. */
         std::vector<pending_init> inits = std::move(pending_inits);
         pending_inits.clear();
-        for(const pending_init& init : inits)
+        size_t done;
+        for(done = 0; done < inits.size(); done++)
         {
-            if(retval != noErr)
-                break;
+            const pending_init& init = inits[done];
             uint32_t arg = init.arg;
             OSErr err = init.arch == "m68k"_4 ? (int16_t)ROMlib_call_cfm68k(init.tv, &arg)
                                               : (int16_t)callPPC(init.tv, { arg });
@@ -1721,7 +1931,23 @@ prepare_container(void *addr, const load_origin& origin, GUEST<ConnectionID> *co
             {
                 fprintf(stderr, "CFM: init routine of %s: %d\n", init.name.c_str(), err);
                 retval = err;
+                break;
             }
+        }
+        if(retval != noErr)
+        {
+            for(size_t i = done; i-- > 0;)
+                if(loaded_fragment *f = find_loaded(inits[i].cid))
+                    if(f->term && !f->terminated)
+                    {
+                        f->terminated = true;
+                        if(f->arch == "m68k"_4)
+                            ROMlib_call_cfm68k(f->term);
+                        else
+                            callPPC(f->term, {});
+                    }
+            for(const pending_init& init : inits)
+                release_init_block(init.arg);
         }
     }
 
@@ -1734,8 +1960,9 @@ prepare_container(void *addr, const load_origin& origin, GUEST<ConnectionID> *co
     fprintf(stderr, "\n");
     if(retval != noErr)
     {
-        loaded.erase(std::remove_if(loaded.begin(), loaded.end(),
-            [&](const loaded_fragment& f) { return f.cid == conn; }), loaded.end());
+        std::string why = !origin.name.empty() || origin.where != kOnDiskFlat
+            ? origin.name : pstr(origin.file.name);
+        release_fragments(closure, why.c_str());
         return retval;
     }
     *connp = conn;
@@ -1752,7 +1979,10 @@ OSErr Executor::C_GetMemFragment(void *addr, uint32_t length, ConstStr63Param fr
     origin.mem = (Ptr)addr;
     origin.length = length;
     origin.name = pstr(fragname);
-    return prepare_container(addr, origin, connp, mainAddrp);
+    OSErr retval = prepare_container(addr, origin, connp, mainAddrp);
+    if(retval == fragLibNotFound && errname)
+        set_err_name(errname);
+    return retval;
 }
 
 
@@ -1816,9 +2046,14 @@ OSErr Executor::C_GetDiskFragment(FSSpecPtr fsp, LONGINT offset,
             origin.length = len;
             origin.name = pstr(fragname);
             retval = prepare_container(p, origin, connp, mainAddrp);
+            if(retval == noErr)
+                if(loaded_fragment *f = find_loaded(*connp))
+                    f->owns_container = true;
         }
         if(retval != noErr && p)
             DisposePtr(p);
+        if(retval == fragLibNotFound && errname)
+            set_err_name(errname);
     }
     loading_system_fragment = saved_system;
     return retval;
@@ -1860,9 +2095,15 @@ Executor::ROMlib_find_cfrg(Handle cfrg, OSType arch, uint8_t type, ConstStr255Pa
 
 /* MacPhoenix: CodeFragmentDispatch's private selector -20
    (CodeFragments.yaml): a file with fragments, from an extension's INIT
-   (8.x's Color Picker); the Extensions folder is searched anyway. */
+   (8.x's Color Picker, Mac OS Easy Open), into the file registry. */
 OSErr Executor::C_CFragRegisterFilePrivate(FSSpecPtr file, Boolean flag)
 {
+    warning_trace_info("CFM: file registry: \"%.*s\" (flag %d)", file->name[0], (char *)file->name + 1, flag);
+    for(const FSSpec &f : registered_files)
+        if(f.vRefNum == file->vRefNum && f.parID == file->parID
+           && EqualString(f.name, file->name, false, true))
+            return noErr;
+    registered_files.push_back(*file);
     return noErr;
 }
 

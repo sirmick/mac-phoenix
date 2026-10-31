@@ -158,7 +158,7 @@ def syserror(text):
 
 
 def run_item(n, item, image, port, out, wait, binary, rom=None, source=None, disks=(),
-             ppc=True, depth=None):
+             ppc=True, depth=None, emu_args=()):
     path, kind, ftype, creator, code = item
     log = os.path.join(out, f"{n:03d}.log")
     result = {"n": n, "path": path, "kind": kind, "type": ftype, "creator": creator,
@@ -195,7 +195,7 @@ def run_item(n, item, image, port, out, wait, binary, rom=None, source=None, dis
                 *extra, *(["--executor-ppc"] if ppc else []),
                 *(["--depth", str(depth)] if depth else []), "--bridge"]
     with open(log, "wb") as f:
-        proc = subprocess.Popen([binary, "--config", "/dev/null", *args,
+        proc = subprocess.Popen([binary, "--config", "/dev/null", *args, *emu_args,
                                  "--port", str(port), "--timeout", str(wait + 150)],
                                 stdout=f, stderr=subprocess.STDOUT, start_new_session=True)
     try:
@@ -297,6 +297,8 @@ def main():
                     help="leave out items with this creator")
     ap.add_argument("--exclude", action="append", default=[],
                     help="leave out items whose path contains this")
+    ap.add_argument("--emu-arg", action="append", default=[],
+                    help="an extra emulator argument (repeatable; --emu-arg=--flag)")
     ap.add_argument("--binary", default=os.environ.get("MACPHOENIX_EMULATOR",
                                                        os.path.join(REPO, "build", "mac-phoenix")))
     opts = ap.parse_args()
@@ -326,13 +328,15 @@ def main():
     print(f"{len(items)} items", flush=True)
 
     # One copy of the image per worker: Executor extracts each image's
-    # System Folder to its own place and restores it every run.
+    # System Folder to its own place and restores it every run. Named by
+    # the worker's port, so grids running at the same time (other ports)
+    # don't share copies.
     copies = []
     for w in range(opts.jobs):
         if rom:   # made fresh for each item (run_item)
-            copies.append(os.path.join(STORAGE, "tmp", f"grid-{name}-rom-{w}.img"))
+            copies.append(os.path.join(STORAGE, "tmp", f"grid-{name}-rom-{opts.port + w}.img"))
             continue
-        copy = os.path.join(IMAGES, f"grid-{name}-{w}.img")
+        copy = os.path.join(IMAGES, f"grid-{name}-{opts.port + w}.img")
         if not os.path.exists(copy) or os.path.getmtime(copy) < os.path.getmtime(image):
             shutil.copyfile(image, copy)
         copies.append(copy)
@@ -344,7 +348,8 @@ def main():
             w = free.pop()
             try:
                 return run_item(n, item, copies[w], opts.port + w, out, opts.wait, opts.binary,
-                                rom, image, disks, not opts.no_ppc, opts.depth)
+                                rom, image, disks, not opts.no_ppc, opts.depth,
+                                opts.emu_arg)
             finally:
                 free.append(w)
         futures = [pool.submit(job, n, item) for n, item in enumerate(items, 1)]

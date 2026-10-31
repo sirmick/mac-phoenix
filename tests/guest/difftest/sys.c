@@ -10,6 +10,7 @@
 #include <Files.h>
 #include <Processes.h>
 #include <Script.h>
+#include <Devices.h>
 #include <CodeFragments.h>
 #include <Quickdraw.h>
 
@@ -42,6 +43,110 @@ int main(void)
     int i;
     char k[64];
     probe_open("sys");
+    if(SECTION("preload"))
+    {
+        /* The probe's own resources marked preload (sys.r): in memory
+           already when it starts? A fat application's 68k segments are
+           often marked so (Exile III). */
+        static const struct { ResType type; short id; const char *key; } rs[] = {
+            { 'CODE', 2, "CODE" }, { 'PRLD', 128, "PRLD" } };
+        for(i = 0; i < 2; i++)
+        {
+            Handle h;
+            SetResLoad(false);
+            h = Get1Resource(rs[i].type, rs[i].id);
+            SetResLoad(true);
+            out(rs[i].key, "%s", !h ? "missing" : *h ? "loaded" : "not loaded");
+        }
+    }
+    if(SECTION("container"))
+    {
+        /* Where CFM put the probe's code: the heap block holding main's
+           code, against the data fork (the whole container) — does it
+           keep the container, or the code section alone? */
+        ProcessSerialNumber psn = { 0, kCurrentProcess };
+        ProcessInfoRec info;
+        FSSpec spec;
+        short ref;
+        long eof = 0;
+        Ptr code = *(Ptr *)main, b;
+        THz z = ApplicationZone();
+        memset(&info, 0, sizeof info);
+        info.processInfoLength = sizeof info;
+        info.processAppSpec = &spec;
+        if(GetProcessInformation(&psn, &info) == noErr && FSpOpenDF(&spec, fsRdPerm, &ref) == noErr)
+        {
+            GetEOF(ref, &eof);
+            FSClose(ref);
+        }
+        out("~dataFork", "%ld", eof);
+        for(b = (Ptr)&z->heapData; b < z->bkLim;)
+        {
+            long size = *(long *)(b + 4);
+            if(size < 12)
+                break;
+            if(code >= b + 12 && code < b + size)
+                break;
+            b += size;
+        }
+        if(b < z->bkLim && *(long *)(b + 4) >= 12)
+        {
+            long size = *(long *)(b + 4) - 12;
+            out("~codeBlock", "%ld", size);
+            out("codeBlock", "%s", size >= eof ? "the container" : "smaller than the container");
+        }
+        else
+            out("codeBlock", "outside the application heap");
+    }
+    if(SECTION("partition"))
+    {
+        /* The partition beyond the heap and the stack: the A5 world. The
+           probe's CODE 0 asks for 256K above A5 (sys.r); does a PowerPC
+           launch reserve it, as a fat application's 68k launch would? */
+        ProcessSerialNumber psn = { 0, kCurrentProcess };
+        ProcessInfoRec info;
+        long heap = (long)LMGetApplLimit() - (long)ApplicationZone();
+        long stack = (long)LMGetCurStackBase() - (long)LMGetApplLimit();
+        memset(&info, 0, sizeof info);
+        info.processInfoLength = sizeof info;
+        GetProcessInformation(&psn, &info);
+        long rest = (long)info.processSize - heap - stack;
+        out("~heap", "%ld stack %ld rest %ld", heap, stack, rest);
+        out("a5world", "%s", rest >= 256 * 1024 ? "CODE 0's" : "not reserved");
+    }
+    if(SECTION("video"))
+    {
+        /* The main screen's driver: cscGetGamma and cscSetGamma, csParam
+           holding a pointer to a VDGammaRecord (Slithereens' fade). */
+        static struct { Ptr csGTable; } rec;
+        CntrlParam pb;
+        OSErr err;
+        GDHandle gd = GetMainDevice();
+        memset(&pb, 0, sizeof pb);
+        pb.ioCRefNum = (**gd).gdRefNum;
+        pb.csCode = 8;                          /* cscGetGamma */
+        rec.csGTable = (Ptr)0xA5A5A5A5;
+        *(Ptr *)pb.csParam = (Ptr)&rec;
+        err = PBStatusSync((ParmBlkPtr)&pb);
+        out("getGamma.err", "%d", err);
+        out("getGamma.csParam", "%s", *(Ptr *)pb.csParam == (Ptr)&rec ? "unchanged" : "overwritten");
+        if(rec.csGTable == (Ptr)0xA5A5A5A5)
+            out("getGamma.csGTable", "(unset)");
+        else if(!rec.csGTable)
+            out("getGamma.csGTable", "(nil)");
+        else
+        {
+            short *g = (short *)rec.csGTable;
+            out("getGamma.csGTable", "version %d type %d formula %d chans %d count %d width %d",
+                g[0], g[1], g[2], g[3], g[4], g[5]);
+            memset(&pb, 0, sizeof pb);
+            pb.ioCRefNum = (**gd).gdRefNum;
+            pb.csCode = 4;                      /* cscSetGamma, the same table */
+            *(Ptr *)pb.csParam = (Ptr)&rec;
+            err = PBControlSync((ParmBlkPtr)&pb);
+            out("setGamma.err", "%d", err);
+        }
+    }
     if(SECTION("gestalt"))
         for(i = 0; i < (int)(sizeof selectors / sizeof selectors[0]); i++)
         {
@@ -121,6 +226,84 @@ int main(void)
         {
             sprintf(k, "roman.%d", sverbs[i]);
             out(k, "%08lx", (long)GetScriptVariable(smRoman, sverbs[i]));
+        }
+    }
+    if(SECTION("gworld"))
+    {
+        /* What an offscreen pixmap's baseAddr holds with its pixels
+           unlocked, locked and unlocked again (programs copy the pixmap
+           into ports of their own: Mars Rising), for each flag set. */
+        static const long flags[] = { 0, pixPurge, keepLocal, useTempMem };
+        for(i = 0; i < (int)(sizeof flags / sizeof flags[0]); i++)
+        {
+            GWorldPtr gw = NULL;
+            Rect r = { 0, 0, 64, 64 };
+            QDErr err = NewGWorld(&gw, 8, &r, NULL, NULL, flags[i]);
+            sprintf(k, "%lx.err", flags[i]);
+            out(k, "%d", err);
+            if(err != noErr || !gw)
+                continue;
+            PixMapHandle pm = GetGWorldPixMap(gw);
+            static const char *const when[] = { "new", "locked", "unlocked" };
+            int w;
+            for(w = 0; w < 3; w++)
+            {
+                if(w == 1)
+                    LockPixels(pm);
+                if(w == 2)
+                    UnlockPixels(pm);
+                Ptr base = (**pm).baseAddr, pix = GetPixBaseAddr(pm);
+                const char *what = base == pix ? "pixels"
+                    : base && *(Ptr *)base == pix ? "handle to pixels" : "other";
+                sprintf(k, "%lx.%s.baseAddr", flags[i], when[w]);
+                out(k, "%s", what);
+                sprintf(k, "%lx.%s.pmVersion", flags[i], when[w]);
+                out(k, "%d", (**pm).pmVersion);
+                sprintf(k, "%lx.%s.state", flags[i], when[w]);
+                out(k, "%08lx", (long)GetPixelsState(pm));
+            }
+            DisposeGWorld(gw);
+        }
+
+        /* A window made while a GWorld's device is current (SetGWorld(gw,
+           nil), then NewCWindow: Mars Rising), the GWorld's pixels
+           unlocked and locked: the device then, where the pixmap points. */
+        for(i = 0; i < 2; i++)
+        {
+            GWorldPtr gw = NULL;
+            Rect r = { 0, 0, 64, 64 }, wr = { 100, 100, 164, 164 };
+            CGrafPtr savePort;
+            GDHandle saveDev;
+            const char *when = i ? "locked" : "unlocked";
+            if(NewGWorld(&gw, 8, &r, NULL, NULL, 0) != noErr || !gw)
+                continue;
+            PixMapHandle gpm = GetGWorldPixMap(gw);
+            if(i == 1)
+                LockPixels(gpm);
+            GetGWorld(&savePort, &saveDev);
+            SetGWorld(gw, NULL);
+            WindowPtr w = NewCWindow(NULL, &wr, "\p", false, documentProc, (WindowPtr)-1, false, 0);
+            sprintf(k, "window.%s.device", when);
+            out(k, "%s", GetGDevice() == GetMainDevice() ? "main"
+                : GetGDevice() == GetGWorldDevice(gw) ? "gworld's" : "other");
+            SetGWorld(savePort, saveDev);
+            if(w)
+            {
+                PixMapHandle wpm = ((CGrafPtr)w)->portPixMap;
+                Ptr base = (**wpm).baseAddr, pix = GetPixBaseAddr(gpm);
+                sprintf(k, "window.%s.baseAddr", when);
+                out(k, "%s", base == (**(**GetMainDevice()).gdPMap).baseAddr ? "screen"
+                    : base == pix ? "gworld's pixels"
+                    : base && *(Ptr *)base == pix ? "handle to gworld's pixels" : "other");
+                sprintf(k, "window.%s.pixelSize", when);
+                out(k, "%d", (**wpm).pixelSize);
+                sprintf(k, "window.%s.pmVersion", when);
+                out(k, "%d", (**wpm).pmVersion);
+                sprintf(k, "window.%s.bounds", when);
+                out_rect(k, &(**wpm).bounds);
+                DisposeWindow(w);
+            }
+            DisposeGWorld(gw);
         }
     }
     /* the screen the system starts on: depth and size (8.6 on the G3 at
