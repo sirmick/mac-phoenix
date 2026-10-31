@@ -266,7 +266,13 @@ static void launchchain(ConstStringPtr fName, INTEGER vRefNum, Boolean resetmemo
         wdpb.ioVRefNum = fsp->vRefNum;
         wdpb.ioWDDirID = fsp->parID;
     }
-    /* Do not do this -- Loser does it SFSaveDisk_Update (vRefNum, fName); */
+    /* MacPhoenix: a real Mac's Standard File dialogs default to the
+       launched application's own folder, not whatever folder a previous
+       app (or the boot-time System Folder access) left in SFSaveDisk/
+       CurDirStore -- capture the app's real vRefNum/dirID before PBOpenWD
+       turns wdpb.ioVRefNum into a working-directory refnum. */
+    INTEGER appVRefNum = wdpb.ioVRefNum;
+    LONGINT appDirID = wdpb.ioWDDirID;
     wdpb.ioWDProcID = "Xctr"_4;
     wdpb.ioNamePtr = 0;
     PBOpenWD(&wdpb, false);
@@ -278,6 +284,8 @@ static void launchchain(ConstStringPtr fName, INTEGER vRefNum, Boolean resetmemo
 	CloseResFile(LM(CurMap));
 #endif
     SetVol((StringPtr)0, ROMlib_exevrefnum);
+    LM(SFSaveDisk) = -appVRefNum;
+    LM(CurDirStore) = appDirID;
     /* MacPhoenix: the partition (ApplZone, stack, A5 world) comes first,
        so the application's resource map is opened inside it. */
     process_layout_partition(ROMlib_exefname);
