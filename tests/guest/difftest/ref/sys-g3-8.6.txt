@@ -1,13 +1,13 @@
-# probe 0576a667f9b29f6c6c3bc0f485da1831d9bfb41bd64aa40136fc52e280a566e7
+# probe e56557bfb56eaeeb8dcfb6732ebfb3786b8bdca5aa6636e13c63de149f29c349
 == preload
 preload.CODE: loaded
 preload.PRLD: loaded
 == container
-container.~dataFork: 90993
-container.~codeBlock: 91012
+container.~dataFork: 96107
+container.~codeBlock: 96132
 container.codeBlock: the container
 == partition
-partition.~heap: 1206896 stack 40982 rest 238
+partition.~heap: 1212016 stack 40974 rest 238
 partition.a5world: not reserved
 == video
 video.getGamma.err: 0
@@ -188,7 +188,7 @@ lowmem.0204: 0002
 lowmem.0206: 6300
 lowmem.0208: 1388
 lowmem.020a: 80cc
-lowmem.020c: e70bd1f6
+lowmem.020c: e70bdad9
 lowmem.0938: cfff
 lowmem.0a60: 0000
 lowmem.0cca: 3cb4
@@ -199,11 +199,11 @@ lowmem.0b21: bf
 process.err: 0
 process.name: "MacPhoenixSuite" (15)
 process.type: APPL DfSy mode 00000080
-process.~size: 1248116 free 1084800
+process.~size: 1253228 free 1076240
 process.spec.name: "MacPhoenixSuite" (15)
 == script
 script.sm.0: 00000860
-script.sm.2: 00000042
+script.sm.2: 0000003e
 script.sm.4: 00000001
 script.sm.6: 00000000
 script.sm.8: 00000000
@@ -326,3 +326,43 @@ cfm.find.ControlsLib: -2817
 cfm.find.FontManager: 0
 cfm.find.DialogsLib: -2817
 cfm.find.NoSuchLibrary: -2817
+== heap
+heap.unlocked.ptr: below the handle
+heap.unlocked.handle: moved
+heap.unlocked.to: between
+heap.~unlocked.at: was 416 now 8624 ptr 416
+heap.locked.ptr: above the handle
+heap.locked.handle: stayed
+heap.purgeable.ptr: below the handle
+heap.purgeable.handle: moved
+heap.nomove.ptr: below
+heap.nomove.handle: moved
+heap.~nomove.at: was 416 now 105072 ptr 416
+heap.nomove.err: 0
+heap.nomove.purgeable.ptr: below
+heap.nomove.purgeable.handle: moved
+heap.split.ptr: below
+heap.split.handle: moved
+heap.split.err: 0
+heap.split.locked.ptr: failed
+heap.split.locked.err: -108
+heap.inway.ptr: below the locked block
+heap.inway.low: purged
+heap.inway.high: kept
+heap.purgeOrHigher.ptr: above the locked block
+heap.purgeOrHigher.low: kept
+heap.stuck.ptr: above the locked block
+heap.gz.fits.ptr: ok
+heap.gz.fits.calls: 0
+heap.gz.fits.purged: yes
+heap.gz.never.ptr: failed
+heap.gz.never.err: -108
+heap.gz.never.called: yes
+heap.~gz.never.calls: 2
+heap.gz.never.purgedBeforeGz: no
+heap.gz.never.need: at least the request
+heap.~gz.never.need: 262160
+heap.sounds.ptrs: ok
+heap.sounds.adjacent: yes
+heap.sounds.belowHandles: yes
+heap.sounds.purged: 0
