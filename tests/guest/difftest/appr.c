@@ -796,6 +796,11 @@ static void controls(void)
         { 16, 16, 100, 0, 100, 30, 0, "vscroll" },
         { 16, 100, 16, 0, 100, 30, 0, "hscroll" },
         { 1008, 100, 20, 200, 0, 0, 0, "popup" },
+        /* its width: a longer menu (ten spaces: no glyphs), fixed width
+           (popupFixedWidth), a title's room */
+        { 1008, 100, 20, 201, 0, 0, 0, "popup10" },
+        { 1009, 100, 20, 200, 0, 0, 0, "popupfixed" },
+        { 1008, 160, 20, 200, 40, 0, 0, "popuptitle" },
         { 368, 60, 20, 0, 0, 0, 10, "push" },
         { 369, 60, 16, 0, 2, 0, 11, "check" },
         { 370, 60, 16, 0, 2, 0, 12, "radio" },
@@ -816,7 +821,7 @@ static void controls(void)
     static const short scrollParts[] = { 20, 21, 22, 23, 129 };
     Rect back, b, port;
     WindowRef w;
-    MenuHandle m;
+    MenuHandle m, m10;
     char k[48];
     int i, j;
     if(!SECTION("controls"))
@@ -825,6 +830,10 @@ static void controls(void)
     m = NewMenu(200, "\p");
     AppendMenu(m, "\p ");
     InsertMenu(m, -1);
+    m10 = NewMenu(201, "\p");
+    AppendMenu(m10, "\p ");
+    AppendMenu(m10, "\p          ");
+    InsertMenu(m10, -1);
     SetRect(&back, 0, 40, 400, 240);
     w = NewCWindow(NULL, &back, "\p", true, plainDBox, (WindowRef)-1, false, 0);
     SetPort((GrafPtr)w);
@@ -877,6 +886,8 @@ static void controls(void)
     DisposeWindow(w);
     DeleteMenu(200);
     DisposeMenu(m);
+    DeleteMenu(201);
+    DisposeMenu(m10);
     /* tabs 80 wide, every style */
     for(i = 0; i <= 5; i++)
     {

@@ -56,7 +56,6 @@ controls.*.check.value1	the "on" tick is an approximation of 8.6's anti-aliased 
 controls.*.radio.value1	the "on" dot is an approximation of 8.6's anti-aliased mark
 controls.16.*	the scroll bar (CDEF 1), through DrawThemeTrack/DrawThemeScrollBarArrows: the thumb's position and the panel either side of it are right, the exact greys aren't (results.md item 5)
 controls.384.*	the scroll bar (8.6's CDEF 384), same gap as CDEF 1 (same DrawThemeTrack)
-controls.1008.*	the popup button (CDEF 63) isn't routed through theme drawing yet
 # Executor sometimes stops answering partway through `controls`, right
 # around 384/400 (8.6's own CDEFs, ControlDefinitions.pwpc) - a real,
 # unexplained hang (not a timeout), load-sensitive: more drawing work
