@@ -2425,7 +2425,13 @@ void Executor::process_layout_partition(ConstStringPtr app_name)
             preferred = (*size)->pref_size;
             minimum = (*size)->min_size;
         }
-        if(Handle code0 = Get1Resource("CODE"_4, 0))
+        /* A fat application started as PowerPC gets no A5 world from its
+           CODE 0, as on 8.6 (difftest sys partition: Exile III's 411K
+           of 68k globals left its heap too small for a GWorld). */
+        Handle code0 = Get1Resource("CODE"_4, 0);
+        if(code0 && ROMlib_cfm_launch_arch(Get1Resource("cfrg"_4, 0), true) == "pwpc"_4)
+            code0 = nullptr;
+        if(code0)
         {
             auto lp = (GUEST<int32_t> *)*code0;
             abovea5 = lp[0];
