@@ -53,16 +53,26 @@ struct CRMSerialRecord{GUEST_STRUCT;GUEST<INTEGER> version;GUEST<StringHandle> i
 
 typedef CRMSerialRecord *CRMSerialPtr;
 
-INTEGER CRMGetCRMVersion();
+// MacPhoenix: `executor: true` so PowerPC/CFM-68K code importing this
+// by name from InterfaceLib finds commtool.cpp's routine, not the
+// generic unresolved-import stub; base/emustubs.cpp's
+// CommToolboxDispatch calls it directly too (that path is unaffected).
+INTEGER CRMGetCRMVersion();NOTRAP_FUNCTION2(CRMGetCRMVersion);
 
-QHdrPtr CRMGetHeader();
 
-void CRMInstall(QElemPtr );
+QHdrPtr CRMGetHeader();NOTRAP_FUNCTION2(CRMGetHeader);
 
-OSErr CRMRemove(QElemPtr );
 
-QElemPtr CRMSearch(QElemPtr );
+void CRMInstall(QElemPtr );NOTRAP_FUNCTION2(CRMInstall);
 
-CRMErr InitCRM();
+
+OSErr CRMRemove(QElemPtr );NOTRAP_FUNCTION2(CRMRemove);
+
+
+QElemPtr CRMSearch(QElemPtr );NOTRAP_FUNCTION2(CRMSearch);
+
+
+CRMErr InitCRM();NOTRAP_FUNCTION2(InitCRM);
+
 
 } /* namespace Executor */
