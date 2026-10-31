@@ -85,6 +85,11 @@ extern char *ROMlib_p2cstr(StringPtr str);
 extern cfir_t *ROMlib_find_cfrg(Handle cfrg, OSType arch, uint8_t type,
                                 ConstStr255Param name);
 
+/* MacPhoenix: the architecture an application with this 'cfrg' (and a
+   CODE 0 or not) starts in through the Code Fragment Manager: "pwpc"_4,
+   "m68k"_4 (CFM-68K), or 0 for its CODE resources (launch.cpp). */
+extern OSType ROMlib_application_cfm_arch(Handle cfrg0, bool have_code0);
+
 
 extern ConnectionID ROMlib_new_connection(uint32_t n_sects);
 

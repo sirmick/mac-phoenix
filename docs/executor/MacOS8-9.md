@@ -242,10 +242,14 @@ Third run (`~/storage/executor-grid/8.6-r3/`): no host crashes.
   a `'MOSS'/'prfl'` event (Executor's coercion was an old private format
   that read only `'odoc'` lists); an application's fragment carries its
   `'cfrg'` name, which the libraries in Communicator's file import from.
-  Communicator itself still quits: its allocator's pools don't fit in the
-  12.5MB partition once its ~10MB of code is loaded there. Open: whether
-  8.6's Process Manager adds a PowerPC application's code to the
-  partition with virtual memory off (Communicator runs on the G3).
+  Communicator itself quit: its allocator's pools didn't fit in the
+  12.5MB partition once its ~10MB of code was loaded there. With virtual
+  memory off a Mac's Process Manager adds a PowerPC application's
+  fragment to its partition: the fragment's length, rounded up to 4, and
+  50K more (8.6, 9.0.4; 28K on 7.6.1), the Code Fragment Manager loading
+  code and data into the application heap (`tests/guest/partprobe`'s
+  PartProbePPC on the G3, ctest `partition_fragment_*`); Executor does
+  the same (process.cpp `powerpc_fragment_extra`).
 * Date & Time: the menu bar clock calls (MenusLib, weak imports it makes
   from 8.2 on) are answered; it now spins in Apple's WindowDefinitions
   drawing its title (no traps: needs PC sampling). With Charcoal (the

@@ -1,12 +1,14 @@
 #!/bin/bash
 # build-retro68.sh — PartProbe as a 68k application built with Retro68
 # (RETRO68: the toolchain prefix, default ~/opt/retro68/build/toolchain)
+# and as a PowerPC one (RETRO68PPC, default ~/opt/retro68/build-ppc/toolchain)
 # against the headers generated from src/executor/multiversal: writes
-# PartProbe.bin here.
+# PartProbe.bin and PartProbePPC.bin here.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO="$(cd "$HERE/../../.." && pwd)"
 RETRO68="${RETRO68:-$HOME/opt/retro68/build/toolchain}"
+RETRO68PPC="${RETRO68PPC:-$HOME/opt/retro68/build-ppc/toolchain}"
 WORK="${WORK:-$HOME/storage/tmp/partprobe-retro68.$$}"
 mkdir -p "$WORK"
 (cd "$REPO/src/executor/multiversal" && \
@@ -16,4 +18,9 @@ cmake -S "$HERE" -B "$WORK/m68k" -DCMAKE_TOOLCHAIN_FILE="$RETRO68/m68k-apple-mac
 cmake --build "$WORK/m68k" -j4
 cp "$WORK/m68k/PartProbe.bin" "$HERE/PartProbe.bin"
 echo PartProbe.bin
+cmake -S "$HERE" -B "$WORK/ppc" -DCMAKE_TOOLCHAIN_FILE="$RETRO68PPC/powerpc-apple-macos/cmake/retroppc.toolchain.cmake" \
+    -DMV_OUT="$WORK/mv" >/dev/null
+cmake --build "$WORK/ppc" -j4
+cp "$WORK/ppc/PartProbe.bin" "$HERE/PartProbePPC.bin"
+echo PartProbePPC.bin
 rm -rf "$WORK"
