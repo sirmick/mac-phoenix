@@ -766,6 +766,21 @@
 
 # ####
 
+# InterfaceLib's GetTrapVector (8.x; 8.6's AppleScript calls it, then
+# CallUniversalProc on the result): a trap's address by its trap word, a
+# Toolbox trap when bit 11 is set, as NGetTrapAddress gives it.
+- only-for: executor
+  function:
+    name: GetTrapVector
+    return: UniversalProcPtr
+    args:
+      - name: trapNumber
+        type: uint16_t
+    library: InterfaceLib
+    executor: C_
+
+# ####
+
 - function:
     name: NSetTrapAddress
     args:

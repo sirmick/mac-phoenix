@@ -195,6 +195,13 @@ ProcPtr Executor::C_NGetTrapAddress(uint16_t n, TrapType ttype) /* IMII-384 */
     return _GetTrapAddress_flags(n, true, ttype != kOSTrapType);
 }
 
+/* MacPhoenix: InterfaceLib's GetTrapVector (OSUtil.yaml) */
+UniversalProcPtr Executor::C_GetTrapVector(uint16_t trapNumber)
+{
+    return (UniversalProcPtr)C_NGetTrapAddress(trapNumber,
+                                               trapNumber & 0x0800 ? kToolboxTrapType : kOSTrapType);
+}
+
 void Executor::C_NSetTrapAddress(ProcPtr addr, uint16_t n, TrapType ttype)
 {
     _SetTrapAddress_flags(addr, n, true, ttype != kOSTrapType);

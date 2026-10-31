@@ -124,6 +124,40 @@
 
 # ####
 
+# InterfaceLib's CallComponentFunction[WithStorage], which a PowerPC
+# component's entry calls to hand a request to one of its routines: the
+# parameter block's arguments (and the storage first) to the routine
+# descriptor. 68k code reaches the same through _ComponentDispatch -1.
+- only-for: executor
+  function:
+    name: CallComponentFunction
+    return: ComponentResult
+    args:
+      - name: params
+        type: ComponentParameters*
+      - name: func
+        type: UniversalProcPtr
+    library: InterfaceLib
+    executor: C_
+
+# ####
+
+- only-for: executor
+  function:
+    name: CallComponentFunctionWithStorage
+    return: ComponentResult
+    args:
+      - name: storage
+        type: Handle
+      - name: params
+        type: ComponentParameters*
+      - name: func
+        type: UniversalProcPtr
+    library: InterfaceLib
+    executor: C_
+
+# ####
+
 - funptr:
     name: ComponentRoutineUPP
     return: ComponentResult

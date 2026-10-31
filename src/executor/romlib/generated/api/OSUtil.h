@@ -11,6 +11,7 @@
  *     VRetraceMgr.h    VBLTask                                              *
  *     FileMgr.h        ParamBlockRec, DrvQEl, VCB                           *
  *     OSEvent.h        EvQEl                                                *
+ *     MixedMode.h      UniversalProcPtr                                     *
  *                                                                           *
  *                                                                           *
  *****************************************************************************/
@@ -25,6 +26,7 @@
 #include "VRetraceMgr.h"
 #include "FileMgr.h"
 #include "OSEvent.h"
+#include "MixedMode.h"
 
 #define MODULE_NAME OSUtil
 #include <base/api-module.h>
@@ -338,6 +340,9 @@ OSErr Dequeue(QElemPtr e, QHdrPtr h);REGISTER_TRAP2(Dequeue, 0xA96E, D0(A0, A1),
 // extern void SetTrapAddress(LONGINT addr,
 // INTEGER n);
 ProcPtr C_NGetTrapAddress(uint16_t n, TrapType ttype);NOTRAP_FUNCTION(NGetTrapAddress);
+
+
+UniversalProcPtr C_GetTrapVector(uint16_t trapNumber);LIBRARY_FUNCTION(InterfaceLib, GetTrapVector, C_GetTrapVector);
 
 
 void C_NSetTrapAddress(ProcPtr addr, uint16_t n, TrapType ttype);NOTRAP_FUNCTION(NSetTrapAddress);
