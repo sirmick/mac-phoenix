@@ -1,5 +1,6 @@
 #if !defined(_STDBITS_H_)
 #define _STDBITS_H_
+#include <quickdraw/gworld.h>
 namespace Executor
 {
 struct cleanup_info
@@ -19,10 +20,8 @@ struct cleanup_info
         PixMapHandle pixmap_handle;
     } data;
     /* MacPhoenix: baseAddr was a handle (ROMlib_lock_handle_base), put
-       back in base_pixmap by the cleanup */
-    Handle base_handle;
-    PixMap *base_pixmap;
-    SignedByte base_state;
+       back by the cleanup */
+    handle_base_lock base_lock;
 };
 
 extern void ROMlib_bogo_stdbits(BitMap *src_bogo_map, BitMap *dst_bogo_map,

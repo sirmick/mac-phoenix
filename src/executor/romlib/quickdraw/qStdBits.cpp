@@ -50,9 +50,7 @@ dy_zero_p(const Rect *srcr, const Rect *dstr,
 void Executor::canonicalize_bogo_map_cleanup(const BitMap *bogo_map,
                                              struct cleanup_info *info)
 {
-    if(info->base_handle)
-        ROMlib_unlock_handle_base(info->base_pixmap, info->base_handle,
-                                  info->base_state);
+    ROMlib_unlock_handle_base(&info->base_lock);
     switch(info->cleanup_type)
     {
         case Executor::cleanup_info::cleanup_state:
@@ -88,7 +86,7 @@ void Executor::canonicalize_bogo_map(const BitMap *bogo_map, PixMap **canonical_
     int high_bits = ((unsigned short)bogo_map->rowBytes) >> 14;
     int low_bit = ((unsigned short)bogo_map->rowBytes) & 1;
 
-    info->base_handle = nullptr;
+    info->base_lock.h = nullptr;
 
     switch(high_bits)
     {
@@ -164,9 +162,7 @@ void Executor::canonicalize_bogo_map(const BitMap *bogo_map, PixMap **canonical_
                 info->cleanup_type = Executor::cleanup_info::cleanup_none;
                 /* MacPhoenix: a copy of a GWorld's pixmap whose pixels
                    are locked now, its baseAddr still their handle */
-                info->base_pixmap = (PixMap *)bogo_map;
-                info->base_handle = ROMlib_lock_handle_base(info->base_pixmap,
-                                                            &info->base_state);
+                ROMlib_lock_handle_base(nullptr, (PixMap *)bogo_map, &info->base_lock);
             }
 
             *canonical_addr = (PixMap *)bogo_map;
@@ -205,9 +201,7 @@ void Executor::canonicalize_bogo_map(const BitMap *bogo_map, PixMap **canonical_
 
                 /* MacPhoenix: a port's pixmap whose baseAddr is a handle
                    (a window opened while a GWorld's device was current) */
-                info->base_pixmap = *pixmap_handle;
-                info->base_handle = ROMlib_lock_handle_base(info->base_pixmap,
-                                                            &info->base_state);
+                ROMlib_lock_handle_base(pixmap_handle, *pixmap_handle, &info->base_lock);
 
                 break;
             }

@@ -299,23 +299,44 @@ QDErr Executor::C_NewGWorld(GUEST<GWorldPtr> *graphics_world_out,
     return noErr;
 }
 
-Handle Executor::ROMlib_lock_handle_base(PixMap *pm, SignedByte *state)
+bool Executor::ROMlib_lock_handle_base(PixMapHandle pmh, PixMap *pm, handle_base_lock *l)
 {
+    l->h = nullptr;
     if(!pm || pm->pmVersion != gw_pm_version_handle)
-        return nullptr;
+        return false;
     Handle h = (Handle)pm->baseAddr;
     if(!ROMlib_live_handle_p(h) || !*h)
-        return nullptr;
-    *state = HGetState(h);
-    HLock(h);
-    pm->baseAddr = *h;
-    return h;
+        return false;
+    l->pmh = pmh;
+    l->pm = pm;
+    l->h = h;
+    /* a GWorld's pixels: its pixmap's baseAddr is the handle (unlocked)
+       or their pointer (locked) */
+    gw_info_t *gw = lookup_gw_info_by_gw_pixmap_baseaddr(h);
+    if(!gw)
+        gw = lookup_gw_info_by_gw_pixmap_baseaddr(*h);
+    l->gw_pixmap = gw ? gw->gw_pixmap : nullptr;
+    if(l->gw_pixmap)
+        LockPixels(l->gw_pixmap);
+    else
+    {
+        l->state = HGetState(h);
+        HLock(h);
+    }
+    (pmh ? (PixMap *)*pmh : pm)->baseAddr = *h;
+    return true;
 }
 
-void Executor::ROMlib_unlock_handle_base(PixMap *pm, Handle h, SignedByte state)
+void Executor::ROMlib_unlock_handle_base(handle_base_lock *l)
 {
-    pm->baseAddr = (Ptr)h;
-    HSetState(h, state);
+    if(!l->h)
+        return;
+    if(l->gw_pixmap)
+        UnlockPixels(l->gw_pixmap);
+    else
+        HSetState(l->h, l->state);
+    (l->pmh ? (PixMap *)*l->pmh : l->pm)->baseAddr = (Ptr)l->h;
+    l->h = nullptr;
 }
 
 Boolean Executor::C_LockPixels(PixMapHandle pixels)

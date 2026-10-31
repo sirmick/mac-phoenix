@@ -661,24 +661,17 @@ namespace
    at the master pointer, over the heap (Mars Rising's 640x480 PaintRect). */
 class PortPixelsGuard
 {
-    PixMapHandle pm = nullptr;
-    Handle h = nullptr;
-    SignedByte state = 0;
+    handle_base_lock lock;
 
 public:
     PortPixelsGuard()
     {
+        lock.h = nullptr;
         GrafPtr port = qdGlobals().thePort;
-        if(!CGrafPort_p(port) || !CPORT_PIXMAP(port))
-            return;
-        pm = CPORT_PIXMAP(port);
-        h = ROMlib_lock_handle_base(*pm, &state);
+        if(CGrafPort_p(port) && CPORT_PIXMAP(port))
+            ROMlib_lock_handle_base(CPORT_PIXMAP(port), *CPORT_PIXMAP(port), &lock);
     }
-    ~PortPixelsGuard()
-    {
-        if(h)
-            ROMlib_unlock_handle_base(*pm, h, state);
-    }
+    ~PortPixelsGuard() { ROMlib_unlock_handle_base(&lock); }
 };
 }
 
