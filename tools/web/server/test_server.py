@@ -5,12 +5,14 @@ relay (ctest executor.web.server; no browser needed).
     python3 tools/web/server/test_server.py
 """
 import base64
+import contextlib
 import hashlib
 import http.client
 import json
 import os
 import shutil
 import socket
+import sqlite3
 import struct
 import sys
 import tempfile
@@ -18,7 +20,7 @@ import threading
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from server import app, config, relay, static  # noqa: E402
+from server import app, backup, config, relay, static  # noqa: E402
 
 
 class ServerTest(unittest.TestCase):
@@ -407,6 +409,27 @@ class ServerTest(unittest.TestCase):
         self.assertIn(b"401", s.recv(4096).split(b"\r\n")[0])
         s.close()
 
+    def test_backup(self):
+        cookie = self.login()
+        rec = struct.pack("<I", 3) + b"b" * 4096
+        r, data = self.request("POST", "/api/sync/overlays/backup-x?base=0&name=a.img&size=1048576", rec, cookie=cookie)
+        self.assertEqual(r.status, 200)
+        blob = b"an object"
+        sha = hashlib.sha256(blob).hexdigest()
+        self.assertEqual(self.request("PUT", f"/api/sync/objects/{sha}", blob, cookie=cookie)[0].status, 204)
+        dest = os.path.join(self.tmp, "backup")
+        data_dir = self.server.app.cfg["server"]["data"]
+        dbs, objects = backup.backup(data_dir, dest)
+        self.assertGreaterEqual(dbs, 2)                      # accounts + the owner's sync
+        self.assertGreaterEqual(objects, 1)
+        self.assertEqual(backup.backup(data_dir, dest)[1], 0)    # again: nothing new
+        with contextlib.closing(sqlite3.connect(os.path.join(dest, "accounts.sqlite"))) as db:
+            self.assertIn("owner", [n for (n,) in db.execute("select name from users")])
+        found = [os.path.join(r, f) for r, _, fs in os.walk(os.path.join(dest, "users")) for f in fs]
+        self.assertTrue(any(f.endswith(sha) for f in found))
+        with contextlib.closing(sqlite3.connect(next(f for f in found if f.endswith("sync.sqlite")))) as db:
+            self.assertEqual(db.execute("select count(*) from blocks where key = 'backup-x'").fetchone()[0], 1)
+
 
 class WS:
     """The tab's end of /relay: masked frames out, relay messages in."""
@@ -500,6 +523,7 @@ class Echo:
         self.running = False
         self.tcp.close()
         self.udp.close()
+
 
 if __name__ == "__main__":
     unittest.main()

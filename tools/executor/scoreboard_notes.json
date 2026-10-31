@@ -686,5 +686,13 @@
  },
  "8.6|Classic Games:Beyond Dark Castle 1.1 ƒ:Beyond Dark Castle Editor ": {
   "owner": "— (the same on the ROM machines)"
+ },
+ "e761|Games PPC:Ferazel's Wand 1.0.3 ƒ:Ferazel's Wand": {
+  "status": "partial",
+  "blocker": "wants its CD: alert \"Please insert the Ferazel's Wand CD and try again.\" at launch, as on the G3 (no CD image in the set)"
+ },
+ "e86|Games PPC:Ferazel's Wand 1.0.3 ƒ:Ferazel's Wand": {
+  "status": "partial",
+  "blocker": "wants its CD: alert \"Please insert the Ferazel's Wand CD and try again.\" at launch, as on the G3 (no CD image in the set)"
  }
 }
