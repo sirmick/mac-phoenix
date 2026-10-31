@@ -15,6 +15,7 @@
 #include <base/functions.impl.h>
 #include "appearance_draw.h"
 #include <algorithm>
+#include <tuple>
 
 using namespace Executor;
 using namespace Executor::appearance;
@@ -1459,6 +1460,242 @@ OSStatus Executor::C_DrawThemeModelessDialogFrame(const Rect *inRect, ThemeDrawS
     InsetRect(&r, 1, 1);
     PenSize(2, 2);
     frameGray(r, lookOf(inState) != Look::inactive ? kFace : kLight);
+    return noErr;
+}
+
+/* ── Menus, measured from 8.6's on a G3 (appr draw32.menu*) ──────────── */
+
+namespace
+{
+/* What's selected (the default appearance's): a light edge, the fill, a
+   dark edge */
+struct Rgb
+{
+    uint16_t r, g, b;
+};
+constexpr Rgb kSelLight = { 0x6666, 0x6666, 0xCCCC }, kSelFill = { 0x3333, 0x3333, 0x9999 },
+              kSelDark = { 0x0000, 0x0000, 0x8888 };
+
+void colorRect(int h1, int v1, int h2, int v2, Rgb c)
+{
+    if(h2 < h1 || v2 < v1)
+        return;
+    Rect r = { (INTEGER)v1, (INTEGER)h1, (INTEGER)(v2 + 1), (INTEGER)(h2 + 1) };
+    RGBColor rgb = { c.r, c.g, c.b };
+    RGBForeColor(&rgb);
+    PaintRect(&r);
+}
+
+/* The menu bar's top corners, cut away in black: N[k] pixels of row k */
+constexpr int kBarCorner[] = { 5, 3, 2, 1, 1 };
+
+void barCorners(int L, int T, int R)
+{
+    for(int k = 0; k < 5; k++)
+    {
+        hrun(L, L + kBarCorner[k] - 1, T + k, grey(0));
+        hrun(R - kBarCorner[k] + 1, R, T + k, grey(0));
+    }
+}
+
+/* A pixel and its mirror in the corner's diagonal, (dh, dv) from the corner
+   at (h, v); sh: -1 for a right corner */
+void cornerPair(int h, int v, int sh, int dh, int dv, int g)
+{
+    pixel(h + sh * dh, v + dv, grey(g));
+    pixel(h + sh * dv, v + dh, grey(g));
+}
+
+/* The normal bar: #ddd, a white edge at the top and the left, #999 at the
+   right and above the black bottom line, the top corners rounded, shaded
+   into the white edge on the left and into the #999 on the right */
+void menuBar(int L, int T, int R, int B)
+{
+    Rect in = { (INTEGER)(T + 1), (INTEGER)(L + 1), (INTEGER)(B - 1), (INTEGER)R };
+    fillGray(in, grey(0xd));
+    hrun(L + 8, R - 8, T, grey(0xf));
+    vrun(L, T + 8, B - 3, grey(0xf));
+    vrun(R, T + 8, B - 2, grey(9));
+    hrun(L + 1, R - 1, B - 2, grey(9));
+    pixel(L, B - 2, grey(0xd));
+    hrun(L, R, B - 1, grey(0));
+    barCorners(L, T, R);
+    /* left: the arc's shading, then the white edge along it */
+    for(auto [dh, dv, g] : { std::tuple{ 5, 0, 5 }, { 6, 0, 0xa }, { 7, 0, 0xd }, { 3, 1, 5 }, { 4, 1, 0xa },
+                             { 2, 2, 5 }, { 3, 2, 0xd } })
+        cornerPair(L, T, 1, dh, dv, g);
+    for(auto [dh, dv] : { std::pair{ 5, 1 }, { 6, 1 }, { 7, 1 }, { 4, 2 }, { 3, 3 } })
+        cornerPair(L, T, 1, dh, dv, 0xf);
+    /* right: the arc darkening from the top edge's white into the side's #999 */
+    for(auto [dh, dv, g] : { std::tuple{ 4, 0, 2 }, { 5, 0, 5 }, { 6, 0, 0xa }, { 7, 0, 0xd }, { 3, 1, 5 },
+                             { 4, 1, 8 }, { 5, 1, 0xb }, { 6, 1, 0xc }, { 2, 2, 5 }, { 3, 2, 8 },
+                             { 4, 2, 0xb }, { 1, 3, 5 }, { 2, 3, 8 }, { 3, 3, 0xb }, { 0, 4, 2 },
+                             { 1, 4, 8 }, { 2, 4, 0xb }, { 0, 5, 5 }, { 1, 5, 0xa }, { 0, 6, 7 },
+                             { 1, 6, 0xb }, { 0, 7, 8 }, { 1, 7, 0xc } })
+        pixel(R - dh, T + dv, grey(g));
+}
+
+/* The selected bar (and title): the selection's colours, square corners */
+void selectedBar(int L, int T, int R, int B)
+{
+    colorRect(L + 1, T + 1, R - 1, B - 3, kSelFill);
+    colorRect(L + 5, T, R - 5, T, kSelLight);
+    colorRect(L, T + 5, L, B - 3, kSelLight);
+    colorRect(R, T + 5, R, B - 2, kSelDark);
+    colorRect(L + 1, B - 2, R - 1, B - 2, kSelDark);
+    colorRect(L, B - 2, L, B - 2, kSelFill);
+    hrun(L, R, B - 1, grey(0));
+    barCorners(L, T, R);
+}
+
+void callTitleProc(MenuTitleDrawingUPP proc, const Rect &r, UInt32 data)
+{
+    if(!proc)
+        return;
+    SInt16 depth;
+    Boolean color;
+    portDepth(&depth, &color);
+    proc(&r, depth, color, data);
+}
+}
+
+OSStatus Executor::C_DrawThemeMenuBarBackground(const Rect *inBounds, ThemeMenuBarState inState, UInt32 inFlags)
+{
+    if(!inBounds)
+        return paramErr;
+    DrawGuard guard;
+    const Rect &b = *inBounds;
+    if(inState == kThemeMenuBarSelected)
+        selectedBar(b.left, b.top, b.right - 1, b.bottom);
+    else
+        menuBar(b.left, b.top, b.right - 1, b.bottom);
+    return noErr;
+}
+
+/* A selected title: the bar's selected look across the title, without its
+   corners and side edges; otherwise only the title's own drawing */
+OSStatus Executor::C_DrawThemeMenuTitle(const Rect *inMenuBarRect, const Rect *inTitleRect, ThemeMenuState inState,
+                                        UInt32 inAttributes, MenuTitleDrawingUPP inTitleProc, UInt32 inTitleData)
+{
+    if(!inMenuBarRect || !inTitleRect)
+        return paramErr;
+    {
+        DrawGuard guard;
+        if(inState == kThemeMenuSelected)
+        {
+            const Rect &t = *inTitleRect;
+            int B = inMenuBarRect->bottom;
+            colorRect(t.left, t.top, t.right - 1, t.top, kSelLight);
+            colorRect(t.left, t.top + 1, t.right - 1, B - 3, kSelFill);
+            colorRect(t.left, B - 2, t.right - 1, B - 2, kSelDark);
+        }
+    }
+    callTitleProc(inTitleProc, *inTitleRect, inTitleData);
+    return noErr;
+}
+
+/* A menu: #ddd, a white edge at the top and the left, #999 at the right and
+   the bottom, a black outline a pixel outside its rectangle and a #222
+   shadow below and to the right of that */
+OSStatus Executor::C_DrawThemeMenuBackground(const Rect *inMenuRect, ThemeMenuType inMenuType)
+{
+    if(!inMenuRect || inMenuType > kThemeMenuTypeHierarchical)
+        return paramErr;
+    DrawGuard guard;
+    const Rect &m = *inMenuRect;
+    Rect frame = m;
+    InsetRect(&frame, -1, -1);
+    frameGray(frame, grey(0));
+    hrun(m.left + 1, m.right + 1, m.bottom + 1, grey(2));
+    vrun(m.right + 1, m.top + 1, m.bottom, grey(2));
+    bevelBox(m, { { 0xf, 9, 0xd } }, 0xd);
+    return noErr;
+}
+
+/* The menu's outline and shadow too */
+OSStatus Executor::C_GetThemeMenuBackgroundRegion(const Rect *inMenuRect, ThemeMenuType menuType, RgnHandle region)
+{
+    if(!inMenuRect || !region || menuType > kThemeMenuTypeHierarchical)
+    {
+        if(region)
+            SetEmptyRgn(region);
+        return paramErr;
+    }
+    const Rect &m = *inMenuRect;
+    RgnHandle shadow = NewRgn();
+    SetRectRgn(region, m.left - 1, m.top - 1, m.right + 1, m.bottom + 1);
+    SetRectRgn(shadow, m.left, m.top, m.right + 2, m.bottom + 2);
+    UnionRgn(region, shadow, region);
+    DisposeRgn(shadow);
+    return noErr;
+}
+
+/* An item: #ddd, white at its left and #999 at its right, or the same in
+   the selection's colours; a hierarchical
+   item's arrow, 6 wide, 12 from its right */
+OSStatus Executor::C_DrawThemeMenuItem(const Rect *inMenuRect, const Rect *inItemRect, SInt16 inVirtualMenuTop,
+                                       SInt16 inVirtualMenuBottom, ThemeMenuState inState,
+                                       ThemeMenuItemType inItemType, MenuItemDrawingUPP inDrawProc,
+                                       UInt32 inUserData)
+{
+    if(!inMenuRect || !inItemRect)
+        return paramErr;
+    {
+        DrawGuard guard;
+        const Rect &it = *inItemRect;
+        int L = it.left, T = it.top, R = it.right - 1, B = it.bottom - 1;
+        if(inState == kThemeMenuSelected)
+        {
+            colorRect(L, T, L, B, kSelLight);
+            colorRect(L + 1, T, R - 1, B, kSelFill);
+            colorRect(R, T, R, B, kSelDark);
+        }
+        else
+        {
+            Rect f = { (INTEGER)T, (INTEGER)L, (INTEGER)(B + 1), (INTEGER)R };
+            fillGray(f, grey(0xd));
+            vrun(L, T, B, grey(0xf));
+            vrun(R, T, B, grey(9));
+            /* the menu's own edges, on its first and last items */
+            if(T == inMenuRect->top)
+            {
+                hrun(L, R - 1, T, grey(0xf));
+                pixel(R, T, grey(0xd));
+            }
+            if(B == inMenuRect->bottom - 1)
+            {
+                hrun(L + 1, R, B, grey(9));
+                pixel(L, B, grey(0xd));
+            }
+        }
+        if((inItemType & ~kThemeMenuItemPopUpBackground) == kThemeMenuItemHierarchical)
+        {
+            uint16_t g = inState == kThemeMenuSelected ? grey(0xf)
+                : inState == kThemeMenuDisabled        ? grey(7)
+                                                       : grey(0);
+            int h = it.right - 12, mid = (T + B) / 2;
+            for(int k = 0; k < 6; k++)
+                vrun(h + k, mid - 5 + k, mid + 5 - k, g);
+        }
+    }
+    if(inDrawProc)
+    {
+        SInt16 depth;
+        Boolean color;
+        portDepth(&depth, &color);
+        inDrawProc(inItemRect, depth, color, inUserData);
+    }
+    return noErr;
+}
+
+/* A #888 line two below the separator item's top, white under it */
+OSStatus Executor::C_DrawThemeMenuSeparator(const Rect *inItemRect)
+{
+    if(!inItemRect)
+        return paramErr;
+    DrawGuard guard;
+    hrun(inItemRect->left, inItemRect->right - 1, inItemRect->top + 2, grey(8));
+    hrun(inItemRect->left, inItemRect->right - 1, inItemRect->top + 3, grey(0xf));
     return noErr;
 }
 
