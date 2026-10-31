@@ -23,9 +23,14 @@ The site's module is built with Skia (`-DEXECUTOR_SKIA=ON`, HiDPI.md):
 the tab draws at the screen's `devicePixelRatio` (`?scale=N` to choose),
 and at 2 text is drawn from outlines, sharp, rather than the 1x screen
 scaled up. Without it the module is 4 MB smaller (1.3 MB gzipped) and
-text at 2x is blurred; `make_site.sh` warns. `-DEXECUTOR_NET=wasm` is the default for new build directories
-(networking through the server's `/relay`); an older `build-wasm` keeps
-the `none` it was configured with until it is given again.
+text at 2x is blurred; `make_site.sh` warns.
+
+`-DEXECUTOR_NET=wasm` (MacTCP and Open Transport through the server's
+`/relay`) is the default for a new build directory, but CMake keeps a
+cached value: a `build-wasm` configured before the relay keeps `none`,
+and its module has no network (MacTCP calls fail, `executor.web.relay`
+fails) until it is configured again with `-DEXECUTOR_NET=wasm`. Check
+with `grep EXECUTOR_NET build-wasm/CMakeCache.txt`.
 
 `make_site.sh` copies what the page needs out of the build tree, so a
 rebuild doesn't change the running site until it is run again. Nothing
@@ -210,6 +215,7 @@ SITE_APPS=MacPerl ctest --test-dir build-wasm -R site.8.6.development -V
 `executor.web.hidpi` (the Finder at scale 1 and 2, text redrawn from
 outlines at 2: fails without Skia) is labelled `site` too, so the run
 checks the module is the site's. Labelled `site`, not `executor` (about
-20 minutes for the six cells); a
-screenshot an application lands in the build tree
-(`site-SYSTEM-APP.png`).
+20 minutes for the six cells). The canvas after each application's checks,
+and the Finder's first, are saved as PNGs in `~/storage/tmp/site/shots/`
+(`SYSTEM-APP.png`, `SITE_SHOTS=DIR` elsewhere); `SITE_DPR=2` runs the page
+at devicePixelRatio 2, so they are the 2x canvas.

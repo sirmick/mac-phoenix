@@ -25,8 +25,12 @@
 // failure prints XFAIL, one that works XPASS (the scoreboard is behind);
 // only an application the scoreboard says runs fails the cell.
 // SITE_APPS=Name,Name: only those. SITE_RESULTS=FILE: appends one JSON
-// line an application. SITE_LOG=1: the Worker's console.
+// line an application. SITE_LOG=1: the Worker's console. The canvas as
+// it is after each application's checks (and the Finder's, first) goes
+// to SITE_SHOTS (default ~/storage/tmp/site/shots) as SYSTEM-NAME.png;
+// SITE_DPR=2: the page at devicePixelRatio 2 (the tab draws at 2x).
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { launch, newPage, firstFrame, request as ask, until } from './harness.mjs';
@@ -80,6 +84,25 @@ const sample = (page, box = [0, 0, 640, 480]) => Promise.race([page.evaluate(asy
         }
     return out;
 }, box), new Promise((r) => setTimeout(() => r(null), 15000))]);
+// The canvas's own pixels as a PNG (at the page's scale), in the shots
+// directory.
+const SHOTS = process.env.SITE_SHOTS || path.join(os.homedir(), 'storage/tmp/site/shots');
+async function shot(name) {
+    const png = await Promise.race([page.evaluate(async () => {
+        const p = await executor.request('pixels');
+        const c = new OffscreenCanvas(p.width, p.height);
+        c.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(p.data), p.width, p.height), 0, 0);
+        const bytes = new Uint8Array(await (await c.convertToBlob({ type: 'image/png' })).arrayBuffer());
+        let bin = '';
+        for (let i = 0; i < bytes.length; i += 0x8000)
+            bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+        return btoa(bin);
+    }), new Promise((r) => setTimeout(() => r(null), 15000))]).catch(() => null);
+    if (!png)
+        return;
+    fs.mkdirSync(SHOTS, { recursive: true });
+    fs.writeFileSync(path.join(SHOTS, `${system}-${name.replace(/[^\w.-]+/g, '_')}.png`), Buffer.from(png, 'base64'));
+}
 const changed = (a, b) => !a || !b ? 0 : a.reduce((n, v, i) => n + (Math.abs(v - b[i]) > 8), 0) / a.length;
 
 const server = await startServer(dir, { images: library, include: [boot, diskName] });
@@ -92,7 +115,7 @@ let page = null, crashed = false;
 async function openTab() {
     if (page)
         await page.context().close().catch(() => {});
-    page = await newPage(browser, { log: !!process.env.SITE_LOG });
+    page = await newPage(browser, { log: !!process.env.SITE_LOG, scale: Number(process.env.SITE_DPR) || 1 });
     page.on('dialog', (d) => d.accept());
     page.on('crash', () => { crashed = true; });
     crashed = false;
@@ -187,9 +210,11 @@ let finderScreen = null, unexpected = 0;
 const table = [];
 try {
     await openTab();
-    if (!await finder()) {
+    const up = await finder();
+    await page.waitForTimeout(3000);                     // the desktop drawn
+    await shot('Finder');
+    if (!up) {
         console.log(`FAIL the Finder on ${boot}`);
-        await page.locator('#screen').screenshot({ path: path.join(dir, `site-${system}-finder.png`) });
         process.exitCode = 1;
     } else {
         for (const [n, app] of apps.entries()) {
@@ -219,8 +244,7 @@ try {
             table.push({ system, disk: diskName, app: app.name, result: mark, scoreboard: v, why: r.why || '',
                          menus: r.menus || [], front: r.front || null, seconds: Math.round((Date.now() - t0) / 1000) });
             if (!crashed)
-                await page.locator('#screen').screenshot({ path: path.join(dir, `site-${system}-${app.name.replace(/[^\w.-]+/g, '_')}.png`) })
-                    .catch(() => {});
+                await shot(app.name);
         }
     }
 } finally {
