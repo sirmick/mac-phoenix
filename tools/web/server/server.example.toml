@@ -1,0 +1,28 @@
+# tools/web/server's configuration (every key, with its default).
+# Relative paths are from this file's directory; ~ is expanded.
+
+[server]
+bind = "127.0.0.1"          # behind a reverse proxy with HTTPS; "0.0.0.0" for every address
+port = 8090
+# The tab: web/executor and the module (build-wasm/src/executor/romlib/
+# config/front-ends/wasm, or a directory tools/web/make_demo.sh made).
+site = "~/src/mac-phoenix/build-wasm/src/executor/romlib/config/front-ends/wasm"
+data = "~/storage/executor-web"   # accounts.sqlite, users/ID/ (their synced changes)
+public = false              # true: the page without signing in (sync still needs it)
+# "auto": the cookie is Secure (HTTPS only) unless the page is on localhost /
+# 127.0.0.1 / ::1 (plain http there is a secure context too); true, false.
+secure_cookies = "auto"
+# Behind a reverse proxy (HTTPS in front, this on 127.0.0.1): pass Host through,
+# the sign-in limits count X-Forwarded-For's address from these. nginx:
+#   location / { proxy_pass http://127.0.0.1:8090; proxy_set_header Host $host;
+#                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+#                proxy_set_header Upgrade $http_upgrade; proxy_set_header Connection $http_connection;
+#                proxy_buffering off; client_max_body_size 64m; }
+trusted_proxies = []        # e.g. ["127.0.0.1"]
+session_days = 30
+max_upload_mb = 64          # one request's body
+
+[library]
+images = "~/storage/images" # the NAME.img.json records' images are the library
+include = ["*.img"]
+exclude = ["test-*", "grid-*"]

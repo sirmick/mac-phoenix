@@ -1,0 +1,65 @@
+<!doctype html>
+<!-- Signing in to Executor's tab (tools/web/server): a name and password,
+     or an invitation (/login?invite=CODE) to make an account. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Executor: sign in</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #333; color: #ccc; font: 13px system-ui, sans-serif; }
+  body { display: flex; align-items: center; justify-content: center; }
+  form { display: flex; flex-direction: column; gap: 8px; width: 260px; }
+  input, button { font: inherit; padding: 6px 8px; border: 0; border-radius: 4px; }
+  input { background: #444; color: #eee; }
+  button { background: #666; color: #fff; cursor: pointer; }
+  #error { color: #f88; min-height: 1.2em; }
+  a { color: #9cf; cursor: pointer; }
+</style>
+</head>
+<body>
+<form id="form">
+  <h2 id="heading">Executor</h2>
+  <input id="invite" placeholder="Invitation" autocomplete="off" hidden>
+  <input id="name" placeholder="Name" autocomplete="username" required>
+  <input id="password" type="password" placeholder="Password" autocomplete="current-password" required>
+  <button id="go" type="submit">Sign in</button>
+  <div id="error"></div>
+  <a id="toggle">I have an invitation</a>
+</form>
+<script>
+'use strict';
+const params = new URLSearchParams(location.search);
+const $ = (id) => document.getElementById(id);
+let registering = false;
+function mode(reg) {
+    registering = reg;
+    $('invite').hidden = !reg;
+    $('invite').required = reg;
+    $('go').textContent = reg ? 'Make the account' : 'Sign in';
+    $('toggle').textContent = reg ? 'I have an account' : 'I have an invitation';
+    $('password').autocomplete = reg ? 'new-password' : 'current-password';
+}
+if (params.get('invite')) {
+    $('invite').value = params.get('invite');
+    mode(true);
+}
+$('toggle').onclick = () => mode(!registering);
+$('form').onsubmit = async (e) => {
+    e.preventDefault();
+    const body = { name: $('name').value, password: $('password').value };
+    if (registering)
+        body.invite = $('invite').value;
+    const res = await fetch(registering ? '/api/register' : '/api/login', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    if (!res.ok) {
+        $('error').textContent = (await res.json().catch(() => ({}))).error || res.statusText;
+        return;
+    }
+    // Back where the server sent us from: this site only (the browser
+    // reads '/\host' as '//host', so the parsed URL's origin decides).
+    const next = new URL(params.get('next') || '/', location.origin);
+    location.href = next.origin === location.origin ? next.pathname + next.search + next.hash : '/';
+};
+</script>
+</body>
+</html>
