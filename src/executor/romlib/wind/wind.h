@@ -72,6 +72,9 @@ extern void ROMlib_window8_forget(WindowPtr w);
 /* windMgr8.cpp: CollapseWindow's state; a part of Executor's document
    frame as GetWindowRegion answers it (false: the window hasn't the part) */
 extern bool ROMlib_window8_collapsed(WindowPtr w);
+/* 8.x: a mouse-down in a window's collapse box, which the system tracks
+   and answers (CollapseWindow) for every application: true if it was one */
+extern bool ROMlib_window8_collapse_click(Point p);
 extern bool ROMlib_window8_part_region(WindowPtr w, WindowRegionCode code, RgnHandle rgn, bool boxes = false);
 /* a floating window CreateNewWindow made (FrontWindow passes it over) */
 extern bool ROMlib_window8_floating_class(WindowPtr w);

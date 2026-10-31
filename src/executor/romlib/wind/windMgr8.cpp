@@ -7,12 +7,14 @@
 #include <base/common.h>
 #include <WindowMgr.h>
 #include <WindowMgr8.h>
+#include <ControlMgr8.h>
 #include <ResourceMgr.h>
 #include <QuickDraw.h>
 #include <CQuickDraw.h>
 #include <MemoryMgr.h>
 #include <quickdraw/cquick.h>
 #include <wind/wind.h>
+#include <prefs/prefs.h>
 #include <base/functions.impl.h>
 #include <algorithm>
 #include <map>
@@ -751,13 +753,61 @@ OSStatus Executor::C_SetWindowIdealUserState(WindowRef window, const Rect *userS
     return noErr;
 }
 
-/* Kept, not drawn: Executor's definitions don't shade a window yet. */
+/* The window shrinks to its title bar (Executor's platinum document
+   frame; other definitions keep their regions) and back, the windows
+   behind and its content redrawn as ZoomWindow does. */
 OSStatus Executor::C_CollapseWindow(WindowRef window, Boolean collapse)
 {
     if(!window)
         return errInvalidWindowPtr;
+    /* a window that can't (dialogs, rDocProc): 8.6's answer, the
+       definition's (tests/guest/difftest appr frames.N.collapse) */
+    GUEST<UInt32> features;
+    C_GetWindowFeatures(window, &features);
+    if(!(features & kWindowCanCollapse))
+        return errMessageNotSupported;
+    bool was = ROMlib_window8_collapsed(window);
     extras(window).collapsed = collapse;
+    if(was == (bool)collapse)
+        return noErr;
+    WindowPeek wp = (WindowPeek)window;
+    if(!WINDOW_VISIBLE(wp))
+    {
+        WINDCALL(window, wCalcRgns, 0);
+        return noErr;
+    }
+    RgnHandle behind = NewRgn();
+    CopyRgn(WINDOW_STRUCT_REGION(wp), behind);
+    WINDCALL(window, wCalcRgns, 0);
+    UnionRgn(behind, WINDOW_STRUCT_REGION(wp), behind);
+    CalcVisBehind(wp, behind);
+    PaintBehind(WINDOW_NEXT_WINDOW(wp), behind);
+    {
+        ThePortGuard guard(wmgr_port);
+        SetClip(WINDOW_STRUCT_REGION(wp));
+        ClipAbove(wp);
+        WINDCALL(window, wDraw, 0);
+        EraseRgn(WINDOW_CONT_REGION(wp));
+        CopyRgn(WINDOW_CONT_REGION(wp), WINDOW_UPDATE_REGION(wp));
+    }
+    DisposeRgn(behind);
     return noErr;
+}
+
+/* 8.6 collapses a window whose collapse box is clicked for any
+   application, one that knows nothing of inCollapseBox too (BridgeAgent
+   on a G3): the click is tracked and answered here, not passed on. */
+bool Executor::ROMlib_window8_collapse_click(Point p)
+{
+    if(system_version < 0x800)
+        return false;
+    GUEST<WindowPtr> gw;
+    if(FindWindow(p, &gw) != inCollapseBox)
+        return false;
+    WindowPtr w = gw;
+    if(TrackBox(w, p, inCollapseBox))
+        C_CollapseWindow(w, !ROMlib_window8_collapsed(w));
+    return true;
 }
 
 bool Executor::ROMlib_window8_collapsed(WindowPtr w)
