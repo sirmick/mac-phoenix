@@ -2181,21 +2181,17 @@ OSErr Executor::process_launch(LaunchParamBlockRec *lpbp)
         /* No AppParameters: an 'oapp' (Apple event wire format, as
            osevent.cpp builds it), queued now so that it comes before
            anything sent to the new process later; BridgeAgent sends its
-           'dosc' while MacPerl is still starting. */
+           'dosc' while MacPerl is still starting. From the system process,
+           not the launcher (8.6, difftest aevt: the 'oapp' of an
+           application BridgeAgent launches comes from "MacOS"). */
         struct
         {
             GUEST<OSType> signature;
             GUEST<int16_t> major, minor;
             GUEST<OSType> marker;
         } msg = { "aevt"_4, 1, 1, ";;;;"_4 };
-        EventRecord evt = {};
-        evt.what = kHighLevelEvent;
-        evt.message = "aevt"_4;
-        GUEST<uint32_t> id = "oapp"_4;
-        memcpy(&evt.where, &id, sizeof id);
         ProcessSerialNumber to = p->serial_number;
-        PostHighLevelEvent(&evt, (Ptr)&to, 0, (Ptr)&msg, sizeof msg,
-                           0x8000 /* receiverIDisPSN */);
+        ROMlib_hle_post_from_system(&to, "aevt"_4, "oapp"_4, 0, (Ptr)&msg, sizeof msg);
         p->posted_open_event = true;
     }
     return noErr;
@@ -2749,8 +2745,9 @@ void Executor::ROMlib_process_port_name(PPCPortRec *port)
    too, so what it sends ('oapp' at launch, Quit All's Quits) is seen as
    coming from it, not from the receiver (the receiver's name was given
    for it, and the Apple Event Manager took such an event as the
-   application's own). */
-static const unsigned char system_port_name[] = "\x0fProcess Manager";
+   application's own). Its name is "MacOS", as an 8.6 'oapp''s sender
+   (difftest aevt). */
+static const unsigned char system_port_name[] = "\x05MacOS";
 
 static void system_port(PPCPortRec *port)
 {

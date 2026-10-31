@@ -6,6 +6,7 @@
 
 #include <AppleEvents.h>
 #include <MemoryMgr.h>
+#include <ProcessMgr.h>
 
 #include <mman/mman.h>
 #include <appleevent/apple_events.h>
@@ -46,7 +47,7 @@ get_subdesc_info(Handle aggr_desc_h, subdesc_info_t *info,
 
         if(attribute_p)
         {
-            inline_key_desc_t *inline_target_desc;
+            inline_desc_t *inline_target_desc;
             char *aggr_desc_p;
 
             info->count = ATTRIBUTE_COUNT(aggr_desc_h);
@@ -54,15 +55,19 @@ get_subdesc_info(Handle aggr_desc_h, subdesc_info_t *info,
 
             aggr_desc_p = (char *)*aggr_desc_h;
 
+            /* MacPhoenix: the target is type and size, no key (it was
+               read as a keyed descriptor: its first data long taken for
+               its size, 0 for a serial number's, a signature's put the
+               attributes past the end of the event) */
             inline_target_desc
-                = (inline_key_desc_t *)(aggr_desc_p
-                                        + offsetof(ae_header_t, target));
+                = (inline_desc_t *)(aggr_desc_p
+                                    + offsetof(ae_header_t, target));
 
             info->base_offset = (offsetof(ae_header_t, target)
-                                 /* type, key, size */
-                                 + 12
+                                 /* type, size */
+                                 + 8
                                  + inline_target_desc->size
-                                 /* two unknown longs */
+                                 /* 'aevt', version */
                                  + 8);
         }
         else
@@ -203,8 +208,10 @@ OSErr aggr_desc_get_addr(Handle aggr_desc_h,
             aggr_desc_p = (char *)*aggr_desc_h;
             if(aggr_desc_size < offset + old_size)
                 abort();
-            memmove(aggr_desc_p + offset + old_size,
-                    aggr_desc_p + offset + new_size,
+            /* MacPhoenix: what follows moves up (was moved down: an
+               attribute added to an event with parameters overwrote them) */
+            memmove(aggr_desc_p + offset + new_size,
+                    aggr_desc_p + offset + old_size,
                     aggr_desc_size - offset - old_size);
         }
         else if(old_size > new_size)
@@ -213,8 +220,9 @@ OSErr aggr_desc_get_addr(Handle aggr_desc_h,
 
             if(aggr_desc_size < offset + old_size)
                 abort();
-            memmove(aggr_desc_p + offset + old_size,
-                    aggr_desc_p + offset + new_size,
+            /* MacPhoenix: and down (was up) */
+            memmove(aggr_desc_p + offset + new_size,
+                    aggr_desc_p + offset + old_size,
                     aggr_desc_size - offset - old_size);
             SetHandleSize(aggr_desc_h, aggr_desc_size - diff);
             if(LM(MemErr) != noErr)
@@ -559,6 +567,9 @@ aggr_delete_key_desc(Handle aggr_handle,
         return true;
 }
 
+/* MacPhoenix: actualSize is the data's size, which may be more than
+   maximumSize (8.6, difftest aevt: a 252-byte TargetID read into 64
+   bytes answers 252); a null descriptor has no data. */
 static void
 ae_desc_to_ptr(descriptor_t *desc,
                void *data, uint32_t max_size, GUEST<int32_t> *size_out)
@@ -567,13 +578,14 @@ ae_desc_to_ptr(descriptor_t *desc,
     Handle desc_data;
 
     desc_data = DESC_DATA(desc);
-    desc_size = GetHandleSize(desc_data);
+    desc_size = desc_data ? GetHandleSize(desc_data) : 0;
 
     copy_size = std::min(desc_size, max_size);
 
-    memcpy(data, *desc_data, copy_size);
+    if(copy_size)
+        memcpy(data, *desc_data, copy_size);
 
-    *size_out = copy_size;
+    *size_out = desc_size;
 }
 
 #if 0
@@ -724,9 +736,51 @@ OSErr Executor::C_AECreateAppleEvent(AEEventClass event_class,
         t[0] = 0x3b3b;
     }
 
-    AE_RETURN_ERROR(AECreateDesc(typeAppleEvent,
-                                 event_data, event_size,
-                                 evt_out));
+    OSErr err = AECreateDesc(typeAppleEvent, event_data, event_size, evt_out);
+    if(err != noErr)
+        AE_RETURN_ERROR(err);
+
+    /* MacPhoenix: the attributes 8.6's Apple Event Manager gives a new
+       event (difftest aevt, G3): the return ID as a long, generated and
+       distinct for kAutoGenerateReturnID; the transaction ID only when
+       there is one; the source, kAESameProcess for an event to the
+       creator itself, else kAEUnknownSource; the interaction level
+       kAECanInteract; the original address, the target. BBEdit Lite
+       6.1's handler gives up on an event without a source. */
+    static int32_t last_return_id = 0x10000;
+    int32_t rtid = return_id;
+    if(return_id == kAutoGenerateReturnID)
+    {
+        if(++last_return_id == kAutoGenerateReturnID || last_return_id == 0)
+            last_return_id = 1;
+        rtid = last_return_id;
+    }
+    GUEST<int32_t> rtid_s = rtid;
+    AEPutAttributePtr(evt_out, keyReturnIDAttr, typeLongInteger, &rtid_s, sizeof rtid_s);
+    if(transaction_id != kAnyTransactionID)
+    {
+        GUEST<int32_t> tran_s = transaction_id;
+        AEPutAttributePtr(evt_out, keyTransactionIDAttr, typeLongInteger, &tran_s, sizeof tran_s);
+    }
+    int16_t source = kAEUnknownSource;
+    if(target_type == typeProcessSerialNumber && target_size == sizeof(ProcessSerialNumber))
+    {
+        ProcessSerialNumber psn, self;
+        memcpy(&psn, *target_data, sizeof psn);
+        GetCurrentProcess(&self);
+        Boolean same = psn.highLongOfPSN == 0 && psn.lowLongOfPSN == kCurrentProcess;
+        if(!same)
+            SameProcess(&psn, &self, &same);
+        if(same)
+            source = kAESameProcess;
+    }
+    GUEST<int16_t> source_s = source;
+    AEPutAttributePtr(evt_out, keyEventSourceAttr, typeShortInteger, &source_s, sizeof source_s);
+    GUEST<int16_t> interact_s = kAECanInteract;
+    AEPutAttributePtr(evt_out, keyInteractLevelAttr, typeShortInteger, &interact_s, sizeof interact_s);
+    if(target && target_type != typeNull)
+        AEPutAttributeDesc(evt_out, keyOriginalAddressAttr, target);
+    AE_RETURN_ERROR(noErr);
 }
 
 /* generic descriptor functions */
@@ -758,6 +812,9 @@ OSErr Executor::C_AECreateDesc(DescType type, const void* data, Size data_size,
 OSErr Executor::C_AEDisposeDesc(AEDesc *desc)
 {
     DisposeHandle(DESC_DATA(desc));
+    /* MacPhoenix: and the descriptor is a null one (8.6, difftest aevt) */
+    DESC_TYPE(desc) = typeNull;
+    DESC_DATA(desc) = nullptr;
 
     AE_RETURN_ERROR(noErr);
 }
@@ -827,19 +884,40 @@ OSErr Executor::C_AECountItems(AEDescList *list, GUEST<int32_t> *count_out)
     AE_RETURN_ERROR(noErr);
 }
 
+/* MacPhoenix: a descriptor a call can't give is a null one (8.6, difftest
+   aevt: BBEdit Lite 6.1 puts what AEGetAttributeDesc gave back for a
+   missing 'optk' into the event); the copy the item was coerced from is
+   disposed of (it leaked). */
+static OSErr coerce_out(descriptor_t *desc, DescType desired_type, AEDesc *desc_out)
+{
+    OSErr err = AECoerceDesc(desc, desired_type, desc_out);
+    AEDisposeDesc(desc);
+    return err;
+}
+
+static void null_desc(AEDesc *desc)
+{
+    if(desc)
+    {
+        DESC_TYPE(desc) = typeNull;
+        DESC_DATA(desc) = nullptr;
+    }
+}
+
 OSErr Executor::C_AEGetNthDesc(AEDescList *list, int32_t index,
                                DescType desired_type,
                                GUEST<AEKeyword> *keyword_out, AEDesc *desc_out)
 {
     descriptor_t *desc = (descriptor_t *)alloca(sizeof *desc);
 
+    null_desc(desc_out);
     if(!LIST_CLASS_P(list))
         AE_RETURN_ERROR(errAEWrongDataType);
 
     if(!aggr_get_nth_desc(DESC_DATA(list), index, keyword_out, desc))
         AE_RETURN_ERROR(errAEDescNotFound);
 
-    AE_RETURN_ERROR(AECoerceDesc(desc, desired_type, desc_out));
+    AE_RETURN_ERROR(coerce_out(desc, desired_type, desc_out));
 }
 
 OSErr Executor::C_AEGetNthPtr(AEDescList *list, int32_t index,
@@ -859,11 +937,12 @@ OSErr Executor::C_AEGetNthPtr(AEDescList *list, int32_t index,
         AE_RETURN_ERROR(errAEDescNotFound);
 
     err = AECoerceDesc(desc, desired_type, coerced_desc);
+    AEDisposeDesc(desc);
     if(err != noErr)
         AE_RETURN_ERROR(err);
 
     *type_out = DESC_TYPE(coerced_desc);
-    ae_desc_to_ptr(desc,
+    ae_desc_to_ptr(coerced_desc,
                    data, max_size, size_out);
     AE_RETURN_ERROR(AEDisposeDesc(coerced_desc));
 }
@@ -934,6 +1013,7 @@ OSErr Executor::C_AEGetParamDesc(AERecord *record, AEKeyword keyword,
 {
     descriptor_t *desc;
 
+    null_desc(desc_out);
     if(!RECORD_CLASS_P(record))
         AE_RETURN_ERROR(errAEWrongDataType);
 
@@ -942,7 +1022,7 @@ OSErr Executor::C_AEGetParamDesc(AERecord *record, AEKeyword keyword,
     if(desc == nullptr)
         AE_RETURN_ERROR(errAEDescNotFound);
 
-    AE_RETURN_ERROR(AECoerceDesc(desc, desired_type, desc_out));
+    AE_RETURN_ERROR(coerce_out(desc, desired_type, desc_out));
 }
 
 OSErr Executor::C_AEPutParamDesc(AERecord *record, AEKeyword keyword,
@@ -972,11 +1052,12 @@ OSErr Executor::C_AEGetParamPtr(AERecord *record, AEKeyword keyword,
         AE_RETURN_ERROR(errAEDescNotFound);
 
     err = AECoerceDesc(desc, desired_type, coerced_desc);
+    AEDisposeDesc(desc);
     if(err != noErr)
         AE_RETURN_ERROR(err);
 
     *type_out = DESC_TYPE(coerced_desc);
-    ae_desc_to_ptr(desc,
+    ae_desc_to_ptr(coerced_desc,
                    (Ptr)data, max_size, size_out);
     AE_RETURN_ERROR(AEDisposeDesc(coerced_desc));
 }
@@ -1073,6 +1154,7 @@ OSErr Executor::C_AEGetAttributeDesc(AppleEvent *evt, AEKeyword keyword,
 {
     descriptor_t *desc;
 
+    null_desc(desc_out);
     if(!APPLE_EVENT_CLASS_P(evt))
         AE_RETURN_ERROR(errAEWrongDataType);
 
@@ -1081,7 +1163,7 @@ OSErr Executor::C_AEGetAttributeDesc(AppleEvent *evt, AEKeyword keyword,
     if(desc == nullptr)
         AE_RETURN_ERROR(errAEDescNotFound);
 
-    AE_RETURN_ERROR(AECoerceDesc(desc, desired_type, desc_out));
+    AE_RETURN_ERROR(coerce_out(desc, desired_type, desc_out));
 }
 
 OSErr Executor::C_AEGetAttributePtr(AppleEvent *evt, AEKeyword keyword,
@@ -1102,11 +1184,12 @@ OSErr Executor::C_AEGetAttributePtr(AppleEvent *evt, AEKeyword keyword,
         AE_RETURN_ERROR(errAEDescNotFound);
 
     err = AECoerceDesc(desc, desired_type, coerced_desc);
+    AEDisposeDesc(desc);
     if(err != noErr)
         AE_RETURN_ERROR(err);
 
     *type_out = DESC_TYPE(coerced_desc);
-    ae_desc_to_ptr(desc,
+    ae_desc_to_ptr(coerced_desc,
                    data, max_size, size_out);
     AE_RETURN_ERROR(AEDisposeDesc(coerced_desc));
 }
