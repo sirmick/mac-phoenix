@@ -34,6 +34,8 @@ UniversalProcPtr Executor::C_NewRoutineDescriptor(
         RoutineDescriptor *p;
 
         p = (RoutineDescriptor *)NewPtr(sizeof *p);
+        if(!p)
+            return nullptr;
         p->goMixedModeTrap = MIXED_MODE_TRAP;
         ROMlib_destroy_blocks((syn68k_addr_t)
                                   US_TO_SYN68K(&p->goMixedModeTrap),
