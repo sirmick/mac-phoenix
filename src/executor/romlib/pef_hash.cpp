@@ -444,6 +444,9 @@ OSErr Executor::C_FindSymbol(ConnectionID connID, ConstStr255Param symName,
     OSErr retval;
     PEFExportedSymbol *pefs;
 
+    /* MacPhoenix: no connection is an error, as CountSymbols says */
+    if(!connID || !connID->lihp)
+        return fragConnectionIDNotFound;
     pefs = lookup_by_name(connID, (char *)symName + 1, symName[0]);
     if(!pefs)
         retval = fragSymbolNotFound;

@@ -206,6 +206,11 @@ Executor may die without warning because of this mismatch",
                          0, "OK", nullptr, nullptr, nullptr, nullptr, nullptr);
             break;
 
+        case launch_cfm_failed:
+            system_error(ROMlib_launch_failure_message.c_str(), 0, "OK",
+                         nullptr, nullptr, nullptr, nullptr, nullptr);
+            break;
+
         default:
             warning_unexpected("%d", ROMlib_launch_failure);
             break;
