@@ -29,7 +29,8 @@ instead, the System image only booting: a fresh copy of the disk is mounted
 beside it for each item, writable on Executor too
 (--executor-writable-images). --rom quadra is the
 68k ROM machine (Quadra 650 ROM). --no-ppc runs Executor without
---executor-ppc; --depth 8 starts the Quadra in 256 colours. Each item records its code ("68k", "ppc", "fat": CODE and
+--executor-ppc; --depth 8 starts the machine in 256 colours (Executor
+too: it starts 8.x at 32 bits, 7.x at 8). Each item records its code ("68k", "ppc", "fat": CODE and
 cfrg resources); --code fat keeps the applications with both. --path names
 items exactly, --skip-creator and --exclude leave some out.
 
@@ -191,7 +192,8 @@ def run_item(n, item, image, port, out, wait, binary, rom=None, source=None, dis
         if extra:
             extra.append("--executor-writable-images")
         args = ["--backend", "executor", "--executor-system", os.path.basename(image),
-                *extra, *(["--executor-ppc"] if ppc else []), "--bridge"]
+                *extra, *(["--executor-ppc"] if ppc else []),
+                *(["--depth", str(depth)] if depth else []), "--bridge"]
     with open(log, "wb") as f:
         proc = subprocess.Popen([binary, "--config", "/dev/null", *args, *emu_args,
                                  "--port", str(port), "--timeout", str(wait + 150)],
@@ -287,7 +289,7 @@ def main():
     ap.add_argument("--disk", action="append", default=[],
                     help="application disk: its items instead of the System image's")
     ap.add_argument("--no-ppc", action="store_true", help="Executor without --executor-ppc")
-    ap.add_argument("--depth", type=int, help="the 68k ROM machine's starting colour depth "
+    ap.add_argument("--depth", type=int, help="the starting colour depth (the 68k ROM machine, Executor) "
                     "(8 for games that run only in 256 colours)")
     ap.add_argument("--code", help="only these kinds of code (comma-separated: 68k,ppc,fat)")
     ap.add_argument("--path", action="append", default=[], help="an item by its full path")

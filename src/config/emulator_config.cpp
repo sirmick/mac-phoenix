@@ -470,8 +470,9 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             printf("  --rom PATH                 ROM file (or positional arg)\n");
             printf("  --ram MB                   RAM size in megabytes (default: 64)\n");
             printf("  --screen WxH               Display resolution (default: 640x480)\n");
-            printf("  --depth N                  68k: colour depth the screen starts in, bits\n");
-            printf("                             (1 2 4 8 16 32; default 32; 8 for 256-colour games)\n");
+            printf("  --depth N                  68k and Executor: colour depth the screen starts in, bits\n");
+            printf("                             (1 2 4 8 16 32; default 32, Executor 32 on 8.x and 8 on 7.x;\n");
+            printf("                             8 for 256-colour games)\n");
             printf("  --disk PATH                Disk image (repeatable)\n");
             printf("  --cdrom PATH               CD-ROM image (repeatable)\n");
             printf("  --extfs PATH               Shared folder (repeatable; the ROM machines mount only the first)\n");
@@ -641,10 +642,10 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             argv[i] = nullptr; argv[++i] = nullptr; continue;
         }
 
-        // --depth <bits>  (the 68k Mac's starting colour depth)
+        // --depth <bits>  (the starting colour depth: 68k Macs, Executor)
         if (strcmp(argv[i], "--depth") == 0 && i+1 < argc) {
             int d = atoi(argv[i+1]);
-            if (valid_depth(d)) config.screen_depth = (uint32_t)d;
+            if (valid_depth(d)) { config.screen_depth = (uint32_t)d; config.screen_depth_set = true; }
             else fprintf(stderr, "[Config] --depth %s: not 1, 2, 4, 8, 16 or 32\n", argv[i+1]);
             argv[i] = nullptr; argv[++i] = nullptr; continue;
         }

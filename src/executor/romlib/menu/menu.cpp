@@ -40,6 +40,7 @@
 #include <rsys/toolevent.h>
 #include <rsys/desk.h>
 #include <vdriver/vdriver.h>
+#include <rsys/cfm.h>
 
 using namespace Executor;
 
@@ -242,6 +243,10 @@ append_end_marker_if_necessary(MCTableHandle h)
 void Executor::C_InitMenus()
 {
     Handle default_mcinfo;
+
+    /* WindowsLib too: InitWindows calls InitMenus (wind/windInit.cpp) */
+    ROMlib_cfm_toolbox_library("MenusLib");
+    ROMlib_cfm_toolbox_library("WindowsLib");
 
     LM(MenuHook) = LM(MBarHook) = 0;
     ClearMenuBar();

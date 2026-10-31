@@ -532,8 +532,9 @@ static void sledgehammer_zone(THz zone, bool print_p,
                 }
 
                 if(BLOCK_STATE(block) != FREE_BLOCK_STATE)
-                    mm_fatal("bogus free block state bits `%d'\n",
-                             BLOCK_STATE(block));
+                    mm_fatal("bogus free block state bits `%d' in block $%08X of zone $%08X\n",
+                             BLOCK_STATE(block), (unsigned)US_TO_SYN68K(block),
+                             (unsigned)US_TO_SYN68K(zone));
 
                 if(print_p)
                     fprintf(stderr, "FREE %p;                       S:%08x %c\n",

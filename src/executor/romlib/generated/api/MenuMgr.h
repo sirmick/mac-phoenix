@@ -10,6 +10,7 @@
  *                         UInt8, Ptr, UInt16                                *
  *     QuickDraw.h         RGBColor, Style                                   *
  *     DriverServices.h    OSStatus                                          *
+ *     FileMgr.h           TextEncoding                                      *
  *                                                                           *
  *                                                                           *
  *****************************************************************************/
@@ -23,6 +24,7 @@
 #include "ExMacTypes.h"
 #include "QuickDraw.h"
 #include "DriverServices.h"
+#include "FileMgr.h"
 
 #define MODULE_NAME MenuMgr
 #include <base/api-module.h>
@@ -451,6 +453,18 @@ OSErr C_SetMenuItemModifiers(MenuRef inMenu, SInt16 inItem, UInt8 inModifiers);L
 
 
 OSErr C_GetMenuItemModifiers(MenuRef inMenu, SInt16 inItem, UInt8 *outModifiers);LIBRARY_FUNCTION(AppearanceLib, GetMenuItemModifiers, C_GetMenuItemModifiers);
+
+
+OSErr C_SetMenuItemHierarchicalID(MenuRef inMenu, SInt16 inItem, SInt16 inHierID);LIBRARY_FUNCTION(AppearanceLib, SetMenuItemHierarchicalID, C_SetMenuItemHierarchicalID);
+
+
+OSErr C_GetMenuItemHierarchicalID(MenuRef inMenu, SInt16 inItem, GUEST<SInt16> *outHierID);LIBRARY_FUNCTION(AppearanceLib, GetMenuItemHierarchicalID, C_GetMenuItemHierarchicalID);
+
+
+OSErr C_SetMenuItemTextEncoding(MenuRef inMenu, SInt16 inItem, TextEncoding inScriptID);LIBRARY_FUNCTION(AppearanceLib, SetMenuItemTextEncoding, C_SetMenuItemTextEncoding);
+
+
+OSErr C_GetMenuItemTextEncoding(MenuRef inMenu, SInt16 inItem, GUEST<TextEncoding> *outScriptID);LIBRARY_FUNCTION(AppearanceLib, GetMenuItemTextEncoding, C_GetMenuItemTextEncoding);
 
 
 void C_InvalidateAllMenuSizes();LIBRARY_FUNCTION(MenusLib, InvalidateAllMenuSizes, C_InvalidateAllMenuSizes);

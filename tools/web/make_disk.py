@@ -25,6 +25,25 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from make_boot_disk import Disk, Writer  # noqa: E402
 
 
+def volume_size(blobs, folders):
+    """Bytes for a volume of these MacBinary files: every fork takes whole
+    allocation blocks, and HFS's grow with the volume (at most 65535 of
+    them), so a disk of many small files needs more than their sum."""
+    forks = []
+    for b in blobs:
+        forks += [int.from_bytes(b[83:87], "big"), int.from_bytes(b[87:91], "big")]
+    # the catalog and extents trees, the bitmap, the boot blocks: some slack
+    overhead = 2 * 1024 * 1024 + (len(forks) // 2 + folders) * 512
+    size = sum(forks) + overhead
+    for _ in range(8):
+        block = 512 * -(-size // (512 * 65535))
+        want = int((sum(-(-f // block) * block for f in forks) + overhead) * 1.05)
+        if want <= size:
+            break
+        size = want
+    return (size + 511) // 512 * 512
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("out")
@@ -67,8 +86,7 @@ def main():
             finally:
                 disk.close()
 
-        content = sum(len(b) for b in blobs.values())
-        size = (int(content * 1.1) + 2 * 1024 * 1024 + 511) // 512 * 512
+        size = volume_size(blobs.values(), len(folders))
         w = Writer(Path(args.out))
         try:
             w.format(size, args.label)

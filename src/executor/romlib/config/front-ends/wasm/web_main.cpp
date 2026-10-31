@@ -15,7 +15,10 @@
  * (executor_host::set_event_poll_hook), a safe point in a process's world:
  *
  *   app              the current application's name (CurApName)
- *   windows          its windows: title, global bounds, visible
+ *   windows          its windows: title, global bounds, visible, kind; a
+ *                    dialog's static text and ParamText's strings too (an
+ *                    alert's message)
+ *   menus            its menu bar: each menu's title and left edge
  *   launch PATH      LaunchApplication of "Volume:Folder:App"; its OSErr
  *
  * The Worker answers 'read' and 'write' itself: files in the module's
@@ -27,10 +30,12 @@
 #include <rsys/hostidle.h>
 
 #include <base/common.h>
+#include <DialogMgr.h>
 #include <FileMgr.h>
 #include <ProcessMgr.h>
 #include <SegmentLdr.h>
 #include <wind/wind.h>
+#include <menu/menu.h>
 #include <util/macstrings.h>
 
 #include <emscripten.h>
@@ -184,7 +189,52 @@ std::string windows_json()
         out += "{\"title\":" + json_string(t ? pstring(*t) : "")
                + ",\"rect\":[" + std::to_string(r.top) + "," + std::to_string(r.left) + ","
                + std::to_string(r.bottom) + "," + std::to_string(r.right) + "]"
-               + ",\"visible\":" + (WINDOW_VISIBLE(w) ? "true" : "false") + "}";
+               + ",\"visible\":" + (WINDOW_VISIBLE(w) ? "true" : "false")
+               + ",\"kind\":" + std::to_string((int)WINDOW_KIND(w));
+        if(WINDOW_KIND(w) == dialogKind)
+        {
+            std::string text;
+            for(int i = 1, n = CountDITL((DialogPtr)w); i <= n && text.size() < 1000; i++)
+            {
+                GUEST<INTEGER> type;
+                GUEST<Handle> h;
+                C_GetDialogItem((DialogPtr)w, i, &type, &h, nullptr);
+                if((type & 0x7F) != statText || !h)
+                    continue;
+                Str255 s;
+                C_GetDialogItemText(h, s);
+                text += (text.empty() ? "" : "\n") + pstring(s);
+            }
+            out += ",\"text\":" + json_string(text) + ",\"params\":[";
+            for(int i = 0; i < 4; i++)             // ParamText's ^0..^3
+            {
+                Handle h = LM(DAStrings)[i];
+                out += (i ? "," : "") + json_string(h && *h ? pstring((const unsigned char *)*h) : "");
+            }
+            out += "]";
+        }
+        out += "}";
+    }
+    return out + "]";
+}
+
+std::string menus_json()
+{
+    std::string out = "[";
+    if(LM(MenuList))
+    {
+        muelem *mp = (*MENULIST)->mulist;
+        muelem *end = mp + (*MENULIST)->muoff / sizeof(muelem);
+        for(; mp != end; mp++)
+        {
+            MenuHandle mh = mp->muhandle;
+            if(!mh)
+                continue;
+            if(out.size() > 1)
+                out += ",";
+            out += "{\"title\":" + json_string(pstring((const unsigned char *)MI_DATA(mh)))
+                   + ",\"left\":" + std::to_string((int)mp->muleft) + "}";
+        }
     }
     return out + "]";
 }
@@ -238,6 +288,8 @@ void on_event_poll()
             reply = json_string(LM(CurApName)[0] <= 31 ? pstring(LM(CurApName)) : "");
         else if(op == "windows")
             reply = windows_json();
+        else if(op == "menus")
+            reply = menus_json();
         else if(op == "launch")
             reply = std::to_string(launch(arg));
         else

@@ -1,4 +1,4 @@
-# probe c3b5eae60a22fedefc833ef0f492fb63a53e82176b6751b46eb10027f6e6d601
+# probe 208c99b0ec04a9754c134b108a9dbbbb34c1e0571a8418f4e3f55165b8b56e01
 == names
 names.Chicago: 16383
 names.Chicago.back: "Chicago" (7)
@@ -40,6 +40,44 @@ names.Symbol: 23
 names.Symbol.back: "Symbol" (6)
 names.Symbol.RealFont12: 1
 names.Symbol.FontToScript: 0
+== fm
+fm.bind.SetAntiAliasedTextEnabled: found
+fm.bind.IsAntiAliasedTextEnabled: found
+fm.bind.QDTextBounds: found
+fm.bind.FetchFontInfo: found
+fm.aa.initial: 0 min 12
+fm.aa.set_on9: 0
+fm.aa.on9: 1 min 9
+fm.aa.set_off12: 0
+fm.aa.off12: 0 min 12
+fm.aa.set_on0: 0
+fm.aa.on0: 1 min 12
+fm.bounds.3.9.0.Hello: -7,0,0,21
+fm.bounds.3.9.0.gjpqy: -7,0,2,24
+fm.bounds.3.9.0.ii: -7,1,0,5
+fm.bounds.3.9.0. : 0,0,0,0
+fm.bounds.3.9.0.: 0,0,0,0
+fm.bounds.0.12.0.Hello: -9,1,0,31
+fm.bounds.0.12.0.gjpqy: -9,1,2,36
+fm.bounds.0.12.0.ii: -9,1,0,7
+fm.bounds.0.12.0. : 0,0,0,0
+fm.bounds.0.12.0.: 0,0,0,0
+fm.bounds.20.24.2.Hello: -16,-1,0,61
+fm.bounds.20.24.2.gjpqy: -16,-2,6,63
+fm.bounds.20.24.2.ii: -16,-2,0,21
+fm.bounds.20.24.2. : 0,-2,0,8
+fm.bounds.20.24.2.: 0,0,0,0
+fm.bounds.4.10.1.Hello: -8,0,0,34
+fm.bounds.4.10.1.gjpqy: -8,0,2,35
+fm.bounds.4.10.1.ii: -8,1,0,12
+fm.bounds.4.10.1. : 0,0,0,1
+fm.bounds.4.10.1.: 0,0,0,0
+fm.fetch.3.9.0: 0: 10 2 12 0
+fm.fetch.0.12.0: 0: 12 3 16 1
+fm.fetch.20.24.2: 0: 18 6 24 0
+fm.fetch.4.10.1: 0: 10 2 14 1
+fm.fetch.999.12.0: 0: 12 3 15 1
+fm.fetch.port: font 0 size 0 face 0: 12 16
 == font-Chicago
 font-Chicago.9.0.swap: err 0 asc 9 desc 2 widMax 13 lead 1 bold 0 ital 0 ul 0 0 0 shadow 0 extra 0 numer 256/256 denom 256/256
 font-Chicago.9.0.swap.font: set

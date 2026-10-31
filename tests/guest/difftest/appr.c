@@ -635,7 +635,7 @@ static void drawing(void)
    the desktop (its pattern isn't what is compared). Active, the close,
    zoom and collapse boxes pressed too: the window's definition called
    with wDraw and the part, as TrackBox does (and again, and the whole
-   frame, to let go). */
+   frame, to let go); and collapsed (CollapseWindow). */
 static void frame_out(const char *key)
 {
     static Rect from = { 50, 20, 150, 220 };   /* the frame and some white round it */
@@ -683,6 +683,7 @@ static void frames(void)
     WindowRef backing, w;
     char k[48];
     int i, j, active;
+    OSStatus err;
     if(!SECTION("frames"))
         return;
     SetRect(&back, 0, 40, 400, 240);
@@ -712,6 +713,19 @@ static void frames(void)
                 frame_out(k);
                 wdef_draw(w, parts[j]);
                 wdef_draw(w, 0);
+            }
+            /* collapsed to the title bar (the windows that can) and back */
+            err = CollapseWindow(w, true);
+            if(err == noErr)
+            {
+                sprintf(k, "%d.collapsed", procs[i]);
+                frame_out(k);
+                CollapseWindow(w, false);
+            }
+            else
+            {
+                sprintf(k, "%d.collapse", procs[i]);
+                out(k, "%d", (int)err);
             }
         }
         DisposeWindow(w);

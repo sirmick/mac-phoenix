@@ -1,7 +1,8 @@
 /* sys: what a program asks the system first, differential
    (tools/difftest/run.py sys): Gestalt selectors, FindFolder for each
    folder type (and the folder's name), value-holding low-memory globals,
-   the process's own information, Script Manager variables. Machine-specific
+   the process's own information, Script Manager variables, which libraries
+   the Code Fragment Manager finds without preparing them. Machine-specific
    answers (RAM, free memory) are keys with "~": shown, not compared. */
 #include "probe.h"
 #include <Gestalt.h>
@@ -10,6 +11,8 @@
 #include <Processes.h>
 #include <Script.h>
 #include <Devices.h>
+#include <CodeFragments.h>
+#include <Quickdraw.h>
 
 #define SET(x) memset(&(x), SENTINEL, sizeof(x))
 
@@ -301,6 +304,43 @@ int main(void)
                 DisposeWindow(w);
             }
             DisposeGWorld(gw);
+        }
+    }
+    /* the screen the system starts on: depth and size (8.6 on the G3 at
+       640x480; Executor starts 8.x Systems as it does) */
+    if(SECTION("screen"))
+    {
+        GDHandle gd = GetMainDevice();
+        PixMapHandle pm = (**gd).gdPMap;
+        Rect r = (**gd).gdRect;
+        out("main.depth", "%d", (**pm).pixelSize);
+        out("main.~rect", "%d,%d,%d,%d", r.top, r.left, r.bottom, r.right);
+        out("main.type", "%d", (**pm).pixelType);
+    }
+    if(SECTION("cfm"))
+    {
+        /* kFindLib: 0 for a library connected to this process (its
+           imports), cfragLibConnErr for one that is there but not
+           connected, cfragNoLibraryErr for none; connected once prepared */
+        static const char *const libs[] = {
+            "InterfaceLib", "AppearanceLib", "WindowsLib", "MenusLib", "ControlsLib",
+            "FontManager", "DialogsLib", "NoSuchLibrary" };
+        for(i = 0; i < (int)(sizeof libs / sizeof libs[0]); i++)
+        {
+            Str255 name, err;
+            ConnectionID conn;
+            Ptr main;
+            OSErr e;
+            name[0] = strlen(libs[i]);
+            memcpy(name + 1, libs[i], name[0]);
+            sprintf(k, "find.%s", libs[i]);
+            out(k, "%d", GetSharedLibrary(name, kPowerPCArch, kFindLib, &conn, &main, err));
+            if(strcmp(libs[i], "AppearanceLib"))
+                continue;
+            e = GetSharedLibrary(name, kPowerPCArch, kReferenceCFrag, &conn, &main, err);
+            out("load.AppearanceLib", "%d", e);
+            sprintf(k, "find.after.%s", libs[i]);
+            out(k, "%d", GetSharedLibrary(name, kPowerPCArch, kFindLib, &conn, &main, err));
         }
     }
     probe_close();

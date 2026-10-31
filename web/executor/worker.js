@@ -251,7 +251,24 @@ async function saveLocally() {
     }
 }
 
+// The previous Worker of this origin's tab gone (a reload, a restart: it
+// may still be saving the volume or holding the overlays' files, and
+// restored from under it, a blob it removes is missing, an overlay opens
+// read-only). Its lock is held until the Worker ends; another tab keeps
+// its own, so after a few seconds this one goes on regardless.
+function previousGone() {
+    if (!navigator.locks)
+        return Promise.resolve();
+    return new Promise((resolve) => {
+        navigator.locks.request('executor-tab', { signal: AbortSignal.timeout(5000) }, () => {
+            resolve();
+            return new Promise(() => {});        // held while this Worker runs
+        }).catch(() => resolve());
+    });
+}
+
 async function start(m) {
+    await previousGone();
     canvas = m.canvas;
     ctx = canvas.getContext('2d');
     const images = m.files.filter((f) => IMAGE.test(f.name));

@@ -622,6 +622,15 @@ void Executor::ROMlib_InitGDevices(int width, int height, int bpp, bool grayscal
     initialBpp = vdriver->bpp();
 }
 
+/* MacPhoenix: the depth the screen starts in after all, once the System
+   file is known (main.cpp: 8.x starts at 32 bits, as a G3 with 8.6 does);
+   what applications quitting go back to. */
+void Executor::ROMlib_set_initial_depth(int bpp)
+{
+    SetDepth(LM(MainDevice), bpp, 0, 0);
+    initialBpp = vdriver->bpp();
+}
+
 void Executor::ResetToInitialDepth()
 {
     SetDepth(LM(MainDevice), initialBpp, 0, 0);

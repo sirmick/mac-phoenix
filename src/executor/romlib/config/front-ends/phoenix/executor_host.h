@@ -18,7 +18,7 @@ struct Config
 {
     int width = 640;
     int height = 480;
-    int bpp = 8;
+    int bpp = 0;        // 0: as the System's Macs start (8.x 32 bits, 7.x 8)
     int ram_mb = 64;
 
     // Executor's own files (System Folder, Configuration, cnid map).

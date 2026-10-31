@@ -267,7 +267,8 @@ Machine:
   --rom PATH                 ROM file (or positional arg)
   --ram MB                   RAM size in megabytes (default: 64)
   --screen WxH               Display resolution (default: 640x480)
-  --depth N                  68k: colour depth the screen starts in (1 2 4 8 16 32; default 32;
+  --depth N                  68k and Executor: colour depth the screen starts in (1 2 4 8 16 32;
+                             default 32; Executor 32 on 8.x Systems, 8 on 7.x;
                              8 for games that run only in 256 colours)
   --disk PATH                Disk image (repeatable)
   --cdrom PATH               CD-ROM image (repeatable)

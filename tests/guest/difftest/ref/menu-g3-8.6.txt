@@ -1,4 +1,4 @@
-# probe 1926be27bd461a50fb7c508e035b62d1b5062ceddce31e18b1f3161fc1f377df
+# probe 4c2d036527d109dafb7514289685a277b7af660500eba237e9b202e33f7cf466
 == append
 append.metachars.count: 9
 append.metachars.1.text: "Plain" (5)
@@ -55,6 +55,17 @@ text.literal.data: ffffffff045465787408496e73657274656400000000075e30206d6574610
 size.size: 216 x 70
 size.size.bold: 216 x 70
 size.MBarHeight: 20
+== dirty
+dirty.SetItemCmd: -1 x -1
+dirty.SetMenuItemText: -1 x -1
+dirty.SetItemMark: 165 x 48
+dirty.SetItemStyle: -1 x -1
+dirty.SetItemIcon: -1 x -1
+dirty.CheckItem: 165 x 66
+dirty.DisableItem: 165 x 66
+dirty.AppendMenu: -1 x -1
+dirty.InsertMenuItem: -1 x -1
+dirty.DeleteMenuItem: -1 x -1
 == marks
 marks.marks.count: 4
 marks.marks.1.text: "a" (1)
@@ -83,6 +94,23 @@ glyphs.bind.GetMenuItemModifiers: found
 glyphs.GetMenuItemKeyGlyph: 0 23
 glyphs.SetMenuItemModifiers: 0
 glyphs.GetMenuItemModifiers: 0 3
+== item85
+item85.bind.GetMenuItemHierarchicalID: found
+item85.bind.SetMenuItemHierarchicalID: found
+item85.bind.GetMenuItemTextEncoding: found
+item85.bind.SetMenuItemTextEncoding: found
+item85.GetMenuItemHierarchicalID.plain: 0 0
+item85.GetMenuItemHierarchicalID.cmd: 0 200
+item85.SetMenuItemHierarchicalID: 0
+item85.GetMenuItemHierarchicalID.set: 0 201 cmd 0 mark 0
+item85.SetMenuItemHierarchicalID.0: 0
+item85.GetMenuItemHierarchicalID.cleared: 0 0 cmd 0 mark 0
+item85.GetMenuItemHierarchicalID.bad: -50 -23131
+item85.SetMenuItemHierarchicalID.bad: -50
+item85.GetMenuItemTextEncoding.plain: 0 -2
+item85.SetMenuItemTextEncoding: 0
+item85.GetMenuItemTextEncoding.set: 0 1
+item85.GetMenuItemTextEncoding.bad: -50 -1515870811
 == icons
 icons.SetMenuItemIconHandle: 0
 icons.GetMenuItemIconHandle.2: 0 type 1 same

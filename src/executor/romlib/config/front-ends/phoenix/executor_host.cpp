@@ -117,9 +117,13 @@ int run(const Config& c)
     std::vector<std::string> args = {
         "mac-phoenix",
         "--size", std::to_string(c.width) + "x" + std::to_string(c.height),
-        "--bpp", std::to_string(c.bpp),
         "--applzone", std::to_string(applMB) + "M",
     };
+    if(c.bpp > 0)
+    {
+        args.push_back("--bpp");
+        args.push_back(std::to_string(c.bpp));
+    }
     if(c.prefer_ppc)
         args.push_back("--ppc");
     if(c.logtraps)

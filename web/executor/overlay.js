@@ -47,6 +47,8 @@ class FileImage {
     }
 
     slice(start, end) { return this.file.slice(start, end); }
+
+    has() { return true; }
 }
 
 // A disk image on the server, read by Range requests (synchronous
@@ -189,6 +191,15 @@ class RemoteImage {
             at += piece.length;
         }
         return out;
+    }
+
+    // [pos, pos + length) here already: read without a request.
+    has(pos, length) {
+        const last = Math.floor((pos + length - 1) / REMOTE_CHUNK);
+        for (let c = Math.floor(pos / REMOTE_CHUNK); c <= last; c++)
+            if (!this.have[c])
+                return false;
+        return true;
     }
 
     // All of [start, end): a download of the image reads the rest.
@@ -345,6 +356,10 @@ class Overlay {
             const off = p - block * OVERLAY_BLOCK;
             const n = Math.min(OVERLAY_BLOCK - off, bytes.length - at);
             let slot = this.map.get(block);
+            if (this.unchanged(slot, p, bytes.subarray(at, at + n))) {
+                at += n;
+                continue;
+            }
             if (slot === undefined) {
                 // First change to this block: the rest of it from the image.
                 const start = block * OVERLAY_BLOCK;
@@ -362,6 +377,29 @@ class Overlay {
             this.pending.add(block);
             at += n;
         }
+    }
+
+    // bytes are what [pos, ...) holds already (slot: its block's, if
+    // changed before). Such a write is no change: Executor writes a
+    // volume's header back as it was when it mounts it, and counted, every
+    // browser opening a disk would have changes of its own to sync, and be
+    // asked which to keep when another browser's came first (sync.js).
+    // A remote image's part not downloaded yet counts as different.
+    unchanged(slot, pos, bytes) {
+        bytes = new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.length);   // Emscripten's: HEAP8's
+        let now;
+        if (slot !== undefined) {
+            now = new Uint8Array(bytes.length);
+            this.data.read(now, { at: slot * OVERLAY_BLOCK + pos % OVERLAY_BLOCK });
+        } else if (this.image.has(pos, bytes.length)) {
+            now = this.image.read(pos, bytes.length);
+        } else {
+            return false;
+        }
+        for (let i = 0; i < bytes.length; i++)
+            if (now[i] !== bytes[i])
+                return false;
+        return true;
     }
 
     // A whole block (from the account: sync.js).

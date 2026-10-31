@@ -7,12 +7,15 @@
 #include <base/common.h>
 #include <WindowMgr.h>
 #include <WindowMgr8.h>
+#include <ControlMgr8.h>
+#include <Appearance.h>
 #include <ResourceMgr.h>
 #include <QuickDraw.h>
 #include <CQuickDraw.h>
 #include <MemoryMgr.h>
 #include <quickdraw/cquick.h>
 #include <wind/wind.h>
+#include <prefs/prefs.h>
 #include <base/functions.impl.h>
 #include <algorithm>
 #include <map>
@@ -148,15 +151,24 @@ void procIDTraits(WindowPtr w, UInt32 *features, WindowAttributes *attributes)
             if(var & 4)
                 a |= kWindowHorizontalZoomAttribute;
             break;
-        case 65: /* dialogs: plain, dialog, movable dialog, alert, movable alert, ... */
-            f |= kWindowIsModal | kWindowCanGetWindowRegion;
-            if(var == 2 || var == 4 || var == 5)
+        case 65: /* dialogs: plain, shadow, modal, movable modal, alert, movable alert, movable grow */
+            f |= kWindowCanGetWindowRegion;
+            if(var >= 2) /* (plain and shadow aren't modal: 8.6) */
+                f |= kWindowIsModal;
+            if(var == 3 || var == 5 || var == 6)
                 f |= kWindowHasTitleBar;
-            if(var == 3 || var == 4)
+            if(var == 4 || var == 5)
                 f |= kWindowIsAlert;
-            if(var == 5)
+            if(var == 6)
                 f |= kWindowCanGrow;
             break;
+        case 124: /* System 7's floating windows: 8.x's WDEF 124 is 66 */
+            if(system_version < 0x800)
+            {
+                f |= kWindowHasTitleBar;
+                break;
+            }
+            /* fall through */
         case 66: /* floating: + grow 2, vertical zoom 4, horizontal 8 */
         case 67: /* side floating */
             f |= kWindowHasTitleBar | kWindowCanCollapse | kWindowCanGetWindowRegion;
@@ -174,6 +186,19 @@ void procIDTraits(WindowPtr w, UInt32 *features, WindowAttributes *attributes)
         default:
             f |= kWindowHasTitleBar;
             break;
+    }
+    /* 8.x's definitions (classic procIDs go to them too) all draw in the
+       current port, measure titles and want disposing at process death;
+       the document ones hilite for drags, show the modified state and
+       set up proxy drag images (8.6) */
+    if(system_version >= 0x800)
+    {
+        f |= kWindowCanGetWindowRegion | kWindowCanDrawInCurrentPort | kWindowCanMeasureTitle
+            | kWindowWantsDisposeAtProcessDeath;
+        int16_t base = var & ~ZOOMBIT;
+        bool document = id == 64 || (id == 0 && (base == documentProc || base == noGrowDocProc));
+        if(document)
+            f |= kWindowSupportsDragHilite | kWindowSupportsModifiedBit | kWindowCanSetupProxyDragImage;
     }
     if(id < 64 && (f & kWindowCanZoom))
         a |= kWindowFullZoomAttribute;
@@ -199,7 +224,13 @@ Rect globalContent(WindowPtr w)
    content, as GetWindowStructureWidths answers). */
 Rect frameWidths(WindowPtr w)
 {
-    Rect s = (*WINDOW_STRUCT_REGION(w))->rgnBBox, c = (*WINDOW_CONT_REGION(w))->rgnBBox, r;
+    /* the frame as its definition makes it, expanded (8.6: a collapsed
+       window's widths too) */
+    RgnHandle sr = NewRgn(), cr = NewRgn();
+    ROMlib_window8_definition_regions(w, sr, cr, true);
+    Rect s = (*sr)->rgnBBox, c = (*cr)->rgnBBox, r;
+    DisposeRgn(sr);
+    DisposeRgn(cr);
     r.top = c.top - s.top;
     r.left = c.left - s.left;
     r.bottom = s.bottom - c.bottom;
@@ -326,50 +357,20 @@ OSStatus Executor::C_GetWindowAttributes(WindowPtr window, GUEST<WindowAttribute
         *outAttributes = x->attributes;
         return noErr;
     }
-    /* a window of a procID: paramErr (8.6), which keeps attributes only
-       for CreateNewWindow's */
-    if(int16_t id = windowDefID(window); id < 64 || id > 67)
-    {
-        *outAttributes = 0;
-        return paramErr;
-    }
-    WindowAttributes a;
-    procIDTraits(window, nullptr, &a);
-    *outAttributes = a;
-    return noErr;
+    /* a window of a procID, an Appearance one too: paramErr (8.6), which
+       keeps attributes only for CreateNewWindow's */
+    *outAttributes = 0;
+    return paramErr;
 }
 
 OSStatus Executor::C_GetWindowClass(WindowPtr window, GUEST<WindowClass> *outClass)
 {
     if(!window)
         return errInvalidWindowPtr;
-    /* 8.6 answers kDocumentWindowClass for every class CreateNewWindow
-       makes (tests/guest/difftest wind) */
-    if(WindowExtras *x = findExtras(window); x && x->created)
-    {
-        *outClass = kDocumentWindowClass;
-        return noErr;
-    }
-    int16_t id = windowDefID(window);
-    /* a window of a classic procID: kDocumentWindowClass, whatever its
-       definition (8.6) */
-    if(id < 64)
-    {
-        *outClass = kDocumentWindowClass;
-        return noErr;
-    }
-    UInt32 features;
-    procIDTraits(window, &features, nullptr);
-    WindowClass c = kDocumentWindowClass;
-    if(id == 66 || id == 67)
-        c = kFloatingWindowClass;
-    else if(features & kWindowIsAlert)
-        c = (features & kWindowHasTitleBar) ? kMovableAlertWindowClass : kAlertWindowClass;
-    else if(features & kWindowIsModal)
-        c = (features & kWindowHasTitleBar) ? kMovableModalWindowClass : kModalWindowClass;
-    else if(id == 0 && GetWVariant(window) == plainDBox)
-        c = kPlainWindowClass;
-    *outClass = c;
+    /* 8.6 answers kDocumentWindowClass for every window: every class
+       CreateNewWindow makes, every procID, the Appearance definitions'
+       floating and dialog ones too (tests/guest/difftest wind) */
+    *outClass = kDocumentWindowClass;
     return noErr;
 }
 
@@ -596,6 +597,8 @@ OSStatus Executor::C_GetWindowBounds(WindowPtr window, WindowRegionCode regionCo
     OSStatus err = C_GetWindowRegion(window, regionCode, rgn);
     if(err == noErr)
         *globalBounds = (*rgn)->rgnBBox;
+    else
+        *globalBounds = { 0, 0, 0, 0 }; /* 8.6 */
     DisposeRgn(rgn);
     return err;
 }
@@ -617,6 +620,9 @@ OSStatus Executor::C_CreateNewWindow(WindowClass windowClass, WindowAttributes a
     bool resizable = attributes & kWindowResizableAttribute;
     bool zoom = attributes & kWindowFullZoomAttribute;
     INTEGER procID;
+    /* 8.x: the platinum definitions' procIDs (WDEF 64-67, as 8.6's frames
+       measure: tests/guest/difftest wind); before, System 7's */
+    bool platinum = system_version >= 0x800;
     switch(windowClass)
     {
         case kAlertWindowClass:
@@ -625,14 +631,26 @@ OSStatus Executor::C_CreateNewWindow(WindowClass windowClass, WindowAttributes a
         case kMovableModalWindowClass:
             if(attributes)
                 return errUnsupportedWindowAttributesForClass;
-            procID = windowClass == kMovableAlertWindowClass || windowClass == kMovableModalWindowClass
-                ? movableDBoxProc : dBoxProc;
+            if(platinum)
+                procID = windowClass == kAlertWindowClass ? kWindowAlertProc
+                    : windowClass == kMovableAlertWindowClass ? kWindowMovableAlertProc
+                    : windowClass == kModalWindowClass ? kWindowModalDialogProc
+                    : kWindowMovableModalDialogProc;
+            else
+                procID = windowClass == kMovableAlertWindowClass || windowClass == kMovableModalWindowClass
+                    ? movableDBoxProc : dBoxProc;
             break;
         case kFloatingWindowClass:
-            procID = 1984 + (resizable ? 1 : 0) + (zoom ? 2 : 0); /* WDEF 124 */
+            if(platinum)
+                procID = kWindowFloatProc + (resizable ? 2 : 0) + (zoom ? 12 : 0);
+            else
+                procID = 1984 + (resizable ? 1 : 0) + (zoom ? 2 : 0); /* WDEF 124 */
             break;
         case kDocumentWindowClass:
-            procID = resizable ? (zoom ? zoomDocProc : documentProc) : (zoom ? zoomNoGrow : noGrowDocProc);
+            if(platinum)
+                procID = kWindowDocumentProc + (resizable ? 1 : 0) + (zoom ? 6 : 0);
+            else
+                procID = resizable ? (zoom ? zoomDocProc : documentProc) : (zoom ? zoomNoGrow : noGrowDocProc);
             break;
         default:
             return errUnrecognizedWindowClass;
@@ -663,7 +681,10 @@ OSStatus Executor::C_SetWindowBounds(WindowRef window, WindowRegionCode regionCo
     if(!window || !globalBounds)
         return paramErr;
     Rect c = *globalBounds;
-    if(regionCode == kWindowStructureRgn)
+    /* (an invisible window's structure is empty to 8.6, which puts the
+       content at the rectangle: tests/guest/difftest wind bounds.content.2
+       and .visible) */
+    if(regionCode == kWindowStructureRgn && WINDOW_VISIBLE((WindowPeek)window))
     {
         Rect fw = frameWidths(window);
         c.top += fw.top;
@@ -671,7 +692,7 @@ OSStatus Executor::C_SetWindowBounds(WindowRef window, WindowRegionCode regionCo
         c.bottom -= fw.bottom;
         c.right -= fw.right;
     }
-    else if(regionCode != kWindowContentRgn)
+    else if(regionCode != kWindowStructureRgn && regionCode != kWindowContentRgn)
         return errWindowRegionCodeInvalid;
     MoveWindow(window, c.left, c.top, false);
     SizeWindow(window, c.right - c.left, c.bottom - c.top, true);
@@ -751,13 +772,61 @@ OSStatus Executor::C_SetWindowIdealUserState(WindowRef window, const Rect *userS
     return noErr;
 }
 
-/* Kept, not drawn: Executor's definitions don't shade a window yet. */
+/* The window shrinks to its title bar (Executor's platinum document
+   frame; other definitions keep their regions) and back, the windows
+   behind and its content redrawn as ZoomWindow does. */
 OSStatus Executor::C_CollapseWindow(WindowRef window, Boolean collapse)
 {
     if(!window)
         return errInvalidWindowPtr;
+    /* a window that can't (dialogs, rDocProc): 8.6's answer, the
+       definition's (tests/guest/difftest appr frames.N.collapse) */
+    GUEST<UInt32> features;
+    C_GetWindowFeatures(window, &features);
+    if(!(features & kWindowCanCollapse))
+        return errMessageNotSupported;
+    bool was = ROMlib_window8_collapsed(window);
     extras(window).collapsed = collapse;
+    if(was == (bool)collapse)
+        return noErr;
+    WindowPeek wp = (WindowPeek)window;
+    if(!WINDOW_VISIBLE(wp))
+    {
+        WINDCALL(window, wCalcRgns, 0);
+        return noErr;
+    }
+    RgnHandle behind = NewRgn();
+    CopyRgn(WINDOW_STRUCT_REGION(wp), behind);
+    WINDCALL(window, wCalcRgns, 0);
+    UnionRgn(behind, WINDOW_STRUCT_REGION(wp), behind);
+    CalcVisBehind(wp, behind);
+    PaintBehind(WINDOW_NEXT_WINDOW(wp), behind);
+    {
+        ThePortGuard guard(wmgr_port);
+        SetClip(WINDOW_STRUCT_REGION(wp));
+        ClipAbove(wp);
+        WINDCALL(window, wDraw, 0);
+        EraseRgn(WINDOW_CONT_REGION(wp));
+        CopyRgn(WINDOW_CONT_REGION(wp), WINDOW_UPDATE_REGION(wp));
+    }
+    DisposeRgn(behind);
     return noErr;
+}
+
+/* 8.6 collapses a window whose collapse box is clicked for any
+   application, one that knows nothing of inCollapseBox too (BridgeAgent
+   on a G3): the click is tracked and answered here, not passed on. */
+bool Executor::ROMlib_window8_collapse_click(Point p)
+{
+    if(system_version < 0x800)
+        return false;
+    GUEST<WindowPtr> gw;
+    if(FindWindow(p, &gw) != inCollapseBox)
+        return false;
+    WindowPtr w = gw;
+    if(TrackBox(w, p, inCollapseBox))
+        C_CollapseWindow(w, !ROMlib_window8_collapsed(w));
+    return true;
 }
 
 bool Executor::ROMlib_window8_collapsed(WindowPtr w)
@@ -846,8 +915,127 @@ OSStatus Executor::C_SetWindowProxyCreatorAndType(WindowRef window, OSType fileC
    19-pixel title bar, the close and zoom boxes 9 pixels in, the grow box
    the content's bottom right 16), global; false for a window without
    them. */
+/* The structure and content as the window's definition makes them
+   (wCalcRgns), invisible windows too: 8.6 asks its definitions, Executor
+   computes an invisible window's regions when it is shown. */
+void Executor::ROMlib_window8_definition_regions(WindowPtr w, RgnHandle structure, RgnHandle content,
+                                                 bool expanded)
+{
+    WindowPeek wp = (WindowPeek)w;
+    WindowExtras *x = expanded ? findExtras(w) : nullptr;
+    bool collapsed = x && x->collapsed;
+    if(WINDOW_VISIBLE(wp) && !collapsed)
+    {
+        if(structure)
+            CopyRgn(WINDOW_STRUCT_REGION(wp), structure);
+        if(content)
+            CopyRgn(WINDOW_CONT_REGION(wp), content);
+        return;
+    }
+    RgnHandle s = NewRgn(), c = NewRgn();
+    CopyRgn(WINDOW_STRUCT_REGION(wp), s);
+    CopyRgn(WINDOW_CONT_REGION(wp), c);
+    if(collapsed)
+        x->collapsed = false;
+    WINDCALL(w, wCalcRgns, 0);
+    if(collapsed)
+        x->collapsed = true;
+    if(structure)
+        CopyRgn(WINDOW_STRUCT_REGION(wp), structure);
+    if(content)
+        CopyRgn(WINDOW_CONT_REGION(wp), content);
+    CopyRgn(s, WINDOW_STRUCT_REGION(wp));
+    CopyRgn(c, WINDOW_CONT_REGION(wp));
+    DisposeRgn(s);
+    DisposeRgn(c);
+}
+
+/* 8.x's platinum frames (tests/guest/difftest wind, 8.6 on a G3): the
+   title bar runs along the structure's top, 22 pixels deep (14 on a
+   floating window), to a pixel short of its right edge (the shadow); the
+   title 2 pixels inside it, centred; the drag region is the whole frame,
+   boxes included (structure minus content; none collapsed). The boxes, the grow box and
+   the collapse box have no region (errWindowRegionCodeInvalid), nor has a
+   frame without a title bar a title or drag region. */
+static bool platinum_part_region(WindowPtr w, WindowRegionCode code, RgnHandle rgn)
+{
+    if(code != kWindowTitleBarRgn && code != kWindowTitleTextRgn && code != kWindowDragRgn)
+        return false;
+    GUEST<UInt32> features;
+    C_GetWindowFeatures(w, &features);
+    if(!(features & kWindowHasTitleBar))
+        return false;
+    RgnHandle s = NewRgn(), c = NewRgn();
+    ROMlib_window8_definition_regions(w, s, c);
+    Rect sb = (*s)->rgnBBox, cb = globalContent(w), bar;
+    int16_t id = windowDefID(w);
+    bool floating = id == 66 || id == 67 || id == 124;
+    /* a floating window's bar down to the content (16) */
+    int depth = !floating ? 22 : id == 67 ? cb.left - sb.left : cb.top - sb.top;
+    /* (a side title bar, WDEF 67's, by symmetry: unmeasured) */
+    if(id == 67)
+        SetRect(&bar, sb.left, sb.top, sb.left + depth, sb.bottom - 1);
+    else
+        SetRect(&bar, sb.left, sb.top, sb.right - 1, sb.top + depth);
+    bool ok = true;
+    switch(code)
+    {
+        case kWindowTitleBarRgn:
+            RectRgn(rgn, &bar);
+            break;
+        case kWindowDragRgn:
+            /* (none collapsed: 8.6) */
+            if(ROMlib_window8_collapsed(w))
+                ok = false;
+            else
+            {
+                /* less the content's rectangle (a grow box cut out of the
+                   content isn't drag), and a classic movable dialog's
+                   inner frame, 3 round it */
+                if(id == 0 && (GetWVariant(w) & ~ZOOMBIT) == movableDBoxProc)
+                    InsetRect(&cb, -3, -3);
+                RectRgn(c, &cb);
+                DiffRgn(s, c, rgn);
+            }
+            break;
+        default: /* kWindowTitleTextRgn */
+        {
+            if(id == 67 || !WINDOW_TITLE(w) || !(*WINDOW_TITLE(w))[0])
+            {
+                ok = false;
+                break;
+            }
+            int width = WINDOW_TITLE_WIDTH(w);
+            if(floating)
+            {
+                /* in the small emphasized system font */
+                ThePortGuard guard(wmgr_port);
+                GUEST<INTEGER> font = PORT_TX_FONT(wmgr_port), size = PORT_TX_SIZE(wmgr_port);
+                Style face = PORT_TX_FACE(wmgr_port);
+                C_UseThemeFont(kThemeSmallEmphasizedSystemFont, 0);
+                StringHandle th = WINDOW_TITLE(w);
+                HLockGuard lock(th);
+                width = StringWidth(*th);
+                TextFont(font);
+                TextSize(size);
+                TextFace(face);
+            }
+            int left = (bar.left + bar.right - width) / 2;
+            /* (a pixel short of the width: 8.6) */
+            Rect r = { (INTEGER)(bar.top + 2), (INTEGER)left, (INTEGER)(bar.bottom - 2), (INTEGER)(left + width - 1) };
+            RectRgn(rgn, &r);
+            break;
+        }
+    }
+    DisposeRgn(s);
+    DisposeRgn(c);
+    return ok;
+}
+
 bool Executor::ROMlib_window8_part_region(WindowPtr w, WindowRegionCode code, RgnHandle rgn, bool boxes)
 {
+    if(system_version >= 0x800)
+        return platinum_part_region(w, code, rgn);
     if(windowDefID(w) != 0)
         return false;
     int16_t var = GetWVariant(w) & ~ZOOMBIT;
