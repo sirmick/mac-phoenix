@@ -120,6 +120,43 @@ int main(void)
             out(k, "%08lx", (long)GetScriptVariable(smRoman, sverbs[i]));
         }
     }
+    if(SECTION("gworld"))
+    {
+        /* What an offscreen pixmap's baseAddr holds with its pixels
+           unlocked, locked and unlocked again (programs copy the pixmap
+           into ports of their own: Mars Rising), for each flag set. */
+        static const long flags[] = { 0, pixPurge, keepLocal, useTempMem };
+        for(i = 0; i < (int)(sizeof flags / sizeof flags[0]); i++)
+        {
+            GWorldPtr gw = NULL;
+            Rect r = { 0, 0, 64, 64 };
+            QDErr err = NewGWorld(&gw, 8, &r, NULL, NULL, flags[i]);
+            sprintf(k, "%lx.err", flags[i]);
+            out(k, "%d", err);
+            if(err != noErr || !gw)
+                continue;
+            PixMapHandle pm = GetGWorldPixMap(gw);
+            static const char *const when[] = { "new", "locked", "unlocked" };
+            int w;
+            for(w = 0; w < 3; w++)
+            {
+                if(w == 1)
+                    LockPixels(pm);
+                if(w == 2)
+                    UnlockPixels(pm);
+                Ptr base = (**pm).baseAddr, pix = GetPixBaseAddr(pm);
+                const char *what = base == pix ? "pixels"
+                    : base && *(Ptr *)base == pix ? "handle to pixels" : "other";
+                sprintf(k, "%lx.%s.baseAddr", flags[i], when[w]);
+                out(k, "%s", what);
+                sprintf(k, "%lx.%s.pmVersion", flags[i], when[w]);
+                out(k, "%d", (**pm).pmVersion);
+                sprintf(k, "%lx.%s.state", flags[i], when[w]);
+                out(k, "%08lx", (long)GetPixelsState(pm));
+            }
+            DisposeGWorld(gw);
+        }
+    }
     probe_close();
     return 0;
 }
