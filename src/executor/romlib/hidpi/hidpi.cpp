@@ -225,9 +225,19 @@ bool covered_by(const Run &old, const Run &now)
 }
 
 /* NOW replaces OLD: where OLD's text is still what's under NOW, NOW's
-   "before" is what was there before OLD (both runs' 1x glyphs go). */
+   "before" is what was there before OLD (both runs' 1x glyphs go), and
+   NOW is drawn where OLD was too (text drawn again through a smaller
+   clip: AppleWorks' font pop-up) */
 void inherit_before(Run &now, const Run &old)
 {
+    for(const IRect &c : old.clip)
+    {
+        IRect r = intersection(c, { now.box.top - 1, now.box.left - 1, now.box.bottom + 1, now.box.right + 1 });
+        if(!empty(r) && std::find_if(now.clip.begin(), now.clip.end(), [&](const IRect &n) {
+                            return n.top <= r.top && n.left <= r.left && n.bottom >= r.bottom && n.right >= r.right;
+                        }) == now.clip.end())
+            now.clip.push_back(r);
+    }
     IRect r = intersection(now.box, old.box);
     for(int y = r.top; y < r.bottom; y++)
     {
@@ -259,6 +269,24 @@ void log_text(const hidpi::TextParams &p, int mode, const char *what)
             p.family, p.size, p.face, mode, what);
 }
 
+/* A run still on the screen with another drawn over it (IT, in g_runs):
+   what's there now is its "after". Where the new one drew over all the
+   pixels it had changed (a button drawn unpressed over its pressed look),
+   nothing of it shows: it goes (it could never be found off the screen
+   again), and false. */
+bool recapture(Runs::iterator it, const Screen &s)
+{
+    auto copy = std::make_shared<Run>(**it);
+    capture(*copy, s, copy->after);
+    if(copy->before == copy->after && !(*it)->noInk)
+    {
+        g_runs.erase(it);
+        return false;
+    }
+    *it = copy;
+    return true;
+}
+
 /* Drop the runs that aren't on the screen any more. */
 void sweep(const Screen &s)
 {
@@ -288,6 +316,8 @@ bool Executor::hidpi::impl::run_valid(const Run &run, const Screen &s)
         const uint8_t *aft = &run.after[(size_t)y * run.rowLen];
         if(!memcmp(cur, aft, run.rowLen))
             continue;
+        if(run.noInk)
+            return false;
         if(run.mode == Mode::Copy)
             for(int x = run.box.left; x < run.box.right; x++)
             {
@@ -362,6 +392,13 @@ void Executor::hidpi::text_draw(const TextParams &p, const std::function<void()>
        || p.glyphs.empty() || p.size <= 0)
     {
         skip("1x (nothing on the screen)");
+        return;
+    }
+    /* nothing of it drawn (a dialog's items drawn again outside its
+       update region): the runs there stay what's on the screen */
+    if(port_clip(port, dx, dy, box).empty())
+    {
+        skip("1x (clipped away)");
         return;
     }
     const FontChoice &choice = font_for(p.family, p.face);
@@ -460,9 +497,8 @@ void Executor::hidpi::text_draw(const TextParams &p, const std::function<void()>
             replaced++;
             continue;
         }
-        auto copy = std::make_shared<Run>(*u);
-        capture(*copy, s, copy->after);
-        *it = copy;
+        if(!recapture(it, s))
+            dropped++;
     }
     /* the other runs it overlaps: the ones it draws again go (a caret
        blinking over one, or the line erased and drawn again, as TextEdit
@@ -490,11 +526,12 @@ void Executor::hidpi::text_draw(const TextParams &p, const std::function<void()>
         log_text(p, txmode, "erases its srcXor twin");
         return;
     }
+    run->noInk = run->before == run->after;
     if(ERROR_ENABLED_P(ERROR_HIDPI_LOG))
     {
         char what[96];
-        snprintf(what, sizeof what, "recorded%s at %d,%d-%d,%d (%zu under, %d replaced, %d gone, %zu on screen)",
-                 run->clip.empty() ? ", clipped away" : "", box.left, box.top, box.right, box.bottom,
+        snprintf(what, sizeof what, "recorded at %d,%d-%d,%d (%zu under, %d replaced, %d gone, %zu on screen)",
+                 box.left, box.top, box.right, box.bottom,
                  under.size(), replaced, dropped, g_runs.size() + 1);
         log_text(p, txmode, what);
     }
@@ -583,13 +620,16 @@ void Executor::hidpi::chrome_draw(const Rect &r, Shapes shapes, const std::funct
             g_runs.erase(it);
             continue;
         }
-        auto copy = std::make_shared<Run>(*u);
-        capture(*copy, s, copy->after);
-        *it = copy;
+        recapture(it, s);
     }
     g_runs.erase(std::remove_if(g_runs.begin(), g_runs.end(),
                                 [&](const auto &u) { return intersects(u->box, box) && !run_valid(*u, s); }),
                  g_runs.end());
+    run->noInk = run->before == run->after;
+    if(ERROR_ENABLED_P(ERROR_HIDPI_LOG))
+        fprintf(stderr, "[hidpi] chrome: %zu shapes at %d,%d-%d,%d%s (%zu under, %zu on screen)\n",
+                run->shapes.size(), box.left, box.top, box.right, box.bottom, run->noInk ? " (no change)" : "",
+                under.size(), g_runs.size() + 1);
     g_runs.push_back(run);
     if(g_runs.size() > MAX_RUNS)
     {

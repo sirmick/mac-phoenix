@@ -91,6 +91,8 @@ struct Run
     std::vector<float> advances;     /* and the pen's advance after it (1x) */
     std::vector<IRect> clip;         /* where QuickDraw could draw: vis & clip & box */
     Shapes shapes;                   /* chrome (no glyphs): drawn instead of its pixels */
+    bool noInk = false;              /* before == after: QuickDraw changed nothing (it was
+                                        there already): any change in the box ends it */
 };
 
 using Runs = std::vector<std::shared_ptr<const Run>>;

@@ -6,8 +6,9 @@
    hidpi_chrome_executor (tests/test_hidpi_chrome.sh), which compares the
    2x surface with the 1x frame inside some of this chrome: keep its boxes
    in step with the layout here. A press in a window's close or zoom box
-   is tracked, for looking at the boxes pressed; a click elsewhere in a
-   window brings it to the front. */
+   is tracked, for looking at the boxes pressed (the document window's
+   close box hides it); a click elsewhere in a window brings it to the
+   front, and in the front one tracks its controls. */
 #include <Types.h>
 #include <Quickdraw.h>
 #include <Fonts.h>
@@ -49,6 +50,7 @@ static const struct ctl ctls[] = {
     { 1008, 50, 260, 70, 380, 200, 0, 0, "\p" }, /* pop-up, menu 200 */
     { 96, 80, 260, 103, 273, 5, 0, 10, "\p" },  /* little arrows */
     { 64, 80, 290, 92, 302, 1, 0, 1, "\p" },    /* disclosure triangle, open */
+    { 368, 110, 300, 130, 380, 0, 0, 1, "\pPress" }, /* pressed, then the window closed */
     /* inactive: the last two */
     { 368, 20, 260, 40, 340, 0, 0, 1, "\pOff" },
     { 369, 214, 20, 230, 120, 1, 0, 1, "\pDim" },
@@ -58,8 +60,31 @@ static void DrawGallery(WindowRef w)
 {
     Rect r;
     ThemeTrackDrawInfo t;
+    RgnHandle clip = NewRgn();
     SetPort((GrafPtr)w);
     DrawControls(w);
+    /* a word drawn, then drawn again with nothing of it reaching the
+       screen (a dialog's items drawn outside its update region): still
+       there */
+    GetClip(clip);
+    MoveTo(305, 105);
+    DrawString("\pTwice");
+    SetRect(&r, 0, 0, 0, 0);
+    ClipRect(&r);
+    MoveTo(305, 105);
+    DrawString("\pTwice");
+    /* a line drawn, then its right half erased and drawn again through a
+       clip of that half (AppleWorks' font pop-up): all of it still there */
+    SetClip(clip);
+    MoveTo(260, 226);
+    DrawString("\pHelvetica field");
+    SetRect(&r, 330, 214, 420, 230);
+    ClipRect(&r);
+    EraseRect(&r);
+    MoveTo(260, 226);
+    DrawString("\pHelvetica field");
+    SetClip(clip);
+    DisposeRgn(clip);
     /* an indeterminate progress bar, still */
     memset(&t, 0, sizeof t);
     t.kind = kThemeMediumIndeterminateBar;
@@ -113,7 +138,8 @@ int main(void)
     {
         const struct ctl *c = &ctls[i];
         SetRect(&r, c->left, c->top, c->right, c->bottom);
-        h = NewControl(doc, &r, (ConstStr255Param)c->title, true, c->value, c->min, c->max, c->proc, 0);
+        h = NewControl(doc, &r, (ConstStr255Param)c->title, true, c->value, c->min, c->max, c->proc,
+                       c->top == 110 ? 'pres' : 0);
         if(i >= (int)(sizeof ctls / sizeof ctls[0]) - 2)
             HiliteControl(h, 255);
     }
@@ -137,11 +163,29 @@ int main(void)
                 /* a window's boxes track the mouse (drawn pressed while
                    it is down in them) and do nothing */
                 WindowRef w;
+                ControlHandle c;
+                Point pt = e.where;
                 short part = FindWindow(e.where, &w);
                 if(part == inGoAway)
-                    TrackGoAway(w, e.where);
+                {
+                    /* the document window's hides it */
+                    if(TrackGoAway(w, e.where) && w == doc)
+                        HideWindow(doc);
+                }
                 else if(part == inZoomIn || part == inZoomOut)
                     TrackBox(w, e.where, part);
+                else if(part == inContent && w == FrontWindow())
+                {
+                    SetPort((GrafPtr)w);
+                    GlobalToLocal(&pt);
+                    /* Press puts up an alert (its OK pressed and the
+                       alert gone, nothing of the button may stay) */
+                    if(FindControl(pt, w, &c) && TrackControl(c, pt, NULL) && GetControlReference(c) == 'pres')
+                    {
+                        SInt16 item;
+                        StandardAlert(kAlertNoteAlert, "\pChromeGallery", "\pPressed.", NULL, &item);
+                    }
+                }
                 else if(part == inContent || part == inDrag)
                     SelectWindow(w);
                 break;

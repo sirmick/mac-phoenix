@@ -396,8 +396,16 @@ one draws again glyph for glyph is replaced, the later one taking its
 whole line again at each keystroke, and the two drawn together darkened
 the anti-aliasing; the caret blinking over a run is enough to make it
 stale, so replacement looks at stale runs too. srcXor drawn twice in the
-same place (erasing itself) removes both. At most 4096 runs; stale ones go
-when text is drawn over them.
+same place (erasing itself) removes both. The replacing run is also drawn
+inside the replaced one's clip (AppleWorks draws its font pop-up's name
+again through a clip of its right half). Text whose drawing the port's
+clip leaves nothing of is not a run and changes none (a dialog's items
+drawn again outside its update region). A run drawn over until no pixel
+it changed is left (a button drawn up again over its pressed look) goes:
+it could never be found stale. One whose drawing changed nothing (chrome
+drawn again over the same pixels) is stale at any change in its box. At
+most 4096 runs; stale ones go when text is drawn over them.
+`tests/test_hidpi_chrome.sh` (ChromeGallery) has a case for each.
 
 Text modes: srcOr, srcBic (the text in the background colour: selected
 icon labels), srcCopy (the box filled first), grayishTextOr (grey, the
