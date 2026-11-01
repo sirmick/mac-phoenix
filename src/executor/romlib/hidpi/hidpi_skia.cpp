@@ -9,6 +9,8 @@
 #include "include/core/SkFont.h"
 #include "include/core/SkFontMgr.h"
 #include "include/core/SkPaint.h"
+#include "include/core/SkPathBuilder.h"
+#include "include/effects/SkGradientShader.h"
 #include "include/core/SkRegion.h"
 #include "include/core/SkTypeface.h"
 #include "include/ports/SkFontMgr_empty.h"
@@ -187,6 +189,46 @@ void draw_run(SkCanvas *canvas, const Scaler &sc, const Run &run)
                          ul);
     }
 }
+
+/* A chrome run: its shapes, anti-aliased, at the display scale. */
+void draw_chrome(SkCanvas *canvas, const Scaler &sc, const Run &run)
+{
+    float s = (float)sc.s;
+    for(const Executor::hidpi::Shape &sh : run.shapes)
+    {
+        SkPaint paint;
+        paint.setAntiAlias(true);
+        paint.setColor(sh.color);
+        if(!sh.colors.empty() && sh.gr > 0)
+        {
+            std::vector<SkColor> colors(sh.colors.begin(), sh.colors.end());
+            paint.setShader(SkGradientShader::MakeRadial({ sh.gx * s, sh.gy * s }, sh.gr * s, colors.data(),
+                                                         sh.pos.size() == colors.size() ? sh.pos.data() : nullptr,
+                                                         (int)colors.size(), SkTileMode::kClamp));
+        }
+        if(sh.stroke > 0)
+        {
+            paint.setStyle(SkPaint::kStroke_Style);
+            paint.setStrokeWidth(sh.stroke * s);
+            paint.setStrokeJoin(SkPaint::kRound_Join);
+            paint.setStrokeCap(SkPaint::kRound_Cap);
+        }
+        if(sh.kind == Executor::hidpi::Shape::Circle && sh.pts.size() >= 3)
+        {
+            canvas->drawCircle(sh.pts[0] * s, sh.pts[1] * s, sh.pts[2] * s, paint);
+            continue;
+        }
+        if(sh.pts.size() < 4)
+            continue;
+        SkPathBuilder b;
+        b.moveTo(sh.pts[0] * s, sh.pts[1] * s);
+        for(size_t i = 2; i + 1 < sh.pts.size(); i += 2)
+            b.lineTo(sh.pts[i] * s, sh.pts[i + 1] * s);
+        if(sh.kind == Executor::hidpi::Shape::Polygon)
+            b.close();
+        canvas->drawPath(b.detach(), paint);
+    }
+}
 }
 
 void Executor::hidpi::impl::draw(double scale, const uint32_t *argb, int w, int h,
@@ -215,7 +257,10 @@ void Executor::hidpi::impl::draw(double scale, const uint32_t *argb, int w, int 
             for(const IRect &c : run->clip)
                 clip.op(sc.rect(c), SkRegion::kUnion_Op);
             canvas->clipRegion(clip);
-            draw_run(canvas.get(), sc, *run);
+            if(!run->shapes.empty())
+                draw_chrome(canvas.get(), sc, *run);
+            else
+                draw_run(canvas.get(), sc, *run);
             canvas->restore();
         }
     }

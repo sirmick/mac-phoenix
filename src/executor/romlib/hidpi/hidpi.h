@@ -14,6 +14,7 @@
 
 #include <ExMacTypes.h>
 #include <vdriver/dirtyrect.h>
+#include <hidpi/hidpi_internal.h>
 
 #include <cstdint>
 #include <functional>
@@ -63,6 +64,12 @@ bool drawing_on_screen();
    the run is recorded around it. */
 void text_draw(const TextParams &p, const std::function<void()> &blit);
 
+/* Chrome drawn on the screen inside R (port coordinates): BLIT draws its
+   1x pixels; SHAPES (port coordinates) are what the presentation surface
+   draws instead, while the screen still has them. Build SHAPES only when
+   active(). */
+void chrome_draw(const Rect &r, Shapes shapes, const std::function<void()> &blit);
+
 /* The presentation surface for the 1x frame ARGB (W x H, rows of W):
    RECTS (1x) changed since the last call, OUT (OW x OH) is redrawn there.
    On the front end's render thread, after ARGB is converted from the
@@ -80,6 +87,7 @@ inline double scale() { return 1.0; }
 inline bool active() { return false; }
 inline bool drawing_on_screen() { return false; }
 inline void text_draw(const TextParams &, const std::function<void()> &blit) { blit(); }
+inline void chrome_draw(const Rect &, Shapes, const std::function<void()> &blit) { blit(); }
 inline void compose(const uint32_t *, int, int, const DirtyRects::Rects &, uint32_t *, int, int) {}
 inline void scaled_size(int w, int h, int *ow, int *oh) { *ow = w; *oh = h; }
 

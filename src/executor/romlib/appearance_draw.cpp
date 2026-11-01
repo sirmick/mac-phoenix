@@ -678,6 +678,18 @@ Rect markBox(const Rect &b)
     return Rect{ (INTEGER)top, (INTEGER)(b.left + 2), (INTEGER)(top + 12), (INTEGER)(b.left + 14) };
 }
 
+/* The check box's tick at the display scale: its shadow, then the tick */
+hidpi::Shapes tickShapes(const Rect &r, Look look)
+{
+    float L = r.left, T = r.top;
+    hidpi::Shapes s;
+    if(look != Look::inactive)
+        s.push_back({ hidpi::Shape::Polyline, { L + 6.5f, T + 10, L + 12.5f, T + 4 }, 1.5f, argbGray(grey(8)) });
+    s.push_back({ hidpi::Shape::Polyline, { L + 2.5f, T + 6, L + 5.5f, T + 9, L + 11.5f, T + 3 }, 2,
+                  argbGray(grey(look == Look::inactive ? 8 : 0)) });
+    return s;
+}
+
 void checkBox(const Rect &b, Look look, ThemeButtonValue value)
 {
     Rect r = markBox(b);
@@ -699,16 +711,19 @@ void checkBox(const Rect &b, Look look, ThemeButtonValue value)
     {
         /* a tick, two pixels thick, out over the top right corner
            (8.6's is anti-aliased: an approximation) */
-        for(int k = 0; k < 2; k++)
-        {
-            lineGray(L + 2, T + 5 + k, L + 5, T + 8 + k, ink);
-            lineGray(L + 5, T + 8 + k, L + 11, T + 2 + k, ink);
-        }
-        if(look != Look::inactive)
-        {
-            lineGray(L + 6, T + 9, L + 12, T + 3, grey(7));
-            lineGray(L + 6, T + 10, L + 12, T + 4, grey(0xa));
-        }
+        Rect tickBox = { (INTEGER)(T + 1), (INTEGER)(L + 1), (INTEGER)(T + 12), (INTEGER)(L + 13) };
+        hidpi::chrome_draw(tickBox, hidpi::active() ? tickShapes(r, look) : hidpi::Shapes{}, [&] {
+            for(int k = 0; k < 2; k++)
+            {
+                lineGray(L + 2, T + 5 + k, L + 5, T + 8 + k, ink);
+                lineGray(L + 5, T + 8 + k, L + 11, T + 2 + k, ink);
+            }
+            if(look != Look::inactive)
+            {
+                lineGray(L + 6, T + 9, L + 12, T + 3, grey(7));
+                lineGray(L + 6, T + 10, L + 12, T + 4, grey(0xa));
+            }
+        });
     }
     else if(value == kThemeButtonMixed)
     {
@@ -726,9 +741,45 @@ void checkBox(const Rect &b, Look look, ThemeButtonValue value)
 /* A radio button: a sphere lit from the top left, its shade stepping
    along the diagonal (the ring just inside the outline darker), in a
    round outline whose ends soften */
+void radioPixels(const Rect &r, Look look, ThemeButtonValue value);
+
+/* The radio button at the display scale: the sphere as a radial gradient
+   lit from the top left, its outline, the dot */
+hidpi::Shapes radioShapes(const Rect &r, Look look, ThemeButtonValue value)
+{
+    float cx = r.left + 6, cy = r.top + 6;
+    uint32_t line = argbGray(grey(look == Look::inactive ? 8 : 0));
+    hidpi::Shapes s;
+    hidpi::Shape body{ hidpi::Shape::Circle, { cx, cy, 5.5f }, 0, argbGray(grey(0xd)) };
+    if(look != Look::inactive)
+    {
+        body.gx = r.left + 3.5f;
+        body.gy = r.top + 3.5f;
+        body.gr = 8.5f;
+        if(look == Look::pressed)
+            body.colors = { argbGray(grey(4)), argbGray(grey(5)), argbGray(grey(7)), argbGray(grey(9)) };
+        else
+            body.colors = { argbGray(grey(0xf)), argbGray(grey(0xe)), argbGray(grey(0xb)), argbGray(grey(8)) };
+        body.pos = { 0, 0.3f, 0.6f, 0.9f };
+    }
+    s.push_back(body);
+    s.push_back({ hidpi::Shape::Circle, { cx, cy, 5.5f }, 1, line });
+    if(value == kThemeButtonOn)
+        s.push_back({ hidpi::Shape::Circle, { cx, cy, 3 }, 0, line });
+    else if(value == kThemeButtonMixed)
+        s.push_back({ hidpi::Shape::Polygon, { cx - 3, cy - 1, cx + 3, cy - 1, cx + 3, cy + 1, cx - 3, cy + 1 }, 0, line });
+    return s;
+}
+
 void radioButton(const Rect &b, Look look, ThemeButtonValue value)
 {
     Rect r = markBox(b);
+    hidpi::chrome_draw(r, hidpi::active() ? radioShapes(r, look, value) : hidpi::Shapes{},
+                       [&] { radioPixels(r, look, value); });
+}
+
+void radioPixels(const Rect &r, Look look, ThemeButtonValue value)
+{
     /* by h + v from the box's corner: inside, and on the rim */
     static const uint8_t litIn[] = { 0xf, 0xf, 0xf, 0xf, 0xf, 0xf, 0xe, 0xf, 0xf, 0xe, 0xe, 0xd, 0xd, 0xb, 0xb, 0xa, 0xa };
     static const uint8_t litRim[] = { 0xd, 0xd, 0xd, 0xd, 0xb, 0xd, 0xd, 0xd, 0xb, 0xb, 0xd, 8, 0xb, 0xb, 8, 8, 8, 8, 8, 8 };

@@ -8,6 +8,7 @@
 #include <CQuickDraw.h>
 #include <Appearance.h>
 #include <quickdraw/cquick.h>
+#include <hidpi/hidpi.h>
 
 namespace Executor
 {
@@ -93,7 +94,40 @@ inline void boxFace(const Rect &r, bool pressed, bool active = true)
 
 /* A solid triangle pointing `dir` (kThemeArrowLeft, Down, Right, Up),
    `size` across, centred in r. */
+/* A grey as the presentation surface's colour (0xAARRGGBB) */
+inline uint32_t argbGray(uint16_t g)
+{
+    uint32_t c = g >> 8;
+    return 0xFF000000 | c << 16 | c << 8 | c;
+}
+
+void arrowPixels(const Rect &r, int dir, int size, uint16_t g);
+
+/* A triangle pointing DIR, SIZE across its base, centred in R; at the
+   display scale a smooth one (hidpi chrome). */
 inline void arrow(const Rect &r, int dir, int size, uint16_t g)
+{
+    int depth = (size + 1) / 2;
+    int ch = (r.left + r.right) / 2, cv = (r.top + r.bottom) / 2;
+    bool vertical = dir == kThemeArrowUp || dir == kThemeArrowDown;
+    /* the pixels: rows from the tip; the base's 2 depth - 1 */
+    int a0 = (vertical ? cv : ch) - depth / 2, c = vertical ? ch : cv;
+    Rect box = vertical ? Rect{ (INTEGER)a0, (INTEGER)(c - depth + 1), (INTEGER)(a0 + depth), (INTEGER)(c + depth) }
+                        : Rect{ (INTEGER)(c - depth + 1), (INTEGER)a0, (INTEGER)(c + depth), (INTEGER)(a0 + depth) };
+    hidpi::Shapes shapes;
+    if(hidpi::active())
+    {
+        bool tipFirst = dir == kThemeArrowUp || dir == kThemeArrowLeft;
+        float tip = tipFirst ? a0 : a0 + depth, base = tipFirst ? a0 + depth : a0;
+        float lo = c - depth + 1, hi = c + depth, mid = c + 0.5f;
+        std::vector<float> p = vertical ? std::vector<float>{ lo, base, hi, base, mid, tip }
+                                        : std::vector<float>{ base, lo, base, hi, tip, mid };
+        shapes.push_back({ hidpi::Shape::Polygon, p, 0, argbGray(g) });
+    }
+    hidpi::chrome_draw(box, std::move(shapes), [&] { arrowPixels(r, dir, size, g); });
+}
+
+inline void arrowPixels(const Rect &r, int dir, int size, uint16_t g)
 {
     gray(g);
     int depth = (size + 1) / 2;
