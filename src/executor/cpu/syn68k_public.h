@@ -184,6 +184,16 @@ static inline uint32_t US_TO_SYN68K_FUN(uint64 addr)
         if(addr - base < ROMlib_sizes[i])
             return (uint32_t)(addr - ROMlib_offsets[i]);
     }
+    /* Past what a window maps: a guest value SYN68K_TO_US made a pointer
+       of (a Ptr through a C++ signature and back: CurrentA5 set from
+       PowerPC, wherever it points) comes back as that value, its window
+       the one whose guest range it lands in. */
+    for(int i = 0; i < OFFSET_TABLE_SIZE; i++)
+    {
+        uint64 g = addr - ROMlib_offsets[i];
+        if(g >> 30 == (uint64)i)
+            return (uint32_t)g;
+    }
     syn68k_bad_host_pointer((const void *)(uintptr_t)addr);
 }
 #define US_TO_SYN68K(addr) (US_TO_SYN68K_FUN((uint64)(uintptr_t)(addr)))
