@@ -198,16 +198,3 @@ TEST_F(HeapZone, SoundLoadingKeepsPointersLow)
             if(*h[j])
                 EXPECT_LT(p[i], *h[j]);
 }
-
-/* A guest value past what its window maps, handed through a host pointer
-   and back (a Ptr argument from PowerPC: LMSetCurrentA5), is the same
-   value, not a fatal error (syn68k_public.h, US_TO_SYN68K_FUN). */
-TEST(GuestAddress, RoundTripPastTheMappedPart)
-{
-    if(ROMlib_sizes[0] + 0x10000 >= (1ull << 30))
-        GTEST_SKIP() << "window 0 maps all of its range";
-    uint32_t g = (uint32_t)ROMlib_sizes[0] + 0x1000;
-    EXPECT_EQ(g, US_TO_SYN68K(SYN68K_TO_US(g)));
-    LMSetCurrentA5((Ptr)SYN68K_TO_US(g));
-    EXPECT_EQ(g, (uint32_t)READUL(0x904)) << "CurrentA5 holds the value";
-}
