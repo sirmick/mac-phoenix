@@ -826,6 +826,15 @@ foreach(codec png h264)
     ENVIRONMENT "NODE_PATH=${PLAYWRIGHT_NODE_PATH};CHROMIUM=${PLAYWRIGHT_CHROMIUM}")
 endforeach()
 
+# Executor's HiDPI chrome runs (docs/executor/HiDPI.md "Phase 2"): ChromeGallery
+# on 8.6 at --executor-scale 2, the 2x screen against the 1x frame scaled up
+# inside known pieces of chrome. Skips without Skia (-DEXECUTOR_SKIA=ON).
+add_test(NAME hidpi_chrome_executor
+  COMMAND bash ${TEST_DIR}/test_hidpi_chrome.sh --port 18474)
+set_tests_properties(hidpi_chrome_executor PROPERTIES
+  TIMEOUT 180 LABELS "executor" SKIP_RETURN_CODE 77
+  ENVIRONMENT "MACEMU_BINARY=$<TARGET_FILE:mac-phoenix>")
+
 # Executor's Toolbox gtests built with Retro68 into a 68k app and run in
 # the guest: on Apple's ROM and System (the ground truth) and on Executor.
 # Skips without Retro68 (toolchain/retro68). The cells share the app's

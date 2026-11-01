@@ -505,7 +505,22 @@ unchanged (the difftest probes).
 
 So far: radio buttons (a sphere as a radial gradient, its outline, the
 dot), the check box's tick (the box itself is lines: crisp at whole
-scales already), and every triangle arrow `appearance::arrow` draws
-(scroll bar arrows, pop-up and little arrows). Next: the slider thumb, tab
-slants, rounded push buttons, the window frame's boxes, menu bar corners;
-region twins for clipping.
+scales already), every triangle arrow `appearance::arrow` draws (scroll
+bar arrows, pop-up and little arrows), the slider's pointed thumb, north
+tabs (the top corners' curve into a straight slant), push buttons'
+rounded corners, the title-bar boxes of document and floating windows
+(their lines as they are, the face's diagonal steps a linear gradient:
+`gx2`/`gy2` with `gr` 0) and the menu bar's rounded top corners (two runs
+around the whole bar's drawing). A piece the port's clip leaves nothing
+of records no run, so the runs under it stay (the menu bar's background
+redrawn under one title).
+
+`tests/guest/chrome/ChromeGallery` keeps a window of this chrome on the
+screen; `hidpi_chrome_executor` (tests/test_hidpi_chrome.sh) runs it on
+8.6 at scale 2 and checks that inside each piece the 2x surface differs
+from the 1x frame scaled up, and inside a plain face does not.
+
+Not yet: other tab directions, the indeterminate progress bar, plain and
+upward slider thumbs, the disclosure triangle, pressed floating boxes,
+the grow corners; region twins for clipping (section 2: nothing in 8.6's
+chrome clips to a curved region yet).

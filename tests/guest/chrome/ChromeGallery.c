@@ -3,8 +3,9 @@
    pop-up, little arrows, disclosure triangle, tabs) that stays on the
    screen until it is told to quit. For looking at Executor's HiDPI chrome
    (--executor-scale 2, docs/executor/HiDPI.md) and the ctest cell
-   hidpi_chrome_executor, which compares the 2x surface with the 1x frame
-   inside the boxes below (tests/test_hidpi_chrome.sh: keep them in step). */
+   hidpi_chrome_executor (tests/test_hidpi_chrome.sh), which compares the
+   2x surface with the 1x frame inside some of this chrome: keep its boxes
+   in step with the layout here. */
 #include <Types.h>
 #include <Quickdraw.h>
 #include <Fonts.h>
