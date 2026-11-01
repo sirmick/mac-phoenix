@@ -54,3 +54,11 @@ controls.16.*	the scroll bar (CDEF 1), through DrawThemeTrack/DrawThemeScrollBar
 controls.384.*	the scroll bar (8.6's CDEF 384), same gap as CDEF 1 (same DrawThemeTrack)
 controls.64.*	the disclosure triangle's selected look (value1) isn't drawn platinum yet
 dialogs.*.standard	StandardAlert's note icon: its black pixels come out transparent (the icon or mask Executor plots differs from 8.6's; not investigated); the background is 8.6's
+
+# platinum-2 (open)
+controls.1008.popupnomenu.*	a pop-up whose menu doesn't exist: 8.6 draws its own empty look
+controls.1008.popupgallery.*	a pop-up whose menu doesn't exist (menu 0, value 200): 8.6 draws its own empty look
+draw32.tabdir.[123].*	tabs facing south, east, west: not drawn platinum yet
+draw8.tabdir.[123].*	tabs facing south, east, west: not drawn platinum yet
+draw32.indeterminate.*	the indeterminate progress bar: not drawn platinum yet
+draw8.indeterminate.*	the indeterminate progress bar: not drawn platinum yet

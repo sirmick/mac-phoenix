@@ -583,6 +583,54 @@ static void drawing(void)
                 PRIM("growbox", DrawThemeStandaloneGrowBox(p, kThemeGrowRight | kThemeGrowDown, false, states[s]))
             }
         }
+        /* tabs facing each way, every style (across a 24-high bar, or down
+           a 24-wide one) */
+        for(i = 0; i < 4; i++)
+            for(s = 0; s <= 4; s++)
+            {
+                Rect tb;
+                if(i < 2)
+                    SetRect(&tb, 10, 10, 90, 34);
+                else
+                    SetRect(&tb, 10, 10, 34, 50);
+                begin(depths[d]);
+                DrawThemeTab(&tb, s, i, NULL, 0);
+                sprintf(k, "tabdir.%d.%d", i, s);
+                end(k);
+            }
+        /* progress bars: indeterminate at a few phases, medium and large,
+           and determinate inactive */
+        for(i = 0; i < 4; i++)
+        {
+            static const SInt8 phases[] = { 0, 1, 5, 12 };
+            int large;
+            for(large = 0; large < 2; large++)
+            {
+                ThemeTrackDrawInfo t;
+                memset(&t, 0, sizeof t);
+                t.kind = large ? kThemeLargeIndeterminateBar : kThemeMediumIndeterminateBar;
+                SetRect(&t.bounds, 8, 10, 108, large ? 26 : 24);
+                t.min = 0; t.max = 100; t.value = 25;
+                t.attributes = kThemeTrackHorizontal;
+                t.enableState = kThemeTrackActive;
+                t.trackInfo.progress.phase = phases[i];
+                begin(depths[d]);
+                DrawThemeTrack(&t, NULL, NULL, 0);
+                sprintf(k, "indeterminate.%s.%d", large ? "large" : "medium", phases[i]);
+                end(k);
+            }
+        }
+        {
+            ThemeTrackDrawInfo t;
+            memset(&t, 0, sizeof t);
+            t.kind = kThemeMediumIndeterminateBar;
+            SetRect(&t.bounds, 8, 10, 108, 24);
+            t.attributes = kThemeTrackHorizontal;
+            t.enableState = kThemeTrackInactive;
+            begin(depths[d]);
+            DrawThemeTrack(&t, NULL, NULL, 0);
+            end("indeterminate.inactive");
+        }
         SetRect(&b, 8, 8, 112, 52);
         begin(depths[d]); DrawThemeFocusRect(&b, true); end("focusrect");
         begin(depths[d]); DrawThemeMenuBarBackground(&b, kThemeMenuBarNormal, 0); end("menubar");
@@ -807,6 +855,9 @@ static void controls(void)
         { 1008, 100, 20, 201, 0, 0, 0, "popup10" },
         { 1009, 100, 20, 200, 0, 0, 0, "popupfixed" },
         { 1008, 160, 20, 200, 40, 0, 0, "popuptitle" },
+        /* no such menu (999); ChromeGallery's: menu 0, value 200 */
+        { 1008, 100, 20, 999, 0, 0, 0, "popupnomenu" },
+        { 1008, 120, 20, 0, 0, 200, 0, "popupgallery" },
         { 368, 60, 20, 0, 0, 0, 10, "push" },
         { 369, 60, 16, 0, 2, 0, 11, "check" },
         { 370, 60, 16, 0, 2, 0, 12, "radio" },
