@@ -9,7 +9,12 @@
 # for pixel: inside each piece of chrome (slider, tabs, a push button's
 # corner, a title-bar box, the menu bar's corners, a radio button) the 2x
 # surface must differ from the 1x frame scaled up, and inside a plain
-# face it must not. The boxes are ChromeGallery's: keep them in step.
+# face it must not. Text ChromeGallery draws again (a word through an
+# empty clip, a line through a clip of half of it) must still be inked
+# at 2x. Then the gallery's Press button puts up an alert and its OK is
+# clicked: where the button was, the 2x screen must be the 1x desktop
+# again (no HiDPI chrome left behind). The boxes are ChromeGallery's (and
+# StandardAlert's on a 640x480 screen): keep them in step.
 #
 # Usage:
 #   tests/test_hidpi_chrome.sh [--timeout N] [--port N]
@@ -79,11 +84,22 @@ LAUNCH=$(curl -sf --max-time 30 -X POST "http://localhost:$PORT/api/launch" \
     -H 'Content-Type: application/json' -d '{"path":"Host:ChromeGallery"}' || echo '{"success":false}')
 echo "$LAUNCH" | grep -q '"success": true' || { echo "FAIL: could not launch ChromeGallery: $LAUNCH"; exit 1; }
 
-# Each box (1x screen coordinates, x0 y0 x1 y1): chrome, or a plain face.
+# A click at X Y (1x screen coordinates)
+click() {
+    curl -sf -X POST "http://localhost:$PORT/api/mouse" -d "{\"x\":$1,\"y\":$2}" >/dev/null
+    sleep 0.5
+    curl -sf -X POST "http://localhost:$PORT/api/mouse" -d '{"button":0,"down":true}' >/dev/null
+    sleep 0.3
+    curl -sf -X POST "http://localhost:$PORT/api/mouse" -d '{"button":0,"down":false}' >/dev/null
+}
+
+# Each box (1x screen coordinates, x0 y0 x1 y1): chrome (differs from the
+# 1x frame scaled up), plain (doesn't), or ink (text: dark pixels at 2x).
+# STAGE: open (the gallery up) or closed (its window closed).
 check() {
     curl -sf "http://localhost:$PORT/api/screenshot" -o "$WORK/2x.png" || return 1
     curl -sf "http://localhost:$PORT/api/screenshot?scale=1" -o "$WORK/1x.png" || return 1
-    python3 - "$WORK/1x.png" "$WORK/2x.png" <<'PY'
+    python3 - "$WORK/1x.png" "$WORK/2x.png" "$1" <<'PY'
 import sys
 from PIL import Image
 a = Image.open(sys.argv[1]).convert('RGB')
@@ -93,48 +109,72 @@ if b.size != (2 * a.size[0], 2 * a.size[1]):
     sys.exit(77)
 up = a.resize(b.size, Image.NEAREST)
 # ChromeGallery's document window: content at (20, 60)
-boxes = [
-    ('slider (pointed thumb)', 40, 160, 220, 184, True),
-    ('north tabs', 280, 200, 440, 224, True),
-    ('push button corner', 40, 80, 46, 86, True),
-    ('title-bar close box', 20, 41, 36, 57, True),
-    ('menu bar left corner', 0, 0, 8, 8, True),
-    ('menu bar right corner', a.size[0] - 8, 0, a.size[0], 8, True),
-    ('radio button', 40, 130, 54, 146, True),
-    ('tab pane face (plain)', 300, 240, 400, 260, False),
-]
+if sys.argv[3] == 'open':
+    boxes = [
+        ('slider (pointed thumb)', 40, 160, 220, 184, 'chrome'),
+        ('north tabs', 280, 200, 440, 224, 'chrome'),
+        ('push button corner', 40, 80, 46, 86, 'chrome'),
+        ('title-bar close box', 20, 41, 36, 57, 'chrome'),
+        ('menu bar left corner', 0, 0, 8, 8, 'chrome'),
+        ('menu bar right corner', a.size[0] - 8, 0, a.size[0], 8, 'chrome'),
+        ('radio button', 40, 130, 54, 146, 'chrome'),
+        ('tab pane face', 300, 240, 400, 260, 'plain'),
+        ('word drawn again, clipped away', 326, 155, 360, 167, 'chrome'),
+        ('line\'s left half (right half drawn again)', 280, 276, 348, 288, 'ink'),
+    ]
+else:
+    boxes = [('where the alert\'s OK was (pressed, the alert gone)', 470, 210, 498, 226, 'plain')]
 pa, pb = up.load(), b.load()
 bad = 0
-for name, x0, y0, x1, y1, chrome in boxes:
+for name, x0, y0, x1, y1, kind in boxes:
     n = 0
     for y in range(2 * y0, 2 * y1):
         for x in range(2 * x0, 2 * x1):
             p, q = pa[x, y], pb[x, y]
-            if max(abs(p[0] - q[0]), abs(p[1] - q[1]), abs(p[2] - q[2])) > 8:
+            if kind == 'ink':
+                n += max(q) < 0x60
+            elif max(abs(p[0] - q[0]), abs(p[1] - q[1]), abs(p[2] - q[2])) > 8:
                 n += 1
-    ok = n >= 8 if chrome else n == 0
+    ok = n >= 8 if kind != 'plain' else n == 0
     bad += not ok
-    print(f'  {"ok  " if ok else "FAIL"} {name}: {n} pixels differ from the 1x frame scaled up'
-          f' ({"chrome: some" if chrome else "plain: none"} expected)')
+    what = {'chrome': 'pixels differ from the 1x frame scaled up (some expected)',
+            'plain': 'pixels differ from the 1x frame scaled up (none expected)',
+            'ink': 'dark pixels at 2x (some expected)'}[kind]
+    print(f'  {"ok  " if ok else "FAIL"} {name}: {n} {what}')
 sys.exit(1 if bad else 0)
 PY
 }
 
+# STAGE, checked again after a pause if it fails at first
+FAILED=0
+stage() {
+    local rc=0
+    check "$1" || rc=$?
+    if [[ $rc -eq 1 ]]; then
+        echo "  (again, in case the window was still drawing)"
+        sleep 5
+        rc=0
+        check "$1" || rc=$?
+    fi
+    if [[ $rc -eq 77 ]]; then exit 77; fi
+    if [[ $rc -ne 0 ]]; then
+        mkdir -p "$STORAGE/tmp"
+        cp "$WORK/1x.png" "$STORAGE/tmp/hidpi_chrome-$1-1x.png" 2>/dev/null || true
+        cp "$WORK/2x.png" "$STORAGE/tmp/hidpi_chrome-$1-2x.png" 2>/dev/null || true
+        echo "FAIL: screenshots in $STORAGE/tmp/hidpi_chrome-$1-{1x,2x}.png"
+        FAILED=1
+    fi
+}
+
 sleep 6
-rc=0
-check || rc=$?
-if [[ $rc -eq 1 ]]; then
-    echo "  (again, in case the window was still drawing)"
-    sleep 5
-    rc=0
-    check || rc=$?
-fi
-if [[ $rc -eq 77 ]]; then exit 77; fi
-if [[ $rc -ne 0 ]]; then
-    mkdir -p "$STORAGE/tmp"
-    cp "$WORK/1x.png" "$STORAGE/tmp/hidpi_chrome-1x.png" 2>/dev/null || true
-    cp "$WORK/2x.png" "$STORAGE/tmp/hidpi_chrome-2x.png" 2>/dev/null || true
-    echo "FAIL: screenshots in $STORAGE/tmp/hidpi_chrome-{1x,2x}.png"
-    exit 1
-fi
+stage open
+# Press: an alert; its OK
+click 360 180
+curl -sf --max-time 20 -X POST "http://localhost:$PORT/api/wait" -d '{"condition":"text=Pressed.","timeout":15}' >/dev/null \
+    || echo "  (the alert's text not seen)"
+sleep 1
+click 465 218
+sleep 3
+stage alert
+[[ $FAILED -eq 0 ]] || exit 1
 echo "PASS"
