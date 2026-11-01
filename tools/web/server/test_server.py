@@ -3,6 +3,12 @@
 relay (ctest executor.web.server; no browser needed).
 
     python3 tools/web/server/test_server.py
+    EXECUTOR_WEB_SERVER_BINARY=PATH python3 tools/web/server/test_server.py
+
+With EXECUTOR_WEB_SERVER_BINARY, the same checks run against that
+program instead (tools/standalone's Go server, started for each class):
+it has no accounts, its one password (--password-file) stands for the
+owner's, and the checks of accounts and their backups are skipped.
 """
 import base64
 import contextlib
@@ -10,10 +16,12 @@ import hashlib
 import http.client
 import json
 import os
+import re
 import shutil
 import socket
 import sqlite3
 import struct
+import subprocess
 import sys
 import tempfile
 import threading
@@ -21,6 +29,32 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from server import app, backup, config, relay, static  # noqa: E402
+
+BINARY = os.environ.get("EXECUTOR_WEB_SERVER_BINARY")
+accounts_only = unittest.skipIf(BINARY, "accounts: the Python server's")
+
+
+class Binary:
+    """The server under EXECUTOR_WEB_SERVER_BINARY as a child process, with
+    the owner's password; server_address and shutdown as app.Server's."""
+    def __init__(self, tmp, site, images, *extra):
+        pw = os.path.join(tmp, "password")
+        with open(pw, "w") as f:
+            f.write("owner-password\n")
+        self.proc = subprocess.Popen([BINARY, "--data", os.path.join(tmp, "data"), "--images", images,
+                                      "--site", site, "--bind", "127.0.0.1", "--port", "0",
+                                      "--password-file", pw, "--quiet", *extra],
+                                     stdout=subprocess.PIPE, text=True)
+        line = self.proc.stdout.readline()
+        m = re.search(r":(\d+)/$", line.strip())
+        if not m:
+            self.proc.kill()
+            raise RuntimeError(f"{BINARY}: {line!r}")
+        self.server_address = ("127.0.0.1", int(m.group(1)))
+
+    def shutdown(self):
+        self.proc.terminate()
+        self.proc.wait()
 
 
 class ServerTest(unittest.TestCase):
@@ -40,6 +74,10 @@ class ServerTest(unittest.TestCase):
             json.dump({"title": "Disk A", "note": "a note", "tags": ["68k"]}, f)
         with open(os.path.join(images, "secret.img"), "wb") as f:
             f.write(b"x")                             # no record: not offered
+        if BINARY:
+            cls.server = Binary(cls.tmp, site, images)
+            cls.port = cls.server.server_address[1]
+            return
         cfg = config.load(None, {"server": {"port": 0, "site": site, "data": os.path.join(cls.tmp, "data")},
                                  "library": {"images": images}})
         cls.server = app.Server(cfg, quiet=True)
@@ -73,6 +111,7 @@ class ServerTest(unittest.TestCase):
         self.assertEqual(r.status, 200)
         return r.getheader("Set-Cookie").split(";")[0]
 
+    @unittest.skipIf(BINARY, "static.py's own (the Go server's: go test)")
     def test_range_parsing(self):
         self.assertEqual(static.parse_range("bytes=0-99", 1000), (0, 100))
         self.assertEqual(static.parse_range("bytes=900-", 1000), (900, 1000))
@@ -149,6 +188,23 @@ class ServerTest(unittest.TestCase):
         r, _ = self.request("GET", "/disks/a.img", headers={"If-None-Match": etag}, cookie=cookie)
         self.assertEqual(r.status, 304)
 
+    def test_cookie_and_cross_site(self):
+        r, _ = self.request("POST", "/api/login", {"name": "owner", "password": "owner-password"})
+        cookie = r.getheader("Set-Cookie").split(";")[0]
+        self.assertIn("HttpOnly", r.getheader("Set-Cookie"))
+        self.assertIn("SameSite=Strict", r.getheader("Set-Cookie"))
+        self.assertNotIn("Secure", r.getheader("Set-Cookie"))           # http://127.0.0.1
+        r, _ = self.request("POST", "/api/login", {"name": "owner", "password": "owner-password"},
+                            headers={"Host": "executor.example"})
+        self.assertIn("; Secure", r.getheader("Set-Cookie"))           # anywhere else
+        self.assertEqual(self.request("GET", "/api/me", cookie=cookie)[0].status, 200)
+        r, _ = self.request("DELETE", "/api/sync/volumes/own", cookie=cookie,
+                            headers={"Origin": "https://elsewhere.example"})
+        self.assertEqual(r.status, 403)
+        r, _ = self.request("POST", "/api/logout", cookie=cookie)
+        self.assertEqual(self.request("GET", "/api/me", cookie=cookie)[0].status, 401)
+
+    @accounts_only
     def test_invite_and_cross_site(self):
         r, _ = self.request("POST", "/api/register", {"invite": "nonsense", "name": "bob", "password": "bob-password"})
         self.assertEqual(r.status, 400)
@@ -231,6 +287,11 @@ class ServerTest(unittest.TestCase):
         r, data = self.request("GET", "/api/sync/volumes/own", cookie=cookie)
         self.assertEqual(json.loads(data), {"version": version, "manifest": manifest})
         self.assertEqual(self.request("GET", f"/api/sync/objects/{sha}", cookie=cookie)[1], blob)
+        if BINARY:                                      # no one else
+            self.request("DELETE", "/api/sync/volumes/own", cookie=cookie)
+            r, data = self.request("GET", "/api/sync/volumes/own", cookie=cookie)
+            self.assertEqual(json.loads(data), {"version": version + 1, "manifest": None})
+            return
         # Someone else's are not ours.
         r, _ = self.request("POST", "/api/register", {"invite": self.server.app.accounts.new_invite(1),
                                                       "name": "erin", "password": "erin-password"})
@@ -273,9 +334,15 @@ class ServerTest(unittest.TestCase):
                                                        "Sec-WebSocket-Key": "x"}, cookie=cookie)
         self.assertEqual(r.status, 403)
 
+    def trust(self, proxies):
+        if BINARY:
+            r, _ = self.request("POST", "/api/settings", {"trusted_proxies": proxies}, cookie=self.login())
+            self.assertEqual(r.status, 200)
+        else:
+            self.server.app.cfg["server"]["trusted_proxies"] = proxies
+
     def test_login_limits(self):
-        app_ = self.server.app
-        app_.cfg["server"]["trusted_proxies"] = ["127.0.0.1"]
+        self.trust(["127.0.0.1"])
         try:
             for i in range(10):                         # one client behind the proxy
                 self.request("POST", "/api/login", {"name": "nobody", "password": "wrong-password"},
@@ -287,8 +354,9 @@ class ServerTest(unittest.TestCase):
                                 headers={"X-Forwarded-For": "203.0.113.6"})
             self.assertEqual(r.status, 200)              # another one is not
         finally:
-            app_.cfg["server"]["trusted_proxies"] = []
-            app_.failures.clear()
+            self.trust([])
+            if not BINARY:
+                self.server.app.failures.clear()
 
     # ---- the relay ----
     def relay_open(self, origin=None):
@@ -315,7 +383,17 @@ class ServerTest(unittest.TestCase):
     def relay_policy(self, **cfg):
         c = dict(config.DEFAULTS["relay"], ports=["1-65535"], allow_private=True)
         c.update(cfg)
-        self.server.app.relay = relay.Relay(c)
+        if BINARY:
+            r, _ = self.request("POST", "/api/settings", {"relay": c}, cookie=self.login())
+            self.assertEqual(r.status, 200)
+        else:
+            self.server.app.relay = relay.Relay(c)
+
+    def relay_sockets(self):
+        """Sockets the relay has open now."""
+        if BINARY:
+            return json.loads(self.request("GET", "/api/relay", cookie=self.login())[1])["sockets"]
+        return self.server.app.relay.sockets.get(1)
 
     def test_relay_tcp(self):
         self.relay_policy()
@@ -413,10 +491,10 @@ class ServerTest(unittest.TestCase):
         ws.s.close()
         echo.stop()
         for _ in range(50):
-            if not self.server.app.relay.sockets.get(1):
+            if not self.relay_sockets():
                 break
             threading.Event().wait(0.1)
-        self.assertFalse(self.server.app.relay.sockets.get(1))
+        self.assertFalse(self.relay_sockets())
 
     def test_relay_short_credit(self):
         self.relay_policy()
@@ -435,6 +513,7 @@ class ServerTest(unittest.TestCase):
         self.assertIn(b"401", s.recv(4096).split(b"\r\n")[0])
         s.close()
 
+    @accounts_only
     def test_backup(self):
         cookie = self.login()
         rec = struct.pack("<I", 3) + b"b" * 4096
@@ -464,7 +543,6 @@ class TlsTest(unittest.TestCase):
     never finishes one (or speaks plain http) holds up no one else."""
     @classmethod
     def setUpClass(cls):
-        import subprocess
         cls.tmp = tempfile.mkdtemp(prefix="executor-web-tls-")
         site = os.path.join(cls.tmp, "site")
         images = os.path.join(cls.tmp, "images")
@@ -481,6 +559,10 @@ class TlsTest(unittest.TestCase):
         subprocess.run(["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1",
                         "-subj", "/CN=127.0.0.1", "-addext", "subjectAltName=IP:127.0.0.1",
                         "-keyout", key, "-out", cls.cert], check=True, capture_output=True)
+        if BINARY:
+            cls.server = Binary(cls.tmp, site, images, "--tls-cert", cls.cert, "--tls-key", key)
+            cls.port = cls.server.server_address[1]
+            return
         cfg = config.load(None, {"server": {"port": 0, "site": site, "data": os.path.join(cls.tmp, "data"),
                                             "tls_cert": cls.cert, "tls_key": key},
                                  "library": {"images": images}})

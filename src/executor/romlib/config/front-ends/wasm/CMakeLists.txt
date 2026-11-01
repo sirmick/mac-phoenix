@@ -191,6 +191,16 @@ if(PYTHON3_COMMAND)
         COMMAND ${PYTHON3_COMMAND} ${PROJECT_SOURCE_DIR}/tools/web/server/test_server.py)
     set_tests_properties(executor.web.server PROPERTIES LABELS "executor;web" TIMEOUT 60)
 endif()
+# tools/standalone, the Go server: go test, then the same checks against it.
+find_program(GO_COMMAND go PATHS /usr/local/go/bin $ENV{HOME}/opt/go/bin)
+find_program(MAKE_COMMAND make)
+if(PYTHON3_COMMAND AND GO_COMMAND AND MAKE_COMMAND)
+    add_test(NAME executor.web.standalone
+        COMMAND ${MAKE_COMMAND} -C ${PROJECT_SOURCE_DIR}/tools/standalone test GO=${GO_COMMAND}
+                OUT=${CMAKE_CURRENT_BINARY_DIR}/executor-standalone)
+    set_tests_properties(executor.web.standalone PROPERTIES LABELS "executor;web" TIMEOUT 300
+        ENVIRONMENT "TMPDIR=${CMAKE_CURRENT_BINARY_DIR}")
+endif()
 if(NODE_COMMAND AND PYTHON3_COMMAND)
     add_test(NAME executor.web.server_sync
         COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_server_sync.mjs

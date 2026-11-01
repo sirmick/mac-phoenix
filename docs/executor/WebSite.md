@@ -7,7 +7,8 @@ application disks) and the data directory (accounts and every user's
 synced changes). Signed-in users pick a System and add disks from the
 library; the disks are read by Range requests as Executor needs them, and
 what they change (a disk's blocks, Executor's own volume) is kept in the
-browser and synced to their account (`web/executor/sync.js`).
+browser and synced to their account (`web/executor/sync.js`). The same tab as one
+program for one person's machine, no accounts: Standalone.md.
 
 ## The tab
 
@@ -213,15 +214,20 @@ full screen, the screen redrawn), its menu bar there and a menu drawn
 when pressed (games: the menus there; a modal dialog at launch is
 cancelled first, and an application with no window gets File > New), and
 still in front with no error alert (a dialog whose text, ParamText
-included, says so: the alert's text is the result's reason). SCOREBOARD.md's verdict (column
-e761 on 7.6.1, e86 on 8.6) says what to expect: a cell fails only when an
-application the scoreboard says runs fails; an expected failure prints
-XFAIL, and one that now works XPASS (bring the scoreboard up to date and
-it is expected from then on).
+included, says so: the alert's text is the result's reason). SCOREBOARD.md's verdict says
+what to expect: its tab columns, w761 on 7.6.1 and w86 on 8.6, made from
+these cells' own results (the native e761 or e86 where a row has none
+yet). A cell fails only when an application the scoreboard says runs
+fails; an expected failure prints XFAIL, and one that now works XPASS
+(bring the scoreboard up to date and it is expected from then on):
+`scoreboard.py tab` runs every cell into `~/storage/executor-grid/m1/
+w761|w86/` (results and screenshots), `scoreboard.py table` writes the
+columns.
 
 ```bash
 ctest --test-dir build-wasm -L site            # EXECUTOR_WEB_LIBRARY=~/storage/web-library
 SITE_APPS=MacPerl ctest --test-dir build-wasm -R site.8.6.development -V
+tools/executor/scoreboard.py tab --build build-wasm --force && tools/executor/scoreboard.py table
 ```
 
 `executor.web.hidpi` (the Finder at scale 1 and 2, text redrawn from
