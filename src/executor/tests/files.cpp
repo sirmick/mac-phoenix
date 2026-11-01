@@ -1661,6 +1661,25 @@ TEST_F(FileTest, MakeFSSpec)
     EXPECT_EQ(vRefNum, spec.vRefNum);
 }
 
+// A full path on a volume that isn't mounted: nsvErr (Mac OS 9.0.4, DevTest's
+// MakeResolvedPath; StdCLib's open gives ENXIO for "dev:test" from it).
+TEST(Files, NoSuchVolume)
+{
+    FSSpec spec;
+    EXPECT_EQ(nsvErr, FSMakeFSSpec(0, 0, PSTR("novolume:x"), &spec));
+    EXPECT_EQ(nsvErr, FSMakeFSSpec(0, 0, PSTR("novolume:"), &spec));
+    EXPECT_EQ(nsvErr, FSMakeFSSpec(0, 0, PSTR("novolume:a:b"), &spec));
+
+    HParamBlockRec hpb = {};
+    hpb.volumeParam.ioNamePtr = (StringPtr)PSTR("novolume:x");
+    hpb.volumeParam.ioVolIndex = -1;
+    EXPECT_EQ(nsvErr, PBHGetVInfoSync(&hpb));
+
+    CInfoPBRec ipb = {};
+    ipb.hFileInfo.ioNamePtr = (StringPtr)PSTR("novolume:x");
+    EXPECT_EQ(nsvErr, PBGetCatInfoSync(&ipb));
+}
+
 #ifdef EXECUTOR
 #include <Finder.h>
 #endif

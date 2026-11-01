@@ -39,18 +39,36 @@ void cachecheck(HVCB *vcbp)
 }
 #endif /* defined(CACHECHECK) */
 
+/* MacPhoenix: a full pathname ("Vol:..."), whose volume is the one named:
+   when none has that name, the call is for no volume (nsvErr), not the
+   default one. */
+static bool names_volume(StringPtr name)
+{
+    if(!name || name[0] < 2 || name[1] == ':')
+        return false;
+    for(int i = 2; i <= name[0]; i++)
+        if(name[i] == ':')
+            return true;
+    return false;
+}
+
+static HVCB *vcb_of_pb(IOParam *pb, StringPtr name)
+{
+    LONGINT dir;
+    HVCB *vcbp = ROMlib_findvcb(pb->ioVRefNum, name, &dir, true);
+    if(!vcbp && !names_volume(name))
+        vcbp = ROMlib_findvcb(pb->ioVRefNum, (StringPtr)0, &dir, true);
+    return vcbp;
+}
+
 Volume *getVolume(void *vpb)
 {
     IOParam *pb = (IOParam*)vpb;
-    LONGINT dir;
-    HVCB *vcbp = ROMlib_findvcb(pb->ioVRefNum, pb->ioNamePtr, &dir, true);
-    if(!vcbp)
-        vcbp = ROMlib_findvcb(pb->ioVRefNum, (StringPtr)0, &dir, true);
-
-    return ROMlib_volume_of(vcbp);
+    return ROMlib_volume_of(vcb_of_pb(pb, pb->ioNamePtr));
 }
 
-
+/* ioVolIndex > 0: the nth volume; 0: ioVRefNum alone (ioNamePtr is where
+   the name goes); < 0: the name, then ioVRefNum. */
 Volume *getIVolume(void *vpb)
 {
     VolumeParam *pb = (VolumeParam*)vpb;
@@ -59,6 +77,8 @@ Volume *getIVolume(void *vpb)
         HVCB *vcbp = (HVCB *)ROMlib_indexqueue(&LM(VCBQHdr), pb->ioVolIndex);
         return ROMlib_volume_of(vcbp);
     }
+    else if(pb->ioVolIndex == 0)
+        return ROMlib_volume_of(vcb_of_pb((IOParam *)pb, nullptr));
     else
         return getVolume(pb);
 }
@@ -79,12 +99,14 @@ Volume *getFileVolume(void *vpb)
         return nullptr;
 }
 
-static Boolean hfsvol(IOParam *pb)
+static Boolean hfsvol_named(IOParam *pb, StringPtr name)
 {
     HVCB *vcbp;
     LONGINT dir;
 
-    vcbp = ROMlib_findvcb(pb->ioVRefNum, pb->ioNamePtr, &dir, true);
+    vcbp = ROMlib_findvcb(pb->ioVRefNum, name, &dir, true);
+    if(!vcbp && names_volume(name))
+        return false;
     if(!vcbp)
     {
         vcbp = ROMlib_findvcb(pb->ioVRefNum, (StringPtr)0, &dir, true);
@@ -103,6 +125,11 @@ static Boolean hfsvol(IOParam *pb)
         return false;
 }
 
+static Boolean hfsvol(IOParam *pb)
+{
+    return hfsvol_named(pb, pb->ioNamePtr);
+}
+
 static Boolean hfsIvol(VolumeParam *pb) /* potentially Indexed vol */
 {
     Boolean retval;
@@ -116,7 +143,7 @@ static Boolean hfsIvol(VolumeParam *pb) /* potentially Indexed vol */
             retval = true;
     }
     else
-        retval = hfsvol((IOParam *)pb);
+        retval = hfsvol_named((IOParam *)pb, pb->ioVolIndex == 0 ? nullptr : (StringPtr)pb->ioNamePtr);
     return retval;
 }
 
