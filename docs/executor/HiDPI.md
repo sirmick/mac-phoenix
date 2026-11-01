@@ -573,9 +573,33 @@ leaves those runs behind and the copy shows the 1x pixels, upscaled. Page
 protection (section 5) is still to do: what it adds is catching writes
 that leave a run's ink pixels unchanged (which nothing visible needs yet).
 
-Carried only when the copy is 1:1 and `srcCopy` (or `ditherCopy`), from
-the same depth with the same colours (indexed: equal colour tables);
-otherwise the copy is the 1x pixels. `--executor-debug hidpi` logs each
+Copies across depths and colour tables carry runs too: a run's ink is
+where the destination has the colour the run left in the source pixel
+there (the pixmaps' colours: indexed through their tables, a device
+table by its entries' values when those are a pixel value each; 16 and
+32 bits direct), and its "before" the source's before in the
+destination's pixels. `srcOr` and `transparent` copies carry them where
+the source's before is the colour they leave out (white, the background
+colour): the "before" there is what the destination had before the copy
+(text on a coloured background stays on it). A copy to a rectangle of
+another size scales them: each destination pixel's source pixel sampled
+as `scale_blt_bitmap` does, the glyphs' positions, advances, baseline
+and size mapped (a horizontal scale besides, `Run::xscale`), chrome's
+points and strokes. Other transfer modes stay 1x.
+
+Scrolling (`ScrollRect`, and programs' own: AppleWorks copies the window
+onto itself and the strip it exposes from its GWorld) is a copy like any
+other. What it showed: a line cut in two by separate copies is two runs,
+each drawn through its own clip, so (1) a piece replaces an existing run
+only if it covers all of it, (2) a run's ink stays its own: drawn over by
+another (the next line's ascenders in its box), the pixels that one
+changed where this one hadn't go into this one's "before" too
+(`recapture`), else this one's restoring them erased the other's glyphs
+when the pieces came in the other order, (3) a carried run's ink only
+where the copy drew, and the render thread's restoring of "before" only
+inside the run's clip.
+
+`--executor-debug hidpi` logs each
 copy from a buffer with runs and what became of them.
 
 `tests/guest/gworld/GWorldGallery` draws text in GWorlds and copies it to
@@ -584,11 +608,17 @@ mask of its left part, a GWorld whose pixels it then inverts itself);
 `hidpi_gworld_executor` (tests/test_hidpi_gworld.sh) runs it on 8.6 at
 scale 2 and checks that the copied text differs from the 1x frame scaled
 up and is anti-aliased, and that the inverted GWorld's text and the
-masked-out part don't differ.
+masked-out part don't differ. It also copies text from 8-, 16- and 1-bit
+GWorlds, with `srcOr` onto yellow and `transparent` onto blue; its Scroll
+Gallery window scrolls text three ways (TextEdit's `TEScroll`,
+`ScrollRect` in a GWorld, AppleWorks' copies) and every row with text
+must be anti-aliased; its Scale window copies text at 2x, 2x wide, half
+and 1.5x.
 
 What it gives (8.6, scale 2): the Finder's window contents (icon labels,
 the header) from outlines, selection and window moves clean; AppleWorks
-5's word processing text (drawn offscreen and copied) from outlines; the
+5's word processing text (drawn offscreen and copied) from outlines, and
+still while it scrolls; the Finder's windows scrolled; the
 menus' saved bits (copied to an offscreen buffer and back) keep their
 text. BBEdit Lite 6.1 and SimpleText draw on the screen (phase 1).
 
@@ -604,7 +634,5 @@ screen's list, which `compose()` draws): `executor.web.hidpi_gworld`
 anti-aliasing greys, the inverted GWorld's text and the masked-out part
 none.
 
-Not yet: scaled copies (`CopyBits` to a rectangle of another size), other
-transfer modes, copies across depths (a 32-bit GWorld onto an 8-bit
-screen) and colour tables, `ScrollRect` within a GWorld or on the screen
-(runs scrolled go 1x until drawn again), page protection.
+Not yet: transfer modes other than `srcCopy`, `srcOr` and `transparent`;
+page protection.
