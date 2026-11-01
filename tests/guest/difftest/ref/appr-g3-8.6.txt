@@ -1,4 +1,4 @@
-# probe 8ae9fa06b987fe42f29cfb3a189783a4a93d9435735c809f68191711daa2e195
+# probe 21b8e584e00bc6d15b916b5998745d07d4c39dbf74908e71fa5838f11b131589
 == gestalt
 gestalt.appr: 0 00000001
 gestalt.apvr: 0 00000110
@@ -1224,6 +1224,11 @@ draw32.windowframe.metrics.9: 120x60 depth 32 crc b86f7496
 draw32.windowframe.metrics.9.err: 0
 draw32.windowframe.metrics.10: 120x60 depth 32 crc fd7490cc
 draw32.windowframe.metrics.10.err: -50
+draw32.windowframe.popup.inactive: 120x60 depth 32 crc 44df416c
+draw32.windowframe.popup.title: 120x60 depth 32 crc 17754cea
+draw32.windowframe.popup.tab: 120x60 depth 32 crc 686fa494
+draw32.windowframe.popup.tabwindow: 120x60 depth 32 crc 843f98f5
+draw32.windowframe.popup.taboffset: 120x60 depth 32 crc 140763fa
 == draw8
 draw8.button.0.active: 120x60 depth 8 crc 8431810d
 draw8.button.1.active: 120x60 depth 8 crc a0e67959
@@ -1445,6 +1450,11 @@ draw8.windowframe.metrics.9: 120x60 depth 8 crc 1d2beefc
 draw8.windowframe.metrics.9.err: 0
 draw8.windowframe.metrics.10: 120x60 depth 8 crc 06154412
 draw8.windowframe.metrics.10.err: -50
+draw8.windowframe.popup.inactive: 120x60 depth 8 crc e2bdd1bb
+draw8.windowframe.popup.title: 120x60 depth 8 crc ffa3c6f4
+draw8.windowframe.popup.tab: 120x60 depth 8 crc 8b0c5458
+draw8.windowframe.popup.tabwindow: 120x60 depth 8 crc 1d2b46d5
+draw8.windowframe.popup.taboffset: 120x60 depth 8 crc ba0727a4
 == frames
 frames.0.active: 200x100 depth 32 crc 7b5a5694
 frames.0.pressed4: 200x100 depth 32 crc 7b5a5694

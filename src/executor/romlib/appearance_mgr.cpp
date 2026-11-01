@@ -739,6 +739,24 @@ OSStatus Executor::C_DrawThemeWindowFrame(ThemeWindowType flavor, const Rect *co
             }
             break;
         }
+        case kThemePopupWindow:
+        {
+            /* the tab 27 wide unless told (the title's width doesn't
+               widen it), at the offset from the frame's left, centred on
+               the window, or centred on the offset, kept on the frame
+               (appr draw32.windowframe.popup.*) */
+            int fl = contRect->left - 4, fr = contRect->right + 3;
+            int width = metrics->popupTabWidth, left = fl + metrics->popupTabOffset;
+            if(width <= 0)
+                width = 27;
+            if(metrics->popupTabPosition == kThemePopupTabCenterOnWindow)
+                left = (fl + fr + 1) / 2 - width / 2;
+            else if(metrics->popupTabPosition == kThemePopupTabCenterOnOffset)
+                left -= width / 2;
+            left = std::max(fl, std::min(left, fr + 1 - width));
+            appearance::popupFrame(*contRect, active, left, width, std::max<int>(0, metrics->titleHeight));
+            break;
+        }
         case kThemeUtilityWindow:
         case kThemeUtilitySideWindow:
             /* (the side one has no collapse box: 8.6) */

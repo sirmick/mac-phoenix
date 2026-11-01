@@ -718,6 +718,31 @@ static void drawing(void)
             sprintf(k, "windowframe.metrics.%d.err", i);
             out(k, "%d", (int)err);
         }
+        /* the popup window inactive; with a title's width; its tab 50
+           wide at 20, and centred on the window and on the offset */
+        for(i = 0; i < 5; i++)
+        {
+            static const char *const pn[] = { "inactive", "title", "tab", "tabwindow", "taboffset" };
+            Rect cont;
+            ThemeWindowMetrics wm = { sizeof(ThemeWindowMetrics), 0, 0, 0, 0, 0 };
+            SetRect(&cont, 10, 25, 110, 55);
+            if(i == 1)
+            {
+                wm.titleWidth = 60;
+                wm.titleHeight = 12;
+            }
+            if(i >= 2)
+            {
+                wm.popupTabOffset = 20;
+                wm.popupTabWidth = 50;
+                wm.popupTabPosition = i - 2;
+            }
+            begin(depths[d]);
+            DrawThemeWindowFrame(kThemePopupWindow, &cont, i ? kThemeStateActive : kThemeStateInactive, &wm,
+                                 kThemeWindowHasCloseBox | kThemeWindowHasTitleText, NULL, 0);
+            sprintf(k, "windowframe.popup.%s", pn[i]);
+            end(k);
+        }
     }
 }
 

@@ -3177,6 +3177,84 @@ void documentBar(const Rect &c, const WindowParts &parts, bool hasTitle, int tit
 }
 }
 
+/* As 8.6 draws it (appr draw32.windowframe.popup.*): a black outline 4
+   out from the content on the left, 3 on the right, the bottom on the
+   content's last row; inside it white lit, #ccc, shaded #999 and #aaa
+   down to the content's black edge, #eee beside it on the right; a #444
+   shadow on the right alone. The tab: rounded top corners, white, #ccc,
+   #999 on its right and bottom. Inactive: the outline and shadow #555,
+   everything else #ddd. */
+void Executor::appearance::popupFrame(const Rect &c, bool active, int x0, int w, int titleHeight)
+{
+    DrawGuard guard;
+    int L = c.left, T = c.top, R = c.right, B = c.bottom;
+    int fl = L - 4, fr = R + 3, tt = T - 10 - titleHeight, bt = T - 6;
+    /* 8.6's tab shadow starts a row lower on a titled tab, and stops
+       short of the frame's top */
+    int shadowTop = tt + (titleHeight > 0 ? 4 : 3);
+    char barShadow = titleHeight > 0 ? '0' : '4';
+    auto run = [&](int h1, int h2, int v, char g) {
+        uint16_t gr = active ? tabGray(g) : grey(g == '0' || g == '4' ? 5 : 0xd);
+        hrun(h1, h2, v, gr);
+    };
+    int xr = x0 + w - 1;
+    run(x0 + 2, xr - 2, tt, '0');
+    run(x0 + 1, x0 + 1, tt + 1, '0');
+    run(x0 + 2, xr - 2, tt + 1, 'f');
+    run(xr - 1, xr - 1, tt + 1, '0');
+    for(int v = tt + 2; v < bt; v++)
+    {
+        run(x0, x0, v, '0');
+        run(x0 + 1, x0 + (v == tt + 2 ? 2 : 1), v, 'f');
+        run(x0 + (v == tt + 2 ? 3 : 2), xr - 2, v, 'c');
+        run(xr - 1, xr - 1, v, '9');
+        run(xr, xr, v, '0');
+        if(v >= shadowTop)
+            run(xr + 1, xr + 1, v, '4');
+    }
+    run(fl, x0, bt, '0');
+    run(x0 + 1, x0 + 1, bt, 'c');
+    run(x0 + 2, xr - 1, bt, '9');
+    run(xr, xr, bt, '0');
+    run(xr + 1, xr + 1, bt, barShadow);
+    run(xr + 2, fr, bt, '0');
+    for(int v = bt + 1; v < B; v++)
+    {
+        run(fl, fl, v, '0');
+        run(fr, fr, v, '0');
+        if(v == bt + 1)
+        {
+            run(fl + 1, fr - 2, v, 'f');
+            run(fr - 1, fr - 1, v, 'c');
+            continue;
+        }
+        run(fr + 1, fr + 1, v, '4');
+        run(fl + 1, fl + 1, v, 'f');
+        run(fr - 1, fr - 1, v, '9');
+        if(v < T - 2)
+            run(fl + 2, fr - 2, v, 'c');
+        else if(v == T - 2)
+        {
+            run(fl + 2, R, v, 'a');
+            run(R + 1, R + 1, v, 'c');
+        }
+        else
+        {
+            run(fl + 2, fl + 2, v, 'a');
+            run(R + 1, R + 1, v, 'e');
+            if(v == T - 1)
+                run(L - 1, R, v, '0');
+            else
+            {
+                run(L - 1, L - 1, v, '0');
+                run(R, R, v, '0');
+            }
+        }
+    }
+    run(fl, fr, B, '0');
+    run(fr + 1, fr + 1, B, '4');
+}
+
 void Executor::appearance::movableDialogFrame(const Rect &c, bool active, bool thin, ConstStringPtr title,
                                               const WindowParts *parts, bool alert)
 {

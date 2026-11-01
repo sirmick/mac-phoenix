@@ -5,8 +5,6 @@
 # platinum theme comes later (docs/executor/MacOS8-9.md "One Toolbox"). Most
 # DrawThemeButton kinds now match (draw32.button.*/draw8.button.*, and the
 # controls section below); what's left:
-draw32.windowframe.metrics.7	DrawThemeWindowFrame's popup window (a tab with rounded corners over a gradient frame): Executor's own look
-draw8.windowframe.metrics.7	DrawThemeWindowFrame's popup window (a tab with rounded corners over a gradient frame): Executor's own look
 frames.0.*	the title's glyphs (Charcoal from Executor's unhinted scaler); the frame is 8.6's
 frames.4.*	the title's glyphs (Charcoal from Executor's unhinted scaler); the frame is 8.6's
 frames.8.*	the title's glyphs (Charcoal from Executor's unhinted scaler); the frame is 8.6's

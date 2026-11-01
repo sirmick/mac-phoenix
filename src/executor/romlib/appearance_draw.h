@@ -189,6 +189,11 @@ void movableDialogFrame(const Rect &c, bool active, bool thin, ConstStringPtr ti
 /* their structure regions */
 void dialogStructure(const Rect &c, bool thin, RgnHandle rgn, bool titled = false);
 
+/* DrawThemeWindowFrame's popup window: a tab over a thin frame, the tab
+   TAB_LEFT..TAB_LEFT + TAB_WIDTH (outline to outline) and TITLE_HEIGHT
+   taller than its least. */
+void popupFrame(const Rect &c, bool active, int tabLeft, int tabWidth, int titleHeight);
+
 /* The grow box alone (DrawGrowIcon on a document window). */
 void documentGrowBox(const Rect &c);
 
