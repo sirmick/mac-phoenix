@@ -59,7 +59,7 @@ static bool apple_title_p(MenuHandle mh)
    menu from 9, its menuLeft 10), the system menus at the right excepted */
 static int title_left(const muelem *mp)
 {
-    return mp->muleft - (platinum_bar() && !ROMlib_system_menu_p((*mp->muhandle)->menuID) ? 1 : 0);
+    return mp->muleft - (platinum_bar() && !ROMlib_system_menu_at_right(mp->muhandle) ? 1 : 0);
 }
 
 /* MacPhoenix: a system menu's title is an icon suite (menu/sysmenu.cpp). */
@@ -461,7 +461,8 @@ static void calc(LONGINT offset)
     PORT_TX_FONT(wmgr_port) = LM(SysFontFam);
 
     /* MacPhoenix: always lay out the whole bar: application menus from the
-       left (muright ends them), system menus right-aligned. */
+       left (muright ends them; 8.x's Help menu follows them), the other
+       system menus right-aligned. */
     (void)offset;
     HLock(LM(MenuList));
     menulistp = *MENULIST;
@@ -473,7 +474,7 @@ static void calc(LONGINT offset)
     {
         mh = mp->muhandle;
         titsize = title_width(mh);
-        if(ROMlib_system_menu_p((*mh)->menuID))
+        if(ROMlib_system_menu_at_right(mh))
         {
             system_width += titsize;
             continue;
@@ -486,7 +487,7 @@ static void calc(LONGINT offset)
     for(mp = firstmp; mp < mep; mp++)
     {
         mh = mp->muhandle;
-        if(!ROMlib_system_menu_p((*mh)->menuID))
+        if(!ROMlib_system_menu_at_right(mh))
             continue;
         mp->muleft = left;
         left += title_width(mh);
@@ -799,8 +800,7 @@ static RgnHandle menurgn(RgnHandle rgn)
 static bool system_menu_at(INTEGER offset)
 {
     muelem *mp = (muelem *)((char *)*MENULIST + offset);
-    MenuHandle mh = mp->muhandle;
-    return ROMlib_system_menu_p((*mh)->menuID);
+    return ROMlib_system_menu_at_right(mp->muhandle);
 }
 
 static Rect title_rect(INTEGER offset)

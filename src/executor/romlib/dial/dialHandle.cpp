@@ -257,7 +257,11 @@ void Executor::C_ModalDialog(ModalFilterUPP fp, GUEST<INTEGER> *item) /* IMI-415
 
             if(idle)
                 TEIdle(idle);
-            GetNextEvent(DIALOGEVTS, &evt);
+            /* MacPhoenix: a tick's sleep between null events, so an alert
+               left up doesn't spin the host (GetNextEvent here took a core);
+               the filter still gets a null event every tick and processes
+               behind still run. */
+            WaitNextEvent(DIALOGEVTS, &evt, 1, nullptr);
             whereunswapped.h = evt.where.h;
             whereunswapped.v = evt.where.v;
 
@@ -288,6 +292,16 @@ void Executor::C_ModalDialog(ModalFilterUPP fp, GUEST<INTEGER> *item) /* IMI-415
                 if(IsDialogEvent(&evt)
                    && DialogSelect(&evt, &ndp, item))
                     done = true;
+            }
+            /* MacPhoenix: an update for a window behind that neither the
+               filter nor DialogSelect drew (AppleWorks' button bar behind
+               its alerts, blank on a Mac too) comes straight back from the
+               next event call: a tick's wait, or the host spins. */
+            if(!done && evt.what == updateEvt)
+            {
+                WindowPeek w = guest_cast<WindowPeek>(evt.message);
+                if(w && !EmptyRgn(w->updateRgn))
+                    Delay(1, nullptr);
             }
         }
     }

@@ -867,6 +867,24 @@ set_tests_properties(desktop_labels_executor PROPERTIES
   TIMEOUT 150 LABELS "executor" SKIP_RETURN_CODE 77
   ENVIRONMENT "MACEMU_BINARY=$<TARGET_FILE:mac-phoenix>")
 
+# An alert left up idles the host and OK still answers: the 8.6 Finder's
+# Erase Disk alert on the read-only image, the emulator's CPU time while it
+# is up (Executor's ModalDialog waits a tick between events).
+add_test(NAME modal_idle_executor
+  COMMAND bash ${TEST_DIR}/test_modal_idle_executor.sh --port 18531)
+set_tests_properties(modal_idle_executor PROPERTIES
+  TIMEOUT 150 LABELS "executor" SKIP_RETURN_CODE 77
+  ENVIRONMENT "MACEMU_BINARY=$<TARGET_FILE:mac-phoenix>")
+
+# 8.x selects text in the highlight colour: SimpleText's selection in the
+# Mac OS Default theme's lavender with no colour saved in parameter RAM,
+# not inverted black.
+add_test(NAME text_hilite_executor
+  COMMAND bash ${TEST_DIR}/test_text_hilite_executor.sh --port 18532)
+set_tests_properties(text_hilite_executor PROPERTIES
+  TIMEOUT 150 LABELS "executor" SKIP_RETURN_CODE 77
+  ENVIRONMENT "MACEMU_BINARY=$<TARGET_FILE:mac-phoenix>")
+
 # Executor's HiDPI GWorld shadows (docs/executor/HiDPI.md "Phase 4"): GWorldGallery
 # on 8.6 at --executor-scale 2, text drawn offscreen and copied to the screen
 # against the 1x frame scaled up. Skips without Skia (-DEXECUTOR_SKIA=ON).
