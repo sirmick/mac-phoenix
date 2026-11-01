@@ -192,6 +192,12 @@ draw(ControlHandle ctl, draw_state_t draw_state,
     data = (popup_data_handle)CTL_DATA(ctl);
     flags = POPUP_FLAGS(data);
 
+    /* MacPhoenix: no such menu, nothing drawn (8.6 on the G3: appr
+       controls.1008.popupnomenu); it may still come later (Standard
+       File's folder pop-up), menu_of looks again at each draw. */
+    if(system_version >= 0x800 && !menu_of(data))
+        return;
+
     item_info = menu_of(data) ? ROMlib_mitemtop(menu_of(data), CTL_VALUE(ctl), &item_title) : nullptr;
 
     /* MacPhoenix: writable, not a literal: the title is cut to fit by
