@@ -1111,6 +1111,28 @@ foreach(cell IN ITEMS "applemenu_submenus_executor_86;--backend executor;18184;g
   )
 endforeach()
 
+# Scroll bars on 8.6: the Finder's live scrolling (a thumb dragged scrolls
+# the window before the button is let go), and on Executor Standard File's
+# list paging both ways (AppleWorks' Open). The G3 the reference.
+foreach(cell IN ITEMS "scroll_bars_executor_86;--backend executor;18210;guest;executor"
+                      "scroll_bars_rom_ppc_86;--backend kpx --core mame-ppc --jit;18212;guest;mame")
+  list(GET cell 0 name)
+  list(GET cell 1 backend)
+  list(GET cell 2 port)
+  list(SUBLIST cell 3 -1 labels)
+  separate_arguments(backend_args UNIX_COMMAND "${backend}")
+  add_test(
+    NAME ${name}
+    COMMAND bash ${TEST_DIR}/test_scroll_bars_86.sh ${backend_args} --timeout 120 --port ${port}
+  )
+  set_tests_properties(${name} PROPERTIES
+    TIMEOUT 240
+    LABELS "${labels}"
+    SKIP_RETURN_CODE 77
+    ENVIRONMENT "MACEMU_ROM=${TEST_PPC_ROM}"
+  )
+endforeach()
+
 # Icon Services from PowerPC code (IconServicesLib) by IconTest
 # (tests/guest/iconservices, Retro68): Executor's (iconservices.cpp), and
 # Apple's on the G3 with 9.0.4 and 8.6; on 8.6 also Executor's with 8.6's System.

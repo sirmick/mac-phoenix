@@ -10,7 +10,13 @@
 // with FileSystemSyncAccessHandle (Workers only), whose reads and writes are
 // synchronous, as Emscripten's filesystem calls are; a block is in `data`
 // when written, the index is written by save() (worker.js, with the
-// volume). Another tab holding the overlay: the image is read-only here.
+// volume). Another tab (or a Worker not gone yet) holding the overlay:
+// its files can't be opened here (NoModificationAllowedError), and the
+// image is writable through a copy in memory instead (`borrowed`: its
+// changes so far read, if the browser lets us, new ones lasting while
+// this Worker runs, never synced). worker.js asks the holder to let go
+// first (and opens the files again if it does, before Executor mounts the
+// image); a holder letting go keeps on in memory itself (toMemory()).
 //
 // OVERLAYFS mounts them for Executor: reads take each block from the
 // overlay if changed, else from the image (runs of unchanged blocks in one
@@ -298,12 +304,48 @@ class Overlay {
         this.dir = null;
         this.reverted = false;          // Revert not on the account yet
         this.inMemory = false;          // no OPFS: kept while the Worker runs
+        this.borrowed = false;          // another tab has the OPFS files
+    }
+
+    // The block index from `index`.
+    loadIndex() {
+        this.map.clear();
+        this.nextSlot = 0;
+        const n = this.index.getSize();
+        if (n >= 8) {
+            const pairs = new Uint32Array(n >> 2);
+            this.index.read(pairs, { at: 0 });
+            for (let i = 0; i + 1 < pairs.length; i += 2) {
+                this.map.set(pairs[i], pairs[i + 1]);
+                this.nextSlot = Math.max(this.nextSlot, pairs[i + 1] + 1);
+            }
+        }
+    }
+
+    // In memory from now on, with the changes so far (another tab takes
+    // the OPFS files): the handles' bytes copied, then closed.
+    toMemory() {
+        this.save();
+        for (const name of ['data', 'index']) {
+            const h = this[name], m = new MemoryHandle();
+            const bytes = new Uint8Array(h.getSize());
+            h.read(bytes, { at: 0 });
+            m.write(bytes, { at: 0 });
+            h.close();
+            this[name] = m;
+        }
+        if (this.syncFile)
+            this.syncFile.close();
+        this.syncFile = null;
+        this.inMemory = this.borrowed = true;
+        this.syncOff = true;
     }
 
     // root: OPFS (none: the changes in memory). legacyKey: the key this
     // image's overlay may have under the old scheme.
-    static async open(root, name, file, key, legacyKey) {
-        const image = file.remote ? await RemoteImage.open(root, file) : new FileImage(file);
+    // image: the base, opened already (opening the overlay again).
+    static async open(root, name, file, key, legacyKey, image) {
+        image = image || (file.remote ? await RemoteImage.open(root, file) : new FileImage(file));
         const ov = new Overlay(name, file, key, image);
         if (!root) {
             ov.data = new MemoryHandle();
@@ -356,15 +398,7 @@ class Overlay {
             await meta.close();
             ov.data = await (await dir.getFileHandle('data', { create: true })).createSyncAccessHandle();
             ov.index = await (await dir.getFileHandle('index', { create: true })).createSyncAccessHandle();
-            const n = ov.index.getSize();
-            if (n >= 8) {
-                const pairs = new Uint32Array(n >> 2);
-                ov.index.read(pairs, { at: 0 });
-                for (let i = 0; i + 1 < pairs.length; i += 2) {
-                    ov.map.set(pairs[i], pairs[i + 1]);
-                    ov.nextSlot = Math.max(ov.nextSlot, pairs[i + 1] + 1);
-                }
-            }
+            ov.loadIndex();
             ov.syncFile = await (await dir.getFileHandle('sync', { create: true })).createSyncAccessHandle();
             const s = new Uint32Array(ov.syncFile.getSize() >> 2);
             ov.syncFile.read(s, { at: 0 });
@@ -374,13 +408,40 @@ class Overlay {
                     ov.pending.add(b);
             }
         } catch (e) {
-            console.log(`[web] ${name}: read-only (${e.message || e})`);
             for (const h of [ov.data, ov.index, ov.syncFile])
                 if (h)
                     h.close();
-            ov.data = ov.index = ov.syncFile = null;
+            ov.syncFile = null;
+            await ov.borrow(e);
         }
         return ov;
+    }
+
+    // Another tab's: a copy in memory, its changes so far in it if the
+    // files can be read while that tab has them open.
+    async borrow(why) {
+        this.data = new MemoryHandle();
+        this.index = new MemoryHandle();
+        this.inMemory = this.borrowed = true;
+        this.syncOff = true;
+        let copied = '';
+        try {
+            if (this.dir) {
+                for (const name of ['data', 'index']) {
+                    const f = await (await this.dir.getFileHandle(name)).getFile();
+                    this[name].write(new Uint8Array(await f.arrayBuffer()), { at: 0 });
+                }
+                this.loadIndex();
+                copied = this.map.size ? ', with its changes so far' : '';
+            }
+        } catch {
+            this.data = new MemoryHandle();
+            this.index = new MemoryHandle();
+            this.map.clear();
+            this.nextSlot = 0;
+            copied = ', without the changes kept in this browser';
+        }
+        console.log(`[web] ${this.name}: in memory${copied} (${why.message || why})`);
     }
 
     get writable() { return this.data !== null; }

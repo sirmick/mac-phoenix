@@ -6,8 +6,11 @@
 
 #include <base/common.h>
 
+#include <algorithm>
+
 #include <WindowMgr.h>
 #include <ControlMgr.h>
+#include <ControlMgr8.h>
 #include <EventMgr.h>
 #include <ToolboxEvent.h>
 #include <OSEvent.h>
@@ -73,6 +76,58 @@ INTEGER Executor::C_FindControl(Point p, WindowPtr w,
 }
 
 
+
+/* MacPhoenix: an indicator with live feedback (8.x: Appearance's live
+   scroll bars) dragged: its region moved with the mouse (held to the
+   thumbCntl limits, back where it started outside the slop), the
+   definition setting the value from it (kControlMsgCalcValueFromPos), and
+   the action procedure called with the control and the part all along, as
+   for the arrows. 8.6's Finder scrolls its windows so, its procedure taking
+   those two (G3); DragTheRgn would call it with none. */
+static INTEGER track_live(ControlHandle c, Point p, INTEGER part, ControlActionUPP a)
+{
+    thumbstr thumb;
+    thumb._tlimit.left = p.h;
+    thumb._tlimit.top = p.v;
+    CTLCALL(c, thumbCntl, ptr_to_longint(&thumb));
+    Rect limit = thumb._tlimit, slop = thumb._tslop;
+    INTEGER axis = thumb._taxis;
+    RgnHandle start = NewRgn(), moved = NewRgn();
+    CTLCALL(c, calcThumbRgn, ptr_to_longint(start));
+    (*c)->contrlHilite = part;
+    CTLCALL(c, drawCntl, part);
+    Point last = p;
+    while(StillDown())
+    {
+        GUEST<Point> gm;
+        GetMouse(&gm);
+        Point m = gm.get();
+        if(!PtInRect(m, &slop))
+            m = p;
+        else
+        {
+            m.h = std::clamp<INTEGER>(m.h, limit.left, std::max<INTEGER>(limit.left, limit.right - 1));
+            m.v = std::clamp<INTEGER>(m.v, limit.top, std::max<INTEGER>(limit.top, limit.bottom - 1));
+        }
+        if(axis == hAxisOnly)
+            m.v = p.v;
+        else if(axis == vAxisOnly)
+            m.h = p.h;
+        if(m.h != last.h || m.v != last.v)
+        {
+            CopyRgn(start, moved);
+            OffsetRgn(moved, m.h - p.h, m.v - p.v);
+            CTLCALL(c, kControlMsgCalcValueFromPos, ptr_to_longint(moved));
+            last = m;
+        }
+        a(c, part);
+    }
+    DisposeRgn(moved);
+    DisposeRgn(start);
+    (*c)->contrlHilite = 0;
+    CTLCALL(c, drawCntl, 0);
+    return part;
+}
 
 INTEGER Executor::C_TrackControl(ControlHandle c, Point p,
                                  ControlActionUPP a) /* IMI-323 */
@@ -141,7 +196,9 @@ INTEGER Executor::C_TrackControl(ControlHandle c, Point p,
     }
     else
         /* #endif */
-        if(partstart > 128)
+        if(partstart > 128 && a && ROMlib_control8_live_feedback(c))
+        inpart = track_live(c, p, partstart, a);
+    else if(partstart > 128)
     {
         /* indicator */
         /* The code used to & the result of CTLCALL with 0xf000

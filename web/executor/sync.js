@@ -134,7 +134,7 @@ const Sync = {
     },
 
     async overlayDown(ov) {
-        if (!this.enabled || !ov.writable)
+        if (!this.enabled || !ov.writable || ov.borrowed)
             return;
         try {
             if (ov.reverted) {                   // Revert, to the account
