@@ -3,7 +3,13 @@
     /                 the tab (the site directory: web/executor + the module)
     /login, /account  signing in, an invitation, sign out; the owner's invitations
     /library.json     the library (library.py); /disks/NAME its images, with Range
-    /api/me           { name, owner }, 401 when signed out
+    /api/me           { name, owner, mode }, 401 when signed out; mode
+                      "hosted", or "standalone": no accounts (everyone is
+                      the one local user), the server the tab's only store
+    /api/session      POST ?id=ID[&take=1] a tab is there (every few s):
+                      { control, held, handing, viewers } (session.py)
+    /api/session/release  POST ?id=ID: the tab goes (a beacon)
+    /api/session/screen   PUT ?id=ID the controller's screen (a PNG); GET it
     /api/login        POST { name, password }      /api/logout POST
     /api/register     POST { invite, name, password }
     /api/invites      GET (owner) the invitations; POST a new one -> { code }
@@ -34,7 +40,8 @@
     /api/logs         GET (owner) the logs and screenshots; /api/logs/DAY/NAME one
 
 Everything but /login and its API needs a session (the cookie), unless
-the configuration makes the page public; sync always does. Writes and
+the configuration makes the page public; sync always does. Standalone
+(mode = "standalone"): nothing does, every request is the local user's. Writes and
 /relay from another site are refused (Origin against Host, and
 Sec-Fetch-Site; the cookie is SameSite=Strict too). Behind a reverse
 proxy: pass Host through (nginx: proxy_set_header Host $host), and name
@@ -60,6 +67,7 @@ from urllib.parse import parse_qs, quote, unquote, urlsplit
 from . import accounts as accounts_mod
 from . import library, relay, static
 from .settings import FieldError, SettingsStore
+from .session import SCREEN_MAX, Sessions
 from .sync import SyncError, SyncStore
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -71,6 +79,7 @@ SIGNED_OUT_BODY = 64 << 10
 MAX_CONNECTIONS = 64
 IDLE = 60                               # s a connection may wait for a request
 LOCAL = ("localhost", "127.0.0.1", "::1")
+LOCAL_USER = {"id": 0, "name": "local", "owner": True}     # standalone's one user
 
 
 class HttpError(Exception):
@@ -93,6 +102,8 @@ class App:
         self.failures_lock = threading.Lock()
         self.relay = relay.Relay(cfg["relay"])
         self.log_lock = threading.Lock()
+        self.sessions = Sessions()
+        self.standalone = cfg["server"]["mode"] == "standalone"
 
     def _recent(self, key, now):
         return [t for t in self.failures.get(key, []) if t > now - LOGIN_WINDOW]
@@ -233,7 +244,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         url = urlsplit(self.path)
         path = unquote(url.path)
         self.query = {k: v[-1] for k, v in parse_qs(url.query).items()}
-        self.user = self.app.accounts.session(self.cookie())
+        self.user = LOCAL_USER if self.app.standalone else self.app.accounts.session(self.cookie())
         try:
             if method in ("POST", "PUT", "DELETE") and not self.same_origin():
                 raise HttpError(403, "not from this site")
@@ -294,7 +305,51 @@ route("GET", "/account")(page("account.html"))
 def me(h):
     if not h.user:
         raise HttpError(401, "signed out")
-    h.send_json(200, {"name": h.user["name"], "owner": h.user["owner"]})
+    h.send_json(200, {"name": h.user["name"], "owner": h.user["owner"],
+                      "mode": "standalone" if h.app.standalone else "hosted"})
+
+
+# ---- the controlling tab (session.py) ----
+def session_id(h):
+    sid = h.query.get("id", "")
+    if not LOG_SESSION.fullmatch(sid):
+        raise HttpError(400, "id: 8-40 letters, digits, -")
+    return sid
+
+
+@route("POST", "/api/session")
+def session_beat(h):
+    h.send_json(200, h.app.sessions.beat(h.user["id"], session_id(h), take=h.query.get("take") == "1"))
+
+
+@route("POST", "/api/session/release")
+def session_release(h):
+    h.app.sessions.release(h.user["id"], session_id(h))
+    h.send_json(200, {})
+
+
+@route("PUT", "/api/session/screen")
+def session_screen_put(h):
+    sid = session_id(h)
+    n = h.content_length()
+    if n > SCREEN_MAX:
+        h.close_connection = True
+        raise HttpError(413, "too large")
+    h._body = data = h.rfile.read(n)
+    if not data.startswith(b"\x89PNG\r\n\x1a\n"):
+        raise HttpError(400, "a PNG")
+    if not h.app.sessions.put_screen(h.user["id"], sid, data):
+        raise HttpError(409, "not the controlling tab")
+    h.send_bytes(204, b"")
+
+
+@route("GET", "/api/session/screen")
+def session_screen_get(h):
+    png = h.app.sessions.screen(h.user["id"])
+    if not png:
+        raise HttpError(404, "no screen")
+    h.cache = "no-store"
+    h.send_bytes(200, png, "image/png")
 
 
 @route("POST", "/api/login", auth=False)

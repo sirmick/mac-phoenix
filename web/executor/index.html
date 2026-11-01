@@ -20,6 +20,8 @@
   #files a { color: #f88; margin-left: 4px; cursor: pointer; }
   #bar select { background: #444; color: #eee; border: 0; font: inherit; }
   #account { color: #9cf; }
+  #viewer { background: #345; color: #cdf; border-radius: 4px; padding: 4px 10px; }
+  #viewer button { background: #567; color: #eee; border: 0; border-radius: 4px; padding: 2px 8px; font: inherit; cursor: pointer; }
   #insecure { background: #543; color: #fda; border-radius: 4px; padding: 4px 10px; max-width: 640px; }
   /* Sized by main.js: a whole number of device pixels a guest pixel. */
   canvas { background: #000; image-rendering: pixelated; outline: none; }
@@ -43,6 +45,8 @@
   nothing is kept in this browser. Disks are read as needed and held in memory; changes to
   them and to Executor's disk last until Executor restarts (download a changed disk with ⤓).
   No sound.</div>
+<div id="viewer" hidden>Executor is open in another tab, which has control: its screen, here.
+  <button id="take">Take control</button></div>
 <div id="screen-box"></div>
 <div id="status">Loading Executor…</div>
 <script src="log.js"></script>

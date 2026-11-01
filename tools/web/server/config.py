@@ -10,6 +10,7 @@ DEFAULTS = {
         "site": "",                      # the tab: index.html, worker.js, executor-web.wasm, ...
         "data": "~/storage/executor-web",  # accounts and every user's synced data
         "public": False,                 # true: the page without signing in (sync still needs it)
+        "mode": "hosted",                # "standalone": no accounts, the server the tab's store
         "secure_cookies": "auto",        # Secure but for localhost; true behind HTTPS
         "trusted_proxies": [],           # addresses whose X-Forwarded-For is believed
         "session_days": 30,
@@ -47,6 +48,8 @@ def load(path=None, overrides=None):
                     cfg[section][k] = v
     for section, values in (overrides or {}).items():
         cfg[section].update({k: v for k, v in values.items() if v is not None})
+    if cfg["server"]["mode"] not in ("hosted", "standalone"):
+        raise ValueError(f"server.mode: hosted or standalone, not {cfg['server']['mode']!r}")
     base = os.path.dirname(os.path.abspath(path)) if path else os.getcwd()
     for section, key in (("server", "site"), ("server", "data"), ("library", "images")):
         if cfg[section][key]:

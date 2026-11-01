@@ -2,7 +2,7 @@
 // as one program (docs/executor/Standalone.md).
 //
 //	executor-standalone [--data DIR] [--config FILE] [--images DIR] [--bind ADDR] [--port N]
-//	                    [--site DIR] [--password-file FILE] [--tls-cert F --tls-key F] [--quiet]
+//	                    [--site DIR] [--password-file FILE] [--tls-cert F --tls-key F] [--open] [--quiet]
 //	executor-standalone [--data DIR] [--config FILE] passwd     the password from stdin ("" : none)
 //
 // The tab (make_site.sh's output) is embedded; --site serves a directory
@@ -51,6 +51,7 @@ func main() {
 	tlsCert := flag.String("tls-cert", "", "PEM certificate (chain): serve HTTPS")
 	tlsKey := flag.String("tls-key", "", "its key (default: in the certificate's file)")
 	quiet := flag.Bool("quiet", false, "errors only")
+	open := flag.Bool("open", false, "open the default browser at the server's address")
 	flag.Parse()
 
 	if err := os.MkdirAll(*data, 0o755); err != nil {
@@ -147,6 +148,11 @@ func main() {
 	s.mu.Unlock()
 	fmt.Printf("Serving %s on %s://%s/\n", s.siteName, scheme, net.JoinHostPort(addr.IP.String(), strconv.Itoa(addr.Port)))
 	os.Stdout.Sync()
+	if *open {
+		if err := openBrowser(browserURL(scheme, addr)); err != nil {
+			fmt.Fprintln(os.Stderr, "executor-standalone: --open:", err)
+		}
+	}
 	srv := &http.Server{Handler: s, ReadHeaderTimeout: idle, IdleTimeout: idle,
 		ErrorLog: nil, MaxHeaderBytes: 64 << 10}
 	if *quiet {

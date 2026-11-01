@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/binary"
+	"net"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -250,6 +251,36 @@ func TestGzipOnlyServed(t *testing.T) {
 		s.ServeHTTP(w, httptest.NewRequest("GET", path, nil))
 		if w.Code != 200 || w.Body.String() != want {
 			t.Errorf("%s: %d %q", path, w.Code, w.Body.String())
+		}
+	}
+}
+
+// A controller silent for the lease has let go; a viewer then gets control.
+func TestSessionLease(t *testing.T) {
+	var s TabSessions
+	if !s.beat("tab-a-00001", false)["control"].(bool) || s.beat("tab-b-00001", false)["control"].(bool) {
+		t.Fatal("first tab not in control")
+	}
+	if !s.putScreen("tab-a-00001", []byte("png")) || s.getScreen() == nil {
+		t.Fatal("screen")
+	}
+	s.seen["tab-a-00001"] = s.seen["tab-a-00001"].Add(-sessionLease) // A's tab closed without a word
+	if a := s.beat("tab-b-00001", false); !a["control"].(bool) || a["viewers"].(int) != 0 {
+		t.Fatalf("after the lease: %v", a)
+	}
+	if s.getScreen() != nil {
+		t.Fatal("A's screen outlived it")
+	}
+}
+
+func TestBrowserURL(t *testing.T) {
+	for addr, want := range map[string]string{
+		"127.0.0.1:8090": "http://127.0.0.1:8090/", "0.0.0.0:8090": "http://127.0.0.1:8090/",
+		"[::]:9000": "http://127.0.0.1:9000/", "[::1]:9000": "http://[::1]:9000/",
+	} {
+		a, _ := net.ResolveTCPAddr("tcp", addr)
+		if got := browserURL("http", a); got != want {
+			t.Errorf("%s: %s, want %s", addr, got, want)
 		}
 	}
 }

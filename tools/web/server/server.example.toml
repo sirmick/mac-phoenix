@@ -9,6 +9,10 @@ port = 8090
 site = "~/src/mac-phoenix/build-wasm/src/executor/romlib/config/front-ends/wasm"
 data = "~/storage/executor-web"   # accounts.sqlite, users/ID/ (their synced changes)
 public = false              # true: the page without signing in (sync still needs it)
+# "standalone": one person's machine: no accounts (no sign-in, every request
+# the local user's), the server the tab's only store (no OPFS), one tab in
+# control at a time and the others watching. Bind to localhost.
+mode = "hosted"
 # "auto": the cookie is Secure (HTTPS only) unless the page is on localhost /
 # 127.0.0.1 / ::1 (plain http there is a secure context too); true, false.
 secure_cookies = "auto"

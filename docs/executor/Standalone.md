@@ -11,7 +11,7 @@ the tab talks to either; what differs is below.
 
 ```bash
 make -C tools/standalone WASM_BUILD=build-wasm        # site/ (make_site.sh), ./executor-standalone
-make -C tools/standalone dist WASM_BUILD=build-wasm   # dist/, six targets
+make -C tools/standalone dist WASM_BUILD=build-wasm   # dist/: a release (below)
 make -C tools/standalone test                         # go test + test_server.py against it
 ```
 
@@ -23,10 +23,46 @@ files (`executor-web.wasm`, `executor-web.js`) are embedded as their
 them decompressed as they go out. `make nosite` builds with whatever
 `site/` has (nothing: `/` says so; `--site DIR` serves a directory).
 
+## A release
+
+`make dist [VERSION=V]` (V defaults to `git describe --always --dirty`)
+makes `dist/` from scratch: `executor-standalone-V-OS-ARCH[.exe]` for the
+six targets, `SHA256SUMS` (`sha256sum -c SHA256SUMS` checks them) and
+`README.txt` for whoever downloads them (`tools/standalone/README.dist.txt`,
+V filled in): which file is which, checking a download, first run,
+where images go. Build it from a clean tree, so the name has no `-dirty`,
+with `WASM_BUILD` a Skia, `EXECUTOR_NET=wasm` Release build (WebSite.md).
+
+The binaries are not signed. What signing would take:
+
+- **macOS** (both architectures): an Apple Developer Program membership
+  (99 USD a year) and its "Developer ID Application" certificate; sign
+  with the hardened runtime, `codesign --sign "Developer ID Application:
+  NAME (TEAM)" --options runtime --timestamp FILE` (on macOS, or with
+  rcodesign from Linux, which also notarizes); notarize with `xcrun
+  notarytool submit FILE.zip --keychain-profile P --wait` (a bare Mach-O
+  can't be stapled: ship it in a zip, notarized, or in a signed and
+  stapled .pkg or .dmg, `xcrun stapler staple`). The program needs no
+  entitlements (no JIT in the server; the tab's JIT is the browser's).
+  Unsigned, Gatekeeper refuses a downloaded binary until the user
+  right-clicks > Open or removes `com.apple.quarantine` (README.txt says so).
+- **Windows**: an Authenticode code-signing certificate from a CA (OV,
+  or EV for SmartScreen reputation at once; since 2023 the key lives on a
+  hardware token or a cloud HSM such as Azure Trusted Signing); sign with
+  `signtool sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256
+  FILE.exe`, or `osslsigncode` from Linux. Unsigned, SmartScreen warns
+  until a download builds reputation.
+- **Linux**: nothing to sign the binary with; publish SHA256SUMS signed
+  (`gpg --detach-sign` or `minisign`/`cosign`) and the key beside it.
+
+A CI release job would run `make dist` on a tag, then the signing steps
+on the macOS and Windows files (their secrets in the CI's store), then
+SHA256SUMS again over the signed files.
+
 ## Running
 
 ```bash
-./executor-standalone                       # http://127.0.0.1:8090/, DATA in the config directory
+./executor-standalone --open                # http://127.0.0.1:8090/ in the browser, DATA in the config directory
 ./executor-standalone --images ~/Disks --port 9000
 ./executor-standalone --bind 0.0.0.0 --tls-cert lan.crt --tls-key lan.key   # on a LAN: set a password
 ./executor-standalone passwd                # the password, from stdin ("" for none)
@@ -40,6 +76,7 @@ them decompressed as they go out. `make nosite` builds with whatever
 | `--site DIR` | the embedded site | |
 | `--password-file F` | settings' | the password for this run |
 | `--tls-cert F`, `--tls-key F` | | HTTPS directly (OPFS and sound need a secure context off localhost) |
+| `--open` | | open the default browser at the address (xdg-open, open, or url.dll on Windows; an any-address bind opens 127.0.0.1) |
 | `--quiet` | | errors only |
 
 Flags hold for the run and are never saved; `DATA/settings.json` holds
@@ -65,7 +102,15 @@ password only this machine may change them (a LAN client gets 403).
   127.0.0.1 unless told otherwise). With one, `/login` asks for it and
   `POST /api/login {password}` sets the same session cookie as the
   Python server's (sessions last 30 days, across restarts). `/api/me` is
-  `{ name: "owner", owner: true, standalone: true }` once signed in.
+  `{ name: "local", owner: true, mode: "standalone" }`, always (signed out
+  too): the Python server's `mode = "standalone"` answer.
+- **One controlling tab** (`session.go`, as `tools/web/server/session.py`):
+  `POST /api/session?id=ID[&take=1]` every 2 s gives `{ control, held,
+  handing, viewers }`; the first tab has control, a silent one lets go
+  after 10 s, `take=1` takes it (the old one is `handing` until it
+  releases: `POST /api/session/release?id=ID`). `PUT /api/session/screen`
+  (the controller's PNG, 8 MB at most; 409 from anyone else) and `GET`
+  it (404 when there is none) show viewers its screen.
 - **`GET /api/server`**, no sign-in needed: `{ standalone: true, version,
   password, signed_in }`: how the tab knows which server it has.
 - **Overlays beside their images.** An overlay whose key is a library
@@ -94,7 +139,9 @@ password only this machine may change them (a LAN client gets 403).
 `test_server.py` runs against the binary with
 `EXECUTOR_WEB_SERVER_BINARY=PATH`: the password stands for the owner's,
 and the checks of invitations, account backups and static.py's range
-parser (go test has the Go one) are skipped: 15 of 18 run. `go test`
+parser (go test has the Go one) are skipped: 17 of 20 run, StandaloneTest
+with no password. `go test`
 covers what the API can't show: the overlay log across restarts, a
-write cut short, compaction, merge, the gzip-only files.
+write cut short, compaction, merge, the gzip-only files, the session
+lease.
 `ctest --test-dir build-wasm -R executor.web.standalone` runs both.

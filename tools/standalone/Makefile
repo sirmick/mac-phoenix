@@ -2,7 +2,8 @@
 # (docs/executor/Standalone.md).
 #
 #   make [WASM_BUILD=DIR]      site/ from DIR (make_site.sh), then ./executor-standalone
-#   make dist                  dist/executor-standalone-OS-ARCH[.exe], six targets
+#   make dist [VERSION=V]      dist/: executor-standalone-V-OS-ARCH[.exe] for six targets,
+#                              SHA256SUMS and README.txt (README.dist.txt); V: git describe
 #   make test [OUT=PATH]       go test, and test_server.py against the binary
 #                              (ctest executor.web.standalone in build-wasm)
 #   make nosite                the binary with no tab (site/ as it is)
@@ -31,12 +32,14 @@ executor-standalone nosite:  # (go build knows what changed, embedded files too)
 	$(GO) build $(GOFLAGS) -ldflags '$(LDFLAGS)' -o $(OUT) .
 
 dist: site
-	mkdir -p dist
+	rm -rf dist && mkdir dist
 	set -e; for t in $(TARGETS); do \
 	    os=$${t%/*}; arch=$${t#*/}; ext=; [ $$os = windows ] && ext=.exe; \
 	    GOOS=$$os GOARCH=$$arch $(GO) build $(GOFLAGS) -ldflags '$(LDFLAGS)' \
-	        -o dist/executor-standalone-$$os-$$arch$$ext .; \
+	        -o dist/executor-standalone-$(VERSION)-$$os-$$arch$$ext .; \
 	done
+	sed 's/VERSION/$(VERSION)/g' README.dist.txt > dist/README.txt
+	cd dist && sha256sum executor-standalone-* > SHA256SUMS
 	ls -l dist
 
 test: executor-standalone

@@ -40,7 +40,12 @@
 //
 // Without OPFS (a page outside a secure context: plain http to another
 // host) an overlay's data and index are in memory (MemoryHandle): the
-// image is writable, its changes last while this Worker runs.
+// image is writable, its changes last while this Worker runs; standalone
+// (sync.js: Store) the server keeps them.
+//
+// Executor flushing an image (FlushVol, a file closed, an eject: fsync on
+// it) saves the overlay and calls Overlay.onFlush (worker.js: standalone,
+// the changes go to the server at once).
 'use strict';
 
 const OVERLAY_BLOCK = 4096;
@@ -305,6 +310,7 @@ class Overlay {
         this.reverted = false;          // Revert not on the account yet
         this.inMemory = false;          // no OPFS: kept while the Worker runs
         this.borrowed = false;          // another tab has the OPFS files
+        this.writes = 0;                // changes so far (sync.js: Store's beacons)
     }
 
     // The block index from `index`.
@@ -500,6 +506,7 @@ class Overlay {
                 this.data.write(bytes.subarray(at, at + n), { at: slot * OVERLAY_BLOCK + off });
             }
             this.pending.add(block);
+            this.writes++;
             at += n;
         }
     }
@@ -617,6 +624,12 @@ const OVERLAYFS = {
     DIR_MODE: 0o40777,
     FILE_MODE: 0o100666,
 
+    flush(ov) {
+        ov.save();
+        if (Overlay.onFlush)
+            Overlay.onFlush(ov);
+    },
+
     mount(mount) {
         const root = OVERLAYFS.createNode(null, '/', OVERLAYFS.DIR_MODE);
         for (const ov of mount.opts.overlays)
@@ -704,8 +717,12 @@ const OVERLAYFS = {
             return position;
         },
         fsync(stream) {
-            stream.node.overlay.save();
+            OVERLAYFS.flush(stream.node.overlay);
             return 0;
+        },
+        close(stream) {
+            if (stream.flags & 3)                // O_WRONLY, O_RDWR
+                OVERLAYFS.flush(stream.node.overlay);
         },
     },
 };
