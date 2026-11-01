@@ -4,6 +4,8 @@
 
 #ifdef EXECUTOR
 #include <CQuickDraw.h>
+#include <MemoryMgr.h>
+#include <base/common.h>
 #else
 #include <Quickdraw.h>
 #include <QDOffscreen.h>
@@ -725,3 +727,54 @@ TEST(QuickDraw, PaintRoundRect_TooSmall)
     
     EXPECT_EQ(0, count);
 }
+
+#ifdef EXECUTOR
+/* useTempMem: the pixels go where TempNewHandle puts things (8.6: outside
+   the application heap; the 8.6 Finder's window offscreens filled its
+   1 MB partition when they went in it). */
+TEST(QuickDraw, GWorldUseTempMemPixels)
+{
+    if(!hasDeepGWorlds())
+        return;
+    GUEST<OSErr> err;
+    Handle temp = TempNewHandle(16, &err);
+    ASSERT_NE(nullptr, temp);
+    THz temp_zone = HandleZone(temp);
+    DisposeHandle(temp);
+
+    GWorldPtr gw = nullptr;
+    Rect r = { 0, 0, 218, 404 };
+    ASSERT_EQ(noErr, NewGWorld(PTR(gw), 32, &r, nullptr, nullptr, useTempMem));
+    ASSERT_NE(nullptr, gw);
+    PixMapHandle pm = GetGWorldPixMap(gw);
+    Handle pixels = (Handle)(*pm)->baseAddr;
+    EXPECT_EQ(temp_zone, HandleZone(pixels));
+    /* locked, unlocked, locked again (the 8.6 Finder): the pixels found
+       again though they aren't in the current zone */
+    for(int i = 0; i < 2; i++)
+    {
+        EXPECT_TRUE(LockPixels(pm));
+        EXPECT_EQ(*pixels, GetPixBaseAddr(pm));
+        UnlockPixels(pm);
+        EXPECT_EQ((Ptr)pixels, (Ptr)(*pm)->baseAddr);
+    }
+    LockPixels(pm);
+    DisposeGWorld(gw);
+}
+
+/* A GWorld no heap has room for: memFullErr and no GWorld, as on 8.6
+   (not one whose pixels are an empty handle, drawn into all the same) */
+TEST(QuickDraw, GWorldTooBig)
+{
+    if(!hasDeepGWorlds())
+        return;
+    Rect r = { 0, 0, 8000, 8000 };
+    for(GWorldFlags flags : { (GWorldFlags)0, (GWorldFlags)useTempMem })
+    {
+        GWorldPtr gw = (GWorldPtr)-1;
+        EXPECT_EQ(memFullErr, NewGWorld(PTR(gw), 32, &r, nullptr, nullptr, flags));
+        EXPECT_EQ(nullptr, gw);
+    }
+}
+
+#endif

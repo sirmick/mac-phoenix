@@ -77,7 +77,7 @@ static void
 install_new_gw_info(GWorldPtr graphics_world,
                     GDHandle graphics_world_device,
                     GWorldFlags flags,
-                    int gd_allocated_p)
+                    int gd_allocated_p, bool temp_mem_p)
 {
     gw_info_t *new_gw_info;
 
@@ -101,6 +101,8 @@ install_new_gw_info(GWorldPtr graphics_world,
     new_gw_info->flags = flags;
     new_gw_info->pixel_lock_count = 0;
     new_gw_info->gd_allocated_p = gd_allocated_p;
+    new_gw_info->temp_mem_p = temp_mem_p;
+    new_gw_info->pixels_h = (Handle)PIXMAP_BASEADDR(new_gw_info->gw_pixmap);
 }
 
 void delete_gw_info(gw_info_t *gw_info)
@@ -127,6 +129,19 @@ void delete_gw_info(gw_info_t *gw_info)
 
     gw_info->next = gw_info_free;
     gw_info_free = gw_info;
+}
+
+/* MacPhoenix: a GWorld's pixels, in temporary memory with useTempMem as on
+   8.6 (the 8.6 Finder's window offscreens, 350K each for a folder window
+   at 32 bits: two of them filled its 1 MB partition). MemError says. */
+static Handle new_gw_pixels(Size size, GWorldFlags flags)
+{
+    if(flags & useTempMem)
+    {
+        GUEST<OSErr> err;
+        return TempNewHandle(size, &err);
+    }
+    return NewHandle(size);
 }
 
 QDErr Executor::C_NewGWorld(GUEST<GWorldPtr> *graphics_world_out,
@@ -186,9 +201,15 @@ QDErr Executor::C_NewGWorld(GUEST<GWorldPtr> *graphics_world_out,
         row_bytes = ((RECT_WIDTH(bounds) * depth + 31) / 32) * 4;
         PIXMAP_SET_ROWBYTES(gd_pixmap, row_bytes);
 
-        gd_pixmap_baseaddr = NewHandle(row_bytes * RECT_HEIGHT(bounds));
-        if(MemError() != noErr)
-            return MemError();
+        gd_pixmap_baseaddr = new_gw_pixels(row_bytes * RECT_HEIGHT(bounds), flags);
+        if(!gd_pixmap_baseaddr)
+        {
+            /* as on 8.6: memFullErr and no GWorld */
+            QDErr err = MemError() ? MemError() : memFullErr;
+            DisposeGDevice(gw_gd);
+            *graphics_world_out = nullptr;
+            return err;
+        }
 
         PIXMAP_BASEADDR(gd_pixmap) = (Ptr)gd_pixmap_baseaddr;
         /* MacPhoenix: the device's pixmap keeps the handle (locking the
@@ -274,11 +295,19 @@ QDErr Executor::C_NewGWorld(GUEST<GWorldPtr> *graphics_world_out,
 
         PIXMAP_SET_ROWBYTES(gw_pixmap, row_bytes);
 
-        gw_pixmap_baseaddr = NewHandle(row_bytes * RECT_HEIGHT(bounds));
-        if(MemError() != noErr)
-            /* ### err, i'm not sure what the mac does when this
-		allocation fails */
-            gw_pixmap_baseaddr = NewHandle(0);
+        gw_pixmap_baseaddr = new_gw_pixels(row_bytes * RECT_HEIGHT(bounds), flags);
+        if(!gw_pixmap_baseaddr)
+        {
+            /* MacPhoenix: as on 8.6, memFullErr and no GWorld (an empty
+               handle for the pixels had the 8.6 Finder draw a folder
+               window over its heap) */
+            QDErr err = MemError() ? MemError() : memFullErr;
+            CloseCPort(GW_CPORT(graphics_world));
+            DisposePtr((Ptr)graphics_world);
+            qdGlobals().thePort = save_portX;
+            *graphics_world_out = nullptr;
+            return err;
+        }
         PIXMAP_BASEADDR(gw_pixmap)
             = (Ptr)gw_pixmap_baseaddr;
         PIXMAP_VERSION(gw_pixmap) = gw_pm_version_handle;
@@ -289,7 +318,8 @@ QDErr Executor::C_NewGWorld(GUEST<GWorldPtr> *graphics_world_out,
     /* mark as a GWorld and not a CGrafPort */
     CPORT_VERSION(graphics_world) |= GW_FLAG_BIT;
 
-    install_new_gw_info(graphics_world, gw_gd, 0, gd_allocated_p);
+    install_new_gw_info(graphics_world, gw_gd, 0, gd_allocated_p,
+                        (flags & useTempMem) != 0);
 
     if(flags & pixelsLocked)
         LockPixels(gw_pixmap);
@@ -390,7 +420,7 @@ void Executor::C_UnlockPixels(PixMapHandle pixels)
             gw_info->flags &= ~pixelsLocked;
 
             pixels_baseaddr = PIXMAP_BASEADDR(pixels);
-            pixels_baseaddr_h = RecoverHandle(pixels_baseaddr);
+            pixels_baseaddr_h = gw_info->pixels_h;
             HSetState(pixels_baseaddr_h,
                       HGetState(pixels_baseaddr_h) & ~LOCKBIT);
             PIXMAP_BASEADDR(pixels) = (Ptr)pixels_baseaddr_h;
@@ -474,7 +504,9 @@ GWorldFlags Executor::C_UpdateGWorld(GUEST<GWorldPtr> *graphics_world,
         gw_info_t *gw_info_ret;
         Rect src_rect, dst_rect;
 
-        err = NewGWorld(&gw_ret_x, depth, bounds, ctab, gw_gd, flags);
+        /* MacPhoenix: the new pixels where the old ones were */
+        err = NewGWorld(&gw_ret_x, depth, bounds, ctab, gw_gd,
+                        flags | (gw_info->temp_mem_p ? useTempMem : 0));
         if(err != noErr)
             return err;
 
@@ -561,7 +593,7 @@ void Executor::C_DisposeGWorld(GWorldPtr graphics_world)
     {
         Handle h;
 
-        h = RecoverHandle((Ptr)(PIXMAP_BASEADDR(gw_info->gw_pixmap)));
+        h = gw_info->pixels_h;
         DisposeHandle(h);
     }
     else
@@ -619,7 +651,7 @@ void Executor::C_AllowPurgePixels(PixMapHandle pixels)
     {
         pixels_baseaddr_h = (Handle)PIXMAP_BASEADDR(pixels);
         if(gw_info->flags & pixelsLocked)
-            pixels_baseaddr_h = RecoverHandle((Ptr)pixels_baseaddr_h);
+            pixels_baseaddr_h = gw_info->pixels_h;
         HPurge(pixels_baseaddr_h);
         gw_info->flags |= pixelsPurgeable;
     }
@@ -635,7 +667,7 @@ void Executor::C_NoPurgePixels(PixMapHandle pixels)
     {
         pixels_baseaddr_h = (Handle)PIXMAP_BASEADDR(pixels);
         if(gw_info->flags & pixelsLocked)
-            pixels_baseaddr_h = RecoverHandle((Ptr)pixels_baseaddr_h);
+            pixels_baseaddr_h = gw_info->pixels_h;
         HNoPurge(pixels_baseaddr_h);
         gw_info->flags &= ~pixelsPurgeable;
     }
@@ -768,7 +800,7 @@ void Executor::C_DisposeScreenBuffer(PixMapHandle pixels)
         {
             Handle baseaddr;
 
-            baseaddr = RecoverHandle(PIXMAP_BASEADDR(pixels));
+            baseaddr = gw_info->pixels_h;
             DisposeHandle(baseaddr);
         }
         else

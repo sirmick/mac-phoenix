@@ -567,6 +567,41 @@ int main(void)
             DisposeGWorld(gw);
         }
     }
+    /* Where an offscreen's pixels go (the 8.6 Finder asks for its windows'
+       offscreens in temporary memory: in its 1 MB partition two of them
+       filled it), and what a GWorld too big for any heap answers. */
+    if(SECTION("gworldmem"))
+    {
+        static const long flags[] = { 0, useTempMem, pixPurge | noNewDevice | useTempMem };
+        for(i = 0; i < (int)(sizeof flags / sizeof flags[0]); i++)
+        {
+            GWorldPtr gw = NULL;
+            Rect r = { 0, 0, 218, 404 };
+            QDErr err = NewGWorld(&gw, 32, &r, NULL,
+                                  (flags[i] & noNewDevice) ? GetMainDevice() : NULL, flags[i]);
+            sprintf(k, "%lx.err", flags[i]);
+            out(k, "%d", err);
+            if(err != noErr || !gw)
+                continue;
+            THz z = HandleZone((Handle)(**GetGWorldPixMap(gw)).baseAddr);
+            sprintf(k, "%lx.zone", flags[i]);
+            out(k, "%s", z == ApplicationZone() ? "application"
+                : z == SystemZone() ? "system" : "other");
+            DisposeGWorld(gw);
+        }
+        for(i = 0; i < 2; i++)
+        {
+            GWorldPtr gw = (GWorldPtr)-1;
+            Rect r = { 0, 0, 8000, 8000 };
+            QDErr err = NewGWorld(&gw, 32, &r, NULL, NULL, i ? useTempMem : 0);
+            sprintf(k, "toobig.%s.err", i ? "temp" : "appl");
+            out(k, "%d", err);
+            sprintf(k, "toobig.%s.gworld", i ? "temp" : "appl");
+            out(k, "%s", gw == NULL ? "nil" : gw == (GWorldPtr)-1 ? "untouched" : "set");
+            if(err == noErr && gw && gw != (GWorldPtr)-1)
+                DisposeGWorld(gw);
+        }
+    }
     /* the screen the system starts on: depth and size (8.6 on the G3 at
        640x480; Executor starts 8.x Systems as it does) */
     if(SECTION("screen"))
