@@ -1055,7 +1055,61 @@ void radioPixels(const Rect &r, Look look, ThemeButtonValue value)
 
 /* A disclosure triangle, 7 by 11, pointing right (or down: the same
    turned), in the accent colours with a shadow below right */
+void disclosureTrianglePixels(const Rect &b, Look look, ThemeButtonValue value);
+
+/* The triangle at the display scale: its black outline round the face,
+   lit along the base, and its shadow (the 1x one's corners) */
+hidpi::Shapes disclosureTriangleShapes(const Rect &b, Look look, ThemeButtonValue value)
+{
+    bool down = value == kThemeDisclosureDown;
+    /* (i, j) as the pixels: i out from the base, j across it */
+    float L = b.left + 4, T = (b.top + b.bottom - 11) / 2;
+    float dh = b.left, dv = (b.top + b.bottom - 7) / 2 + 2;
+    auto pts = [&](std::initializer_list<float> ij) {
+        std::vector<float> v;
+        for(auto it = ij.begin(); it != ij.end(); it += 2)
+        {
+            float i = it[0], j = it[1];
+            v.push_back(down ? dh + j : L + i);
+            v.push_back(down ? dv + i : T + j);
+        }
+        return v;
+    };
+    auto rgb = [](uint16_t r, uint16_t g, uint16_t bl) { return argbRGB(RGBColor{ r, g, bl }); };
+    hidpi::Shapes s;
+    if(look == Look::active)
+    {
+        /* beyond the far edge from its middle: #888 then #bbb */
+        s.push_back({ hidpi::Shape::Polygon, pts({ 5, 6, 7, 6, 2, 11, 2, 12, 1, 12, 1, 10 }), 0, argbGray(0xBBBB) });
+        s.push_back({ hidpi::Shape::Polyline, pts({ 5.5f, 6.5f, 1.5f, 10.5f }), 1, argbGray(0x8888) });
+    }
+    uint32_t outline = argbGray(look == Look::inactive ? 0xAAAA : 0);
+    s.push_back({ hidpi::Shape::Polygon, pts({ 0, 0, 6, 5.5f, 6, 5.5f, 0, 11 }), 0, outline });
+    if(look != Look::inactive)
+    {
+        uint32_t face = look == Look::pressed ? rgb(0x3333, 0x3333, 0x9999) : rgb(0x9999, 0x9999, 0xFFFF);
+        s.push_back({ hidpi::Shape::Polygon, pts({ 1, 1.6f, 4.6f, 5.5f, 1, 9.4f }), 0, face });
+        if(look == Look::active)
+        {
+            s.push_back({ hidpi::Shape::Polyline, pts({ 1.5f, 2, 1.5f, 8.5f }), 1, rgb(0xCCCC, 0xCCCC, 0xFFFF) });
+            s.push_back({ hidpi::Shape::Polyline, pts({ 4.2f, 5.8f, 1.8f, 8.6f }), 1, rgb(0x6666, 0x6666, 0xCCCC) });
+        }
+    }
+    return s;
+}
+
 void disclosureTriangle(const Rect &b, Look look, ThemeButtonValue value)
+{
+    bool down = value == kThemeDisclosureDown;
+    Rect box = down ? Rect{ (INTEGER)((b.top + b.bottom - 7) / 2 + 2), b.left, (INTEGER)((b.top + b.bottom - 7) / 2 + 10),
+                            (INTEGER)(b.left + 12) }
+                    : Rect{ (INTEGER)((b.top + b.bottom - 11) / 2), (INTEGER)(b.left + 4),
+                            (INTEGER)((b.top + b.bottom - 11) / 2 + 12), (INTEGER)(b.left + 12) };
+    hidpi::chrome_draw(box, hidpi::active() ? disclosureTriangleShapes(b, look, value) : hidpi::Shapes{},
+                       [&] { disclosureTrianglePixels(b, look, value); });
+}
+
+void disclosureTrianglePixels(const Rect &b, Look look, ThemeButtonValue value)
 {
     int L = b.left + 4, T = (b.top + b.bottom - 11) / 2;
     bool down = value == kThemeDisclosureDown;
@@ -1064,7 +1118,8 @@ void disclosureTriangle(const Rect &b, Look look, ThemeButtonValue value)
     /* (i, j): j across the triangle's base (0-10), i out from it (0-5) */
     auto plot = [&](int i, int j, RGBColor &c) {
         RGBForeColor(&c);
-        int h = down ? b.left + 2 + j : L + i, v = down ? (b.top + b.bottom - 7) / 2 + i : T + j;
+        /* open, it points down from the rect's left (8.6: appr controls.64.triangle.value1) */
+        int h = down ? b.left + j : L + i, v = down ? (b.top + b.bottom - 7) / 2 + 2 + i : T + j;
         MoveTo(h, v);
         LineTo(h, v);
     };
@@ -1222,11 +1277,6 @@ const RGBColor indeterminateBlue[] = {
     { 0x0000, 0x0000, 0x8888 }, { 0x0000, 0x0000, 0x5555 },
 };
 const uint16_t indeterminateGrey[] = { 0x5555, 0x7777, 0xAAAA, 0xBBBB, 0xFFFF, 0xDDDD, 0xBBBB, 0x9999, 0x7777, 0x5555 };
-
-uint32_t argbRGB(const RGBColor &c)
-{
-    return 0xFF000000u | (c.red >> 8) << 16 | (c.green >> 8) << 8 | (c.blue >> 8);
-}
 
 /* Where the stripes are: pixel (x, y) of the inside (from its top left)
    is in a blue one when (x - y - 8 - 4 phase) mod 16 < 8 */

@@ -101,6 +101,12 @@ inline uint32_t argbGray(uint16_t g)
     return 0xFF000000 | c << 16 | c << 8 | c;
 }
 
+/* A colour as the presentation surface's */
+inline uint32_t argbRGB(const RGBColor &c)
+{
+    return 0xFF000000u | (c.red >> 8) << 16 | (c.green >> 8) << 8 | (c.blue >> 8);
+}
+
 void arrowPixels(const Rect &r, int dir, int size, uint16_t g);
 
 /* A triangle pointing DIR, SIZE across its base, centred in R; at the
