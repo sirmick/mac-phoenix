@@ -5,7 +5,7 @@
 #   make dist [VERSION=V]      dist/: executor-standalone-V-OS-ARCH[.exe] for six targets,
 #                              SHA256SUMS and README.txt (README.dist.txt); V: git describe
 #   make test [OUT=PATH]       go test, and test_server.py against the binary
-#                              (ctest executor.web.standalone in build-wasm)
+#                              (ctest executor.web.standalone_server in build-wasm)
 #   make nosite                the binary with no tab (site/ as it is)
 #
 # The site's large files are embedded as their .gz only (static.go
