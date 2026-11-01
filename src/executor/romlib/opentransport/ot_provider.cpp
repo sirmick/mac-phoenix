@@ -17,8 +17,8 @@
  *     ...) are queued and delivered the same way, after the call returned.
  *   - Notifiers are pascal (context, code, result, cookie), called with the
  *     A5 world the client had when it installed them.
- *   - T_DATA is sent once for what is waiting, and again only after OTRcv
- *     answered kOTNoDataErr (OT's rule).
+ *   - T_DATA is sent once for what is waiting, and again after OTRcv
+ *     answered kOTNoDataErr or took everything there was (OT's rule).
  */
 
 #include "ot_provider.h"
@@ -304,7 +304,10 @@ void pump()
     for(uint32_t ref : refs)
         if(Provider *p = find_provider(ref))
             service(*p);
-    /* Deliver what's queued, oldest first; a notifier may queue more. */
+    /* Deliver what's queued, oldest first; a notifier may queue more. A
+       provider whose notifier is running, or that the client has entered
+       (OTEnterNotifier), keeps its events, in order, for later. */
+    std::deque<Event> held;
     for(int guard = 0; !events.empty() && guard < 1000; guard++)
     {
         Event e = events.front();
@@ -312,13 +315,14 @@ void pump()
         Provider *p = find_provider(e.ref);
         if(!p || !p->notifier)
             continue;
-        if(p->in_notifier)
+        if(p->in_notifier || p->entered)
         {
-            events.push_back(e);
-            break;
+            held.push_back(e);
+            continue;
         }
         call_notifier(*p, e.code, e.result, e.cookie);
     }
+    events.insert(events.begin(), held.begin(), held.end());
     interrupt_level--;
     pumping = false;
     rewatch();
@@ -600,6 +604,42 @@ uint32_t remove_notifier(const Call &c)
     return 0;
 }
 
+/* Boolean OTEnterNotifier(ProviderRef), void OTLeaveNotifier(ProviderRef)
+   (OT 1.1.1): between the two the provider's notifier isn't called, as if
+   the client were in it; its events wait and come after OTLeaveNotifier,
+   in order. False, entering nothing, for a provider that isn't there, and
+   from inside the provider's notifier (Apple's OT 1.1.1 and 2.6.1 both:
+   OTTest's native case). */
+uint32_t enter_notifier(const Call &c)
+{
+    Provider *p = lookup(c);
+    if(!p || p->in_notifier)
+        return false;
+    p->entered++;
+    return true;
+}
+
+uint32_t leave_notifier(const Call &c)
+{
+    Provider *p = lookup(c);
+    if(p && p->entered > 0 && --p->entered == 0)
+        wake(); /* what waited */
+    return 0;
+}
+
+/* OSStatus OTUseSyncIdleEvents(ProviderRef, Boolean) (OT 1.1.1): while a
+   synchronous call of the provider waits, its notifier is called with
+   kOTSyncIdleEvent, again and again (block_wait), so the client can yield
+   to its threads or cancel the call. */
+uint32_t use_sync_idle_events(const Call &c)
+{
+    Provider *p = lookup(c);
+    if(!p)
+        return kOTBadReferenceErr;
+    p->sync_idle = c.b(1);
+    return kOTNoError;
+}
+
 /* ---- endpoint state --------------------------------------------------- */
 
 uint32_t get_endpoint_state(const Call &c)
@@ -826,6 +866,9 @@ int32_t block_wait(uint32_t ref, short events, int timeout_ms, bool &ready)
             break;
         }
         syncint_check_interrupt();
+        p = find_provider(ref);
+        if(p && p->sync_idle && p->notifier && !p->in_notifier && !p->entered)
+            call_notifier(*p, kOTSyncIdleEvent, kOTNoError, 0);
     }
     if((p = find_provider(ref)))
         p->in_sync_wait = false;
@@ -1341,6 +1384,15 @@ uint32_t rcv(const Call &c)
         {
             OT_LOG("rcv %08x %zd bytes\n", p->ref, r);
             log_bytes("got", p->ref, buf, r);
+            /* Everything there was read: the next data gets a T_DATA, no
+               kOTNoDataErr needed (Apple's OT 1.1.1 and 2.6.1, OTTest's
+               native_net; Hotline Connect reads a tracker's listing as
+               it comes, exactly what is there). */
+            if(hostnet::bytes_available(p->fd) <= 0)
+            {
+                p->data_armed = true;
+                rewatch();
+            }
             return r;
         }
         if(r == 0)

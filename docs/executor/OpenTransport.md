@@ -97,7 +97,9 @@ function set's ID as a C string at +16. The function sets and their indices
   are queued and delivered the same way, after the call returned; a
   notifier is never re-entered. Notifiers run in the A5 world the client had
   when it installed them. T_DATA is sent once for what is waiting and again
-  only after OTRcv answered kOTNoDataErr. A datagram bigger than
+  after OTRcv answered kOTNoDataErr or took everything there was (Apple's
+  OT 1.1.1 and 2.6.1; Hotline Connect reads a tracker's listing that way
+  and waits for the next T_DATA). A datagram bigger than
   OTRcvUData's buffer comes in pieces, T_MORE on all but the last. Addresses
   may be DNSAddresses (`"name:port"`): OTConnect (looked up on a host thread
   for an asynchronous or non-blocking endpoint, then T_CONNECT as usual),
@@ -133,6 +135,19 @@ function set's ID as a C string at +16. The function sets and their indices
   ask the host's name servers with res_query, synchronous or asynchronous
   (T_DNRSYSINFOCOMPLETE, T_DNRMAILEXCHANGECOMPLETE, T_DNRQUERYCOMPLETE).
 * **Defaults.** A new provider is synchronous and non-blocking.
+* **OT 1.1.1's additions** (Gestalt `'otvr'` says 1.1.1, $01118000, as
+  Apple's on Mac OS 7.6.1; applications built for it ask: Hotline Connect
+  1.9 wants $01110000 or more), for PowerPC clients: timer tasks
+  (`OTNtvUtilLib`, the 68k set `OTClnt$NtvUtils`): a Time Manager task each,
+  whose expiry runs the task at deferred task time; scheduling again
+  replaces the time, OTCancelTimerTask answers whether it was scheduled.
+  `OTEnterNotifier`/`OTLeaveNotifier` (`OTClientLib`): the provider's
+  events wait until the client leaves; false from inside its notifier.
+  `OTUseSyncIdleEvents`: kOTSyncIdleEvent to the notifier at each 20 ms
+  slice of a blocking call's wait. `OTSetMemoryLimits`
+  (`OTNativeClientLib`): accepted, there is no pool. `OTExitPatchPriv`: the
+  client closed (OT 1.1.1's glue's way out calls it as the process quits).
+  The calls with no 68k set are `ot: native` in the definitions.
 
 ## Tests and tools
 
@@ -145,7 +160,12 @@ function set's ID as a C string at +16. The function sets and their indices
   resolver both ways, interface info, TCP blocking, non-blocking,
   asynchronous, refused and listening, UDP and a datagram in pieces,
   options, a blocking call cancelled from a Time Manager task, DNSAddresses,
-  ports and the odd calls, the other Internet services).
+  ports and the odd calls, the other Internet services). Its PowerPC builds
+  add `native` and `native_net`: OT 1.1.1's additions, found through the
+  Code Fragment Manager (no headers or import libraries have them all),
+  and T_DATA after a read that took everything; Apple's OT 1.1.1 (7.6.1)
+  and 2.6.1 (9.0.4) on the G3 answer as Executor does
+  (`ot_retro68_ppc_rom_761`, `ot_retro68_ppc_rom`).
 
 ## Open
 
@@ -156,10 +176,9 @@ function set's ID as a C string at +16. The function sets and their indices
 * Not written: mappers and name registration (AppleTalk's NBP), the
   transaction calls (OTSndRequest and friends: ATP, ADSP), OTCreateOptions /
   OTCreateOptionString, no-copy receive (OTReleaseBuffer, OTReadBuffer),
-  transfer of ownership, the `Ntv*` set, most of the configuration
-  database (below), `OTExitPatchPriv` (PowerPC glue; answered 0,
-  logged). Timer tasks and most port calls have no 68k glue in OT 1.1
-  (native only), so 68k clients can't reach them.
+  transfer of ownership, the rest of the `Ntv*` sets, most of the
+  configuration database (below). Most port calls have no 68k glue in
+  OT 1.1 (native only), so 68k clients can't reach them.
 
 ## The functions in the definitions; PowerPC clients
 

@@ -38,6 +38,7 @@ enum : uint32_t
     T_GETPROTADDRCOMPLETE = 0x20000008,
     T_RESOLVEADDRCOMPLETE = 0x20000009,
     T_SYNCCOMPLETE = 0x2000000B,
+    kOTSyncIdleEvent = 0x20000011,
     T_DNRSTRINGTOADDRCOMPLETE = 0x10000001,
     T_DNRADDRTONAMECOMPLETE = 0x10000002,
     T_DNRSYSINFOCOMPLETE = 0x10000003,
@@ -86,6 +87,8 @@ struct Provider
     uint32_t notifier = 0, context = 0, a5 = 0;
     bool ppc = false; /* the notifier is PowerPC code (a TV) */
     bool in_notifier = false;
+    int entered = 0;        /* OTEnterNotifier's without their OTLeaveNotifier */
+    bool sync_idle = false; /* OTUseSyncIdleEvents: kOTSyncIdleEvent while a sync call waits */
 
     /* Endpoints. */
     uint32_t state = T_UNBND;
