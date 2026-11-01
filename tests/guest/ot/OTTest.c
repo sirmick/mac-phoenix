@@ -1723,18 +1723,18 @@ static struct
 static void *native_symbol(const char *lib, const char *name)
 {
     unsigned char l[64], n[256];
-    void *conn = nil;
+    ConnectionID conn;
     Ptr main_addr = nil, addr = nil;
-    unsigned char cls = 0;
+    SymClass cls;
     unsigned char err_name[256];
 
     l[0] = (unsigned char)strlen(lib);
     memcpy(l + 1, lib, l[0]);
     n[0] = (unsigned char)strlen(name);
     memcpy(n + 1, name, n[0]);
-    if(GetSharedLibrary(l, 'pwpc', 1 /* kReferenceCFrag */, (void *)&conn, &main_addr, err_name))
+    if(GetSharedLibrary(l, kPowerPCArch, kLoadLib, &conn, &main_addr, err_name))
         return nil;
-    if(FindSymbol(conn, n, &addr, (void *)&cls))
+    if(FindSymbol(conn, n, &addr, &cls))
         return nil;
     return addr;
 }
@@ -1758,11 +1758,14 @@ static Boolean native_lookup(const char *name)
     int i;
 
     for(i = 0; i < 8; i++)
-        if(!(slot[i] = native_symbol(want[i].lib, want[i].sym)))
+    {
+        slot[i] = native_symbol(want[i].lib, want[i].sym);
+        if(!slot[i])
         {
             fail(name, want[i].sym, 0);
             return false;
         }
+    }
     return true;
 }
 
