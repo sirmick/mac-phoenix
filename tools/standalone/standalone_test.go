@@ -253,3 +253,21 @@ func TestGzipOnlyServed(t *testing.T) {
 		}
 	}
 }
+
+// A controller silent for the lease has let go; a viewer then gets control.
+func TestSessionLease(t *testing.T) {
+	var s TabSessions
+	if !s.beat("tab-a-00001", false)["control"].(bool) || s.beat("tab-b-00001", false)["control"].(bool) {
+		t.Fatal("first tab not in control")
+	}
+	if !s.putScreen("tab-a-00001", []byte("png")) || s.getScreen() == nil {
+		t.Fatal("screen")
+	}
+	s.seen["tab-a-00001"] = s.seen["tab-a-00001"].Add(-sessionLease) // A's tab closed without a word
+	if a := s.beat("tab-b-00001", false); !a["control"].(bool) || a["viewers"].(int) != 0 {
+		t.Fatalf("after the lease: %v", a)
+	}
+	if s.getScreen() != nil {
+		t.Fatal("A's screen outlived it")
+	}
+}

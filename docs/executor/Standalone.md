@@ -65,7 +65,15 @@ password only this machine may change them (a LAN client gets 403).
   127.0.0.1 unless told otherwise). With one, `/login` asks for it and
   `POST /api/login {password}` sets the same session cookie as the
   Python server's (sessions last 30 days, across restarts). `/api/me` is
-  `{ name: "owner", owner: true, standalone: true }` once signed in.
+  `{ name: "local", owner: true, mode: "standalone" }`, always (signed out
+  too): the Python server's `mode = "standalone"` answer.
+- **One controlling tab** (`session.go`, as `tools/web/server/session.py`):
+  `POST /api/session?id=ID[&take=1]` every 2 s gives `{ control, held,
+  handing, viewers }`; the first tab has control, a silent one lets go
+  after 10 s, `take=1` takes it (the old one is `handing` until it
+  releases: `POST /api/session/release?id=ID`). `PUT /api/session/screen`
+  (the controller's PNG, 8 MB at most; 409 from anyone else) and `GET`
+  it (404 when there is none) show viewers its screen.
 - **`GET /api/server`**, no sign-in needed: `{ standalone: true, version,
   password, signed_in }`: how the tab knows which server it has.
 - **Overlays beside their images.** An overlay whose key is a library
@@ -94,7 +102,9 @@ password only this machine may change them (a LAN client gets 403).
 `test_server.py` runs against the binary with
 `EXECUTOR_WEB_SERVER_BINARY=PATH`: the password stands for the owner's,
 and the checks of invitations, account backups and static.py's range
-parser (go test has the Go one) are skipped: 15 of 18 run. `go test`
+parser (go test has the Go one) are skipped: 17 of 20 run, StandaloneTest
+with no password. `go test`
 covers what the API can't show: the overlay log across restarts, a
-write cut short, compaction, merge, the gzip-only files.
+write cut short, compaction, merge, the gzip-only files, the session
+lease.
 `ctest --test-dir build-wasm -R executor.web.standalone` runs both.

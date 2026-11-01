@@ -37,13 +37,15 @@ accounts_only = unittest.skipIf(BINARY, "accounts: the Python server's")
 class Binary:
     """The server under EXECUTOR_WEB_SERVER_BINARY as a child process, with
     the owner's password; server_address and shutdown as app.Server's."""
-    def __init__(self, tmp, site, images, *extra):
-        pw = os.path.join(tmp, "password")
-        with open(pw, "w") as f:
-            f.write("owner-password\n")
+    def __init__(self, tmp, site, images, *extra, password="owner-password"):
+        if password:
+            pw = os.path.join(tmp, "password")
+            with open(pw, "w") as f:
+                f.write(password + "\n")
+            extra = ("--password-file", pw, *extra)
         self.proc = subprocess.Popen([BINARY, "--data", os.path.join(tmp, "data"), "--images", images,
                                       "--site", site, "--bind", "127.0.0.1", "--port", "0",
-                                      "--password-file", pw, "--quiet", *extra],
+                                      "--quiet", *extra],
                                      stdout=subprocess.PIPE, text=True)
         line = self.proc.stdout.readline()
         m = re.search(r":(\d+)/$", line.strip())
@@ -125,7 +127,8 @@ class ServerTest(unittest.TestCase):
         r, _ = self.request("GET", "/")
         self.assertEqual(r.status, 302)
         self.assertEqual(r.getheader("Location"), "/login?next=%2F")
-        for path in ("/main.js", "/library.json", "/disks/a.img", "/api/sync", "/api/me"):
+        signed_in_only = ("/main.js", "/library.json", "/disks/a.img", "/api/sync")
+        for path in signed_in_only + (() if BINARY else ("/api/me",)):   # the Go server's says its mode
             self.assertEqual(self.request("GET", path)[0].status, 401, path)
         self.assertEqual(self.request("GET", "/login")[0].status, 200)
         r, _ = self.request("POST", "/api/login", {"name": "owner", "password": "wrong-password"})
@@ -197,12 +200,12 @@ class ServerTest(unittest.TestCase):
         r, _ = self.request("POST", "/api/login", {"name": "owner", "password": "owner-password"},
                             headers={"Host": "executor.example"})
         self.assertIn("; Secure", r.getheader("Set-Cookie"))           # anywhere else
-        self.assertEqual(self.request("GET", "/api/me", cookie=cookie)[0].status, 200)
+        self.assertEqual(self.request("GET", "/api/sync", cookie=cookie)[0].status, 200)
         r, _ = self.request("DELETE", "/api/sync/volumes/own", cookie=cookie,
                             headers={"Origin": "https://elsewhere.example"})
         self.assertEqual(r.status, 403)
         r, _ = self.request("POST", "/api/logout", cookie=cookie)
-        self.assertEqual(self.request("GET", "/api/me", cookie=cookie)[0].status, 401)
+        self.assertEqual(self.request("GET", "/api/sync", cookie=cookie)[0].status, 401)
 
     @accounts_only
     def test_invite_and_cross_site(self):
@@ -546,6 +549,10 @@ class StandaloneTest(unittest.TestCase):
         os.makedirs(site)
         with open(os.path.join(site, "index.html"), "w") as f:
             f.write("<p>tab</p>")
+        if BINARY:                                      # standalone is all it is: no password
+            cls.server = Binary(cls.tmp, site, cls.tmp, password=None)
+            cls.port = cls.server.server_address[1]
+            return
         cfg = config.load(None, {"server": {"port": 0, "site": site, "data": os.path.join(cls.tmp, "data"),
                                             "mode": "standalone"},
                                  "library": {"images": cls.tmp}})
@@ -571,6 +578,8 @@ class StandaloneTest(unittest.TestCase):
         self.assertEqual(self.request("GET", "/")[0].status, 200)
         r, data = self.request("POST", "/api/sync/overlays/k?base=0", struct.pack("<I", 0) + b"z" * 4096)
         self.assertEqual((r.status, json.loads(data)["version"]), (200, 1))
+        if BINARY:
+            return
         with self.assertRaises(ValueError):
             config.load(None, {"server": {"mode": "other"}})
 

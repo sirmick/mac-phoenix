@@ -6,7 +6,9 @@ package main
 //	/login            the password, when there is one (else everything is open)
 //	/library.json     the library (library.go); /disks/NAME its images, with Range
 //	/api/server       { standalone, version, password, signed_in } (no sign-in needed)
-//	/api/me           { name, owner, standalone }; 401 when signed out
+//	/api/me           { name, owner, mode: "standalone" }, always (signed out too)
+//	/api/session      POST ?id=ID[&take=1] the controlling tab (session.go);
+//	                  /api/session/release, PUT/GET /api/session/screen
 //	/api/login        POST { password }       /api/logout POST
 //	/api/settings     GET the settings; POST some of them (settings.go)
 //	/api/sync/...     overlays (overlay.go) and volumes (volumes.go), as app.py:
@@ -95,6 +97,7 @@ type Server struct {
 	overlays *OverlayStore
 	volumes  *VolumeStore
 	relay    *Relay
+	tabs     TabSessions
 	logMu    sync.Mutex
 
 	sessMu   sync.Mutex
@@ -485,11 +488,9 @@ func init() {
 		return c.sendJSON(200, map[string]any{"standalone": true, "version": version,
 			"password": c.s.passwordSet(), "signed_in": c.authed})
 	})
+	// The mode, which the tab reads before anything: signed out too.
 	handle("GET", "/api/me", false, func(c *ctx, m []string) error {
-		if !c.authed {
-			return httpErr(401, "signed out")
-		}
-		return c.sendJSON(200, map[string]any{"name": "owner", "owner": true, "standalone": true})
+		return c.sendJSON(200, map[string]any{"name": "local", "owner": true, "mode": "standalone"})
 	})
 	handle("POST", "/api/login", false, func(c *ctx, m []string) error {
 		s := c.s

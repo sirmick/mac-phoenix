@@ -74,7 +74,7 @@ func init() {
 		if isNew {
 			who := "(signed out)"
 			if c.authed {
-				who = "owner"
+				who = "local"
 			}
 			fmt.Fprintf(&b, "# %sZ %s %s %s\n", now.Format("2006-01-02 15:04:05"), c.address(), who, c.r.UserAgent())
 		}
