@@ -1553,7 +1553,65 @@ uint16_t tabGray(char c)
     return n * 0x1111;
 }
 
-void drawTabNorth(const Rect &bounds, const TabLook &look, int rows)
+/* A north tab at the display scale: its outline as a curve into a
+   straight slant (the 1x sides' steps), the face inside it, the lit edge
+   down the left and across the top, the shade down the right. Colours by
+   style (as tabLooks): outline, face, lit, shade (no lit or shade:
+   inactive). */
+hidpi::Shapes tabNorthShapes(const Rect &bounds, ThemeTabStyle style, int rows)
+{
+    static const uint8_t looks[][4] = { { 0, 0xc, 0xd, 8 }, { 0, 6, 4, 7 }, { 5, 0xd, 0xff, 0xff },
+                                        { 0, 0xe, 0xf, 8 }, { 5, 0xe, 0xff, 0xff } };
+    const uint8_t *c = looks[style];
+    float L = bounds.left, T = bounds.top, W = bounds.right - bounds.left;
+    bool front = rows > tabRows;
+    /* the left side D in from the edge, from Y up to the top's middle;
+       the right side the same mirrored */
+    auto side = [&](float d, float y, bool right) {
+        std::vector<float> v;
+        auto add = [&](float x, float yy) {
+            v.push_back(L + (right ? W - x : x));
+            v.push_back(T + yy);
+        };
+        if(y > tabRows)
+            add(d, y);
+        add(d + 6 - 6 * (std::min<float>(y, tabRows) - 4) / 17, std::min<float>(y, tabRows));
+        add(d + 6, 4);
+        add(6.6f + 0.7f * d, 2.4f + 0.7f * d);
+        add(8 + 0.7f * d, 1 + 0.7f * d);
+        add(10, d);
+        return v;
+    };
+    auto path = [&](float d, float y) {
+        std::vector<float> v = side(d, y, false), r = side(d, y, true);
+        for(size_t i = r.size(); i >= 2; i -= 2)
+            v.insert(v.end(), { r[i - 2], r[i - 1] });
+        return v;
+    };
+    hidpi::Shapes s;
+    s.push_back({ hidpi::Shape::Polygon, path(0, rows), 0, argbGray(c[1] * 0x1111) });
+    if(c[2] != 0xff)
+    {
+        std::vector<float> lit = side(2.5f, rows, false);
+        lit.insert(lit.end(), { L + W - 9, T + 2.5f });
+        s.push_back({ hidpi::Shape::Polyline, lit, 1, argbGray(c[2] * 0x1111) });
+        std::vector<float> shade = side(1.5f, front ? tabRows + 1 : rows, true);
+        s.push_back({ hidpi::Shape::Polyline, shade, 1, argbGray(c[3] * 0x1111) });
+    }
+    s.push_back({ hidpi::Shape::Polyline, path(0.5f, front ? tabRows + 1 : rows), 1, argbGray(c[0] * 0x1111) });
+    return s;
+}
+
+void drawTabNorthPixels(const Rect &bounds, const TabLook &look, int rows);
+
+void drawTabNorth(const Rect &bounds, ThemeTabStyle style, int rows)
+{
+    const Rect box = { bounds.top, bounds.left, (INTEGER)(bounds.top + rows), bounds.right };
+    hidpi::chrome_draw(box, hidpi::active() ? tabNorthShapes(bounds, style, rows) : hidpi::Shapes{},
+                       [&] { drawTabNorthPixels(bounds, tabLooks[style], rows); });
+}
+
+void drawTabNorthPixels(const Rect &bounds, const TabLook &look, int rows)
 {
     int L = bounds.left, R = bounds.right;
     for(int r = 0; r < rows; r++)
@@ -1589,7 +1647,7 @@ OSStatus Executor::C_DrawThemeTab(const Rect *inRect, ThemeTabStyle inStyle, The
         if(inStyle < (int)std::size(tabLooks))
         {
             DrawGuard guard;
-            drawTabNorth(*inRect, tabLooks[inStyle], front ? tabFrontRows : tabRows);
+            drawTabNorth(*inRect, inStyle, front ? tabFrontRows : tabRows);
         }
     }
     else

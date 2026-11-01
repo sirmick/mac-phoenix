@@ -52,13 +52,16 @@ static void DrawGallery(WindowRef w)
     Rect r;
     SetPort((GrafPtr)w);
     DrawControls(w);
-    /* tabs: the front one and one behind, north, on a pane */
-    SetRect(&r, 260, 140, 340, 164);
-    DrawThemeTab(&r, kThemeTabFront, kThemeTabNorth, NULL, 0);
-    SetRect(&r, 340, 140, 420, 164);
-    DrawThemeTab(&r, kThemeTabNonFront, kThemeTabNorth, NULL, 0);
-    SetRect(&r, 260, 162, 420, 210);
+    /* a pane, and on it north tabs: the front one, one behind, one
+       pressed */
+    SetRect(&r, 260, 161, 420, 210);
     DrawThemeTabPane(&r, kThemeStateActive);
+    SetRect(&r, 260, 140, 313, 164);
+    DrawThemeTab(&r, kThemeTabFront, kThemeTabNorth, NULL, 0);
+    SetRect(&r, 313, 140, 366, 164);
+    DrawThemeTab(&r, kThemeTabNonFront, kThemeTabNorth, NULL, 0);
+    SetRect(&r, 366, 140, 419, 164);
+    DrawThemeTab(&r, kThemeTabNonFrontPressed, kThemeTabNorth, NULL, 0);
 }
 
 int main(void)
