@@ -22,6 +22,7 @@ class PlainDataFork : public OpenFile
 {
 protected:
     int fd;
+    bool writable = false; /* opened read-write */
 
 public:
     struct create_t {};
@@ -35,5 +36,6 @@ public:
     virtual void setEOF(size_t sz) override;
     virtual size_t read(size_t offset, void *p, size_t n) override;
     virtual size_t write(size_t offset, void *p, size_t n) override;
+    virtual bool canWrite() const override { return writable; }
 };
 } // namespace Executor

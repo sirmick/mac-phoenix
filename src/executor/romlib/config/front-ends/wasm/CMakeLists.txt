@@ -141,6 +141,17 @@ if(NODE_COMMAND)
         ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM};TMPDIR=${CMAKE_CURRENT_BINARY_DIR}")
 endif()
 
+# The 8.6 Finder's folder windows in the tab: their offscreens (useTempMem)
+# don't fill its heap, and the Worker lives on (web/tests/tab_finder_heap.mjs).
+if(NODE_COMMAND)
+    add_test(NAME executor.web.finder_heap
+        COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_finder_heap.mjs
+                $<TARGET_FILE_DIR:executor-web> ${EXECUTOR_WEB_SYSTEM_PPC})
+    set_tests_properties(executor.web.finder_heap PROPERTIES
+        LABELS "executor;web" TIMEOUT 300 SKIP_RETURN_CODE 77
+        ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM};TMPDIR=${CMAKE_CURRENT_BINARY_DIR}")
+endif()
+
 # A PowerPC application in the tab: AppleWorks 5.0.3 on the same 8.6, up
 # with its windows (it once jumped to 0 here: GetIndString past a list).
 set(EXECUTOR_WEB_PPC_APPLEWORKS "$ENV{HOME}/storage/images/productivity-system-7.img" CACHE FILEPATH

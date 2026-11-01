@@ -1,4 +1,4 @@
-# probe 3dd89c9451641ce0d6e6f1518863c29e0c2476ba2f5d379938df7d8d4448d0fb
+# probe 5e778240f9820064f4a872259c03fbd93c782484acc51b0dd66ab8fc4998f8bf
 == received
 received.install: 0
 received.process: 0
@@ -211,10 +211,19 @@ osl.dispose.cb: 0
 osl.dispose: long
 osl.dispose.cb.calls: 1
 osl.dispose.cb.token: null
+== coerce
+coerce.alias.new: 0
+coerce.alis.fss: 0
+coerce.alis.fss.type: fss 
+coerce.alis.fss.same: yes
+coerce.list.fss: 0
+coerce.list.fss.result: fss  70 same file
+coerce.fss.alis: 0
+coerce.fss.alis.type: alis
 == layout
 layout.new: size 90 params at 90 attributes 0 parameters 0
 layout.new.end: ;;;;
-layout.new.bytes: 00 00 00 00 00 00 00 00 00 00 00 5a 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 54 65 73 74 4c 61 79 31 00 01 02 b8 70 73
+layout.new.bytes: 00 00 00 00 00 00 00 00 00 00 00 5a 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 54 65 73 74 4c 61 79 31 00 01 05 c6 70 73
 layout.appended: 0
 layout.appended.value: TxtW
 layout.cleared44: 0

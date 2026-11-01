@@ -14,6 +14,8 @@
 #include <AppleEvents.h>
 #include <Processes.h>
 #include <Events.h>
+#include <Aliases.h>
+#include <string.h>
 
 static const OSType attrs[] = {
     'evcl', 'evid', 'rtid', 'tran', 'addr', 'esrc', 'inte', 'miss', 'optk', 'from', 'timo', 'subj' };
@@ -400,6 +402,64 @@ int main(void)
         AERemoveObjectAccessor('Cls3', typeWildCard, acc, false);
         AERemoveObjectAccessor(typeWildCard, 'Cnt4', acc, false);
         AERemoveObjectAccessor(typeWildCard, typeWildCard, acc, false);
+    }
+    if(SECTION("coerce"))
+    {
+        /* The Apple Event Manager's own coercions between an alias and an
+           FSSpec: the Finder's 'odoc' gives its documents as aliases
+           (NewAliasMinimal) and applications ask for 'fss ' (SimpleText
+           and BBEdit Lite 6.1 opened nothing on Executor). The probe's own
+           file. */
+        ProcessSerialNumber self;
+        ProcessInfoRec info;
+        FSSpec me, got;
+        AliasHandle alias = NULL;
+        AEDesc ad, fd, list;
+        AEKeyword kw;
+        DescType type;
+        Size size;
+        OSErr err;
+        GetCurrentProcess(&self);
+        memset(&info, 0, sizeof info);
+        info.processInfoLength = sizeof info;
+        info.processAppSpec = &me;
+        GetProcessInformation(&self, &info);
+        out("alias.new", "%d", NewAliasMinimal(&me, &alias));
+        HLock((Handle)alias);
+        AECreateDesc(typeAlias, *alias, GetHandleSize((Handle)alias), &ad);
+        HUnlock((Handle)alias);
+        err = AECoerceDesc(&ad, typeFSS, &fd);
+        out("alis.fss", "%d", err);
+        if(err == noErr)
+        {
+            out("alis.fss.type", "%.4s", (char *)&fd.descriptorType);
+            memcpy(&got, *fd.dataHandle, sizeof got);
+            out("alis.fss.same", "%s", got.vRefNum == me.vRefNum && got.parID == me.parID
+                && EqualString(got.name, me.name, false, true) ? "yes" : "no");
+            AEDisposeDesc(&fd);
+        }
+        /* from a list, as an 'odoc' handler reads it */
+        AECreateList(NULL, 0, false, &list);
+        AEPutDesc(&list, 0, &ad);
+        memset(&got, 0, sizeof got);
+        err = AEGetNthPtr(&list, 1, typeFSS, &kw, &type, &got, sizeof got, &size);
+        out("list.fss", "%d", err);
+        if(err == noErr)
+            out("list.fss.result", "%.4s %ld %s", (char *)&type, (long)size,
+                EqualString(got.name, me.name, false, true) ? "same file" : "other");
+        AEDisposeDesc(&list);
+        AEDisposeDesc(&ad);
+        /* the other way */
+        AECreateDesc(typeFSS, &me, sizeof me, &fd);
+        err = AECoerceDesc(&fd, typeAlias, &ad);
+        out("fss.alis", "%d", err);
+        if(err == noErr)
+        {
+            out("fss.alis.type", "%.4s", (char *)&ad.descriptorType);
+            AEDisposeDesc(&ad);
+        }
+        AEDisposeDesc(&fd);
+        DisposeHandle((Handle)alias);
     }
     if(SECTION("layout"))
     {

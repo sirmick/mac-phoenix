@@ -64,11 +64,27 @@ AppleDoubleFileItem::AppleDoubleFileItem(AppleDoubleScheme scheme, ItemCache& it
 {
 }
 
+/* MacPhoenix: the shared AppleSingle/AppleDouble file, read-write from now
+   on if the host lets it be (else left as it was: writes then fail) */
+static void reopen_writable(const std::shared_ptr<AppleSingleDoubleFile> &p, const fs::path &path)
+{
+    auto f = std::make_unique<PlainDataFork>(path, fsRdWrPerm);
+    if(f->canWrite())
+        p->reopen(std::move(f));
+}
+
 std::shared_ptr<AppleSingleDoubleFile> AppleDoubleFileItem::access(int8_t permission)
 {
     std::shared_ptr<AppleSingleDoubleFile> p;
     if((p = openedFile.lock()))
+    {
+        /* MacPhoenix: opened read-only first (a font's resource fork):
+           writing it (PBSetCatInfo's Finder info) hit a read-only
+           descriptor, lost the write and printed "short write" */
+        if(permission != fsRdPerm && !p->canWrite())
+            reopen_writable(p, makeADPath(scheme, path()));
         return p;
+    }
     else
     {
         fs::path adpath = makeADPath(scheme, path());
@@ -97,7 +113,9 @@ ItemInfo AppleDoubleFileItem::getInfo()
 void AppleDoubleFileItem::setInfo(ItemInfo info)
 {
     FileItem::setInfo(info);
-    access(fsRdWrPerm)->write(9, 0, &info, sizeof(info.file));
+    auto f = access(fsRdWrPerm);
+    if(f->canWrite()) /* MacPhoenix: a read-only host file keeps its info */
+        f->write(9, 0, &info, sizeof(info.file));
 }
 
 void AppleDoubleFileItem::deleteItem()
@@ -148,7 +166,11 @@ std::shared_ptr<AppleSingleDoubleFile> AppleSingleFileItem::access(int8_t permis
 {
     std::shared_ptr<AppleSingleDoubleFile> p;
     if((p = openedFile.lock()))
+    {
+        if(permission != fsRdPerm && !p->canWrite())
+            reopen_writable(p, path());
         return p;
+    }
     else
     {
         p = std::make_shared<AppleSingleDoubleFile>(std::make_unique<PlainDataFork>(path(), permission));
@@ -176,7 +198,9 @@ ItemInfo AppleSingleFileItem::getInfo()
 void AppleSingleFileItem::setInfo(ItemInfo info)
 {
     FileItem::setInfo(info);
-    access(fsRdWrPerm)->write(9, 0, &info, sizeof(info.file));
+    auto f = access(fsRdWrPerm);
+    if(f->canWrite()) /* MacPhoenix: a read-only host file keeps its info */
+        f->write(9, 0, &info, sizeof(info.file));
 }
 
 AppleSingleDoubleFile::AppleSingleDoubleFile(std::unique_ptr<OpenFile> aFile)

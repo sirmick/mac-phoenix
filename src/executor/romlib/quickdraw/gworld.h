@@ -23,6 +23,11 @@ typedef struct gw_info
 
     int pixel_lock_count;
     bool gd_allocated_p;
+    bool temp_mem_p; /* pixels in temporary memory (useTempMem) */
+    /* MacPhoenix: the pixels' handle, for when the pixmap holds their
+       address (locked): RecoverHandle looks in the current zone only, and
+       temporary memory isn't it */
+    Handle pixels_h;
 
     struct gw_info *next;
 } gw_info_t;

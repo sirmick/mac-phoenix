@@ -95,6 +95,11 @@ public:
     void setEOF(uint32_t entryId, size_t sz);
     size_t read(uint32_t entryId, size_t offset, void *p, size_t n);
     size_t write(uint32_t entryId, size_t offset, void *p, size_t n);
+    bool canWrite() const { return file->canWrite(); }
+    /* MacPhoenix: the same file opened again, read-write: one
+       AppleSingleDoubleFile per file stands for every path to it (they
+       share its entry table), opened first by whoever came first */
+    void reopen(std::unique_ptr<OpenFile> f) { file = std::move(f); }
 };
 
 class AppleSingleDoubleFork : public OpenFile
@@ -109,5 +114,6 @@ public:
     virtual void setEOF(size_t sz) override;
     virtual size_t read(size_t offset, void *p, size_t n) override;
     virtual size_t write(size_t offset, void *p, size_t n) override;
+    virtual bool canWrite() const override { return file->canWrite(); }
 };
 } // namespace Executor

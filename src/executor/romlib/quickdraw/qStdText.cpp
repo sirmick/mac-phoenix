@@ -370,6 +370,17 @@ Executor::text_helper(LONGINT n, Ptr textbufp, GUEST<Point> *nump, GUEST<Point> 
             ROMlib_styled_font_info(fmop, finfop);
     }
 
+    /* MacPhoenix: no strike in memory (FMSwapFont found none, or had no
+       room to load one): nothing to measure or draw with */
+    if(!ROMlib_fmo_has_font(fmop))
+    {
+        if(charlocp)
+            for(i = 0; i <= n; i++)
+                charlocp[i] = 0;
+        ALLOCAEND
+        return 0;
+    }
+
     extra = fmop->extra;
     fixed_extra = FIXED(extra);
     widthstate = HGetState((Handle)LM(WidthTabHandle));
