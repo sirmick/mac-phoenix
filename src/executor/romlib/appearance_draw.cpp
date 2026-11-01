@@ -3791,7 +3791,8 @@ void Executor::appearance::floatingFrame(const Rect &c, bool active, const Float
     if(hasTitle)
     {
         floatDots(a0, a, titleLeft - 4, across, false);
-        floatDots(a0, titleRight + 2, end, across, false);
+        /* right of it a run of its own, from 2 past the title (8.6) */
+        floatDots(titleRight + 2, titleRight + 2, end, across, false);
     }
     else
         floatDots(a0, a, end, across, parts.side);
