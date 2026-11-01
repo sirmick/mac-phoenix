@@ -74,7 +74,6 @@ int main(void)
     Rect r;
     int i;
     EventRecord e;
-    Boolean shown = false;
 
     InitGraf(&qd.thePort);
     InitFonts();
@@ -109,21 +108,12 @@ int main(void)
     while(!quit)
     {
         if(!WaitNextEvent(everyEvent, &e, 30, NULL))
-        {
-            /* once in front, the whole window again: on Executor 8.6 the
-               part BridgeAgent's window covered stays blank otherwise */
-            if(!shown)
-            {
-                SetPort((GrafPtr)doc);
-                InvalRect(&((GrafPtr)doc)->portRect);
-                shown = true;
-            }
             continue;
-        }
         switch(e.what)
         {
             case updateEvt:
                 BeginUpdate((WindowRef)e.message);
+                SetPort((GrafPtr)e.message);
                 EraseRect(&((GrafPtr)e.message)->portRect);
                 if((WindowRef)e.message == doc)
                     DrawGallery(doc);
