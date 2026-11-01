@@ -33,6 +33,7 @@
 #include <DialogMgr.h>
 #include <FileMgr.h>
 #include <ProcessMgr.h>
+#include <rsys/process.h>
 #include <SegmentLdr.h>
 #include <wind/wind.h>
 #include <menu/menu.h>
@@ -285,7 +286,14 @@ void on_event_poll()
         std::string op = buf, arg = buf + op.size() + 1;
         std::string reply;
         if(op == "app")
-            reply = json_string(LM(CurApName)[0] <= 31 ? pstring(LM(CurApName)) : "");
+        {
+            /* The front process (as mac-phoenix's /api/app): CurApName
+               names whichever process makes this event call, the Finder in
+               the background behind a full-screen game. */
+            std::string front = ROMlib_front_process_name();
+            reply = json_string(!front.empty() ? front
+                                : LM(CurApName)[0] <= 31 ? pstring(LM(CurApName)) : "");
+        }
         else if(op == "windows")
             reply = windows_json();
         else if(op == "menus")
