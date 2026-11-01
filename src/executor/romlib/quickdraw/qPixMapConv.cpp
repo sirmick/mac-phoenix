@@ -142,7 +142,7 @@ void Executor::canonical_from_bogo_color(uint32_t index,
                 if(pixel_out)
                     *pixel_out = CW_RAW(index);
                 if(rgb_out)
-                    (rgb_spec->pixel_to_rgbcolor)(rgb_spec, index, rgb_out);
+                    (rgb_spec->pixel_to_rgbcolor)(rgb_spec, CW_RAW(index), rgb_out);
                 return;
             }
         }
@@ -154,14 +154,17 @@ void Executor::canonical_from_bogo_color(uint32_t index,
                 if(pixel_out)
                     *pixel_out = CL_RAW(index);
                 if(rgb_out)
-                    (rgb_spec->pixel_to_rgbcolor)(rgb_spec, index, rgb_out);
+                    (rgb_spec->pixel_to_rgbcolor)(rgb_spec, CL_RAW(index), rgb_out);
                 return;
             }
         }
         else
             gui_fatal("unknown bpp");
 
-        (mac_rgb_spec->pixel_to_rgbcolor)(mac_rgb_spec, index, &t_color);
+        /* MacPhoenix: the port's colour is a host-order pixel (Color2Index);
+           the spec reads raw ones (#dddddd came out #dddd00) */
+        (mac_rgb_spec->pixel_to_rgbcolor)(mac_rgb_spec, rgb_spec->bpp == 16 ? CW_RAW(index) : CL_RAW(index),
+                                          &t_color);
         if(pixel_out)
             *pixel_out = (rgb_spec->rgbcolor_to_pixel)(rgb_spec, &t_color, true);
         if(rgb_out)
