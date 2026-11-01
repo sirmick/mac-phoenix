@@ -257,7 +257,12 @@ void Executor::hidpi::impl::draw(double scale, const uint32_t *argb, int w, int 
                 continue;
             if(run->clip.empty() || !run_valid(*run, screen))
                 continue;
-            restore(sc, *run, r, out, ow, oh, screen);
+            /* only where its glyphs are drawn (its clip) */
+            for(const IRect &c : run->clip)
+                restore(sc, *run,
+                        { std::max(r.top, c.top), std::max(r.left, c.left), std::min(r.bottom, c.bottom),
+                          std::min(r.right, c.right) },
+                        out, ow, oh, screen);
             canvas->save();
             canvas->clipIRect(sc.rect(r));
             SkRegion clip;

@@ -283,11 +283,27 @@ void log_text(const hidpi::TextParams &p, int mode, const char *what)
    what's there now is its "after". Where the new one drew over all the
    pixels it had changed (a button drawn unpressed over its pressed look),
    nothing of it shows: it goes (it could never be found off the screen
-   again), and false. */
+   again), and false. What the new one changed where this one hadn't is
+   the new one's, not this one's ink: its "before" there is what's there
+   now too (the next line's ascenders in a line's box: this one's
+   restoring them would erase them where the two come in another order,
+   pieces of them scrolled or copied separately). */
 bool recapture(Runs &runs, Runs::iterator it, const Screen &s)
 {
     auto copy = std::make_shared<Run>(**it);
     capture(*copy, s, copy->after);
+    const Run &old = **it;
+    for(int y = 0; y < old.box.bottom - old.box.top; y++)
+    {
+        const uint8_t *ob = &old.before[(size_t)y * old.rowLen], *oa = &old.after[(size_t)y * old.rowLen];
+        uint8_t *nb = &copy->before[(size_t)y * old.rowLen];
+        const uint8_t *na = &copy->after[(size_t)y * old.rowLen];
+        if(!memcmp(oa, na, old.rowLen))
+            continue;
+        for(int x = old.box.left; x < old.box.right; x++)
+            if(raw_pixel(ob, x - old.x0, old.bpp) == raw_pixel(oa, x - old.x0, old.bpp))
+                set_raw_pixel(nb, x - old.x0, old.bpp, raw_pixel(na, x - old.x0, old.bpp));
+    }
     if(copy->before == copy->after && !(*it)->noInk)
     {
         runs.erase(it);
@@ -871,14 +887,23 @@ std::shared_ptr<Run> carried(const Run &run, int ox, int oy, const IRect &src_ar
     n->rowLen = d.bpp < 8 ? (box.right - n->x0 + ppb - 1) / ppb : (box.right - box.left) * d.bpp / 8;
     capture(*n, d, n->after);
     n->before = n->after;
+    /* the run's ink only where the copy drew (masked out or clipped, the
+       destination's pixel may be the same by chance: another line's text
+       scrolled under it) */
     bool ink = false;
+    std::vector<std::pair<int, int>> spans;
     for(int y = box.top; y < box.bottom; y++)
     {
+        spans.clear();
+        for(const IRect &k : clip)
+            if(k.top <= y && y < k.bottom)
+                spans.push_back({ std::max(k.left, box.left), std::min(k.right, box.right) });
         const uint8_t *sb = &run.before[(size_t)(y - oy - run.box.top) * run.rowLen];
         const uint8_t *sa = &run.after[(size_t)(y - oy - run.box.top) * run.rowLen];
         uint8_t *nb = &n->before[(size_t)(y - box.top) * n->rowLen];
         const uint8_t *na = &n->after[(size_t)(y - box.top) * n->rowLen];
-        for(int x = box.left; x < box.right; x++)
+        for(auto [l, r] : spans)
+        for(int x = l; x < r; x++)
         {
             uint32_t b = raw_pixel(sb, x - ox - run.x0, run.bpp), a = raw_pixel(sa, x - ox - run.x0, run.bpp);
             if(b != a && raw_pixel(na, x - n->x0, n->bpp) == a)
@@ -1026,6 +1051,12 @@ void Executor::hidpi::copy_bits(const PixMap *src, const PixMap *dst, const Rect
         bool replaced = false;
         for(auto &n : made)
         {
+            /* the same piece again, all of it (a line cut in two by
+               separate copies, a scroll and the strip it exposes, is two
+               pieces) */
+            const IRect &o = (*it)->box;
+            if(o.top < n->box.top || o.left < n->box.left || o.bottom > n->box.bottom || o.right > n->box.right)
+                continue;
             bool same = (*it)->shapes.empty() ? !(*it)->glyphs.empty() && covered_by(**it, *n)
                                              : (*it)->box.top == n->box.top && (*it)->box.left == n->box.left
                                                  && (*it)->shapes == n->shapes;

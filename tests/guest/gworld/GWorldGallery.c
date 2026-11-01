@@ -3,7 +3,7 @@
    text in a GWorld copied with CopyBits; text copied through a second
    GWorld; text whose GWorld's pixels the program then writes itself
    (behind QuickDraw); text copied with CopyMask through a mask of its left
-   part. For looking at Executor's HiDPI GWorld shadows (--executor-scale 2,
+   part. A second window scrolls text three ways (DrawScroll). For looking at Executor's HiDPI GWorld shadows (--executor-scale 2,
    docs/executor/HiDPI.md "Phase 4") and the ctest cell hidpi_gworld_executor
    (tests/test_hidpi_gworld.sh), which compares the 2x surface with the 1x
    frame there: keep its boxes in step with the layout here. Stays on the
@@ -159,9 +159,115 @@ static void DrawGallery(WindowRef w)
     }
 }
 
+/* The scroll window: three columns of Geneva 12 lines 14 pixels apart
+   (their boxes overlap: as AppleWorks' lines), each scrolled up twice by
+   19 pixels (cutting through lines) after it is drawn.
+   A: TextEdit, TEScroll (ScrollRect on the screen). B: a GWorld scrolled
+   with ScrollRect in it, the lines it exposes drawn, copied. C: a tall
+   GWorld copied, then scrolled as AppleWorks does: the window copied onto
+   itself, the strip it exposes copied from the GWorld. */
+enum
+{
+    kColumn = 145,
+    kScrollHeight = 150,
+    kLine = 14,
+    kScroll = 19,
+    kSteps = 2,
+};
+
+static TEHandle te;
+
+static void Lines(int from, int to, short top, short left)
+{
+    int i;
+    for(i = from; i <= to; i++)
+    {
+        Str255 s;
+        NumToString(i, s);
+        MoveTo(left + 6, top + i * kLine - 3);
+        DrawString("\pLine ");
+        DrawString(s);
+        DrawString("\p of text");
+    }
+}
+
+static void DrawScroll(WindowRef w)
+{
+    GWorldPtr b, c;
+    CGrafPtr port;
+    GDHandle gd;
+    Rect r, s, d;
+    int i;
+    SetPort((GrafPtr)w);
+    ForeColor(blackColor);
+    BackColor(whiteColor);
+    TextFont(3);
+    TextSize(12);
+
+    /* A */
+    TEUpdate(&((GrafPtr)w)->portRect, te);
+    for(i = 0; i < kSteps; i++)
+        TEScroll(0, -kScroll, te);
+
+    /* B */
+    SetRect(&r, 0, 0, kColumn, kScrollHeight);
+    if(NewGWorld(&b, 0, &r, NULL, NULL, 0) == noErr)
+    {
+        RgnHandle upd = NewRgn();
+        GetGWorld(&port, &gd);
+        SetGWorld(b, NULL);
+        LockPixels(GetGWorldPixMap(b));
+        TextFont(3);
+        TextSize(12);
+        EraseRect(&r);
+        Lines(1, 11, 0, 0);
+        for(i = 1; i <= kSteps; i++)
+        {
+            ScrollRect(&r, 0, -kScroll, upd);
+            EraseRgn(upd);
+            SetClip(upd);
+            Lines(1, 14, -i * kScroll, 0);
+            ClipRect(&r);
+        }
+        DisposeRgn(upd);
+        SetGWorld(port, gd);
+        SetRect(&d, kColumn + 2, 0, 2 * kColumn + 2, kScrollHeight);
+        CopyBits((BitMap *)*GetGWorldPixMap(b), &((GrafPtr)w)->portBits, &r, &d, srcCopy, NULL);
+        DisposeGWorld(b);
+    }
+
+    /* C */
+    SetRect(&r, 0, 0, kColumn, 26 * kLine);
+    if(NewGWorld(&c, 0, &r, NULL, NULL, 0) == noErr)
+    {
+        short left = 2 * kColumn + 4;
+        GetGWorld(&port, &gd);
+        SetGWorld(c, NULL);
+        LockPixels(GetGWorldPixMap(c));
+        TextFont(3);
+        TextSize(12);
+        EraseRect(&r);
+        Lines(1, 26, 0, 0);
+        SetGWorld(port, gd);
+        SetRect(&s, 0, 0, kColumn, kScrollHeight);
+        SetRect(&d, left, 0, left + kColumn, kScrollHeight);
+        CopyBits((BitMap *)*GetGWorldPixMap(c), &((GrafPtr)w)->portBits, &s, &d, srcCopy, NULL);
+        for(i = 1; i <= kSteps; i++)
+        {
+            SetRect(&s, left, kScroll, left + kColumn, kScrollHeight);
+            SetRect(&d, left, 0, left + kColumn, kScrollHeight - kScroll);
+            CopyBits(&((GrafPtr)w)->portBits, &((GrafPtr)w)->portBits, &s, &d, srcCopy, NULL);
+            SetRect(&s, 0, kScrollHeight + (i - 1) * kScroll, kColumn, kScrollHeight + i * kScroll);
+            SetRect(&d, left, kScrollHeight - kScroll, left + kColumn, kScrollHeight);
+            CopyBits((BitMap *)*GetGWorldPixMap(c), &((GrafPtr)w)->portBits, &s, &d, srcCopy, NULL);
+        }
+        DisposeGWorld(c);
+    }
+}
+
 int main(void)
 {
-    WindowRef doc;
+    WindowRef doc, scroll;
     Rect r;
     EventRecord e;
 
@@ -176,6 +282,29 @@ int main(void)
 
     SetRect(&r, 20, 60, 20 + kWidth, 300);
     doc = NewCWindow(NULL, &r, "\pGWorld Gallery", true, documentProc, (WindowRef)-1, true, 0);
+    SetRect(&r, 20, 322, 20 + kWidth, 322 + kScrollHeight);
+    scroll = NewCWindow(NULL, &r, "\pScroll Gallery", true, documentProc, (WindowRef)-1, true, 0);
+    SetPort((GrafPtr)scroll);
+    TextFont(3);
+    TextSize(12);
+    {
+        Rect v;
+        Handle text = NewHandle(0);
+        int i;
+        SetRect(&v, 0, 0, kColumn, kScrollHeight);
+        te = TENew(&v, &v);
+        for(i = 1; i <= 20; i++)
+        {
+            Str255 n;
+            NumToString(i, n);
+            PtrAndHand("Line ", text, 5);
+            PtrAndHand(n + 1, text, n[0]);
+            PtrAndHand(" of text\r", text, 9);
+        }
+        HLock(text);
+        TESetText(*text, GetHandleSize(text), te);
+        DisposeHandle(text);
+    }
 
     while(!quit)
     {
@@ -189,6 +318,13 @@ int main(void)
                 EraseRect(&((GrafPtr)e.message)->portRect);
                 if((WindowRef)e.message == doc)
                     DrawGallery(doc);
+                else if((WindowRef)e.message == scroll)
+                {
+                    /* TextEdit back at its first line, then scrolled */
+                    TEScroll(0, (**te).viewRect.top - (**te).destRect.top, te);
+                    EraseRect(&((GrafPtr)scroll)->portRect);
+                    DrawScroll(scroll);
+                }
                 EndUpdate((WindowRef)e.message);
                 break;
             case mouseDown:
@@ -203,6 +339,7 @@ int main(void)
                 break;
         }
     }
+    DisposeWindow(scroll);
     DisposeWindow(doc);
     return 0;
 }
