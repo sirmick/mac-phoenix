@@ -11,7 +11,8 @@ compared key by key.
                     the differing ones in the report directory
   --accept          add the unexpected differences to the expected file
                     (reason "TODO"), to start one off
-  --out DIR         reports and kept files (default <storage>/difftest/PROBE)
+  --out DIR         reports and kept files (default <storage>/difftest/PROBE;
+                    a git worktree's <storage>/difftest/wt-NAME/PROBE)
 
 Targets: g3-8.6, g3-9.0.4 (the G3 ROM, mame-ppc), executor-8.6. Each test
 target is compared with its reference (executor-8.6 with g3-8.6).
@@ -26,9 +27,15 @@ match (to remove). A crash leaves a partial log: the run is resumed from
 the section after the last one started (Host:PROBE.start), as often as it
 takes; the crashed sections are reported.
 
-Ports 19700, 19710, 19720 (by target); $DIFFTEST_PORT_BASE moves them.
+Ports 18600, 18610, 18620 (by target), nominal: the checkout's range
+(tests/lib/ports.py, MACPHOENIX_PORT_BASE); $DIFFTEST_PORT_BASE moves them.
+A run holds the out directory's .lock: another waits for it, up to
+$DIFFTEST_LOCK_TIMEOUT seconds (default 1800). $DIFFTEST_NO_SKIP=1 (the
+integration run, tools/ci/integration.sh): a target that can't run (exit 77
+otherwise) fails.
 """
 import argparse
+import fcntl
 import fnmatch
 import hashlib
 import os
@@ -37,9 +44,12 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO / "tests" / "lib"))
+import ports  # noqa: E402
 PROBES = REPO / "tests" / "guest" / "difftest"
 STORAGE = Path(os.environ.get("MACEMU_STORAGE", Path.home() / "storage"))
 G3 = STORAGE / "roms" / "g3.rom"
@@ -50,10 +60,11 @@ TARGETS = {
     "executor-8.6": (["--backend", "executor", "--executor-ppc", "--image", "8.6"], {}),
 }
 REFERENCE = {"executor-8.6": "g3-8.6"}
+# nominal (tests/lib/ports.py maps them to this checkout's range);
 # $DIFFTEST_PORT_BASE moves them (another run, or someone else's emulator,
 # holding the defaults)
-PORT_BASE = int(os.environ.get("DIFFTEST_PORT_BASE", "19700"))
-PORTS = {"g3-8.6": PORT_BASE, "g3-9.0.4": PORT_BASE + 10, "executor-8.6": PORT_BASE + 20}
+PORT_BASE = int(os.environ.get("DIFFTEST_PORT_BASE", "18600"))
+PORTS = {t: ports.port(PORT_BASE + 10 * i) for i, t in enumerate(["g3-8.6", "g3-9.0.4", "executor-8.6"])}
 
 
 def parse(text):
@@ -118,7 +129,7 @@ def run_target(probe, target, binary, keep, dump, start=None, timeout=400):
     shutil.rmtree(tmp, ignore_errors=True)
     if re.search(r"^SKIP", log.read_text(errors="replace"), re.M):
         print(f"  {target}: skipped ({log})")
-        sys.exit(77)
+        sys.exit(1 if os.environ.get("DIFFTEST_NO_SKIP") == "1" else 77)
     name_dumps(probe, keep)
     p = keep / f"{probe}.txt"
     return p.read_text(errors="replace") if p.exists() else ""
@@ -286,6 +297,36 @@ def compare(probe, target, ref_target, ref_text, text, crashed, out, accept):
     return report, not unexpected and not missing
 
 
+def lock_wait(out, probe):
+    """Holds out/.lock for the run (kept open); waits for another run."""
+    lock = open(out / ".lock", "a+")
+    limit = int(os.environ.get("DIFFTEST_LOCK_TIMEOUT", "1800"))
+    start, said = time.monotonic(), None
+    while True:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            break
+        except OSError:
+            pass
+        waited = time.monotonic() - start
+        lock.seek(0)
+        holder = lock.read().strip() or "?"
+        if said is None or waited - said >= 60:
+            print(f"  waiting for another run of {probe} ({holder}) to finish with {out}", flush=True)
+            said = waited
+        if waited >= limit:
+            sys.exit(f"another run of {probe} still holds {out / '.lock'} after {limit} s "
+                     f"({holder}); DIFFTEST_LOCK_TIMEOUT waits longer, --out runs elsewhere")
+        time.sleep(1)
+    lock.seek(0)
+    lock.truncate()
+    lock.write(f"pid {os.getpid()}, {REPO}\n")
+    lock.flush()
+    if said is not None:
+        print(f"  {out / '.lock'} free after {time.monotonic() - start:.0f} s", flush=True)
+    return lock
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("probe")
@@ -299,14 +340,14 @@ def main():
     binary = PROBES / f"{o.probe}PPC.bin"
     if not binary.exists():
         sys.exit(f"no {binary}: tests/guest/difftest/build-retro68.sh {o.probe}")
-    out = Path(o.out) if o.out else STORAGE / "difftest" / o.probe
+    if o.out:
+        out = Path(o.out)
+    elif ports.is_main_tree(REPO):
+        out = STORAGE / "difftest" / o.probe
+    else:
+        out = STORAGE / "difftest" / f"wt-{REPO.name}" / o.probe
     out.mkdir(parents=True, exist_ok=True)
-    import fcntl
-    lock = open(out / ".lock", "w")
-    try:
-        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except OSError:
-        sys.exit(f"another run of {o.probe} is going ({out})")
+    lock = lock_wait(out, o.probe)  # noqa: F841 (held to the end)
     ok = True
     for target in o.target or ["executor-8.6"]:
         ref_target = REFERENCE.get(target)

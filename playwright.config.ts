@@ -1,4 +1,11 @@
 import { defineConfig } from '@playwright/test';
+import { execFileSync } from 'node:child_process';
+
+// The emulator's port: 18094 in this checkout's range (tests/lib/ports.py,
+// docs/Testing.md "Ports"), set before the workers start so fixtures.ts and
+// the specs read the same one.
+process.env.MACEMU_HTTP_PORT ||= execFileSync('python3',
+  [`${__dirname}/tests/lib/ports.py`, 'port', '18094'], { encoding: 'utf8' }).trim();
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -6,7 +13,7 @@ export default defineConfig({
   retries: 0,
   workers: 1,
   use: {
-    baseURL: `http://localhost:${process.env.MACEMU_HTTP_PORT || 18094}`,
+    baseURL: `http://localhost:${process.env.MACEMU_HTTP_PORT}`,
     headless: true,
     video: undefined,
   },

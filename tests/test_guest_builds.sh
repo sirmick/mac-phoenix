@@ -25,6 +25,7 @@ while [[ $# -gt 0 ]]; do
         *) echo "Unknown arg: $1"; exit 1 ;;
     esac
 done
+source "$(dirname "$0")/lib/ports.sh"; PORT=$(mp_port "$PORT") || exit 1  # per-worktree (docs/Testing.md)
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$PROJECT_ROOT"
 STORAGE="${MACEMU_STORAGE:-$HOME/storage}"
@@ -35,13 +36,14 @@ MPW=tools/mpw/mpw
 
 export MPW_STATE=$(mktemp -d ${TMPDIR:-/tmp}/mpwbuilds.XXXXXX)
 export MPW_PORT=$PORT
-export MPW_SYSTEM="test-mpwbuilds-7.5.5.img"
+export MPW_SYSTEM="test-mpwbuilds-7.5.5-$$.img"   # per run: worktrees run it at once
+CW_SYSTEM="test-mpwbuilds-cw-7.5.5-$$.img"
 OUT=$(mktemp -d ${TMPDIR:-/tmp}/mpwbuilds-out.XXXXXX)
 CW_STATE=$(mktemp -d ${TMPDIR:-/tmp}/mpwbuilds-cw.XXXXXX)
 cleanup() {
     $MPW stop >/dev/null 2>&1
     MPW_STATE=$CW_STATE $MPW --toolchain cw stop >/dev/null 2>&1
-    rm -rf "$MPW_STATE" "$CW_STATE" "$OUT" "$STORAGE/images/$MPW_SYSTEM" \
+    rm -rf "$MPW_STATE" "$CW_STATE" "$OUT" "$STORAGE/images/$MPW_SYSTEM" "$STORAGE/images/$MPW_SYSTEM.json" \
         "$STORAGE/executor-systems/$MPW_SYSTEM" "$STORAGE/executor-systems/$MPW_SYSTEM.clean"
 }
 trap cleanup EXIT
@@ -75,7 +77,7 @@ if [[ -f "$STORAGE/images/mpw-cw.img" ]]; then
         dir=${p%%:*}
         [[ -f "$dir/build.cw.mpw" ]] || continue
         mkdir -p "$OUT/cw/$dir"
-        if MPW_STATE=$CW_STATE MPW_PORT=$((PORT + 1)) MPW_SYSTEM=test-mpwbuilds-cw-7.5.5.img \
+        if MPW_STATE=$CW_STATE MPW_PORT=$((PORT + 1)) MPW_SYSTEM=$CW_SYSTEM \
                 $MPW --toolchain cw build "$dir" -o "$OUT/cw/$dir" >"$OUT/build-cw.log" 2>&1; then
             echo "PASS $dir builds with CodeWarrior"
         else
@@ -85,8 +87,8 @@ if [[ -f "$STORAGE/images/mpw-cw.img" ]]; then
         fi
     done
     MPW_STATE=$CW_STATE $MPW --toolchain cw stop >/dev/null 2>&1
-    rm -rf "$STORAGE/images/test-mpwbuilds-cw-7.5.5.img" "$STORAGE/executor-systems/test-mpwbuilds-cw-7.5.5.img" \
-        "$STORAGE/executor-systems/test-mpwbuilds-cw-7.5.5.img.clean"
+    rm -rf "$STORAGE/images/$CW_SYSTEM" "$STORAGE/images/$CW_SYSTEM.json" "$STORAGE/executor-systems/$CW_SYSTEM" \
+        "$STORAGE/executor-systems/$CW_SYSTEM.clean"
 else
     echo "SKIP CodeWarrior builds: no mpw-cw.img (tools/mpw/mpw --toolchain cw setup)"
 fi

@@ -15,6 +15,7 @@ while [[ $# -gt 0 ]]; do
         *) echo "unknown arg $1"; exit 1 ;;
     esac
 done
+source "$(dirname "$0")/lib/ports.sh"; PORT=$(mp_port "$PORT") || exit 1  # per-worktree (docs/Testing.md)
 HERE="$(cd "$(dirname "$0")" && pwd)"
 DISK=$(bash "$HERE/lib/refresh_test_disk.sh" tests-7.5.5)
 ROM="${MACEMU_ROM:-$HOME/storage/roms/g3.rom}"

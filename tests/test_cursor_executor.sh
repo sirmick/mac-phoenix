@@ -15,6 +15,7 @@ while [[ $# -gt 0 ]]; do
         *) echo "unknown option $1"; exit 2 ;;
     esac
 done
+source "$(dirname "$0")/lib/ports.sh"; PORT=$(mp_port "$PORT") || exit 1  # per-worktree (docs/Testing.md)
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BIN="${MACEMU_BINARY:-$ROOT/build/mac-phoenix}"
 command -v node >/dev/null || { echo "SKIP: no node"; exit 77; }
