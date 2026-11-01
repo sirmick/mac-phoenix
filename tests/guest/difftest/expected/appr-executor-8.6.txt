@@ -58,5 +58,3 @@ dialogs.*.standard	StandardAlert's note icon: its black pixels come out transpar
 # platinum-2 (open)
 draw32.tabdir.[123].*	tabs facing south, east, west: not drawn platinum yet
 draw8.tabdir.[123].*	tabs facing south, east, west: not drawn platinum yet
-draw32.indeterminate.*	the indeterminate progress bar: not drawn platinum yet
-draw8.indeterminate.*	the indeterminate progress bar: not drawn platinum yet

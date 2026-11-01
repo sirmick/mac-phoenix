@@ -1,5 +1,5 @@
 /* ChromeGallery: a document window and a floating window of platinum
-   chrome (push buttons, check box, radio button, sliders, progress bar,
+   chrome (push buttons, check boxes, radio button, sliders, progress bars,
    pop-up, little arrows, disclosure triangle, tabs) that stays on the
    screen until it is told to quit. For looking at Executor's HiDPI chrome
    (--executor-scale 2, docs/executor/HiDPI.md) and the ctest cell
@@ -17,6 +17,7 @@
 #include <Events.h>
 #include <AppleEvents.h>
 #include <Appearance.h>
+#include <string.h>
 
 static Boolean quit = false;
 
@@ -54,8 +55,16 @@ static const struct ctl ctls[] = {
 static void DrawGallery(WindowRef w)
 {
     Rect r;
+    ThemeTrackDrawInfo t;
     SetPort((GrafPtr)w);
     DrawControls(w);
+    /* an indeterminate progress bar, still */
+    memset(&t, 0, sizeof t);
+    t.kind = kThemeMediumIndeterminateBar;
+    SetRect(&t.bounds, 130, 214, 230, 228);
+    t.attributes = kThemeTrackHorizontal;
+    t.enableState = kThemeTrackActive;
+    DrawThemeTrack(&t, NULL, NULL, 0);
     /* a pane, and on it north tabs: the front one, one behind, one
        pressed */
     SetRect(&r, 260, 161, 420, 210);

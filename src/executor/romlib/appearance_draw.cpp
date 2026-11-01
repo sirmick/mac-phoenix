@@ -1213,6 +1213,107 @@ void eraseWith(ThemeEraseUPP proc, const Rect &r, UInt32 data)
 
 namespace
 {
+void indeterminateBarPixels(const Rect &bounds, int phase, bool active);
+
+/* Each row's stripe colours, top to bottom: the accent's and the grey's */
+const RGBColor indeterminateBlue[] = {
+    { 0x0000, 0x0000, 0x8888 }, { 0x3333, 0x3333, 0x9999 }, { 0x6666, 0x6666, 0xCCCC }, { 0x9999, 0x9999, 0xFFFF },
+    { 0xCCCC, 0xCCCC, 0xFFFF }, { 0x9999, 0x9999, 0xFFFF }, { 0x6666, 0x6666, 0xCCCC }, { 0x3333, 0x3333, 0x9999 },
+    { 0x0000, 0x0000, 0x8888 }, { 0x0000, 0x0000, 0x5555 },
+};
+const uint16_t indeterminateGrey[] = { 0x5555, 0x7777, 0xAAAA, 0xBBBB, 0xFFFF, 0xDDDD, 0xBBBB, 0x9999, 0x7777, 0x5555 };
+
+uint32_t argbRGB(const RGBColor &c)
+{
+    return 0xFF000000u | (c.red >> 8) << 16 | (c.green >> 8) << 8 | (c.blue >> 8);
+}
+
+/* Where the stripes are: pixel (x, y) of the inside (from its top left)
+   is in a blue one when (x - y - 8 - 4 phase) mod 16 < 8 */
+int indeterminateOffset(int phase)
+{
+    return 8 + 4 * phase;
+}
+
+/* The indeterminate bar at the display scale: the frame's lines, the grey
+   and blue stripes as parallelograms shaded row by row (a vertical
+   gradient through the rows' colours) */
+hidpi::Shapes indeterminateBarShapes(const Rect &bounds, int phase, bool active)
+{
+    float L = bounds.left, T = bounds.top, R = bounds.right - 2, B = bounds.bottom - 2; /* inclusive */
+    float x0 = L + 2, y0 = T + 2, x1 = R, y1 = B; /* the inside: [x0, x1) x [y0, y1) */
+    hidpi::Shapes s;
+    auto shaded = [&](std::vector<float> pts, bool blue) {
+        hidpi::Shape sh{ hidpi::Shape::Polygon, std::move(pts), 0, 0xFF000000 };
+        sh.gx = x0, sh.gy = y0, sh.gx2 = x0, sh.gy2 = y1;
+        int n = (int)std::size(indeterminateGrey);
+        for(int i = 0; i < n; i++)
+        {
+            if(!active)
+                sh.colors.push_back(blue ? argbRGB({ 0x9999, 0x9999, 0xFFFF }) : argbGray(0xDDDD));
+            else
+                sh.colors.push_back(blue ? argbRGB(indeterminateBlue[i]) : argbGray(indeterminateGrey[i]));
+            sh.pos.push_back((i + 0.5f) / n);
+        }
+        s.push_back(sh);
+    };
+    shaded({ x0, y0, x1, y0, x1, y1, x0, y1 }, false);
+    /* the blue stripes: x - y = off (mod 16) to off + 8, from the top row's */
+    int off = indeterminateOffset(phase) % 16, h = (int)(y1 - y0);
+    for(int a = off - 16 - h; a < x1 - x0 + 16; a += 16)
+        shaded({ x0 + a, y0, x0 + a + 8, y0, x0 + a + 8 + h, y1, x0 + a + h, y1 }, true);
+    if(active)
+    {
+        rectShape(s, L, T, R + 1, T + 1, 0xAAAA);
+        rectShape(s, L, T, L + 1, B + 1, 0xAAAA);
+    }
+    uint16_t frame = active ? kBlack : 0x5555;
+    rectShape(s, L + 1, T + 1, R + 1, T + 2, frame);
+    rectShape(s, L + 1, B, R + 1, B + 1, frame);
+    rectShape(s, L + 1, T + 1, L + 2, B + 1, frame);
+    rectShape(s, R, T + 1, R + 1, B + 1, frame);
+    return s;
+}
+
+/* A medium indeterminate bar as 8.6 draws it (appr draw32.indeterminate.*):
+   the determinate bar's frame round diagonal stripes 8 wide, blue and
+   grey, each row its own shade (lightest across the middle), moving 4
+   pixels left a phase; inactive #ddd and #99f in a #555 frame. */
+void indeterminateBar(const Rect &bounds, int phase, bool active)
+{
+    Rect box = { bounds.top, bounds.left, (INTEGER)(bounds.bottom - 1), (INTEGER)(bounds.right - 1) };
+    hidpi::chrome_draw(box, hidpi::active() ? indeterminateBarShapes(bounds, phase, active) : hidpi::Shapes{},
+                       [&] { indeterminateBarPixels(bounds, phase, active); });
+}
+
+void indeterminateBarPixels(const Rect &bounds, int phase, bool active)
+{
+    int L = bounds.left, T = bounds.top, R = bounds.right - 2, B = bounds.bottom - 2; /* inclusive */
+    if(active)
+    {
+        lineGray(L, T, R, T, 0xAAAA);
+        lineGray(L, T, L, B, 0xAAAA);
+    }
+    frameGray(Rect{ (INTEGER)(T + 1), (INTEGER)(L + 1), (INTEGER)(B + 1), (INTEGER)(R + 1) }, active ? kBlack : 0x5555);
+    int off = indeterminateOffset(phase);
+    for(int y = T + 2; y < B; y++)
+    {
+        int r = y - (T + 2), n = (int)std::size(indeterminateGrey);
+        RGBColor blue = active ? indeterminateBlue[std::min(r, n - 1)] : RGBColor{ 0x9999, 0x9999, 0xFFFF };
+        uint16_t g = active ? indeterminateGrey[std::min(r, n - 1)] : 0xDDDD;
+        for(int x = L + 2; x < R; x++)
+        {
+            int m = (((x - (L + 2)) - r - off) % 16 + 16) % 16;
+            /* a stripe that would start in the last column isn't drawn
+               (8.6: appr draw32.indeterminate.medium.0, row 7) */
+            if(m < 8 && !(m == 0 && x == R - 1))
+                lineRGB(x, y, x, y, blue);
+            else
+                lineGray(x, y, x, y, g);
+        }
+    }
+}
+
 /* A determinate horizontal progress bar in BOUNDS, as 8.6 draws CDEF 80
    (tests/guest/difftest appr controls.80.*): the bar a pixel short of
    the bounds' right and bottom, a #aaa line over and left of a black
@@ -1325,6 +1426,15 @@ OSStatus Executor::C_DrawThemeTrack(const ThemeTrackDrawInfo *drawInfo, RgnHandl
                 progressBar(g.bounds, drawInfo->min, drawInfo->max, drawInfo->value, active);
                 break;
             }
+            /* 8.6 draws the medium indeterminate bar; the large one not at
+               all (appr draw32.indeterminate.large.*) */
+            if(drawInfo->kind == kThemeMediumIndeterminateBar && g.horizontal)
+            {
+                indeterminateBar(g.bounds, drawInfo->trackInfo.progress.phase, active);
+                break;
+            }
+            if(drawInfo->kind == kThemeLargeIndeterminateBar)
+                break;
             Rect r = g.bounds;
             frameGray(r, active ? kBlack : kShadow);
             InsetRect(&r, 1, 1);
