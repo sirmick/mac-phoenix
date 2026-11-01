@@ -1,20 +1,27 @@
 #!/usr/bin/env python3
-"""scoreboard.py run|table: the target applications on Executor's 7.6.1 and
+"""scoreboard.py run|tab|table: the target applications on Executor's 7.6.1 and
 8.6 against the ROM machines (docs/executor/SCOREBOARD.md).
 
   run [--only COLUMN/SET ...]   grid.py for every column x application disk,
                                 into OUT/<column>/<set>/ (skips finished ones
                                 unless --force)
-  table                         OUT's grids + scoreboard_notes.json ->
-                                docs/executor/SCOREBOARD.md
+  tab [--only COLUMN/DISK ...]  the site's cells (web/tests/tab_site.mjs, ctest
+                                executor.web.site.*, in --build, the wasm build)
+                                for the tab columns, into OUT/<column>/<disk>.jsonl
+                                and screenshots in OUT/<column>/<disk>/
+  table                         OUT's grids and tab runs + scoreboard_notes.json
+                                -> docs/executor/SCOREBOARD.md
 
 Columns: e761 (Executor, Apple's 7.6.1 System, 68k code only), e761ppc (the
 same with --executor-ppc, fat applications), q761 (Quadra 650 ROM, 7.6.1),
-e86 (Executor, 8.6, --executor-ppc), g86 (G3 ROM, 8.6). Sets: the
-application disks, with the target applications (all programs on the games
-disks). Each grid run uses --jobs 2.
+e86 (Executor, 8.6, --executor-ppc), g86 (G3 ROM, 8.6). Tab columns: w761
+and w86, Executor in the browser tab (WebAssembly) on the site's library
+disks (tools/web/make_library.py), each application's row found by its
+source disk and path. Sets: the application disks, with the target
+applications (all programs on the games disks). Each grid run uses --jobs 2.
 
   MACPHOENIX_EMULATOR=$PWD/build/mac-phoenix.score tools/executor/scoreboard.py run
+  tools/executor/scoreboard.py tab --build build-wasm
   tools/executor/scoreboard.py table
 """
 import argparse
@@ -36,6 +43,11 @@ COLUMNS = {
     "q761": ("7.6.1", ["--rom", "quadra", "--code", "68k,fat"]),
     "e86": ("8.6", []),
     "g86": ("8.6", ["--rom", "g3"]),
+}
+# The tab's columns: the system and the site's library disks it is tried on.
+TAB_COLUMNS = {
+    "w761": ("7.6.1", ["productivity", "development", "games-68k"]),
+    "w86": ("8.6", ["productivity", "development", "games-ppc"]),
 }
 # not programs: DOCMaker documents, registration, installers, patchers, help
 NOT_PROGRAMS = ["Dk@P", "Areg", "ercR", "kajr", "ZAPS", "EDOC", "eSRD", "MSH1", "MSH2",
@@ -96,6 +108,56 @@ def cmd_run(opts):
             cmd += ["--depth", "8"]   # as on Executor: many games run only in 256 colours
         print(f"== {col}/{st}", flush=True)
         subprocess.run(cmd)
+
+
+def cmd_tab(opts):
+    for col, (system, disks) in TAB_COLUMNS.items():
+        for disk in disks:
+            if opts.only and f"{col}/{disk}" not in opts.only and col not in opts.only \
+                    and disk not in opts.only:
+                continue
+            results = os.path.join(OUT, col, disk + ".jsonl")
+            if os.path.exists(results) and not opts.force:
+                continue
+            os.makedirs(os.path.join(OUT, col, disk), exist_ok=True)
+            partial = results + ".part"
+            if os.path.exists(partial):
+                os.remove(partial)
+            env = dict(os.environ, SITE_RESULTS=partial, SITE_SHOTS=os.path.join(OUT, col, disk))
+            name = re.escape(f"executor.web.site.{system}.{disk}")
+            print(f"== {col}/{disk}", flush=True)
+            subprocess.run(["ctest", "--test-dir", opts.build, "-R", f"^{name}$",
+                            "--output-on-failure"], env=env)
+            if os.path.exists(partial):
+                os.replace(partial, results)
+
+
+def load_tab(col):
+    """(source disk, path on it) -> the tab run's record, with its
+    screenshot ("shot", relative to OUT) when there is one."""
+    system, disks = TAB_COLUMNS[col]
+    found = {}
+    for disk in disks:
+        try:
+            with open(os.path.join(OUT, col, disk + ".jsonl")) as f:
+                lines = f.read().splitlines()
+        except OSError:
+            continue
+        for line in lines:
+            r = json.loads(line)
+            if not r.get("source"):
+                continue
+            png = os.path.join(col, disk, "%s-%s.png" % (system, re.sub(r"[^\w.-]+", "_", r["app"])))
+            r["shot"] = png if os.path.exists(os.path.join(OUT, png)) else ""
+            found[(r["source"], r["source_app"])] = r
+    return found
+
+
+def tab_verdict(r):
+    """(runs|fails, why) of one tab run; nothing for an application not tried."""
+    if r is None:
+        return "", ""
+    return ("runs", "") if r.get("ok") else ("fails", r.get("why") or "fails")
 
 
 def load(col, st):
@@ -185,16 +247,19 @@ def cmd_table(opts):
             lines += [f"## {system}", "", "Pending.", ""]
             continue
         cols = [c for c, (s, _) in COLUMNS.items() if s == system]
-        ecols = [c for c in cols if c.startswith("e")]
         rcol = [c for c in cols if not c.startswith("e")][0]
+        tcols = [c for c, (s, _) in TAB_COLUMNS.items() if s == system]
+        cols = cols[:cols.index(rcol)] + tcols + [rcol]   # the reference last
+        ecols = [c for c in cols if c != rcol]
+        tabs = {c: load_tab(c) for c in tcols}
         lines += [f"## {system}", "",
                   "| Disk | App | Code | " + " | ".join(cols) + " | First blocker | Screenshot | Owner |",
                   "|---|---|---|" + "---|" * len(cols) + "---|---|---|"]
         for st in SYSTEM_SETS[system]:
             disk, paths, owner = SETS[st]
-            grids = {c: load(c, st) for c in cols}
+            grids = {c: load(c, st) for c in cols if c not in tcols}
             seen = []
-            for c in cols:
+            for c in grids:
                 for p in (grids[c] or {}):
                     if p not in seen:
                         seen.append(p)
@@ -205,13 +270,19 @@ def cmd_table(opts):
                 code = any_r.get("code", "")
                 cells, blocker, shot, worst = [], "", "", 0
                 for c in cols:
-                    r = (grids[c] or {}).get(p)
-                    if r is None and c == "q761" and code == "ppc":
-                        v, b = "n/a", ""
-                    elif r is None and c == "e761ppc" and code != "fat":
-                        v, b = "", ""
+                    if c in tcols:
+                        r = tabs[c].get((disk, p.split(":", 1)[1]))
+                        v, b = tab_verdict(r)
+                        shot_c = r["shot"] if r else ""
                     else:
-                        v, b = verdict(r, c, st)
+                        r = (grids[c] or {}).get(p)
+                        shot_c = os.path.join(c, st, "%03d.png" % r["n"]) if r else ""
+                        if r is None and c == "q761" and code == "ppc":
+                            v, b = "n/a", ""
+                        elif r is None and c == "e761ppc" and code != "fat":
+                            v, b = "", ""
+                        else:
+                            v, b = verdict(r, c, st)
                     note = notes.get(f"{c}|{p}")
                     if note:
                         v = note.get("status", v)
@@ -221,7 +292,7 @@ def cmd_table(opts):
                         # seen: what the log says stays a note (crashes stay fails)
                         v = "runs" if v in ("partial", "runs?") else v
                     cells.append(v)
-                    if c not in ecols:
+                    if c not in ecols or not v:
                         continue
                     total.setdefault((system, c), {}).setdefault(v, 0)
                     total[(system, c)][v] += 1
@@ -230,10 +301,10 @@ def cmd_table(opts):
                     if rank > worst:
                         worst = rank
                         blocker = f"{c}: {b}" if rank > 1 else f"({c}: {b})"
-                        if r:
-                            shot = os.path.join(c, st, "%03d.png" % r["n"])
-                    if r and not shot:
-                        shot = os.path.join(c, st, "%03d.png" % r["n"])
+                        if shot_c:
+                            shot = shot_c
+                    if shot_c and not shot:
+                        shot = shot_c
                 ref = cells[cols.index(rcol)]
                 fault = blocker.split(": ", 1)[-1]
                 if system == "7.6.1" and worst > 1:
@@ -268,6 +339,12 @@ def cmd_table(opts):
             "8.6 (`--executor-ppc`); **g86** G3 ROM + 8.6. Every session gets a fresh, writable",
             "copy of the application disk. BridgeAgent launches the application from the",
             "Finder; 20 s later the grid takes a screenshot and reads the log.",
+            "**w761**, **w86**: Executor in the browser tab (WebAssembly) on the site's",
+            "library disks, `web/tests/tab_site.mjs` (`scoreboard.py tab`, the",
+            "`executor.web.site.*` cells): **runs** when the application came to the front,",
+            "drew a window, drew its second menu and was still in front with no error alert",
+            "after that; blank where the site doesn't offer it. The site's cells check",
+            "against these columns (the native one where a row has none).",
             "",
             "**runs**: the screen matches the reference's (checked by eye, sheet by sheet).",
             "**partial**: up, but drawn wrong or a wrong behaviour seen (or, unchecked, an",
@@ -347,13 +424,17 @@ def main():
     r.add_argument("--only", nargs="*")
     r.add_argument("--force", action="store_true")
     r.add_argument("--wait", type=int, default=20)
+    w = sub.add_parser("tab")
+    w.add_argument("--only", nargs="*")
+    w.add_argument("--force", action="store_true")
+    w.add_argument("--build", default=os.path.join(REPO, "build-wasm"))
     t = sub.add_parser("table")
     t.add_argument("--doc", default=DOC)
     t.add_argument("--systems", nargs="*", default=["7.6.1", "8.6"])
     sh = sub.add_parser("sheets")
     sh.add_argument("--only", nargs="*")
     opts = ap.parse_args()
-    {"run": cmd_run, "table": cmd_table, "sheets": cmd_sheets}[opts.cmd](opts)
+    {"run": cmd_run, "tab": cmd_tab, "table": cmd_table, "sheets": cmd_sheets}[opts.cmd](opts)
 
 
 if __name__ == "__main__":

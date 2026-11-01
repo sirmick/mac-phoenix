@@ -19,13 +19,15 @@
 // DIR the wasm build's page, LIBRARY tools/web/make_library.py's output,
 // SYSTEM 7.6.1 or 8.6 (8.6: PowerPC ticked), DISK a library disk there.
 // The applications are the disk record's "launch" entries for SYSTEM;
-// docs/executor/SCOREBOARD.md says which run yet (the e761 or e86 column:
-// "runs"; "partial", either; else expected to fail), so a cell turns green
-// as fixes land and the scoreboard is brought up to date: an expected
-// failure prints XFAIL, one that works XPASS (the scoreboard is behind);
-// only an application the scoreboard says runs fails the cell.
+// docs/executor/SCOREBOARD.md says which run yet in the tab (the w761 or
+// w86 column, from these runs: tools/executor/scoreboard.py tab; where it
+// has no verdict, the native e761 or e86 column's): "runs"; "partial",
+// either; else expected to fail. So a cell turns green as fixes land and
+// the scoreboard is brought up to date: an expected failure prints XFAIL,
+// one that works XPASS (the scoreboard is behind); only an application the
+// scoreboard says runs fails the cell.
 // SITE_APPS=Name,Name: only those. SITE_RESULTS=FILE: appends one JSON
-// line an application. SITE_LOG=1: the Worker's console;
+// line an application (what scoreboard.py's w columns are made from). SITE_LOG=1: the Worker's console;
 // SITE_QUERY=a=b&c=d: more of the page's query (logtraps=LIST&nesting=N). The canvas as
 // it is after each application's checks (and the Finder's, first) goes
 // to SITE_SHOTS (default ~/storage/tmp/site/shots) as SYSTEM-NAME.png;
@@ -40,7 +42,8 @@ import { startServer, signIn, OWNER_PASSWORD } from './server.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const [dir, library, system, diskName] = process.argv.slice(2);
-const COLUMN = { '7.6.1': 'e761', '8.6': 'e86' }[system];
+const COLUMN = { '7.6.1': 'w761', '8.6': 'w86' }[system];
+const NATIVE = { '7.6.1': 'e761', '8.6': 'e86' }[system];
 const records = {};
 for (const f of fs.existsSync(library || '') ? fs.readdirSync(library) : [])
     if (f.endsWith('.img.json'))
@@ -61,7 +64,7 @@ const request = (page, op, arg, ms = 15000) => Promise.race([
     ask(page, op, arg), new Promise((r) => setTimeout(() => r(null), ms))]);
 
 // SCOREBOARD.md: SYSTEM's section, the row of the application's source
-// disk and path, the column's verdict.
+// disk and path, the tab column's verdict (the native column's if none).
 function verdict(app) {
     const text = fs.readFileSync(path.join(ROOT, 'docs/executor/SCOREBOARD.md'), 'utf8');
     const section = text.split(/^## /m).find((s) => s.startsWith(`${system}\n`));
@@ -70,7 +73,10 @@ function verdict(app) {
     const rows = section.split('\n').filter((l) => l.startsWith('|')).map((l) => l.split('|').slice(1, -1).map((c) => c.trim()));
     const head = rows.find((r) => r[0] === 'Disk');
     const row = rows.find((r) => r[0] === app.source.replace(/\.img$/, '') && r[1] === app.source_app);
-    return head && row ? row[head.indexOf(COLUMN)] : null;
+    if (!head || !row)
+        return null;
+    const tab = head.includes(COLUMN) ? row[head.indexOf(COLUMN)] : '';
+    return tab && tab !== '—' ? tab : row[head.indexOf(NATIVE)];
 }
 
 // The screen, coarsely: grey levels of every 4th pixel of every 4th row
@@ -246,7 +252,8 @@ try {
             unexpected += mark === 'FAIL';
             const line = `${mark} ${system} ${app.name}${r.why ? `: ${r.why}` : ''} (scoreboard: ${v || 'no row'})`;
             console.log(line);
-            table.push({ system, disk: diskName, app: app.name, result: mark, scoreboard: v, why: r.why || '',
+            table.push({ system, disk: diskName, app: app.name, source: app.source, source_app: app.source_app,
+                         ok, result: mark, scoreboard: v, why: r.why || '',
                          menus: r.menus || [], front: r.front || null, seconds: Math.round((Date.now() - t0) / 1000) });
             if (!crashed)
                 await shot(app.name);
