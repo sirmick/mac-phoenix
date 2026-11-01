@@ -936,6 +936,20 @@ static void newwidthtable(FMInput *fmip)
     LM(TheZone) = LM(SysZone);
     LM(WidthTabHandle) = (WidthTableHandle)NewHandle((Size)sizeof(WidthTable));
     LM(TheZone) = savezone;
+    /* MacPhoenix: no memory for one more: the oldest listed table, taken
+       out of the list (re-entered at the front below) */
+    if(!LM(WidthTabHandle))
+    {
+        GUEST<WHandle> *whp = *WIDTHLISTHAND;
+        int n = GetHandleSize((Handle)LM(WidthListHand)) / sizeof(GUEST<Handle>);
+        for(int i = n - 1; i >= 0 && !LM(WidthTabHandle); i--)
+            if(whp[i] && whp[i].raw() != (uint32_t)-1 && *whp[i])
+            {
+                LM(WidthTabHandle) = guest_cast<WidthTableHandle>(whp[i]);
+                Munger((Handle)LM(WidthListHand), i * sizeof(GUEST<Handle>), nullptr,
+                       sizeof(GUEST<Handle>), (Ptr) "", 0);
+            }
+    }
     Munger((Handle)LM(WidthListHand), (LONGINT)0, (Ptr)0, 0,
            (Ptr)&LM(WidthTabHandle), sizeof(LM(WidthTabHandle)));
 
@@ -1157,15 +1171,22 @@ FMOutPtr Executor::C_FMSwapFont(FMInput *fmip) /* IMI-223 */
         LM(ROMlib_fmo).ulThick = 0;
         LM(ROMlib_fmo).shadow = 0;
         LM(ROMlib_fmo).extra = 0;
+        /* MacPhoenix: no strike of any family in memory (all of them
+           missing, or no room to load one): nothing to scale from, no
+           metrics, no widths; text measures 0 and draws nothing
+           (ROMlib_fmo_has_font) rather than reading a nil font */
+        LM(ROMlib_fmo).fontHandle = WIDTHPTR->tabFont;
+        if(LM(ROMlib_fmo).fontHandle)
+            LoadResource(LM(ROMlib_fmo).fontHandle);
+        bool have_font = ROMlib_fmo_has_font(&LM(ROMlib_fmo));
+        INTEGER fsize = WIDTHPTR->fSize > 0 ? (INTEGER)WIDTHPTR->fSize : (INTEGER)fmip->size;
         LM(ROMlib_fmo).numer.h = 
-            (LONGINT)fmip->numer.h * 256 * fmip->size / fmip->denom.h / WIDTHPTR->fSize;
+            (LONGINT)fmip->numer.h * 256 * fmip->size / fmip->denom.h / fsize;
         LM(ROMlib_fmo).numer.v = 
-            (LONGINT)fmip->numer.v * 256 * fmip->size / fmip->denom.v / WIDTHPTR->fSize;
+            (LONGINT)fmip->numer.v * 256 * fmip->size / fmip->denom.v / fsize;
         LM(ROMlib_fmo).denom.h = 256;
         LM(ROMlib_fmo).denom.v = 256;
-        LM(ROMlib_fmo).fontHandle = WIDTHPTR->tabFont;
-        LoadResource(LM(ROMlib_fmo).fontHandle);
-        fp = (FontRec *)*((LM(ROMlib_fmo).fontHandle));
+        fp = have_font ? (FontRec *)*((LM(ROMlib_fmo).fontHandle)) : nullptr;
         style = fmip->face ^ WIDTHPTR->face;
         if(style & (int)bold)
             mungfmo(ftstr.boldt, &LM(ROMlib_fmo));
@@ -1212,11 +1233,26 @@ FMOutPtr Executor::C_FMSwapFont(FMInput *fmip) /* IMI-223 */
                 }
             }
         }
-        if(needtobuild)
+        if(!have_font)
+        {
+            /* fSize stays 0: built again at the next call, when there
+               may be room. Unscaled, no widths. */
+            memset(WIDTHPTR->tabData, 0, sizeof WIDTHPTR->tabData);
+            WIDTHPTR->hOutput = WIDTHPTR->vOutput = 256;
+            WIDTHPTR->hFactor = WIDTHPTR->vFactor = 256;
+        }
+        else if(needtobuild)
             buildtable(LM(ROMlib_fmo).extra);
         /* the strike's own metrics, as 8.6 answers them: the style is in
            bold/shadow/extra (ROMlib_styled_font_info adds it) */
-        if(const SfntMetrics *m = outline_metrics(WIDTHPTR->tabFont))
+        if(!have_font)
+        {
+            LM(ROMlib_fmo).ascent = 0;
+            LM(ROMlib_fmo).descent = 0;
+            LM(ROMlib_fmo).widMax = 0;
+            LM(ROMlib_fmo).leading = 0;
+        }
+        else if(const SfntMetrics *m = outline_metrics(WIDTHPTR->tabFont))
         {
             /* the outline's, not the strike's (which holds every glyph) */
             LM(ROMlib_fmo).ascent = m->ascent;
@@ -1235,7 +1271,8 @@ FMOutPtr Executor::C_FMSwapFont(FMInput *fmip) /* IMI-223 */
     }
     else
     {
-        LoadResource(LM(ROMlib_fmo).fontHandle);
+        if(LM(ROMlib_fmo).fontHandle)
+            LoadResource(LM(ROMlib_fmo).fontHandle);
         LM(WidthPtr) = *LM(WidthTabHandle);
     }
     fmip->size = savesize;
@@ -1243,6 +1280,13 @@ FMOutPtr Executor::C_FMSwapFont(FMInput *fmip) /* IMI-223 */
     HUnlock((Handle)LM(WidthTabHandle));
     LM(LastFOND) = guest_cast<FamRecHandle>(WIDTHPTR->fHand);
     return &LM(ROMlib_fmo);
+}
+
+/* MacPhoenix: FMSwapFont's answer has a strike in memory to draw with */
+bool Executor::ROMlib_fmo_has_font(const FMOutput *fmop)
+{
+    Handle h = fmop->fontHandle;
+    return h && *h;
 }
 
 /* GetFontInfo's metrics for FMSwapFont's answer: shadow adds a line

@@ -4,6 +4,7 @@
 
 #ifdef EXECUTOR
 #include <CQuickDraw.h>
+#include <FontMgr.h>
 #include <MemoryMgr.h>
 #include <base/common.h>
 #else
@@ -777,4 +778,29 @@ TEST(QuickDraw, GWorldTooBig)
     }
 }
 
+/* No family's strike to be found (the port's, the application font and
+   the system font all missing; also what no room to load one comes to):
+   text measures 0 and has no metrics, rather than FMSwapFont dividing by
+   a size of 0 and reading a nil font (the 8.6 Finder in the tab). */
+TEST(QuickDraw, TextWithNoFont)
+{
+    OffscreenPort port(32, 16);
+    INTEGER sysfam = LM(SysFontFam), apfont = LM(ApFontID);
+    LM(SysFontFam) = 32001;
+    LM(ApFontID) = 32002;
+    TextFont(32003);
+    TextSize(12);
+    EXPECT_EQ(0, StringWidth((ConstStringPtr) "\003abc"));
+    FontInfo fi;
+    GetFontInfo(&fi);
+    EXPECT_EQ(0, fi.ascent);
+    EXPECT_EQ(0, fi.descent);
+    MoveTo(2, 12);
+    DrawString((ConstStringPtr) "\003abc");
+    EXPECT_EQ(2, port.port.pnLoc.h);
+    LM(SysFontFam) = sysfam;
+    LM(ApFontID) = apfont;
+    TextFont(0);
+    EXPECT_LT(0, StringWidth((ConstStringPtr) "\003abc"));
+}
 #endif

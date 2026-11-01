@@ -47,6 +47,9 @@ extern Fixed font_width_expand(Fixed width, Fixed extra,
 
 extern void ROMlib_shutdown_font_manager(void);
 extern void ROMlib_styled_font_info(const FMOutput *fmop, FontInfo *fip);
+/* FMSwapFont's answer has a strike in memory (none when no family's could
+   be found or loaded: text then measures 0 and draws nothing) */
+extern bool ROMlib_fmo_has_font(const FMOutput *fmop);
 /* a strike made from an outline font (sfnt.cpp) */
 extern bool ROMlib_outline_strike(Handle strike);
 /* the outline ('sfnt') of FAMILY in any open file whose style has most of
