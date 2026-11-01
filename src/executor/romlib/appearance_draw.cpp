@@ -280,7 +280,56 @@ void sliderChannel(const TrackGeometry &g, bool active)
 /* The pointed thumb: black outline (#777 inactive), shaded in the accent
    ramp lit from the leading top corner, three grip ridges; pressed a step
    darker, inactive #ddd and no grip (appr controls.48). */
+void sliderThumbPixels(const TrackGeometry &g, bool active, bool pressed);
+
+/* The pointed thumb at the display scale: its outline filled, the body
+   inside it, the lit and shaded edges, the grip (the 1x shape's corners) */
+hidpi::Shapes sliderThumbShapes(const TrackGeometry &g, bool active, bool pressed)
+{
+    float a0 = g.lo(g.thumb), c0 = g.horizontal ? g.thumb.top : g.thumb.left;
+    auto pts = [&](std::initializer_list<float> ac) {
+        std::vector<float> v;
+        for(auto it = ac.begin(); it != ac.end(); it += 2)
+        {
+            float a = a0 + it[0], c = c0 + it[1];
+            v.push_back(g.horizontal ? a : c);
+            v.push_back(g.horizontal ? c : a);
+        }
+        return v;
+    };
+    int d = pressed ? 1 : 0;
+    auto ramp = [&](int idx) {
+        const RGBColor &c = accentRamp[std::max(0, idx - d)];
+        return active ? 0xFF000000u | (c.red >> 8) << 16 | (c.green >> 8) << 8 | (c.blue >> 8) : argbGray(kFace);
+    };
+    hidpi::Shapes s;
+    s.push_back({ hidpi::Shape::Polygon, pts({ 0, 1, 1, 0, 14, 0, 15, 1, 15, 10, 9, 16, 6, 16, 0, 10 }), 0,
+                  argbGray(active ? kBlack : 0x7777) });
+    s.push_back({ hidpi::Shape::Polygon, pts({ 1, 1, 14, 1, 14, 10.4f, 8.6f, 15, 6.4f, 15, 1, 10.4f }), 0, ramp(3) });
+    s.push_back({ hidpi::Shape::Polyline, pts({ 13.5f, 2, 13.5f, 10.2f, 8.4f, 14.6f }), 1, ramp(2) });
+    s.push_back({ hidpi::Shape::Polyline, pts({ 1.5f, 10.2f, 6.6f, 14.6f }), 1, ramp(2) });
+    s.push_back({ hidpi::Shape::Polyline, pts({ 1.5f, 9.5f, 1.5f, 1.5f, 12.5f, 1.5f }), 1, ramp(4) });
+    if(active)
+        for(int k = 4; k <= 8; k += 2)
+        {
+            s.push_back({ hidpi::Shape::Polyline, pts({ k + 0.5f, 3.5f, k + 0.5f, 8.5f }), 1, ramp(4) });
+            s.push_back({ hidpi::Shape::Polyline, pts({ k + 1.5f, 4.5f, k + 1.5f, 9.5f }), 1, ramp(1) });
+        }
+    return s;
+}
+
 void sliderThumb(const TrackGeometry &g, bool active, bool pressed)
+{
+    Rect box = g.thumb;
+    if(g.horizontal)
+        box.bottom = box.top + 16;
+    else
+        box.right = box.left + 16;
+    hidpi::chrome_draw(box, hidpi::active() ? sliderThumbShapes(g, active, pressed) : hidpi::Shapes{},
+                       [&] { sliderThumbPixels(g, active, pressed); });
+}
+
+void sliderThumbPixels(const TrackGeometry &g, bool active, bool pressed)
 {
     SliderAxes ax{ g.horizontal, g.lo(g.thumb), g.horizontal ? g.thumb.top : g.thumb.left };
     int d = pressed ? 1 : 0;
