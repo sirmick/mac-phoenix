@@ -13,6 +13,11 @@
 //                    server takes Range requests and sends them uncompressed)
 //   ?ppc             run fat applications' PowerPC code (the PowerPC box;
 //                    PowerPC-only applications always run theirs)
+//   ?logtraps=LIST   Executor logs Toolbox calls (as --executor-logtraps):
+//                    LIST the names (wildcards, -NAME leaves out; 1: all);
+//                    &nesting=N calls nested N deep; ?debug=OPTS Executor's
+//                    --executor-debug options. Everything printed goes to the
+//                    server too (log.js; tools/web/server keeps it per session)
 // library.json beside the page (optional) offers more disks: [{ title,
 // url, note }]; the ones picked are remembered (localStorage) and loaded
 // like ?disk=.
@@ -35,6 +40,7 @@ const box = document.getElementById('screen-box');
 document.getElementById('insecure').hidden = window.isSecureContext;
 const status = document.getElementById('status');
 const params = new URLSearchParams(location.search);
+Log.start(Log.newId(), 'page');
 const [width, height] = (params.get('size') || '640x480').split('x').map(Number);
 // Executor scales by whole numbers (fractional scales: HiDPI.md phase 6).
 const scale = Math.max(1, Math.round(Number(params.get('scale')) || window.devicePixelRatio || 1));
@@ -499,6 +505,7 @@ async function start() {
 
     // The Worker loads the module while the disks still download.
     worker = new Worker('worker.js');
+    worker.addEventListener('error', (e) => console.error(`worker: ${e.message} at ${e.filename}:${e.lineno}`));
     await disksFetched;
     await accountKnown;
     const files = await storedFiles();
@@ -520,7 +527,9 @@ async function start() {
     worker.postMessage({ type: 'start', canvas: offscreen, width, height, scale, files,
                          system: systemSelect.value, ppc: ppcBox.checked,
                          volumeKey: volumeKey(files), sync: !!account, relay: !!account,
-                         ids: imageIds, legacyKeys },
+                         ids: imageIds, legacyKeys, log: Log.session,
+                         logtraps: params.get('logtraps'), nesting: params.get('nesting'),
+                         debug: params.get('debug') },
                        [offscreen]);
     worker.onmessage = (e) => {
         if (mine !== generation)

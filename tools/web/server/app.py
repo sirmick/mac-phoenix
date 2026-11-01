@@ -24,6 +24,10 @@
         PUT    objects/SHA, GET objects/SHA
         GET    (nothing after sync/)  what is kept: { overlays, volumes }
     /relay            WebSocket: the tab's sockets (relay.py, [relay])
+    /api/log          POST ?session=ID, text: lines the tab printed (log.js),
+                      appended to DATA/logs/DAY/ID.log (signed out too: 64 KB
+                      a request; a file stops at 64 MB; kept 14 days)
+    /api/logs         GET (owner) the logs; /api/logs/DAY/ID.log one of them
 
 Everything but /login and its API needs a session (the cookie), unless
 the configuration makes the page public; sync always does. Writes and
@@ -43,6 +47,7 @@ import json
 import os
 import posixpath
 import re
+import shutil
 import sys
 import threading
 import time
@@ -81,6 +86,7 @@ class App:
         self.failures = {}                  # ("address" | "name", value) -> times
         self.failures_lock = threading.Lock()
         self.relay = relay.Relay(cfg["relay"])
+        self.log_lock = threading.Lock()
 
     def _recent(self, key, now):
         return [t for t in self.failures.get(key, []) if t > now - LOGIN_WINDOW]
@@ -454,6 +460,72 @@ def object_get(h, sha):
     if not os.path.isfile(path):
         raise HttpError(404, "no such object")
     h.cache = "private, max-age=31536000, immutable"
+    static.send_file(h, path, head=h.command == "HEAD")
+
+
+# ---- the tab's logs ----
+# The page and its Worker send what they print (Executor's stderr included)
+# and their crashes, a batch a second: a tab whose renderer dies says
+# nothing at the end, so what reached the server is what there is.
+LOG_SESSION = re.compile(r"[A-Za-z0-9-]{8,40}")
+LOG_FILE_MAX = 64 << 20                 # a session's file stops growing here
+LOG_KEEP_DAYS = 14
+
+
+def log_dir(h):
+    return os.path.join(h.app.cfg["server"]["data"], "logs")
+
+
+def log_prune(root):
+    cutoff = time.strftime("%Y-%m-%d", time.gmtime(time.time() - LOG_KEEP_DAYS * 86400))
+    for day in os.listdir(root):
+        if day < cutoff:
+            shutil.rmtree(os.path.join(root, day), ignore_errors=True)
+
+
+@route("POST", "/api/log", auth=False)
+def log_post(h):
+    session = h.query.get("session", "")
+    if not LOG_SESSION.fullmatch(session):
+        raise HttpError(400, "session: 8-40 letters, digits, -")
+    text = h.body().decode("utf-8", "replace")
+    root = log_dir(h)
+    day = time.strftime("%Y-%m-%d", time.gmtime())
+    os.makedirs(os.path.join(root, day), exist_ok=True)
+    path = os.path.join(root, day, session + ".log")
+    with h.app.log_lock:
+        new = not os.path.exists(path)
+        if new:
+            log_prune(root)
+        elif os.path.getsize(path) > LOG_FILE_MAX:
+            return h.send_json(200, {"full": True})
+        with open(path, "a", encoding="utf-8") as f:
+            if new:
+                f.write(f"# {time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime())}Z {h.address()} "
+                        f"{h.user['name'] if h.user else '(signed out)'} "
+                        f"{h.headers.get('User-Agent', '')}\n")
+            f.write(text if text.endswith("\n") else text + "\n")
+    h.send_json(200, {})
+
+
+@route("GET", "/api/logs")
+def logs_list(h):
+    owner_only(h)
+    root, out = log_dir(h), []
+    for day in sorted(os.listdir(root) if os.path.isdir(root) else [], reverse=True):
+        for name in sorted(os.listdir(os.path.join(root, day))):
+            st = os.stat(os.path.join(root, day, name))
+            out.append({"log": f"{day}/{name}", "size": st.st_size, "mtime": int(st.st_mtime)})
+    h.send_json(200, out)
+
+
+@route("GET", r"/api/logs/(\d{4}-\d\d-\d\d)/([A-Za-z0-9-]{8,40}\.log)")
+def logs_get(h, day, name):
+    owner_only(h)
+    path = os.path.join(log_dir(h), day, name)
+    if not os.path.isfile(path):
+        raise HttpError(404, "no such log")
+    h.cache = "no-store"
     static.send_file(h, path, head=h.command == "HEAD")
 
 

@@ -67,11 +67,16 @@ self.Module = {
         postMessage({ type: 'reply', id, result });
     },
     onExit(code) {
+        console.log(`[web] Executor exited (${code})`);
+        Log.flush();
         postMessage({ type: 'exit', code });
+    },
+    onAbort(what) {
+        console.error(`[web] Executor aborted: ${what}`);
     },
 };
 
-importScripts('overlay.js', 'sync.js', 'net.js');
+importScripts('log.js', 'overlay.js', 'sync.js', 'net.js');
 
 // An image's overlay is for exactly this version of it: its content id
 // when the server said it (ids: name -> id), else its name, size and time
@@ -268,6 +273,8 @@ function previousGone() {
 }
 
 async function start(m) {
+    if (m.log)
+        Log.start(m.log, 'worker');
     await previousGone();
     canvas = m.canvas;
     ctx = canvas.getContext('2d');
@@ -281,6 +288,15 @@ async function start(m) {
         args.push('--system', `/uploads/${m.system}`);
     if (m.ppc)
         args.push('--ppc');
+    if (m.logtraps) {
+        args.push('--logtraps');
+        if (m.logtraps !== '1')
+            args.push('--logtraps-filter', m.logtraps);
+        if (m.nesting)
+            args.push('--logtraps-nesting', m.nesting);
+    }
+    if (m.debug)
+        args.push('--debug', m.debug);
     await runtimeReady;
     Sync.enabled = !!m.sync;
     Module.net.enable(!!m.relay);

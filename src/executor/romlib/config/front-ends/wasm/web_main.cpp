@@ -352,6 +352,14 @@ int main(int argc, char **argv)
             system_image = argv[++i];
         else if(a == "--ppc")
             c.prefer_ppc = true;  /* fat applications' PowerPC code too */
+        else if(a == "--logtraps")  /* the page's ?logtraps= (main.js) */
+            c.logtraps = true;
+        else if(a == "--logtraps-filter" && i + 1 < argc)
+            c.logtraps_filter = argv[++i];
+        else if(a == "--logtraps-nesting" && i + 1 < argc)
+            c.logtraps_nesting = atoi(argv[++i]);
+        else if(a == "--debug" && i + 1 < argc)
+            c.debug_options = argv[++i];
         else
             c.app = a;
     }
