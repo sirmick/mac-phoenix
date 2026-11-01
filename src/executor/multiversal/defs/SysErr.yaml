@@ -39,8 +39,9 @@
     name: QDExist
     type: Byte
     address: 0x8F3
+    library: PrivateInterfaceLib
     comment: |
-      SysError SysEqu.a (true);
+      SysError SysEqu.a (true); its accessors are PrivateInterfaceLib's.
 
 # ####
 
