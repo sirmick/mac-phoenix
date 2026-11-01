@@ -469,7 +469,8 @@ static uint32_t mode_switch(UniversalProcPtr theProcPtr, ProcInfoType procinfo,
            call (a Time Manager task during a blocking OTRcv), whose return
            (cpu.lr) the routine would otherwise overwrite (STRAGGLERS 64). */
         PPCProcDescriptor& proc = *(PPCProcDescriptor*) routine->procDescriptor;
-        retval = callPPC(proc.code, proc.rtoc, paramValues, nParameters);
+        retval = callPPC(proc.code, proc.rtoc, paramValues, nParameters,
+                         guest_cast<uint32_t>(routine->procDescriptor.get()));
     }
     else if(toISA == kCFM68kISA)
     {
