@@ -5,7 +5,9 @@
    (--executor-scale 2, docs/executor/HiDPI.md) and the ctest cell
    hidpi_chrome_executor (tests/test_hidpi_chrome.sh), which compares the
    2x surface with the 1x frame inside some of this chrome: keep its boxes
-   in step with the layout here. */
+   in step with the layout here. A press in a window's close or zoom box
+   is tracked, for looking at the boxes pressed; a click elsewhere in a
+   window brings it to the front. */
 #include <Types.h>
 #include <Quickdraw.h>
 #include <Fonts.h>
@@ -130,6 +132,20 @@ int main(void)
                     DrawGallery(doc);
                 EndUpdate((WindowRef)e.message);
                 break;
+            case mouseDown:
+            {
+                /* a window's boxes track the mouse (drawn pressed while
+                   it is down in them) and do nothing */
+                WindowRef w;
+                short part = FindWindow(e.where, &w);
+                if(part == inGoAway)
+                    TrackGoAway(w, e.where);
+                else if(part == inZoomIn || part == inZoomOut)
+                    TrackBox(w, e.where, part);
+                else if(part == inContent || part == inDrag)
+                    SelectWindow(w);
+                break;
+            }
             case kHighLevelEvent:
                 AEProcessAppleEvent(&e);
                 break;
