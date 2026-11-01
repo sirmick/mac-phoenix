@@ -393,31 +393,89 @@ function volumeKey(files) {
     return sys ? `${sys.name}-${sys.size}`.replace(/[^\w.-]/g, '_') : 'own';
 }
 
-// Screenshot: the canvas's own pixels (the display scale) as a PNG, with an
-// optional note, to the server beside this session's log (/api/shot).
-document.getElementById('shot').addEventListener('click', async () => {
-    const p = await window.executor.request('pixels');
-    if (!p || !p.width) {
-        status.textContent = 'No screen to send';
-        return;
-    }
+// Screenshots, to the server beside this session's log (/api/shot): the
+// canvas's own pixels (the display scale) and Executor's 1x frame (when
+// Executor still answers), with a note. The button asks for the note;
+// errors take one by themselves (autoShot), a few a session at most.
+function pngOf(p) {
     const c = document.createElement('canvas');
     c.width = p.width;
     c.height = p.height;
     c.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(p.data), p.width, p.height), 0, 0);
-    const png = await new Promise((resolve) => c.toBlob(resolve, 'image/png'));
+    return new Promise((resolve) => c.toBlob(resolve, 'image/png'));
+}
+
+async function postShot(png, note, tag = '') {
+    try {
+        const res = await fetch(`/api/shot?session=${Log.session}&note=${encodeURIComponent(note)}${tag ? '&tag=' + tag : ''}`, {
+            method: 'POST', body: png, credentials: 'same-origin', headers: { 'Content-Type': 'image/png' } });
+        return res.ok ? (await res.json()).name : `not sent (${res.status})`;
+    } catch {
+        return 'not sent (offline)';
+    }
+}
+
+const within = (promise, ms) => Promise.race([promise, new Promise((r) => setTimeout(() => r(null), ms))]);
+
+async function sendShots(note) {
+    if (!worker)
+        return 'no screen';
+    const scaled = await within(window.executor.request('pixels'), 3000);
+    if (!scaled || !scaled.width)
+        return 'no screen';
+    const name = await postShot(await pngOf(scaled), note);
+    if (scale !== 1) {
+        const base = await within(window.executor.request('screen1x'), 3000);   // Executor gone: none
+        if (base && base.width)
+            await postShot(await pngOf(base), `1x of ${name}`, '1x');
+    }
+    console.log(`[web] screenshot ${name}${note ? ': ' + note : ''}`);
+    return name;
+}
+
+document.getElementById('shot').addEventListener('click', async () => {
     const note = prompt('A note to go with the screenshot (optional):', '');
     if (note === null)
         return;
-    let res = null;
-    try {
-        res = await fetch(`/api/shot?session=${Log.session}&note=${encodeURIComponent(note)}`, {
-            method: 'POST', body: png, credentials: 'same-origin', headers: { 'Content-Type': 'image/png' } });
-    } catch { }
-    const name = res && res.ok ? (await res.json()).name : null;
-    status.textContent = name ? `Screenshot sent (${name})` : `Screenshot not sent (${res ? res.status : 'offline'})`;
-    console.log(`[web] screenshot ${name || 'not sent'}${note ? ': ' + note : ''}`);
+    const name = await sendShots(note);
+    status.textContent = /^\d/.test(name) ? `Screenshot sent (${name})` : `Screenshot ${name}`;
 });
+
+let autoShots = 0, lastAutoShot = 0;
+function autoShot(why) {
+    if (autoShots >= 8 || performance.now() - lastAutoShot < 20000)
+        return;
+    autoShots++;
+    lastAutoShot = performance.now();
+    sendShots(`auto: ${why}`.slice(0, 400));
+}
+
+// Watching from the server: which application is in front (when it
+// changes), and frames stopping while the page is visible.
+let lastApp = null, lastFrames = -1, stalledSince = 0;
+setInterval(async () => {
+    if (!worker || document.hidden)
+        return;
+    const frames = window.executor.frames;
+    if (frames === lastFrames && frames > 0) {
+        if (!stalledSince)
+            stalledSince = performance.now();
+        else if (performance.now() - stalledSince > 15000 && stalledSince > 0) {
+            console.log('[watch] no frames for 15 s');
+            stalledSince = -1;      // once, until frames come again
+        }
+    } else {
+        if (stalledSince === -1)
+            console.log('[watch] frames again');
+        stalledSince = 0;
+    }
+    lastFrames = frames;
+    const app = await within(window.executor.request('app'), 2000);
+    if (app !== null && app !== lastApp) {
+        console.log(`[watch] front: ${app || '(none)'}`);
+        lastApp = app;
+    }
+}, 3000);
 
 document.getElementById('reset').addEventListener('click', async () => {
     if (!confirm("Forget everything saved on Executor's disk for this System?"))
@@ -531,7 +589,10 @@ async function start() {
 
     // The Worker loads the module while the disks still download.
     worker = new Worker('worker.js');
-    worker.addEventListener('error', (e) => console.error(`worker: ${e.message} at ${e.filename}:${e.lineno}`));
+    worker.addEventListener('error', (e) => {
+        console.error(`worker: ${e.message} at ${e.filename}:${e.lineno}`);
+        autoShot(e.message);
+    });
     await disksFetched;
     await accountKnown;
     const files = await storedFiles();
@@ -588,6 +649,8 @@ async function start() {
             worker.postMessage({ type: 'resolve', id: m.id, keep: confirm(conflictText(m)) ? 'mine' : 'account' });
         } else if (m.type === 'restart') {
             start();
+        } else if (m.type === 'error') {
+            autoShot(m.text);
         } else if (m.type === 'exit') {
             status.textContent = `Executor exited (${m.code})`;
         }
@@ -648,11 +711,15 @@ function attachInput(canvas) {
         startAudio();
         canvas.focus();
         canvas.setPointerCapture(e.pointerId);
-        send([1, ...guestPoint(e)], [2, 1, 0]);
+        const at = guestPoint(e);
+        console.log(`[in] down ${at}`);
+        send([1, ...at], [2, 1, 0]);
         e.preventDefault();
     });
     canvas.addEventListener('pointerup', (e) => {
-        send([1, ...guestPoint(e)], [2, 0, 0]);
+        const at = guestPoint(e);
+        console.log(`[in] up ${at}`);
+        send([1, ...at], [2, 0, 0]);
         e.preventDefault();
     });
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -660,6 +727,8 @@ function attachInput(canvas) {
         const code = macKeycodeForEvent(e);
         if (code === null)
             return;
+        if (down)
+            console.log(`[in] key ${['ctrlKey', 'altKey', 'metaKey', 'shiftKey'].filter((m) => e[m]).map((m) => m.slice(0, -3) + '+').join('')}${e.code} (${code})`);
         send([3, down ? 1 : 0, code]);
         e.preventDefault();
     };

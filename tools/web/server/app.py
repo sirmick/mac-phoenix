@@ -27,7 +27,7 @@
     /api/log          POST ?session=ID, text: lines the tab printed (log.js),
                       appended to DATA/logs/DAY/ID.log (signed out too: 64 KB
                       a request; a file stops at 64 MB; kept 14 days)
-    /api/shot         POST ?session=ID[&note=TEXT], a PNG (16 MB): the tab's
+    /api/shot         POST ?session=ID[&note=TEXT][&tag=1x], a PNG (16 MB): the tab's
                       Screenshot button; DATA/logs/DAY/ID-HHMMSS.png, noted in the log
     /api/logs         GET (owner) the logs and screenshots; /api/logs/DAY/NAME one
 
@@ -528,14 +528,18 @@ def shot_post(h):
     if not data.startswith(b"\x89PNG\r\n\x1a\n"):
         raise HttpError(400, "a PNG")
     note = h.query.get("note", "").replace("\n", " ")[:500]
+    tag = h.query.get("tag", "")
+    if not re.fullmatch(r"[a-z0-9]{0,8}", tag):
+        raise HttpError(400, "tag: up to 8 letters and digits")
+    tag = "-" + tag if tag else ""
     day = time.strftime("%Y-%m-%d", time.gmtime())
     os.makedirs(os.path.join(log_dir(h), day), exist_ok=True)
     with h.app.log_lock:
         stamp = time.strftime("%H%M%S", time.gmtime())
-        name, i = f"{session}-{stamp}.png", 1
+        name, i = f"{session}-{stamp}{tag}.png", 1
         while os.path.exists(os.path.join(log_dir(h), day, name)):
             i += 1
-            name = f"{session}-{stamp}-{i}.png"
+            name = f"{session}-{stamp}-{i}{tag}.png"
         with open(os.path.join(log_dir(h), day, name), "wb") as f:
             f.write(data)
         with open(os.path.join(log_dir(h), day, session + ".log"), "a", encoding="utf-8") as f:

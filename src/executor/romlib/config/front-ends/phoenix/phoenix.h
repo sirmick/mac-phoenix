@@ -86,6 +86,17 @@ public:
     // render what changed, or the moved cursor, and publish it.
     void pump() { render(false); }
 
+    // A copy of the 1x frame (ARGB) as last rendered, at any display scale
+    // (the tab's Screenshot sends it beside the scaled one); false before the first.
+    bool copyFrame(std::vector<uint32_t>& out, int& width, int& height)
+    {
+        std::lock_guard<std::mutex> lock(frameMutex_);
+        out = argb_;
+        width = argbWidth_;
+        height = argbHeight_;
+        return !out.empty();
+    }
+
 protected:
     void requestUpdate() override;
 

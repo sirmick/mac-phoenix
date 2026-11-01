@@ -103,6 +103,12 @@ EM_JS(void, js_cursor, (const uint8_t *data, const uint8_t *mask, int hotX, int 
         Module.onCursor(HEAPU8.slice(data, data + 32), HEAPU8.slice(mask, mask + 32), hotX, hotY, !!visible);
 });
 
+/* The 1x frame as RGBA bytes, the answer to request id ('screen1x'). */
+EM_JS(void, js_reply_pixels, (int id, int width, int height, const uint8_t *rgba), {
+    if (Module.onReply)
+        Module.onReply(id, { width, height, data: HEAPU8.slice(rgba, rgba + width * height * 4) });
+});
+
 /* Time the front end spent producing frames (rendering, converting). */
 EM_JS(void, js_frame_time, (double ms), {
     if (Module.stats)
@@ -292,6 +298,19 @@ void on_event_poll()
             reply = menus_json();
         else if(op == "launch")
             reply = std::to_string(launch(arg));
+        else if(op == "screen1x")
+        {
+            std::vector<uint32_t> px;
+            int w, h;
+            if(driver() && driver()->copyFrame(px, w, h))
+            {
+                for(uint32_t &p : px)
+                    p = (p & 0xFF00FF00) | (p >> 16 & 0xFF) | (p & 0xFF) << 16;
+                js_reply_pixels(id, w, h, (const uint8_t *)px.data());
+                continue;
+            }
+            reply = "null";
+        }
         else
             reply = "{\"error\":" + json_string("unknown request " + op) + "}";
         js_reply(id, reply.c_str());
