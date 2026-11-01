@@ -45,12 +45,21 @@ enum
 static bool platinum_bar();
 
 /* MacPhoenix: 8.x's Apple menu title is the System's colour apple (icon
-   family -16386), 16 wide in a 27-wide title, as 8.6 lays it out on a G3 */
-enum { kAppleTitleIcon = -16386, kAppleTitleWidth = 27 };
+   family -16386), 16 wide in a 28-wide title, as 8.6 lays it out on a G3
+   (difftest menu bar.left.*) */
+enum { kAppleTitleIcon = -16386, kAppleTitleWidth = 28 };
 
 static bool apple_title_p(MenuHandle mh)
 {
     return platinum_bar() && MI_DATA(mh)[0] == 1 && MI_DATA(mh)[1] == APPLE_CHAR;
+}
+
+/* MacPhoenix: where a title is drawn, hit and its menu hangs from: on 8.x
+   a pixel left of its menuLeft (the G3: the Apple title's highlight and
+   menu from 9, its menuLeft 10), the system menus at the right excepted */
+static int title_left(const muelem *mp)
+{
+    return mp->muleft - (platinum_bar() && !ROMlib_system_menu_p((*mp->muhandle)->menuID) ? 1 : 0);
 }
 
 /* MacPhoenix: a system menu's title is an icon suite (menu/sysmenu.cpp). */
@@ -84,8 +93,8 @@ static void platinum_title(muelem *elt, bool hilite_p, bool bar_selected)
 {
     MenuHandle mh = elt->muhandle;
     Rect bar = bar_rect(), tr = bar;
-    tr.left = elt->muleft;
-    tr.right = elt->muleft + title_width(mh);
+    tr.left = title_left(elt);
+    tr.right = tr.left + title_width(mh);
     if(hilite_p)
         DrawThemeMenuTitle(&bar, &tr, kThemeMenuSelected, 0, nullptr, 0);
     else if(!bar_selected)
@@ -103,7 +112,7 @@ static void platinum_title(muelem *elt, bool hilite_p, bool bar_selected)
         Rect ir;
         ir.top = (LM(MBarHeight) - 16) / 2;
         ir.bottom = ir.top + 16;
-        ir.left = elt->muleft + (kAppleTitleWidth - 16) / 2;
+        ir.left = title_left(elt) + (kAppleTitleWidth - 16) / 2;
         ir.right = ir.left + 16;
         PlotIconID(&ir, atNone, white ? ttSelected : ttNone, kAppleTitleIcon);
         return;
@@ -123,7 +132,7 @@ static void platinum_title(muelem *elt, bool hilite_p, bool bar_selected)
                  : !(MI_ENABLE_FLAGS(mh) & 1) ? &disabled
                                                : &ROMlib_black_rgb_color);
     PORT_TX_MODE(qdGlobals().thePort) = srcOr;
-    MoveTo(elt->muleft + MENULEFT - 3, 14);
+    MoveTo(title_left(elt) + MENULEFT - 4, 14);
     char *title = (char *)MI_DATA(mh);
     if(ROMlib_AppleChar && title[0] == 1 && title[1] == APPLE_CHAR)
         DrawChar((char)ROMlib_AppleChar);
@@ -424,7 +433,7 @@ static LONGINT hit(LONGINT mousept)
            right */
         mpend = (*MENULIST)->mulist + (*MENULIST)->muoff / sizeof(muelem);
         for(mp = (*MENULIST)->mulist; mp != mpend; mp++)
-            if(p.h >= mp->muleft && p.h < mp->muleft + title_width(mp->muhandle))
+            if(p.h >= title_left(mp) && p.h < title_left(mp) + title_width(mp->muhandle))
                 /*-->*/ return (char *)mp - (char *)*LM(MenuList);
         /*-->*/ return NOTHITINMBAR;
     }
@@ -725,7 +734,7 @@ static Rect *getrect(LONGINT offset)
     { /* regular */
         r.top = LM(MBarHeight);
         /* 8.6: the outline under the title's left */
-        r.left = mp->muleft + (platinum_bar() ? 1 : 0);
+        r.left = title_left(mp) + (platinum_bar() ? 1 : 0);
         r.bottom = r.top + (*mh)->menuHeight;
         r.right = r.left + (*mh)->menuWidth;
     }
