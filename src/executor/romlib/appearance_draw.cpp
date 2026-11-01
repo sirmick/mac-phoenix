@@ -603,6 +603,12 @@ Look lookOf(ThemeDrawState state)
     }
 }
 
+/* A rectangle of pixels [x0, x1) x [y0, y1) in grey G, as a shape */
+void rectShape(hidpi::Shapes &s, float x0, float y0, float x1, float y1, uint16_t g)
+{
+    s.push_back({ hidpi::Shape::Polygon, { x0, y0, x1, y0, x1, y1, x0, y1 }, 0, argbGray(g) });
+}
+
 /* Points on a quarter circle round (cx, cy) from angle A0 to A1 degrees
    (0 right, 90 down), appended to V. */
 void arcPts(std::vector<float> &v, float cx, float cy, float rad, float a0, float a1)
@@ -2085,7 +2091,55 @@ void cornerPair(int h, int v, int sh, int dh, int dv, int g)
 /* The normal bar: #ddd, a white edge at the top and the left, #999 at the
    right and above the black bottom line, the top corners rounded, shaded
    into the white edge on the left and into the #999 on the right */
+void menuBarPixels(int L, int T, int R, int B);
+
+/* A top corner of the bar at the display scale, 8 pixels square: black
+   outside an arc of radius 8 (the screen's rounded corner), the bar's
+   face inside it, its edge along the arc (left: white; right: shaded
+   bands from the top's white down into the side's #999) */
+hidpi::Shapes barCornerShapes(int L, int T, int R, bool right)
+{
+    float x0 = right ? R + 1 - 8 : L, cx = right ? R + 1 - 8 : L + 8, cy = T + 8;
+    hidpi::Shapes s;
+    rectShape(s, x0, T, x0 + 8, T + 8, grey(0));
+    std::vector<float> face{ cx, cy };
+    arcPts(face, cx, cy, 8, right ? 270 : 180, right ? 360 : 270);
+    s.push_back({ hidpi::Shape::Polygon, face, 0, argbGray(grey(0xd)) });
+    if(!right)
+    {
+        std::vector<float> edge;
+        arcPts(edge, cx, cy, 7.5f, 180, 270);
+        s.push_back({ hidpi::Shape::Polyline, edge, 1, argbGray(grey(0xf)) });
+        return s;
+    }
+    /* two bands, #888 and #bbb, lighter towards the top */
+    for(auto [rad, g] : { std::pair{ 7.5f, 8 }, { 6.5f, 0xb } })
+    {
+        std::vector<float> edge;
+        arcPts(edge, cx, cy, rad, 270, 360);
+        hidpi::Shape e{ hidpi::Shape::Polyline, edge, 1, argbGray(grey(g)) };
+        e.gx = cx;
+        e.gy = T;
+        e.gx2 = R + 1;
+        e.gy2 = cy;
+        e.colors = { argbGray(grey(0xd)), argbGray(grey(g)), argbGray(grey(g)) };
+        e.pos = { 0, 0.4f, 1 };
+        s.push_back(e);
+    }
+    return s;
+}
+
 void menuBar(int L, int T, int R, int B)
+{
+    Rect left = { (INTEGER)T, (INTEGER)L, (INTEGER)(T + 8), (INTEGER)(L + 8) },
+         right = { (INTEGER)T, (INTEGER)(R + 1 - 8), (INTEGER)(T + 8), (INTEGER)(R + 1) };
+    hidpi::chrome_draw(left, hidpi::active() ? barCornerShapes(L, T, R, false) : hidpi::Shapes{}, [&] {
+        hidpi::chrome_draw(right, hidpi::active() ? barCornerShapes(L, T, R, true) : hidpi::Shapes{},
+                           [&] { menuBarPixels(L, T, R, B); });
+    });
+}
+
+void menuBarPixels(int L, int T, int R, int B)
 {
     Rect in = { (INTEGER)(T + 1), (INTEGER)(L + 1), (INTEGER)(B - 1), (INTEGER)R };
     fillGray(in, grey(0xd));
@@ -2298,12 +2352,6 @@ void pixelGray(int h, int v, uint16_t g)
    the diagonal; PRESSED (8.6 while the button is down in it), the inside
    a darker ramp, #444 to #bbb, its right and bottom edges no lighter
    than #999. GLYPH: 0 none (close), 1 zoom, 2 collapse. */
-/* A rectangle of pixels [x0, x1) x [y0, y1) in grey G, as a shape */
-void rectShape(hidpi::Shapes &s, float x0, float y0, float x1, float y1, uint16_t g)
-{
-    s.push_back({ hidpi::Shape::Polygon, { x0, y0, x1, y0, x1, y1, x0, y1 }, 0, argbGray(g) });
-}
-
 /* A face of grey steps along the diagonal from (x, y), N pixels square:
    STEPS[k] where the pixel's dx + dy is k, as a linear gradient */
 void diagonalShade(hidpi::Shapes &s, float x, float y, int n, std::initializer_list<uint16_t> steps)
