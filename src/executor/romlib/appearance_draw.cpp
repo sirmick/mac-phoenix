@@ -28,7 +28,7 @@ namespace
 /* ── Tracks ──────────────────────────────────────────────────────────── */
 
 constexpr int arrowSize = 16; /* a scroll bar's arrow boxes, its width */
-constexpr int sliderThumbLength = 15, sliderInset = 5;
+constexpr int sliderThumbLength = 15, sliderPlainThumbLength = 13, sliderInset = 5;
 
 /* Where a track's parts are. The axis: v (vertical) or h; `lo`/`hi` the
    ends along it. */
@@ -122,7 +122,10 @@ TrackGeometry trackGeometry(const ThemeTrackDrawInfo &info)
             g.drag.top = g.bounds.top, g.drag.bottom = g.bounds.bottom;
         else
             g.drag.left = g.bounds.left, g.drag.right = g.bounds.right;
-        g.thumbLength = sliderThumbLength;
+        /* a non-directional thumb is 13 long (8.6: appr controls.56) */
+        g.thumbLength = info.kind == kThemeSlider && info.trackInfo.slider.thumbDir == kThemeThumbPlain
+                            ? sliderPlainThumbLength
+                            : sliderThumbLength;
         g.hasThumb = info.kind == kThemeSlider;
     }
     g.thumb = g.drag;
@@ -173,23 +176,6 @@ void drawScrollBarArrows(const TrackGeometry &g, ThemeTrackEnableState enable, T
                  enabled && (press & kThemeRightOutsideArrowPressed), enabled);
 }
 
-void drawThumb(const TrackGeometry &g, bool pressed)
-{
-    boxFace(g.thumb, pressed);
-    if(g.thumbLength >= 20)
-    {
-        /* three grip lines across the middle */
-        int mid = (g.lo(g.thumb) + g.hi(g.thumb)) / 2;
-        for(int d = -2; d <= 2; d += 2)
-        {
-            if(g.horizontal)
-                lineGray(mid + d, g.thumb.top + 4, mid + d, g.thumb.bottom - 5, kDark);
-            else
-                lineGray(g.thumb.left + 4, mid + d, g.thumb.right - 5, mid + d, kDark);
-        }
-    }
-}
-
 /* The default appearance's accent ramp, darkest first: progress bars and
    slider thumbs are shaded in it (appr controls.48/80). */
 const RGBColor accentRamp[] = {
@@ -197,11 +183,23 @@ const RGBColor accentRamp[] = {
     { 0x9999, 0x9999, 0xFFFF }, { 0xCCCC, 0xCCCC, 0xFFFF }, { 0xEEEE, 0xEEEE, 0xEEEE },
 };
 
-/* A slider whose thumb points down (horizontal) or right (vertical), as
-   8.6's CDEF 48 makes them; other thumbs stay rectangles. */
-bool pointedThumb(const ThemeTrackDrawInfo &info)
+/* A slider's thumb: pointing down (horizontal) or right (vertical), up or
+   left, or neither (8.6's CDEF 48, 52, 56: appr controls.48/52/56). */
+enum class Thumb
 {
-    return info.kind == kThemeSlider && info.trackInfo.slider.thumbDir == kThemeThumbDownward;
+    down,
+    up,
+    plain
+};
+
+Thumb thumbShape(const ThemeTrackDrawInfo &info)
+{
+    switch(info.trackInfo.slider.thumbDir)
+    {
+        case kThemeThumbDownward: return Thumb::down;
+        case kThemeThumbUpward: return Thumb::up;
+        default: return Thumb::plain;
+    }
 }
 
 /* Where a pixel of a slider goes: A along the track, C across it, from
@@ -238,12 +236,30 @@ void pointedThumbRows(F span)
     span(15, 6, 8);
 }
 
+/* A thumb's rows, 16 across: the pointed one, the same turned over (its
+   point up), or 13 along with its corners cut. */
+template<typename F>
+void thumbRows(Thumb shape, F span)
+{
+    if(shape == Thumb::down)
+        pointedThumbRows(span);
+    else if(shape == Thumb::up)
+        pointedThumbRows([&](int c, int from, int to) { span(15 - c, from, to); });
+    else
+    {
+        span(0, 1, 11);
+        for(int c = 1; c < 15; c++)
+            span(c, 0, 12);
+        span(15, 1, 11);
+    }
+}
+
 /* 8.6's region (appr track.2/5 thumb.rgn, the CRCs). */
-void pointedThumbRgn(const TrackGeometry &g, RgnHandle rgn)
+void sliderThumbRgn(const TrackGeometry &g, Thumb shape, RgnHandle rgn)
 {
     SetEmptyRgn(rgn);
     RgnHandle row = NewRgn();
-    pointedThumbRows([&](int c, int from, int to) {
+    thumbRows(shape, [&](int c, int from, int to) {
         Rect r;
         if(g.horizontal)
             SetRect(&r, g.thumb.left + from, g.thumb.top + c, g.thumb.left + to + 1, g.thumb.top + c + 1);
@@ -258,10 +274,12 @@ void pointedThumbRgn(const TrackGeometry &g, RgnHandle rgn)
 /* The slider's channel, 6 deep, 3 into the track and its length less 1:
    a #222 outline with its corners cut (#777 inactive), #aaa inside (#bbb)
    and, active, a #aaa line over and before it (appr controls.48). */
-void sliderChannel(const TrackGeometry &g, bool active)
+void sliderChannel(const TrackGeometry &g, Thumb shape, bool active)
 {
     int len = g.hi(g.bounds) - g.lo(g.bounds) - 2; /* the last pixel along */
-    SliderAxes ax{ g.horizontal, g.lo(g.bounds), g.horizontal ? g.bounds.top + 3 : g.bounds.left + 3 };
+    /* under the thumb's body: 3 in, 6 with the point before it, 4 */
+    int in = shape == Thumb::down ? 3 : shape == Thumb::up ? 6 : 4;
+    SliderAxes ax{ g.horizontal, g.lo(g.bounds), g.horizontal ? g.bounds.top + in : g.bounds.left + in };
     uint16_t edge = active ? 0x2222 : 0x7777, inside = active ? 0xAAAA : kTrack;
     if(active)
     {
@@ -278,14 +296,14 @@ void sliderChannel(const TrackGeometry &g, bool active)
         ax.line(2, c, len - 1, c, inside);
 }
 
-/* The pointed thumb: black outline (#777 inactive), shaded in the accent
-   ramp lit from the leading top corner, three grip ridges; pressed a step
-   darker, inactive #ddd and no grip (appr controls.48). */
-void sliderThumbPixels(const TrackGeometry &g, bool active, bool pressed);
+/* A slider's thumb: black outline (#777 inactive), shaded in the accent
+   ramp lit from the top left, three grip ridges; pressed a step darker,
+   inactive #ddd and no grip (appr controls.48/52/56). */
+void sliderThumbPixels(const TrackGeometry &g, Thumb shape, bool active, bool pressed);
 
-/* The pointed thumb at the display scale: its outline filled, the body
-   inside it, the lit and shaded edges, the grip (the 1x shape's corners) */
-hidpi::Shapes sliderThumbShapes(const TrackGeometry &g, bool active, bool pressed)
+/* The thumb at the display scale: its outline filled, the body inside it,
+   the lit and shaded edges, the grip (the 1x shape's corners) */
+hidpi::Shapes sliderThumbShapes(const TrackGeometry &g, Thumb shape, bool active, bool pressed)
 {
     float a0 = g.lo(g.thumb), c0 = g.horizontal ? g.thumb.top : g.thumb.left;
     auto pts = [&](std::initializer_list<float> ac) {
@@ -303,41 +321,67 @@ hidpi::Shapes sliderThumbShapes(const TrackGeometry &g, bool active, bool presse
         const RGBColor &c = accentRamp[std::max(0, idx - d)];
         return active ? 0xFF000000u | (c.red >> 8) << 16 | (c.green >> 8) << 8 | (c.blue >> 8) : argbGray(kFace);
     };
+    uint32_t outline = argbGray(active ? kBlack : 0x7777);
     hidpi::Shapes s;
-    s.push_back({ hidpi::Shape::Polygon, pts({ 0, 1, 1, 0, 14, 0, 15, 1, 15, 10, 9, 16, 6, 16, 0, 10 }), 0,
-                  argbGray(active ? kBlack : 0x7777) });
-    s.push_back({ hidpi::Shape::Polygon, pts({ 1, 1, 14, 1, 14, 10.4f, 8.6f, 15, 6.4f, 15, 1, 10.4f }), 0, ramp(3) });
-    s.push_back({ hidpi::Shape::Polyline, pts({ 13.5f, 2, 13.5f, 10.2f, 8.4f, 14.6f }), 1, ramp(2) });
-    s.push_back({ hidpi::Shape::Polyline, pts({ 1.5f, 10.2f, 6.6f, 14.6f }), 1, ramp(2) });
-    s.push_back({ hidpi::Shape::Polyline, pts({ 1.5f, 9.5f, 1.5f, 1.5f, 12.5f, 1.5f }), 1, ramp(4) });
-    if(active)
-        for(int k = 4; k <= 8; k += 2)
-        {
-            s.push_back({ hidpi::Shape::Polyline, pts({ k + 0.5f, 3.5f, k + 0.5f, 8.5f }), 1, ramp(4) });
-            s.push_back({ hidpi::Shape::Polyline, pts({ k + 1.5f, 4.5f, k + 1.5f, 9.5f }), 1, ramp(1) });
-        }
+    auto line = [&](std::initializer_list<float> ac, int idx) { s.push_back({ hidpi::Shape::Polyline, pts(ac), 1, ramp(idx) }); };
+    /* the grip: ridges at K, from C down (LEN long) */
+    auto grip = [&](int k0, float c, float len) {
+        if(active)
+            for(int k = k0; k <= k0 + 4; k += 2)
+            {
+                line({ k + 0.5f, c + 0.5f, k + 0.5f, c + 0.5f + len }, 4);
+                line({ k + 1.5f, c + 1.5f, k + 1.5f, c + 1.5f + len }, 1);
+            }
+    };
+    switch(shape)
+    {
+        case Thumb::down:
+            s.push_back({ hidpi::Shape::Polygon, pts({ 0, 1, 1, 0, 14, 0, 15, 1, 15, 10, 9, 16, 6, 16, 0, 10 }), 0, outline });
+            s.push_back({ hidpi::Shape::Polygon, pts({ 1, 1, 14, 1, 14, 10.4f, 8.6f, 15, 6.4f, 15, 1, 10.4f }), 0, ramp(3) });
+            line({ 13.5f, 2, 13.5f, 10.2f, 8.4f, 14.6f }, 2);
+            line({ 1.5f, 10.2f, 6.6f, 14.6f }, 2);
+            line({ 1.5f, 9.5f, 1.5f, 1.5f, 12.5f, 1.5f }, 4);
+            grip(4, 3, 5);
+            break;
+        case Thumb::up:
+            s.push_back({ hidpi::Shape::Polygon, pts({ 0, 15, 1, 16, 14, 16, 15, 15, 15, 6, 9, 0, 6, 0, 0, 6 }), 0, outline });
+            s.push_back({ hidpi::Shape::Polygon, pts({ 1, 15, 14, 15, 14, 5.6f, 8.6f, 1, 6.4f, 1, 1, 5.6f }), 0, ramp(3) });
+            line({ 1.5f, 14, 1.5f, 5.8f, 6.6f, 1.4f }, 4);
+            line({ 8.4f, 1.4f, 13.5f, 5.8f, 13.5f, 14.5f, 2, 14.5f }, 2);
+            grip(4, 6, 5);
+            break;
+        case Thumb::plain:
+            s.push_back({ hidpi::Shape::Polygon, pts({ 0, 1, 1, 0, 12, 0, 13, 1, 13, 15, 12, 16, 1, 16, 0, 15 }), 0, outline });
+            s.push_back({ hidpi::Shape::Polygon, pts({ 1, 1, 12, 1, 12, 15, 1, 15 }), 0, ramp(3) });
+            line({ 1.5f, 14, 1.5f, 1.5f, 11, 1.5f }, 4);
+            line({ 11.5f, 2, 11.5f, 14.5f, 2, 14.5f }, 2);
+            grip(3, 4, 6);
+            break;
+    }
     return s;
 }
 
-void sliderThumb(const TrackGeometry &g, bool active, bool pressed)
+void sliderThumb(const TrackGeometry &g, Thumb shape, bool active, bool pressed)
 {
     Rect box = g.thumb;
     if(g.horizontal)
         box.bottom = box.top + 16;
     else
         box.right = box.left + 16;
-    hidpi::chrome_draw(box, hidpi::active() ? sliderThumbShapes(g, active, pressed) : hidpi::Shapes{},
-                       [&] { sliderThumbPixels(g, active, pressed); });
+    hidpi::chrome_draw(box, hidpi::active() ? sliderThumbShapes(g, shape, active, pressed) : hidpi::Shapes{},
+                       [&] { sliderThumbPixels(g, shape, active, pressed); });
 }
 
-void sliderThumbPixels(const TrackGeometry &g, bool active, bool pressed)
+void sliderThumbPixels(const TrackGeometry &g, Thumb shape, bool active, bool pressed)
 {
     SliderAxes ax{ g.horizontal, g.lo(g.thumb), g.horizontal ? g.thumb.top : g.thumb.left };
     int d = pressed ? 1 : 0;
     auto ramp = [&](int idx) { return active ? accentRamp[std::max(0, idx - d)] : RGBColor{ kFace, kFace, kFace }; };
+    auto px = [&](int a, int c, int idx) { ax.line(a, c, a, c, ramp(idx)); };
+    auto run = [&](int a1, int a2, int c, int idx) { ax.line(a1, c, a2, c, ramp(idx)); };
     uint16_t outline = active ? kBlack : 0x7777;
-    /* the outline: each row's ends */
-    pointedThumbRows([&](int c, int from, int to) {
+    /* the outline: each row's ends, the first and last rows whole */
+    thumbRows(shape, [&](int c, int from, int to) {
         if(c == 0 || c == 15)
             ax.line(from, c, to, c, outline);
         else
@@ -346,29 +390,76 @@ void sliderThumbPixels(const TrackGeometry &g, bool active, bool pressed)
             ax.line(to, c, to, c, outline);
         }
     });
-    ax.line(1, 1, 1, 1, ramp(5));
-    ax.line(2, 1, 12, 1, ramp(4));
-    ax.line(13, 1, 13, 1, ramp(3));
-    for(int c = 2; c < 10; c++)
+    /* the body: a lit first row and column, shaded last ones; its grip
+       ridges from row TOP, LEN long, at K, K + 2, K + 4 */
+    int gripTop, gripLen, gripK;
+    switch(shape)
     {
-        ax.line(1, c, 1, c, ramp(4));
-        ax.line(2, c, 12, c, ramp(3));
-        ax.line(13, c, 13, c, ramp(2));
-    }
-    for(int k = 0; k < 5; k++)
-    {
-        int c = 10 + k;
-        ax.line(2 + k, c, 12 - k, c, ramp(k == 4 ? 2 : 3));
-        ax.line(2 + k, c, 2 + k, c, ramp(2));
-        ax.line(12 - k, c, 12 - k, c, ramp(2));
+        case Thumb::down:
+            px(1, 1, 5);
+            run(2, 12, 1, 4);
+            px(13, 1, 3);
+            for(int c = 2; c < 10; c++)
+            {
+                px(1, c, 4);
+                run(2, 12, c, 3);
+                px(13, c, 2);
+            }
+            for(int k = 0; k < 5; k++)
+            {
+                int c = 10 + k;
+                run(2 + k, 12 - k, c, k == 4 ? 2 : 3);
+                px(2 + k, c, 2);
+                px(12 - k, c, 2);
+            }
+            gripTop = 3, gripLen = 5, gripK = 4;
+            break;
+        case Thumb::up:
+            /* the point: lit on its leading side, shaded on the other */
+            px(6, 1, 5);
+            px(7, 1, 4);
+            px(8, 1, 3);
+            for(int c = 2; c < 6; c++)
+            {
+                px(7 - c, c, 4);
+                run(8 - c, 6 + c, c, 3);
+                px(7 + c, c, 2);
+            }
+            px(1, 6, 5);
+            run(2, 12, 6, 3);
+            px(13, 6, 2);
+            for(int c = 7; c < 14; c++)
+            {
+                px(1, c, 4);
+                run(2, 12, c, 3);
+                px(13, c, 2);
+            }
+            px(1, 14, 3);
+            run(2, 13, 14, 2);
+            gripTop = 6, gripLen = 5, gripK = 4;
+            break;
+        default:
+            px(1, 1, 5);
+            run(2, 10, 1, 4);
+            px(11, 1, 3);
+            for(int c = 2; c < 14; c++)
+            {
+                px(1, c, 4);
+                run(2, 10, c, 3);
+                px(11, c, 2);
+            }
+            px(1, 14, 3);
+            run(2, 11, 14, 2);
+            gripTop = 4, gripLen = 6, gripK = 3;
+            break;
     }
     if(!active)
         return;
-    for(int r = 4; r <= 8; r += 2)
+    for(int r = gripK; r <= gripK + 4; r += 2)
     {
-        ax.line(r, 3, r, 3, ramp(5));
-        ax.line(r, 4, r, 8, ramp(4));
-        ax.line(r + 1, 4, r + 1, 9, ramp(1));
+        px(r, gripTop, 5);
+        ax.line(r, gripTop + 1, r, gripTop + gripLen, ramp(4));
+        ax.line(r + 1, gripTop + 1, r + 1, gripTop + gripLen + 1, ramp(1));
     }
 }
 
@@ -601,6 +692,12 @@ Look lookOf(ThemeDrawState state)
         default:
             return Look::active;
     }
+}
+
+/* A rectangle of pixels [x0, x1) x [y0, y1) in grey G, as a shape */
+void rectShape(hidpi::Shapes &s, float x0, float y0, float x1, float y1, uint16_t g)
+{
+    s.push_back({ hidpi::Shape::Polygon, { x0, y0, x1, y0, x1, y1, x0, y1 }, 0, argbGray(g) });
 }
 
 /* Points on a quarter circle round (cx, cy) from angle A0 to A1 degrees
@@ -1212,23 +1309,10 @@ OSStatus Executor::C_DrawThemeTrack(const ThemeTrackDrawInfo *drawInfo, RgnHandl
         }
         case kThemeSlider:
         {
-            if(pointedThumb(*drawInfo))
-            {
-                sliderChannel(g, active);
-                sliderThumb(g, active, drawInfo->trackInfo.slider.pressState & kThemeThumbPressed);
-                break;
-            }
-            /* a channel 4 across the middle, the thumb over it */
-            Rect ch = g.bounds;
-            int mid = g.horizontal ? (ch.top + ch.bottom) / 2 : (ch.left + ch.right) / 2;
-            if(g.horizontal)
-                ch.top = mid - 2, ch.bottom = mid + 2;
-            else
-                ch.left = mid - 2, ch.right = mid + 2;
-            fillGray(ch, active ? kTrack : kLight);
-            frameGray(ch, active ? kDark : kShadow);
+            Thumb shape = thumbShape(*drawInfo);
+            sliderChannel(g, shape, active);
             if(g.hasThumb)
-                drawThumb(g, drawInfo->trackInfo.slider.pressState & kThemeThumbPressed);
+                sliderThumb(g, shape, active, drawInfo->trackInfo.slider.pressState & kThemeThumbPressed);
             break;
         }
         default:
@@ -1322,8 +1406,8 @@ OSStatus Executor::C_GetThemeTrackThumbRgn(const ThemeTrackDrawInfo *drawInfo, R
     if(isProgress(drawInfo->kind))
         return paramErr; /* no thumb: 8.6 leaves the output alone */
     TrackGeometry g = trackGeometry(*drawInfo);
-    if(g.hasThumb && pointedThumb(*drawInfo))
-        pointedThumbRgn(g, thumbRgn);
+    if(g.hasThumb && drawInfo->kind == kThemeSlider)
+        sliderThumbRgn(g, thumbShape(*drawInfo), thumbRgn);
     else if(g.hasThumb)
         RectRgn(thumbRgn, &g.thumb);
     else
@@ -1447,6 +1531,59 @@ OSStatus Executor::C_GetThemeScrollBarTrackRect(const Rect *bounds, ThemeTrackEn
 
 /* ── Buttons ─────────────────────────────────────────────────────────── */
 
+namespace
+{
+/* What DrawThemeButton sets up for its label proc, by kind and state
+   (appr labels.*, 8.6 on the G3): the push-like kinds a title colour on
+   their face's, the marks grayishTextOr when inactive; the rest nothing. */
+struct LabelLook
+{
+    bool colors = false, grayish = false;
+    uint16_t fg = 0, bg = 0;
+};
+
+LabelLook labelLook(ThemeButtonKind kind, ThemeDrawState state)
+{
+    LabelLook l;
+    auto set = [&](uint16_t fg, uint16_t bg) {
+        l.colors = true;
+        l.fg = fg;
+        l.bg = bg;
+    };
+    switch(kind)
+    {
+        case kThemePushButton:
+        case kThemePopupButton:
+        case kThemeArrowButton:
+        case kThemeBevelButton:
+        case kThemeSmallBevelButton:
+        case kThemeLargeBevelButton:
+        {
+            bool bevel = kind != kThemePushButton && kind != kThemePopupButton && kind != kThemeArrowButton;
+            uint16_t face = bevel ? 0xCCCC : 0xDDDD;
+            switch(state)
+            {
+                case kThemeStateActive: set(0, face); break;
+                case kThemeStateInactive: set(0x7777, 0xDDDD); break;
+                case kThemeStatePressedUp: set(0xFFFF, bevel ? 0x8888 : 0x6666); break;
+                case kThemeStatePressedDown:
+                case kThemeStateUnavailable:
+                    set(bevel || kind == kThemeArrowButton ? 0 : 0x2222, face);
+                    break;
+            }
+            break;
+        }
+        case kThemeCheckBox:
+        case kThemeRadioButton:
+        case kThemeDisclosureButton:
+        case kThemeIncDecButton:
+            l.grayish = state == kThemeStateInactive;
+            break;
+    }
+    return l;
+}
+}
+
 OSStatus Executor::C_DrawThemeButton(const Rect *inBounds, ThemeButtonKind inKind,
                                      const ThemeButtonDrawInfo *inNewInfo, const ThemeButtonDrawInfo *inPrevInfo,
                                      ThemeEraseUPP inEraseProc, ThemeButtonDrawUPP inLabelProc, UInt32 inUserData)
@@ -1464,7 +1601,27 @@ OSStatus Executor::C_DrawThemeButton(const Rect *inBounds, ThemeButtonKind inKin
         SInt16 depth;
         Boolean color;
         portDepth(&depth, &color);
+        LabelLook look = labelLook(inKind, inNewInfo->state);
+        GrafPtr port = qdGlobals().thePort;
+        RGBColor fg, bg;
+        GetForeColor(&fg);
+        GetBackColor(&bg);
+        INTEGER mode = PORT_TX_MODE(port);
+        if(look.colors)
+        {
+            RGBColor f = { look.fg, look.fg, look.fg }, b = { look.bg, look.bg, look.bg };
+            RGBForeColor(&f);
+            RGBBackColor(&b);
+        }
+        if(look.grayish)
+            TextMode(grayishTextOr);
         inLabelProc(&content, inKind, inNewInfo, inUserData, depth, color);
+        if(qdGlobals().thePort == port)
+        {
+            RGBForeColor(&fg);
+            RGBBackColor(&bg);
+            TextMode(mode);
+        }
     }
     return noErr;
 }
@@ -2085,7 +2242,55 @@ void cornerPair(int h, int v, int sh, int dh, int dv, int g)
 /* The normal bar: #ddd, a white edge at the top and the left, #999 at the
    right and above the black bottom line, the top corners rounded, shaded
    into the white edge on the left and into the #999 on the right */
+void menuBarPixels(int L, int T, int R, int B);
+
+/* A top corner of the bar at the display scale, 8 pixels square: black
+   outside an arc of radius 8 (the screen's rounded corner), the bar's
+   face inside it, its edge along the arc (left: white; right: shaded
+   bands from the top's white down into the side's #999) */
+hidpi::Shapes barCornerShapes(int L, int T, int R, bool right)
+{
+    float x0 = right ? R + 1 - 8 : L, cx = right ? R + 1 - 8 : L + 8, cy = T + 8;
+    hidpi::Shapes s;
+    rectShape(s, x0, T, x0 + 8, T + 8, grey(0));
+    std::vector<float> face{ cx, cy };
+    arcPts(face, cx, cy, 8, right ? 270 : 180, right ? 360 : 270);
+    s.push_back({ hidpi::Shape::Polygon, face, 0, argbGray(grey(0xd)) });
+    if(!right)
+    {
+        std::vector<float> edge;
+        arcPts(edge, cx, cy, 7.5f, 180, 270);
+        s.push_back({ hidpi::Shape::Polyline, edge, 1, argbGray(grey(0xf)) });
+        return s;
+    }
+    /* two bands, #888 and #bbb, lighter towards the top */
+    for(auto [rad, g] : { std::pair{ 7.5f, 8 }, { 6.5f, 0xb } })
+    {
+        std::vector<float> edge;
+        arcPts(edge, cx, cy, rad, 270, 360);
+        hidpi::Shape e{ hidpi::Shape::Polyline, edge, 1, argbGray(grey(g)) };
+        e.gx = cx;
+        e.gy = T;
+        e.gx2 = R + 1;
+        e.gy2 = cy;
+        e.colors = { argbGray(grey(0xd)), argbGray(grey(g)), argbGray(grey(g)) };
+        e.pos = { 0, 0.4f, 1 };
+        s.push_back(e);
+    }
+    return s;
+}
+
 void menuBar(int L, int T, int R, int B)
+{
+    Rect left = { (INTEGER)T, (INTEGER)L, (INTEGER)(T + 8), (INTEGER)(L + 8) },
+         right = { (INTEGER)T, (INTEGER)(R + 1 - 8), (INTEGER)(T + 8), (INTEGER)(R + 1) };
+    hidpi::chrome_draw(left, hidpi::active() ? barCornerShapes(L, T, R, false) : hidpi::Shapes{}, [&] {
+        hidpi::chrome_draw(right, hidpi::active() ? barCornerShapes(L, T, R, true) : hidpi::Shapes{},
+                           [&] { menuBarPixels(L, T, R, B); });
+    });
+}
+
+void menuBarPixels(int L, int T, int R, int B)
 {
     Rect in = { (INTEGER)(T + 1), (INTEGER)(L + 1), (INTEGER)(B - 1), (INTEGER)R };
     fillGray(in, grey(0xd));
@@ -2298,7 +2503,73 @@ void pixelGray(int h, int v, uint16_t g)
    the diagonal; PRESSED (8.6 while the button is down in it), the inside
    a darker ramp, #444 to #bbb, its right and bottom edges no lighter
    than #999. GLYPH: 0 none (close), 1 zoom, 2 collapse. */
+/* A face of grey steps along the diagonal from (x, y), N pixels square:
+   STEPS[k] where the pixel's dx + dy is k, as a linear gradient */
+void diagonalShade(hidpi::Shapes &s, float x, float y, int n, std::initializer_list<uint16_t> steps)
+{
+    hidpi::Shape face{ hidpi::Shape::Polygon, { x, y, x + n, y, x + n, y + n, x, y + n }, 0, argbGray(*steps.begin()) };
+    face.gx = x + 0.5f;
+    face.gy = y + 0.5f;
+    face.gx2 = x + n - 0.5f;
+    face.gy2 = y + n - 0.5f;
+    int k = 0;
+    for(uint16_t g : steps)
+    {
+        face.colors.push_back(argbGray(g));
+        face.pos.push_back((float)k++ / (steps.size() - 1));
+    }
+    s.push_back(face);
+}
+
+void titleBoxPixels(int h, int v, int glyph, bool pressed);
+
+/* A title-bar box at the display scale: its lines as they are, the face's
+   steps a smooth shade */
+hidpi::Shapes titleBoxShapes(int h, int v, int glyph, bool pressed)
+{
+    hidpi::Shapes s;
+    rectShape(s, h, v, h + 13, v + 13, kPlatFace);
+    rectShape(s, h, v, h + 12, v + 1, kPlatBox);
+    rectShape(s, h, v, h + 1, v + 12, kPlatBox);
+    rectShape(s, h + 12, v + 1, h + 13, v + 13, kWhite);
+    rectShape(s, h + 1, v + 12, h + 13, v + 13, kWhite);
+    rectShape(s, h + 1, v + 1, h + 12, v + 12, kPlatDark);
+    if(pressed)
+    {
+        /* 0x4444 + 0x1111 * ((i + j) / 2) over the 9 x 9 inside */
+        diagonalShade(s, h + 2, v + 2, 9, { 0x4444, 0xCCCC });
+        rectShape(s, h + 10, v + 4, h + 11, v + 11, kPlatShade);
+        rectShape(s, h + 4, v + 10, h + 11, v + 11, kPlatShade);
+    }
+    else
+    {
+        rectShape(s, h + 2, v + 2, h + 11, v + 11, kPlatBox);
+        rectShape(s, h + 2, v + 2, h + 11, v + 3, kPlatFace);
+        rectShape(s, h + 2, v + 2, h + 3, v + 11, kPlatFace);
+        rectShape(s, h + 2, v + 2, h + 3, v + 3, kWhite);
+        diagonalShade(s, h + 3, v + 3, 7, { 0x9999, 0xFFFF });
+    }
+    if(glyph == 1)
+    {
+        rectShape(s, h + 7, v + 1, h + 8, v + 8, kPlatDark);
+        rectShape(s, h + 1, v + 7, h + 8, v + 8, kPlatDark);
+    }
+    else if(glyph == 2)
+    {
+        rectShape(s, h + 1, v + 5, h + 12, v + 6, kPlatDark);
+        rectShape(s, h + 1, v + 7, h + 12, v + 8, kPlatDark);
+    }
+    return s;
+}
+
 void titleBox(int h, int v, int glyph, bool pressed = false)
+{
+    Rect box = { (INTEGER)v, (INTEGER)h, (INTEGER)(v + 13), (INTEGER)(h + 13) };
+    hidpi::chrome_draw(box, hidpi::active() ? titleBoxShapes(h, v, glyph, pressed) : hidpi::Shapes{},
+                       [&] { titleBoxPixels(h, v, glyph, pressed); });
+}
+
+void titleBoxPixels(int h, int v, int glyph, bool pressed)
 {
     /* the square's other corners are the face's (an alert's bar is tinted
        round them: 8.6) */
@@ -2756,7 +3027,53 @@ Rect floatOutline(const Rect &c, bool side, bool collapsed = false, bool thin = 
    2 collapse (its lines across the bar: vertical in a SIDE bar), 4 zoom
    vertically (a line across the middle), 8 horizontally (down it), 12
    both (a corner). */
+void smallTitleBoxPixels(int h, int v, int glyph, bool side);
+
+/* A floating window's box at the display scale: its lines as they are,
+   the face's steps a smooth shade */
+hidpi::Shapes smallTitleBoxShapes(int h, int v, int glyph, bool side)
+{
+    hidpi::Shapes s;
+    rectShape(s, h, v, h + 9, v + 1, kPlatBox);
+    rectShape(s, h, v, h + 1, v + 9, kPlatBox);
+    rectShape(s, h + 9, v + 1, h + 10, v + 10, kWhite);
+    rectShape(s, h + 1, v + 9, h + 10, v + 10, kWhite);
+    rectShape(s, h + 1, v + 1, h + 9, v + 9, kPlatDark);
+    rectShape(s, h + 2, v + 2, h + 8, v + 8, kPlatBox);
+    rectShape(s, h + 2, v + 2, h + 8, v + 3, kPlatFace);
+    rectShape(s, h + 2, v + 2, h + 3, v + 8, kPlatFace);
+    rectShape(s, h + 2, v + 2, h + 3, v + 3, kWhite);
+    diagonalShade(s, h + 3, v + 3, 4, { 0x9999, 0x9999, 0xAAAA, 0xCCCC, 0xDDDD, 0xEEEE, 0xFFFF });
+    if(glyph == 2 && !side)
+    {
+        rectShape(s, h + 1, v + 3, h + 9, v + 4, kPlatDark);
+        rectShape(s, h + 1, v + 5, h + 9, v + 6, kPlatDark);
+    }
+    else if(glyph == 2)
+    {
+        rectShape(s, h + 3, v + 1, h + 4, v + 9, kPlatDark);
+        rectShape(s, h + 5, v + 1, h + 6, v + 9, kPlatDark);
+    }
+    if(glyph == 12)
+    {
+        rectShape(s, h + 5, v + 1, h + 6, v + 6, kPlatDark);
+        rectShape(s, h + 1, v + 5, h + 6, v + 6, kPlatDark);
+    }
+    else if(glyph & 4)
+        rectShape(s, h + 1, v + 4, h + 9, v + 5, kPlatDark);
+    else if(glyph & 8)
+        rectShape(s, h + 4, v + 1, h + 5, v + 9, kPlatDark);
+    return s;
+}
+
 void smallTitleBox(int h, int v, int glyph, bool side)
+{
+    Rect box = { (INTEGER)v, (INTEGER)h, (INTEGER)(v + 10), (INTEGER)(h + 10) };
+    hidpi::chrome_draw(box, hidpi::active() ? smallTitleBoxShapes(h, v, glyph, side) : hidpi::Shapes{},
+                       [&] { smallTitleBoxPixels(h, v, glyph, side); });
+}
+
+void smallTitleBoxPixels(int h, int v, int glyph, bool side)
 {
     lineGray(h, v, h + 8, v, kPlatBox);
     lineGray(h, v, h, v + 8, kPlatBox);

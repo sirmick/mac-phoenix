@@ -1,4 +1,4 @@
-# probe 62340d5d49f0d0fbadcc09068cedf8c529c1f36bf8b978e06cecfb1d37a036dd
+# probe 152f3c3f0ae0ec9b3132c68a92801341f00041133e4769ad45b22c1e6fc77ef3
 == gestalt
 gestalt.appr: 0 00000001
 gestalt.apvr: 0 00000110
@@ -43,6 +43,10 @@ controls.1009.popupfixed.active: 108x28 depth 32 crc cf67f98d
 controls.1009.popupfixed.inactive: 108x28 depth 32 crc 996a6fef
 controls.1008.popuptitle.active: 168x28 depth 32 crc 8a02c4bd
 controls.1008.popuptitle.inactive: 168x28 depth 32 crc 8283e06d
+controls.1008.popupnomenu.active: 108x28 depth 32 crc 4a585401
+controls.1008.popupnomenu.inactive: 108x28 depth 32 crc 4a585401
+controls.1008.popupgallery.active: 128x28 depth 32 crc 2669a428
+controls.1008.popupgallery.inactive: 128x28 depth 32 crc 2669a428
 controls.368.push.active: 68x28 depth 32 crc 72ad5f0a
 controls.368.push.inactive: 68x28 depth 32 crc 74430085
 controls.368.push.pressed: 68x28 depth 32 crc 6040e27a
@@ -80,6 +84,12 @@ controls.34.bevel.value1: 48x38 depth 32 crc 6daacf91
 controls.48.slider.active: 108x28 depth 32 crc 0a3957c3
 controls.48.slider.inactive: 108x28 depth 32 crc 44f90801
 controls.48.slider.pressed: 108x28 depth 32 crc da263575
+controls.52.sliderup.active: 108x28 depth 32 crc f31ad303
+controls.52.sliderup.inactive: 108x28 depth 32 crc 01b93302
+controls.52.sliderup.pressed: 108x28 depth 32 crc 412e5ca6
+controls.56.sliderplain.active: 108x28 depth 32 crc 58f11cf8
+controls.56.sliderplain.inactive: 108x28 depth 32 crc 2cfe9154
+controls.56.sliderplain.pressed: 108x28 depth 32 crc 096ab8c1
 controls.64.triangle.active: 20x20 depth 32 crc fe158122
 controls.64.triangle.inactive: 20x20 depth 32 crc 40e433b1
 controls.64.triangle.value1: 20x20 depth 32 crc 89871b73
@@ -1096,6 +1106,35 @@ draw32.tab.3.pressed: 120x60 depth 32 crc 3a0ede4a
 draw32.popuparrow.0.pressed: 120x60 depth 32 crc fd7490cc
 draw32.popuparrow.1.pressed: 120x60 depth 32 crc fd7490cc
 draw32.growbox.pressed: 120x60 depth 32 crc 736bd006
+draw32.tabdir.0.0: 120x60 depth 32 crc a9be4214
+draw32.tabdir.0.1: 120x60 depth 32 crc 9c9bb020
+draw32.tabdir.0.2: 120x60 depth 32 crc d58c98ce
+draw32.tabdir.0.3: 120x60 depth 32 crc 30b2c5cb
+draw32.tabdir.0.4: 120x60 depth 32 crc 194bf792
+draw32.tabdir.1.0: 120x60 depth 32 crc ce148d94
+draw32.tabdir.1.1: 120x60 depth 32 crc 732dbc9b
+draw32.tabdir.1.2: 120x60 depth 32 crc d0f2921d
+draw32.tabdir.1.3: 120x60 depth 32 crc a508f41c
+draw32.tabdir.1.4: 120x60 depth 32 crc 3bab4f60
+draw32.tabdir.2.0: 120x60 depth 32 crc 4f984c8d
+draw32.tabdir.2.1: 120x60 depth 32 crc 08021cab
+draw32.tabdir.2.2: 120x60 depth 32 crc 8274a33f
+draw32.tabdir.2.3: 120x60 depth 32 crc 354da857
+draw32.tabdir.2.4: 120x60 depth 32 crc 6813647c
+draw32.tabdir.3.0: 120x60 depth 32 crc c3df2cc2
+draw32.tabdir.3.1: 120x60 depth 32 crc 67a49c8a
+draw32.tabdir.3.2: 120x60 depth 32 crc c0ab986c
+draw32.tabdir.3.3: 120x60 depth 32 crc a90e627a
+draw32.tabdir.3.4: 120x60 depth 32 crc bc723f93
+draw32.indeterminate.medium.0: 120x60 depth 32 crc e7e1a698
+draw32.indeterminate.large.0: 120x60 depth 32 crc fd7490cc
+draw32.indeterminate.medium.1: 120x60 depth 32 crc a7aff274
+draw32.indeterminate.large.1: 120x60 depth 32 crc fd7490cc
+draw32.indeterminate.medium.5: 120x60 depth 32 crc a7aff274
+draw32.indeterminate.large.5: 120x60 depth 32 crc fd7490cc
+draw32.indeterminate.medium.12: 120x60 depth 32 crc e7e1a698
+draw32.indeterminate.large.12: 120x60 depth 32 crc fd7490cc
+draw32.indeterminate.inactive: 120x60 depth 32 crc 36f6b9d6
 draw32.focusrect: 120x60 depth 32 crc 7d0f0a87
 draw32.menubar: 120x60 depth 32 crc 62716c70
 draw32.menubg.0: 120x60 depth 32 crc ccfea453
@@ -1272,6 +1311,35 @@ draw8.tab.3.pressed: 120x60 depth 8 crc b3a85449
 draw8.popuparrow.0.pressed: 120x60 depth 8 crc 06154412
 draw8.popuparrow.1.pressed: 120x60 depth 8 crc 06154412
 draw8.growbox.pressed: 120x60 depth 8 crc be265dbf
+draw8.tabdir.0.0: 120x60 depth 8 crc 54310ab8
+draw8.tabdir.0.1: 120x60 depth 8 crc 5245b50a
+draw8.tabdir.0.2: 120x60 depth 8 crc 27dcb37b
+draw8.tabdir.0.3: 120x60 depth 8 crc ab12e565
+draw8.tabdir.0.4: 120x60 depth 8 crc c007701b
+draw8.tabdir.1.0: 120x60 depth 8 crc f03077af
+draw8.tabdir.1.1: 120x60 depth 8 crc e3d4e5ed
+draw8.tabdir.1.2: 120x60 depth 8 crc d787347c
+draw8.tabdir.1.3: 120x60 depth 8 crc 2689c53e
+draw8.tabdir.1.4: 120x60 depth 8 crc 07dc9ae3
+draw8.tabdir.2.0: 120x60 depth 8 crc 20a22aa0
+draw8.tabdir.2.1: 120x60 depth 8 crc 9346ba87
+draw8.tabdir.2.2: 120x60 depth 8 crc e676ab66
+draw8.tabdir.2.3: 120x60 depth 8 crc 0493ec76
+draw8.tabdir.2.4: 120x60 depth 8 crc 535fd663
+draw8.tabdir.3.0: 120x60 depth 8 crc 22dd2a86
+draw8.tabdir.3.1: 120x60 depth 8 crc d96cebce
+draw8.tabdir.3.2: 120x60 depth 8 crc d1e1ce5c
+draw8.tabdir.3.3: 120x60 depth 8 crc 130e7710
+draw8.tabdir.3.4: 120x60 depth 8 crc 0299dc2b
+draw8.indeterminate.medium.0: 120x60 depth 8 crc 52331c27
+draw8.indeterminate.large.0: 120x60 depth 8 crc 06154412
+draw8.indeterminate.medium.1: 120x60 depth 8 crc 40eecceb
+draw8.indeterminate.large.1: 120x60 depth 8 crc 06154412
+draw8.indeterminate.medium.5: 120x60 depth 8 crc 40eecceb
+draw8.indeterminate.large.5: 120x60 depth 8 crc 06154412
+draw8.indeterminate.medium.12: 120x60 depth 8 crc 52331c27
+draw8.indeterminate.large.12: 120x60 depth 8 crc 06154412
+draw8.indeterminate.inactive: 120x60 depth 8 crc 1dbd311d
 draw8.focusrect: 120x60 depth 8 crc e186b53f
 draw8.menubar: 120x60 depth 8 crc 8d59b533
 draw8.menubg.0: 120x60 depth 8 crc 575061af
@@ -1537,6 +1605,60 @@ dialogs.plain.standard.back: dddd dddd dddd
 dialogs.plain.standard.cport: 1
 dialogs.plain.standard: 48x28 depth 32 crc 9ea0b5ba
 dialogs.plain.standard.hit: err 0 1 dumped 1
+== labels
+labels.kind0.state1: fg 0000 0000 0000 bg dddd dddd dddd mode 1
+labels.kind0.state0: fg 7777 7777 7777 bg dddd dddd dddd mode 1
+labels.kind0.state2: fg ffff ffff ffff bg 6666 6666 6666 mode 1
+labels.kind0.state3: fg 2222 2222 2222 bg dddd dddd dddd mode 1
+labels.kind0.state7: fg 2222 2222 2222 bg dddd dddd dddd mode 1
+labels.kind1.state1: fg 0000 0000 0000 bg ffff ffff ffff mode 1
+labels.kind1.state0: fg 0000 0000 0000 bg ffff ffff ffff mode 49
+labels.kind1.state2: fg 0000 0000 0000 bg ffff ffff ffff mode 1
+labels.kind1.state3: fg 0000 0000 0000 bg ffff ffff ffff mode 1
+labels.kind1.state7: fg 0000 0000 0000 bg ffff ffff ffff mode 1
+labels.kind2.state1: fg 0000 0000 0000 bg ffff ffff ffff mode 1
+labels.kind2.state0: fg 0000 0000 0000 bg ffff ffff ffff mode 49
+labels.kind2.state2: fg 0000 0000 0000 bg ffff ffff ffff mode 1
+labels.kind2.state3: fg 0000 0000 0000 bg ffff ffff ffff mode 1
+labels.kind2.state7: fg 0000 0000 0000 bg ffff ffff ffff mode 1
+labels.kind3.state1: fg 0000 0000 0000 bg cccc cccc cccc mode 1
+labels.kind3.state0: fg 7777 7777 7777 bg dddd dddd dddd mode 1
+labels.kind3.state2: fg ffff ffff ffff bg 8888 8888 8888 mode 1
+labels.kind3.state3: fg 0000 0000 0000 bg cccc cccc cccc mode 1
+labels.kind3.state7: fg 0000 0000 0000 bg cccc cccc cccc mode 1
+labels.kind4.state1: fg 0000 0000 0000 bg dddd dddd dddd mode 1
+labels.kind4.state0: fg 7777 7777 7777 bg dddd dddd dddd mode 1
+labels.kind4.state2: fg ffff ffff ffff bg 6666 6666 6666 mode 1
+labels.kind4.state3: fg 0000 0000 0000 bg dddd dddd dddd mode 1
+labels.kind4.state7: fg 0000 0000 0000 bg dddd dddd dddd mode 1
+labels.kind5.state1: fg 0000 0000 0000 bg dddd dddd dddd mode 1
+labels.kind5.state0: fg 7777 7777 7777 bg dddd dddd dddd mode 1
+labels.kind5.state2: fg ffff ffff ffff bg 6666 6666 6666 mode 1
+labels.kind5.state3: fg 2222 2222 2222 bg dddd dddd dddd mode 1
+labels.kind5.state7: fg 2222 2222 2222 bg dddd dddd dddd mode 1
+labels.kind6.state1: fg 0000 0000 0000 bg ffff ffff ffff mode 1
+labels.kind6.state0: fg 0000 0000 0000 bg ffff ffff ffff mode 49
+labels.kind6.state2: fg 0000 0000 0000 bg ffff ffff ffff mode 1
+labels.kind6.state3: fg 0000 0000 0000 bg ffff ffff ffff mode 1
+labels.kind6.state7: fg 0000 0000 0000 bg ffff ffff ffff mode 1
+labels.kind7.state1: fg 0000 0000 0000 bg ffff ffff ffff mode 1
+labels.kind7.state0: fg 0000 0000 0000 bg ffff ffff ffff mode 49
+labels.kind7.state2: fg 0000 0000 0000 bg ffff ffff ffff mode 1
+labels.kind7.state3: fg 0000 0000 0000 bg ffff ffff ffff mode 1
+labels.kind7.state7: fg 0000 0000 0000 bg ffff ffff ffff mode 1
+labels.kind8.state1: fg 0000 0000 0000 bg cccc cccc cccc mode 1
+labels.kind8.state0: fg 7777 7777 7777 bg dddd dddd dddd mode 1
+labels.kind8.state2: fg ffff ffff ffff bg 8888 8888 8888 mode 1
+labels.kind8.state3: fg 0000 0000 0000 bg cccc cccc cccc mode 1
+labels.kind8.state7: fg 0000 0000 0000 bg cccc cccc cccc mode 1
+labels.kind9.state1: fg 0000 0000 0000 bg cccc cccc cccc mode 1
+labels.kind9.state0: fg 7777 7777 7777 bg dddd dddd dddd mode 1
+labels.kind9.state2: fg ffff ffff ffff bg 8888 8888 8888 mode 1
+labels.kind9.state3: fg 0000 0000 0000 bg cccc cccc cccc mode 1
+labels.kind9.state7: fg 0000 0000 0000 bg cccc cccc cccc mode 1
+labels.background.plain: 1111 2222 3333
+labels.background.theme: 1111 2222 3333
+labels.background.content: 1111 2222 3333
 == unregister
 unregister.Unregister: 0
 unregister.Unregister.again: -30562

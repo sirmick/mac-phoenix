@@ -583,6 +583,54 @@ static void drawing(void)
                 PRIM("growbox", DrawThemeStandaloneGrowBox(p, kThemeGrowRight | kThemeGrowDown, false, states[s]))
             }
         }
+        /* tabs facing each way, every style (across a 24-high bar, or down
+           a 24-wide one) */
+        for(i = 0; i < 4; i++)
+            for(s = 0; s <= 4; s++)
+            {
+                Rect tb;
+                if(i < 2)
+                    SetRect(&tb, 10, 10, 90, 34);
+                else
+                    SetRect(&tb, 10, 10, 34, 50);
+                begin(depths[d]);
+                DrawThemeTab(&tb, s, i, NULL, 0);
+                sprintf(k, "tabdir.%d.%d", i, s);
+                end(k);
+            }
+        /* progress bars: indeterminate at a few phases, medium and large,
+           and determinate inactive */
+        for(i = 0; i < 4; i++)
+        {
+            static const SInt8 phases[] = { 0, 1, 5, 12 };
+            int large;
+            for(large = 0; large < 2; large++)
+            {
+                ThemeTrackDrawInfo t;
+                memset(&t, 0, sizeof t);
+                t.kind = large ? kThemeLargeIndeterminateBar : kThemeMediumIndeterminateBar;
+                SetRect(&t.bounds, 8, 10, 108, large ? 26 : 24);
+                t.min = 0; t.max = 100; t.value = 25;
+                t.attributes = kThemeTrackHorizontal;
+                t.enableState = kThemeTrackActive;
+                t.trackInfo.progress.phase = phases[i];
+                begin(depths[d]);
+                DrawThemeTrack(&t, NULL, NULL, 0);
+                sprintf(k, "indeterminate.%s.%d", large ? "large" : "medium", phases[i]);
+                end(k);
+            }
+        }
+        {
+            ThemeTrackDrawInfo t;
+            memset(&t, 0, sizeof t);
+            t.kind = kThemeMediumIndeterminateBar;
+            SetRect(&t.bounds, 8, 10, 108, 24);
+            t.attributes = kThemeTrackHorizontal;
+            t.enableState = kThemeTrackInactive;
+            begin(depths[d]);
+            DrawThemeTrack(&t, NULL, NULL, 0);
+            end("indeterminate.inactive");
+        }
         SetRect(&b, 8, 8, 112, 52);
         begin(depths[d]); DrawThemeFocusRect(&b, true); end("focusrect");
         begin(depths[d]); DrawThemeMenuBarBackground(&b, kThemeMenuBarNormal, 0); end("menubar");
@@ -807,6 +855,9 @@ static void controls(void)
         { 1008, 100, 20, 201, 0, 0, 0, "popup10" },
         { 1009, 100, 20, 200, 0, 0, 0, "popupfixed" },
         { 1008, 160, 20, 200, 40, 0, 0, "popuptitle" },
+        /* no such menu (999); ChromeGallery's: menu 0, value 200 */
+        { 1008, 100, 20, 999, 0, 0, 0, "popupnomenu" },
+        { 1008, 120, 20, 0, 0, 200, 0, "popupgallery" },
         { 368, 60, 20, 0, 0, 0, 10, "push" },
         { 369, 60, 16, 0, 2, 0, 11, "check" },
         { 370, 60, 16, 0, 2, 0, 12, "radio" },
@@ -816,6 +867,9 @@ static void controls(void)
         { 33, 40, 30, 0, 1, 0, 10, "bevel" },
         { 34, 40, 30, 0, 1, 0, 10, "bevel" },
         { 48, 100, 20, 0, 10, 5, 129, "slider" },
+        /* pointing up (reverse direction), non-directional */
+        { 52, 100, 20, 0, 10, 5, 129, "sliderup" },
+        { 56, 100, 20, 0, 10, 5, 129, "sliderplain" },
         { 64, 12, 12, 0, 1, 0, 0, "triangle" },
         { 80, 100, 14, 0, 100, 50, 0, "progress" },
         { 96, 13, 23, 0, 10, 5, 20, "arrows" },
@@ -1013,6 +1067,78 @@ static void dialogs(void)
     DisposeModalFilterUPP(filter);
 }
 
+/* The colours DrawThemeButton leaves for its label proc, by kind and
+   state (the port: black on white before each call) */
+static char label_key[48];
+static pascal void label_proc(const Rect *bounds, ThemeButtonKind kind, const ThemeButtonDrawInfo *info,
+                              UInt32 data, SInt16 depth, Boolean color)
+{
+    RGBColor fg, bg;
+    GetForeColor(&fg);
+    GetBackColor(&bg);
+    out(label_key, "fg %04x %04x %04x bg %04x %04x %04x mode %d", fg.red, fg.green, fg.blue, bg.red, bg.green,
+        bg.blue, qd.thePort->txMode);
+}
+
+static void background_out(const char *key, ControlHandle c)
+{
+    /* a colour of its own first: whether the call changes it at all */
+    RGBColor bg;
+    RGBColor mark = { 0x1111, 0x2222, 0x3333 }, white = { 0xFFFF, 0xFFFF, 0xFFFF };
+    RGBBackColor(&mark);
+    SetUpControlBackground(c, 32, true);
+    GetBackColor(&bg);
+    out(key, "%04x %04x %04x", bg.red, bg.green, bg.blue);
+    RGBBackColor(&white);
+}
+
+static void labels(void)
+{
+    /* every kind 8.6 knows (0-12) and a few states */
+    static const ThemeButtonKind kinds[] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 };
+    static const ThemeDrawState states[] = { kThemeStateActive, kThemeStateInactive, kThemeStatePressed,
+                                             kThemeStatePressedDown, kThemeStateUnavailable };
+    ThemeButtonDrawUPP proc = NewThemeButtonDrawUPP(label_proc);
+    RGBColor black = { 0, 0, 0 }, white = { 0xFFFF, 0xFFFF, 0xFFFF }, tint = { 0xCCCC, 0xEEEE, 0xFFFF };
+    Rect back, b;
+    WindowRef w;
+    ControlHandle c;
+    int i, j;
+    if(!SECTION("labels"))
+        return;
+    RegisterAppearanceClient();
+    SetRect(&back, 0, 40, 400, 240);
+    w = NewCWindow(NULL, &back, "\p", true, plainDBox, (WindowRef)-1, false, 0);
+    SetPort((GrafPtr)w);
+    SetRect(&b, 20, 20, 100, 40);
+    for(i = 0; i < (int)(sizeof kinds / sizeof kinds[0]); i++)
+        for(j = 0; j < (int)(sizeof states / sizeof states[0]); j++)
+        {
+            ThemeButtonDrawInfo info;
+            info.state = states[j];
+            info.value = kThemeButtonOff;
+            info.adornment = kThemeAdornmentNone;
+            RGBForeColor(&black);
+            RGBBackColor(&white);
+            TextMode(srcOr);
+            sprintf(label_key, "kind%d.state%d", (int)kinds[i], (int)states[j]);
+            DrawThemeButton(&b, kinds[i], &info, NULL, NULL, proc, 0);
+        }
+    RGBForeColor(&black);
+    RGBBackColor(&white);
+    /* SetUpControlBackground for a control in no embedding hierarchy: the
+       plain window, then with a theme background, then a content colour */
+    c = NewControl(w, &b, "\p", false, 0, 0, 1, pushButProc, 0);
+    background_out("background.plain", c);
+    SetThemeWindowBackground(w, kThemeBrushDialogBackgroundActive, false);
+    background_out("background.theme", c);
+    SetWindowContentColor(w, &tint);
+    background_out("background.content", c);
+    DisposeControl(c);
+    DisposeWindow(w);
+    DisposeThemeButtonDrawUPP(proc);
+}
+
 int main(void)
 {
     long v;
@@ -1048,6 +1174,7 @@ int main(void)
     modes();
     title();
     dialogs();
+    labels();
     if(SECTION("unregister"))
     {
         RegisterAppearanceClient();   /* sections stand alone (a resumed run) */

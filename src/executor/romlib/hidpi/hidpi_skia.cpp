@@ -199,12 +199,19 @@ void draw_chrome(SkCanvas *canvas, const Scaler &sc, const Run &run)
         SkPaint paint;
         paint.setAntiAlias(true);
         paint.setColor(sh.color);
-        if(!sh.colors.empty() && sh.gr > 0)
+        if(!sh.colors.empty())
         {
             std::vector<SkColor> colors(sh.colors.begin(), sh.colors.end());
-            paint.setShader(SkGradientShader::MakeRadial({ sh.gx * s, sh.gy * s }, sh.gr * s, colors.data(),
-                                                         sh.pos.size() == colors.size() ? sh.pos.data() : nullptr,
-                                                         (int)colors.size(), SkTileMode::kClamp));
+            const SkScalar *pos = sh.pos.size() == colors.size() ? sh.pos.data() : nullptr;
+            if(sh.gr > 0)
+                paint.setShader(SkGradientShader::MakeRadial({ sh.gx * s, sh.gy * s }, sh.gr * s, colors.data(), pos,
+                                                             (int)colors.size(), SkTileMode::kClamp));
+            else
+            {
+                SkPoint ends[] = { { sh.gx * s, sh.gy * s }, { sh.gx2 * s, sh.gy2 * s } };
+                paint.setShader(SkGradientShader::MakeLinear(ends, colors.data(), pos, (int)colors.size(),
+                                                             SkTileMode::kClamp));
+            }
         }
         if(sh.stroke > 0)
         {

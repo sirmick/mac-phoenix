@@ -489,8 +489,10 @@ OSErr Executor::C_SetUpControlBackground(ControlRef inControl, SInt16 inDepth, B
             CTLCALL(c, kControlMsgSetUpBackground, ptr_to_longint(&rec));
             return noErr;
         }
-    RGBColor *colors = validate_colors_for_window(CTL_OWNER(inControl));
-    RGBBackColor(&colors[wContentColor]);
+    /* Else nothing: the port's background stays (8.6 on the G3, even with
+       a theme background or a content colour: appr labels.background.*).
+       Its CDEFs call this before erasing; white here left white boxes
+       round controls on the theme's grey. */
     return noErr;
 }
 

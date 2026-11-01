@@ -267,8 +267,16 @@ draw_push(ControlHandle c, int16_t part)
         InsetRect(&r, 2, 2);
         RectRgn(PORT_CLIP_REGION(CTL_OWNER(c)), &r);
         SectRgn(PORT_CLIP_REGION(CTL_OWNER(c)), save, PORT_CLIP_REGION(CTL_OWNER(c)));
-        /* the title white on the pressed face */
-        if(CTL_HILITE(c) && CTL_HILITE(c) != 255)
+        /* the title white on the pressed face, #777 when inactive, as
+           DrawThemeButton sets them up for 8.6's label procs (appr
+           labels.kind0.*) */
+        if(CTL_HILITE(c) == 255)
+        {
+            static const RGBColor inactive = { 0x7777, 0x7777, 0x7777 };
+            current_control_colors[text_color] = inactive;
+            text_mode = srcOr;
+        }
+        else if(CTL_HILITE(c))
             current_control_colors[text_color] = ROMlib_white_rgb_color;
         if(text_mode == srcCopy)
             text_mode = srcOr;

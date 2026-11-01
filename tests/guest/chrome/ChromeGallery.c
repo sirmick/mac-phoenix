@@ -3,8 +3,9 @@
    pop-up, little arrows, disclosure triangle, tabs) that stays on the
    screen until it is told to quit. For looking at Executor's HiDPI chrome
    (--executor-scale 2, docs/executor/HiDPI.md) and the ctest cell
-   hidpi_chrome_executor, which compares the 2x surface with the 1x frame
-   inside the boxes below (tests/test_hidpi_chrome.sh: keep them in step). */
+   hidpi_chrome_executor (tests/test_hidpi_chrome.sh), which compares the
+   2x surface with the 1x frame inside some of this chrome: keep its boxes
+   in step with the layout here. */
 #include <Types.h>
 #include <Quickdraw.h>
 #include <Fonts.h>
@@ -45,7 +46,9 @@ static const struct ctl ctls[] = {
     { 1008, 50, 260, 70, 380, 200, 0, 0, "\p" }, /* pop-up, menu 200 */
     { 96, 80, 260, 103, 273, 5, 0, 10, "\p" },  /* little arrows */
     { 64, 80, 290, 92, 302, 1, 0, 1, "\p" },    /* disclosure triangle, open */
-    { 368, 20, 260, 40, 340, 0, 0, 1, "\pOff" }, /* inactive */
+    /* inactive: the last two */
+    { 368, 20, 260, 40, 340, 0, 0, 1, "\pOff" },
+    { 369, 214, 20, 230, 120, 1, 0, 1, "\pDim" },
 };
 
 static void DrawGallery(WindowRef w)
@@ -88,6 +91,9 @@ int main(void)
     AppendMenu(m, "\pChrome");
     InsertMenu(m, -1);
 
+    /* the floating window first: the document window in front, active */
+    SetRect(&r, 480, 80, 620, 160);
+    floater = NewCWindow(NULL, &r, "\pFloat", true, kWindowFloatProc, (WindowRef)-1, true, 0);
     SetRect(&r, 20, 60, 460, 300);
     doc = NewCWindow(NULL, &r, "\pChrome Gallery", true, zoomDocProc, (WindowRef)-1, true, 0);
     SetPort((GrafPtr)doc);
@@ -97,11 +103,9 @@ int main(void)
         const struct ctl *c = &ctls[i];
         SetRect(&r, c->left, c->top, c->right, c->bottom);
         h = NewControl(doc, &r, (ConstStr255Param)c->title, true, c->value, c->min, c->max, c->proc, 0);
-        if(i == sizeof ctls / sizeof ctls[0] - 1)
+        if(i >= (int)(sizeof ctls / sizeof ctls[0]) - 2)
             HiliteControl(h, 255);
     }
-    SetRect(&r, 480, 80, 620, 160);
-    floater = NewCWindow(NULL, &r, "\pFloat", true, kWindowFloatProc, (WindowRef)-1, true, 0);
 
     while(!quit)
     {
@@ -111,6 +115,7 @@ int main(void)
         {
             case updateEvt:
                 BeginUpdate((WindowRef)e.message);
+                SetPort((GrafPtr)e.message);
                 EraseRect(&((GrafPtr)e.message)->portRect);
                 if((WindowRef)e.message == doc)
                     DrawGallery(doc);
