@@ -15,7 +15,7 @@
 //                    PowerPC-only applications always run theirs)
 //   ?logtraps=LIST   Executor logs Toolbox calls (as --executor-logtraps):
 //                    LIST the names (wildcards, -NAME leaves out; 1: all);
-//                    &nesting=N calls nested N deep; ?debug=OPTS Executor's
+//                    &nesting=N calls nested N deep (default 6); ?debug=OPTS Executor's
 //                    --executor-debug options. Everything printed goes to the
 //                    server too (log.js; tools/web/server keeps it per session)
 // library.json beside the page (optional) offers more disks: [{ title,

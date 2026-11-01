@@ -292,8 +292,8 @@ async function start(m) {
         args.push('--logtraps');
         if (m.logtraps !== '1')
             args.push('--logtraps-filter', m.logtraps);
-        if (m.nesting)
-            args.push('--logtraps-nesting', m.nesting);
+        // Applications' calls come nested in the Toolbox's callbacks (the Finder's are all)
+        args.push('--logtraps-nesting', m.nesting || '6');
     }
     if (m.debug)
         args.push('--debug', m.debug);
