@@ -1,0 +1,10 @@
+# build.mpw — DevProbe: how StdCLib uses its device table; tools/mpw/mpw build tests/guest/devtest
+# products: DevProbe
+Delete -i DevProbe
+MrC devprobe.c -o devprobe.o
+PPCLink -main __start devprobe.o ∂
+	"{SharedLibraries}InterfaceLib" "{SharedLibraries}StdCLib" ∂
+	"{PPCLibraries}StdCRuntime.o" "{PPCLibraries}PPCCRuntime.o" ∂
+	-t APPL -c 'DvPb' -o DevProbe
+Rez -a devprobe.r -o DevProbe
+SetFile -t APPL -c 'DvPb' -a B DevProbe
