@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/binary"
+	"net"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -269,5 +270,17 @@ func TestSessionLease(t *testing.T) {
 	}
 	if s.getScreen() != nil {
 		t.Fatal("A's screen outlived it")
+	}
+}
+
+func TestBrowserURL(t *testing.T) {
+	for addr, want := range map[string]string{
+		"127.0.0.1:8090": "http://127.0.0.1:8090/", "0.0.0.0:8090": "http://127.0.0.1:8090/",
+		"[::]:9000": "http://127.0.0.1:9000/", "[::1]:9000": "http://[::1]:9000/",
+	} {
+		a, _ := net.ResolveTCPAddr("tcp", addr)
+		if got := browserURL("http", a); got != want {
+			t.Errorf("%s: %s, want %s", addr, got, want)
+		}
 	}
 }
