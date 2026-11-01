@@ -2,7 +2,8 @@
 // scratch data directory and an owner account ("owner", OWNER_PASSWORD),
 // serving SITE (the wasm build's page) and a library of IMAGES (images
 // with NAME.img.json records; include: the patterns offered). relay: lines
-// for the configuration's [relay] section; public: the page without signing in.
+// for the configuration's [relay] section; public: the page without signing in;
+// standalone: mode = "standalone" (no accounts, the server the tab's store).
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -23,13 +24,15 @@ async function freePort() {
     });
 }
 
-export async function startServer(site, { images = '', include = ['*.img'], relay = '', public: open = false } = {}) {
+export async function startServer(site, { images = '', include = ['*.img'], relay = '', public: open = false,
+                                    standalone = false } = {}) {
     const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'executor-web-'));
     const port = await freePort();
     const conf = path.join(scratch, 'server.toml');
     fs.writeFileSync(conf, `[server]\nport = ${port}\nsite = ${JSON.stringify(path.resolve(site))}\n`
         + `data = ${JSON.stringify(path.join(scratch, 'data'))}\n`
         + (open ? 'public = true\n' : '')
+        + (standalone ? 'mode = "standalone"\n' : '')
         + `[library]\nimages = ${JSON.stringify(images)}\ninclude = ${JSON.stringify(include)}\n`
         + (relay ? `[relay]\n${relay}\n` : ''));
     const cli = (...args) => execFileSync('python3', [SERVER, '--config', conf, ...args],

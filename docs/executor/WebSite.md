@@ -112,6 +112,22 @@ loginctl enable-linger $USER          # keeps running signed out
 journalctl --user -u executor-web     # its log (--quiet: errors only)
 ```
 
+### Standalone mode
+
+`mode = "standalone"` in `[server]` (or `--standalone`): one person's
+machine, the shape of P1's single binary. No accounts (every request is
+the one local user's) and the server is the tab's only store: `/api/me`
+says `"mode": "standalone"` and the tab uses no OPFS. Disks are read by
+Range requests (no chunk cache), their changed 4 KB blocks kept in memory
+and sent to `/api/sync/overlays` about every second and at once when
+Executor flushes (FlushVol, a file closed, an eject: fsync on the image),
+the last of them in a beacon when the page goes; Executor's volume is
+restored from and saved to `/api/sync/volumes` and `objects`
+(`web/executor/sync.js`, `Store`). One tab is in control
+(`/api/session`, `tools/web/server/session.py`): another shows its screen
+(a PNG a second, `/api/session/screen`) until it takes control or the
+first goes. Bind it to localhost. Test: `ctest -R executor.web.standalone`.
+
 ## HTTPS in front
 
 The page needs a secure context (HTTPS, or localhost) for OPFS: without it

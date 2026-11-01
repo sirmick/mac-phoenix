@@ -198,7 +198,12 @@ if(NODE_COMMAND AND PYTHON3_COMMAND)
     add_test(NAME executor.web.server_lazy
         COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_server_lazy.mjs
                 $<TARGET_FILE_DIR:executor-web> ${EXECUTOR_WEB_SYSTEM})
-    set_tests_properties(executor.web.server_sync executor.web.server_lazy PROPERTIES
+    # Standalone mode (the server the only store): a change survives a
+    # reload, a second tab watches until it takes control.
+    add_test(NAME executor.web.standalone
+        COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_standalone.mjs
+                $<TARGET_FILE_DIR:executor-web>)
+    set_tests_properties(executor.web.server_sync executor.web.server_lazy executor.web.standalone PROPERTIES
         LABELS "executor;web" TIMEOUT 300 SKIP_RETURN_CODE 77
         ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM}")
     # The site (make_site.sh) from a page that isn't a secure context (no
