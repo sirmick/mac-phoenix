@@ -255,7 +255,7 @@ void inherit_before(Run &now, const Run &old)
         return;
     for(const IRect &c : old.clip)
     {
-        IRect r = intersection(c, { kept.top - 1, kept.left - 1, kept.bottom + 1, kept.right + 1 });
+        IRect r = intersection(c, kept); /* no margin: past it may be what's in front now */
         if(!empty(r) && std::find_if(now.clip.begin(), now.clip.end(), [&](const IRect &n) {
                             return n.top <= r.top && n.left <= r.left && n.bottom >= r.bottom && n.right >= r.right;
                         }) == now.clip.end())
