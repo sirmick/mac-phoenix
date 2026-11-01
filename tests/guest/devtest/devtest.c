@@ -1,10 +1,15 @@
-/* devprobe.c — DevProbe, a PowerPC application that records how StdCLib
-   uses its device table (_getDevHandler, _addDevHandler): every handler of
-   the slots it finds is replaced by one that logs its arguments (r3-r6, the
-   words they point to) and its result, then calls the original; then the
-   low-level calls, stdio and the "dev:" names run. Run on Apple's StdCLib
-   (Mac OS 9.0.4) to learn what Executor's has to do. Log to
-   Host:devprobe.txt through the File Manager; "---" at the end. */
+/* devtest.c — DevTest, a PowerPC application on StdCLib's device table
+   (_addDevHandler, _getDevHandler) and the descriptor layer above it: open,
+   read, write, lseek, ioctl, fcntl, faccess, unlink on files (FSYS), the
+   "dev:" names (SYST, CONS) and a device of its own (TEST, slot 3); stdio on
+   that device; MakeResolvedPath. MrC, PPCLink: tools/mpw/mpw build
+   tests/guest/devtest. Executor's StdCLib (docs/executor/PPCLibs.md) against
+   Apple's on a Power Mac: ctest devtest_executor and devtest_rom_ppc (Mac OS
+   9.0.4, the reference). Results go to Host:devtest_results.txt through the
+   File Manager, in the guest suite's form: PASS/FAIL lines, "---" at the
+   end. The test's files are made in the application's folder and closed
+   before they are deleted (Host: is the host's file system on the ROM
+   machine, which deletes open files). */
 #include <Types.h>
 #include <Memory.h>
 #include <Quickdraw.h>
@@ -30,8 +35,12 @@ typedef long (*Handler)(long, long, long, long);
 
 extern long _addDevHandler(long slot, OSType name, Handler, Handler, Handler, Handler, Handler);
 extern long _getDevHandler(long slot, OSType *name, Handler *, Handler *, Handler *, Handler *, Handler *);
+extern OSErr MakeResolvedPath(short vol, long dir, unsigned char *path, Boolean resolveLeaf,
+                              unsigned char *buffer, Boolean *isFolder, Boolean *hadAlias,
+                              Boolean *leafIsAlias);
 
 static short out_ref;
+static int failures;
 
 static void put(const char *s)
 {
@@ -39,211 +48,393 @@ static void put(const char *s)
     FSWrite(out_ref, &n, s);
 }
 
-static void hex(unsigned long v)
+static void dec(char *out, long v)
 {
-    static const char digits[] = "0123456789ABCDEF";
-    char out[10];
-    int i;
-    for(i = 0; i < 8; i++)
-        out[i] = digits[(v >> (28 - 4 * i)) & 15];
-    out[8] = ' ';
-    out[9] = 0;
-    put(out);
-}
-
-static void type(OSType t)
-{
-    char s[6];
-    s[0] = t >> 24; s[1] = t >> 16; s[2] = t >> 8; s[3] = t; s[4] = ' '; s[5] = 0;
-    put(s);
-}
-
-/* Twelve words at p, if p looks like an address in RAM. */
-static void words(const char *what, long p)
-{
-    unsigned long *w = (unsigned long *)p;
-    int i;
-    if(p < 0x1000 || (unsigned long)p >= 0x40000000)
-        return;
-    put("    ");
-    put(what);
-    put(": ");
-    for(i = 0; i < 12; i++)
-        hex(w[i]);
-    put("\n");
-}
-
-static void str(const char *what, long p)
-{
-    const char *s = (const char *)p;
-    char buf[40];
-    int i;
-    if(p < 0x1000 || (unsigned long)p >= 0x40000000)
-        return;
-    for(i = 0; i < 39 && s[i] >= 32 && s[i] < 127; i++)
-        buf[i] = s[i];
-    buf[i] = 0;
-    if(i < 2)
-        return;
-    put("    ");
-    put(what);
-    put(" as text: \"");
-    put(buf);
-    put("\"\n");
-}
-
-#define SLOTS 4
-static OSType names[SLOTS];
-static Handler orig[SLOTS][5];
-static int depth;
-
-static long logged(int slot, int which, long a, long b, long c, long d)
-{
-    static const char *const procs[5] = { "p1", "p2", "p3", "p4", "p5" };
-    long r;
-    put("  call ");
-    type(names[slot]);
-    put(procs[which]);
-    put(" ");
-    hex(a); hex(b); hex(c); hex(d);
-    put("\n");
-    words("r3", a); str("r3", a);
-    words("r4", b); str("r4", b);
-    words("r5", c); str("r5", c);
-    words("r6", d);
-    if(which != 0 && a >= 0x1000 && (unsigned long)a < 0x40000000)
+    char tmp[16];
+    int n = 0, i = 0;
+    unsigned long u = v < 0 ? -(unsigned long)v : (unsigned long)v;
+    do
     {
-        /* The device's word for the descriptor, and what it leads to. */
-        long c = ((long *)a)[2];
-        words("cookie", c);
-        if(c >= 0x1000 && (unsigned long)c < 0x40000000)
-            words("*cookie", *(long *)c);
+        tmp[n++] = (char)('0' + u % 10);
+        u /= 10;
+    } while(u);
+    if(v < 0)
+        out[i++] = '-';
+    while(n)
+        out[i++] = tmp[--n];
+    out[i] = 0;
+}
+
+/* "PASS label got" or "FAIL label got (want expected)" */
+static void check(const char *label, const char *got, const char *want)
+{
+    int ok = strcmp(got, want) == 0;
+    put(ok ? "PASS " : "FAIL ");
+    put(label);
+    put(" [");
+    put(got);
+    put("]");
+    if(!ok)
+    {
+        put(" (want [");
+        put(want);
+        put("])");
+        failures++;
     }
-    depth++;
-    r = orig[slot][which](a, b, c, d);
-    depth--;
-    put("  -> ");
-    type(names[slot]);
-    put(procs[which]);
-    put(" = ");
-    hex(r);
-    put(" errno ");
-    hex(errno);
     put("\n");
-    words("r3 after", a);
-    words("r5 after", c);
-    return r;
 }
 
-#define WRAP(s, w) static long wrap_##s##_##w(long a, long b, long c, long d) \
-    { return logged(s, w, a, b, c, d); }
-#define WRAPS(s) WRAP(s, 0) WRAP(s, 1) WRAP(s, 2) WRAP(s, 3) WRAP(s, 4)
-WRAPS(0) WRAPS(1) WRAPS(2) WRAPS(3)
-static Handler wraps[SLOTS][5] = {
-    { wrap_0_0, wrap_0_1, wrap_0_2, wrap_0_3, wrap_0_4 },
-    { wrap_1_0, wrap_1_1, wrap_1_2, wrap_1_3, wrap_1_4 },
-    { wrap_2_0, wrap_2_1, wrap_2_2, wrap_2_3, wrap_2_4 },
-    { wrap_3_0, wrap_3_1, wrap_3_2, wrap_3_3, wrap_3_4 },
-};
-
-/* A device of its own (slot 3): claims "test:" names, reads "abc",
-   takes what is written, answers FIOINTERACTIVE and FIOBUFSIZE; logs each
-   call. testerr makes its read and write fail with that result. */
-static long testerr;
-
-static long test_proc(int which, long a, long b, long c, long d)
+static void checkl(const char *label, long got, long want)
 {
-    put("  TEST p");
-    hex(which + 1);
-    hex(a); hex(b); hex(c); hex(d);
-    put("\n");
-    words("r3", a); str("r3", a);
-    if(which == 4)
-        words("r5", c);
-    switch(which)
+    char g[16], w[16];
+    dec(g, got);
+    dec(w, want);
+    check(label, g, w);
+}
+
+/* A call's result and errno, "result errno"; errno is cleared before the
+   calls that are to leave it alone. */
+static void checkr(const char *label, long got, long want, long wantErrno)
+{
+    char g[40], w[40];
+    dec(g, got);
+    strcat(g, " ");
+    dec(g + strlen(g), errno);
+    dec(w, want);
+    strcat(w, " ");
+    dec(w + strlen(w), wantErrno);
+    check(label, g, w);
+}
+
+/* ---- the TEST device ---- */
+
+/* Claims "test:" names; reads "abc"; takes what is written; answers
+   FIOINTERACTIVE, FIOBUFSIZE (77), FIOLSEEK (42) and FIODUPFD. testerr makes
+   read and write fail with that result. Records what it was asked. */
+static long testerr;
+static long lastCmd, lastFlags, lastIoctl, closes;
+
+static long t1(long name, long cmd, long arg, long d)
+{
+    (void)d;
+    if(strncmp((char *)name, "test:", 5) != 0)
+        return -1;
+    lastCmd = cmd;
+    if(cmd == 0x6400)
     {
-        case 0:
-            if(strncmp((char *)a, "test:", 5) != 0)
-                return -1;
-            if(b == 0x6400)
-                ((long *)c)[2] = 0x12345678;
-            return 0;
-        case 1:
-            return 0;
-        case 2:
-        {
-            long *iob = (long *)a;
-            if(testerr)
-                return testerr;
-            if(iob[3] > 0)
-            {
-                char *p = (char *)iob[4];
-                long n = iob[3] < 3 ? iob[3] : 3;
-                memcpy(p, "abc", n);
-                iob[3] -= n;
-                iob[4] += n;
-            }
-            return 0;
-        }
-        case 3:
-        {
-            long *iob = (long *)a;
-            if(testerr)
-                return testerr;
-            iob[4] += iob[3];
-            iob[3] = 0;
-            return 0;
-        }
-        case 4:
-            if(b == FIOINTERACTIVE)
-                return 0;
-            if(b == FIOBUFSIZE)
-            {
-                *(long *)c = 77;
-                return 0;
-            }
-            if(b == FIOLSEEK)
-            {
-                ((long *)c)[1] = 42;
-                return 0;
-            }
-            if(b == FIODUPFD)
-                return 0;
-            return 22;
+        lastFlags = *(unsigned short *)arg;
+        ((long *)arg)[2] = 0x12345678;   /* the device's word */
     }
     return 0;
 }
-static long t1(long a, long b, long c, long d) { return test_proc(0, a, b, c, d); }
-static long t2(long a, long b, long c, long d) { return test_proc(1, a, b, c, d); }
-static long t3(long a, long b, long c, long d) { return test_proc(2, a, b, c, d); }
-static long t4(long a, long b, long c, long d) { return test_proc(3, a, b, c, d); }
-static long t5(long a, long b, long c, long d) { return test_proc(4, a, b, c, d); }
 
-static void step(const char *s)
+static long t2(long iob, long b, long c, long d)
 {
-    put("== ");
-    put(s);
-    put("\n");
+    (void)b; (void)c; (void)d;
+    if(((long *)iob)[2] == 0x12345678)
+        closes++;
+    return 0;
 }
 
-static void result(const char *what, long v)
+static long t3(long a, long b, long c, long d)
 {
-    put("  ");
-    put(what);
-    put(" = ");
-    hex(v);
-    put(" errno ");
-    hex(errno);
-    put("\n");
+    long *iob = (long *)a;
+    (void)b; (void)c; (void)d;
+    if(testerr)
+        return testerr;
+    if(iob[3] > 0)
+    {
+        char *p = (char *)iob[4];
+        long n = iob[3] < 3 ? iob[3] : 3;
+        memcpy(p, "abc", n);
+        iob[3] -= n;
+        iob[4] += n;
+    }
+    return 0;
+}
+
+static long t4(long a, long b, long c, long d)
+{
+    long *iob = (long *)a;
+    (void)b; (void)c; (void)d;
+    if(testerr)
+        return testerr;
+    iob[4] += iob[3];
+    iob[3] = 0;
+    return 0;
+}
+
+static long t5(long iob, long cmd, long arg, long d)
+{
+    (void)iob; (void)d;
+    lastIoctl = cmd;
+    if(cmd == FIOINTERACTIVE)
+        return 0;
+    if(cmd == FIOBUFSIZE)
+    {
+        *(long *)arg = 77;
+        return 0;
+    }
+    if(cmd == FIOLSEEK)
+    {
+        ((long *)arg)[1] = 42;
+        return 0;
+    }
+    if(cmd == FIODUPFD)
+        return 0;
+    return EINVAL;
+}
+
+/* ---- the table ---- */
+
+static void test_table(void)
+{
+    static const char *const want[3] = { "FSYS", "CONS", "SYST" };
+    char label[40], got[8];
+    int slot;
+    for(slot = 0; slot < 6; slot++)
+    {
+        OSType name = 0;
+        Handler h[5] = { 0, 0, 0, 0, 0 };
+        long r = _getDevHandler(slot, &name, &h[0], &h[1], &h[2], &h[3], &h[4]);
+        strcpy(label, "_getDevHandler ");
+        dec(label + strlen(label), slot);
+        if(slot < 3)
+        {
+            memcpy(got, &name, 4);
+            got[4] = 0;
+            check(label, r == 0 && h[0] && h[4] ? got : "fails", want[slot]);
+        }
+        else
+            checkl(label, r, -1);
+    }
+    checkl("_addDevHandler 3", _addDevHandler(3, 'TEST', t1, t2, t3, t4, t5), 3);
+    checkl("_addDevHandler 5", _addDevHandler(5, 'TES5', t1, t2, t3, t4, t5), -1);
+    {
+        OSType name = 0;
+        Handler h[5];
+        long r = _getDevHandler(3, &name, &h[0], &h[1], &h[2], &h[3], &h[4]);
+        checkl("_getDevHandler 3 after", r, 0);
+        check("_getDevHandler 3 handlers", name == 'TEST' && h[0] == t1 && h[4] == t5 ? "TEST" : "other",
+              "TEST");
+    }
+}
+
+/* ---- files (FSYS) ---- */
+
+static void test_files(void)
+{
+    char buf[16];
+    long n;
+    short refnum;
+    int fd, fd2;
+    FILE *f;
+
+    errno = 0;
+    fd = open("devtest.tmp", O_RDWR | O_CREAT | O_TRUNC);
+    checkr("open O_CREAT", fd, 3, 0);
+    checkr("write", write(fd, "hello", 5), 5, 0);
+    checkr("lseek SEEK_SET", lseek(fd, 1, SEEK_SET), 1, 0);
+    memset(buf, 0, sizeof buf);
+    checkr("read", read(fd, buf, 3), 3, 0);
+    check("read text", buf, "ell");
+    checkr("lseek SEEK_END", lseek(fd, -2, SEEK_END), 3, 0);
+    checkr("lseek SEEK_CUR", lseek(fd, 1, SEEK_CUR), 4, 0);
+    checkr("read at end", read(fd, buf, 4), 1, 0);
+    checkr("read past end", read(fd, buf, 4), 0, 0);
+    checkr("ioctl FIOINTERACTIVE", ioctl(fd, FIOINTERACTIVE, &n), -1, EINVAL);
+    errno = 0;
+    n = 0;
+    checkr("ioctl FIOBUFSIZE", ioctl(fd, FIOBUFSIZE, &n), -1, EINVAL);
+    errno = 0;
+    checkr("ioctl FIOFNAME", ioctl(fd, FIOFNAME, &n), -1, EINVAL);
+    errno = 0;
+    refnum = 0;
+    checkr("ioctl FIOREFNUM", ioctl(fd, FIOREFNUM, (long *)&refnum), 0, 0);
+    check("FIOREFNUM a file's", refnum > 0 ? "refnum" : "none", "refnum");
+    checkr("ioctl FIOSETEOF", ioctl(fd, FIOSETEOF, (long *)2), 0, 0);
+    checkr("lseek after FIOSETEOF", lseek(fd, 0, SEEK_END), 2, 0);
+    fd2 = fcntl(fd, F_DUPFD, 0);
+    checkr("F_DUPFD", fd2, 4, 0);
+    checkr("close", close(fd), 0, 0);
+    checkr("write to the dup", write(fd2, "y", 1), 1, 0);
+    checkr("close the dup", close(fd2), 0, 0);
+    checkr("close again", close(fd2), -1, EBADF);
+    errno = 0;
+    checkr("read a closed fd", read(fd, buf, 1), -1, EBADF);
+    errno = 0;
+    fd = open("devtest.tmp", O_RDONLY);
+    checkr("open O_RDONLY", fd, 3, 0);
+    checkr("write to O_RDONLY", write(fd, "q", 1), -1, EBADF);
+    errno = 0;
+    close(fd);
+    checkr("open O_CREAT|O_EXCL existing", open("devtest.tmp", O_RDWR | O_CREAT | O_EXCL), -1, EEXIST);
+    errno = 0;
+
+    f = fopen("devtest.tmp", "r");
+    check("fopen", f ? "FILE" : "NULL", "FILE");
+    if(f)
+    {
+        memset(buf, 0, sizeof buf);
+        check("fgets", fgets(buf, sizeof buf, f) ? buf : "NULL", "hey");
+        checkr("fclose", fclose(f), 0, 0);
+    }
+    f = fopen("devtest.tmp", "a");
+    if(f)
+    {
+        checkr("fputs to a file", fputs("abc", f), 3, 0);
+        checkr("fclose appended", fclose(f), 0, 0);
+    }
+    errno = 0;
+
+    checkr("faccess F_RENAME", faccess("devtest.tmp", F_RENAME, (long *)"devtest2.tmp"), 0, 0);
+    checkr("open the old name", open("devtest.tmp", O_RDONLY), -1, ENOENT);
+    errno = 0;
+    checkr("faccess F_DELETE", faccess("devtest2.tmp", F_DELETE, 0), 0, 0);
+    checkr("unlink missing", unlink("devtest2.tmp"), -1, ENOENT);
+    errno = 0;
+    checkr("open missing O_RDONLY", open("missing.tmp", O_RDONLY), -1, ENOENT);
+    errno = 0;
+}
+
+/* ---- the "dev:" names ---- */
+
+static void test_dev(void)
+{
+    long n;
+    int fd;
+
+    errno = 0;
+    fd = open("dev:null", O_WRONLY);
+    checkr("open dev:null", fd, 3, 0);
+    checkr("write dev:null", write(fd, "x", 1), 1, 0);
+    checkr("close dev:null", close(fd), 0, 0);
+    fd = open("Dev:Null", O_RDONLY);
+    checkr("open Dev:Null", fd, 3, 0);
+    checkr("read Dev:Null", read(fd, &n, 4), 0, 0);
+    close(fd);
+    fd = open("dev:console", O_RDWR);
+    checkr("open dev:console", fd, 3, 0);
+    checkr("close dev:console", close(fd), 0, 0);
+    fd = open("dev:stdout", O_WRONLY);
+    checkr("open dev:stdout", fd, 3, 0);
+    checkr("write dev:stdout", write(fd, "so\n", 3), 3, 0);
+    checkr("close dev:stdout", close(fd), 0, 0);
+    fd = open("Dev:StdErr", O_WRONLY);
+    checkr("open Dev:StdErr", fd, 3, 0);
+    close(fd);
+    fd = open("dev:stdin", O_RDONLY);
+    checkr("open dev:stdin", fd, 3, 0);
+    close(fd);
+    checkr("open dev:test", open("dev:test", O_RDWR), -1, ENXIO);
+    errno = 0;
+    checkr("write fd 1", write(1, "out\n", 4), 4, 0);
+    errno = 0;
+}
+
+/* ---- a device of its own ---- */
+
+static void test_device(void)
+{
+    char buf[16];
+    long n;
+    int fd, fd2;
+    FILE *f;
+
+    errno = 0;
+    fd = open("test:x", O_RDWR);
+    checkr("open test:x", fd, 3, 0);
+    checkl("open asks F_OPEN", lastCmd, 0x6400);
+    checkl("iob flags O_RDWR", lastFlags & 0xFF, O_RDWR + 1);
+    memset(buf, 0, sizeof buf);
+    checkr("read test", read(fd, buf, 10), 3, 0);
+    check("read test text", buf, "abc");
+    checkr("write test", write(fd, "wxyz", 4), 4, 0);
+    n = 0;
+    checkr("ioctl FIOBUFSIZE test", ioctl(fd, FIOBUFSIZE, &n), 0, 0);
+    checkl("FIOBUFSIZE value", n, 77);
+    checkl("ioctl reaches the device", lastIoctl, FIOBUFSIZE);
+    checkr("ioctl FIOFNAME test", ioctl(fd, FIOFNAME, &n), -1, EINVAL);
+    errno = 0;
+    checkr("lseek test", lseek(fd, 5, SEEK_SET), 42, 0);
+    checkl("lseek is FIOLSEEK", lastIoctl, FIOLSEEK);
+    fd2 = fcntl(fd, F_DUPFD, 0);
+    checkr("F_DUPFD test", fd2, 4, 0);
+    checkl("F_DUPFD is FIODUPFD", lastIoctl, FIODUPFD);
+    testerr = EIO;
+    checkr("read fails EIO", read(fd, buf, 10), -1, EIO);
+    errno = 0;
+    testerr = 0x4000FFD4;
+    checkr("write fails 0x4000FFD4", write(fd, "w", 1), -1, 0x4000FFD4);
+    errno = 0;
+    testerr = 0;
+    closes = 0;
+    checkr("close test", close(fd), 0, 0);
+    checkr("close test dup", close(fd2), 0, 0);
+    checkl("close calls", closes, 2);
+
+    f = fopen("test:y", "r");
+    check("fopen test:y", f ? "FILE" : "NULL", "FILE");
+    if(f)
+    {
+        checkl("getc test", getc(f), 'a');
+        checkr("fclose test:y", fclose(f), 0, 0);
+    }
+    f = fopen("test:z", "w");
+    check("fopen test:z", f ? "FILE" : "NULL", "FILE");
+    if(f)
+    {
+        checkr("fputs test:z", fputs("line\n", f), 5, 0);
+        checkr("fclose test:z", fclose(f), 0, 0);
+    }
+    errno = 0;
+    checkr("faccess F_DELETE test", faccess("test:x", F_DELETE, 0), 0, 0);
+    checkl("F_DELETE reaches the device", lastCmd, 0x6401);
+}
+
+/* ---- MakeResolvedPath ---- */
+
+/* "err folder|file alias|- length text end|more": the path as a Pascal
+   string in buffer, nothing after it. */
+static void resolved(const char *label, const char *name, OSErr wantErr, int wantFolder)
+{
+    Str255 path;
+    unsigned char buf[300];
+    Boolean folder = 0, alias = 0, leaf = 0;
+    char got[300], want[300];
+    OSErr e;
+    path[0] = strlen(name);
+    memcpy(path + 1, name, path[0]);
+    memset(buf, 0xEE, sizeof buf);
+    e = MakeResolvedPath(0, 0, path, true, buf, &folder, &alias, &leaf);
+    dec(got, e);
+    strcat(got, folder ? " folder" : " file");
+    strcat(got, alias || leaf ? " alias " : " - ");
+    dec(got + strlen(got), buf[0]);
+    strcat(got, " ");
+    strncat(got, (char *)buf + 1, buf[0] < 200 ? buf[0] : 200);
+    strcat(got, buf[buf[0] + 1] == 0xEE ? " end" : " more");
+    dec(want, wantErr);
+    strcat(want, wantFolder ? " folder - " : " file - ");
+    dec(want + strlen(want), strlen(name));
+    strcat(want, " ");
+    strcat(want, name);
+    strcat(want, " end");
+    check(label, got, want);
+}
+
+static void test_resolve(void)
+{
+    resolved("MakeResolvedPath file", "Host:devtest_results.txt", noErr, 0);
+    resolved("MakeResolvedPath folder", "Host:", noErr, 1);
+    resolved("MakeResolvedPath missing", "Host:missing.tmp", fnfErr, 0);
+    resolved("MakeResolvedPath no folder", "Host:nodir:x", dirNFErr, 0);
+    resolved("MakeResolvedPath no volume", "novolume:x", nsvErr, 0);
 }
 
 int main(void)
 {
     OSErr err;
-    long r, n;
-    int slot, i, fd;
-    char buf[64];
-    FILE *f;
 
     InitGraf(&qd.thePort);
     InitFonts();
@@ -253,234 +444,21 @@ int main(void)
     InitDialogs(0);
     InitCursor();
 
-    HDelete(0, 0, "\pHost:devprobe.txt");
-    err = HCreate(0, 0, "\pHost:devprobe.txt", 'ttxt', 'TEXT');
+    HDelete(0, 0, "\pHost:devtest_results.txt");
+    err = HCreate(0, 0, "\pHost:devtest_results.txt", 'ttxt', 'TEXT');
     if(err == noErr)
-        err = HOpen(0, 0, "\pHost:devprobe.txt", fsWrPerm, &out_ref);
+        err = HOpen(0, 0, "\pHost:devtest_results.txt", fsWrPerm, &out_ref);
     if(err != noErr)
         ExitToShell();
 
-    step("_getDevHandler");
-    for(slot = 0; slot < 8; slot++)
-    {
-        OSType name = 0;
-        Handler h[5] = { 0, 0, 0, 0, 0 };
-        r = _getDevHandler(slot, &name, &h[0], &h[1], &h[2], &h[3], &h[4]);
-        put("  slot ");
-        hex(slot);
-        put("= ");
-        hex(r);
-        type(name);
-        for(i = 0; i < 5; i++)
-            hex((long)h[i]);
-        put("\n");
-        if(slot < SLOTS && r == 0)
-        {
-            names[slot] = name;
-            for(i = 0; i < 5; i++)
-                orig[slot][i] = h[i];
-        }
-    }
-    step("_addDevHandler wrappers");
-    for(slot = 0; slot < SLOTS; slot++)
-        if(names[slot])
-        {
-            r = _addDevHandler(slot, names[slot], wraps[slot][0], wraps[slot][1], wraps[slot][2],
-                               wraps[slot][3], wraps[slot][4]);
-            result("add", r);
-        }
-    if(!names[3])
-    {
-        step("_addDevHandler 3 TEST");
-        r = _addDevHandler(3, 'TEST', t1, t2, t3, t4, t5);
-        result("add", r);
-        for(slot = 4; slot < 12; slot++)
-        {
-            put("  slot ");
-            hex(slot);
-            result("add", _addDevHandler(slot, 'TES2', t1, t2, t3, t4, t5));
-        }
-        step("_getDevHandler 3");
-        {
-            OSType name = 0;
-            Handler h[5];
-            result("get", _getDevHandler(3, &name, &h[0], &h[1], &h[2], &h[3], &h[4]));
-            type(name);
-            put(h[0] == t1 ? "t1 " : "not-t1 ");
-            put("\n");
-        }
-    }
-
-    step("open probe.tmp O_RDWR|O_CREAT|O_TRUNC");
-    fd = open("probe.tmp", O_RDWR | O_CREAT | O_TRUNC);
-    result("fd", fd);
-    step("write 5");
-    result("write", write(fd, "hello", 5));
-    step("lseek 1 SEEK_SET");
-    result("lseek", lseek(fd, 1, SEEK_SET));
-    step("read 3");
-    r = read(fd, buf, 3);
-    result("read", r);
-    step("ioctl FIOINTERACTIVE");
-    result("ioctl", ioctl(fd, FIOINTERACTIVE, &n));
-    step("ioctl FIOBUFSIZE");
-    n = 0;
-    result("ioctl", ioctl(fd, FIOBUFSIZE, &n));
-    result("arg", n);
-    step("ioctl FIOREFNUM");
-    n = 0;
-    result("ioctl", ioctl(fd, FIOREFNUM, &n));
-    result("arg", n);
-    step("ioctl FIOFNAME");
-    n = 0;
-    result("ioctl", ioctl(fd, FIOFNAME, &n));
-    str("arg", n);
-    step("dup");
-    result("dup", fcntl(fd, F_DUPFD, 0));
-    step("close");
-    result("close", close(fd));
-    step("open missing.tmp O_RDONLY");
-    result("fd", open("missing.tmp", O_RDONLY));
-    step("open dev:null O_WRONLY");
-    fd = open("dev:null", O_WRONLY);
-    result("fd", fd);
-    if(fd >= 0)
-    {
-        result("write", write(fd, "x", 1));
-        result("close", close(fd));
-    }
-    step("open dev:console O_RDWR");
-    fd = open("dev:console", O_RDWR);
-    result("fd", fd);
-    if(fd >= 0)
-        result("close", close(fd));
-    step("open dev:stdout O_WRONLY");
-    fd = open("dev:stdout", O_WRONLY);
-    result("fd", fd);
-    if(fd >= 0)
-    {
-        result("write", write(fd, "so\n", 3));
-        result("close", close(fd));
-    }
-    step("open Dev:StdErr O_WRONLY");
-    fd = open("Dev:StdErr", O_WRONLY);
-    result("fd", fd);
-    if(fd >= 0)
-        result("close", close(fd));
-    step("open dev:stdin O_RDONLY");
-    fd = open("dev:stdin", O_RDONLY);
-    result("fd", fd);
-    if(fd >= 0)
-        result("close", close(fd));
-    step("open dev:test O_RDWR");
-    fd = open("dev:test", O_RDWR);
-    result("fd", fd);
-    if(fd >= 0)
-        result("close", close(fd));
-    step("write 1 (stdout)");
-    result("write", write(1, "out\n", 4));
-    step("ioctl 0 FIOINTERACTIVE");
-    result("ioctl", ioctl(0, FIOINTERACTIVE, &n));
-    step("read 0 (stdin)");
-    result("read", read(0, buf, 4));
-    step("fopen probe.tmp r");
-    f = fopen("probe.tmp", "r");
-    result("f", (long)f);
-    if(f)
-    {
-        step("fgets");
-        result("fgets", (long)fgets(buf, sizeof buf, f));
-        step("fclose");
-        result("fclose", fclose(f));
-    }
-    step("faccess probe.tmp F_DELETE");
-    result("faccess", faccess("probe.tmp", F_DELETE, 0));
-    step("unlink missing.tmp");
-    result("unlink", unlink("missing.tmp"));
-    step("fflush stdout");
-    printf("printed\n");
-    result("fflush", fflush(stdout));
-
-    step("lseek -2 SEEK_END");
-    fd = open("probe.tmp", O_RDWR | O_CREAT | O_TRUNC);
-    write(fd, "hello", 5);
-    result("lseek", lseek(fd, -2, SEEK_END));
-    step("lseek 1 SEEK_CUR");
-    result("lseek", lseek(fd, 1, SEEK_CUR));
-    step("read at end");
-    result("read", read(fd, buf, 4));
-    step("FIOSETEOF 2");
-    n = 2;
-    result("ioctl", ioctl(fd, FIOSETEOF, (long *)2));
-    result("lseek end", lseek(fd, 0, SEEK_END));
-    step("dup, close twice");
-    i = fcntl(fd, F_DUPFD, 0);
-    result("dup", i);
-    result("close", close(fd));
-    result("write dup", write(i, "z", 1));
-    result("close dup", close(i));
-    result("close again", close(i));
-    step("write to O_RDONLY");
-    fd = open("probe.tmp", O_RDONLY);
-    result("write", write(fd, "q", 1));
-    close(fd);
-    step("faccess F_RENAME");
-    result("faccess", faccess("probe.tmp", F_RENAME, (long *)"probe2.tmp"));
-    unlink("probe2.tmp");
-
-    step("open test:x O_RDWR");
-    fd = open("test:x", O_RDWR);
-    result("fd", fd);
-    step("read 10 test");
-    result("read", read(fd, buf, 10));
-    step("write 4 test");
-    result("write", write(fd, "wxyz", 4));
-    step("ioctl FIOBUFSIZE test");
-    n = 0;
-    result("ioctl", ioctl(fd, FIOBUFSIZE, &n));
-    result("arg", n);
-    step("ioctl FIOFNAME test");
-    result("ioctl", ioctl(fd, FIOFNAME, &n));
-    step("lseek 5 SEEK_SET test");
-    result("lseek", lseek(fd, 5, SEEK_SET));
-    step("dup test");
-    i = fcntl(fd, F_DUPFD, 0);
-    result("dup", i);
-    step("read fails 5");
-    testerr = 5;
-    result("read", read(fd, buf, 10));
-    step("write fails 0x4000FFD4");
-    testerr = 0x4000FFD4;
-    result("write", write(fd, "w", 1));
-    testerr = 0;
-    step("close test");
-    result("close", close(fd));
-    result("close dup", close(i));
-    step("fopen test:y r");
-    f = fopen("test:y", "r");
-    result("f", (long)f);
-    if(f)
-    {
-        result("getc", getc(f));
-        result("fclose", fclose(f));
-    }
-    step("fopen test:z w, fputs, fclose");
-    f = fopen("test:z", "w");
-    if(f)
-    {
-        result("fputs", fputs("line\n", f));
-        result("fclose", fclose(f));
-    }
-    step("faccess test:x F_DELETE");
-    result("faccess", faccess("test:x", F_DELETE, 0));
+    test_table();
+    test_files();
+    test_dev();
+    test_device();
+    test_resolve();
 
     put("---\n");
     FSClose(out_ref);
-    /* Back to Apple's handlers before exit closes the streams. */
-    for(slot = 0; slot < SLOTS; slot++)
-        if(names[slot])
-            _addDevHandler(slot, names[slot], orig[slot][0], orig[slot][1], orig[slot][2],
-                           orig[slot][3], orig[slot][4]);
-    exit(0);
+    exit(failures ? 1 : 0);
     return 0;
 }

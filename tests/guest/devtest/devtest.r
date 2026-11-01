@@ -1,4 +1,4 @@
-/* devprobe.r — DevProbe's resources: the fragment's 'cfrg' and the SIZE. */
+/* devtest.r — DevTest's resources: the fragment's 'cfrg' and the SIZE. */
 
 #include "CodeFragmentTypes.r"
 #include "Types.r"
@@ -8,7 +8,7 @@ resource 'cfrg' (0) {
         kPowerPC, kFullLib, kNoVersionNum, kNoVersionNum,
         kDefaultStackSize, kNoAppSubFolder,
         kIsApp, kOnDiskFlat, kZeroOffset, kWholeFork,
-        "DevProbe"
+        "DevTest"
     }
 };
 

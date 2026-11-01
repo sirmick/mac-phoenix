@@ -361,6 +361,29 @@ set_tests_properties(clib_rom_ppc PROPERTIES
   ENVIRONMENT "MACEMU_ROM=${TEST_PPC_ROM}"
 )
 
+# StdCLib's device table and descriptor layer (FSYS, CONS, SYST, a device of
+# the program's own in slot 3; MakeResolvedPath) by DevTest
+# (tests/guest/devtest, MPW): Executor's, and Apple's on Mac OS 9.0.4.
+add_test(
+  NAME devtest_executor
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --backend executor --app ${CMAKE_SOURCE_DIR}/tests/guest/devtest/DevTest.bin --results devtest_results.txt --network none --timeout 120 --port 18458
+)
+set_tests_properties(devtest_executor PROPERTIES
+  TIMEOUT 180
+  LABELS "guest;executor"
+  SKIP_RETURN_CODE 77
+)
+add_test(
+  NAME devtest_rom_ppc
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --backend kpx --core mame-ppc --jit --app ${CMAKE_SOURCE_DIR}/tests/guest/devtest/DevTest.bin --results devtest_results.txt --network none --timeout 150 --port 18478
+)
+set_tests_properties(devtest_rom_ppc PROPERTIES
+  TIMEOUT 220
+  LABELS "guest"
+  SKIP_RETURN_CODE 77
+  ENVIRONMENT "MACEMU_ROM=${TEST_PPC_ROM}"
+)
+
 # PowerPC breakpoints and traces in an Executor session (--executor-ppc-break,
 # /api/executor/ppc-break; docs/executor/PPCTrace.md): CLibTest, a routine
 # breakpoint from the command line and a fragment one over the API.
