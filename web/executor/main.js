@@ -25,6 +25,11 @@
 // like ?disk=.
 // Served by tools/web/server, signed in (api/me): the overlays and
 // Executor's own volume are synced with the account (sync.js).
+// Standalone (api/me's mode; the server on one's own machine): the server
+// is the only store, no OPFS: disks read by Range as needed, their changes
+// and Executor's volume kept on the server (sync.js: Store), the last of
+// them in a beacon when the page goes. One tab is in control (api/session);
+// the others show its screen until they take control or it goes.
 // Outside a secure context (plain http to another host) there is no OPFS
 // and no AudioWorklet: uploads, library disks (read as needed, held in
 // memory) and changes to them and to Executor's volume last while
@@ -42,6 +47,7 @@ const box = document.getElementById('screen-box');
 document.getElementById('insecure').hidden = window.isSecureContext;
 const status = document.getElementById('status');
 const params = new URLSearchParams(location.search);
+addEventListener('pagehide', storeLast);      // before log.js's: the beacons' room is shared
 Log.start(Log.newId(), 'page');
 const [width, height] = (params.get('size') || '640x480').split('x').map(Number);
 // Executor scales by whole numbers (fractional scales: HiDPI.md phase 6).
@@ -68,7 +74,7 @@ window.executor = {
 };
 
 // ---- uploads, kept in OPFS (or for this visit, where there is none) ----
-const opfs = window.isSecureContext && navigator.storage && navigator.storage.getDirectory;
+let opfs = window.isSecureContext && navigator.storage && navigator.storage.getDirectory;
 let sessionFiles = [];          // without OPFS; and ?disk= fetches
 
 async function uploads() {
@@ -170,7 +176,7 @@ async function fetchDisk(url) {
         const range = probe && probe.status === 206 && /^bytes 0-0\/(\d+)$/.exec(probe.headers.get('Content-Range') || '');
         abort.abort();
         const size = range && Number(range[1]);
-        if (size && (lazy === '1' || size >= LAZY_MIN)) {
+        if (size && (lazy === '1' || standalone || size >= LAZY_MIN)) {
             if (probe.headers.get('X-Image-Id'))
                 imageIds[name] = probe.headers.get('X-Image-Id');
             return { name, size, lastModified: Date.parse(probe.headers.get('Last-Modified')) || 0,
@@ -282,6 +288,7 @@ function forgetLibraryDisk(name) {
 }
 
 async function fetchDisks() {
+    await modeKnown;
     loadLibrary();
     for (const url of [...params.getAll('disk'), ...picked()]) {
         try {
@@ -316,7 +323,9 @@ async function showFiles(files) {
         const st = imageState[f.name];
         s.textContent = f.name + (st && st.modified ? ' •' : '');
         if (st)
-            s.title = st.borrowed ? 'open in another tab: changes here last until this tab closes'
+            s.title = st.onServer ? (st.modified ? 'changed (kept on the server; the original is untouched)'
+                                                 : 'writable (changes kept on the server)')
+                    : st.borrowed ? 'open in another tab: changes here last until this tab closes'
                     : st.inMemory ? (st.modified ? 'changed (until Executor restarts: not a secure page; the original is untouched)'
                                                  : 'writable (changes last until Executor restarts: not a secure page)')
                     : st.modified ? 'changed (kept in this browser; the original is untouched)'
@@ -356,6 +365,11 @@ async function revert(f) {
         worker.terminate();
     worker = null;
     delete imageState[f.name];
+    if (standalone) {
+        await fetch(`api/sync/overlays/${imageKey(f)}`, { method: 'DELETE', cache: 'no-store' }).catch(() => {});
+        start();
+        return;
+    }
     if (!opfs) {
         start();                    // its changes were the Worker's
         return;
@@ -428,6 +442,8 @@ document.getElementById('reset').addEventListener('click', async () => {
     if (worker)
         worker.terminate();
     worker = null;
+    if (standalone)
+        await fetch(`api/sync/volumes/${volumeKey(await storedFiles())}`, { method: 'DELETE', cache: 'no-store' }).catch(() => {});
     if (opfs) {
         const volumes = await (await uploads()).getDirectoryHandle('volumes', { create: true });
         const key = volumeKey(await storedFiles());
@@ -477,21 +493,103 @@ function showSystems(files) {
     systemSelect.value = [...systemSelect.options].some((o) => o.value === want) ? want : '';
 }
 
-// ---- the account (tools/web/server): { name, owner }, or null ----
-let account = null;
-const accountKnown = (async () => {
-    if (!opfs)
-        return;
+// ---- the server (tools/web/server): the account, { name, owner }, or
+// null; standalone, no account and no OPFS ----
+let account = null, standalone = false;
+const modeKnown = (async () => {
+    let me = null;
     try {
         const res = await fetch('api/me', { cache: 'no-store' });
-        account = res.ok ? await res.json() : null;
+        me = res.ok ? await res.json() : null;
     } catch { }
+    standalone = !!me && me.mode === 'standalone';
+    if (standalone) {
+        opfs = false;
+        document.getElementById('insecure').hidden = true;
+    }
+    account = opfs ? me : null;
     const a = document.getElementById('account');
     if (account) {
         a.textContent = account.name;
         a.hidden = false;
     }
 })();
+
+// ---- standalone: one tab in control (tools/web/server/session.py) ----
+// This tab says it is there every BEAT ms while it watches; in control,
+// its Worker does (its timers aren't held back in a background tab) and
+// says what the server answered ('session'). Taken over: saved, stopped,
+// let go, watching. The beacons: what the Worker hasn't stored yet.
+const BEAT = 2000, HANDOVER = 6000;
+let control = false, watching = null, storeBeacons = [];
+const viewer = document.getElementById('viewer');
+
+async function beat(take = false) {
+    try {
+        const res = await fetch(`api/session?id=${Log.session}${take ? '&take=1' : ''}`,
+                                { method: 'POST', cache: 'no-store' });
+        return res.ok ? await res.json() : null;
+    } catch {
+        return null;
+    }
+}
+
+// In control (s: the server's answer): after the tab it was taken from
+// let go (it saves first), Executor starts.
+async function takeControl(s) {
+    control = true;
+    clearTimeout(watching);
+    watching = null;
+    viewer.hidden = true;
+    for (const end = Date.now() + HANDOVER; s && s.handing && Date.now() < end;) {
+        await new Promise((r) => setTimeout(r, 300));
+        s = await beat();
+    }
+    start();
+}
+
+// Another tab is in control: its screen, a PNG a second, until this one
+// takes control (the button) or gets it (the other one gone).
+async function watch() {
+    const s = await beat();
+    if (s && s.control)
+        return takeControl(s);
+    viewer.hidden = false;
+    status.textContent = s ? 'Executor is open in another tab: watching it here' : 'The server can\'t be reached';
+    let img = box.querySelector('img');
+    if (!img) {
+        img = document.createElement('img');
+        img.id = 'screen';
+        box.replaceChildren(img);
+    }
+    img.style.width = `${width}px`;
+    const next = new Image();
+    next.onload = () => { img.src = next.src; };
+    next.src = `api/session/screen?t=${Date.now()}`;
+    watching = setTimeout(watch, BEAT);
+}
+
+document.getElementById('take').addEventListener('click', async () => {
+    const s = await beat(true);
+    if (s && s.control)
+        takeControl(s);
+});
+
+async function lostControl() {
+    control = false;
+    generation++;
+    await saveAndStop();
+    navigator.sendBeacon(`api/session/release?id=${Log.session}`);
+    watch();
+}
+
+function storeLast() {
+    if (!standalone || !control)
+        return;
+    for (const b of storeBeacons)
+        navigator.sendBeacon(b.url, b.body);
+    navigator.sendBeacon(`api/session/release?id=${Log.session}`);
+}
 
 // Sync (sync.js) found changes here and on the account: which to keep.
 function conflictText(m) {
@@ -525,6 +623,9 @@ async function saveAndStop() {
 }
 
 async function start() {
+    await modeKnown;
+    if (standalone && !control)
+        return watching || watch();
     const mine = ++generation;
     window.executor.frames = 0;     // "running" means the new Worker's frames
     await saveAndStop();
@@ -540,7 +641,6 @@ async function start() {
     worker = new Worker('worker.js');
     worker.addEventListener('error', (e) => console.error(`worker: ${e.message} at ${e.filename}:${e.lineno}`));
     await disksFetched;
-    await accountKnown;
     const files = await storedFiles();
     showFiles(files);
     showSystems(files);
@@ -559,7 +659,8 @@ async function start() {
     const offscreen = canvas.transferControlToOffscreen();
     worker.postMessage({ type: 'start', canvas: offscreen, width, height, scale, files,
                          system: systemSelect.value, ppc: ppcBox.checked,
-                         volumeKey: volumeKey(files), sync: !!account, relay: !!account,
+                         volumeKey: volumeKey(files), sync: !!account, relay: !!account || standalone,
+                         standalone,
                          ids: imageIds, legacyKeys, log: Log.session,
                          logtraps: params.get('logtraps'), nesting: params.get('nesting'),
                          debug: params.get('debug'), ppcbreak: params.get('ppcbreak') },
@@ -576,7 +677,8 @@ async function start() {
         } else if (m.type === 'images') {
             const before = JSON.stringify(imageState);
             for (const i of m.images)
-                imageState[i.name] = { modified: i.modified, writable: i.writable, inMemory: i.inMemory, borrowed: i.borrowed };
+                imageState[i.name] = { modified: i.modified, writable: i.writable, inMemory: i.inMemory,
+                                       borrowed: i.borrowed, onServer: i.onServer };
             if (JSON.stringify(imageState) !== before)
                 storedFiles().then(showFiles);
         } else if (m.type === 'cursor') {
@@ -597,6 +699,11 @@ async function start() {
             worker.postMessage({ type: 'resolve', id: m.id, keep: confirm(conflictText(m)) ? 'mine' : 'account' });
         } else if (m.type === 'restart') {
             start();
+        } else if (m.type === 'beacons') {
+            storeBeacons = m.items;
+        } else if (m.type === 'session') {
+            if (!m.s.control && control)
+                lostControl();
         } else if (m.type === 'exit') {
             status.textContent = `Executor exited (${m.code})`;
         }

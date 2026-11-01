@@ -14,6 +14,14 @@
 // Signed in to tools/web/server: the overlays and the volume are synced
 // with the account (sync.js), down before they are mounted, up after
 // saves, and the network goes through its relay (net.js).
+//
+// Standalone (the server says so; main.js): no OPFS, the server keeps
+// it all (sync.js: Store): disks read by Range as needed, the overlays in
+// memory and Executor's volume restored from the server and saved there
+// about every second and when Executor flushes; what is left for when the
+// page goes, in a beacon the page holds ('beacons'). The page in control
+// says it is there (sessionBeat); while another tab watches, the screen
+// goes to the server for it, a PNG a second.
 'use strict';
 
 let canvas = null, ctx = null;
@@ -257,11 +265,17 @@ function scanVolume() {
 // Which images have changes (the page marks them, offers their download).
 function reportImages() {
     postMessage({ type: 'images', images: overlays.map((o) => ({
-        name: o.name, modified: o.modified, writable: o.writable, inMemory: o.inMemory, borrowed: o.borrowed })) });
+        name: o.name, modified: o.modified, writable: o.writable, inMemory: o.inMemory, borrowed: o.borrowed,
+        onServer: Store.enabled && !o.syncOff })) });
 }
 
 // now: the page is going away, sync without waiting for the next round.
 async function saveVolume(now = false) {
+    if (Store.enabled) {
+        if (overlays.length)
+            reportImages();
+        return Store.up(overlays, storeVolume);
+    }
     await saveLocally();
     await Sync.up(overlays, volumeDir, volumeKey, saved, now);
 }
@@ -316,6 +330,64 @@ async function saveLocally() {
     }
 }
 
+// Standalone: the volume as it is now, to the server (sync.js: Store); the
+// files changed since the last round read and hashed.
+async function storeVolume() {
+    const now = scanVolume();
+    const files = {}, bytes = new Map();
+    for (const [path, f] of Object.entries(now.files)) {
+        const old = saved.files[path];
+        if (old && old.size === f.size && old.mtime === f.mtime && old.sha) {
+            files[path] = old;
+            continue;
+        }
+        const data = FS.readFile(path);
+        const sha = await Sync.sha256(data);
+        bytes.set(sha, data);
+        files[path] = { ...f, sha };
+    }
+    saved = { dirs: now.dirs, files };
+    await Store.volumeUp(saved, bytes);
+}
+
+// Standalone: this tab is there, and in control (main.js; the Worker's
+// timers run on in a background tab); who watches.
+async function sessionBeat() {
+    try {
+        const res = await fetch(`api/session?id=${session}`, { method: 'POST', cache: 'no-store' });
+        if (!res.ok)
+            return;
+        const s = await res.json();
+        viewers = s.viewers;
+        postMessage({ type: 'session', s });
+    } catch { }
+}
+
+// Standalone: the page's beacon for if it goes now (sync.js: Store), when
+// something changed; and the screen for whoever watches.
+let beaconWrites = -1, viewers = 0, shotFrames = -1, shooting = false, session = '';
+function storeBeacons() {
+    const writes = overlays.reduce((n, o) => n + o.writes + o.sync.version, 0) + Store.flying.size;
+    if (writes === beaconWrites)
+        return;
+    beaconWrites = writes;
+    const items = Store.beacons(overlays);
+    postMessage({ type: 'beacons', items }, items.map((i) => i.body.buffer));
+}
+
+async function sendScreen() {
+    if (!viewers || shooting || !canvas || Module.stats.frames === shotFrames)
+        return;
+    shooting = true;
+    shotFrames = Module.stats.frames;
+    try {
+        const png = await canvas.convertToBlob({ type: 'image/png' });
+        await fetch(`api/session/screen?id=${session}`, { method: 'PUT', body: png, cache: 'no-store',
+                                                          headers: { 'Content-Type': 'image/png' } });
+    } catch { }
+    shooting = false;
+}
+
 // The previous Worker of this origin's tab gone (a reload, a restart: it
 // may still be saving the volume or holding the overlays' files, and
 // restored from under it, a blob it removes is missing, an overlay opens
@@ -361,10 +433,25 @@ async function start(m) {
         for (const spec of m.ppcbreak.split(';').filter(Boolean))
             args.push('--ppc-break', spec);
     await runtimeReady;
-    Sync.enabled = !!m.sync;
+    Sync.enabled = !!m.sync && !m.standalone;
+    Store.enabled = !!m.standalone;
+    session = m.log || '';
+    if (Store.enabled)
+        setInterval(sessionBeat, 2000);
     Module.net.enable(!!m.relay);
     ids = m.ids || {};
-    if (m.volumeKey) {
+    if (m.volumeKey && Store.enabled) {
+        try {
+            const kept = await Store.volumeDown(m.volumeKey);
+            if (kept) {
+                saved = kept;
+                console.log(`[web] restored ${Object.keys(kept.files).length} files of the volume from the server`);
+            }
+        } catch (e) {
+            notice(`Executor's disk: the server can't be reached (${e.message || e}): changes to it are not kept`);
+            Store.volumeOff = true;
+        }
+    } else if (m.volumeKey) {
         await openVolume(m.volumeKey);
         await Sync.volumeDown(volumeDir, m.volumeKey);
         const n = await restoreVolume();
@@ -374,7 +461,8 @@ async function start(m) {
     FS.mkdir('/host');              // Executor's "Host" volume
     if (images.length) {
         let root = null;
-        try { root = await navigator.storage.getDirectory(); } catch { }
+        if (!Store.enabled)
+            try { root = await navigator.storage.getDirectory(); } catch { }
         const open = (f, image) => Overlay.open(root, f.name, f, imageKey(f), (m.legacyKeys || {})[f.name], image);
         overlays = await Promise.all(images.map((f) => open(f)));
         // Another tab's: asked for, then opened again (a Worker gone
@@ -388,7 +476,7 @@ async function start(m) {
                 notice(`Another tab has ${still.join(', ')}: changes to ${still.length > 1 ? 'them' : 'it'} here last until this tab closes`);
         }
         for (const o of overlays)
-            await Sync.overlayDown(o);
+            await (Store.enabled ? Store.overlayDown(o) : Sync.overlayDown(o));
         FS.mkdir('/uploads');
         FS.mount(OVERLAYFS, { overlays }, '/uploads');
         reportImages();
@@ -402,7 +490,19 @@ async function start(m) {
     }
     Module.callMain(args);
     // Runs while Executor yields to the browser (about every frame).
-    setInterval(saveVolume, 2000);
+    if (Store.enabled) {
+        // A flush: the beacon as it is now (before the page hears of
+        // anything after it), and the changes up at once.
+        Overlay.onFlush = () => {
+            storeBeacons();
+            setTimeout(saveVolume);
+        };
+        setInterval(saveVolume, STORE_EVERY);
+        setInterval(storeBeacons, 250);
+        setInterval(sendScreen, 1000);
+    } else {
+        setInterval(saveVolume, 2000);
+    }
 }
 
 self.onmessage = (e) => {
@@ -432,7 +532,7 @@ self.onmessage = (e) => {
                 remoteBytes: remote.reduce((n, o) => n + o.image.fetched, 0),
                 remoteRequests: remote.reduce((n, o) => n + o.image.requests, 0),
                 // blocks not on the account yet (or on their way there)
-                unsynced: overlays.reduce((n, o) => n + o.pending.size, 0) + (Sync.busy ? 1 : 0) } });
+                unsynced: overlays.reduce((n, o) => n + o.pending.size, 0) + (Sync.busy || Store.round ? 1 : 0) } });
         } else if (m.op === 'pixels') {
             // The canvas's own pixels (tests: comparing scales needs more
             // than a screenshot's possible browser-side resampling).
