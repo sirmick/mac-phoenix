@@ -515,6 +515,17 @@ class StandaloneTest(unittest.TestCase):
         self.request("POST", f"/api/session/release?id={a}")
         self.assertEqual(self.request("POST", "/api/session?id=x")[0].status, 400)
 
+    def test_lapsed_controller(self):
+        # Its lease lapsed: control to the next tab, without the old screen.
+        from server import session
+        s = session.Sessions()
+        png = b"\x89PNG\r\n\x1a\n"
+        s.beat(1, "tab-a-00002")
+        self.assertTrue(s.put_screen(1, "tab-a-00002", png))
+        s.users[1]["seen"]["tab-a-00002"] -= session.LEASE + 1
+        self.assertTrue(s.beat(1, "tab-b-00002")["control"])
+        self.assertIsNone(s.screen(1))
+
 
 @unittest.skipUnless(shutil.which("openssl"), "no openssl to make a certificate")
 class TlsTest(unittest.TestCase):

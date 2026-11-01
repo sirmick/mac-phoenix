@@ -26,6 +26,7 @@ class Sessions:
         s["seen"] = {k: t for k, t in s["seen"].items() if t > now - LEASE}
         if s["holder"] not in s["seen"]:
             s["holder"] = None
+            s["screen"] = None                  # the lapsed tab's, not the next one's
         if s["handing"] not in s["seen"]:
             s["handing"] = None
         return s
