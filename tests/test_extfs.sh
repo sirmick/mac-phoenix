@@ -15,6 +15,7 @@
 set -euo pipefail
 
 PORT="${1:-18098}"
+source "$(dirname "$0")/lib/ports.sh"; PORT=$(mp_port "$PORT") || exit 1  # per-worktree (docs/Testing.md)
 ROM="${MACEMU_ROM:-$HOME/roms/quadra.rom}"
 BINARY="${MACEMU_BINARY:-$(cd "$(dirname "$0")/.." && pwd)/build/mac-phoenix}"
 TMPCONFIG=$(mktemp)

@@ -1189,10 +1189,10 @@ endforeach()
 # list, a missing one: tests/guest/strprobe. The Macs are the reference
 # (the Quadra with 7.6.1 through Apple's 68k glue, the G3 with 8.6 through
 # InterfaceLib; the same answers), Executor's own from PowerPC code.
-foreach(cell "strprobe_rom_761;;StrProbe.bin;--os-version 7.6.1;${TEST_ROM};19500;guest"
-             "strprobe_rom_ppc_86;--backend kpx --core mame-ppc --jit;StrProbePPC.bin;--image 8.6;${TEST_PPC_ROM};19502;guest;mame"
-             "strprobe_ppc_executor_86;--backend executor --executor-ppc;StrProbePPC.bin;--image 8.6;;19504;guest;executor"
-             "strprobe_ppc_executor_761;--backend executor;StrProbePPC.bin;--os-version 7.6.1;;19506;guest;761;executor")
+foreach(cell "strprobe_rom_761;;StrProbe.bin;--os-version 7.6.1;${TEST_ROM};18560;guest"
+             "strprobe_rom_ppc_86;--backend kpx --core mame-ppc --jit;StrProbePPC.bin;--image 8.6;${TEST_PPC_ROM};18562;guest;mame"
+             "strprobe_ppc_executor_86;--backend executor --executor-ppc;StrProbePPC.bin;--image 8.6;;18564;guest;executor"
+             "strprobe_ppc_executor_761;--backend executor;StrProbePPC.bin;--os-version 7.6.1;;18566;guest;761;executor")
   list(GET cell 0 name)
   list(GET cell 1 backend)
   list(GET cell 2 app)
@@ -1222,12 +1222,14 @@ foreach(probe aevt appr ctl menu sys text wind)
     NAME difftest_${probe}_executor_86
     COMMAND python3 ${CMAKE_SOURCE_DIR}/tools/difftest/run.py ${probe} --no-refresh
   )
-  # one at a time: run.py's sessions for a target share its port
+  # one at a time: run.py's sessions for a target share its port and out
+  # dir (another run on it, outside this ctest: waited for, 300 s)
   set_tests_properties(difftest_${probe}_executor_86 PROPERTIES
-    TIMEOUT 900
+    TIMEOUT 1200
     LABELS "guest;executor"
     SKIP_RETURN_CODE 77
     RESOURCE_LOCK difftest_executor
+    ENVIRONMENT "DIFFTEST_LOCK_TIMEOUT=300"
   )
 endforeach()
 

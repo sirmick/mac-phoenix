@@ -32,6 +32,7 @@ while [[ $# -gt 0 ]]; do
         *) echo "Unknown arg: $1"; exit 1 ;;
     esac
 done
+source "$(dirname "$0")/lib/ports.sh"; PORT=$(mp_port "$PORT") || exit 1  # per-worktree (docs/Testing.md)
 
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$PROJECT_ROOT"
@@ -43,11 +44,11 @@ MPW=tools/mpw/mpw
 
 export MPW_STATE=$(mktemp -d ${TMPDIR:-/tmp}/mpwtest.XXXXXX)
 export MPW_PORT=$PORT
-export MPW_SYSTEM="test-mpw${CORE:+-$CORE}-7.5.5.img"
+export MPW_SYSTEM="test-mpw${CORE:+-$CORE}-7.5.5-$$.img"   # per run: worktrees run it at once
 WORK=$(mktemp -d ${TMPDIR:-/tmp}/mpwtest-src.XXXXXX)
 cleanup() {
     $MPW stop
-    rm -rf "$MPW_STATE" "$WORK" "$STORAGE/images/$MPW_SYSTEM" \
+    rm -rf "$MPW_STATE" "$WORK" "$STORAGE/images/$MPW_SYSTEM" "$STORAGE/images/$MPW_SYSTEM.json" \
         "$STORAGE/executor-systems/$MPW_SYSTEM" "$STORAGE/executor-systems/$MPW_SYSTEM.clean"
 }
 trap cleanup EXIT
