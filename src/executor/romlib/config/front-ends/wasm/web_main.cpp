@@ -368,6 +368,8 @@ int main(int argc, char **argv)
             c.logtraps_nesting = atoi(argv[++i]);
         else if(a == "--debug" && i + 1 < argc)
             c.debug_options = argv[++i];
+        else if(a == "--ppc-break" && i + 1 < argc)  /* ?ppcbreak= */
+            c.ppc_breaks.push_back(argv[++i]);
         else
             c.app = a;
     }
