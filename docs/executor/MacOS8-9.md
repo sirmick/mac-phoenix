@@ -424,6 +424,19 @@ Appearance). All of these are 8.6's pixel for pixel. Not yet: tabs
 pointing other ways, the indeterminate bar, plain (non-directional)
 slider thumbs and tick marks.
 
+Dialog backgrounds (2026-11-01, `appr` dialogs): on 8.6 a dialog is white
+unless its 'dlgx' asks for the theme background
+(kDialogFlagsUseThemeBackground, NewFeaturesDialog's flag too); every
+alert (Alert and its kin, an 'alrx' or not, StandardAlert) is on the
+theme's grey (#dddddd); either way the dialog gets a colour port, which a
+plain DLOG doesn't. The Window Manager erases (ShowHide, PaintOne,
+EraseWindowRegion) with the background a window was given
+(SetThemeWindowBackground, SetWindowContentColor) before its colour
+table's. Found with it: a port's back colour on a 32-bit screen was read
+in the wrong byte order (qPixMapConv.cpp: #dddddd came out #dddd00, the
+grayishTextOr titles of inactive buttons brown). Not yet: StandardAlert's
+note icon (its black pixels transparent).
+
 Platinum menus (2026-10-31, `appr` draw*.menu*, and the Finder's File,
 Edit, View and Special menus on the G3). 8.x's MBDF 0 is a 68k loader for
 MBDF 63, PowerPC code that passes its arguments on to MenusLib's

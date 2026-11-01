@@ -332,6 +332,7 @@ OSStatus Executor::C_SetThemeWindowBackground(WindowRef inWindow, ThemeBrush inB
     SetPort(inWindow);
     BackPat(&qdGlobals().white);
     RGBBackColor(&c);
+    ROMlib_set_window_theme_background(inWindow, c);
     if(inUpdate)
     {
         Rect r = PORT_RECT(inWindow);

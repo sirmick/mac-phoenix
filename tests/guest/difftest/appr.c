@@ -906,6 +906,113 @@ static void controls(void)
     }
 }
 
+/* Dialog and alert backgrounds: does 8.6 give a dialog the theme's grey?
+   A dialog from NewColorDialog, from a DLOG without and with a 'dlgx'
+   (kDialogFlagsUseThemeBackground), an alert from an ALRT without and with
+   an 'alrx' (kAlertFlagsUseThemeBackground), StandardAlert; as an
+   Appearance client and not. Each: the port's back colour and a patch of
+   the content away from the items (appr.r). */
+static int dlg_dumped;
+static char dlg_key[48];
+
+static void dlg_out(DialogRef d, const char *key)
+{
+    RGBColor c;
+    Rect patch;
+    char k[64];
+    SetPort((GrafPtr)d);
+    GetBackColor(&c);
+    sprintf(k, "%s.back", key);
+    out(k, "%04x %04x %04x", c.red, c.green, c.blue);
+    sprintf(k, "%s.cport", key);
+    out(k, "%d", (((CGrafPtr)d)->portVersion & 0xC000) == 0xC000);
+    SetRect(&patch, 14, 14, 54, 34);
+    copy_out(key, &patch);
+}
+
+static pascal Boolean dlg_filter(DialogRef d, EventRecord *e, DialogItemIndex *item)
+{
+    if(e->what != nullEvent || dlg_dumped)
+        return false;
+    dlg_dumped = 1;
+    dlg_out(d, dlg_key);
+    *item = 1;
+    return true;
+}
+
+static void dialogs(void)
+{
+    static const char *const pass[] = { "client", "plain" };
+    ModalFilterUPP filter = NewModalFilterUPP(dlg_filter);
+    char k[48];
+    int p;
+    if(!SECTION("dialogs"))
+        return;
+    RegisterAppearanceClient();
+    for(p = 0; p < 2; p++)
+    {
+        DialogRef d;
+        Rect b;
+        if(p == 1)
+            UnregisterAppearanceClient();
+        SetRect(&b, 100, 100, 300, 200);
+        {
+            /* the dialog owns its item list: a copy, not the resource */
+            Handle items = GetResource('DITL', 200);
+            HandToHand(&items);
+            d = NewColorDialog(NULL, &b, "\p", true, dBoxProc, (WindowRef)-1, false, 0, items);
+        }
+        sprintf(k, "%s.new", pass[p]);
+        if(d)
+        {
+            DrawDialog(d);
+            dlg_out(d, k);
+            DisposeDialog(d);
+        }
+        else
+            out(k, "nil");
+        for(int id = 200; id <= 201; id++)
+        {
+            d = GetNewDialog(id, NULL, (WindowRef)-1);
+            sprintf(k, "%s.%s", pass[p], id == 200 ? "dlog" : "dlgx");
+            if(!d)
+            {
+                out(k, "nil");
+                continue;
+            }
+            DrawDialog(d);
+            dlg_out(d, k);
+            DisposeDialog(d);
+        }
+        for(int id = 300; id <= 301; id++)
+        {
+            DialogItemIndex hit;
+            sprintf(dlg_key, "%s.%s", pass[p], id == 300 ? "alrt" : "alrx");
+            dlg_dumped = 0;
+            hit = Alert(id, filter);
+            sprintf(k, "%s.hit", dlg_key);
+            out(k, "%d dumped %d", (int)hit, dlg_dumped);
+        }
+        {
+            AlertStdAlertParamRec param;
+            DialogItemIndex hit = 0;
+            OSErr err;
+            memset(&param, 0, sizeof param);
+            param.filterProc = filter;
+            param.defaultText = (ConstStringPtr)kAlertDefaultOKText;
+            param.defaultButton = kAlertStdAlertOKButton;
+            param.position = kWindowDefaultPosition;
+            sprintf(dlg_key, "%s.standard", pass[p]);
+            dlg_dumped = 0;
+            err = StandardAlert(kAlertNoteAlert, "\pDialog", NULL, &param, &hit);
+            sprintf(k, "%s.hit", dlg_key);
+            out(k, "err %d %d dumped %d", (int)err, (int)hit, dlg_dumped);
+        }
+    }
+    RegisterAppearanceClient();
+    DisposeModalFilterUPP(filter);
+}
+
 int main(void)
 {
     long v;
@@ -940,6 +1047,7 @@ int main(void)
     frames();
     modes();
     title();
+    dialogs();
     if(SECTION("unregister"))
     {
         RegisterAppearanceClient();   /* sections stand alone (a resumed run) */

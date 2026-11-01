@@ -72,6 +72,11 @@ extern void ROMlib_window8_forget(WindowPtr w);
 /* windMgr8.cpp: CollapseWindow's state; a part of Executor's document
    frame as GetWindowRegion answers it (false: the window hasn't the part) */
 extern bool ROMlib_window8_collapsed(WindowPtr w);
+/* the colour the Window Manager erases a window's content with when it was
+   given one (SetWindowContentColor, SetThemeWindowBackground): false if not
+   (the window's colour table's content colour then) */
+extern bool ROMlib_window_background(WindowPtr w, RGBColor *color);
+extern void ROMlib_set_window_theme_background(WindowPtr w, const RGBColor &color);
 /* 8.x: a mouse-down in a window's collapse box, which the system tracks
    and answers (CollapseWindow) for every application: true if it was one */
 extern bool ROMlib_window8_collapse_click(Point p);

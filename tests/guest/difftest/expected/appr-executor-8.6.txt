@@ -53,3 +53,4 @@ controls.*.radio.value1	the "on" dot is an approximation of 8.6's anti-aliased m
 controls.16.*	the scroll bar (CDEF 1), through DrawThemeTrack/DrawThemeScrollBarArrows: the thumb's position and the panel either side of it are right, the exact greys aren't (results.md item 5)
 controls.384.*	the scroll bar (8.6's CDEF 384), same gap as CDEF 1 (same DrawThemeTrack)
 controls.64.*	the disclosure triangle's selected look (value1) isn't drawn platinum yet
+dialogs.*.standard	StandardAlert's note icon: its black pixels come out transparent (the icon or mask Executor plots differs from 8.6's; not investigated); the background is 8.6's

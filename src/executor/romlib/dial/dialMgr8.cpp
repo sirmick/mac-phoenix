@@ -15,6 +15,7 @@
 #include <ToolboxUtil.h>
 #include <EventMgr.h>
 #include <ToolboxEvent.h>
+#include <Appearance.h>
 #include <dial/itm.h>
 #include <dial/dial.h>
 #include <quickdraw/cquick.h>
@@ -191,7 +192,7 @@ OSErr Executor::C_StandardAlert(AlertType inAlertType, ConstStr255Param inError,
             items.add(userItem | itemDisable, Rect{ 0, 0, 0, 0 }, nullptr);
     }
     if(inAlertType != kAlertPlainAlert)
-        items.addIcon(Rect{ 14, 24, 46, 56 }, inAlertType);
+        items.addIcon(Rect{ 12, 20, 44, 52 }, inAlertType); /* 8.6: appr dialogs.*.standard */
     items.add(statText | itemDisable,
               Rect{ 14, textLeft, (int16_t)(14 + errorLines * line), (int16_t)(textLeft + textWidth) }, inError);
     if(explanationLines)
@@ -213,6 +214,8 @@ OSErr Executor::C_StandardAlert(AlertType inAlertType, ConstStr255Param inError,
                                    (WindowPtr)-1, false, 0, items.handle());
     if(!dlg)
         return memFullErr;
+    /* on the theme's grey, as every alert (appr dialogs.*.standard) */
+    SetThemeWindowBackground(dlg, kThemeBrushDialogBackgroundActive, false);
     if(defaultButton >= 1 && defaultButton <= 3 && texts[defaultButton - 1])
         SetDialogDefaultItem(dlg, defaultButton);
     if(cancelButton >= 1 && cancelButton <= 3 && texts[cancelButton - 1])
@@ -243,6 +246,8 @@ DialogPtr Executor::C_NewFeaturesDialog(void *inStorage, const Rect *inBoundsRec
        the window's controls). */
     if(inFlags & kDialogFlagsUseControlHierarchy)
         CreateRootControl(dlg, nullptr);
+    if(inFlags & kDialogFlagsUseThemeBackground)
+        SetThemeWindowBackground(dlg, kThemeBrushDialogBackgroundActive, false);
     if(inIsVisible)
         ShowWindow(dlg);
     return dlg;

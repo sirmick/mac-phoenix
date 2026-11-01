@@ -40,6 +40,8 @@ struct WindowExtras
     bool collapsed = false;
     bool hasContentColor = false;
     RGBColor contentColor = { 0xFFFF, 0xFFFF, 0xFFFF };
+    bool hasThemeBackground = false; /* SetThemeWindowBackground's brush */
+    RGBColor themeBackground = { 0xFFFF, 0xFFFF, 0xFFFF };
     UInt32 ownerCount = 1;
     PixPatHandle contentPattern = nullptr; /* a copy */
     AliasHandle proxyAlias = nullptr;
@@ -552,10 +554,11 @@ OSStatus Executor::C_EraseWindowRegion(WindowPtr window, RgnHandle region)
 {
     if(!window)
         return errInvalidWindowPtr;
-    RGBColor *colors = validate_colors_for_window(window);
+    RGBColor *colors = validate_colors_for_window(window), background = colors[wContentColor];
+    ROMlib_window_background(window, &background);
     RGBColor saved;
     GetBackColor(&saved);
-    RGBBackColor(&colors[wContentColor]);
+    RGBBackColor(&background);
     EraseRgn(region);
     RGBBackColor(&saved);
     return noErr;
@@ -833,6 +836,25 @@ bool Executor::ROMlib_window8_collapsed(WindowPtr w)
 {
     WindowExtras *x = findExtras(w);
     return x && x->collapsed;
+}
+
+bool Executor::ROMlib_window_background(WindowPtr w, RGBColor *color)
+{
+    WindowExtras *x = findExtras(w);
+    if(x && x->hasContentColor)
+        *color = x->contentColor;
+    else if(x && x->hasThemeBackground)
+        *color = x->themeBackground;
+    else
+        return false;
+    return true;
+}
+
+void Executor::ROMlib_set_window_theme_background(WindowPtr w, const RGBColor &color)
+{
+    WindowExtras &x = extras(w);
+    x.hasThemeBackground = true;
+    x.themeBackground = color;
 }
 
 OSStatus Executor::C_SetWindowContentColor(WindowRef window, const RGBColor *color)

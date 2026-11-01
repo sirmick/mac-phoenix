@@ -1,4 +1,4 @@
-# probe 20949e7a15099947a4d04e210f04bc7575d7eb3ddd1a8cdbcec2a41237114bca
+# probe 62340d5d49f0d0fbadcc09068cedf8c529c1f36bf8b978e06cecfb1d37a036dd
 == gestalt
 gestalt.appr: 0 00000001
 gestalt.apvr: 0 00000110
@@ -1494,6 +1494,49 @@ title.32.system: 120x60 depth 32 crc c170c602
 title.8.geneva9: 120x60 depth 8 crc a440980a
 title.8.system: 120x60 depth 8 crc df726a23
 title.screen: 120x60 depth 32 crc 981a00ed
+== dialogs
+dialogs.client.new.back: ffff ffff ffff
+dialogs.client.new.cport: 1
+dialogs.client.new: 48x28 depth 32 crc d3faa3de
+dialogs.client.dlog.back: ffff ffff ffff
+dialogs.client.dlog.cport: 0
+dialogs.client.dlog: 48x28 depth 32 crc d3faa3de
+dialogs.client.dlgx.back: dddd dddd dddd
+dialogs.client.dlgx.cport: 1
+dialogs.client.dlgx: 48x28 depth 32 crc 7524fb4a
+dialogs.client.alrt.back: dddd dddd dddd
+dialogs.client.alrt.cport: 1
+dialogs.client.alrt: 48x28 depth 32 crc 7524fb4a
+dialogs.client.alrt.hit: 1 dumped 1
+dialogs.client.alrx.back: dddd dddd dddd
+dialogs.client.alrx.cport: 1
+dialogs.client.alrx: 48x28 depth 32 crc 7524fb4a
+dialogs.client.alrx.hit: 1 dumped 1
+dialogs.client.standard.back: dddd dddd dddd
+dialogs.client.standard.cport: 1
+dialogs.client.standard: 48x28 depth 32 crc 9ea0b5ba
+dialogs.client.standard.hit: err 0 1 dumped 1
+dialogs.plain.new.back: ffff ffff ffff
+dialogs.plain.new.cport: 1
+dialogs.plain.new: 48x28 depth 32 crc d3faa3de
+dialogs.plain.dlog.back: ffff ffff ffff
+dialogs.plain.dlog.cport: 0
+dialogs.plain.dlog: 48x28 depth 32 crc d3faa3de
+dialogs.plain.dlgx.back: dddd dddd dddd
+dialogs.plain.dlgx.cport: 1
+dialogs.plain.dlgx: 48x28 depth 32 crc 7524fb4a
+dialogs.plain.alrt.back: dddd dddd dddd
+dialogs.plain.alrt.cport: 1
+dialogs.plain.alrt: 48x28 depth 32 crc 7524fb4a
+dialogs.plain.alrt.hit: 1 dumped 1
+dialogs.plain.alrx.back: dddd dddd dddd
+dialogs.plain.alrx.cport: 1
+dialogs.plain.alrx: 48x28 depth 32 crc 7524fb4a
+dialogs.plain.alrx.hit: 1 dumped 1
+dialogs.plain.standard.back: dddd dddd dddd
+dialogs.plain.standard.cport: 1
+dialogs.plain.standard: 48x28 depth 32 crc 9ea0b5ba
+dialogs.plain.standard.hit: err 0 1 dumped 1
 == unregister
 unregister.Unregister: 0
 unregister.Unregister.again: -30562

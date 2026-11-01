@@ -189,6 +189,11 @@ void Executor::C_ShowHide(WindowPtr w, Boolean flag)
                     content_color = &w_ctab_table[i].rgb;
             }
         }
+        /* MacPhoenix: the background it was given (SetThemeWindowBackground,
+           SetWindowContentColor) first */
+        RGBColor background;
+        if(ROMlib_window_background(w, &background))
+            content_color = &background;
         if(content_color)
             RGBBackColor(content_color);
         FillRgn(WINDOW_CONT_REGION(w), &qdGlobals().white);

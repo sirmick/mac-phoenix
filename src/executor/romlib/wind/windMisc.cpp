@@ -329,8 +329,10 @@ void Executor::C_PaintOne(WindowPeek w, RgnHandle clobbered)
                     RGBColor *window_colors;
 
                     window_colors = validate_colors_for_window((WindowPtr)w);
+                    RGBColor background = window_colors[wContentColor];
+                    ROMlib_window_background((WindowPtr)w, &background);
 
-                    RGBBackColor(&window_colors[wContentColor]);
+                    RGBBackColor(&background);
                     EraseRgn(rh);
 
                     /* restore the background color to it's usual

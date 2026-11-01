@@ -17,6 +17,8 @@
 #include <mman/mman.h>
 #include <prefs/options.h>
 #include <dial/dial.h>
+#include <Appearance.h>
+#include <prefs/prefs.h>
 
 using namespace Executor;
 
@@ -94,9 +96,11 @@ INTEGER Executor::C_Alert(INTEGER id, ModalFilterUPP fp) /* IMI-418 */
                                  : noAutoCenter));
     }
 
+    /* 8.x: every alert a colour one, on the theme's grey (appr
+       dialogs.*.alrt/alrx: an 'alrx' or not) */
     color_p = ((alert_ctab_res_h
                 && CTAB_SIZE((CTabHandle)alert_ctab_res_h) != -1)
-               || item_ctab_res_h);
+               || item_ctab_res_h || system_version >= 0x800);
     if(color_p)
         dp = ((DialogPeek)
                   NewColorDialog(nullptr, &adjusted_rect,
@@ -110,6 +114,9 @@ INTEGER Executor::C_Alert(INTEGER id, ModalFilterUPP fp) /* IMI-418 */
 
     if(!dp)
         return -1; /* no memory for it */
+
+    if(system_version >= 0x800)
+        SetThemeWindowBackground((WindowPtr)dp, kThemeBrushDialogBackgroundActive, false);
 
     if(color_p)
     {

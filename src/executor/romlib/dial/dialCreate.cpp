@@ -22,6 +22,9 @@
 #include <mman/mman.h>
 #include <res/resource.h>
 #include <textedit/textedit.h>
+#include <Appearance.h>
+#include <DialogMgr8.h>
+#include <prefs/prefs.h>
 
 using namespace Executor;
 
@@ -376,7 +379,12 @@ DialogPtr Executor::C_GetNewDialog(INTEGER id, void* dst,
     dialog_ctab_res_h = ROMlib_getrestid("dctb"_4, id);
     item_ctab_res_h = ROMlib_getrestid("ictb"_4, id);
 
-    color_p = (dialog_ctab_res_h || item_ctab_res_h);
+    /* 8.x: a 'dlgx' asking for the theme's grey makes a colour dialog on
+       it; without one a dialog is white (appr dialogs.*.dlog/dlgx) */
+    Handle dlgx = ROMlib_getrestid("dlgx"_4, id);
+    bool theme_p = system_version >= 0x800 && dlgx && GetHandleSize(dlgx) >= 6
+                   && (*(GUEST<uint32_t> *)(*dlgx + 2) & kDialogFlagsUseThemeBackground);
+    color_p = (dialog_ctab_res_h || item_ctab_res_h || theme_p);
 
     HLockGuard guard(dialog_res_h);
     Rect adjusted_rect;
@@ -402,6 +410,8 @@ DialogPtr Executor::C_GetNewDialog(INTEGER id, void* dst,
                                    (*dialog_res_h)->dlgrc,
                                    dialog_item_list_res_h);
 
+    if(retval && theme_p)
+        SetThemeWindowBackground(retval, kThemeBrushDialogBackgroundActive, true);
     return retval;
 }
 
