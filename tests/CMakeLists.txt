@@ -835,6 +835,15 @@ set_tests_properties(hidpi_chrome_executor PROPERTIES
   TIMEOUT 180 LABELS "executor" SKIP_RETURN_CODE 77
   ENVIRONMENT "MACEMU_BINARY=$<TARGET_FILE:mac-phoenix>")
 
+# The 8.6 Finder's desktop labels after an update that covers only part of
+# them: a Finder window over half of two labels closed, the icon column as
+# before (Executor's DMDrawDesktopRegion clipped like the Finder's update).
+add_test(NAME desktop_labels_executor
+  COMMAND bash ${TEST_DIR}/test_desktop_labels_executor.sh --port 18516)
+set_tests_properties(desktop_labels_executor PROPERTIES
+  TIMEOUT 150 LABELS "executor" SKIP_RETURN_CODE 77
+  ENVIRONMENT "MACEMU_BINARY=$<TARGET_FILE:mac-phoenix>")
+
 # Executor's HiDPI GWorld shadows (docs/executor/HiDPI.md "Phase 4"): GWorldGallery
 # on 8.6 at --executor-scale 2, text drawn offscreen and copied to the screen
 # against the 1x frame scaled up. Skips without Skia (-DEXECUTOR_SKIA=ON).
