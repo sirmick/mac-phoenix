@@ -82,7 +82,8 @@ type Server struct {
 	data         string
 	settingsPath string
 	mu           sync.RWMutex
-	file         Settings        // what settings.json has
+	doc          map[string]any  // what settings.json has (the schema's document)
+	hash         string          // ... and the password's
 	override     func(*Settings) // the command line's
 	eff          Settings        // what applies
 	running      Settings        // what the listener was made with
@@ -108,9 +109,8 @@ func (s *Server) settings() Settings {
 	return s.eff
 }
 
-func (s *Server) applySettings(file Settings) {
-	eff := file
-	eff.Include = append([]string{}, file.Include...)
+func (s *Server) applySettings(doc map[string]any, hash string) {
+	eff := typed(doc, hash, s.data)
 	if s.override != nil {
 		s.override(&eff)
 	}
@@ -119,7 +119,7 @@ func (s *Server) applySettings(file Settings) {
 	}
 	s.mu.Lock()
 	old := s.eff
-	s.file, s.eff = file, eff
+	s.doc, s.hash, s.eff = doc, hash, eff
 	s.mu.Unlock()
 	if old.Images != eff.Images || old.Images == "" {
 		paths := []string{}
@@ -534,59 +534,58 @@ func init() {
 
 	// ---- settings ----
 	handle("GET", "/api/settings", true, func(c *ctx, m []string) error {
-		return c.sendJSON(200, c.s.settingsView())
+		return c.sendJSON(200, c.s.settingsView(c))
 	})
 	handle("POST", "/api/settings", true, func(c *ctx, m []string) error {
 		s := c.s
-		if !s.passwordSet() && !isLoopback(c.r.RemoteAddr) {
-			return httpErr(403, "settings from this machine only, or set a password")
-		}
 		b, err := c.bodyBytes()
 		if err != nil {
 			return err
 		}
-		var raw map[string]json.RawMessage
-		if json.Unmarshal(b, &raw) != nil {
+		var patch map[string]any
+		if json.Unmarshal(b, &patch) != nil || patch == nil {
 			return httpErr(400, "not a JSON object")
 		}
-		if _, ok := raw["password_hash"]; ok {
-			return httpErr(400, "password_hash: set password instead")
+		// network.password: a string sets it; it is not a setting.
+		var pw *string
+		if n, ok := patch["network"].(map[string]any); ok {
+			if p, ok := n["password"].(string); ok {
+				pw = &p
+				delete(n, "password")
+			}
+		}
+		if pw != nil && !s.passwordSet() && !isLoopback(c.r.RemoteAddr) {
+			return httpErr(403, "the password from this machine only, or set one")
 		}
 		s.mu.RLock()
-		next := s.file
+		cur, hash := s.doc, s.hash
 		s.mu.RUnlock()
-		next.Include = append([]string{}, next.Include...)
-		next.Exclude = append([]string{}, next.Exclude...)
-		var pw *string
-		if p, ok := raw["password"]; ok {
-			var v string
-			if json.Unmarshal(p, &v) != nil {
-				return httpErr(400, "password: a string (\"\": none)")
+		next, server, err := patchSettings(cur, patch)
+		if err != nil {
+			fe, _ := err.(*fieldError)
+			path := ""
+			if fe != nil {
+				path = fe.Path
 			}
-			pw = &v
-			delete(raw, "password")
+			return c.sendJSON(400, map[string]any{"error": err.Error(), "path": path})
 		}
-		rest, _ := json.Marshal(raw)
-		if err := strictUnmarshal(rest, &next); err != nil {
-			return httpErr(400, err.Error())
-		}
-		if err := next.check(); err != nil {
-			return httpErr(400, err.Error())
+		if server && !s.passwordSet() && !isLoopback(c.r.RemoteAddr) {
+			return httpErr(403, "the server's settings from this machine only, or set a password")
 		}
 		if pw != nil {
-			next.PasswordHash = ""
+			hash = ""
 			if *pw != "" {
-				next.PasswordHash = hashPassword(*pw)
+				hash = hashPassword(*pw)
 			}
 		}
-		if err := saveSettings(s.settingsPath, next); err != nil {
+		if err := saveSettings(s.settingsPath, next, hash); err != nil {
 			return err
 		}
-		s.applySettings(next)
+		s.applySettings(next, hash)
 		if pw != nil && *pw != "" && !c.signed {
 			c.setCookie(s.newSession()) // whoever set it stays signed in
 		}
-		return c.sendJSON(200, s.settingsView())
+		return c.sendJSON(200, s.settingsView(c))
 	})
 
 	// ---- the library ----
@@ -782,28 +781,28 @@ func isLoopback(remote string) bool {
 	return ip != nil && ip.IsLoopback()
 }
 
-func (s *Server) settingsView() map[string]any {
+func (s *Server) settingsView(c *ctx) map[string]any {
 	s.mu.RLock()
-	eff, running := s.eff, s.running
+	doc, eff, running := deepCopy(s.doc).(map[string]any), s.eff, s.running
 	s.mu.RUnlock()
-	b, _ := json.Marshal(eff)
-	var v map[string]any
-	json.Unmarshal(b, &v)
-	delete(v, "password_hash")
-	v["password"] = eff.PasswordHash != ""
-	v["data"] = s.data
+	doc["network"].(map[string]any)["password"] = eff.PasswordHash != ""
+	doc["advanced"].(map[string]any)["data"] = s.data
 	restart := []string{}
 	if eff.Bind != running.Bind {
-		restart = append(restart, "bind")
+		restart = append(restart, "network.bind")
 	}
 	if eff.Port != running.Port && running.Port != 0 {
-		restart = append(restart, "port")
+		restart = append(restart, "network.port")
 	}
-	if eff.TLSCert != running.TLSCert || eff.TLSKey != running.TLSKey {
-		restart = append(restart, "tls")
+	if eff.TLSCert != running.TLSCert {
+		restart = append(restart, "network.tls_cert")
 	}
-	v["restart_needed"] = restart
-	return v
+	if eff.TLSKey != running.TLSKey {
+		restart = append(restart, "network.tls_key")
+	}
+	return map[string]any{"version": settingsSchema.Version, "settings": doc,
+		"scopes": []string{"page", "server"}, "restart_needed": restart,
+		"can_change_server": s.passwordSet() || isLoopback(c.r.RemoteAddr), "file": s.settingsPath}
 }
 
 const loginPage = `<!doctype html>
