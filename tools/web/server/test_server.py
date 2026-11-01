@@ -219,7 +219,7 @@ class ServerTest(unittest.TestCase):
                             headers={"Host": "executor.example"})
         self.assertIn("; Secure", r.getheader("Set-Cookie"))           # anywhere else
         r, data = self.request("GET", "/api/me", cookie=cookie)
-        self.assertEqual(json.loads(data), {"name": "carol", "owner": False})
+        self.assertEqual(json.loads(data), {"name": "carol", "owner": False, "mode": "hosted"})
         self.assertEqual(self.request("POST", "/api/invites", {}, cookie=cookie)[0].status, 403)
         r, _ = self.request("POST", "/api/register", {"invite": self.invite, "name": "dave",
                                                       "password": "dave-password"})
@@ -534,6 +534,65 @@ class ServerTest(unittest.TestCase):
         self.assertTrue(any(f.endswith(sha) for f in found))
         with contextlib.closing(sqlite3.connect(next(f for f in found if f.endswith("sync.sqlite")))) as db:
             self.assertEqual(db.execute("select count(*) from blocks where key = 'backup-x'").fetchone()[0], 1)
+
+
+class StandaloneTest(unittest.TestCase):
+    """mode = "standalone": no sign-in, the server the tab's store, one
+    controlling tab (session.py)."""
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.mkdtemp(prefix="executor-web-standalone-")
+        site = os.path.join(cls.tmp, "site")
+        os.makedirs(site)
+        with open(os.path.join(site, "index.html"), "w") as f:
+            f.write("<p>tab</p>")
+        cfg = config.load(None, {"server": {"port": 0, "site": site, "data": os.path.join(cls.tmp, "data"),
+                                            "mode": "standalone"},
+                                 "library": {"images": cls.tmp}})
+        cls.server = app.Server(cfg, quiet=True)
+        cls.port = cls.server.server_address[1]
+        threading.Thread(target=cls.server.serve_forever, daemon=True).start()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.server.shutdown()
+        shutil.rmtree(cls.tmp)
+
+    request = ServerTest.request
+
+    def beat(self, sid, take=False):
+        r, data = self.request("POST", f"/api/session?id={sid}{'&take=1' if take else ''}")
+        self.assertEqual(r.status, 200)
+        return json.loads(data)
+
+    def test_no_accounts(self):
+        r, data = self.request("GET", "/api/me")
+        self.assertEqual((r.status, json.loads(data)["mode"]), (200, "standalone"))
+        self.assertEqual(self.request("GET", "/")[0].status, 200)
+        r, data = self.request("POST", "/api/sync/overlays/k?base=0", struct.pack("<I", 0) + b"z" * 4096)
+        self.assertEqual((r.status, json.loads(data)["version"]), (200, 1))
+        with self.assertRaises(ValueError):
+            config.load(None, {"server": {"mode": "other"}})
+
+    def test_one_controlling_tab(self):
+        png = b"\x89PNG\r\n\x1a\n" + b"pixels"
+        a, b = "tab-a-00001", "tab-b-00001"
+        self.assertEqual(self.beat(a), {"control": True, "held": False, "handing": False, "viewers": 0})
+        self.assertEqual(self.beat(b), {"control": False, "held": True, "handing": False, "viewers": 1})
+        self.assertEqual(self.beat(a)["viewers"], 1)
+        self.assertEqual(self.request("PUT", f"/api/session/screen?id={b}", png)[0].status, 409)
+        self.assertEqual(self.request("PUT", f"/api/session/screen?id={a}", png)[0].status, 204)
+        self.assertEqual(self.request("GET", "/api/session/screen")[1], png)
+        # B takes control: A sees it, lets go; B waits for that.
+        self.assertEqual(self.beat(b, take=True)["handing"], True)
+        self.assertEqual(self.beat(a)["control"], False)
+        self.assertEqual(self.request("POST", f"/api/session/release?id={a}")[0].status, 200)
+        self.assertEqual(self.beat(b), {"control": True, "held": False, "handing": False, "viewers": 0})
+        self.assertEqual(self.request("GET", "/api/session/screen")[0].status, 404)
+        self.request("POST", f"/api/session/release?id={b}")
+        self.assertEqual(self.beat(a)["control"], True)
+        self.request("POST", f"/api/session/release?id={a}")
+        self.assertEqual(self.request("POST", "/api/session?id=x")[0].status, 400)
 
 
 @unittest.skipUnless(shutil.which("openssl"), "no openssl to make a certificate")
