@@ -1187,6 +1187,19 @@ set_tests_properties(codewarrior_executor_86 PROPERTIES
   SKIP_RETURN_CODE 77
 )
 
+# MPW Shell (PowerPC) on Executor with 8.6's System: Startup builds the
+# Project, Directory and Build menus (commands found through StdCLib's
+# MakeResolvedPath), a do-script's output redirected to a file.
+add_test(
+  NAME mpw_executor_86
+  COMMAND bash ${TEST_DIR}/test_mpw_86.sh --timeout 120 --port 18344
+)
+set_tests_properties(mpw_executor_86 PROPERTIES
+  TIMEOUT 240
+  LABELS "guest;executor"
+  SKIP_RETURN_CODE 77
+)
+
 # Icon Services from PowerPC code (IconServicesLib) by IconTest
 # (tests/guest/iconservices, Retro68): Executor's (iconservices.cpp), and
 # Apple's on the G3 with 9.0.4 and 8.6; on 8.6 also Executor's with 8.6's System.
