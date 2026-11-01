@@ -333,6 +333,12 @@ MenuHandle Executor::C_GetMenu(int16_t rid)
     MenuHandle retval;
     Handle mct_res_h;
 
+    /* MacPhoenix: whether this call reads the MENU from its file. Read now,
+       its menuProc is the MDEF's ID (high word), never a handle; only one
+       already in memory may hold a handle someone put there. */
+    SetResLoad(false);
+    Handle was = GetResource("MENU"_4, rid);
+    bool fresh = !was || !*was;
     SetResLoad(true);
     retval = (MenuHandle)GetResource("MENU"_4, rid);
 
@@ -364,7 +370,11 @@ MenuHandle Executor::C_GetMenu(int16_t rid)
         Handle current_proc;
 
         current_proc = (*retval)->menuProc;
-        if(!HandleZone(current_proc) || !GetHandleSize(current_proc))
+        /* MacPhoenix: a freshly read MENU's ID is not tried as a handle.
+           ClarisWorks 4's menu 136 names MDEF 200, $00C80000, which on
+           8.6 can be a master pointer of the Finder's (a routine
+           descriptor for FinderLib code): the menu ran the Finder's code. */
+        if(fresh || !HandleZone(current_proc) || !GetHandleSize(current_proc))
         {
             Handle temph;
 

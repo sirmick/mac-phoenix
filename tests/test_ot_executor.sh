@@ -55,6 +55,7 @@ TOOL=tests/guest/ot/OTTest.bin
 [[ -f "$TOOL" ]] || { echo "FAIL: $TOOL missing"; exit 1; }
 
 export MPW_STATE=$(mktemp -d ${TMPDIR:-/tmp}/ottest.XXXXXX)
+export MPW_OWNER_PID=$$   # the session goes when this script does (killed at a timeout too)
 export MPW_PORT=$PORT
 export MPW_OS=$OS_VERSION
 export MPW_SYSTEM="test-ot${CORE:+-$CORE}${NO_ASLM:+-noaslm}-$OS_VERSION-$$.img"   # per run: worktrees run it at once

@@ -34,7 +34,10 @@ Environment: MPW_TOOLCHAIN (apple), MPW_STATE (default ~/.cache/mac-phoenix/mpw
 or mpw-cw), MPW_PORT (18390, cw 18391), MPW_SYSTEM (mpw-service-7.5.5.img or
 mpw-cw-service-7.5.5.img: the copy of tests-7.5.5.img the session runs on),
 MPW_OS (7.5.5: the session on tests-MPW_OS.img, e.g. 7.6.1; its copy is then
-mpw-service-7.6.1.img), MACPHOENIX_BINARY, MACEMU_STORAGE (~/storage). See docs/MPW.md.
+mpw-service-7.6.1.img), MACPHOENIX_BINARY, MACEMU_STORAGE (~/storage),
+MPW_OWNER_PID (the session is stopped once that process is gone: a test's
+own PID, so a run ctest kills at its timeout leaves no emulator behind).
+See docs/MPW.md.
 """
 import argparse
 import base64
@@ -232,6 +235,12 @@ def start(core=None, quiet=False, emu=None):
         p = subprocess.Popen(cmd, stdout=logf, stderr=subprocess.STDOUT,
                              stdin=subprocess.DEVNULL, start_new_session=True, cwd=ROOT)
     s = {"pid": p.pid, "port": PORT, "log": logpath, "host": HOST, "started": time.time()}
+    owner = os.environ.get("MPW_OWNER_PID")
+    if owner:
+        # the watchdog: its own session, so it outlives whoever kills the owner
+        subprocess.Popen([sys.executable, os.path.abspath(__file__), "_watch", str(p.pid), owner],
+                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL, start_new_session=True)
     with open(SESSION, "w") as f:
         json.dump(s, f)
     if not quiet:
@@ -301,6 +310,34 @@ def stop():
         os.unlink(SESSION)
     except OSError:
         pass
+
+
+def watch(pid, owner):
+    """MPW_OWNER_PID's watchdog: stops the session's emulator (its process
+    group) once the owner is gone; ends with the emulator."""
+    def gone(p):
+        try:
+            os.kill(p, 0)
+        except OSError:
+            return True
+        try:   # killed but not yet reaped by its parent: gone too
+            with open("/proc/%d/stat" % p) as f:
+                return f.read().rsplit(")", 1)[1].split()[0] == "Z"
+        except (OSError, IndexError):
+            return False
+    while not gone(pid):
+        if gone(owner):
+            try:
+                os.killpg(pid, signal.SIGTERM)
+                for _ in range(50):
+                    if gone(pid):
+                        return
+                    time.sleep(0.1)
+                os.killpg(pid, signal.SIGKILL)
+            except OSError:
+                pass
+            return
+        time.sleep(2)
 
 
 # ---- running commands ---------------------------------------------------
@@ -611,6 +648,8 @@ def cmd_build(args):
 
 
 def main():
+    if sys.argv[1:2] == ["_watch"]:
+        return watch(int(sys.argv[2]), int(sys.argv[3]))
     ap = argparse.ArgumentParser(prog="mpw", description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--toolchain", choices=sorted(TOOLCHAINS), default=TOOLCHAIN,

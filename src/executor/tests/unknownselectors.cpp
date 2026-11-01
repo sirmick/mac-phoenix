@@ -87,3 +87,13 @@ TEST_F(UnknownSelector, TranslationDispatchSelector24)
     uint32_t d1 = run({ 0x5D4F, 0x486F, 0x0002, 0x7024, 0xABFC, 0x321F, 0x584F });
     EXPECT_EQ(0xF42F, d1 & 0xFFFF) << "noTranslationPathErr";
 }
+
+/* subq.w #2,sp (result); clr.w -(sp); pea.l (sp) twice (two pointers, as
+   the resident System code's pea $A92(a6); pea $A8E(a6)); moveq #$20,d0;
+   _TranslationDispatch; move.w (sp)+,d1 -- 10 argument bytes, a word
+   result (ResEdit's launch from the Finder on 8.6) */
+TEST_F(UnknownSelector, TranslationDispatchSelector20)
+{
+    uint32_t d1 = run({ 0x554F, 0x4267, 0x4857, 0x4857, 0x7020, 0xABFC, 0x321F });
+    EXPECT_EQ(0xF42F, d1 & 0xFFFF) << "noTranslationPathErr";
+}

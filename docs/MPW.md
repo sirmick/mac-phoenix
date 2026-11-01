@@ -68,6 +68,9 @@ tools/mpw/mpw --toolchain cw build tests/guest/suite -o /tmp/cw
 * **One session per state directory.** Tests run their own (`MPW_STATE`,
   `MPW_PORT`, `MPW_SYSTEM`); see `tests/test_mpw_toolchain.sh`. `MPW_OS=7.6.1`
   runs the session on `tests-7.6.1.img` instead of 7.5.5's (`ot_executor_761`).
+  `MPW_OWNER_PID` (the tests set their own PID) stops the session once that
+  process is gone, so a test ctest kills at its timeout leaves no emulator
+  holding its port.
 * `emulator.log` in the state directory has Executor's output; a CPU crash
   ends the command with an error rather than a timeout.
 * **MPW C swaps `'\r'` and `'\n'`** (`'\n'` is 13): compare key codes and
