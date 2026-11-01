@@ -1,0 +1,12 @@
+{
+ "note": "MR Browser 0.39 (that-ben, 2025): Macintosh Repository's own client, the PowerPC (Carbon) build, expanded by StuffIt Expander in the guest; signing in takes a Macintosh Repository account and PIN, left to the user",
+ "kind": "expand",
+ "archive": "MR-Browser-PPC-v0.39.sit",
+ "expect": [
+  "MR Browser PPC v0.39.app"
+ ],
+ "launch": [
+  "MR Browser PPC v0.39.app:Contents:MacOS:MR Browser PPC"
+ ],
+ "os": "tools-8.6"
+}

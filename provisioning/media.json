@@ -109,7 +109,10 @@
     {"name": "freehand_8.hqx", "dir": "downloads/apps", "size": 19151055, "md5": "f4dff883d02132c7b961524626498969", "ia": "Macintosh_Garden_Apps_F_2014/freehand_8.hqx", "garden": "apps/freehand_8.hqx"},
     {"name": "QuarkXPress_4_Upgrade.zip", "dir": "downloads/apps", "size": 73800776, "md5": "8a79828b6f42706bdd94c83d42db3e6a", "ia": "Macintosh_Garden_Apps_Q_2020/QuarkXPress_4_Upgrade.zip", "garden": "apps/QuarkXPress_4_Upgrade.zip"},
     {"name": "filemaker_pro_4.0.sit", "dir": "downloads/apps", "size": 23170213, "md5": "98b1f662f20f5ff74e61ea3629109346", "ia": "Macintosh_Garden_Apps_F_2014/filemaker_pro_4.0.sit", "garden": "apps/filemaker_pro_4.0.sit"},
-    {"name": "Persuasion3_0.zip", "dir": "downloads/apps", "size": 10641349, "md5": "519f55ae9ef08d14f2a05f876ff97e63", "garden": "apps/Persuasion3_0.zip"}
+    {"name": "Persuasion3_0.zip", "dir": "downloads/apps", "size": 10641349, "md5": "519f55ae9ef08d14f2a05f876ff97e63", "garden": "apps/Persuasion3_0.zip"},
+    {"name": "HotlineConnectClient192.sit_.bin", "dir": "downloads/internet", "size": 1983488, "md5": "50258b58cded5761670e96ad53ea5b6f", "ia": "Macintosh_Garden_Apps_H_2016/HotlineConnectClient192.sit_.bin", "garden": "apps/HotlineConnectClient192.sit_.bin"},
+    {"name": "MR-Browser-PPC-v0.39.sit", "dir": "downloads/internet", "size": 761308, "md5": "711f492545d41fae1dc33ab94c02ccae", "url": "https://www.macintoshrepository.org/files/direct/MR-Browser-PPC-v0.39.sit"},
+    {"name": "Serial-MReader-0.03-2021-08.sit", "dir": "downloads/internet", "size": 1945810, "md5": "c594e350c270f3383423a65b7a74def4", "local": true, "page": "https://www.macintoshrepository.org/7177-surfers-serials-serial-box-view-mreader", "note": "Macintosh Repository's file 58081 (download.php?id=58081, a form POST, no stable URL; guests wait 10 minutes between downloads), SHA1 51b4742585f1f1828f0ba252d90bfb6d1707ac32 as MR lists it"}
   ],
   "out": "."
 }

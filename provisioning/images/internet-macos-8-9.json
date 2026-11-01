@@ -1,0 +1,27 @@
+{
+ "title": "Internet (Mac OS 8.6 / 9)",
+ "tags": [
+  "internet",
+  "ppc"
+ ],
+ "note": "Internet clients for the Mac OS 8.6 and 9.0.4 profiles: MR Browser 0.39 (Macintosh Repository's own client; signing in takes an MR account and PIN), Hotline Connect Client 1.9.1 (the classic build and the Carbon one), and Serial MReader 0.03 with the Serial Box 2021-08 database, kept as an archive only. Boots with 8.6 or 9.0.4.",
+ "label": "Internet",
+ "size_mb": 64,
+ "place": [
+  {
+   "snapshot": "mr-browser-0.39",
+   "take": "MR Browser PPC v0.39.app",
+   "to": "MR Browser 0.39 ƒ"
+  },
+  {
+   "snapshot": "hotline-client-1.9.1",
+   "take": "HotlineConnectClient-Mac",
+   "as": "Hotline Connect Client 1.9.1 ƒ"
+  },
+  {
+   "snapshot": "serial-mreader-0.03",
+   "take": "Serial MReader v0.03 2021-08 ƒ",
+   "as": "Serial MReader 0.03 ƒ"
+  }
+ ]
+}

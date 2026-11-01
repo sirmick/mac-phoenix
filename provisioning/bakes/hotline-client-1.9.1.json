@@ -1,0 +1,13 @@
+{
+ "note": "Hotline Connect Client 1.9.1 (Hotline Communications, 2003): the classic PowerPC build (HLclient19.Classic, InterfaceLib + Open Transport) and the Carbon one, expanded by StuffIt Expander in the guest",
+ "kind": "expand",
+ "archive": "HotlineConnectClient192.sit_.bin",
+ "expect": [
+  "HotlineConnectClient-Mac"
+ ],
+ "launch": [
+  "HotlineConnectClient-Mac:HLclient19.Classic",
+  "HotlineConnectClient-Mac:HotlineClient(M-Carbon)"
+ ],
+ "os": "tools-8.6"
+}
