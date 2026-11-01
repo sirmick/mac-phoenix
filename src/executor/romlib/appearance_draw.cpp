@@ -1453,6 +1453,59 @@ OSStatus Executor::C_GetThemeScrollBarTrackRect(const Rect *bounds, ThemeTrackEn
 
 /* ── Buttons ─────────────────────────────────────────────────────────── */
 
+namespace
+{
+/* What DrawThemeButton sets up for its label proc, by kind and state
+   (appr labels.*, 8.6 on the G3): the push-like kinds a title colour on
+   their face's, the marks grayishTextOr when inactive; the rest nothing. */
+struct LabelLook
+{
+    bool colors = false, grayish = false;
+    uint16_t fg = 0, bg = 0;
+};
+
+LabelLook labelLook(ThemeButtonKind kind, ThemeDrawState state)
+{
+    LabelLook l;
+    auto set = [&](uint16_t fg, uint16_t bg) {
+        l.colors = true;
+        l.fg = fg;
+        l.bg = bg;
+    };
+    switch(kind)
+    {
+        case kThemePushButton:
+        case kThemePopupButton:
+        case kThemeArrowButton:
+        case kThemeBevelButton:
+        case kThemeSmallBevelButton:
+        case kThemeLargeBevelButton:
+        {
+            bool bevel = kind != kThemePushButton && kind != kThemePopupButton && kind != kThemeArrowButton;
+            uint16_t face = bevel ? 0xCCCC : 0xDDDD;
+            switch(state)
+            {
+                case kThemeStateActive: set(0, face); break;
+                case kThemeStateInactive: set(0x7777, 0xDDDD); break;
+                case kThemeStatePressedUp: set(0xFFFF, bevel ? 0x8888 : 0x6666); break;
+                case kThemeStatePressedDown:
+                case kThemeStateUnavailable:
+                    set(bevel || kind == kThemeArrowButton ? 0 : 0x2222, face);
+                    break;
+            }
+            break;
+        }
+        case kThemeCheckBox:
+        case kThemeRadioButton:
+        case kThemeDisclosureButton:
+        case kThemeIncDecButton:
+            l.grayish = state == kThemeStateInactive;
+            break;
+    }
+    return l;
+}
+}
+
 OSStatus Executor::C_DrawThemeButton(const Rect *inBounds, ThemeButtonKind inKind,
                                      const ThemeButtonDrawInfo *inNewInfo, const ThemeButtonDrawInfo *inPrevInfo,
                                      ThemeEraseUPP inEraseProc, ThemeButtonDrawUPP inLabelProc, UInt32 inUserData)
@@ -1470,7 +1523,27 @@ OSStatus Executor::C_DrawThemeButton(const Rect *inBounds, ThemeButtonKind inKin
         SInt16 depth;
         Boolean color;
         portDepth(&depth, &color);
+        LabelLook look = labelLook(inKind, inNewInfo->state);
+        GrafPtr port = qdGlobals().thePort;
+        RGBColor fg, bg;
+        GetForeColor(&fg);
+        GetBackColor(&bg);
+        INTEGER mode = PORT_TX_MODE(port);
+        if(look.colors)
+        {
+            RGBColor f = { look.fg, look.fg, look.fg }, b = { look.bg, look.bg, look.bg };
+            RGBForeColor(&f);
+            RGBBackColor(&b);
+        }
+        if(look.grayish)
+            TextMode(grayishTextOr);
         inLabelProc(&content, inKind, inNewInfo, inUserData, depth, color);
+        if(qdGlobals().thePort == port)
+        {
+            RGBForeColor(&fg);
+            RGBBackColor(&bg);
+            TextMode(mode);
+        }
     }
     return noErr;
 }

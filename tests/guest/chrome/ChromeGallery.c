@@ -46,7 +46,9 @@ static const struct ctl ctls[] = {
     { 1008, 50, 260, 70, 380, 200, 0, 0, "\p" }, /* pop-up, menu 200 */
     { 96, 80, 260, 103, 273, 5, 0, 10, "\p" },  /* little arrows */
     { 64, 80, 290, 92, 302, 1, 0, 1, "\p" },    /* disclosure triangle, open */
-    { 368, 20, 260, 40, 340, 0, 0, 1, "\pOff" }, /* inactive */
+    /* inactive: the last two */
+    { 368, 20, 260, 40, 340, 0, 0, 1, "\pOff" },
+    { 369, 214, 20, 230, 120, 1, 0, 1, "\pDim" },
 };
 
 static void DrawGallery(WindowRef w)
@@ -101,7 +103,7 @@ int main(void)
         const struct ctl *c = &ctls[i];
         SetRect(&r, c->left, c->top, c->right, c->bottom);
         h = NewControl(doc, &r, (ConstStr255Param)c->title, true, c->value, c->min, c->max, c->proc, 0);
-        if(i == sizeof ctls / sizeof ctls[0] - 1)
+        if(i >= (int)(sizeof ctls / sizeof ctls[0]) - 2)
             HiliteControl(h, 255);
     }
 
