@@ -522,6 +522,11 @@ void Executor::ROMlib_apple_menu_update()
     }
 }
 
+bool Executor::ROMlib_apple_menu_p(MenuHandle mh)
+{
+    return mh && mh == apple_menu;
+}
+
 Handle Executor::ROMlib_apple_menu_icon(MenuHandle mh, INTEGER item)
 {
     if(mh == app_menu && app_menu && item > app_menu_fixed

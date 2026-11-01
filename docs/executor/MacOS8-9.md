@@ -456,7 +456,11 @@ with a command key or submenu); titles and items black, #777 disabled,
 white selected. The Finder's four menus have 8.6's geometry exactly; the
 glyphs are 1 pixel to the right (the scaler, as the window titles). A
 SetMenuItemKeyGlyph glyph is drawn after the ⌘ as its character in the
-System's .Keyboard font (FOND 98; the Finder's Move To Trash: ⌘⌫). Not
+System's .Keyboard font (FOND 98; the Finder's Move To Trash: ⌘⌫). The
+Apple menu has its own layout on 8.6 (measured on the G3 with long items
+added to Apple Menu Items): plain items' text 15 in, an entry's icon 18
+and its text 40, then 18 to the right edge (31 with a submenu); the
+whole menu is still a pixel right of the G3's. Not
 yet: SetMenuItemModifiers' marks (kept, not drawn), scroll arrows in a
 long menu, popup menus' own look, the menu bar clock.
 
