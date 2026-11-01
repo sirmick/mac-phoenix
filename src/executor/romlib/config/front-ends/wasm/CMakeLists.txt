@@ -119,6 +119,17 @@ if(NODE_COMMAND)
         ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM};TMPDIR=${CMAKE_CURRENT_BINARY_DIR}")
 endif()
 
+# HiDPI GWorld shadows in the tab: GWorldGallery at ?scale=2 on 8.6, the copied
+# text anti-aliased, text written behind QuickDraw not (web/tests/tab_hidpi_gworld.mjs).
+if(NODE_COMMAND)
+    add_test(NAME executor.web.hidpi_gworld
+        COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_hidpi_gworld.mjs
+                $<TARGET_FILE_DIR:executor-web> ${PROJECT_SOURCE_DIR}/tests/guest ${EXECUTOR_WEB_SYSTEM_PPC})
+    set_tests_properties(executor.web.hidpi_gworld PROPERTIES
+        LABELS "executor;web" TIMEOUT 300 SKIP_RETURN_CODE 77
+        ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM};TMPDIR=${CMAKE_CURRENT_BINARY_DIR}")
+endif()
+
 # The Finder's live scrolling on 8.6 in the tab: a thumb dragged scrolls
 # the window, and the Worker lives on (web/tests/tab_scroll.mjs).
 if(NODE_COMMAND)

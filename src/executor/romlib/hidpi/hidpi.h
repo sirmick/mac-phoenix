@@ -13,6 +13,8 @@
    here is an inline no-op. */
 
 #include <ExMacTypes.h>
+#include <QuickDraw.h>
+#include <CQuickDraw.h>
 #include <vdriver/dirtyrect.h>
 #include <hidpi/hidpi_internal.h>
 
@@ -64,6 +66,20 @@ bool drawing_on_screen();
    the run is recorded around it. */
 void text_draw(const TextParams &p, const std::function<void()> &blit);
 
+/* Whether text drawn in thePort now is recorded: the screen, or an
+   offscreen pixel buffer (a GWorld's: phase 4, its runs carried to the
+   screen by CopyBits). */
+bool recording();
+
+/* CopyBits' copy of SRC's SR to DST's DR (canonical pixmaps, their pixels
+   locked; DST thePort's): BLIT copies the 1x pixels. The runs SRC still
+   shows there go with them, where the copy lands. */
+void copy_bits(const PixMap *src, const PixMap *dst, const Rect *sr, const Rect *dr, int mode,
+               RgnHandle mask, const std::function<void()> &blit);
+
+/* GW is gone (DisposeGWorld). */
+void forget_offscreen(GWorldPtr gw);
+
 /* Chrome drawn on the screen inside R (port coordinates): BLIT draws its
    1x pixels; SHAPES (port coordinates) are what the presentation surface
    draws instead, while the screen still has them. Build SHAPES only when
@@ -86,6 +102,10 @@ inline void set_scale(double) {}
 inline double scale() { return 1.0; }
 inline bool active() { return false; }
 inline bool drawing_on_screen() { return false; }
+inline bool recording() { return false; }
+inline void copy_bits(const PixMap *, const PixMap *, const Rect *, const Rect *, int, RgnHandle,
+                      const std::function<void()> &blit) { blit(); }
+inline void forget_offscreen(GWorldPtr) {}
 inline void text_draw(const TextParams &, const std::function<void()> &blit) { blit(); }
 inline void chrome_draw(const Rect &, Shapes, const std::function<void()> &blit) { blit(); }
 inline void compose(const uint32_t *, int, int, const DirtyRects::Rects &, uint32_t *, int, int) {}

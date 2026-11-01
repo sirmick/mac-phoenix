@@ -835,6 +835,15 @@ set_tests_properties(hidpi_chrome_executor PROPERTIES
   TIMEOUT 180 LABELS "executor" SKIP_RETURN_CODE 77
   ENVIRONMENT "MACEMU_BINARY=$<TARGET_FILE:mac-phoenix>")
 
+# Executor's HiDPI GWorld shadows (docs/executor/HiDPI.md "Phase 4"): GWorldGallery
+# on 8.6 at --executor-scale 2, text drawn offscreen and copied to the screen
+# against the 1x frame scaled up. Skips without Skia (-DEXECUTOR_SKIA=ON).
+add_test(NAME hidpi_gworld_executor
+  COMMAND bash ${TEST_DIR}/test_hidpi_gworld.sh --port 18476)
+set_tests_properties(hidpi_gworld_executor PROPERTIES
+  TIMEOUT 180 LABELS "executor" SKIP_RETURN_CODE 77
+  ENVIRONMENT "MACEMU_BINARY=$<TARGET_FILE:mac-phoenix>")
+
 # Executor's Toolbox gtests built with Retro68 into a 68k app and run in
 # the guest: on Apple's ROM and System (the ground truth) and on Executor.
 # Skips without Retro68 (toolchain/retro68). The cells share the app's
