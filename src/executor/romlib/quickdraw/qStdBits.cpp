@@ -20,6 +20,7 @@
 #include <mman/mman.h>
 #include <commandline/flags.h>
 #include <mman/tempalloc.h>
+#include <hidpi/hidpi.h>
 
 using namespace Executor;
 
@@ -445,7 +446,10 @@ void Executor::ROMlib_bogo_stdbits(BitMap *src_bogo_map, BitMap *dst_bogo_map,
     if(PORT_PEN_VIS(qdGlobals().thePort) < 0)
         return;
 
-    ROMlib_real_copy_bits(src, dst, src_rect, dst_rect, mode, mask);
+    /* MacPhoenix: the high-resolution runs the source shows go with its
+       pixels (hidpi.h, GWorld shadows) */
+    hidpi::copy_bits(src, dst, src_rect, dst_rect, mode, mask,
+                     [&] { ROMlib_real_copy_bits(src, dst, src_rect, dst_rect, mode, mask); });
 
     canonicalize_bogo_map_cleanup(src_bogo_map, &cleanup_info[0]);
     canonicalize_bogo_map_cleanup(dst_bogo_map, &cleanup_info[1]);
@@ -499,7 +503,10 @@ static void StdBitsPicSaveFlag(const BitMap *src_bogo_map,
     if(PORT_PEN_VIS(qdGlobals().thePort) < 0)
         return;
 
-    ROMlib_real_copy_bits(src, dst, src_rect, dst_rect, mode, mask);
+    /* MacPhoenix: the high-resolution runs the source shows go with its
+       pixels (hidpi.h, GWorld shadows) */
+    hidpi::copy_bits(src, dst, src_rect, dst_rect, mode, mask,
+                     [&] { ROMlib_real_copy_bits(src, dst, src_rect, dst_rect, mode, mask); });
 
     canonicalize_bogo_map_cleanup(src_bogo_map, &cleanup_info[0]);
     canonicalize_bogo_map_cleanup(dst_bogo_map, &cleanup_info[1]);
