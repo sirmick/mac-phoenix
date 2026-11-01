@@ -116,6 +116,21 @@ DISKS = [
          {"app": "Ferazel's Wand 1.0.3 ƒ:Ferazel's Wand", "name": "Ferazel's Wand", "source": "games-ppc.img"},
          {"app": "Slithereens 1.0.1 ƒ:Slithereens", "name": "Slithereens", "source": "games-ppc.img"},
      ]},
+    {"name": "internet.img", "label": "Internet",
+     "title": "Internet",
+     "tags": ["internet", "ppc"],
+     "note": "Hotline Connect Client 1.9.1 (the classic PowerPC build: trackers, servers, chat, "
+             "files; on Mac OS 8.6 with PowerPC ticked; it writes into its folder, so let the disk be "
+             "changed) and Serial MReader 0.03 with the Serial Box 2021-08 database (68k and PowerPC; "
+             "an archive only). MR Browser and Hotline's Carbon build need CarbonLib: not here.",
+     "systems": ["8.6"],
+     "take": [("internet-macos-8-9.img", ["Hotline Connect Client 1.9.1 ƒ", "Serial MReader 0.03 ƒ"])],
+     "launch": [
+         {"app": "Hotline Connect Client 1.9.1 ƒ:HLclient19.Classic", "name": "HLclient19.Classic"},
+         {"app": "Serial MReader 0.03 ƒ:Serial MReader v0.03 PPC", "name": "Serial MReader v0.03 PPC"},
+         {"app": "Serial MReader 0.03 ƒ:Serial MReader v0.03 68K", "name": "Serial MReader v0.03 68K",
+          "systems": ["7.6.1", "8.6"]},
+     ]},
 ]
 
 
