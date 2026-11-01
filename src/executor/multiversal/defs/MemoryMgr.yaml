@@ -197,6 +197,17 @@
 # ####
 
 - lowmem:
+    name: HpChk
+    type: Ptr
+    address: 0x316
+    library: PrivateInterfaceLib
+    comment: |
+      heapcheck by its LowMem.h name, for PrivateInterfaceLib's accessors:
+      MPW Shell keeps its globals there (MacPgm, MPW.yaml) through them.
+
+# ####
+
+- lowmem:
     name: Lo3Bytes
     type: LONGINT
     address: 0x31A
@@ -245,8 +256,9 @@
     name: IAZNotify
     type: ProcPtr
     address: 0x33C
+    library: PrivateInterfaceLib
     comment: |
-      MemoryMgr ThinkC (true-b);
+      MemoryMgr ThinkC (true-b); its accessors are PrivateInterfaceLib's.
 
 # ####
 

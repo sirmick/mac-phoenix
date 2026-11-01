@@ -357,6 +357,9 @@ async function start(m) {
     }
     if (m.debug)
         args.push('--debug', m.debug);
+    if (m.ppcbreak)
+        for (const spec of m.ppcbreak.split(';').filter(Boolean))
+            args.push('--ppc-break', spec);
     await runtimeReady;
     Sync.enabled = !!m.sync;
     Module.net.enable(!!m.relay);

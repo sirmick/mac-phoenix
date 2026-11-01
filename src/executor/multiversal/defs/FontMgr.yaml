@@ -368,8 +368,9 @@
     name: JSwapFont
     type: ProcPtr
     address: 0x8E0
+    library: PrivateInterfaceLib
     comment: |
-      FontMgr Private.a (true-b);
+      FontMgr Private.a (true-b); its accessors are PrivateInterfaceLib's.
 
 # ####
 
