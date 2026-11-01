@@ -161,6 +161,12 @@ void traps::init(bool log, const std::string& trapFilter)
 
 /* ---- MacPhoenix: selectors no routine answers --------------------------- */
 
+void Executor::traps::putOSTrapWord(uint16_t trapno)
+{
+    if(!(trapno & TOOLBIT))
+        EM_D1 = (EM_D1 & 0xFFFF0000) | trapno;
+}
+
 void Executor::traps::log_unimplemented(const std::string &what)
 {
     static std::set<std::string> logged;

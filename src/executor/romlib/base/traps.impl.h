@@ -303,6 +303,7 @@ void WrappedFunction<Ret (Args...), fptr, CallConv>::init()
 template<typename Ret, typename... Args, Ret (*fptr)(Args...), int trapno, typename CallConv>
 Ret TrapFunction<Ret (Args...), fptr, trapno, CallConv>::invokeViaTrapTable(Args... args) const
 {
+    putOSTrapWord(trapno);
     return (UPP<Ret (Args...),CallConv>(SYN68K_TO_US(tableEntry())))(args...);
 }
 
