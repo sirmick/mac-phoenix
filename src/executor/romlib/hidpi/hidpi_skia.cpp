@@ -131,6 +131,7 @@ void draw_run(SkCanvas *canvas, const Scaler &sc, const Run &run)
     }
 
     SkFont font(tf, run.size * s);
+    font.setScaleX(run.xscale);
     font.setEdging(run.mode == Mode::Xor ? SkFont::Edging::kAlias : SkFont::Edging::kAntiAlias);
     font.setSubpixel(true);
     font.setHinting(SkFontHinting::kSlight);

@@ -13,7 +13,8 @@
 # hasn't); text whose GWorld the program then wrote itself (behind
 # QuickDraw), and CopyMask's masked-out part, must not differ. Text from
 # GWorlds of other depths (8, 16, 1 bits) and copied with srcOr and
-# transparent onto colour must be anti-aliased too. The boxes
+# transparent onto colour must be anti-aliased too, and text copied to
+# rectangles of other sizes (2x, wide, half, 1.5x). The boxes
 # are GWorldGallery's: keep them in step. Its second window scrolls text
 # three ways: every row of it with text must still be anti-aliased.
 #
@@ -114,6 +115,11 @@ boxes = [
     ('depth 1 GWorld copied', 318, 241, 460, 259, 'blend'),
     ('srcOr onto yellow', 24, 266, 235, 284, 'blend'),
     ('transparent onto blue', 249, 266, 460, 284, 'blend'),
+    # the Scale window: content at (478, 60)
+    ('copied at 2x', 482, 60, 622, 96, 'blend'),
+    ('copied 2x wide, 1x high', 482, 104, 622, 122, 'blend'),
+    ('copied at half', 482, 130, 552, 148, 'blend'),
+    ('copied at 1.5x', 482, 156, 626, 177, 'blend'),
 ]
 pa, pb = up.load(), b.load()
 grey = lambda p: 0x30 < max(p) < 0xD0 and max(p) - min(p) < 0x20

@@ -5,7 +5,8 @@
    (behind QuickDraw); text copied with CopyMask through a mask of its left
    part; text from GWorlds of other depths, and copied with srcOr and
    transparent (DrawDepths). A second window scrolls text three ways
-   (DrawScroll). For looking at Executor's HiDPI GWorld shadows (--executor-scale 2,
+   (DrawScroll); a third copies text to rectangles of other sizes
+   (DrawScaled). For looking at Executor's HiDPI GWorld shadows (--executor-scale 2,
    docs/executor/HiDPI.md "Phase 4") and the ctest cell hidpi_gworld_executor
    (tests/test_hidpi_gworld.sh), which compares the 2x surface with the 1x
    frame there: keep its boxes in step with the layout here. Stays on the
@@ -314,9 +315,43 @@ static void DrawScroll(WindowRef w)
     }
 }
 
+/* The scale window: text in GWorlds copied to rectangles of other sizes */
+struct scaled
+{
+    struct line l;
+    short w, h;                         /* the GWorld */
+    short top, left, bottom, right;     /* where it is copied */
+};
+static const struct scaled scaleds[] = {
+    { { 3, 12, 0, 4, 13, "\pTwice" }, 70, 18, 0, 4, 36, 144 },          /* 2x */
+    { { 3, 12, 0, 4, 13, "\pWide" }, 70, 18, 44, 4, 62, 144 },          /* 2x wide, 1x high */
+    { { 2, 24, 0, 4, 26, "\pHalf" }, 140, 36, 70, 4, 88, 74 },          /* half */
+    { { 3, 10, 0, 2, 11, "\pOne and a half" }, 96, 14, 96, 4, 117, 148 }, /* 1.5x */
+};
+
+static void DrawScaled(WindowRef w)
+{
+    int i;
+    SetPort((GrafPtr)w);
+    ForeColor(blackColor);
+    BackColor(whiteColor);
+    for(i = 0; i < (int)(sizeof scaleds / sizeof scaleds[0]); i++)
+    {
+        const struct scaled *c = &scaleds[i];
+        GWorldPtr g = OffscreenAt(0, c->w, c->h, &c->l, 1);
+        Rect s, d;
+        if(!g)
+            continue;
+        SetRect(&s, 0, 0, c->w, c->h);
+        SetRect(&d, c->left, c->top, c->right, c->bottom);
+        CopyBits((BitMap *)*GetGWorldPixMap(g), &((GrafPtr)w)->portBits, &s, &d, srcCopy, NULL);
+        DisposeGWorld(g);
+    }
+}
+
 int main(void)
 {
-    WindowRef doc, scroll;
+    WindowRef doc, scroll, scale;
     Rect r;
     EventRecord e;
 
@@ -331,6 +366,8 @@ int main(void)
 
     SetRect(&r, 20, 60, 20 + kWidth, 300);
     doc = NewCWindow(NULL, &r, "\pGWorld Gallery", true, documentProc, (WindowRef)-1, true, 0);
+    SetRect(&r, 478, 60, 630, 190);
+    scale = NewCWindow(NULL, &r, "\pScale", true, documentProc, (WindowRef)-1, true, 0);
     SetRect(&r, 20, 322, 20 + kWidth, 322 + kScrollHeight);
     scroll = NewCWindow(NULL, &r, "\pScroll Gallery", true, documentProc, (WindowRef)-1, true, 0);
     SetPort((GrafPtr)scroll);
@@ -367,6 +404,8 @@ int main(void)
                 EraseRect(&((GrafPtr)e.message)->portRect);
                 if((WindowRef)e.message == doc)
                     DrawGallery(doc);
+                else if((WindowRef)e.message == scale)
+                    DrawScaled(scale);
                 else if((WindowRef)e.message == scroll)
                 {
                     /* TextEdit back at its first line, then scrolled */
@@ -388,6 +427,7 @@ int main(void)
                 break;
         }
     }
+    DisposeWindow(scale);
     DisposeWindow(scroll);
     DisposeWindow(doc);
     return 0;

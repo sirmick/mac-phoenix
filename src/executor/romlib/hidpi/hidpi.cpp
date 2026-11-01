@@ -969,23 +969,52 @@ Pixels snapshot(const Screen &s, const IRect &box)
     return p;
 }
 
-/* RUN of the source, where the copy put it: its box the part copied
-   (OX, OY: source pixel to destination pixel); its ink the pixels where
-   the destination has the colour the run left in the source (SC, DC: the
-   two pixmaps' colours; masked out, clipped or not that colour: not ink);
-   its "before" there what the destination would have had without the
-   text: the source's "before" in the destination's pixels (Copy), or
-   with Transparent where that is the background colour BG, what the
-   destination had before the copy (OLD); its clip CLIP's part of its
-   own. Null when nothing it drew landed. D: the destination after the
+/* Where a copy puts the source's pixels: the source rectangle (source
+   pixels) onto the destination rectangle (destination pixels), scaled as
+   scale_blt_bitmap samples (destination pixel i of a row takes source
+   pixel (i * step) >> 16, step = (old width << 16) / new width). */
+struct Placement
+{
+    int sl, st, sw, sh; /* source rectangle */
+    int dl, dt, dw, dh; /* destination rectangle */
+    long fx, fy;        /* the steps, 16.16 */
+    double kx, ky;      /* destination pixels a source pixel */
+
+    Placement(const IRect &s, const IRect &d)
+        : sl(s.left), st(s.top), sw(s.right - s.left), sh(s.bottom - s.top), dl(d.left), dt(d.top),
+          dw(d.right - d.left), dh(d.bottom - d.top), fx(((long)sw << 16) / dw), fy(((long)sh << 16) / dh),
+          kx((double)dw / sw), ky((double)dh / sh)
+    {
+    }
+    int src_x(int x) const { return sl + (int)(((long)(x - dl) * fx) >> 16); }
+    int src_y(int y) const { return st + (int)(((long)(y - dt) * fy) >> 16); }
+    float x(float sx) const { return dl + (sx - sl) * kx; }
+    float y(float sy) const { return dt + (sy - st) * ky; }
+    IRect rect(const IRect &r) const
+    {
+        return { (int)std::floor(y(r.top)), (int)std::floor(x(r.left)), (int)std::ceil(y(r.bottom)),
+                 (int)std::ceil(x(r.right)) };
+    }
+};
+
+/* RUN of the source, where the copy put it (AT: scaled, its geometry
+   with it): its box the part copied; its ink the pixels where the
+   destination has the colour the run left in the source pixel there (SC,
+   DC: the two pixmaps' colours; masked out, clipped or not that colour:
+   not ink); its "before" there what the destination would have had
+   without the text: the source's "before" in the destination's pixels
+   (Copy), or with Transparent where that is the background colour BG,
+   what the destination had before the copy (OLD); its clip CLIP's part of
+   its own. Null when nothing it drew landed. D: the destination after the
    copy. */
-std::shared_ptr<Run> carried(const Run &run, int ox, int oy, const IRect &src_area,
+std::shared_ptr<Run> carried(const Run &run, const Placement &at, const IRect &src_area,
                              const std::vector<IRect> &clip, const Screen &d, const Colours &sc,
                              const Colours &dc, Combine how, uint32_t bg, const Pixels &old)
 {
     IRect sbox = intersection(run.box, src_area);
-    IRect box = intersection({ sbox.top + oy, sbox.left + ox, sbox.bottom + oy, sbox.right + ox },
-                             { 0, 0, d.height, d.width });
+    if(empty(sbox))
+        return nullptr;
+    IRect box = intersection(at.rect(sbox), { 0, 0, d.height, d.width });
     if(empty(box))
         return nullptr;
     auto n = std::make_shared<Run>(run);
@@ -1005,18 +1034,24 @@ std::shared_ptr<Run> carried(const Run &run, int ox, int oy, const IRect &src_ar
     std::vector<std::pair<int, int>> spans;
     for(int y = box.top; y < box.bottom; y++)
     {
+        int sy = at.src_y(y);
+        if(sy < sbox.top || sy >= sbox.bottom)
+            continue;
         spans.clear();
         for(const IRect &k : clip)
             if(k.top <= y && y < k.bottom)
                 spans.push_back({ std::max(k.left, box.left), std::min(k.right, box.right) });
-        const uint8_t *sb = &run.before[(size_t)(y - oy - run.box.top) * run.rowLen];
-        const uint8_t *sa = &run.after[(size_t)(y - oy - run.box.top) * run.rowLen];
+        const uint8_t *sb = &run.before[(size_t)(sy - run.box.top) * run.rowLen];
+        const uint8_t *sa = &run.after[(size_t)(sy - run.box.top) * run.rowLen];
         uint8_t *nb = &n->before[(size_t)(y - box.top) * n->rowLen];
         const uint8_t *na = &n->after[(size_t)(y - box.top) * n->rowLen];
         for(auto [l, r] : spans)
         for(int x = l; x < r; x++)
         {
-            uint32_t b = raw_pixel(sb, x - ox - run.x0, run.bpp), a = raw_pixel(sa, x - ox - run.x0, run.bpp);
+            int sx = at.src_x(x);
+            if(sx < sbox.left || sx >= sbox.right)
+                continue;
+            uint32_t b = raw_pixel(sb, sx - run.x0, run.bpp), a = raw_pixel(sa, sx - run.x0, run.bpp);
             if(b == a)
                 continue;
             uint32_t now = raw_pixel(na, x - n->x0, n->bpp);
@@ -1051,29 +1086,48 @@ std::shared_ptr<Run> carried(const Run &run, int ox, int oy, const IRect &src_ar
     if(how != Combine::Copy && n->mode == Mode::Copy)
         n->mode = Mode::Or;
     n->noInk = !ink;
+    /* the geometry, scaled with the pixels: text by its size (the height's
+       scale) and a horizontal scale besides */
+    float kx = at.kx, ky = at.ky;
     for(size_t i = 0; i < n->xs.size(); i++)
-        n->xs[i] += ox;
-    n->baseline += oy;
-    n->ulLeft += ox;
-    n->ulRight += ox;
+    {
+        n->xs[i] = at.x(n->xs[i]);
+        n->advances[i] *= kx;
+    }
+    n->baseline = at.y(n->baseline);
+    n->ulLeft = at.x(n->ulLeft);
+    n->ulRight = at.x(n->ulRight);
+    n->size *= ky;
+    n->xscale *= kx / ky;
+    if(kx != 1 || ky != 1)
+    {
+        n->bold = std::max(1, (int)std::lround(n->bold * kx));
+        n->ulThick = std::max(1, (int)std::lround(n->ulThick * ky));
+        n->shadow = n->shadow ? std::max(1, (int)std::lround(n->shadow * kx)) : 0;
+    }
     for(Executor::hidpi::Shape &sh : n->shapes)
     {
         for(size_t i = 0; i + 1 < sh.pts.size(); i += 2)
         {
             if(sh.kind == Executor::hidpi::Shape::Circle && i == 2)
-                break; /* the radius */
-            sh.pts[i] += ox;
-            sh.pts[i + 1] += oy;
+            {
+                sh.pts[2] *= std::min(kx, ky); /* the radius */
+                break;
+            }
+            sh.pts[i] = at.x(sh.pts[i]);
+            sh.pts[i + 1] = at.y(sh.pts[i + 1]);
         }
-        sh.gx += ox;
-        sh.gy += oy;
-        sh.gx2 += ox;
-        sh.gy2 += oy;
+        sh.stroke *= std::min(kx, ky);
+        sh.gx = at.x(sh.gx);
+        sh.gy = at.y(sh.gy);
+        sh.gx2 = at.x(sh.gx2);
+        sh.gy2 = at.y(sh.gy2);
+        sh.gr *= std::min(kx, ky);
     }
     n->clip.clear();
     for(const IRect &c : run.clip)
     {
-        IRect m{ c.top + oy, c.left + ox, c.bottom + oy, c.right + ox };
+        IRect m = at.rect(c);
         for(const IRect &k : clip)
         {
             IRect r = intersection(m, k);
@@ -1118,12 +1172,12 @@ void Executor::hidpi::copy_bits(const PixMap *src, const PixMap *dst, const Rect
             if(intersects(r->box, src_area) && run_valid(*r, from.s))
                 runs.push_back(r);
     }
-    /* 1:1, srcCopy, srcOr or transparent: else the copy is the 1x pixels */
+    /* srcCopy, srcOr or transparent: else the copy is the 1x pixels */
     const char *why = nullptr;
     if(runs.empty())
         why = "no runs";
-    else if(sr->right - sr->left != dr->right - dr->left || sr->bottom - sr->top != dr->bottom - dr->top)
-        why = "scaled";
+    else if(sr->right <= sr->left || sr->bottom <= sr->top || dr->right <= dr->left || dr->bottom <= dr->top)
+        why = "empty";
     Combine how = Combine::Copy;
     uint32_t bg = 0xFFFFFF;
     switch(mode & ~64) /* ditherCopy: 64 */
@@ -1178,10 +1232,11 @@ void Executor::hidpi::copy_bits(const PixMap *src, const PixMap *dst, const Rect
                     both.push_back(intersection(a, b));
         clip = std::move(both);
     }
-    int ox = (dr->left - dx) - (sr->left - sx), oy = (dr->top - dy) - (sr->top - sy);
+    Placement at({ sr->top - sy, sr->left - sx, sr->bottom - sy, sr->right - sx },
+                 { dr->top - dy, dr->left - dx, dr->bottom - dy, dr->right - dx });
     Runs made;
     for(const auto &r : runs)
-        if(auto n = carried(*r, ox, oy, src_area, clip, to.s, sc, dc, how, bg, old))
+        if(auto n = carried(*r, at, src_area, clip, to.s, sc, dc, how, bg, old))
             made.push_back(n);
     if(made.empty())
     {
@@ -1237,8 +1292,9 @@ void Executor::hidpi::copy_bits(const PixMap *src, const PixMap *dst, const Rect
     if(ERROR_ENABLED_P(ERROR_HIDPI_LOG))
     {
         char what[96];
-        snprintf(what, sizeof what, "%zu carried to %s at %+d,%+d (%zu there)", made.size(),
-                 to.screen ? "the screen" : "an offscreen", ox, oy, dst_runs.size());
+        snprintf(what, sizeof what, "%zu carried to %s at %+d,%+d x%.2f,%.2f (%zu there)", made.size(),
+                 to.screen ? "the screen" : "an offscreen", at.dl - at.sl, at.dt - at.st, at.kx, at.ky,
+                 dst_runs.size());
         log_copy(what, src_area, runs.size());
     }
 }
