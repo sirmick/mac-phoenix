@@ -13,6 +13,11 @@
 //                    server takes Range requests and sends them uncompressed)
 //   ?ppc             run fat applications' PowerPC code (the PowerPC box;
 //                    PowerPC-only applications always run theirs)
+//   ?logtraps=LIST   Executor logs Toolbox calls (as --executor-logtraps):
+//                    LIST the names (wildcards, -NAME leaves out; 1: all);
+//                    &nesting=N calls nested N deep (default 6); ?debug=OPTS Executor's
+//                    --executor-debug options. Everything printed goes to the
+//                    server too (log.js; tools/web/server keeps it per session)
 // library.json beside the page (optional) offers more disks: [{ title,
 // url, note }]; the ones picked are remembered (localStorage) and loaded
 // like ?disk=.
@@ -35,6 +40,7 @@ const box = document.getElementById('screen-box');
 document.getElementById('insecure').hidden = window.isSecureContext;
 const status = document.getElementById('status');
 const params = new URLSearchParams(location.search);
+Log.start(Log.newId(), 'page');
 const [width, height] = (params.get('size') || '640x480').split('x').map(Number);
 // Executor scales by whole numbers (fractional scales: HiDPI.md phase 6).
 const scale = Math.max(1, Math.round(Number(params.get('scale')) || window.devicePixelRatio || 1));
@@ -387,6 +393,32 @@ function volumeKey(files) {
     return sys ? `${sys.name}-${sys.size}`.replace(/[^\w.-]/g, '_') : 'own';
 }
 
+// Screenshot: the canvas's own pixels (the display scale) as a PNG, with an
+// optional note, to the server beside this session's log (/api/shot).
+document.getElementById('shot').addEventListener('click', async () => {
+    const p = await window.executor.request('pixels');
+    if (!p || !p.width) {
+        status.textContent = 'No screen to send';
+        return;
+    }
+    const c = document.createElement('canvas');
+    c.width = p.width;
+    c.height = p.height;
+    c.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(p.data), p.width, p.height), 0, 0);
+    const png = await new Promise((resolve) => c.toBlob(resolve, 'image/png'));
+    const note = prompt('A note to go with the screenshot (optional):', '');
+    if (note === null)
+        return;
+    let res = null;
+    try {
+        res = await fetch(`/api/shot?session=${Log.session}&note=${encodeURIComponent(note)}`, {
+            method: 'POST', body: png, credentials: 'same-origin', headers: { 'Content-Type': 'image/png' } });
+    } catch { }
+    const name = res && res.ok ? (await res.json()).name : null;
+    status.textContent = name ? `Screenshot sent (${name})` : `Screenshot not sent (${res ? res.status : 'offline'})`;
+    console.log(`[web] screenshot ${name || 'not sent'}${note ? ': ' + note : ''}`);
+});
+
 document.getElementById('reset').addEventListener('click', async () => {
     if (!confirm("Forget everything saved on Executor's disk for this System?"))
         return;
@@ -499,6 +531,7 @@ async function start() {
 
     // The Worker loads the module while the disks still download.
     worker = new Worker('worker.js');
+    worker.addEventListener('error', (e) => console.error(`worker: ${e.message} at ${e.filename}:${e.lineno}`));
     await disksFetched;
     await accountKnown;
     const files = await storedFiles();
@@ -520,7 +553,9 @@ async function start() {
     worker.postMessage({ type: 'start', canvas: offscreen, width, height, scale, files,
                          system: systemSelect.value, ppc: ppcBox.checked,
                          volumeKey: volumeKey(files), sync: !!account, relay: !!account,
-                         ids: imageIds, legacyKeys },
+                         ids: imageIds, legacyKeys, log: Log.session,
+                         logtraps: params.get('logtraps'), nesting: params.get('nesting'),
+                         debug: params.get('debug') },
                        [offscreen]);
     worker.onmessage = (e) => {
         if (mine !== generation)

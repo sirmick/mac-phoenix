@@ -1,4 +1,4 @@
-# probe 4c2d036527d109dafb7514289685a277b7af660500eba237e9b202e33f7cf466
+# probe 6743f0346f6d19a0cb4a6637d23b34361090d3506651f633d2a727c184dbdfa9
 == append
 append.metachars.count: 9
 append.metachars.1.text: "Plain" (5)
@@ -148,3 +148,8 @@ clock.bind.RefreshMenuBarClock: found
 clock.bind.InvalidateAllMenuSizes: found
 clock.bind.InvalidateAllCachedMenuPixels: found
 clock.bind.RecalculateAllWindowTitleWidths: found
+== bar
+bar.lastRight: 151
+bar.left.300: 10
+bar.left.301: 38
+bar.left.302: 73

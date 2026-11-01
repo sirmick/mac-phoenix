@@ -101,6 +101,12 @@ inline uint32_t argbGray(uint16_t g)
     return 0xFF000000 | c << 16 | c << 8 | c;
 }
 
+/* A colour as the presentation surface's */
+inline uint32_t argbRGB(const RGBColor &c)
+{
+    return 0xFF000000u | (c.red >> 8) << 16 | (c.green >> 8) << 8 | (c.blue >> 8);
+}
+
 void arrowPixels(const Rect &r, int dir, int size, uint16_t g);
 
 /* A triangle pointing DIR, SIZE across its base, centred in R; at the
@@ -182,6 +188,11 @@ void movableDialogFrame(const Rect &c, bool active, bool thin, ConstStringPtr ti
                         const WindowParts *parts = nullptr, bool alert = false);
 /* their structure regions */
 void dialogStructure(const Rect &c, bool thin, RgnHandle rgn, bool titled = false);
+
+/* DrawThemeWindowFrame's popup window: a tab over a thin frame, the tab
+   TAB_LEFT..TAB_LEFT + TAB_WIDTH (outline to outline) and TITLE_HEIGHT
+   taller than its least. */
+void popupFrame(const Rect &c, bool active, int tabLeft, int tabWidth, int titleHeight);
 
 /* The grow box alone (DrawGrowIcon on a document window). */
 void documentGrowBox(const Rect &c);

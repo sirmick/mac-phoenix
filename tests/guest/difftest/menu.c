@@ -292,6 +292,42 @@ int main(void)
         probe_bind("MenusLib", "InvalidateAllCachedMenuPixels");
         probe_bind("WindowsLib", "RecalculateAllWindowTitleWidths");
     }
+    if(SECTION("bar"))
+    {
+        /* where the menu bar lays its titles out: an Apple menu, File, Edit
+           (the MenuList's lastRight and each menu's left) */
+        static const unsigned char *const titles[] = { "\p\024", "\pFile", "\pEdit" };
+        MenuHandle bar[3];
+        Handle list;
+        short n, j;
+        for(i = 0; i < 3; i++)
+        {
+            bar[i] = NewMenu(300 + i, titles[i]);
+            AppendMenu(bar[i], "\pItem");
+            InsertMenu(bar[i], 0);
+        }
+        DrawMenuBar();
+        list = LMGetMenuList();
+        n = *(short *)*list / 6;
+        out("lastRight", "%d", ((short *)*list)[1]);
+        for(j = 1; j <= n; j++)
+        {
+            unsigned char *e = (unsigned char *)*list + 6 * j;
+            MenuHandle mh = *(MenuHandle *)e;
+            short left = *(short *)(e + 4);
+            /* the system menus, right-aligned, depend on the screen */
+            if((**mh).menuID < 0)
+                continue;
+            sprintf(k, "left.%d", (int)(**mh).menuID);
+            out(k, "%d", left);
+        }
+        for(i = 0; i < 3; i++)
+        {
+            DeleteMenu(300 + i);
+            DisposeMenu(bar[i]);
+        }
+        DrawMenuBar();
+    }
     probe_close();
     return 0;
 }

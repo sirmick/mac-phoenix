@@ -1,11 +1,13 @@
 /* ChromeGallery: a document window and a floating window of platinum
-   chrome (push buttons, check box, radio button, sliders, progress bar,
+   chrome (push buttons, check boxes, radio button, sliders, progress bars,
    pop-up, little arrows, disclosure triangle, tabs) that stays on the
    screen until it is told to quit. For looking at Executor's HiDPI chrome
    (--executor-scale 2, docs/executor/HiDPI.md) and the ctest cell
    hidpi_chrome_executor (tests/test_hidpi_chrome.sh), which compares the
    2x surface with the 1x frame inside some of this chrome: keep its boxes
-   in step with the layout here. */
+   in step with the layout here. A press in a window's close or zoom box
+   is tracked, for looking at the boxes pressed; a click elsewhere in a
+   window brings it to the front. */
 #include <Types.h>
 #include <Quickdraw.h>
 #include <Fonts.h>
@@ -17,6 +19,7 @@
 #include <Events.h>
 #include <AppleEvents.h>
 #include <Appearance.h>
+#include <string.h>
 
 static Boolean quit = false;
 
@@ -54,8 +57,16 @@ static const struct ctl ctls[] = {
 static void DrawGallery(WindowRef w)
 {
     Rect r;
+    ThemeTrackDrawInfo t;
     SetPort((GrafPtr)w);
     DrawControls(w);
+    /* an indeterminate progress bar, still */
+    memset(&t, 0, sizeof t);
+    t.kind = kThemeMediumIndeterminateBar;
+    SetRect(&t.bounds, 130, 214, 230, 228);
+    t.attributes = kThemeTrackHorizontal;
+    t.enableState = kThemeTrackActive;
+    DrawThemeTrack(&t, NULL, NULL, 0);
     /* a pane, and on it north tabs: the front one, one behind, one
        pressed */
     SetRect(&r, 260, 161, 420, 210);
@@ -121,6 +132,20 @@ int main(void)
                     DrawGallery(doc);
                 EndUpdate((WindowRef)e.message);
                 break;
+            case mouseDown:
+            {
+                /* a window's boxes track the mouse (drawn pressed while
+                   it is down in them) and do nothing */
+                WindowRef w;
+                short part = FindWindow(e.where, &w);
+                if(part == inGoAway)
+                    TrackGoAway(w, e.where);
+                else if(part == inZoomIn || part == inZoomOut)
+                    TrackBox(w, e.where, part);
+                else if(part == inContent || part == inDrag)
+                    SelectWindow(w);
+                break;
+            }
             case kHighLevelEvent:
                 AEProcessAppleEvent(&e);
                 break;

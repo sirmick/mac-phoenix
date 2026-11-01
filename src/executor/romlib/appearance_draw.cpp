@@ -1055,7 +1055,61 @@ void radioPixels(const Rect &r, Look look, ThemeButtonValue value)
 
 /* A disclosure triangle, 7 by 11, pointing right (or down: the same
    turned), in the accent colours with a shadow below right */
+void disclosureTrianglePixels(const Rect &b, Look look, ThemeButtonValue value);
+
+/* The triangle at the display scale: its black outline round the face,
+   lit along the base, and its shadow (the 1x one's corners) */
+hidpi::Shapes disclosureTriangleShapes(const Rect &b, Look look, ThemeButtonValue value)
+{
+    bool down = value == kThemeDisclosureDown;
+    /* (i, j) as the pixels: i out from the base, j across it */
+    float L = b.left + 4, T = (b.top + b.bottom - 11) / 2;
+    float dh = b.left, dv = (b.top + b.bottom - 7) / 2 + 2;
+    auto pts = [&](std::initializer_list<float> ij) {
+        std::vector<float> v;
+        for(auto it = ij.begin(); it != ij.end(); it += 2)
+        {
+            float i = it[0], j = it[1];
+            v.push_back(down ? dh + j : L + i);
+            v.push_back(down ? dv + i : T + j);
+        }
+        return v;
+    };
+    auto rgb = [](uint16_t r, uint16_t g, uint16_t bl) { return argbRGB(RGBColor{ r, g, bl }); };
+    hidpi::Shapes s;
+    if(look == Look::active)
+    {
+        /* beyond the far edge from its middle: #888 then #bbb */
+        s.push_back({ hidpi::Shape::Polygon, pts({ 5, 6, 7, 6, 2, 11, 2, 12, 1, 12, 1, 10 }), 0, argbGray(0xBBBB) });
+        s.push_back({ hidpi::Shape::Polyline, pts({ 5.5f, 6.5f, 1.5f, 10.5f }), 1, argbGray(0x8888) });
+    }
+    uint32_t outline = argbGray(look == Look::inactive ? 0xAAAA : 0);
+    s.push_back({ hidpi::Shape::Polygon, pts({ 0, 0, 6, 5.5f, 6, 5.5f, 0, 11 }), 0, outline });
+    if(look != Look::inactive)
+    {
+        uint32_t face = look == Look::pressed ? rgb(0x3333, 0x3333, 0x9999) : rgb(0x9999, 0x9999, 0xFFFF);
+        s.push_back({ hidpi::Shape::Polygon, pts({ 1, 1.6f, 4.6f, 5.5f, 1, 9.4f }), 0, face });
+        if(look == Look::active)
+        {
+            s.push_back({ hidpi::Shape::Polyline, pts({ 1.5f, 2, 1.5f, 8.5f }), 1, rgb(0xCCCC, 0xCCCC, 0xFFFF) });
+            s.push_back({ hidpi::Shape::Polyline, pts({ 4.2f, 5.8f, 1.8f, 8.6f }), 1, rgb(0x6666, 0x6666, 0xCCCC) });
+        }
+    }
+    return s;
+}
+
 void disclosureTriangle(const Rect &b, Look look, ThemeButtonValue value)
+{
+    bool down = value == kThemeDisclosureDown;
+    Rect box = down ? Rect{ (INTEGER)((b.top + b.bottom - 7) / 2 + 2), b.left, (INTEGER)((b.top + b.bottom - 7) / 2 + 10),
+                            (INTEGER)(b.left + 12) }
+                    : Rect{ (INTEGER)((b.top + b.bottom - 11) / 2), (INTEGER)(b.left + 4),
+                            (INTEGER)((b.top + b.bottom - 11) / 2 + 12), (INTEGER)(b.left + 12) };
+    hidpi::chrome_draw(box, hidpi::active() ? disclosureTriangleShapes(b, look, value) : hidpi::Shapes{},
+                       [&] { disclosureTrianglePixels(b, look, value); });
+}
+
+void disclosureTrianglePixels(const Rect &b, Look look, ThemeButtonValue value)
 {
     int L = b.left + 4, T = (b.top + b.bottom - 11) / 2;
     bool down = value == kThemeDisclosureDown;
@@ -1064,7 +1118,8 @@ void disclosureTriangle(const Rect &b, Look look, ThemeButtonValue value)
     /* (i, j): j across the triangle's base (0-10), i out from it (0-5) */
     auto plot = [&](int i, int j, RGBColor &c) {
         RGBForeColor(&c);
-        int h = down ? b.left + 2 + j : L + i, v = down ? (b.top + b.bottom - 7) / 2 + i : T + j;
+        /* open, it points down from the rect's left (8.6: appr controls.64.triangle.value1) */
+        int h = down ? b.left + j : L + i, v = down ? (b.top + b.bottom - 7) / 2 + 2 + i : T + j;
         MoveTo(h, v);
         LineTo(h, v);
     };
@@ -1213,6 +1268,102 @@ void eraseWith(ThemeEraseUPP proc, const Rect &r, UInt32 data)
 
 namespace
 {
+void indeterminateBarPixels(const Rect &bounds, int phase, bool active);
+
+/* Each row's stripe colours, top to bottom: the accent's and the grey's */
+const RGBColor indeterminateBlue[] = {
+    { 0x0000, 0x0000, 0x8888 }, { 0x3333, 0x3333, 0x9999 }, { 0x6666, 0x6666, 0xCCCC }, { 0x9999, 0x9999, 0xFFFF },
+    { 0xCCCC, 0xCCCC, 0xFFFF }, { 0x9999, 0x9999, 0xFFFF }, { 0x6666, 0x6666, 0xCCCC }, { 0x3333, 0x3333, 0x9999 },
+    { 0x0000, 0x0000, 0x8888 }, { 0x0000, 0x0000, 0x5555 },
+};
+const uint16_t indeterminateGrey[] = { 0x5555, 0x7777, 0xAAAA, 0xBBBB, 0xFFFF, 0xDDDD, 0xBBBB, 0x9999, 0x7777, 0x5555 };
+
+/* Where the stripes are: pixel (x, y) of the inside (from its top left)
+   is in a blue one when (x - y - 8 - 4 phase) mod 16 < 8 */
+int indeterminateOffset(int phase)
+{
+    return 8 + 4 * phase;
+}
+
+/* The indeterminate bar at the display scale: the frame's lines, the grey
+   and blue stripes as parallelograms shaded row by row (a vertical
+   gradient through the rows' colours) */
+hidpi::Shapes indeterminateBarShapes(const Rect &bounds, int phase, bool active)
+{
+    float L = bounds.left, T = bounds.top, R = bounds.right - 2, B = bounds.bottom - 2; /* inclusive */
+    float x0 = L + 2, y0 = T + 2, x1 = R, y1 = B; /* the inside: [x0, x1) x [y0, y1) */
+    hidpi::Shapes s;
+    auto shaded = [&](std::vector<float> pts, bool blue) {
+        hidpi::Shape sh{ hidpi::Shape::Polygon, std::move(pts), 0, 0xFF000000 };
+        sh.gx = x0, sh.gy = y0, sh.gx2 = x0, sh.gy2 = y1;
+        int n = (int)std::size(indeterminateGrey);
+        for(int i = 0; i < n; i++)
+        {
+            if(!active)
+                sh.colors.push_back(blue ? argbRGB({ 0x9999, 0x9999, 0xFFFF }) : argbGray(0xDDDD));
+            else
+                sh.colors.push_back(blue ? argbRGB(indeterminateBlue[i]) : argbGray(indeterminateGrey[i]));
+            sh.pos.push_back((i + 0.5f) / n);
+        }
+        s.push_back(sh);
+    };
+    shaded({ x0, y0, x1, y0, x1, y1, x0, y1 }, false);
+    /* the blue stripes: x - y = off (mod 16) to off + 8, from the top row's */
+    int off = indeterminateOffset(phase) % 16, h = (int)(y1 - y0);
+    for(int a = off - 16 - h; a < x1 - x0 + 16; a += 16)
+        shaded({ x0 + a, y0, x0 + a + 8, y0, x0 + a + 8 + h, y1, x0 + a + h, y1 }, true);
+    if(active)
+    {
+        rectShape(s, L, T, R + 1, T + 1, 0xAAAA);
+        rectShape(s, L, T, L + 1, B + 1, 0xAAAA);
+    }
+    uint16_t frame = active ? kBlack : 0x5555;
+    rectShape(s, L + 1, T + 1, R + 1, T + 2, frame);
+    rectShape(s, L + 1, B, R + 1, B + 1, frame);
+    rectShape(s, L + 1, T + 1, L + 2, B + 1, frame);
+    rectShape(s, R, T + 1, R + 1, B + 1, frame);
+    return s;
+}
+
+/* A medium indeterminate bar as 8.6 draws it (appr draw32.indeterminate.*):
+   the determinate bar's frame round diagonal stripes 8 wide, blue and
+   grey, each row its own shade (lightest across the middle), moving 4
+   pixels left a phase; inactive #ddd and #99f in a #555 frame. */
+void indeterminateBar(const Rect &bounds, int phase, bool active)
+{
+    Rect box = { bounds.top, bounds.left, (INTEGER)(bounds.bottom - 1), (INTEGER)(bounds.right - 1) };
+    hidpi::chrome_draw(box, hidpi::active() ? indeterminateBarShapes(bounds, phase, active) : hidpi::Shapes{},
+                       [&] { indeterminateBarPixels(bounds, phase, active); });
+}
+
+void indeterminateBarPixels(const Rect &bounds, int phase, bool active)
+{
+    int L = bounds.left, T = bounds.top, R = bounds.right - 2, B = bounds.bottom - 2; /* inclusive */
+    if(active)
+    {
+        lineGray(L, T, R, T, 0xAAAA);
+        lineGray(L, T, L, B, 0xAAAA);
+    }
+    frameGray(Rect{ (INTEGER)(T + 1), (INTEGER)(L + 1), (INTEGER)(B + 1), (INTEGER)(R + 1) }, active ? kBlack : 0x5555);
+    int off = indeterminateOffset(phase);
+    for(int y = T + 2; y < B; y++)
+    {
+        int r = y - (T + 2), n = (int)std::size(indeterminateGrey);
+        RGBColor blue = active ? indeterminateBlue[std::min(r, n - 1)] : RGBColor{ 0x9999, 0x9999, 0xFFFF };
+        uint16_t g = active ? indeterminateGrey[std::min(r, n - 1)] : 0xDDDD;
+        for(int x = L + 2; x < R; x++)
+        {
+            int m = (((x - (L + 2)) - r - off) % 16 + 16) % 16;
+            /* a stripe that would start in the last column isn't drawn
+               (8.6: appr draw32.indeterminate.medium.0, row 7) */
+            if(m < 8 && !(m == 0 && x == R - 1))
+                lineRGB(x, y, x, y, blue);
+            else
+                lineGray(x, y, x, y, g);
+        }
+    }
+}
+
 /* A determinate horizontal progress bar in BOUNDS, as 8.6 draws CDEF 80
    (tests/guest/difftest appr controls.80.*): the bar a pixel short of
    the bounds' right and bottom, a #aaa line over and left of a black
@@ -1325,6 +1476,15 @@ OSStatus Executor::C_DrawThemeTrack(const ThemeTrackDrawInfo *drawInfo, RgnHandl
                 progressBar(g.bounds, drawInfo->min, drawInfo->max, drawInfo->value, active);
                 break;
             }
+            /* 8.6 draws the medium indeterminate bar; the large one not at
+               all (appr draw32.indeterminate.large.*) */
+            if(drawInfo->kind == kThemeMediumIndeterminateBar && g.horizontal)
+            {
+                indeterminateBar(g.bounds, drawInfo->trackInfo.progress.phase, active);
+                break;
+            }
+            if(drawInfo->kind == kThemeLargeIndeterminateBar)
+                break;
             Rect r = g.bounds;
             frameGray(r, active ? kBlack : kShadow);
             InsetRect(&r, 1, 1);
@@ -1774,25 +1934,164 @@ uint16_t tabGray(char c)
     return n * 0x1111;
 }
 
+/* Tabs facing the other ways, every row as tabLooks' (taken from 8.6 on
+   the G3: appr draw32/draw8.tabdir.*), in the north tab's terms: row 0 at
+   the tab's far edge, along the tab left to right. South is north turned
+   over and east and west north turned sideways, but each shades its own
+   edges (the light from the top left), so the rows are their own. */
+const char *const tabDirRows[3][5][tabFrontRows] = {
+    { /* facing south */
+        { /* non-front */
+            "2|0|", "20ac|9|800", "2acd|b|840", "2acd|c|b43", "0cd|c|a0", "2ad|c|b43", "0cd|c|80", "0cd|c|a0",
+            "2ad|c|b43", "0cd|c|80", "0cd|c|a0", "2ad|c|b43", "0cd|c|80", "0cd|c|a0", "2ad|c|b43", "0cd|c|80",
+            "0cd|c|a0", "2ad|c|b43", "0cd|c|80", "0cd|c|a0", "0ad|c|b40",
+        },
+        { /* non-front pressed */
+            "2|0|", "2045|8|30", "2445|7|80", "2445|6|743", "045|6|80", "245|6|743", "045|6|80", "045|6|70",
+            "245|6|743", "045|6|80", "045|6|70", "245|6|743", "045|6|80", "045|6|70", "245|6|743", "045|6|80",
+            "045|6|70", "245|6|743", "045|6|80", "045|6|70", "045|6|740",
+        },
+        { /* non-front inactive */
+            "|5|", "55|d|55", "5|d|5", "5|d|5", "5|d|5", "5|d|5", "5|d|5", "5|d|5", "5|d|5", "5|d|5", "5|d|5",
+            "5|d|5", "5|d|5", "5|d|5", "5|d|5", "5|d|5", "5|d|5", "5|d|5", "5|d|5", "5|d|5", "5|d|5",
+        },
+        { /* front */
+            "2|0|", "20|9|700", "2b|c|b980", "2bcf|e|b42", "0cf|e|d80", "2bf|e|b42", "0cf|e|d80", "0cf|e|d80",
+            "2bf|e|b42", "0cf|e|d80", "0cf|e|d80", "2bf|e|b42", "0cf|e|d80", "0cf|e|d80", "2bf|e|b42", "0cf|e|d80",
+            "0cf|e|d80", "2bf|e|b42", "0cf|e|d80", "0cf|e|d80", "2bf|e|b40", "0cf|e|db0", "ccf|e|b9", "ff|e|b",
+        },
+        { /* front inactive */
+            "|5|", "55|e|55", "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5",
+            "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5", "|e|", "|e|",
+            "|e|",
+        },
+    },
+    { /* facing east */
+        { /* non-front */
+            "2|0|", "20ac|9|800", "2acd|b|840", "2add|c|b42", "0cd|c|80", "2ad|c|b42", "0cd|c|80", "0cd|c|a0",
+            "2ad|c|b42", "0cd|c|80", "0cd|c|a0", "2ad|c|b42", "0cd|c|80", "0cd|c|a0", "2ad|c|b42", "0cd|c|80",
+            "0cd|c|a0", "2ad|c|b42", "0cd|c|80", "0cd|c|a0", "2ad|c|b62",
+        },
+        { /* non-front pressed */
+            "2|0|", "2044|8|4430", "24455|7|55580", "2445|6|743", "045|6|80", "245|6|743", "045|6|80", "045|6|70",
+            "245|6|743", "045|6|80", "045|6|70", "245|6|743", "045|6|80", "045|6|70", "245|6|743", "045|6|80",
+            "045|6|70", "245|6|743", "045|6|80", "045|6|70", "045|6|740",
+        },
+        { /* non-front inactive */
+            "|5|", "55|d|55", "5|d|5", "5|d|5", "5|d|5", "5|d|5", "5|d|5", "5|d|5", "5|d|5", "5|d|5", "5|d|5",
+            "5|d|5", "5|d|5", "5|d|5", "5|d|5", "5|d|5", "5|d|5", "5|d|5", "5|d|5", "5|d|5", "5|d|5",
+        },
+        { /* front */
+            "2|0|", "20|9|700", "2b|c|b970", "2bcf|e|940", "0cf|e|b80", "2bf|e|940", "0cf|e|b80", "0cf|e|90",
+            "2bf|e|b40", "0cf|e|80", "0cf|e|90", "2bf|e|b40", "0cf|e|80", "0cf|e|90", "2bf|e|b40", "0cf|e|80",
+            "0cf|e|90", "2bf|e|b40", "0cf|e|80", "0cf|e|90", "2bf|e|b40", "0cf|e|80", "ccf|e|b9", "f|e|b",
+        },
+        { /* front inactive */
+            "|5|", "55|e|55", "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5",
+            "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5",
+            "|e|", "f|e|f",
+        },
+    },
+    { /* facing west */
+        { /* non-front */
+            "2|0|", "20a|c|a00", "2ac|d|80", "2add|c|b42", "0cd|c|80", "2ad|c|b42", "0cd|c|80", "0cd|c|a0",
+            "2ad|c|b42", "0cd|c|80", "0cd|c|a0", "2ad|c|b42", "0cd|c|80", "0cd|c|a0", "2ad|c|b42", "0cd|c|80",
+            "0cd|c|a0", "2ad|c|b42", "0cd|c|80", "0cd|c|a0", "2ad|c|b62",
+        },
+        { /* non-front pressed */
+            "2|0|", "20|4|30", "244|5|80", "2445|6|743", "045|6|80", "245|6|743", "045|6|80", "045|6|70",
+            "245|6|743", "045|6|80", "045|6|70", "245|6|743", "045|6|80", "045|6|70", "245|6|743", "045|6|80",
+            "045|6|70", "245|6|743", "045|6|80", "045|6|70", "045|6|740",
+        },
+        { /* non-front inactive */
+            "|5|", "55|d|55", "5|d|5", "5|d|5", "5|d|5", "5|d|5", "5|d|5", "5|d|5", "5|d|5", "5|d|5", "5|d|5",
+            "5|d|5", "5|d|5", "5|d|5", "5|d|5", "5|d|5", "5|d|5", "5|d|5", "5|d|5", "5|d|5", "5|d|5",
+        },
+        { /* front */
+            "2|0|", "20b|c|b00", "2bc|f|d80", "2bcf|e|b43", "0cf|e|d80", "2bf|e|b43", "0cf|e|d80", "0cf|e|d80",
+            "2bf|e|b43", "0cf|e|d80", "0cf|e|d80", "2bf|e|b43", "0cf|e|c80", "0cf|e|d80", "2bf|e|b43", "0cf|e|c80",
+            "0cf|e|d80", "2bf|e|b43", "0cf|e|d80", "0cf|e|80", "2bf|e|b40", "0cf|e|80", "ccf|e|cc", "f|e|f",
+        },
+        { /* front inactive */
+            "|5|", "55|e|55", "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5",
+            "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5",
+            "|e|", "f|e|f",
+        },
+    },
+};
+
+const char *tabDirRow(ThemeTabStyle style, ThemeTabDirection dir, int r)
+{
+    return dir == kThemeTabNorth ? tabRow(tabLooks[style], r) : tabDirRows[dir - 1][style][r];
+}
+
+int tabDirInset(ThemeTabStyle style, ThemeTabDirection dir, int r)
+{
+    if(r < tabRows)
+        return tabInset(r);
+    return dir == kThemeTabNorth ? tabLooks[style].belowInset[r - tabRows] : 0;
+}
+
+/* Where a tab's north-space points (A along, R across from its far edge)
+   are on the screen, for direction DIR in bounds B */
+struct TabFrame
+{
+    Rect b;
+    ThemeTabDirection dir;
+    int length() const { return dir == kThemeTabNorth || dir == kThemeTabSouth ? b.right - b.left : b.bottom - b.top; }
+    /* a pixel */
+    Point at(int a, int r) const
+    {
+        switch(dir)
+        {
+            case kThemeTabSouth: return Point{ (INTEGER)(b.bottom - 1 - r), (INTEGER)(b.left + a) };
+            case kThemeTabEast: return Point{ (INTEGER)(b.top + a), (INTEGER)(b.right - 1 - r) };
+            case kThemeTabWest: return Point{ (INTEGER)(b.top + a), (INTEGER)(b.left + r) };
+            default: return Point{ (INTEGER)(b.top + r), (INTEGER)(b.left + a) };
+        }
+    }
+    /* a point between pixels */
+    void pt(float a, float r, float &x, float &y) const
+    {
+        switch(dir)
+        {
+            case kThemeTabSouth: x = b.left + a, y = b.bottom - r; break;
+            case kThemeTabEast: x = b.right - r, y = b.top + a; break;
+            case kThemeTabWest: x = b.left + r, y = b.top + a; break;
+            default: x = b.left + a, y = b.top + r; break;
+        }
+    }
+    /* pixels A1..A2 of row R */
+    void run(int a1, int a2, int r, uint16_t g) const
+    {
+        if(a2 < a1)
+            return;
+        Point p = at(a1, r), q = at(a2, r);
+        lineGray(p.h, p.v, q.h, q.v, g);
+    }
+};
+
 /* A north tab at the display scale: its outline as a curve into a
    straight slant (the 1x sides' steps), the face inside it, the lit edge
    down the left and across the top, the shade down the right. Colours by
    style (as tabLooks): outline, face, lit, shade (no lit or shade:
    inactive). */
-hidpi::Shapes tabNorthShapes(const Rect &bounds, ThemeTabStyle style, int rows)
+hidpi::Shapes tabShapes(const TabFrame &f, ThemeTabStyle style, int rows)
 {
     static const uint8_t looks[][4] = { { 0, 0xc, 0xd, 8 }, { 0, 6, 4, 7 }, { 5, 0xd, 0xff, 0xff },
                                         { 0, 0xe, 0xf, 8 }, { 5, 0xe, 0xff, 0xff } };
     const uint8_t *c = looks[style];
-    float L = bounds.left, T = bounds.top, W = bounds.right - bounds.left;
+    float W = f.length();
     bool front = rows > tabRows;
     /* the left side D in from the edge, from Y up to the top's middle;
        the right side the same mirrored */
     auto side = [&](float d, float y, bool right) {
         std::vector<float> v;
         auto add = [&](float x, float yy) {
-            v.push_back(L + (right ? W - x : x));
-            v.push_back(T + yy);
+            float px, py;
+            f.pt(right ? W - x : x, yy, px, py);
+            v.push_back(px);
+            v.push_back(py);
         };
         if(y > tabRows)
             add(d, y);
@@ -1814,7 +2113,9 @@ hidpi::Shapes tabNorthShapes(const Rect &bounds, ThemeTabStyle style, int rows)
     if(c[2] != 0xff)
     {
         std::vector<float> lit = side(2.5f, rows, false);
-        lit.insert(lit.end(), { L + W - 9, T + 2.5f });
+        float ex, ey;
+        f.pt(W - 9, 2.5f, ex, ey);
+        lit.insert(lit.end(), { ex, ey });
         s.push_back({ hidpi::Shape::Polyline, lit, 1, argbGray(c[2] * 0x1111) });
         std::vector<float> shade = side(1.5f, front ? tabRows + 1 : rows, true);
         s.push_back({ hidpi::Shape::Polyline, shade, 1, argbGray(c[3] * 0x1111) });
@@ -1823,33 +2124,35 @@ hidpi::Shapes tabNorthShapes(const Rect &bounds, ThemeTabStyle style, int rows)
     return s;
 }
 
-void drawTabNorthPixels(const Rect &bounds, const TabLook &look, int rows);
+void drawTabPixels(const TabFrame &f, ThemeTabStyle style, int rows);
 
-void drawTabNorth(const Rect &bounds, ThemeTabStyle style, int rows)
+void drawTab(const Rect &bounds, ThemeTabStyle style, ThemeTabDirection dir, int rows)
 {
-    const Rect box = { bounds.top, bounds.left, (INTEGER)(bounds.top + rows), bounds.right };
-    hidpi::chrome_draw(box, hidpi::active() ? tabNorthShapes(bounds, style, rows) : hidpi::Shapes{},
-                       [&] { drawTabNorthPixels(bounds, tabLooks[style], rows); });
+    TabFrame f{ bounds, dir };
+    Point p = f.at(0, 0), q = f.at(f.length() - 1, rows - 1);
+    const Rect box = { std::min(p.v, q.v), std::min(p.h, q.h), (INTEGER)(std::max(p.v, q.v) + 1),
+                       (INTEGER)(std::max(p.h, q.h) + 1) };
+    hidpi::chrome_draw(box, hidpi::active() ? tabShapes(f, style, rows) : hidpi::Shapes{},
+                       [&] { drawTabPixels(f, style, rows); });
 }
 
-void drawTabNorthPixels(const Rect &bounds, const TabLook &look, int rows)
+void drawTabPixels(const TabFrame &f, ThemeTabStyle style, int rows)
 {
-    int L = bounds.left, R = bounds.right;
+    int len = f.length();
     for(int r = 0; r < rows; r++)
     {
-        const char *row = tabRow(look, r);
+        const char *row = tabDirRow(style, f.dir, r);
         const char *bar1 = strchr(row, '|'), *bar2 = strchr(bar1 + 1, '|');
-        int e = r < tabRows ? tabInset(r) : look.belowInset[r - tabRows], y = bounds.top + r, left = L + e,
-            right = R - 1 - e;
+        int e = tabDirInset(style, f.dir, r), left = e, right = len - 1 - e;
         uint16_t fill = tabGray(bar1[1]);
-        lineGray(left, y, right, y, fill);
+        f.run(left, right, r, fill);
         for(const char *c = row; c < bar1; c++)
-            lineGray(left + (c - row), y, left + (c - row), y, tabGray(*c));
+            f.run(left + (c - row), left + (c - row), r, tabGray(*c));
         int n = strlen(bar2 + 1);
-        if(R - 12 <= right - n)
-            lineGray(R - 12, y, right - n, y, fill);
+        if(len - 12 <= right - n)
+            f.run(len - 12, right - n, r, fill);
         for(int i = 0; i < n; i++)
-            lineGray(right - n + 1 + i, y, right - n + 1 + i, y, tabGray(bar2[1 + i]));
+            f.run(right - n + 1 + i, right - n + 1 + i, r, tabGray(bar2[1 + i]));
     }
 }
 }
@@ -1860,30 +2163,12 @@ OSStatus Executor::C_DrawThemeTab(const Rect *inRect, ThemeTabStyle inStyle, The
     if(!inRect)
         return paramErr;
     bool front = inStyle == kThemeTabFront || inStyle == kThemeTabFrontInactive || inStyle == kThemeTabFrontUnavailable;
-    bool active = inStyle == kThemeTabFront || inStyle == kThemeTabNonFront || inStyle == kThemeTabNonFrontPressed;
-    if(inDirection == kThemeTabNorth)
-    {
-        /* the unavailable styles came after 8.6's Appearance: it draws
-           nothing for them (appr controls.tab80.5) */
-        if(inStyle < (int)std::size(tabLooks))
-        {
-            DrawGuard guard;
-            drawTabNorth(*inRect, inStyle, front ? tabFrontRows : tabRows);
-        }
-    }
-    else
+    /* the unavailable styles came after 8.6's Appearance: it draws
+       nothing for them (appr controls.tab80.5) */
+    if(inStyle < (int)std::size(tabLooks) && inDirection >= kThemeTabNorth && inDirection <= kThemeTabWest)
     {
         DrawGuard guard;
-        Rect r = *inRect;
-        fillGray(r, front ? kFace : (inStyle == kThemeTabNonFrontPressed ? kShadow : kTrack));
-        uint16_t ink = active ? kBlack : kShadow;
-        lineGray(r.left, r.bottom - 1, r.left, r.top + 2, ink);
-        LineTo(r.left + 2, r.top);
-        LineTo(r.right - 3, r.top);
-        LineTo(r.right - 1, r.top + 2);
-        LineTo(r.right - 1, r.bottom - 1);
-        if(!front)
-            lineGray(r.left, r.bottom - 1, r.right - 1, r.bottom - 1, ink);
+        drawTab(*inRect, inStyle, inDirection, front ? tabFrontRows : tabRows);
     }
     if(labelProc)
     {
@@ -2179,6 +2464,99 @@ OSStatus Executor::C_DrawThemeTickMark(const Rect *bounds, ThemeDrawState state)
         hrun(h, h + 6, v + 1, grey(8));
         pixel(h + 6, v, grey(8));
     }
+    return noErr;
+}
+
+/* A standalone grow box, as 8.6 draws it (appr draw32.growdir.*): 16
+   square (small, 11) right of ORIGIN, or left of it growing left; down
+   from it whichever way it grows. A black outline, a white-lit #aaa-shaded
+   bevel, two ridges across the #ccc face; inactive (and pressed), a #555
+   outline round a flat face. The no-grow box has no ridges. */
+namespace
+{
+Rect growBoxBounds(Point origin, ThemeGrowDirection dir, bool small)
+{
+    int size = small ? 11 : 16, left = dir & kThemeGrowLeft ? origin.h - size : origin.h;
+    return Rect{ origin.v, (INTEGER)left, (INTEGER)(origin.v + size), (INTEGER)(left + size) };
+}
+
+/* the ridges, rows from TOP, columns from 2 (c: the face) */
+const char *const growRidges[2][7] = {
+    { "cccccffcccc", "ccccfc7accc", "cccfc7affcc", "ccfc7afc7cc", "cca7afc7ccc", "cccafc7cccc", "cccca7ccccc" },
+    { "ccffccc", "cfc7acc", "fc7affc", "a7afc7c", "cafc7cc", "cca7ccc" },
+};
+
+hidpi::Shapes growBoxShapes(const Rect &b, bool small, bool active, bool ridges)
+{
+    hidpi::Shapes s;
+    float L = b.left, T = b.top, S = b.right - b.left;
+    rectShape(s, L, T, L + S, T + S, grey(active ? 0 : 5));
+    rectShape(s, L + 1, T + 1, L + S - 1, T + S - 1, grey(0xc));
+    if(!active)
+        return s;
+    rectShape(s, L + 1, T + 1, L + S - 2, T + 2, grey(0xf));
+    rectShape(s, L + 1, T + 1, L + 2, T + S - 2, grey(0xf));
+    rectShape(s, L + S - 2, T + 2, L + S - 1, T + S - 1, grey(0xa));
+    rectShape(s, L + 2, T + S - 2, L + S - 1, T + S - 1, grey(0xa));
+    if(!ridges)
+        return s;
+    /* each ridge a white line and the shade below it, along x + y */
+    float x0 = small ? L - 3 : L, y0 = small ? T - 2 : T;
+    for(float o : { 0.f, 2.f })
+    {
+        s.push_back({ hidpi::Shape::Polyline, { x0 + o + 8, y0 + o + 4, x0 + o + 4, y0 + o + 8 }, 1, argbGray(grey(0xf)) });
+        s.push_back({ hidpi::Shape::Polyline, { x0 + o + 9.25f, y0 + o + 5.25f, x0 + o + 5.25f, y0 + o + 9.25f }, 1.4f,
+                      argbGray(grey(8)) });
+    }
+    return s;
+}
+
+void growBox(Point origin, ThemeGrowDirection dir, bool small, ThemeDrawState state, bool ridges)
+{
+    DrawGuard guard;
+    Rect b = growBoxBounds(origin, dir, small);
+    bool active = lookOf(state) == Look::active;
+    hidpi::chrome_draw(b, hidpi::active() ? growBoxShapes(b, small, active, ridges) : hidpi::Shapes{}, [&] {
+        if(!active)
+        {
+            bevelBox(b, { { 5, 5, 5 } }, 0xc);
+            return;
+        }
+        bevelBox(b, { { 0, 0, 0 }, { 0xf, 0xa, 0xc } }, 0xc);
+        if(!ridges)
+            return;
+        int top = small ? 2 : 4;
+        for(int r = 0; r < (small ? 6 : 7); r++)
+            for(const char *c = growRidges[small][r]; *c; c++)
+                if(*c != 'c')
+                    pixel(b.left + 2 + (c - growRidges[small][r]), b.top + top + r, tabGray(*c));
+    });
+}
+}
+
+OSStatus Executor::C_DrawThemeStandaloneGrowBox(Point origin, ThemeGrowDirection growDirection, Boolean isSmall,
+                                                ThemeDrawState state)
+{
+    growBox(origin, growDirection, isSmall, state, true);
+    return noErr;
+}
+
+OSStatus Executor::C_DrawThemeStandaloneNoGrowBox(Point origin, ThemeGrowDirection growDirection, Boolean isSmall,
+                                                  ThemeDrawState state)
+{
+    growBox(origin, growDirection, isSmall, state, false);
+    return noErr;
+}
+
+/* 8.6 takes the direction and the size the other way round here (appr
+   misc.growbox.*): any direction gives the small box, and isSmall (1,
+   kThemeGrowLeft) puts it left of the origin. */
+OSStatus Executor::C_GetThemeStandaloneGrowBoxBounds(Point origin, ThemeGrowDirection growDirection, Boolean isSmall,
+                                                     Rect *bounds)
+{
+    if(!bounds)
+        return paramErr;
+    *bounds = growBoxBounds(origin, isSmall, growDirection != 0);
     return noErr;
 }
 
@@ -2797,6 +3175,84 @@ void documentBar(const Rect &c, const WindowParts &parts, bool hasTitle, int tit
     else
         stripes(left, right, boxTop, alert);
 }
+}
+
+/* As 8.6 draws it (appr draw32.windowframe.popup.*): a black outline 4
+   out from the content on the left, 3 on the right, the bottom on the
+   content's last row; inside it white lit, #ccc, shaded #999 and #aaa
+   down to the content's black edge, #eee beside it on the right; a #444
+   shadow on the right alone. The tab: rounded top corners, white, #ccc,
+   #999 on its right and bottom. Inactive: the outline and shadow #555,
+   everything else #ddd. */
+void Executor::appearance::popupFrame(const Rect &c, bool active, int x0, int w, int titleHeight)
+{
+    DrawGuard guard;
+    int L = c.left, T = c.top, R = c.right, B = c.bottom;
+    int fl = L - 4, fr = R + 3, tt = T - 10 - titleHeight, bt = T - 6;
+    /* 8.6's tab shadow starts a row lower on a titled tab, and stops
+       short of the frame's top */
+    int shadowTop = tt + (titleHeight > 0 ? 4 : 3);
+    char barShadow = titleHeight > 0 ? '0' : '4';
+    auto run = [&](int h1, int h2, int v, char g) {
+        uint16_t gr = active ? tabGray(g) : grey(g == '0' || g == '4' ? 5 : 0xd);
+        hrun(h1, h2, v, gr);
+    };
+    int xr = x0 + w - 1;
+    run(x0 + 2, xr - 2, tt, '0');
+    run(x0 + 1, x0 + 1, tt + 1, '0');
+    run(x0 + 2, xr - 2, tt + 1, 'f');
+    run(xr - 1, xr - 1, tt + 1, '0');
+    for(int v = tt + 2; v < bt; v++)
+    {
+        run(x0, x0, v, '0');
+        run(x0 + 1, x0 + (v == tt + 2 ? 2 : 1), v, 'f');
+        run(x0 + (v == tt + 2 ? 3 : 2), xr - 2, v, 'c');
+        run(xr - 1, xr - 1, v, '9');
+        run(xr, xr, v, '0');
+        if(v >= shadowTop)
+            run(xr + 1, xr + 1, v, '4');
+    }
+    run(fl, x0, bt, '0');
+    run(x0 + 1, x0 + 1, bt, 'c');
+    run(x0 + 2, xr - 1, bt, '9');
+    run(xr, xr, bt, '0');
+    run(xr + 1, xr + 1, bt, barShadow);
+    run(xr + 2, fr, bt, '0');
+    for(int v = bt + 1; v < B; v++)
+    {
+        run(fl, fl, v, '0');
+        run(fr, fr, v, '0');
+        if(v == bt + 1)
+        {
+            run(fl + 1, fr - 2, v, 'f');
+            run(fr - 1, fr - 1, v, 'c');
+            continue;
+        }
+        run(fr + 1, fr + 1, v, '4');
+        run(fl + 1, fl + 1, v, 'f');
+        run(fr - 1, fr - 1, v, '9');
+        if(v < T - 2)
+            run(fl + 2, fr - 2, v, 'c');
+        else if(v == T - 2)
+        {
+            run(fl + 2, R, v, 'a');
+            run(R + 1, R + 1, v, 'c');
+        }
+        else
+        {
+            run(fl + 2, fl + 2, v, 'a');
+            run(R + 1, R + 1, v, 'e');
+            if(v == T - 1)
+                run(L - 1, R, v, '0');
+            else
+            {
+                run(L - 1, L - 1, v, '0');
+                run(R, R, v, '0');
+            }
+        }
+    }
+    run(fl, fr, B, '0');
+    run(fr + 1, fr + 1, B, '4');
 }
 
 void Executor::appearance::movableDialogFrame(const Rect &c, bool active, bool thin, ConstStringPtr title,

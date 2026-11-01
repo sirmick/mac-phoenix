@@ -231,8 +231,10 @@ static void shapes(void)
             sprintf(k, "tab.%d", i); out(k, "err %d", (int)err);
             sprintf(k, "tab.%d.rgn", i); out_rgn(k, r);
         }
-        for(i = 0; i < 4; i++)
+        for(i = 0; i < 11; i++)
         {
+            if(i == 7)
+                continue;
             SET(o); err = GetThemeStandaloneGrowBoxBounds(p, i, false, &o);
             sprintf(k, "growbox.%d", i); out(k, "err %d %d,%d,%d,%d", (int)err, o.top, o.left, o.bottom, o.right);
             SET(o); err = GetThemeStandaloneGrowBoxBounds(p, i, true, &o);
@@ -598,6 +600,22 @@ static void drawing(void)
                 sprintf(k, "tabdir.%d.%d", i, s);
                 end(k);
             }
+        /* grow boxes into each corner, large and small, and the no-grow
+           box */
+        for(i = 0; i < 4; i++)
+            for(s = 0; s < 4; s++)
+            {
+                static const ThemeGrowDirection dirs[] = { kThemeGrowRight | kThemeGrowDown,
+                    kThemeGrowLeft | kThemeGrowDown, kThemeGrowRight | kThemeGrowUp, kThemeGrowLeft | kThemeGrowUp };
+                Point p = { 30, 50 };
+                begin(depths[d]);
+                if(s < 2)
+                    DrawThemeStandaloneGrowBox(p, dirs[i], s, kThemeStateActive);
+                else
+                    DrawThemeStandaloneNoGrowBox(p, dirs[i], s - 2, kThemeStateActive);
+                sprintf(k, "%s.%d.%s", s < 2 ? "growdir" : "nogrowdir", dirs[i], s & 1 ? "small" : "large");
+                end(k);
+            }
         /* progress bars: indeterminate at a few phases, medium and large,
            and determinate inactive */
         for(i = 0; i < 4; i++)
@@ -699,6 +717,31 @@ static void drawing(void)
             end(k);
             sprintf(k, "windowframe.metrics.%d.err", i);
             out(k, "%d", (int)err);
+        }
+        /* the popup window inactive; with a title's width; its tab 50
+           wide at 20, and centred on the window and on the offset */
+        for(i = 0; i < 5; i++)
+        {
+            static const char *const pn[] = { "inactive", "title", "tab", "tabwindow", "taboffset" };
+            Rect cont;
+            ThemeWindowMetrics wm = { sizeof(ThemeWindowMetrics), 0, 0, 0, 0, 0 };
+            SetRect(&cont, 10, 25, 110, 55);
+            if(i == 1)
+            {
+                wm.titleWidth = 60;
+                wm.titleHeight = 12;
+            }
+            if(i >= 2)
+            {
+                wm.popupTabOffset = 20;
+                wm.popupTabWidth = 50;
+                wm.popupTabPosition = i - 2;
+            }
+            begin(depths[d]);
+            DrawThemeWindowFrame(kThemePopupWindow, &cont, i ? kThemeStateActive : kThemeStateInactive, &wm,
+                                 kThemeWindowHasCloseBox | kThemeWindowHasTitleText, NULL, 0);
+            sprintf(k, "windowframe.popup.%s", pn[i]);
+            end(k);
         }
     }
 }
