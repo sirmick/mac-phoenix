@@ -7,7 +7,8 @@ application disks) and the data directory (accounts and every user's
 synced changes). Signed-in users pick a System and add disks from the
 library; the disks are read by Range requests as Executor needs them, and
 what they change (a disk's blocks, Executor's own volume) is kept in the
-browser and synced to their account (`web/executor/sync.js`).
+browser and synced to their account (`web/executor/sync.js`). The same tab as one
+program for one person's machine, no accounts: Standalone.md.
 
 ## The tab
 
