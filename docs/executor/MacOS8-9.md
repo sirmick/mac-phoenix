@@ -32,7 +32,11 @@ the policy.
     could not be found" (no name): its launcher loads the Finder's own
     1.8 MB library, Executor's CFM allocated it in the 930 KB application
     heap and answered "not found". CFM now falls back to temporary memory
-    (`cfm.cpp`, `cfm_new_ptr`), as Apple's does.
+    (`cfm.cpp`, `cfm_new_ptr`), as Apple's does. An import library's
+    image goes to temporary memory first, one in the application's own
+    file too (its data stays in the heap): Serial MReader's REALbasic
+    runtime (1.3 MB) filled its 2.8 MB partition, which on the G3's 8.6
+    (virtual memory off) is 2.1 MB in use with the program running.
 * Then (steps 1 and 2 below, "The Finder starting"): the 8.6 Finder ran
   to its menu bar and desktop pattern with 173 imports unresolved.
 * Now (step 3, 2026-10-28): CFM finds 8.x's Toolbox libraries in the
