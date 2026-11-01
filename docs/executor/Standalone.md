@@ -144,4 +144,4 @@ with no password. `go test`
 covers what the API can't show: the overlay log across restarts, a
 write cut short, compaction, merge, the gzip-only files, the session
 lease.
-`ctest --test-dir build-wasm -R executor.web.standalone` runs both.
+`ctest --test-dir build-wasm -R executor.web.standalone` runs both (executor.web.standalone_server: go test and test_server.py against the binary; executor.web.standalone: the tab on it).
