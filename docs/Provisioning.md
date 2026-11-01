@@ -117,6 +117,19 @@ Installers disk (Photoshop 4.0, Illustrator 6.0, PageMaker 6.5, FreeHand 8,
 the QuarkXPress 4.0 upgrade, Persuasion 3.0, FileMaker Pro 4.0). No serial
 is typed for them, and serials that came inside an archive are left out of it.
 
+## The internet disk
+
+| Image | What | Boot with |
+|---|---|---|
+| `internet-macos-8-9.img` | MR Browser 0.39 (Macintosh Repository's own client, PowerPC/Carbon; signing in takes an MR account's PIN), Hotline Connect Client 1.9.1 (the classic build, `HLclient19.Classic`, and the Carbon one), Serial MReader 0.03 with the Serial Box 2021-08 database (68k and PowerPC; an archive only: its serials are never used) | `8.6` / `9.0.4` |
+
+Each is its archive expanded in the guest. MR Browser's archive is pinned
+by Macintosh Repository's direct URL; Serial MReader's has none (MR's
+downloads are a form POST, guests 10 minutes apart), so it is a local pin
+carrying MR's page, file id and SHA1. Through the net bridge
+(`--network socket`) Hotline lists hltracker.com's servers and connects to
+them, and MR Browser reaches MR's API.
+
 ## The Installers disks
 
 | Image | What |
@@ -125,6 +138,7 @@ is typed for them, and serials that came inside an archive are left out of it.
 | `installers-productivity.img` | the productivity bakes' installers, and those only staged: Photoshop 4.0, Illustrator 6.0, PageMaker 6.5, FreeHand 8, QuarkXPress 4.0 upgrade, Persuasion 3.0, FileMaker Pro 4.0, Word 5.1a |
 | `installers-development.img` | System 7's: CodeWarrior Pro 4, MPW 3.4.2, ToolServer, the ASLM SDK, THINK C/Pascal, Symantec C++, MacPerl 5.2, MacPython 1.5.2, HyperCard, Frontier, ResEdit, Resorcerer, BBEdit Lite 4.1, ZTerm, MacsBug |
 | `installers-development-macos-8-9.img` | Mac OS 8–9's: CodeWarrior Pro 7.2, MPW-GM, MacPerl 5.6.1, MacPython 2.3.5, BBEdit Lite 6.1.2 (one HFS volume can't hold both CodeWarrior CDs) |
+| `installers-internet.img` | the internet bakes' archives: MR Browser 0.39, Hotline Connect Client 1.9.1, Serial MReader 0.03 |
 | `installers-system.img` | System 6.0.8 to Mac OS 9.0.4, Open Transport 1.1.2, CarbonLib 1.6, Disk Copy, StuffIt Expander |
 
 One per category (development in two), a folder per product (`"installers"` in

@@ -1,0 +1,12 @@
+{
+ "note": "Serial MReader 0.03 with the Serial Box 2021-08 database (Macintosh Repository's latest for System 7 to 9): the 68k and PowerPC readers, expanded by StuffIt Expander in the guest. Archival only: its serials are never used to register anything",
+ "kind": "expand",
+ "archive": "Serial-MReader-0.03-2021-08.sit",
+ "expect": [
+  "Serial MReader v0.03 2021-08 ƒ"
+ ],
+ "launch": [
+  "Serial MReader v0.03 2021-08 ƒ:Serial MReader v0.03 PPC"
+ ],
+ "os": "tools-8.6"
+}
