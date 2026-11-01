@@ -45,6 +45,7 @@ static const struct ctl ctls[] = {
     { 1008, 50, 260, 70, 380, 200, 0, 0, "\p" }, /* pop-up, menu 200 */
     { 96, 80, 260, 103, 273, 5, 0, 10, "\p" },  /* little arrows */
     { 64, 80, 290, 92, 302, 1, 0, 1, "\p" },    /* disclosure triangle, open */
+    { 368, 20, 260, 40, 340, 0, 0, 1, "\pOff" }, /* inactive */
 };
 
 static void DrawGallery(WindowRef w)
@@ -67,6 +68,7 @@ static void DrawGallery(WindowRef w)
 int main(void)
 {
     WindowRef doc, floater;
+    ControlHandle h;
     MenuHandle m;
     Rect r;
     int i;
@@ -94,7 +96,9 @@ int main(void)
     {
         const struct ctl *c = &ctls[i];
         SetRect(&r, c->left, c->top, c->right, c->bottom);
-        NewControl(doc, &r, (ConstStr255Param)c->title, true, c->value, c->min, c->max, c->proc, 0);
+        h = NewControl(doc, &r, (ConstStr255Param)c->title, true, c->value, c->min, c->max, c->proc, 0);
+        if(i == sizeof ctls / sizeof ctls[0] - 1)
+            HiliteControl(h, 255);
     }
     SetRect(&r, 480, 80, 620, 160);
     floater = NewCWindow(NULL, &r, "\pFloat", true, kWindowFloatProc, (WindowRef)-1, true, 0);

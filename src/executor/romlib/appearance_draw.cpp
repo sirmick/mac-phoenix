@@ -15,6 +15,7 @@
 #include <base/functions.impl.h>
 #include "appearance_draw.h"
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <iterator>
 #include <tuple>
@@ -602,7 +603,70 @@ Look lookOf(ThemeDrawState state)
     }
 }
 
+/* Points on a quarter circle round (cx, cy) from angle A0 to A1 degrees
+   (0 right, 90 down), appended to V. */
+void arcPts(std::vector<float> &v, float cx, float cy, float rad, float a0, float a1)
+{
+    for(int i = 0; i <= 6; i++)
+    {
+        float a = (a0 + (a1 - a0) * i / 6) * 3.14159265f / 180;
+        v.insert(v.end(), { cx + rad * std::cos(a), cy + rad * std::sin(a) });
+    }
+}
+
+/* A rounded rectangle's outline from its top left corner round, closed. */
+std::vector<float> roundRectPts(float l, float t, float r, float b, float rad)
+{
+    std::vector<float> v;
+    arcPts(v, l + rad, t + rad, rad, 180, 270);
+    arcPts(v, r - rad, t + rad, rad, 270, 360);
+    arcPts(v, r - rad, b - rad, rad, 0, 90);
+    arcPts(v, l + rad, b - rad, rad, 90, 180);
+    v.insert(v.end(), { v[0], v[1] });
+    return v;
+}
+
+void pushButtonPixels(const Rect &b, Look look);
+
+/* A push button at the display scale: the face inside the rounded
+   outline, the first ring following the corners, the square second ring,
+   the outline */
+hidpi::Shapes pushButtonShapes(const Rect &b, Look look)
+{
+    float L = b.left, T = b.top, R = b.right, B = b.bottom;
+    hidpi::Shapes s;
+    if(look == Look::inactive)
+    {
+        s.push_back({ hidpi::Shape::Polygon, roundRectPts(L, T, R, B, 3.5f), 0, argbGray(grey(0xd)) });
+        s.push_back({ hidpi::Shape::Polyline, roundRectPts(L + 0.5f, T + 0.5f, R - 0.5f, B - 0.5f, 3), 1,
+                      argbGray(grey(8)) });
+        return s;
+    }
+    bool p = look == Look::pressed;
+    s.push_back({ hidpi::Shape::Polygon, roundRectPts(L, T, R, B, 3.5f), 0, argbGray(grey(p ? 6 : 0xd)) });
+    std::vector<float> tl1{ L + 1.5f, B - 3 }, br1{ R - 1.5f, T + 3 };
+    arcPts(tl1, L + 3.5f, T + 3.5f, 2, 180, 270);
+    tl1.insert(tl1.end(), { R - 3, T + 1.5f });
+    arcPts(br1, R - 3.5f, B - 3.5f, 2, 0, 90);
+    br1.insert(br1.end(), { L + 3, B - 1.5f });
+    s.push_back({ hidpi::Shape::Polyline, tl1, 1, argbGray(grey(p ? 4 : 0xd)) });
+    s.push_back({ hidpi::Shape::Polyline, br1, 1, argbGray(grey(p ? 8 : 7)) });
+    s.push_back({ hidpi::Shape::Polyline, { L + 2.5f, B - 3, L + 2.5f, T + 2.5f, R - 3, T + 2.5f }, 1,
+                  argbGray(grey(p ? 5 : 0xf)) });
+    s.push_back({ hidpi::Shape::Polyline, { R - 2.5f, T + 3, R - 2.5f, B - 2.5f, L + 3, B - 2.5f }, 1,
+                  argbGray(grey(p ? 7 : 0xa)) });
+    s.push_back({ hidpi::Shape::Polyline, roundRectPts(L + 0.5f, T + 0.5f, R - 0.5f, B - 0.5f, 3), 1,
+                  argbGray(grey(0)) });
+    return s;
+}
+
 void pushButton(const Rect &b, Look look)
+{
+    hidpi::chrome_draw(b, hidpi::active() ? pushButtonShapes(b, look) : hidpi::Shapes{},
+                       [&] { pushButtonPixels(b, look); });
+}
+
+void pushButtonPixels(const Rect &b, Look look)
 {
     int L = b.left, T = b.top, R = b.right - 1, B = b.bottom - 1;
     if(look == Look::inactive)
