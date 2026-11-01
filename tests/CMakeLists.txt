@@ -1248,7 +1248,7 @@ endforeach()
 # Differential probes (docs/executor/DiffTest.md): each probe's answers on
 # Executor (8.6 System) against the committed G3 8.6 reference, known
 # differences in tests/guest/difftest/expected/. Fails on a new difference.
-foreach(probe aevt appr ctl menu sys text wind)
+foreach(probe aevt appr ctl menu sys text textutil wind)
   add_test(
     NAME difftest_${probe}_executor_86
     COMMAND python3 ${CMAKE_SOURCE_DIR}/tools/difftest/run.py ${probe} --no-refresh
