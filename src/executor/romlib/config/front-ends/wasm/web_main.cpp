@@ -337,16 +337,20 @@ void on_yield()
 
 }
 
-/* web_main [--size WxH] [--disk IMAGE]... [--system IMAGE] [--ppc] [APP]: the
- * screen size, disk images to mount (read-only), the image whose System
- * Folder to run on (Apple's System and Finder: copied into Executor's
- * volume, and the Finder started), fat applications' PowerPC code run (as
- * --executor-ppc), and an application to start instead of Executor's
- * Browser or the Finder (paths in the module's filesystem). */
+/* web_main [--size WxH] [--disk IMAGE]... [--system IMAGE] [--ppc] [--ram MB]
+ * [--depth BPP] [APP]: the screen size, disk images to mount (read-only),
+ * the image whose System Folder to run on (Apple's System and Finder:
+ * copied into Executor's volume, and the Finder started), fat
+ * applications' PowerPC code run (as --executor-ppc), the memory (default:
+ * 32 MB, 64 on Apple's System) and the depth the screen starts in (as
+ * --depth; default: as the System's Macs), and an application to start
+ * instead of Executor's Browser or the Finder (paths in the module's
+ * filesystem). The page's settings (web/executor/settings.js) say which. */
 int main(int argc, char **argv)
 {
     executor_host::Config c;
     std::string system_image;
+    int ram_mb = 0, bpp = 0;
     for(int i = 1; i < argc; i++)
     {
         std::string a = argv[i];
@@ -360,6 +364,10 @@ int main(int argc, char **argv)
             system_image = argv[++i];
         else if(a == "--ppc")
             c.prefer_ppc = true;  /* fat applications' PowerPC code too */
+        else if(a == "--ram" && i + 1 < argc)
+            ram_mb = atoi(argv[++i]);
+        else if(a == "--depth" && i + 1 < argc)
+            bpp = atoi(argv[++i]);
         else if(a == "--logtraps")  /* the page's ?logtraps= (main.js) */
             c.logtraps = true;
         else if(a == "--logtraps-filter" && i + 1 < argc)
@@ -376,7 +384,7 @@ int main(int argc, char **argv)
     /* The depth the System's Macs start in, as natively: 8.x 32 bits, 7.x
        and Executor's own System 8 (at 8 bits 8.6's desktop pattern maps
        to one colour of the standard palette, flat lavender). */
-    c.bpp = 0;
+    c.bpp = bpp;
     c.ram_mb = 32;
     c.data_dir = "/executor"; /* in memory; Executor makes its System Folder */
     /* Disk images are writable: the page keeps their changes in an overlay
@@ -408,6 +416,8 @@ int main(int argc, char **argv)
         else
             fprintf(stderr, "[web] no System Folder from %s: %s\n", system_image.c_str(), err.c_str());
     }
+    if(ram_mb > 0)
+        c.ram_mb = ram_mb;
     /* "Host", as mac-phoenix names its first shared folder: files the page
        reads and writes (worker.js 'read', 'write'). */
     c.shared_folders.push_back("/host");

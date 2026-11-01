@@ -420,6 +420,10 @@ async function start(m) {
         args.push('--system', `/uploads/${m.system}`);
     if (m.ppc)
         args.push('--ppc');
+    if (m.ram)
+        args.push('--ram', `${m.ram}`);
+    if (m.depth)
+        args.push('--depth', `${m.depth}`);
     if (m.logtraps) {
         args.push('--logtraps');
         if (m.logtraps !== '1')
