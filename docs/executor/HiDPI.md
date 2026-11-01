@@ -597,6 +597,13 @@ again) took all of that one's clip, so a desktop label drawn again while
 a window covered most of it was drawn over the window at 2x; the old clip
 is taken now only round the old text still under the new one.
 
+The same in the wasm tab, nothing tab-specific (the runs reach the
+screen's list, which `compose()` draws): `executor.web.hidpi_gworld`
+(web/tests/tab_hidpi_gworld.mjs) launches GWorldGallery at `?scale=2` on
+8.6 with PowerPC and checks the canvas's pixels: the copied text has
+anti-aliasing greys, the inverted GWorld's text and the masked-out part
+none.
+
 Not yet: scaled copies (`CopyBits` to a rectangle of another size), other
 transfer modes, copies across depths (a 32-bit GWorld onto an 8-bit
 screen) and colour tables, `ScrollRect` within a GWorld or on the screen
