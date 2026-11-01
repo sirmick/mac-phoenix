@@ -3,7 +3,9 @@
 // serving SITE (the wasm build's page) and a library of IMAGES (images
 // with NAME.img.json records; include: the patterns offered). relay: lines
 // for the configuration's [relay] section; public: the page without signing in;
-// standalone: mode = "standalone" (no accounts, the server the tab's store).
+// standalone: mode = "standalone" (no accounts, the server the tab's store);
+// with EXECUTOR_STANDALONE_BINARY, that server instead (tools/standalone's,
+// its own embedded tab: SITE unused).
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -35,10 +37,15 @@ export async function startServer(site, { images = '', include = ['*.img'], rela
         + (standalone ? 'mode = "standalone"\n' : '')
         + `[library]\nimages = ${JSON.stringify(images)}\ninclude = ${JSON.stringify(include)}\n`
         + (relay ? `[relay]\n${relay}\n` : ''));
+    const binary = standalone && process.env.EXECUTOR_STANDALONE_BINARY;
     const cli = (...args) => execFileSync('python3', [SERVER, '--config', conf, ...args],
                                           { input: `${OWNER_PASSWORD}\n` }).toString().trim();
-    cli('adduser', 'owner', '--owner');
-    const child = spawn('python3', [SERVER, '--config', conf, '--quiet'], { stdio: ['ignore', 'pipe', 'inherit'] });
+    if (!binary)
+        cli('adduser', 'owner', '--owner');
+    const child = binary
+        ? spawn(binary, ['-data', path.join(scratch, 'data'), '-images', images, '-port', `${port}`, '-quiet'],
+                { stdio: ['ignore', 'pipe', 'inherit'] })
+        : spawn('python3', [SERVER, '--config', conf, '--quiet'], { stdio: ['ignore', 'pipe', 'inherit'] });
     await new Promise((resolve, reject) => {
         child.stdout.on('data', (d) => { if (d.toString().includes('Serving')) resolve(); });
         child.on('exit', (code) => reject(new Error(`the server exited (${code})`)));
