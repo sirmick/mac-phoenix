@@ -1,5 +1,5 @@
 {
- "note": "Hotline Connect Client 1.9.1 (Hotline Communications, 2003): the classic PowerPC build (HLclient19.Classic, InterfaceLib + Open Transport) and the Carbon one, expanded by StuffIt Expander in the guest",
+ "note": "Hotline Connect Client 1.9.1 (Hotline Communications, 2003): the classic PowerPC build (HLclient19.Classic, InterfaceLib + Open Transport) and the Carbon one, expanded by StuffIt Expander in the guest. Its tracker list (Data:Hotline Prefs, which both builds read) gets ten trackers beside hltracker.com's, gathered 2026-11-01 from hlwiki, preterhuman and the Hotline fandom wiki, not probed",
  "kind": "expand",
  "archive": "HotlineConnectClient192.sit_.bin",
  "expect": [
@@ -9,5 +9,368 @@
   "HotlineConnectClient-Mac:HLclient19.Classic",
   "HotlineConnectClient-Mac:HotlineClient(M-Carbon)"
  ],
- "os": "tools-8.6"
+ "os": "tools-8.6",
+ "steps": [
+  {
+   "launch": "{target}:HotlineConnectClient-Mac:HLclient19.Classic"
+  },
+  {
+   "wait_for": {
+    "text": "Sound Manager.  Sounds will be disabled."
+   },
+   "timeout": 60
+  },
+  {
+   "click": {
+    "text": "OK"
+   }
+  },
+  {
+   "menu": [
+    "Hotline",
+    "Show Servers"
+   ]
+  },
+  {
+   "wait_for": {
+    "text": "Featured Servers"
+   },
+   "timeout": 20
+  },
+  {
+   "drag": {
+    "text": "Hotline Connect",
+    "by": [
+     0,
+     345
+    ]
+   },
+   "note": "the toolbar window floats over the Servers window's toolbar"
+  },
+  {
+   "wait_for": {
+    "text": "Search:"
+   },
+   "timeout": 10
+  },
+  {
+   "click": {
+    "text": "Search:",
+    "offset": [
+     -48,
+     6
+    ]
+   },
+   "note": "Servers toolbar: the add-tracker icon, left of the search field (an icon, no text)"
+  },
+  {
+   "wait_for": {
+    "text": "Address:"
+   },
+   "timeout": 10
+  },
+  {
+   "type": "tracked.stickytack.com"
+  },
+  {
+   "key": "tab"
+  },
+  {
+   "type": "tracked.stickytack.com"
+  },
+  {
+   "click": {
+    "text": "Save"
+   }
+  },
+  {
+   "click": {
+    "text": "Search:",
+    "offset": [
+     -48,
+     6
+    ]
+   },
+   "note": "Servers toolbar: the add-tracker icon, left of the search field (an icon, no text)"
+  },
+  {
+   "wait_for": {
+    "text": "Address:"
+   },
+   "timeout": 10
+  },
+  {
+   "type": "tracker.preterhuman.net"
+  },
+  {
+   "key": "tab"
+  },
+  {
+   "type": "tracker.preterhuman.net"
+  },
+  {
+   "click": {
+    "text": "Save"
+   }
+  },
+  {
+   "click": {
+    "text": "Search:",
+    "offset": [
+     -48,
+     6
+    ]
+   },
+   "note": "Servers toolbar: the add-tracker icon, left of the search field (an icon, no text)"
+  },
+  {
+   "wait_for": {
+    "text": "Address:"
+   },
+   "timeout": 10
+  },
+  {
+   "type": "hotline.duckdns.org"
+  },
+  {
+   "key": "tab"
+  },
+  {
+   "type": "hotline.duckdns.org"
+  },
+  {
+   "click": {
+    "text": "Save"
+   }
+  },
+  {
+   "click": {
+    "text": "Search:",
+    "offset": [
+     -48,
+     6
+    ]
+   },
+   "note": "Servers toolbar: the add-tracker icon, left of the search field (an icon, no text)"
+  },
+  {
+   "wait_for": {
+    "text": "Address:"
+   },
+   "timeout": 10
+  },
+  {
+   "type": "hotline.ubersoft.org"
+  },
+  {
+   "key": "tab"
+  },
+  {
+   "type": "hotline.ubersoft.org"
+  },
+  {
+   "click": {
+    "text": "Save"
+   }
+  },
+  {
+   "click": {
+    "text": "Search:",
+    "offset": [
+     -48,
+     6
+    ]
+   },
+   "note": "Servers toolbar: the add-tracker icon, left of the search field (an icon, no text)"
+  },
+  {
+   "wait_for": {
+    "text": "Address:"
+   },
+   "timeout": 10
+  },
+  {
+   "type": "tracked.nailbat.com"
+  },
+  {
+   "key": "tab"
+  },
+  {
+   "type": "tracked.nailbat.com"
+  },
+  {
+   "click": {
+    "text": "Save"
+   }
+  },
+  {
+   "click": {
+    "text": "Search:",
+    "offset": [
+     -48,
+     6
+    ]
+   },
+   "note": "Servers toolbar: the add-tracker icon, left of the search field (an icon, no text)"
+  },
+  {
+   "wait_for": {
+    "text": "Address:"
+   },
+   "timeout": 10
+  },
+  {
+   "type": "tracker.vespernet.net"
+  },
+  {
+   "key": "tab"
+  },
+  {
+   "type": "tracker.vespernet.net"
+  },
+  {
+   "click": {
+    "text": "Save"
+   }
+  },
+  {
+   "click": {
+    "text": "Search:",
+    "offset": [
+     -48,
+     6
+    ]
+   },
+   "note": "Servers toolbar: the add-tracker icon, left of the search field (an icon, no text)"
+  },
+  {
+   "wait_for": {
+    "text": "Address:"
+   },
+   "timeout": 10
+  },
+  {
+   "type": "hotline.jpn.ph"
+  },
+  {
+   "key": "tab"
+  },
+  {
+   "type": "hotline.jpn.ph"
+  },
+  {
+   "click": {
+    "text": "Save"
+   }
+  },
+  {
+   "click": {
+    "text": "Search:",
+    "offset": [
+     -48,
+     6
+    ]
+   },
+   "note": "Servers toolbar: the add-tracker icon, left of the search field (an icon, no text)"
+  },
+  {
+   "wait_for": {
+    "text": "Address:"
+   },
+   "timeout": 10
+  },
+  {
+   "type": "badmoon.biz"
+  },
+  {
+   "key": "tab"
+  },
+  {
+   "type": "badmoon.biz"
+  },
+  {
+   "click": {
+    "text": "Save"
+   }
+  },
+  {
+   "click": {
+    "text": "Search:",
+    "offset": [
+     -48,
+     6
+    ]
+   },
+   "note": "Servers toolbar: the add-tracker icon, left of the search field (an icon, no text)"
+  },
+  {
+   "wait_for": {
+    "text": "Address:"
+   },
+   "timeout": 10
+  },
+  {
+   "type": "saddle.dyndns.org"
+  },
+  {
+   "key": "tab"
+  },
+  {
+   "type": "saddle.dyndns.org"
+  },
+  {
+   "click": {
+    "text": "Save"
+   }
+  },
+  {
+   "click": {
+    "text": "Search:",
+    "offset": [
+     -48,
+     6
+    ]
+   },
+   "note": "Servers toolbar: the add-tracker icon, left of the search field (an icon, no text)"
+  },
+  {
+   "wait_for": {
+    "text": "Address:"
+   },
+   "timeout": 10
+  },
+  {
+   "type": "hotline.kicks-ass.net"
+  },
+  {
+   "key": "tab"
+  },
+  {
+   "type": "hotline.kicks-ass.net"
+  },
+  {
+   "click": {
+    "text": "Save"
+   }
+  },
+  {
+   "wait": 2
+  },
+  {
+   "shot": "trackers"
+  },
+  {
+   "drag": {
+    "text": "Hotline Connect",
+    "by": [
+     0,
+     -345
+    ]
+   },
+   "note": "back where it was: Hotline keeps window positions in its prefs"
+  },
+  {
+   "quit": true
+  }
+ ]
 }

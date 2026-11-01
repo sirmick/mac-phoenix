@@ -54,6 +54,8 @@ test_image.py (launching what's on an image). Steps, as recipes give them:
                                          only (bake.py --do records a name if one
                                          is there); recipes don't use them
   {"drag": [[x, y], [x2, y2]]}           press, move, release (popup menus)
+  {"drag": {"text": T, "by": [dx, dy]}}  ... from the middle of drawn text: a window
+                                         moved by its title (one floating over another)
   {"key": "return"}                      an /api/keypress name or ADB keycode
   {"cmd_key": 12}                        Command + an ADB keycode (12 = Q)
   {"type": "Mac Phoenix"}                ASCII typed on a US keyboard (into the
@@ -870,6 +872,13 @@ class Guest:
             self.dclick(*pos)
         elif "dclick" in step:
             self.dclick(*step["dclick"])
+        elif "drag" in step and isinstance(step["drag"], dict):
+            what = step["drag"]                 # a window by its drawn title
+            t = self.drawn(what["text"], app=self.app())
+            if not t:
+                raise NotFound(f"no {what['text']!r} drawn")
+            x, y = (t["rect"][0] + t["rect"][2]) // 2, (t["rect"][1] + t["rect"][3]) // 2
+            self.drag([x, y], [x + what["by"][0], y + what["by"][1]])
         elif "drag" in step:
             self.drag(*step["drag"])
         elif "key" in step:

@@ -64,6 +64,7 @@ LIBRARIES = {
     "Text Encoding Converter",
     "SOMobjects™ for Mac OS",
     "AppleScript",
+    "Internet Config Extension",                         # InternetConfigLib (Hotline imports it)
 }
 # Anywhere in the System Folder, by name: what doesn't work on Executor.
 DROP = {

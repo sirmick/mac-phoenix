@@ -4,7 +4,7 @@
   "internet",
   "ppc"
  ],
- "note": "Internet clients for the Mac OS 8.6 and 9.0.4 profiles: MR Browser 0.39 (Macintosh Repository's own client; signing in takes an MR account and PIN), Hotline Connect Client 1.9.1 (the classic build and the Carbon one), and Serial MReader 0.03 with the Serial Box 2021-08 database, kept as an archive only. Boots with 8.6 or 9.0.4.",
+ "note": "Internet clients for the Mac OS 8.6 and 9.0.4 profiles: MR Browser 0.39 (Macintosh Repository's own client; signing in takes an MR account and PIN), Hotline Connect Client 1.9.1 (the classic build and the Carbon one; trackers: hltracker.com, tracked.stickytack.com, tracker.preterhuman.net, hotline.duckdns.org, hotline.ubersoft.org, tracked.nailbat.com, tracker.vespernet.net, hotline.jpn.ph, badmoon.biz, saddle.dyndns.org, hotline.kicks-ass.net, gathered 2026-11-01 from hlwiki/preterhuman/fandom, not probed), and Serial MReader 0.03 with the Serial Box 2021-08 database, kept as an archive only. Boots with 8.6 or 9.0.4.",
  "label": "Internet",
  "size_mb": 64,
  "place": [

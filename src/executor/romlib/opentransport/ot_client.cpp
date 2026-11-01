@@ -45,6 +45,29 @@ uint32_t close_priv(const Call &c)
     return 0;
 }
 
+/* void OTExitPatchPriv(OTClientContextPtr): OT 1.1.1's PowerPC glue
+   (Hotline Connect 1.9's) gives OT, in the client record, a way out that
+   calls this with the record as the process quits: the client closed, as
+   by CloseOpenTransport. Executor closes a quitting process's clients
+   itself (ROMlib_ot_process_exit); a client closed already is let be. */
+uint32_t exit_patch_priv(const Call &c)
+{
+    if(clients.count(c.l(0)))
+        return close_priv(c);
+    return 0;
+}
+
+/* OSStatus OTSetMemoryLimits(size_t growSize, size_t maxSize): how far
+   OT may grow the client's memory pool. Executor's OT takes the client's
+   memory from its heap as it goes (OTAllocMem), so there is no pool to
+   limit: accepted. Hotline Connect 1.9 asks for (128K, 0) after
+   InitOpenTransport and ignores the answer. */
+uint32_t set_memory_limits(const Call &c)
+{
+    OT_LOG("OTSetMemoryLimits(%u, %u)\n", c.l(0), c.l(1));
+    return kOTNoError;
+}
+
 /* OSStatus OTRegisterAsClientPriv(OTClientName, OTNotifyProcPtr,
    OTClientRecord *) */
 uint32_t register_priv(const Call &c)

@@ -735,6 +735,8 @@
         value: 0x2000000F
       - name: T_LKUPNAMERESULT
         value: 0x20000010
+      - name: kOTSyncIdleEvent
+        value: 0x20000011
       - name: kSTREAMEVENT
         value: 0x21000000
       - name: kSIGNALEVENT
@@ -1470,6 +1472,31 @@
     callconv: C
     executor: close_priv
 
+# Called by the way out OT 1.1.1's PowerPC glue puts in the client record,
+# with the record, as the process quits.
+- function:
+    name: OTExitPatchPriv
+    args:
+      - name: clientContext
+        type: OTClientContextPtr
+    library: OTClientUtilLib
+    aslm: { set: "OTClnt$LclUtils", name: "OTExitPatchPriv", index: 7 }
+    callconv: C
+    executor: exit_patch_priv
+
+- function:
+    name: OTSetMemoryLimits
+    return: OSStatus
+    args:
+      - name: growSize
+        type: OTByteCount
+      - name: maxSize
+        type: OTByteCount
+    library: OTNativeClientLib
+    ot: native
+    callconv: C
+    executor: set_memory_limits
+
 - function:
     name: OTRegisterAsClientPriv
     return: OSStatus
@@ -1689,6 +1716,42 @@
     aslm: { set: "OTClnt$LclClnt", name: "OTINSTALLNOTIFIER", index: 20 }
     callconv: pascal
     executor: install_notifier
+
+# OT 1.1.1's additions for PowerPC clients (`ot: native`: no 68k set of
+# OT 1.1 has them).
+- function:
+    name: OTEnterNotifier
+    return: Boolean
+    args:
+      - name: ref
+        type: ProviderRef
+    library: OTClientLib
+    ot: native
+    callconv: C
+    executor: enter_notifier
+
+- function:
+    name: OTLeaveNotifier
+    args:
+      - name: ref
+        type: ProviderRef
+    library: OTClientLib
+    ot: native
+    callconv: C
+    executor: leave_notifier
+
+- function:
+    name: OTUseSyncIdleEvents
+    return: OSStatus
+    args:
+      - name: ref
+        type: ProviderRef
+      - name: useEvents
+        type: Boolean
+    library: OTClientLib
+    ot: native
+    callconv: C
+    executor: use_sync_idle_events
 
 - function:
     name: OTRemoveNotifier
@@ -2266,6 +2329,55 @@
     aslm: { set: "OTClnt$CmnShared", name: "OTLEAVEINTERRUPT", index: 47 }
     callconv: pascal
     executor: leave_interrupt
+
+# Timer tasks (OT 1.1.1): native in OTNtvUtilLib; the 68k set that has them
+# (OTClnt$NtvUtils) has no glue in OT 1.1's libraries.
+- function:
+    name: OTCreateTimerTask
+    return: SInt32
+    args:
+      - name: proc
+        type: OTProcessProcPtr
+      - name: arg
+        type: "void*"
+    library: OTNtvUtilLib
+    aslm: { set: "OTClnt$NtvUtils", name: "OTCREATETIMERTASK", index: 25 }
+    callconv: pascal
+    executor: create_timer
+
+- function:
+    name: OTScheduleTimerTask
+    return: Boolean
+    args:
+      - name: timerTask
+        type: SInt32
+      - name: milliSeconds
+        type: OTTimeout
+    library: OTNtvUtilLib
+    aslm: { set: "OTClnt$NtvUtils", name: "OTSCHEDULETIMERTASK", index: 26 }
+    callconv: pascal
+    executor: schedule_timer
+
+- function:
+    name: OTCancelTimerTask
+    return: Boolean
+    args:
+      - name: timerTask
+        type: SInt32
+    library: OTNtvUtilLib
+    aslm: { set: "OTClnt$NtvUtils", name: "OTCANCELTIMERTASK", index: 27 }
+    callconv: pascal
+    executor: cancel_timer
+
+- function:
+    name: OTDestroyTimerTask
+    args:
+      - name: timerTask
+        type: SInt32
+    library: OTNtvUtilLib
+    aslm: { set: "OTClnt$NtvUtils", name: "OTDESTROYTIMERTASK", index: 28 }
+    callconv: pascal
+    executor: destroy_timer
 
 # ---- ot_utils.cpp ------------------------------------------------
 

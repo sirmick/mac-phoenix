@@ -458,12 +458,13 @@ class ExecutorGenerator < Generator
             libs = Array(fun["library"])
             lib = libs[0]
             libs[1..-1].each {|other| @out << "LIBRARY_ALSO(#{other}, #{name}, #{lib});\n" }
-            if fun["aslm"] then
+            if fun["aslm"] or fun["ot"] then
                 # Open Transport's: bound through the Shared Library Manager
-                # on 68k as well; the routine reads its arguments through
-                # ot::Call, so only their sizes matter here: a Boolean, a
-                # word (a byte is a word too, the way Pascal passes it), or
-                # a long.
+                # on 68k as well (`ot: native`: an OT 1.1.1 addition no 68k
+                # function set has, PowerPC only); the routine reads its
+                # arguments through ot::Call, so only their sizes matter
+                # here: a Boolean, a word (a byte is a word too, the way
+                # Pascal passes it), or a long.
                 letter = lambda do |t|
                     if t.nil? || t == "void" then "V"
                     elsif t == "Boolean" then "B"
@@ -474,8 +475,9 @@ class ExecutorGenerator < Generator
                 sig = args.map {|arg| letter.call(arg["type"])}.join
                 pascal = fun["callconv"].to_s.downcase == "pascal"
                 @out << "namespace ot { uint32_t #{cname}(const Call &); }"
-                @out << "OT_FUNCTION(#{lib}, #{name}, \"#{fun["aslm"]["set"]}\", "
-                @out << "\"#{fun["aslm"]["name"]}\", #{pascal}, \"#{sig}\", "
+                set, setname = fun["aslm"] ? [fun["aslm"]["set"], fun["aslm"]["name"]] : ["", name]
+                @out << "OT_FUNCTION(#{lib}, #{name}, \"#{set}\", "
+                @out << "\"#{setname}\", #{pascal}, \"#{sig}\", "
                 @out << "'#{letter.call(fun["return"])}', #{cname});\n"
             elsif fun["raw"] then
                 @out << "LIBRARY_RAW(#{lib}, #{name});\n"

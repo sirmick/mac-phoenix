@@ -25,6 +25,7 @@
 #include <OSUtils.h>
 #include <Gestalt.h>
 #include <Timer.h>
+#include <CodeFragments.h>
 #include <OpenTransport.h>
 #include <OpenTptInternet.h>
 #include <OpenTptLinks.h>
@@ -1687,6 +1688,381 @@ static void test_inet_misc(void)
     pass("inet_misc");
 }
 
+/* ---- OT 1.1.1's additions for PowerPC clients ------------------------
+   Timer tasks (OTNtvUtilLib), OTEnterNotifier / OTLeaveNotifier and
+   OTUseSyncIdleEvents (OTClientLib), OTSetMemoryLimits
+   (OTNativeClientLib): looked up through the Code Fragment Manager, so the
+   case builds on any headers and import libraries (Retro68's and OT 1.1's
+   have none of them) and finds what the running OT has. */
+
+#if defined(powerc) || defined(__powerc) || defined(__POWERPC__) || defined(__powerpc__)
+#define OT_NATIVE 1
+
+typedef long (*CreateTimerFn)(OTProcessProcPtr, void *);
+typedef Boolean (*ScheduleTimerFn)(long, OTTimeout);
+typedef Boolean (*CancelTimerFn)(long);
+typedef void (*DestroyTimerFn)(long);
+typedef Boolean (*EnterNotifierFn)(ProviderRef);
+typedef void (*LeaveNotifierFn)(ProviderRef);
+typedef OSStatus (*UseSyncIdleFn)(ProviderRef, Boolean);
+typedef OSStatus (*SetMemoryLimitsFn)(size_t, size_t);
+
+static struct
+{
+    CreateTimerFn create_timer;
+    ScheduleTimerFn schedule_timer;
+    CancelTimerFn cancel_timer;
+    DestroyTimerFn destroy_timer;
+    EnterNotifierFn enter;
+    LeaveNotifierFn leave;
+    UseSyncIdleFn sync_idle;
+    SetMemoryLimitsFn memory_limits;
+} nat;
+
+/* A library's export, or nil. */
+static void *native_symbol(const char *lib, const char *name)
+{
+    unsigned char l[64], n[256];
+    ConnectionID conn;
+    Ptr main_addr = nil, addr = nil;
+    SymClass cls;
+    unsigned char err_name[256];
+
+    l[0] = (unsigned char)strlen(lib);
+    memcpy(l + 1, lib, l[0]);
+    n[0] = (unsigned char)strlen(name);
+    memcpy(n + 1, name, n[0]);
+    if(GetSharedLibrary(l, kPowerPCArch, kLoadLib, &conn, &main_addr, err_name))
+        return nil;
+    if(FindSymbol(conn, n, &addr, &cls))
+        return nil;
+    return addr;
+}
+
+static Boolean native_lookup(const char *name)
+{
+    static const struct
+    {
+        const char *lib, *sym;
+    } want[] = {
+        { "OTNtvUtilLib", "OTCreateTimerTask" },
+        { "OTNtvUtilLib", "OTScheduleTimerTask" },
+        { "OTNtvUtilLib", "OTCancelTimerTask" },
+        { "OTNtvUtilLib", "OTDestroyTimerTask" },
+        { "OTClientLib", "OTEnterNotifier" },
+        { "OTClientLib", "OTLeaveNotifier" },
+        { "OTClientLib", "OTUseSyncIdleEvents" },
+        { "OTNativeClientLib", "OTSetMemoryLimits" },
+    };
+    void **slot = (void **)&nat;
+    int i;
+
+    for(i = 0; i < 8; i++)
+    {
+        slot[i] = native_symbol(want[i].lib, want[i].sym);
+        if(!slot[i])
+        {
+            fail(name, want[i].sym, 0);
+            return false;
+        }
+    }
+    return true;
+}
+
+static volatile long tt_runs, tt_could_sync;
+static volatile unsigned long tt_ran_at;
+
+static pascal void timer_proc(void *arg)
+{
+    tt_runs += (long)arg;
+    tt_ran_at = TickCount();
+    tt_could_sync = OTCanMakeSyncCall();
+}
+
+/* Notifier for the Enter/Leave probe: counts events; from inside itself,
+   what OTEnterNotifier answers. */
+static volatile long en_events, en_inner;
+static EndpointRef en_ep;
+
+static pascal void enter_notifier(void *ctx, OTEventCode code, OTResult result, void *cookie)
+{
+    (void)ctx;
+    (void)result;
+    (void)cookie;
+    if(code == T_BINDCOMPLETE || code == T_UNBINDCOMPLETE)
+    {
+        en_events++;
+        if(en_inner < 0)
+        {
+            en_inner = nat.enter(en_ep) ? 1 : 0;
+            if(en_inner)
+                nat.leave(en_ep);
+        }
+    }
+}
+
+static void spin(unsigned long ticks)
+{
+    unsigned long until = TickCount() + ticks;
+    while(TickCount() < until)
+        ;
+}
+
+static void test_native(void)
+{
+    long t, before;
+    Boolean b1, b2;
+    unsigned long start, until;
+    OSStatus err;
+    EndpointRef ep;
+
+    if(!native_lookup("native"))
+        return;
+    err = nat.memory_limits(0x20000, 0);
+    printf("# OTSetMemoryLimits(128K, 0): %ld\n", (long)err);
+    if(err)
+    {
+        fail("native", "OTSetMemoryLimits", err);
+        return;
+    }
+
+    /* Timer tasks */
+    tt_runs = 0;
+    tt_could_sync = -1;
+    t = nat.create_timer(timer_proc, (void *)1);
+    if(!t)
+    {
+        fail("native", "OTCreateTimerTask", 0);
+        return;
+    }
+    start = TickCount();
+    b1 = nat.schedule_timer(t, 500);
+    b2 = nat.schedule_timer(t, 500);
+    printf("# OTScheduleTimerTask: %d, again while scheduled: %d\n", b1, b2);
+    until = TickCount() + 180;
+    while(!tt_runs && TickCount() < until)
+        ;
+    printf("# timer ran %ld after %lu ticks; OTCanMakeSyncCall there: %ld\n", tt_runs,
+           tt_ran_at - start, tt_could_sync);
+    /* Apple's (1.1.1, 2.6.1): true both times; once, at deferred task time */
+    if(!b1 || !b2)
+    {
+        fail("native", "OTScheduleTimerTask should answer true", b1);
+        nat.destroy_timer(t);
+        return;
+    }
+    if(tt_could_sync != 0)
+    {
+        fail("native", "OTCanMakeSyncCall in a timer task", tt_could_sync);
+        nat.destroy_timer(t);
+        return;
+    }
+    if(tt_runs != 1 || tt_ran_at - start < 20)
+    {
+        fail("native", "timer task: once, after 500 ms", tt_runs ? (long)(tt_ran_at - start) : -1);
+        nat.destroy_timer(t);
+        return;
+    }
+    spin(60);
+    if(tt_runs != 1)
+    {
+        fail("native", "timer task ran again", tt_runs);
+        nat.destroy_timer(t);
+        return;
+    }
+    /* scheduled for later, then sooner: which counts? */
+    start = TickCount();
+    nat.schedule_timer(t, 2000);
+    nat.schedule_timer(t, 200);
+    until = TickCount() + 240;
+    while(tt_runs == 1 && TickCount() < until)
+        ;
+    printf("# rescheduled 2000 -> 200 ms: ran %ld after %lu ticks\n", tt_runs - 1,
+           tt_runs > 1 ? tt_ran_at - start : 0);
+    /* Apple's: the later call's time counts (12 ticks) */
+    if(tt_runs != 2 || tt_ran_at - start > 60)
+    {
+        fail("native", "a timer task scheduled again runs at the new time", tt_runs);
+        nat.destroy_timer(t);
+        return;
+    }
+    spin(30);
+    nat.schedule_timer(t, 300);
+    b1 = nat.cancel_timer(t);
+    b2 = nat.cancel_timer(t);
+    before = tt_runs;
+    spin(60);
+    printf("# OTCancelTimerTask: %d, again: %d; ran after: %ld\n", b1, b2, tt_runs - before);
+    if(!b1 || b2 || tt_runs != before)
+    {
+        fail("native", "OTCancelTimerTask: true, then false; not run", tt_runs - before);
+        nat.destroy_timer(t);
+        return;
+    }
+    nat.destroy_timer(t);
+
+    /* OTEnterNotifier / OTLeaveNotifier: an asynchronous bind's completion
+       waits until the client leaves. */
+    ep = OTOpenEndpoint(OTCreateConfiguration(kUDPName), 0, nil, &err);
+    if(err)
+    {
+        fail("native", "OTOpenEndpoint udp", err);
+        return;
+    }
+    en_ep = ep;
+    en_events = 0;
+    en_inner = 0;
+    OTInstallNotifier(ep, enter_notifier, nil);
+    OTSetAsynchronous(ep);
+    b1 = nat.enter(ep);
+    err = OTBind(ep, nil, nil);
+    spin(60);
+    printf("# OTEnterNotifier: %d; events while entered: %ld\n", b1, en_events);
+    if(!b1 || err || en_events)
+    {
+        fail("native", "OTEnterNotifier should hold T_BINDCOMPLETE", err ? err : en_events);
+        if(b1)
+            nat.leave(ep);
+        OTCloseProvider(ep);
+        return;
+    }
+    nat.leave(ep);
+    if(!wait_for(&en_events, 3))
+    {
+        fail("native", "T_BINDCOMPLETE after OTLeaveNotifier", 0);
+        OTCloseProvider(ep);
+        return;
+    }
+    en_inner = -1; /* the notifier asks OTEnterNotifier at the next event */
+    OTUnbind(ep);
+    until = TickCount() + 180;
+    while(en_inner < 0 && TickCount() < until)
+        ;
+    printf("# OTEnterNotifier from inside the notifier: %ld\n", en_inner);
+    OTCloseProvider(ep);
+    if(en_inner != 0) /* Apple's: false there */
+    {
+        fail("native", "OTEnterNotifier inside the notifier should answer false", en_inner);
+        return;
+    }
+    pass("native");
+}
+
+/* OTUseSyncIdleEvents: a blocking receive the echo server never answers;
+   the notifier cancels it at the third kOTSyncIdleEvent (a Time Manager
+   task after 3 s if none come). T_DATA again: data read to the last byte
+   without kOTNoDataErr, then more sent: does another T_DATA come? */
+static volatile long si_events;
+static EndpointRef si_ep;
+
+static pascal void idle_notifier(void *ctx, OTEventCode code, OTResult result, void *cookie)
+{
+    (void)ctx;
+    (void)result;
+    (void)cookie;
+    if(code == 0x20000011 /* kOTSyncIdleEvent */ && ++si_events == 3)
+        OTCancelSynchronousCalls(si_ep, kOTCanceledErr);
+}
+
+static volatile long td_data;
+
+static pascal void tdata_notifier(void *ctx, OTEventCode code, OTResult result, void *cookie)
+{
+    (void)ctx;
+    (void)result;
+    (void)cookie;
+    if(code == T_DATA)
+        td_data++;
+}
+
+static void test_native_net(void)
+{
+    OSStatus err;
+    EndpointRef ep;
+    CancelTask t;
+    OTResult r;
+    OTFlags flags;
+    char buf[64];
+    unsigned long until;
+    long first;
+
+    if(!native_lookup("native_net"))
+        return;
+    ep = open_tcp(&err);
+    if(err)
+    {
+        fail("native_net", "OTOpenEndpoint", err);
+        return;
+    }
+    OTSetSynchronous(ep);
+    OTSetBlocking(ep);
+    if(OTBind(ep, nil, nil) || connect_echo(ep))
+    {
+        fail("native_net", "bind/connect", 0);
+        OTCloseProvider(ep);
+        return;
+    }
+    si_ep = ep;
+    si_events = 0;
+    OTInstallNotifier(ep, idle_notifier, nil);
+    err = nat.sync_idle(ep, true);
+    OTMemzero(&t, sizeof t);
+    t.tm.tmAddr = NewTimerProc(cancel_proc);
+    t.a5 = SetCurrentA5();
+    t.ep = ep;
+    InsTime((QElemPtr)&t.tm);
+    PrimeTime((QElemPtr)&t.tm, 3000);
+    r = OTRcv(ep, buf, 1, &flags);
+    RmvTime((QElemPtr)&t.tm);
+    printf("# OTUseSyncIdleEvents: %ld; idle events %ld; OTRcv %ld; safety cancel %ld\n",
+           (long)err, si_events, (long)r, t.fired);
+    OTCancelSynchronousCalls(ep, kOTNoError);
+    nat.sync_idle(ep, false);
+    OTRemoveNotifier(ep);
+    if(err || si_events < 3 || r != kOTCanceledErr || t.fired)
+    {
+        fail("native_net", "kOTSyncIdleEvent during a blocking OTRcv", si_events);
+        close_orderly(ep);
+        return;
+    }
+
+    /* T_DATA, on the same endpoint, now asynchronous */
+    td_data = 0;
+    OTInstallNotifier(ep, tdata_notifier, nil);
+    OTSetNonBlocking(ep);
+    OTSetAsynchronous(ep);
+    OTSnd(ep, "0123456789", 10, 0);
+    if(!wait_for(&td_data, 5))
+    {
+        fail("native_net", "T_DATA", 0);
+        close_orderly(ep);
+        return;
+    }
+    spin(30);
+    r = OTRcv(ep, buf, 10, &flags); /* all of it, no kOTNoDataErr */
+    first = td_data;
+    OTSnd(ep, "abcdefghij", 10, 0);
+    until = TickCount() + 120;
+    while(td_data == first && TickCount() < until)
+        ;
+    printf("# read %ld (all there was), sent more: T_DATA %ld -> %ld\n", (long)r, first, td_data);
+    r = OTRcv(ep, buf, sizeof buf, &flags);
+    printf("# then OTRcv: %ld\n", (long)r);
+    OTSetSynchronous(ep);
+    OTSetBlocking(ep);
+    OTRemoveNotifier(ep);
+    close_orderly(ep);
+    /* Apple's (1.1.1, 2.6.1): reading all there was is enough for the next
+       data to bring a T_DATA, no kOTNoDataErr needed */
+    if(td_data == first || r != 10)
+    {
+        fail("native_net", "T_DATA after a read that took everything", td_data);
+        return;
+    }
+    pass("native_net");
+}
+#endif
+
 /* ---- main ------------------------------------------------------------ */
 
 typedef void (*TestFn)(void);
@@ -1714,6 +2090,10 @@ static const struct
     { "dns_addr", test_dns_addr, true },
     { "misc", test_misc, false },
     { "inet_misc", test_inet_misc, false },
+#if OT_NATIVE
+    { "native", test_native, false },
+    { "native_net", test_native_net, true },
+#endif
 };
 
 static Boolean wanted(int argc, char **argv, const char *name)

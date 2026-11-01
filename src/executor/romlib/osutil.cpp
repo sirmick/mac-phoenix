@@ -324,16 +324,31 @@ void Executor::UpperString(StringPtr s, Boolean diac)
     ROMlib_UprString(s + 1, diac, (INTEGER)(unsigned char)s[0]);
 }
 
-/* MacPhoenix: a raw-buffer uppercase, the PowerPC InterfaceLib export apps
-   like Warcraft II's map editor call directly (no 68k trap for it in the
-   test corpus). `script' picked case-mapping rules per-script on a real
-   Mac; Executor's case-folding tables only cover MacRoman, so it's
-   ignored here the same way the rest of Executor assumes MacRoman text. */
-void Executor::UpperText(Ptr textPtr, LONGINT length, INTEGER script)
+/* MacPhoenix: the _LwrText family as InterfaceLib exports them, raw
+   MacRoman text converted in place, as the trap (base/emustubs.cpp) and
+   the Script Manager's case calls do (ROMlib_text_case, script.cpp). */
+void Executor::LowerText(Ptr textPtr, INTEGER len)
 {
-    if(length > 0)
-        ROMlib_UprString((StringPtr)textPtr, false,
-                         (INTEGER)(length > 32767 ? 32767 : length));
+    if(textPtr)
+        ROMlib_text_case(textPtr, len, 0x000);
+}
+
+void Executor::StripText(Ptr textPtr, INTEGER len)
+{
+    if(textPtr)
+        ROMlib_text_case(textPtr, len, 0x200);
+}
+
+void Executor::UpperText(Ptr textPtr, INTEGER len)
+{
+    if(textPtr)
+        ROMlib_text_case(textPtr, len, 0x400);
+}
+
+void Executor::StripUpperText(Ptr textPtr, INTEGER len)
+{
+    if(textPtr)
+        ROMlib_text_case(textPtr, len, 0x600);
 }
 
 void Executor::GetDateTime(GUEST<ULONGINT> *mactimepointer)

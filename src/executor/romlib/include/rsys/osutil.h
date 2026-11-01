@@ -26,6 +26,11 @@ extern void date_to_swapped_fields(long long mactime, GUEST<INTEGER> *yearp,
     // case insitive, diac insensitive
 extern int ROMlib_strcmp(const Byte *s1, const Byte *s2);
 
+/* MacPhoenix: MacRoman text lowercased (flags 0), stripped of
+   diacriticals ($200), uppercased ($400) or both ($600) in place, as the
+   _LwrText trap family and the Script Manager's case calls do (script.cpp). */
+extern void ROMlib_text_case(Ptr textp, INTEGER len, uint16_t flags);
+
 #define PARAMRAMMACNAME "\010ParamRAM"
 
 extern Executor::LONGINT ROMlib_GMTcorrect; /* Correction for GMT to localtime */
