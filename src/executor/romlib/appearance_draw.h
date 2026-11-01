@@ -224,6 +224,9 @@ Rect floatingCollapseBox(const Rect &c, const FloatParts &parts);
 Rect floatingZoomBox(const Rect &c, const FloatParts &parts);
 /* the grow box, frame not content (its corner of the content) */
 Rect floatingGrowBox(const Rect &c);
+/* One of its boxes (WHICH: 0 close, 1 zoom, 2 collapse) alone, pressed
+   or not (TrackBox's wDraw with the part). */
+void floatingBox(const Rect &c, const FloatParts &parts, int which, bool pressed);
 
 /* The current port's depth and whether its device is in colour, what the
    definitions' callbacks are told. */

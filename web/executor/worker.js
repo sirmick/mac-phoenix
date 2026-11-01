@@ -67,11 +67,13 @@ self.Module = {
         postMessage({ type: 'reply', id, result });
     },
     onExit(code) {
+        stopped = true;
         console.log(`[web] Executor exited (${code})`);
         Log.flush();
         postMessage({ type: 'exit', code });
     },
     onAbort(what) {
+        stopped = true;
         console.error(`[web] Executor aborted: ${what}`);
     },
 };
@@ -86,6 +88,64 @@ function imageKey(f) {
     return (ids[f.name] ? `${f.name}-${ids[f.name]}` : `${f.name}-${f.size}-${f.lastModified}`).replace(/[^\w.-]/g, '_');
 }
 let overlays = [];
+
+// Disks open in another tab (its Worker has their OPFS files: overlay.js):
+// asked for on 'executor-disks', { type: 'release', keys }. A holder whose
+// Executor has stopped, or whose page is in the background, lets them go
+// (keeping on with them in memory) and says 'released'; one in use says
+// 'held', and the asker keeps its copies in memory.
+let stopped = false;                // Executor exited, aborted or trapped
+let hidden = false;                 // the page in the background (main.js)
+const disks = typeof BroadcastChannel === 'function' ? new BroadcastChannel('executor-disks') : null;
+const DISKS_WAIT = 1500;            // ms for the holder's answer
+self.addEventListener('error', () => { stopped = true; });
+self.addEventListener('unhandledrejection', () => { stopped = true; });
+
+if (disks)
+    disks.addEventListener('message', (e) => {
+        const m = e.data;
+        if (m.type !== 'release')
+            return;
+        const mine = overlays.filter((o) => m.keys.includes(o.key) && o.writable && !o.inMemory);
+        if (!mine.length)
+            return;
+        const keys = mine.map((o) => o.key);
+        if (stopped || hidden) {
+            for (const o of mine)
+                o.toMemory();
+            reportImages();
+            notice(`Another tab has ${mine.map((o) => o.name).join(', ')} now: changes here last until this tab closes`);
+            disks.postMessage({ type: 'released', keys });
+        } else {
+            notice(`Another tab wants ${mine.map((o) => o.name).join(', ')}: leave this tab in the background, or close it, to hand them over`);
+            disks.postMessage({ type: 'held', keys });
+        }
+    });
+
+// The other tab's answers for keys; resolves when every key has one, or
+// after DISKS_WAIT.
+function askForDisks(keys) {
+    if (!disks)
+        return Promise.resolve();
+    return new Promise((resolve) => {
+        const left = new Set(keys);
+        const done = () => {
+            disks.removeEventListener('message', answer);
+            resolve();
+        };
+        const answer = (e) => {
+            if (e.data.type !== 'released' && e.data.type !== 'held')
+                return;
+            for (const k of e.data.keys)
+                left.delete(k);
+            if (!left.size)
+                done();
+        };
+        disks.addEventListener('message', answer);
+        disks.postMessage({ type: 'release', keys });
+        setTimeout(done, DISKS_WAIT);
+    });
+}
 
 Module.noInitialRun = true;
 const runtimeReady = new Promise((resolve) => { Module.onRuntimeInitialized = resolve; });
@@ -197,7 +257,7 @@ function scanVolume() {
 // Which images have changes (the page marks them, offers their download).
 function reportImages() {
     postMessage({ type: 'images', images: overlays.map((o) => ({
-        name: o.name, modified: o.modified, writable: o.writable, inMemory: o.inMemory })) });
+        name: o.name, modified: o.modified, writable: o.writable, inMemory: o.inMemory, borrowed: o.borrowed })) });
 }
 
 // now: the page is going away, sync without waiting for the next round.
@@ -312,8 +372,18 @@ async function start(m) {
     if (images.length) {
         let root = null;
         try { root = await navigator.storage.getDirectory(); } catch { }
-        overlays = await Promise.all(images.map((f) => Overlay.open(root, f.name, f, imageKey(f),
-                                                                    (m.legacyKeys || {})[f.name])));
+        const open = (f, image) => Overlay.open(root, f.name, f, imageKey(f), (m.legacyKeys || {})[f.name], image);
+        overlays = await Promise.all(images.map((f) => open(f)));
+        // Another tab's: asked for, then opened again (a Worker gone
+        // meanwhile lets go without answering), before Executor mounts them.
+        const borrowed = overlays.filter((o) => o.borrowed);
+        if (borrowed.length) {
+            await askForDisks(borrowed.map((o) => o.key));
+            overlays = await Promise.all(overlays.map((o, i) => o.borrowed ? open(images[i], o.image) : o));
+            const still = overlays.filter((o) => o.borrowed).map((o) => o.name);
+            if (still.length)
+                notice(`Another tab has ${still.join(', ')}: changes to ${still.length > 1 ? 'them' : 'it'} here last until this tab closes`);
+        }
         for (const o of overlays)
             await Sync.overlayDown(o);
         FS.mkdir('/uploads');
@@ -341,6 +411,8 @@ self.onmessage = (e) => {
         saveVolume(true).then(() => postMessage({ type: 'saved' }));
     } else if (m.type === 'resolve') {
         Sync.resolve(m.id, m.keep);
+    } else if (m.type === 'visibility') {
+        hidden = m.hidden;
     } else if (m.type === 'input') {
         Module.input.push(...m.events);
     } else if (m.type === 'request') {

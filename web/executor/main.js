@@ -314,7 +314,8 @@ async function showFiles(files) {
         const st = imageState[f.name];
         s.textContent = f.name + (st && st.modified ? ' •' : '');
         if (st)
-            s.title = st.inMemory ? (st.modified ? 'changed (until Executor restarts: not a secure page; the original is untouched)'
+            s.title = st.borrowed ? 'open in another tab: changes here last until this tab closes'
+                    : st.inMemory ? (st.modified ? 'changed (until Executor restarts: not a secure page; the original is untouched)'
                                                  : 'writable (changes last until Executor restarts: not a secure page)')
                     : st.modified ? 'changed (kept in this browser; the original is untouched)'
                     : st.writable ? 'writable' : 'read-only (open in another tab?)';
@@ -441,9 +442,13 @@ document.getElementById('reset').addEventListener('click', async () => {
 });
 
 // Leaving or hiding the page: the Worker saves what changed now.
+// Hidden, it hands its disks to another tab that asks (worker.js).
 document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden' && worker)
+    if (!worker)
+        return;
+    if (document.visibilityState === 'hidden')
         worker.postMessage({ type: 'save' });
+    worker.postMessage({ type: 'visibility', hidden: document.visibilityState === 'hidden' });
 });
 
 // The System to run on: Executor's own (''), or a disk image's (its name),
@@ -557,17 +562,19 @@ async function start() {
                          logtraps: params.get('logtraps'), nesting: params.get('nesting'),
                          debug: params.get('debug') },
                        [offscreen]);
+    worker.postMessage({ type: 'visibility', hidden: document.visibilityState === 'hidden' });
     worker.onmessage = (e) => {
         if (mine !== generation)
             return;
         const m = e.data;
         if (m.type === 'frame') {
-            if (window.executor.frames++ === 0)
+            // (a notice from the Worker before it stays)
+            if (window.executor.frames++ === 0 && status.textContent === 'Loading Executor…')
                 status.textContent = 'Executor';
         } else if (m.type === 'images') {
             const before = JSON.stringify(imageState);
             for (const i of m.images)
-                imageState[i.name] = { modified: i.modified, writable: i.writable, inMemory: i.inMemory };
+                imageState[i.name] = { modified: i.modified, writable: i.writable, inMemory: i.inMemory, borrowed: i.borrowed };
             if (JSON.stringify(imageState) !== before)
                 storedFiles().then(showFiles);
         } else if (m.type === 'cursor') {

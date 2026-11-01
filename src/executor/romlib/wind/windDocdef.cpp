@@ -1185,6 +1185,23 @@ bool Executor::ROMlib_wdef_floating(WindowPtr window, bool close, bool grow, int
         case wDraw:
             if(!WINDOW_VISIBLE(w))
                 return true;
+            /* TrackBox's: the box alone, pressed while the button is down
+               in it (as the document window's) */
+            if(parm == wInGoAway || parm == wInZoomIn || parm == wInZoomOut || parm == wInCollapseBox)
+            {
+                int which = parm == wInGoAway ? 0 : parm == wInCollapseBox ? 2 : 1;
+                if(!WINDOW_HILITED(w) || parts.collapsed || (which == 0 && !parts.close)
+                   || (which == 1 && !parts.zoom) || (which == 2 && !parts.collapse))
+                    return true;
+                GUEST<Point> gp;
+                C_GetMouse(&gp);
+                Point mp = gp.get();
+                LONGINT hit;
+                ROMlib_wdef_floating(window, close, grow, zoom, side, wHit, ((LONGINT)mp.v << 16) | (uint16_t)mp.h, &hit);
+                bool pressed = C_Button() && (hit == parm || (which == 1 && (hit == wInZoomIn || hit == wInZoomOut)));
+                appearance::floatingBox(c, parts, which, pressed);
+                return true;
+            }
             if(StringHandle th = WINDOW_TITLE(w))
             {
                 HLockGuard guard(th);

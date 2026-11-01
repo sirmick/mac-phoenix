@@ -465,10 +465,18 @@ void Executor::convert_pixmap(const PixMap *src, PixMap *dst,
             if(src_bpp != cached_src_bpp || dst_bpp != cached_dst_bpp
                || src_seed_x != cached_src_seed_x || dst_seed_x != cached_dst_seed_x)
             {
+                /* each pixel value's colour, from the entry with that
+                   value: a 'cicn' table may list only the values it uses
+                   (8.6's note icon: 0-8, then black as 15) */
+                int max_mapping_elt = (1 << src_bpp) - 1;
+                CTabHandle mapping = (CTabHandle)NewHandleClear(CTAB_STORAGE_FOR_SIZE(max_mapping_elt));
+                CTAB_SIZE(mapping) = max_mapping_elt;
+                sort_color_table(mapping, src_table);
                 conversion_func
                     = depthconv_make_ind_to_rgb_table(depth_table_space, src_bpp,
-                                                      nullptr, CTAB_TABLE(src_table),
+                                                      nullptr, CTAB_TABLE(mapping),
                                                       dst_rgb_spec);
+                DisposeHandle((Handle)mapping);
             }
             break;
         }

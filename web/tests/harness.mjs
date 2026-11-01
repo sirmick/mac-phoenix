@@ -35,8 +35,9 @@ export async function newPage(browser, { log = true, tag = '', scale = 1 } = {})
     return page;
 }
 
-export async function open(dir, { log = true, query = '' } = {}) {
-    const server = http.createServer((req, res) => {
+// The page's files from dir, on a port of its own.
+export function serve(dir) {
+    return http.createServer((req, res) => {
         const f = path.join(dir, decodeURIComponent(new URL(req.url, 'http://x').pathname));
         fs.readFile(f, (err, data) => {
             if (err) { res.writeHead(404); res.end(); return; }
@@ -44,6 +45,10 @@ export async function open(dir, { log = true, query = '' } = {}) {
             res.end(data);
         });
     }).listen(0);
+}
+
+export async function open(dir, { log = true, query = '' } = {}) {
+    const server = serve(dir);
     const browser = await launch();
     const page = await browser.newPage({ viewport: { width: 800, height: 640 } });
     page.on('pageerror', (e) => console.log('[page error]', e.stack || e.message));
