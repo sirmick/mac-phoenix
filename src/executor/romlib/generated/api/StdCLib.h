@@ -433,7 +433,7 @@ OSErr c_ResolvePath(const char *raw, char *resolved, Boolean *isFolder, Boolean 
 OSErr c_ResolvePath(const char *raw, char *resolved, Boolean *isFolder, Boolean *hadAlias);LIBRARY_FUNCTION(StdCLib, IEResolvePath, c_ResolvePath);
 
 
-OSErr c_MakeResolvedPath(int16_t vol, int32_t dir, uint8_t *path, Boolean resolveLeaf, char *buffer, Boolean *isFolder, Boolean *hadAlias, Boolean *leafIsAlias);LIBRARY_FUNCTION(StdCLib, MakeResolvedPath, c_MakeResolvedPath);
+OSErr c_MakeResolvedPath(int16_t vol, int32_t dir, uint8_t *path, Boolean resolveLeaf, uint8_t *buffer, Boolean *isFolder, Boolean *hadAlias, Boolean *leafIsAlias);LIBRARY_FUNCTION(StdCLib, MakeResolvedPath, c_MakeResolvedPath);
 
 
 Boolean c_TrapAvailable(int16_t trapNum);LIBRARY_FUNCTION(StdCLib, TrapAvailable, c_TrapAvailable);

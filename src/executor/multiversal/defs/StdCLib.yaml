@@ -1537,7 +1537,7 @@
       - name: "resolveLeaf"
         type: "Boolean"
       - name: "buffer"
-        type: "char*"
+        type: "uint8_t*"
       - name: "isFolder"
         type: "Boolean*"
       - name: "hadAlias"
