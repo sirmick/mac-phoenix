@@ -1934,25 +1934,164 @@ uint16_t tabGray(char c)
     return n * 0x1111;
 }
 
+/* Tabs facing the other ways, every row as tabLooks' (taken from 8.6 on
+   the G3: appr draw32/draw8.tabdir.*), in the north tab's terms: row 0 at
+   the tab's far edge, along the tab left to right. South is north turned
+   over and east and west north turned sideways, but each shades its own
+   edges (the light from the top left), so the rows are their own. */
+const char *const tabDirRows[3][5][tabFrontRows] = {
+    { /* facing south */
+        { /* non-front */
+            "2|0|", "20ac|9|800", "2acd|b|840", "2acd|c|b43", "0cd|c|a0", "2ad|c|b43", "0cd|c|80", "0cd|c|a0",
+            "2ad|c|b43", "0cd|c|80", "0cd|c|a0", "2ad|c|b43", "0cd|c|80", "0cd|c|a0", "2ad|c|b43", "0cd|c|80",
+            "0cd|c|a0", "2ad|c|b43", "0cd|c|80", "0cd|c|a0", "0ad|c|b40",
+        },
+        { /* non-front pressed */
+            "2|0|", "2045|8|30", "2445|7|80", "2445|6|743", "045|6|80", "245|6|743", "045|6|80", "045|6|70",
+            "245|6|743", "045|6|80", "045|6|70", "245|6|743", "045|6|80", "045|6|70", "245|6|743", "045|6|80",
+            "045|6|70", "245|6|743", "045|6|80", "045|6|70", "045|6|740",
+        },
+        { /* non-front inactive */
+            "|5|", "55|d|55", "5|d|5", "5|d|5", "5|d|5", "5|d|5", "5|d|5", "5|d|5", "5|d|5", "5|d|5", "5|d|5",
+            "5|d|5", "5|d|5", "5|d|5", "5|d|5", "5|d|5", "5|d|5", "5|d|5", "5|d|5", "5|d|5", "5|d|5",
+        },
+        { /* front */
+            "2|0|", "20|9|700", "2b|c|b980", "2bcf|e|b42", "0cf|e|d80", "2bf|e|b42", "0cf|e|d80", "0cf|e|d80",
+            "2bf|e|b42", "0cf|e|d80", "0cf|e|d80", "2bf|e|b42", "0cf|e|d80", "0cf|e|d80", "2bf|e|b42", "0cf|e|d80",
+            "0cf|e|d80", "2bf|e|b42", "0cf|e|d80", "0cf|e|d80", "2bf|e|b40", "0cf|e|db0", "ccf|e|b9", "ff|e|b",
+        },
+        { /* front inactive */
+            "|5|", "55|e|55", "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5",
+            "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5", "|e|", "|e|",
+            "|e|",
+        },
+    },
+    { /* facing east */
+        { /* non-front */
+            "2|0|", "20ac|9|800", "2acd|b|840", "2add|c|b42", "0cd|c|80", "2ad|c|b42", "0cd|c|80", "0cd|c|a0",
+            "2ad|c|b42", "0cd|c|80", "0cd|c|a0", "2ad|c|b42", "0cd|c|80", "0cd|c|a0", "2ad|c|b42", "0cd|c|80",
+            "0cd|c|a0", "2ad|c|b42", "0cd|c|80", "0cd|c|a0", "2ad|c|b62",
+        },
+        { /* non-front pressed */
+            "2|0|", "2044|8|4430", "24455|7|55580", "2445|6|743", "045|6|80", "245|6|743", "045|6|80", "045|6|70",
+            "245|6|743", "045|6|80", "045|6|70", "245|6|743", "045|6|80", "045|6|70", "245|6|743", "045|6|80",
+            "045|6|70", "245|6|743", "045|6|80", "045|6|70", "045|6|740",
+        },
+        { /* non-front inactive */
+            "|5|", "55|d|55", "5|d|5", "5|d|5", "5|d|5", "5|d|5", "5|d|5", "5|d|5", "5|d|5", "5|d|5", "5|d|5",
+            "5|d|5", "5|d|5", "5|d|5", "5|d|5", "5|d|5", "5|d|5", "5|d|5", "5|d|5", "5|d|5", "5|d|5",
+        },
+        { /* front */
+            "2|0|", "20|9|700", "2b|c|b970", "2bcf|e|940", "0cf|e|b80", "2bf|e|940", "0cf|e|b80", "0cf|e|90",
+            "2bf|e|b40", "0cf|e|80", "0cf|e|90", "2bf|e|b40", "0cf|e|80", "0cf|e|90", "2bf|e|b40", "0cf|e|80",
+            "0cf|e|90", "2bf|e|b40", "0cf|e|80", "0cf|e|90", "2bf|e|b40", "0cf|e|80", "ccf|e|b9", "f|e|b",
+        },
+        { /* front inactive */
+            "|5|", "55|e|55", "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5",
+            "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5",
+            "|e|", "f|e|f",
+        },
+    },
+    { /* facing west */
+        { /* non-front */
+            "2|0|", "20a|c|a00", "2ac|d|80", "2add|c|b42", "0cd|c|80", "2ad|c|b42", "0cd|c|80", "0cd|c|a0",
+            "2ad|c|b42", "0cd|c|80", "0cd|c|a0", "2ad|c|b42", "0cd|c|80", "0cd|c|a0", "2ad|c|b42", "0cd|c|80",
+            "0cd|c|a0", "2ad|c|b42", "0cd|c|80", "0cd|c|a0", "2ad|c|b62",
+        },
+        { /* non-front pressed */
+            "2|0|", "20|4|30", "244|5|80", "2445|6|743", "045|6|80", "245|6|743", "045|6|80", "045|6|70",
+            "245|6|743", "045|6|80", "045|6|70", "245|6|743", "045|6|80", "045|6|70", "245|6|743", "045|6|80",
+            "045|6|70", "245|6|743", "045|6|80", "045|6|70", "045|6|740",
+        },
+        { /* non-front inactive */
+            "|5|", "55|d|55", "5|d|5", "5|d|5", "5|d|5", "5|d|5", "5|d|5", "5|d|5", "5|d|5", "5|d|5", "5|d|5",
+            "5|d|5", "5|d|5", "5|d|5", "5|d|5", "5|d|5", "5|d|5", "5|d|5", "5|d|5", "5|d|5", "5|d|5",
+        },
+        { /* front */
+            "2|0|", "20b|c|b00", "2bc|f|d80", "2bcf|e|b43", "0cf|e|d80", "2bf|e|b43", "0cf|e|d80", "0cf|e|d80",
+            "2bf|e|b43", "0cf|e|d80", "0cf|e|d80", "2bf|e|b43", "0cf|e|c80", "0cf|e|d80", "2bf|e|b43", "0cf|e|c80",
+            "0cf|e|d80", "2bf|e|b43", "0cf|e|d80", "0cf|e|80", "2bf|e|b40", "0cf|e|80", "ccf|e|cc", "f|e|f",
+        },
+        { /* front inactive */
+            "|5|", "55|e|55", "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5",
+            "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5", "5|e|5",
+            "|e|", "f|e|f",
+        },
+    },
+};
+
+const char *tabDirRow(ThemeTabStyle style, ThemeTabDirection dir, int r)
+{
+    return dir == kThemeTabNorth ? tabRow(tabLooks[style], r) : tabDirRows[dir - 1][style][r];
+}
+
+int tabDirInset(ThemeTabStyle style, ThemeTabDirection dir, int r)
+{
+    if(r < tabRows)
+        return tabInset(r);
+    return dir == kThemeTabNorth ? tabLooks[style].belowInset[r - tabRows] : 0;
+}
+
+/* Where a tab's north-space points (A along, R across from its far edge)
+   are on the screen, for direction DIR in bounds B */
+struct TabFrame
+{
+    Rect b;
+    ThemeTabDirection dir;
+    int length() const { return dir == kThemeTabNorth || dir == kThemeTabSouth ? b.right - b.left : b.bottom - b.top; }
+    /* a pixel */
+    Point at(int a, int r) const
+    {
+        switch(dir)
+        {
+            case kThemeTabSouth: return Point{ (INTEGER)(b.bottom - 1 - r), (INTEGER)(b.left + a) };
+            case kThemeTabEast: return Point{ (INTEGER)(b.top + a), (INTEGER)(b.right - 1 - r) };
+            case kThemeTabWest: return Point{ (INTEGER)(b.top + a), (INTEGER)(b.left + r) };
+            default: return Point{ (INTEGER)(b.top + r), (INTEGER)(b.left + a) };
+        }
+    }
+    /* a point between pixels */
+    void pt(float a, float r, float &x, float &y) const
+    {
+        switch(dir)
+        {
+            case kThemeTabSouth: x = b.left + a, y = b.bottom - r; break;
+            case kThemeTabEast: x = b.right - r, y = b.top + a; break;
+            case kThemeTabWest: x = b.left + r, y = b.top + a; break;
+            default: x = b.left + a, y = b.top + r; break;
+        }
+    }
+    /* pixels A1..A2 of row R */
+    void run(int a1, int a2, int r, uint16_t g) const
+    {
+        if(a2 < a1)
+            return;
+        Point p = at(a1, r), q = at(a2, r);
+        lineGray(p.h, p.v, q.h, q.v, g);
+    }
+};
+
 /* A north tab at the display scale: its outline as a curve into a
    straight slant (the 1x sides' steps), the face inside it, the lit edge
    down the left and across the top, the shade down the right. Colours by
    style (as tabLooks): outline, face, lit, shade (no lit or shade:
    inactive). */
-hidpi::Shapes tabNorthShapes(const Rect &bounds, ThemeTabStyle style, int rows)
+hidpi::Shapes tabShapes(const TabFrame &f, ThemeTabStyle style, int rows)
 {
     static const uint8_t looks[][4] = { { 0, 0xc, 0xd, 8 }, { 0, 6, 4, 7 }, { 5, 0xd, 0xff, 0xff },
                                         { 0, 0xe, 0xf, 8 }, { 5, 0xe, 0xff, 0xff } };
     const uint8_t *c = looks[style];
-    float L = bounds.left, T = bounds.top, W = bounds.right - bounds.left;
+    float W = f.length();
     bool front = rows > tabRows;
     /* the left side D in from the edge, from Y up to the top's middle;
        the right side the same mirrored */
     auto side = [&](float d, float y, bool right) {
         std::vector<float> v;
         auto add = [&](float x, float yy) {
-            v.push_back(L + (right ? W - x : x));
-            v.push_back(T + yy);
+            float px, py;
+            f.pt(right ? W - x : x, yy, px, py);
+            v.push_back(px);
+            v.push_back(py);
         };
         if(y > tabRows)
             add(d, y);
@@ -1974,7 +2113,9 @@ hidpi::Shapes tabNorthShapes(const Rect &bounds, ThemeTabStyle style, int rows)
     if(c[2] != 0xff)
     {
         std::vector<float> lit = side(2.5f, rows, false);
-        lit.insert(lit.end(), { L + W - 9, T + 2.5f });
+        float ex, ey;
+        f.pt(W - 9, 2.5f, ex, ey);
+        lit.insert(lit.end(), { ex, ey });
         s.push_back({ hidpi::Shape::Polyline, lit, 1, argbGray(c[2] * 0x1111) });
         std::vector<float> shade = side(1.5f, front ? tabRows + 1 : rows, true);
         s.push_back({ hidpi::Shape::Polyline, shade, 1, argbGray(c[3] * 0x1111) });
@@ -1983,33 +2124,35 @@ hidpi::Shapes tabNorthShapes(const Rect &bounds, ThemeTabStyle style, int rows)
     return s;
 }
 
-void drawTabNorthPixels(const Rect &bounds, const TabLook &look, int rows);
+void drawTabPixels(const TabFrame &f, ThemeTabStyle style, int rows);
 
-void drawTabNorth(const Rect &bounds, ThemeTabStyle style, int rows)
+void drawTab(const Rect &bounds, ThemeTabStyle style, ThemeTabDirection dir, int rows)
 {
-    const Rect box = { bounds.top, bounds.left, (INTEGER)(bounds.top + rows), bounds.right };
-    hidpi::chrome_draw(box, hidpi::active() ? tabNorthShapes(bounds, style, rows) : hidpi::Shapes{},
-                       [&] { drawTabNorthPixels(bounds, tabLooks[style], rows); });
+    TabFrame f{ bounds, dir };
+    Point p = f.at(0, 0), q = f.at(f.length() - 1, rows - 1);
+    const Rect box = { std::min(p.v, q.v), std::min(p.h, q.h), (INTEGER)(std::max(p.v, q.v) + 1),
+                       (INTEGER)(std::max(p.h, q.h) + 1) };
+    hidpi::chrome_draw(box, hidpi::active() ? tabShapes(f, style, rows) : hidpi::Shapes{},
+                       [&] { drawTabPixels(f, style, rows); });
 }
 
-void drawTabNorthPixels(const Rect &bounds, const TabLook &look, int rows)
+void drawTabPixels(const TabFrame &f, ThemeTabStyle style, int rows)
 {
-    int L = bounds.left, R = bounds.right;
+    int len = f.length();
     for(int r = 0; r < rows; r++)
     {
-        const char *row = tabRow(look, r);
+        const char *row = tabDirRow(style, f.dir, r);
         const char *bar1 = strchr(row, '|'), *bar2 = strchr(bar1 + 1, '|');
-        int e = r < tabRows ? tabInset(r) : look.belowInset[r - tabRows], y = bounds.top + r, left = L + e,
-            right = R - 1 - e;
+        int e = tabDirInset(style, f.dir, r), left = e, right = len - 1 - e;
         uint16_t fill = tabGray(bar1[1]);
-        lineGray(left, y, right, y, fill);
+        f.run(left, right, r, fill);
         for(const char *c = row; c < bar1; c++)
-            lineGray(left + (c - row), y, left + (c - row), y, tabGray(*c));
+            f.run(left + (c - row), left + (c - row), r, tabGray(*c));
         int n = strlen(bar2 + 1);
-        if(R - 12 <= right - n)
-            lineGray(R - 12, y, right - n, y, fill);
+        if(len - 12 <= right - n)
+            f.run(len - 12, right - n, r, fill);
         for(int i = 0; i < n; i++)
-            lineGray(right - n + 1 + i, y, right - n + 1 + i, y, tabGray(bar2[1 + i]));
+            f.run(right - n + 1 + i, right - n + 1 + i, r, tabGray(bar2[1 + i]));
     }
 }
 }
@@ -2020,30 +2163,12 @@ OSStatus Executor::C_DrawThemeTab(const Rect *inRect, ThemeTabStyle inStyle, The
     if(!inRect)
         return paramErr;
     bool front = inStyle == kThemeTabFront || inStyle == kThemeTabFrontInactive || inStyle == kThemeTabFrontUnavailable;
-    bool active = inStyle == kThemeTabFront || inStyle == kThemeTabNonFront || inStyle == kThemeTabNonFrontPressed;
-    if(inDirection == kThemeTabNorth)
-    {
-        /* the unavailable styles came after 8.6's Appearance: it draws
-           nothing for them (appr controls.tab80.5) */
-        if(inStyle < (int)std::size(tabLooks))
-        {
-            DrawGuard guard;
-            drawTabNorth(*inRect, inStyle, front ? tabFrontRows : tabRows);
-        }
-    }
-    else
+    /* the unavailable styles came after 8.6's Appearance: it draws
+       nothing for them (appr controls.tab80.5) */
+    if(inStyle < (int)std::size(tabLooks) && inDirection >= kThemeTabNorth && inDirection <= kThemeTabWest)
     {
         DrawGuard guard;
-        Rect r = *inRect;
-        fillGray(r, front ? kFace : (inStyle == kThemeTabNonFrontPressed ? kShadow : kTrack));
-        uint16_t ink = active ? kBlack : kShadow;
-        lineGray(r.left, r.bottom - 1, r.left, r.top + 2, ink);
-        LineTo(r.left + 2, r.top);
-        LineTo(r.right - 3, r.top);
-        LineTo(r.right - 1, r.top + 2);
-        LineTo(r.right - 1, r.bottom - 1);
-        if(!front)
-            lineGray(r.left, r.bottom - 1, r.right - 1, r.bottom - 1, ink);
+        drawTab(*inRect, inStyle, inDirection, front ? tabFrontRows : tabRows);
     }
     if(labelProc)
     {

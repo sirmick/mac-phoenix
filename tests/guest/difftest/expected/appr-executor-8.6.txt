@@ -55,5 +55,3 @@ controls.384.*	the scroll bar (8.6's CDEF 384), same gap as CDEF 1 (same DrawThe
 dialogs.*.standard	StandardAlert's note icon: its black pixels come out transparent (the icon or mask Executor plots differs from 8.6's; not investigated); the background is 8.6's
 
 # platinum-2 (open)
-draw32.tabdir.[123].*	tabs facing south, east, west: not drawn platinum yet
-draw8.tabdir.[123].*	tabs facing south, east, west: not drawn platinum yet
