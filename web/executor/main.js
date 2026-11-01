@@ -451,27 +451,24 @@ function autoShot(why) {
 }
 
 // Watching from the server: which application is in front (when it
-// changes), and frames stopping while the page is visible.
-let lastApp = null, lastFrames = -1, stalledSince = 0;
+// changes), and Executor no longer answering (3 requests in a row: hung,
+// or the module died).
+let lastApp = null, unanswered = 0;
 setInterval(async () => {
-    if (!worker || document.hidden)
+    if (!worker || document.hidden || !window.executor.frames)
         return;
-    const frames = window.executor.frames;
-    if (frames === lastFrames && frames > 0) {
-        if (!stalledSince)
-            stalledSince = performance.now();
-        else if (performance.now() - stalledSince > 15000 && stalledSince > 0) {
-            console.log('[watch] no frames for 15 s');
-            stalledSince = -1;      // once, until frames come again
+    const app = await within(window.executor.request('app'), 2500);
+    if (app === null) {
+        if (++unanswered === 3) {
+            console.log('[watch] Executor not answering');
+            autoShot('Executor not answering');
         }
-    } else {
-        if (stalledSince === -1)
-            console.log('[watch] frames again');
-        stalledSince = 0;
+        return;
     }
-    lastFrames = frames;
-    const app = await within(window.executor.request('app'), 2000);
-    if (app !== null && app !== lastApp) {
+    if (unanswered >= 3)
+        console.log('[watch] Executor answering again');
+    unanswered = 0;
+    if (app !== lastApp) {
         console.log(`[watch] front: ${app || '(none)'}`);
         lastApp = app;
     }
