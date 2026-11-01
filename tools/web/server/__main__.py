@@ -40,6 +40,7 @@ def main():
         a.add_argument("--site")
         a.add_argument("--data")
         a.add_argument("--quiet", action="store_true")
+        a.add_argument("--standalone", action="store_const", const="standalone", dest="mode")
     a = sub.add_parser("adduser")
     a.add_argument("name")
     a.add_argument("--owner", action="store_true")
@@ -50,7 +51,7 @@ def main():
     sub.add_parser("backup").add_argument("dest")
     args = ap.parse_args()
 
-    overrides = {"server": {k: getattr(args, k, None) for k in ("port", "bind", "site", "data")}}
+    overrides = {"server": {k: getattr(args, k, None) for k in ("port", "bind", "site", "data", "mode")}}
     cfg = config.load(args.config, overrides)
     cmd = args.cmd or "serve"
     if cmd == "serve":
