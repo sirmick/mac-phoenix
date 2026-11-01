@@ -11,7 +11,9 @@
 # (CopyBits, through a second GWorld, CopyMask's unmasked part) must differ
 # from the 1x frame scaled up and show anti-aliasing (greys the 1x frame
 # hasn't); text whose GWorld the program then wrote itself (behind
-# QuickDraw), and CopyMask's masked-out part, must not differ. The boxes
+# QuickDraw), and CopyMask's masked-out part, must not differ. Text from
+# GWorlds of other depths (8, 16, 1 bits) and copied with srcOr and
+# transparent onto colour must be anti-aliased too. The boxes
 # are GWorldGallery's: keep them in step. Its second window scrolls text
 # three ways: every row of it with text must still be anti-aliased.
 #
@@ -107,6 +109,11 @@ boxes = [
     ('written behind QuickDraw (1x)', 20, 190, 460, 210, 'plain'),
     ('CopyMask, the mask\'s part', 28, 217, 218, 234, 'text'),
     ('CopyMask, masked out', 221, 215, 460, 235, 'plain'),
+    ('depth 8 GWorld copied', 24, 241, 165, 259, 'blend'),
+    ('depth 16 GWorld copied', 171, 241, 312, 259, 'blend'),
+    ('depth 1 GWorld copied', 318, 241, 460, 259, 'blend'),
+    ('srcOr onto yellow', 24, 266, 235, 284, 'blend'),
+    ('transparent onto blue', 249, 266, 460, 284, 'blend'),
 ]
 pa, pb = up.load(), b.load()
 grey = lambda p: 0x30 < max(p) < 0xD0 and max(p) - min(p) < 0x20
@@ -142,9 +149,15 @@ for name, x0, y0, x1, y1, kind in boxes:
             n += max(abs(p[0] - q[0]), abs(p[1] - q[1]), abs(p[2] - q[2])) > 8
             g += grey(q)
             g1 += grey(p)
-    ok = n >= 50 and g > g1 + 20 if kind == 'text' else n == 0
+    if kind == 'blend':
+        # anti-aliased on any background: colours the 1x box hasn't
+        seen = {pa[x, y] for y in range(2 * y0, 2 * y1, 2) for x in range(2 * x0, 2 * x1, 2)}
+        g = sum(pb[x, y] not in seen for y in range(2 * y0, 2 * y1) for x in range(2 * x0, 2 * x1))
+        g1 = 0
+    ok = n >= 50 and g > g1 + 20 if kind in ('text', 'blend') else n == 0
     bad += not ok
     what = (f'differ from the 1x frame scaled up, {g} grey (1x: {g1})' if kind == 'text'
+            else f'differ from the 1x frame scaled up, {g} in colours the 1x has not' if kind == 'blend'
             else 'differ from the 1x frame scaled up (none expected)')
     print(f'  {"ok  " if ok else "FAIL"} {name}: {n} pixels {what}')
 sys.exit(1 if bad else 0)

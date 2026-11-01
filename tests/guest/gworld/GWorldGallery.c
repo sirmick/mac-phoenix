@@ -3,7 +3,9 @@
    text in a GWorld copied with CopyBits; text copied through a second
    GWorld; text whose GWorld's pixels the program then writes itself
    (behind QuickDraw); text copied with CopyMask through a mask of its left
-   part. A second window scrolls text three ways (DrawScroll). For looking at Executor's HiDPI GWorld shadows (--executor-scale 2,
+   part; text from GWorlds of other depths, and copied with srcOr and
+   transparent (DrawDepths). A second window scrolls text three ways
+   (DrawScroll). For looking at Executor's HiDPI GWorld shadows (--executor-scale 2,
    docs/executor/HiDPI.md "Phase 4") and the ctest cell hidpi_gworld_executor
    (tests/test_hidpi_gworld.sh), which compares the 2x surface with the 1x
    frame there: keep its boxes in step with the layout here. Stays on the
@@ -40,15 +42,15 @@ struct line
     const char *text;
 };
 
-static GWorldPtr Offscreen(short height, const struct line *lines, int n)
+static GWorldPtr OffscreenAt(short depth, short width, short height, const struct line *lines, int n)
 {
     GWorldPtr gw;
     CGrafPtr port;
     GDHandle gd;
     Rect r;
     int i;
-    SetRect(&r, 0, 0, kWidth, height);
-    if(NewGWorld(&gw, 0, &r, NULL, NULL, 0) != noErr)
+    SetRect(&r, 0, 0, width, height);
+    if(NewGWorld(&gw, depth, &r, NULL, NULL, 0) != noErr)
         return NULL;
     GetGWorld(&port, &gd);
     SetGWorld(gw, NULL);
@@ -67,6 +69,11 @@ static GWorldPtr Offscreen(short height, const struct line *lines, int n)
     TextFace(0);
     SetGWorld(port, gd);
     return gw;
+}
+
+static GWorldPtr Offscreen(short height, const struct line *lines, int n)
+{
+    return OffscreenAt(0, kWidth, height, lines, n);
 }
 
 static void CopyTo(GWorldPtr gw, WindowRef w, short top, short height)
@@ -91,6 +98,47 @@ static const struct line stale_lines[] = {
 static const struct line mask_lines[] = {
     { 3, 12, 0, 10, 15, "\pMasked copy: only the left part of this shows" },
 };
+
+static const struct line depth_lines[] = {
+    { 3, 12, 0, 6, 15, "\pDepth 8, copied" },
+    { 3, 12, 0, 6, 15, "\pDepth 16, copied" },
+    { 3, 12, 0, 6, 15, "\pDepth 1, copied" },
+};
+static const struct line mode_lines[] = {
+    { 3, 12, 0, 6, 15, "\psrcOr on yellow" },
+    { 3, 12, 0, 6, 15, "\ptransparent on blue" },
+};
+
+/* 180-200: text in GWorlds of other depths copied to the window (8, 16,
+   1 bits); 205-225: copied with srcOr onto light yellow, with transparent
+   onto light blue */
+static void DrawDepths(WindowRef w)
+{
+    static const short depths[] = { 8, 16, 1 };
+    static const RGBColor yellow = { 0xFFFF, 0xFFFF, 0xC000 }, blue = { 0xD000, 0xE800, 0xFFFF };
+    GWorldPtr g;
+    Rect s, d;
+    int i;
+    for(i = 0; i < 3; i++)
+        if((g = OffscreenAt(depths[i], 145, 20, &depth_lines[i], 1)))
+        {
+            SetRect(&s, 0, 0, 145, 20);
+            SetRect(&d, i * 147, 180, i * 147 + 145, 200);
+            CopyBits((BitMap *)*GetGWorldPixMap(g), &((GrafPtr)w)->portBits, &s, &d, srcCopy, NULL);
+            DisposeGWorld(g);
+        }
+    for(i = 0; i < 2; i++)
+        if((g = OffscreenAt(0, 215, 20, &mode_lines[i], 1)))
+        {
+            SetRect(&s, 0, 0, 215, 20);
+            SetRect(&d, i * 225, 205, i * 225 + 215, 225);
+            RGBForeColor(i ? &blue : &yellow);
+            PaintRect(&d);
+            ForeColor(blackColor);
+            CopyBits((BitMap *)*GetGWorldPixMap(g), &((GrafPtr)w)->portBits, &s, &d, i ? transparent : srcOr, NULL);
+            DisposeGWorld(g);
+        }
+}
 
 static void DrawGallery(WindowRef w)
 {
@@ -157,6 +205,7 @@ static void DrawGallery(WindowRef w)
         DisposePtr(mask.baseAddr);
         DisposeGWorld(e);
     }
+    DrawDepths(w);
 }
 
 /* The scroll window: three columns of Geneva 12 lines 14 pixels apart
