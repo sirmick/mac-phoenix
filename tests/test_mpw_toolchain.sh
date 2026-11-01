@@ -43,6 +43,7 @@ MPW=tools/mpw/mpw
 [[ -x build/mac-phoenix ]] || { echo "SKIP: no build/mac-phoenix"; exit 77; }
 
 export MPW_STATE=$(mktemp -d ${TMPDIR:-/tmp}/mpwtest.XXXXXX)
+export MPW_OWNER_PID=$$   # the session goes when this script does (killed at a timeout too)
 export MPW_PORT=$PORT
 export MPW_SYSTEM="test-mpw${CORE:+-$CORE}-7.5.5-$$.img"   # per run: worktrees run it at once
 WORK=$(mktemp -d ${TMPDIR:-/tmp}/mpwtest-src.XXXXXX)

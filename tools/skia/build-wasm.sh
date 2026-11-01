@@ -135,5 +135,10 @@ rm -rf "$dest"
 mkdir -p "$dest/out/Release-wasm-wasm"
 cp out/wasm/*.a "$dest/out/Release-wasm-wasm/"
 cp -r include "$dest/include"
+# include/core/SkColorSpace.h (gradients, colour spaces) includes skcms's
+# headers, as the prebuilt native package has them
+mkdir -p "$dest/modules/skcms/src"
+cp modules/skcms/*.h "$dest/modules/skcms/"
+cp modules/skcms/src/*.h "$dest/modules/skcms/src/"
 touch "$dest/.complete"
 echo "$dest"

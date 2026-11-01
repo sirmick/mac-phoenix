@@ -25,7 +25,8 @@
 // failure prints XFAIL, one that works XPASS (the scoreboard is behind);
 // only an application the scoreboard says runs fails the cell.
 // SITE_APPS=Name,Name: only those. SITE_RESULTS=FILE: appends one JSON
-// line an application. SITE_LOG=1: the Worker's console. The canvas as
+// line an application. SITE_LOG=1: the Worker's console;
+// SITE_QUERY=a=b&c=d: more of the page's query (logtraps=LIST&nesting=N). The canvas as
 // it is after each application's checks (and the Finder's, first) goes
 // to SITE_SHOTS (default ~/storage/tmp/site/shots) as SYSTEM-NAME.png;
 // SITE_DPR=2: the page at devicePixelRatio 2 (the tab draws at 2x), shots
@@ -111,7 +112,8 @@ const changed = (a, b) => !a || !b ? 0 : a.reduce((n, v, i) => n + (Math.abs(v -
 const server = await startServer(dir, { images: library, include: [boot, diskName] });
 const browser = await launch();
 const query = `?disk=disks/${encodeURIComponent(boot)}&disk=disks/${encodeURIComponent(diskName)}`
-    + `&system=${encodeURIComponent(boot)}${system === '8.6' ? '&ppc=1' : ''}`;
+    + `&system=${encodeURIComponent(boot)}${system === '8.6' ? '&ppc=1' : ''}`
+    + (process.env.SITE_QUERY ? `&${process.env.SITE_QUERY}` : '');
 // A tab signed in on the System with the disk; a new one (a browser
 // context of its own) when an application crashed the last.
 let page = null, crashed = false;
