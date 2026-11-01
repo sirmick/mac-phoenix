@@ -88,6 +88,13 @@ if(NODE_COMMAND)
     add_test(NAME executor.web.write
         COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_write.mjs
                 $<TARGET_FILE_DIR:executor-web> ${EXECUTOR_WEB_SYSTEM})
+    # Two tabs on the same disks: the second on copies in memory.
+    add_test(NAME executor.web.two_tabs
+        COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_two_tabs.mjs
+                $<TARGET_FILE_DIR:executor-web> ${EXECUTOR_WEB_SYSTEM})
+    set_tests_properties(executor.web.two_tabs PROPERTIES
+        LABELS "executor;web" TIMEOUT 240 SKIP_RETURN_CODE 77
+        ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM}")
     set_tests_properties(executor.web.write PROPERTIES
         LABELS "executor;web" TIMEOUT 240 SKIP_RETURN_CODE 77
         ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM}")
