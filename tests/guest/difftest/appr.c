@@ -231,8 +231,10 @@ static void shapes(void)
             sprintf(k, "tab.%d", i); out(k, "err %d", (int)err);
             sprintf(k, "tab.%d.rgn", i); out_rgn(k, r);
         }
-        for(i = 0; i < 4; i++)
+        for(i = 0; i < 11; i++)
         {
+            if(i == 7)
+                continue;
             SET(o); err = GetThemeStandaloneGrowBoxBounds(p, i, false, &o);
             sprintf(k, "growbox.%d", i); out(k, "err %d %d,%d,%d,%d", (int)err, o.top, o.left, o.bottom, o.right);
             SET(o); err = GetThemeStandaloneGrowBoxBounds(p, i, true, &o);
@@ -596,6 +598,22 @@ static void drawing(void)
                 begin(depths[d]);
                 DrawThemeTab(&tb, s, i, NULL, 0);
                 sprintf(k, "tabdir.%d.%d", i, s);
+                end(k);
+            }
+        /* grow boxes into each corner, large and small, and the no-grow
+           box */
+        for(i = 0; i < 4; i++)
+            for(s = 0; s < 4; s++)
+            {
+                static const ThemeGrowDirection dirs[] = { kThemeGrowRight | kThemeGrowDown,
+                    kThemeGrowLeft | kThemeGrowDown, kThemeGrowRight | kThemeGrowUp, kThemeGrowLeft | kThemeGrowUp };
+                Point p = { 30, 50 };
+                begin(depths[d]);
+                if(s < 2)
+                    DrawThemeStandaloneGrowBox(p, dirs[i], s, kThemeStateActive);
+                else
+                    DrawThemeStandaloneNoGrowBox(p, dirs[i], s - 2, kThemeStateActive);
+                sprintf(k, "%s.%d.%s", s < 2 ? "growdir" : "nogrowdir", dirs[i], s & 1 ? "small" : "large");
                 end(k);
             }
         /* progress bars: indeterminate at a few phases, medium and large,

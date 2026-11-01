@@ -1,4 +1,4 @@
-# probe 152f3c3f0ae0ec9b3132c68a92801341f00041133e4769ad45b22c1e6fc77ef3
+# probe 8ae9fa06b987fe42f29cfb3a189783a4a93d9435735c809f68191711daa2e195
 == gestalt
 gestalt.appr: 0 00000001
 gestalt.apvr: 0 00000110
@@ -924,6 +924,18 @@ misc.growbox.2: err 0 100,100,111,111
 misc.growbox.small.2: err 0 100,89,111,100
 misc.growbox.3: err 0 100,100,111,111
 misc.growbox.small.3: err 0 100,89,111,100
+misc.growbox.4: err 0 100,100,111,111
+misc.growbox.small.4: err 0 100,89,111,100
+misc.growbox.5: err 0 100,100,111,111
+misc.growbox.small.5: err 0 100,89,111,100
+misc.growbox.6: err 0 100,100,111,111
+misc.growbox.small.6: err 0 100,89,111,100
+misc.growbox.8: err 0 100,100,111,111
+misc.growbox.small.8: err 0 100,89,111,100
+misc.growbox.9: err 0 100,100,111,111
+misc.growbox.small.9: err 0 100,89,111,100
+misc.growbox.10: err 0 100,100,111,111
+misc.growbox.small.10: err 0 100,89,111,100
 misc.menubg.0: err 0
 misc.menubg.0.rgn: bbox 49,19,252,202 size 44 crc fca9682d
 misc.menubg.1: err 0
@@ -1126,6 +1138,22 @@ draw32.tabdir.3.1: 120x60 depth 32 crc 67a49c8a
 draw32.tabdir.3.2: 120x60 depth 32 crc c0ab986c
 draw32.tabdir.3.3: 120x60 depth 32 crc a90e627a
 draw32.tabdir.3.4: 120x60 depth 32 crc bc723f93
+draw32.growdir.10.large: 120x60 depth 32 crc 7589cdba
+draw32.growdir.10.small: 120x60 depth 32 crc 22784bba
+draw32.nogrowdir.10.large: 120x60 depth 32 crc c15eb4ba
+draw32.nogrowdir.10.small: 120x60 depth 32 crc 2d08b0fb
+draw32.growdir.9.large: 120x60 depth 32 crc 2288ef4d
+draw32.growdir.9.small: 120x60 depth 32 crc ca120df8
+draw32.nogrowdir.9.large: 120x60 depth 32 crc 5f4bf37d
+draw32.nogrowdir.9.small: 120x60 depth 32 crc e79c7f57
+draw32.growdir.6.large: 120x60 depth 32 crc 7589cdba
+draw32.growdir.6.small: 120x60 depth 32 crc 22784bba
+draw32.nogrowdir.6.large: 120x60 depth 32 crc c15eb4ba
+draw32.nogrowdir.6.small: 120x60 depth 32 crc 2d08b0fb
+draw32.growdir.5.large: 120x60 depth 32 crc 2288ef4d
+draw32.growdir.5.small: 120x60 depth 32 crc ca120df8
+draw32.nogrowdir.5.large: 120x60 depth 32 crc 5f4bf37d
+draw32.nogrowdir.5.small: 120x60 depth 32 crc e79c7f57
 draw32.indeterminate.medium.0: 120x60 depth 32 crc e7e1a698
 draw32.indeterminate.large.0: 120x60 depth 32 crc fd7490cc
 draw32.indeterminate.medium.1: 120x60 depth 32 crc a7aff274
@@ -1331,6 +1359,22 @@ draw8.tabdir.3.1: 120x60 depth 8 crc d96cebce
 draw8.tabdir.3.2: 120x60 depth 8 crc d1e1ce5c
 draw8.tabdir.3.3: 120x60 depth 8 crc 130e7710
 draw8.tabdir.3.4: 120x60 depth 8 crc 0299dc2b
+draw8.growdir.10.large: 120x60 depth 8 crc fabb2b56
+draw8.growdir.10.small: 120x60 depth 8 crc 13173548
+draw8.nogrowdir.10.large: 120x60 depth 8 crc 5539dba6
+draw8.nogrowdir.10.small: 120x60 depth 8 crc ed7044cd
+draw8.growdir.9.large: 120x60 depth 8 crc ef445ac3
+draw8.growdir.9.small: 120x60 depth 8 crc 9f2238dd
+draw8.nogrowdir.9.large: 120x60 depth 8 crc 727dbea1
+draw8.nogrowdir.9.small: 120x60 depth 8 crc 52fca5b3
+draw8.growdir.6.large: 120x60 depth 8 crc fabb2b56
+draw8.growdir.6.small: 120x60 depth 8 crc 13173548
+draw8.nogrowdir.6.large: 120x60 depth 8 crc 5539dba6
+draw8.nogrowdir.6.small: 120x60 depth 8 crc ed7044cd
+draw8.growdir.5.large: 120x60 depth 8 crc ef445ac3
+draw8.growdir.5.small: 120x60 depth 8 crc 9f2238dd
+draw8.nogrowdir.5.large: 120x60 depth 8 crc 727dbea1
+draw8.nogrowdir.5.small: 120x60 depth 8 crc 52fca5b3
 draw8.indeterminate.medium.0: 120x60 depth 8 crc 52331c27
 draw8.indeterminate.large.0: 120x60 depth 8 crc 06154412
 draw8.indeterminate.medium.1: 120x60 depth 8 crc 40eecceb

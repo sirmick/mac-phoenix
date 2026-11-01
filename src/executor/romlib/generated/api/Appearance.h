@@ -1045,10 +1045,13 @@ OSStatus C_DrawThemeChasingArrows(const Rect *bounds, UInt32 index, ThemeDrawSta
 OSStatus C_DrawThemePopupArrow(const Rect *bounds, ThemeArrowOrientation orientation, ThemePopupArrowSize size, ThemeDrawState state, ThemeEraseUPP eraseProc, UInt32 eraseData);LIBRARY_FUNCTION(AppearanceLib, DrawThemePopupArrow, C_DrawThemePopupArrow);
 
 
+OSStatus C_DrawThemeStandaloneGrowBox(Point origin, ThemeGrowDirection growDirection, Boolean isSmall, ThemeDrawState state);LIBRARY_FUNCTION(AppearanceLib, DrawThemeStandaloneGrowBox, C_DrawThemeStandaloneGrowBox);
 
 
+OSStatus C_DrawThemeStandaloneNoGrowBox(Point origin, ThemeGrowDirection growDirection, Boolean isSmall, ThemeDrawState state);LIBRARY_FUNCTION(AppearanceLib, DrawThemeStandaloneNoGrowBox, C_DrawThemeStandaloneNoGrowBox);
 
 
+OSStatus C_GetThemeStandaloneGrowBoxBounds(Point origin, ThemeGrowDirection growDirection, Boolean isSmall, Rect *bounds);LIBRARY_FUNCTION(AppearanceLib, GetThemeStandaloneGrowBoxBounds, C_GetThemeStandaloneGrowBoxBounds);
 
 
 OSStatus C_NormalizeThemeDrawingState();LIBRARY_FUNCTION(AppearanceLib, NormalizeThemeDrawingState, C_NormalizeThemeDrawingState);

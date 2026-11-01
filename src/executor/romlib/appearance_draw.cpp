@@ -2467,6 +2467,99 @@ OSStatus Executor::C_DrawThemeTickMark(const Rect *bounds, ThemeDrawState state)
     return noErr;
 }
 
+/* A standalone grow box, as 8.6 draws it (appr draw32.growdir.*): 16
+   square (small, 11) right of ORIGIN, or left of it growing left; down
+   from it whichever way it grows. A black outline, a white-lit #aaa-shaded
+   bevel, two ridges across the #ccc face; inactive (and pressed), a #555
+   outline round a flat face. The no-grow box has no ridges. */
+namespace
+{
+Rect growBoxBounds(Point origin, ThemeGrowDirection dir, bool small)
+{
+    int size = small ? 11 : 16, left = dir & kThemeGrowLeft ? origin.h - size : origin.h;
+    return Rect{ origin.v, (INTEGER)left, (INTEGER)(origin.v + size), (INTEGER)(left + size) };
+}
+
+/* the ridges, rows from TOP, columns from 2 (c: the face) */
+const char *const growRidges[2][7] = {
+    { "cccccffcccc", "ccccfc7accc", "cccfc7affcc", "ccfc7afc7cc", "cca7afc7ccc", "cccafc7cccc", "cccca7ccccc" },
+    { "ccffccc", "cfc7acc", "fc7affc", "a7afc7c", "cafc7cc", "cca7ccc" },
+};
+
+hidpi::Shapes growBoxShapes(const Rect &b, bool small, bool active, bool ridges)
+{
+    hidpi::Shapes s;
+    float L = b.left, T = b.top, S = b.right - b.left;
+    rectShape(s, L, T, L + S, T + S, grey(active ? 0 : 5));
+    rectShape(s, L + 1, T + 1, L + S - 1, T + S - 1, grey(0xc));
+    if(!active)
+        return s;
+    rectShape(s, L + 1, T + 1, L + S - 2, T + 2, grey(0xf));
+    rectShape(s, L + 1, T + 1, L + 2, T + S - 2, grey(0xf));
+    rectShape(s, L + S - 2, T + 2, L + S - 1, T + S - 1, grey(0xa));
+    rectShape(s, L + 2, T + S - 2, L + S - 1, T + S - 1, grey(0xa));
+    if(!ridges)
+        return s;
+    /* each ridge a white line and the shade below it, along x + y */
+    float x0 = small ? L - 3 : L, y0 = small ? T - 2 : T;
+    for(float o : { 0.f, 2.f })
+    {
+        s.push_back({ hidpi::Shape::Polyline, { x0 + o + 8, y0 + o + 4, x0 + o + 4, y0 + o + 8 }, 1, argbGray(grey(0xf)) });
+        s.push_back({ hidpi::Shape::Polyline, { x0 + o + 9.25f, y0 + o + 5.25f, x0 + o + 5.25f, y0 + o + 9.25f }, 1.4f,
+                      argbGray(grey(8)) });
+    }
+    return s;
+}
+
+void growBox(Point origin, ThemeGrowDirection dir, bool small, ThemeDrawState state, bool ridges)
+{
+    DrawGuard guard;
+    Rect b = growBoxBounds(origin, dir, small);
+    bool active = lookOf(state) == Look::active;
+    hidpi::chrome_draw(b, hidpi::active() ? growBoxShapes(b, small, active, ridges) : hidpi::Shapes{}, [&] {
+        if(!active)
+        {
+            bevelBox(b, { { 5, 5, 5 } }, 0xc);
+            return;
+        }
+        bevelBox(b, { { 0, 0, 0 }, { 0xf, 0xa, 0xc } }, 0xc);
+        if(!ridges)
+            return;
+        int top = small ? 2 : 4;
+        for(int r = 0; r < (small ? 6 : 7); r++)
+            for(const char *c = growRidges[small][r]; *c; c++)
+                if(*c != 'c')
+                    pixel(b.left + 2 + (c - growRidges[small][r]), b.top + top + r, tabGray(*c));
+    });
+}
+}
+
+OSStatus Executor::C_DrawThemeStandaloneGrowBox(Point origin, ThemeGrowDirection growDirection, Boolean isSmall,
+                                                ThemeDrawState state)
+{
+    growBox(origin, growDirection, isSmall, state, true);
+    return noErr;
+}
+
+OSStatus Executor::C_DrawThemeStandaloneNoGrowBox(Point origin, ThemeGrowDirection growDirection, Boolean isSmall,
+                                                  ThemeDrawState state)
+{
+    growBox(origin, growDirection, isSmall, state, false);
+    return noErr;
+}
+
+/* 8.6 takes the direction and the size the other way round here (appr
+   misc.growbox.*): any direction gives the small box, and isSmall (1,
+   kThemeGrowLeft) puts it left of the origin. */
+OSStatus Executor::C_GetThemeStandaloneGrowBoxBounds(Point origin, ThemeGrowDirection growDirection, Boolean isSmall,
+                                                     Rect *bounds)
+{
+    if(!bounds)
+        return paramErr;
+    *bounds = growBoxBounds(origin, isSmall, growDirection != 0);
+    return noErr;
+}
+
 OSStatus Executor::C_DrawThemeModelessDialogFrame(const Rect *inRect, ThemeDrawState inState)
 {
     if(!inRect)

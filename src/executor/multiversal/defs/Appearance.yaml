@@ -2913,6 +2913,7 @@
       - name: state
         type: ThemeDrawState
     library: AppearanceLib
+    executor: C_
 
 # ####
 
@@ -2929,6 +2930,7 @@
       - name: state
         type: ThemeDrawState
     library: AppearanceLib
+    executor: C_
 
 # ####
 
@@ -2945,6 +2947,7 @@
       - name: bounds
         type: Rect*
     library: AppearanceLib
+    executor: C_
 
 # ####
 
