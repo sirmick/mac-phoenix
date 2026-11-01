@@ -130,6 +130,10 @@ extern bool ROMlib_process_os_event(EventRecord *evt, bool remove);
 extern void ROMlib_desktop_layer_invalidate(RgnHandle rgn);
 /* The desktop layer's visRgn (Finder's desktop window shares it). */
 extern bool ROMlib_desktop_layer_region_p(RgnHandle rgn);
+/* The desktop layer's visRgn, or null before TakeDesktopLayer: the desktop
+   less the windows in front, and inside the Finder's BeginUpdate (its
+   desktop window shares the region) only what is being updated. */
+extern RgnHandle ROMlib_desktop_layer_vis_region();
 /* Quit All (Finder's Restart and Shut Down, refcon 'rest' or 'shut'), and
    the applications' answers to its Quit events. */
 extern void ROMlib_process_quit_all(int32_t refcon);
