@@ -151,7 +151,7 @@ class Schema:
             if isinstance(v, dict) and child and "properties" in child:
                 out += self.leaves(v, p, child)
             elif v is None and child and "properties" in child:
-                out += [_join(p, ck) for ck in child["properties"]]
+                out += [_join(p, ck) for ck, c in child["properties"].items() if not c.get("readOnly")]
             else:
                 out.append(p)
         return out

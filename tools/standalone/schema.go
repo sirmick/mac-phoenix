@@ -263,8 +263,10 @@ func leaves(patch map[string]any, path string, n *schemaNode, out *[]string) {
 		if m, ok := v.(map[string]any); ok && child != nil && child.Properties != nil {
 			leaves(m, p, child, out)
 		} else if v == nil && child != nil && child.Properties != nil {
-			for ck := range child.Properties {
-				*out = append(*out, join(p, ck))
+			for ck, c := range child.Properties {
+				if !c.ReadOnly {
+					*out = append(*out, join(p, ck))
+				}
 			}
 		} else {
 			*out = append(*out, p)

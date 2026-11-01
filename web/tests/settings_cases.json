@@ -29,6 +29,7 @@
       "expect": { "machine.ram_mb": 0, "machine.ppc": true } },
     { "start": { "machine": { "ram_mb": 128, "ppc": true }, "sound": { "volume": 10 } }, "patch": { "machine": null },
       "expect": { "machine.ram_mb": 0, "machine.ppc": false, "sound.volume": 10 } },
+    { "start": { "advanced": { "debug": "memcheck" } }, "patch": { "advanced": null }, "expect": { "advanced.debug": "" } },
     { "patch": { "version": 1, "display": { "scale": 2 } }, "expect": { "version": 2, "display.scale": 2 } }
   ],
   "migrations": [
