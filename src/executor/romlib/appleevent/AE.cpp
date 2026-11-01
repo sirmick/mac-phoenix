@@ -633,6 +633,46 @@ static bool coerce_integer(AEDesc *desc, DescType result_type, AEDesc *desc_out)
     return false;
 }
 
+/* MacPhoenix: the Apple Event Manager's own coercions between an alias and
+   an FSSpec, after the installed handlers (8.6, difftest aevt coerce): the
+   Finder gives an 'odoc's documents as aliases and applications ask for
+   'fss ' (SimpleText and BBEdit Lite 6.1 opened nothing). */
+static bool coerce_alias(AEDesc *desc, DescType result_type, AEDesc *desc_out)
+{
+    DescType from = DESC_TYPE(desc);
+    Handle h = DESC_DATA(desc);
+    if(!h)
+        return false;
+    if(from == typeAlias && result_type == typeFSS)
+    {
+        GUEST<Handle> alias = h;
+        if(HandToHand(&alias) != noErr)
+            return false;
+        FSSpec spec;
+        Boolean was_aliased;
+        OSErr err = ResolveAlias(nullptr, (AliasHandle)(Handle)alias, &spec, &was_aliased);
+        DisposeHandle(alias);
+        return err == noErr && AECreateDesc(typeFSS, &spec, sizeof spec, desc_out) == noErr;
+    }
+    if(from == typeFSS && result_type == typeAlias && GetHandleSize(h) >= (Size)sizeof(FSSpec))
+    {
+        FSSpec spec;
+        memcpy(&spec, *h, sizeof spec);
+        GUEST<AliasHandle> alias;
+        if(NewAlias(nullptr, &spec, &alias) != noErr || !alias)
+            return false;
+        bool ok;
+        {
+            HLockGuard guard((Handle)(AliasHandle)alias);
+            ok = AECreateDesc(typeAlias, *(Handle)(AliasHandle)alias,
+                              GetHandleSize((Handle)(AliasHandle)alias), desc_out) == noErr;
+        }
+        DisposeHandle((Handle)(AliasHandle)alias);
+        return ok;
+    }
+    return false;
+}
+
 OSErr Executor::C_AECoerceDesc(AEDesc *desc, DescType result_type,
                                AEDesc *desc_out)
 {
@@ -671,7 +711,8 @@ OSErr Executor::C_AECoerceDesc(AEDesc *desc, DescType result_type,
                                    true);
         if(err != noErr)
         {
-            if(coerce_integer(desc, result_type, desc_out))
+            if(coerce_integer(desc, result_type, desc_out)
+               || coerce_alias(desc, result_type, desc_out))
                 AE_RETURN_ERROR(noErr);
             goto fail;
         }
