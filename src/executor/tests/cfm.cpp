@@ -314,3 +314,25 @@ TEST(CFM, RelocationIsRelativeToDefaultAddress)
     word = relocated_word(0x6750, &start);
     EXPECT_EQ(start + 4, word);
 }
+
+/* PrivateInterfaceLib's low-memory accessors applications import from it
+   (8.6's exports them): MPW Shell keeps its globals in HpChk ($316) through
+   LMSetHpChk and LMGetHpChk. */
+TEST(CFM, PrivateInterfaceLibExportsLowMemAccessors)
+{
+    GUEST<ConnectionID> cid;
+    GUEST<Ptr> main, addr;
+    uint8_t cls;
+    Str255 errname;
+    ASSERT_EQ(noErr, GetSharedLibrary((StringPtr) "\023PrivateInterfaceLib", "pwpc"_4,
+                                      kReferenceCFrag, &cid, &main, errname));
+    for(const char *name : { "LMGetHpChk", "LMSetHpChk", "LMGetQDExist", "LMSetQDExist",
+                             "LMGetIAZNotify", "LMSetIAZNotify", "LMSetJSwapFont" })
+        EXPECT_EQ(noErr, FindSymbol(cid, PSTR(name), &addr, &cls)) << name;
+
+    Ptr saved = LMGetHpChk(), p = NewPtr(4);
+    LMSetHpChk(p);
+    EXPECT_EQ(guest_cast<uint32_t>(p), (uint32_t)*(GUEST<uint32_t> *)SYN68K_TO_US(0x316));
+    LMSetHpChk(saved);
+    DisposePtr(p);
+}

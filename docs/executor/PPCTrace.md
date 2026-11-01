@@ -113,6 +113,13 @@ curl -s localhost:11000/api/executor/ppc-break | python3 -c \
 Fragment and routine breakpoints added over the API are resolved on the guest's
 thread, at the next PowerPC instruction.
 
+## In the tab
+
+The WebAssembly tab takes the same specs in its query, several separated by
+`;` (URL-encode `+` as `%2B`): `index.html?ppcbreak=PowerShell%2B2880c@40*2`.
+Reports go to the Worker's console (and the server's log); `tab_site.mjs`
+passes them with `SITE_QUERY='ppcbreak=...'`.
+
 ## Example: BBEdit Lite 6.1's untitled window (-1708)
 
 BBEdit Lite 6.1 on 8.6 sends itself `'core'/'crel'` at launch to open its
