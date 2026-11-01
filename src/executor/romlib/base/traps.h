@@ -70,6 +70,13 @@ struct MixedModeCall
 };
 extern MixedModeCall mixed_mode_call;
 void log_unimplemented(const std::string &what);
+
+/* MacPhoenix: before a call into an OS trap's table entry (something has
+   patched it), the trap word in D1's low word, as the trap dispatcher
+   leaves it: a patch shared by several traps tells them apart by it (MPW
+   Shell's file system patches; the flag bits are set afterwards, from the
+   call's arguments). Nothing for a Toolbox trap. */
+void putOSTrapWord(uint16_t trapno);
 extern std::string unimplemented_log_path; /* also appended to; empty: not */
 
 class Entrypoint : public internal::DeferredInit
@@ -126,6 +133,7 @@ public:
     {
         return (trapno & TOOLBIT) ? tooltraptable[trapno & 0x3FF] : ostraptable[trapno & 0xFF];
     }
+    uint16_t trapNumber() const { return trapno; }
     virtual bool putSelector(uint32_t sel) const = 0;
     /* 2 or 4: the selector is a word or long pushed after the arguments
        (Pack3's: Apple's PACK 3 then answers InterfaceLib's Standard File
@@ -258,6 +266,8 @@ public:
 protected:
     Ret callFromLibrary(Args... args) const override
     {
+        if(dispatcher.isPatched())
+            putOSTrapWord(dispatcher.trapNumber());
         if(dispatcher.isPatched() && dispatcher.putSelector(selector))
             return (UPP<Ret (Args...), CallConv>(SYN68K_TO_US(dispatcher.tableEntry())))(args...);
         if constexpr(std::is_same_v<CallConv, callconv::Pascal>)

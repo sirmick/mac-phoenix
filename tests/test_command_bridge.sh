@@ -178,7 +178,10 @@ check "/api/launch bad path stays Finder" "$APP_AFTER" 'Finder'
 # Apple event (BridgeAgent's kAEQuitApplication).
 if [[ -n "$QUIT_APP" ]]; then
     echo "Test 6: POST /api/launch + /api/quit ($QUIT_NAME)"
-    APP_PATH="${QUIT_APP/#DISK:/$(basename "$DISK"):}"
+    # Executor names the System's volume after the image, cut to the 27
+    # characters a volume name has.
+    VOLUME="$(basename "$DISK")"
+    APP_PATH="${QUIT_APP/#DISK:/${VOLUME:0:27}:}"
     LAUNCH=$(curl -s --max-time 20 -X POST "http://localhost:$PORT/api/launch" -d "{\"path\": \"$APP_PATH\"}" || echo "CURL_FAILED")
     check "/api/launch $QUIT_NAME" "$LAUNCH" '"success": true'
     WAIT_APP=$(curl -s -X POST "http://localhost:$PORT/api/wait" -d "{\"condition\": \"app=$QUIT_NAME\", \"timeout\": 20}" || echo "CURL_FAILED")

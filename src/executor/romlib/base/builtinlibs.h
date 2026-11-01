@@ -94,5 +94,12 @@ namespace Executor
         std::map<std::string, std::vector<std::string>> exportTable(OSType arch);
 
         Ptr makeUndefinedSymbolStub(const char *name, OSType arch = "pwpc"_4);
+
+        /* MacPhoenix: host routines a program calls through a pointer
+           (StdCLib's device handlers): a PowerPC transition vector, a
+           CFM-68K one (code: the return address on the stack; it answers
+           where execution goes on). Made once, never released. */
+        Ptr makePPCRoutine(const char *name, std::function<uint32_t (PowerCore&)> code);
+        Ptr makeCFM68KRoutine(const char *name, std::function<syn68k_addr_t (syn68k_addr_t)> code);
     }
 }

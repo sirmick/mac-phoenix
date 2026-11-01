@@ -331,6 +331,16 @@ Ptr builtinlibs::makeUndefinedSymbolStub(const char *name, OSType arch)
     return (Ptr) &callback;
 }
 
+Ptr builtinlibs::makePPCRoutine(const char *name, std::function<uint32_t (PowerCore&)> code)
+{
+    return (Ptr)&new_callback(name, std::move(code));
+}
+
+Ptr builtinlibs::makeCFM68KRoutine(const char *name, std::function<syn68k_addr_t (syn68k_addr_t)> code)
+{
+    return (Ptr)new_vector68k(name, std::move(code));
+}
+
 /* By library: (routine, library whose entry it is). */
 static std::unordered_map<std::string, std::vector<std::pair<std::string, std::string>>>& alsoExports()
 {

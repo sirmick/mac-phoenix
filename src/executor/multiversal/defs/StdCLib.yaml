@@ -1537,7 +1537,7 @@
       - name: "resolveLeaf"
         type: "Boolean"
       - name: "buffer"
-        type: "char*"
+        type: "uint8_t*"
       - name: "isFolder"
         type: "Boolean*"
       - name: "hadAlias"
@@ -2187,6 +2187,53 @@
         type: "uint32_t"
     library: StdCLib
     executor: c_faccess
+
+# StdCLib's device table (five slots: FSYS, CONS, SYST, two free): a slot's
+# name and its five handlers (faccess, close, read, write, ioctl), as MPW
+# Shell installs its windows' console ('ECON') and wraps the file system's.
+- only-for: Executor
+  function:
+    name: "_addDevHandler"
+    return: "int32_t"
+    args:
+      - name: "slot"
+        type: "int32_t"
+      - name: "name"
+        type: "uint32_t"
+      - name: "faccessProc"
+        type: "uint32_t"
+      - name: "closeProc"
+        type: "uint32_t"
+      - name: "readProc"
+        type: "uint32_t"
+      - name: "writeProc"
+        type: "uint32_t"
+      - name: "ioctlProc"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_addDevHandler
+
+- only-for: Executor
+  function:
+    name: "_getDevHandler"
+    return: "int32_t"
+    args:
+      - name: "slot"
+        type: "int32_t"
+      - name: "name"
+        type: "uint32_t"
+      - name: "faccessProc"
+        type: "uint32_t"
+      - name: "closeProc"
+        type: "uint32_t"
+      - name: "readProc"
+        type: "uint32_t"
+      - name: "writeProc"
+        type: "uint32_t"
+      - name: "ioctlProc"
+        type: "uint32_t"
+    library: StdCLib
+    executor: c_getDevHandler
 
 - only-for: Executor
   function:
