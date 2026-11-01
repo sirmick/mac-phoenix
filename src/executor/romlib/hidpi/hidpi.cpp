@@ -384,6 +384,13 @@ void Executor::hidpi::text_draw(const TextParams &p, const std::function<void()>
         skip("1x (nothing on the screen)");
         return;
     }
+    /* nothing of it drawn (a dialog's items drawn again outside its
+       update region): the runs there stay what's on the screen */
+    if(port_clip(port, dx, dy, box).empty())
+    {
+        skip("1x (clipped away)");
+        return;
+    }
     const FontChoice &choice = font_for(p.family, p.face);
     if(!choice.font)
     {
@@ -513,8 +520,8 @@ void Executor::hidpi::text_draw(const TextParams &p, const std::function<void()>
     if(ERROR_ENABLED_P(ERROR_HIDPI_LOG))
     {
         char what[96];
-        snprintf(what, sizeof what, "recorded%s at %d,%d-%d,%d (%zu under, %d replaced, %d gone, %zu on screen)",
-                 run->clip.empty() ? ", clipped away" : "", box.left, box.top, box.right, box.bottom,
+        snprintf(what, sizeof what, "recorded at %d,%d-%d,%d (%zu under, %d replaced, %d gone, %zu on screen)",
+                 box.left, box.top, box.right, box.bottom,
                  under.size(), replaced, dropped, g_runs.size() + 1);
         log_text(p, txmode, what);
     }
