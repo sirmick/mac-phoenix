@@ -816,6 +816,9 @@ static void controls(void)
         { 33, 40, 30, 0, 1, 0, 10, "bevel" },
         { 34, 40, 30, 0, 1, 0, 10, "bevel" },
         { 48, 100, 20, 0, 10, 5, 129, "slider" },
+        /* pointing up (reverse direction), non-directional */
+        { 52, 100, 20, 0, 10, 5, 129, "sliderup" },
+        { 56, 100, 20, 0, 10, 5, 129, "sliderplain" },
         { 64, 12, 12, 0, 1, 0, 0, "triangle" },
         { 80, 100, 14, 0, 100, 50, 0, "progress" },
         { 96, 13, 23, 0, 10, 5, 20, "arrows" },
@@ -1013,6 +1016,78 @@ static void dialogs(void)
     DisposeModalFilterUPP(filter);
 }
 
+/* The colours DrawThemeButton leaves for its label proc, by kind and
+   state (the port: black on white before each call) */
+static char label_key[48];
+static pascal void label_proc(const Rect *bounds, ThemeButtonKind kind, const ThemeButtonDrawInfo *info,
+                              UInt32 data, SInt16 depth, Boolean color)
+{
+    RGBColor fg, bg;
+    GetForeColor(&fg);
+    GetBackColor(&bg);
+    out(label_key, "fg %04x %04x %04x bg %04x %04x %04x mode %d", fg.red, fg.green, fg.blue, bg.red, bg.green,
+        bg.blue, qd.thePort->txMode);
+}
+
+static void background_out(const char *key, ControlHandle c)
+{
+    /* a colour of its own first: whether the call changes it at all */
+    RGBColor bg;
+    RGBColor mark = { 0x1111, 0x2222, 0x3333 }, white = { 0xFFFF, 0xFFFF, 0xFFFF };
+    RGBBackColor(&mark);
+    SetUpControlBackground(c, 32, true);
+    GetBackColor(&bg);
+    out(key, "%04x %04x %04x", bg.red, bg.green, bg.blue);
+    RGBBackColor(&white);
+}
+
+static void labels(void)
+{
+    /* every kind 8.6 knows (0-12) and a few states */
+    static const ThemeButtonKind kinds[] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 };
+    static const ThemeDrawState states[] = { kThemeStateActive, kThemeStateInactive, kThemeStatePressed,
+                                             kThemeStatePressedDown, kThemeStateUnavailable };
+    ThemeButtonDrawUPP proc = NewThemeButtonDrawUPP(label_proc);
+    RGBColor black = { 0, 0, 0 }, white = { 0xFFFF, 0xFFFF, 0xFFFF }, tint = { 0xCCCC, 0xEEEE, 0xFFFF };
+    Rect back, b;
+    WindowRef w;
+    ControlHandle c;
+    int i, j;
+    if(!SECTION("labels"))
+        return;
+    RegisterAppearanceClient();
+    SetRect(&back, 0, 40, 400, 240);
+    w = NewCWindow(NULL, &back, "\p", true, plainDBox, (WindowRef)-1, false, 0);
+    SetPort((GrafPtr)w);
+    SetRect(&b, 20, 20, 100, 40);
+    for(i = 0; i < (int)(sizeof kinds / sizeof kinds[0]); i++)
+        for(j = 0; j < (int)(sizeof states / sizeof states[0]); j++)
+        {
+            ThemeButtonDrawInfo info;
+            info.state = states[j];
+            info.value = kThemeButtonOff;
+            info.adornment = kThemeAdornmentNone;
+            RGBForeColor(&black);
+            RGBBackColor(&white);
+            TextMode(srcOr);
+            sprintf(label_key, "kind%d.state%d", (int)kinds[i], (int)states[j]);
+            DrawThemeButton(&b, kinds[i], &info, NULL, NULL, proc, 0);
+        }
+    RGBForeColor(&black);
+    RGBBackColor(&white);
+    /* SetUpControlBackground for a control in no embedding hierarchy: the
+       plain window, then with a theme background, then a content colour */
+    c = NewControl(w, &b, "\p", false, 0, 0, 1, pushButProc, 0);
+    background_out("background.plain", c);
+    SetThemeWindowBackground(w, kThemeBrushDialogBackgroundActive, false);
+    background_out("background.theme", c);
+    SetWindowContentColor(w, &tint);
+    background_out("background.content", c);
+    DisposeControl(c);
+    DisposeWindow(w);
+    DisposeThemeButtonDrawUPP(proc);
+}
+
 int main(void)
 {
     long v;
@@ -1048,6 +1123,7 @@ int main(void)
     modes();
     title();
     dialogs();
+    labels();
     if(SECTION("unregister"))
     {
         RegisterAppearanceClient();   /* sections stand alone (a resumed run) */

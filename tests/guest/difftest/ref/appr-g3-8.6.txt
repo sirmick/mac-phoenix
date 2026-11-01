@@ -1,4 +1,4 @@
-# probe 62340d5d49f0d0fbadcc09068cedf8c529c1f36bf8b978e06cecfb1d37a036dd
+# probe e6e3bbe5d5e49d2ccee0d41c939900038c681dd21f09bb82f66d2e231a7db6db
 == gestalt
 gestalt.appr: 0 00000001
 gestalt.apvr: 0 00000110
@@ -80,6 +80,12 @@ controls.34.bevel.value1: 48x38 depth 32 crc 6daacf91
 controls.48.slider.active: 108x28 depth 32 crc 0a3957c3
 controls.48.slider.inactive: 108x28 depth 32 crc 44f90801
 controls.48.slider.pressed: 108x28 depth 32 crc da263575
+controls.52.sliderup.active: 108x28 depth 32 crc f31ad303
+controls.52.sliderup.inactive: 108x28 depth 32 crc 01b93302
+controls.52.sliderup.pressed: 108x28 depth 32 crc 412e5ca6
+controls.56.sliderplain.active: 108x28 depth 32 crc 58f11cf8
+controls.56.sliderplain.inactive: 108x28 depth 32 crc 2cfe9154
+controls.56.sliderplain.pressed: 108x28 depth 32 crc 096ab8c1
 controls.64.triangle.active: 20x20 depth 32 crc fe158122
 controls.64.triangle.inactive: 20x20 depth 32 crc 40e433b1
 controls.64.triangle.value1: 20x20 depth 32 crc 89871b73
@@ -1537,6 +1543,60 @@ dialogs.plain.standard.back: dddd dddd dddd
 dialogs.plain.standard.cport: 1
 dialogs.plain.standard: 48x28 depth 32 crc 9ea0b5ba
 dialogs.plain.standard.hit: err 0 1 dumped 1
+== labels
+labels.kind0.state1: fg 0000 0000 0000 bg dddd dddd dddd mode 1
+labels.kind0.state0: fg 7777 7777 7777 bg dddd dddd dddd mode 1
+labels.kind0.state2: fg ffff ffff ffff bg 6666 6666 6666 mode 1
+labels.kind0.state3: fg 2222 2222 2222 bg dddd dddd dddd mode 1
+labels.kind0.state7: fg 2222 2222 2222 bg dddd dddd dddd mode 1
+labels.kind1.state1: fg 0000 0000 0000 bg ffff ffff ffff mode 1
+labels.kind1.state0: fg 0000 0000 0000 bg ffff ffff ffff mode 49
+labels.kind1.state2: fg 0000 0000 0000 bg ffff ffff ffff mode 1
+labels.kind1.state3: fg 0000 0000 0000 bg ffff ffff ffff mode 1
+labels.kind1.state7: fg 0000 0000 0000 bg ffff ffff ffff mode 1
+labels.kind2.state1: fg 0000 0000 0000 bg ffff ffff ffff mode 1
+labels.kind2.state0: fg 0000 0000 0000 bg ffff ffff ffff mode 49
+labels.kind2.state2: fg 0000 0000 0000 bg ffff ffff ffff mode 1
+labels.kind2.state3: fg 0000 0000 0000 bg ffff ffff ffff mode 1
+labels.kind2.state7: fg 0000 0000 0000 bg ffff ffff ffff mode 1
+labels.kind3.state1: fg 0000 0000 0000 bg cccc cccc cccc mode 1
+labels.kind3.state0: fg 7777 7777 7777 bg dddd dddd dddd mode 1
+labels.kind3.state2: fg ffff ffff ffff bg 8888 8888 8888 mode 1
+labels.kind3.state3: fg 0000 0000 0000 bg cccc cccc cccc mode 1
+labels.kind3.state7: fg 0000 0000 0000 bg cccc cccc cccc mode 1
+labels.kind4.state1: fg 0000 0000 0000 bg dddd dddd dddd mode 1
+labels.kind4.state0: fg 7777 7777 7777 bg dddd dddd dddd mode 1
+labels.kind4.state2: fg ffff ffff ffff bg 6666 6666 6666 mode 1
+labels.kind4.state3: fg 0000 0000 0000 bg dddd dddd dddd mode 1
+labels.kind4.state7: fg 0000 0000 0000 bg dddd dddd dddd mode 1
+labels.kind5.state1: fg 0000 0000 0000 bg dddd dddd dddd mode 1
+labels.kind5.state0: fg 7777 7777 7777 bg dddd dddd dddd mode 1
+labels.kind5.state2: fg ffff ffff ffff bg 6666 6666 6666 mode 1
+labels.kind5.state3: fg 2222 2222 2222 bg dddd dddd dddd mode 1
+labels.kind5.state7: fg 2222 2222 2222 bg dddd dddd dddd mode 1
+labels.kind6.state1: fg 0000 0000 0000 bg ffff ffff ffff mode 1
+labels.kind6.state0: fg 0000 0000 0000 bg ffff ffff ffff mode 49
+labels.kind6.state2: fg 0000 0000 0000 bg ffff ffff ffff mode 1
+labels.kind6.state3: fg 0000 0000 0000 bg ffff ffff ffff mode 1
+labels.kind6.state7: fg 0000 0000 0000 bg ffff ffff ffff mode 1
+labels.kind7.state1: fg 0000 0000 0000 bg ffff ffff ffff mode 1
+labels.kind7.state0: fg 0000 0000 0000 bg ffff ffff ffff mode 49
+labels.kind7.state2: fg 0000 0000 0000 bg ffff ffff ffff mode 1
+labels.kind7.state3: fg 0000 0000 0000 bg ffff ffff ffff mode 1
+labels.kind7.state7: fg 0000 0000 0000 bg ffff ffff ffff mode 1
+labels.kind8.state1: fg 0000 0000 0000 bg cccc cccc cccc mode 1
+labels.kind8.state0: fg 7777 7777 7777 bg dddd dddd dddd mode 1
+labels.kind8.state2: fg ffff ffff ffff bg 8888 8888 8888 mode 1
+labels.kind8.state3: fg 0000 0000 0000 bg cccc cccc cccc mode 1
+labels.kind8.state7: fg 0000 0000 0000 bg cccc cccc cccc mode 1
+labels.kind9.state1: fg 0000 0000 0000 bg cccc cccc cccc mode 1
+labels.kind9.state0: fg 7777 7777 7777 bg dddd dddd dddd mode 1
+labels.kind9.state2: fg ffff ffff ffff bg 8888 8888 8888 mode 1
+labels.kind9.state3: fg 0000 0000 0000 bg cccc cccc cccc mode 1
+labels.kind9.state7: fg 0000 0000 0000 bg cccc cccc cccc mode 1
+labels.background.plain: 1111 2222 3333
+labels.background.theme: 1111 2222 3333
+labels.background.content: 1111 2222 3333
 == unregister
 unregister.Unregister: 0
 unregister.Unregister.again: -30562
