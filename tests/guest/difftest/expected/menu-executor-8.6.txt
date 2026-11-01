@@ -5,4 +5,3 @@ clock.IsMenuBarClockEnabled	8.6's image has the menu bar clock on; Executor draw
 clock.GetMenuBarClockConfig.data	8.6's clock configuration (the user's); Executor keeps zeros until set
 dirty.CheckItem	8.6's MDEF makes the item with an icon number taller (66), Executor's not
 dirty.DisableItem	as dirty.CheckItem
-bar.lastRight	8.6's lastRight is 78 past Edit's left (its title ~35 wide) with no other application menu in the list: what it counts is not known; the titles' lefts match

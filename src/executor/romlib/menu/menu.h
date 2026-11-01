@@ -60,6 +60,9 @@ extern void ROMlib_install_system_menus();
 extern bool ROMlib_system_menu_select(INTEGER mid, INTEGER item);
 extern bool ROMlib_icon_title_p(MenuHandle mh);
 extern Handle ROMlib_icon_title_suite(MenuHandle mh);
+/* A system menu the menu bar right-aligns: all of them but 8.x's Help
+   menu, a text title after the application's menus. */
+extern bool ROMlib_system_menu_at_right(MenuHandle mh);
 extern void ROMlib_apple_menu_add(StringPtr name, int16_t group, Handle suite, int32_t key);
 extern bool ROMlib_apple_menu_remove(int32_t key);
 extern void ROMlib_apple_menu_attach(MenuHandle mh);

@@ -10,6 +10,9 @@
 # "Echo ... > Host:file" writes the file, and the log has no PowerPC
 # exception. Screenshot and log in $TMPDIR.
 #
+# Also: an AddMenu Help item, chosen from 8.x's Help menu (a text title after
+# the application's menus), runs.
+#
 # Usage:
 #   tests/test_mpw_86.sh [--timeout N] [--port N]
 #
@@ -98,8 +101,23 @@ mpw_script() {
 }
 mpw_script 'Echo "mpw on executor" > Host:mpw-echo.txt'
 mpw_script 'AddMenu > Host:mpw-menus.txt'
+# 8.x's Help menu: a text title right after Build (x 434..475; a G3 lays it
+# out after the application's menus too), where AddMenu Help items go:
+# after MPW Help..., the menu's fourth row.
+mpw_script 'AddMenu Help "Say Hello" "Echo hello > Host:mpw-help.txt"'
 sleep 2
 curl -sf "$URL/screenshot" > "$OUT/mpw.png" || true
+mouse() { curl -sf -X POST "$URL/mouse" -d "$1" >/dev/null; sleep 0.4; }
+mouse '{"x":455,"y":10}'
+mouse '{"button":0,"down":true}'
+curl -sf "$URL/screenshot" > "$OUT/mpw-help.png" || true
+mouse '{"x":470,"y":85}'
+mouse '{"button":0,"down":false}'
+sleep 3
+if ! tr '\r' '\n' < "$EXTFS_DIR/mpw-help.txt" 2>/dev/null | grep -q '^hello$'; then
+    echo "FAIL: Help > Say Hello (AddMenu Help) did not run ($OUT/mpw-help.png)"
+    FAIL=1
+fi
 if ! tr '\r' '\n' < "$EXTFS_DIR/mpw-echo.txt" 2>/dev/null | grep -q '^mpw on executor$'; then
     echo "FAIL: Echo > Host:mpw-echo.txt wrote nothing ($(cat "$OUT/script.out" 2>/dev/null))"
     FAIL=1
