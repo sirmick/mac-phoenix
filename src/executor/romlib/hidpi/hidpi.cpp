@@ -225,9 +225,19 @@ bool covered_by(const Run &old, const Run &now)
 }
 
 /* NOW replaces OLD: where OLD's text is still what's under NOW, NOW's
-   "before" is what was there before OLD (both runs' 1x glyphs go). */
+   "before" is what was there before OLD (both runs' 1x glyphs go), and
+   NOW is drawn where OLD was too (text drawn again through a smaller
+   clip: AppleWorks' font pop-up) */
 void inherit_before(Run &now, const Run &old)
 {
+    for(const IRect &c : old.clip)
+    {
+        IRect r = intersection(c, { now.box.top - 1, now.box.left - 1, now.box.bottom + 1, now.box.right + 1 });
+        if(!empty(r) && std::find_if(now.clip.begin(), now.clip.end(), [&](const IRect &n) {
+                            return n.top <= r.top && n.left <= r.left && n.bottom >= r.bottom && n.right >= r.right;
+                        }) == now.clip.end())
+            now.clip.push_back(r);
+    }
     IRect r = intersection(now.box, old.box);
     for(int y = r.top; y < r.bottom; y++)
     {
