@@ -121,6 +121,14 @@ class ServerTest(unittest.TestCase):
         self.assertTrue(lines[0].startswith("# ") and "(signed out)" in lines[0])
         self.assertEqual(lines[1:], ["one", "two", "three"])
         self.assertEqual(self.request("GET", "/api/logs/2000-01-01/../../accounts.sqlite", cookie=cookie)[0].status, 404)
+        self.assertEqual(self.request("POST", "/api/shot?session=k1x-0011223344556677", b"GIF89a")[0].status, 400)
+        png = b"\x89PNG\r\n\x1a\n" + bytes(100000)  # over the signed-out body limit
+        r, data = self.request("POST", "/api/shot?session=k1x-0011223344556677&note=the%20menu", png)
+        self.assertEqual(r.status, 200)
+        name = json.loads(data)["name"]
+        self.assertEqual(self.request("GET", "/api/logs/" + name, cookie=cookie)[1], png)
+        r, data = self.request("GET", "/api/logs/" + logs[0]["log"], cookie=cookie)
+        self.assertEqual(data.decode().splitlines()[-1], f"# screenshot {name}: the menu")
 
     def test_disk_ranges(self):
         cookie = self.login()

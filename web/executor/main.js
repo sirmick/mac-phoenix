@@ -393,6 +393,32 @@ function volumeKey(files) {
     return sys ? `${sys.name}-${sys.size}`.replace(/[^\w.-]/g, '_') : 'own';
 }
 
+// Screenshot: the canvas's own pixels (the display scale) as a PNG, with an
+// optional note, to the server beside this session's log (/api/shot).
+document.getElementById('shot').addEventListener('click', async () => {
+    const p = await window.executor.request('pixels');
+    if (!p || !p.width) {
+        status.textContent = 'No screen to send';
+        return;
+    }
+    const c = document.createElement('canvas');
+    c.width = p.width;
+    c.height = p.height;
+    c.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(p.data), p.width, p.height), 0, 0);
+    const png = await new Promise((resolve) => c.toBlob(resolve, 'image/png'));
+    const note = prompt('A note to go with the screenshot (optional):', '');
+    if (note === null)
+        return;
+    let res = null;
+    try {
+        res = await fetch(`/api/shot?session=${Log.session}&note=${encodeURIComponent(note)}`, {
+            method: 'POST', body: png, credentials: 'same-origin', headers: { 'Content-Type': 'image/png' } });
+    } catch { }
+    const name = res && res.ok ? (await res.json()).name : null;
+    status.textContent = name ? `Screenshot sent (${name})` : `Screenshot not sent (${res ? res.status : 'offline'})`;
+    console.log(`[web] screenshot ${name || 'not sent'}${note ? ': ' + note : ''}`);
+});
+
 document.getElementById('reset').addEventListener('click', async () => {
     if (!confirm("Forget everything saved on Executor's disk for this System?"))
         return;

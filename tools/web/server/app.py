@@ -27,7 +27,9 @@
     /api/log          POST ?session=ID, text: lines the tab printed (log.js),
                       appended to DATA/logs/DAY/ID.log (signed out too: 64 KB
                       a request; a file stops at 64 MB; kept 14 days)
-    /api/logs         GET (owner) the logs; /api/logs/DAY/ID.log one of them
+    /api/shot         POST ?session=ID[&note=TEXT], a PNG (16 MB): the tab's
+                      Screenshot button; DATA/logs/DAY/ID-HHMMSS.png, noted in the log
+    /api/logs         GET (owner) the logs and screenshots; /api/logs/DAY/NAME one
 
 Everything but /login and its API needs a session (the cookie), unless
 the configuration makes the page public; sync always does. Writes and
@@ -508,6 +510,39 @@ def log_post(h):
     h.send_json(200, {})
 
 
+# A screenshot from the tab's button (main.js): a PNG beside the session's
+# log, DAY/SESSION-HHMMSS.png, and a line in the log saying so.
+SHOT_MAX = 16 << 20
+
+
+@route("POST", "/api/shot", auth=False)
+def shot_post(h):
+    session = h.query.get("session", "")
+    if not LOG_SESSION.fullmatch(session):
+        raise HttpError(400, "session: 8-40 letters, digits, -")
+    n = h.content_length()
+    if n > SHOT_MAX:
+        h.close_connection = True
+        raise HttpError(413, "too large")
+    h._body = data = h.rfile.read(n)
+    if not data.startswith(b"\x89PNG\r\n\x1a\n"):
+        raise HttpError(400, "a PNG")
+    note = h.query.get("note", "").replace("\n", " ")[:500]
+    day = time.strftime("%Y-%m-%d", time.gmtime())
+    os.makedirs(os.path.join(log_dir(h), day), exist_ok=True)
+    with h.app.log_lock:
+        stamp = time.strftime("%H%M%S", time.gmtime())
+        name, i = f"{session}-{stamp}.png", 1
+        while os.path.exists(os.path.join(log_dir(h), day, name)):
+            i += 1
+            name = f"{session}-{stamp}-{i}.png"
+        with open(os.path.join(log_dir(h), day, name), "wb") as f:
+            f.write(data)
+        with open(os.path.join(log_dir(h), day, session + ".log"), "a", encoding="utf-8") as f:
+            f.write(f"# screenshot {day}/{name}{': ' + note if note else ''}\n")
+    h.send_json(200, {"name": f"{day}/{name}"})
+
+
 @route("GET", "/api/logs")
 def logs_list(h):
     owner_only(h)
@@ -519,7 +554,7 @@ def logs_list(h):
     h.send_json(200, out)
 
 
-@route("GET", r"/api/logs/(\d{4}-\d\d-\d\d)/([A-Za-z0-9-]{8,40}\.log)")
+@route("GET", r"/api/logs/(\d{4}-\d\d-\d\d)/([A-Za-z0-9-]{8,60}\.(?:log|png))")
 def logs_get(h, day, name):
     owner_only(h)
     path = os.path.join(log_dir(h), day, name)
