@@ -2877,6 +2877,11 @@ bool Executor::ROMlib_desktop_layer_region_p(RgnHandle rgn)
     return desktop_layer && rgn && rgn == PORT_VIS_REGION(desktop_layer);
 }
 
+RgnHandle Executor::ROMlib_desktop_layer_vis_region()
+{
+    return desktop_layer ? PORT_VIS_REGION(desktop_layer) : nullptr;
+}
+
 void Executor::ROMlib_desktop_layer_invalidate(RgnHandle rgn)
 {
     if(desktop_layer && WINDOW_UPDATE_REGION(desktop_layer))

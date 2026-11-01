@@ -8,8 +8,10 @@ while programs keep seeing the 640x480-style 1x screen they were written
 for. The ROM machines can't do this: their QuickDraw is Apple's code in
 ROM.
 
-Status: phase 1 (text on the screen) implemented, 2026-10-31: see
-"Phase 1, as built" at the end. The rest is design.
+Status: phase 1 (text on the screen) implemented, 2026-10-31; phase 2
+(chrome) and phase 4 (GWorld shadows) started 2026-11-01: see
+"Phase 1, as built" and the sections after it at the end. The rest is
+design.
 
 ## The idea in one paragraph
 
@@ -533,3 +535,104 @@ Not yet: other tab directions, the indeterminate progress bar, the
 disclosure triangle, pressed floating boxes,
 the grow corners; region twins for clipping (section 2: nothing in 8.6's
 chrome clips to a curved region yet).
+
+## Phase 4, GWorld shadows (started 2026-11-01)
+
+Text and chrome drawn into a GWorld, or any port whose pixels aren't the
+screen's (an old-style offscreen `BitMap` too), are recorded as runs of
+that pixel buffer exactly as on the screen (`hidpi::recording()`,
+`port_target()` in hidpi.cpp): the same `Run`, its box, "before" and
+"after" in the buffer's own pixels and coordinates. A buffer's runs are
+kept by its GWorld (whose pixels move while unlocked) or else by its base
+address, at most 1024 runs a buffer and 64 buffers (least recently used
+go); `DisposeGWorld` drops them, and a buffer whose size, `rowBytes` or
+depth changed (`UpdateGWorld`) starts again empty. They live on the
+emulator thread only: the render thread still sees only the screen's.
+
+So the shadow is not a bitmap at the display scale but the runs
+themselves, kept where they were drawn, until a copy puts them on the
+screen. `hidpi::copy_bits()` wraps `ROMlib_real_copy_bits`, which
+`StdBits`, `CopyBits`, `CopyMask` and `CopyDeepMask` all reach with their
+pixmaps canonicalised and locked. When the source has runs still valid in
+the rectangle copied, each lands in the destination (the screen, or
+another offscreen buffer: copied twice they still arrive) moved by the
+copy's offset: its box the part copied, its "after" the destination's
+pixels after the copy, its "before" the source run's "before" wherever the
+destination got the source's pixel (masked out or clipped: the
+destination's own, so not ink), its clip the run's own, moved, within the
+destination rectangle, the port's vis and clip and the mask region. A run
+nothing of whose ink landed isn't carried. Runs already in the destination
+that the copy brings again (a window's contents copied again unchanged)
+are replaced, as text drawn again is, so they aren't drawn twice.
+
+Staleness is checked at the copy, per run against the buffer's 1x pixels
+(`run_valid`, as on the screen), which is stricter than the hash of the
+copied rectangle the design proposed: a program that wrote the pixels
+behind QuickDraw (`GetPixBaseAddr`), or drew anything else over the text,
+leaves those runs behind and the copy shows the 1x pixels, upscaled. Page
+protection (section 5) is still to do: what it adds is catching writes
+that leave a run's ink pixels unchanged (which nothing visible needs yet).
+
+Copies across depths and colour tables carry runs too: a run's ink is
+where the destination has the colour the run left in the source pixel
+there (the pixmaps' colours: indexed through their tables, a device
+table by its entries' values when those are a pixel value each; 16 and
+32 bits direct), and its "before" the source's before in the
+destination's pixels. `srcOr` and `transparent` copies carry them where
+the source's before is the colour they leave out (white, the background
+colour): the "before" there is what the destination had before the copy
+(text on a coloured background stays on it). A copy to a rectangle of
+another size scales them: each destination pixel's source pixel sampled
+as `scale_blt_bitmap` does, the glyphs' positions, advances, baseline
+and size mapped (a horizontal scale besides, `Run::xscale`), chrome's
+points and strokes. Other transfer modes stay 1x.
+
+Scrolling (`ScrollRect`, and programs' own: AppleWorks copies the window
+onto itself and the strip it exposes from its GWorld) is a copy like any
+other. What it showed: a line cut in two by separate copies is two runs,
+each drawn through its own clip, so (1) a piece replaces an existing run
+only if it covers all of it, (2) a run's ink stays its own: drawn over by
+another (the next line's ascenders in its box), the pixels that one
+changed where this one hadn't go into this one's "before" too
+(`recapture`), else this one's restoring them erased the other's glyphs
+when the pieces came in the other order, (3) a carried run's ink only
+where the copy drew, and the render thread's restoring of "before" only
+inside the run's clip.
+
+`--executor-debug hidpi` logs each
+copy from a buffer with runs and what became of them.
+
+`tests/guest/gworld/GWorldGallery` draws text in GWorlds and copies it to
+its window (`CopyBits`, through a second GWorld, `CopyMask` through a
+mask of its left part, a GWorld whose pixels it then inverts itself);
+`hidpi_gworld_executor` (tests/test_hidpi_gworld.sh) runs it on 8.6 at
+scale 2 and checks that the copied text differs from the 1x frame scaled
+up and is anti-aliased, and that the inverted GWorld's text and the
+masked-out part don't differ. It also copies text from 8-, 16- and 1-bit
+GWorlds, with `srcOr` onto yellow and `transparent` onto blue; its Scroll
+Gallery window scrolls text three ways (TextEdit's `TEScroll`,
+`ScrollRect` in a GWorld, AppleWorks' copies) and every row with text
+must be anti-aliased; its Scale window copies text at 2x, 2x wide, half
+and 1.5x.
+
+What it gives (8.6, scale 2): the Finder's window contents (icon labels,
+the header) from outlines, selection and window moves clean; AppleWorks
+5's word processing text (drawn offscreen and copied) from outlines, and
+still while it scrolls; the Finder's windows scrolled; the
+menus' saved bits (copied to an offscreen buffer and back) keep their
+text. BBEdit Lite 6.1 and SimpleText draw on the screen (phase 1).
+
+Fixed on the way (phase 1): a run replacing an earlier one (text drawn
+again) took all of that one's clip, so a desktop label drawn again while
+a window covered most of it was drawn over the window at 2x; the old clip
+is taken now only round the old text still under the new one.
+
+The same in the wasm tab, nothing tab-specific (the runs reach the
+screen's list, which `compose()` draws): `executor.web.hidpi_gworld`
+(web/tests/tab_hidpi_gworld.mjs) launches GWorldGallery at `?scale=2` on
+8.6 with PowerPC and checks the canvas's pixels: the copied text has
+anti-aliasing greys, the inverted GWorld's text and the masked-out part
+none.
+
+Not yet: transfer modes other than `srcCopy`, `srcOr` and `transparent`;
+page protection.

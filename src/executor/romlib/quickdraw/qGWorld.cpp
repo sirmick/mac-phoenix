@@ -12,6 +12,7 @@
 #include <quickdraw/gworld.h>
 #include <mman/mman.h>
 #include <quickdraw/qcolor.h>
+#include <hidpi/hidpi.h>
 
 using namespace Executor;
 
@@ -546,6 +547,7 @@ void Executor::C_DisposeGWorld(GWorldPtr graphics_world)
         qdGlobals().thePort = LM(WMgrPort);
     /* FIXME: set the gdevice to something sane as well? */
 
+    hidpi::forget_offscreen(graphics_world);
     gw_info = lookup_gw_info_by_gw(graphics_world);
 
     if(!gw_info)

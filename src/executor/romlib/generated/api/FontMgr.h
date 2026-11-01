@@ -159,12 +159,12 @@ typedef WidthTable *WidthTablePtr;
 
 typedef GUEST<WidthTablePtr> *WidthTableHandle;
 
-// FontMgr Private.a (true-b);
+// FontMgr Private.a (true-b); its accessors are PrivateInterfaceLib's.
 const LowMemGlobal<ProcPtr > JSwapFont{ 0x8E0 };
 inline ProcPtr  LMGetJSwapFont() { return LM(JSwapFont); }
 inline void LMSetJSwapFont(ProcPtr val) { LM(JSwapFont) = val; }
-NOTRAP_FUNCTION2(LMGetJSwapFont);
-NOTRAP_FUNCTION2(LMSetJSwapFont);
+LIBRARY_FUNCTION(PrivateInterfaceLib, LMGetJSwapFont, LMGetJSwapFont);
+LIBRARY_FUNCTION(PrivateInterfaceLib, LMSetJSwapFont, LMSetJSwapFont);
 
 
 // FontMgr IMIV-42 (true);

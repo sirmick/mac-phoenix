@@ -13,6 +13,7 @@
 #include <quickdraw/region.h>
 #include <quickdraw/font.h>
 #include <quickdraw/sfnt.h>
+#include <quickdraw/gworld.h>
 #include <vdriver/vdriver.h>
 #include <error/error.h>
 
@@ -227,18 +228,13 @@ bool covered_by(const Run &old, const Run &now)
 /* NOW replaces OLD: where OLD's text is still what's under NOW, NOW's
    "before" is what was there before OLD (both runs' 1x glyphs go), and
    NOW is drawn where OLD was too (text drawn again through a smaller
-   clip: AppleWorks' font pop-up) */
+   clip: AppleWorks' font pop-up), but only round what of OLD is still
+   there: a label drawn again while a window covers most of it (the
+   desktop's, under AppleWorks' document) isn't drawn over the window */
 void inherit_before(Run &now, const Run &old)
 {
-    for(const IRect &c : old.clip)
-    {
-        IRect r = intersection(c, { now.box.top - 1, now.box.left - 1, now.box.bottom + 1, now.box.right + 1 });
-        if(!empty(r) && std::find_if(now.clip.begin(), now.clip.end(), [&](const IRect &n) {
-                            return n.top <= r.top && n.left <= r.left && n.bottom >= r.bottom && n.right >= r.right;
-                        }) == now.clip.end())
-            now.clip.push_back(r);
-    }
     IRect r = intersection(now.box, old.box);
+    IRect kept{ r.bottom, r.right, r.top, r.left };
     for(int y = r.top; y < r.bottom; y++)
     {
         uint8_t *nb = &now.before[(size_t)(y - now.box.top) * now.rowLen];
@@ -248,8 +244,22 @@ void inherit_before(Run &now, const Run &old)
         {
             uint32_t b = raw_pixel(ob, x - old.x0, old.bpp), a = raw_pixel(oa, x - old.x0, old.bpp);
             if(b != a && raw_pixel(nb, x - now.x0, now.bpp) == a)
+            {
                 set_raw_pixel(nb, x - now.x0, now.bpp, b);
+                kept = { std::min(kept.top, y), std::min(kept.left, x), std::max(kept.bottom, y + 1),
+                         std::max(kept.right, x + 1) };
+            }
         }
+    }
+    if(empty(kept))
+        return;
+    for(const IRect &c : old.clip)
+    {
+        IRect r = intersection(c, kept); /* no margin: past it may be what's in front now */
+        if(!empty(r) && std::find_if(now.clip.begin(), now.clip.end(), [&](const IRect &n) {
+                            return n.top <= r.top && n.left <= r.left && n.bottom >= r.bottom && n.right >= r.right;
+                        }) == now.clip.end())
+            now.clip.push_back(r);
     }
 }
 
@@ -273,14 +283,30 @@ void log_text(const hidpi::TextParams &p, int mode, const char *what)
    what's there now is its "after". Where the new one drew over all the
    pixels it had changed (a button drawn unpressed over its pressed look),
    nothing of it shows: it goes (it could never be found off the screen
-   again), and false. */
-bool recapture(Runs::iterator it, const Screen &s)
+   again), and false. What the new one changed where this one hadn't is
+   the new one's, not this one's ink: its "before" there is what's there
+   now too (the next line's ascenders in a line's box: this one's
+   restoring them would erase them where the two come in another order,
+   pieces of them scrolled or copied separately). */
+bool recapture(Runs &runs, Runs::iterator it, const Screen &s)
 {
     auto copy = std::make_shared<Run>(**it);
     capture(*copy, s, copy->after);
+    const Run &old = **it;
+    for(int y = 0; y < old.box.bottom - old.box.top; y++)
+    {
+        const uint8_t *ob = &old.before[(size_t)y * old.rowLen], *oa = &old.after[(size_t)y * old.rowLen];
+        uint8_t *nb = &copy->before[(size_t)y * old.rowLen];
+        const uint8_t *na = &copy->after[(size_t)y * old.rowLen];
+        if(!memcmp(oa, na, old.rowLen))
+            continue;
+        for(int x = old.box.left; x < old.box.right; x++)
+            if(raw_pixel(ob, x - old.x0, old.bpp) == raw_pixel(oa, x - old.x0, old.bpp))
+                set_raw_pixel(nb, x - old.x0, old.bpp, raw_pixel(na, x - old.x0, old.bpp));
+    }
     if(copy->before == copy->after && !(*it)->noInk)
     {
-        g_runs.erase(it);
+        runs.erase(it);
         return false;
     }
     *it = copy;
@@ -288,11 +314,140 @@ bool recapture(Runs::iterator it, const Screen &s)
 }
 
 /* Drop the runs that aren't on the screen any more. */
-void sweep(const Screen &s)
+void sweep(Runs &runs, const Screen &s)
 {
-    g_runs.erase(std::remove_if(g_runs.begin(), g_runs.end(),
-                                [&](const auto &r) { return !run_valid(*r, s); }),
-                 g_runs.end());
+    runs.erase(std::remove_if(runs.begin(), runs.end(),
+                              [&](const auto &r) { return !run_valid(*r, s); }),
+               runs.end());
+}
+
+/* ---- offscreen pixels: GWorld shadows (phase 4) ----
+
+   Text and chrome drawn into a GWorld (or any port whose pixels aren't the
+   screen's) are runs of that pixel buffer, kept as the screen's are, in
+   its own coordinates. CopyBits from it carries the runs still valid in
+   the rectangle copied over to where it lands, the screen or another
+   offscreen buffer (copy_bits below). The runs are checked against the
+   buffer's 1x pixels at each copy: a program that wrote them behind
+   QuickDraw's back (or drew over them otherwise) leaves the 1x pixels.
+   The emulator thread only: the render thread sees only the screen's. */
+
+struct Offscreen
+{
+    int width = 0, height = 0, rowBytes = 0, bpp = 0;
+    Runs runs;
+    uint64_t used = 0;
+};
+/* by GWorld (its pixels move while unlocked) or else by base address */
+std::map<const void *, Offscreen> g_offscreens;
+uint64_t g_offscreen_clock;
+enum
+{
+    MAX_OFFSCREENS = 64,
+    MAX_OFFSCREEN_RUNS = 1024,
+};
+
+/* A pixel buffer drawn into, and its runs. */
+struct Target
+{
+    Runs *runs;
+    Screen s;
+    bool screen;
+};
+
+/* The pixel buffer at BASE (a host pointer; ALT: what the pixmap's
+   baseAddr says, a GWorld's pixels' handle while they're unlocked);
+   CREATE: a buffer without runs yet too (else false) */
+bool offscreen_target(Ptr base, const void *alt, const Rect &bounds, int rowBytes, int bpp, Target *t,
+                      bool create = true)
+{
+    int w = bounds.right - bounds.left, h = bounds.bottom - bounds.top;
+    if(!base || w <= 0 || h <= 0 || (bpp != 1 && bpp != 2 && bpp != 4 && bpp != 8 && bpp != 16 && bpp != 32)
+       || (long)rowBytes * 8 < (long)w * bpp)
+        return false;
+    gw_info_t *gw = lookup_gw_info_by_gw_pixmap_baseaddr(base);
+    if(!gw && alt)
+        gw = lookup_gw_info_by_gw_pixmap_baseaddr((void *)alt);
+    const void *key = gw ? (const void *)gw->gw : (const void *)base;
+    if(!create && !g_offscreens.count(key))
+        return false;
+    if(g_offscreens.size() >= MAX_OFFSCREENS && !g_offscreens.count(key))
+    {
+        auto lru = g_offscreens.begin();
+        for(auto it = g_offscreens.begin(); it != g_offscreens.end(); ++it)
+            if(it->second.used < lru->second.used)
+                lru = it;
+        g_offscreens.erase(lru);
+    }
+    Offscreen &o = g_offscreens[key];
+    if(o.width != w || o.height != h || o.rowBytes != rowBytes || o.bpp != bpp)
+    {
+        o.runs.clear();
+        o.width = w;
+        o.height = h;
+        o.rowBytes = rowBytes;
+        o.bpp = bpp;
+    }
+    o.used = ++g_offscreen_clock;
+    t->runs = &o.runs;
+    t->s = { (const uint8_t *)base, w, h, rowBytes, bpp, nullptr };
+    t->screen = false;
+    return true;
+}
+
+bool screen_target(Target *t)
+{
+    t->runs = &g_runs;
+    t->s = current_screen();
+    t->screen = true;
+    return true;
+}
+
+/* What PORT draws into. */
+bool port_target(GrafPtr port, Target *t)
+{
+    GDHandle gd = LM(MainDevice);
+    if(!port || !gd || !*gd || !vdriver || !vdriver->framebuffer())
+        return false;
+    if(PORT_BASEADDR(port) == PIXMAP_BASEADDR(GD_PMAP(gd)))
+        return screen_target(t);
+    if(CGrafPort_p(port))
+    {
+        PixMapHandle pm = CPORT_PIXMAP((CGrafPtr)port);
+        Ptr base = PIXMAP_BASEADDR(pm);
+        const void *alt = nullptr;
+        if((*pm)->pmVersion == gw_pm_version_handle && base)
+        {
+            alt = base;
+            base = *(Handle)base;
+        }
+        return offscreen_target(base, alt, PIXMAP_BOUNDS(pm), PIXMAP_ROWBYTES(pm), PIXMAP_PIXEL_SIZE(pm), t);
+    }
+    BitMap &bm = PORT_BITS(port);
+    return offscreen_target(bm.baseAddr, nullptr, bm.bounds, BITMAP_ROWBYTES(&bm), 1, t);
+}
+
+/* What a canonical PixMap (StdBits') is. */
+bool pixmap_target(const PixMap *pm, Target *t, bool create)
+{
+    GDHandle gd = LM(MainDevice);
+    if(!pm || !gd || !*gd || !vdriver || !vdriver->framebuffer())
+        return false;
+    if(pm->baseAddr == PIXMAP_BASEADDR(GD_PMAP(gd)))
+        return screen_target(t);
+    return offscreen_target(pm->baseAddr, nullptr, pm->bounds, BITMAP_ROWBYTES(pm), pm->pixelSize, t, create);
+}
+
+/* At most so many runs on T. */
+void trim(Runs &runs, const Target &t)
+{
+    size_t max = t.screen ? MAX_RUNS : MAX_OFFSCREEN_RUNS;
+    if(runs.size() > max)
+    {
+        sweep(runs, t.s);
+        if(runs.size() > max * 3 / 4)
+            runs.erase(runs.begin(), runs.begin() + (runs.size() - max * 3 / 4));
+    }
 }
 }
 
@@ -383,7 +538,14 @@ void Executor::hidpi::text_draw(const TextParams &p, const std::function<void()>
         case grayishTextOr & 0x37: mode = Mode::Grey; break;
         default: skip("1x (transfer mode)"); return;
     }
-    Screen s = current_screen();
+    Target t;
+    if(!port_target(port, &t))
+    {
+        skip("1x (not a pixel buffer)");
+        return;
+    }
+    const Screen &s = t.s;
+    Runs &runs = *t.runs;
     const Rect &bounds = PORT_BOUNDS(port);
     int dx = bounds.left, dy = bounds.top;
     IRect box = intersection({ p.dst->top - dy, p.dst->left - dx, p.dst->bottom - dy, p.dst->right - dx },
@@ -427,7 +589,7 @@ void Executor::hidpi::text_draw(const TextParams &p, const std::function<void()>
     Runs under;
     {
         std::lock_guard lk(g_mutex);
-        for(auto &r : g_runs)
+        for(auto &r : runs)
             if(intersects(r->box, box) && run_valid(*r, s))
                 under.push_back(r);
     }
@@ -479,25 +641,25 @@ void Executor::hidpi::text_draw(const TextParams &p, const std::function<void()>
     int replaced = 0, dropped = 0;
     for(auto &u : under)
     {
-        auto it = std::find(g_runs.begin(), g_runs.end(), u);
-        if(it == g_runs.end())
+        auto it = std::find(runs.begin(), runs.end(), u);
+        if(it == runs.end())
             continue;
         /* srcXor drawn again over itself: both gone */
         if(mode == Mode::Xor && u->mode == Mode::Xor && !erased && same_text(*u, *run)
            && u->box.top == box.top && u->box.left == box.left)
         {
-            g_runs.erase(it);
+            runs.erase(it);
             erased = true;
             continue;
         }
         if(covered_by(*u, *run))
         {
             inherit_before(*run, *u);
-            g_runs.erase(it);
+            runs.erase(it);
             replaced++;
             continue;
         }
-        if(!recapture(it, s))
+        if(!recapture(runs, it, s))
             dropped++;
     }
     /* the other runs it overlaps: the ones it draws again go (a caret
@@ -505,7 +667,7 @@ void Executor::hidpi::text_draw(const TextParams &p, const std::function<void()>
        does, makes no difference: where what it left is still under this
        one, this one takes their "before"); those not on the screen any more
        go too */
-    g_runs.erase(std::remove_if(g_runs.begin(), g_runs.end(), [&](const auto &r) {
+    runs.erase(std::remove_if(runs.begin(), runs.end(), [&](const auto &r) {
                      if(!intersects(r->box, box)
                         || std::find(under.begin(), under.end(), r) != under.end())
                          return false;
@@ -520,7 +682,7 @@ void Executor::hidpi::text_draw(const TextParams &p, const std::function<void()>
                      dropped++;
                      return true;
                  }),
-                 g_runs.end());
+                 runs.end());
     if(erased)
     {
         log_text(p, txmode, "erases its srcXor twin");
@@ -532,27 +694,24 @@ void Executor::hidpi::text_draw(const TextParams &p, const std::function<void()>
         char what[96];
         snprintf(what, sizeof what, "recorded at %d,%d-%d,%d (%zu under, %d replaced, %d gone, %zu on screen)",
                  box.left, box.top, box.right, box.bottom,
-                 under.size(), replaced, dropped, g_runs.size() + 1);
+                 under.size(), replaced, dropped, runs.size() + 1);
         log_text(p, txmode, what);
     }
-    g_runs.push_back(run);
-    if(g_runs.size() > MAX_RUNS)
-    {
-        sweep(s);
-        if(g_runs.size() > MAX_RUNS * 3 / 4)
-            g_runs.erase(g_runs.begin(), g_runs.begin() + (g_runs.size() - MAX_RUNS * 3 / 4));
-    }
+    runs.push_back(run);
+    trim(runs, t);
 }
 
 void Executor::hidpi::chrome_draw(const Rect &r, Shapes shapes, const std::function<void()> &blit)
 {
-    if(!active() || shapes.empty() || !drawing_on_screen())
+    GrafPtr port = qdGlobals().thePort;
+    Target t;
+    if(!active() || shapes.empty() || !port_target(port, &t))
     {
         blit();
         return;
     }
-    GrafPtr port = qdGlobals().thePort;
-    Screen s = current_screen();
+    const Screen &s = t.s;
+    Runs &runs = *t.runs;
     const Rect &bounds = PORT_BOUNDS(port);
     int dx = bounds.left, dy = bounds.top;
     IRect box = intersection({ r.top - dy, r.left - dx, r.bottom - dy, r.right - dx }, { 0, 0, s.height, s.width });
@@ -579,7 +738,7 @@ void Executor::hidpi::chrome_draw(const Rect &r, Shapes shapes, const std::funct
     Runs under;
     {
         std::lock_guard lk(g_mutex);
-        for(auto &u : g_runs)
+        for(auto &u : runs)
             if(intersects(u->box, box) && run_valid(*u, s))
                 under.push_back(u);
     }
@@ -608,8 +767,8 @@ void Executor::hidpi::chrome_draw(const Rect &r, Shapes shapes, const std::funct
     std::lock_guard lk(g_mutex);
     for(auto &u : under)
     {
-        auto it = std::find(g_runs.begin(), g_runs.end(), u);
-        if(it == g_runs.end())
+        auto it = std::find(runs.begin(), runs.end(), u);
+        if(it == runs.end())
             continue;
         /* the same chrome drawn again: this one, with what was there
            before the first */
@@ -617,26 +776,21 @@ void Executor::hidpi::chrome_draw(const Rect &r, Shapes shapes, const std::funct
            && u->box.bottom == box.bottom && u->box.right == box.right && u->shapes == run->shapes)
         {
             inherit_before(*run, *u);
-            g_runs.erase(it);
+            runs.erase(it);
             continue;
         }
-        recapture(it, s);
+        recapture(runs, it, s);
     }
-    g_runs.erase(std::remove_if(g_runs.begin(), g_runs.end(),
+    runs.erase(std::remove_if(runs.begin(), runs.end(),
                                 [&](const auto &u) { return intersects(u->box, box) && !run_valid(*u, s); }),
-                 g_runs.end());
+                 runs.end());
     run->noInk = run->before == run->after;
     if(ERROR_ENABLED_P(ERROR_HIDPI_LOG))
         fprintf(stderr, "[hidpi] chrome: %zu shapes at %d,%d-%d,%d%s (%zu under, %zu on screen)\n",
                 run->shapes.size(), box.left, box.top, box.right, box.bottom, run->noInk ? " (no change)" : "",
-                under.size(), g_runs.size() + 1);
-    g_runs.push_back(run);
-    if(g_runs.size() > MAX_RUNS)
-    {
-        sweep(s);
-        if(g_runs.size() > MAX_RUNS * 3 / 4)
-            g_runs.erase(g_runs.begin(), g_runs.begin() + (g_runs.size() - MAX_RUNS * 3 / 4));
-    }
+                under.size(), runs.size() + 1);
+    runs.push_back(run);
+    trim(runs, t);
 }
 
 void Executor::hidpi::compose(const uint32_t *argb, int w, int h, const DirtyRects::Rects &rects,
@@ -675,5 +829,472 @@ void Executor::hidpi::compose(const uint32_t *argb, int w, int h, const DirtyRec
             calls = pixels = 0;
             total_ms = max_ms = 0;
         }
+    }
+}
+
+/* ---- GWorld shadows: runs carried by CopyBits ---- */
+
+bool Executor::hidpi::recording()
+{
+    Target t;
+    return active() && port_target(qdGlobals().thePort, &t);
+}
+
+void Executor::hidpi::forget_offscreen(GWorldPtr gw)
+{
+    g_offscreens.erase((const void *)gw);
+}
+
+namespace
+{
+/* A pixmap's pixels as colours, and back (indexed: the nearest entry). */
+struct Colours
+{
+    int bpp;
+    std::vector<uint32_t> table; /* bpp <= 8: by pixel value, 0x00RRGGBB */
+    mutable std::map<uint32_t, uint32_t> nearest;
+
+    explicit Colours(const PixMap *pm) : bpp(pm->pixelSize)
+    {
+        if(bpp > 8)
+            return;
+        table.assign(1 << bpp, 0);
+        CTabHandle ct = pm->pmTable;
+        if(!ct || !*ct)
+        {
+            if(bpp == 1)
+                table = { 0xFFFFFF, 0x000000 };
+            return;
+        }
+        /* a device's table says each entry's pixel value (ctFlags' high
+           bit); when those aren't a pixel value each, the entries' order */
+        int n = std::min((int)CTAB_SIZE(ct) + 1, (int)table.size());
+        std::vector<bool> used(table.size());
+        bool by_value = CTAB_FLAGS(ct) & 0x8000;
+        for(int i = 0; i < n && by_value; i++)
+        {
+            int v = CTAB_TABLE(ct)[i].value;
+            if(v < 0 || v >= (int)table.size() || used[v])
+                by_value = false;
+            else
+                used[v] = true;
+        }
+        for(int i = 0; i < n; i++)
+        {
+            const ColorSpec &c = CTAB_TABLE(ct)[i];
+            table[by_value ? (int)c.value : i] = (c.rgb.red >> 8) << 16 | (c.rgb.green >> 8) << 8 | (c.rgb.blue >> 8);
+        }
+    }
+    uint32_t rgb(uint32_t raw) const
+    {
+        switch(bpp)
+        {
+            case 16:
+            {
+                auto x = [](uint32_t c) { return (c << 3 | c >> 2) & 0xFF; };
+                return x(raw >> 10 & 31) << 16 | x(raw >> 5 & 31) << 8 | x(raw & 31);
+            }
+            case 32: return raw & 0xFFFFFF;
+            default: return raw < table.size() ? table[raw] : 0;
+        }
+    }
+    uint32_t raw(uint32_t rgb) const
+    {
+        switch(bpp)
+        {
+            case 16: return (rgb >> 19 & 31) << 10 | (rgb >> 11 & 31) << 5 | (rgb >> 3 & 31);
+            case 32: return rgb;
+            default:
+            {
+                auto it = nearest.find(rgb);
+                if(it != nearest.end())
+                    return it->second;
+                uint32_t best = 0;
+                long bestd = -1;
+                for(uint32_t v = 0; v < table.size(); v++)
+                {
+                    long d = 0;
+                    for(int sh = 0; sh <= 16; sh += 8)
+                    {
+                        long e = (long)(rgb >> sh & 0xFF) - (long)(table[v] >> sh & 0xFF);
+                        d += e * e;
+                    }
+                    if(bestd < 0 || d < bestd)
+                        bestd = d, best = v;
+                }
+                return nearest[rgb] = best;
+            }
+        }
+    }
+};
+
+/* Whether colours A and B are the same, as far as a copy between pixmaps
+   of these depths keeps them */
+bool same_rgb(uint32_t a, uint32_t b, int tolerance)
+{
+    for(int sh = 0; sh <= 16; sh += 8)
+        if(std::abs((int)(a >> sh & 0xFF) - (int)(b >> sh & 0xFF)) > tolerance)
+            return false;
+    return true;
+}
+
+/* How a copy combines the source with the destination, for runs. */
+enum class Combine
+{
+    Copy,        /* srcCopy, ditherCopy: the source's pixels */
+    Transparent, /* srcOr (white), transparent (the background colour): the
+                    source's pixels except that colour, which leaves the
+                    destination's */
+};
+
+/* Pixels of a pixel buffer inside BOX, as a run keeps them. */
+struct Pixels
+{
+    IRect box;
+    int bpp, x0, rowLen;
+    std::vector<uint8_t> px;
+    uint32_t at(int x, int y) const { return raw_pixel(&px[(size_t)(y - box.top) * rowLen], x - x0, bpp); }
+};
+
+Pixels snapshot(const Screen &s, const IRect &box)
+{
+    Pixels p{ box, s.bpp };
+    int ppb = 8 / std::min(s.bpp, 8);
+    p.x0 = s.bpp < 8 ? box.left / ppb * ppb : box.left;
+    p.rowLen = s.bpp < 8 ? (box.right - p.x0 + ppb - 1) / ppb : (box.right - box.left) * s.bpp / 8;
+    p.px.resize((size_t)std::max(0, box.bottom - box.top) * p.rowLen);
+    for(int y = box.top; y < box.bottom; y++)
+        memcpy(&p.px[(size_t)(y - box.top) * p.rowLen], s.data + (size_t)y * s.rowBytes + p.x0 * s.bpp / 8,
+               p.rowLen);
+    return p;
+}
+
+/* Where a copy puts the source's pixels: the source rectangle (source
+   pixels) onto the destination rectangle (destination pixels), scaled as
+   scale_blt_bitmap samples (destination pixel i of a row takes source
+   pixel (i * step) >> 16, step = (old width << 16) / new width). */
+struct Placement
+{
+    int sl, st, sw, sh; /* source rectangle */
+    int dl, dt, dw, dh; /* destination rectangle */
+    long fx, fy;        /* the steps, 16.16 */
+    double kx, ky;      /* destination pixels a source pixel */
+
+    Placement(const IRect &s, const IRect &d)
+        : sl(s.left), st(s.top), sw(s.right - s.left), sh(s.bottom - s.top), dl(d.left), dt(d.top),
+          dw(d.right - d.left), dh(d.bottom - d.top), fx(((long)sw << 16) / dw), fy(((long)sh << 16) / dh),
+          kx((double)dw / sw), ky((double)dh / sh)
+    {
+    }
+    int src_x(int x) const { return sl + (int)(((long)(x - dl) * fx) >> 16); }
+    int src_y(int y) const { return st + (int)(((long)(y - dt) * fy) >> 16); }
+    float x(float sx) const { return dl + (sx - sl) * kx; }
+    float y(float sy) const { return dt + (sy - st) * ky; }
+    IRect rect(const IRect &r) const
+    {
+        return { (int)std::floor(y(r.top)), (int)std::floor(x(r.left)), (int)std::ceil(y(r.bottom)),
+                 (int)std::ceil(x(r.right)) };
+    }
+};
+
+/* RUN of the source, where the copy put it (AT: scaled, its geometry
+   with it): its box the part copied; its ink the pixels where the
+   destination has the colour the run left in the source pixel there (SC,
+   DC: the two pixmaps' colours; masked out, clipped or not that colour:
+   not ink); its "before" there what the destination would have had
+   without the text: the source's "before" in the destination's pixels
+   (Copy), or with Transparent where that is the background colour BG,
+   what the destination had before the copy (OLD); its clip CLIP's part of
+   its own. Null when nothing it drew landed. D: the destination after the
+   copy. */
+std::shared_ptr<Run> carried(const Run &run, const Placement &at, const IRect &src_area,
+                             const std::vector<IRect> &clip, const Screen &d, const Colours &sc,
+                             const Colours &dc, Combine how, uint32_t bg, const Pixels &old)
+{
+    IRect sbox = intersection(run.box, src_area);
+    if(empty(sbox))
+        return nullptr;
+    IRect box = intersection(at.rect(sbox), { 0, 0, d.height, d.width });
+    if(empty(box))
+        return nullptr;
+    auto n = std::make_shared<Run>(run);
+    n->box = box;
+    n->bpp = d.bpp;
+    int ppb = 8 / std::min(d.bpp, 8);
+    n->x0 = d.bpp < 8 ? box.left / ppb * ppb : box.left;
+    n->rowLen = d.bpp < 8 ? (box.right - n->x0 + ppb - 1) / ppb : (box.right - box.left) * d.bpp / 8;
+    capture(*n, d, n->after);
+    n->before = n->after;
+    bool same_pixels = sc.bpp == dc.bpp && sc.table == dc.table && how == Combine::Copy;
+    int tolerance = dc.bpp <= 8 && sc.table != dc.table ? 0x28 : sc.bpp == dc.bpp ? 0 : 8;
+    /* the run's ink only where the copy drew (masked out or clipped, the
+       destination's pixel may be the same by chance: another line's text
+       scrolled under it) */
+    bool ink = false;
+    std::vector<std::pair<int, int>> spans;
+    for(int y = box.top; y < box.bottom; y++)
+    {
+        int sy = at.src_y(y);
+        if(sy < sbox.top || sy >= sbox.bottom)
+            continue;
+        spans.clear();
+        for(const IRect &k : clip)
+            if(k.top <= y && y < k.bottom)
+                spans.push_back({ std::max(k.left, box.left), std::min(k.right, box.right) });
+        const uint8_t *sb = &run.before[(size_t)(sy - run.box.top) * run.rowLen];
+        const uint8_t *sa = &run.after[(size_t)(sy - run.box.top) * run.rowLen];
+        uint8_t *nb = &n->before[(size_t)(y - box.top) * n->rowLen];
+        const uint8_t *na = &n->after[(size_t)(y - box.top) * n->rowLen];
+        for(auto [l, r] : spans)
+        for(int x = l; x < r; x++)
+        {
+            int sx = at.src_x(x);
+            if(sx < sbox.left || sx >= sbox.right)
+                continue;
+            uint32_t b = raw_pixel(sb, sx - run.x0, run.bpp), a = raw_pixel(sa, sx - run.x0, run.bpp);
+            if(b == a)
+                continue;
+            uint32_t now = raw_pixel(na, x - n->x0, n->bpp);
+            if(same_pixels)
+            {
+                if(now != a)
+                    continue;
+                set_raw_pixel(nb, x - n->x0, n->bpp, b);
+                ink = true;
+                continue;
+            }
+            uint32_t a_rgb = sc.rgb(a), b_rgb = sc.rgb(b);
+            if(!same_rgb(dc.rgb(now), a_rgb, tolerance))
+                continue;
+            uint32_t was;
+            if(how == Combine::Copy)
+                was = dc.raw(b_rgb);
+            else if(same_rgb(b_rgb, bg, 0) && !same_rgb(a_rgb, bg, 0))
+                was = old.at(x, y);
+            else
+                continue;
+            if(was == now)
+                continue;
+            set_raw_pixel(nb, x - n->x0, n->bpp, was);
+            ink = true;
+        }
+    }
+    if(!ink && !run.noInk)
+        return nullptr;
+    /* the text's own background box left behind (srcCopy text copied
+       transparently) */
+    if(how != Combine::Copy && n->mode == Mode::Copy)
+        n->mode = Mode::Or;
+    n->noInk = !ink;
+    /* the geometry, scaled with the pixels: text by its size (the height's
+       scale) and a horizontal scale besides */
+    float kx = at.kx, ky = at.ky;
+    for(size_t i = 0; i < n->xs.size(); i++)
+    {
+        n->xs[i] = at.x(n->xs[i]);
+        n->advances[i] *= kx;
+    }
+    n->baseline = at.y(n->baseline);
+    n->ulLeft = at.x(n->ulLeft);
+    n->ulRight = at.x(n->ulRight);
+    n->size *= ky;
+    n->xscale *= kx / ky;
+    if(kx != 1 || ky != 1)
+    {
+        n->bold = std::max(1, (int)std::lround(n->bold * kx));
+        n->ulThick = std::max(1, (int)std::lround(n->ulThick * ky));
+        n->shadow = n->shadow ? std::max(1, (int)std::lround(n->shadow * kx)) : 0;
+    }
+    for(Executor::hidpi::Shape &sh : n->shapes)
+    {
+        for(size_t i = 0; i + 1 < sh.pts.size(); i += 2)
+        {
+            if(sh.kind == Executor::hidpi::Shape::Circle && i == 2)
+            {
+                sh.pts[2] *= std::min(kx, ky); /* the radius */
+                break;
+            }
+            sh.pts[i] = at.x(sh.pts[i]);
+            sh.pts[i + 1] = at.y(sh.pts[i + 1]);
+        }
+        sh.stroke *= std::min(kx, ky);
+        sh.gx = at.x(sh.gx);
+        sh.gy = at.y(sh.gy);
+        sh.gx2 = at.x(sh.gx2);
+        sh.gy2 = at.y(sh.gy2);
+        sh.gr *= std::min(kx, ky);
+    }
+    n->clip.clear();
+    for(const IRect &c : run.clip)
+    {
+        IRect m = at.rect(c);
+        for(const IRect &k : clip)
+        {
+            IRect r = intersection(m, k);
+            if(!empty(r))
+                n->clip.push_back(r);
+        }
+    }
+    if(n->clip.empty())
+        return nullptr;
+    return n;
+}
+
+void log_copy(const char *what, const IRect &r, size_t runs)
+{
+    if(ERROR_ENABLED_P(ERROR_HIDPI_LOG))
+        fprintf(stderr, "[hidpi] copy %d,%d-%d,%d: %s (%zu runs)\n", r.left, r.top, r.right, r.bottom, what, runs);
+}
+}
+
+void Executor::hidpi::copy_bits(const PixMap *src, const PixMap *dst, const Rect *sr, const Rect *dr, int mode,
+                                RgnHandle mask, const std::function<void()> &blit)
+{
+    Target from;
+    bool src_screen = active() && vdriver && vdriver->framebuffer() && LM(MainDevice)
+        && src->baseAddr == PIXMAP_BASEADDR(GD_PMAP(LM(MainDevice)));
+    if(!active() || (!src_screen && g_offscreens.empty()) || !pixmap_target(src, &from, false)
+       || from.runs->empty())
+    {
+        blit();
+        return;
+    }
+    int sx = src->bounds.left, sy = src->bounds.top;
+    IRect src_area = intersection({ sr->top - sy, sr->left - sx, sr->bottom - sy, sr->right - sx },
+                                  { 0, 0, from.s.height, from.s.width });
+    /* the source's runs in the rectangle copied that it still shows */
+    Runs runs;
+    {
+        std::unique_lock lk(g_mutex, std::defer_lock);
+        if(from.screen)
+            lk.lock();
+        for(const auto &r : *from.runs)
+            if(intersects(r->box, src_area) && run_valid(*r, from.s))
+                runs.push_back(r);
+    }
+    /* srcCopy, srcOr or transparent: else the copy is the 1x pixels */
+    const char *why = nullptr;
+    if(runs.empty())
+        why = "no runs";
+    else if(sr->right <= sr->left || sr->bottom <= sr->top || dr->right <= dr->left || dr->bottom <= dr->top)
+        why = "empty";
+    Combine how = Combine::Copy;
+    uint32_t bg = 0xFFFFFF;
+    switch(mode & ~64) /* ditherCopy: 64 */
+    {
+        case srcCopy:
+            break;
+        case srcOr:
+            how = Combine::Transparent;
+            break;
+        case transparent:
+        {
+            how = Combine::Transparent;
+            GrafPtr port = qdGlobals().thePort;
+            bg = (CGrafPort_p(port) ? argb_of(CPORT_RGB_BK_COLOR(port))
+                                    : argb_of(*ROMlib_qd_color_to_rgb(PORT_BK_COLOR(port))))
+                & 0xFFFFFF;
+            break;
+        }
+        default:
+            if(!why)
+                why = "transfer mode";
+    }
+    Target to;
+    if(!why && !pixmap_target(dst, &to, true))
+        why = "destination";
+    if(why)
+    {
+        log_copy(why, src_area, runs.size());
+        blit();
+        return;
+    }
+
+    int dx = dst->bounds.left, dy = dst->bounds.top;
+    IRect dst_area = intersection({ dr->top - dy, dr->left - dx, dr->bottom - dy, dr->right - dx },
+                                  { 0, 0, to.s.height, to.s.width });
+    /* what the destination had: where a transparent copy leaves it */
+    Pixels old = how == Combine::Copy ? Pixels{ dst_area, to.s.bpp, 0, 0, {} } : snapshot(to.s, dst_area);
+    Colours sc(src), dc(dst);
+
+    blit();
+
+    /* where the copy could draw: the destination rectangle, the port's
+       vis and clip, the mask */
+    std::vector<IRect> clip = port_clip(qdGlobals().thePort, dx, dy, dst_area);
+    if(mask)
+    {
+        std::vector<IRect> m, both;
+        region_rects(mask, dx, dy, m);
+        for(const IRect &a : clip)
+            for(const IRect &b : m)
+                if(!empty(intersection(a, b)))
+                    both.push_back(intersection(a, b));
+        clip = std::move(both);
+    }
+    Placement at({ sr->top - sy, sr->left - sx, sr->bottom - sy, sr->right - sx },
+                 { dr->top - dy, dr->left - dx, dr->bottom - dy, dr->right - dx });
+    Runs made;
+    for(const auto &r : runs)
+        if(auto n = carried(*r, at, src_area, clip, to.s, sc, dc, how, bg, old))
+            made.push_back(n);
+    if(made.empty())
+    {
+        log_copy("nothing landed", src_area, runs.size());
+        return;
+    }
+
+    std::unique_lock lk(g_mutex, std::defer_lock);
+    if(to.screen)
+        lk.lock();
+    Runs &dst_runs = *to.runs;
+    /* the runs it copied over: those the copy brings again go (a window's
+       contents copied again unchanged: drawn twice they'd darken), giving
+       their "before"; those it painted over go; the others' "after" is
+       what's there now */
+    for(size_t i = 0; i < dst_runs.size();)
+    {
+        auto it = dst_runs.begin() + i;
+        if(!intersects((*it)->box, dst_area, 1))
+        {
+            i++;
+            continue;
+        }
+        bool replaced = false;
+        for(auto &n : made)
+        {
+            /* the same piece again, all of it (a line cut in two by
+               separate copies, a scroll and the strip it exposes, is two
+               pieces) */
+            const IRect &o = (*it)->box;
+            if(o.top < n->box.top || o.left < n->box.left || o.bottom > n->box.bottom || o.right > n->box.right)
+                continue;
+            bool same = (*it)->shapes.empty() ? !(*it)->glyphs.empty() && covered_by(**it, *n)
+                                             : (*it)->box.top == n->box.top && (*it)->box.left == n->box.left
+                                                 && (*it)->shapes == n->shapes;
+            if(same)
+            {
+                auto m = std::make_shared<Run>(*n);
+                inherit_before(*m, **it);
+                n = m;
+                replaced = true;
+                break;
+            }
+        }
+        if(replaced || !run_valid(**it, to.s))
+            dst_runs.erase(it);
+        else if(recapture(dst_runs, it, to.s))
+            i++;
+    }
+    for(auto &n : made)
+        dst_runs.push_back(n);
+    trim(dst_runs, to);
+    if(ERROR_ENABLED_P(ERROR_HIDPI_LOG))
+    {
+        char what[96];
+        snprintf(what, sizeof what, "%zu carried to %s at %+d,%+d x%.2f,%.2f (%zu there)", made.size(),
+                 to.screen ? "the screen" : "an offscreen", at.dl - at.sl, at.dt - at.st, at.kx, at.ky,
+                 dst_runs.size());
+        log_copy(what, src_area, runs.size());
     }
 }

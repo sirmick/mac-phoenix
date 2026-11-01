@@ -835,6 +835,24 @@ set_tests_properties(hidpi_chrome_executor PROPERTIES
   TIMEOUT 180 LABELS "executor" SKIP_RETURN_CODE 77
   ENVIRONMENT "MACEMU_BINARY=$<TARGET_FILE:mac-phoenix>")
 
+# The 8.6 Finder's desktop labels after an update that covers only part of
+# them: a Finder window over half of two labels closed, the icon column as
+# before (Executor's DMDrawDesktopRegion clipped like the Finder's update).
+add_test(NAME desktop_labels_executor
+  COMMAND bash ${TEST_DIR}/test_desktop_labels_executor.sh --port 18516)
+set_tests_properties(desktop_labels_executor PROPERTIES
+  TIMEOUT 150 LABELS "executor" SKIP_RETURN_CODE 77
+  ENVIRONMENT "MACEMU_BINARY=$<TARGET_FILE:mac-phoenix>")
+
+# Executor's HiDPI GWorld shadows (docs/executor/HiDPI.md "Phase 4"): GWorldGallery
+# on 8.6 at --executor-scale 2, text drawn offscreen and copied to the screen
+# against the 1x frame scaled up. Skips without Skia (-DEXECUTOR_SKIA=ON).
+add_test(NAME hidpi_gworld_executor
+  COMMAND bash ${TEST_DIR}/test_hidpi_gworld.sh --port 18476)
+set_tests_properties(hidpi_gworld_executor PROPERTIES
+  TIMEOUT 180 LABELS "executor" SKIP_RETURN_CODE 77
+  ENVIRONMENT "MACEMU_BINARY=$<TARGET_FILE:mac-phoenix>")
+
 # Executor's Toolbox gtests built with Retro68 into a 68k app and run in
 # the guest: on Apple's ROM and System (the ground truth) and on Executor.
 # Skips without Retro68 (toolchain/retro68). The cells share the app's
@@ -1132,6 +1150,19 @@ foreach(cell IN ITEMS "scroll_bars_executor_86;--backend executor;18210;guest;ex
     ENVIRONMENT "MACEMU_ROM=${TEST_PPC_ROM}"
   )
 endforeach()
+
+# CodeWarrior IDE 3.2 (PowerPC) on Executor on 8.6's System: runs, its
+# second preparation of Translation (a global data section) given the
+# system's instance, relocated, not freed memory.
+add_test(
+  NAME codewarrior_executor_86
+  COMMAND bash ${TEST_DIR}/test_codewarrior_86.sh --timeout 120 --port 18340
+)
+set_tests_properties(codewarrior_executor_86 PROPERTIES
+  TIMEOUT 240
+  LABELS "guest;executor"
+  SKIP_RETURN_CODE 77
+)
 
 # Icon Services from PowerPC code (IconServicesLib) by IconTest
 # (tests/guest/iconservices, Retro68): Executor's (iconservices.cpp), and

@@ -141,7 +141,11 @@ void set_err_name(Str255 errname)
    GlyphsCache keep the font object and glyph cache lists there; given a
    fresh copy per application, the second application's ATS walked the
    first's skip list to an end node it no longer recognised, and spun
-   (docs/executor/MacOS8-9.md). Relocated by the first preparation only.
+   (docs/executor/MacOS8-9.md). Relocated by the first preparation only,
+   so its transition vectors point into that preparation's code: its memory
+   (keep) goes back with the section, when the last connection using it
+   closes. Freed with the first connection, 8.6's Translation (Easy Open)
+   handed CodeWarrior IDE's Finder calls freed memory as its data.
    Containers in files only: an in-memory one has no lasting identity. */
 struct global_section
 {
@@ -151,6 +155,9 @@ struct global_section
     void *start;
     uint32_t length;
     bool relocated;
+    int refs;                 /* connections using it */
+    ConnectionID owner;       /* the preparation that relocated it, open */
+    std::vector<Ptr> keep;    /* the owner's memory, once it closed */
 };
 std::vector<global_section> global_sections;
 
@@ -1233,15 +1240,53 @@ static void close_connection(ConnectionID cid)
     loaded_fragment gone = *f;
     loaded.erase(loaded.begin() + (f - loaded.data()));
 
+    /* The system's global sections it uses lose a connection; the rest of
+       its memory goes back, unless a global section it relocated is still
+       in use: that keeps it. */
+    std::vector<Ptr> memory;
+    std::vector<global_section *> globals;
     uint32_t lo = guest_cast<uint32_t>(gone.image), hi = lo + gone.image_length;
     for(uint32_t i = 0; i < cid->n_sects; i++)
     {
-        uint32_t at = guest_cast<uint32_t>((Ptr)(void *)cid->sects[i].start);
-        if(at && (at < lo || at >= hi))
-            DisposePtr((Ptr)(void *)cid->sects[i].start);
+        Ptr start = (Ptr)(void *)cid->sects[i].start;
+        uint32_t at = guest_cast<uint32_t>(start);
+        auto g = std::find_if(global_sections.begin(), global_sections.end(),
+                              [&](const global_section& g) { return at && g.start == (void *)start; });
+        if(g != global_sections.end())
+        {
+            --g->refs;
+            globals.push_back(&*g);
+        }
+        else if(at && (at < lo || at >= hi))
+            memory.push_back(start);
     }
     if(gone.owns_image)
-        DisposePtr(gone.image);
+        memory.push_back(gone.image);
+    for(global_section *g : globals)
+        if(g->owner == cid)
+        {
+            g->owner = nullptr;
+            if(g->refs > 0)
+            {
+                g->keep.insert(g->keep.end(), memory.begin(), memory.end());
+                memory.clear();
+            }
+        }
+    for(Ptr p : memory)
+        DisposePtr(p);
+    std::vector<void *> used;
+    for(global_section *g : globals)
+        used.push_back(g->start);
+    for(auto g = global_sections.begin(); g != global_sections.end();)
+        if(g->refs <= 0 && std::find(used.begin(), used.end(), g->start) != used.end())
+        {
+            DisposePtr((Ptr)g->start);
+            for(Ptr p : g->keep)
+                DisposePtr(p);
+            g = global_sections.erase(g);
+        }
+        else
+            ++g;
     DisposePtr((Ptr)cid);
     if(CFragClosureID c = gone.closure)
     {
@@ -1781,6 +1826,7 @@ do_pef_section(ConnectionID connp, const void *addr,
     {
         if(global_section *g = find_global_section(i))
         {
+            ++g->refs;
             connp->sects[i].start = g->start;
             connp->sects[i].length = g->length;
             connp->sects[i].perms = readable_section | writable_section
@@ -1839,7 +1885,7 @@ do_pef_section(ConnectionID connp, const void *addr,
         if(retval == noErr)
             global_sections.push_back({ current_origin->file, current_origin->offset, i,
                                         connp->sects[i].start.get(), connp->sects[i].length,
-                                        false });
+                                        false, 1, connp, {} });
     }
     return retval;
 }

@@ -18,6 +18,8 @@
 //                    &nesting=N calls nested N deep (default 6); ?debug=OPTS Executor's
 //                    --executor-debug options. Everything printed goes to the
 //                    server too (log.js; tools/web/server keeps it per session)
+//   ?ppcbreak=SPEC   PowerPC breakpoints (as --executor-ppc-break; several
+//                    separated by ';'; docs/executor/PPCTrace.md)
 // library.json beside the page (optional) offers more disks: [{ title,
 // url, note }]; the ones picked are remembered (localStorage) and loaded
 // like ?disk=.
@@ -560,7 +562,7 @@ async function start() {
                          volumeKey: volumeKey(files), sync: !!account, relay: !!account,
                          ids: imageIds, legacyKeys, log: Log.session,
                          logtraps: params.get('logtraps'), nesting: params.get('nesting'),
-                         debug: params.get('debug') },
+                         debug: params.get('debug'), ppcbreak: params.get('ppcbreak') },
                        [offscreen]);
     worker.postMessage({ type: 'visibility', hidden: document.visibilityState === 'hidden' });
     worker.onmessage = (e) => {

@@ -409,12 +409,12 @@ Executor::text_helper(LONGINT n, Ptr textbufp, GUEST<Point> *nump, GUEST<Point> 
     vOutput = WIDTHPTR->vOutput;
     hOutputInverse = FixRatio(1 << 8, hOutput);
 
-    /* MacPhoenix: text on the screen recorded for the high-resolution
-       presentation (hidpi.h), each character where the pen is; not text
+    /* MacPhoenix: text on the screen or offscreen recorded for the
+       high-resolution presentation (hidpi.h), each character where the pen is; not text
        scaled by numer/denom */
     std::vector<hidpi::Glyph> hd_glyphs;
     bool hd_record = action == text_helper_draw && hidpi::active() && hOutput == 256
-        && vOutput == 256 && hidpi::drawing_on_screen();
+        && vOutput == 256 && hidpi::recording();
 
     space_extra = PORT_SP_EXTRA(qdGlobals().thePort);
     spacewidth = (WIDTHPTR->tabData[(unsigned)' '] + space_extra

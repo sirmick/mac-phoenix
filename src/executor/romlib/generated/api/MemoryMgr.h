@@ -138,6 +138,15 @@ NOTRAP_FUNCTION2(LMGetheapcheck);
 NOTRAP_FUNCTION2(LMSetheapcheck);
 
 
+// heapcheck by its LowMem.h name, for PrivateInterfaceLib's accessors:
+// MPW Shell keeps its globals there (MacPgm, MPW.yaml) through them.
+const LowMemGlobal<Ptr > HpChk{ 0x316 };
+inline Ptr  LMGetHpChk() { return LM(HpChk); }
+inline void LMSetHpChk(Ptr val) { LM(HpChk) = val; }
+LIBRARY_FUNCTION(PrivateInterfaceLib, LMGetHpChk, LMGetHpChk);
+LIBRARY_FUNCTION(PrivateInterfaceLib, LMSetHpChk, LMSetHpChk);
+
+
 // MemoryMgr IMI-85 (true);
 const LowMemGlobal<LONGINT > Lo3Bytes{ 0x31A };
 inline LONGINT  LMGetLo3Bytes() { return LM(Lo3Bytes); }
@@ -178,12 +187,12 @@ NOTRAP_FUNCTION2(LMGetGZMoveHnd);
 NOTRAP_FUNCTION2(LMSetGZMoveHnd);
 
 
-// MemoryMgr ThinkC (true-b);
+// MemoryMgr ThinkC (true-b); its accessors are PrivateInterfaceLib's.
 const LowMemGlobal<ProcPtr > IAZNotify{ 0x33C };
 inline ProcPtr  LMGetIAZNotify() { return LM(IAZNotify); }
 inline void LMSetIAZNotify(ProcPtr val) { LM(IAZNotify) = val; }
-NOTRAP_FUNCTION2(LMGetIAZNotify);
-NOTRAP_FUNCTION2(LMSetIAZNotify);
+LIBRARY_FUNCTION(PrivateInterfaceLib, LMGetIAZNotify, LMGetIAZNotify);
+LIBRARY_FUNCTION(PrivateInterfaceLib, LMSetIAZNotify, LMSetIAZNotify);
 
 
 // MemoryMgr IMI-95 (true);

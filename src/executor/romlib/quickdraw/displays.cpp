@@ -7,6 +7,7 @@
 #include <mman/mman.h>
 #include <quickdraw/cquick.h>
 #include <wind/wind.h>
+#include <rsys/process.h>
 #include <vdriver/vdriver.h>
 #include <base/traps.impl.h>
 
@@ -354,12 +355,21 @@ GDHandle Executor::C_DMGetNextScreenDevice(GDHandle theDevice, Boolean activeOnl
 
 /* MacPhoenix: the desktop painted, not made an update: the 8.x Finder calls
    it while it updates its desktop window, which then never stopped getting
-   update events (and its Apple events waited behind them). */
+   update events (and its Apple events waited behind them). Painted only
+   where the desktop layer may draw: inside that update the Finder erases
+   each icon's whole label rectangle with DMDrawDesktopRect, then redraws
+   the label clipped to the update; a label partly outside it lost the rest
+   (left wiped where an application's windows had uncovered the desktop). */
 void Executor::C_DMDrawDesktopRegion(RgnHandle globalRgn)
 {
+    RgnHandle rgn = NewRgn();
+    CopyRgn(globalRgn, rgn);
+    if(RgnHandle vis = ROMlib_desktop_layer_vis_region())
+        SectRgn(rgn, vis, rgn);
     ROMlib_painting_desktop_only = true;
-    PaintOne(nullptr, globalRgn);
+    PaintOne(nullptr, rgn);
     ROMlib_painting_desktop_only = false;
+    DisposeRgn(rgn);
 }
 
 void Executor::C_DMDrawDesktopRect(Rect *globalRect)
