@@ -524,6 +524,14 @@ void Executor::hidpi::chrome_draw(const Rect &r, Shapes shapes, const std::funct
         blit();
         return;
     }
+    /* nothing of it drawn (a title's background redrawn under the bar's
+       corners): the runs there stay */
+    std::vector<IRect> clip = port_clip(port, dx, dy, box);
+    if(clip.empty())
+    {
+        blit();
+        return;
+    }
     auto run = std::make_shared<Run>();
     run->box = box;
     run->bpp = s.bpp;
@@ -558,7 +566,7 @@ void Executor::hidpi::chrome_draw(const Rect &r, Shapes shapes, const std::funct
         sh.gy2 -= dy;
     }
     run->shapes = std::move(shapes);
-    run->clip = port_clip(port, dx, dy, box);
+    run->clip = std::move(clip);
 
     std::lock_guard lk(g_mutex);
     for(auto &u : under)
