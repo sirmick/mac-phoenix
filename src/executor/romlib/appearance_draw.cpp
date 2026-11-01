@@ -15,6 +15,7 @@
 #include <base/functions.impl.h>
 #include "appearance_draw.h"
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <iterator>
 #include <tuple>
@@ -280,7 +281,56 @@ void sliderChannel(const TrackGeometry &g, bool active)
 /* The pointed thumb: black outline (#777 inactive), shaded in the accent
    ramp lit from the leading top corner, three grip ridges; pressed a step
    darker, inactive #ddd and no grip (appr controls.48). */
+void sliderThumbPixels(const TrackGeometry &g, bool active, bool pressed);
+
+/* The pointed thumb at the display scale: its outline filled, the body
+   inside it, the lit and shaded edges, the grip (the 1x shape's corners) */
+hidpi::Shapes sliderThumbShapes(const TrackGeometry &g, bool active, bool pressed)
+{
+    float a0 = g.lo(g.thumb), c0 = g.horizontal ? g.thumb.top : g.thumb.left;
+    auto pts = [&](std::initializer_list<float> ac) {
+        std::vector<float> v;
+        for(auto it = ac.begin(); it != ac.end(); it += 2)
+        {
+            float a = a0 + it[0], c = c0 + it[1];
+            v.push_back(g.horizontal ? a : c);
+            v.push_back(g.horizontal ? c : a);
+        }
+        return v;
+    };
+    int d = pressed ? 1 : 0;
+    auto ramp = [&](int idx) {
+        const RGBColor &c = accentRamp[std::max(0, idx - d)];
+        return active ? 0xFF000000u | (c.red >> 8) << 16 | (c.green >> 8) << 8 | (c.blue >> 8) : argbGray(kFace);
+    };
+    hidpi::Shapes s;
+    s.push_back({ hidpi::Shape::Polygon, pts({ 0, 1, 1, 0, 14, 0, 15, 1, 15, 10, 9, 16, 6, 16, 0, 10 }), 0,
+                  argbGray(active ? kBlack : 0x7777) });
+    s.push_back({ hidpi::Shape::Polygon, pts({ 1, 1, 14, 1, 14, 10.4f, 8.6f, 15, 6.4f, 15, 1, 10.4f }), 0, ramp(3) });
+    s.push_back({ hidpi::Shape::Polyline, pts({ 13.5f, 2, 13.5f, 10.2f, 8.4f, 14.6f }), 1, ramp(2) });
+    s.push_back({ hidpi::Shape::Polyline, pts({ 1.5f, 10.2f, 6.6f, 14.6f }), 1, ramp(2) });
+    s.push_back({ hidpi::Shape::Polyline, pts({ 1.5f, 9.5f, 1.5f, 1.5f, 12.5f, 1.5f }), 1, ramp(4) });
+    if(active)
+        for(int k = 4; k <= 8; k += 2)
+        {
+            s.push_back({ hidpi::Shape::Polyline, pts({ k + 0.5f, 3.5f, k + 0.5f, 8.5f }), 1, ramp(4) });
+            s.push_back({ hidpi::Shape::Polyline, pts({ k + 1.5f, 4.5f, k + 1.5f, 9.5f }), 1, ramp(1) });
+        }
+    return s;
+}
+
 void sliderThumb(const TrackGeometry &g, bool active, bool pressed)
+{
+    Rect box = g.thumb;
+    if(g.horizontal)
+        box.bottom = box.top + 16;
+    else
+        box.right = box.left + 16;
+    hidpi::chrome_draw(box, hidpi::active() ? sliderThumbShapes(g, active, pressed) : hidpi::Shapes{},
+                       [&] { sliderThumbPixels(g, active, pressed); });
+}
+
+void sliderThumbPixels(const TrackGeometry &g, bool active, bool pressed)
 {
     SliderAxes ax{ g.horizontal, g.lo(g.thumb), g.horizontal ? g.thumb.top : g.thumb.left };
     int d = pressed ? 1 : 0;
@@ -553,7 +603,70 @@ Look lookOf(ThemeDrawState state)
     }
 }
 
+/* Points on a quarter circle round (cx, cy) from angle A0 to A1 degrees
+   (0 right, 90 down), appended to V. */
+void arcPts(std::vector<float> &v, float cx, float cy, float rad, float a0, float a1)
+{
+    for(int i = 0; i <= 6; i++)
+    {
+        float a = (a0 + (a1 - a0) * i / 6) * 3.14159265f / 180;
+        v.insert(v.end(), { cx + rad * std::cos(a), cy + rad * std::sin(a) });
+    }
+}
+
+/* A rounded rectangle's outline from its top left corner round, closed. */
+std::vector<float> roundRectPts(float l, float t, float r, float b, float rad)
+{
+    std::vector<float> v;
+    arcPts(v, l + rad, t + rad, rad, 180, 270);
+    arcPts(v, r - rad, t + rad, rad, 270, 360);
+    arcPts(v, r - rad, b - rad, rad, 0, 90);
+    arcPts(v, l + rad, b - rad, rad, 90, 180);
+    v.insert(v.end(), { v[0], v[1] });
+    return v;
+}
+
+void pushButtonPixels(const Rect &b, Look look);
+
+/* A push button at the display scale: the face inside the rounded
+   outline, the first ring following the corners, the square second ring,
+   the outline */
+hidpi::Shapes pushButtonShapes(const Rect &b, Look look)
+{
+    float L = b.left, T = b.top, R = b.right, B = b.bottom;
+    hidpi::Shapes s;
+    if(look == Look::inactive)
+    {
+        s.push_back({ hidpi::Shape::Polygon, roundRectPts(L, T, R, B, 3.5f), 0, argbGray(grey(0xd)) });
+        s.push_back({ hidpi::Shape::Polyline, roundRectPts(L + 0.5f, T + 0.5f, R - 0.5f, B - 0.5f, 3), 1,
+                      argbGray(grey(8)) });
+        return s;
+    }
+    bool p = look == Look::pressed;
+    s.push_back({ hidpi::Shape::Polygon, roundRectPts(L, T, R, B, 3.5f), 0, argbGray(grey(p ? 6 : 0xd)) });
+    std::vector<float> tl1{ L + 1.5f, B - 3 }, br1{ R - 1.5f, T + 3 };
+    arcPts(tl1, L + 3.5f, T + 3.5f, 2, 180, 270);
+    tl1.insert(tl1.end(), { R - 3, T + 1.5f });
+    arcPts(br1, R - 3.5f, B - 3.5f, 2, 0, 90);
+    br1.insert(br1.end(), { L + 3, B - 1.5f });
+    s.push_back({ hidpi::Shape::Polyline, tl1, 1, argbGray(grey(p ? 4 : 0xd)) });
+    s.push_back({ hidpi::Shape::Polyline, br1, 1, argbGray(grey(p ? 8 : 7)) });
+    s.push_back({ hidpi::Shape::Polyline, { L + 2.5f, B - 3, L + 2.5f, T + 2.5f, R - 3, T + 2.5f }, 1,
+                  argbGray(grey(p ? 5 : 0xf)) });
+    s.push_back({ hidpi::Shape::Polyline, { R - 2.5f, T + 3, R - 2.5f, B - 2.5f, L + 3, B - 2.5f }, 1,
+                  argbGray(grey(p ? 7 : 0xa)) });
+    s.push_back({ hidpi::Shape::Polyline, roundRectPts(L + 0.5f, T + 0.5f, R - 0.5f, B - 0.5f, 3), 1,
+                  argbGray(grey(0)) });
+    return s;
+}
+
 void pushButton(const Rect &b, Look look)
+{
+    hidpi::chrome_draw(b, hidpi::active() ? pushButtonShapes(b, look) : hidpi::Shapes{},
+                       [&] { pushButtonPixels(b, look); });
+}
+
+void pushButtonPixels(const Rect &b, Look look)
 {
     int L = b.left, T = b.top, R = b.right - 1, B = b.bottom - 1;
     if(look == Look::inactive)
@@ -678,6 +791,18 @@ Rect markBox(const Rect &b)
     return Rect{ (INTEGER)top, (INTEGER)(b.left + 2), (INTEGER)(top + 12), (INTEGER)(b.left + 14) };
 }
 
+/* The check box's tick at the display scale: its shadow, then the tick */
+hidpi::Shapes tickShapes(const Rect &r, Look look)
+{
+    float L = r.left, T = r.top;
+    hidpi::Shapes s;
+    if(look != Look::inactive)
+        s.push_back({ hidpi::Shape::Polyline, { L + 6.5f, T + 10, L + 12.5f, T + 4 }, 1.5f, argbGray(grey(8)) });
+    s.push_back({ hidpi::Shape::Polyline, { L + 2.5f, T + 6, L + 5.5f, T + 9, L + 11.5f, T + 3 }, 2,
+                  argbGray(grey(look == Look::inactive ? 8 : 0)) });
+    return s;
+}
+
 void checkBox(const Rect &b, Look look, ThemeButtonValue value)
 {
     Rect r = markBox(b);
@@ -699,16 +824,19 @@ void checkBox(const Rect &b, Look look, ThemeButtonValue value)
     {
         /* a tick, two pixels thick, out over the top right corner
            (8.6's is anti-aliased: an approximation) */
-        for(int k = 0; k < 2; k++)
-        {
-            lineGray(L + 2, T + 5 + k, L + 5, T + 8 + k, ink);
-            lineGray(L + 5, T + 8 + k, L + 11, T + 2 + k, ink);
-        }
-        if(look != Look::inactive)
-        {
-            lineGray(L + 6, T + 9, L + 12, T + 3, grey(7));
-            lineGray(L + 6, T + 10, L + 12, T + 4, grey(0xa));
-        }
+        Rect tickBox = { (INTEGER)(T + 1), (INTEGER)(L + 1), (INTEGER)(T + 12), (INTEGER)(L + 13) };
+        hidpi::chrome_draw(tickBox, hidpi::active() ? tickShapes(r, look) : hidpi::Shapes{}, [&] {
+            for(int k = 0; k < 2; k++)
+            {
+                lineGray(L + 2, T + 5 + k, L + 5, T + 8 + k, ink);
+                lineGray(L + 5, T + 8 + k, L + 11, T + 2 + k, ink);
+            }
+            if(look != Look::inactive)
+            {
+                lineGray(L + 6, T + 9, L + 12, T + 3, grey(7));
+                lineGray(L + 6, T + 10, L + 12, T + 4, grey(0xa));
+            }
+        });
     }
     else if(value == kThemeButtonMixed)
     {
@@ -726,9 +854,45 @@ void checkBox(const Rect &b, Look look, ThemeButtonValue value)
 /* A radio button: a sphere lit from the top left, its shade stepping
    along the diagonal (the ring just inside the outline darker), in a
    round outline whose ends soften */
+void radioPixels(const Rect &r, Look look, ThemeButtonValue value);
+
+/* The radio button at the display scale: the sphere as a radial gradient
+   lit from the top left, its outline, the dot */
+hidpi::Shapes radioShapes(const Rect &r, Look look, ThemeButtonValue value)
+{
+    float cx = r.left + 6, cy = r.top + 6;
+    uint32_t line = argbGray(grey(look == Look::inactive ? 8 : 0));
+    hidpi::Shapes s;
+    hidpi::Shape body{ hidpi::Shape::Circle, { cx, cy, 5.5f }, 0, argbGray(grey(0xd)) };
+    if(look != Look::inactive)
+    {
+        body.gx = r.left + 3.5f;
+        body.gy = r.top + 3.5f;
+        body.gr = 8.5f;
+        if(look == Look::pressed)
+            body.colors = { argbGray(grey(4)), argbGray(grey(5)), argbGray(grey(7)), argbGray(grey(9)) };
+        else
+            body.colors = { argbGray(grey(0xf)), argbGray(grey(0xe)), argbGray(grey(0xb)), argbGray(grey(8)) };
+        body.pos = { 0, 0.3f, 0.6f, 0.9f };
+    }
+    s.push_back(body);
+    s.push_back({ hidpi::Shape::Circle, { cx, cy, 5.5f }, 1, line });
+    if(value == kThemeButtonOn)
+        s.push_back({ hidpi::Shape::Circle, { cx, cy, 3 }, 0, line });
+    else if(value == kThemeButtonMixed)
+        s.push_back({ hidpi::Shape::Polygon, { cx - 3, cy - 1, cx + 3, cy - 1, cx + 3, cy + 1, cx - 3, cy + 1 }, 0, line });
+    return s;
+}
+
 void radioButton(const Rect &b, Look look, ThemeButtonValue value)
 {
     Rect r = markBox(b);
+    hidpi::chrome_draw(r, hidpi::active() ? radioShapes(r, look, value) : hidpi::Shapes{},
+                       [&] { radioPixels(r, look, value); });
+}
+
+void radioPixels(const Rect &r, Look look, ThemeButtonValue value)
+{
     /* by h + v from the box's corner: inside, and on the rim */
     static const uint8_t litIn[] = { 0xf, 0xf, 0xf, 0xf, 0xf, 0xf, 0xe, 0xf, 0xf, 0xe, 0xe, 0xd, 0xd, 0xb, 0xb, 0xa, 0xa };
     static const uint8_t litRim[] = { 0xd, 0xd, 0xd, 0xd, 0xb, 0xd, 0xd, 0xd, 0xb, 0xb, 0xd, 8, 0xb, 0xb, 8, 8, 8, 8, 8, 8 };
@@ -1453,7 +1617,65 @@ uint16_t tabGray(char c)
     return n * 0x1111;
 }
 
-void drawTabNorth(const Rect &bounds, const TabLook &look, int rows)
+/* A north tab at the display scale: its outline as a curve into a
+   straight slant (the 1x sides' steps), the face inside it, the lit edge
+   down the left and across the top, the shade down the right. Colours by
+   style (as tabLooks): outline, face, lit, shade (no lit or shade:
+   inactive). */
+hidpi::Shapes tabNorthShapes(const Rect &bounds, ThemeTabStyle style, int rows)
+{
+    static const uint8_t looks[][4] = { { 0, 0xc, 0xd, 8 }, { 0, 6, 4, 7 }, { 5, 0xd, 0xff, 0xff },
+                                        { 0, 0xe, 0xf, 8 }, { 5, 0xe, 0xff, 0xff } };
+    const uint8_t *c = looks[style];
+    float L = bounds.left, T = bounds.top, W = bounds.right - bounds.left;
+    bool front = rows > tabRows;
+    /* the left side D in from the edge, from Y up to the top's middle;
+       the right side the same mirrored */
+    auto side = [&](float d, float y, bool right) {
+        std::vector<float> v;
+        auto add = [&](float x, float yy) {
+            v.push_back(L + (right ? W - x : x));
+            v.push_back(T + yy);
+        };
+        if(y > tabRows)
+            add(d, y);
+        add(d + 6 - 6 * (std::min<float>(y, tabRows) - 4) / 17, std::min<float>(y, tabRows));
+        add(d + 6, 4);
+        add(6.6f + 0.7f * d, 2.4f + 0.7f * d);
+        add(8 + 0.7f * d, 1 + 0.7f * d);
+        add(10, d);
+        return v;
+    };
+    auto path = [&](float d, float y) {
+        std::vector<float> v = side(d, y, false), r = side(d, y, true);
+        for(size_t i = r.size(); i >= 2; i -= 2)
+            v.insert(v.end(), { r[i - 2], r[i - 1] });
+        return v;
+    };
+    hidpi::Shapes s;
+    s.push_back({ hidpi::Shape::Polygon, path(0, rows), 0, argbGray(c[1] * 0x1111) });
+    if(c[2] != 0xff)
+    {
+        std::vector<float> lit = side(2.5f, rows, false);
+        lit.insert(lit.end(), { L + W - 9, T + 2.5f });
+        s.push_back({ hidpi::Shape::Polyline, lit, 1, argbGray(c[2] * 0x1111) });
+        std::vector<float> shade = side(1.5f, front ? tabRows + 1 : rows, true);
+        s.push_back({ hidpi::Shape::Polyline, shade, 1, argbGray(c[3] * 0x1111) });
+    }
+    s.push_back({ hidpi::Shape::Polyline, path(0.5f, front ? tabRows + 1 : rows), 1, argbGray(c[0] * 0x1111) });
+    return s;
+}
+
+void drawTabNorthPixels(const Rect &bounds, const TabLook &look, int rows);
+
+void drawTabNorth(const Rect &bounds, ThemeTabStyle style, int rows)
+{
+    const Rect box = { bounds.top, bounds.left, (INTEGER)(bounds.top + rows), bounds.right };
+    hidpi::chrome_draw(box, hidpi::active() ? tabNorthShapes(bounds, style, rows) : hidpi::Shapes{},
+                       [&] { drawTabNorthPixels(bounds, tabLooks[style], rows); });
+}
+
+void drawTabNorthPixels(const Rect &bounds, const TabLook &look, int rows)
 {
     int L = bounds.left, R = bounds.right;
     for(int r = 0; r < rows; r++)
@@ -1489,7 +1711,7 @@ OSStatus Executor::C_DrawThemeTab(const Rect *inRect, ThemeTabStyle inStyle, The
         if(inStyle < (int)std::size(tabLooks))
         {
             DrawGuard guard;
-            drawTabNorth(*inRect, tabLooks[inStyle], front ? tabFrontRows : tabRows);
+            drawTabNorth(*inRect, inStyle, front ? tabFrontRows : tabRows);
         }
     }
     else

@@ -507,6 +507,88 @@ void Executor::hidpi::text_draw(const TextParams &p, const std::function<void()>
     }
 }
 
+void Executor::hidpi::chrome_draw(const Rect &r, Shapes shapes, const std::function<void()> &blit)
+{
+    if(!active() || shapes.empty() || !drawing_on_screen())
+    {
+        blit();
+        return;
+    }
+    GrafPtr port = qdGlobals().thePort;
+    Screen s = current_screen();
+    const Rect &bounds = PORT_BOUNDS(port);
+    int dx = bounds.left, dy = bounds.top;
+    IRect box = intersection({ r.top - dy, r.left - dx, r.bottom - dy, r.right - dx }, { 0, 0, s.height, s.width });
+    if(empty(box) || (long)(box.bottom - box.top) * (box.right - box.left) > MAX_BOX_PIXELS)
+    {
+        blit();
+        return;
+    }
+    auto run = std::make_shared<Run>();
+    run->box = box;
+    run->bpp = s.bpp;
+    int ppb = 8 / std::min(s.bpp, 8);
+    run->x0 = s.bpp < 8 ? box.left / ppb * ppb : box.left;
+    run->rowLen = s.bpp < 8 ? (box.right - run->x0 + ppb - 1) / ppb : (box.right - box.left) * s.bpp / 8;
+    capture(*run, s, run->before);
+    Runs under;
+    {
+        std::lock_guard lk(g_mutex);
+        for(auto &u : g_runs)
+            if(intersects(u->box, box) && run_valid(*u, s))
+                under.push_back(u);
+    }
+
+    blit();
+
+    capture(*run, s, run->after);
+    run->mode = Mode::Or;
+    for(Shape &sh : shapes)
+    {
+        for(size_t i = 0; i + 1 < sh.pts.size(); i += 2)
+        {
+            if(sh.kind == Shape::Circle && i == 2)
+                break; /* the radius */
+            sh.pts[i] -= dx;
+            sh.pts[i + 1] -= dy;
+        }
+        sh.gx -= dx;
+        sh.gy -= dy;
+    }
+    run->shapes = std::move(shapes);
+    run->clip = port_clip(port, dx, dy, box);
+
+    std::lock_guard lk(g_mutex);
+    for(auto &u : under)
+    {
+        auto it = std::find(g_runs.begin(), g_runs.end(), u);
+        if(it == g_runs.end())
+            continue;
+        /* the same chrome drawn again: this one, with what was there
+           before the first */
+        if(!u->shapes.empty() && u->box.top == box.top && u->box.left == box.left
+           && u->box.bottom == box.bottom && u->box.right == box.right && u->shapes == run->shapes)
+        {
+            inherit_before(*run, *u);
+            g_runs.erase(it);
+            continue;
+        }
+        auto copy = std::make_shared<Run>(*u);
+        capture(*copy, s, copy->after);
+        *it = copy;
+    }
+    g_runs.erase(std::remove_if(g_runs.begin(), g_runs.end(),
+                                [&](const auto &u) { return intersects(u->box, box) && !run_valid(*u, s); }),
+                 g_runs.end());
+    g_runs.push_back(run);
+    if(g_runs.size() > MAX_RUNS)
+    {
+        sweep(s);
+        if(g_runs.size() > MAX_RUNS * 3 / 4)
+            g_runs.erase(g_runs.begin(), g_runs.begin() + (g_runs.size() - MAX_RUNS * 3 / 4));
+    }
+}
+
 void Executor::hidpi::compose(const uint32_t *argb, int w, int h, const DirtyRects::Rects &rects,
                               uint32_t *out, int ow, int oh)
 {

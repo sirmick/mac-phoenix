@@ -65,6 +65,8 @@ extern bool ROMlib_apple_menu_remove(int32_t key);
 extern void ROMlib_apple_menu_attach(MenuHandle mh);
 extern void ROMlib_apple_menu_update();
 extern Handle ROMlib_apple_menu_icon(MenuHandle mh, INTEGER item);
+/* the Apple menu (the one the Apple Menu Items entries go in) */
+extern bool ROMlib_apple_menu_p(MenuHandle mh);
 extern bool ROMlib_apple_menu_open(ConstStringPtr name);
 extern Handle ROMlib_app_icon_suite();
 extern void ROMlib_app_menu_update();

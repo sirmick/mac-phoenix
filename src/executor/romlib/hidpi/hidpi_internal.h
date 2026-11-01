@@ -7,6 +7,32 @@
 #include <memory>
 #include <vector>
 
+namespace Executor::hidpi
+{
+/* A piece of chrome as vector geometry, in 1x pixel coordinates (pixel x
+   covers [x, x + 1)): what a theme drawing call draws with QuickDraw's
+   pixel steps, drawn anti-aliased at the display scale instead (phase 2,
+   "chrome"). Filled, or stroked STROKE wide; in COLOR, or a radial
+   gradient round (gx, gy) of radius gr through COLORS at POS. */
+struct Shape
+{
+    enum Kind : uint8_t
+    {
+        Circle,   /* pts: cx, cy, r */
+        Polygon,  /* pts: x, y, ... (closed) */
+        Polyline, /* pts: x, y, ... (open; round joins and caps) */
+    } kind;
+    std::vector<float> pts;
+    float stroke = 0;
+    uint32_t color = 0xFF000000; /* 0xAARRGGBB */
+    float gx = 0, gy = 0, gr = 0;
+    std::vector<uint32_t> colors;
+    std::vector<float> pos;
+    bool operator==(const Shape &) const = default;
+};
+using Shapes = std::vector<Shape>;
+}
+
 namespace Executor::hidpi::impl
 {
 /* An outline font's bytes (an 'sfnt' resource copied out of the guest)
@@ -62,6 +88,7 @@ struct Run
     std::vector<float> xs;           /* each glyph's origin */
     std::vector<float> advances;     /* and the pen's advance after it (1x) */
     std::vector<IRect> clip;         /* where QuickDraw could draw: vis & clip & box */
+    Shapes shapes;                   /* chrome (no glyphs): drawn instead of its pixels */
 };
 
 using Runs = std::vector<std::shared_ptr<const Run>>;

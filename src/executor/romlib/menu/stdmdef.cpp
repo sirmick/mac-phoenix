@@ -176,6 +176,14 @@ enum
        submenu), with one (the key's 33 and 9 before it) */
     kPlatRightMargin = 10,
     kPlatCommandWidth = 42,
+    /* 8.6's Apple menu has its own (measured on the G3, long items added
+       to Apple Menu Items): plain items' text 15 in, an entry's icon 18 and
+       its text 40, the room after the text 18, or 31 with a submenu */
+    kAppleTextIndent = 15,
+    kAppleIconIndent = 18,
+    kAppleIconTextIndent = 40,
+    kAppleRightMargin = 18,
+    kAppleSubmenuWidth = 31,
 };
 
 static bool platinum_menus()
@@ -196,7 +204,8 @@ void size_menu(MenuHandle mh, tablePtr tablep)
         icon_info_t icon_info;
         int w;
 
-        w = platinum_menus() ? kPlatTextIndent : checksize + 2;
+        bool apple = platinum_menus() && ROMlib_apple_menu_p(mh);
+        w = apple ? kAppleTextIndent : platinum_menus() ? kPlatTextIndent : checksize + 2;
 
         get_icon_info(tp->options, &icon_info, false);
         w += icon_info.width;
@@ -210,12 +219,17 @@ void size_menu(MenuHandle mh, tablePtr tablep)
            command key only on items that have one (or a submenu arrow),
            and 16 pixels for an Apple Menu Items entry's icon, whose
            placeholder bytes don't count. */
-        if(ROMlib_apple_menu_icon(mh, tp - tablep->entry + 1))
+        if(apple && ROMlib_apple_menu_icon(mh, tp - tablep->entry + 1))
+            w = kAppleIconTextIndent + icon_info.width
+                + TextWidth((Ptr)tp->name, 1 + kApplePlaceholder, tp->name[0] - kApplePlaceholder);
+        else if(ROMlib_apple_menu_icon(mh, tp - tablep->entry + 1))
             w += kAppleItemIconRoom
                  + TextWidth((Ptr)tp->name, 1 + kApplePlaceholder, tp->name[0] - kApplePlaceholder);
         else
             w += StringWidth(tp->name);
-        if(platinum_menus())
+        if(apple)
+            w += iskeyequiv(tp) || tp->options->mkeyeq == 0x1B ? kAppleSubmenuWidth : kAppleRightMargin;
+        else if(platinum_menus())
             w += iskeyequiv(tp) || tp->options->mkeyeq == 0x1B ? kPlatCommandWidth : kPlatRightMargin;
         else
         {
@@ -402,9 +416,21 @@ static void platinum_item(Rect *rp, struct table::tableentry *tp, int item, Menu
         else
             PlotIcon(&r, icon_info.icon);
     }
-    MoveTo(rp->left + kPlatTextIndent + icon_info.width, v);
+    bool apple = ROMlib_apple_menu_p(mh);
+    MoveTo(rp->left + (apple ? kAppleTextIndent : kPlatTextIndent) + icon_info.width, v);
     TextFace(tp->options->mstyle);
-    if(apple_suite)
+    if(apple_suite && apple)
+    {
+        Rect r;
+        r.left = rp->left + kAppleIconIndent;
+        r.top = ir.top + (kAppleItemHeight - 16) / 2;
+        r.right = r.left + 16;
+        r.bottom = r.top + 16;
+        PlotIconSuite(&r, atNone, selected ? ttSelected : ttNone, apple_suite);
+        MoveTo(rp->left + kAppleIconTextIndent, v);
+        DrawText((Ptr)tp->name, 1 + kApplePlaceholder, tp->name[0] - kApplePlaceholder);
+    }
+    else if(apple_suite)
     {
         Rect r;
         r.left = rp->left + kPlatTextIndent;

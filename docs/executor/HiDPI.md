@@ -488,3 +488,24 @@ unoptimized (this was the first run through, not a target to chase
 yet). Module size (Release, gzipped over the wire): 59.8 MB/5.39 MB
 without Skia, 63.8 MB/6.67 MB with it -- about 4.0 MB/1.27 MB gzipped
 for HiDPI in this minimal configuration.
+
+## Phase 2, chrome (started 2026-11-01)
+
+Chrome runs beside the text runs (`hidpi::chrome_draw`): a theme drawing
+call that draws on the screen hands over its 1x rectangle, a function that
+draws its pixels, and the same piece as vector shapes (`hidpi::Shape`:
+circles, polygons, polylines; filled, stroked or a radial gradient; 1x
+coordinates). The run keeps the pixels before and after, as a text run
+does: while the screen still has what it left, the presentation surface
+puts back what was there before and draws the shapes anti-aliased at the
+display scale; anything else drawn over it shows the 1x pixels again. A
+piece drawn again unchanged replaces its run (keeping the first one's
+"before"). Shapes are built only at a scale above 1; the 1x truth is
+unchanged (the difftest probes).
+
+So far: radio buttons (a sphere as a radial gradient, its outline, the
+dot), the check box's tick (the box itself is lines: crisp at whole
+scales already), and every triangle arrow `appearance::arrow` draws
+(scroll bar arrows, pop-up and little arrows). Next: the slider thumb, tab
+slants, rounded push buttons, the window frame's boxes, menu bar corners;
+region twins for clipping.
