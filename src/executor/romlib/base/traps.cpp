@@ -284,6 +284,22 @@ uint32_t Executor::traps::unknown_selector_68k(const char *trap_name, uint32_t s
         EM_D0 = (uint32_t)-3025;
         return ret;
     }
+    if(strcmp(trap_name, "TranslationDispatch") == 0 && sel == 0x20)
+    {
+        /* Selector $20, from the same resident System code as $24 (a
+           ResEdit launch from the Finder on 8.6 in the tab): subq.w #2,sp;
+           clr.w -(sp); pea $A92(a6); pea $A8E(a6); moveq #$20,d0;
+           _TranslationDispatch; addq.w #2,sp -- two pointers and a word,
+           10 argument bytes, a word result. No translation, as $24. */
+        snprintf(what, sizeof what,
+                 "TranslationDispatch selector $20 (10 argument bytes): answered noTranslationPathErr");
+        log_unimplemented(what);
+        syn68k_addr_t ret = POPADDR();
+        EM_A7 += 10;
+        WRITEUW(EM_A7, (uint16_t)-3025); /* noTranslationPathErr */
+        EM_D0 = (uint32_t)-3025;
+        return ret;
+    }
     snprintf(what, sizeof what, "%s selector $%x: no size in the selector, session stopped (called from $%x)",
              trap_name, (unsigned)sel, (unsigned)READUL(EM_A7));
     log_unimplemented(what);
