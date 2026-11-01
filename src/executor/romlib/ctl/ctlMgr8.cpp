@@ -374,6 +374,11 @@ bool Executor::ROMlib_control8_handles_tracking(ControlHandle c)
     return features(c) & kControlHandlesTracking;
 }
 
+bool Executor::ROMlib_control8_live_feedback(ControlHandle c)
+{
+    return features(c) & kControlSupportsLiveFeedback;
+}
+
 INTEGER Executor::ROMlib_control8_track(ControlHandle c, Point p, ControlActionUPP a,
                                         EventModifiers modifiers)
 {

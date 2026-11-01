@@ -115,14 +115,32 @@ Executor::lookup_aux_ctl(ControlHandle ctl)
     return t;
 }
 
+ControlPtr Executor::ROMlib_control_record(ControlHandle c, const char *who)
+{
+    if(c && syn68k_is_guest_mapped((uintptr_t)c, sizeof(GUEST<ControlPtr>)))
+    {
+        ControlPtr p = *c;
+        if(p && syn68k_is_guest_mapped((uintptr_t)p, sizeof(ControlRecord)))
+            return p;
+    }
+    fprintf(stderr, "[bad handle] %s: ControlHandle %s\n", who,
+            !c ? "nil"
+               : !syn68k_is_guest_mapped((uintptr_t)c, sizeof(GUEST<ControlPtr>))
+                   ? "outside memory"
+                   : "with a bad master pointer");
+    return nullptr;
+}
+
 void Executor::C_SetControlReference(ControlHandle c, LONGINT data) /* IMI-327 */
 {
-    (*c)->contrlRfCon = data;
+    if(ControlPtr p = ROMlib_control_record(c, "SetControlReference"))
+        p->contrlRfCon = data;
 }
 
 LONGINT Executor::C_GetControlReference(ControlHandle c) /* IMI-327 */
 {
-    return (*c)->contrlRfCon;
+    ControlPtr p = ROMlib_control_record(c, "GetControlReference");
+    return p ? p->contrlRfCon.get() : 0;
 }
 
 void Executor::C_SetControlAction(ControlHandle c, ControlActionUPP a) /* IMI-328 */
@@ -135,7 +153,8 @@ void Executor::C_SetControlAction(ControlHandle c, ControlActionUPP a) /* IMI-32
 
 ControlActionUPP Executor::C_GetControlAction(ControlHandle c) /* IMI-328 */
 {
-    return (*c)->contrlAction;
+    ControlPtr p = ROMlib_control_record(c, "GetControlAction");
+    return p ? p->contrlAction.get() : nullptr;
 }
 
 INTEGER Executor::C_GetControlVariant(ControlHandle c) /* IMV-222 */

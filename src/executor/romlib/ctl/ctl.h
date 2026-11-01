@@ -82,8 +82,16 @@ extern void ROMlib_control8_draw_subs(ControlHandle c);
 extern void ROMlib_control8_show_subs(ControlHandle c, bool show);
 extern bool ROMlib_control8_find(WindowPtr w, Point p, ControlHandle *hit, INTEGER *part);
 extern bool ROMlib_control8_handles_tracking(ControlHandle c);
+extern bool ROMlib_control8_live_feedback(ControlHandle c);
 extern INTEGER ROMlib_control8_track(ControlHandle c, Point p, ControlActionUPP a,
                                      EventModifiers modifiers);
+
+/* MacPhoenix: the record a ControlHandle from a program leads to, or null
+   when the handle or its master pointer is nil or outside guest memory (a
+   Mac reads whatever is there; here a stray read faults, and traps the
+   wasm module): the accessors answer 0 and do nothing for such a handle,
+   logged as "[bad handle] who". */
+extern ControlPtr ROMlib_control_record(ControlHandle c, const char *who);
 
 class CtlCallGuard : private ThePortGuard
 {

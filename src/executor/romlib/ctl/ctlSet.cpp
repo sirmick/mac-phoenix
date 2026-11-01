@@ -29,7 +29,8 @@ void Executor::C_SetControlValue(ControlHandle c, INTEGER v) /* IMI-326 */
 
 INTEGER Executor::C_GetControlValue(ControlHandle c) /* IMI-326 */
 {
-    return (*c)->contrlValue;
+    ControlPtr p = ROMlib_control_record(c, "GetControlValue");
+    return p ? p->contrlValue.get() : 0;
 }
 
 void Executor::C_SetControlMinimum(ControlHandle c, INTEGER v) /* IMI-326 */
@@ -43,7 +44,8 @@ void Executor::C_SetControlMinimum(ControlHandle c, INTEGER v) /* IMI-326 */
 
 INTEGER Executor::C_GetControlMinimum(ControlHandle c) /* IMI-327 */
 {
-    return (*c)->contrlMin;
+    ControlPtr p = ROMlib_control_record(c, "GetControlMinimum");
+    return p ? p->contrlMin.get() : 0;
 }
 
 void Executor::C_SetControlMaximum(ControlHandle c, INTEGER v) /* IMI-327 */
@@ -62,5 +64,6 @@ void Executor::C_SetControlMaximum(ControlHandle c, INTEGER v) /* IMI-327 */
 
 INTEGER Executor::C_GetControlMaximum(ControlHandle c) /* IMI-327 */
 {
-    return (*c)->contrlMax;
+    ControlPtr p = ROMlib_control_record(c, "GetControlMaximum");
+    return p ? p->contrlMax.get() : 0;
 }
