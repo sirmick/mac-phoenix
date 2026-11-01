@@ -607,6 +607,12 @@ int32_t c_faccess(const char *path, uint32_t cmd, uint32_t arg);LIBRARY_FUNCTION
 int32_t c_faccess(const char *path, uint32_t cmd, uint32_t arg);LIBRARY_FUNCTION(StdCLib, _faccess, c_faccess);
 
 
+int32_t c_addDevHandler(int32_t slot, uint32_t name, uint32_t faccessProc, uint32_t closeProc, uint32_t readProc, uint32_t writeProc, uint32_t ioctlProc);LIBRARY_FUNCTION(StdCLib, _addDevHandler, c_addDevHandler);
+
+
+int32_t c_getDevHandler(int32_t slot, uint32_t name, uint32_t faccessProc, uint32_t closeProc, uint32_t readProc, uint32_t writeProc, uint32_t ioctlProc);LIBRARY_FUNCTION(StdCLib, _getDevHandler, c_getDevHandler);
+
+
 int32_t c_access(const char *path, int32_t arg2);LIBRARY_FUNCTION(StdCLib, access, c_access);
 
 
