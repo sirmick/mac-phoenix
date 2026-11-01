@@ -259,6 +259,24 @@ void log_text(const hidpi::TextParams &p, int mode, const char *what)
             p.family, p.size, p.face, mode, what);
 }
 
+/* A run still on the screen with another drawn over it (IT, in g_runs):
+   what's there now is its "after". Where the new one drew over all the
+   pixels it had changed (a button drawn unpressed over its pressed look),
+   nothing of it shows: it goes (it could never be found off the screen
+   again), and false. */
+bool recapture(Runs::iterator it, const Screen &s)
+{
+    auto copy = std::make_shared<Run>(**it);
+    capture(*copy, s, copy->after);
+    if(copy->before == copy->after && !(*it)->noInk)
+    {
+        g_runs.erase(it);
+        return false;
+    }
+    *it = copy;
+    return true;
+}
+
 /* Drop the runs that aren't on the screen any more. */
 void sweep(const Screen &s)
 {
@@ -288,6 +306,8 @@ bool Executor::hidpi::impl::run_valid(const Run &run, const Screen &s)
         const uint8_t *aft = &run.after[(size_t)y * run.rowLen];
         if(!memcmp(cur, aft, run.rowLen))
             continue;
+        if(run.noInk)
+            return false;
         if(run.mode == Mode::Copy)
             for(int x = run.box.left; x < run.box.right; x++)
             {
@@ -460,9 +480,8 @@ void Executor::hidpi::text_draw(const TextParams &p, const std::function<void()>
             replaced++;
             continue;
         }
-        auto copy = std::make_shared<Run>(*u);
-        capture(*copy, s, copy->after);
-        *it = copy;
+        if(!recapture(it, s))
+            dropped++;
     }
     /* the other runs it overlaps: the ones it draws again go (a caret
        blinking over one, or the line erased and drawn again, as TextEdit
@@ -490,6 +509,7 @@ void Executor::hidpi::text_draw(const TextParams &p, const std::function<void()>
         log_text(p, txmode, "erases its srcXor twin");
         return;
     }
+    run->noInk = run->before == run->after;
     if(ERROR_ENABLED_P(ERROR_HIDPI_LOG))
     {
         char what[96];
@@ -583,13 +603,16 @@ void Executor::hidpi::chrome_draw(const Rect &r, Shapes shapes, const std::funct
             g_runs.erase(it);
             continue;
         }
-        auto copy = std::make_shared<Run>(*u);
-        capture(*copy, s, copy->after);
-        *it = copy;
+        recapture(it, s);
     }
     g_runs.erase(std::remove_if(g_runs.begin(), g_runs.end(),
                                 [&](const auto &u) { return intersects(u->box, box) && !run_valid(*u, s); }),
                  g_runs.end());
+    run->noInk = run->before == run->after;
+    if(ERROR_ENABLED_P(ERROR_HIDPI_LOG))
+        fprintf(stderr, "[hidpi] chrome: %zu shapes at %d,%d-%d,%d%s (%zu under, %zu on screen)\n",
+                run->shapes.size(), box.left, box.top, box.right, box.bottom, run->noInk ? " (no change)" : "",
+                under.size(), g_runs.size() + 1);
     g_runs.push_back(run);
     if(g_runs.size() > MAX_RUNS)
     {
