@@ -413,19 +413,50 @@
 
 # ####
 
-# MacPhoenix: a PowerPC-only InterfaceLib export (no 68k apps in the test
-# corpus call it via a trap), used to uppercase a raw text run in place.
+# MacPhoenix: InterfaceLib's exports of the _LwrText trap family ($A056
+# with flags: $200 strip, $400 upper; base/emustubs.cpp has the trap), raw
+# MacRoman text converted in place (Inside Macintosh: Text). Serial
+# MReader's PowerPC build calls LowerText, Warcraft II's map editor
+# UpperText.
+- function:
+    name: LowerText
+    args:
+      - name: textPtr
+        type: Ptr
+      - name: len
+        type: INTEGER
+    library: InterfaceLib
+    executor: LowerText
+
+- function:
+    name: StripText
+    args:
+      - name: textPtr
+        type: Ptr
+      - name: len
+        type: INTEGER
+    library: InterfaceLib
+    executor: StripText
+
 - function:
     name: UpperText
     args:
       - name: textPtr
         type: Ptr
-      - name: length
-        type: LONGINT
-      - name: script
+      - name: len
         type: INTEGER
     library: InterfaceLib
     executor: UpperText
+
+- function:
+    name: StripUpperText
+    args:
+      - name: textPtr
+        type: Ptr
+      - name: len
+        type: INTEGER
+    library: InterfaceLib
+    executor: StripUpperText
 
 # ####
 

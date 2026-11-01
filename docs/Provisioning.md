@@ -126,7 +126,10 @@ is typed for them, and serials that came inside an archive are left out of it.
 Each is its archive expanded in the guest. MR Browser's archive is pinned
 by Macintosh Repository's direct URL; Serial MReader's has none (MR's
 downloads are a form POST, guests 10 minutes apart), so it is a local pin
-carrying MR's page, file id and SHA1. Through the net bridge
+carrying MR's page, file id and SHA1. Hotline's bake adds ten trackers to the one it ships with (hltracker.com),
+through its own add-tracker dialog; the list was gathered on 2026-11-01 from
+hlwiki, preterhuman and the Hotline fandom wiki and not probed, so some may
+be gone. Both builds read it (`Data:Hotline Prefs`). Through the net bridge
 (`--network socket`) Hotline lists hltracker.com's servers and connects to
 them, and MR Browser reaches MR's API.
 

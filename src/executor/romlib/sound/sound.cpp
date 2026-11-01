@@ -353,7 +353,10 @@ OSErr Executor::C_SndPlay(SndChannelPtr chanp, Handle sndh, Boolean async)
                 GUEST<SndChannelPtr> foo;
 
                 foo = nullptr;
-                SndNewChannel(&foo, sampledSynth, 0, 0);
+                /* MacPhoenix: no room for the channel (an alert's beep in a
+                   full heap): SndNewChannel's error, nothing played. */
+                if(OSErr err = SndNewChannel(&foo, sampledSynth, 0, 0))
+                    return err;
                 chanp = foo;
             }
 
@@ -414,10 +417,21 @@ OSErr Executor::C_SndNewChannel(GUEST<SndChannelPtr> *chanpp, INTEGER synth,
             break;
 
         case soundon:
+        {
+            /* MacPhoenix: memFullErr when the channel or its modifier block
+               doesn't fit (IM: Sound); both were used unchecked. */
+            Ptr mod = NewPtrClear(sizeof(ModifierStub));
+            if(!mod)
+                return memFullErr;
             if(*chanpp == nullptr)
             {
-                *chanpp = (SndChannelPtr)NewPtr(sizeof(SndChannel));
-                chanp = *chanpp;
+                chanp = (SndChannelPtr)NewPtr(sizeof(SndChannel));
+                if(!chanp)
+                {
+                    DisposePtr(mod);
+                    return memFullErr;
+                }
+                *chanpp = chanp;
                 chanp->flags = CHAN_ALLOC_FLAG;
             }
             else
@@ -427,7 +441,7 @@ OSErr Executor::C_SndNewChannel(GUEST<SndChannelPtr> *chanpp, INTEGER synth,
             }
             chanp->nextChan = allchans;
             allchans = chanp;
-            chanp->firstMod = (Ptr)NewPtrClear(sizeof(ModifierStub));
+            chanp->firstMod = mod;
             SND_CHAN_TIME(chanp) = 0;
             SND_CHAN_CURRENT_START(chanp) = 0;
             {
@@ -446,6 +460,8 @@ OSErr Executor::C_SndNewChannel(GUEST<SndChannelPtr> *chanpp, INTEGER synth,
             chanp->qHead = 0;
             chanp->qTail = 0;
             retval = noErr;
+            break;
+        }
     }
     return retval;
 }

@@ -399,6 +399,15 @@ void Executor::ROMlib_cfm_application_start()
    that it doesn't fill the heap of the application that happens to load
    it. */
 static bool loading_system_fragment;
+/* An import library found by name for a closure (not the application's
+   own fragment), from the application's file too: its container image in
+   temporary memory first; its data sections stay the application's. Mac
+   OS 8.6 on the G3, virtual memory off, runs Serial MReader's PowerPC
+   build (its REALbasic runtime STRuntime, 1.3 MB, a library in its own
+   file) in its 2.8 MB partition with 2.1 MB of it in use (About This
+   Computer): the runtime's code isn't in the partition. In the heap here
+   it filled it, and the program's allocations failed. */
+static bool loading_import_library;
 /* A global section outlives the process that prepares it: never in its
    heap. */
 static bool loading_global_section;
@@ -806,9 +815,12 @@ check_file(INTEGER vref, LONGINT dirid, Str255 file, bool shlb_test_p,
                         name[0] = std::min<int>(name[0], 63);
                         /* The file stays open while the fragment's init
                            routine runs: it may read its own resources. */
+                        bool saved_import = loading_import_library;
+                        loading_import_library = true;
                         retval = GetDiskFragment(&fs, offset, length, name,
                                                  loadflags, cidp, mainaddrp,
                                                  errName);
+                        loading_import_library = saved_import;
                     }
                 }
                 /* MacPhoenix: a file that was open before (the
@@ -2161,7 +2173,14 @@ OSErr Executor::C_GetDiskFragment(FSSpecPtr fsp, LONGINT offset,
            the end); was the whole data fork, so a fat file's second
            container never loaded. */
         LONGINT len = length == kWholeFork ? eof - offset : length;
-        Ptr p = len > 0 ? cfm_new_ptr(len) : nullptr;
+        Ptr p = nullptr;
+        if(len > 0 && loading_import_library && ROMlib_pm_zone)
+        {
+            TheZoneGuard guard(ROMlib_pm_zone);
+            p = NewPtr(len);
+        }
+        if(!p && len > 0)
+            p = cfm_new_ptr(len);
         if(!p)
             retval = len > 0 ? fragNoMem : cfragFragmentFormatErr;
         else

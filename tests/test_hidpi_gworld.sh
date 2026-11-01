@@ -11,8 +11,12 @@
 # (CopyBits, through a second GWorld, CopyMask's unmasked part) must differ
 # from the 1x frame scaled up and show anti-aliasing (greys the 1x frame
 # hasn't); text whose GWorld the program then wrote itself (behind
-# QuickDraw), and CopyMask's masked-out part, must not differ. The boxes
-# are GWorldGallery's: keep them in step.
+# QuickDraw), and CopyMask's masked-out part, must not differ. Text from
+# GWorlds of other depths (8, 16, 1 bits) and copied with srcOr and
+# transparent onto colour must be anti-aliased too, and text copied to
+# rectangles of other sizes (2x, wide, half, 1.5x). The boxes
+# are GWorldGallery's: keep them in step. Its second window scrolls text
+# three ways: every row of it with text must still be anti-aliased.
 #
 # Usage:
 #   tests/test_hidpi_gworld.sh [--timeout N] [--port N]
@@ -106,10 +110,43 @@ boxes = [
     ('written behind QuickDraw (1x)', 20, 190, 460, 210, 'plain'),
     ('CopyMask, the mask\'s part', 28, 217, 218, 234, 'text'),
     ('CopyMask, masked out', 221, 215, 460, 235, 'plain'),
+    ('depth 8 GWorld copied', 24, 241, 165, 259, 'blend'),
+    ('depth 16 GWorld copied', 171, 241, 312, 259, 'blend'),
+    ('depth 1 GWorld copied', 318, 241, 460, 259, 'blend'),
+    ('srcOr onto yellow', 24, 266, 235, 284, 'blend'),
+    ('transparent onto blue', 249, 266, 460, 284, 'blend'),
+    # the Scale window: content at (478, 60)
+    ('copied at 2x', 482, 60, 622, 96, 'blend'),
+    ('copied 2x wide, 1x high', 482, 104, 622, 122, 'blend'),
+    ('copied at half', 482, 130, 552, 148, 'blend'),
+    ('copied at 1.5x', 482, 156, 626, 177, 'blend'),
 ]
 pa, pb = up.load(), b.load()
 grey = lambda p: 0x30 < max(p) < 0xD0 and max(p) - min(p) < 0x20
 bad = 0
+# The Scroll Gallery window (content at (20, 322)): three columns of text
+# scrolled 37 pixels after they were drawn (TextEdit's TEScroll on the
+# screen; ScrollRect in a GWorld, copied; the window copied onto itself
+# and the strip it exposes copied from a GWorld). Every 1x row with text
+# in it must be anti-aliased at 2x: a piece of a line left 1x is not.
+pa1 = a.load()
+for name, x0, x1 in [('TextEdit scrolled (ScrollRect on the screen)', 20, 165),
+                     ('ScrollRect in a GWorld, copied', 167, 312),
+                     ('copied onto itself + strip from a GWorld', 314, 460)]:
+    rows = sharp = 0
+    flat = []
+    for y in range(324, 456):
+        if sum(max(pa1[x, y]) < 0x60 for x in range(x0, x1)) < 3:
+            continue
+        rows += 1
+        if any(grey(pb[x, Y]) for Y in (2 * y, 2 * y + 1) for x in range(2 * x0, 2 * x1)):
+            sharp += 1
+        else:
+            flat.append(y)
+    ok = rows >= 60 and sharp == rows
+    bad += not ok
+    print(f'  {"ok  " if ok else "FAIL"} {name}: {sharp} of {rows} rows with text anti-aliased'
+          + (f' (1x: {flat[:8]})' if flat else ''))
 for name, x0, y0, x1, y1, kind in boxes:
     n = g = g1 = 0
     for y in range(2 * y0, 2 * y1):
@@ -118,9 +155,15 @@ for name, x0, y0, x1, y1, kind in boxes:
             n += max(abs(p[0] - q[0]), abs(p[1] - q[1]), abs(p[2] - q[2])) > 8
             g += grey(q)
             g1 += grey(p)
-    ok = n >= 50 and g > g1 + 20 if kind == 'text' else n == 0
+    if kind == 'blend':
+        # anti-aliased on any background: colours the 1x box hasn't
+        seen = {pa[x, y] for y in range(2 * y0, 2 * y1, 2) for x in range(2 * x0, 2 * x1, 2)}
+        g = sum(pb[x, y] not in seen for y in range(2 * y0, 2 * y1) for x in range(2 * x0, 2 * x1))
+        g1 = 0
+    ok = n >= 50 and g > g1 + 20 if kind in ('text', 'blend') else n == 0
     bad += not ok
     what = (f'differ from the 1x frame scaled up, {g} grey (1x: {g1})' if kind == 'text'
+            else f'differ from the 1x frame scaled up, {g} in colours the 1x has not' if kind == 'blend'
             else 'differ from the 1x frame scaled up (none expected)')
     print(f'  {"ok  " if ok else "FAIL"} {name}: {n} pixels {what}')
 sys.exit(1 if bad else 0)

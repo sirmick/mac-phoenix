@@ -80,6 +80,7 @@ struct Run
     uint32_t fg, bk;                 /* 0xAARRGGBB */
     std::shared_ptr<const FontData> font;
     float size;                      /* points (1x pixels per em) */
+    float xscale = 1;                /* and horizontally that times (a scaled copy) */
     int synth;                       /* Synth: what the outline lacks */
     int bold;                        /* synthBold: QuickDraw's smear (1x pixels) */
     bool underline, outline;
