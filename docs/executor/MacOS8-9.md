@@ -174,8 +174,17 @@ difftest sys "boot") and finds its VCB by that volume reference number;
 Executor's GetWDInfo gave back the working directory's own number, so
 the startup disk had no VCB, counted as off line (drive 0), and the
 Finder neither put its Trash on the desktop nor filled the Apple menu
-(AddAppleMenuItem never called). Still open there: the items' small
-icons and Apple Menu Options' submenus (the G3 shows both).
+(AddAppleMenuItem never called). Apple Menu Options' submenus: on 8.x it
+is an 'APPC' (a control panel that is an application), and the loader
+ran INITs of INIT/cdev/RDEV/fext files only; it runs 'APPC' ones now
+when allowed (extensions.cpp; ctest applemenu_submenus_*). The items'
+icons as on the G3: an alias without a custom icon shows its kind's icon
+by its type ('fact' Control Panels, 'faet' a folder, 'adrp' its
+creator's application), not its target's; a 'badg' override with
+kExtendedFlagHasCustomBadge (Favorites); applications' icons from any
+volume's desktop database; and folders keep their Finder info when the
+System Folder is copied out (Recent Applications' custom icon). IconTest
+checks them on the G3 and Executor.
 Also: the "Finder Preferences" copied from the image hold that volume's
 folder IDs; with a Desktop Folder already on Executor's System volume at
 startup the Finder lists the Preferences folder (dir 12) as the desktop.
@@ -395,6 +404,25 @@ outlines, the utility windows' 14-deep bars (the side one without a
 collapse box; full zoom's glyph a corner): all 8.6's pixel for pixel but
 the popup window. Not yet: a pressed floating box, the popup window's
 frame, the movable grow dialog's grow corner.
+
+Platinum tracks and tabs (2026-10-31, `appr` controls.48/80, tab80,
+track, misc.tab): 8.6's CDEF 80 clips to GetThemeTrackBounds, which for
+a progress bar is the bounds as given (no thumb, drag rectangle or live
+value: paramErr, the output left alone); the determinate bar is a tube
+in the accent ramp (#005 #339 #66c #99f #ccf #eee) up to a black line, the
+rest sunk grey. CDEF 48's slider: a 6-deep channel with cut corners
+(#222 outline, #aaa inside, a #aaa line over and before it) and a thumb
+pointing down (right, vertical: the same shape transposed), shaded in
+the same ramp with three grip ridges, a step darker pressed; its region
+is that shape (8.6's CRCs), its position rounded. DrawThemeTab (north):
+21 rows, a front tab 24 down over the pane's edge, the sides stepping out
+a pixel every 3 rows from 10 in; a row is the fill, a left piece and a
+right piece from 12 in from the right drawn last, which is what a narrow
+tab looks like on 8.6 too; GetThemeTabRegion is the same shape. 8.6
+draws nothing for kThemeTabNonFrontUnavailable (newer than its
+Appearance). All of these are 8.6's pixel for pixel. Not yet: tabs
+pointing other ways, the indeterminate bar, plain (non-directional)
+slider thumbs and tick marks.
 
 Platinum menus (2026-10-31, `appr` draw*.menu*, and the Finder's File,
 Edit, View and Special menus on the G3). 8.x's MBDF 0 is a 68k loader for

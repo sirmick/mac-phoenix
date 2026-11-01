@@ -133,6 +133,10 @@ std::vector<std::string> EmulatorSubprocess::build_child_args()
         args.push_back("--watch");
         args.push_back(config_->watch);
     }
+    for (const std::string& spec : config_->executor_ppc_break) {
+        args.push_back("--executor-ppc-break");
+        args.push_back(spec);
+    }
     if (!config_->executor_debug.empty()) {
         args.push_back("--executor-debug");
         args.push_back(config_->executor_debug);

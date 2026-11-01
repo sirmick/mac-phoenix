@@ -121,6 +121,11 @@ extern void ROMlib_cfm_toolbox_library(const char *library);
 extern bool ROMlib_cfm_ppc_code(uint32_t addr);
 /* "Fragment sect N+$off (Export+$off)" for a PowerPC address, or "" */
 extern std::string ROMlib_cfm_describe(uint32_t addr);
+/* "Fragment N+$off", no export (cheap), or "" */
+extern std::string ROMlib_cfm_where(uint32_t addr);
+/* A loaded PowerPC fragment's (by its name or its file's) section sect
+   (< 0: its code) + off, or 0 (--executor-ppc-break) */
+extern uint32_t ROMlib_cfm_resolve(const std::string& name, int sect, uint32_t off);
 extern bool ROMlib_cfm_exports_sane(ConnectionID id);
 
 /* CallUniversalProc from CFM-68K code: the routine's arguments start at

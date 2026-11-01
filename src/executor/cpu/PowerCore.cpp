@@ -122,6 +122,14 @@ public:
 };
 PpcHost ppc_host;
 
+void (*instruction_hook)(PowerCore&, uint32_t) = nullptr;
+
+void call_instruction_hook(cpu::Core &, uint32_t pc, void *)
+{
+    if(instruction_hook)
+        instruction_hook(PowerCore::instance(), pc);
+}
+
 cpu::Core &core()
 {
     if(cpu::Core *c = the_core.load())
@@ -133,6 +141,7 @@ cpu::Core &core()
     config.timers = false;      /* Executor's own timer thread */
     config.exceptions = false;  /* skip and log */
     config.jit = true;          /* the native back-end where there is one */
+    config.instruction_hook = PowerCore::instance().instructionHooks;
     cpu::Core *c = cpu::create("mame-ppc", config, syn68k_guest_memory(), ppc_host).release();
     if(!c)
     {
@@ -141,6 +150,8 @@ cpu::Core &core()
     }
     c->reset();
     c->set_reg(R::MSR, 0x2000);  /* supervisor, FP available, big-endian */
+    if(instruction_hook)
+        c->set_instruction_hook(&call_instruction_hook, nullptr);
     the_core = c;
     return *c;
 }
@@ -194,6 +205,39 @@ void PowerCore::restoreExecContext(const void *src)
 {
     if(cpu::Core *c = the_core.load())
         c->restore_exec_context(src);
+}
+
+bool PowerCore::setInstructionHook(void (*hook)(PowerCore&, uint32_t pc))
+{
+    if(!instructionHooks)
+        return false;
+    instruction_hook = hook;
+    if(cpu::Core *c = the_core.load())
+        return c->set_instruction_hook(hook ? &call_instruction_hook : nullptr, nullptr);
+    return true;
+}
+
+void PowerCore::liveState(PowerCoreState &s) const
+{
+    PowerCore p;
+    if(cpu::Core *c = the_core.load())
+        from_core(p, *c);
+    s = p;
+}
+
+int PowerCore::disassemble(uint32_t addr, char *buf, size_t len) const
+{
+    cpu::Core *c = the_core.load();
+    return c ? c->disassemble(addr, buf, len) : 0;
+}
+
+bool PowerCore::peek32(uint32_t addr, uint32_t &value) const
+{
+    cpu::GuestMemory &m = syn68k_guest_memory();
+    if(!m.mapped(addr) || !m.mapped(addr + 3))
+        return false;
+    value = m.read32(addr);
+    return true;
 }
 
 void PowerCore::requestInterrupt()

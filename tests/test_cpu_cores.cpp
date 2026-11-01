@@ -63,7 +63,8 @@ struct PpcMachine
     TestHost host;
     std::unique_ptr<cpu::Core> core;
 
-    PpcMachine(const uint32_t *program, size_t words, bool jit, bool fast = false, bool exceptions = true)
+    PpcMachine(const uint32_t *program, size_t words, bool jit, bool fast = false, bool exceptions = true,
+               bool hooks = false)
         : ram(cpu::GuestMemory::PAGE_BYTES)
     {
         mem.map(0, ram.size(), ram.data());
@@ -74,6 +75,7 @@ struct PpcMachine
         config.model = 750;
         config.jit = jit;
         config.exceptions = exceptions;
+        config.instruction_hook = hooks;
         if(fast)
             config.fast_memory = { { 0, (uint32_t)ram.size(), false } };
         core = cpu::create_mame_ppc(config, mem, host);
@@ -160,6 +162,44 @@ static void test_ppc_misaligned_fp(bool jit)
     CHECK(q.core->run() == cpu::StopReason::HostOp);
     CHECK(q.mem.read8(0x2404) == 0x12 && q.mem.read8(0x2405) == 0x34 && q.mem.read8(0x2409) == 0x78);
     CHECK(q.core->reg(cpu::ppc::GPR0 + 30) == 0x1234 && q.core->reg(cpu::ppc::GPR0 + 31) == 0x5678);
+}
+
+/* Config::instruction_hook: the hook sees every instruction, in order, the
+ * registers as the instructions before it left them; across a branch and
+ * a host op; then none once it is cleared. A core made without it refuses. */
+static void test_ppc_instruction_hook(bool jit)
+{
+    /* addi r3,r0,5 ; b +8 ; (addi r3,r0,99) ; addi r3,r3,1 ; host op 3 ;
+     * addi r4,r0,7 ; host op 0 */
+    static const uint32_t prog[] = { 0x38600005, 0x48000008, 0x38600063, 0x38630001,
+                                     0x18000003, 0x38800007, 0x18000000 };
+    PpcMachine plain(prog, 7, jit);
+    CHECK(!plain.core->set_instruction_hook([](cpu::Core &, uint32_t, void *) {}, nullptr));
+
+    struct Seen { uint32_t pc, r3; };
+    std::vector<Seen> seen;
+    PpcMachine p(prog, 7, jit, false, true, true);
+    p.core->reset();
+    CHECK(p.core->set_instruction_hook(
+        [](cpu::Core &c, uint32_t pc, void *ctx) {
+            CHECK(c.pc() == pc);
+            ((std::vector<Seen> *)ctx)->push_back({ pc, c.reg(cpu::ppc::GPR0 + 3) });
+        },
+        &seen));
+    p.core->set_pc(0x1000);
+    CHECK(p.core->run() == cpu::StopReason::HostOp);
+    static const Seen want[] = { { 0x1000, 0 }, { 0x1004, 5 }, { 0x100C, 5 }, { 0x1010, 6 },
+                                 { 0x1014, 6 }, { 0x1018, 6 } };
+    CHECK(seen.size() == std::size(want));
+    for(size_t i = 0; i < seen.size() && i < std::size(want); i++)
+        CHECK(seen[i].pc == want[i].pc && seen[i].r3 == want[i].r3);
+    CHECK(p.core->reg(cpu::ppc::GPR0 + 4) == 7);
+
+    seen.clear();
+    CHECK(p.core->set_instruction_hook(nullptr, nullptr));
+    p.core->set_pc(0x1000);
+    CHECK(p.core->run() == cpu::StopReason::HostOp);
+    CHECK(seen.empty() && p.core->reg(cpu::ppc::GPR0 + 3) == 6);
 }
 
 /* --bench [N]: N million (default 1) iterations of lwz/addi/stw/addic./bne
@@ -283,6 +323,8 @@ int main(int argc, char **argv)
     test_ppc(true);
     test_ppc_misaligned_fp(false);
     test_ppc_misaligned_fp(true);
+    test_ppc_instruction_hook(false);
+    test_ppc_instruction_hook(true);
 
     if(failures)
     {

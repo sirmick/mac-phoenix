@@ -36,6 +36,7 @@
 #include <string>
 #include <vector>
 #include <strings.h>
+#include <rsys/ppc_break.h>
 
 using namespace Executor;
 
@@ -319,6 +320,53 @@ std::string Executor::ROMlib_cfm_describe(uint32_t addr)
                 }
             if(!best.empty())
                 snprintf(buf + n, sizeof buf - n, " (%s+$%x)", best.c_str(), addr - best_at);
+            return buf;
+        }
+    }
+    return "";
+}
+
+/* MacPhoenix: --executor-ppc-break. A loaded PowerPC fragment's section
+   (the first executable one for sect < 0) + off, by the fragment's name or
+   its file's; 0 when none is loaded, the section has no such offset. */
+uint32_t Executor::ROMlib_cfm_resolve(const std::string& name, int sect, uint32_t off)
+{
+    for(auto it = loaded.rbegin(); it != loaded.rend(); ++it)
+    {
+        const loaded_fragment& f = *it;
+        if(f.arch != "pwpc"_4 || !f.cid || f.terminated)
+            continue;
+        if(f.origin.name != name && pstr(f.origin.file.name) != name)
+            continue;
+        for(uint32_t i = 0; i < f.cid->n_sects; i++)
+        {
+            const section_info_t& s = f.cid->sects[i];
+            bool want = sect < 0 ? (s.perms & (1 << 2)) != 0 : (int)i == sect;
+            if(want && s.length && off < s.length)
+                return ptr_to_longint(s.start.get()) + off;
+            if(want)
+                return 0;
+        }
+    }
+    return 0;
+}
+
+/* "Fragment N+$off" without the export search (a trace's every line). */
+std::string Executor::ROMlib_cfm_where(uint32_t addr)
+{
+    for(auto it = loaded.rbegin(); it != loaded.rend(); ++it)
+    {
+        const loaded_fragment& f = *it;
+        if(f.arch != "pwpc"_4 || !f.cid)
+            continue;
+        for(uint32_t i = 0; i < f.cid->n_sects; i++)
+        {
+            const section_info_t& sect = f.cid->sects[i];
+            uint32_t start = ptr_to_longint(sect.start.get());
+            if(addr < start || addr - start >= sect.length)
+                continue;
+            char buf[300];
+            snprintf(buf, sizeof buf, "%s %u+$%x", f.origin.name.c_str(), i, addr - start);
             return buf;
         }
     }
@@ -1940,6 +1988,9 @@ prepare_container(void *addr, const load_origin& origin, GUEST<ConnectionID> *co
     retval = do_pef_sections(conn, headp, &main_addr, arch);
     --prepare_depth;
     current_origin = saved_origin;
+    /* breakpoints in it, before its init routine runs */
+    if(retval == noErr)
+        ppc_break_fragments_changed();
 
     /* this preparation's fragments: this one first, then its closure's */
     std::vector<ConnectionID> closure;

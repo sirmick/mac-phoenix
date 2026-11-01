@@ -6,4 +6,8 @@
 # stores them as inline attributes before the ;;;; marker. Parameters
 # still start at the end of a new event, so one appended by hand is found.
 layout.new	the return ID, source, interaction level and original address are inline attributes in Executor
-layout.put	the same four inline attributes: 60 bytes more, parameters from 150
+layout.put	the same four inline attributes: 64 bytes more, parameters from 154
+# The header: class, ID and target where 8.6 has them; the parameter
+# offset and attribute count differ for the inline attributes above, and
+# the long at 58 (8.6: 0x000102b8, perhaps the return ID) is zero.
+layout.new.bytes	the parameter offset and attribute count (inline attributes), and the long at 58

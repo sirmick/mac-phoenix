@@ -495,6 +495,11 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             printf("                             trace, trapfailure, unimplemented, unexpected, errno, sound, all\n");
             printf("  --watch ADDR[:LEN]         Report every write to guest memory ADDR (hex; LEN 1-16, default 4):\n");
             printf("                             old/new value, 68k PC and registers, last traps, host stack (Executor)\n");
+            printf("  --executor-ppc-break SPEC  PowerPC breakpoint (Executor; repeatable; docs/executor/PPCTrace.md):\n");
+            printf("                             WHERE[@N][*HITS][#MEM], WHERE $ADDR, FRAGMENT[:SECT]+OFF (hex) or\n");
+            printf("                             !Routine (Executor's); on a hit registers, back chain, stack, MEM\n");
+            printf("                             (rN+OFF:LEN, $ADDR:LEN, ^ reads through), then N instructions traced;\n");
+            printf("                             HITS hits reported (default 1, 0 all). \"on\": none yet, for the API\n");
             printf("  --executor-logtraps-nesting N  ... and calls nested N deep in Toolbox callbacks (default 1)\n");
             printf("  --executor-logtraps-filter LIST  ... only calls whose names match these comma-separated\n");
             printf("                             wildcards (\"Gestalt,HideWindow,PB*\"): less slowdown;\n");
@@ -672,6 +677,9 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
         }
         if (strcmp(argv[i], "--executor-logtraps-filter") == 0 && i + 1 < argc) {
             config.executor_logtraps_filter = argv[i + 1]; argv[i] = argv[i + 1] = nullptr; i++; continue;
+        }
+        if (strcmp(argv[i], "--executor-ppc-break") == 0 && i + 1 < argc) {
+            config.executor_ppc_break.push_back(argv[i + 1]); argv[i] = argv[i + 1] = nullptr; i++; continue;
         }
         if (strcmp(argv[i], "--watch") == 0 && i + 1 < argc) {
             config.watch = argv[i + 1]; argv[i] = argv[i + 1] = nullptr; i++; continue;

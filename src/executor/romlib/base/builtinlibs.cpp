@@ -142,6 +142,22 @@ uint32_t builtinlibs::handleSC(PowerCore& cpu)
     }
 }
 
+const char *builtinlibs::callbackName(uint32_t opPC)
+{
+    PPCCallback *cb = guestvalues::GuestTypeTraits<PPCCallback*>::reg_to_host(opPC - 8);
+    int index = cb - callbacks;
+    return index >= 0 && index < nCallbacks ? cb->name : nullptr;
+}
+
+std::vector<uint32_t> builtinlibs::callbackAddresses(const std::string& name)
+{
+    std::vector<uint32_t> found;
+    for(int i = 0; i < nCallbacks; i++)
+        if(callbacks[i].name && name == callbacks[i].name)
+            found.push_back(US_TO_SYN68K(&callbacks[i].sc));
+    return found;
+}
+
 static PPCCallback& new_callback(const char *function, std::function<uint32_t (PowerCore&)> code)
 {
     assert(nCallbacks < std::size(callbacks));

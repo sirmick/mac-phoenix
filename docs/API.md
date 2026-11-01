@@ -50,6 +50,7 @@ guest memory directly and need nothing in the guest. How both work:
 | `/api/storage` | GET | ROMs (identified by checksum), disk images with their titles and tags, Executor Systems |
 | `/api/storage/create-image` | POST | `{"filename", "size_mb", "volume_name", "format": "hfs"/"hfs+"}`: a blank disk image in `<storage>/images` |
 | `/api/executor/system` | POST | `{"image": "7.5.5.img"[, "name"]}`: copy an image's System Folder out for Executor |
+| `/api/executor/ppc-break` | GET/POST | Executor's PowerPC breakpoints (session started with `--executor-ppc-break`): GET `[?since=N]` the breakpoints and hit reports; POST `{"add": SPEC}` / `{"remove": SPEC\|"all"}` (docs/executor/PPCTrace.md) |
 
 ## Reading the guest
 

@@ -1,4 +1,4 @@
-# probe 04d5e3d80da8f5987fa60f28ddc2cfaa2994568b63d53dc08ad4db7b6f368f1a
+# probe 20949e7a15099947a4d04e210f04bc7575d7eb3ddd1a8cdbcec2a41237114bca
 == gestalt
 gestalt.appr: 0 00000001
 gestalt.apvr: 0 00000110
@@ -882,6 +882,21 @@ track.2.thumb: err 0
 track.2.thumb.rgn: bbox 0,36,16,51 size 112 crc 97f500c0
 track.2.drag: err 0 0,5,16,145
 track.2.live40: err 0 32
+track.3.bounds: err 0 0,0,14,100
+track.3.thumb: err -50
+track.3.thumb.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+track.3.drag: err -50 -23131,-23131,-23131,-23131
+track.3.live40: err -50 -1515870811
+track.4.bounds: err 0 0,0,14,100
+track.4.thumb: err -50
+track.4.thumb.rgn: bbox 0,0,0,0 size 10 crc 76a4e2e8
+track.4.drag: err -50 -23131,-23131,-23131,-23131
+track.4.live40: err -50 -1515870811
+track.5.bounds: err 0 2,0,148,16
+track.5.thumb: err 0
+track.5.thumb.rgn: bbox 36,0,51,16 size 132 crc 686765a1
+track.5.drag: err 0 5,0,145,16
+track.5.live40: err 0 32
 == misc
 misc.tab.0: err 0
 misc.tab.0.rgn: bbox 10,10,31,30 size 124 crc 7c3d06cb

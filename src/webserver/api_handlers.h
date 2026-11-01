@@ -97,6 +97,7 @@ private:
     Response handle_copy(const Request& req);
     Response handle_ui(const Request& req);
     Response handle_text(const Request& req);
+    Response handle_ppc_break(const Request& req);  // /api/executor/ppc-break
     Response handle_annotate(const Request& req);
     std::string text_json(const std::string& query);
     Response handle_quit(const Request& req);
