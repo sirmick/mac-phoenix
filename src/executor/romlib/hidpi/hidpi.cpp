@@ -554,6 +554,8 @@ void Executor::hidpi::chrome_draw(const Rect &r, Shapes shapes, const std::funct
         }
         sh.gx -= dx;
         sh.gy -= dy;
+        sh.gx2 -= dx;
+        sh.gy2 -= dy;
     }
     run->shapes = std::move(shapes);
     run->clip = port_clip(port, dx, dy, box);

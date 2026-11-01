@@ -2298,7 +2298,79 @@ void pixelGray(int h, int v, uint16_t g)
    the diagonal; PRESSED (8.6 while the button is down in it), the inside
    a darker ramp, #444 to #bbb, its right and bottom edges no lighter
    than #999. GLYPH: 0 none (close), 1 zoom, 2 collapse. */
+/* A rectangle of pixels [x0, x1) x [y0, y1) in grey G, as a shape */
+void rectShape(hidpi::Shapes &s, float x0, float y0, float x1, float y1, uint16_t g)
+{
+    s.push_back({ hidpi::Shape::Polygon, { x0, y0, x1, y0, x1, y1, x0, y1 }, 0, argbGray(g) });
+}
+
+/* A face of grey steps along the diagonal from (x, y), N pixels square:
+   STEPS[k] where the pixel's dx + dy is k, as a linear gradient */
+void diagonalShade(hidpi::Shapes &s, float x, float y, int n, std::initializer_list<uint16_t> steps)
+{
+    hidpi::Shape face{ hidpi::Shape::Polygon, { x, y, x + n, y, x + n, y + n, x, y + n }, 0, argbGray(*steps.begin()) };
+    face.gx = x + 0.5f;
+    face.gy = y + 0.5f;
+    face.gx2 = x + n - 0.5f;
+    face.gy2 = y + n - 0.5f;
+    int k = 0;
+    for(uint16_t g : steps)
+    {
+        face.colors.push_back(argbGray(g));
+        face.pos.push_back((float)k++ / (steps.size() - 1));
+    }
+    s.push_back(face);
+}
+
+void titleBoxPixels(int h, int v, int glyph, bool pressed);
+
+/* A title-bar box at the display scale: its lines as they are, the face's
+   steps a smooth shade */
+hidpi::Shapes titleBoxShapes(int h, int v, int glyph, bool pressed)
+{
+    hidpi::Shapes s;
+    rectShape(s, h, v, h + 13, v + 13, kPlatFace);
+    rectShape(s, h, v, h + 12, v + 1, kPlatBox);
+    rectShape(s, h, v, h + 1, v + 12, kPlatBox);
+    rectShape(s, h + 12, v + 1, h + 13, v + 13, kWhite);
+    rectShape(s, h + 1, v + 12, h + 13, v + 13, kWhite);
+    rectShape(s, h + 1, v + 1, h + 12, v + 12, kPlatDark);
+    if(pressed)
+    {
+        /* 0x4444 + 0x1111 * ((i + j) / 2) over the 9 x 9 inside */
+        diagonalShade(s, h + 2, v + 2, 9, { 0x4444, 0xCCCC });
+        rectShape(s, h + 10, v + 4, h + 11, v + 11, kPlatShade);
+        rectShape(s, h + 4, v + 10, h + 11, v + 11, kPlatShade);
+    }
+    else
+    {
+        rectShape(s, h + 2, v + 2, h + 11, v + 11, kPlatBox);
+        rectShape(s, h + 2, v + 2, h + 11, v + 3, kPlatFace);
+        rectShape(s, h + 2, v + 2, h + 3, v + 11, kPlatFace);
+        rectShape(s, h + 2, v + 2, h + 3, v + 3, kWhite);
+        diagonalShade(s, h + 3, v + 3, 7, { 0x9999, 0xFFFF });
+    }
+    if(glyph == 1)
+    {
+        rectShape(s, h + 7, v + 1, h + 8, v + 8, kPlatDark);
+        rectShape(s, h + 1, v + 7, h + 8, v + 8, kPlatDark);
+    }
+    else if(glyph == 2)
+    {
+        rectShape(s, h + 1, v + 5, h + 12, v + 6, kPlatDark);
+        rectShape(s, h + 1, v + 7, h + 12, v + 8, kPlatDark);
+    }
+    return s;
+}
+
 void titleBox(int h, int v, int glyph, bool pressed = false)
+{
+    Rect box = { (INTEGER)v, (INTEGER)h, (INTEGER)(v + 13), (INTEGER)(h + 13) };
+    hidpi::chrome_draw(box, hidpi::active() ? titleBoxShapes(h, v, glyph, pressed) : hidpi::Shapes{},
+                       [&] { titleBoxPixels(h, v, glyph, pressed); });
+}
+
+void titleBoxPixels(int h, int v, int glyph, bool pressed)
 {
     /* the square's other corners are the face's (an alert's bar is tinted
        round them: 8.6) */
@@ -2756,7 +2828,53 @@ Rect floatOutline(const Rect &c, bool side, bool collapsed = false, bool thin = 
    2 collapse (its lines across the bar: vertical in a SIDE bar), 4 zoom
    vertically (a line across the middle), 8 horizontally (down it), 12
    both (a corner). */
+void smallTitleBoxPixels(int h, int v, int glyph, bool side);
+
+/* A floating window's box at the display scale: its lines as they are,
+   the face's steps a smooth shade */
+hidpi::Shapes smallTitleBoxShapes(int h, int v, int glyph, bool side)
+{
+    hidpi::Shapes s;
+    rectShape(s, h, v, h + 9, v + 1, kPlatBox);
+    rectShape(s, h, v, h + 1, v + 9, kPlatBox);
+    rectShape(s, h + 9, v + 1, h + 10, v + 10, kWhite);
+    rectShape(s, h + 1, v + 9, h + 10, v + 10, kWhite);
+    rectShape(s, h + 1, v + 1, h + 9, v + 9, kPlatDark);
+    rectShape(s, h + 2, v + 2, h + 8, v + 8, kPlatBox);
+    rectShape(s, h + 2, v + 2, h + 8, v + 3, kPlatFace);
+    rectShape(s, h + 2, v + 2, h + 3, v + 8, kPlatFace);
+    rectShape(s, h + 2, v + 2, h + 3, v + 3, kWhite);
+    diagonalShade(s, h + 3, v + 3, 4, { 0x9999, 0x9999, 0xAAAA, 0xCCCC, 0xDDDD, 0xEEEE, 0xFFFF });
+    if(glyph == 2 && !side)
+    {
+        rectShape(s, h + 1, v + 3, h + 9, v + 4, kPlatDark);
+        rectShape(s, h + 1, v + 5, h + 9, v + 6, kPlatDark);
+    }
+    else if(glyph == 2)
+    {
+        rectShape(s, h + 3, v + 1, h + 4, v + 9, kPlatDark);
+        rectShape(s, h + 5, v + 1, h + 6, v + 9, kPlatDark);
+    }
+    if(glyph == 12)
+    {
+        rectShape(s, h + 5, v + 1, h + 6, v + 6, kPlatDark);
+        rectShape(s, h + 1, v + 5, h + 6, v + 6, kPlatDark);
+    }
+    else if(glyph & 4)
+        rectShape(s, h + 1, v + 4, h + 9, v + 5, kPlatDark);
+    else if(glyph & 8)
+        rectShape(s, h + 4, v + 1, h + 5, v + 9, kPlatDark);
+    return s;
+}
+
 void smallTitleBox(int h, int v, int glyph, bool side)
+{
+    Rect box = { (INTEGER)v, (INTEGER)h, (INTEGER)(v + 10), (INTEGER)(h + 10) };
+    hidpi::chrome_draw(box, hidpi::active() ? smallTitleBoxShapes(h, v, glyph, side) : hidpi::Shapes{},
+                       [&] { smallTitleBoxPixels(h, v, glyph, side); });
+}
+
+void smallTitleBoxPixels(int h, int v, int glyph, bool side)
 {
     lineGray(h, v, h + 8, v, kPlatBox);
     lineGray(h, v, h, v + 8, kPlatBox);

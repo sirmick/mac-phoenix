@@ -13,7 +13,8 @@ namespace Executor::hidpi
    covers [x, x + 1)): what a theme drawing call draws with QuickDraw's
    pixel steps, drawn anti-aliased at the display scale instead (phase 2,
    "chrome"). Filled, or stroked STROKE wide; in COLOR, or a radial
-   gradient round (gx, gy) of radius gr through COLORS at POS. */
+   gradient round (gx, gy) of radius gr through COLORS at POS (gr 0: a
+   linear one from (gx, gy) to (gx2, gy2)). */
 struct Shape
 {
     enum Kind : uint8_t
@@ -26,6 +27,7 @@ struct Shape
     float stroke = 0;
     uint32_t color = 0xFF000000; /* 0xAARRGGBB */
     float gx = 0, gy = 0, gr = 0;
+    float gx2 = 0, gy2 = 0;
     std::vector<uint32_t> colors;
     std::vector<float> pos;
     bool operator==(const Shape &) const = default;

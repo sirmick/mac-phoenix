@@ -73,6 +73,7 @@ int main(void)
     Rect r;
     int i;
     EventRecord e;
+    Boolean shown = false;
 
     InitGraf(&qd.thePort);
     InitFonts();
@@ -88,6 +89,9 @@ int main(void)
     AppendMenu(m, "\pChrome");
     InsertMenu(m, -1);
 
+    /* the floating window first: the document window in front, active */
+    SetRect(&r, 480, 80, 620, 160);
+    floater = NewCWindow(NULL, &r, "\pFloat", true, kWindowFloatProc, (WindowRef)-1, true, 0);
     SetRect(&r, 20, 60, 460, 300);
     doc = NewCWindow(NULL, &r, "\pChrome Gallery", true, zoomDocProc, (WindowRef)-1, true, 0);
     SetPort((GrafPtr)doc);
@@ -100,13 +104,21 @@ int main(void)
         if(i == sizeof ctls / sizeof ctls[0] - 1)
             HiliteControl(h, 255);
     }
-    SetRect(&r, 480, 80, 620, 160);
-    floater = NewCWindow(NULL, &r, "\pFloat", true, kWindowFloatProc, (WindowRef)-1, true, 0);
 
     while(!quit)
     {
         if(!WaitNextEvent(everyEvent, &e, 30, NULL))
+        {
+            /* once in front, the whole window again: on Executor 8.6 the
+               part BridgeAgent's window covered stays blank otherwise */
+            if(!shown)
+            {
+                SetPort((GrafPtr)doc);
+                InvalRect(&((GrafPtr)doc)->portRect);
+                shown = true;
+            }
             continue;
+        }
         switch(e.what)
         {
             case updateEvt:
