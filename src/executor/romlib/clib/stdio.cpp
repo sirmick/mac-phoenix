@@ -1082,10 +1082,12 @@ int32_t c_fputs(const char *s, uint32_t f)
 {
     if(fileIndex(f) < 0)
         return EOF_;
-    for(; *s; s++)
+    /* The number of characters, as Apple's (DevTest). */
+    int32_t n = 0;
+    for(; *s; s++, n++)
         if(putC((uint8_t)*s, f) == EOF_)
             return EOF_;
-    return 0;
+    return n;
 }
 
 int32_t c_puts(const char *s)
