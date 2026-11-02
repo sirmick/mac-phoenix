@@ -14,6 +14,7 @@ const Log = (() => {
     const console_ = {};
     let session = '', where = '', lines = [], size = 0, sent = 0, dropped = 0;
     let sending = false, off = false, timer = 0;
+    let onError = null;     // the Worker's: tell the page (it takes a screenshot)
 
     function text(a) {
         if (typeof a === 'string')
@@ -34,8 +35,11 @@ const Log = (() => {
             size -= lines.shift().length + 1;
             dropped++;
         }
-        if (level === 'error')
+        if (level === 'error') {
             flush();
+            if (onError)
+                try { onError(line.slice(0, 300)); } catch { }
+        }
         else if (!timer)
             timer = setTimeout(flush, 1000);
     }
@@ -115,5 +119,6 @@ const Log = (() => {
         return Date.now().toString(36) + '-' + [...r].map((b) => b.toString(16).padStart(2, '0')).join('');
     }
 
-    return { start, flush, newId, get session() { return session; } };
+    return { start, flush, newId, get session() { return session; },
+             set onError(f) { onError = f; } };
 })();

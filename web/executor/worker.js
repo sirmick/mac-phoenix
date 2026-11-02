@@ -405,8 +405,10 @@ function previousGone() {
 }
 
 async function start(m) {
-    if (m.log)
+    if (m.log) {
         Log.start(m.log, 'worker');
+        Log.onError = (text) => postMessage({ type: 'error', text });
+    }
     await previousGone();
     canvas = m.canvas;
     ctx = canvas.getContext('2d');
