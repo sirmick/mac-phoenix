@@ -155,6 +155,18 @@ type Relay struct {
 	mu    sync.Mutex
 	conns int
 	socks int
+	open  map[net.Conn]string // the WebSockets open, by the paired browser's hash
+}
+
+// unpaired closes the WebSockets of the browser with hash h ("": all).
+func (r *Relay) unpaired(h string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for conn, b := range r.open {
+		if h == "" || b == h {
+			conn.Close()
+		}
+	}
 }
 
 func (r *Relay) counts() (int, int) {
@@ -223,6 +235,17 @@ func (r *Relay) serve(c *ctx) error {
 		return nil
 	}
 	defer conn.Close()
+	r.mu.Lock()
+	if r.open == nil {
+		r.open = map[net.Conn]string{}
+	}
+	r.open[conn] = c.browser
+	r.mu.Unlock()
+	defer func() {
+		r.mu.Lock()
+		delete(r.open, conn)
+		r.mu.Unlock()
+	}()
 	conn.SetDeadline(time.Time{})
 	sum := sha1.Sum([]byte(key + wsGUID))
 	fmt.Fprintf(rw, "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"+

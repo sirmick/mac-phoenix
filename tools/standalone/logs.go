@@ -2,8 +2,8 @@ package main
 
 // The tab's logs, as tools/web/server/app.py: the page and its Worker
 // send what they print (log.js), a batch a second, appended to
-// DATA/logs/DAY/SESSION.log (signed out too: 64 KB a request; a file
-// stops at 64 MB; kept 14 days). /api/shot: the Screenshot button's PNG
+// DATA/logs/DAY/SESSION.log (a paired browser's; a file stops at 64 MB;
+// kept 14 days). /api/shot: the Screenshot button's PNG
 // beside it, DAY/SESSION-HHMMSS.png, and a line in the log saying so.
 
 import (
@@ -39,7 +39,7 @@ func (s *Server) logPrune() {
 }
 
 func init() {
-	handle("POST", "/api/log", false, func(c *ctx, m []string) error {
+	handle("POST", "/api/log", true, func(c *ctx, m []string) error {
 		session := c.query["session"]
 		if !logSessionRe.MatchString(session) {
 			return httpErr(400, "session: 8-40 letters, digits, -")
@@ -72,10 +72,7 @@ func init() {
 		defer f.Close()
 		var b bytes.Buffer
 		if isNew {
-			who := "(signed out)"
-			if c.authed {
-				who = "local"
-			}
+			who := fmt.Sprintf("%q", c.s.pairing.name(c.browser))
 			fmt.Fprintf(&b, "# %sZ %s %s %s\n", now.Format("2006-01-02 15:04:05"), c.address(), who, c.r.UserAgent())
 		}
 		b.WriteString(text)
@@ -89,7 +86,7 @@ func init() {
 	})
 
 	shotTagRe := regexp.MustCompile(`^[a-z0-9]{0,8}$`)
-	handle("POST", "/api/shot", false, func(c *ctx, m []string) error {
+	handle("POST", "/api/shot", true, func(c *ctx, m []string) error {
 		session := c.query["session"]
 		if !logSessionRe.MatchString(session) {
 			return httpErr(400, "session: 8-40 letters, digits, -")

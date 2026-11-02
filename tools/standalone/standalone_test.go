@@ -245,12 +245,11 @@ func TestGzipOnlyServed(t *testing.T) {
 	zw := gzip.NewWriter(&z)
 	zw.Write([]byte("// the module's glue\n"))
 	zw.Close()
-	s := &Server{site: fstest.MapFS{"executor-web.js.gz": {Data: z.Bytes()}, "index.html": {Data: []byte("<p>tab</p>")}}}
+	s := testServer(t, fstest.MapFS{"executor-web.js.gz": {Data: z.Bytes()}, "index.html": {Data: []byte("<p>tab</p>")}})
+	token := pairAs(t, s, "test")
 	for path, want := range map[string]string{"/executor-web.js": "// the module's glue\n", "/": "<p>tab</p>"} {
-		w := httptest.NewRecorder()
-		s.ServeHTTP(w, httptest.NewRequest("GET", path, nil))
-		if w.Code != 200 || w.Body.String() != want {
-			t.Errorf("%s: %d %q", path, w.Code, w.Body.String())
+		if a := do(s, "GET", path, "", token); a.code != 200 || a.body != want {
+			t.Errorf("%s: %d %q", path, a.code, a.body)
 		}
 	}
 }

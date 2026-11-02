@@ -18,6 +18,24 @@ func browserURL(scheme string, addr *net.TCPAddr) string {
 	return scheme + "://" + net.JoinHostPort(host, strconv.Itoa(addr.Port)) + "/"
 }
 
+// lanURLs: for an "any address" bind, the address on each of this
+// machine's networks (not loopback or link-local).
+func lanURLs(scheme string, addr *net.TCPAddr) []string {
+	if !addr.IP.IsUnspecified() {
+		return nil
+	}
+	var out []string
+	addrs, _ := net.InterfaceAddrs()
+	for _, a := range addrs {
+		n, ok := a.(*net.IPNet)
+		if !ok || n.IP.IsLoopback() || n.IP.IsLinkLocalUnicast() || (addr.IP.To4() != nil && n.IP.To4() == nil) {
+			continue
+		}
+		out = append(out, scheme+"://"+net.JoinHostPort(n.IP.String(), strconv.Itoa(addr.Port))+"/")
+	}
+	return out
+}
+
 func openBrowser(url string) error {
 	var cmd *exec.Cmd
 	switch runtime.GOOS {

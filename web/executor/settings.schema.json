@@ -150,7 +150,7 @@
         "bind": {
           "type": "string", "maxLength": 255, "default": "127.0.0.1", "x-scope": "server", "x-apply": "server",
           "title": "Listen on",
-          "description": "127.0.0.1: this computer only. 0.0.0.0 (or ::): the LAN too; set a password first.",
+          "description": "127.0.0.1: this computer only. 0.0.0.0 (or ::): the LAN too (with TLS, best). Every browser pairs with the key either way.",
           "examples": ["127.0.0.1", "0.0.0.0", "::"]
         },
         "port": {
@@ -186,11 +186,12 @@
           "type": "string", "maxLength": 255, "default": "", "x-scope": "server", "x-apply": "live",
           "title": "Name server", "description": "For the Mac's DNS lookups (empty: the computer's)."
         },
-        "password": {
-          "type": "boolean", "default": false, "x-scope": "server", "x-apply": "live", "readOnly": true,
-          "title": "Password",
-          "description": "Asked of every browser but this computer's, before the tab. Needed to change these settings from another computer.",
-          "x-widget": "password", "x-group": "Access"
+        "paired": {
+          "type": "array", "default": [], "x-scope": "server", "x-apply": "live", "readOnly": true,
+          "items": { "type": "object" },
+          "title": "Paired browsers",
+          "description": "Browsers that have shown the server's key (the address it prints has it). Revoke one and it must pair again; --rotate-key makes a new key and unpairs them all.",
+          "x-widget": "paired-browsers", "x-group": "Access"
         },
         "trusted_proxies": {
           "type": "array", "maxItems": 64, "default": [], "x-scope": "server", "x-apply": "live",
@@ -199,12 +200,12 @@
         },
         "secure_cookies": {
           "type": ["string", "boolean"], "enum": ["auto", true, false], "default": "auto", "x-scope": "server", "x-apply": "live",
-          "title": "Secure cookies", "description": "auto: Secure but for localhost; on behind HTTPS.",
+          "title": "Secure cookies", "description": "auto: Secure when served over HTTPS (here, or at a trusted proxy).",
           "x-labels": ["Auto", "On", "Off"]
         },
         "tls_cert": {
           "type": "string", "maxLength": 4096, "default": "", "x-scope": "server", "x-apply": "server",
-          "title": "TLS certificate", "description": "PEM certificate (chain): serve HTTPS (empty: HTTP).", "x-widget": "path"
+          "title": "TLS certificate", "description": "PEM certificate (chain): serve HTTPS (auto: a self-signed one made once in the data directory, as --tls auto; empty: HTTP).", "x-widget": "path"
         },
         "tls_key": {
           "type": "string", "maxLength": 4096, "default": "", "x-scope": "server", "x-apply": "server",

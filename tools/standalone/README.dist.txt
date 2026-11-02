@@ -20,7 +20,12 @@ Check a download against SHA256SUMS:
 
 Run it:
   ./executor-standalone-VERSION-linux-amd64 --open
-It serves http://127.0.0.1:8090/ and --open opens that in your browser.
+It serves http://127.0.0.1:8090/ and prints an address with a key in it
+(http://127.0.0.1:8090/#key=...): a browser that opens it is paired with
+the server, and only paired browsers get anything from it. --open opens
+that address in your browser. Settings > Network lists the paired
+browsers (Revoke unpairs one); --rotate-key makes a new key and unpairs
+them all.
 The binaries are not signed: on macOS, chmod +x the file and, the first
 time, right-click > Open (or: xattr -d com.apple.quarantine FILE); on
 Windows, SmartScreen asks once (More info > Run anyway).
@@ -33,8 +38,10 @@ beside it ({"title": "...", "note": "..."}). Changes you make to a disk
 are kept beside it (NAME.img-ID.overlay); the image itself is not
 written unless you merge them.
 
-  --port N, --bind ADDR   another port; listen beyond this machine (then
-                          set a password: executor-standalone passwd)
+  --port N, --bind ADDR   another port; listen beyond this machine
+                          (--bind 0.0.0.0: it prints the LAN addresses too)
+  --tls auto              HTTPS, with a certificate it makes once (self-signed:
+                          the browser asks once; compare the SHA-256 it prints)
   --data DIR              the data directory
   --help                  every flag
 
