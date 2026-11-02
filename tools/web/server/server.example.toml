@@ -30,7 +30,7 @@ max_upload_mb = 64          # one request's body
 
 [library]
 images = "~/storage/images" # the NAME.img.json records' images are the library
-include = ["*.img"]
+include = ["*.img", "*.iso"]
 exclude = ["test-*", "grid-*"]
 
 [relay]
