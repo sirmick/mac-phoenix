@@ -26,6 +26,9 @@
 #include <rsys/hook.h>
 #include <osevent/osevent.h>
 #include <rsys/process.h>
+#include <menu/menu.h>
+
+#include <iterator>
 #include <base/functions.impl.h>
 #include <base/traps.impl.h>
 
@@ -113,12 +116,86 @@ inline int _FindWindow(Point pt, WindowPtr *wp)
 #define ALLOW_MOVABLE_MODAL /* we've made so many other changes, we \
                    may as well go whole hog */
 
-/* MacPhoenix: System 7's menu bar setup around a modal dialog ($AA67).
-   Executor's ModalDialog leaves the menu bar alone, so there is nothing to
-   disable or restore. */
+/* MacPhoenix: the menu bar around a modal dialog ($AA67), as 7.5.5 (a
+   Quadra) and 8.6 (a G3) show it under an alert or Standard File: the
+   application's menus, the Apple menu among them, disabled and the bar
+   drawn with no title selected; the system menus (Help, Application) as
+   they were; the Edit menu (the one with Command-X, C and V) left on when
+   the dialog has a text field. Setting up again before the restore does
+   nothing. Per process: the menus it disabled, enabled again after. */
+namespace
+{
+struct ModalMenus
+{
+    int depth;
+    int n;
+    MenuHandle menus[32];
+};
+ModalMenus modal_menus;
+
+bool edit_menu_p(MenuHandle mh)
+{
+    int found = 0;
+    for(INTEGER i = 1, n = CountMItems(mh); i <= n; i++)
+    {
+        GUEST<CharParameter> c;
+        GetItemCmd(mh, i, &c);
+        if(c == 'X' || c == 'x' || c == 'C' || c == 'c' || c == 'V' || c == 'v')
+            found++;
+    }
+    return found >= 3;
+}
+}
+
 void Executor::C_ModalDialogMenuSetup(Boolean setup)
 {
-    (void)setup;
+    static bool registered;
+    if(!registered)
+    {
+        registered = true;
+        ROMlib_process_register_state(&modal_menus, sizeof modal_menus);
+    }
+    if(!LM(MenuList))
+        return;
+    if(setup)
+    {
+        if(modal_menus.depth++ > 0)
+            return;
+        modal_menus.n = 0;
+        DialogPeek dp = (DialogPeek)FrontWindow();
+        bool text = dp && dp->window.windowKind == dialogKind && dp->editField != -1;
+        menulist *ml = *MENULIST;
+        int count = ml->muoff / sizeof(muelem);
+        for(int i = 0; i < count && modal_menus.n < (int)std::size(modal_menus.menus); i++)
+        {
+            MenuHandle mh = (*MENULIST)->mulist[i].muhandle;
+            if(ROMlib_system_menu_p((*mh)->menuID) || !(MI_ENABLE_FLAGS(mh) & 1)
+               || (text && edit_menu_p(mh)))
+                continue;
+            MI_ENABLE_FLAGS(mh) = MI_ENABLE_FLAGS(mh) & ~1;
+            modal_menus.menus[modal_menus.n++] = mh;
+        }
+        HiliteMenu(0);
+        DrawMenuBar();
+    }
+    else
+    {
+        if(modal_menus.depth == 0 || --modal_menus.depth > 0)
+            return;
+        /* those still in the bar */
+        menulist *ml = *MENULIST;
+        int count = ml->muoff / sizeof(muelem);
+        for(int k = 0; k < modal_menus.n; k++)
+            for(int i = 0; i < count; i++)
+                if((*MENULIST)->mulist[i].muhandle == modal_menus.menus[k])
+                {
+                    MenuHandle mh = modal_menus.menus[k];
+                    MI_ENABLE_FLAGS(mh) = MI_ENABLE_FLAGS(mh) | 1;
+                    break;
+                }
+        modal_menus.n = 0;
+        DrawMenuBar();
+    }
 }
 
 #if !defined(ALLOW_MOVABLE_MODAL)
@@ -249,6 +326,13 @@ void Executor::C_ModalDialog(ModalFilterUPP fp, GUEST<INTEGER> *item) /* IMI-415
             fp2 = fp;
         else
             fp2 = &ROMlib_myfilt;
+        /* MacPhoenix: 7.5 and later disable the menu bar meanwhile */
+        struct MenuSetup
+        {
+            bool on = system_version >= 0x750;
+            MenuSetup() { if(on) C_ModalDialogMenuSetup(true); }
+            ~MenuSetup() { if(on) C_ModalDialogMenuSetup(false); }
+        } menu_setup;
         for(done = false; !done;)
         {
             WindowPtr temp_wp;
