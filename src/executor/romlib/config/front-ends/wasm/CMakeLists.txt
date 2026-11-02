@@ -262,4 +262,19 @@ if(NODE_COMMAND AND GO_COMMAND)
         set_tests_properties(executor.web.site.${system}.${disk} PROPERTIES
             LABELS "web;site" TIMEOUT 1800 SKIP_RETURN_CODE 77 ENVIRONMENT "${EXECUTOR_WEB_ENV}")
     endforeach()
+    # M1 (docs/executor/M1.md): the same disks' targets used, not only opened
+    # (a document saved, a script or build run, a game past its title
+    # screen: web/tests/tab_m1.mjs). Long, and every target must work: label
+    # m1 (ctest -L m1), not site.
+    foreach(cell "7.6.1 productivity" "7.6.1 development" "7.6.1 games-68k"
+                 "8.6 productivity" "8.6 development" "8.6 tools-8" "8.6 games-ppc")
+        separate_arguments(cell)
+        list(GET cell 0 system)
+        list(GET cell 1 disk)
+        add_test(NAME executor.web.m1.${system}.${disk}
+            COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_m1.mjs
+                    $<TARGET_FILE_DIR:executor-web> ${EXECUTOR_WEB_LIBRARY} ${system} ${disk}.img)
+        set_tests_properties(executor.web.m1.${system}.${disk} PROPERTIES
+            LABELS "web;m1" TIMEOUT 3600 SKIP_RETURN_CODE 77 ENVIRONMENT "${EXECUTOR_WEB_ENV}")
+    endforeach()
 endif()

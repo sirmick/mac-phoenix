@@ -80,6 +80,16 @@ DISKS = [
          {"app": "Tools ƒ:ResEdit 2.1.3 ƒ:ResEdit 2.1.3:ResEdit", "name": "ResEdit"},
          {"app": "Tools ƒ:BBEdit Lite 4.1 ƒ:BBEdit Lite 4.1", "name": "BBEdit Lite 4.1"},
      ]},
+    {"name": "tools-8.img", "label": "Tools",
+     "title": "Tools (Mac OS 8)",
+     "tags": ["development", "ppc"],
+     "note": "BBEdit Lite 6.1.2, ResEdit 2.1.3, Resorcerer 2.0, Disk Copy 6.3.3, StuffIt Expander 6.0.1, "
+             "ZTerm 1.0.1, MacsBug 6.6.3: the Mac OS 8/9 development disk's tools. For Mac OS 8.6.",
+     "systems": ["8.6"],
+     "take": [("dev-tools-macos-8-9.img", ["Tools ƒ"])],
+     "launch": [
+         {"app": "Tools ƒ:BBEdit Lite 6.1.2 ƒ:BBEdit Lite 6.1", "name": "BBEdit Lite 6.1"},
+     ]},
     {"name": "games-68k.img", "label": "Games",
      "title": "Games (68k)",
      "tags": ["games", "68k"],

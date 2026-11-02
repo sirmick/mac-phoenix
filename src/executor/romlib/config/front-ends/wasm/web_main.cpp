@@ -17,7 +17,8 @@
  *   app              the current application's name (CurApName)
  *   windows          its windows: title, global bounds, visible, kind; a
  *                    dialog's static text and ParamText's strings too (an
- *                    alert's message)
+ *                    alert's message); with "items", its items too: type,
+ *                    global rectangle, a control's title or a text item's text
  *   menus            its menu bar: each menu's title and left edge
  *   launch PATH      LaunchApplication of "Volume:Folder:App"; its OSErr
  *   mount PATH       a disk image put in now (the Disks panel's insert, the
@@ -55,6 +56,8 @@
 #include <SegmentLdr.h>
 #include <wind/wind.h>
 #include <menu/menu.h>
+#include <ControlMgr.h>
+#include <quickdraw/cquick.h>
 #include <util/macstrings.h>
 
 #include <emscripten.h>
@@ -209,7 +212,7 @@ std::string pstring(const unsigned char *p)
     return p ? std::string((const char *)p + 1, p[0]) : std::string();
 }
 
-std::string windows_json()
+std::string windows_json(bool items)
 {
     std::string out = "[";
     for(WindowPeek w = LM(WindowList); w; w = WINDOW_NEXT_WINDOW(w))
@@ -242,6 +245,33 @@ std::string windows_json()
             {
                 Handle h = LM(DAStrings)[i];
                 out += (i ? "," : "") + json_string(h && *h ? pstring((const unsigned char *)*h) : "");
+            }
+            out += "]";
+            if(!items)
+            {
+                out += "}";
+                continue;
+            }
+            /* Its items, on the screen: a control's title, a text item's
+               text (what a test clicks by name). */
+            out += ",\"items\":[";
+            Rect &bounds = PORT_BOUNDS((GrafPtr)w);
+            for(int i = 1, n = CountDITL((DialogPtr)w); i <= n; i++)
+            {
+                GUEST<INTEGER> type;
+                GUEST<Handle> h;
+                Rect ir;
+                C_GetDialogItem((DialogPtr)w, i, &type, &h, &ir);
+                int kind = type & 0x7F;
+                Str255 s = { 0 };
+                if(h && kind >= ctrlItem && kind < statText)   /* buttons, boxes, radios, resource controls */
+                    C_GetControlTitle((ControlHandle)(Handle)h, s);
+                else if(h && (kind == statText || kind == editText))
+                    C_GetDialogItemText(h, s);
+                out += (i > 1 ? "," : "") + std::string("{\"type\":") + std::to_string(kind)
+                       + ",\"rect\":[" + std::to_string(ir.top - bounds.top) + "," + std::to_string(ir.left - bounds.left)
+                       + "," + std::to_string(ir.bottom - bounds.top) + "," + std::to_string(ir.right - bounds.left)
+                       + "],\"title\":" + json_string(pstring(s)) + "}";
             }
             out += "]";
         }
@@ -444,7 +474,7 @@ void on_event_poll()
                                 : LM(CurApName)[0] <= 31 ? pstring(LM(CurApName)) : "");
         }
         else if(op == "windows")
-            reply = windows_json();
+            reply = windows_json(arg == "items");
         else if(op == "menus")
             reply = menus_json();
         else if(op == "launch")
