@@ -446,7 +446,21 @@ async function start(m) {
     ids = m.ids || {};
     if (m.volumeKey && Store.enabled) {
         try {
-            const kept = await Store.volumeDown(m.volumeKey);
+            // A connection that drops (the server restarted under the
+            // download: "Content-Length ... exceeds response Body") is tried
+            // again a few times; an HTTP error is not.
+            let kept;
+            for (let attempt = 1; ; attempt++) {
+                try {
+                    kept = await Store.volumeDown(m.volumeKey);
+                    break;
+                } catch (e) {
+                    if (!(e instanceof TypeError) || attempt === 4)
+                        throw e;
+                    console.log(`[web] Executor's disk: ${e.message || e}; trying again`);
+                    await new Promise((r) => setTimeout(r, 1500 * attempt));
+                }
+            }
             if (kept) {
                 saved = kept;
                 console.log(`[web] restored ${Object.keys(kept.files).length} files of the volume from the server`);
