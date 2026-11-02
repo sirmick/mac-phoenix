@@ -45,6 +45,10 @@
 // window.executor.frames counts frames.
 'use strict';
 
+// A paired browser opening the server's printed address (tools/standalone
+// pair.go): the key out of the address before anything logs or keeps it.
+if (/(^#|&)key=/.test(location.hash))
+    history.replaceState(null, '', location.pathname + location.search);
 const box = document.getElementById('screen-box');
 document.getElementById('insecure').hidden = window.isSecureContext;
 const status = document.getElementById('status');

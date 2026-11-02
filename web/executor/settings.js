@@ -152,9 +152,6 @@ const Settings = (() => {
     function patched(d, patch, within = scopes) {
         patch = clone(patch);
         delete patch.version;
-        const pw = patch.network && typeof patch.network.password === 'string';
-        if (pw)
-            delete patch.network.password;
         for (const p of leaves(patch).sort()) {
             const n = lookup(p);
             if (!n)
@@ -580,7 +577,7 @@ const Settings = (() => {
         if (p['x-scope'] === 'server' && !canChangeServer && !p.readOnly) {
             const note = document.createElement('div');
             note.className = 'settings-override';
-            note.textContent = 'From this computer only, or with a password set.';
+            note.textContent = "Set by the server's owner.";
             right.append(note);
         }
         right.append(help, error);
@@ -593,8 +590,8 @@ const Settings = (() => {
         const widget = p['x-widget'];
         const types = [].concat(p.type || []);
         let el;
-        if (widget === 'password')
-            return passwordControl(id, commit, locked);
+        if (widget === 'paired-browsers')
+            return pairedBrowsers(id, value);
         if (widget === 'disk-list')
             return diskList(id, value, commit, locked);
         if (p['x-choices']) {
@@ -678,36 +675,46 @@ const Settings = (() => {
         return el;
     }
 
-    function passwordControl(id, commit, locked) {
-        const wrap = document.createElement('span');
-        wrap.className = 'settings-password';
-        const state = document.createElement('span');
-        const input = document.createElement('input');
-        input.type = 'password';
-        input.id = id;
-        input.autocomplete = 'new-password';
-        input.placeholder = 'a new password';
-        input.disabled = locked;
-        const refresh = () => {
-            state.textContent = at(doc, 'network.password') ? 'Set. ' : 'None. ';
-            clear.hidden = !at(doc, 'network.password');
+    // tools/standalone's paired browsers (pair.go): name, address, last
+    // seen, Revoke (this one: the page goes back to pairing).
+    function pairedBrowsers(id, value) {
+        const wrap = document.createElement('div');
+        wrap.className = 'settings-paired';
+        wrap.id = id;
+        const ago = (t) => {
+            const s = Math.max(0, (Date.now() - Date.parse(t)) / 1000);
+            return s < 90 ? 'now' : s < 5400 ? `${Math.round(s / 60)} min ago`
+                : s < 129600 ? `${Math.round(s / 3600)} h ago` : `${Math.round(s / 86400)} days ago`;
         };
-        const setIt = button('Set', '', async () => {
-            if (!input.value)
-                return;
-            await commit(input.value);
-            input.value = '';
-            refresh();
-        });
-        const clear = button('Remove', '', async () => {
-            if (confirm('Remove the password? Anyone who reaches the server can use Executor.')) {
-                await commit('');
-                refresh();
+        const show = (list) => {
+            const ol = document.createElement('ul');
+            for (const b of list) {
+                const li = document.createElement('li');
+                const name = document.createElement('span');
+                name.className = 'settings-paired-name';
+                name.textContent = b.name + (b.this ? ' (this browser)' : '');
+                const when = document.createElement('span');
+                when.className = 'settings-paired-seen';
+                when.textContent = `${b.address}, ${ago(b.last_seen)}`;
+                when.title = `paired ${new Date(b.created).toLocaleString()}, last seen ${new Date(b.last_seen).toLocaleString()}`;
+                const revoke = button('Revoke', '', async () => {
+                    if (b.this && !confirm('Revoke this browser? It must pair with the key again.'))
+                        return;
+                    const res = await fetch(`api/paired/${b.id}`, { method: 'DELETE', cache: 'no-store' });
+                    if (b.this)
+                        return location.reload();
+                    if (res.ok)
+                        show((await res.json()).browsers);
+                });
+                revoke.dataset.id = b.id;
+                li.append(name, when, revoke);
+                ol.append(li);
             }
-        });
-        setIt.disabled = clear.disabled = locked;
-        refresh();
-        wrap.append(state, input, setIt, clear);
+            if (!list.length)
+                ol.append(Object.assign(document.createElement('li'), { textContent: 'None.' }));
+            wrap.replaceChildren(ol);
+        };
+        show(value || []);
         return wrap;
     }
 
