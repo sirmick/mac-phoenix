@@ -71,7 +71,8 @@ SHA256SUMS again over the signed files.
 | Flag | Default | |
 |---|---|---|
 | `--data DIR` | `os.UserConfigDir()/executor-web` | settings, overlays of disks not in the library, volumes, logs |
-| `--images DIR` | settings' `images`, `DATA/images` | the library |
+| `--config FILE` | `DATA/settings.json` | the settings file |
+| `--images DIR` | settings' `disks.images`, `DATA/images` | the library |
 | `--bind`, `--port` | `127.0.0.1`, `8090` | `--port 0`: any (the first line printed says which) |
 | `--site DIR` | the embedded site | |
 | `--password-file F` | settings' | the password for this run |
@@ -79,22 +80,29 @@ SHA256SUMS again over the signed files.
 | `--open` | | open the default browser at the address (xdg-open, open, or url.dll on Windows; an any-address bind opens 127.0.0.1) |
 | `--quiet` | | errors only |
 
-Flags hold for the run and are never saved; `DATA/settings.json` holds
-the rest.
+Flags hold for the run and are never saved; `settings.json` holds the
+rest. `os.UserConfigDir()` is `~/.config` (or `$XDG_CONFIG_HOME`) on
+Linux, `~/Library/Application Support` on macOS, `%AppData%` on Windows.
 
 ## Settings
 
-`GET /api/settings` gives them, `POST /api/settings` changes some (a JSON
-object of the keys to change; unknown keys are refused). Without a
-password only this machine may change them (a LAN client gets 403).
+One file, version 2, nested by category, described by
+`web/executor/settings.schema.json` (Settings.md): the tab's Settings
+dialog edits it. The page's settings (machine, disks mounted, keys,
+display, sound, logging) are kept here for the tab; the server's own
+(`disks.images`/`include`/`exclude`, `network.*`) are this program's.
+Version 1 files (flat, before) are migrated when read and saved as 2.
 
-| Key | Default | Applies |
-|---|---|---|
-| `images`, `include`, `exclude` | `DATA/images`, `["*.img"]`, `[]` | at once |
-| `relay` | `tools/web/server`'s `[relay]`, plus `nameserver` (QUERY's; "": the host's) | new relay connections |
-| `password` | none | at once: a string sets it (stored as PBKDF2), `""` clears it |
-| `trusted_proxies`, `secure_cookies`, `max_upload_mb` | `[]`, `"auto"`, 64 | at once |
-| `bind`, `port`, `tls_cert`, `tls_key` | | at the next start (`restart_needed` in the answer lists them) |
+`GET /api/settings` gives `{ version, settings, scopes, restart_needed,
+can_change_server, file }`; `POST /api/settings` takes a JSON merge patch
+(`null`: the default, of a setting or a whole category) and answers the
+same, or 400 `{ error, path }` for an invalid value. Without a password
+only this machine may change the server's own settings (a LAN client
+gets 403). `network.password` reads as whether one is set; a string
+written sets it (stored as PBKDF2 beside the settings, never sent), `""`
+removes it. `network.bind`, `port`, `tls_cert`, `tls_key` apply at the
+next start (`restart_needed` lists them); the rest at once (the relay's
+for new connections).
 
 ## What differs from tools/web/server
 
