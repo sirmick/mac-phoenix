@@ -1,6 +1,6 @@
 package main
 
-// The tab's logs, as tools/web/server/app.py: the page and its Worker
+// The tab's logs: the page and its Worker
 // send what they print (log.js), a batch a second, appended to
 // DATA/logs/DAY/SESSION.log (the claiming browser's; a file stops at 64 MB;
 // kept 14 days). /api/shot: the Screenshot button's PNG

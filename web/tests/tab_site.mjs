@@ -1,6 +1,6 @@
 // The assembled site (docs/executor/WebSite.md): the applications on a
 // library disk, opened in the tab on one of the site's systems and used a
-// moment, as a visitor would: signed in to tools/web/server, its boot disk
+// moment, as a visitor would: on tools/standalone, its boot disk
 // and the application disk from the library (read lazily), each
 // application launched in turn (a reload between them) and checked:
 //
@@ -38,7 +38,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { launch, newPage, firstFrame, request as ask, until } from './harness.mjs';
-import { startServer, signIn, OWNER_PASSWORD } from './server.mjs';
+import { startServer } from './server.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const [dir, library, system, diskName] = process.argv.slice(2);
@@ -116,21 +116,32 @@ async function shot(name) {
 const changed = (a, b) => !a || !b ? 0 : a.reduce((n, v, i) => n + (Math.abs(v - b[i]) > 8), 0) / a.length;
 
 const server = await startServer(dir, { images: library, include: [boot, diskName] });
+if (!server) {
+    console.log('SKIP: no go');
+    process.exit(77);
+}
 const browser = await launch();
 const query = `?disk=disks/${encodeURIComponent(boot)}&disk=disks/${encodeURIComponent(diskName)}`
     + `&system=${encodeURIComponent(boot)}${system === '8.6' ? '&ppc=1' : ''}`
     + (process.env.SITE_QUERY ? `&${process.env.SITE_QUERY}` : '');
-// A tab signed in on the System with the disk; a new one (a browser
-// context of its own) when an application crashed the last.
+// A tab on the System with the disk; a new one when an application
+// crashed the last (in the same browser: the first to load the tab has
+// the server, claim.go).
 let page = null, crashed = false;
 async function openTab() {
-    if (page)
-        await page.context().close().catch(() => {});
-    page = await newPage(browser, { log: !!process.env.SITE_LOG, scale: DPR });
+    if (page) {
+        const context = page.context();
+        await page.close().catch(() => {});
+        page = await context.newPage();
+        page.on('pageerror', (e) => console.log('[page error]', e.stack || e.message));
+        if (process.env.SITE_LOG)
+            page.on('worker', (w) => w.on('console', (m) => console.log('[worker]', m.text())));
+    } else
+        page = await newPage(browser, { log: !!process.env.SITE_LOG, scale: DPR });
     page.on('dialog', (d) => d.accept());
     page.on('crash', () => { crashed = true; });
     crashed = false;
-    await signIn(page, server.url, 'owner', OWNER_PASSWORD, { query });
+    await page.goto(`${server.url}/${query}`);
 }
 const finder = async () => {
     await firstFrame(page, 120000);

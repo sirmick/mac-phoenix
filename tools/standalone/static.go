@@ -1,6 +1,6 @@
 package main
 
-// Files over HTTP, as tools/web/server/static.py: validators,
+// Files over HTTP: validators,
 // pre-compressed copies, byte ranges.
 //
 // For a request for NAME, when NAME.gz exists and the browser accepts

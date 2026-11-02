@@ -63,7 +63,7 @@ files.push(...new Set(apps.map((a) => a.image)));
 let t0 = Date.now();
 await page.setInputFiles('#add', files);
 await firstFrame(page, 120000);
-times.upload_s = secs(t0);       // stored in OPFS, restarted
+times.upload_s = secs(t0);       // uploaded, restarted
 
 // TAB_TRACE=FILE: a Chromium trace (the Worker's CPU samples) from the
 // System choice to the desktop quiet.

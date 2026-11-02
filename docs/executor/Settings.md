@@ -3,17 +3,16 @@
 One JSON document, described by one JSON Schema:
 `web/executor/settings.schema.json`. The schema is where every setting's
 category, default, type, range, label and help text are; nothing else
-repeats them. Three implementations check a document against it, with
+repeats them. Two implementations check a document against it, with
 the same subset of JSON Schema and the same messages:
 
 | | Where | Keeps |
 |---|---|---|
 | `tools/standalone` (`schema.go`, `settings.go`) | the Go server | `settings.json` (`--config`; default in the data directory, Standalone.md): all of it |
-| `tools/web/server` (`settings.py`) | the hosted server | `DATA/users/ID/settings.json`: each user's page settings |
-| `web/executor/settings.js` | the tab | with whichever server answers `/api/settings`, else localStorage (`executor-settings`) |
+| `web/executor/settings.js` | the tab | on the server, through `/api/settings` (without it: the defaults, kept nowhere) |
 
 `web/tests/settings_cases.json` holds them to the same answers (go test,
-`test_server.py`, `tab_settings.mjs`). The Go server embeds a copy of the
+`tab_settings.mjs`). The Go server embeds a copy of the
 schema (`tools/standalone/settings.schema.json`; go test fails if it
 differs: copy it after editing).
 
@@ -23,7 +22,7 @@ differs: copy it after editing).
 {
   "version": 2,
   "machine":  { "system": "", "ram_mb": 0, "screen": "640x480", "depth": 0, "ppc": false },
-  "disks":    { "mounted": [], "images": "", "include": ["*.img", "*.iso"], "exclude": [] },
+  "disks":    { "mounted": [], "images": "", "include": ["*.img", "*.iso"], "exclude": [], "max_image_mb": 4096 },
   "input":    { "command_key": "meta", "keyboard_capture": true, "right_click": "control" },
   "display":  { "scale": 0, "smoothing": false, "fullscreen_button": true },
   "sound":    { "enabled": true, "volume": 80 },
@@ -68,10 +67,7 @@ applies: the saved value, unless the page's address overrides it for the
 visit (`?size=`, `?scale=`, `?ppc`, `?system=`, `?logtraps=`,
 `?nesting=`, `?debug=`, `?ppcbreak=`; the dialog says so). main.js reads
 the machine's at each start of Executor; the bar's PowerPC box and System
-menu write them. The library disks picked (`disks.mounted`, in order)
-replace localStorage's `executor-library`; the old keys
-(`executor-system`, `executor-ppc`, `executor-library`) move into the
-settings once.
+menu write them. The library disks picked: `disks.mounted`, in order.
 
 What applies live: the Command key (`keys.js`: Command on Meta, Ctrl or
 Alt, Option and Control the other two), the right button (a click, or

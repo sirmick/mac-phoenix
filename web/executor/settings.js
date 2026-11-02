@@ -1,10 +1,10 @@
 // The tab's settings (docs/executor/Settings.md): settings.schema.json
 // describes them, this keeps them and makes the Settings dialog from it.
 //
-// Where they are kept: the server's /api/settings when there is one
-// (tools/standalone: settings.json, the page's and the server's own;
-// tools/web/server, signed in: the account's, the page's only), else this
-// browser's localStorage. The page's address overrides some for the visit
+// Where they are kept: the server's /api/settings (tools/standalone:
+// settings.json, the page's and the server's own); without it (refused:
+// the server restarted, main.js) the defaults, kept nowhere. The page's
+// address overrides some for the visit
 // (?size= ?scale= ?ppc ?system= ?logtraps= ?nesting= ?debug= ?ppcbreak=),
 // never saved.
 //
@@ -22,7 +22,6 @@
 'use strict';
 
 const Settings = (() => {
-    const LOCAL_KEY = 'executor-settings';
     const params = new URLSearchParams(location.search);
     // ?param -> setting, and how to read it.
     const OVERRIDES = {
@@ -31,7 +30,7 @@ const Settings = (() => {
         nesting: ['advanced.logtraps_nesting', Number], debug: ['advanced.debug', String],
         ppcbreak: ['advanced.ppc_break', String],
     };
-    let schema = null, doc = null, where = 'local', scopes = ['page'], canChangeServer = false;
+    let schema = null, doc = null, where = 'none', scopes = ['page'], canChangeServer = false;
     let restartNeeded = [], serverFile = '', atStart = null;
     const listeners = new Map(), providers = {};
 
@@ -183,47 +182,6 @@ const Settings = (() => {
         serverFile = v.file || '';
     }
 
-    function readLocal() {
-        let saved = {};
-        try {
-            saved = JSON.parse(localStorage.getItem(LOCAL_KEY) || '{}') || {};
-        } catch { }
-        // Kept what is still valid, setting by setting.
-        let d = defaults();
-        for (const [cat, values] of Object.entries(saved))
-            if (jsonType(values) === 'object' && jsonType(d[cat]) === 'object')
-                for (const [k, v] of Object.entries(values))
-                    try {
-                        d = patched(d, { [cat]: { [k]: v } });
-                    } catch { }
-        d.version = schema['x-version'];
-        return d;
-    }
-
-    // The page's settings before there were any (main.js's localStorage keys).
-    async function migrateOld() {
-        const patch = {};
-        const sys = localStorage.getItem('executor-system'), ppc = localStorage.getItem('executor-ppc');
-        const lib = localStorage.getItem('executor-library');
-        if (sys !== null)
-            (patch.machine = patch.machine || {}).system = sys;
-        if (ppc !== null)
-            (patch.machine = patch.machine || {}).ppc = ppc === '1';
-        if (lib !== null)
-            try {
-                patch.disks = { mounted: JSON.parse(lib).filter((u) => typeof u === 'string' && u) };
-            } catch { }
-        if (!Object.keys(patch).length)
-            return;
-        try {
-            await set(patch);
-        } catch (e) {
-            console.log(`[web] settings: the old ones not kept (${e.message})`);
-        }
-        for (const k of ['executor-system', 'executor-ppc', 'executor-library'])
-            localStorage.removeItem(k);
-    }
-
     const ready = (async () => {
         try {
             schema = await (await fetch('settings.schema.json', { cache: 'no-cache' })).json();
@@ -239,10 +197,10 @@ const Settings = (() => {
             }
         } catch { }
         if (where !== 'server') {
-            doc = readLocal();
+            doc = defaults();
+            doc.version = schema['x-version'];
             scopes = ['page'];
         }
-        await migrateOld();
         apply('*');
     })();
 
@@ -258,12 +216,7 @@ const Settings = (() => {
                 throw new FieldError(v.path || '', v.error || `the server: ${res.status}`);
             fromServer(v);
         } else {
-            doc = next;
-            const save = {};        // the page's only
-            for (const [cat, n] of Object.entries(schema.properties))
-                if (n.properties)
-                    save[cat] = doc[cat];
-            localStorage.setItem(LOCAL_KEY, JSON.stringify({ version: schema['x-version'], ...save }));
+            doc = next;             // for this visit
         }
         const changed = [];
         for (const [cat, n] of Object.entries(schema.properties))
@@ -465,8 +418,8 @@ const Settings = (() => {
         if (!cats.some(([c]) => c === current))
             current = cats.length ? cats[0][0] : null;
         dialog.querySelector('.settings-where').textContent = where === 'server'
-            ? (serverFile ? `kept in ${serverFile}` : 'kept with your account')
-            : 'kept in this browser';
+            ? (serverFile ? `kept in ${serverFile}` : 'kept on the server')
+            : 'not kept: no server';
         const nav = dialog.querySelector('nav');
         nav.replaceChildren(...cats.map(([c, n]) => {
             const b = button(n.title, c === current ? 'active' : '', () => {

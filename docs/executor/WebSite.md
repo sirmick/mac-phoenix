@@ -1,14 +1,21 @@
-# The site: Executor in a tab, as a private service
+# The site: Executor in a tab, served by tools/standalone
 
-M1's site is `tools/web/server` (what it serves and its API: the docstring
-of `tools/web/server/app.py`) in front of three things this page says how
-to put in place: the tab (the wasm build), the library (boot and
-application disks) and the data directory (accounts and every user's
-synced changes). Signed-in users pick a System and add disks from the
-library; the disks are read by Range requests as Executor needs them, and
-what they change (a disk's blocks, Executor's own volume) is kept in the
-browser and synced to their account (`web/executor/sync.js`). The same tab as one
-program for one person's machine, no accounts: Standalone.md.
+The site is `tools/standalone` (Standalone.md: the program, its API and
+who may use it) in front of three things this page says how to put in
+place: the tab (the wasm build, embedded in the program or `--site
+DIR`), the library (boot and application disks) and the data directory
+(settings, the changes made to disks not in the library, Executor's own
+volumes, the tab's logs). A visitor picks a System and adds disks from
+the library; the disks are read by Range requests as Executor needs it,
+and what it changes (a disk's blocks, Executor's own volume) is kept by
+the server (`web/executor/sync.js`, `Store`).
+
+It is a private service: **the first browser to open the tab after the
+server starts has it until the server stops** (Standalone.md, "Who uses
+it"); any other gets a page saying it is in use. Start the server, open
+it in your browser, and it is yours. To hand it to another browser,
+restart the server. There are no accounts (the hosted Python server that
+had them was retired 2026-11-02; DIRECTION.md).
 
 ## The tab
 
@@ -17,14 +24,15 @@ source ~/emsdk/emsdk_env.sh
 tools/skia/build-wasm.sh                                 # once: Skia for wasm, ~/storage/deps/skia-m144-wasm-wasm
 emcmake cmake -B build-wasm -DCMAKE_BUILD_TYPE=Release -DEXECUTOR_SKIA=ON -DEXECUTOR_NET=wasm
 cmake --build build-wasm -j2
-tools/web/make_site.sh /srv/executor-web/site            # the page, the module, .gz copies
+make -C tools/standalone WASM_BUILD=$PWD/build-wasm      # the site embedded: ./tools/standalone/executor-standalone
 ```
 
 The site's module is built with Skia (`-DEXECUTOR_SKIA=ON`, HiDPI.md):
 the tab draws at the screen's `devicePixelRatio` (`?scale=N` to choose),
 and at 2 text is drawn from outlines, sharp, rather than the 1x screen
 scaled up. Without it the module is 4 MB smaller (1.3 MB gzipped) and
-text at 2x is blurred; `make_site.sh` warns.
+text at 2x is blurred; `make_site.sh` (which the Makefile runs) warns.
+`executor.web.hidpi` and `executor.web.hidpi_gworld` fail without it.
 
 `-DEXECUTOR_NET=wasm` (MacTCP and Open Transport through the server's
 `/relay`) is the default for a new build directory, but CMake keeps a
@@ -33,17 +41,12 @@ and its module has no network (MacTCP calls fail, `executor.web.relay`
 fails) until it is configured again with `-DEXECUTOR_NET=wasm`. Check
 with `grep EXECUTOR_NET build-wasm/CMakeCache.txt`.
 
-`make_site.sh` copies what the page needs out of the build tree, so a
-rebuild doesn't change the running site until it is run again. Nothing
-else is needed: the tab needs no cross-origin isolation headers, but it
-does need a secure context (HTTPS, or `localhost`) for OPFS, where it
-keeps disks and changes. Over plain http to another host (the server by
-its LAN address) it runs with nothing kept, and says so above the screen:
-library disks are read as needed into memory (at most 128 MB of each, the
-chunks read longest ago dropped), disks are writable through overlays in
-memory, Executor's own disk is in memory, and all of it lasts until
-Executor restarts (adding a disk restarts it); no sound
-(`executor.web.insecure` runs the site so).
+The binary has the tab in it as it was when `make` ran: a rebuild of
+build-wasm changes nothing until `make` runs again (or serve
+`tools/web/make_site.sh DIR`'s copy with `--site DIR`). The tab keeps
+nothing in the browser (the server keeps it all), so it needs no secure
+context, but sound does: HTTPS, or `localhost` (below). It runs only on
+its server: served by anything else it says so and does not start.
 
 ## The library
 
@@ -84,72 +87,57 @@ A link opens a System with disks already added, e.g.
 
 ## The server
 
-As a systemd user service of an account on the host (or a system service
-with `User=`; the unit is `tools/web/server/executor-web.service`):
+As a systemd user service of an account on the host (or a system
+service with `User=`):
 
-```bash
-mkdir -p ~/.config/executor-web ~/.config/systemd/user
-cp tools/web/server/server.example.toml ~/.config/executor-web/server.toml
-cp tools/web/server/executor-web.service ~/.config/systemd/user/
+```ini
+# ~/.config/systemd/user/executor-web.service
+[Unit]
+Description=Executor in a tab (tools/standalone)
+After=network.target
+
+[Service]
+ExecStart=%h/bin/executor-standalone --data /srv/executor-web/data --images /srv/executor-web/library --bind 127.0.0.1 --port 8090 --quiet
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
 ```
 
-`server.toml` for this layout (every key: `server.example.toml`):
-
-```toml
-[server]
-bind = "127.0.0.1"                    # the proxy in front has the public address
-port = 8090
-site = "/srv/executor-web/site"
-data = "/srv/executor-web/data"       # accounts.sqlite, users/ID/
-secure_cookies = true                 # behind HTTPS
-trusted_proxies = ["127.0.0.1"]       # the proxy's X-Forwarded-For is believed
-max_upload_mb = 64
-
-[library]
-images = "/srv/executor-web/library"
-include = ["*.img", "*.iso"]
-```
-
-The unit runs `python3 ~/src/mac-phoenix/tools/web/server` (Python 3.11 or
-later, no other packages); point `ExecStart` at the checkout in use. Then:
-
 ```bash
-python3 tools/web/server --config ~/.config/executor-web/server.toml adduser NAME --owner
+cp tools/standalone/executor-standalone ~/bin/
 systemctl --user daemon-reload && systemctl --user enable --now executor-web
 loginctl enable-linger $USER          # keeps running signed out
-journalctl --user -u executor-web     # its log (--quiet: errors only)
+journalctl --user -u executor-web     # its log (--quiet: errors only); the first line, its address
 ```
 
-### Standalone mode
+Every other setting is in `DATA/settings.json` (Standalone.md,
+"Settings"; the tab's Settings dialog edits it): the library's
+`disks.include` (`["*.img", "*.iso"]` for the CDs below), the relay's
+`network.relay_*`, `network.trusted_proxies`. A restart of the service
+frees the claim: the browser that had the server reloads to have it
+again, and whichever browser opens it first then has it.
 
-`mode = "standalone"` in `[server]` (or `--standalone`): one person's
-machine, the shape of P1's single binary. No accounts (every request is
-the one local user's) and the server is the tab's only store: `/api/me`
-says `"mode": "standalone"` and the tab uses no OPFS. Disks are read by
-Range requests (no chunk cache), their changed 4 KB blocks kept in memory
-and sent to `/api/sync/overlays` about every second and at once when
-Executor flushes (FlushVol, a file closed, an eject: fsync on the image),
-the last of them in a beacon when the page goes; Executor's volume is
-restored from and saved to `/api/sync/volumes` and `objects`
-(`web/executor/sync.js`, `Store`). One tab is in control
-(`/api/session`, `tools/web/server/session.py`): another shows its screen
-(a PNG a second, `/api/session/screen`) until it takes control or the
-first goes. Bind it to localhost. Test: `ctest -R executor.web.standalone`.
+## HTTPS
+
+Sound needs a secure context: HTTPS, or `localhost`. On a LAN the server
+serves HTTPS itself: `--tls auto` makes a self-signed certificate once
+(`DATA/tls/`, for localhost, the machine's name and addresses; its
+SHA-256 printed to compare with what the browser shows when it asks the
+first time), or `--tls-cert`/`--tls-key` (settings' `network.tls_cert`,
+`tls_key`) for one of your own.
 
 ## HTTPS in front
 
-The page needs a secure context (HTTPS, or localhost) for OPFS: without it
-large library disks, saved changes and sound don't work. On a LAN without a
-proxy, the server can serve HTTPS itself: set `tls_cert`/`tls_key` in
-`[server]` (a self-signed certificate whose subjectAltName has the address;
-the browser asks once to accept it).
-
-
-The server speaks plain HTTP on 127.0.0.1; a reverse proxy has the
-certificate. It must pass `Host` through (the server checks a write's
-`Origin` against it), add `X-Forwarded-For`, pass WebSocket upgrades
+Or the server speaks plain HTTP on 127.0.0.1 and a reverse proxy has the
+certificate (`network.trusted_proxies: ["127.0.0.1"]` so its
+`X-Forwarded-For` and `X-Forwarded-Proto` are believed: the claim's
+cookie is then Secure). It must pass `Host` through (the server checks a
+write's `Origin` against it), add `X-Forwarded-For` and
+`X-Forwarded-Proto`, pass WebSocket upgrades
 (`/relay`), not buffer (disk ranges stream), and allow bodies of
-`max_upload_mb` (sync uploads). nginx, with a certificate from certbot:
+`network.max_upload_mb` (the tab's uploads to the store) and
+`disks.max_image_mb` (disk images added through the tab). nginx, with a certificate from certbot:
 
 ```nginx
 server {
@@ -161,11 +149,12 @@ server {
         proxy_pass http://127.0.0.1:8090;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection $http_connection;
         proxy_http_version 1.1;
         proxy_buffering off;
-        client_max_body_size 64m;
+        client_max_body_size 4096m;
         proxy_read_timeout 120s;
     }
 }
@@ -180,56 +169,36 @@ The proxy must not cache or recompress `/disks/`: the tab asks for byte
 ranges and checks the reply is a 206 with `Content-Range`, else it
 downloads the whole disk before starting.
 
-## Accounts
-
-The owner invites: from `/account` (signed in), or
-
-```bash
-python3 tools/web/server --config ~/.config/executor-web/server.toml invite --days 7
-# -> CODE; send https://mac.example.org/login?invite=CODE
-```
-
-The invited person picks a name and password there. `users`, `passwd NAME`
-and `deluser NAME` (removes their synced data too) manage the rest. A
-user's changes are theirs only; the library's disks are shared and never
-written (changes are overlays).
-
 ## Where things live
 
 | Path | What | Back up |
 |---|---|---|
-| `/srv/executor-web/site` | the tab (`make_site.sh`) | no: made again from the build |
-| `/srv/executor-web/library` | disks and records (`make_library.py`) | no: made again from the provisioned images |
-| `data/accounts.sqlite` | accounts, sessions, invitations | yes |
-| `data/users/ID/sync.sqlite` | the user's synced disk blocks and volume manifests | yes |
-| `data/users/ID/objects/` | the files of their Executor volumes, by SHA-256 | yes |
+| `/srv/executor-web/library` | disks and records (`make_library.py`); the changes to each disk beside it, `NAME-ID.overlay` | the `.overlay` files |
+| `/srv/executor-web/library/uploads` | disk images added through the tab, their records and overlays | yes |
+| `data/settings.json` | the settings | yes |
+| `data/volumes/`, `data/objects/` | Executor's own volumes: manifests, and their files by SHA-256 | yes |
+| `data/overlays/` | changes to disks not in the library (or when the library is read-only) | yes |
+| `data/logs/` | the tab's logs, 14 days | no |
 | `data/image-ids.json` | the library disks' content ids (a cache) | no |
+| `data/tls/` | `--tls auto`'s certificate | yes, or it is made again (the browser asks again) |
 
 A library disk's id is its content's: changing a disk (a new
-`make_library.py` run that changes it) gives it a new id, and users'
-changes to the old one are dropped with a notice when they next open it.
-Make library disks again only when their contents should change.
+`make_library.py` run that changes it) gives it a new id, and the
+changes made to the old one stay beside it, unused, until deleted. Make
+library disks again only when their contents should change.
 
 ## Backups
 
-The databases are SQLite in WAL mode, written while the server runs:
-copying the files can catch half a transaction. `backup` copies them
-through SQLite's backup API, then the objects DEST lacks:
-
-```bash
-python3 tools/web/server --config ~/.config/executor-web/server.toml backup /srv/backup/executor-web
-```
-
-Run it from a timer (a `systemd --user` timer or cron, daily) and keep
-DEST's history with the backup tool in use (restic, borg, rsnapshot):
-objects never change once written, so DEST grows only by what is new. To
-restore: stop the service, copy DEST's contents into the data directory,
-start it.
+The overlay files are logs that are crash-consistent, and everything
+else is written atomically: copying the data directory and the
+`.overlay` files with any tool while the server runs is a backup (restic,
+borg, rsnapshot, from a daily timer). To restore: stop the service, copy
+them back, start it.
 
 ## The site's cells
 
 `web/tests/tab_site.mjs` opens every application in a library disk's
-record on a System, as a visitor would: signed in to a scratch server
+record on a System, as a visitor would: on a scratch `tools/standalone`
 whose library is `make_library.py`'s output, the boot disk and the
 application disk added, each application launched in turn (the page
 reloaded between them) and checked: in front, a window of its own (or,

@@ -47,6 +47,7 @@ type Settings struct {
 	SecureCookies  any // "auto", true or false
 	TrustedProxies []string
 	MaxUploadMB    int
+	MaxImageMB     int
 	TLSCert        string
 	TLSKey         string
 	Relay          RelaySettings
@@ -56,9 +57,10 @@ type Settings struct {
 func typed(doc map[string]any, data string) Settings {
 	var f struct {
 		Disks struct {
-			Images  string   `json:"images"`
-			Include []string `json:"include"`
-			Exclude []string `json:"exclude"`
+			Images     string   `json:"images"`
+			Include    []string `json:"include"`
+			Exclude    []string `json:"exclude"`
+			MaxImageMB int      `json:"max_image_mb"`
 		} `json:"disks"`
 		Network struct {
 			Bind                string   `json:"bind"`
@@ -85,7 +87,7 @@ func typed(doc map[string]any, data string) Settings {
 		d.Images = expand(d.Images)
 	}
 	return Settings{Bind: n.Bind, Port: n.Port, Images: d.Images, Include: d.Include, Exclude: d.Exclude,
-		SecureCookies: n.SecureCookies, TrustedProxies: n.TrustedProxies, MaxUploadMB: n.MaxUploadMB,
+		SecureCookies: n.SecureCookies, TrustedProxies: n.TrustedProxies, MaxUploadMB: n.MaxUploadMB, MaxImageMB: d.MaxImageMB,
 		TLSCert: n.TLSCert, TLSKey: n.TLSKey,
 		Relay: RelaySettings{n.RelayEnabled, n.RelayPorts, n.RelayAllowPrivate, n.RelayMaxSockets,
 			n.RelayMaxConnections, n.RelayNameserver}}

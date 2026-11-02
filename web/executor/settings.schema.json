@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "settings.schema.json",
   "title": "Executor settings",
-  "description": "settings.json: the tab's and its server's settings (docs/executor/Settings.md). The one source of defaults, types, ranges, labels and help: tools/standalone and tools/web/server validate with it, settings.js makes the dialog from it. x-scope: page (the tab's; per user when signed in to a hosted site) or server (tools/standalone's own). x-apply: live, executor (Executor restarts to apply), server (at the server's next start). x-choices: options the page fills in (systems: disk images; screens).",
+  "description": "settings.json: the tab's and its server's settings (docs/executor/Settings.md). The one source of defaults, types, ranges, labels and help: tools/standalone validates with it, settings.js makes the dialog from it. x-scope: page (the tab's) or server (tools/standalone's own). x-apply: live, executor (Executor restarts to apply), server (at the server's next start). x-choices: options the page fills in (systems: disk images; screens).",
   "type": "object",
   "x-version": 2,
   "additionalProperties": false,
@@ -74,6 +74,10 @@
           "type": "array", "maxItems": 64, "default": [], "x-scope": "server", "x-apply": "live",
           "items": { "type": "string", "minLength": 1, "maxLength": 255 },
           "title": "Leave out", "description": "File name patterns it doesn't.", "x-widget": "words"
+        },
+        "max_image_mb": {
+          "type": "integer", "minimum": 1, "maximum": 1048576, "default": 4096, "x-scope": "server", "x-apply": "live",
+          "title": "Largest image added (MB)", "description": "A disk image the tab adds to the library (written to the disk as it comes)."
         }
       }
     },

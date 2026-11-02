@@ -1,7 +1,7 @@
 # wash-plan: written by Wash as the plan changes.
 # Edit it only between workspaces; plan_set {"from": "<this file>"} loads it.
 
-revision = 10
+revision = 19
 
 [[node]]
   id = "cuts"
@@ -387,7 +387,7 @@ revision = 10
   parent = "m1"
   body = "Standing node for the owner's live reports (1x Executor bugs). Done: desktop label erase (c80b476a), Finder heap/useTempMem GWorlds + FMSwapFont + EBADF (d51e4e42..a9eb08ea). Queue: zoomed Finder window leaves a strip of the old frame (x~415, 1x); half-erased desktop after BBEdit's dialog/AppleWorks launch (maybe fixed by c80b476a: confirm); BBEdit Lite 6.1 odoc does nothing, SimpleText refuses read-only Read Me; AppleWorks 'The disk is locked' OK ignores click/Return; 8.x Help menu as a text title after the app's menus (Executor shows the 7.x balloon icon: sysmenu.cpp), where AddMenu -help items go (MPW); 8.x text selection drawn in the highlight colour, not inverted black."
   state = "active"
-  revision = 2
+  revision = 17
 
 [[node]]
   id = "go-server"
@@ -450,9 +450,9 @@ revision = 10
   emoji = "🧹"
   parent = "p1"
   needs = ["standalone-auth"]
-  body = "Owner decision 2026-11-02. Move every test that runs against tools/web/server (test_server.py cases, executor.web.* site/server cells, tab_site) onto the Go binary; then remove the hosted mode from web/executor (accounts, OPFS overlays, account sync, the login/account pages) and retire tools/web/server (keep it in git history; docs updated: WebSite.md becomes the standalone's). The demo on :8090 moves to the standalone binary. Relay stays in Go."
-  state = "active"
-  revision = 8
+  body = "Owner decisions 2026-11-02. Move every test that runs against tools/web/server or the static serverless tab onto the Go binary; remove the hosted mode (accounts, sync, login/account pages) AND (owner, 2026-11-02 later) the static mode's OPFS store: one mode only, the Go server is the store (serve.py, make_demo.sh's static demo, harness serve() go). Retire tools/web/server (git history keeps it); docs: WebSite.md becomes the standalone's. The demo on :8090 moves to the standalone binary (orchestrator runs it). Relay stays in Go."
+  state = "done"
+  revision = 19
   overrides = ["2026-11-02: started by Orchestrator before standalone-auth (active): builds on wash/auth (claim design reported, under review); review fixes will come in as a follow-up on the same branch"]
 
 [[node]]

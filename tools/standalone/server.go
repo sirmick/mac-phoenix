@@ -1,6 +1,6 @@
 package main
 
-// The server: tools/web/server/app.py's API without accounts.
+// The server: the tab's API (docs/executor/Standalone.md).
 //
 //	/                 the tab (embedded, or --site DIR)
 //	/library.json     the library (library.go); /disks/NAME its images, with Range;
@@ -10,7 +10,7 @@ package main
 //	/api/session      POST ?id=ID[&take=1] the controlling tab (session.go);
 //	                  /api/session/release, PUT/GET /api/session/screen
 //	/api/settings     GET the settings; POST some of them (settings.go)
-//	/api/sync/...     overlays (overlay.go) and volumes (volumes.go), as app.py:
+//	/api/sync/...     overlays (overlay.go) and volumes (volumes.go):
 //	    GET    overlays/KEY?since=V   records (u32 LE block, 4 KB) newer than V;
 //	                                  X-Sync-Version, X-Sync-Reset
 //	    POST   overlays/KEY?stage=T   records kept for a commit with T
@@ -20,6 +20,8 @@ package main
 //	    GET/PUT/DELETE volumes/KEY    { version, manifest }
 //	    POST   objects/missing; PUT/GET objects/SHA
 //	    GET    (nothing after sync/)  { overlays, volumes }
+//	/api/uploads/NAME POST the image as the body: into the library as uploads/NAME
+//	                  -> its entry; DELETE: it, its record and overlay (uploads.go)
 //	/api/relay        GET { connections, sockets } open now
 //	/relay            WebSocket: the tab's sockets (relay.go)
 //	/api/log, /api/shot, /api/logs[/DAY/NAME]   the tab's logs (logs.go)
@@ -132,7 +134,7 @@ func (s *Server) imageFor(key string) (string, string) {
 	for _, d := range catalog(st.Images, st.Include, st.Exclude) {
 		p := filepath.Join(st.Images, d.Name)
 		if id := s.ids.peek(p); id != "" && overlayKey(d.Name, id) == key {
-			return st.Images, p
+			return filepath.Dir(p), p
 		}
 	}
 	return "", ""
@@ -474,7 +476,7 @@ func init() {
 	// ---- sync: overlays ----
 	handle("GET", "/api/sync/?", true, func(c *ctx, m []string) error {
 		st := c.s.settings()
-		return c.sendJSON(200, map[string]any{"overlays": c.s.overlays.summary(st.Images),
+		return c.sendJSON(200, map[string]any{"overlays": c.s.overlays.summary(st.Images, filepath.Join(st.Images, uploadsDir)),
 			"volumes": c.s.volumes.summary()})
 	})
 	handle("GET", "/api/sync/overlays/([^/]+)", true, func(c *ctx, m []string) error {

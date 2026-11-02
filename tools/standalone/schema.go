@@ -4,9 +4,9 @@ package main
 // go test): the settings' defaults, types and ranges. What of JSON Schema
 // it uses, and so what this checks: type (one or a list), enum, minimum,
 // maximum, minLength, maxLength, pattern, items, maxItems, properties,
-// additionalProperties: false, readOnly, default. tools/web/server/
-// settings.py and web/executor/settings.js check the same; the cases in
-// web/tests/settings_cases.json hold all three to it.
+// additionalProperties: false, readOnly, default. web/executor/settings.js
+// checks the same; the cases in web/tests/settings_cases.json hold both
+// to it.
 
 import (
 	_ "embed"

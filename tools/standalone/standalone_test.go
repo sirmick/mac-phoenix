@@ -1,9 +1,8 @@
 package main
 
-// The parts tools/web/server/test_server.py can't see from outside: the
-// range parser, and the overlay log across restarts, a write cut short,
-// compaction and merge. (test_server.py with EXECUTOR_WEB_SERVER_BINARY
-// checks the API.)
+// The parts the API can't show (api_test.go checks it): the range
+// parser, and the overlay log across restarts, a write cut short,
+// compaction and merge.
 
 import (
 	"bytes"

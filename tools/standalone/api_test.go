@@ -1,7 +1,6 @@
 package main
 
-// The API over a real connection, the claiming browser's (what
-// tools/web/server/test_server.py checked of this program): the page and
+// The API over a real connection, the claiming browser's: the page and
 // the library, the logs, disk ranges, sync, hostile requests, cross-site
 // writes, the controlling tab, the relay. And the program itself (TestMain
 // runs main in a child): the printed address, --tls auto, the claim over

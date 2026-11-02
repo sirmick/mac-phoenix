@@ -1,4 +1,4 @@
-// Executor's own volume is kept in OPFS (worker.js): a file written on it
+// Executor's own volume is kept by the server (sync.js, Store): a file written on it
 // survives a reload; Reset forgets it. Executor's own System, so no Apple
 // software is needed.
 //

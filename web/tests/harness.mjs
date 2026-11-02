@@ -1,10 +1,9 @@
-// Shared by the tab tests: serve the wasm build's page, start headless
-// Chromium on it. Needs the playwright package (NODE_PATH; none: exit 77)
-// and CHROMIUM=PATH for a browser other than the one it expects.
-import http from 'node:http';
-import fs from 'node:fs';
-import path from 'node:path';
+// Shared by the tab tests: the wasm build's page on tools/standalone
+// (server.mjs: built here with go; none: exit 77), headless Chromium on
+// it. Needs the playwright package (NODE_PATH; none: exit 77) and
+// CHROMIUM=PATH for a browser other than the one it expects.
 import { createRequire } from 'node:module';
+import { startServer } from './server.mjs';
 
 let chromium;
 try {
@@ -14,8 +13,6 @@ try {
     process.exit(77);
 }
 
-const types = { '.html': 'text/html', '.js': 'text/javascript', '.wasm': 'application/wasm' };
-
 // Headless Chromium (CHROMIUM=PATH, or playwright's own).
 // CHROMIUM_ARGS: extra switches, space-separated (--enable-logging=stderr, say);
 // args: the test's own.
@@ -24,8 +21,9 @@ export function launch({ args: own = [] } = {}) {
     return chromium.launch(process.env.CHROMIUM ? { executablePath: process.env.CHROMIUM, args } : { args });
 }
 
-// A page of browser (a context of its own: its own OPFS), its errors and
-// the Worker's console shown; scale: its devicePixelRatio.
+// A page of browser (a context of its own: another browser, to the
+// server), its errors and the Worker's console shown; scale: its
+// devicePixelRatio.
 export async function newPage(browser, { log = true, tag = '', scale = 1 } = {}) {
     const context = await browser.newContext({ viewport: { width: 800, height: 640 }, deviceScaleFactor: scale });
     const page = await context.newPage();
@@ -35,29 +33,24 @@ export async function newPage(browser, { log = true, tag = '', scale = 1 } = {})
     return page;
 }
 
-// The page's files from dir, on a port of its own.
-export function serve(dir) {
-    return http.createServer((req, res) => {
-        const f = path.join(dir, decodeURIComponent(new URL(req.url, 'http://x').pathname));
-        fs.readFile(f, (err, data) => {
-            if (err) { res.writeHead(404); res.end(); return; }
-            res.writeHead(200, { 'Content-Type': types[path.extname(f)] || 'application/octet-stream' });
-            res.end(data);
-        });
-    }).listen(0);
-}
-
-export async function open(dir, { log = true, query = '' } = {}) {
-    const server = serve(dir);
+// The tab from dir on tools/standalone (images: its library; include:
+// the patterns offered), in a browser of its own at index.html?query: the
+// page, close(), and the server ({ url, data, ... }: server.mjs).
+export async function open(dir, { log = true, query = '', images, include } = {}) {
+    const server = await startServer(dir, { images, include });
+    if (!server) {
+        console.log('SKIP: no go');
+        process.exit(77);
+    }
     const browser = await launch();
     const page = await browser.newPage({ viewport: { width: 800, height: 640 } });
     page.on('pageerror', (e) => console.log('[page error]', e.stack || e.message));
     page.on('crash', () => console.log('[page crashed]'));
     if (log)
         page.on('worker', (w) => w.on('console', (m) => console.log('[worker]', m.text())));
-    await page.goto(`http://127.0.0.1:${server.address().port}/index.html${query ? `?${query}` : ''}`);
-    const close = async () => { await browser.close(); server.close(); };
-    return { page, close };
+    await page.goto(`${server.url}/index.html${query ? `?${query}` : ''}`);
+    const close = async () => { await browser.close(); server.stop(); };
+    return { page, close, server };
 }
 
 // Until the Worker has drawn a frame (after a start or restart).

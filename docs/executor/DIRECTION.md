@@ -209,8 +209,18 @@ discussed):
   AudioWorklet; the page stays responsive through long traps. No
   `SharedArrayBuffer` needed, so static hosting holds.
 * **No Apple software on the site.** It boots Executor's own System; users
-  upload a disk image (theirs: an Apple System, applications), kept in
-  OPFS.
+  add disk images (theirs: an Apple System, applications) to the
+  server's library, or upload them for a visit.
+* **One server: the standalone** (decided 2026-11-02). `tools/standalone`
+  (Go, one binary with the tab inside: Standalone.md, WebSite.md) is the
+  only server; it keeps what the tab changes, and the first browser to
+  open it has it until it stops. The hosted Python server
+  (`tools/web/server`: accounts, invitations, each user's changes synced
+  from OPFS) is retired; it is in git history up to the merge of
+  `wash/auth`. So is the static site (the tab on any host, keeping disks
+  and changes in the browser's OPFS; `tools/web/serve.py`,
+  `make_demo.sh`): one mode only, the tab on its server, which keeps
+  everything (W3's OPFS work below is history).
 * **Networking: none at first; the socket layer becomes a host
   interface.** A page can't open TCP/UDP, only fetch, WebSocket, WebRTC,
   WebTransport. Executor's MacTCP and OT are C++ over host sockets, so the
@@ -279,8 +289,8 @@ The tab's MacTCP and Open Transport are the native C++ over
 `rsys/hostnet.h`; in the tab that header's backend is
 `host/wasm/net.cpp` (`EXECUTOR_NET=wasm`, the wasm build's default), a
 table of the tab's own sockets. What leaves the tab goes over one
-WebSocket to `/relay` on `tools/web/server` (`relay.py`), opened at the
-first socket that needs it, signed in only (the page tells the Worker,
+WebSocket to `/relay` on `tools/standalone` (`relay.go`), opened at the
+first socket that needs it, served by it only (the page tells the Worker,
 `web/executor/net.js`; served elsewhere, or under node, `available()` is
 false). What stays in the tab:
 
@@ -339,16 +349,16 @@ Flow control is the window both ways (64 KB a socket): the relay reads
 from a peer only while the tab has room, and holds no more than a window
 of the tab's. The relay pings every 30 s and drops a connection silent for
 90; a protocol error closes it (1008), its sockets with it. Policy
-(`[relay]`, `server.example.toml`): destination ports from an allow-list
+(`network.relay_*` in its settings, Standalone.md): destination ports from an allow-list
 (the classic services by default), no private, loopback, link-local,
-multicast or broadcast hosts unless `allow_private`, `max_sockets` a user
-across their tabs, `max_connections` WebSockets a user; the Origin must be
-the server's (`app.py`). Gates: `executor.web.server` (the protocol from a
-Python client: echo with flow control, refusals, the policy, UDP, DNS,
+multicast or broadcast hosts unless `allow_private`, `max_sockets`
+across the tabs, `max_connections` WebSockets; the Origin must be the
+server's. Gates: `executor.web.standalone_server` (go test: the protocol
+from a Go client: echo with flow control, refusals, the policy, UDP, DNS,
 limits) and `executor.web.relay` (MacPhoenixSuite's network and mactcp
 sections and OTTestRetro68K in the tab against `tests/lib/echo_server.py`).
 Not yet (v2): a connect-rate limit (only concurrency is capped now, so a
-signed-in user could scan the allowed public hosts and ports), TLS
+tab could scan the allowed public hosts and ports), TLS
 stripping, WebRTC AppleTalk.
 
 ### 5. PPC: MAME's PowerPC recompiler

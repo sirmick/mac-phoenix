@@ -1,4 +1,4 @@
-// What the tab prints, sent to the server too (tools/web/server: POST
+// What the tab prints, sent to the server too (tools/standalone: POST
 // /api/log): console.log/info/warn/error, uncaught errors and rejected
 // promises, in the page and in its Worker (Executor's stdout and stderr come
 // through Module.print/printErr). A batch a second, at once after an error,
@@ -8,7 +8,7 @@
 'use strict';
 
 const Log = (() => {
-    const BATCH = 60 << 10;     // under the server's signed-out body limit (and keepalive's)
+    const BATCH = 60 << 10;     // under keepalive's body limit
     const BUFFER = 4 << 20;     // waiting to be sent; beyond it the oldest go
     const BUDGET = 48 << 20;    // a session's lines, then no more are sent
     const console_ = {};

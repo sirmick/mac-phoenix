@@ -16,6 +16,7 @@
 package main
 
 import (
+	"context"
 	"crypto/tls"
 	"embed"
 	"errors"
@@ -27,10 +28,13 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
+	"time"
 )
 
 //go:embed all:site
@@ -157,10 +161,34 @@ func main() {
 	if *quiet {
 		srv.ErrorLog = quietLog()
 	}
-	if err := srv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		fatal(err)
+	// SIGTERM/SIGINT (systemd's stop, a restart, ^C): no new connections,
+	// and what is being answered (a disk's download) has shutdownGrace to
+	// finish; a second signal ends it now.
+	stop := make(chan os.Signal, 2)
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+	served := make(chan error, 1)
+	go func() { served <- srv.Serve(ln) }()
+	select {
+	case err := <-served:
+		if !errors.Is(err, http.ErrServerClosed) {
+			fatal(err)
+		}
+	case <-stop:
+		if !*quiet {
+			fmt.Println("Stopping: letting the answers under way finish")
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), shutdownGrace)
+		go func() {
+			<-stop
+			cancel()
+		}()
+		if err := srv.Shutdown(ctx); err != nil && !*quiet {
+			fmt.Fprintln(os.Stderr, "executor-standalone: stopped with answers unfinished:", err)
+		}
 	}
 }
+
+const shutdownGrace = 60 * time.Second
 
 func expand(p string) string {
 	if rest, ok := strings.CutPrefix(p, "~/"); ok {

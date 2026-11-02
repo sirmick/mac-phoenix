@@ -1,22 +1,14 @@
-// Writable disk images for Executor's tab: a copy-on-write overlay in OPFS
-// over each image, which itself is never written (the user's upload, or a
-// cached ?disk= download).
+// Writable disk images for Executor's tab: a copy-on-write overlay in
+// memory over each image, which itself is never written (a disk on the
+// server, or the user's upload).
 //
-// Overlay: 4 KB blocks. overlays/KEY/ holds `data` (changed blocks, each in
-// a slot), `index` (pairs of block number and slot, little-endian uint32)
-// and meta.json ({ name, key }). KEY names the exact base image (name, size,
-// time): a changed base gets a new overlay, and its old one is dropped,
-// since its blocks would land on different data. data and index are opened
-// with FileSystemSyncAccessHandle (Workers only), whose reads and writes are
-// synchronous, as Emscripten's filesystem calls are; a block is in `data`
-// when written, the index is written by save() (worker.js, with the
-// volume). Another tab (or a Worker not gone yet) holding the overlay:
-// its files can't be opened here (NoModificationAllowedError), and the
-// image is writable through a copy in memory instead (`borrowed`: its
-// changes so far read, if the browser lets us, new ones lasting while
-// this Worker runs, never synced). worker.js asks the holder to let go
-// first (and opens the files again if it does, before Executor mounts the
-// image); a holder letting go keeps on in memory itself (toMemory()).
+// Overlay: 4 KB blocks, the changed ones in `data` (a MemoryHandle), each
+// in a slot; map: block number -> slot. KEY names the exact base image: a
+// disk from the server by its content (the server's X-Image-Id: main.js),
+// so its changes survive the image being touched; an upload by its name,
+// size and time. The server keeps a server disk's changes under KEY
+// (sync.js, Store): they come down before Executor mounts the image and go
+// back as they are made. An upload's last while this Worker runs.
 //
 // OVERLAYFS mounts them for Executor: reads take each block from the
 // overlay if changed, else from the image (runs of unchanged blocks in one
@@ -26,26 +18,9 @@
 // the server read as it is needed (RemoteImage): a large disk mounts
 // before it has downloaded.
 //
-// Signed in to tools/web/server, an overlay's changes go to the account
-// too (sync.js): `sync` beside data and index keeps what was sent
-// (uint32s: the version the server gave, flags (1: synced at all, 2: take
-// the account's at the next start), the count and the numbers of the
-// blocks changed since); `revert` there says Revert hasn't reached the
-// account yet.
-//
-// KEY: a disk from the server is keyed on its content (the server's
-// X-Image-Id: main.js), so its changes survive the image being touched;
-// an upload on its name, size and time. An overlay under a disk's old key
-// (its name, size and download time) is moved to the new one.
-//
-// Without OPFS (a page outside a secure context: plain http to another
-// host) an overlay's data and index are in memory (MemoryHandle): the
-// image is writable, its changes last while this Worker runs; standalone
-// (sync.js: Store) the server keeps them.
-//
 // Executor flushing an image (FlushVol, a file closed, an eject: fsync on
-// it) saves the overlay and calls Overlay.onFlush (worker.js: standalone,
-// the changes go to the server at once).
+// it) calls Overlay.onFlush (worker.js: the changes go to the server at
+// once).
 'use strict';
 
 const OVERLAY_BLOCK = 4096;
@@ -111,13 +86,9 @@ class FileImage {
 
 // A disk image on the server, read by Range requests (synchronous
 // XMLHttpRequests: Workers may, and Emscripten's filesystem calls are
-// synchronous) in 256 KB chunks, kept in OPFS as they arrive:
-// disk-cache/KEY.part (the image, sparse), KEY.have (a byte a chunk) and
-// KEY.part.json (its URL and ETag: another ETag, another image, the copy
-// starts again). desc: { name, size, lastModified, remote: { url, etag, key } }
-// (main.js). Without OPFS, or another tab holding the copy: in memory, at
-// most REMOTE_MEMORY bytes of it, the chunks read longest ago dropped (and
-// read again if needed).
+// synchronous) in 256 KB chunks, kept in memory: at most REMOTE_MEMORY
+// bytes of it, the chunks read longest ago dropped (and read again if
+// needed). desc: { name, size, lastModified, remote: { url, etag } } (main.js).
 const REMOTE_CHUNK = 256 * 1024;
 const REMOTE_AHEAD = 4;                  // chunks a request, the ones needed or not
 const REMOTE_TIMEOUT = 20000;            // ms a request
@@ -139,44 +110,9 @@ class RemoteImage {
         this.etag = desc.remote.etag;
         this.chunks = Math.ceil(this.size / REMOTE_CHUNK);
         this.have = new Uint8Array(this.chunks);
-        this.part = null;                // sync access handles; null: memory
-        this.haveFile = null;
-        this.memory = new Map();         // chunk -> bytes, without them; oldest read first
+        this.memory = new Map();         // chunk -> bytes; oldest read first
         this.fetched = 0;                // bytes, and requests, for 'stats'
         this.requests = 0;
-    }
-
-    static async open(root, desc) {
-        const img = new RemoteImage(desc);
-        if (!root)
-            return img;
-        const key = desc.remote.key;
-        try {
-            const dir = await root.getDirectoryHandle('disk-cache', { create: true });
-            let meta = null;
-            try {
-                meta = JSON.parse(await (await (await dir.getFileHandle(`${key}.part.json`)).getFile()).text());
-            } catch { }
-            if (!meta || meta.etag !== img.etag || meta.size !== img.size) {
-                for (const n of [`${key}.part`, `${key}.have`])
-                    await dir.removeEntry(n).catch(() => {});
-                const w = await (await dir.getFileHandle(`${key}.part.json`, { create: true })).createWritable();
-                await w.write(JSON.stringify({ url: img.url, etag: img.etag, size: img.size }));
-                await w.close();
-            }
-            img.part = await (await dir.getFileHandle(`${key}.part`, { create: true })).createSyncAccessHandle();
-            img.haveFile = await (await dir.getFileHandle(`${key}.have`, { create: true })).createSyncAccessHandle();
-            img.haveFile.read(img.have, { at: 0 });
-        } catch (e) {
-            console.log(`[web] ${desc.name}: the downloaded part in memory only (${e.message || e})`);
-            if (img.part)
-                img.part.close();
-            img.part = img.haveFile = null;
-            img.have.fill(0);
-        }
-        const n = img.have.reduce((a, b) => a + b, 0);
-        console.log(`[web] ${desc.name}: ${(img.size / 1e6).toFixed(0)} MB on the server, ${n} of ${img.chunks} chunks here`);
-        return img;
     }
 
     fetchChunks(first, count) {
@@ -213,23 +149,14 @@ class RemoteImage {
         const bytes = new Uint8Array(x.response);
         this.fetched += bytes.length;
         this.requests++;
-        if (this.part) {
-            // The bytes on disk before the map says they are there.
-            this.part.write(bytes, { at: start });
-            this.part.flush();
-            this.have.fill(1, first, first + count);
-            this.haveFile.write(this.have.subarray(first, first + count), { at: first });
-            this.haveFile.flush();
-        } else {
-            for (let c = 0; c < count; c++)
-                this.memory.set(first + c, bytes.slice(c * REMOTE_CHUNK, (c + 1) * REMOTE_CHUNK));
-            this.have.fill(1, first, first + count);
-            for (const [c] of this.memory) {
-                if (this.memory.size * REMOTE_CHUNK <= REMOTE_MEMORY)
-                    break;
-                this.memory.delete(c);
-                this.have[c] = 0;
-            }
+        for (let c = 0; c < count; c++)
+            this.memory.set(first + c, bytes.slice(c * REMOTE_CHUNK, (c + 1) * REMOTE_CHUNK));
+        this.have.fill(1, first, first + count);
+        for (const [c] of this.memory) {
+            if (this.memory.size * REMOTE_CHUNK <= REMOTE_MEMORY)
+                break;
+            this.memory.delete(c);
+            this.have[c] = 0;
         }
     }
 
@@ -245,10 +172,6 @@ class RemoteImage {
                     n++;
                 this.fetchChunks(c, n);
             }
-        }
-        if (this.part) {
-            this.part.read(out, { at: pos });
-            return out;
         }
         for (let at = 0; at < length;) {
             const c = Math.floor((pos + at) / REMOTE_CHUNK);
@@ -279,13 +202,6 @@ class RemoteImage {
             parts.push(this.read(p, Math.min(4 << 20, end - p)));
         return new Blob(parts);
     }
-
-    flush() {
-        if (this.part) {
-            this.part.flush();
-            this.haveFile.flush();
-        }
-    }
 }
 
 // Emscripten's errno values.
@@ -300,157 +216,17 @@ class Overlay {
         this.size = file.size;
         this.map = new Map();           // block -> slot
         this.nextSlot = 0;
-        this.data = null;               // sync access handles; null: read-only
-        this.index = null;
-        this.indexDirty = false;
-        this.syncFile = null;
-        this.sync = { version: 0, synced: false, adopt: false };
+        this.data = new MemoryHandle(); // the changed blocks
+        this.sync = { version: 0 };     // the server's (standalone: sync.js, Store)
         this.pending = new Set();       // blocks changed since the last upload
-        this.dir = null;
-        this.reverted = false;          // Revert not on the account yet
-        this.inMemory = false;          // no OPFS: kept while the Worker runs
-        this.borrowed = false;          // another tab has the OPFS files
         this.writes = 0;                // changes so far (sync.js: Store's beacons)
     }
 
-    // The block index from `index`.
-    loadIndex() {
-        this.map.clear();
-        this.nextSlot = 0;
-        const n = this.index.getSize();
-        if (n >= 8) {
-            const pairs = new Uint32Array(n >> 2);
-            this.index.read(pairs, { at: 0 });
-            for (let i = 0; i + 1 < pairs.length; i += 2) {
-                this.map.set(pairs[i], pairs[i + 1]);
-                this.nextSlot = Math.max(this.nextSlot, pairs[i + 1] + 1);
-            }
-        }
+    static open(name, file, key) {
+        return new Overlay(name, file, key, file.remote ? new RemoteImage(file) : new FileImage(file));
     }
 
-    // In memory from now on, with the changes so far (another tab takes
-    // the OPFS files): the handles' bytes copied, then closed.
-    toMemory() {
-        this.save();
-        for (const name of ['data', 'index']) {
-            const h = this[name], m = new MemoryHandle();
-            const bytes = new Uint8Array(h.getSize());
-            h.read(bytes, { at: 0 });
-            m.write(bytes, { at: 0 });
-            h.close();
-            this[name] = m;
-        }
-        if (this.syncFile)
-            this.syncFile.close();
-        this.syncFile = null;
-        this.inMemory = this.borrowed = true;
-        this.syncOff = true;
-    }
-
-    // root: OPFS (none: the changes in memory). legacyKey: the key this
-    // image's overlay may have under the old scheme.
-    // image: the base, opened already (opening the overlay again).
-    static async open(root, name, file, key, legacyKey, image) {
-        image = image || (file.remote ? await RemoteImage.open(root, file) : new FileImage(file));
-        const ov = new Overlay(name, file, key, image);
-        if (!root) {
-            ov.data = new MemoryHandle();
-            ov.index = new MemoryHandle();
-            ov.inMemory = true;
-            return ov;
-        }
-        try {
-            const overlays = await root.getDirectoryHandle('overlays', { create: true });
-            let exists = false;
-            try {
-                await overlays.getDirectoryHandle(key);
-                exists = true;
-            } catch { }
-            // Overlays of this image's other versions: theirs, not ours;
-            // but this one's under its old key, moved.
-            for await (const [dirName, handle] of overlays.entries()) {
-                if (handle.kind !== 'directory' || dirName === key)
-                    continue;
-                let meta = null;
-                try {
-                    meta = JSON.parse(await (await (await handle.getFileHandle('meta.json')).getFile()).text());
-                } catch { }
-                if (!meta || meta.name !== name)
-                    continue;
-                if (dirName === legacyKey && !exists) {
-                    const to = await overlays.getDirectoryHandle(key, { create: true });
-                    for await (const [n, f] of handle.entries()) {
-                        if (f.kind !== 'file' || n === 'meta.json')
-                            continue;
-                        const w = await (await to.getFileHandle(n, { create: true })).createWritable();
-                        await w.write(await f.getFile());
-                        await w.close();
-                    }
-                    exists = true;
-                    console.log(`[web] ${name}: its changes moved to the new key`);
-                } else {
-                    notice(`${name} is another image now: the changes to the earlier one are dropped`);
-                }
-                await overlays.removeEntry(dirName, { recursive: true });
-            }
-            const dir = await overlays.getDirectoryHandle(key, { create: true });
-            ov.dir = dir;
-            try {
-                await dir.getFileHandle('revert');
-                ov.reverted = true;
-            } catch { }
-            const meta = await (await dir.getFileHandle('meta.json', { create: true })).createWritable();
-            await meta.write(JSON.stringify({ name, key }));
-            await meta.close();
-            ov.data = await (await dir.getFileHandle('data', { create: true })).createSyncAccessHandle();
-            ov.index = await (await dir.getFileHandle('index', { create: true })).createSyncAccessHandle();
-            ov.loadIndex();
-            ov.syncFile = await (await dir.getFileHandle('sync', { create: true })).createSyncAccessHandle();
-            const s = new Uint32Array(ov.syncFile.getSize() >> 2);
-            ov.syncFile.read(s, { at: 0 });
-            if (s.length >= 3) {
-                ov.sync = { version: s[0], synced: (s[1] & 1) !== 0, adopt: (s[1] & 2) !== 0 };
-                for (const b of s.subarray(3, 3 + s[2]))
-                    ov.pending.add(b);
-            }
-        } catch (e) {
-            for (const h of [ov.data, ov.index, ov.syncFile])
-                if (h)
-                    h.close();
-            ov.syncFile = null;
-            await ov.borrow(e);
-        }
-        return ov;
-    }
-
-    // Another tab's: a copy in memory, its changes so far in it if the
-    // files can be read while that tab has them open.
-    async borrow(why) {
-        this.data = new MemoryHandle();
-        this.index = new MemoryHandle();
-        this.inMemory = this.borrowed = true;
-        this.syncOff = true;
-        let copied = '';
-        try {
-            if (this.dir) {
-                for (const name of ['data', 'index']) {
-                    const f = await (await this.dir.getFileHandle(name)).getFile();
-                    this[name].write(new Uint8Array(await f.arrayBuffer()), { at: 0 });
-                }
-                this.loadIndex();
-                copied = this.map.size ? ', with its changes so far' : '';
-            }
-        } catch {
-            this.data = new MemoryHandle();
-            this.index = new MemoryHandle();
-            this.map.clear();
-            this.nextSlot = 0;
-            copied = ', without the changes kept in this browser';
-        }
-        console.log(`[web] ${this.name}: in memory${copied} (${why.message || why})`);
-    }
-
-    get writable() { return this.data !== null; }
+    get writable() { return true; }
     get modified() { return this.map.size > 0; }
 
     // The bytes [pos, pos + length), length within the image.
@@ -501,7 +277,6 @@ class Overlay {
                 slot = this.nextSlot++;
                 this.data.write(buf, { at: slot * OVERLAY_BLOCK });
                 this.map.set(block, slot);
-                this.indexDirty = true;
             } else {
                 this.data.write(bytes.subarray(at, at + n), { at: slot * OVERLAY_BLOCK + off });
             }
@@ -514,8 +289,7 @@ class Overlay {
     // bytes are what [pos, ...) holds already (slot: its block's, if
     // changed before). Such a write is no change: Executor writes a
     // volume's header back as it was when it mounts it, and counted, every
-    // browser opening a disk would have changes of its own to sync, and be
-    // asked which to keep when another browser's came first (sync.js).
+    // disk opened would have changes of its own to send to the server.
     // A remote image's part not downloaded yet counts as different.
     unchanged(slot, pos, bytes) {
         bytes = new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.length);   // Emscripten's: HEAP8's
@@ -534,13 +308,12 @@ class Overlay {
         return true;
     }
 
-    // A whole block (from the account: sync.js).
+    // A whole block (from the server: sync.js).
     putBlock(block, bytes) {
         let slot = this.map.get(block);
         if (slot === undefined) {
             slot = this.nextSlot++;
             this.map.set(block, slot);
-            this.indexDirty = true;
         }
         this.data.write(bytes, { at: slot * OVERLAY_BLOCK });
     }
@@ -557,42 +330,6 @@ class Overlay {
         this.nextSlot = 0;
         this.pending.clear();
         this.data.truncate(0);
-        this.indexDirty = true;
-    }
-
-    saveSync() {
-        if (!this.syncFile)
-            return;
-        const s = new Uint32Array(3 + this.pending.size);
-        s[0] = this.sync.version;
-        s[1] = (this.sync.synced ? 1 : 0) | (this.sync.adopt ? 2 : 0);
-        s[2] = this.pending.size;
-        s.set([...this.pending], 3);
-        this.syncFile.truncate(0);
-        this.syncFile.write(s, { at: 0 });
-        this.syncFile.flush();
-    }
-
-    // The block index to OPFS, and both files flushed.
-    save() {
-        if (this.image.flush)
-            this.image.flush();
-        if (!this.writable)
-            return;
-        if (this.indexDirty) {
-            const pairs = new Uint32Array(this.map.size * 2);
-            let i = 0;
-            for (const [block, slot] of this.map) {
-                pairs[i++] = block;
-                pairs[i++] = slot;
-            }
-            this.index.truncate(0);
-            this.index.write(pairs, { at: 0 });
-            this.indexDirty = false;
-        }
-        this.data.flush();
-        this.index.flush();
-        this.saveSync();
     }
 
     // The image as it is now: the original's slices and the changed blocks.
@@ -625,7 +362,6 @@ const OVERLAYFS = {
     FILE_MODE: 0o100666,
 
     flush(ov) {
-        ov.save();
         if (Overlay.onFlush)
             Overlay.onFlush(ov);
     },
