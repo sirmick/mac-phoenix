@@ -99,11 +99,18 @@ done
 
 api launch "{\"path\":\"$BBEDIT\"}" >/dev/null || { echo "FAIL: first launch"; exit 1; }
 for _ in $(seq 1 30); do [[ "$(app)" == "BBEdit Lite 6.1" ]] && break; sleep 1; done
-sleep 4
-click 418 259                               # the survey's Cancel
-sleep 2
-api quit '{}' >/dev/null || { echo "FAIL: quit"; exit 1; }
-for _ in $(seq 1 20); do [[ "$(app)" != "BBEdit Lite 6.1" ]] && break; sleep 1; done
+# The survey's Cancel, then Quit; again while BBEdit is still there (a
+# click before it is in front, its menus not yet up, goes to the Finder).
+for _ in $(seq 1 5); do
+    sleep 3
+    click 418 259
+    sleep 2
+    api quit '{}' >/dev/null || true
+    for _ in $(seq 1 6); do [[ "$(app)" != "BBEdit Lite 6.1" ]] && break; sleep 1; done
+    [[ "$(app)" != "BBEdit Lite 6.1" ]] && break
+done
+curl -sf "http://localhost:$PORT/api/screenshot" > "$OUT/quit.png"
+[[ "$(app)" != "BBEdit Lite 6.1" ]] || { echo "FAIL: BBEdit didn't quit (survey still up? $OUT/quit.png)"; exit 1; }
 MARK=$(wc -l < "$OUT/emulator.log")
 
 api launch '{"path":"Host:relaunch.txt.bin","open":true}' >/dev/null || { echo "FAIL: second launch"; exit 1; }
