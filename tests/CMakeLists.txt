@@ -884,6 +884,14 @@ set_tests_properties(relaunch_ppc_executor PROPERTIES
   TIMEOUT 240 LABELS "executor" SKIP_RETURN_CODE 77
   ENVIRONMENT "MACEMU_BINARY=$<TARGET_FILE:mac-phoenix>")
 
+# 8.6 at 2x: the desktop's labels sharp again after a Finder window has
+# been over part of them (their runs outlive being covered in part).
+add_test(NAME hidpi_labels_executor
+  COMMAND bash ${TEST_DIR}/test_hidpi_labels_executor.sh --port 18544)
+set_tests_properties(hidpi_labels_executor PROPERTIES
+  TIMEOUT 240 LABELS "executor" SKIP_RETURN_CODE 77
+  ENVIRONMENT "MACEMU_BINARY=$<TARGET_FILE:mac-phoenix>")
+
 # An alert left up idles the host and OK still answers: the 8.6 Finder's
 # Erase Disk alert on the read-only image, the emulator's CPU time while it
 # is up (Executor's ModalDialog waits a tick between events).

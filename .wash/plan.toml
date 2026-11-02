@@ -1,7 +1,7 @@
 # wash-plan: written by Wash as the plan changes.
 # Edit it only between workspaces; plan_set {"from": "<this file>"} loads it.
 
-revision = 19
+revision = 26
 
 [[node]]
   id = "cuts"
@@ -386,8 +386,8 @@ revision = 19
   emoji = "🪟"
   parent = "m1"
   body = "Standing node for the owner's live reports (1x Executor bugs). Done: desktop label erase (c80b476a), Finder heap/useTempMem GWorlds + FMSwapFont + EBADF (d51e4e42..a9eb08ea). Queue: zoomed Finder window leaves a strip of the old frame (x~415, 1x); half-erased desktop after BBEdit's dialog/AppleWorks launch (maybe fixed by c80b476a: confirm); BBEdit Lite 6.1 odoc does nothing, SimpleText refuses read-only Read Me; AppleWorks 'The disk is locked' OK ignores click/Return; 8.x Help menu as a text title after the app's menus (Executor shows the 7.x balloon icon: sysmenu.cpp), where AddMenu -help items go (MPW); 8.x text selection drawn in the highlight colour, not inverted black."
-  state = "active"
-  revision = 17
+  state = "done"
+  revision = 26
 
 [[node]]
   id = "go-server"
@@ -442,7 +442,7 @@ revision = 19
   needs = ["settings-ui"]
   body = "Owner decisions 2026-11-02: (1) A 'Disks' panel replaces the top bar's disk controls, docked right (screen moves aside); mounted disks with state badges (original / changed / read-only CD / application; eject, revert, download), the library below (covers, tags, filter), add by button or drag-and-drop. (2) System choice in the panel ONLY (System disk section, with Reset; library System disks offered); top bar = Disks [count], PowerPC, Restart, Settings, Fullscreen, Screenshot. (3) Live insert; Finder eject removes it from the panel. (4) Overlay state obvious. Mockup approved 2026-11-02 (db6c9bd2, ~/storage/tmp/disks-ui/mockup/). Gate: a tab test cell (mount live, eject from the Finder, revert), existing executor.web.* cells pass."
   state = "active"
-  revision = 5
+  revision = 21
 
 [[node]]
   id = "deprecate-python"
@@ -463,3 +463,13 @@ revision = 19
   body = "Owner decisions 2026-11-02 (final): on the first serve of index.html with no claim, the server generates a token and sets it as an HttpOnly SameSite=Strict cookie (Secure under TLS). The claim is in memory only: every backend start begins unclaimed, so restarting the backend means reloading the frontend; no persistence, no --reset-claim. The cookie authenticates the UI: all API, disk, relay and log routes need it, and a reload in the same browser keeps working. Other browsers get an 'in use by another browser' page and can't read or write. After a backend restart, the tab sees 401/403 and tells the user to reload. No password, no loopback exception, no pre-shared key, no paired list. The earlier session/take-control lock folds into this or goes. Tests: first GET claims, a second browser refused, reload OK, restart frees."
   state = "done"
   revision = 10
+
+[[node]]
+  id = "follow-ups-1102"
+  title = "Follow-ups from the 2026-11-02 round (reviews and members)"
+  emoji = "📌"
+  template = "note"
+  parent = "p1"
+  body = "(1) Standalone: a settings.json without \"version\" is read as v1 and refused ('disks: no such setting'): default to the current version. (2) uploads.go: replace=1 drops the old overlay before the rename/record write succeeds (review-dp). (3) Mixed Mode: prepared_at / loaded entries never erased when a SysZone accelerated resource is purged and reloaded: stale vector (review-lf2, pre-existing). (4) ControlMgr8.yaml SetBevelButtonContentInfo has no dispatcher/selector unlike its AppearanceLib siblings: confirm PPC-only is deliberate (review-lf3). (5) BBEdit Lite 6.1's survey dialog shows while the Finder's menus are still up and a click goes to the Finder: launch order (live-fix4). (6) Both servers died ~19:50 2026-11-02 with no reboot: cause unknown (a test's cleanup?)."
+  state = "todo"
+  revision = 25

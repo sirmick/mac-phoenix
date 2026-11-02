@@ -16,6 +16,7 @@
 #include <ControlMgr8.h>
 #include <QuickDraw.h>
 #include <CQuickDraw.h>
+#include <Appearance.h>
 #include <MemoryMgr.h>
 #include <ctl/ctl.h>
 #include <wind/wind.h>
@@ -501,6 +502,14 @@ OSErr Executor::C_SetUpControlBackground(ControlRef inControl, SInt16 inDepth, B
     return noErr;
 }
 
+OSErr Executor::C_SetBevelButtonContentInfo(ControlRef inButton, ControlButtonContentInfoPtr inContent)
+{
+    if(!inContent)
+        return paramErr;
+    return C_SetControlData(inButton, kControlEntireControl, kControlBevelButtonContentTag,
+                            sizeof(ControlButtonContentInfo), inContent);
+}
+
 OSErr Executor::C_SetUpControlTextColor(ControlRef inControl, SInt16 inDepth, Boolean inIsColorDevice)
 {
     if(!inControl)
@@ -550,6 +559,20 @@ OSErr Executor::C_SetControlFontStyle(ControlRef inControl, const ControlFontSty
         return paramErr;
     extras(inControl).font = *inStyle;
     extras(inControl).hasFont = inStyle->flags != 0;
+    /* and to a definition that keeps data: Apple's (ControlDefinitions:
+       static text, radio buttons) draw in the style they were given this
+       way, bold labels and all (the 8.6 Finder's View Options) */
+    if(features(inControl) & kControlSupportsDataAccess)
+    {
+        ControlFontStyleRec style = *inStyle;
+        ControlDataAccessRec rec;
+        rec.tag = kControlFontStyleTag;
+        rec.part = kControlEntireControl;
+        rec.size = sizeof style;
+        rec.dataPtr = (Ptr)&style;
+        CtlCallGuard guard(inControl);
+        CTLCALL(inControl, kControlMsgSetData, ptr_to_longint(&rec));
+    }
     return noErr;
 }
 

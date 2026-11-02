@@ -248,6 +248,7 @@ void Executor::hidpi::impl::draw(double scale, const uint32_t *argb, int w, int 
         SkImageInfo::MakeN32Premul(ow, oh), out, (size_t)ow * 4);
     if(!canvas)
         return;
+    std::vector<IRect> damage;
     for(const IRect &r : rects)
     {
         upscale(sc, argb, w, h, r, out, ow, oh);
@@ -256,19 +257,33 @@ void Executor::hidpi::impl::draw(double scale, const uint32_t *argb, int w, int 
             if(run->box.left >= r.right + 1 || r.left >= run->box.right + 1
                || run->box.top >= r.bottom + 1 || r.top >= run->box.bottom + 1)
                 continue;
-            if(run->clip.empty() || !run_valid(*run, screen))
+            if(run->clip.empty())
                 continue;
-            /* only where its glyphs are drawn (its clip) */
+            /* only where its glyphs are drawn (its clip), and where the
+               screen still shows it: drawn over in places (an XOR line
+               crossing it, the zoom rectangles of a window closing), the
+               rest of it stays sharp, the 1x pixels show there */
+            SkRegion where;
             for(const IRect &c : run->clip)
-                restore(sc, *run,
-                        { std::max(r.top, c.top), std::max(r.left, c.left), std::min(r.bottom, c.bottom),
-                          std::min(r.right, c.right) },
-                        out, ow, oh, screen);
-            canvas->save();
-            canvas->clipIRect(sc.rect(r));
+                where.op({ std::max(r.left, c.left), std::max(r.top, c.top), std::min(r.right, c.right),
+                           std::min(r.bottom, c.bottom) }, SkRegion::kUnion_Op);
+            if(!run_valid(*run, screen))
+            {
+                if(!run_damage(*run, screen, r, damage))
+                    continue;
+                for(const IRect &d : damage)
+                    where.op({ d.left, d.top, d.right, d.bottom }, SkRegion::kDifference_Op);
+            }
+            if(where.isEmpty())
+                continue;
             SkRegion clip;
-            for(const IRect &c : run->clip)
-                clip.op(sc.rect(c), SkRegion::kUnion_Op);
+            for(SkRegion::Iterator it(where); !it.done(); it.next())
+            {
+                const SkIRect &c = it.rect();
+                restore(sc, *run, { c.fTop, c.fLeft, c.fBottom, c.fRight }, out, ow, oh, screen);
+                clip.op(sc.rect({ c.fTop, c.fLeft, c.fBottom, c.fRight }), SkRegion::kUnion_Op);
+            }
+            canvas->save();
             canvas->clipRegion(clip);
             if(!run->shapes.empty())
                 draw_chrome(canvas.get(), sc, *run);
