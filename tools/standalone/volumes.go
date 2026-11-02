@@ -1,7 +1,7 @@
 package main
 
 // Volumes (web/executor/worker.js: Executor's own volume, per System
-// choice), as tools/web/server/sync.py: a manifest, { dirs, files: {
+// choice): a manifest, { dirs, files: {
 // path: { size, mtime, sha } } }, versioned and based like the overlays;
 // the files' contents are objects by SHA-256, shared by every volume,
 // uploaded before the manifest that names them (409 { missing }).

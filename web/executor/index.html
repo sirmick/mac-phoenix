@@ -1,9 +1,8 @@
 <!doctype html>
-<!-- Executor in a tab (docs/executor/DIRECTION.md, W2/W3): no ROM, no server
-     beyond static files. The module runs in worker.js; this page shows its
-     frames on an OffscreenCanvas, sends it mouse and keyboard input, and
-     keeps the disk images and applications you add in the browser's
-     private storage (OPFS). -->
+<!-- Executor in a tab (docs/executor/DIRECTION.md, W2/W3): no ROM, served by
+     tools/standalone, which keeps what it changes. The module runs in
+     worker.js; this page shows its frames on an OffscreenCanvas and sends
+     it mouse and keyboard input. -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -21,10 +20,8 @@
   #bar select { background: #444; color: #eee; border: 0; font: inherit; }
   #library-covers { display: flex; gap: 4px; }
   #library-covers img { height: 48px; border-radius: 3px; cursor: pointer; }
-  #account { color: #9cf; }
   #viewer { background: #345; color: #cdf; border-radius: 4px; padding: 4px 10px; }
   #viewer button { background: #567; color: #eee; border: 0; border-radius: 4px; padding: 2px 8px; font: inherit; cursor: pointer; }
-  #insecure { background: #543; color: #fda; border-radius: 4px; padding: 4px 10px; max-width: 640px; }
   #status.lost { background: #543; color: #fda; border-radius: 4px; padding: 4px 10px; }
   /* Sized by main.js: a whole number of device pixels a guest pixel. */
   canvas { background: #000; image-rendering: pixelated; outline: none; }
@@ -44,12 +41,7 @@
   <button id="restart">Restart</button>
   <button id="shot" title="Send a picture of the screen to the server, for a look later (with what this page printed)">Screenshot</button>
   <button id="reset" title="Forget what was saved on Executor's disk for this System">Reset</button>
-  <a id="account" href="account" hidden title="Signed in: changes are kept for your other browsers too"></a>
 </div>
-<div id="insecure" hidden>Not a secure page (HTTPS, or this computer's own address):
-  nothing is kept in this browser. Disks are read as needed and held in memory; changes to
-  them and to Executor's disk last until Executor restarts (download a changed disk with ⤓).
-  No sound.</div>
 <div id="viewer" hidden>Executor is open in another tab, which has control: its screen, here.
   <button id="take">Take control</button></div>
 <div id="screen-box"></div>

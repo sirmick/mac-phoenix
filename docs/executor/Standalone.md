@@ -4,10 +4,10 @@
 one Go program per OS, with no other files: the page and the wasm module
 are embedded, the library is a directory of images, and the server keeps
 everything the tab changes (P1 in the plan: images only, no accounts).
-It has `tools/web/server`'s API (WebSite.md, `app.py`'s docstring), so
-the tab talks to either; what differs is below. The first browser to
-open it has it until it stops; no other gets anything from it (Who uses
-it, below).
+It is the tab's only server (the hosted Python one, with accounts, was
+retired 2026-11-02: DIRECTION.md); its API is below. The first browser
+to open it has it until it stops; no other gets anything from it (Who
+uses it, below). Putting it on a host for others: WebSite.md.
 
 ## Building
 
@@ -86,7 +86,7 @@ The certificate (self-signed: the browser asks once), SHA-256 AB:12:...
 | `--bind`, `--port` | `127.0.0.1`, `8090` | `--port 0`: any (the first line printed says which) |
 | `--site DIR` | the embedded site | |
 | `--tls auto` | settings' `network.tls_cert` (`auto` there too) | HTTPS with a self-signed certificate made once, `DATA/tls/cert.pem` and `key.pem` (for localhost, the machine's name and its addresses then; the SHA-256 printed to compare with the browser's); `--tls off`: plain HTTP whatever the settings say |
-| `--tls-cert F`, `--tls-key F` | | HTTPS with this certificate (OPFS and sound need a secure context off localhost) |
+| `--tls-cert F`, `--tls-key F` | | HTTPS with this certificate (sound needs a secure context off localhost) |
 | `--open` | | open the default browser at the address (xdg-open, open, or url.dll on Windows; an any-address bind opens 127.0.0.1) |
 | `--quiet` | | errors only |
 
@@ -142,13 +142,40 @@ another browser loaded first) at its next call, every 2 s
 (`/api/session`), and says to reload, with a Reload button (`main.js`);
 the reload claims it again. Loopback is nothing special.
 
-## What differs from tools/web/server
+## The API
 
-- **No accounts:** the claim (above); no `/login`, `/api/login`,
-  `/api/logout`. `/api/me` is `{ name: "local", owner: true, mode:
-  "standalone" }`: the Python server's `mode = "standalone"` answer.
+```
+/                 the tab (embedded, or --site DIR)
+/library.json     the library (library.go): [{ title, url, note, tags, size, cover }];
+                  /disks/NAME its images, with Range; /covers/NAME their covers
+/api/server       { standalone: true, version, tls }
+/api/me           { name: "local", owner: true, mode: "standalone" }: the tab's
+                  sign that it is on its server (else it does not start)
+/api/session      POST ?id=ID[&take=1] the controlling tab (session.go);
+                  /api/session/release, PUT/GET /api/session/screen
+/api/settings     GET the settings; POST a merge patch (settings.go; above)
+/api/sync/...     overlays (overlay.go) and volumes (volumes.go):
+    GET    overlays/KEY?since=V   records (u32 LE block, 4 KB) newer than V;
+                                  X-Sync-Version, X-Sync-Reset
+    POST   overlays/KEY?stage=T   records kept for a commit with T
+    POST   overlays/KEY?base=V[&stage=T][&replace=1][&name=&size=] -> { version }
+                                  (409 { version } when V isn't the server's)
+    DELETE overlays/KEY           Revert -> { version }
+    POST   overlays/KEY/merge     into the library image -> { blocks, id, key }
+    GET/PUT/DELETE volumes/KEY    { version, manifest }
+    POST   objects/missing; PUT/GET objects/SHA
+    GET    (nothing after sync/)  { overlays, volumes }
+/api/relay        GET { connections, sockets } open now
+/relay            WebSocket: the tab's sockets (relay.go; DIRECTION.md, "The network relay")
+/api/log, /api/shot, /api/logs[/DAY/NAME]   the tab's logs (logs.go)
+```
+
+Writes and `/relay` from another site are refused (Origin against Host,
+Sec-Fetch-Site). In more detail:
+
+- **No accounts:** the claim (above).
 - **One controlling tab** of the browser that has the server
-  (`session.go`, as `tools/web/server/session.py`):
+  (`session.go`):
   `POST /api/session?id=ID[&take=1]` every 2 s gives `{ control, held,
   handing, viewers }`; the first tab has control, a silent one lets go
   after 10 s, `take=1` takes it (the old one is `handing` until it
@@ -169,7 +196,8 @@ the reload claims it again. Loopback is nothing special.
   image's new id and key (`{ blocks, id, key }`). A tab with the disk open
   must reload it.
 - **Volumes and objects** are files: `DATA/volumes/KEY.json` (`{ version,
-  manifest }`) and `DATA/objects/AB/SHA`, collected as in sync.py.
+  manifest }`) and `DATA/objects/AB/SHA`; an object no manifest names
+  is removed an hour after it was written.
 - **`GET /api/relay`**: `{ connections, sockets }` open now.
 - No backup command: the overlay logs are crash-consistent and the rest
   is written atomically, so copying `DATA` and the `.overlay` files with
@@ -183,8 +211,7 @@ the reload claims it again. Loopback is nothing special.
 build-wasm): the API over a real connection as the claiming browser (the
 page and library, logs, disk ranges, overlay and volume sync, hostile
 requests, cross-site writes, settings, the controlling tab, the relay's
-TCP, UDP, DNS, limits and framing: what test_server.py checked of this
-program before); the claim (`claim_test.go`: every route in the table
+TCP, UDP, DNS, limits and framing); the claim (`claim_test.go`: every route in the table
 needs it and is refused, 401 unclaimed and 403 claimed; the first load
 claims, and not a fetch, an image, HEAD or another site's; reloads keep
 it; a second browser can neither read nor write; a restart frees it; a
@@ -197,4 +224,8 @@ the gzip-only files, the session lease. In build-wasm,
 the first browser has it, HttpOnly; its reloads and tabs; another
 browser's in-use page and refusals; a restart, the tab's reload notice
 and Reload; another browser first after a restart; screenshots in
-`claim-shots/`).
+`claim-shots/`). The tab's other cells on it (each builds it with go):
+`executor.web.standalone` (a change survives a reload; a second tab
+watches, then takes control), `server_lazy` (a large disk read by Range),
+`settings`, `insecure` (plain http to a LAN name), `relay` (MacTCP and
+Open Transport through `/relay`), and the `site` cells (WebSite.md).

@@ -14,7 +14,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { launch, newPage, firstFrame } from './harness.mjs';
-import { startGoServer } from './server.mjs';
+import { startServer } from './server.mjs';
 
 const [dir, shots] = process.argv.slice(2);
 const scratch = fs.mkdtempSync(path.join(process.env.TMPDIR || os.tmpdir(), 'tab-claim-'));
@@ -22,7 +22,7 @@ fs.mkdirSync(path.join(scratch, 'images'));
 if (shots)
     fs.mkdirSync(shots, { recursive: true });
 const images = path.join(scratch, 'images'), data = path.join(scratch, 'data');
-let go = await startGoServer(dir, { images, data });
+let go = await startServer(dir, { images, data });
 if (!go) {
     console.log('SKIP: no go');
     process.exit(77);
@@ -34,7 +34,7 @@ async function restart() {
     const exited = new Promise((r) => go.child.once('exit', r));
     go.stop();
     await exited;
-    go = await startGoServer(dir, { images, data, bin, args: ['--port', port] });
+    go = await startServer(dir, { images, data, bin, args: ['--port', port] });
 }
 let failed = 0;
 const check = (ok, what) => {

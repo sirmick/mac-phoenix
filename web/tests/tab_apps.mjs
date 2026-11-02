@@ -4,7 +4,7 @@
 //   node web/tests/tab_apps.mjs DIR GUEST_DIR
 //
 // DIR is the wasm build's executor-web output, GUEST_DIR tests/guest. Both
-// applications are uploaded through the page's file input (kept in OPFS),
+// applications are uploaded through the page's file input (onto Executor's volume),
 // launched from the Browser with the 'launch' request (a process switch),
 // and report through Executor's Host volume:
 //   PPCHello         PowerPC code (mame-ppc's C back-end), its PASS lines

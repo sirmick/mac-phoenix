@@ -1,6 +1,6 @@
 package main
 
-// The relay: /relay, a WebSocket, as tools/web/server/relay.py (the
+// The relay: /relay, a WebSocket (the
 // protocol: docs/executor/DIRECTION.md, "The network relay"; the tab's
 // side: web/executor/net.js). Executor's MacTCP and Open Transport reach
 // the network through it: TCP connections out, UDP datagrams to and from

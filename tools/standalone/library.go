@@ -1,6 +1,6 @@
 package main
 
-// The library, as tools/web/server/library.py: every image in the images
+// The library: every image in the images
 // directory with a record (NAME.img.json: title, tags, note) that the
 // include/exclude patterns let through is in /library.json and served at
 // disks/NAME; a record's "cover", a picture beside the image, at

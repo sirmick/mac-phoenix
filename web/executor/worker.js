@@ -4,21 +4,17 @@
 // The module loads as soon as the Worker exists (noInitialRun), while the
 // page is still fetching disks; 'start' mounts them and calls main.
 //
-// Uploads: disk images are mounted from the page's Files without copying,
-// writable through a copy-on-write overlay in OPFS (overlay.js: OVERLAYFS
-// at /uploads; the images themselves are never written); anything else (an
-// application in MacBinary) is copied into Executor's own volume, in
-// "executor:Uploads". A disk image on the server (main.js: a large one)
-// comes as a description, read as needed (overlay.js: RemoteImage).
+// Disks: a disk image on the server comes as a description, read as
+// needed (overlay.js: RemoteImage); an uploaded one is mounted from the
+// page's File without copying. Both are writable through a copy-on-write
+// overlay in memory (overlay.js: OVERLAYFS at /uploads; the images
+// themselves are never written). Anything else uploaded (an application in
+// MacBinary) is copied into Executor's own volume, in "executor:Uploads".
 //
-// Signed in to tools/web/server: the overlays and the volume are synced
-// with the account (sync.js), down before they are mounted, up after
-// saves, and the network goes through its relay (net.js).
-//
-// Standalone (the server says so; main.js): no OPFS, the server keeps
-// it all (sync.js: Store): disks read by Range as needed, the overlays in
-// memory and Executor's volume restored from the server and saved there
-// about every second and when Executor flushes; what is left for when the
+// The server (tools/standalone) keeps it all (sync.js: Store): a server
+// disk's overlay comes from it before Executor mounts the disk, and
+// Executor's volume is restored from it; both are saved there about every
+// second and when Executor flushes; what is left for when the
 // page goes, in a beacon the page holds ('beacons'). The page in control
 // says it is there (sessionBeat); while another tab watches, the screen
 // goes to the server for it, a PNG a second.
@@ -75,13 +71,11 @@ self.Module = {
         postMessage({ type: 'reply', id, result });
     },
     onExit(code) {
-        stopped = true;
         console.log(`[web] Executor exited (${code})`);
         Log.flush();
         postMessage({ type: 'exit', code });
     },
     onAbort(what) {
-        stopped = true;
         console.error(`[web] Executor aborted: ${what}`);
     },
 };
@@ -96,64 +90,6 @@ function imageKey(f) {
     return (ids[f.name] ? `${f.name}-${ids[f.name]}` : `${f.name}-${f.size}-${f.lastModified}`).replace(/[^\w.-]/g, '_');
 }
 let overlays = [];
-
-// Disks open in another tab (its Worker has their OPFS files: overlay.js):
-// asked for on 'executor-disks', { type: 'release', keys }. A holder whose
-// Executor has stopped, or whose page is in the background, lets them go
-// (keeping on with them in memory) and says 'released'; one in use says
-// 'held', and the asker keeps its copies in memory.
-let stopped = false;                // Executor exited, aborted or trapped
-let hidden = false;                 // the page in the background (main.js)
-const disks = typeof BroadcastChannel === 'function' ? new BroadcastChannel('executor-disks') : null;
-const DISKS_WAIT = 1500;            // ms for the holder's answer
-self.addEventListener('error', () => { stopped = true; });
-self.addEventListener('unhandledrejection', () => { stopped = true; });
-
-if (disks)
-    disks.addEventListener('message', (e) => {
-        const m = e.data;
-        if (m.type !== 'release')
-            return;
-        const mine = overlays.filter((o) => m.keys.includes(o.key) && o.writable && !o.inMemory);
-        if (!mine.length)
-            return;
-        const keys = mine.map((o) => o.key);
-        if (stopped || hidden) {
-            for (const o of mine)
-                o.toMemory();
-            reportImages();
-            notice(`Another tab has ${mine.map((o) => o.name).join(', ')} now: changes here last until this tab closes`);
-            disks.postMessage({ type: 'released', keys });
-        } else {
-            notice(`Another tab wants ${mine.map((o) => o.name).join(', ')}: leave this tab in the background, or close it, to hand them over`);
-            disks.postMessage({ type: 'held', keys });
-        }
-    });
-
-// The other tab's answers for keys; resolves when every key has one, or
-// after DISKS_WAIT.
-function askForDisks(keys) {
-    if (!disks)
-        return Promise.resolve();
-    return new Promise((resolve) => {
-        const left = new Set(keys);
-        const done = () => {
-            disks.removeEventListener('message', answer);
-            resolve();
-        };
-        const answer = (e) => {
-            if (e.data.type !== 'released' && e.data.type !== 'held')
-                return;
-            for (const k of e.data.keys)
-                left.delete(k);
-            if (!left.size)
-                done();
-        };
-        disks.addEventListener('message', answer);
-        disks.postMessage({ type: 'release', keys });
-        setTimeout(done, DISKS_WAIT);
-    });
-}
 
 Module.noInitialRun = true;
 const runtimeReady = new Promise((resolve) => { Module.onRuntimeInitialized = resolve; });
@@ -194,52 +130,16 @@ Module.instantiateWasm = (imports, receive) => {
 };
 importScripts('executor-web.js');
 
-// ---- Executor's own volume (/executor), kept in OPFS ----
-// volumes/KEY/ (KEY: the System choice) holds a manifest.json (every
-// folder, and every file's blob, size and time) and the blobs. Restored
-// into memory before main; changes saved every couple of seconds while
-// Executor runs (and when the page is hidden): new blobs first, the
-// manifest last, the old blobs deleted after, so a tab closed mid-save
-// leaves the previous state whole.
+// ---- Executor's own volume (/executor), kept by the server ----
+// Per System choice (the page's volumeKey): restored into memory before
+// main, saved with its manifest (every folder, every file's size, time
+// and SHA-256; sync.js, Store).
 const VOLUME = '/executor';
-// Not kept: uploads (kept as uploads already), and System 7.5's "Shutdown
-// Check", which it makes at startup and deletes at Shut Down; a tab never
-// shuts down, and restored it would bring up the improper-shutdown alert.
-const NOT_KEPT = new Set([`${VOLUME}/Uploads`, `${VOLUME}/Shutdown Check`, `${VOLUME}/%Shutdown Check`]);
-let volumeDir = null, volumeKey = '', saved = { dirs: [], files: {} }, nextBlob = 1, saving = false;
-
-async function openVolume(key) {
-    volumeKey = key;
-    try {
-        const root = await navigator.storage.getDirectory();
-        const volumes = await root.getDirectoryHandle('volumes', { create: true });
-        volumeDir = await volumes.getDirectoryHandle(key, { create: true });
-    } catch {
-        volumeDir = null;                        // no OPFS: not kept
-    }
-}
-
-async function restoreVolume() {
-    if (!volumeDir)
-        return 0;
-    try {
-        const text = await (await (await volumeDir.getFileHandle('manifest.json')).getFile()).text();
-        saved = JSON.parse(text);
-    } catch {
-        return 0;                                // nothing saved yet
-    }
-    for (const d of saved.dirs)
-        FS.mkdirTree(d);
-    let n = 0;
-    for (const [path, f] of Object.entries(saved.files)) {
-        const data = new Uint8Array(await (await (await volumeDir.getFileHandle(f.blob)).getFile()).arrayBuffer());
-        FS.writeFile(path, data);
-        FS.utime(path, f.mtime, f.mtime);
-        nextBlob = Math.max(nextBlob, Number(f.blob.slice(1)) + 1);
-        n++;
-    }
-    return n;
-}
+// Not kept: System 7.5's "Shutdown Check", which it makes at startup and
+// deletes at Shut Down; a tab never shuts down, and restored it would
+// bring up the improper-shutdown alert.
+const NOT_KEPT = new Set([`${VOLUME}/Shutdown Check`, `${VOLUME}/%Shutdown Check`]);
+let saved = { dirs: [], files: {} };
 
 function scanVolume() {
     const dirs = [], files = {};
@@ -265,73 +165,20 @@ function scanVolume() {
 // Which images have changes (the page marks them, offers their download).
 function reportImages() {
     postMessage({ type: 'images', images: overlays.map((o) => ({
-        name: o.name, modified: o.modified, writable: o.writable, inMemory: o.inMemory, borrowed: o.borrowed,
-        onServer: Store.enabled && !o.syncOff })) });
+        name: o.name, modified: o.modified, writable: o.writable, onServer: Store.enabled && !o.syncOff })) });
 }
 
-// now: the page is going away, sync without waiting for the next round.
-async function saveVolume(now = false) {
-    if (Store.enabled) {
-        if (overlays.length)
-            reportImages();
-        return Store.up(overlays, storeVolume);
-    }
-    await saveLocally();
-    await Sync.up(overlays, volumeDir, volumeKey, saved, now);
-}
-
-async function saveLocally() {
-    for (const o of overlays) {
-        try { o.save(); } catch (e) { console.log(`[web] saving ${o.name}'s changes: ${e}`); }
-    }
+// The overlays and the volume, to the server.
+async function saveVolume() {
+    if (!Store.enabled)
+        return;
     if (overlays.length)
         reportImages();
-    if (!volumeDir || saving)
-        return;
-    saving = true;
-    try {
-        const now = scanVolume();
-        const files = {}, stale = [];
-        let changed = now.dirs.length !== saved.dirs.length;
-        for (const [path, f] of Object.entries(now.files)) {
-            const old = saved.files[path];
-            if (old && old.size === f.size && old.mtime === f.mtime) {
-                files[path] = old;
-                continue;
-            }
-            const blob = `b${nextBlob++}`;
-            const data = FS.readFile(path);
-            const w = await (await volumeDir.getFileHandle(blob, { create: true })).createWritable();
-            await w.write(data);
-            await w.close();
-            files[path] = { ...f, blob, sha: Sync.enabled ? await Sync.sha256(data) : undefined };
-            if (old)
-                stale.push(old.blob);
-            changed = true;
-        }
-        for (const [path, old] of Object.entries(saved.files))
-            if (!(path in now.files)) {
-                stale.push(old.blob);
-                changed = true;
-            }
-        if (!changed)
-            return;
-        const manifest = { dirs: now.dirs, files };
-        const w = await (await volumeDir.getFileHandle('manifest.json', { create: true })).createWritable();
-        await w.write(JSON.stringify(manifest));
-        await w.close();
-        saved = manifest;
-        for (const blob of stale)
-            await volumeDir.removeEntry(blob).catch(() => {});
-    } catch (e) {
-        console.log(`[web] saving the volume: ${e}`);
-    } finally {
-        saving = false;
-    }
+    return Store.up(overlays, storeVolume);
 }
 
-// Standalone: the volume as it is now, to the server (sync.js: Store); the
-// files changed since the last round read and hashed.
+// The volume as it is now, to the server (sync.js: Store); the files
+// changed since the last round read and hashed.
 async function storeVolume() {
     const now = scanVolume();
     const files = {}, bytes = new Map();
@@ -391,10 +238,10 @@ async function sendScreen() {
 }
 
 // The previous Worker of this origin's tab gone (a reload, a restart: it
-// may still be saving the volume or holding the overlays' files, and
-// restored from under it, a blob it removes is missing, an overlay opens
-// read-only). Its lock is held until the Worker ends; another tab keeps
-// its own, so after a few seconds this one goes on regardless.
+// may still be saving the volume to the server, and restored from under
+// it, this one would start on the state before). Its lock is held until
+// the Worker ends; another tab keeps its own, so after a few seconds this
+// one goes on regardless.
 function previousGone() {
     if (!navigator.locks)
         return Promise.resolve();
@@ -441,7 +288,6 @@ async function start(m) {
         for (const spec of m.ppcbreak.split(';').filter(Boolean))
             args.push('--ppc-break', spec);
     await runtimeReady;
-    Sync.enabled = !!m.sync && !m.standalone;
     Store.enabled = !!m.standalone;
     session = m.log || '';
     if (Store.enabled)
@@ -459,32 +305,16 @@ async function start(m) {
             notice(`Executor's disk: the server can't be reached (${e.message || e}): changes to it are not kept`);
             Store.volumeOff = true;
         }
-    } else if (m.volumeKey) {
-        await openVolume(m.volumeKey);
-        await Sync.volumeDown(volumeDir, m.volumeKey);
-        const n = await restoreVolume();
-        if (n)
-            console.log(`[web] restored ${n} files of the saved volume`);
     }
     FS.mkdir('/host');              // Executor's "Host" volume
     if (images.length) {
-        let root = null;
-        if (!Store.enabled)
-            try { root = await navigator.storage.getDirectory(); } catch { }
-        const open = (f, image) => Overlay.open(root, f.name, f, imageKey(f), (m.legacyKeys || {})[f.name], image);
-        overlays = await Promise.all(images.map((f) => open(f)));
-        // Another tab's: asked for, then opened again (a Worker gone
-        // meanwhile lets go without answering), before Executor mounts them.
-        const borrowed = overlays.filter((o) => o.borrowed);
-        if (borrowed.length) {
-            await askForDisks(borrowed.map((o) => o.key));
-            overlays = await Promise.all(overlays.map((o, i) => o.borrowed ? open(images[i], o.image) : o));
-            const still = overlays.filter((o) => o.borrowed).map((o) => o.name);
-            if (still.length)
-                notice(`Another tab has ${still.join(', ')}: changes to ${still.length > 1 ? 'them' : 'it'} here last until this tab closes`);
-        }
-        for (const o of overlays)
-            await (Store.enabled ? Store.overlayDown(o) : Sync.overlayDown(o));
+        overlays = images.map((f) => Overlay.open(f.name, f, imageKey(f)));
+        if (Store.enabled)
+            for (const o of overlays)
+                if (o.file.remote)
+                    await Store.overlayDown(o);
+                else
+                    o.syncOff = true;       // an upload: this visit's
         FS.mkdir('/uploads');
         FS.mount(OVERLAYFS, { overlays }, '/uploads');
         reportImages();
@@ -508,8 +338,6 @@ async function start(m) {
         setInterval(saveVolume, STORE_EVERY);
         setInterval(storeBeacons, 250);
         setInterval(sendScreen, 1000);
-    } else {
-        setInterval(saveVolume, 2000);
     }
 }
 
@@ -520,10 +348,6 @@ self.onmessage = (e) => {
     } else if (m.type === 'save') {
         // The page is going away, or restarting (it waits for the reply).
         saveVolume(true).then(() => postMessage({ type: 'saved' }));
-    } else if (m.type === 'resolve') {
-        Sync.resolve(m.id, m.keep);
-    } else if (m.type === 'visibility') {
-        hidden = m.hidden;
     } else if (m.type === 'input') {
         Module.input.push(...m.events);
     } else if (m.type === 'request') {
@@ -531,16 +355,14 @@ self.onmessage = (e) => {
         if (m.op === 'download') {
             // The image as changed: the original's slices and the changed blocks.
             const o = overlays.find((x) => x.name === m.arg);
-            if (o)
-                o.save();
             postMessage({ type: 'reply', id: m.id, result: o ? o.blob() : null });
         } else if (m.op === 'stats') {
             const remote = overlays.filter((o) => o.image instanceof RemoteImage);
             postMessage({ type: 'reply', id: m.id, result: { ...Module.stats,
                 remoteBytes: remote.reduce((n, o) => n + o.image.fetched, 0),
                 remoteRequests: remote.reduce((n, o) => n + o.image.requests, 0),
-                // blocks not on the account yet (or on their way there)
-                unsynced: overlays.reduce((n, o) => n + o.pending.size, 0) + (Sync.busy || Store.round ? 1 : 0) } });
+                // blocks not on the server yet (or on their way there)
+                unsynced: Store.enabled ? overlays.reduce((n, o) => n + o.pending.size, 0) + (Store.round ? 1 : 0) : 0 } });
         } else if (m.op === 'pixels') {
             // The canvas's own pixels (tests: comparing scales needs more
             // than a screenshot's possible browser-side resampling).

@@ -1,7 +1,7 @@
 package main
 
 // Overlays: a disk's changed 4 KB blocks (web/executor/overlay.js), by
-// the tab's key, with tools/web/server/sync.py's versions: every upload
+// the tab's key, versioned: every upload
 // is a new version and its blocks carry it, so a tab that has version V
 // asks for the blocks newer than V; an upload names the version it is on
 // (base) and is refused (409 { version }) when another came in between.
