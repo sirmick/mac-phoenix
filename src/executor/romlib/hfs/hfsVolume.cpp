@@ -362,6 +362,17 @@ static INTEGER openxtnt(LONGINT filnum, LONGINT clpsize, LONGINT filsize,
 #define CTNUM 4
 
 INTEGER Executor::ROMlib_nextvrn = 0; /* TODO: low memory global */
+INTEGER Executor::ROMlib_mount_vrefnum = 0;
+
+INTEGER Executor::ROMlib_new_vrefnum()
+{
+    INTEGER want = ROMlib_mount_vrefnum;
+    ROMlib_mount_vrefnum = 0;
+    for(VCB *v = (VCB *)LM(VCBQHdr).qHead; want && v; v = (VCB *)v->qLink)
+        if(v->vcbVRefNum == want)
+            want = 0;                       /* taken meanwhile */
+    return want ? want : --ROMlib_nextvrn;
+}
 
 OSErr
 Executor::hfsPBMountVol(ParmBlkPtr pb, LONGINT floppyfd, LONGINT offset, LONGINT bsize,
@@ -426,7 +437,7 @@ Executor::hfsPBMountVol(ParmBlkPtr pb, LONGINT floppyfd, LONGINT offset, LONGINT
                 vcbp->vcbDRefNum = drvtodref(pb->volumeParam.ioVRefNum);
                 vcbp->vcbFSID = 0;
                 if(!alreadythere)
-                    vcbp->vcbVRefNum = --ROMlib_nextvrn;
+                    vcbp->vcbVRefNum = ROMlib_new_vrefnum();
                 vcbp->vcbDirIndex = 0;
                 vcbp->vcbDirBlk = 0;
                 vcbp->vcbFlags = 0;

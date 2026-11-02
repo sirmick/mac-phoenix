@@ -72,7 +72,16 @@ self.Module = {
         postMessage({ type: 'audio', samples: out }, [out.buffer]);
     },
     onReply(id, result) {
+        // An eject that went (or had no volume to unmount): the image out too.
+        const name = ejecting.get(id);
+        ejecting.delete(id);
+        if (name !== undefined && (result === 0 || result === -35))
+            ejected(name, true);
         postMessage({ type: 'reply', id, result });
+    },
+    // A disk image's volumes gone (web_main.cpp: ejected here or by the Finder).
+    onEjected(path) {
+        ejected(path.replace(/^\/uploads\//, ''));
     },
     onExit(code) {
         stopped = true;
@@ -260,6 +269,83 @@ function scanVolume() {
     };
     try { walk(VOLUME); } catch { }
     return { dirs, files };
+}
+
+// ---- disks in and out while Executor runs (main.js: the Disks panel) ----
+// The image's overlay opened (another tab's asked for first, as at the
+// start), its changes fetched, then in /uploads; Executor mounts it at the
+// running application's next event call ('mount': its OSErr is the reply).
+let root = null, legacyKeys = {}, cds = new Set();
+const ejecting = new Map();         // request id -> image name
+async function openImage(f) {
+    const open = (image) => Overlay.open(root, f.name, f, imageKey(f), legacyKeys[f.name], image);
+    let o = await open();
+    if (o.borrowed) {
+        await askForDisks([o.key]);
+        o = await open(o.image);
+        if (o.borrowed)
+            notice(`Another tab has ${o.name}: changes to it here last until this tab closes`);
+    }
+    o.readOnly = cds.has(f.name);
+    await (Store.enabled ? Store.overlayDown(o) : Sync.overlayDown(o));
+    return o;
+}
+
+async function insert(id, { file, cd, ids: more, legacyKey }) {
+    if (!IMAGE.test(file.name)) {
+        // (an application restarts Executor: main.js)
+        postMessage({ type: 'reply', id, result: { error: 'not a disk image' } });
+        return;
+    }
+    Object.assign(ids, more || {});
+    if (legacyKey)
+        legacyKeys[file.name] = legacyKey;
+    if (cd)
+        cds.add(file.name);
+    const old = overlays.find((o) => o.name === file.name);
+    if (old) {                          // in already
+        postMessage({ type: 'reply', id, result: 0 });
+        return;
+    }
+    let o;
+    try {
+        o = await openImage(file);
+    } catch (e) {
+        postMessage({ type: 'reply', id, result: { error: `${e.message || e}` } });
+        return;
+    }
+    overlays.push(o);
+    OVERLAYFS.add(o);
+    reportImages();
+    Module.requests.push([id, 'mount', `/uploads/${file.name}`]);
+}
+
+// Gone from the Mac: its changes saved (and to the server or the
+// account), its files let go, out of /uploads; the page told.
+async function ejected(name, always = false) {
+    const o = overlays.find((x) => x.name === name);
+    if (!o) {
+        if (always)
+            postMessage({ type: 'ejected', name });
+        return;
+    }
+    overlays = overlays.filter((x) => x !== o);
+    try {
+        o.save();
+        if (Store.enabled) {
+            await Store.round;          // (one running may have it in hand)
+            await Store.overlayUp(o);
+        } else if (Sync.enabled) {
+            await Sync.overlayUp(o);
+        }
+    } catch (e) {
+        console.log(`[web] ${name}: saving its changes at eject: ${e}`);
+    }
+    try { o.close(); } catch (e) { console.log(`[web] ${name}: closing: ${e}`); }
+    OVERLAYFS.remove(name);
+    console.log(`[web] ${name} ejected`);
+    reportImages();
+    postMessage({ type: 'ejected', name });
 }
 
 // Which images have changes (the page marks them, offers their download).
@@ -465,11 +551,12 @@ async function start(m) {
             console.log(`[web] restored ${n} files of the saved volume`);
     }
     FS.mkdir('/host');              // Executor's "Host" volume
+    legacyKeys = m.legacyKeys || {};
+    cds = new Set(m.cds || []);
+    if (!Store.enabled)
+        try { root = await navigator.storage.getDirectory(); } catch { }
     if (images.length) {
-        let root = null;
-        if (!Store.enabled)
-            try { root = await navigator.storage.getDirectory(); } catch { }
-        const open = (f, image) => Overlay.open(root, f.name, f, imageKey(f), (m.legacyKeys || {})[f.name], image);
+        const open = (f, image) => Overlay.open(root, f.name, f, imageKey(f), legacyKeys[f.name], image);
         overlays = await Promise.all(images.map((f) => open(f)));
         // Another tab's: asked for, then opened again (a Worker gone
         // meanwhile lets go without answering), before Executor mounts them.
@@ -481,12 +568,16 @@ async function start(m) {
             if (still.length)
                 notice(`Another tab has ${still.join(', ')}: changes to ${still.length > 1 ? 'them' : 'it'} here last until this tab closes`);
         }
-        for (const o of overlays)
+        for (const o of overlays) {
+            o.readOnly = cds.has(o.name);
             await (Store.enabled ? Store.overlayDown(o) : Sync.overlayDown(o));
-        FS.mkdir('/uploads');
-        FS.mount(OVERLAYFS, { overlays }, '/uploads');
-        reportImages();
+        }
     }
+    // Mounted with none too: the Disks panel puts images in later.
+    FS.mkdir('/uploads');
+    FS.mount(OVERLAYFS, { overlays }, '/uploads');
+    if (images.length)
+        reportImages();
     if (others.length) {
         FS.mkdirTree(`${VOLUME}/Uploads`);
         const reader = new FileReaderSync();
@@ -532,6 +623,11 @@ self.onmessage = (e) => {
             if (o)
                 o.save();
             postMessage({ type: 'reply', id: m.id, result: o ? o.blob() : null });
+        } else if (m.op === 'insert') {
+            insert(m.id, m.arg);
+        } else if (m.op === 'eject') {
+            ejecting.set(m.id, m.arg);
+            Module.requests.push([m.id, 'eject', `/uploads/${m.arg}`]);
         } else if (m.op === 'stats') {
             const remote = overlays.filter((o) => o.image instanceof RemoteImage);
             postMessage({ type: 'reply', id: m.id, result: { ...Module.stats,

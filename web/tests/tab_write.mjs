@@ -11,7 +11,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { open, firstFrame, request, until } from './harness.mjs';
+import { open, firstFrame, request, until, pickSystem, diskButton } from './harness.mjs';
 
 const [dir, image] = process.argv.slice(2);
 if (!image || !fs.existsSync(image)) {
@@ -60,14 +60,14 @@ async function openDisk() {
 }
 async function download(to) {
     const dl = page.waitForEvent('download');
-    await page.locator('#files a[title^="Download"]').first().click();
+    await diskButton(page, path.basename(image), 'download');
     fs.copyFileSync(await (await dl).path(), to);
 }
 
 await firstFrame(page);
 await page.setInputFiles('#add', image);
 await firstFrame(page);
-await page.selectOption('#system', path.basename(image));
+await pickSystem(page, path.basename(image));
 await firstFrame(page, 60000);
 check(await finder(), 'the Finder is up');
 const disk = await openDisk();
@@ -84,7 +84,7 @@ await download(path.join(scratch, 'changed.img'));
 check(hls(path.join(scratch, 'changed.img')).includes('untitled folder'),
       'the downloaded image has the new folder');
 
-await page.locator('#files a[title^="Revert"]').first().click();
+await diskButton(page, path.basename(image), 'revert');
 await firstFrame(page, 60000);
 check(await finder(), 'the Finder after Revert');
 await download(path.join(scratch, 'reverted.img'));

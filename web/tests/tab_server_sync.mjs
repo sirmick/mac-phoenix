@@ -13,7 +13,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { launch, newPage, firstFrame, request, until } from './harness.mjs';
+import { launch, newPage, firstFrame, request, until, openDisks, closeDisks, diskButton } from './harness.mjs';
 import { startServer, signIn, OWNER_PASSWORD } from './server.mjs';
 
 const [dir] = process.argv.slice(2);
@@ -127,7 +127,9 @@ try {
     check(await ready(b), 'B again');
     check(await head(b) === 'DDDDMARK!', "B has A's");
 
-    await b.click('#reset');
+    await openDisks(b);
+    await b.locator('#reset').evaluate((r) => r.click());
+    await closeDisks(b);
     check(await ready(b), 'Reset in B');
     await a.reload();
     check(await ready(a), 'A again');
@@ -138,7 +140,7 @@ try {
     // volume's header back at mounting, unchanged: no change of A's
     // (overlay.js), so A, behind, isn't asked (it would keep its own).
     check(await until(() => request(a, 'stats').then((s) => s.unsynced === 0), 15000), "A's writes on the account");
-    await b.locator('#files a[title^="Revert"]').first().click();
+    await diskButton(b, 'blank.img', 'revert');
     check(await ready(b), 'Revert in B');
     check(await head(b) !== 'DDDDMARK!', 'B has the disk as it was');
     await a.reload();

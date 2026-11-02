@@ -213,6 +213,16 @@ if(NODE_COMMAND AND PYTHON3_COMMAND)
     add_test(NAME executor.web.standalone
         COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_standalone.mjs
                 $<TARGET_FILE_DIR:executor-web>)
+    # The Disks panel (disks.js): a disk put in while the Finder runs, a
+    # change to it reverted, put away in the Finder; a CD read-only, out by
+    # the panel's eject (standalone; EXECUTOR_WEB_SYSTEM the System, picked
+    # in the panel from the library).
+    add_test(NAME executor.web.disks
+        COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_disks.mjs
+                $<TARGET_FILE_DIR:executor-web> ${EXECUTOR_WEB_SYSTEM} ${CMAKE_CURRENT_BINARY_DIR}/disks-shots)
+    set_tests_properties(executor.web.disks PROPERTIES
+        LABELS "executor;web" TIMEOUT 400 SKIP_RETURN_CODE 77
+        ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM};TMPDIR=${CMAKE_CURRENT_BINARY_DIR}")
     # The Settings dialog (settings.js) kept in the browser, by tools/standalone
     # (settings.json; built here with go) and per user by tools/web/server.
     add_test(NAME executor.web.settings

@@ -10,7 +10,7 @@
 // tests-7.5.5.img). Skips (77) without it.
 import fs from 'node:fs';
 import path from 'node:path';
-import { launch, serve, firstFrame, request, until } from './harness.mjs';
+import { launch, serve, firstFrame, request, until, pickSystem, diskState } from './harness.mjs';
 
 const [dir, image] = process.argv.slice(2);
 if (!image || !fs.existsSync(image)) {
@@ -38,14 +38,13 @@ async function tab(tag) {
     return { page, lines, saw: (re) => until(() => lines.some((l) => re.test(l)), 15000) };
 }
 const finder = (page) => until(() => request(page, 'app').then((a) => a === 'Finder'), 60000);
-const title = (page) => page.evaluate((n) => [...document.querySelectorAll('#files span')]
-    .find((s) => s.textContent.startsWith(n))?.title || '', name);
+const title = (page) => diskState(page, name);
 
 const one = await tab('1');
 await firstFrame(one.page);
 await one.page.setInputFiles('#add', image);
 await firstFrame(one.page);
-await one.page.selectOption('#system', name);
+await pickSystem(one.page, name);
 await firstFrame(one.page, 60000);
 check(await finder(one.page), 'tab 1: the Finder is up');
 check(!/another tab/.test(await title(one.page)), 'tab 1 has the disk');
@@ -55,7 +54,7 @@ await firstFrame(two.page, 60000);
 check(await finder(two.page), 'tab 2: the Finder is up');
 check(await one.saw(/Another tab wants/), 'tab 1, in use, was asked and keeps the disk');
 check(await two.saw(/Another tab has .*: changes to it here last/), 'tab 2 says another tab has the disk');
-check(/open in another tab/.test(await title(two.page)), "tab 2's disk is a copy in memory");
+check(/in another tab/i.test(await title(two.page)), "tab 2's disk is a copy in memory");
 check(!two.lines.some((l) => /read-only/.test(l)), 'tab 2: no disk read-only');
 const shots = process.env.SHOTS || dir;
 check(/Another tab has/.test(await two.page.locator('#status').textContent()), "tab 2's page shows the notice");
@@ -70,7 +69,7 @@ await firstFrame(two.page, 60000);
 check(await finder(two.page), 'tab 2 again: the Finder is up');
 check(await one.saw(/Another tab has .* now/), 'tab 1, in the background, let the disk go');
 check(!/another tab/.test(await title(two.page)), 'tab 2 has the disk now');
-check(await until(async () => /open in another tab/.test(await title(one.page)), 5000),
+check(await until(async () => /in another tab/i.test(await title(one.page)), 5000),
       "tab 1's disk is a copy in memory now");
 check(await request(one.page, 'app') === 'Finder', 'tab 1 still runs');
 await one.page.screenshot({ path: path.join(shots, 'tab_two_tabs_let_go.png') });

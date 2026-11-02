@@ -318,6 +318,11 @@ extern LONGINT ROMlib_magic_offset;
 #endif
 
 extern INTEGER ROMlib_nextvrn;
+/* MacPhoenix: the vRefNum the next volume mounted takes (0: a new one):
+   a disk image put back on its drive keeps its number (PBMountVol), so
+   what the Finder keeps of it stays good. */
+extern INTEGER ROMlib_mount_vrefnum;
+INTEGER ROMlib_new_vrefnum();
 
 std::string expandPath(std::string);
 

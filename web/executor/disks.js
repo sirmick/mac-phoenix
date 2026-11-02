@@ -4,21 +4,23 @@
 // asked for, through the handlers given to Disks.init:
 //   add(files)        files picked or dropped (disk images, applications)
 //   insert(disk)      a library disk to put in the Mac
+//   insertShelved(name), forgetShelved(name)
+//                     one of one's own disks taken out earlier ("Your disks")
 //   eject(name)       a disk to take out
 //   revert(name)      forget a disk's changes
 //   download(name)    the image as it is now
-//   system(value)     the System to start from ('' : Executor's own;
-//                     a mounted image's name; a library disk's url)
 //   reset()           forget the changes to Executor's disk for this System
+//   systemSelect      the page's System choice (a <select>, main.js), shown here
 // Disks.update(state) draws what is there now:
-//   { system, systems: [{ value, label }], mounted: [{ name, title, cover,
-//     kind: 'hd'|'cd'|'floppy', state: { modified, changed (bytes),
+//   { system: { value, label }, mounted: [{ name, title, cover,
+//     kind: 'hd'|'cd'|'floppy'|'app', state: { modified, changed (bytes),
 //     writable, inMemory, borrowed, onServer }, inserting }],
-//     library: [{ title, url, note, tags, size, cover }], mountedUrls }
+//     library: [{ title, url, note, tags, size, cover }], mountedUrls,
+//     shelf: [{ name, size }] }
 'use strict';
 
 const Disks = (() => {
-    let on = {}, state = { system: '', systems: [], mounted: [], library: [], mountedUrls: [] };
+    let on = {}, state = { system: { value: '', label: "Executor's own" }, mounted: [], library: [], mountedUrls: [], shelf: [] };
     let panel = null, button = null, drop = null, filter = '', tags = new Set();
 
     const ICONS = {
@@ -83,8 +85,8 @@ const Disks = (() => {
             return { badge: ['changed', 'Changed'], changed: true,
                      explain: `${st.changed ? size(st.changed) + ' changed' : 'Changed'}, kept ${where}. `
                               + 'The image itself is untouched: Revert forgets the changes, Download saves the disk as it is now.' };
-        if (st.inMemory)
-            return { badge: ['memory', 'Original'], explain: 'Changes would last until Executor restarts (not a secure page).' };
+        if (st.inMemory && !st.onServer)
+            return { badge: ['original', 'Original'], explain: 'Changes would last until Executor restarts (not a secure page).' };
         return { badge: ['original', 'Original'], explain: '' };
     }
 
@@ -122,25 +124,39 @@ const Disks = (() => {
         const h = el('h2', '', 'System disk');
         h.append(el('span', 'hint', 'what the Mac starts from'));
         const pick = el('div', 'system-pick');
-        const sel = document.createElement('select');
-        sel.id = 'disks-system-select';
-        for (const s of state.systems)
-            sel.append(new Option(s.label, s.value));
-        sel.value = state.system;
-        sel.addEventListener('change', () => on.system && on.system(sel.value));
-        pick.append(sel);
+        if (on.systemSelect)
+            pick.append(on.systemSelect);
         const row = el('div', 'disk');
-        const cur = state.systems.find((s) => s.value === state.system);
-        const title = el('div', 'title', cur ? cur.label : "Executor's own");
+        const title = el('div', 'title', state.system.label);
         const file = el('div', 'file');
         file.append(el('span', 'badge system', 'Startup'),
-                    state.system ? 'Apple’s System and Finder from this disk' : 'Executor’s own System, no disk needed');
+                    state.system.value ? 'Apple’s System and Finder from this disk' : 'Executor’s own System, no disk needed');
         const acts = el('div', 'acts');
-        acts.append(btn('Reset…', "Forget what was changed on Executor's disk for this System (preferences, installed files)",
-                        () => on.reset && on.reset()));
-        row.append(icon('system'), title, acts, file,
-                   el('div', 'explain', 'Your changes to the System Folder are kept for this System; Reset forgets them. '
-                                        + 'Changing the System restarts the Mac.'));
+        const reset = btn('Reset…', "Forget what was changed on Executor's disk for this System (preferences, installed files)",
+                          () => on.reset && on.reset());
+        reset.id = 'reset';
+        acts.append(reset);
+        let explain = 'Your changes to the System Folder are kept for this System; Reset forgets them. '
+            + 'Changing the System restarts the Mac.';
+        // The System's disk image: its own changes, as a mounted disk's.
+        const disk = state.system.disk;
+        if (disk) {
+            row.dataset.name = disk.name;
+            const info = describe(disk);
+            file.append(el('span', `badge ${info.badge[0]}`, info.badge[1]));
+            if (info.changed)
+                row.classList.add('changed');
+            if (info.explain)
+                explain = `${info.explain} ${explain}`;
+            const revert = btn('↺', 'Revert: forget the changes to this disk (restarts the Mac)',
+                               () => on.revert && on.revert(disk.name));
+            revert.className = 'revert';
+            revert.disabled = !info.changed;
+            const dl = btn('⤓', 'Download the image as it is now', () => on.download && on.download(disk.name));
+            dl.className = 'download';
+            acts.prepend(revert, dl);
+        }
+        row.append(icon('system'), title, acts, file, el('div', 'explain', explain));
         wrap.append(h, pick, row);
         return wrap;
     }
@@ -235,6 +251,29 @@ const Disks = (() => {
         return wrap;
     }
 
+    // One's own disks taken out: put back in, or forgotten.
+    function shelfSection() {
+        const wrap = el('section');
+        wrap.id = 'disks-shelf';
+        const h = el('h2', '', 'Your disks');
+        h.append(el('span', 'hint', 'taken out, kept in this browser'));
+        wrap.append(h);
+        for (const d of state.shelf) {
+            const row = el('div', 'disk');
+            row.dataset.name = d.name;
+            const acts = el('div', 'acts');
+            const ins = btn('Insert', 'Put this disk in the Mac', () => on.insertShelved && on.insertShelved(d.name));
+            ins.className = 'insert';
+            const del = btn('✕', 'Forget this disk (deleted from this browser)', () => on.forgetShelved && on.forgetShelved(d.name));
+            del.className = 'forget';
+            acts.append(ins, del);
+            const file = el('div', 'file', d.size ? size(d.size) : '');
+            row.append(icon(isCD(d) ? 'cd' : d.size <= 1440 * 1024 ? 'floppy' : 'hd'), el('div', 'title', d.name), acts, file);
+            wrap.append(row);
+        }
+        return wrap;
+    }
+
     function render() {
         if (button) {
             const n = state.mounted.length;
@@ -244,7 +283,8 @@ const Disks = (() => {
             return;
         const scroll = panel.querySelector('.scroll');
         const top = scroll.scrollTop;
-        scroll.replaceChildren(systemSection(), mountedSection(), librarySection());
+        scroll.replaceChildren(systemSection(), mountedSection(),
+                               ...(state.shelf.length ? [shelfSection()] : []), librarySection());
         scroll.scrollTop = top;
     }
 

@@ -311,6 +311,7 @@ class Overlay {
         this.inMemory = false;          // no OPFS: kept while the Worker runs
         this.borrowed = false;          // another tab has the OPFS files
         this.writes = 0;                // changes so far (sync.js: Store's beacons)
+        this.readOnly = false;          // a CD: never written (Executor mounts it locked)
     }
 
     // The block index from `index`.
@@ -450,7 +451,16 @@ class Overlay {
         console.log(`[web] ${this.name}: in memory${copied} (${why.message || why})`);
     }
 
-    get writable() { return this.data !== null; }
+    get writable() { return this.data !== null && !this.readOnly; }
+
+    // Ejected: saved, its OPFS files let go (opened again if it comes back).
+    close() {
+        this.save();
+        for (const h of [this.data, this.index, this.syncFile])
+            if (h && h.close)
+                h.close();
+        this.data = this.index = this.syncFile = null;
+    }
     get modified() { return this.map.size > 0; }
 
     // The bytes [pos, pos + length), length within the image.
@@ -631,10 +641,18 @@ const OVERLAYFS = {
     },
 
     mount(mount) {
-        const root = OVERLAYFS.createNode(null, '/', OVERLAYFS.DIR_MODE);
+        const root = OVERLAYFS.root = OVERLAYFS.createNode(null, '/', OVERLAYFS.DIR_MODE);
         for (const ov of mount.opts.overlays)
-            OVERLAYFS.createNode(root, ov.name, ov.writable ? OVERLAYFS.FILE_MODE : 0o100444, ov);
+            OVERLAYFS.add(ov);
         return root;
+    },
+
+    // Images put in and taken out while Executor runs (the Disks panel).
+    add(ov) {
+        OVERLAYFS.createNode(OVERLAYFS.root, ov.name, ov.writable ? OVERLAYFS.FILE_MODE : 0o100444, ov);
+    },
+    remove(name) {
+        delete OVERLAYFS.root.contents[name];
     },
 
     createNode(parent, name, mode, overlay) {
@@ -680,6 +698,12 @@ const OVERLAYFS = {
     },
 
     stream_ops: {
+        // A read-only image (a CD) refuses to open for writing: Executor
+        // opens it read-only then, and mounts it locked.
+        open(stream) {
+            if ((stream.flags & 3) && !stream.node.overlay.writable)
+                throw new FS.ErrnoError(EROFS);
+        },
         read(stream, buffer, offset, length, position) {
             const ov = stream.node.overlay;
             const n = Math.max(0, Math.min(length, ov.size - position));

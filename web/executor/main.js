@@ -24,7 +24,9 @@
 //                    separated by ';'; docs/executor/PPCTrace.md)
 // library.json beside the page (optional) offers more disks: [{ title,
 // url, note, cover }]; the ones picked are remembered (the disks.mounted
-// setting) and loaded like ?disk=. Disks with a cover (CDs) are offered by it too.
+// setting) and loaded like ?disk=. The Disks panel (disks.js; docs/executor/Disks.md)
+// shows the System, the disks in the Mac and the library, and puts disks in
+// and takes them out while Executor runs.
 // Served by tools/web/server, signed in (api/me): the overlays and
 // Executor's own volume are synced with the account (sync.js).
 // Standalone (api/me's mode; the server on one's own machine): the server
@@ -241,10 +243,19 @@ async function fetchDisk(url) {
     return cached();
 }
 
+const IMAGE = /\.(img|image|dsk|hfs|iso|toast|cdr)$/i;
+const systemSelect = document.createElement('select');
+systemSelect.id = 'system';
+
 // ---- the library: disks the site offers (library.json), picked by the user
+// (the disks.mounted setting: the Disks panel, or the Settings dialog's
+// list). The page follows the setting while Executor runs: a disk added
+// goes into the Mac at once, one taken off comes out (inMac).
 let library = [];
 const picked = () => Settings.get('disks.mounted') || [];
 Settings.provide('library', () => library);
+const href = (u) => new URL(u, location.href).href;
+const fileName = (url) => decodeURIComponent(new URL(url, location.href).pathname.split('/').pop());
 
 async function loadLibrary() {
     try {
@@ -253,33 +264,19 @@ async function loadLibrary() {
     } catch {
         library = [];
     }
-    showLibrary();
+    showSystems(shownFiles);
 }
 
-function showLibrary() {
-    showDisks();
+function addLibraryDisk(url) {
+    if (url && !picked().some((u) => href(u) === href(url)))
+        return Settings.set({ disks: { mounted: [...picked(), url] } });
 }
 
-async function addLibraryDisk(url) {
-    if (!url || picked().some((u) => new URL(u, location.href).href === new URL(url, location.href).href))
-        return;
-    await Settings.set({ disks: { mounted: [...picked(), url] } });
-    showLibrary();
-    generation++;                   // restarting, once it is downloaded
-    window.executor.frames = 0;
-    try {
-        const file = await fetchDisk(url);
-        sessionFiles = sessionFiles.filter((f) => f.name !== file.name).concat(file);
-    } catch (e) {
-        status.textContent = `Cannot load ${url}: ${e.message}`;
-    }
-    start();
-}
-
-// A library disk the user removes is forgotten too.
+// A library disk taken out is forgotten too.
 function forgetLibraryDisk(name) {
-    const keep = picked().filter((u) => decodeURIComponent(new URL(u, location.href).pathname.split('/').pop()) !== name);
-    Settings.set({ disks: { mounted: keep } }).then(showLibrary);
+    const keep = picked().filter((u) => fileName(u) !== name);
+    if (keep.length !== picked().length)
+        return Settings.set({ disks: { mounted: keep } });
 }
 
 async function fetchDisks() {
@@ -302,69 +299,203 @@ function imageKey(f) {
     return imageIds[f.name] ? `${f.name}-${imageIds[f.name]}`.replace(/[^\w.-]/g, '_')
                             : plainKey(f.name, f.size, f.lastModified);
 }
-let imageState = {};                // name -> { modified, writable }, from the Worker
+let imageState = {};                // name -> { modified, changed, writable, ... }, from the Worker
 
-function link(text, title, onclick) {
-    const a = document.createElement('a');
-    a.textContent = text;
-    a.title = title;
-    a.onclick = onclick;
-    return a;
+// ---- disks in and out of the running Mac ----
+// Executor running: a disk goes in at once (the Worker opens it, Executor
+// mounts it as a floppy put in: web_main.cpp 'mount'); not yet, at the start.
+const live = () => !!worker && window.executor.frames > 0;
+const inserting = new Set();        // names on their way in
+const reverting = new Set();        // taken out to be put back
+const ejectWaits = new Map();       // name -> resolve, for 'ejected'
+const FBSY = -47, NSV = -35;
+// CDs are read-only (Executor mounts them locked).
+const isCD = (name) => /\.(iso|toast|cdr)$/i.test(name)
+    || library.some((d) => fileName(d.url) === name && (d.tags || []).includes('cd'));
+
+async function putIn(file) {
+    if (!live())
+        return start();
+    inserting.add(file.name);
+    showDisks();
+    const r = await window.executor.request('insert', { file, cd: isCD(file.name), ids: { ...imageIds },
+                                                        legacyKey: legacyKeys[file.name] });
+    inserting.delete(file.name);
+    if (r !== 0)
+        status.textContent = `${file.name}: not mounted (${r === NSV ? 'no Mac volume on it' : r === -1 ? 'cannot open it'
+                                                           : (r && r.error) || r})`;
+    showFiles(await storedFiles());
 }
 
-// The Disks panel (disks.js): what is in the Mac, from the files and the
-// Worker's word on each image, its title and cover from the library.
-let shownFiles = [];
-const fileName = (url) => decodeURIComponent(new URL(url, location.href).pathname.split('/').pop());
+// Out of the Mac: 0 when it is (the Worker has saved its changes and let it
+// go: 'ejected'), else the OSErr (fBsyErr: in use).
+function takeOut(name) {
+    return new Promise((resolve) => {
+        ejectWaits.set(name, resolve);
+        window.executor.request('eject', name).then((r) => {
+            if (r !== 0 && r !== NSV) {
+                ejectWaits.delete(name);
+                resolve(r && r.error ? -1 : r);
+            }
+        });
+    });
+}
 
-function showFiles(files) {
-    shownFiles = files;
+// Ejected, here or in the Finder: out of the panel. A library disk is
+// forgotten (still in the library), an image of one's own goes on the
+// shelf ("Your disks"), an application is forgotten.
+async function ejected(name) {
+    delete imageState[name];
+    const wait = ejectWaits.get(name);
+    ejectWaits.delete(name);
+    if (wait)
+        wait(0);
+    if (reverting.has(name) || name === systemSelect.value)
+        return;
+    shownFiles = shownFiles.filter((f) => f.name !== name);    // (before the setting changes: followPicked)
+    const fromLibrary = picked().some((u) => fileName(u) === name);
+    const file = sessionFiles.find((f) => f.name === name);
+    sessionFiles = sessionFiles.filter((f) => f.name !== name);
+    if (fromLibrary)
+        await forgetLibraryDisk(name);
+    else if (IMAGE.test(name))
+        await shelve(name, file);
+    else
+        await remove(name);
+    showFiles(await storedFiles());
+}
+
+async function eject(name) {
+    if (!IMAGE.test(name) || !live()) {
+        // An application, or Executor not running: off the list (an
+        // application stays in "executor:Uploads" until Executor restarts).
+        await ejected(name);
+        return;
+    }
+    const r = await takeOut(name);
+    if (r === FBSY)
+        status.textContent = `${name} is in use: quit what has files open on it, then eject it`;
+    else if (r !== 0)
+        status.textContent = `${name}: not ejected (${r})`;
+}
+
+// Followed while Executor runs: library disks added (here, in the Settings
+// dialog, by another tab) go in; ones taken off come out.
+async function followPicked(urls) {
+    if (!live())
+        return showDisks();
+    const want = new Set(urls.map(href));
+    for (const url of urls) {
+        const name = fileName(url);
+        if (shownFiles.some((f) => f.name === name) || inserting.has(name))
+            continue;
+        inserting.add(name);
+        showDisks();
+        try {
+            const file = await fetchDisk(url);
+            sessionFiles = sessionFiles.filter((f) => f.name !== file.name).concat(file);
+            inserting.delete(name);
+            await putIn(file);
+        } catch (e) {
+            inserting.delete(name);
+            status.textContent = `Cannot load ${url}: ${e.message}`;
+            showDisks();
+        }
+    }
+    for (const d of library)
+        if (!want.has(href(d.url)) && shownFiles.some((f) => f.name === fileName(d.url)) && !ejectWaits.has(fileName(d.url))
+            && fileName(d.url) !== systemSelect.value && !params.getAll('disk').some((u) => href(u) === href(d.url)))
+            takeOut(fileName(d.url));
+}
+Settings.on('disks.mounted', (v) => followPicked(v || []));
+
+// ---- the shelf: one's own images taken out (OPFS shelf/, or for the visit)
+let shelfFiles = [];
+async function shelfDir() {
+    return (await uploads()).getDirectoryHandle('shelf', { create: true });
+}
+
+async function shelve(name, file) {
+    if (!opfs) {
+        if (file)
+            shelfFiles = shelfFiles.filter((f) => f.name !== name).concat(file);
+        return;
+    }
+    try {
+        const from = await (await uploads()).getFileHandle(name);
+        const to = await (await shelfDir()).getFileHandle(name, { create: true });
+        const w = await to.createWritable();
+        await w.write(await from.getFile());
+        await w.close();
+        await remove(name);
+    } catch (e) {
+        console.log(`[web] shelving ${name}: ${e}`);
+    }
+}
+
+async function shelved() {
+    const files = [...shelfFiles];
+    if (opfs)
+        for await (const [, h] of (await shelfDir()).entries())
+            if (h.kind === 'file')
+                files.push(await h.getFile());
+    return files.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+async function unshelve(name) {
+    let file = shelfFiles.find((f) => f.name === name);
+    shelfFiles = shelfFiles.filter((f) => f.name !== name);
+    if (opfs && !file) {
+        const dir = await shelfDir();
+        file = await (await dir.getFileHandle(name)).getFile();
+        await store(file);
+        await dir.removeEntry(name);
+        file = (await storedFiles()).find((f) => f.name === name);
+    } else if (file) {
+        sessionFiles = sessionFiles.concat(file);
+    }
+    return file;
+}
+
+async function forgetShelved(name) {
+    if (!confirm(`Forget ${name}? It is deleted from this browser.`))
+        return;
+    shelfFiles = shelfFiles.filter((f) => f.name !== name);
+    if (opfs)
+        await (await shelfDir()).removeEntry(name).catch(() => {});
     showDisks();
 }
 
-function showDisks() {
-    const byName = new Map(library.map((d) => [fileName(d.url), d]));
-    const mounted = shownFiles.filter((f) => f.name !== systemSelect.value).map((f) => {
-        const d = byName.get(f.name) || {};
-        const kind = !IMAGE.test(f.name) ? 'app'
-            : /\.(iso|toast|cdr)$/i.test(f.name) || (d.tags || []).includes('cd') ? 'cd'
-            : (f.size || 0) <= 1440 * 1024 ? 'floppy' : 'hd';
-        return { name: f.name, title: d.title || f.name, cover: d.cover, kind, state: imageState[f.name] };
-    });
-    // The library's System disks too, not yet here: picking one inserts it.
-    const systems = [...systemSelect.options].map((o) => ({ value: o.value, label: o.textContent }));
-    for (const d of library)
-        if ((d.tags || []).includes('system') && !shownFiles.some((f) => f.name === fileName(d.url)))
-            systems.push({ value: d.url, label: `${d.title} (from the library)` });
-    Disks.update({ system: systemSelect.value, systems, mounted, library,
-                   mountedUrls: [...params.getAll('disk'), ...picked()] });
+// ---- the Disks panel (disks.js): what is in the Mac, from the files and
+// the Worker's word on each image, its title and cover from the library.
+let shownFiles = [];
+
+function showFiles(files) {
+    shownFiles = files;
+    showSystems(files);             // (and the panel)
 }
 
-Disks.init({
-    add: addFiles,
-    insert: (d) => addLibraryDisk(d.url),
-    async eject(name) {
-        await remove(name);
-        forgetLibraryDisk(name);
-        start();
-    },
-    revert: (name) => {
-        const f = shownFiles.find((x) => x.name === name);
-        if (f)
-            revert(f);
-    },
-    download,
-    async system(value) {
-        const d = library.find((x) => x.url === value);
-        if (d) {
-            await Settings.set({ machine: { system: fileName(d.url) } });
-            return addLibraryDisk(d.url);
+async function showDisks() {
+    const byName = new Map(library.map((d) => [fileName(d.url), d]));
+    const kind = (name, size, d) => !IMAGE.test(name) ? 'app' : isCD(name) ? 'cd'
+        : (size || 0) <= 1440 * 1024 ? 'floppy' : 'hd';
+    const mounted = shownFiles.filter((f) => f.name !== systemSelect.value).map((f) => {
+        const d = byName.get(f.name) || {};
+        return { name: f.name, title: d.title || f.name, cover: d.cover, kind: kind(f.name, f.size, d),
+                 state: imageState[f.name], inserting: inserting.has(f.name) };
+    });
+    for (const name of inserting)
+        if (!mounted.some((m) => m.name === name)) {
+            const d = byName.get(name) || {};
+            mounted.push({ name, title: d.title || name, cover: d.cover, kind: kind(name, d.size, d), inserting: true });
         }
-        systemSelect.value = value;
-        systemSelect.dispatchEvent(new Event('change'));
-    },
-    reset,
-});
+    const sel = systemSelect.selectedOptions[0];
+    const sys = shownFiles.find((f) => f.name === systemSelect.value);
+    Disks.update({ system: { value: systemSelect.value, label: sel ? sel.textContent : "Executor's own",
+                             disk: sys && { name: sys.name, kind: 'hd', state: imageState[sys.name] } },
+                   mounted, library, mountedUrls: [...params.getAll('disk'), ...picked()],
+                   shelf: (await shelved()).map((f) => ({ name: f.name, size: f.size })) });
+}
 
 async function download(name) {
     const blob = await window.executor.request('download', name);
@@ -377,25 +508,15 @@ async function download(name) {
     setTimeout(() => URL.revokeObjectURL(a.href), 60000);
 }
 
-// The Worker goes without saving (its overlay handles with it), then the
-// overlay is deleted and Executor starts again on the original.
-async function revert(f) {
-    if (!confirm(`Forget all changes to ${f.name}?`))
-        return;
-    generation++;
-    if (worker)
-        worker.terminate();
-    worker = null;
-    delete imageState[f.name];
+// The image's changes forgotten where they are kept (its overlay let go:
+// the Worker's ejected it, or gone).
+async function forgetChanges(f) {
     if (standalone) {
         await fetch(`api/sync/overlays/${imageKey(f)}`, { method: 'DELETE', cache: 'no-store' }).catch(() => {});
-        start();
         return;
     }
-    if (!opfs) {
-        start();                    // its changes were the Worker's
-        return;
-    }
+    if (!opfs)
+        return;                     // its changes were the Worker's
     const overlays = await (await uploads()).getDirectoryHandle('overlays', { create: true });
     for (let i = 0; i < 20; i++) {                  // until the old Worker lets go
         try {
@@ -412,21 +533,80 @@ async function revert(f) {
     if (account)
         await (await overlays.getDirectoryHandle(imageKey(f), { create: true }))
             .getFileHandle('revert', { create: true });
+}
+
+// Revert: the disk out of the Mac, its changes forgotten, back in as it
+// came. In use (or Executor not running): the Worker goes without saving
+// and Executor starts again on the original.
+async function revert(f) {
+    if (!confirm(`Forget all changes to ${f.name}? The disk goes back to how it came.`))
+        return;
+    if (live() && f.name !== systemSelect.value) {     // (the System's: a restart)
+        reverting.add(f.name);
+        const r = await takeOut(f.name);
+        if (r === 0) {
+            await forgetChanges(f);
+            reverting.delete(f.name);
+            delete imageState[f.name];
+            await putIn(f);
+            return;
+        }
+        reverting.delete(f.name);
+        if (r === FBSY && !confirm(`${f.name} is in use. Restart Executor to revert it?`))
+            return;
+    }
+    generation++;
+    if (worker)
+        worker.terminate();
+    worker = null;
+    delete imageState[f.name];
+    await forgetChanges(f);
     start();
 }
 
+// Disk images go in at once; an application (into "executor:Uploads")
+// restarts Executor, whose volume doesn't see a file put there under it.
 async function addFiles(files) {
-    generation++;                   // restarting (once the files are stored)
-    window.executor.frames = 0;
+    const restart = !live() || files.some((f) => !IMAGE.test(f.name));
+    if (restart) {
+        generation++;               // restarting (once the files are stored)
+        window.executor.frames = 0;
+    }
     for (const f of files)
         await store(f);
-    start();
+    if (restart)
+        return start();
+    const stored = await storedFiles();
+    for (const f of files)
+        await putIn(stored.find((s) => s.name === f.name) || f);
 }
 document.getElementById('add').addEventListener('change', async (e) => {
     const files = [...e.target.files];
     e.target.value = '';
     addFiles(files);
 });
+
+Disks.init({
+    add: addFiles,
+    insert: (d) => addLibraryDisk(d.url),
+    async insertShelved(name) {
+        const f = await unshelve(name);
+        if (f)
+            await putIn(f);
+        showFiles(await storedFiles());
+    },
+    forgetShelved,
+    eject,
+    revert(name) {
+        const f = shownFiles.find((x) => x.name === name);
+        if (f)
+            revert(f);
+    },
+    download,
+    reset,
+    systemSelect,
+});
+
 document.getElementById('restart').addEventListener('click', () => start());
 
 // Executor's own volume is kept per System choice (worker.js, volumes/KEY):
@@ -550,14 +730,29 @@ document.addEventListener('visibilitychange', () => {
     worker.postMessage({ type: 'visibility', hidden: document.visibilityState === 'hidden' });
 });
 
-// The System to run on: Executor's own (''), or a disk image's (its name),
-// remembered across visits.
-const IMAGE = /\.(img|image|dsk|hfs|iso|toast|cdr)$/i;
-const systemSelect = document.getElementById('system');
-systemSelect.addEventListener('change', () => {
-    Settings.set({ machine: { system: systemSelect.value } }).finally(start);
+// The System to run on: Executor's own (''), a disk image's (its name), or
+// a library System disk's (its url: put in, then that), remembered across
+// visits. The choice is in the Disks panel (disks.js).
+systemSelect.addEventListener('change', async () => {
+    const value = systemSelect.value;
+    const d = library.find((x) => x.url === value);
+    generation++;
+    await saveAndStop();            // (not live: the disk waits for the start)
+    if (d) {
+        const mounted = picked().some((u) => href(u) === href(d.url)) ? picked() : [...picked(), d.url];
+        await Settings.set({ machine: { system: fileName(d.url) }, disks: { mounted } });
+        try {
+            const file = await fetchDisk(d.url);
+            sessionFiles = sessionFiles.filter((f) => f.name !== file.name).concat(file);
+        } catch (e) {
+            status.textContent = `Cannot load ${d.url}: ${e.message}`;
+        }
+    } else {
+        await Settings.set({ machine: { system: value } }).catch(() => {});
+    }
+    start();
 });
-Settings.provide('systems', () => [...systemSelect.options].map((o) => o.value).filter(Boolean));
+Settings.provide('systems', () => [...systemSelect.options].map((o) => o.value).filter((v) => v && !v.includes('/')));
 
 // Fat applications' PowerPC code (mac-phoenix's --executor-ppc), remembered.
 const ppcBox = document.getElementById('ppc');
@@ -568,8 +763,11 @@ ppcBox.addEventListener('change', () => {
 
 function showSystems(files) {
     const want = Settings.get('machine.system');
+    const title = (name) => (library.find((d) => fileName(d.url) === name) || {}).title;
+    const offered = library.filter((d) => (d.tags || []).includes('system') && !files.some((f) => f.name === fileName(d.url)));
     systemSelect.replaceChildren(new Option("Executor's own", ''),
-        ...files.filter((f) => IMAGE.test(f.name)).map((f) => new Option(f.name, f.name)));
+        ...files.filter((f) => IMAGE.test(f.name) && !isCD(f.name)).map((f) => new Option(title(f.name) || f.name, f.name)),
+        ...offered.map((d) => new Option(`${d.title} (from the library)`, d.url)));
     systemSelect.value = [...systemSelect.options].some((o) => o.value === want) ? want : '';
     showDisks();
 }
@@ -737,7 +935,6 @@ async function start() {
     await disksFetched;
     const files = await storedFiles();
     showFiles(files);
-    showSystems(files);
 
     // A canvas hands its control over once: a fresh one per start.
     canvas = document.createElement('canvas');
@@ -755,7 +952,7 @@ async function start() {
                          system: systemSelect.value, ppc: ppcBox.checked,
                          volumeKey: volumeKey(files), sync: !!account, relay: !!account || standalone,
                          standalone,
-                         ids: imageIds, legacyKeys, log: Log.session,
+                         ids: imageIds, legacyKeys, cds: files.map((f) => f.name).filter(isCD), log: Log.session,
                          ram: Settings.get('machine.ram_mb'), depth: Settings.get('machine.depth'),
                          logtraps: Settings.get('advanced.logtraps'),
                          nesting: String(Settings.get('advanced.logtraps_nesting')),
@@ -792,6 +989,8 @@ async function start() {
                 resolve(m.result);
         } else if (m.type === 'notice') {
             status.textContent = m.text;
+        } else if (m.type === 'ejected') {
+            ejected(m.name);
         } else if (m.type === 'conflict') {
             worker.postMessage({ type: 'resolve', id: m.id, keep: confirm(conflictText(m)) ? 'mine' : 'account' });
         } else if (m.type === 'restart') {
