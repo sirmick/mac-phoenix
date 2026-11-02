@@ -867,6 +867,14 @@ set_tests_properties(desktop_labels_executor PROPERTIES
   TIMEOUT 150 LABELS "executor" SKIP_RETURN_CODE 77
   ENVIRONMENT "MACEMU_BINARY=$<TARGET_FILE:mac-phoenix>")
 
+# Two sessions on one --executor-system at once: the second runs on a copy
+# of its own (executor-systems/run/<pid>), both keep their BridgeAgent.
+add_test(NAME system_sessions_executor
+  COMMAND bash ${TEST_DIR}/test_executor_system_sessions.sh --port 18540)
+set_tests_properties(system_sessions_executor PROPERTIES
+  TIMEOUT 180 LABELS "executor" SKIP_RETURN_CODE 77
+  ENVIRONMENT "MACEMU_BINARY=$<TARGET_FILE:mac-phoenix>")
+
 # An alert left up idles the host and OK still answers: the 8.6 Finder's
 # Erase Disk alert on the read-only image, the emulator's CPU time while it
 # is up (Executor's ModalDialog waits a tick between events).
