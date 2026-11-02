@@ -22,6 +22,8 @@
 #if !defined(UNIX)
 #include <string.h>
 #endif
+#include <set>
+#include <string>
 
 #define HVCB VCB
 
@@ -484,6 +486,7 @@ extern OSErr ROMlib_writevcbp(HVCB *vcbp);
 extern void ROMlib_openfloppy(const char *dname, GUEST<LONGINT> *messp);
 extern void ROMlib_openharddisk(const char *dname, GUEST<LONGINT> *messp);
 extern bool ROMlib_readonly_images; /* MacPhoenix: open images read-only */
+extern std::set<std::string> ROMlib_locked_images; /* MacPhoenix: and these always (CDs) */
 extern void ROMlib_hfsinit(void);
 extern OSErr ROMlib_ejectfloppy(LONGINT floppyfd);
 extern OSErr ROMlib_readwrite(LONGINT fd, char *buffer, LONGINT count, LONGINT off,
