@@ -875,6 +875,15 @@ set_tests_properties(system_sessions_executor PROPERTIES
   TIMEOUT 180 LABELS "executor" SKIP_RETURN_CODE 77
   ENVIRONMENT "MACEMU_BINARY=$<TARGET_FILE:mac-phoenix>")
 
+# A PowerPC application launched a second time (BBEdit Lite 6.1 on 8.6,
+# then an odoc): the System's accelerated WDEF, prepared by the first, is the
+# system's, not the first launch's heap.
+add_test(NAME relaunch_ppc_executor
+  COMMAND bash ${TEST_DIR}/test_relaunch_ppc_executor.sh --port 18542)
+set_tests_properties(relaunch_ppc_executor PROPERTIES
+  TIMEOUT 240 LABELS "executor" SKIP_RETURN_CODE 77
+  ENVIRONMENT "MACEMU_BINARY=$<TARGET_FILE:mac-phoenix>")
+
 # An alert left up idles the host and OK still answers: the 8.6 Finder's
 # Erase Disk alert on the read-only image, the emulator's CPU time while it
 # is up (Executor's ModalDialog waits a tick between events).

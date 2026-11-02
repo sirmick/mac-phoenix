@@ -112,6 +112,12 @@ extern uint32_t ROMlib_call_cfm68k(uint32_t tvector, std::initializer_list<uint3
 extern void ROMlib_cfm_terminate();
 extern void ROMlib_cfm_process_exit(uint32_t part_lo, uint32_t part_hi);
 extern void ROMlib_cfm_application_start();
+/* MacPhoenix: fragments prepared while on are the system's, not the current
+   application's (an accelerated code resource in the system heap, which
+   outlives the application that first calls it): their sections in
+   temporary memory, kept and not terminated when the application quits.
+   Answers the previous setting. */
+extern bool ROMlib_cfm_system_owned(bool on);
 /* MacPhoenix: a Toolbox manager initialized (InitFonts, InitWindows,
    InitMenus): from 8.5 the library it is in (FontManager, WindowsLib,
    MenusLib) is connected to the application, so kFindLib finds it. */
