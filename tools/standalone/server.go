@@ -3,14 +3,12 @@ package main
 // The server: tools/web/server/app.py's API without accounts.
 //
 //	/                 the tab (embedded, or --site DIR)
-//	/login            the password, when there is one (else everything is open)
 //	/library.json     the library (library.go); /disks/NAME its images, with Range;
 //	                  /covers/NAME their covers
-//	/api/server       { standalone, version, password, signed_in } (no sign-in needed)
-//	/api/me           { name, owner, mode: "standalone" }, always (signed out too)
+//	/api/server       { standalone, version, tls }
+//	/api/me           { name, owner, mode: "standalone" }
 //	/api/session      POST ?id=ID[&take=1] the controlling tab (session.go);
 //	                  /api/session/release, PUT/GET /api/session/screen
-//	/api/login        POST { password }       /api/logout POST
 //	/api/settings     GET the settings; POST some of them (settings.go)
 //	/api/sync/...     overlays (overlay.go) and volumes (volumes.go), as app.py:
 //	    GET    overlays/KEY?since=V   records (u32 LE block, 4 KB) newer than V;
@@ -26,14 +24,13 @@ package main
 //	/relay            WebSocket: the tab's sockets (relay.go)
 //	/api/log, /api/shot, /api/logs[/DAY/NAME]   the tab's logs (logs.go)
 //
-// With a password, everything but /login, /api/login, /api/server,
-// /api/log and /api/shot needs the session cookie. Writes and /relay
+// Everything needs the cookie of the browser with the claim (claim.go),
+// which the first load of the tab takes: the site, the API, the disks,
+// /relay, the logs. Writes and /relay
 // from another site are refused (Origin against Host, Sec-Fetch-Site).
 // Every answer is cross-origin isolated (COOP/COEP).
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -53,11 +50,7 @@ import (
 )
 
 const (
-	cookieName     = "executor_session"
 	signedOutBody  = 64 << 10
-	loginFailures  = 10 // per address in loginWindow, then 429
-	loginWindow    = 10 * time.Minute
-	sessionLife    = 30 * 24 * time.Hour
 	maxConnections = 64
 	idle           = 60 * time.Second
 )
@@ -86,11 +79,11 @@ type Server struct {
 	settingsPath string
 	mu           sync.RWMutex
 	doc          map[string]any  // what settings.json has (the schema's document)
-	hash         string          // ... and the password's
 	override     func(*Settings) // the command line's
 	eff          Settings        // what applies
-	running      Settings        // what the listener was made with
-	pwOverride   string          // --password-file's hash
+	saved        Settings        // the document's, flags aside
+	started      *Settings       // ... as the server started: what the listener was made with
+	tls          bool            // it serves HTTPS
 	site         fs.FS
 	siteName     string
 	quiet        bool
@@ -101,10 +94,7 @@ type Server struct {
 	relay    *Relay
 	tabs     TabSessions
 	logMu    sync.Mutex
-
-	sessMu   sync.Mutex
-	sessions map[string]time.Time
-	failures map[string][]time.Time
+	claim    Claim
 }
 
 func (s *Server) settings() Settings {
@@ -113,17 +103,18 @@ func (s *Server) settings() Settings {
 	return s.eff
 }
 
-func (s *Server) applySettings(doc map[string]any, hash string) {
-	eff := typed(doc, hash, s.data)
+func (s *Server) applySettings(doc map[string]any) {
+	eff := typed(doc, s.data)
+	saved := eff
 	if s.override != nil {
 		s.override(&eff)
 	}
-	if s.pwOverride != "" {
-		eff.PasswordHash = s.pwOverride
-	}
 	s.mu.Lock()
 	old := s.eff
-	s.doc, s.hash, s.eff = doc, hash, eff
+	s.doc, s.eff, s.saved = doc, eff, saved
+	if s.started == nil {
+		s.started = &saved
+	}
 	s.mu.Unlock()
 	if old.Images != eff.Images || old.Images == "" {
 		paths := []string{}
@@ -133,8 +124,6 @@ func (s *Server) applySettings(doc map[string]any, hash string) {
 		s.ids.warm(paths)
 	}
 }
-
-func (s *Server) passwordSet() bool { return s.settings().PasswordHash != "" }
 
 // imageFor: the library image whose overlay key is key, if one is (by
 // the ids known: the tab has fetched the disk to have the key).
@@ -155,8 +144,7 @@ type ctx struct {
 	w      http.ResponseWriter
 	r      *http.Request
 	query  map[string]string
-	authed bool // signed in, or no password
-	signed bool // has a session (with a password)
+	authed bool // the browser with the claim
 	body   []byte
 	read   bool
 }
@@ -257,28 +245,22 @@ func (c *ctx) address() string {
 	return addr
 }
 
-func hostName(host string) string {
-	u, err := url.Parse("//" + host)
-	if err != nil {
-		return host
-	}
-	return u.Hostname()
-}
-
-func isLocal(host string) bool {
-	switch host {
-	case "localhost", "127.0.0.1", "::1":
-		return true
-	}
-	return false
-}
-
 func (c *ctx) secure() bool {
 	switch v := c.s.settings().SecureCookies.(type) {
 	case bool:
 		return v
 	}
-	return !isLocal(hostName(c.r.Host)) // "auto": but on this machine (plain http)
+	// "auto": over TLS, here or at a trusted proxy.
+	return c.r.TLS != nil || (c.address() != c.peer() && c.r.Header.Get("X-Forwarded-Proto") == "https")
+}
+
+// peer: the address the connection is from.
+func (c *ctx) peer() string {
+	addr, _, err := net.SplitHostPort(c.r.RemoteAddr)
+	if err != nil {
+		return c.r.RemoteAddr
+	}
+	return addr
 }
 
 func (c *ctx) sameOrigin() bool {
@@ -293,61 +275,9 @@ func (c *ctx) sameOrigin() bool {
 	return err == nil && u.Host == c.r.Host
 }
 
-// ---- sessions ----
-func (s *Server) session(token string) bool {
-	if token == "" {
-		return false
-	}
-	s.sessMu.Lock()
-	defer s.sessMu.Unlock()
-	t, ok := s.sessions[token]
-	if ok && time.Now().After(t) {
-		delete(s.sessions, token)
-		return false
-	}
-	return ok
-}
-
-func (s *Server) newSession() string {
-	b := make([]byte, 24)
-	rand.Read(b)
-	t := hex.EncodeToString(b)
-	s.sessMu.Lock()
-	s.sessions[t] = time.Now().Add(sessionLife)
-	s.saveSessions()
-	s.sessMu.Unlock()
-	return t
-}
-
-func (s *Server) endSession(token string) {
-	s.sessMu.Lock()
-	delete(s.sessions, token)
-	s.saveSessions()
-	s.sessMu.Unlock()
-}
-
-// The sessions last across restarts: DATA/sessions.json. Under sessMu.
-func (s *Server) saveSessions() {
-	now := time.Now()
-	for k, t := range s.sessions {
-		if now.After(t) {
-			delete(s.sessions, k)
-		}
-	}
-	if b, err := json.Marshal(s.sessions); err == nil {
-		writeAtomic(filepath.Join(s.data, "sessions.json"), b, 0o600)
-	}
-}
-
-func (s *Server) loadSessions() {
-	s.sessions = map[string]time.Time{}
-	if b, err := os.ReadFile(filepath.Join(s.data, "sessions.json")); err == nil {
-		json.Unmarshal(b, &s.sessions)
-	}
-}
-
+// ---- the cookie ----
 func (c *ctx) cookie() string {
-	k, err := c.r.Cookie(cookieName)
+	k, err := c.r.Cookie(cookieName(c.r.Host))
 	if err != nil {
 		return ""
 	}
@@ -359,22 +289,10 @@ func (c *ctx) setCookie(token string) {
 	if c.secure() {
 		attrs = append(attrs, "Secure")
 	}
-	if token != "" {
-		attrs = append(attrs, fmt.Sprintf("Max-Age=%d", int(sessionLife.Seconds())))
-	} else {
-		attrs = append(attrs, "Max-Age=0")
-	}
-	c.w.Header().Add("Set-Cookie", cookieName+"="+token+"; "+strings.Join(attrs, "; "))
-}
-
-func (s *Server) recentFailures(addr string, now time.Time) []time.Time {
-	var out []time.Time
-	for _, t := range s.failures[addr] {
-		if now.Sub(t) < loginWindow {
-			out = append(out, t)
-		}
-	}
-	return out
+	// Kept past the browser's restart; the token is no good after the
+	// server's anyway.
+	attrs = append(attrs, fmt.Sprintf("Max-Age=%d", 400*24*3600))
+	c.w.Header().Add("Set-Cookie", cookieName(c.r.Host)+"="+token+"; "+strings.Join(attrs, "; "))
 }
 
 // ---- routing ----
@@ -403,8 +321,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	for k, v := range r.URL.Query() {
 		c.query[k] = v[len(v)-1]
 	}
-	c.signed = s.passwordSet() && s.session(c.cookie())
-	c.authed = !s.passwordSet() || c.signed
+	c.authed = s.claim.holds(c.cookie())
 	err := s.dispatch(c)
 	var he *HTTPError
 	if errors.As(err, &he) {
@@ -437,7 +354,7 @@ func (s *Server) dispatch(c *ctx) error {
 			continue
 		}
 		if rt.auth && !c.authed {
-			return httpErr(401, "sign in first")
+			return c.refused()
 		}
 		return rt.fn(c, m)
 	}
@@ -452,15 +369,6 @@ func (s *Server) static(c *ctx, p string) error {
 	if strings.HasSuffix(p, "/") {
 		norm = path.Join(norm, "index.html")
 	}
-	if !c.authed {
-		if strings.HasSuffix(norm, ".html") {
-			if p == "" {
-				p = "/"
-			}
-			return c.redirect("/login?next=" + pyQuote(p, ""))
-		}
-		return httpErr(401, "sign in first")
-	}
 	name := strings.TrimPrefix(norm, "/")
 	if name == "" {
 		name = "."
@@ -468,6 +376,18 @@ func (s *Server) static(c *ctx, p string) error {
 	st, err := fs.Stat(s.site, name)
 	if err != nil {
 		st, err = fs.Stat(s.site, name+".gz") // embedded as NAME.gz only (static.go)
+	}
+	if !c.authed && err == nil && norm == "/index.html" && c.mayClaim() {
+		if token, ok := s.claim.take(); ok {
+			c.setCookie(token)
+			c.authed = true
+		}
+	}
+	if !c.authed {
+		if strings.HasSuffix(norm, ".html") || path.Ext(norm) == "" {
+			return c.sendRefusedPage()
+		}
+		return c.refused()
 	}
 	if err != nil {
 		if norm == "/index.html" {
@@ -482,56 +402,11 @@ func (s *Server) static(c *ctx, p string) error {
 }
 
 func init() {
-	handle("GET", "/login", false, func(c *ctx, m []string) error {
-		return c.sendBytes(200, []byte(loginPage), "text/html; charset=utf-8")
+	handle("GET", "/api/server", true, func(c *ctx, m []string) error {
+		return c.sendJSON(200, map[string]any{"standalone": true, "version": version, "tls": c.s.tls})
 	})
-	handle("GET", "/api/server", false, func(c *ctx, m []string) error {
-		return c.sendJSON(200, map[string]any{"standalone": true, "version": version,
-			"password": c.s.passwordSet(), "signed_in": c.authed})
-	})
-	// The mode, which the tab reads before anything: signed out too.
-	handle("GET", "/api/me", false, func(c *ctx, m []string) error {
+	handle("GET", "/api/me", true, func(c *ctx, m []string) error {
 		return c.sendJSON(200, map[string]any{"name": "local", "owner": true, "mode": "standalone"})
-	})
-	handle("POST", "/api/login", false, func(c *ctx, m []string) error {
-		s := c.s
-		addr := c.address()
-		now := time.Now()
-		s.sessMu.Lock()
-		many := len(s.recentFailures(addr, now)) >= loginFailures
-		s.sessMu.Unlock()
-		if many {
-			return httpErr(429, "too many attempts: try again later")
-		}
-		b, err := c.jsonBody()
-		if err != nil {
-			return err
-		}
-		pw, _ := b["password"].(string)
-		hash := s.settings().PasswordHash
-		if hash == "" {
-			return c.sendJSON(200, map[string]any{"name": "owner"}) // nothing to sign in to
-		}
-		if !checkPassword(hash, pw) {
-			s.sessMu.Lock()
-			s.failures[addr] = append(s.recentFailures(addr, now), now)
-			if len(s.failures) > 1000 {
-				for k := range s.failures {
-					if len(s.recentFailures(k, now)) == 0 {
-						delete(s.failures, k)
-					}
-				}
-			}
-			s.sessMu.Unlock()
-			return httpErr(401, "wrong password")
-		}
-		c.setCookie(s.newSession())
-		return c.sendJSON(200, map[string]any{"name": "owner"})
-	})
-	handle("POST", "/api/logout", false, func(c *ctx, m []string) error {
-		c.s.endSession(c.cookie())
-		c.setCookie("")
-		return c.sendJSON(200, map[string]any{})
 	})
 
 	// ---- settings ----
@@ -548,21 +423,10 @@ func init() {
 		if json.Unmarshal(b, &patch) != nil || patch == nil {
 			return httpErr(400, "not a JSON object")
 		}
-		// network.password: a string sets it; it is not a setting.
-		var pw *string
-		if n, ok := patch["network"].(map[string]any); ok {
-			if p, ok := n["password"].(string); ok {
-				pw = &p
-				delete(n, "password")
-			}
-		}
-		if pw != nil && !s.passwordSet() && !isLoopback(c.r.RemoteAddr) {
-			return httpErr(403, "the password from this machine only, or set one")
-		}
 		s.mu.RLock()
-		cur, hash := s.doc, s.hash
+		cur := s.doc
 		s.mu.RUnlock()
-		next, server, err := patchSettings(cur, patch)
+		next, err := patchSettings(cur, patch)
 		if err != nil {
 			fe, _ := err.(*fieldError)
 			path := ""
@@ -571,22 +435,10 @@ func init() {
 			}
 			return c.sendJSON(400, map[string]any{"error": err.Error(), "path": path})
 		}
-		if server && !s.passwordSet() && !isLoopback(c.r.RemoteAddr) {
-			return httpErr(403, "the server's settings from this machine only, or set a password")
-		}
-		if pw != nil {
-			hash = ""
-			if *pw != "" {
-				hash = hashPassword(*pw)
-			}
-		}
-		if err := saveSettings(s.settingsPath, next, hash); err != nil {
+		if err := saveSettings(s.settingsPath, next); err != nil {
 			return err
 		}
-		s.applySettings(next, hash)
-		if pw != nil && *pw != "" && !c.signed {
-			c.setCookie(s.newSession()) // whoever set it stays signed in
-		}
+		s.applySettings(next)
 		return c.sendJSON(200, s.settingsView(c))
 	})
 
@@ -783,57 +635,26 @@ func intQuery(c *ctx, k string, def int64) (int64, error) {
 	return n, nil
 }
 
-func isLoopback(remote string) bool {
-	host, _, err := net.SplitHostPort(remote)
-	if err != nil {
-		host = remote
-	}
-	ip := net.ParseIP(host)
-	return ip != nil && ip.IsLoopback()
-}
-
 func (s *Server) settingsView(c *ctx) map[string]any {
 	s.mu.RLock()
-	doc, eff, running := deepCopy(s.doc).(map[string]any), s.eff, s.running
+	doc, saved, started := deepCopy(s.doc).(map[string]any), s.saved, *s.started
 	s.mu.RUnlock()
-	doc["network"].(map[string]any)["password"] = eff.PasswordHash != ""
 	doc["advanced"].(map[string]any)["data"] = s.data
 	restart := []string{}
-	if eff.Bind != running.Bind {
+	// What was changed since the start (flags override both alike).
+	if saved.Bind != started.Bind {
 		restart = append(restart, "network.bind")
 	}
-	if eff.Port != running.Port && running.Port != 0 {
+	if saved.Port != started.Port {
 		restart = append(restart, "network.port")
 	}
-	if eff.TLSCert != running.TLSCert {
+	if saved.TLSCert != started.TLSCert {
 		restart = append(restart, "network.tls_cert")
 	}
-	if eff.TLSKey != running.TLSKey {
+	if saved.TLSKey != started.TLSKey {
 		restart = append(restart, "network.tls_key")
 	}
 	return map[string]any{"version": settingsSchema.Version, "settings": doc,
 		"scopes": []string{"page", "server"}, "restart_needed": restart,
-		"can_change_server": s.passwordSet() || isLoopback(c.r.RemoteAddr), "file": s.settingsPath}
+		"can_change_server": true, "file": s.settingsPath}
 }
-
-const loginPage = `<!doctype html>
-<html><head><meta charset="utf-8"><title>Executor: sign in</title>
-<meta name="viewport" content="width=device-width">
-<style>body{font:15px system-ui,sans-serif;max-width:22em;margin:5em auto}input,button{font:inherit;padding:.3em}#err{color:#b00}</style>
-</head><body>
-<h1>Executor</h1>
-<form id="f"><p><label>Password <input id="pw" type="password" autofocus autocomplete="current-password"></label>
-<button>Sign in</button></p><p id="err"></p></form>
-<script>
-document.getElementById('f').onsubmit = async (e) => {
-    e.preventDefault();
-    const res = await fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: document.getElementById('pw').value }) });
-    if (res.ok) {
-        const next = new URLSearchParams(location.search).get('next') || '/';
-        location.href = next.startsWith('/') && !next.startsWith('//') ? next : '/';
-    } else
-        document.getElementById('err').textContent = (await res.json()).error;
-};
-</script></body></html>
-`

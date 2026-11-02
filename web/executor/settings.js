@@ -152,9 +152,6 @@ const Settings = (() => {
     function patched(d, patch, within = scopes) {
         patch = clone(patch);
         delete patch.version;
-        const pw = patch.network && typeof patch.network.password === 'string';
-        if (pw)
-            delete patch.network.password;
         for (const p of leaves(patch).sort()) {
             const n = lookup(p);
             if (!n)
@@ -580,7 +577,7 @@ const Settings = (() => {
         if (p['x-scope'] === 'server' && !canChangeServer && !p.readOnly) {
             const note = document.createElement('div');
             note.className = 'settings-override';
-            note.textContent = 'From this computer only, or with a password set.';
+            note.textContent = "Set by the server's owner.";
             right.append(note);
         }
         right.append(help, error);
@@ -593,8 +590,6 @@ const Settings = (() => {
         const widget = p['x-widget'];
         const types = [].concat(p.type || []);
         let el;
-        if (widget === 'password')
-            return passwordControl(id, commit, locked);
         if (widget === 'disk-list')
             return diskList(id, value, commit, locked);
         if (p['x-choices']) {
@@ -676,39 +671,6 @@ const Settings = (() => {
         el.id = id;
         el.disabled = locked;
         return el;
-    }
-
-    function passwordControl(id, commit, locked) {
-        const wrap = document.createElement('span');
-        wrap.className = 'settings-password';
-        const state = document.createElement('span');
-        const input = document.createElement('input');
-        input.type = 'password';
-        input.id = id;
-        input.autocomplete = 'new-password';
-        input.placeholder = 'a new password';
-        input.disabled = locked;
-        const refresh = () => {
-            state.textContent = at(doc, 'network.password') ? 'Set. ' : 'None. ';
-            clear.hidden = !at(doc, 'network.password');
-        };
-        const setIt = button('Set', '', async () => {
-            if (!input.value)
-                return;
-            await commit(input.value);
-            input.value = '';
-            refresh();
-        });
-        const clear = button('Remove', '', async () => {
-            if (confirm('Remove the password? Anyone who reaches the server can use Executor.')) {
-                await commit('');
-                refresh();
-            }
-        });
-        setIt.disabled = clear.disabled = locked;
-        refresh();
-        wrap.append(state, input, setIt, clear);
-        return wrap;
     }
 
     // The library's disks mounted, in order: up, down, remove, add.

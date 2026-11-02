@@ -191,10 +191,11 @@ if(PYTHON3_COMMAND)
         COMMAND ${PYTHON3_COMMAND} ${PROJECT_SOURCE_DIR}/tools/web/server/test_server.py)
     set_tests_properties(executor.web.server PROPERTIES LABELS "executor;web" TIMEOUT 60)
 endif()
-# tools/standalone, the Go server: go test, then the same checks against it.
+# tools/standalone, the Go server: go test (the API over a real connection,
+# the claim, the relay, the program itself).
 find_program(GO_COMMAND go PATHS /usr/local/go/bin $ENV{HOME}/opt/go/bin)
 find_program(MAKE_COMMAND make)
-if(PYTHON3_COMMAND AND GO_COMMAND AND MAKE_COMMAND)
+if(GO_COMMAND AND MAKE_COMMAND)
     add_test(NAME executor.web.standalone_server
         COMMAND ${MAKE_COMMAND} -C ${PROJECT_SOURCE_DIR}/tools/standalone test GO=${GO_COMMAND}
                 OUT=${CMAKE_CURRENT_BINARY_DIR}/executor-standalone)
@@ -219,6 +220,15 @@ if(NODE_COMMAND AND PYTHON3_COMMAND)
         COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_settings.mjs
                 $<TARGET_FILE_DIR:executor-web> ${CMAKE_CURRENT_BINARY_DIR}/settings-shots)
     set_tests_properties(executor.web.settings PROPERTIES
+        LABELS "executor;web" TIMEOUT 300 SKIP_RETURN_CODE 77
+        ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM};TMPDIR=${CMAKE_CURRENT_BINARY_DIR};GO=${GO_COMMAND}")
+    # The claim with tools/standalone (claim.go; built here with go): the
+    # first browser has it, another gets the in-use page, a restart frees
+    # it and the tab says to reload.
+    add_test(NAME executor.web.claim
+        COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_claim.mjs
+                $<TARGET_FILE_DIR:executor-web> ${CMAKE_CURRENT_BINARY_DIR}/claim-shots)
+    set_tests_properties(executor.web.claim PROPERTIES
         LABELS "executor;web" TIMEOUT 300 SKIP_RETURN_CODE 77
         ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM};TMPDIR=${CMAKE_CURRENT_BINARY_DIR};GO=${GO_COMMAND}")
     set_tests_properties(executor.web.server_sync executor.web.server_lazy executor.web.standalone PROPERTIES
