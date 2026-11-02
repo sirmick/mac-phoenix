@@ -4,7 +4,8 @@ package main
 //
 //	/                 the tab (embedded, or --site DIR)
 //	/login            the password, when there is one (else everything is open)
-//	/library.json     the library (library.go); /disks/NAME its images, with Range
+//	/library.json     the library (library.go); /disks/NAME its images, with Range;
+//	                  /covers/NAME their covers
 //	/api/server       { standalone, version, password, signed_in } (no sign-in needed)
 //	/api/me           { name, owner, mode: "standalone" }, always (signed out too)
 //	/api/session      POST ?id=ID[&take=1] the controlling tab (session.go);
@@ -606,6 +607,15 @@ func init() {
 				return httpErr(404, "not in the library")
 			}
 			return sendFile(c, source{os.DirFS(st.Images), d.Name}, id, map[string]string{"X-Image-Id": id})
+		}
+		return httpErr(404, "not in the library")
+	})
+	handle("GET", "/covers/(.+)", true, func(c *ctx, m []string) error {
+		st := c.s.settings()
+		for _, d := range catalog(st.Images, st.Include, st.Exclude) {
+			if d.cover == m[1] {
+				return sendFile(c, source{os.DirFS(st.Images), d.cover}, "", nil)
+			}
 		}
 		return httpErr(404, "not in the library")
 	})

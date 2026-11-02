@@ -76,6 +76,14 @@ class ServerTest(unittest.TestCase):
             json.dump({"title": "Disk A", "note": "a note", "tags": ["68k"]}, f)
         with open(os.path.join(images, "secret.img"), "wb") as f:
             f.write(b"x")                             # no record: not offered
+        with open(os.path.join(images, "c.iso"), "wb") as f:
+            f.write(b"\0" * 4096)                    # a CD, with its cover beside it
+        with open(os.path.join(images, "c.iso.json"), "w") as f:
+            json.dump({"title": "CD C", "tags": ["cd"], "cover": "c.jpg"}, f)
+        with open(os.path.join(images, "c.jpg"), "wb") as f:
+            f.write(b"cover")
+        with open(os.path.join(images, "d.jpg"), "wb") as f:
+            f.write(b"not a cover")
         if BINARY:
             cls.server = Binary(cls.tmp, site, images)
             cls.port = cls.server.server_address[1]
@@ -141,10 +149,16 @@ class ServerTest(unittest.TestCase):
         self.assertEqual(self.request("GET", "/../data/accounts.sqlite", cookie=cookie)[0].status, 404)
         r, data = self.request("GET", "/library.json", cookie=cookie)
         lib = json.loads(data)
-        self.assertEqual([d["title"] for d in lib], ["Disk A"])
+        self.assertEqual([d["title"] for d in lib], ["Disk A", "CD C"])
         self.assertEqual(lib[0]["url"], "disks/a.img")
         self.assertEqual(lib[0]["size"], len(self.disk))
+        self.assertNotIn("cover", lib[0])
         self.assertEqual(self.request("GET", "/disks/secret.img", cookie=cookie)[0].status, 404)
+        self.assertEqual((lib[1]["url"], lib[1]["cover"]), ("disks/c.iso", "covers/c.jpg"))
+        r, data = self.request("GET", "/covers/c.jpg", cookie=cookie)
+        self.assertEqual((r.status, data), (200, b"cover"))
+        self.assertEqual(self.request("GET", "/covers/d.jpg", cookie=cookie)[0].status, 404)
+        self.assertEqual(self.request("GET", "/covers/c.jpg")[0].status, 401)
 
     def test_logs(self):
         r, _ = self.request("POST", "/api/log?session=abc", b"x")

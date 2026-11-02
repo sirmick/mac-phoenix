@@ -54,7 +54,7 @@ func defaultSettings(data string) Settings {
 		Bind:           "127.0.0.1",
 		Port:           8090,
 		Images:         filepath.Join(data, "images"),
-		Include:        []string{"*.img"},
+		Include:        []string{"*.img", "*.iso"},
 		Exclude:        []string{},
 		SecureCookies:  "auto",
 		TrustedProxies: []string{},

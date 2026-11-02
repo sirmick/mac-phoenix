@@ -3,7 +3,9 @@
 provisioning/build.py writes NAME.img.json beside each image it makes,
 with a title, tags and a note; every image with a record that the
 include/exclude patterns let through is in /library.json, the tab's list
-(web/executor/main.js), and is served at disks/NAME.
+(web/executor/main.js), and is served at disks/NAME. A record's "cover",
+a picture beside the image (CDs: tools/web/make_library.py), is served at
+covers/NAME.
 
 Each disk's id is its content's (SHA-256, the first 24 digits): its ETag
 and X-Image-Id, and the tab keys a disk's changes (its overlay) on it, so
@@ -67,7 +69,7 @@ class Ids:
         threading.Thread(target=run, daemon=True).start()
 
 
-def catalog(images, include=("*.img",), exclude=()):
+def catalog(images, include=("*.img", "*.iso"), exclude=()):
     out = []
     if not images or not os.path.isdir(images):
         return out
@@ -84,9 +86,15 @@ def catalog(images, include=("*.img",), exclude=()):
                 r = json.load(f)
         except (OSError, ValueError):
             continue
-        out.append({"name": name, "title": r.get("title") or name, "note": r.get("note", ""),
-                    "tags": r.get("tags", []), "size": os.path.getsize(path),
-                    "url": "disks/" + quote(name)})
+        d = {"name": name, "title": r.get("title") or name, "note": r.get("note", ""),
+             "tags": r.get("tags", []), "size": os.path.getsize(path),
+             "url": "disks/" + quote(name)}
+        cover = r.get("cover")
+        if (isinstance(cover, str) and cover == os.path.basename(cover)
+                and os.path.isfile(os.path.join(images, cover))):
+            d["cover"] = cover
+            d["cover_url"] = "covers/" + quote(cover)
+        out.append(d)
     return out
 
 
@@ -94,5 +102,13 @@ def find(images, include, exclude, name):
     """The path of a disk in the catalog, or None."""
     for d in catalog(images, include, exclude):
         if d["name"] == name:
+            return os.path.join(images, name)
+    return None
+
+
+def find_cover(images, include, exclude, name):
+    """The path of a catalog disk's cover, or None."""
+    for d in catalog(images, include, exclude):
+        if d.get("cover") == name:
             return os.path.join(images, name)
     return None

@@ -20,7 +20,7 @@ DEFAULTS = {
     },
     "library": {
         "images": "~/storage/images",
-        "include": ["*.img"],
+        "include": ["*.img", "*.iso"],
         "exclude": [],
     },
     "relay": {

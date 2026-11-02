@@ -414,7 +414,8 @@ def library_auth(h):
 @route("GET", "/library.json", auth=False)
 def library_json(h):
     library_auth(h)
-    h.send_json(200, [{k: d[k] for k in ("title", "url", "note", "tags", "size")}
+    h.send_json(200, [{**{k: d[k] for k in ("title", "url", "note", "tags", "size")},
+                       **({"cover": d["cover_url"]} if "cover_url" in d else {})}
                       for d in library.catalog(*lib_args(h))])
 
 
@@ -426,6 +427,15 @@ def disk(h, name):
         raise HttpError(404, "not in the library")
     ident = h.app.ids.get(path)
     static.send_file(h, path, head=h.command == "HEAD", tag=ident, headers=[("X-Image-Id", ident)])
+
+
+@route("GET", "/covers/(.+)", auth=False)
+def cover(h, name):
+    library_auth(h)
+    path = library.find_cover(*lib_args(h), name)
+    if not path:
+        raise HttpError(404, "not in the library")
+    static.send_file(h, path, head=h.command == "HEAD")
 
 
 # ---- sync ----
