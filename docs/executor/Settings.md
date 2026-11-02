@@ -23,7 +23,7 @@ differs: copy it after editing).
 {
   "version": 2,
   "machine":  { "system": "", "ram_mb": 0, "screen": "640x480", "depth": 0, "ppc": false },
-  "disks":    { "mounted": [], "images": "", "include": ["*.img"], "exclude": [] },
+  "disks":    { "mounted": [], "images": "", "include": ["*.img", "*.iso"], "exclude": [] },
   "input":    { "command_key": "meta", "keyboard_capture": true, "right_click": "control" },
   "display":  { "scale": 0, "smoothing": false, "fullscreen_button": true },
   "sound":    { "enabled": true, "volume": 80 },

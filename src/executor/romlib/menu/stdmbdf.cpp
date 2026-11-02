@@ -114,7 +114,8 @@ static void platinum_title(muelem *elt, bool hilite_p, bool bar_selected)
         ir.bottom = ir.top + 16;
         ir.left = title_left(elt) + (kAppleTitleWidth - 16) / 2;
         ir.right = ir.left + 16;
-        PlotIconID(&ir, atNone, white ? ttSelected : ttNone, kAppleTitleIcon);
+        PlotIconID(&ir, atNone, white ? ttSelected : !(MI_ENABLE_FLAGS(mh) & 1) ? ttDisabled : ttNone,
+                   kAppleTitleIcon);
         return;
     }
     if(ROMlib_icon_title_p(mh))

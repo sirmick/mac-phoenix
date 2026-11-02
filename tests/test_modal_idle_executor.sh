@@ -12,8 +12,11 @@
 # Selects Macintosh HD (the read-only 8.6 image) and picks Special > Erase
 # Disk..., which answers with a stop alert ("could not be erased, because
 # the disk is locked"); measures the emulator's CPU time over 3 seconds,
-# then clicks OK and checks the alert is gone. The coordinates are those of
-# a fresh 8.6 desktop on a 640x480 screen with no other disk.
+# then clicks OK and checks the alert is gone. While the alert is up the
+# menu bar is as a G3's: the application's menus disabled (File drawn
+# grey, no Special title selected), Help as it was; after OK, File black
+# again (ModalDialogMenuSetup). The coordinates are those of a fresh 8.6
+# desktop on a 640x480 screen with no other disk.
 #
 # Usage:
 #   tests/test_modal_idle_executor.sh [--timeout N] [--port N]
@@ -119,6 +122,24 @@ if [[ $(red alert 150 95 195 140) -lt 100 ]]; then
     echo "FAIL: no stop alert after Special > Erase Disk... (see the coordinates in this script)"; exit 1
 fi
 
+# Black pixels in a menu title (x0 x1, the bar's text rows)
+black() {
+    python3 - "$WORK/$1.png" "$2" "$3" <<'EOF2'
+import sys
+from PIL import Image
+im = Image.open(sys.argv[1]).convert('RGB')
+x0, x1 = map(int, sys.argv[2:4])
+print(sum(1 for x in range(x0, x1) for y in range(3, 17) if im.getpixel((x, y)) == (0, 0, 0)))
+EOF2
+}
+# File at 40..66, Special 155..205, Help 215..250
+if [[ $(black alert 40 66) -gt 0 || $(black alert 155 205) -gt 0 ]]; then
+    echo "FAIL: File/Special not disabled under the alert"; exit 1
+fi
+if [[ $(black alert 215 250) -lt 50 ]]; then
+    echo "FAIL: Help disabled under the alert (the system menus stay as they were)"; exit 1
+fi
+
 HZ=$(getconf CLK_TCK)
 t0=$(ticks); sleep 3; t1=$(ticks)
 pct=$(( (t1 - t0) * 100 / (3 * HZ) ))
@@ -131,7 +152,10 @@ shot after
 if [[ $(red after 150 95 195 140) -gt 0 ]]; then
     echo "FAIL: the alert is still up after clicking OK"; exit 1
 fi
+if [[ $(black after 40 66) -lt 50 ]]; then
+    echo "FAIL: File still disabled after the alert"; exit 1
+fi
 if [[ $pct -ge 50 ]]; then
     echo "FAIL: the emulator took ${pct}% of a core with an alert up (ModalDialog spinning)"; exit 1
 fi
-echo "PASS: alert idles (${pct}%) and OK dismisses it"
+echo "PASS: alert idles (${pct}%), menus disabled meanwhile, OK dismisses it"

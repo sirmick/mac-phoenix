@@ -133,6 +133,30 @@ be gone. Both builds read it (`Data:Hotline Prefs`). Through the net bridge
 (`--network socket`) Hotline lists hltracker.com's servers and connects to
 them, and MR Browser reaches MR's API.
 
+## CDs
+
+Magazine cover discs, kept as they came: `provisioning/cds.json` lists
+them (title, magazine, issue, date, publisher, notable contents, cover),
+`media.json` pins each image and its cover scan (dir `images`, MD5 and
+SHA-256, the archive.org item), and `provisioning/cds.py [--fetch]` checks
+them (pinned digests, an HFS volume behind the partition map with the
+expected name) and writes each record, `NAME.iso.json`, beside the image.
+They mount as CDs on the ROM machines (`--cdrom`) and as read-only disks on
+Executor (`--disk`); `tools/web/make_library.py` offers them on the site
+with their covers.
+
+| Image | Volume | What |
+|---|---|---|
+| `macaddict-016-1997-12.iso` | MacAddict16 | MacAddict #16, December 1997: Quake, Fallout and Photoshop 4.0 demos, Mac OS 7.6.1 Update, QuickDraw 3D 1.5.3, OpenDoc, SK8 |
+| `macaddict-025-1998-09.iso` | MacAddict 25 | #25, September 1998: Mac OS 8.5 Preview Pack, Myth demo, QuickTime 3.0, Drive Setup 1.5 |
+| `macaddict-058-2001-06.iso` | MacAddict 58 | #58, June 2001: Classic and early Mac OS X (Carbon) software, Marathon Rubicon |
+| `macaddict-063-2001-11.iso` | MacAddict 63 | #63, November 2001: Alice, Aliens vs. Predator and Escape from Monkey Island demos, REALbasic 3.5 |
+
+Toast made them all: an Apple partition map of 512-byte blocks, one
+`Apple_HFS` partition. #16 has a second dump on archive.org
+(`macaddict-cd-016`, 300 KB longer); its item has the sleeve scans, the
+cover used here.
+
 ## The Installers disks
 
 | Image | What |

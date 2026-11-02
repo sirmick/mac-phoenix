@@ -66,7 +66,7 @@
           "x-widget": "path"
         },
         "include": {
-          "type": "array", "maxItems": 64, "default": ["*.img"], "x-scope": "server", "x-apply": "live",
+          "type": "array", "maxItems": 64, "default": ["*.img", "*.iso"], "x-scope": "server", "x-apply": "live",
           "items": { "type": "string", "minLength": 1, "maxLength": 255 },
           "title": "Offer", "description": "File name patterns the library offers.", "x-widget": "words"
         },

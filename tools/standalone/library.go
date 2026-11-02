@@ -3,7 +3,8 @@ package main
 // The library, as tools/web/server/library.py: every image in the images
 // directory with a record (NAME.img.json: title, tags, note) that the
 // include/exclude patterns let through is in /library.json and served at
-// disks/NAME.
+// disks/NAME; a record's "cover", a picture beside the image, at
+// covers/NAME.
 //
 // Each disk's id is its content's (SHA-256, the first 24 digits): its
 // ETag and X-Image-Id; the tab keys a disk's overlay on it (NAME-ID).
@@ -30,6 +31,8 @@ type Disk struct {
 	Note  string   `json:"note"`
 	Tags  []string `json:"tags"`
 	Size  int64    `json:"size"`
+	Cover string   `json:"cover,omitempty"` // covers/NAME
+	cover string
 }
 
 func catalog(images string, include, exclude []string) []Disk {
@@ -68,6 +71,7 @@ func catalog(images string, include, exclude []string) []Disk {
 			Title string   `json:"title"`
 			Note  string   `json:"note"`
 			Tags  []string `json:"tags"`
+			Cover string   `json:"cover"`
 		}
 		if json.Unmarshal(b, &r) != nil {
 			continue
@@ -78,8 +82,14 @@ func catalog(images string, include, exclude []string) []Disk {
 		if r.Tags == nil {
 			r.Tags = []string{}
 		}
-		out = append(out, Disk{Name: name, Title: r.Title, Note: r.Note, Tags: r.Tags, Size: st.Size(),
-			URL: "disks/" + pyQuote(name, "/")})
+		d := Disk{Name: name, Title: r.Title, Note: r.Note, Tags: r.Tags, Size: st.Size(),
+			URL: "disks/" + pyQuote(name, "/")}
+		if r.Cover != "" && r.Cover == filepath.Base(r.Cover) {
+			if cst, err := os.Stat(filepath.Join(images, r.Cover)); err == nil && cst.Mode().IsRegular() {
+				d.cover, d.Cover = r.Cover, "covers/"+pyQuote(r.Cover, "/")
+			}
+		}
+		out = append(out, d)
 	}
 	return out
 }
