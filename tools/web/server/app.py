@@ -29,6 +29,8 @@
         POST   objects/missing        { shas } -> { missing }
         PUT    objects/SHA, GET objects/SHA
         GET    (nothing after sync/)  what is kept: { overlays, volumes }
+    /api/settings     GET the user's settings for the tab; POST a merge patch of
+                      them (settings.py; the page's half of settings.schema.json)
     /relay            WebSocket: the tab's sockets (relay.py, [relay])
     /api/log          POST ?session=ID, text: lines the tab printed (log.js),
                       appended to DATA/logs/DAY/ID.log (signed out too: 64 KB
@@ -64,6 +66,7 @@ from urllib.parse import parse_qs, quote, unquote, urlsplit
 
 from . import accounts as accounts_mod
 from . import library, relay, static
+from .settings import FieldError, SettingsStore
 from .session import SCREEN_MAX, Sessions
 from .sync import SyncError, SyncStore
 
@@ -93,6 +96,7 @@ class App:
         os.makedirs(data, exist_ok=True)
         self.accounts = accounts_mod.Accounts(os.path.join(data, "accounts.sqlite"))
         self.sync = SyncStore(data)
+        self.settings = SettingsStore(data)
         self.ids = library.Ids(os.path.join(data, "image-ids.json"))
         self.failures = {}                  # ("address" | "name", value) -> times
         self.failures_lock = threading.Lock()
@@ -436,6 +440,28 @@ def cover(h, name):
     if not path:
         raise HttpError(404, "not in the library")
     static.send_file(h, path, head=h.command == "HEAD")
+
+
+# ---- settings ----
+@route("GET", "/api/settings")
+def settings_get(h):
+    s = h.app.settings
+    h.send_json(200, s.view(s.get(h.user["id"])))
+
+
+@route("POST", "/api/settings")
+def settings_post(h):
+    b = h.json_body()
+    if not isinstance(b, dict):
+        raise HttpError(400, "not a JSON object")
+    s = h.app.settings
+    try:
+        doc = s.post(h.user["id"], b)
+    except FieldError as e:
+        raise HttpError(400, str(e), path=e.path)
+    except PermissionError as e:
+        raise HttpError(403, str(e))
+    h.send_json(200, s.view(doc))
 
 
 # ---- sync ----

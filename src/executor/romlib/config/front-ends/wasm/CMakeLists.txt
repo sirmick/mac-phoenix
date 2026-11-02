@@ -213,6 +213,14 @@ if(NODE_COMMAND AND PYTHON3_COMMAND)
     add_test(NAME executor.web.standalone
         COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_standalone.mjs
                 $<TARGET_FILE_DIR:executor-web>)
+    # The Settings dialog (settings.js) kept in the browser, by tools/standalone
+    # (settings.json; built here with go) and per user by tools/web/server.
+    add_test(NAME executor.web.settings
+        COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_settings.mjs
+                $<TARGET_FILE_DIR:executor-web> ${CMAKE_CURRENT_BINARY_DIR}/settings-shots)
+    set_tests_properties(executor.web.settings PROPERTIES
+        LABELS "executor;web" TIMEOUT 300 SKIP_RETURN_CODE 77
+        ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM};TMPDIR=${CMAKE_CURRENT_BINARY_DIR};GO=${GO_COMMAND}")
     set_tests_properties(executor.web.server_sync executor.web.server_lazy executor.web.standalone PROPERTIES
         LABELS "executor;web" TIMEOUT 300 SKIP_RETURN_CODE 77
         ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM}")

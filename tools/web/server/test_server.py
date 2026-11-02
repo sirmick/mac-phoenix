@@ -28,7 +28,7 @@ import threading
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from server import app, backup, config, relay, static  # noqa: E402
+from server import app, backup, config, relay, settings, static  # noqa: E402
 
 BINARY = os.environ.get("EXECUTOR_WEB_SERVER_BINARY")
 accounts_only = unittest.skipIf(BINARY, "accounts: the Python server's")
@@ -351,9 +351,57 @@ class ServerTest(unittest.TestCase):
                                                        "Sec-WebSocket-Key": "x"}, cookie=cookie)
         self.assertEqual(r.status, 403)
 
+    # ---- settings (settings.schema.json; tools/standalone's are the same) ----
+    def test_settings(self):
+        cookie = self.login()
+        r, body = self.request("GET", "/api/settings", cookie=cookie)
+        self.assertEqual(r.status, 200)
+        v = json.loads(body)
+        self.assertEqual((v["version"], v["settings"]["machine"]["screen"]), (2, "640x480"))
+        r, body = self.request("POST", "/api/settings", {"machine": {"ram_mb": 96}, "input": {"command_key": "ctrl"}},
+                               cookie=cookie)
+        self.assertEqual(r.status, 200, body)
+        r, body = self.request("POST", "/api/settings", {"sound": {"volume": "loud"}}, cookie=cookie)
+        self.assertEqual((r.status, json.loads(body)["path"]), (400, "sound.volume"))
+        v = json.loads(self.request("GET", "/api/settings", cookie=cookie)[1])["settings"]
+        self.assertEqual((v["machine"]["ram_mb"], v["input"]["command_key"], v["sound"]["volume"]), (96, "ctrl", 80))
+        r, _ = self.request("POST", "/api/settings", {"machine": None, "input": None}, cookie=cookie)
+        v = json.loads(self.request("GET", "/api/settings", cookie=cookie)[1])["settings"]
+        self.assertEqual((v["machine"]["ram_mb"], v["input"]["command_key"]), (0, "meta"))
+        self.assertEqual(self.request("GET", "/api/settings")[0].status, 401)
+        # The server's own: tools/standalone's to change; a hosted site's are its configuration's.
+        r, _ = self.request("POST", "/api/settings", {"network": {"relay_max_sockets": 16}}, cookie=cookie)
+        self.assertEqual(r.status, 200 if BINARY else 403)
+        if BINARY:
+            self.request("POST", "/api/settings", {"network": {"relay_max_sockets": None}}, cookie=cookie)
+        else:
+            self.assertNotIn("network", v)
+
+    @unittest.skipIf(BINARY, "the Python checks (go test has the Go ones)")
+    def test_settings_cases(self):
+        with open(os.path.join(settings.ROOT, "web", "tests", "settings_cases.json")) as f:
+            cases = json.load(f)
+        schema = settings.Schema.load()
+        schema.check(schema.defaults())
+        for c in cases["patches"]:
+            doc = schema.patch(schema.defaults(), c["start"]) if "start" in c else schema.defaults()
+            with self.subTest(patch=c["patch"]):
+                if "error" in c:
+                    with self.assertRaises(settings.FieldError) as e:
+                        schema.patch(doc, c["patch"])
+                    self.assertEqual(e.exception.path, c["error"])
+                    continue
+                out = schema.patch(doc, c["patch"])
+                for path, want in c["expect"].items():
+                    got = out
+                    for k in path.split("."):
+                        got = got[k]
+                    self.assertEqual(got, want, path)
+
     def trust(self, proxies):
         if BINARY:
-            r, _ = self.request("POST", "/api/settings", {"trusted_proxies": proxies}, cookie=self.login())
+            r, _ = self.request("POST", "/api/settings", {"network": {"trusted_proxies": proxies}},
+                                cookie=self.login())
             self.assertEqual(r.status, 200)
         else:
             self.server.app.cfg["server"]["trusted_proxies"] = proxies
@@ -401,7 +449,8 @@ class ServerTest(unittest.TestCase):
         c = dict(config.DEFAULTS["relay"], ports=["1-65535"], allow_private=True)
         c.update(cfg)
         if BINARY:
-            r, _ = self.request("POST", "/api/settings", {"relay": c}, cookie=self.login())
+            r, _ = self.request("POST", "/api/settings", {"network": {f"relay_{k}": v for k, v in c.items()}},
+                                cookie=self.login())
             self.assertEqual(r.status, 200)
         else:
             self.server.app.relay = relay.Relay(c)

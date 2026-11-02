@@ -1,0 +1,253 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "settings.schema.json",
+  "title": "Executor settings",
+  "description": "settings.json: the tab's and its server's settings (docs/executor/Settings.md). The one source of defaults, types, ranges, labels and help: tools/standalone and tools/web/server validate with it, settings.js makes the dialog from it. x-scope: page (the tab's; per user when signed in to a hosted site) or server (tools/standalone's own). x-apply: live, executor (Executor restarts to apply), server (at the server's next start). x-choices: options the page fills in (systems: disk images; screens).",
+  "type": "object",
+  "x-version": 2,
+  "additionalProperties": false,
+  "properties": {
+    "version": { "type": "integer", "minimum": 1, "maximum": 2, "default": 2 },
+    "machine": {
+      "type": "object",
+      "title": "Machine",
+      "description": "The Mac Executor pretends to be.",
+      "additionalProperties": false,
+      "properties": {
+        "system": {
+          "type": "string", "maxLength": 255, "default": "", "x-scope": "page", "x-apply": "executor",
+          "title": "System",
+          "description": "Apple's System and Finder from one of your disk images, or Executor's own.",
+          "x-choices": "systems"
+        },
+        "ram_mb": {
+          "type": "integer", "minimum": 0, "maximum": 512, "default": 0, "x-scope": "page", "x-apply": "executor",
+          "title": "Memory (MB)",
+          "description": "0: as the System needs (32 MB on Executor's own, 64 on Apple's).",
+          "x-widget": "number"
+        },
+        "screen": {
+          "type": "string", "pattern": "^[1-9][0-9]{2,3}x[1-9][0-9]{2,3}$", "default": "640x480",
+          "x-scope": "page", "x-apply": "executor",
+          "title": "Screen size",
+          "description": "Width x height in Mac pixels.",
+          "examples": ["512x342", "640x480", "800x600", "832x624", "1024x768", "1152x870", "1280x1024"]
+        },
+        "depth": {
+          "type": "integer", "enum": [0, 1, 2, 4, 8, 16, 32], "default": 0, "x-scope": "page", "x-apply": "executor",
+          "title": "Colours",
+          "description": "The depth the screen starts in. 256 colours for games that run only in them.",
+          "x-labels": ["As the System does (8.x millions, 7.x 256)", "Black and white", "4 greys", "16 colours", "256 colours", "Thousands", "Millions"]
+        },
+        "ppc": {
+          "type": "boolean", "default": false, "x-scope": "page", "x-apply": "executor",
+          "title": "PowerPC",
+          "description": "Run fat applications' PowerPC code (PowerPC-only applications always run theirs)."
+        }
+      }
+    },
+    "disks": {
+      "type": "object",
+      "title": "Disks",
+      "description": "Disk images: the library's and your own. Changes to an image are kept beside it (an overlay); the image itself is never written.",
+      "additionalProperties": false,
+      "properties": {
+        "mounted": {
+          "type": "array", "maxItems": 64, "default": [], "x-scope": "page", "x-apply": "executor",
+          "items": { "type": "string", "minLength": 1, "maxLength": 2048 },
+          "title": "Library disks",
+          "description": "Disks from the library, mounted in this order (downloaded once, kept in this browser).",
+          "x-widget": "disk-list"
+        },
+        "images": {
+          "type": "string", "maxLength": 4096, "default": "", "x-scope": "server", "x-apply": "live",
+          "title": "Library folder",
+          "description": "The folder of disk images the server offers (empty: DATA/images).",
+          "x-widget": "path"
+        },
+        "include": {
+          "type": "array", "maxItems": 64, "default": ["*.img", "*.iso"], "x-scope": "server", "x-apply": "live",
+          "items": { "type": "string", "minLength": 1, "maxLength": 255 },
+          "title": "Offer", "description": "File name patterns the library offers.", "x-widget": "words"
+        },
+        "exclude": {
+          "type": "array", "maxItems": 64, "default": [], "x-scope": "server", "x-apply": "live",
+          "items": { "type": "string", "minLength": 1, "maxLength": 255 },
+          "title": "Leave out", "description": "File name patterns it doesn't.", "x-widget": "words"
+        }
+      }
+    },
+    "input": {
+      "type": "object",
+      "title": "Input",
+      "description": "Keyboard and mouse.",
+      "additionalProperties": false,
+      "properties": {
+        "command_key": {
+          "type": "string", "enum": ["meta", "ctrl", "alt"], "default": "meta", "x-scope": "page", "x-apply": "live",
+          "title": "Command key",
+          "description": "The key that is the Mac's Command (⌘). Option and Control are the others, in the order Alt, Ctrl, Meta. The browser keeps some Ctrl shortcuts (Ctrl+W, Ctrl+T) unless the keyboard is captured.",
+          "x-labels": ["Meta (⌘ / Windows key): Alt is Option, Ctrl is Control", "Ctrl: Alt is Option, Meta is Control", "Alt: Meta is Option, Ctrl is Control"]
+        },
+        "keyboard_capture": {
+          "type": "boolean", "default": true, "x-scope": "page", "x-apply": "live",
+          "title": "Capture the keyboard in fullscreen",
+          "description": "In fullscreen, every key goes to the Mac, browser shortcuts too (Keyboard Lock API: Chromium-based browsers; hold Esc to leave)."
+        },
+        "right_click": {
+          "type": "string", "enum": ["click", "control"], "default": "control", "x-scope": "page", "x-apply": "live",
+          "title": "Right button",
+          "description": "What the right mouse button does.",
+          "x-labels": ["Click, as the left one", "Control-click (contextual menus)"]
+        }
+      }
+    },
+    "display": {
+      "type": "object",
+      "title": "Display",
+      "description": "How the Mac's screen is shown.",
+      "additionalProperties": false,
+      "properties": {
+        "scale": {
+          "type": "integer", "minimum": 0, "maximum": 4, "default": 0, "x-scope": "page", "x-apply": "executor",
+          "title": "Rendering scale",
+          "description": "Executor draws at this many times the Mac's screen, text from outlines (0: the display's pixel ratio). Programs still see the Mac's size."
+        },
+        "smoothing": {
+          "type": "boolean", "default": false, "x-scope": "page", "x-apply": "live",
+          "title": "Smooth scaling",
+          "description": "Blend pixels where the screen is enlarged (off: sharp, whole pixels)."
+        },
+        "fullscreen_button": {
+          "type": "boolean", "default": true, "x-scope": "page", "x-apply": "live",
+          "title": "Fullscreen button",
+          "description": "Show a Fullscreen button in the bar (F11 or the browser's own works too)."
+        }
+      }
+    },
+    "sound": {
+      "type": "object",
+      "title": "Sound",
+      "description": "The Mac's sound, through the browser.",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean", "default": true, "x-scope": "page", "x-apply": "live",
+          "title": "Sound", "description": "Play the Mac's sound (it starts with the first click or key)."
+        },
+        "volume": {
+          "type": "integer", "minimum": 0, "maximum": 100, "default": 80, "x-scope": "page", "x-apply": "live",
+          "title": "Volume", "description": "Percent.", "x-widget": "range"
+        }
+      }
+    },
+    "network": {
+      "type": "object",
+      "title": "Network",
+      "description": "The server: who reaches it, and the relay that takes the Mac's TCP and UDP to the Internet.",
+      "additionalProperties": false,
+      "properties": {
+        "bind": {
+          "type": "string", "maxLength": 255, "default": "127.0.0.1", "x-scope": "server", "x-apply": "server",
+          "title": "Listen on",
+          "description": "127.0.0.1: this computer only. 0.0.0.0 (or ::): the LAN too; set a password first.",
+          "examples": ["127.0.0.1", "0.0.0.0", "::"]
+        },
+        "port": {
+          "type": "integer", "minimum": 0, "maximum": 65535, "default": 8090, "x-scope": "server", "x-apply": "server",
+          "title": "Port", "description": "0: any free one."
+        },
+        "relay_enabled": {
+          "type": "boolean", "default": true, "x-scope": "server", "x-apply": "live",
+          "title": "Relay", "description": "Let the Mac's MacTCP and Open Transport reach the Internet through the server.",
+          "x-group": "Relay"
+        },
+        "relay_ports": {
+          "type": "array", "maxItems": 256, "x-scope": "server", "x-apply": "live",
+          "items": { "type": ["integer", "string"], "minimum": 1, "maximum": 65535, "pattern": "^ *[0-9]{1,5} *(- *[0-9]{1,5} *)?$" },
+          "default": [7, 13, 20, 21, 23, 25, 37, 43, 53, 70, 79, 80, 110, 113, 119, 123, 143,
+                      194, 443, 563, 993, 995, 1080, 6667, 8080],
+          "title": "Ports", "description": "Destination ports the relay connects to: numbers and A-B ranges.",
+          "x-widget": "words"
+        },
+        "relay_allow_private": {
+          "type": "boolean", "default": false, "x-scope": "server", "x-apply": "live",
+          "title": "Private addresses", "description": "Loopback, private and link-local hosts too (your LAN)."
+        },
+        "relay_max_sockets": {
+          "type": "integer", "minimum": 0, "maximum": 4096, "default": 32, "x-scope": "server", "x-apply": "live",
+          "title": "Sockets", "description": "At most this many open at once, all tabs together."
+        },
+        "relay_max_connections": {
+          "type": "integer", "minimum": 0, "maximum": 256, "default": 4, "x-scope": "server", "x-apply": "live",
+          "title": "Tabs", "description": "At most this many tabs with the relay open."
+        },
+        "relay_nameserver": {
+          "type": "string", "maxLength": 255, "default": "", "x-scope": "server", "x-apply": "live",
+          "title": "Name server", "description": "For the Mac's DNS lookups (empty: the computer's)."
+        },
+        "password": {
+          "type": "boolean", "default": false, "x-scope": "server", "x-apply": "live", "readOnly": true,
+          "title": "Password",
+          "description": "Asked of every browser but this computer's, before the tab. Needed to change these settings from another computer.",
+          "x-widget": "password", "x-group": "Access"
+        },
+        "trusted_proxies": {
+          "type": "array", "maxItems": 64, "default": [], "x-scope": "server", "x-apply": "live",
+          "items": { "type": "string", "minLength": 1, "maxLength": 255 },
+          "title": "Trusted proxies", "description": "Addresses whose X-Forwarded-For is believed.", "x-widget": "words"
+        },
+        "secure_cookies": {
+          "type": ["string", "boolean"], "enum": ["auto", true, false], "default": "auto", "x-scope": "server", "x-apply": "live",
+          "title": "Secure cookies", "description": "auto: Secure but for localhost; on behind HTTPS.",
+          "x-labels": ["Auto", "On", "Off"]
+        },
+        "tls_cert": {
+          "type": "string", "maxLength": 4096, "default": "", "x-scope": "server", "x-apply": "server",
+          "title": "TLS certificate", "description": "PEM certificate (chain): serve HTTPS (empty: HTTP).", "x-widget": "path"
+        },
+        "tls_key": {
+          "type": "string", "maxLength": 4096, "default": "", "x-scope": "server", "x-apply": "server",
+          "title": "TLS key", "description": "Its key (empty: in the certificate's file).", "x-widget": "path"
+        },
+        "max_upload_mb": {
+          "type": "integer", "minimum": 1, "maximum": 65536, "default": 64, "x-scope": "server", "x-apply": "live",
+          "title": "Largest upload (MB)", "description": "One request's body."
+        }
+      }
+    },
+    "advanced": {
+      "type": "object",
+      "title": "Advanced",
+      "description": "Logging and debugging. What the tab prints goes to the server's logs too.",
+      "additionalProperties": false,
+      "properties": {
+        "logtraps": {
+          "type": "string", "maxLength": 1024, "default": "", "x-scope": "page", "x-apply": "executor",
+          "title": "Log Toolbox calls",
+          "description": "Names, comma-separated (wildcards; -NAME leaves out; 1: all). Empty: none."
+        },
+        "logtraps_nesting": {
+          "type": "integer", "minimum": 0, "maximum": 64, "default": 6, "x-scope": "page", "x-apply": "executor",
+          "title": "Nested calls", "description": "... and calls nested this deep in Toolbox callbacks."
+        },
+        "debug": {
+          "type": "string", "maxLength": 1024, "default": "", "x-scope": "page", "x-apply": "executor",
+          "title": "Debug options", "description": "Executor's --executor-debug options (memcheck, trapfailure, unimplemented, ...)."
+        },
+        "ppc_break": {
+          "type": "string", "maxLength": 1024, "default": "", "x-scope": "page", "x-apply": "executor",
+          "title": "PowerPC breakpoints", "description": "As --executor-ppc-break; several separated by ';' (docs/executor/PPCTrace.md)."
+        },
+        "screenshot_button": {
+          "type": "boolean", "default": true, "x-scope": "page", "x-apply": "live",
+          "title": "Screenshot button", "description": "Show the bar's Screenshot button (it sends the screen to the server's logs)."
+        },
+        "data": {
+          "type": "string", "maxLength": 4096, "default": "", "x-scope": "server", "x-apply": "server", "readOnly": true,
+          "title": "Data folder", "description": "Settings, overlays, Executor's volumes and the logs (--data).", "x-widget": "path"
+        }
+      }
+    }
+  }
+}

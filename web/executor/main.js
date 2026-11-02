@@ -1,5 +1,7 @@
 // The page side: keep uploads in OPFS, start the Worker with them, hand it
-// a canvas, send it input. Query string:
+// a canvas, send it input. The settings (settings.js: the Settings dialog,
+// kept by the server or in this browser) say how; the query string
+// overrides some of them for the visit:
 //   ?size=WxH        the screen (default 640x480)
 //   ?scale=N         render at N times the screen, text from outlines
 //                    (docs/executor/HiDPI.md; default: devicePixelRatio,
@@ -21,8 +23,8 @@
 //   ?ppcbreak=SPEC   PowerPC breakpoints (as --executor-ppc-break; several
 //                    separated by ';'; docs/executor/PPCTrace.md)
 // library.json beside the page (optional) offers more disks: [{ title,
-// url, note, cover }]; the ones picked are remembered (localStorage) and
-// loaded like ?disk=. Disks with a cover (CDs) are offered by it too.
+// url, note, cover }]; the ones picked are remembered (the disks.mounted
+// setting) and loaded like ?disk=. Disks with a cover (CDs) are offered by it too.
 // Served by tools/web/server, signed in (api/me): the overlays and
 // Executor's own volume are synced with the account (sync.js).
 // Standalone (api/me's mode; the server on one's own machine): the server
@@ -49,9 +51,13 @@ const status = document.getElementById('status');
 const params = new URLSearchParams(location.search);
 addEventListener('pagehide', storeLast);      // before log.js's: the beacons' room is shared
 Log.start(Log.newId(), 'page');
-const [width, height] = (params.get('size') || '640x480').split('x').map(Number);
-// Executor scales by whole numbers (fractional scales: HiDPI.md phase 6).
-const scale = Math.max(1, Math.round(Number(params.get('scale')) || window.devicePixelRatio || 1));
+// The screen and the scale Executor draws at, from the settings at each start.
+let width = 640, height = 480, scale = 1;
+function machine() {
+    [width, height] = Settings.get('machine.screen').split('x').map(Number);
+    // Executor scales by whole numbers (fractional scales: HiDPI.md phase 6).
+    scale = Math.max(1, Math.round(Settings.get('display.scale') || window.devicePixelRatio || 1));
+}
 
 let worker = null, canvas = null, cursor = null, nextId = 1;
 // Bumped when a restart begins: messages from an older Worker (still
@@ -240,7 +246,8 @@ const libraryBox = document.getElementById('library-box');
 const librarySelect = document.getElementById('library');
 const libraryCovers = document.getElementById('library-covers');
 let library = [];
-const picked = () => JSON.parse(localStorage.getItem('executor-library') || '[]');
+const picked = () => Settings.get('disks.mounted') || [];
+Settings.provide('library', () => library);
 
 async function loadLibrary() {
     try {
@@ -277,7 +284,7 @@ librarySelect.addEventListener('change', () => addLibraryDisk(librarySelect.valu
 async function addLibraryDisk(url) {
     if (!url)
         return;
-    localStorage.setItem('executor-library', JSON.stringify([...picked(), url]));
+    await Settings.set({ disks: { mounted: [...picked(), url] } });
     showLibrary();
     generation++;                   // restarting, once it is downloaded
     window.executor.frames = 0;
@@ -293,12 +300,12 @@ async function addLibraryDisk(url) {
 // A library disk the user removes is forgotten too.
 function forgetLibraryDisk(name) {
     const keep = picked().filter((u) => decodeURIComponent(new URL(u, location.href).pathname.split('/').pop()) !== name);
-    localStorage.setItem('executor-library', JSON.stringify(keep));
-    showLibrary();
+    Settings.set({ disks: { mounted: keep } }).then(showLibrary);
 }
 
 async function fetchDisks() {
     await modeKnown;
+    await Settings.ready;
     loadLibrary();
     for (const url of [...params.getAll('disk'), ...picked()]) {
         try {
@@ -539,20 +546,19 @@ document.addEventListener('visibilitychange', () => {
 const IMAGE = /\.(img|image|dsk|hfs|iso|toast|cdr)$/i;
 const systemSelect = document.getElementById('system');
 systemSelect.addEventListener('change', () => {
-    localStorage.setItem('executor-system', systemSelect.value);
-    start();
+    Settings.set({ machine: { system: systemSelect.value } }).finally(start);
 });
+Settings.provide('systems', () => [...systemSelect.options].map((o) => o.value).filter(Boolean));
 
 // Fat applications' PowerPC code (mac-phoenix's --executor-ppc), remembered.
 const ppcBox = document.getElementById('ppc');
-ppcBox.checked = params.has('ppc') || localStorage.getItem('executor-ppc') === '1';
+Settings.on('machine.ppc', (v) => { ppcBox.checked = v; });
 ppcBox.addEventListener('change', () => {
-    localStorage.setItem('executor-ppc', ppcBox.checked ? '1' : '0');
-    start();
+    Settings.set({ machine: { ppc: ppcBox.checked } }).finally(start);
 });
 
 function showSystems(files) {
-    const want = params.get('system') || localStorage.getItem('executor-system') || '';
+    const want = Settings.get('machine.system');
     systemSelect.replaceChildren(new Option("Executor's own", ''),
         ...files.filter((f) => IMAGE.test(f.name)).map((f) => new Option(f.name, f.name)));
     systemSelect.value = [...systemSelect.options].some((o) => o.value === want) ? want : '';
@@ -687,7 +693,17 @@ async function saveAndStop() {
         worker = null;
 }
 
+// The Settings dialog's "Restart Executor": what changed, saved, and the
+// page again (the library's disks too).
+Settings.restart = async () => {
+    generation++;
+    await saveAndStop();
+    location.reload();
+};
+
 async function start() {
+    await Settings.ready;
+    machine();
     await modeKnown;
     if (standalone && !control)
         return watching || watch();
@@ -730,9 +746,12 @@ async function start() {
                          volumeKey: volumeKey(files), sync: !!account, relay: !!account || standalone,
                          standalone,
                          ids: imageIds, legacyKeys, log: Log.session,
-                         logtraps: params.get('logtraps'), nesting: params.get('nesting'),
-                         debug: params.get('debug'), ppcbreak: params.get('ppcbreak') },
+                         ram: Settings.get('machine.ram_mb'), depth: Settings.get('machine.depth'),
+                         logtraps: Settings.get('advanced.logtraps'),
+                         nesting: String(Settings.get('advanced.logtraps_nesting')),
+                         debug: Settings.get('advanced.debug'), ppcbreak: Settings.get('advanced.ppc_break') },
                        [offscreen]);
+    Settings.started();
     worker.postMessage({ type: 'visibility', hidden: document.visibilityState === 'hidden' });
     worker.onmessage = (e) => {
         if (mine !== generation)
@@ -781,17 +800,22 @@ async function start() {
 }
 
 // ---- sound: an AudioWorklet (audio.js) fed 48 kHz stereo from the Worker.
-// Browsers start an AudioContext only after a click or key press.
-let audio = null;
+// Browsers start an AudioContext only after a click or key press. The
+// volume (the sound settings) applies at once.
+let audio = null, gain = null;
+const loudness = () => (Settings.get('sound.enabled') ? Settings.get('sound.volume') / 100 : 0);
 async function startAudio() {
-    if (audio || !window.isSecureContext || typeof AudioWorkletNode === 'undefined')
+    if (audio || !window.isSecureContext || typeof AudioWorkletNode === 'undefined' || !Settings.get('sound.enabled'))
         return;     // AudioWorklet: secure contexts only
     const ctx = new AudioContext({ sampleRate: 48000 });
     await ctx.audioWorklet.addModule('audio.js');
     audio = new AudioWorkletNode(ctx, 'executor-audio', { outputChannelCount: [2] });
-    audio.connect(ctx.destination);
+    gain = new GainNode(ctx, { gain: loudness() });
+    audio.connect(gain).connect(ctx.destination);
     await ctx.resume();
 }
+Settings.on('sound.volume', () => gain && (gain.gain.value = loudness()));
+Settings.on('sound.enabled', () => gain && (gain.gain.value = loudness()));
 
 // ---- the canvas's size: the largest whole number of device pixels a guest
 // pixel that fits the window, so every pixel is the same size (a
@@ -800,8 +824,8 @@ function fitCanvas() {
     if (!canvas)
         return;
     const dpr = window.devicePixelRatio || 1;
-    const bar = document.getElementById('bar').offsetHeight + document.getElementById('status').offsetHeight
-        + document.getElementById('insecure').offsetHeight + 32;
+    const bar = document.fullscreenElement ? 0 : document.getElementById('bar').offsetHeight
+        + document.getElementById('status').offsetHeight + document.getElementById('insecure').offsetHeight + 32;
     const fit = Math.min(window.innerWidth * dpr / width, (window.innerHeight - bar) * dpr / height);
     const scale = Math.max(1, Math.floor(fit));     // device pixels a guest pixel
     canvas.style.width = `${width * scale / dpr}px`;
@@ -830,19 +854,23 @@ function attachInput(canvas) {
                 Math.max(0, Math.min(height - 1, y))];
     };
     canvas.addEventListener('pointermove', (e) => send([1, ...guestPoint(e)]));
+    // The right button: a click, or a Control-click (input.right_click).
+    let controlClick = false;
     canvas.addEventListener('pointerdown', (e) => {
         startAudio();
         canvas.focus();
         canvas.setPointerCapture(e.pointerId);
         const at = guestPoint(e);
-        console.log(`[in] down ${at}`);
-        send([1, ...at], [2, 1, 0]);
+        controlClick = e.button === 2 && Settings.get('input.right_click') === 'control';
+        console.log(`[in] down ${at}${controlClick ? ' control' : ''}`);
+        send(...(controlClick ? [[3, 1, 0x36]] : []), [1, ...at], [2, 1, 0]);
         e.preventDefault();
     });
     canvas.addEventListener('pointerup', (e) => {
         const at = guestPoint(e);
         console.log(`[in] up ${at}`);
-        send([1, ...at], [2, 0, 0]);
+        send([1, ...at], [2, 0, 0], ...(controlClick ? [[3, 0, 0x36]] : []));
+        controlClick = false;
         e.preventDefault();
     });
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());

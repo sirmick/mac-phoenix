@@ -1,14 +1,16 @@
 // executor-standalone: Executor's tab and what it needs from a server,
 // as one program (docs/executor/Standalone.md).
 //
-//	executor-standalone [--data DIR] [--images DIR] [--bind ADDR] [--port N]
+//	executor-standalone [--data DIR] [--config FILE] [--images DIR] [--bind ADDR] [--port N]
 //	                    [--site DIR] [--password-file FILE] [--tls-cert F --tls-key F] [--open] [--quiet]
-//	executor-standalone [--data DIR] passwd     the password from stdin ("" : none)
+//	executor-standalone [--data DIR] [--config FILE] passwd     the password from stdin ("" : none)
 //
 // The tab (make_site.sh's output) is embedded; --site serves a directory
-// instead. DATA (default: the user's config directory's executor-web)
-// has settings.json, the overlays of disks not in the library, Executor's
-// volumes and their objects, and the tab's logs.
+// instead. DATA (default: the user's config directory's executor-web:
+// ~/.config on Linux, ~/Library/Application Support on macOS, %AppData% on
+// Windows) has settings.json (or --config's file; settings.go), the
+// overlays of disks not in the library, Executor's volumes and their
+// objects, and the tab's logs.
 package main
 
 import (
@@ -40,6 +42,7 @@ func main() {
 		defData = filepath.Join(d, "executor-web")
 	}
 	data := flag.String("data", defData, "the data directory")
+	config := flag.String("config", "", "the settings file (default: DATA/settings.json)")
 	images := flag.String("images", "", "the library's images (default: settings', DATA/images)")
 	bind := flag.String("bind", "", "the address to listen on (default: settings', 127.0.0.1)")
 	port := flag.Int("port", -1, "the port (0: any; default: settings', 8090)")
@@ -55,9 +58,13 @@ func main() {
 		fatal(err)
 	}
 	abs, _ := filepath.Abs(*data)
-	s := &Server{data: abs, settingsPath: filepath.Join(abs, "settings.json"), quiet: *quiet,
+	settingsPath := filepath.Join(abs, "settings.json")
+	if *config != "" {
+		settingsPath, _ = filepath.Abs(*config)
+	}
+	s := &Server{data: abs, settingsPath: settingsPath, quiet: *quiet,
 		failures: map[string][]time.Time{}}
-	file, err := loadSettings(s.settingsPath, abs)
+	doc, hash, err := loadSettings(s.settingsPath)
 	if err != nil {
 		fatal(err)
 	}
@@ -66,11 +73,11 @@ func main() {
 		fmt.Fprint(os.Stderr, "Password (empty: none): ")
 		line, _ := bufio.NewReader(os.Stdin).ReadString('\n')
 		pw := strings.TrimRight(line, "\r\n")
-		file.PasswordHash = ""
+		hash = ""
 		if pw != "" {
-			file.PasswordHash = hashPassword(pw)
+			hash = hashPassword(pw)
 		}
-		if err := saveSettings(s.settingsPath, file); err != nil {
+		if err := saveSettings(s.settingsPath, doc, hash); err != nil {
 			fatal(err)
 		}
 		return
@@ -107,7 +114,7 @@ func main() {
 	}
 	s.ids = newIds(filepath.Join(abs, "image-ids.json"))
 	s.loadSessions()
-	s.applySettings(file)
+	s.applySettings(doc, hash)
 	if st := s.settings(); st.Images != "" {
 		os.MkdirAll(st.Images, 0o755)
 	}

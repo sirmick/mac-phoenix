@@ -17,7 +17,7 @@ grep -q '^EXECUTOR_SKIA:BOOL=ON' "$BUILD/CMakeCache.txt" ||
     echo "warning: $BUILD has no Skia (-DEXECUTOR_SKIA=ON): text at 2x will be blurred (docs/executor/WebSite.md)"
 
 mkdir -p "$OUT"
-cp "$WASM"/{index.html,main.js,worker.js,log.js,overlay.js,sync.js,net.js,keys.js,cursor.js,audio.js,executor-web.js,executor-web.wasm} "$OUT/"
+cp "$WASM"/{index.html,main.js,worker.js,log.js,overlay.js,sync.js,net.js,keys.js,settings.js,settings.css,settings.schema.json,cursor.js,audio.js,executor-web.js,executor-web.wasm} "$OUT/"
 for f in executor-web.wasm executor-web.js; do
     gzip -9 -k -f "$OUT/$f"
 done
