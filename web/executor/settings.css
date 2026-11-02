@@ -14,7 +14,7 @@ dialog.settings button:disabled { opacity: .45; cursor: default; }
 dialog.settings button:focus-visible, dialog.settings input:focus-visible,
 dialog.settings select:focus-visible { outline: 2px solid #7af; outline-offset: 1px; }
 dialog.settings .settings-close { background: transparent; font-size: 15px; padding: 2px 8px; }
-.settings-body { display: flex; min-height: 380px; max-height: calc(86vh - 50px); }
+.settings-body { display: flex; height: min(470px, calc(86vh - 90px)); }
 .settings-body nav { display: flex; flex-direction: column; gap: 2px; padding: 10px 8px; min-width: 130px;
                      background: #333; border-right: 1px solid #444; }
 dialog.settings nav button { background: transparent; text-align: left; padding: 6px 12px; color: #ccc; }
