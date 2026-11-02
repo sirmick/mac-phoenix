@@ -285,8 +285,18 @@ static uint32_t mode_switch(UniversalProcPtr theProcPtr, ProcInfoType procinfo,
             GUEST<ConnectionID> conn;
             GUEST<Ptr> main;
             Str255 err;
+            /* A resource in the system heap (the System's WDEF 124 on 8.6)
+               keeps the prepared record after the application that first
+               called it quits: its fragment is the system's, or the next
+               application calls into the old one's heap (BBEdit Lite 6.1
+               launched a second time). */
+            THz sys = LM(SysZone);
+            bool in_sys = descriptor >= ptr_to_longint(sys)
+                && descriptor < ptr_to_longint(sys->bkLim.get());
+            bool was_owned = ROMlib_cfm_system_owned(in_sys);
             OSErr e = GetMemFragment(ptr_from_longint<void *>(container), 0, (StringPtr) "\0",
                                      kReferenceCFrag, &conn, &main, err);
+            ROMlib_cfm_system_owned(was_owned);
             if(e != noErr || !main)
             {
                 fprintf(stderr, "[Executor] Mixed Mode: preparing the fragment at $%08x failed (%d)\n",
