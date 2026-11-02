@@ -13,7 +13,7 @@
 // the gate -- see "two canvases report the same backing size" below).
 import fs from 'node:fs';
 import path from 'node:path';
-import { open, firstFrame, request, until } from './harness.mjs';
+import { open, firstFrame, request, until, pickSystem } from './harness.mjs';
 
 const [dir, image] = process.argv.slice(2);
 if (!image || !fs.existsSync(image)) {
@@ -35,7 +35,7 @@ async function bootAt(scale) {
     await firstFrame(page);
     await page.setInputFiles('#add', image);
     await firstFrame(page);
-    await page.selectOption('#system', path.basename(image));
+    await pickSystem(page, path.basename(image));
     await firstFrame(page, 60000);
     const up = await until(() => request(page, 'app').then((a) => a === 'Finder'), 60000);
     if (!up)

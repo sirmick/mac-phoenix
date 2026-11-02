@@ -14,6 +14,7 @@
 #include <prefs/prefs.h>
 #include <base/cpu.h>
 #include <file/volume.h>
+#include <map>
 #include <file/fsm.h>
 #include <file/localvolume/localvolume.h>
 
@@ -1182,6 +1183,29 @@ OSErr Executor::PBMountVol(ParmBlkPtr pb)
        (file/fsm.cpp) */
     if(ROMlib_fsm_mount(vref, pb, &retval))
         PBRETURN(pb, retval);
+    /* MacPhoenix: a disk image's drive with no volume on it (unmounted, the
+       web tab's Disks panel putting one in: through this trap, so the
+       System's patches and the Finder see it) mounts its image again. */
+    for(DrvQEl *dp = (DrvQEl *)LM(DrvQHdr).qHead; dp; dp = (DrvQEl *)dp->qLink)
+    {
+        auto *dqp = (DrvQExtra *)((char *)dp - sizeof(LONGINT));
+        if(dp->dQDrive != vref || dp->dQRefNum != OURHFSDREF || !dqp->devicename)
+            continue;
+        static std::map<INTEGER, INTEGER> last;     /* drive -> its last vRefNum */
+        if(ROMlib_vcbbydrive(vref))
+            retval = volOnLinErr;
+        else
+        {
+            GUEST<LONGINT> mess;
+            ROMlib_mount_vrefnum = last.count(vref) ? last[vref] : 0;
+            ROMlib_openharddisk((const char *)dqp->devicename, &mess);
+            ROMlib_mount_vrefnum = 0;
+            retval = mess ? (OSErr)(mess >> 16) : nsvErr;
+            if(HVCB *v = ROMlib_vcbbydrive(vref))
+                last[vref] = v->vcbVRefNum;
+        }
+        PBRETURN(pb, retval);
+    }
     if(vref == 1 || vref == 2)
         retval = noErr;
     else

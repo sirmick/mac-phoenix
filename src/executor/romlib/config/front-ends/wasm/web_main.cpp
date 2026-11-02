@@ -20,6 +20,19 @@
  *                    alert's message)
  *   menus            its menu bar: each menu's title and left edge
  *   launch PATH      LaunchApplication of "Volume:Folder:App"; its OSErr
+ *   mount PATH       a disk image put in now (the Disks panel's insert, the
+ *                    image in the module's filesystem already): mounted
+ *                    through _MountVol (the System's patches tell the Finder),
+ *                    a diskEvt posted, as for a floppy; the OSErr (-1: the
+ *                    image can't be opened; nsvErr: no Mac volume on it)
+ *   mount-cd PATH    the same, a CD: locked (ROMlib_locked_images, as --cdrom)
+ *   eject PATH       a disk image's volumes unmounted through _UnmountVol
+ *                    (fBsyErr: in use)
+ *   volumes          the volumes mounted: their names
+ *
+ * Disk images going away, ejected here or by the Finder (Put Away, or
+ * anything else that unmounts them), are told to the page at the next event
+ * call (Module.onEjected(path)): it takes them out of its Disks panel.
  *
  * The Worker answers 'read' and 'write' itself: files in the module's
  * filesystem, such as the Host volume (/host).
@@ -32,6 +45,11 @@
 #include <base/common.h>
 #include <DialogMgr.h>
 #include <FileMgr.h>
+#include <OSEvent.h>
+#include <file/file.h>
+#include <hfs/hfs.h>
+#include <MemoryMgr.h>
+#include <base/cpu.h>
 #include <ProcessMgr.h>
 #include <rsys/process.h>
 #include <SegmentLdr.h>
@@ -46,6 +64,7 @@
 #include <filesystem>
 #include <cstdio>
 #include <cstring>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -108,6 +127,12 @@ EM_JS(void, js_cursor, (const uint8_t *data, const uint8_t *mask, int hotX, int 
 EM_JS(void, js_reply_pixels, (int id, int width, int height, const uint8_t *rgba), {
     if (Module.onReply)
         Module.onReply(id, { width, height, data: HEAPU8.slice(rgba, rgba + width * height * 4) });
+});
+
+/* A disk image whose volumes are all gone (ejected). */
+EM_JS(void, js_ejected, (const char *path), {
+    if (Module.onEjected)
+        Module.onEjected(UTF8ToString(path));
 });
 
 /* Time the front end spent producing frames (rendering, converting). */
@@ -283,6 +308,124 @@ OSErr launch(const std::string &utf8)
     return LaunchApplication(&pb);
 }
 
+/* ---- disk images in and out while Executor runs ---- */
+const char IMAGES[] = "/uploads/";
+
+/* The disk images' drives (by path) and whether a volume is on each now. */
+std::map<std::string, bool> image_drives()
+{
+    std::map<std::string, bool> out;
+    for(DrvQEl *dp = (DrvQEl *)LM(DrvQHdr).qHead; dp; dp = (DrvQEl *)dp->qLink)
+    {
+        auto *dqp = (DrvQExtra *)((char *)dp - sizeof(LONGINT));
+        const char *name = (const char *)dqp->devicename;
+        if(!name || strncmp(name, IMAGES, sizeof IMAGES - 1) != 0)
+            continue;
+        bool &on = out[name];
+        for(HVCB *v = (HVCB *)LM(VCBQHdr).qHead; v; v = (HVCB *)v->qLink)
+            if(v->vcbDrvNum == dp->dQDrive)
+                on = true;
+    }
+    return out;
+}
+
+/* A File Manager trap called as a program would, through the trap table:
+   the System's patches on _MountVol and _UnmountVol are how the Finder
+   hears of volumes coming and going. A0 the parameter block (in the
+   system heap: the patches read it), D0 the result. */
+OSErr fs_trap(uint16_t trap, INTEGER vref)
+{
+    static std::map<uint16_t, Ptr> stubs;
+    static ParmBlkPtr pb = nullptr;
+    Ptr &code = stubs[trap];
+    if(!code)
+    {
+        code = NewPtrSys(4);
+        ((GUEST<uint16_t> *)code)[0] = trap;          /* _MountVol, _UnmountVol */
+        ((GUEST<uint16_t> *)code)[1] = 0x4E75;        /* RTS */
+    }
+    if(!pb)
+        pb = (ParmBlkPtr)NewPtrSysClear(sizeof(ParamBlockRec));
+    memset((void *)pb, 0, sizeof(ParamBlockRec));
+    pb->volumeParam.ioVRefNum = vref;
+    uint32_t d[8], a[7];
+    for(int i = 0; i < 8; i++)
+        d[i] = EM_DREG(i);
+    for(int i = 0; i < 7; i++)
+        a[i] = EM_AREG(i);
+    EM_A0 = US_TO_SYN68K(pb);
+    execute68K(US_TO_SYN68K(code));
+    OSErr err = (int16_t)EM_D0;
+    for(int i = 0; i < 8; i++)
+        EM_DREG(i) = d[i];
+    for(int i = 0; i < 7; i++)
+        EM_AREG(i) = a[i];
+    return err;
+}
+
+/* The image's drive (ROMlib_image_drive: its flags worked out, locked for
+   a CD), then _MountVol on it, as GetNextEvent would for a disk put in; a
+   diskEvt for the program in front. */
+OSErr mount_image(const std::string &path)
+{
+    INTEGER drive = ROMlib_image_drive(path.c_str());
+    if(!drive)
+        return -1;
+    OSErr err = fs_trap(0xA00F, drive);
+    PPostEvent(diskEvt, ((LONGINT)err << 16) | (uint16_t)drive, nullptr);
+    return err;
+}
+
+/* Through _UnmountVol, as the Finder's Put Away. */
+OSErr eject_image(const std::string &path)
+{
+    for(DrvQEl *dp = (DrvQEl *)LM(DrvQHdr).qHead; dp; dp = (DrvQEl *)dp->qLink)
+    {
+        auto *dqp = (DrvQExtra *)((char *)dp - sizeof(LONGINT));
+        if(!dqp->devicename || path != (const char *)dqp->devicename)
+            continue;
+        for(HVCB *v = (HVCB *)LM(VCBQHdr).qHead, *next; v; v = next)
+        {
+            next = (HVCB *)v->qLink;
+            if(v->vcbDrvNum != dp->dQDrive)
+                continue;
+            if(OSErr err = fs_trap(0xA00E, v->vcbVRefNum))
+                return err;
+        }
+        return noErr;
+    }
+    return nsvErr;
+}
+
+/* Drives that had a volume and have none now: ejected. A volume ejected
+   but still known (offline: the Finder's Eject) is unmounted too, the
+   image being gone from the page, so no grey icon stays on the desktop. */
+std::map<std::string, bool> seen;
+void watch_images()
+{
+    auto now = image_drives();
+    for(auto &[path, on] : now)
+    {
+        if(seen[path] && !on)
+        {
+            for(DrvQEl *dp = (DrvQEl *)LM(DrvQHdr).qHead; dp; dp = (DrvQEl *)dp->qLink)
+            {
+                auto *dqp = (DrvQExtra *)((char *)dp - sizeof(LONGINT));
+                if(!dqp->devicename || path != (const char *)dqp->devicename)
+                    continue;
+                for(HVCB *v = (HVCB *)LM(VCBQHdr).qHead, *next; v; v = next)
+                {
+                    next = (HVCB *)v->qLink;
+                    if(!v->vcbDrvNum && (v->vcbDRefNum == dp->dQDrive || v->vcbDRefNum == -dp->dQDrive))
+                        fs_trap(0xA00E, v->vcbVRefNum);
+                }
+            }
+            js_ejected(path.c_str());
+        }
+        seen[path] = on;
+    }
+}
+
 /* At an event call of the running application. */
 void on_event_poll()
 {
@@ -306,6 +449,22 @@ void on_event_poll()
             reply = menus_json();
         else if(op == "launch")
             reply = std::to_string(launch(arg));
+        else if(op == "volumes")
+        {
+            reply = "[";
+            for(HVCB *v = (HVCB *)LM(VCBQHdr).qHead; v; v = (HVCB *)v->qLink)
+                reply += (reply.size() > 1 ? "," : "") + json_string(pstring((const unsigned char *)v->vcbVN));
+            reply += "]";
+        }
+        else if(op == "mount")
+            reply = std::to_string(mount_image(arg));
+        else if(op == "mount-cd")
+        {
+            ROMlib_locked_images.insert(arg);
+            reply = std::to_string(mount_image(arg));
+        }
+        else if(op == "eject")
+            reply = std::to_string(eject_image(arg));
         else if(op == "screen1x")
         {
             std::vector<uint32_t> px;
@@ -323,6 +482,7 @@ void on_event_poll()
             reply = "{\"error\":" + json_string("unknown request " + op) + "}";
         js_reply(id, reply.c_str());
     }
+    watch_images();
 }
 
 void on_yield()
@@ -412,6 +572,10 @@ int main(int argc, char **argv)
        their changes in an overlay (web/executor/overlay.js); the images
        themselves are never written. */
     c.writable_images = true;
+    /* Removable, as a floppy or a CD put in: the Finder puts them away
+       without asking (the System's image stays a fixed disk). */
+    ROMlib_ejectable_images = true;
+    ROMlib_fixed_image = system_image;
     if(!system_image.empty())
     {
         bool finder = false;

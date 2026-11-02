@@ -367,10 +367,18 @@ const OVERLAYFS = {
     },
 
     mount(mount) {
-        const root = OVERLAYFS.createNode(null, '/', OVERLAYFS.DIR_MODE);
+        const root = OVERLAYFS.root = OVERLAYFS.createNode(null, '/', OVERLAYFS.DIR_MODE);
         for (const ov of mount.opts.overlays)
-            OVERLAYFS.createNode(root, ov.name, ov.writable ? OVERLAYFS.FILE_MODE : 0o100444, ov);
+            OVERLAYFS.add(ov);
         return root;
+    },
+
+    // Images put in and taken out while Executor runs (the Disks panel).
+    add(ov) {
+        OVERLAYFS.createNode(OVERLAYFS.root, ov.name, ov.writable ? OVERLAYFS.FILE_MODE : 0o100444, ov);
+    },
+    remove(name) {
+        delete OVERLAYFS.root.contents[name];
     },
 
     createNode(parent, name, mode, overlay) {

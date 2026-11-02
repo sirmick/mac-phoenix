@@ -13,7 +13,7 @@
 // don't come. Skips (77) without SYSTEM.
 import fs from 'node:fs';
 import path from 'node:path';
-import { open, firstFrame, request, until } from './harness.mjs';
+import { open, firstFrame, request, until, pickSystem } from './harness.mjs';
 
 const [dir, guest, system, ...rest] = process.argv.slice(2);
 const apps = [];
@@ -72,7 +72,7 @@ if (process.env.TAB_TRACE)
         path: process.env.TAB_TRACE,
         categories: ['devtools.timeline', 'v8', 'disabled-by-default-v8.cpu_profiler'] });
 t0 = Date.now();
-await page.selectOption('#system', path.basename(system));
+await pickSystem(page, path.basename(system));
 await firstFrame(page, 120000);
 times.first_frame_s = secs(t0);
 check(await until(() => request(page, 'app').then((a) => a === 'Finder'), 120000), 'the Finder is up');

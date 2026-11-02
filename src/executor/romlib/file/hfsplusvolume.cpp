@@ -1262,7 +1262,7 @@ OSErr Executor::hfsPlusMountVol(ParmBlkPtr pb, int fd, uint64_t offset, drive_fl
             vp->u.hfs.fd = fd;
             vp->vcb.vcbDrvNum = pb->volumeParam.ioVRefNum;
             vp->vcb.vcbDRefNum = OURHFSDREF;
-            vp->vcb.vcbVRefNum = --ROMlib_nextvrn;
+            vp->vcb.vcbVRefNum = ROMlib_new_vrefnum();
             vp->vcb.vcbAtrb = (reader->writable() ? 0 : VHARDLOCKBIT) | ((flags & DRIVE_FLAGS_FIXED) ? VNONEJECTABLEBIT : 0);
             bool wrapped = reader->wrapped();
             uint64_t bytes = uint64_t(reader->header().totalBlocks) * reader->header().blockSize;

@@ -66,8 +66,10 @@ patch is checked whole: nothing changes if any of it is wrong.
 applies: the saved value, unless the page's address overrides it for the
 visit (`?size=`, `?scale=`, `?ppc`, `?system=`, `?logtraps=`,
 `?nesting=`, `?debug=`, `?ppcbreak=`; the dialog says so). main.js reads
-the machine's at each start of Executor; the bar's PowerPC box and System
-menu write them. The library disks picked: `disks.mounted`, in order.
+the machine's at each start of Executor; the bar's PowerPC box and the
+Disks panel's System choice write them. The library disks picked:
+`disks.mounted`, in order (live: the page puts them in and takes them out
+of the running Mac, Disks.md).
 
 What applies live: the Command key (`keys.js`: Command on Meta, Ctrl or
 Alt, Option and Control the other two), the right button (a click, or
@@ -80,8 +82,8 @@ Ctrl+W and the like reach the Mac; holding Esc leaves.
 
 ## Not yet
 
-- Disks: the overlays' revert and download stay on the bar's disk chips;
-  uploaded images are not part of the settings (they are files).
+- Disks: the overlays' revert and download are in the Disks panel
+  (Disks.md); uploaded images are not part of the settings (they are files).
 - Network: the relay settings are the Go server's; the tab itself has no
   network setting (it uses the relay whenever the server offers one).
 - Hosted: the owner edits the server's settings in `server.toml`, not in

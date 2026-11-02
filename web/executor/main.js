@@ -22,7 +22,9 @@
 //                    separated by ';'; docs/executor/PPCTrace.md)
 // library.json beside the page (optional) offers more disks: [{ title,
 // url, note, cover }]; the ones picked are remembered (the disks.mounted
-// setting) and loaded like ?disk=. Disks with a cover (CDs) are offered by it too.
+// setting) and loaded like ?disk=. The Disks panel (disks.js; docs/executor/Disks.md)
+// shows the System, the disks in the Mac and the library, and puts disks in
+// and takes them out while Executor runs.
 // Served by tools/standalone (api/me's mode; served by anything else the
 // page says it needs it): the server is the only store: disks read by
 // Range as needed, their changes and Executor's volume kept on the server
@@ -144,13 +146,19 @@ async function fetchDisk(url) {
     return new File(chunks, name);
 }
 
+const IMAGE = /\.(img|image|dsk|hfs|iso|toast|cdr)$/i;
+const systemSelect = document.createElement('select');
+systemSelect.id = 'system';
+
 // ---- the library: disks the site offers (library.json), picked by the user
-const libraryBox = document.getElementById('library-box');
-const librarySelect = document.getElementById('library');
-const libraryCovers = document.getElementById('library-covers');
+// (the disks.mounted setting: the Disks panel, or the Settings dialog's
+// list). The page follows the setting while Executor runs: a disk added
+// goes into the Mac at once, one taken off comes out.
 let library = [];
 const picked = () => Settings.get('disks.mounted') || [];
 Settings.provide('library', () => library);
+const href = (u) => new URL(u, location.href).href;
+const fileName = (url) => decodeURIComponent(new URL(url, location.href).pathname.split('/').pop());
 
 async function loadLibrary() {
     try {
@@ -163,47 +171,19 @@ async function loadLibrary() {
 }
 
 function showLibrary() {
-    const have = new Set([...params.getAll('disk'), ...picked()].map((u) => new URL(u, location.href).href));
-    const offer = library.filter((d) => !have.has(new URL(d.url, location.href).href));
-    librarySelect.replaceChildren(new Option('Add a disk…', ''),
-        ...offer.map((d) => {
-            const o = new Option(d.title, d.url);
-            o.title = d.note || '';
-            return o;
-        }));
-    libraryBox.hidden = offer.length === 0;
-    libraryCovers.replaceChildren(...offer.filter((d) => d.cover).map((d) => {
-        const img = new Image();
-        img.src = d.cover;
-        img.alt = d.title;
-        img.title = d.note ? `${d.title}: ${d.note}` : d.title;
-        img.addEventListener('click', () => addLibraryDisk(d.url));
-        return img;
-    }));
+    showSystems(shownFiles);        // (and the panel)
 }
 
-librarySelect.addEventListener('change', () => addLibraryDisk(librarySelect.value));
-
-async function addLibraryDisk(url) {
-    if (!url)
-        return;
-    await Settings.set({ disks: { mounted: [...picked(), url] } });
-    showLibrary();
-    generation++;                   // restarting, once it is downloaded
-    window.executor.frames = 0;
-    try {
-        const file = await fetchDisk(url);
-        sessionFiles = sessionFiles.filter((f) => f.name !== file.name).concat(file);
-    } catch (e) {
-        status.textContent = `Cannot load ${url}: ${e.message}`;
-    }
-    start();
+function addLibraryDisk(url) {
+    if (url && !picked().some((u) => href(u) === href(url)))
+        return Settings.set({ disks: { mounted: [...picked(), url] } });
 }
 
-// A library disk the user removes is forgotten too.
+// A library disk taken out is forgotten too.
 function forgetLibraryDisk(name) {
-    const keep = picked().filter((u) => decodeURIComponent(new URL(u, location.href).pathname.split('/').pop()) !== name);
-    Settings.set({ disks: { mounted: keep } }).then(showLibrary);
+    const keep = picked().filter((u) => fileName(u) !== name);
+    if (keep.length !== picked().length)
+        return Settings.set({ disks: { mounted: keep } });
 }
 
 async function fetchDisks() {
@@ -226,39 +206,136 @@ function imageKey(f) {
     return imageIds[f.name] ? `${f.name}-${imageIds[f.name]}`.replace(/[^\w.-]/g, '_')
                             : plainKey(f.name, f.size, f.lastModified);
 }
-let imageState = {};                // name -> { modified, writable }, from the Worker
+let imageState = {};                // name -> { modified, changed, writable, onServer }, from the Worker
 
-function link(text, title, onclick) {
-    const a = document.createElement('a');
-    a.textContent = text;
-    a.title = title;
-    a.onclick = onclick;
-    return a;
+// ---- disks in and out of the running Mac ----
+// Executor running: a disk goes in at once (the Worker opens it, Executor
+// mounts it as a floppy put in: web_main.cpp 'mount'); not yet, at the start.
+const live = () => !!worker && window.executor.frames > 0;
+const inserting = new Set();        // names on their way in
+const reverting = new Set();        // taken out to be put back
+const ejectWaits = new Map();       // name -> resolve, for 'ejected'
+const FBSY = -47, NSV = -35;
+// CDs are read-only (Executor mounts them locked).
+const isCD = (name) => /\.(iso|toast|cdr)$/i.test(name)
+    || library.some((d) => fileName(d.url) === name && (d.tags || []).includes('cd'));
+
+async function putIn(file) {
+    if (!live())
+        return start();
+    inserting.add(file.name);
+    showDisks();
+    const r = await window.executor.request('insert', { file, cd: isCD(file.name), ids: { ...imageIds } });
+    inserting.delete(file.name);
+    if (r !== 0)
+        status.textContent = `${file.name}: not mounted (${r === NSV ? 'no Mac volume on it' : r === -1 ? 'cannot open it'
+                                                           : (r && r.error) || r})`;
+    showFiles(await storedFiles());
 }
 
-async function showFiles(files) {
-    const list = document.getElementById('files');
-    list.replaceChildren(...files.map((f) => {
-        const s = document.createElement('span');
-        const st = imageState[f.name];
-        s.textContent = f.name + (st && st.modified ? ' •' : '');
-        if (st)
-            s.title = st.onServer ? (st.modified ? 'changed (kept on the server; the original is untouched)'
-                                                 : 'writable (changes kept on the server)')
-                    : st.modified ? 'changed (until Executor restarts: not kept on the server; the original is untouched)'
-                    : 'writable (changes last until Executor restarts: not kept on the server)';
-        if (IMAGE.test(f.name)) {
-            s.append(link('⤓', 'Download the image as it is now', () => download(f.name)));
-            if (st && st.modified)
-                s.append(link('↺', 'Revert: forget the changes to this image', () => revert(f)));
+// Out of the Mac: 0 when it is (the Worker has saved its changes and let it
+// go: 'ejected'), else the OSErr (fBsyErr: in use).
+function takeOut(name) {
+    return new Promise((resolve) => {
+        ejectWaits.set(name, resolve);
+        window.executor.request('eject', name).then((r) => {
+            if (r !== 0 && r !== NSV) {
+                ejectWaits.delete(name);
+                resolve(r && r.error ? -1 : r);
+            }
+        });
+    });
+}
+
+// Ejected, here or in the Finder: out of the panel. A library disk (an
+// upload too: it is in the library) is forgotten from the setting, still
+// in the library; one held for this visit only is dropped.
+async function ejected(name) {
+    delete imageState[name];
+    const wait = ejectWaits.get(name);
+    ejectWaits.delete(name);
+    if (wait)
+        wait(0);
+    if (reverting.has(name) || name === systemSelect.value)
+        return;
+    shownFiles = shownFiles.filter((f) => f.name !== name);    // (before the setting changes: followPicked)
+    await remove(name);
+    await forgetLibraryDisk(name);
+    showFiles(await storedFiles());
+}
+
+async function eject(name) {
+    if (!IMAGE.test(name) || !live()) {
+        // An application, or Executor not running: off the list (an
+        // application stays in "executor:Uploads" until Executor restarts).
+        await ejected(name);
+        return;
+    }
+    const r = await takeOut(name);
+    if (r === FBSY)
+        status.textContent = `${name} is in use: quit what has files open on it, then eject it`;
+    else if (r !== 0)
+        status.textContent = `${name}: not ejected (${r})`;
+}
+
+// Followed while Executor runs: library disks added (here, in the Settings
+// dialog, by an upload) go in; ones taken off come out.
+async function followPicked(urls) {
+    if (!live())
+        return showDisks();
+    const want = new Set(urls.map(href));
+    for (const url of urls) {
+        const name = fileName(url);
+        if (shownFiles.some((f) => f.name === name) || inserting.has(name))
+            continue;
+        inserting.add(name);
+        showDisks();
+        try {
+            const file = await fetchDisk(url);
+            sessionFiles = sessionFiles.filter((f) => f.name !== file.name).concat(file);
+            inserting.delete(name);
+            await putIn(file);
+        } catch (e) {
+            inserting.delete(name);
+            status.textContent = `Cannot load ${url}: ${e.message}`;
+            showDisks();
         }
-        s.append(link('✕', 'Remove', async () => {
-            await remove(f.name);
-            forgetLibraryDisk(f.name);
-            start();
-        }));
-        return s;
-    }));
+    }
+    for (const d of library)
+        if (!want.has(href(d.url)) && shownFiles.some((f) => f.name === fileName(d.url)) && !ejectWaits.has(fileName(d.url))
+            && fileName(d.url) !== systemSelect.value && !params.getAll('disk').some((u) => href(u) === href(d.url)))
+            takeOut(fileName(d.url));
+}
+Settings.on('disks.mounted', (v) => followPicked(v || []));
+
+// ---- the Disks panel (disks.js): what is in the Mac, from the files and
+// the Worker's word on each image, its title and cover from the library.
+let shownFiles = [];
+
+function showFiles(files) {
+    shownFiles = files;
+    showSystems(files);             // (and the panel)
+}
+
+function showDisks() {
+    const byName = new Map(library.map((d) => [fileName(d.url), d]));
+    const kind = (name, size) => !IMAGE.test(name) ? 'app' : isCD(name) ? 'cd'
+        : (size || 0) <= 1440 * 1024 ? 'floppy' : 'hd';
+    const mounted = shownFiles.filter((f) => f.name !== systemSelect.value).map((f) => {
+        const d = byName.get(f.name) || {};
+        return { name: f.name, title: d.title || f.name, cover: d.cover, kind: kind(f.name, f.size),
+                 state: imageState[f.name], inserting: inserting.has(f.name) };
+    });
+    for (const name of inserting)
+        if (!mounted.some((m) => m.name === name)) {
+            const d = byName.get(name) || {};
+            mounted.push({ name, title: d.title || name, cover: d.cover, kind: kind(name, d.size), inserting: true });
+        }
+    const sel = systemSelect.selectedOptions[0];
+    const sys = shownFiles.find((f) => f.name === systemSelect.value);
+    Disks.update({ system: { value: systemSelect.value, label: sel ? sel.textContent : "Executor's own",
+                             disk: sys && { name: sys.name, kind: 'hd', state: imageState[sys.name] } },
+                   mounted, library, mountedUrls: [...params.getAll('disk'), ...picked()] });
 }
 
 async function download(name) {
@@ -272,11 +349,26 @@ async function download(name) {
     setTimeout(() => URL.revokeObjectURL(a.href), 60000);
 }
 
-// The Worker goes without saving, then the server forgets the overlay and
+// Revert: the disk out of the Mac, the server forgets its changes, back in
+// as it came. In use (or the System's): the Worker goes without saving and
 // Executor starts again on the original.
 async function revert(f) {
-    if (!confirm(`Forget all changes to ${f.name}?`))
+    if (!confirm(`Forget all changes to ${f.name}? The disk goes back to how it came.`))
         return;
+    if (live() && f.name !== systemSelect.value) {
+        reverting.add(f.name);
+        const r = await takeOut(f.name);
+        if (r === 0) {
+            await fetch(`api/sync/overlays/${imageKey(f)}`, { method: 'DELETE', cache: 'no-store' }).catch(() => {});
+            reverting.delete(f.name);
+            delete imageState[f.name];
+            await putIn(f);
+            return;
+        }
+        reverting.delete(f.name);
+        if (r === FBSY && !confirm(`${f.name} is in use. Restart Executor to revert it?`))
+            return;
+    }
     generation++;
     if (worker)
         worker.terminate();
@@ -308,10 +400,17 @@ async function uploadImage(file, { replace = false } = {}) {
     return entry;
 }
 
-document.getElementById('add').addEventListener('change', async (e) => {
-    generation++;                   // restarting (once the files are stored)
-    window.executor.frames = 0;
-    for (const f of e.target.files) {
+// Added by the panel's button or dropped: disk images uploaded into the
+// library and put in (while Executor runs: followPicked, at once); an
+// application (into "executor:Uploads") restarts Executor, whose volume
+// doesn't see a file put there under it.
+async function addFiles(files) {
+    const restart = !live() || files.some((f) => !IMAGE.test(f.name));
+    if (restart) {
+        generation++;               // restarting (once the files are stored)
+        window.executor.frames = 0;
+    }
+    for (const f of files) {
         if (!IMAGE.test(f.name)) {
             await store(f);
             continue;
@@ -325,10 +424,45 @@ document.getElementById('add').addEventListener('change', async (e) => {
         } catch (err) {
             status.textContent = `${f.name} isn't kept on the server (${err.message}): for this visit only`;
             await store(f);
+            if (!restart)
+                await putIn(f);
         }
     }
+    if (restart)
+        return start();
+    showFiles(await storedFiles());
+}
+document.getElementById('add').addEventListener('change', async (e) => {
+    const files = [...e.target.files];
     e.target.value = '';
-    start();
+    addFiles(files);
+});
+
+// One's upload deleted from the server's library (tools/standalone: the
+// image, its record and its overlay).
+async function removeUpload(d) {
+    if (!confirm(`Delete ${d.title} from the server? The image and its changes are gone.`))
+        return;
+    const res = await fetch(`api/uploads/${encodeURIComponent(fileName(d.url))}`, { method: 'DELETE', cache: 'no-store' })
+        .catch(() => null);
+    if (!res || !res.ok)
+        status.textContent = `${d.title}: not deleted (${res ? res.status : 'the server can\'t be reached'})`;
+    await loadLibrary();
+}
+
+Disks.init({
+    add: addFiles,
+    insert: (d) => addLibraryDisk(d.url),
+    removeUpload,
+    eject,
+    revert(name) {
+        const f = shownFiles.find((x) => x.name === name);
+        if (f)
+            revert(f);
+    },
+    download,
+    reset,
+    systemSelect,
 });
 document.getElementById('restart').addEventListener('click', () => start());
 
@@ -420,7 +554,7 @@ setInterval(async () => {
     }
 }, 3000);
 
-document.getElementById('reset').addEventListener('click', async () => {
+async function reset() {
     if (!confirm("Forget everything saved on Executor's disk for this System?"))
         return;
     if (worker)
@@ -428,7 +562,7 @@ document.getElementById('reset').addEventListener('click', async () => {
     worker = null;
     await fetch(`api/sync/volumes/${volumeKey(await storedFiles())}`, { method: 'DELETE', cache: 'no-store' }).catch(() => {});
     start();
-});
+}
 
 // Leaving or hiding the page: the Worker saves what changed now.
 document.addEventListener('visibilitychange', () => {
@@ -438,14 +572,29 @@ document.addEventListener('visibilitychange', () => {
         worker.postMessage({ type: 'save' });
 });
 
-// The System to run on: Executor's own (''), or a disk image's (its name),
-// remembered across visits.
-const IMAGE = /\.(img|image|dsk|hfs|iso|toast|cdr)$/i;
-const systemSelect = document.getElementById('system');
-systemSelect.addEventListener('change', () => {
-    Settings.set({ machine: { system: systemSelect.value } }).finally(start);
+// The System to run on: Executor's own (''), a disk image's (its name), or
+// a library System disk's (its url: put in, then that), remembered across
+// visits. The choice is in the Disks panel (disks.js).
+systemSelect.addEventListener('change', async () => {
+    const value = systemSelect.value;
+    const d = library.find((x) => x.url === value);
+    generation++;
+    await saveAndStop();            // (not live: the disk waits for the start)
+    if (d) {
+        const mounted = picked().some((u) => href(u) === href(d.url)) ? picked() : [...picked(), d.url];
+        await Settings.set({ machine: { system: fileName(d.url) }, disks: { mounted } });
+        try {
+            const file = await fetchDisk(d.url);
+            sessionFiles = sessionFiles.filter((f) => f.name !== file.name).concat(file);
+        } catch (e) {
+            status.textContent = `Cannot load ${d.url}: ${e.message}`;
+        }
+    } else {
+        await Settings.set({ machine: { system: value } }).catch(() => {});
+    }
+    start();
 });
-Settings.provide('systems', () => [...systemSelect.options].map((o) => o.value).filter(Boolean));
+Settings.provide('systems', () => [...systemSelect.options].map((o) => o.value).filter((v) => v && !v.includes('/')));
 
 // Fat applications' PowerPC code (mac-phoenix's --executor-ppc), remembered.
 const ppcBox = document.getElementById('ppc');
@@ -456,9 +605,13 @@ ppcBox.addEventListener('change', () => {
 
 function showSystems(files) {
     const want = Settings.get('machine.system');
+    const title = (name) => (library.find((d) => fileName(d.url) === name) || {}).title;
+    const offered = library.filter((d) => (d.tags || []).includes('system') && !files.some((f) => f.name === fileName(d.url)));
     systemSelect.replaceChildren(new Option("Executor's own", ''),
-        ...files.filter((f) => IMAGE.test(f.name)).map((f) => new Option(f.name, f.name)));
+        ...files.filter((f) => IMAGE.test(f.name) && !isCD(f.name)).map((f) => new Option(title(f.name) || f.name, f.name)),
+        ...offered.map((d) => new Option(`${d.title} (from the library)`, d.url)));
     systemSelect.value = [...systemSelect.options].some((o) => o.value === want) ? want : '';
+    showDisks();
 }
 
 // ---- the server: tools/standalone (api/me's mode), the tab's store ----
@@ -632,7 +785,6 @@ async function start() {
     await disksFetched;
     const files = await storedFiles();
     showFiles(files);
-    showSystems(files);
 
     // A canvas hands its control over once: a fresh one per start.
     canvas = document.createElement('canvas');
@@ -650,7 +802,7 @@ async function start() {
                          system: systemSelect.value, ppc: ppcBox.checked,
                          volumeKey: volumeKey(files), relay: standalone,
                          standalone,
-                         ids: imageIds, log: Log.session,
+                         ids: imageIds, cds: files.map((f) => f.name).filter(isCD), log: Log.session,
                          ram: Settings.get('machine.ram_mb'), depth: Settings.get('machine.depth'),
                          logtraps: Settings.get('advanced.logtraps'),
                          nesting: String(Settings.get('advanced.logtraps_nesting')),
@@ -668,7 +820,7 @@ async function start() {
         } else if (m.type === 'images') {
             const before = JSON.stringify(imageState);
             for (const i of m.images)
-                imageState[i.name] = { modified: i.modified, writable: i.writable, onServer: i.onServer };
+                imageState[i.name] = { modified: i.modified, changed: i.changed, writable: i.writable, onServer: i.onServer };
             if (JSON.stringify(imageState) !== before)
                 storedFiles().then(showFiles);
         } else if (m.type === 'cursor') {
@@ -686,6 +838,8 @@ async function start() {
         } else if (m.type === 'notice') {
             if (!claimLost)
                 status.textContent = m.text;
+        } else if (m.type === 'ejected') {
+            ejected(m.name);
         } else if (m.type === 'restart') {
             start();
         } else if (m.type === 'beacons') {
@@ -730,7 +884,9 @@ function fitCanvas() {
     const dpr = window.devicePixelRatio || 1;
     const bar = document.fullscreenElement ? 0 : document.getElementById('bar').offsetHeight
         + document.getElementById('status').offsetHeight + 32;
-    const fit = Math.min(window.innerWidth * dpr / width, (window.innerHeight - bar) * dpr / height);
+    // (the Disks panel open: what it leaves)
+    const across = window.innerWidth - (parseFloat(getComputedStyle(document.body).paddingRight) || 0);
+    const fit = Math.min(across * dpr / width, (window.innerHeight - bar) * dpr / height);
     const scale = Math.max(1, Math.floor(fit));     // device pixels a guest pixel
     canvas.style.width = `${width * scale / dpr}px`;
     canvas.style.height = `${height * scale / dpr}px`;

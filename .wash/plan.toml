@@ -1,7 +1,7 @@
 # wash-plan: written by Wash as the plan changes.
 # Edit it only between workspaces; plan_set {"from": "<this file>"} loads it.
 
-revision = 26
+revision = 34
 
 [[node]]
   id = "cuts"
@@ -441,8 +441,8 @@ revision = 26
   parent = "p1"
   needs = ["settings-ui"]
   body = "Owner decisions 2026-11-02: (1) A 'Disks' panel replaces the top bar's disk controls, docked right (screen moves aside); mounted disks with state badges (original / changed / read-only CD / application; eject, revert, download), the library below (covers, tags, filter), add by button or drag-and-drop. (2) System choice in the panel ONLY (System disk section, with Reset; library System disks offered); top bar = Disks [count], PowerPC, Restart, Settings, Fullscreen, Screenshot. (3) Live insert; Finder eject removes it from the panel. (4) Overlay state obvious. Mockup approved 2026-11-02 (db6c9bd2, ~/storage/tmp/disks-ui/mockup/). Gate: a tab test cell (mount live, eject from the Finder, revert), existing executor.web.* cells pass."
-  state = "active"
-  revision = 21
+  state = "done"
+  revision = 34
 
 [[node]]
   id = "deprecate-python"

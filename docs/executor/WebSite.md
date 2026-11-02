@@ -79,11 +79,12 @@ The CDs are `provisioning/cds.json`'s (docs/Provisioning.md, "CDs"):
 hard links to the pinned images, each with its record (`NAME.iso.json`)
 and its cover cut down to 480 pixels (`NAME.cover.jpg`, the record's
 `cover`). `library.json` gives a disk's cover as `covers/NAME`, and the
-tab offers those disks by their covers beside "Add a disk…".
+tab's Disks panel shows those disks by their covers (Disks.md).
 
 A link opens a System with disks already added, e.g.
 `/?disk=disks/boot-8.6.img&disk=disks/games-ppc.img&system=boot-8.6.img&ppc=1`
-(the page's controls do the same: System, PowerPC, "Add a disk…").
+(the page's controls do the same: the Disks panel's System choice and
+library, PowerPC).
 
 ## The server
 

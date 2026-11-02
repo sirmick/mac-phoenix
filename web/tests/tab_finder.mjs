@@ -10,7 +10,7 @@
 // double-click and checks its window came up. Skips (77) without IMAGE.
 import fs from 'node:fs';
 import path from 'node:path';
-import { open, firstFrame, request, until } from './harness.mjs';
+import { open, firstFrame, request, until, pickSystem } from './harness.mjs';
 
 const [dir, image] = process.argv.slice(2);
 if (!image || !fs.existsSync(image)) {
@@ -27,7 +27,7 @@ const check = (ok, what) => {
 await firstFrame(page);
 await page.setInputFiles('#add', image);
 await firstFrame(page);
-await page.selectOption('#system', path.basename(image));
+await pickSystem(page, path.basename(image));
 await firstFrame(page, 60000);
 const start = Date.now();
 check(await until(() => request(page, 'app').then((a) => a === 'Finder'), 60000), 'the Finder is up');

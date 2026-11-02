@@ -55,12 +55,22 @@ void Executor::ROMlib_hfsinit(void)
 #define EJECTABLE(buf) (buf[strlen(buf) - 3] == 'f' && buf[strlen(buf) - 2] == 'd')
 #endif
 
+/* MacPhoenix: disk images mounted as removable disks (the web tab's: the
+   Finder puts them away without asking), but the one named fixed (the
+   System's image). */
+bool Executor::ROMlib_ejectable_images = false;
+std::string Executor::ROMlib_fixed_image;
+static bool image_ejectable(const char *path)
+{
+    return ROMlib_ejectable_images && ROMlib_fixed_image != path;
+}
+
 #define ASSIGN_NAME_MODE_STRING(buf, lenp, filename, sbuf)                       \
     do                                                                           \
     {                                                                            \
         char ejectable;                                                          \
                                                                                  \
-        ejectable = EJECTABLE(filename);                                         \
+        ejectable = EJECTABLE(filename) || image_ejectable(filename);          \
         *(lenp) = strlen((filename)) + 1 + 6 + 1 + 1 + 1;                        \
         (buf) = (char *)alloca(*(lenp));                                         \
         sprintf((buf), "%s%c%06o%c%c", (filename), 0, (sbuf).st_mode & 07777, 0, \
@@ -138,7 +148,9 @@ void Executor::ROMlib_OurClose(void)
         if(vcbp->vcbCTRef)
         {
             pbr.ioParam.ioVRefNum = vcbp->vcbVRefNum;
-            PBUnmountVol(&pbr);
+            /* MacPhoenix: the end, so files still open are closed (a
+               volume with open files is busy to PBUnmountVol) */
+            hfsPBUnmountVol(&pbr, true);
 #if defined(MACOSX_) || defined(MACOSX_)
             if(!(vcbp->vcbAtrb & VNONEJECTABLEBIT) && vcbp->vcbDrvNum)
                 ROMlib_ejectfloppy(((VCBExtra *)vcbp)->u.hfs.fd);
@@ -637,6 +649,30 @@ void Executor::ROMlib_openharddisk(const char *dname, GUEST<LONGINT> *messp)
         ASSIGN_NAME_MODE_STRING(newbuf, &len, dname, sbuf);
         ROMlib_openfloppy(newbuf, messp);
     }
+}
+
+/* MacPhoenix: a disk image's drive in the drive queue, with the flags its
+   mount would give it (locked: read-only), no volume mounted yet: _MountVol
+   on the drive mounts it (PBMountVol), so the System's patches see the
+   mount (the web tab's Disks panel). The drive number, or 0. */
+INTEGER Executor::ROMlib_image_drive(const char *path)
+{
+    struct stat sbuf;
+    if(stat(path, &sbuf) != 0)
+        return 0;
+    char *dname;
+    long len;
+    ASSIGN_NAME_MODE_STRING(dname, &len, path, sbuf);
+    LONGINT bsize, maxbytes;
+    drive_flags_t flags;
+    uint32_t offset;
+    LONGINT fd = try_to_open_disk(dname, &bsize, &maxbytes, &flags, &offset);
+    if(fd < 0)
+        return 0;
+    close(fd);
+    hfs_access_t hfs = { -1, (LONGINT)offset, bsize, maxbytes };
+    DrvQExtra *dqp = ROMlib_addtodq(2048L * 2, dname, 0, OURHFSDREF, flags, &hfs);
+    return dqp ? (INTEGER)dqp->dq.dQDrive : 0;
 }
 
 #define JUMPTODONEIF(x) \

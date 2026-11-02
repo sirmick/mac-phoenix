@@ -53,10 +53,10 @@
       "additionalProperties": false,
       "properties": {
         "mounted": {
-          "type": "array", "maxItems": 64, "default": [], "x-scope": "page", "x-apply": "executor",
+          "type": "array", "maxItems": 64, "default": [], "x-scope": "page", "x-apply": "live",
           "items": { "type": "string", "minLength": 1, "maxLength": 2048 },
           "title": "Library disks",
-          "description": "Disks from the library, mounted in this order (downloaded once, kept in this browser).",
+          "description": "Disks from the library in the Mac, in this order: put in and taken out at once, as in the Disks panel (downloaded once, kept in this browser).",
           "x-widget": "disk-list"
         },
         "images": {

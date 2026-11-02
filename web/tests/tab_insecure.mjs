@@ -21,7 +21,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { launch, newPage, firstFrame, request, until } from './harness.mjs';
+import { launch, newPage, firstFrame, request, until, openDisks, closeDisks, diskState } from './harness.mjs';
 import { startServer } from './server.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -85,18 +85,19 @@ try {
     console.log(`  ${system}: read ${(first.remoteBytes / 1e6).toFixed(1)} MB in ${first.remoteRequests} requests`);
     check(first.remoteBytes > 0, `${system} read as needed`);
 
-    // The 50 MB disk from the Library menu: Executor restarts with it.
-    await page.selectOption('#library', 'disks/library-disk.img');
-    await page.waitForFunction(() => document.getElementById('files').textContent.includes('library-disk.img'),
-                               null, { timeout: 30000 });
-    await firstFrame(page, 60000);
-    check(await until(() => request(page, 'app').then((a) => a === 'Finder'), 90000), 'the Finder again, with the library disk');
+    // The 50 MB disk from the Disks panel's library: into the running Mac.
+    await openDisks(page);
+    await page.click('#disks-library .lib-card[data-url="disks/library-disk.img"]');
+    await closeDisks(page);
+    check(await until(() => request(page, 'volumes').then((v) => Array.isArray(v) && v.includes(LABEL)), 90000),
+          'the library disk is mounted, Executor running');
+    check(await until(() => request(page, 'app').then((a) => a === 'Finder'), 90000), 'the Finder, with the library disk');
     await until(() => titles(page).then((t) => t.includes('Desktop')), 15000);
     await page.waitForTimeout(3000);
-    const st = await page.evaluate(() => [...document.querySelectorAll('#files span')]
-        .map((s) => `${s.firstChild.textContent}: ${s.title}`));
-    console.log(`  files: ${st.join('; ')}`);
-    check(st.some((s) => s.startsWith('library-disk.img') && /writable|changed/.test(s) && /on the server/.test(s)),
+    const st = await diskState(page, 'library-disk.img');
+    console.log(`  library-disk.img: ${st}`);
+    check(await page.evaluate(() => imageState['library-disk.img'] && imageState['library-disk.img'].writable
+                                    && imageState['library-disk.img'].onServer),
           'the library disk is writable, its changes kept on the server');
 
     // Its icon: the Finder's disk icons are down the right edge, in mount
@@ -128,8 +129,7 @@ try {
         await page.mouse.click(...at(left + 32, top + 60));
         await page.keyboard.press('Meta+KeyD');
     }
-    check(await until(() => page.evaluate(() => [...document.querySelectorAll('#files span')]
-              .some((s) => s.firstChild.textContent === 'library-disk.img •')), 15000),
+    check(await until(() => page.evaluate(() => imageState['library-disk.img'] && imageState['library-disk.img'].modified), 15000),
           'a duplicated file marks the library disk changed');
     await page.waitForTimeout(1500);
     await page.screenshot({ path: path.join(out, 'tab_insecure.png') });

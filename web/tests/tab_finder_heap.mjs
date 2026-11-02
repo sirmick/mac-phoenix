@@ -11,7 +11,7 @@
 // SYSTEM: Apple's 8.6 (HFS+, the tests' 8.6.img). Skips (77) without it.
 import fs from 'node:fs';
 import path from 'node:path';
-import { open, firstFrame, request, until } from './harness.mjs';
+import { open, firstFrame, request, until, pickSystem } from './harness.mjs';
 
 const [dir, system] = process.argv.slice(2);
 if (!system || !fs.existsSync(system)) {
@@ -40,7 +40,7 @@ await page.check('#ppc');
 await firstFrame(page);
 await page.setInputFiles('#add', system);
 await firstFrame(page, 120000);
-await page.selectOption('#system', path.basename(system));
+await pickSystem(page, path.basename(system));
 await firstFrame(page, 120000);
 check(await until(() => request(page, 'app').then((a) => a === 'Finder'), 120000), 'the Finder is up');
 await page.waitForTimeout(3000);

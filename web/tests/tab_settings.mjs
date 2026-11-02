@@ -161,7 +161,7 @@ try {
             fs.writeFileSync(`${blank}.json`, JSON.stringify({ title: 'Blank disk', note: 'empty', tags: [] }));
             await p.reload();
             await ready(p);
-            await p.waitForFunction(() => document.querySelectorAll('#library option').length > 1);
+            await p.waitForFunction(() => Disks.state.library.length > 0);
             await p.click('#settings-button');
             await p.click('nav button[data-category=disks]');
             await p.selectOption('.settings-disks select', 'disks/blank.img');

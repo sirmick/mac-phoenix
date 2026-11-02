@@ -69,7 +69,16 @@ self.Module = {
         postMessage({ type: 'audio', samples: out }, [out.buffer]);
     },
     onReply(id, result) {
+        // An eject that went (or had no volume to unmount): the image out too.
+        const name = ejecting.get(id);
+        ejecting.delete(id);
+        if (name !== undefined && (result === 0 || result === -35))
+            ejected(name, true);
         postMessage({ type: 'reply', id, result });
+    },
+    // A disk image's volumes gone (web_main.cpp: ejected here or by the Finder).
+    onEjected(path) {
+        ejected(path.replace(/^\/uploads\//, ''));
     },
     onExit(code) {
         console.log(`[web] Executor exited (${code})`);
@@ -163,10 +172,78 @@ function scanVolume() {
     return { dirs, files };
 }
 
+// ---- disks in and out while Executor runs (main.js: the Disks panel) ----
+// The image's overlay opened, its changes fetched, then in /uploads;
+// Executor mounts it at the running application's next event call
+// ('mount': its OSErr is the reply). CDs read-only (mounted locked).
+let cds = new Set();
+const ejecting = new Map();         // request id -> image name
+async function openImage(f) {
+    const o = Overlay.open(f.name, f, imageKey(f));
+    if (Store.enabled && o.file.remote)
+        await Store.overlayDown(o);
+    else
+        o.syncOff = true;               // an upload: this visit's
+    return o;
+}
+
+async function insert(id, { file, cd, ids: more }) {
+    if (!IMAGE.test(file.name)) {
+        // (an application restarts Executor: main.js)
+        postMessage({ type: 'reply', id, result: { error: 'not a disk image' } });
+        return;
+    }
+    Object.assign(ids, more || {});
+    if (cd)
+        cds.add(file.name);
+    if (overlays.some((o) => o.name === file.name)) {           // in already
+        postMessage({ type: 'reply', id, result: 0 });
+        return;
+    }
+    let o;
+    try {
+        o = await openImage(file);
+    } catch (e) {
+        postMessage({ type: 'reply', id, result: { error: `${e.message || e}` } });
+        return;
+    }
+    overlays.push(o);
+    OVERLAYFS.add(o);
+    reportImages();
+    // A CD locked as --cdrom's are (ROMlib_locked_images).
+    Module.requests.push([id, cds.has(file.name) ? 'mount-cd' : 'mount', `/uploads/${file.name}`]);
+}
+
+// Gone from the Mac: its changes to the server at once, out of /uploads;
+// the page told. always: told even when it was never in (an eject of a
+// disk with no volume).
+async function ejected(name, always = false) {
+    const o = overlays.find((x) => x.name === name);
+    if (!o) {
+        if (always)
+            postMessage({ type: 'ejected', name });
+        return;
+    }
+    overlays = overlays.filter((x) => x !== o);
+    try {
+        if (Store.enabled && !o.syncOff) {
+            await Store.round;          // (one running may have it in hand)
+            await Store.overlayUp(o);
+        }
+    } catch (e) {
+        console.log(`[web] ${name}: saving its changes at eject: ${e}`);
+    }
+    OVERLAYFS.remove(name);
+    console.log(`[web] ${name} ejected`);
+    reportImages();
+    postMessage({ type: 'ejected', name });
+}
+
 // Which images have changes (the page marks them, offers their download).
 function reportImages() {
     postMessage({ type: 'images', images: overlays.map((o) => ({
-        name: o.name, modified: o.modified, writable: o.writable, onServer: Store.enabled && !o.syncOff })) });
+        name: o.name, modified: o.modified, changed: o.map.size * OVERLAY_BLOCK, writable: !cds.has(o.name),
+        onServer: Store.enabled && !o.syncOff })) });
 }
 
 // The overlays and the volume, to the server.
@@ -266,7 +343,8 @@ async function start(m) {
     const others = m.files.filter((f) => !IMAGE.test(f.name));
     // CDs are mounted locked, as a Mac's are (their overlay stays empty).
     const args = ['--size', `${m.width}x${m.height}`,
-                  ...images.flatMap((f) => [CD.test(f.name) ? '--cdrom' : '--disk', `/uploads/${f.name}`])];
+                  ...images.flatMap((f) => [CD.test(f.name) || (m.cds || []).includes(f.name) ? '--cdrom' : '--disk',
+                                            `/uploads/${f.name}`])];
     if (m.scale && m.scale !== 1)
         args.push('--scale', `${m.scale}`);
     if (m.system && images.some((f) => f.name === m.system))
@@ -323,18 +401,15 @@ async function start(m) {
         }
     }
     FS.mkdir('/host');              // Executor's "Host" volume
-    if (images.length) {
-        overlays = images.map((f) => Overlay.open(f.name, f, imageKey(f)));
-        if (Store.enabled)
-            for (const o of overlays)
-                if (o.file.remote)
-                    await Store.overlayDown(o);
-                else
-                    o.syncOff = true;       // an upload: this visit's
-        FS.mkdir('/uploads');
-        FS.mount(OVERLAYFS, { overlays }, '/uploads');
+    cds = new Set([...(m.cds || []), ...images.map((f) => f.name).filter((n) => CD.test(n))]);
+    overlays = [];
+    for (const f of images)
+        overlays.push(await openImage(f));
+    // Mounted with none too: the Disks panel puts images in later.
+    FS.mkdir('/uploads');
+    FS.mount(OVERLAYFS, { overlays }, '/uploads');
+    if (images.length)
         reportImages();
-    }
     if (others.length) {
         FS.mkdirTree(`${VOLUME}/Uploads`);
         const reader = new FileReaderSync();
@@ -368,7 +443,12 @@ self.onmessage = (e) => {
         Module.input.push(...m.events);
     } else if (m.type === 'request') {
         // Files are the Worker's: answered at once, Executor running or not.
-        if (m.op === 'download') {
+        if (m.op === 'insert') {
+            insert(m.id, m.arg);
+        } else if (m.op === 'eject') {
+            ejecting.set(m.id, m.arg);
+            Module.requests.push([m.id, 'eject', `/uploads/${m.arg}`]);
+        } else if (m.op === 'download') {
             // The image as changed: the original's slices and the changed blocks.
             const o = overlays.find((x) => x.name === m.arg);
             postMessage({ type: 'reply', id: m.id, result: o ? o.blob() : null });

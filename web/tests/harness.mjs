@@ -70,3 +70,34 @@ export async function until(fn, ms, every = 250) {
         await new Promise((r) => setTimeout(r, every));
     }
 }
+
+// The Disks panel (web/executor/disks.js): open, closed (it moves the
+// screen aside), the System picked in it.
+// (through Disks: a small viewport can leave the panel's buttons outside
+// it; web/tests/tab_disks.mjs clicks the real ones)
+export async function openDisks(page) {
+    await page.evaluate(() => Disks.open());
+}
+export async function closeDisks(page) {
+    await page.evaluate(() => Disks.close());
+}
+export async function pickSystem(page, value) {
+    await openDisks(page);
+    await page.selectOption('#system', value);
+    await closeDisks(page);
+}
+// A disk's button in the panel (revert, download, eject; the System's
+// disk too), clicked with the panel open, then closed.
+export async function diskButton(page, name, button) {
+    await openDisks(page);
+    await page.locator(`#disks-panel [data-name="${name}"] button.${button}`).evaluate((b) => b.click());
+    await closeDisks(page);
+}
+// What the panel says of a disk: its badges and explanation.
+export async function diskState(page, name) {
+    await openDisks(page);
+    const row = page.locator(`#disks-panel [data-name="${name}"]`);
+    const text = (await row.count()) ? (await row.first().locator('.file, .explain').allTextContents()).join(' ') : '';
+    await closeDisks(page);
+    return text;
+}
