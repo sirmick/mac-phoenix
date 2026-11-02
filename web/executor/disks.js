@@ -4,6 +4,7 @@
 // asked for, through the handlers given to Disks.init:
 //   add(files)        files picked or dropped (disk images, applications)
 //   insert(disk)      a library disk to put in the Mac
+//   removeUpload(disk) one of one's uploads deleted from the server's library
 //   eject(name)       a disk to take out
 //   revert(name)      forget a disk's changes
 //   download(name)    the image as it is now
@@ -235,6 +236,14 @@ const Disks = (() => {
                 ins.className = 'insert';
                 card.append(art, el('div', 'title', d.title),
                             el('div', 'meta', [d.size ? size(d.size) : '', ...(d.tags || [])].filter(Boolean).join(' · ')), ins);
+                if ((d.tags || []).includes('uploaded') && !here) {
+                    const del = btn('✕', 'Delete this upload from the server (the image and its changes)', (e) => {
+                        e.stopPropagation();
+                        on.removeUpload && on.removeUpload(d);
+                    });
+                    del.className = 'remove';
+                    card.append(del);
+                }
                 if (!here)
                     card.addEventListener('click', () => on.insert && on.insert(d));
                 return card;

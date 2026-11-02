@@ -35,7 +35,8 @@ page are added and open it.
 - **Library**: `library.json`'s disks, one's uploads among them, as cards
   (cover, or an icon for a hard disk, CD or System; title, size, tags); a
   filter on title, note and tags; tag chips (all must match). A click
-  inserts; disks in the Mac are marked.
+  inserts; disks in the Mac are marked. An upload not in the Mac has a ✕:
+  deleted from the server (`DELETE api/uploads/NAME`: image, record, overlay).
 
 ## In and out while Executor runs
 

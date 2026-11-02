@@ -84,4 +84,6 @@ body.disks-open { padding-right: min(400px, 92vw); box-sizing: border-box; }
 .lib-card.mounted::after { content: 'Mounted'; position: absolute; top: 10px; right: 10px; background: #3d5a3d; color: #cfc;
                            font-size: 10px; font-weight: 600; padding: 1px 5px; border-radius: 3px; text-transform: uppercase; }
 .lib-card .insert { position: absolute; top: 10px; right: 10px; display: none; }
+.lib-card .remove { position: absolute; top: 10px; left: 10px; display: none; padding: 1px 6px !important; }
+.lib-card:not(.mounted):hover .remove { display: block; }
 .lib-card:not(.mounted):hover .insert { display: block; }

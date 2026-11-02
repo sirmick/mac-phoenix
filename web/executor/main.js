@@ -438,9 +438,22 @@ document.getElementById('add').addEventListener('change', async (e) => {
     addFiles(files);
 });
 
+// One's upload deleted from the server's library (tools/standalone: the
+// image, its record and its overlay).
+async function removeUpload(d) {
+    if (!confirm(`Delete ${d.title} from the server? The image and its changes are gone.`))
+        return;
+    const res = await fetch(`api/uploads/${encodeURIComponent(fileName(d.url))}`, { method: 'DELETE', cache: 'no-store' })
+        .catch(() => null);
+    if (!res || !res.ok)
+        status.textContent = `${d.title}: not deleted (${res ? res.status : 'the server can\'t be reached'})`;
+    await loadLibrary();
+}
+
 Disks.init({
     add: addFiles,
     insert: (d) => addLibraryDisk(d.url),
+    removeUpload,
     eject,
     revert(name) {
         const f = shownFiles.find((x) => x.name === name);

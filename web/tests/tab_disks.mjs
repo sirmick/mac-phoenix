@@ -177,6 +177,15 @@ try {
           "it is in the server's library, tagged uploaded");
     check(await until(() => row('mine.img').count(), 5000), 'and in the panel');
     await shot('6-uploaded.png');
+
+    // Out by the panel, then deleted from the library by its card's ✕.
+    await row('mine.img').locator('button.eject').click();
+    check(await until(async () => !(await hasVolume('Mine')), 20000), 'the upload ejected');
+    const card = page.locator('#disks-library .lib-card[data-url$="mine.img"]');
+    await card.hover();
+    await card.locator('button.remove').click();
+    check(await until(() => page.evaluate(() => !library.some((d) => d.url.endsWith('mine.img'))), 10000),
+          "its card's ✕ deletes it from the server's library");
 } finally {
     await browser.close();
     server.stop();
