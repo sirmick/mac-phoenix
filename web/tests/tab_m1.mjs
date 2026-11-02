@@ -171,9 +171,9 @@ const TARGETS = {
         ['Lemmings', 'Lemmings 1.5.2 ƒ:Lemmings', [[136, 354]]], ['Maelstrom', 'Maelstrom 1.4.2 ƒ:Maelstrom', ['KeyP']],
         ['Master of Orion', 'Master of Orion ƒ:Master of Orion', [[396, 278]]],
         ['Pathways Into Darkness', 'Pathways into Darkness 1.1 ƒ:Pathways ƒ:Pathways Into Darkness'],
-        ['MacPopulousII', 'Populous II ƒ:MacPopulousII'], ['Prince of Persia', 'Prince of Persia ƒ:Prince of Persia'],
+        ['MacPopulousII', 'Populous II ƒ:MacPopulousII:MacPopulousII', [[186, 240]]], ['Prince of Persia', 'Prince of Persia ƒ:Prince of Persia'],
         ['SimEarth Color', 'SimEarth 2.0 ƒ:SimEarth Color'], ['SimLife™ Color', 'SimLife 1.0.1 ƒ:SimLife™ Color'],
-        ['Spectre 1.1', 'Spectre 1.1 ƒ:Spectre 1.1', [[503, 139], 'KeyP']], ['Swoop', 'Swoop 1.0.2 ƒ:Swoop', [[160, 98]]],
+        ['Spectre 1.1', 'Spectre 1.1 ƒ:Spectre 1.1', [[503, 139], 'KeyP']], ['Swoop', 'Swoop 1.0.2 ƒ:Swoop', ['KeyN']],
         ['Monkey Island', 'The Secret of Monkey Island ƒ:Monkey Island'],
     ].map(([name, app, start]) => ({ name, app: `Games:${app}`, systems: ['7.6.1'], use: (t) => t.play(start) })),
     'games-ppc.img': [
@@ -267,6 +267,8 @@ const at = async (x, y) => {
 };
 const DIALOG_KIND = 2;
 const ERROR = /error|sorry|requires?\b|required|cannot|can't|could not|couldn't|unable|not enough|out of memory|newer version|insert the|damaged|modified by|(^|\s)-\d{3,}/i;
+// (an alert: a game's own dialog full of rules isn't one)
+const failing = (w) => w && w.kind === DIALOG_KIND && said(w).length < 400 && ERROR.test(said(w));
 const said = (w) => w.kind !== DIALOG_KIND ? ''
     : /\^[0-3]/.test(w.text) ? w.text.replace(/\^([0-3])/g, (_, i) => (w.params || [])[i] || '')
         : [w.text, ...(w.params || [])].filter(Boolean).join('\n');
@@ -400,7 +402,7 @@ const t = {
         for (let round = 0; round < 4; round++) {
             const ws = await t.windows(true);
             const d = ws.find((w) => w.kind === DIALOG_KIND);
-            if (d && ERROR.test(said(d)))
+            if (failing(d))
                 throw new Error(`alert "${said(d).replace(/\s+/g, ' ')}"`);
             const buttons = d ? (d.items || []).filter((i) => i.type >= 4 && i.type < 8) : [];
             const button = SAFE.map((re) => buttons.find((i) => re.test(i.title))).find(Boolean);
@@ -426,7 +428,7 @@ const t = {
         if (now !== null && now !== current)
             throw new Error(`then gone (${now} in front)`);
         const d = (await t.windows()).find((w) => w.kind === DIALOG_KIND);
-        if (d && ERROR.test(said(d)))
+        if (failing(d))
             throw new Error(`alert "${said(d).replace(/\s+/g, ' ')}"`);
         if (changed(title, then) < 0.1)
             throw new Error('still the title screen');
