@@ -4,13 +4,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
-	"time"
 )
 
 // The schema here is web/executor's.
@@ -77,11 +77,11 @@ func TestSettingsCases(t *testing.T) {
 		doc := defaultDoc()
 		if k.Start != nil {
 			var err error
-			if doc, _, err = patchSettings(doc, k.Start); err != nil {
+			if doc, err = patchSettings(doc, k.Start); err != nil {
 				t.Fatalf("%d start: %v", i, err)
 			}
 		}
-		next, _, err := patchSettings(doc, k.Patch)
+		next, err := patchSettings(doc, k.Patch)
 		if k.Error != "" {
 			var fe *fieldError
 			if !errors.As(err, &fe) || fe.Path != k.Error {
@@ -100,7 +100,7 @@ func TestSettingsCases(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "settings.json")
 		os.WriteFile(path, what, 0o600)
-		doc, _, err := loadSettings(path)
+		doc, err := loadSettings(path)
 		if k.Error != "" {
 			if err == nil || !strings.Contains(err.Error(), k.Error) {
 				t.Errorf("%s: %v, want an error at %s", what, err, k.Error)
@@ -113,7 +113,7 @@ func TestSettingsCases(t *testing.T) {
 		}
 		expectAt(t, string(what), doc, k.Expect)
 		// saved as version 2, and read back the same
-		again, _, err := loadSettings(path)
+		again, err := loadSettings(path)
 		if err != nil || !reflect.DeepEqual(again, doc) {
 			t.Errorf("%s: read again: %v", what, err)
 		}
@@ -121,25 +121,28 @@ func TestSettingsCases(t *testing.T) {
 }
 
 // POST and GET /api/settings: saved, kept across a restart, invalid ones
-// refused with where, the password write-only.
+// refused with where; a password and a paired list from before the claim dropped.
 func TestSettingsAPI(t *testing.T) {
 	data := t.TempDir()
 	path := filepath.Join(data, "conf", "settings.json")
+	os.MkdirAll(filepath.Dir(path), 0o755)
+	os.WriteFile(path, []byte(`{"version":2,"password_hash":"aa$bb","network":{"password":true,"paired":[],"port":9000}}`), 0o600)
+	var token string
 	start := func() *Server {
-		doc, hash, err := loadSettings(path)
+		doc, err := loadSettings(path)
 		if err != nil {
 			t.Fatal(err)
 		}
-		s := &Server{data: data, settingsPath: path, ids: newIds(filepath.Join(data, "ids.json")),
-			sessions: map[string]time.Time{}, failures: map[string][]time.Time{}}
-		s.applySettings(doc, hash)
-		s.running = s.settings()
+		s := &Server{data: data, settingsPath: path, ids: newIds(filepath.Join(data, "ids.json"))}
+		token, _ = s.claim.take() // each start: a new claim
+		s.applySettings(doc)
 		return s
 	}
 	call := func(s *Server, method, body string) (int, map[string]any) {
 		r := httptest.NewRequest(method, "/api/settings", strings.NewReader(body))
-		r.RemoteAddr = "127.0.0.1:5000"
+		r.RemoteAddr = "192.0.2.7:5000" // not loopback: nothing special
 		r.Header.Set("Content-Type", "application/json")
+		r.AddCookie(&http.Cookie{Name: cookieName(r.Host), Value: token})
 		w := httptest.NewRecorder()
 		s.ServeHTTP(w, r)
 		var v map[string]any
@@ -147,6 +150,9 @@ func TestSettingsAPI(t *testing.T) {
 		return w.Code, v
 	}
 	s := start()
+	if b, _ := os.ReadFile(path); bytes.Contains(b, []byte("password")) || bytes.Contains(b, []byte("paired")) {
+		t.Errorf("the old password or paired list kept: %s", b)
+	}
 	code, v := call(s, "POST", `{"machine":{"ram_mb":96},"network":{"port":9001}}`)
 	if code != 200 {
 		t.Fatalf("POST: %d %v", code, v)
@@ -154,9 +160,15 @@ func TestSettingsAPI(t *testing.T) {
 	if got := v["restart_needed"].([]any); len(got) != 1 || got[0] != "network.port" {
 		t.Errorf("restart_needed %v", got)
 	}
+	if v["can_change_server"] != true {
+		t.Errorf("can_change_server %v", v["can_change_server"])
+	}
 	code, v = call(s, "POST", `{"sound":{"volume":"loud"}}`)
 	if code != 400 || v["path"] != "sound.volume" {
 		t.Errorf("invalid: %d %v", code, v)
+	}
+	if code, v = call(s, "POST", `{"advanced":{"data":"/elsewhere"}}`); code != 400 || v["path"] != "advanced.data" {
+		t.Errorf("data is read-only: %d %v", code, v)
 	}
 	s = start() // again, from the file
 	_, v = call(s, "GET", "")
@@ -164,17 +176,7 @@ func TestSettingsAPI(t *testing.T) {
 	if at(st, "machine.ram_mb") != 96.0 || at(st, "network.port") != 9001.0 || at(st, "sound.volume") != 80.0 {
 		t.Errorf("not kept: %v", st)
 	}
-	if at(st, "network.password") != false || at(st, "advanced.data") != data {
+	if at(st, "network.paired") != nil || at(st, "advanced.data") != data {
 		t.Errorf("read-only ones: %v", st)
-	}
-	if code, v = call(s, "POST", `{"network":{"password":"pw"}}`); code != 200 || at(v["settings"].(map[string]any), "network.password") != true {
-		t.Errorf("password: %d %v", code, v)
-	}
-	b, _ := os.ReadFile(path)
-	if !bytes.Contains(b, []byte(`"password_hash"`)) || bytes.Contains(b, []byte(`"password":`)) {
-		t.Errorf("the file: %s", b)
-	}
-	if s.settings().PasswordHash == "" {
-		t.Error("the password does not apply")
 	}
 }

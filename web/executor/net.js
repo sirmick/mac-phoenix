@@ -1,8 +1,8 @@
-// The Worker's side of the network relay (tools/web/server's /relay):
+// The Worker's side of the network relay (tools/standalone's /relay):
 // the WebSocket that Executor's MacTCP and Open Transport reach the
 // network through (host/wasm/net.cpp; the protocol: docs/executor/
-// DIRECTION.md, "The network relay"). Signed in to the server only: the
-// page says so at the start, and net.url is the relay's then.
+// DIRECTION.md, "The network relay"). Served by tools/standalone only:
+// the page says so at the start, and net.url is the relay's then.
 //
 // The C side opens it, sends through it and takes what came from inbox
 // (one Uint8Array per message) as it yields; nothing here calls into C.

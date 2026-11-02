@@ -399,6 +399,15 @@ void Executor::ROMlib_cfm_application_start()
    that it doesn't fill the heap of the application that happens to load
    it. */
 static bool loading_system_fragment;
+/* ROMlib_cfm_system_owned */
+static bool system_owned;
+
+bool Executor::ROMlib_cfm_system_owned(bool on)
+{
+    bool was = system_owned;
+    system_owned = on;
+    return was;
+}
 /* An import library found by name for a closure (not the application's
    own fragment), from the application's file too: its container image in
    temporary memory first; its data sections stay the application's. Mac
@@ -416,6 +425,16 @@ static Ptr
 cfm_new_ptr(Size n)
 {
     if(loading_global_section)
+    {
+        Ptr p = nullptr;
+        if(ROMlib_pm_zone)
+        {
+            TheZoneGuard guard(ROMlib_pm_zone);
+            p = NewPtr(n);
+        }
+        return p ? p : NewPtrSys(n);
+    }
+    if(system_owned)
     {
         Ptr p = nullptr;
         if(ROMlib_pm_zone)
@@ -2035,7 +2054,7 @@ prepare_container(void *addr, const load_origin& origin, GUEST<ConnectionID> *co
 
     size_t loaded_mark = loaded.size();
     size_t init_mark = pending_inits.size();
-    loaded.push_back({ origin, arch, conn, LM(ApplZone), 0, false });
+    loaded.push_back({ origin, arch, conn, system_owned ? LM(SysZone) : LM(ApplZone), 0, false });
     loaded.back().image = (Ptr)addr;
     loaded.back().image_length = origin.length;
     const load_origin *saved_origin = current_origin;

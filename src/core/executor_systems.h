@@ -16,6 +16,9 @@
  *                  preferences behind), kept otherwise.  File times are
  *                  kept: they are the files' Mac dates, and Finder checks
  *                  its own against the segment cache in its preferences.
+ *                  One session at a time (<name>.lock): another started
+ *                  while it runs gets a fresh copy of its own,
+ *                  run/<pid>/<name>, removed when it exits.
  *
  * Without a system, Executor uses its own data folder (<storage>/executor)
  * and starts in its Browser.
@@ -42,6 +45,10 @@ std::vector<System> list(const std::string& storage_dir);
 // <name>.clean to <name> as needed) and executor_start ("finder", "browser" or a
 // path inside the System's folder). Empty strings mean Executor's defaults.
 void resolve(const config::EmulatorConfig& config, std::string& data_dir, std::string& app);
+
+// Removes this session's copy of its System, if it has one (at exit; main's
+// signal handler, which leaves without atexit).
+void remove_session_copy();
 
 // The image to mount beside the System (empty if the System is not one).
 std::string system_image(const config::EmulatorConfig& config);

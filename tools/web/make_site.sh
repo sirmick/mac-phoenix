@@ -1,12 +1,11 @@
 #!/bin/bash
 # Executor's tab as a directory to serve: the page (web/executor), the
-# module, and .gz copies of the large files (tools/web/serve.py and
-# tools/web/server send them to browsers that accept gzip).
+# module, and .gz copies of the large files (tools/standalone sends them to
+# browsers that accept gzip).
 #
 #   tools/web/make_site.sh OUT_DIR [BUILD_WASM_DIR]
 #
-# The server's [server] site (docs/executor/WebSite.md); make_demo.sh adds
-# a boot disk for a static host.
+# tools/standalone embeds it (its Makefile's site; --site DIR serves one).
 set -euo pipefail
 OUT="$1"
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"

@@ -18,31 +18,32 @@ page are added and open it.
 - **In the Mac**: the data disks and uploaded applications. Each has a
   badge and, when there is something to say, what it means:
   - `ORIGINAL`: no changes.
-  - `CHANGED`: how much (the overlay's blocks), where it is kept (on the
-    server, in this browser, in memory only) and what Revert and
-    Download do. The image itself is never written (overlay.js).
+  - `CHANGED`: how much (the overlay's blocks), where it is kept and what
+    Revert and Download do. The image itself is never written (overlay.js).
   - `CD · READ-ONLY`: `.iso`/`.toast`/`.cdr`, or a library disk tagged
     `cd`. Mounted locked: OVERLAYFS refuses to open it for writing, so
     Executor opens it read-only (`try_to_open_disk`: `DRIVE_FLAGS_LOCKED`).
-  - `IN MEMORY`: another tab has the disk (worker.js: borrowed).
+  - `THIS VISIT`: a disk the server didn't take: its changes last until
+    Executor restarts.
   - `APPLICATION`: copied into `executor:Uploads`.
   - `INSERTING…`: on its way in (downloading, opening, mounting).
   Buttons: ↺ Revert, ⤓ Download, ⏏ Eject. Below them: **Add disk image or
-  application…** (the page's `#add`) or drop files.
-- **Your disks**: images of one's own taken out (kept in OPFS `shelf/`, or
-  for the visit without OPFS): Insert, or ✕ forget.
-- **Library**: `library.json`'s disks as cards (cover, or an icon for a
-  hard disk, CD or System; title, size, tags); a filter on title, note
-  and tags; tag chips (all must match). A click inserts; disks in the
-  Mac are marked.
+  application…** (the page's `#add`) or drop files: a disk image is
+  uploaded into the server's library (main.js `uploadImage`, tools/standalone
+  `POST /api/uploads/NAME`, tagged `uploaded`) and put in; one the server
+  refuses is held for this visit.
+- **Library**: `library.json`'s disks, one's uploads among them, as cards
+  (cover, or an icon for a hard disk, CD or System; title, size, tags); a
+  filter on title, note and tags; tag chips (all must match). A click
+  inserts; disks in the Mac are marked.
 
 ## In and out while Executor runs
 
 Inserting needs no restart (main.js `putIn` -> worker.js `insert` ->
 web_main.cpp `mount`):
 
-1. The page has the file (an upload in OPFS, a library disk fetched as
-   before: lazily by Range when large, else into `disk-cache/`).
+1. The page has the file (a library disk, uploads included, read by Range
+   as needed; one held for the visit in memory).
 2. The Worker opens its overlay (asking another tab for it first, as at
    the start), fetches its changes (Sync/Store `overlayDown`) and adds it
    to the mounted OVERLAYFS (`/uploads` is mounted even when empty).
@@ -73,19 +74,17 @@ says so). Whatever unmounts or ejects a disk image, the Finder's Put Away
 included, web_main.cpp notices at the next event call (`watch_images`: a
 drive of `/uploads/` that had a volume and has none; an ejected volume
 still known offline is unmounted, so no grey icon stays) and calls
-`Module.onEjected`; the Worker saves the overlay's changes (to the server
-or the account at once), lets its files go, takes it out of `/uploads`
-and tells the page, which takes it out of the panel: a library disk out
-of `disks.mounted`, one's own image onto the shelf.
+`Module.onEjected`; the Worker sends the overlay's changes to the server
+at once, takes it out of `/uploads` and tells the page, which takes it out
+of the panel and of `disks.mounted` (it stays in the library).
 
 The page follows `disks.mounted` (`x-apply: live`): a URL added there
 (the panel's library, the Settings dialog's list, another tab) is put
 in, one taken off is ejected. Executor not running, everything waits for
 the next start, as before.
 
-Revert takes the disk out, forgets its changes where they are kept
-(OPFS `overlays/KEY`, the server's `api/sync/overlays/KEY`, the account
-through a `revert` mark) and puts it back as it came. A disk in use (or
+Revert takes the disk out, the server forgets its changes
+(`DELETE api/sync/overlays/KEY`) and puts it back as it came. A disk in use (or
 the System's) reverts with a restart, as before.
 
 ## Requests (web_main.cpp)

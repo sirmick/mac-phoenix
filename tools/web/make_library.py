@@ -5,7 +5,7 @@
 
 Makes every disk in DISKS below from the provisioned images (provisioning/
 build.py's, in ~/storage/images) into OUT_DIR (default ~/storage/web-library),
-each with its record, NAME.json: the title, tags and note tools/web/server's
+each with its record, NAME.json: the title, tags and note tools/standalone's
 library shows, and "launch", the applications on it, which the site's cells
 (web/tests/tab_site.mjs) open on each of their systems. A disk is made again
 only when an image it comes from is newer, or with --force.

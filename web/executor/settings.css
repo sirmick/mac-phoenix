@@ -44,7 +44,6 @@ dialog.settings nav button.active { background: #4a5a74; color: #fff; }
 .settings-error:empty { display: none; }
 .settings-row.invalid input, .settings-row.invalid select { border-color: #c55; }
 .settings-override { color: #fc6; font-size: 12px; margin-top: 3px; }
-.settings-password { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .settings-disks ol { margin: 0 0 6px; padding-left: 20px; }
 .settings-disks li { padding: 2px 0; }
 .settings-disks li span { display: inline-block; min-width: 220px; }

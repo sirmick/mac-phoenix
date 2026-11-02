@@ -1,6 +1,6 @@
 package main
 
-// One controlling tab, as tools/web/server/session.py: each tab says it
+// One controlling tab (of the browser with the claim): each tab says it
 // is there every few seconds (POST /api/session?id=ID); the first gets
 // control and keeps it while it does; the others are viewers, shown the
 // controller's screen (PUT/GET /api/session/screen, a PNG). take=1

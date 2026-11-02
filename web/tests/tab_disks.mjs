@@ -5,7 +5,8 @@
 // reverted (out, its changes forgotten, back in: the folder gone), then
 // put away in the Finder (Cmd-Y): out of the panel and of the
 // disks.mounted setting. A library CD goes in read-only and comes out by
-// the panel's eject button.
+// the panel's eject button. One's own image added by the Add button goes
+// into the server's library (uploaded) and into the running Mac.
 //
 //   node web/tests/tab_disks.mjs DIR SYSTEM [SHOTS]
 //
@@ -30,9 +31,12 @@ const hformat = (name, label) => {
     fs.writeFileSync(f, Buffer.alloc(2 << 20));
     execFileSync('hformat', ['-l', label, f], { stdio: 'ignore', env: { ...process.env, HOME: images } });
 };
+const own = fs.mkdtempSync(path.join(os.tmpdir(), 'tab-disks-own-'));
 try {
     hformat('blank.img', 'Blank');
     hformat('disc.iso', 'Disc');
+    fs.writeFileSync(path.join(own, 'mine.img'), Buffer.alloc(1440 * 1024));
+    execFileSync('hformat', ['-l', 'Mine', path.join(own, 'mine.img')], { stdio: 'ignore', env: { ...process.env, HOME: own } });
 } catch (e) {
     console.log(`SKIP: no hfsutils (${e.code || e.status})`);
     process.exit(77);
@@ -43,7 +47,11 @@ record('sys.img', { title: 'The System', tags: ['system'] });
 record('blank.img', { title: 'Blank', tags: [] });
 record('disc.iso', { title: 'Disc', tags: ['cd'] });
 
-const server = await startServer(dir, { images, include: ['*.img', '*.iso'], standalone: true });
+const server = await startServer(dir, { images, include: ['*.img', '*.iso'] });
+if (!server) {
+    console.log('SKIP: no go to build tools/standalone');
+    process.exit(77);
+}
 const browser = await launch();
 const context = await browser.newContext({ viewport: { width: 1400, height: 800 } });
 const page = await context.newPage();
@@ -160,10 +168,20 @@ try {
     check(await until(async () => !(await row('disc.iso').count()), 10000), 'and it is out of the panel');
     check(await request(page, 'app') === 'Finder', 'the Finder still runs');
     await shot('5-cd-ejected.png');
+
+    // One's own image, by the Add button: uploaded into the library, put in.
+    await page.setInputFiles('#add', path.join(own, 'mine.img'));
+    check(await until(() => hasVolume('Mine'), 60000), 'an added image is mounted while Executor runs');
+    check(await page.evaluate(() => worker === window.before), 'still without a restart');
+    check(await page.evaluate(() => library.some((d) => d.url.endsWith('mine.img') && (d.tags || []).includes('uploaded'))),
+          "it is in the server's library, tagged uploaded");
+    check(await until(() => row('mine.img').count(), 5000), 'and in the panel');
+    await shot('6-uploaded.png');
 } finally {
     await browser.close();
     server.stop();
     fs.rmSync(images, { recursive: true, force: true });
+    fs.rmSync(own, { recursive: true, force: true });
 }
 console.log(failed ? `${failed} check(s) failed` : 'all passed');
 process.exit(failed ? 1 : 0);

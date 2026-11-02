@@ -1,6 +1,6 @@
 package main
 
-// The library, as tools/web/server/library.py: every image in the images
+// The library: every image in the images
 // directory with a record (NAME.img.json: title, tags, note) that the
 // include/exclude patterns let through is in /library.json and served at
 // disks/NAME; a record's "cover", a picture beside the image, at
@@ -8,6 +8,8 @@ package main
 //
 // Each disk's id is its content's (SHA-256, the first 24 digits): its
 // ETag and X-Image-Id; the tab keys a disk's overlay on it (NAME-ID).
+// Images uploaded through the tab (uploads.go) are in IMAGES/uploads,
+// named uploads/NAME.
 // Ids are kept in DATA/image-ids.json by path, size and time, worked out
 // on first use (warm: the library's at start, in the background).
 
@@ -17,6 +19,7 @@ import (
 	"encoding/json"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -37,15 +40,9 @@ type Disk struct {
 
 func catalog(images string, include, exclude []string) []Disk {
 	out := []Disk{}
-	ents, err := os.ReadDir(images)
-	if err != nil || images == "" {
+	if images == "" {
 		return out
 	}
-	names := make([]string, 0, len(ents))
-	for _, e := range ents {
-		names = append(names, e.Name())
-	}
-	sort.Strings(names)
 	match := func(name string, pats []string) bool {
 		for _, p := range pats {
 			if ok, _ := filepath.Match(p, name); ok {
@@ -54,16 +51,32 @@ func catalog(images string, include, exclude []string) []Disk {
 		}
 		return false
 	}
+	out = catalogDir(out, images, "", func(name string) bool { return match(name, include) && !match(name, exclude) })
+	// Uploads were sent to be offered: any image's name.
+	return catalogDir(out, filepath.Join(images, uploadsDir), uploadsDir+"/", func(name string) bool { return uploadName.MatchString(name) })
+}
+
+// catalogDir: dir's images that offer lets through, named prefix+NAME.
+func catalogDir(out []Disk, dir, prefix string, offer func(name string) bool) []Disk {
+	ents, err := os.ReadDir(dir)
+	if err != nil {
+		return out
+	}
+	names := make([]string, 0, len(ents))
+	for _, e := range ents {
+		names = append(names, e.Name())
+	}
+	sort.Strings(names)
 	for _, rec := range names {
 		name, ok := strings.CutSuffix(rec, ".json")
 		if !ok {
 			continue
 		}
-		st, err := os.Stat(filepath.Join(images, name))
-		if err != nil || !st.Mode().IsRegular() || !match(name, include) || match(name, exclude) {
+		st, err := os.Stat(filepath.Join(dir, name))
+		if err != nil || !st.Mode().IsRegular() || !offer(name) {
 			continue
 		}
-		b, err := os.ReadFile(filepath.Join(images, rec))
+		b, err := os.ReadFile(filepath.Join(dir, rec))
 		if err != nil {
 			continue
 		}
@@ -82,11 +95,11 @@ func catalog(images string, include, exclude []string) []Disk {
 		if r.Tags == nil {
 			r.Tags = []string{}
 		}
-		d := Disk{Name: name, Title: r.Title, Note: r.Note, Tags: r.Tags, Size: st.Size(),
-			URL: "disks/" + pyQuote(name, "/")}
+		d := Disk{Name: prefix + name, Title: r.Title, Note: r.Note, Tags: r.Tags, Size: st.Size(),
+			URL: "disks/" + pyQuote(prefix+name, "/")}
 		if r.Cover != "" && r.Cover == filepath.Base(r.Cover) {
-			if cst, err := os.Stat(filepath.Join(images, r.Cover)); err == nil && cst.Mode().IsRegular() {
-				d.cover, d.Cover = r.Cover, "covers/"+pyQuote(r.Cover, "/")
+			if cst, err := os.Stat(filepath.Join(dir, r.Cover)); err == nil && cst.Mode().IsRegular() {
+				d.cover, d.Cover = prefix+r.Cover, "covers/"+pyQuote(prefix+r.Cover, "/")
 			}
 		}
 		out = append(out, d)
@@ -96,9 +109,10 @@ func catalog(images string, include, exclude []string) []Disk {
 
 var keyUnsafe = regexp.MustCompile(`[^\w.-]`)
 
-// overlayKey is the tab's key for a disk's overlay (main.js).
+// overlayKey is the tab's key for a disk's overlay (main.js): by its
+// file's name (an upload's without uploads/).
 func overlayKey(name, id string) string {
-	return keyUnsafe.ReplaceAllString(name+"-"+id, "_")
+	return keyUnsafe.ReplaceAllString(path.Base(name)+"-"+id, "_")
 }
 
 type idEntry struct {
@@ -111,6 +125,7 @@ type Ids struct {
 	mu      sync.Mutex
 	known   map[string]idEntry
 	hashing map[string]*sync.Mutex
+	warming sync.WaitGroup // warm's
 }
 
 func newIds(path string) *Ids {
@@ -178,8 +193,24 @@ func (ids *Ids) get(path string) (string, error) {
 	return id, nil
 }
 
+// set: path's id, worked out as it was written.
+func (ids *Ids) set(path, id string) {
+	st, err := os.Stat(path)
+	if err != nil {
+		return
+	}
+	ids.mu.Lock()
+	defer ids.mu.Unlock()
+	ids.known[path] = idEntry{stampOf(st), id}
+	if b, err := json.Marshal(ids.known); err == nil {
+		writeAtomic(ids.path, b, 0o644)
+	}
+}
+
 func (ids *Ids) warm(paths []string) {
+	ids.warming.Add(1)
 	go func() {
+		defer ids.warming.Done()
 		for _, p := range paths {
 			ids.get(p)
 		}

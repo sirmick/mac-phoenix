@@ -1,7 +1,7 @@
 package main
 
 // Overlays: a disk's changed 4 KB blocks (web/executor/overlay.js), by
-// the tab's key, with tools/web/server/sync.py's versions: every upload
+// the tab's key, versioned: every upload
 // is a new version and its blocks carry it, so a tab that has version V
 // asks for the blocks newer than V; an upload names the version it is on
 // (base) and is refused (409 { version }) when another came in between.
@@ -584,6 +584,29 @@ func (s *OverlayStore) merge(key string) (int, string, error) {
 	delete(s.overlays, key)
 	s.mu.Unlock()
 	return n, image, nil
+}
+
+// drop: the overlay of key, its file too, gone (its image is).
+func (s *OverlayStore) drop(key string) error {
+	o, err := s.get(key)
+	if err != nil {
+		return err
+	}
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if o.readers > 0 {
+		return httpErr(409, "being read: try again")
+	}
+	if o.f != nil {
+		o.f.Close()
+		o.f = nil
+	}
+	os.Remove(o.path)
+	os.Remove(filepath.Join(s.data, key+".overlay"))
+	s.mu.Lock()
+	delete(s.overlays, key)
+	s.mu.Unlock()
+	return nil
 }
 
 type overlaySummary struct {

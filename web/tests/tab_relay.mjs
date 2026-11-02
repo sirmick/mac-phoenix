@@ -1,6 +1,6 @@
-// The network relay (tools/web/server's /relay, host/wasm/net.cpp): the
+// The network relay (tools/standalone's /relay, host/wasm/net.cpp): the
 // tab's MacTCP and Open Transport against an echo server on this host,
-// through the relay, signed in. MacPhoenixSuite's network and mactcp
+// through the relay. MacPhoenixSuite's network and mactcp
 // sections and OTTestRetro68K (Open Transport, Executor's own) report all
 // PASS, as natively (mactcp_executor, ot_retro68_68k_executor); their
 // passive opens and listeners connect inside the tab.
@@ -15,7 +15,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { launch, newPage, firstFrame, request, until } from './harness.mjs';
-import { startServer, signIn, OWNER_PASSWORD } from './server.mjs';
+import { startServer } from './server.mjs';
 
 const [dir, guest] = process.argv.slice(2);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -29,7 +29,12 @@ const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'tab-relay-'));
 const portFile = path.join(scratch, 'echo_port');
 const echo = spawn('python3', [path.join(ROOT, 'tests/lib/echo_server.py'), portFile], { stdio: 'inherit' });
 const echoPort = await until(async () => fs.existsSync(portFile) && fs.readFileSync(portFile, 'utf8').trim(), 5000, 100);
-const server = await startServer(dir, { relay: 'ports = ["1-65535"]\nallow_private = true' });
+const server = await startServer(dir, { relay: { ports: ['1-65535'], allow_private: true } });
+if (!server) {
+    console.log('SKIP: no go');
+    echo.kill();
+    process.exit(77);
+}
 const browser = await launch();
 
 // One run of an uploaded application: its results file, ending in "---".
@@ -47,7 +52,7 @@ const passes = (t) => t.split(/\r?\n|\r/).filter((l) => /^PASS/.test(l)).length;
 
 try {
     const page = await newPage(browser);
-    await signIn(page, server.url, 'owner', OWNER_PASSWORD);
+    await page.goto(`${server.url}/`);
     await firstFrame(page);
     await page.setInputFiles('#add', [path.join(guest, 'suite/MacPhoenixSuite.bin'),
                                       path.join(guest, 'ot/OTTestRetro68K.bin')]);

@@ -29,7 +29,11 @@ try {
 fs.writeFileSync(`${disk}.json`, JSON.stringify({ title: 'Blank', note: 'a blank disk', tags: [] }));
 const original = fs.readFileSync(disk);
 
-const server = await startServer(dir, { images, standalone: true });
+const server = await startServer(dir, { images });
+if (!server) {
+    console.log('SKIP: no go');
+    process.exit(77);
+}
 const browser = await launch();
 let failed = 0;
 const check = (ok, what) => {

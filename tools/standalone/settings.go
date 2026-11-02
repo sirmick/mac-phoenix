@@ -10,20 +10,14 @@ package main
 //
 //	GET  -> { version, settings, scopes, restart_needed, can_change_server }
 //	POST a JSON merge patch (RFC 7396) of settings: null puts a setting, or
-//	     a whole category, back to its default; network.password a string
-//	     sets the password ("": none). The settings after, as GET.
+//	     a whole category, back to its default. The settings after, as GET.
 //
 // Command-line flags override settings for the run and are not saved.
 // What a POST changes applies at once (the library, the relay's policy
-// for new connections, the password), except x-apply server ones (bind,
+// for new connections), except x-apply server ones (bind,
 // port, the TLS files): at the next start, listed in restart_needed.
 
 import (
-	"crypto/pbkdf2"
-	"crypto/rand"
-	"crypto/sha256"
-	"crypto/subtle"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -53,19 +47,20 @@ type Settings struct {
 	SecureCookies  any // "auto", true or false
 	TrustedProxies []string
 	MaxUploadMB    int
+	MaxImageMB     int
 	TLSCert        string
 	TLSKey         string
 	Relay          RelaySettings
-	PasswordHash   string // pbkdf2: salt$hash
 }
 
 // typed: doc's server settings; images "" is DATA/images.
-func typed(doc map[string]any, hash, data string) Settings {
+func typed(doc map[string]any, data string) Settings {
 	var f struct {
 		Disks struct {
-			Images  string   `json:"images"`
-			Include []string `json:"include"`
-			Exclude []string `json:"exclude"`
+			Images     string   `json:"images"`
+			Include    []string `json:"include"`
+			Exclude    []string `json:"exclude"`
+			MaxImageMB int      `json:"max_image_mb"`
 		} `json:"disks"`
 		Network struct {
 			Bind                string   `json:"bind"`
@@ -92,8 +87,8 @@ func typed(doc map[string]any, hash, data string) Settings {
 		d.Images = expand(d.Images)
 	}
 	return Settings{Bind: n.Bind, Port: n.Port, Images: d.Images, Include: d.Include, Exclude: d.Exclude,
-		SecureCookies: n.SecureCookies, TrustedProxies: n.TrustedProxies, MaxUploadMB: n.MaxUploadMB,
-		TLSCert: n.TLSCert, TLSKey: n.TLSKey, PasswordHash: hash,
+		SecureCookies: n.SecureCookies, TrustedProxies: n.TrustedProxies, MaxUploadMB: n.MaxUploadMB, MaxImageMB: d.MaxImageMB,
+		TLSCert: n.TLSCert, TLSKey: n.TLSKey,
 		Relay: RelaySettings{n.RelayEnabled, n.RelayPorts, n.RelayAllowPrivate, n.RelayMaxSockets,
 			n.RelayMaxConnections, n.RelayNameserver}}
 }
@@ -159,10 +154,9 @@ func parsePorts(spec []any) ([]portRange, error) {
 	return out, nil
 }
 
-// patchSettings: doc with patch applied (a merge patch, password taken
-// out), checked; and whether it changes any of the server's settings.
-// doc is not changed.
-func patchSettings(doc, patch map[string]any) (map[string]any, bool, error) {
+// patchSettings: doc with patch applied (a merge patch), checked. doc is
+// not changed.
+func patchSettings(doc, patch map[string]any) (map[string]any, error) {
 	patch = deepCopy(patch).(map[string]any)
 	delete(patch, "version")
 	// Each setting named exists and may be written; types and ranges are
@@ -170,62 +164,66 @@ func patchSettings(doc, patch map[string]any) (map[string]any, bool, error) {
 	paths := []string{}
 	leaves(patch, "", settingsSchema, &paths)
 	sort.Strings(paths)
-	server := false
 	for _, p := range paths {
 		n := settingsSchema.lookup(p)
 		if n == nil {
-			return nil, false, &fieldError{p, "no such setting"}
+			return nil, &fieldError{p, "no such setting"}
 		}
 		if n.ReadOnly {
-			return nil, false, &fieldError{p, "read-only"}
+			return nil, &fieldError{p, "read-only"}
 		}
-		server = server || n.Scope == "server"
 	}
 	next := settingsSchema.fill(mergePatch(deepCopy(doc).(map[string]any), patch))
 	if err := check(next); err != nil {
-		return nil, false, err
+		return nil, err
 	}
-	return next, server, nil
+	return next, nil
 }
 
 // loadSettings: the file's document, migrated, filled with defaults and
-// checked, and the password's hash (kept beside the settings, never sent).
-func loadSettings(path string) (map[string]any, string, error) {
+// checked. A password (password_hash, network.password; before the
+// claim) and network.paired (the pairing builds') are dropped, and the
+// file saved without them.
+func loadSettings(path string) (map[string]any, error) {
 	b, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
-		return defaultDoc(), "", nil
+		return defaultDoc(), nil
 	}
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 	var doc map[string]any
 	if err := json.Unmarshal(b, &doc); err != nil || doc == nil {
-		return nil, "", fmt.Errorf("%s: not a JSON object", path)
+		return nil, fmt.Errorf("%s: not a JSON object", path)
 	}
 	old, _ := doc["version"].(float64)
 	if doc, err = migrate(doc); err != nil {
-		return nil, "", fmt.Errorf("%s: %v", path, err)
+		return nil, fmt.Errorf("%s: %v", path, err)
 	}
-	hash, _ := doc["password_hash"].(string)
+	_, stale := doc["password_hash"]
 	delete(doc, "password_hash")
-	doc = settingsSchema.fill(doc)
-	if err := check(doc); err != nil {
-		return nil, "", fmt.Errorf("%s: %v", path, err)
-	}
-	if old < float64(settingsSchema.Version) { // migrated: saved as it is now
-		if err := saveSettings(path, doc, hash); err != nil {
-			return nil, "", err
+	if n, ok := doc["network"].(map[string]any); ok {
+		for _, k := range []string{"password", "paired"} {
+			if _, ok := n[k]; ok {
+				delete(n, k)
+				stale = true
+			}
 		}
 	}
-	return doc, hash, nil
+	doc = settingsSchema.fill(doc)
+	if err := check(doc); err != nil {
+		return nil, fmt.Errorf("%s: %v", path, err)
+	}
+	if stale || old < float64(settingsSchema.Version) { // saved as it is now
+		if err := saveSettings(path, doc); err != nil {
+			return nil, err
+		}
+	}
+	return doc, nil
 }
 
-func saveSettings(path string, doc map[string]any, hash string) error {
-	out := deepCopy(doc).(map[string]any)
-	if hash != "" {
-		out["password_hash"] = hash
-	}
-	b, err := json.MarshalIndent(out, "", "  ")
+func saveSettings(path string, doc map[string]any) error {
+	b, err := json.MarshalIndent(doc, "", "  ")
 	if err != nil {
 		return err
 	}
@@ -258,28 +256,4 @@ func writeAtomic(path string, data []byte, mode os.FileMode) error {
 		os.Remove(tmp.Name())
 	}
 	return err
-}
-
-// ---- the password ----
-const pbkdfRounds = 200000
-
-func hashPassword(pw string) string {
-	salt := make([]byte, 16)
-	rand.Read(salt)
-	key, _ := pbkdf2.Key(sha256.New, pw, salt, pbkdfRounds, 32)
-	return hex.EncodeToString(salt) + "$" + hex.EncodeToString(key)
-}
-
-func checkPassword(hash, pw string) bool {
-	salt, want, ok := strings.Cut(hash, "$")
-	if !ok {
-		return false
-	}
-	s, err1 := hex.DecodeString(salt)
-	w, err2 := hex.DecodeString(want)
-	if err1 != nil || err2 != nil {
-		return false
-	}
-	key, err := pbkdf2.Key(sha256.New, pw, s, pbkdfRounds, len(w))
-	return err == nil && subtle.ConstantTimeCompare(key, w) == 1
 }

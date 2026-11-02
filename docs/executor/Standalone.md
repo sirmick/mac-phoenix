@@ -4,15 +4,17 @@
 one Go program per OS, with no other files: the page and the wasm module
 are embedded, the library is a directory of images, and the server keeps
 everything the tab changes (P1 in the plan: images only, no accounts).
-It has `tools/web/server`'s API (WebSite.md, `app.py`'s docstring), so
-the tab talks to either; what differs is below.
+It is the tab's only server (the hosted Python one, with accounts, was
+retired 2026-11-02: DIRECTION.md); its API is below. The first browser
+to open it has it until it stops; no other gets anything from it (Who
+uses it, below). Putting it on a host for others: WebSite.md.
 
 ## Building
 
 ```bash
 make -C tools/standalone WASM_BUILD=build-wasm        # site/ (make_site.sh), ./executor-standalone
 make -C tools/standalone dist WASM_BUILD=build-wasm   # dist/: a release (below)
-make -C tools/standalone test                         # go test + test_server.py against it
+make -C tools/standalone test                         # go test
 ```
 
 Go 1.24 or later, no cgo, no modules beyond the standard library:
@@ -64,8 +66,16 @@ SHA256SUMS again over the signed files.
 ```bash
 ./executor-standalone --open                # http://127.0.0.1:8090/ in the browser, DATA in the config directory
 ./executor-standalone --images ~/Disks --port 9000
-./executor-standalone --bind 0.0.0.0 --tls-cert lan.crt --tls-key lan.key   # on a LAN: set a password
-./executor-standalone passwd                # the password, from stdin ("" for none)
+./executor-standalone --bind 0.0.0.0 --tls auto     # on a LAN: HTTPS, a self-signed certificate made once
+```
+
+It prints where it listens, then the address to open:
+
+```
+Serving (embedded) on https://0.0.0.0:8090/
+Open https://127.0.0.1:8090/ (the first browser to open it has it until the server stops)
+  or on the LAN: https://192.168.1.20:8090/
+The certificate (self-signed: the browser asks once), SHA-256 AB:12:...
 ```
 
 | Flag | Default | |
@@ -75,8 +85,8 @@ SHA256SUMS again over the signed files.
 | `--images DIR` | settings' `disks.images`, `DATA/images` | the library |
 | `--bind`, `--port` | `127.0.0.1`, `8090` | `--port 0`: any (the first line printed says which) |
 | `--site DIR` | the embedded site | |
-| `--password-file F` | settings' | the password for this run |
-| `--tls-cert F`, `--tls-key F` | | HTTPS directly (OPFS and sound need a secure context off localhost) |
+| `--tls auto` | settings' `network.tls_cert` (`auto` there too) | HTTPS with a self-signed certificate made once, `DATA/tls/cert.pem` and `key.pem` (for localhost, the machine's name and its addresses then; the SHA-256 printed to compare with the browser's); `--tls off`: plain HTTP whatever the settings say |
+| `--tls-cert F`, `--tls-key F` | | HTTPS with this certificate (sound needs a secure context off localhost) |
 | `--open` | | open the default browser at the address (xdg-open, open, or url.dll on Windows; an any-address bind opens 127.0.0.1) |
 | `--quiet` | | errors only |
 
@@ -90,37 +100,91 @@ One file, version 2, nested by category, described by
 `web/executor/settings.schema.json` (Settings.md): the tab's Settings
 dialog edits it. The page's settings (machine, disks mounted, keys,
 display, sound, logging) are kept here for the tab; the server's own
-(`disks.images`/`include`/`exclude`, `network.*`) are this program's.
+(`disks.images`/`include`/`exclude`, `network.*`) are this program's;
+the browser that has the server may change either (`can_change_server`
+is always true).
 Version 1 files (flat, before) are migrated when read and saved as 2.
 
 `GET /api/settings` gives `{ version, settings, scopes, restart_needed,
 can_change_server, file }`; `POST /api/settings` takes a JSON merge patch
 (`null`: the default, of a setting or a whole category) and answers the
-same, or 400 `{ error, path }` for an invalid value. Without a password
-only this machine may change the server's own settings (a LAN client
-gets 403). `network.password` reads as whether one is set; a string
-written sets it (stored as PBKDF2 beside the settings, never sent), `""`
-removes it. `network.bind`, `port`, `tls_cert`, `tls_key` apply at the
-next start (`restart_needed` lists them); the rest at once (the relay's
-for new connections).
+same, or 400 `{ error, path }` for an invalid value. `network.bind`,
+`port`, `tls_cert`, `tls_key` apply at the next start (`restart_needed`
+lists the ones changed since it started); the rest at once (the relay's
+for new connections). A password from before the claim (`password_hash`,
+`network.password`) and a paired list (`network.paired`) are dropped when
+the file is read.
 
-## What differs from tools/web/server
+## Who uses it
 
-- **No accounts.** Without a password everything is open (it listens on
-  127.0.0.1 unless told otherwise). With one, `/login` asks for it and
-  `POST /api/login {password}` sets the same session cookie as the
-  Python server's (sessions last 30 days, across restarts). `/api/me` is
-  `{ name: "local", owner: true, mode: "standalone" }`, always (signed out
-  too): the Python server's `mode = "standalone"` answer.
-- **One controlling tab** (`session.go`, as `tools/web/server/session.py`):
+The first browser to load the tab has the server until it stops
+(`claim.go`); no password, key or account. The first `GET /` (or
+`/index.html`) while no browser has it makes a token (256 random bits)
+and answers with the tab and the token in a cookie (`executor_claim_PORT`,
+by the port asked for, as two servers on one machine are one host to a
+browser; HttpOnly, SameSite=Strict, Secure over TLS or behind a trusted
+proxy saying `X-Forwarded-Proto: https`; 400 days). Only a page load from
+this site or the address bar claims it (`Sec-Fetch-Dest: document`,
+`Sec-Fetch-Site` `none` or `same-origin`, or no such headers): another
+site can't take it by loading the address in the background. Every route
+needs the cookie: the site, the API, `/disks` (Range requests too),
+`/relay` (before the upgrade), the logs. That browser's reloads and other
+tabs keep working (one of them in control, below).
+
+Another browser gets, for a page, a page saying Executor is in use by
+another browser (403), and 403 `{ error: "in use by another browser" }`
+from everything else: it can't read or write anything.
+
+The claim is in memory only (the token's SHA-256): every start of the
+server begins unclaimed, so restarting the server is how another browser
+gets it. A tab open across a restart gets 401 (`{ reload: true }`; 403 if
+another browser loaded first) at its next call, every 2 s
+(`/api/session`), and says to reload, with a Reload button (`main.js`);
+the reload claims it again. Loopback is nothing special.
+
+## The API
+
+```
+/                 the tab (embedded, or --site DIR)
+/library.json     the library (library.go): [{ title, url, note, tags, size, cover }];
+                  /disks/NAME its images, with Range; /covers/NAME their covers
+/api/server       { standalone: true, version, tls }
+/api/me           { name: "local", owner: true, mode: "standalone" }: the tab's
+                  sign that it is on its server (else it does not start)
+/api/session      POST ?id=ID[&take=1] the controlling tab (session.go);
+                  /api/session/release, PUT/GET /api/session/screen
+/api/settings     GET the settings; POST a merge patch (settings.go; above)
+/api/sync/...     overlays (overlay.go) and volumes (volumes.go):
+    GET    overlays/KEY?since=V   records (u32 LE block, 4 KB) newer than V;
+                                  X-Sync-Version, X-Sync-Reset
+    POST   overlays/KEY?stage=T   records kept for a commit with T
+    POST   overlays/KEY?base=V[&stage=T][&replace=1][&name=&size=] -> { version }
+                                  (409 { version } when V isn't the server's)
+    DELETE overlays/KEY           Revert -> { version }
+    POST   overlays/KEY/merge     into the library image -> { blocks, id, key }
+    GET/PUT/DELETE volumes/KEY    { version, manifest }
+    POST   objects/missing; PUT/GET objects/SHA
+    GET    (nothing after sync/)  { overlays, volumes }
+/api/uploads/NAME POST the image as the body[?replace=1] -> its library entry
+                  (uploads/NAME); DELETE: it, its record and its overlay (uploads.go)
+/api/relay        GET { connections, sockets } open now
+/relay            WebSocket: the tab's sockets (relay.go; DIRECTION.md, "The network relay")
+/api/log, /api/shot, /api/logs[/DAY/NAME]   the tab's logs (logs.go)
+```
+
+Writes and `/relay` from another site are refused (Origin against Host,
+Sec-Fetch-Site). In more detail:
+
+- **No accounts:** the claim (above).
+- **One controlling tab** of the browser that has the server
+  (`session.go`):
   `POST /api/session?id=ID[&take=1]` every 2 s gives `{ control, held,
   handing, viewers }`; the first tab has control, a silent one lets go
   after 10 s, `take=1` takes it (the old one is `handing` until it
   releases: `POST /api/session/release?id=ID`). `PUT /api/session/screen`
   (the controller's PNG, 8 MB at most; 409 from anyone else) and `GET`
   it (404 when there is none) show viewers its screen.
-- **`GET /api/server`**, no sign-in needed: `{ standalone: true, version,
-  password, signed_in }`: how the tab knows which server it has.
+- **`GET /api/server`**: `{ standalone: true, version, tls }`.
 - **Overlays beside their images.** An overlay whose key is a library
   disk's (`NAME-ID`, main.js) is `IMAGES/NAME-ID.overlay`, next to the
   image (`DATA/overlays/` when the directory is read-only, and for disks
@@ -134,8 +198,22 @@ for new connections).
   image's new id and key (`{ blocks, id, key }`). A tab with the disk open
   must reload it.
 - **Volumes and objects** are files: `DATA/volumes/KEY.json` (`{ version,
-  manifest }`) and `DATA/objects/AB/SHA`, collected as in sync.py.
+  manifest }`) and `DATA/objects/AB/SHA`; an object no manifest names
+  is removed an hour after it was written.
+- **Uploads** (`uploads.go`): a disk image the tab adds (main.js
+  `uploadImage`) is `POST /api/uploads/NAME` with the image as the body
+  (an image's extension, no path; at most `disks.max_image_mb`, written
+  beside it and renamed, so a cut-short upload leaves nothing) and goes
+  into the library as `IMAGES/uploads/NAME` with its record `NAME.json`
+  (tags `["uploaded"]`), offered whatever `include`/`exclude` say:
+  `disks/uploads/NAME`, overlaid beside it like the library's own.
+  409 when there is one of that name (`?replace=1` replaces an upload and
+  drops its overlay; a top-level library image is never replaced).
+  `DELETE /api/uploads/NAME` removes it, its record and its overlay.
 - **`GET /api/relay`**: `{ connections, sockets }` open now.
+- **Stopping:** SIGTERM or SIGINT closes the listener and gives the
+  answers under way (a disk's download) 60 s to finish; a second signal
+  stops it at once.
 - No backup command: the overlay logs are crash-consistent and the rest
   is written atomically, so copying `DATA` and the `.overlay` files with
   any tool is a backup.
@@ -144,12 +222,25 @@ for new connections).
 
 ## Tests
 
-`test_server.py` runs against the binary with
-`EXECUTOR_WEB_SERVER_BINARY=PATH`: the password stands for the owner's,
-and the checks of invitations, account backups and static.py's range
-parser (go test has the Go one) are skipped: 17 of 20 run, StandaloneTest
-with no password. `go test`
-covers what the API can't show: the overlay log across restarts, a
-write cut short, compaction, merge, the gzip-only files, the session
-lease.
-`ctest --test-dir build-wasm -R executor.web.standalone` runs both (executor.web.standalone_server: go test and test_server.py against the binary; executor.web.standalone: the tab on it).
+`go test` (`make test`; ctest `executor.web.standalone_server` in
+build-wasm): the API over a real connection as the claiming browser (the
+page and library, logs, disk ranges, overlay and volume sync, hostile
+requests, cross-site writes, settings, the controlling tab, the relay's
+TCP, UDP, DNS, limits and framing); the claim (`claim_test.go`: every route in the table
+needs it and is refused, 401 unclaimed and 403 claimed; the first load
+claims, and not a fetch, an image, HEAD or another site's; reloads keep
+it; a second browser can neither read nor write; a restart frees it; a
+cookie per port; the relay); the program itself, run as a child (the
+printed address, `--tls auto` with its certificate pinned, the claim over
+HTTPS with a Secure cookie, a restart freeing it); and what the API can't show:
+the overlay log across restarts, a write cut short, compaction, merge,
+the gzip-only files, the session lease. In build-wasm,
+`executor.web.claim` is the claim in a browser (`web/tests/tab_claim.mjs`:
+the first browser has it, HttpOnly; its reloads and tabs; another
+browser's in-use page and refusals; a restart, the tab's reload notice
+and Reload; another browser first after a restart; screenshots in
+`claim-shots/`). The tab's other cells on it (each builds it with go):
+`executor.web.standalone` (a change survives a reload; a second tab
+watches, then takes control), `server_lazy` (a large disk read by Range),
+`settings`, `insecure` (plain http to a LAN name), `relay` (MacTCP and
+Open Transport through `/relay`), and the `site` cells (WebSite.md).

@@ -2,7 +2,7 @@
  *
  * A page can't open sockets, so the descriptors here are the tab's own:
  * a table of sockets in this file. What leaves the tab goes over one
- * WebSocket to tools/web/server's relay (/relay; the protocol is in
+ * WebSocket to tools/standalone's relay (/relay; the protocol is in
  * docs/executor/DIRECTION.md, "The network relay"): TCP connections out,
  * UDP datagrams, DNS. Listeners and loopback stay in the tab: a connect
  * to our own address, or to 127/8 where a listener of the tab has the
@@ -74,7 +74,7 @@ EM_JS(int, js_net_take, (uint8_t *buf, int max), {
 
 namespace
 {
-/* The protocol (tools/web/server/relay.py has the same numbers). */
+/* The protocol (tools/standalone/relay.go has the same numbers). */
 enum : uint8_t
 {
     CONNECT = 0x01, UDP = 0x02, SEND = 0x03, SENDTO = 0x04, SHUTDOWN = 0x05, CLOSE = 0x06,

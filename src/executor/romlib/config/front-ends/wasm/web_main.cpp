@@ -533,6 +533,8 @@ int main(int argc, char **argv)
             c.scale = atof(argv[++i]);
         else if(a == "--disk" && i + 1 < argc)
             c.disks.push_back(argv[++i]);
+        else if(a == "--cdrom" && i + 1 < argc)  /* locked, as a Mac's CDs */
+            c.cdroms.push_back(argv[++i]);
         else if(a == "--system" && i + 1 < argc)
             system_image = argv[++i];
         else if(a == "--ppc")
@@ -560,8 +562,9 @@ int main(int argc, char **argv)
     c.bpp = bpp;
     c.ram_mb = 32;
     c.data_dir = "/executor"; /* in memory; Executor makes its System Folder */
-    /* Disk images are writable: the page keeps their changes in an overlay
-       (web/executor/overlay.js); the images themselves are never written. */
+    /* Disk images are writable (CDs, --cdrom, are not): the page keeps
+       their changes in an overlay (web/executor/overlay.js); the images
+       themselves are never written. */
     c.writable_images = true;
     /* Removable, as a floppy or a CD put in: the Finder puts them away
        without asking (the System's image stays a fixed disk). */

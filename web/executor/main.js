@@ -1,25 +1,23 @@
-// The page side: keep uploads in OPFS, start the Worker with them, hand it
-// a canvas, send it input. The settings (settings.js: the Settings dialog,
+// The page side: start the Worker with the disks and uploads, hand it a
+// canvas, send it input. The settings (settings.js: the Settings dialog,
 // kept by the server or in this browser) say how; the query string
 // overrides some of them for the visit:
 //   ?size=WxH        the screen (default 640x480)
 //   ?scale=N         render at N times the screen, text from outlines
 //                    (docs/executor/HiDPI.md; default: devicePixelRatio,
 //                    EXECUTOR_SKIA builds only)
-//   ?disk=URL        a disk image to fetch and mount (repeatable); kept in
-//                    OPFS (disk-cache/) and revalidated on later visits
-//                    with its ETag, so it downloads once
+//   ?disk=URL        a disk image to mount (repeatable): the server's, read
+//                    by Range as Executor needs it
 //   ?system=NAME     run on that image's System and Finder
-//   ?lazy=1|0        read ?disk= images as they are needed, or download them
-//                    whole (default: lazily from LAZY_MIN up, when the
-//                    server takes Range requests and sends them uncompressed)
+//   ?lazy=0          download ?disk= images whole first (default: read as
+//                    needed, when the server takes Range requests)
 //   ?ppc             run fat applications' PowerPC code (the PowerPC box;
 //                    PowerPC-only applications always run theirs)
 //   ?logtraps=LIST   Executor logs Toolbox calls (as --executor-logtraps):
 //                    LIST the names (wildcards, -NAME leaves out; 1: all);
 //                    &nesting=N calls nested N deep (default 6); ?debug=OPTS Executor's
 //                    --executor-debug options. Everything printed goes to the
-//                    server too (log.js; tools/web/server keeps it per session)
+//                    server too (log.js; tools/standalone keeps it per session)
 //   ?ppcbreak=SPEC   PowerPC breakpoints (as --executor-ppc-break; several
 //                    separated by ';'; docs/executor/PPCTrace.md)
 // library.json beside the page (optional) offers more disks: [{ title,
@@ -27,17 +25,15 @@
 // setting) and loaded like ?disk=. The Disks panel (disks.js; docs/executor/Disks.md)
 // shows the System, the disks in the Mac and the library, and puts disks in
 // and takes them out while Executor runs.
-// Served by tools/web/server, signed in (api/me): the overlays and
-// Executor's own volume are synced with the account (sync.js).
-// Standalone (api/me's mode; the server on one's own machine): the server
-// is the only store, no OPFS: disks read by Range as needed, their changes
-// and Executor's volume kept on the server (sync.js: Store), the last of
-// them in a beacon when the page goes. One tab is in control (api/session);
-// the others show its screen until they take control or it goes.
-// Outside a secure context (plain http to another host) there is no OPFS
-// and no AudioWorklet: uploads, library disks (read as needed, held in
-// memory) and changes to them and to Executor's volume last while
-// Executor runs, sound is off; the page says so (#insecure).
+// Served by tools/standalone (api/me's mode; served by anything else the
+// page says it needs it): the server is the only store: disks read by
+// Range as needed, their changes and Executor's volume kept on the server
+// (sync.js: Store), the last of them in a beacon when the page goes.
+// Uploads are this visit's: disk images held in memory, other files copied
+// onto Executor's volume (kept with it). One tab is in control
+// (api/session); the others show its screen until they take control or it
+// goes. Outside a secure context (plain http to another host) there is no
+// AudioWorklet: no sound.
 //
 // Automation: window.executor.request(op, arg) -> Promise. At the running
 // application's next event call (web_main.cpp): 'app', 'windows', 'menus', 'launch'
@@ -48,7 +44,6 @@
 'use strict';
 
 const box = document.getElementById('screen-box');
-document.getElementById('insecure').hidden = window.isSecureContext;
 const status = document.getElementById('status');
 const params = new URLSearchParams(location.search);
 addEventListener('pagehide', storeLast);      // before log.js's: the beacons' room is shared
@@ -81,74 +76,27 @@ window.executor = {
     },
 };
 
-// ---- uploads, kept in OPFS (or for this visit, where there is none) ----
-let opfs = window.isSecureContext && navigator.storage && navigator.storage.getDirectory;
-let sessionFiles = [];          // without OPFS; and ?disk= fetches
-
-async function uploads() {
-    return navigator.storage.getDirectory();
-}
+// ---- the disks: uploads and ?disk= fetches, for this visit ----
+let sessionFiles = [];
 
 async function storedFiles() {
-    const files = [...sessionFiles];
-    if (opfs) {
-        const dir = await uploads();
-        for await (const [, handle] of dir.entries())
-            if (handle.kind === 'file' && !files.some((f) => f.name === handle.name))
-                files.push(await handle.getFile());
-    }
-    return files.sort((a, b) => a.name.localeCompare(b.name));
+    return [...sessionFiles].sort((a, b) => a.name.localeCompare(b.name));
 }
 
 async function store(file) {
-    if (!opfs) {
-        sessionFiles = sessionFiles.filter((f) => f.name !== file.name).concat(file);
-        return;
-    }
-    const dir = await uploads();
-    const handle = await dir.getFileHandle(file.name, { create: true });
-    const w = await handle.createWritable();
-    await w.write(file);
-    await w.close();
+    sessionFiles = sessionFiles.filter((f) => f.name !== file.name).concat(file);
 }
 
 async function remove(name) {
     sessionFiles = sessionFiles.filter((f) => f.name !== name);
-    if (opfs)
-        await (await uploads()).removeEntry(name).catch(() => {});
 }
 
-// A large ?disk= is not downloaded first: the Worker reads it as Executor
-// needs it (overlay.js: RemoteImage), and keeps what it read. Smaller ones,
-// or compressed ones (the server's NAME.gz):
-// ?disk=URL: downloaded once into OPFS (disk-cache/: the image and a .json
-// with its URL and ETag), revalidated on later visits (304: the copy is
-// current), mounted from there: disk-backed, never whole in memory. If the
-// server can't be reached, the cached copy. Without OPFS: into memory, per
-// visit.
-async function diskCache() {
-    return (await uploads()).getDirectoryHandle('disk-cache', { create: true });
-}
-
-async function cacheKey(url) {
-    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(url));
-    return Array.from(new Uint8Array(digest).slice(0, 12), (b) => b.toString(16).padStart(2, '0')).join('');
-}
-
-async function readJson(dir, name) {
-    try {
-        return JSON.parse(await (await (await dir.getFileHandle(name)).getFile()).text());
-    } catch {
-        return null;
-    }
-}
-
-const LAZY_MIN = 32 << 20;
-
+// A ?disk= is not downloaded first: the Worker reads it as Executor needs
+// it (overlay.js: RemoteImage). Where the server gives no ranges (or
+// ?lazy=0): downloaded into memory.
 // A disk's identity, for its overlay's key (overlay.js): the server's
-// content id (X-Image-Id, tools/web/server), name -> id; and the key its
-// overlay had before ids (name, size, download time), to move it from.
-const imageIds = {}, legacyKeys = {};
+// content id (X-Image-Id, tools/standalone), name -> id.
+const imageIds = {};
 const plainKey = (name, size, time) => `${name}-${size}-${time}`.replace(/[^\w.-]/g, '_');
 
 async function fetchDisk(url) {
@@ -158,20 +106,6 @@ async function fetchDisk(url) {
         status.textContent = total ? `Loading ${name}… ${Math.floor(got * 100 / total)}%`
                                    : `Loading ${name}… ${(got / 1e6).toFixed(0)} MB`;
     };
-    const dir = opfs ? await diskCache() : null;
-    const key = dir ? await cacheKey(absolute) : null;
-    const meta = dir ? await readJson(dir, `${key}.json`) : null;
-    // Its OPFS time kept: without a content id, an image's overlay
-    // (overlay.js) is for this version.
-    const cached = async () => {
-        const f = await (await dir.getFileHandle(`${key}.img`)).getFile();
-        const m = await readJson(dir, `${key}.json`);
-        if (m && m.id)
-            imageIds[name] = m.id;
-        legacyKeys[name] = plainKey(name, f.size, f.lastModified);
-        return new File([f], name, { lastModified: f.lastModified });
-    };
-
     // A Range request for its first byte: a 206 says the server (and any
     // proxy) gives ranges, and the size.
     const lazy = params.get('lazy');
@@ -184,63 +118,32 @@ async function fetchDisk(url) {
         const range = probe && probe.status === 206 && /^bytes 0-0\/(\d+)$/.exec(probe.headers.get('Content-Range') || '');
         abort.abort();
         const size = range && Number(range[1]);
-        if (size && (lazy === '1' || standalone || size >= LAZY_MIN)) {
+        if (size) {
             if (probe.headers.get('X-Image-Id'))
                 imageIds[name] = probe.headers.get('X-Image-Id');
             return { name, size, lastModified: Date.parse(probe.headers.get('Last-Modified')) || 0,
-                     remote: { url: absolute, etag: probe.headers.get('ETag'), key } };
+                     remote: { url: absolute, etag: probe.headers.get('ETag') } };
         }
     }
 
-    let res;
-    try {
-        // no-store: the browser's HTTP cache would keep a second copy.
-        res = await fetch(absolute, { cache: 'no-store',
-                                      headers: meta && meta.etag ? { 'If-None-Match': meta.etag } : {} });
-    } catch (e) {
-        if (meta)
-            return cached();            // offline: what we have
-        throw e;
-    }
-    if (res.status === 304 && meta)
-        return cached();
+    // no-store: the browser's HTTP cache would keep a second copy.
+    const res = await fetch(absolute, { cache: 'no-store' });
     if (!res.ok)
         throw new Error(`${name}: ${res.status}`);
     // Compressed in transit, Content-Length is the compressed size;
-    // tools/web/serve.py says the real one.
+    // tools/standalone says the real one (X-Decoded-Length).
     const total = Number(res.headers.get('X-Decoded-Length'))
         || (res.headers.get('Content-Encoding') ? 0 : Number(res.headers.get('Content-Length')) || 0);
     const reader = res.body.getReader();
     let got = 0;
-    if (!dir) {
-        const chunks = [];
-        for (let r; !(r = await reader.read()).done;) {
-            chunks.push(r.value);
-            progress(got += r.value.length, total);
-        }
-        if (res.headers.get('X-Image-Id'))
-            imageIds[name] = res.headers.get('X-Image-Id');
-        return new File(chunks, name);
+    const chunks = [];
+    for (let r; !(r = await reader.read()).done;) {
+        chunks.push(r.value);
+        progress(got += r.value.length, total);
     }
-    // Into OPFS as it arrives; the file is replaced only when complete
-    // (createWritable writes a swap file and commits at close).
-    const out = await (await dir.getFileHandle(`${key}.img`, { create: true })).createWritable();
-    try {
-        for (let r; !(r = await reader.read()).done;) {
-            await out.write(r.value);
-            progress(got += r.value.length, total);
-        }
-        await out.close();
-    } catch (e) {
-        await out.abort();
-        throw e;
-    }
-    const w = await (await dir.getFileHandle(`${key}.json`, { create: true })).createWritable();
-    await w.write(JSON.stringify({ url: absolute, name, etag: res.headers.get('ETag'),
-                                   lastModified: res.headers.get('Last-Modified'), size: got,
-                                   id: res.headers.get('X-Image-Id') }));
-    await w.close();
-    return cached();
+    if (res.headers.get('X-Image-Id'))
+        imageIds[name] = res.headers.get('X-Image-Id');
+    return new File(chunks, name);
 }
 
 const IMAGE = /\.(img|image|dsk|hfs|iso|toast|cdr)$/i;
@@ -250,7 +153,7 @@ systemSelect.id = 'system';
 // ---- the library: disks the site offers (library.json), picked by the user
 // (the disks.mounted setting: the Disks panel, or the Settings dialog's
 // list). The page follows the setting while Executor runs: a disk added
-// goes into the Mac at once, one taken off comes out (inMac).
+// goes into the Mac at once, one taken off comes out.
 let library = [];
 const picked = () => Settings.get('disks.mounted') || [];
 Settings.provide('library', () => library);
@@ -264,7 +167,11 @@ async function loadLibrary() {
     } catch {
         library = [];
     }
-    showSystems(shownFiles);
+    showLibrary();
+}
+
+function showLibrary() {
+    showSystems(shownFiles);        // (and the panel)
 }
 
 function addLibraryDisk(url) {
@@ -293,13 +200,13 @@ async function fetchDisks() {
     }
 }
 
-// Disk images are writable through an overlay in OPFS (overlay.js), per
-// exact version of the image (the Worker computes the same key).
+// Disk images are writable through an overlay (overlay.js) kept by the
+// server, per exact version of the image (the Worker computes the same key).
 function imageKey(f) {
     return imageIds[f.name] ? `${f.name}-${imageIds[f.name]}`.replace(/[^\w.-]/g, '_')
                             : plainKey(f.name, f.size, f.lastModified);
 }
-let imageState = {};                // name -> { modified, changed, writable, ... }, from the Worker
+let imageState = {};                // name -> { modified, changed, writable, onServer }, from the Worker
 
 // ---- disks in and out of the running Mac ----
 // Executor running: a disk goes in at once (the Worker opens it, Executor
@@ -318,8 +225,7 @@ async function putIn(file) {
         return start();
     inserting.add(file.name);
     showDisks();
-    const r = await window.executor.request('insert', { file, cd: isCD(file.name), ids: { ...imageIds },
-                                                        legacyKey: legacyKeys[file.name] });
+    const r = await window.executor.request('insert', { file, cd: isCD(file.name), ids: { ...imageIds } });
     inserting.delete(file.name);
     if (r !== 0)
         status.textContent = `${file.name}: not mounted (${r === NSV ? 'no Mac volume on it' : r === -1 ? 'cannot open it'
@@ -341,9 +247,9 @@ function takeOut(name) {
     });
 }
 
-// Ejected, here or in the Finder: out of the panel. A library disk is
-// forgotten (still in the library), an image of one's own goes on the
-// shelf ("Your disks"), an application is forgotten.
+// Ejected, here or in the Finder: out of the panel. A library disk (an
+// upload too: it is in the library) is forgotten from the setting, still
+// in the library; one held for this visit only is dropped.
 async function ejected(name) {
     delete imageState[name];
     const wait = ejectWaits.get(name);
@@ -353,15 +259,8 @@ async function ejected(name) {
     if (reverting.has(name) || name === systemSelect.value)
         return;
     shownFiles = shownFiles.filter((f) => f.name !== name);    // (before the setting changes: followPicked)
-    const fromLibrary = picked().some((u) => fileName(u) === name);
-    const file = sessionFiles.find((f) => f.name === name);
-    sessionFiles = sessionFiles.filter((f) => f.name !== name);
-    if (fromLibrary)
-        await forgetLibraryDisk(name);
-    else if (IMAGE.test(name))
-        await shelve(name, file);
-    else
-        await remove(name);
+    await remove(name);
+    await forgetLibraryDisk(name);
     showFiles(await storedFiles());
 }
 
@@ -380,7 +279,7 @@ async function eject(name) {
 }
 
 // Followed while Executor runs: library disks added (here, in the Settings
-// dialog, by another tab) go in; ones taken off come out.
+// dialog, by an upload) go in; ones taken off come out.
 async function followPicked(urls) {
     if (!live())
         return showDisks();
@@ -409,63 +308,6 @@ async function followPicked(urls) {
 }
 Settings.on('disks.mounted', (v) => followPicked(v || []));
 
-// ---- the shelf: one's own images taken out (OPFS shelf/, or for the visit)
-let shelfFiles = [];
-async function shelfDir() {
-    return (await uploads()).getDirectoryHandle('shelf', { create: true });
-}
-
-async function shelve(name, file) {
-    if (!opfs) {
-        if (file)
-            shelfFiles = shelfFiles.filter((f) => f.name !== name).concat(file);
-        return;
-    }
-    try {
-        const from = await (await uploads()).getFileHandle(name);
-        const to = await (await shelfDir()).getFileHandle(name, { create: true });
-        const w = await to.createWritable();
-        await w.write(await from.getFile());
-        await w.close();
-        await remove(name);
-    } catch (e) {
-        console.log(`[web] shelving ${name}: ${e}`);
-    }
-}
-
-async function shelved() {
-    const files = [...shelfFiles];
-    if (opfs)
-        for await (const [, h] of (await shelfDir()).entries())
-            if (h.kind === 'file')
-                files.push(await h.getFile());
-    return files.sort((a, b) => a.name.localeCompare(b.name));
-}
-
-async function unshelve(name) {
-    let file = shelfFiles.find((f) => f.name === name);
-    shelfFiles = shelfFiles.filter((f) => f.name !== name);
-    if (opfs && !file) {
-        const dir = await shelfDir();
-        file = await (await dir.getFileHandle(name)).getFile();
-        await store(file);
-        await dir.removeEntry(name);
-        file = (await storedFiles()).find((f) => f.name === name);
-    } else if (file) {
-        sessionFiles = sessionFiles.concat(file);
-    }
-    return file;
-}
-
-async function forgetShelved(name) {
-    if (!confirm(`Forget ${name}? It is deleted from this browser.`))
-        return;
-    shelfFiles = shelfFiles.filter((f) => f.name !== name);
-    if (opfs)
-        await (await shelfDir()).removeEntry(name).catch(() => {});
-    showDisks();
-}
-
 // ---- the Disks panel (disks.js): what is in the Mac, from the files and
 // the Worker's word on each image, its title and cover from the library.
 let shownFiles = [];
@@ -475,26 +317,25 @@ function showFiles(files) {
     showSystems(files);             // (and the panel)
 }
 
-async function showDisks() {
+function showDisks() {
     const byName = new Map(library.map((d) => [fileName(d.url), d]));
-    const kind = (name, size, d) => !IMAGE.test(name) ? 'app' : isCD(name) ? 'cd'
+    const kind = (name, size) => !IMAGE.test(name) ? 'app' : isCD(name) ? 'cd'
         : (size || 0) <= 1440 * 1024 ? 'floppy' : 'hd';
     const mounted = shownFiles.filter((f) => f.name !== systemSelect.value).map((f) => {
         const d = byName.get(f.name) || {};
-        return { name: f.name, title: d.title || f.name, cover: d.cover, kind: kind(f.name, f.size, d),
+        return { name: f.name, title: d.title || f.name, cover: d.cover, kind: kind(f.name, f.size),
                  state: imageState[f.name], inserting: inserting.has(f.name) };
     });
     for (const name of inserting)
         if (!mounted.some((m) => m.name === name)) {
             const d = byName.get(name) || {};
-            mounted.push({ name, title: d.title || name, cover: d.cover, kind: kind(name, d.size, d), inserting: true });
+            mounted.push({ name, title: d.title || name, cover: d.cover, kind: kind(name, d.size), inserting: true });
         }
     const sel = systemSelect.selectedOptions[0];
     const sys = shownFiles.find((f) => f.name === systemSelect.value);
     Disks.update({ system: { value: systemSelect.value, label: sel ? sel.textContent : "Executor's own",
                              disk: sys && { name: sys.name, kind: 'hd', state: imageState[sys.name] } },
-                   mounted, library, mountedUrls: [...params.getAll('disk'), ...picked()],
-                   shelf: (await shelved()).map((f) => ({ name: f.name, size: f.size })) });
+                   mounted, library, mountedUrls: [...params.getAll('disk'), ...picked()] });
 }
 
 async function download(name) {
@@ -508,44 +349,17 @@ async function download(name) {
     setTimeout(() => URL.revokeObjectURL(a.href), 60000);
 }
 
-// The image's changes forgotten where they are kept (its overlay let go:
-// the Worker's ejected it, or gone).
-async function forgetChanges(f) {
-    if (standalone) {
-        await fetch(`api/sync/overlays/${imageKey(f)}`, { method: 'DELETE', cache: 'no-store' }).catch(() => {});
-        return;
-    }
-    if (!opfs)
-        return;                     // its changes were the Worker's
-    const overlays = await (await uploads()).getDirectoryHandle('overlays', { create: true });
-    for (let i = 0; i < 20; i++) {                  // until the old Worker lets go
-        try {
-            await overlays.removeEntry(imageKey(f), { recursive: true });
-            break;
-        } catch (e) {
-            if (e.name === 'NotFoundError')
-                break;
-            await new Promise((r) => setTimeout(r, 100));
-        }
-    }
-    // Signed in: the account forgets them too, at the start (sync.js), or
-    // at the next one it reaches the server.
-    if (account)
-        await (await overlays.getDirectoryHandle(imageKey(f), { create: true }))
-            .getFileHandle('revert', { create: true });
-}
-
-// Revert: the disk out of the Mac, its changes forgotten, back in as it
-// came. In use (or Executor not running): the Worker goes without saving
-// and Executor starts again on the original.
+// Revert: the disk out of the Mac, the server forgets its changes, back in
+// as it came. In use (or the System's): the Worker goes without saving and
+// Executor starts again on the original.
 async function revert(f) {
     if (!confirm(`Forget all changes to ${f.name}? The disk goes back to how it came.`))
         return;
-    if (live() && f.name !== systemSelect.value) {     // (the System's: a restart)
+    if (live() && f.name !== systemSelect.value) {
         reverting.add(f.name);
         const r = await takeOut(f.name);
         if (r === 0) {
-            await forgetChanges(f);
+            await fetch(`api/sync/overlays/${imageKey(f)}`, { method: 'DELETE', cache: 'no-store' }).catch(() => {});
             reverting.delete(f.name);
             delete imageState[f.name];
             await putIn(f);
@@ -560,25 +374,63 @@ async function revert(f) {
         worker.terminate();
     worker = null;
     delete imageState[f.name];
-    await forgetChanges(f);
+    await fetch(`api/sync/overlays/${imageKey(f)}`, { method: 'DELETE', cache: 'no-store' }).catch(() => {});
     start();
 }
 
-// Disk images go in at once; an application (into "executor:Uploads")
-// restarts Executor, whose volume doesn't see a file put there under it.
+// A disk image the user adds goes into the server's library
+// (tools/standalone uploads.go) and is mounted from there, so it and its
+// changes are kept; resolves to its library entry. Rejects with .status
+// (409: there is one of that name, { replace: true } replaces it).
+async function uploadImage(file, { replace = false } = {}) {
+    status.textContent = `Uploading ${file.name}…`;
+    const res = await fetch(`api/uploads/${encodeURIComponent(file.name)}${replace ? '?replace=1' : ''}`,
+                            { method: 'POST', body: file, cache: 'no-store' });
+    if (!res.ok) {
+        const e = new Error((await res.json().catch(() => ({}))).error || `${res.status}`);
+        e.status = res.status;
+        throw e;
+    }
+    const entry = await res.json();
+    await loadLibrary();
+    await Settings.set({ disks: { mounted: [...picked().filter((u) => u !== entry.url), entry.url] } });
+    showLibrary();
+    const disk = await fetchDisk(entry.url);
+    sessionFiles = sessionFiles.filter((f) => f.name !== disk.name).concat(disk);
+    return entry;
+}
+
+// Added by the panel's button or dropped: disk images uploaded into the
+// library and put in (while Executor runs: followPicked, at once); an
+// application (into "executor:Uploads") restarts Executor, whose volume
+// doesn't see a file put there under it.
 async function addFiles(files) {
     const restart = !live() || files.some((f) => !IMAGE.test(f.name));
     if (restart) {
         generation++;               // restarting (once the files are stored)
         window.executor.frames = 0;
     }
-    for (const f of files)
-        await store(f);
+    for (const f of files) {
+        if (!IMAGE.test(f.name)) {
+            await store(f);
+            continue;
+        }
+        try {
+            await uploadImage(f).catch((err) => {
+                if (err.status === 409 && confirm(`Replace the uploaded ${f.name} (and its changes)?`))
+                    return uploadImage(f, { replace: true });
+                throw err;
+            });
+        } catch (err) {
+            status.textContent = `${f.name} isn't kept on the server (${err.message}): for this visit only`;
+            await store(f);
+            if (!restart)
+                await putIn(f);
+        }
+    }
     if (restart)
         return start();
-    const stored = await storedFiles();
-    for (const f of files)
-        await putIn(stored.find((s) => s.name === f.name) || f);
+    showFiles(await storedFiles());
 }
 document.getElementById('add').addEventListener('change', async (e) => {
     const files = [...e.target.files];
@@ -589,13 +441,6 @@ document.getElementById('add').addEventListener('change', async (e) => {
 Disks.init({
     add: addFiles,
     insert: (d) => addLibraryDisk(d.url),
-    async insertShelved(name) {
-        const f = await unshelve(name);
-        if (f)
-            await putIn(f);
-        showFiles(await storedFiles());
-    },
-    forgetShelved,
     eject,
     revert(name) {
         const f = shownFiles.find((x) => x.name === name);
@@ -606,7 +451,6 @@ Disks.init({
     reset,
     systemSelect,
 });
-
 document.getElementById('restart').addEventListener('click', () => start());
 
 // Executor's own volume is kept per System choice (worker.js, volumes/KEY):
@@ -703,31 +547,16 @@ async function reset() {
     if (worker)
         worker.terminate();
     worker = null;
-    if (standalone)
-        await fetch(`api/sync/volumes/${volumeKey(await storedFiles())}`, { method: 'DELETE', cache: 'no-store' }).catch(() => {});
-    if (opfs) {
-        const volumes = await (await uploads()).getDirectoryHandle('volumes', { create: true });
-        const key = volumeKey(await storedFiles());
-        await volumes.removeEntry(key, { recursive: true }).catch(() => {});
-        // The same for Reset as for Revert.
-        if (account) {
-            const w = await (await (await volumes.getDirectoryHandle(key, { create: true }))
-                .getFileHandle('sync.json', { create: true })).createWritable();
-            await w.write(JSON.stringify({ reset: true }));
-            await w.close();
-        }
-    }
+    await fetch(`api/sync/volumes/${volumeKey(await storedFiles())}`, { method: 'DELETE', cache: 'no-store' }).catch(() => {});
     start();
 }
 
 // Leaving or hiding the page: the Worker saves what changed now.
-// Hidden, it hands its disks to another tab that asks (worker.js).
 document.addEventListener('visibilitychange', () => {
     if (!worker)
         return;
     if (document.visibilityState === 'hidden')
         worker.postMessage({ type: 'save' });
-    worker.postMessage({ type: 'visibility', hidden: document.visibilityState === 'hidden' });
 });
 
 // The System to run on: Executor's own (''), a disk image's (its name), or
@@ -772,29 +601,23 @@ function showSystems(files) {
     showDisks();
 }
 
-// ---- the server (tools/web/server): the account, { name, owner }, or
-// null; standalone, no account and no OPFS ----
-let account = null, standalone = false;
+// ---- the server: tools/standalone (api/me's mode), the tab's store ----
+let standalone = false;
 const modeKnown = (async () => {
-    let me = null;
+    let me = null, code = 0;
     try {
         const res = await fetch('api/me', { cache: 'no-store' });
+        code = res.status;
         me = res.ok ? await res.json() : null;
     } catch { }
     standalone = !!me && me.mode === 'standalone';
-    if (standalone) {
-        opfs = false;
-        document.getElementById('insecure').hidden = true;
-    }
-    account = opfs ? me : null;
-    const a = document.getElementById('account');
-    if (account) {
-        a.textContent = account.name;
-        a.hidden = false;
-    }
+    if (code === 401 || code === 403)
+        lostClaim(code);
+    else if (!standalone)
+        status.textContent = "Executor's tab needs its server: tools/standalone (docs/executor/Standalone.md)";
 })();
 
-// ---- standalone: one tab in control (tools/web/server/session.py) ----
+// ---- standalone: one tab in control (tools/standalone's session.go) ----
 // This tab says it is there every BEAT ms while it watches; in control,
 // its Worker does (its timers aren't held back in a background tab) and
 // says what the server answered ('session'). Taken over: saved, stopped,
@@ -807,10 +630,30 @@ async function beat(take = false) {
     try {
         const res = await fetch(`api/session?id=${Log.session}${take ? '&take=1' : ''}`,
                                 { method: 'POST', cache: 'no-store' });
+        if (res.status === 401 || res.status === 403)
+            lostClaim(res.status);
         return res.ok ? await res.json() : null;
     } catch {
         return null;
     }
+}
+
+// tools/standalone (claim.go): the first browser to load the tab has the
+// server until it stops. Refused now (401: it restarted; 403: and another
+// browser has it), this tab's cookie opens nothing: a reload claims it
+// again. Said once, and kept over other notices.
+let claimLost = false;
+function lostClaim(code) {
+    if (claimLost)
+        return;
+    claimLost = true;
+    const reload = document.createElement('button');
+    reload.id = 'reload';
+    reload.textContent = 'Reload';
+    reload.onclick = () => location.reload();
+    status.replaceChildren(code === 403 ? 'The server has restarted and another browser has it now. '
+                                        : 'The server has restarted: reload this page to go on. ', reload);
+    status.classList.add('lost');
 }
 
 // In control (s: the server's answer): after the tab it was taken from
@@ -834,7 +677,8 @@ async function watch() {
     if (s && s.control)
         return takeControl(s);
     viewer.hidden = false;
-    status.textContent = s ? 'Executor is open in another tab: watching it here' : 'The server can\'t be reached';
+    if (!claimLost)
+        status.textContent = s ? 'Executor is open in another tab: watching it here' : 'The server can\'t be reached';
     let img = box.querySelector('img');
     if (!img) {
         img = document.createElement('img');
@@ -868,15 +712,6 @@ function storeLast() {
     for (const b of storeBeacons)
         navigator.sendBeacon(b.url, b.body);
     navigator.sendBeacon(`api/session/release?id=${Log.session}`);
-}
-
-// Sync (sync.js) found changes here and on the account: which to keep.
-function conflictText(m) {
-    const why = m.why === 'before'
-        ? `${m.what} has changes made in this browser before you signed in, and your account has its own.`
-        : `${m.what} was changed in another browser too, since this one last synced.`;
-    return `${why}\n\nOK: keep this browser's (it replaces the account's).\n`
-        + "Cancel: take the account's (this browser's changes are dropped).";
 }
 
 // ---- the Worker ----
@@ -913,7 +748,9 @@ async function start() {
     await Settings.ready;
     machine();
     await modeKnown;
-    if (standalone && !control)
+    if (!standalone)
+        return;                     // (modeKnown said why)
+    if (!control)
         return watching || watch();
     const mine = ++generation;
     window.executor.frames = 0;     // "running" means the new Worker's frames
@@ -950,16 +787,15 @@ async function start() {
     const offscreen = canvas.transferControlToOffscreen();
     worker.postMessage({ type: 'start', canvas: offscreen, width, height, scale, files,
                          system: systemSelect.value, ppc: ppcBox.checked,
-                         volumeKey: volumeKey(files), sync: !!account, relay: !!account || standalone,
+                         volumeKey: volumeKey(files), relay: standalone,
                          standalone,
-                         ids: imageIds, legacyKeys, cds: files.map((f) => f.name).filter(isCD), log: Log.session,
+                         ids: imageIds, cds: files.map((f) => f.name).filter(isCD), log: Log.session,
                          ram: Settings.get('machine.ram_mb'), depth: Settings.get('machine.depth'),
                          logtraps: Settings.get('advanced.logtraps'),
                          nesting: String(Settings.get('advanced.logtraps_nesting')),
                          debug: Settings.get('advanced.debug'), ppcbreak: Settings.get('advanced.ppc_break') },
                        [offscreen]);
     Settings.started();
-    worker.postMessage({ type: 'visibility', hidden: document.visibilityState === 'hidden' });
     worker.onmessage = (e) => {
         if (mine !== generation)
             return;
@@ -971,8 +807,7 @@ async function start() {
         } else if (m.type === 'images') {
             const before = JSON.stringify(imageState);
             for (const i of m.images)
-                imageState[i.name] = { modified: i.modified, changed: i.changed, writable: i.writable, inMemory: i.inMemory,
-                                       borrowed: i.borrowed, onServer: i.onServer };
+                imageState[i.name] = { modified: i.modified, changed: i.changed, writable: i.writable, onServer: i.onServer };
             if (JSON.stringify(imageState) !== before)
                 storedFiles().then(showFiles);
         } else if (m.type === 'cursor') {
@@ -988,15 +823,16 @@ async function start() {
             if (resolve)
                 resolve(m.result);
         } else if (m.type === 'notice') {
-            status.textContent = m.text;
+            if (!claimLost)
+                status.textContent = m.text;
         } else if (m.type === 'ejected') {
             ejected(m.name);
-        } else if (m.type === 'conflict') {
-            worker.postMessage({ type: 'resolve', id: m.id, keep: confirm(conflictText(m)) ? 'mine' : 'account' });
         } else if (m.type === 'restart') {
             start();
         } else if (m.type === 'beacons') {
             storeBeacons = m.items;
+        } else if (m.type === 'claim') {
+            lostClaim(m.status);
         } else if (m.type === 'session') {
             if (!m.s.control && control)
                 lostControl();
@@ -1034,7 +870,7 @@ function fitCanvas() {
         return;
     const dpr = window.devicePixelRatio || 1;
     const bar = document.fullscreenElement ? 0 : document.getElementById('bar').offsetHeight
-        + document.getElementById('status').offsetHeight + document.getElementById('insecure').offsetHeight + 32;
+        + document.getElementById('status').offsetHeight + 32;
     // (the Disks panel open: what it leaves)
     const across = window.innerWidth - (parseFloat(getComputedStyle(document.body).paddingRight) || 0);
     const fit = Math.min(across * dpr / width, (window.innerHeight - bar) * dpr / height);

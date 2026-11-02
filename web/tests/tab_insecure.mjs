@@ -1,15 +1,16 @@
 // The site from a page that isn't a secure context (plain http to a host
-// other than this computer: the demo opened by its LAN address), where the
-// browser gives no OPFS, Cache Storage or Web Locks. The site as
+// other than this computer: tools/standalone opened by its LAN address),
+// where the browser gives no OPFS, Cache Storage or Web Locks. The site as
 // tools/web/make_site.sh assembles it (every file the Worker imports),
-// served public by tools/web/server; Chromium reaches it as
-// http://executor.test (a host-resolver rule), at devicePixelRatio 1.5.
-// The page says it keeps nothing; a System image from the library runs
-// the Finder, read lazily into memory (overlay.js: RemoteImage); a 50 MB
-// library disk added from the Library menu mounts the same way, writable
-// in memory (MemoryHandle), and a double-click on its icon opens it: the
-// click lands on the guest pixel it was over at a fractional ratio
-// (main.js: guestPoint, the whole-number scale).
+// served by tools/standalone; Chromium reaches it as http://executor.test
+// (a host-resolver rule), at devicePixelRatio 1.5. The server is the
+// store, so that changes nothing but sound; a System image from the
+// library runs the Finder, read by Range as needed (overlay.js:
+// RemoteImage); a 50 MB library disk added from the Library menu mounts
+// the same way, writable (its changes kept on the server), and a
+// double-click on its icon opens it: the click lands on the guest pixel it
+// was over at a fractional ratio (main.js: guestPoint, the whole-number
+// scale).
 //
 //   node web/tests/tab_insecure.mjs BUILD_WASM IMAGE
 //
@@ -57,7 +58,11 @@ hfs('hcopy', '-t', path.join(scratch, 'Read Me'), ':');
 hfs('humount');
 fs.writeFileSync(`${disk}.json`, JSON.stringify({ title: 'Library disk (50 MB)', note: 'tab_insecure' }));
 
-const server = await startServer(site, { images: lib, include: ['*.img'], public: true });
+const server = await startServer(site, { images: lib, include: ['*.img'] });
+if (!server) {
+    console.log('SKIP: no go');
+    process.exit(77);
+}
 const port = new URL(server.url).port;
 const origin = `http://executor.test:${port}`;
 const browser = await launch({ args: ['--host-resolver-rules=MAP executor.test 127.0.0.1'] });
@@ -72,10 +77,8 @@ const titles = (page) => request(page, 'windows').then((ws) => ws.filter((w) => 
 try {
     const page = await newPage(browser, { log: !!process.env.TAB_LOG, scale: DPR });
     await page.goto(`${origin}/?disk=disks/${encodeURIComponent(system)}&system=${encodeURIComponent(system)}`);
-    const env = await page.evaluate(() => ({ secure: window.isSecureContext, dpr: devicePixelRatio,
-                                             note: !document.getElementById('insecure').hidden }));
+    const env = await page.evaluate(() => ({ secure: window.isSecureContext, dpr: devicePixelRatio }));
     check(!env.secure && env.dpr === DPR, `not a secure context, devicePixelRatio ${env.dpr}`);
-    check(env.note, 'the page says nothing is kept');
     await firstFrame(page, 60000);
     check(await until(() => request(page, 'app').then((a) => a === 'Finder'), 90000), `the Finder on ${system}'s System`);
     const first = await request(page, 'stats');
@@ -93,8 +96,9 @@ try {
     await page.waitForTimeout(3000);
     const st = await diskState(page, 'library-disk.img');
     console.log(`  library-disk.img: ${st}`);
-    check(await page.evaluate(() => imageState['library-disk.img'] && imageState['library-disk.img'].writable)
-          && /restarts|in memory/.test(st), 'the library disk is writable, in memory');
+    check(await page.evaluate(() => imageState['library-disk.img'] && imageState['library-disk.img'].writable
+                                    && imageState['library-disk.img'].onServer),
+          'the library disk is writable, its changes kept on the server');
 
     // Its icon: the Finder's disk icons are down the right edge, in mount
     // order; the guest point to page pixels at the canvas's CSS size.
@@ -116,7 +120,7 @@ try {
     console.log(`  double-clicks opened: ${tried.join(', ')}`);
     check(opened === LABEL, `a double-click on its icon opens "${LABEL}"`);
 
-    // A change to it, in memory: Read Me (the window's first icon, at the
+    // A change to it: Read Me (the window's first icon, at the
     // window's top left) duplicated.
     const win = (await request(page, 'windows')).find((w) => w.title === LABEL);
     console.log(`  its window: ${JSON.stringify(win)}`);

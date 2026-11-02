@@ -4,8 +4,6 @@
 // asked for, through the handlers given to Disks.init:
 //   add(files)        files picked or dropped (disk images, applications)
 //   insert(disk)      a library disk to put in the Mac
-//   insertShelved(name), forgetShelved(name)
-//                     one of one's own disks taken out earlier ("Your disks")
 //   eject(name)       a disk to take out
 //   revert(name)      forget a disk's changes
 //   download(name)    the image as it is now
@@ -14,13 +12,13 @@
 // Disks.update(state) draws what is there now:
 //   { system: { value, label }, mounted: [{ name, title, cover,
 //     kind: 'hd'|'cd'|'floppy'|'app', state: { modified, changed (bytes),
-//     writable, inMemory, borrowed, onServer }, inserting }],
-//     library: [{ title, url, note, tags, size, cover }], mountedUrls,
-//     shelf: [{ name, size }] }
+//     writable, onServer }, inserting }],
+//     library: [{ title, url, note, tags, size, cover }], mountedUrls }
+// (one's own images are uploaded into the library: tagged "uploaded")
 'use strict';
 
 const Disks = (() => {
-    let on = {}, state = { system: { value: '', label: "Executor's own" }, mounted: [], library: [], mountedUrls: [], shelf: [] };
+    let on = {}, state = { system: { value: '', label: "Executor's own" }, mounted: [], library: [], mountedUrls: [] };
     let panel = null, button = null, drop = null, filter = '', tags = new Set();
 
     const ICONS = {
@@ -78,15 +76,13 @@ const Disks = (() => {
             return { badge: ['original', 'Application'], explain: 'Copied into Executor’s disk, in the Uploads folder.' };
         if (d.kind === 'cd')
             return { badge: ['cd', 'CD · read-only'], explain: 'Read-only, as a CD: nothing on it changes.' };
-        const where = st.onServer ? 'on the server' : st.inMemory || st.borrowed ? 'in memory only' : 'in this browser';
-        if (st.borrowed)
-            return { badge: ['memory', 'In memory'], explain: 'Open in another tab: changes here last until this tab closes.' };
+        const kept = st.onServer === false ? 'for this visit only (not kept on the server)' : 'on the server';
         if (st.modified)
             return { badge: ['changed', 'Changed'], changed: true,
-                     explain: `${st.changed ? size(st.changed) + ' changed' : 'Changed'}, kept ${where}. `
+                     explain: `${st.changed ? size(st.changed) + ' changed' : 'Changed'}, kept ${kept}. `
                               + 'The image itself is untouched: Revert forgets the changes, Download saves the disk as it is now.' };
-        if (st.inMemory && !st.onServer)
-            return { badge: ['original', 'Original'], explain: 'Changes would last until Executor restarts (not a secure page).' };
+        if (st.onServer === false)
+            return { badge: ['memory', 'This visit'], explain: 'Not kept on the server: changes last until Executor restarts.' };
         return { badge: ['original', 'Original'], explain: '' };
     }
 
@@ -251,29 +247,6 @@ const Disks = (() => {
         return wrap;
     }
 
-    // One's own disks taken out: put back in, or forgotten.
-    function shelfSection() {
-        const wrap = el('section');
-        wrap.id = 'disks-shelf';
-        const h = el('h2', '', 'Your disks');
-        h.append(el('span', 'hint', 'taken out, kept in this browser'));
-        wrap.append(h);
-        for (const d of state.shelf) {
-            const row = el('div', 'disk');
-            row.dataset.name = d.name;
-            const acts = el('div', 'acts');
-            const ins = btn('Insert', 'Put this disk in the Mac', () => on.insertShelved && on.insertShelved(d.name));
-            ins.className = 'insert';
-            const del = btn('✕', 'Forget this disk (deleted from this browser)', () => on.forgetShelved && on.forgetShelved(d.name));
-            del.className = 'forget';
-            acts.append(ins, del);
-            const file = el('div', 'file', d.size ? size(d.size) : '');
-            row.append(icon(isCD(d) ? 'cd' : d.size <= 1440 * 1024 ? 'floppy' : 'hd'), el('div', 'title', d.name), acts, file);
-            wrap.append(row);
-        }
-        return wrap;
-    }
-
     function render() {
         if (button) {
             const n = state.mounted.length;
@@ -283,8 +256,7 @@ const Disks = (() => {
             return;
         const scroll = panel.querySelector('.scroll');
         const top = scroll.scrollTop;
-        scroll.replaceChildren(systemSection(), mountedSection(),
-                               ...(state.shelf.length ? [shelfSection()] : []), librarySection());
+        scroll.replaceChildren(systemSection(), mountedSection(), librarySection());
         scroll.scrollTop = top;
     }
 

@@ -1,9 +1,8 @@
 package main
 
-// The parts tools/web/server/test_server.py can't see from outside: the
-// range parser, and the overlay log across restarts, a write cut short,
-// compaction and merge. (test_server.py with EXECUTOR_WEB_SERVER_BINARY
-// checks the API.)
+// The parts the API can't show (api_test.go checks it): the range
+// parser, and the overlay log across restarts, a write cut short,
+// compaction and merge.
 
 import (
 	"bytes"
@@ -245,12 +244,11 @@ func TestGzipOnlyServed(t *testing.T) {
 	zw := gzip.NewWriter(&z)
 	zw.Write([]byte("// the module's glue\n"))
 	zw.Close()
-	s := &Server{site: fstest.MapFS{"executor-web.js.gz": {Data: z.Bytes()}, "index.html": {Data: []byte("<p>tab</p>")}}}
+	s := testServer(t, fstest.MapFS{"executor-web.js.gz": {Data: z.Bytes()}, "index.html": {Data: []byte("<p>tab</p>")}})
+	token := claimAs(t, s)
 	for path, want := range map[string]string{"/executor-web.js": "// the module's glue\n", "/": "<p>tab</p>"} {
-		w := httptest.NewRecorder()
-		s.ServeHTTP(w, httptest.NewRequest("GET", path, nil))
-		if w.Code != 200 || w.Body.String() != want {
-			t.Errorf("%s: %d %q", path, w.Code, w.Body.String())
+		if a := do(s, "GET", path, "", token); a.code != 200 || a.body != want {
+			t.Errorf("%s: %d %q", path, a.code, a.body)
 		}
 	}
 }

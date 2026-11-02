@@ -639,7 +639,7 @@ set(sources ${base_sources} ${mman_sources} ${vdriver_sources}
 
 # MacPhoenix: the host network edge (include/rsys/hostnet.h): host sockets,
 # none (MacTCP and Open Transport answer with errors; no host threads), or
-# wasm (the tab's sockets, over tools/web/server's relay).
+# wasm (the tab's sockets, over tools/standalone's relay).
 set(EXECUTOR_NET posix CACHE STRING "Executor's network backend: posix | none | wasm")
 set_property(CACHE EXECUTOR_NET PROPERTY STRINGS posix none wasm)
 if(NOT EXECUTOR_NET MATCHES "^(posix|none|wasm)$")

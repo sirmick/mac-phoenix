@@ -63,7 +63,12 @@ int run(const Config& c)
         paths["PrintDef"] = (d / "printdef.ini").string();
     }
     std::string vols;
-    for(const auto& disk : c.disks)
+    ROMlib_locked_images.clear();
+    for(const auto& cd : c.cdroms)
+        ROMlib_locked_images.insert(cd);
+    std::vector<std::string> images = c.disks;
+    images.insert(images.end(), c.cdroms.begin(), c.cdroms.end());
+    for(const auto& disk : images)
     {
         if(!vols.empty())
             vols += ';';

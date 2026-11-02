@@ -18,8 +18,9 @@ add_custom_target(executor-web-page ALL
     COMMENT "Executor's page")
 add_dependencies(executor-web-page executor-web)
 
-# The tab under headless Chromium (web/tests/tab_smoke.mjs). Skips without
-# the playwright package: EXECUTOR_WEB_NODE_PATH is a node_modules holding
+# The tab under headless Chromium (web/tests/tab_smoke.mjs), on
+# tools/standalone (web/tests/harness.mjs builds it with go: every cell
+# below). Skips without go, or the playwright package: EXECUTOR_WEB_NODE_PATH is a node_modules holding
 # it, EXECUTOR_WEB_CHROMIUM a browser other than the one it expects.
 set(EXECUTOR_WEB_NODE_PATH "" CACHE PATH "node_modules with playwright, for executor.web.tab")
 set(EXECUTOR_WEB_CHROMIUM "" CACHE FILEPATH "Chromium for executor.web.tab (default: playwright's)")
@@ -65,7 +66,7 @@ if(NODE_COMMAND)
         ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM}")
 endif()
 
-# Executor's own volume kept in OPFS across reloads, and Reset.
+# Executor's own volume kept by the server across reloads, and Reset.
 if(NODE_COMMAND)
     add_test(NAME executor.web.persist
         COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_persist.mjs
@@ -84,17 +85,11 @@ if(NODE_COMMAND)
     add_test(NAME executor.web.finder
         COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_finder.mjs
                 $<TARGET_FILE_DIR:executor-web> ${EXECUTOR_WEB_SYSTEM})
-    # Writable images: a change kept, downloaded, reverted (overlay.js).
+    # Writable images: a change to a library disk kept by the server,
+    # downloaded, reverted (overlay.js).
     add_test(NAME executor.web.write
         COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_write.mjs
                 $<TARGET_FILE_DIR:executor-web> ${EXECUTOR_WEB_SYSTEM})
-    # Two tabs on the same disks: the second on copies in memory.
-    add_test(NAME executor.web.two_tabs
-        COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_two_tabs.mjs
-                $<TARGET_FILE_DIR:executor-web> ${EXECUTOR_WEB_SYSTEM})
-    set_tests_properties(executor.web.two_tabs PROPERTIES
-        LABELS "executor;web" TIMEOUT 240 SKIP_RETURN_CODE 77
-        ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM}")
     set_tests_properties(executor.web.write PROPERTIES
         LABELS "executor;web" TIMEOUT 240 SKIP_RETURN_CODE 77
         ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM}")
@@ -106,8 +101,7 @@ endif()
 # W4: PowerPC in the tab on Apple's 8.6 System (an HFS+ image, the page's
 # System choice and PowerPC box): the Finder, a disk's window, PPCHello;
 # prints the times (web/tests/tab_ppc.mjs). Skips without the image. The
-# browser profile (its OPFS holds the uploaded image) in the build tree,
-# not a tmpfs /tmp.
+# browser profile in the build tree, not a tmpfs /tmp.
 set(EXECUTOR_WEB_SYSTEM_PPC "$ENV{HOME}/storage/images/8.6.img" CACHE FILEPATH
     "Mac OS 8.x System image for executor.web.ppc")
 if(NODE_COMMAND)
@@ -182,34 +176,27 @@ if(NODE_COMMAND)
         ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM}")
 endif()
 
-# tools/web/server, the private service: its own checks (no browser), then
-# the tab on it: signing in, invitations and sync between two browsers;
-# a large library disk (EXECUTOR_WEB_SYSTEM and its record) read lazily.
+# tools/standalone, the server (docs/executor/Standalone.md): go test (the
+# API over a real connection, the claim, the relay, the program itself),
+# then the tab on it (the cells below build it with go: GO).
 find_program(PYTHON3_COMMAND python3)
-if(PYTHON3_COMMAND)
-    add_test(NAME executor.web.server
-        COMMAND ${PYTHON3_COMMAND} ${PROJECT_SOURCE_DIR}/tools/web/server/test_server.py)
-    set_tests_properties(executor.web.server PROPERTIES LABELS "executor;web" TIMEOUT 60)
-endif()
-# tools/standalone, the Go server: go test, then the same checks against it.
 find_program(GO_COMMAND go PATHS /usr/local/go/bin $ENV{HOME}/opt/go/bin)
 find_program(MAKE_COMMAND make)
-if(PYTHON3_COMMAND AND GO_COMMAND AND MAKE_COMMAND)
+set(EXECUTOR_WEB_ENV "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM};TMPDIR=${CMAKE_CURRENT_BINARY_DIR};GO=${GO_COMMAND}")
+if(GO_COMMAND AND MAKE_COMMAND)
     add_test(NAME executor.web.standalone_server
         COMMAND ${MAKE_COMMAND} -C ${PROJECT_SOURCE_DIR}/tools/standalone test GO=${GO_COMMAND}
                 OUT=${CMAKE_CURRENT_BINARY_DIR}/executor-standalone)
     set_tests_properties(executor.web.standalone_server PROPERTIES LABELS "executor;web" TIMEOUT 300
         ENVIRONMENT "TMPDIR=${CMAKE_CURRENT_BINARY_DIR}")
 endif()
-if(NODE_COMMAND AND PYTHON3_COMMAND)
-    add_test(NAME executor.web.server_sync
-        COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_server_sync.mjs
-                $<TARGET_FILE_DIR:executor-web>)
+if(NODE_COMMAND AND GO_COMMAND)
+    # A large library disk (EXECUTOR_WEB_SYSTEM and its record) read by Range.
     add_test(NAME executor.web.server_lazy
         COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_server_lazy.mjs
                 $<TARGET_FILE_DIR:executor-web> ${EXECUTOR_WEB_SYSTEM})
-    # Standalone mode (the server the only store): a change survives a
-    # reload, a second tab watches until it takes control.
+    # The server the only store: a change survives a reload, a second tab
+    # watches until it takes control.
     add_test(NAME executor.web.standalone
         COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_standalone.mjs
                 $<TARGET_FILE_DIR:executor-web>)
@@ -221,52 +208,49 @@ if(NODE_COMMAND AND PYTHON3_COMMAND)
         COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_disks.mjs
                 $<TARGET_FILE_DIR:executor-web> ${EXECUTOR_WEB_SYSTEM} ${CMAKE_CURRENT_BINARY_DIR}/disks-shots)
     set_tests_properties(executor.web.disks PROPERTIES
-        LABELS "executor;web" TIMEOUT 400 SKIP_RETURN_CODE 77
-        ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM};TMPDIR=${CMAKE_CURRENT_BINARY_DIR}")
-    # The Settings dialog (settings.js) kept in the browser, by tools/standalone
-    # (settings.json; built here with go) and per user by tools/web/server.
+        LABELS "executor;web" TIMEOUT 400 SKIP_RETURN_CODE 77 ENVIRONMENT "${EXECUTOR_WEB_ENV}")
+    # The Settings dialog (settings.js) kept in the browser and by
+    # tools/standalone (settings.json).
     add_test(NAME executor.web.settings
         COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_settings.mjs
                 $<TARGET_FILE_DIR:executor-web> ${CMAKE_CURRENT_BINARY_DIR}/settings-shots)
-    set_tests_properties(executor.web.settings PROPERTIES
-        LABELS "executor;web" TIMEOUT 300 SKIP_RETURN_CODE 77
-        ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM};TMPDIR=${CMAKE_CURRENT_BINARY_DIR};GO=${GO_COMMAND}")
-    set_tests_properties(executor.web.server_sync executor.web.server_lazy executor.web.standalone PROPERTIES
-        LABELS "executor;web" TIMEOUT 300 SKIP_RETURN_CODE 77
-        ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM}")
+    # The claim (claim.go): the first browser has it, another gets the
+    # in-use page, a restart frees it and the tab says to reload.
+    add_test(NAME executor.web.claim
+        COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_claim.mjs
+                $<TARGET_FILE_DIR:executor-web> ${CMAKE_CURRENT_BINARY_DIR}/claim-shots)
     # The site (make_site.sh) from a page that isn't a secure context (no
-    # OPFS): disks read into memory, writable there, a 50 MB library disk
-    # opened with a double-click at devicePixelRatio 1.5.
+    # OPFS): disks read by Range, writable, a 50 MB library disk opened with
+    # a double-click at devicePixelRatio 1.5.
     add_test(NAME executor.web.insecure
         COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_insecure.mjs
                 ${CMAKE_BINARY_DIR} ${EXECUTOR_WEB_SYSTEM})
-    set_tests_properties(executor.web.insecure PROPERTIES
-        LABELS "executor;web" TIMEOUT 300 SKIP_RETURN_CODE 77
-        ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM};TMPDIR=${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(executor.web.server_lazy executor.web.standalone executor.web.settings
+                         executor.web.claim executor.web.insecure PROPERTIES
+        LABELS "executor;web" TIMEOUT 300 SKIP_RETURN_CODE 77 ENVIRONMENT "${EXECUTOR_WEB_ENV}")
 endif()
 
 # The network relay: MacPhoenixSuite's network and mactcp sections and
-# OTTestRetro68K in the tab, through tools/web/server's /relay to an echo
+# OTTestRetro68K in the tab, through tools/standalone's /relay to an echo
 # server on this host (tests/lib/echo_server.py).
-if(NODE_COMMAND AND PYTHON3_COMMAND)
+if(NODE_COMMAND AND GO_COMMAND AND PYTHON3_COMMAND)
     add_test(NAME executor.web.relay
         COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_relay.mjs
                 $<TARGET_FILE_DIR:executor-web> ${PROJECT_SOURCE_DIR}/tests/guest)
     set_tests_properties(executor.web.relay PROPERTIES
-        LABELS "executor;web" TIMEOUT 400 SKIP_RETURN_CODE 77
-        ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM}")
+        LABELS "executor;web" TIMEOUT 400 SKIP_RETURN_CODE 77 ENVIRONMENT "${EXECUTOR_WEB_ENV}")
 endif()
 
 # The assembled site (docs/executor/WebSite.md): every target application on
 # its library disk (tools/web/make_library.py's, EXECUTOR_WEB_LIBRARY),
-# opened from tools/web/server's library on each of the site's systems and
+# opened from tools/standalone's library on each of the site's systems and
 # used a moment; docs/executor/SCOREBOARD.md says which are expected to fail
 # yet (web/tests/tab_site.mjs). Long (a reload and a launch an
 # application), so label site, not executor: ctest -L site. Skip without
 # the library.
 set(EXECUTOR_WEB_LIBRARY "$ENV{HOME}/storage/web-library" CACHE PATH
     "tools/web/make_library.py's output, for the executor.web.site cells")
-if(NODE_COMMAND AND PYTHON3_COMMAND)
+if(NODE_COMMAND AND GO_COMMAND)
     foreach(cell "7.6.1 productivity" "7.6.1 development" "7.6.1 games-68k"
                  "8.6 productivity" "8.6 development" "8.6 games-ppc")
         separate_arguments(cell)
@@ -276,7 +260,6 @@ if(NODE_COMMAND AND PYTHON3_COMMAND)
             COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_site.mjs
                     $<TARGET_FILE_DIR:executor-web> ${EXECUTOR_WEB_LIBRARY} ${system} ${disk}.img)
         set_tests_properties(executor.web.site.${system}.${disk} PROPERTIES
-            LABELS "web;site" TIMEOUT 1800 SKIP_RETURN_CODE 77
-            ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM};TMPDIR=${CMAKE_CURRENT_BINARY_DIR}")
+            LABELS "web;site" TIMEOUT 1800 SKIP_RETURN_CODE 77 ENVIRONMENT "${EXECUTOR_WEB_ENV}")
     endforeach()
 endif()

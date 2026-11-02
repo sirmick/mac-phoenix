@@ -230,8 +230,9 @@ static LONGINT try_to_open_disk(const char *dname, LONGINT *bsizep,
 #endif
 
 
-    // MacPhoenix: images shared with the ROM emulator are mounted locked.
-    floppyfd = ROMlib_readonly_images ? -1
+    // MacPhoenix: images shared with the ROM emulator are mounted locked,
+    // and CDs always.
+    floppyfd = ROMlib_readonly_images || ROMlib_locked_images.count(dname) ? -1
                                       : open(dname, O_BINARY | O_RDWR | EXTRA_BITS, 0000);
 
     if(floppyfd < 0)
@@ -632,6 +633,7 @@ void Executor::ROMlib_openfloppy(const char *dname, GUEST<LONGINT> *messp)
 }
 
 bool Executor::ROMlib_readonly_images = false;
+std::set<std::string> Executor::ROMlib_locked_images;
 
 void Executor::ROMlib_openharddisk(const char *dname, GUEST<LONGINT> *messp)
 {
