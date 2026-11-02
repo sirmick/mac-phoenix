@@ -201,8 +201,8 @@ class RemoteImage {
             if (x.status === 206 || attempt >= REMOTE_TRIES || (x.status >= 400 && x.status < 500))
                 break;
         }
-        if (x.status === 401)
-            notice(`Signed out: sign in again to read ${this.name}`);
+        if (x.status === 401 || x.status === 403)
+            notice(`${this.name}: refused (HTTP ${x.status}): reload the page`);
         const etag = x.getResponseHeader('ETag');
         // (main.js checked that Range requests get 206: a proxy dropping
         // Range shows at once, not after the whole image.)

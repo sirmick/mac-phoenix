@@ -111,6 +111,7 @@ type Ids struct {
 	mu      sync.Mutex
 	known   map[string]idEntry
 	hashing map[string]*sync.Mutex
+	warming sync.WaitGroup // warm's
 }
 
 func newIds(path string) *Ids {
@@ -179,7 +180,9 @@ func (ids *Ids) get(path string) (string, error) {
 }
 
 func (ids *Ids) warm(paths []string) {
+	ids.warming.Add(1)
 	go func() {
+		defer ids.warming.Done()
 		for _, p := range paths {
 			ids.get(p)
 		}

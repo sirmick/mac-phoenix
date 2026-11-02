@@ -1,100 +1,118 @@
 package main
 
-// The settings: DATA/settings.json, GET/POST /api/settings. The keys are
-// tools/web/server's configuration ([server], [library], [relay] of
-// server.example.toml) in one flat object, less the accounts' (no
-// session_days, no public: a password or nothing). Command-line flags
-// override them for the run and are not saved.
+// The settings: settings.json (--config; default DATA/settings.json), GET
+// and POST /api/settings. settings.schema.json is their one description
+// (schema.go): the categories of the tab's settings dialog
+// (web/executor/settings.js), each setting's default, type, range, label
+// and help. The page's (x-scope page) are the tab's: kept here for it, used
+// by the page; the server's (x-scope server) are this program's. Version 1
+// files (flat, this program's first) are migrated on load and saved as 2.
 //
+//	GET  -> { version, settings, scopes, restart_needed, can_change_server }
+//	POST a JSON merge patch (RFC 7396) of settings: null puts a setting, or
+//	     a whole category, back to its default. The settings after, as GET.
+//
+// Command-line flags override settings for the run and are not saved.
 // What a POST changes applies at once (the library, the relay's policy
-// for new connections, the password), except bind, port and the TLS
-// files: those at the next start.
+// for new connections), except x-apply server ones (bind,
+// port, the TLS files): at the next start, listed in restart_needed.
 
 import (
-	"crypto/pbkdf2"
-	"crypto/rand"
-	"crypto/sha256"
-	"crypto/subtle"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 )
 
 type RelaySettings struct {
-	Enabled        bool   `json:"enabled"`
-	Ports          []any  `json:"ports"` // ints and "A-B" ranges
-	AllowPrivate   bool   `json:"allow_private"`
-	MaxSockets     int    `json:"max_sockets"`
-	MaxConnections int    `json:"max_connections"`
-	Nameserver     string `json:"nameserver"` // QUERY's; "": the host's
+	Enabled        bool
+	Ports          []any // ints and "A-B" ranges
+	AllowPrivate   bool
+	MaxSockets     int
+	MaxConnections int
+	Nameserver     string // QUERY's; "": the host's
 }
 
+// Settings: what of the document this program uses, typed.
 type Settings struct {
-	Bind           string        `json:"bind"`
-	Port           int           `json:"port"`
-	Images         string        `json:"images"`
-	Include        []string      `json:"include"`
-	Exclude        []string      `json:"exclude"`
-	SecureCookies  any           `json:"secure_cookies"` // "auto", true or false
-	TrustedProxies []string      `json:"trusted_proxies"`
-	MaxUploadMB    int           `json:"max_upload_mb"`
-	TLSCert        string        `json:"tls_cert"`
-	TLSKey         string        `json:"tls_key"`
-	Relay          RelaySettings `json:"relay"`
-	PasswordHash   string        `json:"password_hash,omitempty"` // pbkdf2: salt$hash
+	Bind           string
+	Port           int
+	Images         string
+	Include        []string
+	Exclude        []string
+	SecureCookies  any // "auto", true or false
+	TrustedProxies []string
+	MaxUploadMB    int
+	TLSCert        string
+	TLSKey         string
+	Relay          RelaySettings
 }
 
-func defaultSettings(data string) Settings {
-	return Settings{
-		Bind:           "127.0.0.1",
-		Port:           8090,
-		Images:         filepath.Join(data, "images"),
-		Include:        []string{"*.img", "*.iso"},
-		Exclude:        []string{},
-		SecureCookies:  "auto",
-		TrustedProxies: []string{},
-		MaxUploadMB:    64,
-		Relay: RelaySettings{
-			Enabled: true,
-			Ports: []any{7, 13, 20, 21, 23, 25, 37, 43, 53, 70, 79, 80, 110, 113, 119, 123, 143,
-				194, 443, 563, 993, 995, 1080, 6667, 8080},
-			MaxSockets:     32,
-			MaxConnections: 4,
-		},
+// typed: doc's server settings; images "" is DATA/images.
+func typed(doc map[string]any, data string) Settings {
+	var f struct {
+		Disks struct {
+			Images  string   `json:"images"`
+			Include []string `json:"include"`
+			Exclude []string `json:"exclude"`
+		} `json:"disks"`
+		Network struct {
+			Bind                string   `json:"bind"`
+			Port                int      `json:"port"`
+			RelayEnabled        bool     `json:"relay_enabled"`
+			RelayPorts          []any    `json:"relay_ports"`
+			RelayAllowPrivate   bool     `json:"relay_allow_private"`
+			RelayMaxSockets     int      `json:"relay_max_sockets"`
+			RelayMaxConnections int      `json:"relay_max_connections"`
+			RelayNameserver     string   `json:"relay_nameserver"`
+			TrustedProxies      []string `json:"trusted_proxies"`
+			SecureCookies       any      `json:"secure_cookies"`
+			TLSCert             string   `json:"tls_cert"`
+			TLSKey              string   `json:"tls_key"`
+			MaxUploadMB         int      `json:"max_upload_mb"`
+		} `json:"network"`
 	}
+	b, _ := json.Marshal(doc)
+	json.Unmarshal(b, &f)
+	d, n := f.Disks, f.Network
+	if d.Images == "" {
+		d.Images = filepath.Join(data, "images")
+	} else {
+		d.Images = expand(d.Images)
+	}
+	return Settings{Bind: n.Bind, Port: n.Port, Images: d.Images, Include: d.Include, Exclude: d.Exclude,
+		SecureCookies: n.SecureCookies, TrustedProxies: n.TrustedProxies, MaxUploadMB: n.MaxUploadMB,
+		TLSCert: n.TLSCert, TLSKey: n.TLSKey,
+		Relay: RelaySettings{n.RelayEnabled, n.RelayPorts, n.RelayAllowPrivate, n.RelayMaxSockets,
+			n.RelayMaxConnections, n.RelayNameserver}}
 }
 
-// check says what is wrong with s, if anything.
-func (s *Settings) check() error {
-	if s.Port < 0 || s.Port > 65535 {
-		return errors.New("port: 0-65535")
-	}
-	if s.MaxUploadMB < 1 {
-		return errors.New("max_upload_mb: at least 1")
-	}
-	switch v := s.SecureCookies.(type) {
-	case bool:
-	case string:
-		if v != "auto" {
-			return errors.New(`secure_cookies: "auto", true or false`)
-		}
-	default:
-		return errors.New(`secure_cookies: "auto", true or false`)
-	}
-	if _, err := parsePorts(s.Relay.Ports); err != nil {
+func defaultDoc() map[string]any { return settingsSchema.defaults().(map[string]any) }
+
+// check: doc against the schema, and what it can't say.
+func check(doc map[string]any) error {
+	if err := settingsSchema.validate(doc, "", false); err != nil {
 		return err
 	}
-	if s.Relay.MaxSockets < 0 || s.Relay.MaxConnections < 0 {
-		return errors.New("relay: limits are not negative")
+	n, _ := doc["network"].(map[string]any)
+	if n != nil {
+		if p, ok := n["relay_ports"].([]any); ok {
+			if _, err := parsePorts(p); err != nil {
+				return &fieldError{"network.relay_ports", err.Error()}
+			}
+		}
 	}
-	for _, p := range append(append([]string{}, s.Include...), s.Exclude...) {
-		if _, err := filepath.Match(p, ""); err != nil {
-			return fmt.Errorf("pattern %q: %v", p, err)
+	d, _ := doc["disks"].(map[string]any)
+	for _, key := range []string{"include", "exclude"} {
+		l, _ := d[key].([]any)
+		for _, p := range l {
+			if _, err := filepath.Match(p.(string), ""); err != nil {
+				return &fieldError{"disks." + key, fmt.Sprintf("pattern %q: %v", p, err)}
+			}
 		}
 	}
 	return nil
@@ -114,47 +132,100 @@ func parsePorts(spec []any) ([]portRange, error) {
 		case string:
 			a, b, _ = strings.Cut(v, "-")
 		default:
-			return nil, fmt.Errorf("relay ports: %v is not a port or A-B", p)
+			return nil, fmt.Errorf("%v is not a port or A-B", p)
 		}
 		lo, err := strconv.Atoi(strings.TrimSpace(a))
 		if err != nil {
-			return nil, fmt.Errorf("relay ports: %v", p)
+			return nil, fmt.Errorf("%v is not a port or A-B", p)
 		}
 		hi := lo
 		if b != "" {
 			if hi, err = strconv.Atoi(strings.TrimSpace(b)); err != nil {
-				return nil, fmt.Errorf("relay ports: %v", p)
+				return nil, fmt.Errorf("%v is not a port or A-B", p)
 			}
+		}
+		if lo < 1 || hi > 65535 || lo > hi {
+			return nil, fmt.Errorf("%v: ports are 1-65535, A-B with A <= B", p)
 		}
 		out = append(out, portRange{lo, hi})
 	}
 	return out, nil
 }
 
-func loadSettings(path, data string) (Settings, error) {
-	s := defaultSettings(data)
+// patchSettings: doc with patch applied (a merge patch), checked. doc is
+// not changed.
+func patchSettings(doc, patch map[string]any) (map[string]any, error) {
+	patch = deepCopy(patch).(map[string]any)
+	delete(patch, "version")
+	// Each setting named exists and may be written; types and ranges are
+	// the result's to check.
+	paths := []string{}
+	leaves(patch, "", settingsSchema, &paths)
+	sort.Strings(paths)
+	for _, p := range paths {
+		n := settingsSchema.lookup(p)
+		if n == nil {
+			return nil, &fieldError{p, "no such setting"}
+		}
+		if n.ReadOnly {
+			return nil, &fieldError{p, "read-only"}
+		}
+	}
+	next := settingsSchema.fill(mergePatch(deepCopy(doc).(map[string]any), patch))
+	if err := check(next); err != nil {
+		return nil, err
+	}
+	return next, nil
+}
+
+// loadSettings: the file's document, migrated, filled with defaults and
+// checked. A password (password_hash, network.password; before the
+// claim) and network.paired (the pairing builds') are dropped, and the
+// file saved without them.
+func loadSettings(path string) (map[string]any, error) {
 	b, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
-		return s, nil
+		return defaultDoc(), nil
 	}
 	if err != nil {
-		return s, err
+		return nil, err
 	}
-	if err := strictUnmarshal(b, &s); err != nil {
-		return s, fmt.Errorf("%s: %v", path, err)
+	var doc map[string]any
+	if err := json.Unmarshal(b, &doc); err != nil || doc == nil {
+		return nil, fmt.Errorf("%s: not a JSON object", path)
 	}
-	return s, s.check()
+	old, _ := doc["version"].(float64)
+	if doc, err = migrate(doc); err != nil {
+		return nil, fmt.Errorf("%s: %v", path, err)
+	}
+	_, stale := doc["password_hash"]
+	delete(doc, "password_hash")
+	if n, ok := doc["network"].(map[string]any); ok {
+		for _, k := range []string{"password", "paired"} {
+			if _, ok := n[k]; ok {
+				delete(n, k)
+				stale = true
+			}
+		}
+	}
+	doc = settingsSchema.fill(doc)
+	if err := check(doc); err != nil {
+		return nil, fmt.Errorf("%s: %v", path, err)
+	}
+	if stale || old < float64(settingsSchema.Version) { // saved as it is now
+		if err := saveSettings(path, doc); err != nil {
+			return nil, err
+		}
+	}
+	return doc, nil
 }
 
-func strictUnmarshal(b []byte, v any) error {
-	d := json.NewDecoder(strings.NewReader(string(b)))
-	d.DisallowUnknownFields()
-	return d.Decode(v)
-}
-
-func saveSettings(path string, s Settings) error {
-	b, err := json.MarshalIndent(s, "", "  ")
+func saveSettings(path string, doc map[string]any) error {
+	b, err := json.MarshalIndent(doc, "", "  ")
 	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
 	return writeAtomic(path, append(b, '\n'), 0o600)
@@ -183,28 +254,4 @@ func writeAtomic(path string, data []byte, mode os.FileMode) error {
 		os.Remove(tmp.Name())
 	}
 	return err
-}
-
-// ---- the password ----
-const pbkdfRounds = 200000
-
-func hashPassword(pw string) string {
-	salt := make([]byte, 16)
-	rand.Read(salt)
-	key, _ := pbkdf2.Key(sha256.New, pw, salt, pbkdfRounds, 32)
-	return hex.EncodeToString(salt) + "$" + hex.EncodeToString(key)
-}
-
-func checkPassword(hash, pw string) bool {
-	salt, want, ok := strings.Cut(hash, "$")
-	if !ok {
-		return false
-	}
-	s, err1 := hex.DecodeString(salt)
-	w, err2 := hex.DecodeString(want)
-	if err1 != nil || err2 != nil {
-		return false
-	}
-	key, err := pbkdf2.Key(sha256.New, pw, s, pbkdfRounds, len(w))
-	return err == nil && subtle.ConstantTimeCompare(key, w) == 1
 }

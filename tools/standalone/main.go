@@ -1,18 +1,21 @@
 // executor-standalone: Executor's tab and what it needs from a server,
 // as one program (docs/executor/Standalone.md).
 //
-//	executor-standalone [--data DIR] [--images DIR] [--bind ADDR] [--port N]
-//	                    [--site DIR] [--password-file FILE] [--tls-cert F --tls-key F] [--open] [--quiet]
-//	executor-standalone [--data DIR] passwd     the password from stdin ("" : none)
+//	executor-standalone [--data DIR] [--config FILE] [--images DIR] [--bind ADDR] [--port N]
+//	                    [--site DIR] [--tls auto | --tls-cert F [--tls-key F]]
+//	                    [--open] [--quiet]
 //
+// It prints its address; the first browser to open it has the server
+// until it stops (claim.go); --open opens it.
 // The tab (make_site.sh's output) is embedded; --site serves a directory
-// instead. DATA (default: the user's config directory's executor-web)
-// has settings.json, the overlays of disks not in the library, Executor's
-// volumes and their objects, and the tab's logs.
+// instead. DATA (default: the user's config directory's executor-web:
+// ~/.config on Linux, ~/Library/Application Support on macOS, %AppData% on
+// Windows) has settings.json (or --config's file; settings.go), the
+// overlays of disks not in the library, Executor's volumes and their
+// objects, the tab's logs (and --tls auto's certificate).
 package main
 
 import (
-	"bufio"
 	"crypto/tls"
 	"embed"
 	"errors"
@@ -28,7 +31,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 )
 
 //go:embed all:site
@@ -40,11 +42,12 @@ func main() {
 		defData = filepath.Join(d, "executor-web")
 	}
 	data := flag.String("data", defData, "the data directory")
+	config := flag.String("config", "", "the settings file (default: DATA/settings.json)")
 	images := flag.String("images", "", "the library's images (default: settings', DATA/images)")
 	bind := flag.String("bind", "", "the address to listen on (default: settings', 127.0.0.1)")
 	port := flag.Int("port", -1, "the port (0: any; default: settings', 8090)")
 	site := flag.String("site", "", "serve the tab from this directory, not the embedded one")
-	pwFile := flag.String("password-file", "", "the password for this run, from a file")
+	tlsMode := flag.String("tls", "", "auto: serve HTTPS with a self-signed certificate made once in DATA/tls")
 	tlsCert := flag.String("tls-cert", "", "PEM certificate (chain): serve HTTPS")
 	tlsKey := flag.String("tls-key", "", "its key (default: in the certificate's file)")
 	quiet := flag.Bool("quiet", false, "errors only")
@@ -55,35 +58,23 @@ func main() {
 		fatal(err)
 	}
 	abs, _ := filepath.Abs(*data)
-	s := &Server{data: abs, settingsPath: filepath.Join(abs, "settings.json"), quiet: *quiet,
-		failures: map[string][]time.Time{}}
-	file, err := loadSettings(s.settingsPath, abs)
+	settingsPath := filepath.Join(abs, "settings.json")
+	if *config != "" {
+		settingsPath, _ = filepath.Abs(*config)
+	}
+	s := &Server{data: abs, settingsPath: settingsPath, quiet: *quiet}
+	if flag.NArg() > 0 {
+		fatal(fmt.Errorf("unknown command %q", flag.Arg(0)))
+	}
+	if *tlsMode != "" && *tlsMode != "auto" && *tlsMode != "off" {
+		fatal(fmt.Errorf("--tls %s: auto or off", *tlsMode))
+	}
+	doc, err := loadSettings(s.settingsPath)
 	if err != nil {
 		fatal(err)
 	}
-
-	if flag.Arg(0) == "passwd" {
-		fmt.Fprint(os.Stderr, "Password (empty: none): ")
-		line, _ := bufio.NewReader(os.Stdin).ReadString('\n')
-		pw := strings.TrimRight(line, "\r\n")
-		file.PasswordHash = ""
-		if pw != "" {
-			file.PasswordHash = hashPassword(pw)
-		}
-		if err := saveSettings(s.settingsPath, file); err != nil {
-			fatal(err)
-		}
-		return
-	} else if flag.NArg() > 0 {
-		fatal(fmt.Errorf("unknown command %q", flag.Arg(0)))
-	}
-
-	if *pwFile != "" {
-		b, err := os.ReadFile(*pwFile)
-		if err != nil {
-			fatal(err)
-		}
-		s.pwOverride = hashPassword(strings.TrimRight(string(b), "\r\n"))
+	for _, f := range []string{"sessions.json", "pair.key", "paired.json"} { // the password's, the pairing's
+		os.Remove(filepath.Join(abs, f))
 	}
 	s.override = func(st *Settings) {
 		if *images != "" {
@@ -98,6 +89,12 @@ func main() {
 		if *tlsCert != "" {
 			st.TLSCert, st.TLSKey = *tlsCert, *tlsKey
 		}
+		switch *tlsMode {
+		case "auto":
+			st.TLSCert, st.TLSKey = "auto", ""
+		case "off":
+			st.TLSCert, st.TLSKey = "", ""
+		}
 	}
 	if *site != "" {
 		s.site, s.siteName = os.DirFS(*site), *site
@@ -106,8 +103,7 @@ func main() {
 		s.siteName = "(embedded)"
 	}
 	s.ids = newIds(filepath.Join(abs, "image-ids.json"))
-	s.loadSessions()
-	s.applySettings(file)
+	s.applySettings(doc)
 	if st := s.settings(); st.Images != "" {
 		os.MkdirAll(st.Images, 0o755)
 	}
@@ -116,30 +112,40 @@ func main() {
 	s.relay = &Relay{s: s}
 
 	st := s.settings()
-	s.running = st
 	ln, err := net.Listen("tcp", net.JoinHostPort(st.Bind, strconv.Itoa(st.Port)))
 	if err != nil {
 		fatal(err)
 	}
 	ln = &limitListener{Listener: ln, slots: make(chan struct{}, maxConnections)}
-	scheme := "http"
+	scheme, fingerprint := "http", ""
 	if st.TLSCert != "" {
-		key := st.TLSKey
-		if key == "" {
-			key = st.TLSCert
+		var cert tls.Certificate
+		if st.TLSCert == "auto" {
+			cert, fingerprint, err = autoCert(abs)
+		} else {
+			key := st.TLSKey
+			if key == "" {
+				key = st.TLSCert
+			}
+			cert, err = tls.LoadX509KeyPair(expand(st.TLSCert), expand(key))
 		}
-		cert, err := tls.LoadX509KeyPair(expand(st.TLSCert), expand(key))
 		if err != nil {
 			fatal(err)
 		}
 		ln = tls.NewListener(ln, &tls.Config{Certificates: []tls.Certificate{cert}, NextProtos: []string{"http/1.1"}})
-		scheme = "https"
+		scheme, s.tls = "https", true
 	}
 	addr := ln.Addr().(*net.TCPAddr)
-	s.mu.Lock()
-	s.running.Port = addr.Port
-	s.mu.Unlock()
 	fmt.Printf("Serving %s on %s://%s/\n", s.siteName, scheme, net.JoinHostPort(addr.IP.String(), strconv.Itoa(addr.Port)))
+	fmt.Printf("Open %s (the first browser to open it has it until the server stops)\n", browserURL(scheme, addr))
+	for _, u := range lanURLs(scheme, addr) {
+		fmt.Printf("  or on the LAN: %s\n", u)
+	}
+	if fingerprint != "" {
+		fmt.Printf("The certificate (self-signed: the browser asks once), SHA-256 %s\n", fingerprint)
+	} else if !addr.IP.IsLoopback() {
+		fmt.Println("Listening beyond this computer over plain HTTP: --tls auto serves HTTPS.")
+	}
 	os.Stdout.Sync()
 	if *open {
 		if err := openBrowser(browserURL(scheme, addr)); err != nil {

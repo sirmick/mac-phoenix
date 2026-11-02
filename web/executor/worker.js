@@ -356,6 +356,8 @@ async function storeVolume() {
 async function sessionBeat() {
     try {
         const res = await fetch(`api/session?id=${session}`, { method: 'POST', cache: 'no-store' });
+        if (res.status === 401 || res.status === 403)
+            postMessage({ type: 'claim', status: res.status });     // (main.js: reload)
         if (!res.ok)
             return;
         const s = await res.json();
@@ -424,6 +426,10 @@ async function start(m) {
         args.push('--system', `/uploads/${m.system}`);
     if (m.ppc)
         args.push('--ppc');
+    if (m.ram)
+        args.push('--ram', `${m.ram}`);
+    if (m.depth)
+        args.push('--depth', `${m.depth}`);
     if (m.logtraps) {
         args.push('--logtraps');
         if (m.logtraps !== '1')

@@ -1,6 +1,5 @@
 // W3C KeyboardEvent.code -> classic Mac ADB key code; the table is
-// client/client.js's, with Ctrl/Alt/Meta at its defaults (Control,
-// Option, Command).
+// client/client.js's; Ctrl/Alt/Meta as setCommandKey says.
 'use strict';
 
 const EVENT_CODE_TO_MAC = Object.freeze({
@@ -24,8 +23,8 @@ const EVENT_CODE_TO_MAC = Object.freeze({
     Backspace: 0x33, Delete: 0x75, CapsLock: 0x39,
     // Shift is the only modifier in this static table — it's never user-
     // remapped (Mac Shift IS the only sensible target). Ctrl / Alt / Meta
-    // are owned by `modifierOverride` (built from keyboardConfig) so the
-    // user can change them in Settings → Keyboard at runtime.
+    // are MODIFIERS', below, so the user can change them in Settings →
+    // Input at runtime.
     ShiftLeft: 0x38, ShiftRight: 0x38,
     // Editing & navigation
     Insert: 0x72,                                     // Mac Help
@@ -48,11 +47,24 @@ const EVENT_CODE_TO_MAC = Object.freeze({
     Numpad8: 0x5B, Numpad9: 0x5C,
 });
 
-const MODIFIERS = Object.freeze({
-    ControlLeft: 0x36, ControlRight: 0x36,
-    AltLeft: 0x3A, AltRight: 0x3A,
-    MetaLeft: 0x37, MetaRight: 0x37,
+// Ctrl, Alt and Meta: which is Command is the input.command_key setting
+// (settings.js); Option and Control are the other two, in the order Alt,
+// Ctrl, Meta.
+const MAC_COMMAND = 0x37, MAC_OPTION = 0x3A, MAC_CONTROL = 0x36;
+const MODIFIER_PRESETS = Object.freeze({
+    meta: { Control: MAC_CONTROL, Alt: MAC_OPTION, Meta: MAC_COMMAND },
+    ctrl: { Control: MAC_COMMAND, Alt: MAC_OPTION, Meta: MAC_CONTROL },
+    alt:  { Control: MAC_CONTROL, Alt: MAC_COMMAND, Meta: MAC_OPTION },
 });
+let MODIFIERS = {};
+
+function setCommandKey(which) {
+    const p = MODIFIER_PRESETS[which] || MODIFIER_PRESETS.meta;
+    MODIFIERS = {};
+    for (const [key, mac] of Object.entries(p))
+        MODIFIERS[`${key}Left`] = MODIFIERS[`${key}Right`] = mac;
+}
+setCommandKey('meta');
 
 function macKeycodeForEvent(e) {
     if (e.code in MODIFIERS)
