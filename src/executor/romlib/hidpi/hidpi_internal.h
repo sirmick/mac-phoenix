@@ -139,6 +139,19 @@ struct Screen
    left them (srcCopy: its whole box). */
 bool run_valid(const Run &run, const Screen &screen);
 
+/* Where, inside AREA, the screen no longer shows RUN (a pixel it changed,
+   or one next to it, is different now: an XOR line crossing it), as 1x
+   rectangles a pixel wider than the pixels: the rest of it can still be
+   drawn. False when it can't be drawn in part (no ink of its own: any
+   change ends it; another depth) or when less than a quarter of its ink is
+   still there (what matches could be chance). */
+bool run_damage(const Run &run, const Screen &screen, const IRect &area, std::vector<IRect> &out);
+
+/* RUN still on the screen, all of it or in part (run_damage): a window
+   over half of a desktop label leaves the other half, which nothing draws
+   again when it goes. */
+bool run_alive(const Run &run, const Screen &screen);
+
 /* hidpi_skia.cpp: the presentation surface's RECTS (1x) redrawn: ARGB
    scaled up, RUNS drawn over it. */
 void draw(double scale, const uint32_t *argb, int w, int h, const std::vector<IRect> &rects,

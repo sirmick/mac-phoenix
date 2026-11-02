@@ -317,7 +317,7 @@ bool recapture(Runs &runs, Runs::iterator it, const Screen &s)
 void sweep(Runs &runs, const Screen &s)
 {
     runs.erase(std::remove_if(runs.begin(), runs.end(),
-                              [&](const auto &r) { return !run_valid(*r, s); }),
+                              [&](const auto &r) { return !run_alive(*r, s); }),
                runs.end());
 }
 
@@ -677,7 +677,7 @@ void Executor::hidpi::text_draw(const TextParams &p, const std::function<void()>
                          replaced++;
                          return true;
                      }
-                     if(run_valid(*r, s))
+                     if(run_alive(*r, s))
                          return false;
                      dropped++;
                      return true;
@@ -782,7 +782,7 @@ void Executor::hidpi::chrome_draw(const Rect &r, Shapes shapes, const std::funct
         recapture(runs, it, s);
     }
     runs.erase(std::remove_if(runs.begin(), runs.end(),
-                                [&](const auto &u) { return intersects(u->box, box) && !run_valid(*u, s); }),
+                                [&](const auto &u) { return intersects(u->box, box) && !run_alive(*u, s); }),
                  runs.end());
     run->noInk = run->before == run->after;
     if(ERROR_ENABLED_P(ERROR_HIDPI_LOG))
@@ -791,6 +791,63 @@ void Executor::hidpi::chrome_draw(const Rect &r, Shapes shapes, const std::funct
                 under.size(), runs.size() + 1);
     runs.push_back(run);
     trim(runs, t);
+}
+
+bool Executor::hidpi::impl::run_damage(const Run &run, const Screen &s, const IRect &area,
+                                       std::vector<IRect> &out)
+{
+    out.clear();
+    if(run.noInk || run.bpp != s.bpp || run.box.bottom > s.height || run.box.right > s.width || !s.data)
+        return false;
+    int byte0 = run.x0 * run.bpp / 8;
+    int rows = run.box.bottom - run.box.top;
+    auto inked = [&](int x, int y) {
+        if(y < 0 || y >= rows || x < run.box.left || x >= run.box.right)
+            return false;
+        int i = x - run.x0;
+        return raw_pixel(&run.before[(size_t)y * run.rowLen], i, run.bpp)
+            != raw_pixel(&run.after[(size_t)y * run.rowLen], i, run.bpp);
+    };
+    long ink = 0, lost = 0;
+    for(int y = 0; y < rows; y++)
+        for(int x = run.box.left; x < run.box.right; x++)
+            ink += inked(x, y);
+    for(int y = 0; y < rows; y++)
+    {
+        const uint8_t *cur = s.data + (size_t)(run.box.top + y) * s.rowBytes + byte0;
+        const uint8_t *aft = &run.after[(size_t)y * run.rowLen];
+        if(!memcmp(cur, aft, run.rowLen))
+            continue;
+        int sy = run.box.top + y;
+        for(int x = run.box.left; x < run.box.right; x++)
+        {
+            if(raw_pixel(cur, x - run.x0, run.bpp) == raw_pixel(aft, x - run.x0, run.bpp))
+                continue;
+            bool near = run.mode == Mode::Copy;
+            for(int dy = -1; dy <= 1 && !near; dy++)
+                for(int dx = -1; dx <= 1 && !near; dx++)
+                    near = inked(x + dx, y + dy);
+            if(!near)
+                continue;
+            lost += inked(x, y);
+            IRect d = { sy - 1, x - 1, sy + 2, x + 2 };
+            if(intersects(d, area))
+            {
+                /* the pixels before it on this row, one rectangle */
+                if(!out.empty() && out.back().top == d.top && out.back().right >= d.left)
+                    out.back().right = d.right;
+                else
+                    out.push_back(d);
+            }
+        }
+    }
+    return lost * 4 <= ink * 3;
+}
+
+bool Executor::hidpi::impl::run_alive(const Run &run, const Screen &s)
+{
+    std::vector<IRect> damage;
+    return run_valid(run, s) || run_damage(run, s, run.box, damage);
 }
 
 void Executor::hidpi::compose(const uint32_t *argb, int w, int h, const DirtyRects::Rects &rects,
@@ -1281,9 +1338,11 @@ void Executor::hidpi::copy_bits(const PixMap *src, const PixMap *dst, const Rect
                 break;
             }
         }
-        if(replaced || !run_valid(**it, to.s))
+        /* covered in part: the rest of it stays as it was (its "after"
+           taking what's over it would make that its ink) */
+        if(replaced || !run_alive(**it, to.s))
             dst_runs.erase(it);
-        else if(recapture(dst_runs, it, to.s))
+        else if(!run_valid(**it, to.s) || recapture(dst_runs, it, to.s))
             i++;
     }
     for(auto &n : made)

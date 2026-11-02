@@ -573,6 +573,12 @@ kReservedControlPart = kControlDisabledPart,
 kControlInactiveControlPart = kControlInactivePart,
 };
 
+enum {kControlBevelButtonContentTag = "cont"_4,
+};
+
+OSErr C_SetBevelButtonContentInfo(ControlRef inButton, ControlButtonContentInfoPtr inContent);LIBRARY_FUNCTION(AppearanceLib, SetBevelButtonContentInfo, C_SetBevelButtonContentInfo);
+
+
 OSStatus C_GetControlSystemProperty(ControlRef control, PropertyTag tag, UInt32 bufferSize, GUEST<UInt32> *actualSize, void *buffer);LIBRARY_FUNCTION(ControlsLib, GetControlSystemProperty, C_GetControlSystemProperty);
 
 
