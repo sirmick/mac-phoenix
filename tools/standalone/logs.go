@@ -88,6 +88,7 @@ func init() {
 		return c.sendJSON(200, map[string]any{})
 	})
 
+	shotTagRe := regexp.MustCompile(`^[a-z0-9]{0,8}$`)
 	handle("POST", "/api/shot", false, func(c *ctx, m []string) error {
 		session := c.query["session"]
 		if !logSessionRe.MatchString(session) {
@@ -104,6 +105,13 @@ func init() {
 		if r := []rune(note); len(r) > 500 {
 			note = string(r[:500])
 		}
+		tag := c.query["tag"] // "1x": Executor's 1x frame beside the scaled one
+		if !shotTagRe.MatchString(tag) {
+			return httpErr(400, "tag: up to 8 letters and digits")
+		}
+		if tag != "" {
+			tag = "-" + tag
+		}
 		s := c.s
 		now := time.Now().UTC()
 		day := now.Format("2006-01-02")
@@ -114,12 +122,12 @@ func init() {
 		s.logMu.Lock()
 		defer s.logMu.Unlock()
 		stamp := now.Format("150405")
-		name := fmt.Sprintf("%s-%s.png", session, stamp)
+		name := fmt.Sprintf("%s-%s%s.png", session, stamp, tag)
 		for i := 2; ; i++ {
 			if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
 				break
 			}
-			name = fmt.Sprintf("%s-%s-%d.png", session, stamp, i)
+			name = fmt.Sprintf("%s-%s-%d%s.png", session, stamp, i, tag)
 		}
 		if err := os.WriteFile(filepath.Join(dir, name), data, 0o644); err != nil {
 			return err
