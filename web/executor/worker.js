@@ -180,7 +180,6 @@ let cds = new Set();
 const ejecting = new Map();         // request id -> image name
 async function openImage(f) {
     const o = Overlay.open(f.name, f, imageKey(f));
-    o.readOnly = cds.has(f.name);
     if (Store.enabled && o.file.remote)
         await Store.overlayDown(o);
     else
@@ -211,7 +210,8 @@ async function insert(id, { file, cd, ids: more }) {
     overlays.push(o);
     OVERLAYFS.add(o);
     reportImages();
-    Module.requests.push([id, 'mount', `/uploads/${file.name}`]);
+    // A CD locked as --cdrom's are (ROMlib_locked_images).
+    Module.requests.push([id, cds.has(file.name) ? 'mount-cd' : 'mount', `/uploads/${file.name}`]);
 }
 
 // Gone from the Mac: its changes to the server at once, out of /uploads;
@@ -242,7 +242,7 @@ async function ejected(name, always = false) {
 // Which images have changes (the page marks them, offers their download).
 function reportImages() {
     postMessage({ type: 'images', images: overlays.map((o) => ({
-        name: o.name, modified: o.modified, changed: o.map.size * OVERLAY_BLOCK, writable: o.writable,
+        name: o.name, modified: o.modified, changed: o.map.size * OVERLAY_BLOCK, writable: !cds.has(o.name),
         onServer: Store.enabled && !o.syncOff })) });
 }
 

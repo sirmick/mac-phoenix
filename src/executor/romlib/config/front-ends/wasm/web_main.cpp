@@ -25,6 +25,7 @@
  *                    through _MountVol (the System's patches tell the Finder),
  *                    a diskEvt posted, as for a floppy; the OSErr (-1: the
  *                    image can't be opened; nsvErr: no Mac volume on it)
+ *   mount-cd PATH    the same, a CD: locked (ROMlib_locked_images, as --cdrom)
  *   eject PATH       a disk image's volumes unmounted through _UnmountVol
  *                    (fBsyErr: in use)
  *   volumes          the volumes mounted: their names
@@ -457,6 +458,11 @@ void on_event_poll()
         }
         else if(op == "mount")
             reply = std::to_string(mount_image(arg));
+        else if(op == "mount-cd")
+        {
+            ROMlib_locked_images.insert(arg);
+            reply = std::to_string(mount_image(arg));
+        }
         else if(op == "eject")
             reply = std::to_string(eject_image(arg));
         else if(op == "screen1x")

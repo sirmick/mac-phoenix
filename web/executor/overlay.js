@@ -220,14 +220,13 @@ class Overlay {
         this.sync = { version: 0 };     // the server's (standalone: sync.js, Store)
         this.pending = new Set();       // blocks changed since the last upload
         this.writes = 0;                // changes so far (sync.js: Store's beacons)
-        this.readOnly = false;          // a CD: never written (Executor mounts it locked)
     }
 
     static open(name, file, key) {
         return new Overlay(name, file, key, file.remote ? new RemoteImage(file) : new FileImage(file));
     }
 
-    get writable() { return !this.readOnly; }
+    get writable() { return true; }
     get modified() { return this.map.size > 0; }
 
     // The bytes [pos, pos + length), length within the image.
@@ -425,12 +424,6 @@ const OVERLAYFS = {
     },
 
     stream_ops: {
-        // A read-only image (a CD) refuses to open for writing: Executor
-        // opens it read-only then, and mounts it locked.
-        open(stream) {
-            if ((stream.flags & 3) && stream.node.overlay && !stream.node.overlay.writable)
-                throw new FS.ErrnoError(EROFS);
-        },
         read(stream, buffer, offset, length, position) {
             const ov = stream.node.overlay;
             const n = Math.max(0, Math.min(length, ov.size - position));

@@ -21,8 +21,8 @@ page are added and open it.
   - `CHANGED`: how much (the overlay's blocks), where it is kept and what
     Revert and Download do. The image itself is never written (overlay.js).
   - `CD · READ-ONLY`: `.iso`/`.toast`/`.cdr`, or a library disk tagged
-    `cd`. Mounted locked: OVERLAYFS refuses to open it for writing, so
-    Executor opens it read-only (`try_to_open_disk`: `DRIVE_FLAGS_LOCKED`).
+    `cd`. Mounted locked, as `--cdrom`'s: `ROMlib_locked_images` (at the
+    start through the host config's `cdroms`, put in live by `mount-cd`).
   - `THIS VISIT`: a disk the server didn't take: its changes last until
     Executor restarts.
   - `APPLICATION`: copied into `executor:Uploads`.
@@ -90,7 +90,7 @@ the System's) reverts with a restart, as before.
 
 ## Requests (web_main.cpp)
 
-`mount PATH`, `eject PATH` and `volumes` (the mounted volumes' names)
+`mount PATH`, `mount-cd PATH`, `eject PATH` and `volumes` (the mounted volumes' names)
 join `app`, `windows`, `menus`, `launch`; the page's `insert`
 (`{ file, cd, ids, legacyKey }`) and `eject NAME` go through the Worker.
 
