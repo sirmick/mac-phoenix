@@ -3,10 +3,8 @@ package main
 // The server: tools/web/server/app.py's API without accounts.
 //
 //	/                 the tab (embedded, or --site DIR)
-//	/pair             the page that pairs a browser (pair.go); any page, unpaired
 //	/library.json     the library (library.go); /disks/NAME its images, with Range;
 //	                  /covers/NAME their covers
-//	/api/pair         POST { key, name } pairs this browser; /api/paired[/ID] the list, revoke
 //	/api/server       { standalone, version, tls }
 //	/api/me           { name, owner, mode: "standalone" }
 //	/api/session      POST ?id=ID[&take=1] the controlling tab (session.go);
@@ -26,8 +24,9 @@ package main
 //	/relay            WebSocket: the tab's sockets (relay.go)
 //	/api/log, /api/shot, /api/logs[/DAY/NAME]   the tab's logs (logs.go)
 //
-// Everything but /pair and /api/pair needs a paired browser's cookie
-// (pair.go): the site, the API, the disks, /relay, the logs. Writes and /relay
+// Everything needs the cookie of the browser with the claim (claim.go),
+// which the first load of the tab takes: the site, the API, the disks,
+// /relay, the logs. Writes and /relay
 // from another site are refused (Origin against Host, Sec-Fetch-Site).
 // Every answer is cross-origin isolated (COOP/COEP).
 
@@ -51,7 +50,6 @@ import (
 )
 
 const (
-	cookieName     = "executor_session"
 	signedOutBody  = 64 << 10
 	maxConnections = 64
 	idle           = 60 * time.Second
@@ -96,7 +94,7 @@ type Server struct {
 	relay    *Relay
 	tabs     TabSessions
 	logMu    sync.Mutex
-	pairing  *Pairing
+	claim    Claim
 }
 
 func (s *Server) settings() Settings {
@@ -142,14 +140,13 @@ func (s *Server) imageFor(key string) (string, string) {
 
 // ---- a request ----
 type ctx struct {
-	s       *Server
-	w       http.ResponseWriter
-	r       *http.Request
-	query   map[string]string
-	authed  bool   // a paired browser
-	browser string // ... its token's hash
-	body    []byte
-	read    bool
+	s      *Server
+	w      http.ResponseWriter
+	r      *http.Request
+	query  map[string]string
+	authed bool // the browser with the claim
+	body   []byte
+	read   bool
 }
 
 func (c *ctx) has(k string) bool { _, ok := c.r.URL.Query()[k]; return ok }
@@ -280,7 +277,7 @@ func (c *ctx) sameOrigin() bool {
 
 // ---- the cookie ----
 func (c *ctx) cookie() string {
-	k, err := c.r.Cookie(cookieName)
+	k, err := c.r.Cookie(cookieName(c.r.Host))
 	if err != nil {
 		return ""
 	}
@@ -292,12 +289,10 @@ func (c *ctx) setCookie(token string) {
 	if c.secure() {
 		attrs = append(attrs, "Secure")
 	}
-	if token != "" {
-		attrs = append(attrs, fmt.Sprintf("Max-Age=%d", int(pairedLife.Seconds())))
-	} else {
-		attrs = append(attrs, "Max-Age=0")
-	}
-	c.w.Header().Add("Set-Cookie", cookieName+"="+token+"; "+strings.Join(attrs, "; "))
+	// Kept past the browser's restart; the token is no good after the
+	// server's anyway.
+	attrs = append(attrs, fmt.Sprintf("Max-Age=%d", 400*24*3600))
+	c.w.Header().Add("Set-Cookie", cookieName(c.r.Host)+"="+token+"; "+strings.Join(attrs, "; "))
 }
 
 // ---- routing ----
@@ -326,7 +321,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	for k, v := range r.URL.Query() {
 		c.query[k] = v[len(v)-1]
 	}
-	c.browser, c.authed = s.pairing.seen(c.cookie())
+	c.authed = s.claim.holds(c.cookie())
 	err := s.dispatch(c)
 	var he *HTTPError
 	if errors.As(err, &he) {
@@ -359,7 +354,7 @@ func (s *Server) dispatch(c *ctx) error {
 			continue
 		}
 		if rt.auth && !c.authed {
-			return httpErr(401, "pair this browser first", "pair", "/pair")
+			return c.refused()
 		}
 		return rt.fn(c, m)
 	}
@@ -374,12 +369,6 @@ func (s *Server) static(c *ctx, p string) error {
 	if strings.HasSuffix(p, "/") {
 		norm = path.Join(norm, "index.html")
 	}
-	if !c.authed {
-		if strings.HasSuffix(norm, ".html") || path.Ext(norm) == "" {
-			return c.sendPairPage(401) // here, so the address's #key= stays for it
-		}
-		return httpErr(401, "pair this browser first", "pair", "/pair")
-	}
 	name := strings.TrimPrefix(norm, "/")
 	if name == "" {
 		name = "."
@@ -387,6 +376,18 @@ func (s *Server) static(c *ctx, p string) error {
 	st, err := fs.Stat(s.site, name)
 	if err != nil {
 		st, err = fs.Stat(s.site, name+".gz") // embedded as NAME.gz only (static.go)
+	}
+	if !c.authed && err == nil && norm == "/index.html" && c.mayClaim() {
+		if token, ok := s.claim.take(); ok {
+			c.setCookie(token)
+			c.authed = true
+		}
+	}
+	if !c.authed {
+		if strings.HasSuffix(norm, ".html") || path.Ext(norm) == "" {
+			return c.sendRefusedPage()
+		}
+		return c.refused()
 	}
 	if err != nil {
 		if norm == "/index.html" {
@@ -638,7 +639,6 @@ func (s *Server) settingsView(c *ctx) map[string]any {
 	s.mu.RLock()
 	doc, saved, started := deepCopy(s.doc).(map[string]any), s.saved, *s.started
 	s.mu.RUnlock()
-	doc["network"].(map[string]any)["paired"] = s.pairing.list(c.browser)
 	doc["advanced"].(map[string]any)["data"] = s.data
 	restart := []string{}
 	// What was changed since the start (flags override both alike).

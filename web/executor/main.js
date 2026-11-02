@@ -45,10 +45,6 @@
 // window.executor.frames counts frames.
 'use strict';
 
-// A paired browser opening the server's printed address (tools/standalone
-// pair.go): the key out of the address before anything logs or keeps it.
-if (/(^#|&)key=/.test(location.hash))
-    history.replaceState(null, '', location.pathname + location.search);
 const box = document.getElementById('screen-box');
 document.getElementById('insecure').hidden = window.isSecureContext;
 const status = document.getElementById('status');
@@ -603,10 +599,30 @@ async function beat(take = false) {
     try {
         const res = await fetch(`api/session?id=${Log.session}${take ? '&take=1' : ''}`,
                                 { method: 'POST', cache: 'no-store' });
+        if (res.status === 401 || res.status === 403)
+            lostClaim(res.status);
         return res.ok ? await res.json() : null;
     } catch {
         return null;
     }
+}
+
+// tools/standalone (claim.go): the first browser to load the tab has the
+// server until it stops. Refused now (401: it restarted; 403: and another
+// browser has it), this tab's cookie opens nothing: a reload claims it
+// again. Said once, and kept over other notices.
+let claimLost = false;
+function lostClaim(code) {
+    if (claimLost)
+        return;
+    claimLost = true;
+    const reload = document.createElement('button');
+    reload.id = 'reload';
+    reload.textContent = 'Reload';
+    reload.onclick = () => location.reload();
+    status.replaceChildren(code === 403 ? 'The server has restarted and another browser has it now. '
+                                        : 'The server has restarted: reload this page to go on. ', reload);
+    status.classList.add('lost');
 }
 
 // In control (s: the server's answer): after the tab it was taken from
@@ -630,7 +646,8 @@ async function watch() {
     if (s && s.control)
         return takeControl(s);
     viewer.hidden = false;
-    status.textContent = s ? 'Executor is open in another tab: watching it here' : 'The server can\'t be reached';
+    if (!claimLost)
+        status.textContent = s ? 'Executor is open in another tab: watching it here' : 'The server can\'t be reached';
     let img = box.querySelector('img');
     if (!img) {
         img = document.createElement('img');
@@ -785,13 +802,16 @@ async function start() {
             if (resolve)
                 resolve(m.result);
         } else if (m.type === 'notice') {
-            status.textContent = m.text;
+            if (!claimLost)
+                status.textContent = m.text;
         } else if (m.type === 'conflict') {
             worker.postMessage({ type: 'resolve', id: m.id, keep: confirm(conflictText(m)) ? 'mine' : 'account' });
         } else if (m.type === 'restart') {
             start();
         } else if (m.type === 'beacons') {
             storeBeacons = m.items;
+        } else if (m.type === 'claim') {
+            lostClaim(m.status);
         } else if (m.type === 'session') {
             if (!m.s.control && control)
                 lostControl();

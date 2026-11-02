@@ -1,11 +1,11 @@
 package main
 
-// The API over a real connection, a paired browser's (what
+// The API over a real connection, the claiming browser's (what
 // tools/web/server/test_server.py checked of this program): the page and
 // the library, the logs, disk ranges, sync, hostile requests, cross-site
-// writes, the pairing limit behind a proxy, the controlling tab, the
-// relay. And the program itself (TestMain runs main in a child): the
-// printed address, --tls auto, --rotate-key.
+// writes, the controlling tab, the relay. And the program itself (TestMain
+// runs main in a child): the printed address, --tls auto, the claim over
+// HTTPS and a restart freeing it.
 
 import (
 	"bufio"
@@ -43,7 +43,7 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-// live: testServer on a real listener, and a paired browser's cookie.
+// live: testServer on a real listener, and the claiming browser's cookie.
 type live struct {
 	t     *testing.T
 	s     *Server
@@ -55,7 +55,7 @@ func liveServer(t *testing.T) *live {
 	s := testServer(t, nil)
 	hs := httptest.NewServer(s)
 	t.Cleanup(hs.Close)
-	return &live{t, s, hs.Listener.Addr().String(), pairAs(t, s, "test")}
+	return &live{t, s, hs.Listener.Addr().String(), claimAs(t, s)}
 }
 
 // req: method path with body ([]byte, or JSON of anything else), the
@@ -76,7 +76,6 @@ func (l *live) req(method, path string, body any, headers ...string) (*http.Resp
 	if ctype != "" {
 		r.Header.Set("Content-Type", ctype)
 	}
-	r.Header.Set("Cookie", cookieName+"="+l.token)
 	for _, h := range headers {
 		k, v, _ := strings.Cut(h, ": ")
 		if k == "Host" {
@@ -84,6 +83,9 @@ func (l *live) req(method, path string, body any, headers ...string) (*http.Resp
 		} else {
 			r.Header.Set(k, v)
 		}
+	}
+	if _, ok := r.Header["Cookie"]; !ok {
+		r.Header.Set("Cookie", cookieName(r.Host)+"="+l.token)
 	}
 	res, err := http.DefaultTransport.RoundTrip(r)
 	if err != nil {
@@ -136,8 +138,8 @@ func TestAPIPageAndLibrary(t *testing.T) {
 	if res, data := l.req("GET", "/", nil); res.StatusCode != 200 || string(data) != "<p>tab</p>" {
 		t.Errorf("/: %d %q", res.StatusCode, data)
 	}
-	if code := l.status("GET", "/../pair.key", nil); code != 404 {
-		t.Errorf("/../pair.key: %d", code)
+	if code := l.status("GET", "/../settings.json", nil); code != 404 {
+		t.Errorf("/../settings.json: %d", code)
 	}
 	_, data := l.req("GET", "/library.json", nil)
 	var lib []map[string]any
@@ -151,8 +153,8 @@ func TestAPIPageAndLibrary(t *testing.T) {
 			t.Errorf("%s: %d, want %d", path, code, want)
 		}
 	}
-	if code := l.status("GET", "/covers/c.jpg", nil, "Cookie: "); code != 401 {
-		t.Errorf("a cover, unpaired: %d", code)
+	if code := l.status("GET", "/covers/c.jpg", nil, "Cookie: "); code != 403 {
+		t.Errorf("a cover, another browser: %d", code)
 	}
 }
 
@@ -173,10 +175,10 @@ func TestAPILogs(t *testing.T) {
 	name := logs[0]["log"].(string)
 	_, data = l.req("GET", "/api/logs/"+name, nil)
 	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
-	if !strings.HasPrefix(lines[0], "# ") || !strings.Contains(lines[0], `"test"`) || strings.Join(lines[1:], ",") != "one,two,three" {
+	if !strings.HasPrefix(lines[0], "# ") || !strings.Contains(lines[0], " local ") || strings.Join(lines[1:], ",") != "one,two,three" {
 		t.Errorf("the log: %q", data)
 	}
-	if code := l.status("GET", "/api/logs/2000-01-01/../../pair.key", nil); code != 404 {
+	if code := l.status("GET", "/api/logs/2000-01-01/../../settings.json", nil); code != 404 {
 		t.Errorf("out of the logs: %d", code)
 	}
 	if code := l.status("POST", "/api/shot?session="+sess, []byte("GIF89a")); code != 400 {
@@ -233,15 +235,15 @@ func TestAPIDiskRanges(t *testing.T) {
 	if code := l.status("GET", "/disks/a.img", nil, "If-None-Match: "+etag); code != 304 {
 		t.Errorf("If-None-Match: %d", code)
 	}
-	if code := l.status("GET", "/disks/a.img", nil, "Range: bytes=0-99", "Cookie: "); code != 401 {
-		t.Errorf("a range, unpaired: %d", code)
+	if code := l.status("GET", "/disks/a.img", nil, "Range: bytes=0-99", "Cookie: "); code != 403 {
+		t.Errorf("a range, another browser: %d", code)
 	}
 }
 
 func TestAPICrossSite(t *testing.T) {
 	l := liveServer(t)
 	if code := l.status("GET", "/api/sync", nil); code != 200 {
-		t.Errorf("paired: %d", code)
+		t.Errorf("claimed: %d", code)
 	}
 	for _, h := range []string{"Origin: https://elsewhere.example", "Sec-Fetch-Site: cross-site"} {
 		if code := l.status("DELETE", "/api/sync/volumes/own", nil, h); code != 403 {
@@ -371,23 +373,23 @@ func TestAPIHostileRequests(t *testing.T) {
 	l := liveServer(t)
 	// A negative or bad length: 400, the connection closed.
 	for _, n := range []string{"-1", "abc"} {
-		data := l.raw("POST /api/pair HTTP/1.1\r\nHost: x\r\nContent-Length: " + n + "\r\n\r\n")
+		data := l.raw("POST /api/settings HTTP/1.1\r\nHost: x\r\nContent-Length: " + n + "\r\n\r\n")
 		if line, _, _ := bytes.Cut(data, []byte("\r\n")); !bytes.Contains(line, []byte(" 400 ")) {
 			t.Errorf("Content-Length %s: %q", n, line)
 		}
 	}
-	// Unpaired, a large body is refused before it is read.
-	if code := l.status("POST", "/api/pair", bytes.Repeat([]byte("x"), 100<<10), "Content-Type: application/json", "Cookie: "); code != 413 {
-		t.Errorf("a large body, unpaired: %d", code)
+	// Another browser's large body is refused before it is read.
+	if code := l.status("POST", "/api/settings", bytes.Repeat([]byte("x"), 100<<10), "Content-Type: application/json", "Cookie: "); code != 403 {
+		t.Errorf("a large body, another browser: %d", code)
 	}
 	// CR/LF in the path can't make headers.
 	data := l.raw("GET /a%0d%0aSet-Cookie:%20evil=1.html HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n")
 	head, _, _ := bytes.Cut(data, []byte("\r\n\r\n"))
-	if bytes.Contains(head, []byte("\r\nSet-Cookie: evil")) || !bytes.Contains(head, []byte(" 401 ")) {
+	if bytes.Contains(head, []byte("\r\nSet-Cookie: evil")) || !bytes.Contains(head, []byte(" 403 ")) {
 		t.Errorf("CR/LF: %q", head)
 	}
 	// ../ however spelled stays in the site.
-	for _, p := range []string{"/%2e%2e/pair.key", "/..%2fpair.key", "/%2e%2e%2f%2e%2e/etc/passwd"} {
+	for _, p := range []string{"/%2e%2e/settings.json", "/..%2fsettings.json", "/%2e%2e%2f%2e%2e/etc/passwd"} {
 		if code := l.status("GET", p, nil); code != 404 {
 			t.Errorf("%s: %d", p, code)
 		}
@@ -412,24 +414,6 @@ func TestAPISettings(t *testing.T) {
 	st = l.json("GET", "/api/settings", nil)["settings"].(map[string]any)
 	if at(st, "machine.ram_mb") != 0.0 || at(st, "input.command_key") != "meta" || at(st, "network.relay_max_sockets") != 32.0 {
 		t.Errorf("reset: %v", st)
-	}
-}
-
-// Behind a trusted proxy the limit is per client (X-Forwarded-For).
-func TestAPIPairLimitBehindProxy(t *testing.T) {
-	l := liveServer(t)
-	l.req("POST", "/api/settings", map[string]any{"network": map[string]any{"trusted_proxies": []string{"127.0.0.1"}}})
-	pair := func(key, client string) int {
-		return l.status("POST", "/api/pair", map[string]any{"key": key}, "X-Forwarded-For: "+client, "Cookie: ")
-	}
-	for i := 0; i < pairFailures; i++ {
-		pair("wrong", "203.0.113.5")
-	}
-	if code := pair(l.s.pairing.key, "203.0.113.5"); code != 429 {
-		t.Errorf("after %d wrong keys: %d", pairFailures, code)
-	}
-	if code := pair(l.s.pairing.key, "203.0.113.6"); code != 200 {
-		t.Errorf("another client: %d", code)
 	}
 }
 
@@ -503,7 +487,7 @@ func (l *live) relayOpen(origin string) (*ws, int) {
 		extra = "Origin: " + origin + "\r\n"
 	}
 	fmt.Fprintf(c, "GET /relay HTTP/1.1\r\nHost: %s\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"+
-		"Sec-WebSocket-Key: %s\r\nSec-WebSocket-Version: 13\r\n%sCookie: %s=%s\r\n\r\n", l.addr, key, extra, cookieName, l.token)
+		"Sec-WebSocket-Key: %s\r\nSec-WebSocket-Version: 13\r\n%sCookie: %s=%s\r\n\r\n", l.addr, key, extra, cookieName(l.addr), l.token)
 	w := &ws{l.t, c, bufio.NewReader(c)}
 	c.SetDeadline(time.Now().Add(10 * time.Second))
 	res, err := http.ReadResponse(w.r, nil)
@@ -775,7 +759,7 @@ func TestRelaySecondRefused(t *testing.T) {
 	c, _ := net.Dial("tcp", l.addr)
 	defer c.Close()
 	fmt.Fprintf(c, "GET /relay HTTP/1.1\r\nHost: %s\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"+
-		"Sec-WebSocket-Key: eA==\r\nCookie: %s=%s\r\n\r\n", l.addr, cookieName, l.token)
+		"Sec-WebSocket-Key: eA==\r\nCookie: %s=%s\r\n\r\n", l.addr, cookieName(l.addr), l.token)
 	c.SetDeadline(time.Now().Add(10 * time.Second))
 	data, _ := io.ReadAll(c)
 	if !bytes.Contains(data, []byte("\x88")) || !bytes.HasSuffix(data, []byte("too many relay connections")) {
@@ -804,7 +788,7 @@ func TestRelayShortCredit(t *testing.T) {
 // ---- the program ----
 
 // program: this test binary as executor-standalone (TestMain) with args;
-// the lines it printed up to its "or enter the key" one.
+// the lines it printed up to its "Open ADDRESS" one.
 func program(t *testing.T, args ...string) (*exec.Cmd, []string) {
 	t.Helper()
 	cmd := exec.Command(os.Args[0], "-test.run=^$")
@@ -819,7 +803,7 @@ func program(t *testing.T, args ...string) (*exec.Cmd, []string) {
 	sc := bufio.NewScanner(out)
 	for sc.Scan() {
 		lines = append(lines, sc.Text())
-		if strings.Contains(sc.Text(), "enter the key") {
+		if strings.HasPrefix(sc.Text(), "Open ") {
 			break
 		}
 	}
@@ -827,7 +811,7 @@ func program(t *testing.T, args ...string) (*exec.Cmd, []string) {
 	return cmd, lines
 }
 
-var pairLine = regexp.MustCompile(`^Pair a browser: open (https?://127\.0\.0\.1:(\d+)/)#key=([0-9a-f]{32})$`)
+var openLine = regexp.MustCompile(`^Open (https?://127\.0\.0\.1:(\d+)/) \(`)
 
 func TestProgram(t *testing.T) {
 	data := t.TempDir()
@@ -838,25 +822,30 @@ func TestProgram(t *testing.T) {
 	disk := bytes.Repeat([]byte("0123456789abcdef"), 4096)
 	os.WriteFile(filepath.Join(images, "a.img"), disk, 0o644)
 	os.WriteFile(filepath.Join(images, "a.img.json"), []byte(`{"title":"A"}`), 0o644)
+	// The pairing builds' files go.
+	os.WriteFile(filepath.Join(data, "pair.key"), []byte("0123456789abcdef0123456789abcdef\n"), 0o600)
+	os.WriteFile(filepath.Join(data, "paired.json"), []byte("{}\n"), 0o600)
 	base := []string{"--data", data, "--site", site, "--images", images, "--bind", "127.0.0.1", "--port", "0", "--quiet"}
 
 	// --tls auto: HTTPS with the certificate it made, pinned.
-	_, lines := program(t, append(base, "--tls", "auto")...)
-	var m []string
-	for _, line := range lines {
-		if m = pairLine.FindStringSubmatch(line); m != nil {
-			break
+	start := func() (*exec.Cmd, string) {
+		cmd, lines := program(t, append(base, "--tls", "auto")...)
+		var m []string
+		for _, line := range lines {
+			if m = openLine.FindStringSubmatch(line); m != nil {
+				break
+			}
 		}
+		if m == nil || !strings.HasPrefix(m[1], "https://") {
+			t.Fatalf("printed: %q", lines)
+		}
+		return cmd, m[1]
 	}
-	if m == nil || !strings.HasPrefix(m[1], "https://") {
-		t.Fatalf("printed: %q", lines)
-	}
-	url, key := m[1], m[3]
-	if b, _ := os.ReadFile(filepath.Join(data, "pair.key")); strings.TrimSpace(string(b)) != key {
-		t.Errorf("pair.key %q, printed %s", b, key)
-	}
-	if !strings.Contains(strings.Join(lines, "\n"), "(or enter the key: "+grouped(key)+")") {
-		t.Errorf("no key in fours: %q", lines)
+	first, url := start()
+	for _, f := range []string{"pair.key", "paired.json"} {
+		if _, err := os.Stat(filepath.Join(data, f)); err == nil {
+			t.Errorf("%s still there", f)
+		}
 	}
 	pem, err := os.ReadFile(filepath.Join(data, "tls", "cert.pem"))
 	if err != nil {
@@ -883,22 +872,13 @@ func TestProgram(t *testing.T) {
 		res.Body.Close()
 		return res, b
 	}
-	if res, body := get("/", ""); res.StatusCode != 401 || !bytes.Contains(body, []byte(`id="key"`)) {
-		t.Errorf("unpaired over HTTPS: %d", res.StatusCode)
-	}
-	res, err := client.Post(url+"api/pair", "application/json", strings.NewReader(`{"key":"`+key+`"}`))
-	if err != nil {
-		t.Fatal(err)
-	}
-	res.Body.Close()
+	// The first load claims it, with a Secure cookie.
+	res, body := get("/", "")
 	setCookie := res.Header.Get("Set-Cookie")
-	if res.StatusCode != 200 || !strings.Contains(setCookie, "Secure") {
-		t.Fatalf("pairing over HTTPS: %d %q", res.StatusCode, setCookie)
+	if res.StatusCode != 200 || string(body) != "<p>tab</p>" || !strings.Contains(setCookie, "Secure") {
+		t.Fatalf("the first load over HTTPS: %d %q %q", res.StatusCode, body, setCookie)
 	}
 	cookie, _, _ := strings.Cut(setCookie, ";")
-	if res, body := get("/", cookie); res.StatusCode != 200 || string(body) != "<p>tab</p>" {
-		t.Errorf("paired: %d %q", res.StatusCode, body)
-	}
 	if res, body := get("/disks/a.img", cookie, "Range: bytes=100-199"); res.StatusCode != 206 || !bytes.Equal(body, disk[100:200]) {
 		t.Errorf("a range over HTTPS: %d", res.StatusCode)
 	}
@@ -911,7 +891,8 @@ func TestProgram(t *testing.T) {
 		t.Errorf("/api/server: %v", v)
 	}
 	// One connected and silent (no ClientHello), one speaking plain HTTP:
-	// HTTPS answered meanwhile; the plain one closed, not hung.
+	// HTTPS answered meanwhile (another browser: in use); the plain one
+	// closed, not hung.
 	host := strings.TrimSuffix(strings.TrimPrefix(url, "https://"), "/")
 	silent, _ := net.Dial("tcp", host)
 	defer silent.Close()
@@ -919,8 +900,8 @@ func TestProgram(t *testing.T) {
 	defer plain.Close()
 	io.WriteString(plain, "GET / HTTP/1.1\r\nHost: x\r\n\r\n")
 	for i := 0; i < 3; i++ {
-		if res, _ := get("/pair", ""); res.StatusCode != 200 {
-			t.Errorf("HTTPS beside a silent client: %d", res.StatusCode)
+		if res, body := get("/", ""); res.StatusCode != 403 || !bytes.Contains(body, []byte(`id="in-use"`)) {
+			t.Errorf("HTTPS beside a silent client, another browser: %d", res.StatusCode)
 		}
 	}
 	plain.SetDeadline(time.Now().Add(10 * time.Second))
@@ -929,18 +910,20 @@ func TestProgram(t *testing.T) {
 		t.Errorf("plain HTTP to HTTPS: %q %v", got, err)
 	}
 
-	// --rotate-key: a new key printed; the cookie no longer opens anything.
-	_, lines = program(t, append(base, "--tls", "auto", "--rotate-key")...)
-	for _, line := range lines {
-		if m = pairLine.FindStringSubmatch(line); m != nil {
-			break
-		}
-	}
-	if m == nil || m[3] == key {
-		t.Fatalf("after --rotate-key: %q", lines)
-	}
-	url = m[1]
+	// A restart frees it: the old cookie opens nothing (401: reload), and
+	// the reload claims it again.
+	first.Process.Kill()
+	first.Wait()
+	_, url = start()
 	if res, _ := get("/api/me", cookie); res.StatusCode != 401 {
-		t.Errorf("the old cookie after --rotate-key: %d", res.StatusCode)
+		t.Errorf("the old cookie after a restart: %d", res.StatusCode)
+	}
+	res, _ = get("/", cookie)
+	again, _, _ := strings.Cut(res.Header.Get("Set-Cookie"), ";")
+	if res.StatusCode != 200 || again == "" || again == cookie {
+		t.Errorf("the reload after a restart: %d %q", res.StatusCode, again)
+	}
+	if res, _ := get("/api/me", again); res.StatusCode != 200 {
+		t.Errorf("the new cookie: %d", res.StatusCode)
 	}
 }

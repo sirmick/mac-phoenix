@@ -355,6 +355,8 @@ async function storeVolume() {
 async function sessionBeat() {
     try {
         const res = await fetch(`api/session?id=${session}`, { method: 'POST', cache: 'no-store' });
+        if (res.status === 401 || res.status === 403)
+            postMessage({ type: 'claim', status: res.status });     // (main.js: reload)
         if (!res.ok)
             return;
         const s = await res.json();

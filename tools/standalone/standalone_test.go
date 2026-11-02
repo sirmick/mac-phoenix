@@ -246,7 +246,7 @@ func TestGzipOnlyServed(t *testing.T) {
 	zw.Write([]byte("// the module's glue\n"))
 	zw.Close()
 	s := testServer(t, fstest.MapFS{"executor-web.js.gz": {Data: z.Bytes()}, "index.html": {Data: []byte("<p>tab</p>")}})
-	token := pairAs(t, s, "test")
+	token := claimAs(t, s)
 	for path, want := range map[string]string{"/executor-web.js": "// the module's glue\n", "/": "<p>tab</p>"} {
 		if a := do(s, "GET", path, "", token); a.code != 200 || a.body != want {
 			t.Errorf("%s: %d %q", path, a.code, a.body)

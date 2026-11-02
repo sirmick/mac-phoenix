@@ -4,7 +4,7 @@
 #   make [WASM_BUILD=DIR]      site/ from DIR (make_site.sh), then ./executor-standalone
 #   make dist [VERSION=V]      dist/: executor-standalone-V-OS-ARCH[.exe] for six targets,
 #                              SHA256SUMS and README.txt (README.dist.txt); V: git describe
-#   make test [OUT=PATH]       the binary, and go test (the API, pairing, the relay, the program
+#   make test [OUT=PATH]       the binary, and go test (the API, the claim, the relay, the program
 #                              itself; ctest executor.web.standalone_server in build-wasm)
 #   make nosite                the binary with no tab (site/ as it is)
 #

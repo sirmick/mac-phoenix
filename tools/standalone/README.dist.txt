@@ -20,12 +20,10 @@ Check a download against SHA256SUMS:
 
 Run it:
   ./executor-standalone-VERSION-linux-amd64 --open
-It serves http://127.0.0.1:8090/ and prints an address with a key in it
-(http://127.0.0.1:8090/#key=...): a browser that opens it is paired with
-the server, and only paired browsers get anything from it. --open opens
-that address in your browser. Settings > Network lists the paired
-browsers (Revoke unpairs one); --rotate-key makes a new key and unpairs
-them all.
+It serves http://127.0.0.1:8090/ (--open opens it in your browser). The
+first browser to open it has it until the server stops: any other browser
+is told it is in use, and gets nothing from it. Restart the server to
+use it from another browser; a tab left open then says to reload.
 The binaries are not signed: on macOS, chmod +x the file and, the first
 time, right-click > Open (or: xattr -d com.apple.quarantine FILE); on
 Windows, SmartScreen asks once (More info > Run anyway).

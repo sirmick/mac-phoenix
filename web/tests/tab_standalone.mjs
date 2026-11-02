@@ -62,7 +62,6 @@ const watching = (page) => page.locator('#viewer').isVisible();
 
 try {
     const a = await newPage(browser, { log: false, tag: ' A' });
-    await server.pair(a);                       // (tools/standalone's: its key)
     await a.goto(URL_);
     check(a.url() === URL_, 'no sign-in');
     check((await a.evaluate(() => fetch('api/me').then((r) => r.json()))).mode === 'standalone',

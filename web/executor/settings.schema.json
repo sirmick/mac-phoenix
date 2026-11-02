@@ -150,7 +150,7 @@
         "bind": {
           "type": "string", "maxLength": 255, "default": "127.0.0.1", "x-scope": "server", "x-apply": "server",
           "title": "Listen on",
-          "description": "127.0.0.1: this computer only. 0.0.0.0 (or ::): the LAN too (with TLS, best). Every browser pairs with the key either way.",
+          "description": "127.0.0.1: this computer only. 0.0.0.0 (or ::): the LAN too (with TLS, best). Either way the first browser to open the tab has it until the server restarts.",
           "examples": ["127.0.0.1", "0.0.0.0", "::"]
         },
         "port": {
@@ -186,17 +186,10 @@
           "type": "string", "maxLength": 255, "default": "", "x-scope": "server", "x-apply": "live",
           "title": "Name server", "description": "For the Mac's DNS lookups (empty: the computer's)."
         },
-        "paired": {
-          "type": "array", "default": [], "x-scope": "server", "x-apply": "live", "readOnly": true,
-          "items": { "type": "object" },
-          "title": "Paired browsers",
-          "description": "Browsers that have shown the server's key (the address it prints has it). Revoke one and it must pair again; --rotate-key makes a new key and unpairs them all.",
-          "x-widget": "paired-browsers", "x-group": "Access"
-        },
         "trusted_proxies": {
           "type": "array", "maxItems": 64, "default": [], "x-scope": "server", "x-apply": "live",
           "items": { "type": "string", "minLength": 1, "maxLength": 255 },
-          "title": "Trusted proxies", "description": "Addresses whose X-Forwarded-For is believed.", "x-widget": "words"
+          "title": "Trusted proxies", "description": "Addresses whose X-Forwarded-For is believed.", "x-widget": "words", "x-group": "Access"
         },
         "secure_cookies": {
           "type": ["string", "boolean"], "enum": ["auto", true, false], "default": "auto", "x-scope": "server", "x-apply": "live",

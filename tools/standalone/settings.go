@@ -10,8 +10,7 @@ package main
 //
 //	GET  -> { version, settings, scopes, restart_needed, can_change_server }
 //	POST a JSON merge patch (RFC 7396) of settings: null puts a setting, or
-//	     a whole category, back to its default. The settings after, as GET
-//	     (network.paired: the paired browsers, pair.go).
+//	     a whole category, back to its default. The settings after, as GET.
 //
 // Command-line flags override settings for the run and are not saved.
 // What a POST changes applies at once (the library, the relay's policy
@@ -180,8 +179,9 @@ func patchSettings(doc, patch map[string]any) (map[string]any, error) {
 }
 
 // loadSettings: the file's document, migrated, filled with defaults and
-// checked. A password (before pairing: password_hash, network.password)
-// is dropped, and the file saved without it.
+// checked. A password (password_hash, network.password; before the
+// claim) and network.paired (the pairing builds') are dropped, and the
+// file saved without them.
 func loadSettings(path string) (map[string]any, error) {
 	b, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
@@ -201,9 +201,11 @@ func loadSettings(path string) (map[string]any, error) {
 	_, stale := doc["password_hash"]
 	delete(doc, "password_hash")
 	if n, ok := doc["network"].(map[string]any); ok {
-		if _, ok := n["password"]; ok {
-			delete(n, "password")
-			stale = true
+		for _, k := range []string{"password", "paired"} {
+			if _, ok := n[k]; ok {
+				delete(n, k)
+				stale = true
+			}
 		}
 	}
 	doc = settingsSchema.fill(doc)

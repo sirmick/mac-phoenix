@@ -2,7 +2,7 @@ package main
 
 // The tab's logs, as tools/web/server/app.py: the page and its Worker
 // send what they print (log.js), a batch a second, appended to
-// DATA/logs/DAY/SESSION.log (a paired browser's; a file stops at 64 MB;
+// DATA/logs/DAY/SESSION.log (the claiming browser's; a file stops at 64 MB;
 // kept 14 days). /api/shot: the Screenshot button's PNG
 // beside it, DAY/SESSION-HHMMSS.png, and a line in the log saying so.
 
@@ -72,8 +72,7 @@ func init() {
 		defer f.Close()
 		var b bytes.Buffer
 		if isNew {
-			who := fmt.Sprintf("%q", c.s.pairing.name(c.browser))
-			fmt.Fprintf(&b, "# %sZ %s %s %s\n", now.Format("2006-01-02 15:04:05"), c.address(), who, c.r.UserAgent())
+			fmt.Fprintf(&b, "# %sZ %s local %s\n", now.Format("2006-01-02 15:04:05"), c.address(), c.r.UserAgent())
 		}
 		b.WriteString(text)
 		if !strings.HasSuffix(text, "\n") {

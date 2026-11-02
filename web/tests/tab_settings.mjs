@@ -144,7 +144,6 @@ try {
         console.log('SKIP the Go server: no go');
     else {
         const p = await page();
-        await go.pair(p);
         await exercise(p, `${go.url}/`, 'tools/standalone', { network: true });
         const file = JSON.parse(fs.readFileSync(go.settingsFile, 'utf8'));
         check(file.version === 2 && file.machine.ram_mb === 96 && file.sound.volume === 35,

@@ -121,12 +121,12 @@ func TestSettingsCases(t *testing.T) {
 }
 
 // POST and GET /api/settings: saved, kept across a restart, invalid ones
-// refused with where; a password from before pairing dropped.
+// refused with where; a password and a paired list from before the claim dropped.
 func TestSettingsAPI(t *testing.T) {
 	data := t.TempDir()
 	path := filepath.Join(data, "conf", "settings.json")
 	os.MkdirAll(filepath.Dir(path), 0o755)
-	os.WriteFile(path, []byte(`{"version":2,"password_hash":"aa$bb","network":{"password":true,"port":9000}}`), 0o600)
+	os.WriteFile(path, []byte(`{"version":2,"password_hash":"aa$bb","network":{"password":true,"paired":[],"port":9000}}`), 0o600)
 	var token string
 	start := func() *Server {
 		doc, err := loadSettings(path)
@@ -134,12 +134,7 @@ func TestSettingsAPI(t *testing.T) {
 			t.Fatal(err)
 		}
 		s := &Server{data: data, settingsPath: path, ids: newIds(filepath.Join(data, "ids.json"))}
-		if s.pairing, err = loadPairing(data, false); err != nil {
-			t.Fatal(err)
-		}
-		if token == "" {
-			token, _ = s.pairing.pair(s.pairing.key, "test", "127.0.0.1")
-		}
+		token, _ = s.claim.take() // each start: a new claim
 		s.applySettings(doc)
 		return s
 	}
@@ -147,7 +142,7 @@ func TestSettingsAPI(t *testing.T) {
 		r := httptest.NewRequest(method, "/api/settings", strings.NewReader(body))
 		r.RemoteAddr = "192.0.2.7:5000" // not loopback: nothing special
 		r.Header.Set("Content-Type", "application/json")
-		r.AddCookie(&http.Cookie{Name: cookieName, Value: token})
+		r.AddCookie(&http.Cookie{Name: cookieName(r.Host), Value: token})
 		w := httptest.NewRecorder()
 		s.ServeHTTP(w, r)
 		var v map[string]any
@@ -155,8 +150,8 @@ func TestSettingsAPI(t *testing.T) {
 		return w.Code, v
 	}
 	s := start()
-	if b, _ := os.ReadFile(path); bytes.Contains(b, []byte("password")) {
-		t.Errorf("the old password kept: %s", b)
+	if b, _ := os.ReadFile(path); bytes.Contains(b, []byte("password")) || bytes.Contains(b, []byte("paired")) {
+		t.Errorf("the old password or paired list kept: %s", b)
 	}
 	code, v := call(s, "POST", `{"machine":{"ram_mb":96},"network":{"port":9001}}`)
 	if code != 200 {
@@ -172,8 +167,8 @@ func TestSettingsAPI(t *testing.T) {
 	if code != 400 || v["path"] != "sound.volume" {
 		t.Errorf("invalid: %d %v", code, v)
 	}
-	if code, v = call(s, "POST", `{"network":{"paired":[]}}`); code != 400 || v["path"] != "network.paired" {
-		t.Errorf("paired is read-only: %d %v", code, v)
+	if code, v = call(s, "POST", `{"advanced":{"data":"/elsewhere"}}`); code != 400 || v["path"] != "advanced.data" {
+		t.Errorf("data is read-only: %d %v", code, v)
 	}
 	s = start() // again, from the file
 	_, v = call(s, "GET", "")
@@ -181,11 +176,7 @@ func TestSettingsAPI(t *testing.T) {
 	if at(st, "machine.ram_mb") != 96.0 || at(st, "network.port") != 9001.0 || at(st, "sound.volume") != 80.0 {
 		t.Errorf("not kept: %v", st)
 	}
-	paired, _ := at(st, "network.paired").([]any)
-	if len(paired) != 1 || paired[0].(map[string]any)["this"] != true || at(st, "advanced.data") != data {
+	if at(st, "network.paired") != nil || at(st, "advanced.data") != data {
 		t.Errorf("read-only ones: %v", st)
-	}
-	if b, _ := os.ReadFile(path); bytes.Contains(b, []byte(`"paired"`)) {
-		t.Errorf("the paired list in the file: %s", b)
 	}
 }

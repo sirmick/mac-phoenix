@@ -5,8 +5,9 @@ one Go program per OS, with no other files: the page and the wasm module
 are embedded, the library is a directory of images, and the server keeps
 everything the tab changes (P1 in the plan: images only, no accounts).
 It has `tools/web/server`'s API (WebSite.md, `app.py`'s docstring), so
-the tab talks to either; what differs is below. Only browsers paired
-with it by its key get anything from it (Pairing, below).
+the tab talks to either; what differs is below. The first browser to
+open it has it until it stops; no other gets anything from it (Who uses
+it, below).
 
 ## Building
 
@@ -63,19 +64,17 @@ SHA256SUMS again over the signed files.
 ## Running
 
 ```bash
-./executor-standalone --open                # http://127.0.0.1:8090/#key=KEY in the browser, DATA in the config directory
+./executor-standalone --open                # http://127.0.0.1:8090/ in the browser, DATA in the config directory
 ./executor-standalone --images ~/Disks --port 9000
 ./executor-standalone --bind 0.0.0.0 --tls auto     # on a LAN: HTTPS, a self-signed certificate made once
-./executor-standalone --rotate-key          # a new key: every paired browser unpaired
 ```
 
-It prints where it listens, then the address that pairs a browser:
+It prints where it listens, then the address to open:
 
 ```
 Serving (embedded) on https://0.0.0.0:8090/
-Pair a browser: open https://127.0.0.1:8090/#key=3f0c9e...
-  or on the LAN: https://192.168.1.20:8090/#key=3f0c9e...
-  (or enter the key: 3f0c-9e..-....)
+Open https://127.0.0.1:8090/ (the first browser to open it has it until the server stops)
+  or on the LAN: https://192.168.1.20:8090/
 The certificate (self-signed: the browser asks once), SHA-256 AB:12:...
 ```
 
@@ -88,8 +87,7 @@ The certificate (self-signed: the browser asks once), SHA-256 AB:12:...
 | `--site DIR` | the embedded site | |
 | `--tls auto` | settings' `network.tls_cert` (`auto` there too) | HTTPS with a self-signed certificate made once, `DATA/tls/cert.pem` and `key.pem` (for localhost, the machine's name and its addresses then; the SHA-256 printed to compare with the browser's); `--tls off`: plain HTTP whatever the settings say |
 | `--tls-cert F`, `--tls-key F` | | HTTPS with this certificate (OPFS and sound need a secure context off localhost) |
-| `--rotate-key` | | a new pairing key; every paired browser unpaired |
-| `--open` | | open the default browser at the pairing address (xdg-open, open, or url.dll on Windows; an any-address bind opens 127.0.0.1) |
+| `--open` | | open the default browser at the address (xdg-open, open, or url.dll on Windows; an any-address bind opens 127.0.0.1) |
 | `--quiet` | | errors only |
 
 Flags hold for the run and are never saved; `settings.json` holds the
@@ -103,58 +101,54 @@ One file, version 2, nested by category, described by
 dialog edits it. The page's settings (machine, disks mounted, keys,
 display, sound, logging) are kept here for the tab; the server's own
 (`disks.images`/`include`/`exclude`, `network.*`) are this program's;
-any paired browser may change either (`can_change_server` is always true).
+the browser that has the server may change either (`can_change_server`
+is always true).
 Version 1 files (flat, before) are migrated when read and saved as 2.
 
 `GET /api/settings` gives `{ version, settings, scopes, restart_needed,
 can_change_server, file }`; `POST /api/settings` takes a JSON merge patch
 (`null`: the default, of a setting or a whole category) and answers the
-same, or 400 `{ error, path }` for an invalid value. `network.paired` is
-the paired browsers (read-only; Settings > Network lists them with
-Revoke). `network.bind`, `port`, `tls_cert`, `tls_key` apply at the
-next start (`restart_needed` lists the ones changed since it started);
-the rest at once (the relay's for new connections). A password from
-before pairing (`password_hash`, `network.password`) is dropped when the
-file is read.
+same, or 400 `{ error, path }` for an invalid value. `network.bind`,
+`port`, `tls_cert`, `tls_key` apply at the next start (`restart_needed`
+lists the ones changed since it started); the rest at once (the relay's
+for new connections). A password from before the claim (`password_hash`,
+`network.password`) and a paired list (`network.paired`) are dropped when
+the file is read.
 
-## Pairing
+## Who uses it
 
-A pre-shared key instead of accounts or a password (`pair.go`). The
-first run makes a random 128-bit key, `DATA/pair.key` (0600, 32 hex
-digits), and every run prints it in an address, `http(s)://HOST:PORT/#key=KEY`:
-a fragment, so it is in no request, server log or Referer; `--open`
-opens it. A browser that isn't paired gets, whatever page it asks for,
-a small enter-the-key page (401; also at `/pair`), and 401 from
-everything else: the site, the API, `/disks` (Range requests too),
-`/relay` (before the upgrade), the logs. The page takes the key from the
-address (then removes it; pasted into an open page too) or as typed
-(spaces, dashes and capitals ignored) and sends it once:
+The first browser to load the tab has the server until it stops
+(`claim.go`); no password, key or account. The first `GET /` (or
+`/index.html`) while no browser has it makes a token (256 random bits)
+and answers with the tab and the token in a cookie (`executor_claim_PORT`,
+by the port asked for, as two servers on one machine are one host to a
+browser; HttpOnly, SameSite=Strict, Secure over TLS or behind a trusted
+proxy saying `X-Forwarded-Proto: https`; 400 days). Only a page load from
+this site or the address bar claims it (`Sec-Fetch-Dest: document`,
+`Sec-Fetch-Site` `none` or `same-origin`, or no such headers): another
+site can't take it by loading the address in the background. Every route
+needs the cookie: the site, the API, `/disks` (Range requests too),
+`/relay` (before the upgrade), the logs. That browser's reloads and other
+tabs keep working (one of them in control, below).
 
-- `POST /api/pair {key, name}`: compared in constant time; an address
-  with 10 wrong keys in 10 minutes gets 429 (per client behind a trusted
-  proxy). The answer sets the session cookie (`executor_session`;
-  HttpOnly, SameSite=Strict, Secure over TLS or behind a trusted proxy
-  saying `X-Forwarded-Proto: https`; 400 days). The server keeps the
-  token's SHA-256, not the token, in `DATA/paired.json` with the
-  browser's name (the page's, else from its User-Agent: "Firefox on
-  Linux"), its address, when it paired and when it was last seen (to the
-  minute). A browser unseen for 400 days is forgotten.
-- `GET /api/paired` → `{ browsers: [{ id, name, address, created,
-  last_seen, this }] }`; `DELETE /api/paired/ID` revokes one (its relay
-  WebSockets are closed; revoking `this` clears the cookie). Settings >
-  Network shows the list with Revoke.
-- `--rotate-key`: a new key, and every paired browser forgotten.
+Another browser gets, for a page, a page saying Executor is in use by
+another browser (403), and 403 `{ error: "in use by another browser" }`
+from everything else: it can't read or write anything.
 
-Loopback is nothing special: a browser on the same machine pairs too
-(the address `--open` opens does it at once). The tab removes a `#key=`
-from its own address before it logs anything (`main.js`).
+The claim is in memory only (the token's SHA-256): every start of the
+server begins unclaimed, so restarting the server is how another browser
+gets it. A tab open across a restart gets 401 (`{ reload: true }`; 403 if
+another browser loaded first) at its next call, every 2 s
+(`/api/session`), and says to reload, with a Reload button (`main.js`);
+the reload claims it again. Loopback is nothing special.
 
 ## What differs from tools/web/server
 
-- **No accounts:** pairing (above); no `/login`, `/api/login`,
+- **No accounts:** the claim (above); no `/login`, `/api/login`,
   `/api/logout`. `/api/me` is `{ name: "local", owner: true, mode:
   "standalone" }`: the Python server's `mode = "standalone"` answer.
-- **One controlling tab** (`session.go`, as `tools/web/server/session.py`):
+- **One controlling tab** of the browser that has the server
+  (`session.go`, as `tools/web/server/session.py`):
   `POST /api/session?id=ID[&take=1]` every 2 s gives `{ control, held,
   handing, viewers }`; the first tab has control, a silent one lets go
   after 10 s, `take=1` takes it (the old one is `handing` until it
@@ -186,16 +180,21 @@ from its own address before it logs anything (`main.js`).
 ## Tests
 
 `go test` (`make test`; ctest `executor.web.standalone_server` in
-build-wasm): the API over a real connection as a paired browser (the
+build-wasm): the API over a real connection as the claiming browser (the
 page and library, logs, disk ranges, overlay and volume sync, hostile
 requests, cross-site writes, settings, the controlling tab, the relay's
 TCP, UDP, DNS, limits and framing: what test_server.py checked of this
-program before); pairing (`pair_test.go`: every route refused unpaired,
-the key, the limit, revoke, rotate, the relay closed on revoke); the
-program itself, run as a child (the printed address, `--tls auto` with
-its certificate pinned, `--rotate-key`); and what the API can't show:
+program before); the claim (`claim_test.go`: every route in the table
+needs it and is refused, 401 unclaimed and 403 claimed; the first load
+claims, and not a fetch, an image, HEAD or another site's; reloads keep
+it; a second browser can neither read nor write; a restart frees it; a
+cookie per port; the relay); the program itself, run as a child (the
+printed address, `--tls auto` with its certificate pinned, the claim over
+HTTPS with a Secure cookie, a restart freeing it); and what the API can't show:
 the overlay log across restarts, a write cut short, compaction, merge,
 the gzip-only files, the session lease. In build-wasm,
-`executor.web.pair` is pairing in a browser (`web/tests/tab_pair.mjs`:
-the enter-the-key page, the printed address, Settings > Network's list
-and Revoke, `--rotate-key`; screenshots in `pair-shots/`).
+`executor.web.claim` is the claim in a browser (`web/tests/tab_claim.mjs`:
+the first browser has it, HttpOnly; its reloads and tabs; another
+browser's in-use page and refusals; a restart, the tab's reload notice
+and Reload; another browser first after a restart; screenshots in
+`claim-shots/`).

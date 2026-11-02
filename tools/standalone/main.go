@@ -2,18 +2,17 @@
 // as one program (docs/executor/Standalone.md).
 //
 //	executor-standalone [--data DIR] [--config FILE] [--images DIR] [--bind ADDR] [--port N]
-//	                    [--site DIR] [--tls auto | --tls-cert F [--tls-key F]] [--rotate-key]
+//	                    [--site DIR] [--tls auto | --tls-cert F [--tls-key F]]
 //	                    [--open] [--quiet]
 //
-// It prints an address with the pairing key (pair.go): a browser opens
-// it once and is paired; --open opens it.
+// It prints its address; the first browser to open it has the server
+// until it stops (claim.go); --open opens it.
 // The tab (make_site.sh's output) is embedded; --site serves a directory
 // instead. DATA (default: the user's config directory's executor-web:
 // ~/.config on Linux, ~/Library/Application Support on macOS, %AppData% on
 // Windows) has settings.json (or --config's file; settings.go), the
 // overlays of disks not in the library, Executor's volumes and their
-// objects, the tab's logs, the pairing key and the paired browsers (and
-// --tls auto's certificate).
+// objects, the tab's logs (and --tls auto's certificate).
 package main
 
 import (
@@ -51,7 +50,6 @@ func main() {
 	tlsMode := flag.String("tls", "", "auto: serve HTTPS with a self-signed certificate made once in DATA/tls")
 	tlsCert := flag.String("tls-cert", "", "PEM certificate (chain): serve HTTPS")
 	tlsKey := flag.String("tls-key", "", "its key (default: in the certificate's file)")
-	rotate := flag.Bool("rotate-key", false, "make a new pairing key: every paired browser is unpaired")
 	quiet := flag.Bool("quiet", false, "errors only")
 	open := flag.Bool("open", false, "open the default browser at the server's address")
 	flag.Parse()
@@ -75,8 +73,8 @@ func main() {
 	if err != nil {
 		fatal(err)
 	}
-	if s.pairing, err = loadPairing(abs, *rotate); err != nil {
-		fatal(err)
+	for _, f := range []string{"sessions.json", "pair.key", "paired.json"} { // the password's, the pairing's
+		os.Remove(filepath.Join(abs, f))
 	}
 	s.override = func(st *Settings) {
 		if *images != "" {
@@ -138,13 +136,11 @@ func main() {
 		scheme, s.tls = "https", true
 	}
 	addr := ln.Addr().(*net.TCPAddr)
-	key := "#key=" + s.pairing.key
 	fmt.Printf("Serving %s on %s://%s/\n", s.siteName, scheme, net.JoinHostPort(addr.IP.String(), strconv.Itoa(addr.Port)))
-	fmt.Printf("Pair a browser: open %s%s\n", browserURL(scheme, addr), key)
+	fmt.Printf("Open %s (the first browser to open it has it until the server stops)\n", browserURL(scheme, addr))
 	for _, u := range lanURLs(scheme, addr) {
-		fmt.Printf("  or on the LAN: %s%s\n", u, key)
+		fmt.Printf("  or on the LAN: %s\n", u)
 	}
-	fmt.Printf("  (or enter the key: %s)\n", grouped(s.pairing.key))
 	if fingerprint != "" {
 		fmt.Printf("The certificate (self-signed: the browser asks once), SHA-256 %s\n", fingerprint)
 	} else if !addr.IP.IsLoopback() {
@@ -152,7 +148,7 @@ func main() {
 	}
 	os.Stdout.Sync()
 	if *open {
-		if err := openBrowser(browserURL(scheme, addr) + key); err != nil {
+		if err := openBrowser(browserURL(scheme, addr)); err != nil {
 			fmt.Fprintln(os.Stderr, "executor-standalone: --open:", err)
 		}
 	}
