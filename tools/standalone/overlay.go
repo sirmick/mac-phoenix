@@ -586,6 +586,29 @@ func (s *OverlayStore) merge(key string) (int, string, error) {
 	return n, image, nil
 }
 
+// drop: the overlay of key, its file too, gone (its image is).
+func (s *OverlayStore) drop(key string) error {
+	o, err := s.get(key)
+	if err != nil {
+		return err
+	}
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if o.readers > 0 {
+		return httpErr(409, "being read: try again")
+	}
+	if o.f != nil {
+		o.f.Close()
+		o.f = nil
+	}
+	os.Remove(o.path)
+	os.Remove(filepath.Join(s.data, key+".overlay"))
+	s.mu.Lock()
+	delete(s.overlays, key)
+	s.mu.Unlock()
+	return nil
+}
+
 type overlaySummary struct {
 	Key     string `json:"key"`
 	Name    string `json:"name"`

@@ -136,7 +136,8 @@ cookie is then Secure). It must pass `Host` through (the server checks a
 write's `Origin` against it), add `X-Forwarded-For` and
 `X-Forwarded-Proto`, pass WebSocket upgrades
 (`/relay`), not buffer (disk ranges stream), and allow bodies of
-`network.max_upload_mb` (the tab's uploads to the store). nginx, with a certificate from certbot:
+`network.max_upload_mb` (the tab's uploads to the store) and
+`disks.max_image_mb` (disk images added through the tab). nginx, with a certificate from certbot:
 
 ```nginx
 server {
@@ -153,7 +154,7 @@ server {
         proxy_set_header Connection $http_connection;
         proxy_http_version 1.1;
         proxy_buffering off;
-        client_max_body_size 64m;
+        client_max_body_size 4096m;
         proxy_read_timeout 120s;
     }
 }
@@ -173,6 +174,7 @@ downloads the whole disk before starting.
 | Path | What | Back up |
 |---|---|---|
 | `/srv/executor-web/library` | disks and records (`make_library.py`); the changes to each disk beside it, `NAME-ID.overlay` | the `.overlay` files |
+| `/srv/executor-web/library/uploads` | disk images added through the tab, their records and overlays | yes |
 | `data/settings.json` | the settings | yes |
 | `data/volumes/`, `data/objects/` | Executor's own volumes: manifests, and their files by SHA-256 | yes |
 | `data/overlays/` | changes to disks not in the library (or when the library is read-only) | yes |

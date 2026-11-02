@@ -74,6 +74,10 @@
           "type": "array", "maxItems": 64, "default": [], "x-scope": "server", "x-apply": "live",
           "items": { "type": "string", "minLength": 1, "maxLength": 255 },
           "title": "Leave out", "description": "File name patterns it doesn't.", "x-widget": "words"
+        },
+        "max_image_mb": {
+          "type": "integer", "minimum": 1, "maximum": 1048576, "default": 4096, "x-scope": "server", "x-apply": "live",
+          "title": "Largest image added (MB)", "description": "A disk image the tab adds to the library (written to the disk as it comes)."
         }
       }
     },

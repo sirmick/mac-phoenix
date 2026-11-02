@@ -286,11 +286,47 @@ async function revert(f) {
     start();
 }
 
+// A disk image the user adds goes into the server's library
+// (tools/standalone uploads.go) and is mounted from there, so it and its
+// changes are kept; resolves to its library entry. Rejects with .status
+// (409: there is one of that name, { replace: true } replaces it).
+async function uploadImage(file, { replace = false } = {}) {
+    status.textContent = `Uploading ${file.name}…`;
+    const res = await fetch(`api/uploads/${encodeURIComponent(file.name)}${replace ? '?replace=1' : ''}`,
+                            { method: 'POST', body: file, cache: 'no-store' });
+    if (!res.ok) {
+        const e = new Error((await res.json().catch(() => ({}))).error || `${res.status}`);
+        e.status = res.status;
+        throw e;
+    }
+    const entry = await res.json();
+    await loadLibrary();
+    await Settings.set({ disks: { mounted: [...picked().filter((u) => u !== entry.url), entry.url] } });
+    showLibrary();
+    const disk = await fetchDisk(entry.url);
+    sessionFiles = sessionFiles.filter((f) => f.name !== disk.name).concat(disk);
+    return entry;
+}
+
 document.getElementById('add').addEventListener('change', async (e) => {
     generation++;                   // restarting (once the files are stored)
     window.executor.frames = 0;
-    for (const f of e.target.files)
-        await store(f);
+    for (const f of e.target.files) {
+        if (!IMAGE.test(f.name)) {
+            await store(f);
+            continue;
+        }
+        try {
+            await uploadImage(f).catch((err) => {
+                if (err.status === 409 && confirm(`Replace the uploaded ${f.name} (and its changes)?`))
+                    return uploadImage(f, { replace: true });
+                throw err;
+            });
+        } catch (err) {
+            status.textContent = `${f.name} isn't kept on the server (${err.message}): for this visit only`;
+            await store(f);
+        }
+    }
     e.target.value = '';
     start();
 });

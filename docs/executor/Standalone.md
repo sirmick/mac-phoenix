@@ -165,6 +165,8 @@ the reload claims it again. Loopback is nothing special.
     GET/PUT/DELETE volumes/KEY    { version, manifest }
     POST   objects/missing; PUT/GET objects/SHA
     GET    (nothing after sync/)  { overlays, volumes }
+/api/uploads/NAME POST the image as the body[?replace=1] -> its library entry
+                  (uploads/NAME); DELETE: it, its record and its overlay (uploads.go)
 /api/relay        GET { connections, sockets } open now
 /relay            WebSocket: the tab's sockets (relay.go; DIRECTION.md, "The network relay")
 /api/log, /api/shot, /api/logs[/DAY/NAME]   the tab's logs (logs.go)
@@ -198,7 +200,20 @@ Sec-Fetch-Site). In more detail:
 - **Volumes and objects** are files: `DATA/volumes/KEY.json` (`{ version,
   manifest }`) and `DATA/objects/AB/SHA`; an object no manifest names
   is removed an hour after it was written.
+- **Uploads** (`uploads.go`): a disk image the tab adds (main.js
+  `uploadImage`) is `POST /api/uploads/NAME` with the image as the body
+  (an image's extension, no path; at most `disks.max_image_mb`, written
+  beside it and renamed, so a cut-short upload leaves nothing) and goes
+  into the library as `IMAGES/uploads/NAME` with its record `NAME.json`
+  (tags `["uploaded"]`), offered whatever `include`/`exclude` say:
+  `disks/uploads/NAME`, overlaid beside it like the library's own.
+  409 when there is one of that name (`?replace=1` replaces an upload and
+  drops its overlay; a top-level library image is never replaced).
+  `DELETE /api/uploads/NAME` removes it, its record and its overlay.
 - **`GET /api/relay`**: `{ connections, sockets }` open now.
+- **Stopping:** SIGTERM or SIGINT closes the listener and gives the
+  answers under way (a disk's download) 60 s to finish; a second signal
+  stops it at once.
 - No backup command: the overlay logs are crash-consistent and the rest
   is written atomically, so copying `DATA` and the `.overlay` files with
   any tool is a backup.
