@@ -41,10 +41,10 @@ The schema's own keywords, beside the standard ones:
   and the bar say "Restart Executor to apply" until it has), `server` (at
   the server's next start: `restart_needed`).
 - `x-labels` (an `enum`'s), `x-group` (a heading before the setting),
-  `x-widget` (`number`, `range`, `path`, `words`, `password`,
+  `x-widget` (`number`, `range`, `path`, `words`, `paired-browsers`,
   `disk-list`), `x-choices` (options the page knows: `systems`).
-- `readOnly`: answered, never written (`network.password`: whether one
-  is set; `advanced.data`: the data directory).
+- `readOnly`: answered, never written (`network.paired`: the paired
+  browsers, Standalone.md "Pairing"; `advanced.data`: the data directory).
 - `x-version`: the document's version. A new version that renames or
   moves settings gets a step in `migrate` (`schema.go`); a setting added
   needs none (missing settings take their defaults).
