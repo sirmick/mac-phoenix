@@ -174,6 +174,24 @@ for i in $(seq 1 8); do
 done
 check "/api/launch bad path stays Finder" "$APP_AFTER" 'Finder'
 
+# Test 5b: /api/launch of a volume's root opens its window, as a double-click
+# does (BridgeAgent sends the Finder an 'odoc' with an alias of the volume;
+# the test images are all "Macintosh HD").
+echo "Test 5b: POST /api/launch (volume)"
+LAUNCH=$(curl -s --max-time 20 -X POST "http://localhost:$PORT/api/launch" -d '{"path": "Macintosh HD:"}' || echo "CURL_FAILED")
+check "/api/launch volume" "$LAUNCH" '"success": true'
+WIN=""
+for i in $(seq 1 10); do
+    WIN=$(curl -s "http://localhost:$PORT/api/windows" || echo "CURL_FAILED")
+    if echo "$WIN" | grep -q '"Macintosh HD"'; then break; fi
+    sleep 1
+done
+if echo "$WIN" | grep -q 'not available'; then
+    echo "  (no /api/windows on this backend: the launch's answer only)"
+else
+    check "volume window open" "$WIN" '"Macintosh HD"'
+fi
+
 # Test 6 (--quit-app): an application launched, then quit with the Quit
 # Apple event (BridgeAgent's kAEQuitApplication).
 if [[ -n "$QUIT_APP" ]]; then
