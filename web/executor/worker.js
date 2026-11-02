@@ -265,7 +265,7 @@ function scanVolume() {
 // Which images have changes (the page marks them, offers their download).
 function reportImages() {
     postMessage({ type: 'images', images: overlays.map((o) => ({
-        name: o.name, modified: o.modified, writable: o.writable, inMemory: o.inMemory, borrowed: o.borrowed,
+        name: o.name, modified: o.modified, changed: o.map ? o.map.size * OVERLAY_BLOCK : 0, writable: o.writable, inMemory: o.inMemory, borrowed: o.borrowed,
         onServer: Store.enabled && !o.syncOff })) });
 }
 

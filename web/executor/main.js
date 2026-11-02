@@ -242,9 +242,6 @@ async function fetchDisk(url) {
 }
 
 // ---- the library: disks the site offers (library.json), picked by the user
-const libraryBox = document.getElementById('library-box');
-const librarySelect = document.getElementById('library');
-const libraryCovers = document.getElementById('library-covers');
 let library = [];
 const picked = () => Settings.get('disks.mounted') || [];
 Settings.provide('library', () => library);
@@ -260,29 +257,11 @@ async function loadLibrary() {
 }
 
 function showLibrary() {
-    const have = new Set([...params.getAll('disk'), ...picked()].map((u) => new URL(u, location.href).href));
-    const offer = library.filter((d) => !have.has(new URL(d.url, location.href).href));
-    librarySelect.replaceChildren(new Option('Add a disk…', ''),
-        ...offer.map((d) => {
-            const o = new Option(d.title, d.url);
-            o.title = d.note || '';
-            return o;
-        }));
-    libraryBox.hidden = offer.length === 0;
-    libraryCovers.replaceChildren(...offer.filter((d) => d.cover).map((d) => {
-        const img = new Image();
-        img.src = d.cover;
-        img.alt = d.title;
-        img.title = d.note ? `${d.title}: ${d.note}` : d.title;
-        img.addEventListener('click', () => addLibraryDisk(d.url));
-        return img;
-    }));
+    showDisks();
 }
 
-librarySelect.addEventListener('change', () => addLibraryDisk(librarySelect.value));
-
 async function addLibraryDisk(url) {
-    if (!url)
+    if (!url || picked().some((u) => new URL(u, location.href).href === new URL(url, location.href).href))
         return;
     await Settings.set({ disks: { mounted: [...picked(), url] } });
     showLibrary();
@@ -333,33 +312,59 @@ function link(text, title, onclick) {
     return a;
 }
 
-async function showFiles(files) {
-    const list = document.getElementById('files');
-    list.replaceChildren(...files.map((f) => {
-        const s = document.createElement('span');
-        const st = imageState[f.name];
-        s.textContent = f.name + (st && st.modified ? ' •' : '');
-        if (st)
-            s.title = st.onServer ? (st.modified ? 'changed (kept on the server; the original is untouched)'
-                                                 : 'writable (changes kept on the server)')
-                    : st.borrowed ? 'open in another tab: changes here last until this tab closes'
-                    : st.inMemory ? (st.modified ? 'changed (until Executor restarts: not a secure page; the original is untouched)'
-                                                 : 'writable (changes last until Executor restarts: not a secure page)')
-                    : st.modified ? 'changed (kept in this browser; the original is untouched)'
-                    : st.writable ? 'writable' : 'read-only (open in another tab?)';
-        if (IMAGE.test(f.name)) {
-            s.append(link('⤓', 'Download the image as it is now', () => download(f.name)));
-            if (st && st.modified)
-                s.append(link('↺', 'Revert: forget the changes to this image', () => revert(f)));
-        }
-        s.append(link('✕', 'Remove', async () => {
-            await remove(f.name);
-            forgetLibraryDisk(f.name);
-            start();
-        }));
-        return s;
-    }));
+// The Disks panel (disks.js): what is in the Mac, from the files and the
+// Worker's word on each image, its title and cover from the library.
+let shownFiles = [];
+const fileName = (url) => decodeURIComponent(new URL(url, location.href).pathname.split('/').pop());
+
+function showFiles(files) {
+    shownFiles = files;
+    showDisks();
 }
+
+function showDisks() {
+    const byName = new Map(library.map((d) => [fileName(d.url), d]));
+    const mounted = shownFiles.filter((f) => f.name !== systemSelect.value).map((f) => {
+        const d = byName.get(f.name) || {};
+        const kind = !IMAGE.test(f.name) ? 'app'
+            : /\.(iso|toast|cdr)$/i.test(f.name) || (d.tags || []).includes('cd') ? 'cd'
+            : (f.size || 0) <= 1440 * 1024 ? 'floppy' : 'hd';
+        return { name: f.name, title: d.title || f.name, cover: d.cover, kind, state: imageState[f.name] };
+    });
+    // The library's System disks too, not yet here: picking one inserts it.
+    const systems = [...systemSelect.options].map((o) => ({ value: o.value, label: o.textContent }));
+    for (const d of library)
+        if ((d.tags || []).includes('system') && !shownFiles.some((f) => f.name === fileName(d.url)))
+            systems.push({ value: d.url, label: `${d.title} (from the library)` });
+    Disks.update({ system: systemSelect.value, systems, mounted, library,
+                   mountedUrls: [...params.getAll('disk'), ...picked()] });
+}
+
+Disks.init({
+    add: addFiles,
+    insert: (d) => addLibraryDisk(d.url),
+    async eject(name) {
+        await remove(name);
+        forgetLibraryDisk(name);
+        start();
+    },
+    revert: (name) => {
+        const f = shownFiles.find((x) => x.name === name);
+        if (f)
+            revert(f);
+    },
+    download,
+    async system(value) {
+        const d = library.find((x) => x.url === value);
+        if (d) {
+            await Settings.set({ machine: { system: fileName(d.url) } });
+            return addLibraryDisk(d.url);
+        }
+        systemSelect.value = value;
+        systemSelect.dispatchEvent(new Event('change'));
+    },
+    reset,
+});
 
 async function download(name) {
     const blob = await window.executor.request('download', name);
@@ -410,13 +415,17 @@ async function revert(f) {
     start();
 }
 
-document.getElementById('add').addEventListener('change', async (e) => {
+async function addFiles(files) {
     generation++;                   // restarting (once the files are stored)
     window.executor.frames = 0;
-    for (const f of e.target.files)
+    for (const f of files)
         await store(f);
-    e.target.value = '';
     start();
+}
+document.getElementById('add').addEventListener('change', async (e) => {
+    const files = [...e.target.files];
+    e.target.value = '';
+    addFiles(files);
 });
 document.getElementById('restart').addEventListener('click', () => start());
 
@@ -508,7 +517,7 @@ setInterval(async () => {
     }
 }, 3000);
 
-document.getElementById('reset').addEventListener('click', async () => {
+async function reset() {
     if (!confirm("Forget everything saved on Executor's disk for this System?"))
         return;
     if (worker)
@@ -529,7 +538,7 @@ document.getElementById('reset').addEventListener('click', async () => {
         }
     }
     start();
-});
+}
 
 // Leaving or hiding the page: the Worker saves what changed now.
 // Hidden, it hands its disks to another tab that asks (worker.js).
@@ -562,6 +571,7 @@ function showSystems(files) {
     systemSelect.replaceChildren(new Option("Executor's own", ''),
         ...files.filter((f) => IMAGE.test(f.name)).map((f) => new Option(f.name, f.name)));
     systemSelect.value = [...systemSelect.options].some((o) => o.value === want) ? want : '';
+    showDisks();
 }
 
 // ---- the server (tools/web/server): the account, { name, owner }, or
@@ -764,7 +774,7 @@ async function start() {
         } else if (m.type === 'images') {
             const before = JSON.stringify(imageState);
             for (const i of m.images)
-                imageState[i.name] = { modified: i.modified, writable: i.writable, inMemory: i.inMemory,
+                imageState[i.name] = { modified: i.modified, changed: i.changed, writable: i.writable, inMemory: i.inMemory,
                                        borrowed: i.borrowed, onServer: i.onServer };
             if (JSON.stringify(imageState) !== before)
                 storedFiles().then(showFiles);
@@ -826,7 +836,9 @@ function fitCanvas() {
     const dpr = window.devicePixelRatio || 1;
     const bar = document.fullscreenElement ? 0 : document.getElementById('bar').offsetHeight
         + document.getElementById('status').offsetHeight + document.getElementById('insecure').offsetHeight + 32;
-    const fit = Math.min(window.innerWidth * dpr / width, (window.innerHeight - bar) * dpr / height);
+    // (the Disks panel open: what it leaves)
+    const across = window.innerWidth - (parseFloat(getComputedStyle(document.body).paddingRight) || 0);
+    const fit = Math.min(across * dpr / width, (window.innerHeight - bar) * dpr / height);
     const scale = Math.max(1, Math.floor(fit));     // device pixels a guest pixel
     canvas.style.width = `${width * scale / dpr}px`;
     canvas.style.height = `${height * scale / dpr}px`;
