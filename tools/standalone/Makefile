@@ -4,8 +4,8 @@
 #   make [WASM_BUILD=DIR]      site/ from DIR (make_site.sh), then ./executor-standalone
 #   make dist [VERSION=V]      dist/: executor-standalone-V-OS-ARCH[.exe] for six targets,
 #                              SHA256SUMS and README.txt (README.dist.txt); V: git describe
-#   make test [OUT=PATH]       go test, and test_server.py against the binary
-#                              (ctest executor.web.standalone_server in build-wasm)
+#   make test [OUT=PATH]       the binary, and go test (the API, pairing, the relay, the program
+#                              itself; ctest executor.web.standalone_server in build-wasm)
 #   make nosite                the binary with no tab (site/ as it is)
 #
 # The site's large files are embedded as their .gz only (static.go
@@ -44,7 +44,6 @@ dist: site
 
 test: executor-standalone
 	$(GO) test ./...
-	EXECUTOR_WEB_SERVER_BINARY=$(abspath $(OUT)) python3 $(ROOT)/tools/web/server/test_server.py
 
 clean:
 	rm -rf dist executor-standalone

@@ -5,7 +5,8 @@
 // for the configuration's [relay] section; public: the page without signing in;
 // standalone: mode = "standalone" (no accounts, the server the tab's store);
 // with EXECUTOR_STANDALONE_BINARY, that server instead (tools/standalone's,
-// its own embedded tab: SITE unused).
+// its own embedded tab: SITE unused; pair(page) pairs a page's browser
+// with it). startGoServer: tools/standalone, built here, on --site SITE.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -42,22 +43,73 @@ export async function startServer(site, { images = '', include = ['*.img'], rela
                                           { input: `${OWNER_PASSWORD}\n` }).toString().trim();
     if (!binary)
         cli('adduser', 'owner', '--owner');
-    const child = binary
-        ? spawn(binary, ['-data', path.join(scratch, 'data'), '-images', images, '-port', `${port}`, '-quiet'],
-                { stdio: ['ignore', 'pipe', 'inherit'] })
-        : spawn('python3', [SERVER, '--config', conf, '--quiet'], { stdio: ['ignore', 'pipe', 'inherit'] });
+    if (binary) {
+        const go = await runGo(binary, ['--data', path.join(scratch, 'data'), '--images', images,
+                                        '--bind', '127.0.0.1', '--port', `${port}`, '--quiet']);
+        return { ...go, stop() { go.stop(); fs.rmSync(scratch, { recursive: true, force: true }); } };
+    }
+    const child = spawn('python3', [SERVER, '--config', conf, '--quiet'], { stdio: ['ignore', 'pipe', 'inherit'] });
     await new Promise((resolve, reject) => {
         child.stdout.on('data', (d) => { if (d.toString().includes('Serving')) resolve(); });
         child.on('exit', (code) => reject(new Error(`the server exited (${code})`)));
     });
     return {
         url: `http://127.0.0.1:${port}`,
+        pair: async () => {},
         invite: () => cli('invite'),
         stop() {
             child.kill();
             fs.rmSync(scratch, { recursive: true, force: true });
         },
     };
+}
+
+// tools/standalone's binary with args; once it listens: { url, key,
+// pairURL (its printed address, #key=), pair(page) (that page's browser
+// paired: POST /api/pair from its context), stop() }. The process: child.
+export async function runGo(binary, args) {
+    const child = spawn(binary, args, { stdio: ['ignore', 'pipe', 'inherit'] });
+    let out = '';
+    const [url, pairURL] = await new Promise((resolve, reject) => {
+        child.stdout.on('data', (d) => {
+            out += d.toString();
+            const m = /^Pair a browser: open ((https?:\/\/[^/\s]+)\/#key=[0-9a-f]+)$/m.exec(out);
+            if (m)
+                resolve([m[2], m[1]]);
+        });
+        child.on('exit', (code) => reject(new Error(`the Go server exited (${code}): ${out}`)));
+    });
+    const key = pairURL.split('#key=')[1];
+    return {
+        url, pairURL, key, child, output: () => out,
+        async pair(page, name = 'test') {
+            const res = await page.context().request.post(`${url}/api/pair`, { data: { key, name } });
+            if (!res.ok())
+                throw new Error(`pairing: ${res.status()}`);
+        },
+        stop() { child.kill(); },
+    };
+}
+
+// startGoServer: tools/standalone built (go; null without it) and run on
+// --site site, a scratch DATA unless given; args added. As runGo, and
+// data, settingsFile, bin.
+export async function startGoServer(site, { images, data, args = [], bin } = {}) {
+    const scratch = fs.mkdtempSync(path.join(process.env.TMPDIR || os.tmpdir(), 'executor-go-'));
+    process.on('exit', () => fs.rmSync(scratch, { recursive: true, force: true }));   // (bin may outlive stop())
+    if (!bin) {
+        bin = path.join(scratch, 'executor-standalone');
+        try {
+            execFileSync(process.env.GO || 'go', ['build', '-o', bin, '.'],
+                         { cwd: path.join(ROOT, 'tools/standalone'), stdio: 'inherit', env: { ...process.env, CGO_ENABLED: '0' } });
+        } catch (e) {
+            return null;
+        }
+    }
+    data = data || path.join(scratch, 'data');
+    const go = await runGo(bin, ['--data', data, '--site', path.resolve(site), ...(images ? ['--images', images] : []),
+                                 '--bind', '127.0.0.1', '--port', '0', '--quiet', ...args]);
+    return { ...go, bin, data, settingsFile: path.join(data, 'settings.json') };
 }
 
 // Signs page in through /login (or makes the account, with an invitation),

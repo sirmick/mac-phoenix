@@ -14,10 +14,10 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { spawn, execFileSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { launch, newPage, serve, firstFrame } from './harness.mjs';
-import { startServer, signIn, OWNER_PASSWORD } from './server.mjs';
+import { startServer, startGoServer, signIn, OWNER_PASSWORD } from './server.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const [dir, shots] = process.argv.slice(2);
@@ -33,29 +33,6 @@ const check = (ok, what) => {
 };
 const ready = (page) => page.evaluate(() => Settings.ready.then(() => Settings.where));
 const get = (page, p) => page.evaluate((p) => Settings.get(p), p);
-
-// tools/standalone on --site DIR, a scratch data directory.
-async function goServer() {
-    let bin = path.join(scratch, 'executor-standalone');
-    try {
-        execFileSync(process.env.GO || 'go', ['build', '-o', bin, '.'], { cwd: path.join(ROOT, 'tools/standalone'),
-                                                                     stdio: 'inherit', env: { ...process.env, CGO_ENABLED: '0' } });
-    } catch (e) {
-        return null;
-    }
-    const data = path.join(scratch, 'go-data');
-    const child = spawn(bin, ['--data', data, '--site', path.resolve(dir), '--images', path.join(scratch, 'images'),
-                              '--bind', '127.0.0.1', '--port', '0', '--quiet'], { stdio: ['ignore', 'pipe', 'inherit'] });
-    const url = await new Promise((resolve, reject) => {
-        child.stdout.on('data', (d) => {
-            const m = /(http:\/\/[\d.]+:\d+)\//.exec(d.toString());
-            if (m)
-                resolve(m[1]);
-        });
-        child.on('exit', (code) => reject(new Error(`the Go server exited (${code})`)));
-    });
-    return { url, settingsFile: path.join(data, 'settings.json'), stop: () => child.kill() };
-}
 
 // The dialog: change Memory, refuse a bad one, pick Ctrl as Command; then
 // a reload keeps them.
@@ -162,11 +139,12 @@ try {
 
     // ---- tools/standalone: settings.json ----
     fs.mkdirSync(path.join(scratch, 'images'));
-    const go = await goServer();
+    const go = await startGoServer(dir, { images: path.join(scratch, 'images') });
     if (!go)
         console.log('SKIP the Go server: no go');
     else {
         const p = await page();
+        await go.pair(p);
         await exercise(p, `${go.url}/`, 'tools/standalone', { network: true });
         const file = JSON.parse(fs.readFileSync(go.settingsFile, 'utf8'));
         check(file.version === 2 && file.machine.ram_mb === 96 && file.sound.volume === 35,
