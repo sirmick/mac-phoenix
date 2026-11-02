@@ -21,8 +21,8 @@
 //   ?ppcbreak=SPEC   PowerPC breakpoints (as --executor-ppc-break; several
 //                    separated by ';'; docs/executor/PPCTrace.md)
 // library.json beside the page (optional) offers more disks: [{ title,
-// url, note }]; the ones picked are remembered (localStorage) and loaded
-// like ?disk=.
+// url, note, cover }]; the ones picked are remembered (localStorage) and
+// loaded like ?disk=. Disks with a cover (CDs) are offered by it too.
 // Served by tools/web/server, signed in (api/me): the overlays and
 // Executor's own volume are synced with the account (sync.js).
 // Standalone (api/me's mode; the server on one's own machine): the server
@@ -238,6 +238,7 @@ async function fetchDisk(url) {
 // ---- the library: disks the site offers (library.json), picked by the user
 const libraryBox = document.getElementById('library-box');
 const librarySelect = document.getElementById('library');
+const libraryCovers = document.getElementById('library-covers');
 let library = [];
 const picked = () => JSON.parse(localStorage.getItem('executor-library') || '[]');
 
@@ -261,10 +262,19 @@ function showLibrary() {
             return o;
         }));
     libraryBox.hidden = offer.length === 0;
+    libraryCovers.replaceChildren(...offer.filter((d) => d.cover).map((d) => {
+        const img = new Image();
+        img.src = d.cover;
+        img.alt = d.title;
+        img.title = d.note ? `${d.title}: ${d.note}` : d.title;
+        img.addEventListener('click', () => addLibraryDisk(d.url));
+        return img;
+    }));
 }
 
-librarySelect.addEventListener('change', async () => {
-    const url = librarySelect.value;
+librarySelect.addEventListener('change', () => addLibraryDisk(librarySelect.value));
+
+async function addLibraryDisk(url) {
     if (!url)
         return;
     localStorage.setItem('executor-library', JSON.stringify([...picked(), url]));
@@ -278,7 +288,7 @@ librarySelect.addEventListener('change', async () => {
         status.textContent = `Cannot load ${url}: ${e.message}`;
     }
     start();
-});
+}
 
 // A library disk the user removes is forgotten too.
 function forgetLibraryDisk(name) {

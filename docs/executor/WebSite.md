@@ -64,12 +64,19 @@ TMPDIR=~/storage/tmp tools/web/make_library.py /srv/executor-web/library
 | `development.img` | 392 MB | MPW, CodeWarrior Pro 4 (IDE 3.2), THINK C 6, THINK Pascal 4.5, HyperCard 2.4.1, MacPerl 5.2, ResEdit 2.1.3, BBEdit Lite 4.1 | 7.6.1, 8.6 |
 | `games-68k.img` | 71 MB | 18 games that run on the 68k side (Lemmings, Maelstrom, SimEarth, Monkey Island, ...) | 7.6.1 |
 | `games-ppc.img` | 476 MB | fat and PowerPC games (Marathon 2, Escape Velocity, EV Nova, Ferazel's Wand, ...) | 8.6, PowerPC ticked |
+| `macaddict-*.iso` | 650-675 MB each | MacAddict's cover CDs #16 (Dec 1997), #25 (Sep 1998), #58 (Jun 2001), #63 (Nov 2001), as they came, with cover scans | any |
 
 Whole application folders are copied as installed (`make_disk.py`, both
 forks and Finder info as MacBinary through hfsutils), so an application
 finds its files beside it. A disk is made again when an image it comes
 from is newer (`--force`: always). Which applications run yet:
 SCOREBOARD.md; the site's cells (below) check them in the tab.
+
+The CDs are `provisioning/cds.json`'s (docs/Provisioning.md, "CDs"):
+hard links to the pinned images, each with its record (`NAME.iso.json`)
+and its cover cut down to 480 pixels (`NAME.cover.jpg`, the record's
+`cover`). `library.json` gives a disk's cover as `covers/NAME`, and the
+tab offers those disks by their covers beside "Add a disk…".
 
 A link opens a System with disks already added, e.g.
 `/?disk=disks/boot-8.6.img&disk=disks/games-ppc.img&system=boot-8.6.img&ppc=1`
@@ -100,7 +107,7 @@ max_upload_mb = 64
 
 [library]
 images = "/srv/executor-web/library"
-include = ["*.img"]
+include = ["*.img", "*.iso"]
 ```
 
 The unit runs `python3 ~/src/mac-phoenix/tools/web/server` (Python 3.11 or

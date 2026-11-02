@@ -14,6 +14,11 @@ The boot disks are make_boot_disk.py's cuts of 7.6.1.img and 8.6.img; the
 application disks make_disk.py's copies of whole folders of the provisioned
 disks, so an application has its folder as it was installed. Point the
 server's [library] images at OUT_DIR (docs/executor/WebSite.md).
+
+The CDs (provisioning/cds.json: magazine cover discs, pinned in media.json,
+checked and given their records by provisioning/cds.py) go in as they are,
+hard-linked, each with its cover scan cut down to COVER_PX for the site:
+the record's "cover".
 """
 import argparse
 import json
@@ -23,6 +28,8 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+CDS = HERE.parent.parent / "provisioning" / "cds.json"
+COVER_PX = 480
 
 # Each application: its path on the disk made here, its path on the source
 # image (as docs/executor/SCOREBOARD.md's App column has it, which says
@@ -170,6 +177,38 @@ def record(d):
     return r
 
 
+def make_cd(cd, images, out, force):
+    """The CD image linked into out, its cover cut down, its record."""
+    from PIL import Image
+    src, img = images / cd["name"], out / cd["name"]
+    if not (images / (cd["name"] + ".json")).exists():
+        sys.exit(f"{cd['name']}: no record in {images} (provisioning/cds.py checks it and writes it)")
+    if force or not img.exists() or not os.path.samefile(src, img):
+        tmp = out / (cd["name"] + ".part")
+        tmp.unlink(missing_ok=True)
+        try:
+            os.link(src, tmp)
+        except OSError:
+            subprocess.run(["cp", "--reflink=auto", str(src), str(tmp)], check=True)
+        os.replace(tmp, img)
+    cover = Path(cd["name"]).stem + ".cover.jpg"
+    scan = images / cd["cover"]
+    if force or not (out / cover).exists() or scan.stat().st_mtime > (out / cover).stat().st_mtime:
+        with Image.open(scan) as im:
+            im = im.convert("RGB")
+            im.thumbnail((COVER_PX, COVER_PX), Image.LANCZOS)
+            im.save(out / cover, "JPEG", quality=85, optimize=True)
+    with open(images / (cd["name"] + ".json")) as f:
+        r = json.load(f)
+    rec = {k: r[k] for k in ("title", "tags", "note", "magazine", "issue", "date", "publisher", "contents")}
+    rec.update({"label": r["volume"], "cover": cover, "source": r["source"],
+                "made_by": "tools/web/make_library.py"})
+    new = json.dumps(rec, indent=1, ensure_ascii=False) + "\n"
+    p = out / (cd["name"] + ".json")
+    if not p.exists() or p.read_text() != new:
+        p.write_text(new)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("out", nargs="?", default="~/storage/web-library")
@@ -199,6 +238,11 @@ def main():
             print(f"{img}: up to date")
         if not rec.exists() or rec.read_text() != new:
             rec.write_text(new)
+
+    with open(CDS) as f:
+        for cd in json.load(f)["cds"]:
+            if not args.only or cd["name"] in args.only:
+                make_cd(cd, images, out, args.force)
 
 
 if __name__ == "__main__":

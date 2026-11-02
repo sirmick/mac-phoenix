@@ -19,6 +19,8 @@
   #files span { background: #444; border-radius: 4px; padding: 2px 6px; margin-right: 4px; }
   #files a { color: #f88; margin-left: 4px; cursor: pointer; }
   #bar select { background: #444; color: #eee; border: 0; font: inherit; }
+  #library-covers { display: flex; gap: 4px; }
+  #library-covers img { height: 48px; border-radius: 3px; cursor: pointer; }
   #account { color: #9cf; }
   #viewer { background: #345; color: #cdf; border-radius: 4px; padding: 4px 10px; }
   #viewer button { background: #567; color: #eee; border: 0; border-radius: 4px; padding: 2px 8px; font: inherit; cursor: pointer; }
@@ -32,6 +34,7 @@
   <label>Add disk image or application…<input id="add" type="file" multiple hidden></label>
   <label id="library-box" hidden title="Disks offered by this site: downloaded once, kept in this browser">Library
     <select id="library"><option value="">Add a disk…</option></select></label>
+  <span id="library-covers" title="CDs offered by this site: click one to add it"></span>
   <span id="files"></span>
   <label title="Apple's System and Finder from one of your disk images">System
     <select id="system"><option value="">Executor's own</option></select></label>
