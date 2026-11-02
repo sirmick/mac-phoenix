@@ -26,6 +26,7 @@
 
 let canvas = null, ctx = null;
 const IMAGE = /\.(img|image|dsk|hfs|iso|toast|cdr)$/i;
+const CD = /\.(iso|toast|cdr)$/i;
 
 self.Module = {
     // Drawing: frames, pixels drawn, ms in the front end (web_main.cpp)
@@ -416,8 +417,9 @@ async function start(m) {
     ctx = canvas.getContext('2d');
     const images = m.files.filter((f) => IMAGE.test(f.name));
     const others = m.files.filter((f) => !IMAGE.test(f.name));
+    // CDs are mounted locked, as a Mac's are (their overlay stays empty).
     const args = ['--size', `${m.width}x${m.height}`,
-                  ...images.flatMap((f) => ['--disk', `/uploads/${f.name}`])];
+                  ...images.flatMap((f) => [CD.test(f.name) ? '--cdrom' : '--disk', `/uploads/${f.name}`])];
     if (m.scale && m.scale !== 1)
         args.push('--scale', `${m.scale}`);
     if (m.system && images.some((f) => f.name === m.system))
@@ -450,7 +452,21 @@ async function start(m) {
     ids = m.ids || {};
     if (m.volumeKey && Store.enabled) {
         try {
-            const kept = await Store.volumeDown(m.volumeKey);
+            // A connection that drops (the server restarted under the
+            // download: "Content-Length ... exceeds response Body") is tried
+            // again a few times; an HTTP error is not.
+            let kept;
+            for (let attempt = 1; ; attempt++) {
+                try {
+                    kept = await Store.volumeDown(m.volumeKey);
+                    break;
+                } catch (e) {
+                    if (!(e instanceof TypeError) || attempt === 4)
+                        throw e;
+                    console.log(`[web] Executor's disk: ${e.message || e}; trying again`);
+                    await new Promise((r) => setTimeout(r, 1500 * attempt));
+                }
+            }
             if (kept) {
                 saved = kept;
                 console.log(`[web] restored ${Object.keys(kept.files).length} files of the volume from the server`);

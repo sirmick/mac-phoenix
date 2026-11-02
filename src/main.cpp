@@ -211,6 +211,7 @@ static void sigterm_handler(int sig)
 		g_subprocess->stop();
 		g_subprocess = nullptr;
 	}
+	executor_systems::remove_session_copy();
 	_exit(0);
 }
 
