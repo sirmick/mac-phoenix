@@ -500,22 +500,24 @@ def fetch(e, f, url, progress=None):
     return md5.hexdigest()
 
 
-def file_ok(path, e):
-    """path holds e: right size and, if pinned, right MD5."""
-    if not os.path.isfile(path) or (e.get("size") and os.path.getsize(path) != e["size"]):
-        return False
-    if not e.get("md5"):
-        return True
-    h = hashlib.md5()
+def file_digest(path, algo):
+    h = hashlib.new(algo)
     with open(path, "rb") as f:
         while chunk := f.read(1 << 20):
             h.update(chunk)
-    return h.hexdigest() == e["md5"]
+    return h.hexdigest()
+
+
+def file_ok(path, e):
+    """path holds e: right size and, if pinned, right MD5 and SHA-256."""
+    if not os.path.isfile(path) or (e.get("size") and os.path.getsize(path) != e["size"]):
+        return False
+    return all(file_digest(path, k) == e[k] for k in ("md5", "sha256") if e.get(k))
 
 
 def download(e, out_dir, progress=None, log=None):
     """Fetch e into out_dir from the first source that gives the pinned size
-    and MD5; progress(done, total) may raise Cancelled."""
+    and MD5 (and SHA-256, if pinned); progress(done, total) may raise Cancelled."""
     dest = os.path.join(out_dir, pin_path(e))
     os.makedirs(os.path.dirname(dest), exist_ok=True)
     part = dest + ".part"
@@ -529,6 +531,8 @@ def download(e, out_dir, progress=None, log=None):
                 raise Mismatch(f"{url}: {size} bytes, pinned {e['size']}")
             if e.get("md5") and digest != e["md5"]:
                 raise Mismatch(f"{url}: MD5 {digest}, pinned {e['md5']}")
+            if e.get("sha256") and (sha := file_digest(part, "sha256")) != e["sha256"]:
+                raise Mismatch(f"{url}: SHA-256 {sha}, pinned {e['sha256']}")
             os.replace(part, dest)
             return dest
         except Cancelled:
@@ -545,7 +549,7 @@ def download(e, out_dir, progress=None, log=None):
 
 # ----------------------------------------------------------------- pins
 
-PIN_KEYS = ("name", "as", "dir", "size", "md5") + LOCATORS + ("local", "title", "year", "page", "note")
+PIN_KEYS = ("name", "as", "dir", "size", "md5", "sha256") + LOCATORS + ("local", "title", "year", "page", "note")
 
 
 def pin_path(p):
