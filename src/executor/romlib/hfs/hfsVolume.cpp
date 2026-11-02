@@ -857,24 +857,62 @@ OSErr Executor::hfsPBFlushVol(ParmBlkPtr pb, Boolean async)
     PBRETURN((VolumeParam *)pb, err);
 }
 
-static void closeallvcbfiles(HVCB *vcbp)
+/* MacPhoenix: the FCBs that are the volume's own (its B-trees, file
+   numbers below 16, and the desktop database's, finder.cpp) and not a
+   program's: they don't make the volume busy. */
+static bool system_fcb_p(filecontrolblock *fcbp, INTEGER refnum)
+{
+    return (uint32_t)fcbp->fcbFlNum < 16 || ROMlib_desktop_refnum_p(refnum);
+}
+
+/* MacPhoenix: as on a Mac, a volume with files open on it is busy
+   (fBsyErr) and stays mounted; ROMlib_OurClose (force) closes them
+   first. Unmounting, every FCB still pointing at the volume is freed: the
+   VCB goes, and an FCB left pointing at it would be read later. */
+static OSErr closeallvcbfiles(HVCB *vcbp, bool force)
 {
     filecontrolblock *fcbp, *efcbp;
     IOParam iopb;
     short length;
 
     length = *(GUEST<INTEGER> *)LM(FCBSPtr);
-    fcbp = (filecontrolblock *)((short *)LM(FCBSPtr) + 1);
     efcbp = (filecontrolblock *)((char *)LM(FCBSPtr) + length);
-    for(; fcbp < efcbp; fcbp = (filecontrolblock *)((char *)fcbp + LM(FSFCBLen)))
+    for(fcbp = (filecontrolblock *)((short *)LM(FCBSPtr) + 1); fcbp < efcbp;
+        fcbp = (filecontrolblock *)((char *)fcbp + LM(FSFCBLen)))
+        if(fcbp->fcbFlNum && fcbp->fcbVPtr == vcbp
+           && !system_fcb_p(fcbp, (char *)fcbp - (char *)LM(FCBSPtr)))
+        {
+            if(!force)
+                return fBsyErr;
+            memset(&iopb, 0, sizeof iopb);
+            iopb.ioRefNum = (char *)fcbp - (char *)LM(FCBSPtr);
+            /* my */ PBClose((ParmBlkPtr)&iopb, false);
+        }
+    for(fcbp = (filecontrolblock *)((short *)LM(FCBSPtr) + 1); fcbp < efcbp;
+        fcbp = (filecontrolblock *)((char *)fcbp + LM(FSFCBLen)))
         if(fcbp->fcbFlNum && fcbp->fcbVPtr == vcbp)
         {
+            memset(&iopb, 0, sizeof iopb);
             iopb.ioRefNum = (char *)fcbp - (char *)LM(FCBSPtr);
             /* my */ PBFlushFile((ParmBlkPtr)&iopb, false);
         }
+    return noErr;
 }
 
-OSErr Executor::hfsPBUnmountVol(ParmBlkPtr pb)
+static void freevcbfcbs(HVCB *vcbp)
+{
+    short length = *(GUEST<INTEGER> *)LM(FCBSPtr);
+    auto *efcbp = (filecontrolblock *)((char *)LM(FCBSPtr) + length);
+    for(auto *fcbp = (filecontrolblock *)((short *)LM(FCBSPtr) + 1); fcbp < efcbp;
+        fcbp = (filecontrolblock *)((char *)fcbp + LM(FSFCBLen)))
+        if(fcbp->fcbVPtr == vcbp)
+        {
+            fcbp->fcbFlNum = 0;
+            fcbp->fcbVPtr = nullptr;
+        }
+}
+
+OSErr Executor::hfsPBUnmountVol(ParmBlkPtr pb, bool force)
 {
     OSErr err;
     HVCB *vcbp;
@@ -883,8 +921,12 @@ OSErr Executor::hfsPBUnmountVol(ParmBlkPtr pb)
                           pb->volumeParam.ioNamePtr, (LONGINT *)0, false);
     if(vcbp)
     {
-        closeallvcbfiles(vcbp);
+        err = closeallvcbfiles(vcbp, force);
+        if(err != noErr)
+            PBRETURN((VolumeParam *)pb, err);
         err = ROMlib_flushvcbp(vcbp);
+        ROMlib_desktop_unmounting(vcbp->vcbVRefNum);
+        freevcbfcbs(vcbp);
         Dequeue((QElemPtr)vcbp, &LM(VCBQHdr));
         DisposePtr(vcbp->vcbMAdr);
         DisposePtr(vcbp->vcbBufAdr);

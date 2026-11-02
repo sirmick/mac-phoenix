@@ -71,7 +71,13 @@ there under it.
 
 Ejecting (the panel's ⏏, or `eject` by request) unmounts the image's
 volumes through `_UnmountVol` (`fBsyErr` when files are open: the page
-says so). Whatever unmounts or ejects a disk image, the Finder's Put Away
+says so). As on a Mac, an HFS volume with a program's file open on it
+(an application running from it, a document open) is busy: `PBUnmountVol`
+answers `fBsyErr` and leaves it mounted (hfs/hfsVolume.cpp; HFS+ did
+already); the volume's own files (its B-trees, the desktop database's
+FCB) don't count, and go with it. The Finder's Put Away gets the same answer.
+Executor's end (`ROMlib_OurClose`) closes what is still open first.
+Whatever unmounts or ejects a disk image, the Finder's Put Away
 included, web_main.cpp notices at the next event call (`watch_images`: a
 drive of `/uploads/` that had a volume and has none; an ejected volume
 still known offline is unmounted, so no grey icon stays) and calls
@@ -101,5 +107,9 @@ from `EXECUTOR_WEB_SYSTEM` picked in the panel from the library): a blank
 disk put in while the Finder runs (no restart), a folder made on it,
 Revert (the folder gone, the disk back in), Put Away in the Finder (out
 of the panel and the setting), a CD read-only and out by the panel's
-eject. The other tab cells reach the panel through `web/tests/harness.mjs`
+eject, a disk SimpleText runs from in use (the eject refused, the disk
+in) until SimpleText quits. `executor_tests` `HFSUnmountTest.*`
+(`src/executor/tests/hfs_volume.cpp`): a data or resource fork open
+makes a blank HFS floppy busy, the desktop database doesn't, the forced
+unmount closes. The other tab cells reach the panel through `web/tests/harness.mjs`
 (`openDisks`, `pickSystem`, `diskButton`, `diskState`).

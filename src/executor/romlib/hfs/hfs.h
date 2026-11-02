@@ -574,7 +574,7 @@ extern OSErr hfsPBHGetVol(WDPBPtr ufsPB, Boolean a);
 extern OSErr hfsPBSetVol(ParmBlkPtr ufsPB, Boolean a);
 extern OSErr hfsPBHSetVol(WDPBPtr ufsPB, Boolean a);
 extern OSErr hfsPBFlushVol(ParmBlkPtr ufsPB, Boolean a);
-extern OSErr hfsPBUnmountVol(ParmBlkPtr ufsPB);
+extern OSErr hfsPBUnmountVol(ParmBlkPtr ufsPB, bool force = false);
 extern OSErr hfsPBOffLine(ParmBlkPtr ufsPB);
 extern OSErr hfsPBEject(ParmBlkPtr ufsPB);
 

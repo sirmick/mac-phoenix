@@ -148,7 +148,9 @@ void Executor::ROMlib_OurClose(void)
         if(vcbp->vcbCTRef)
         {
             pbr.ioParam.ioVRefNum = vcbp->vcbVRefNum;
-            PBUnmountVol(&pbr);
+            /* MacPhoenix: the end, so files still open are closed (a
+               volume with open files is busy to PBUnmountVol) */
+            hfsPBUnmountVol(&pbr, true);
 #if defined(MACOSX_) || defined(MACOSX_)
             if(!(vcbp->vcbAtrb & VNONEJECTABLEBIT) && vcbp->vcbDrvNum)
                 ROMlib_ejectfloppy(((VCBExtra *)vcbp)->u.hfs.fd);

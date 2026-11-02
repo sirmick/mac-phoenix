@@ -712,6 +712,19 @@ bool Executor::ROMlib_desktop_refnum_p(short refnum)
     return false;
 }
 
+/* MacPhoenix: the volume is going (hfsPBUnmountVol): its database is
+   written back and forgotten, so a volume mounted later with the same
+   vRefNum gets its own, not this one with an FCB that is gone. */
+void Executor::ROMlib_desktop_unmounting(short vRefNum)
+{
+    auto it = databases.find(vRefNum);
+    if(it == databases.end())
+        return;
+    if(it->second.dirty)
+        it->second.save();
+    databases.erase(it);
+}
+
 OSErr
 Executor::PBDTCloseDown(DTPBPtr dtp)
 {

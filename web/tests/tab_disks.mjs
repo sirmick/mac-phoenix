@@ -6,7 +6,10 @@
 // put away in the Finder (Cmd-Y): out of the panel and of the
 // disks.mounted setting. A library CD goes in read-only and comes out by
 // the panel's eject button. One's own image added by the Add button goes
-// into the server's library (uploaded) and into the running Mac.
+// into the server's library (uploaded) and into the running Mac. A disk
+// an application runs from (SimpleText, copied from SYSTEM by hcopy) is in
+// use: the panel's eject says so and it stays in, until the application
+// quits.
 //
 //   node web/tests/tab_disks.mjs DIR SYSTEM [SHOTS]
 //
@@ -35,6 +38,16 @@ const own = fs.mkdtempSync(path.join(os.tmpdir(), 'tab-disks-own-'));
 try {
     hformat('blank.img', 'Blank');
     hformat('disc.iso', 'Disc');
+    // Apps: SimpleText from the System image (MacBinary through hcopy)
+    hformat('apps.img', 'Apps');
+    const hfs = (...a) => execFileSync(a[0], a.slice(1), { stdio: 'ignore', env: { ...process.env, HOME: images } });
+    hfs('hmount', path.resolve(system));
+    hfs('hcopy', '-m', ':SimpleText', path.join(images, 'SimpleText.bin'));
+    hfs('humount');
+    hfs('hmount', path.join(images, 'apps.img'));
+    hfs('hcopy', '-m', path.join(images, 'SimpleText.bin'), ':SimpleText');
+    hfs('humount');
+    fs.rmSync(path.join(images, 'SimpleText.bin'));
     fs.writeFileSync(path.join(own, 'mine.img'), Buffer.alloc(1440 * 1024));
     execFileSync('hformat', ['-l', 'Mine', path.join(own, 'mine.img')], { stdio: 'ignore', env: { ...process.env, HOME: own } });
 } catch (e) {
@@ -46,6 +59,7 @@ const record = (name, r) => fs.writeFileSync(path.join(images, `${name}.json`), 
 record('sys.img', { title: 'The System', tags: ['system'] });
 record('blank.img', { title: 'Blank', tags: [] });
 record('disc.iso', { title: 'Disc', tags: ['cd'] });
+record('apps.img', { title: 'Apps', tags: [] });
 
 const server = await startServer(dir, { images, include: ['*.img', '*.iso'] });
 if (!server) {
@@ -168,6 +182,27 @@ try {
     check(await until(async () => !(await row('disc.iso').count()), 10000), 'and it is out of the panel');
     check(await request(page, 'app') === 'Finder', 'the Finder still runs');
     await shot('5-cd-ejected.png');
+
+    // In use: SimpleText runs from it (its file open), the panel's eject
+    // refuses (fBsyErr) and the disk stays; quit, and it comes out.
+    await page.click('#disks-library .lib-card[data-url="disks/apps.img"]');
+    check(await until(() => hasVolume('Apps'), 60000), 'the Apps disk is mounted');
+    check(await request(page, 'launch', 'Apps:SimpleText') === 0, 'SimpleText launched from it');
+    check(await until(() => request(page, 'app').then((a) => a === 'SimpleText'), 30000), 'SimpleText runs');
+    await until(() => row('apps.img').count(), 5000);
+    await row('apps.img').locator('button.eject').click();
+    check(await until(() => page.evaluate(() => /apps\.img is in use/.test(document.getElementById('status').textContent)), 10000),
+          "the panel's eject says the disk is in use");
+    await page.waitForTimeout(1000);
+    check(await hasVolume('Apps'), 'and the disk stays mounted');
+    check(await row('apps.img').count() === 1, 'and in the panel');
+    check((await picked()).includes('disks/apps.img'), 'and in the setting');
+    await shot('5a-in-use.png');
+    keys(0x0C);                                 // Cmd-Q
+    check(await until(() => request(page, 'app').then((a) => a === 'Finder'), 30000), 'SimpleText quit');
+    await row('apps.img').locator('button.eject').click();
+    check(await until(async () => !(await hasVolume('Apps')), 20000), 'now the eject unmounts it');
+    check(await until(async () => !(await row('apps.img').count()), 10000), 'and it is out of the panel');
 
     // One's own image, by the Add button: uploaded into the library, put in.
     await page.setInputFiles('#add', path.join(own, 'mine.img'));
