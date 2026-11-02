@@ -30,13 +30,55 @@ export async function runGo(binary, args) {
     return { url, child, output: () => out, stop() { child.kill(); } };
 }
 
+// A library the test didn't make (outside TMPDIR: ~/storage/web-library,
+// ~/storage/images) seen through a directory of links that can't be
+// written: the server keeps a library disk's changes beside the image when
+// it can (overlay.go), where every other server on that library (a site's
+// own included) would find them; so they go to the scratch DATA instead.
+// An overlay that turns up in the library all the same fails the test.
+function libraryView(images, scratch) {
+    const real = fs.realpathSync(images);
+    const tmp = fs.realpathSync(process.env.TMPDIR || os.tmpdir());
+    if (real === tmp || real.startsWith(tmp + path.sep))
+        return images;
+    const view = path.join(scratch, 'library');
+    fs.mkdirSync(view);
+    for (const f of fs.readdirSync(real))
+        if (f !== 'uploads' && !f.endsWith('.overlay'))
+            fs.symlinkSync(path.join(real, f), path.join(view, f));
+    fs.mkdirSync(path.join(view, 'uploads'));               // the server's, writable
+    fs.chmodSync(view, 0o555);
+    const overlays = () => {
+        const found = new Map();
+        for (const dir of [real, path.join(real, 'uploads')])
+            for (const f of fs.existsSync(dir) ? fs.readdirSync(dir) : [])
+                if (f.endsWith('.overlay'))
+                    found.set(path.join(dir, f), fs.statSync(path.join(dir, f)).mtimeMs);
+        return found;
+    };
+    const before = overlays();
+    process.on('exit', () => {
+        const wrote = [...overlays()].filter(([f, t]) => before.get(f) !== t).map(([f]) => f);
+        if (wrote.length) {
+            console.log(`FAIL: the test wrote into the library ${real}: ${wrote.join(', ')}`);
+            process.exitCode = 1;
+        }
+    });
+    return view;
+}
+
 // startServer: tools/standalone built (go; null without it) and run on
 // --site site, a scratch DATA unless given (its settings.json made from
 // include and relay when there is none); args added. As runGo, and data,
 // settingsFile, bin.
 export async function startServer(site, { images, include, relay, data, args = [], bin } = {}) {
     const scratch = fs.mkdtempSync(path.join(process.env.TMPDIR || os.tmpdir(), 'executor-go-'));
-    process.on('exit', () => fs.rmSync(scratch, { recursive: true, force: true }));   // (bin may outlive stop())
+    process.on('exit', () => {                          // (bin may outlive stop())
+        try {
+            fs.chmodSync(path.join(scratch, 'library'), 0o755);   // libraryView's
+        } catch {}
+        fs.rmSync(scratch, { recursive: true, force: true });
+    });
     const embedded = !bin && process.env.EXECUTOR_STANDALONE_BINARY;
     if (embedded)
         bin = embedded;
@@ -50,6 +92,8 @@ export async function startServer(site, { images, include, relay, data, args = [
         }
     }
     data = data || path.join(scratch, 'data');
+    if (images)
+        images = libraryView(images, scratch);
     const settingsFile = path.join(data, 'settings.json');
     if ((include || relay) && !fs.existsSync(settingsFile)) {
         const network = {};
