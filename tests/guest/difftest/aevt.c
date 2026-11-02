@@ -460,6 +460,62 @@ int main(void)
         }
         AEDisposeDesc(&fd);
         DisposeHandle((Handle)alias);
+        /* A volume (BridgeAgent's LAUNCH "Macintosh HD:" sends the Finder an
+           'odoc' with NewAlias of it): its FSSpec, the record's kind, parent
+           and ID, its full path, and back to an FSSpec */
+        {
+            FSSpec vol;
+            unsigned char *r;
+            short at, n;
+            alias = NULL;
+            err = FSMakeFSSpec(me.vRefNum, fsRtDirID, "\p", &vol);
+            out("vol.spec", "%d parent %ld same volume %s", err, (long)vol.parID,
+                vol.vRefNum == me.vRefNum ? "yes" : "no");
+            out("vol.alias.minimal", "%d", NewAliasMinimal(&vol, &alias));
+            if(alias)
+                DisposeHandle((Handle)alias);
+            alias = NULL;
+            err = NewAlias(NULL, &vol, &alias);
+            out("vol.alias.new", "%d", err);
+            if(err == noErr && alias)
+            {
+                HLock((Handle)alias);
+                r = (unsigned char *)*alias;
+                out("vol.alias.kind", "%d", *(short *)(r + 8));
+                out("vol.alias.parent", "%ld", *(long *)(r + 46));
+                out("vol.alias.id", "%ld", *(long *)(r + 114));
+                out("vol.alias.name.same", "%s",
+                    EqualString(r + 50, vol.name, false, true) ? "yes" : "no");
+                /* the tagged data from 150: tag 2, the full path, with
+                   the volume's name as "VOL" */
+                for(at = 150; at + 4 <= GetHandleSize((Handle)alias); )
+                {
+                    short tag = *(short *)(r + at);
+                    n = *(short *)(r + at + 2);
+                    if(tag == -1)
+                        break;
+                    if(tag == 2)
+                        out("vol.alias.path", "VOL%.*s", (int)(n - vol.name[0]),
+                            (char *)r + at + 4 + vol.name[0]);
+                    at += 4 + ((n + 1) & ~1);
+                }
+                AECreateDesc(typeAlias, *alias, GetHandleSize((Handle)alias), &ad);
+                HUnlock((Handle)alias);
+                memset(&got, 0, sizeof got);
+                err = AECoerceDesc(&ad, typeFSS, &fd);
+                out("vol.alis.fss", "%d", err);
+                if(err == noErr)
+                {
+                    memcpy(&got, *fd.dataHandle, sizeof got);
+                    out("vol.alis.fss.same", "%s", got.vRefNum == vol.vRefNum
+                        && got.parID == vol.parID && EqualString(got.name, vol.name, false, true)
+                        ? "yes" : "no");
+                    AEDisposeDesc(&fd);
+                }
+                AEDisposeDesc(&ad);
+                DisposeHandle((Handle)alias);
+            }
+        }
     }
     if(SECTION("layout"))
     {
