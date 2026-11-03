@@ -458,6 +458,60 @@ int main(void)
             out("fss.alis.type", "%.4s", (char *)&ad.descriptorType);
             AEDisposeDesc(&ad);
         }
+        /* A list coerced whole (Navigation Services' reply: BBEdit Lite 6.1
+           coerces its selection, a list of one FSSpec, to 'fss '): one item,
+           two, none; an item that itself needs coercing */
+        {
+            static const struct { const char *key; int items; DescType item, to; } lists[] = {
+                { "one.fss", 1, typeFSS, typeFSS },     { "one.alis", 1, typeFSS, typeAlias },
+                { "two.fss", 2, typeFSS, typeFSS },     { "none.fss", 0, typeFSS, typeFSS },
+                { "one.long.shor", 1, typeLongInteger, typeShortInteger },
+                { "one.long.list", 1, typeLongInteger, typeAEList },
+            };
+            for(int i = 0; i < (int)(sizeof lists / sizeof lists[0]); i++)
+            {
+                AEDesc l, item, result;
+                long n = 7;
+                char k[48];
+                AECreateList(NULL, 0, false, &l);
+                if(lists[i].item == typeFSS)
+                    AECreateDesc(typeFSS, &me, sizeof me, &item);
+                else
+                    AECreateDesc(typeLongInteger, &n, sizeof n, &item);
+                for(int j = 0; j < lists[i].items; j++)
+                    AEPutDesc(&l, 0, &item);
+                AEDisposeDesc(&item);
+                result.descriptorType = typeNull;
+                result.dataHandle = NULL;
+                err = AECoerceDesc(&l, lists[i].to, &result);
+                sprintf(k, "list.%s", lists[i].key);
+                out(k, "%d type %.4s size %ld", err, (char *)&result.descriptorType,
+                    result.dataHandle ? (long)GetHandleSize(result.dataHandle) : -1L);
+                AEDisposeDesc(&result);
+                AEDisposeDesc(&l);
+            }
+        }
+        /* the null descriptor (an object specifier's container for the
+           application; BBEdit Lite 6.1's Save sends itself one) */
+        {
+            static const DescType tos[] = { 'obj ', typeNull, typeChar, typeLongInteger,
+                                            typeAEList, typeAERecord, typeWildCard };
+            for(int i = 0; i < (int)(sizeof tos / sizeof tos[0]); i++)
+            {
+                AEDesc nd, result;
+                char k[48];
+                nd.descriptorType = typeNull;
+                nd.dataHandle = NULL;
+                result.descriptorType = 'XXXX';
+                result.dataHandle = NULL;
+                err = AECoerceDesc(&nd, tos[i], &result);
+                sprintf(k, "null.%.4s", (char *)&tos[i]);
+                out(k, "%d type %.4s size %ld", err, (char *)&result.descriptorType,
+                    result.dataHandle ? (long)GetHandleSize(result.dataHandle) : -1L);
+                if(err == noErr)
+                    AEDisposeDesc(&result);
+            }
+        }
         AEDisposeDesc(&fd);
         DisposeHandle((Handle)alias);
         /* A volume (BridgeAgent's LAUNCH "Macintosh HD:" sends the Finder an

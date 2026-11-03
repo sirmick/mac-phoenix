@@ -1,4 +1,4 @@
-# probe dc51792fbe99237e22eac4b8fb14d99151c9775d71cec51f489923a7e2ed4d80
+# probe 63d81d5250f45fd020c45b1779b40f163a61844f17c506337041c7b058cb9614
 == received
 received.install: 0
 received.process: 0
@@ -220,6 +220,19 @@ coerce.list.fss: 0
 coerce.list.fss.result: fss  70 same file
 coerce.fss.alis: 0
 coerce.fss.alis.type: alis
+coerce.list.one.fss: 0 type fss  size 70
+coerce.list.one.alis: 0 type alis size 186
+coerce.list.two.fss: -1700 type null size -1
+coerce.list.none.fss: -1700 type null size -1
+coerce.list.one.long.shor: 0 type shor size 2
+coerce.list.one.long.list: 0 type list size 36
+coerce.null.obj : -1700 type null size -1
+coerce.null.null: -1700 type null size -1
+coerce.null.TEXT: -1700 type null size -1
+coerce.null.long: -1700 type null size -1
+coerce.null.list: -1700 type null size -1
+coerce.null.reco: -1700 type null size -1
+coerce.null.****: -1700 type null size -1
 coerce.vol.spec: 0 parent 1 same volume yes
 coerce.vol.alias.minimal: 0
 coerce.vol.alias.new: 0
@@ -232,7 +245,7 @@ coerce.vol.alis.fss.same: yes
 == layout
 layout.new: size 90 params at 90 attributes 0 parameters 0
 layout.new.end: ;;;;
-layout.new.bytes: 00 00 00 00 00 00 00 00 00 00 00 5a 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 54 65 73 74 4c 61 79 31 00 01 02 77 70 73
+layout.new.bytes: 00 00 00 00 00 00 00 00 00 00 00 5a 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 54 65 73 74 4c 61 79 31 00 01 02 70 70 73
 layout.appended: 0
 layout.appended.value: TxtW
 layout.cleared44: 0

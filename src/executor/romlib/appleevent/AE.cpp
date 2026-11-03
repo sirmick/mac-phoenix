@@ -637,6 +637,19 @@ static bool coerce_integer(AEDesc *desc, DescType result_type, AEDesc *desc_out)
    an FSSpec, after the installed handlers (8.6, difftest aevt coerce): the
    Finder gives an 'odoc's documents as aliases and applications ask for
    'fss ' (SimpleText and BBEdit Lite 6.1 opened nothing). */
+/* MacPhoenix: a list of one item is that item, coerced (aevt
+   coerce.list.*; Navigation Services' reply, its selection coerced to
+   'fss ' by BBEdit Lite 6.1's Save). Two items or none don't coerce. */
+static bool coerce_single_item_list(AEDesc *desc, DescType result_type, AEDesc *desc_out)
+{
+    GUEST<LONGINT> count;
+    GUEST<AEKeyword> keyword;
+    if(DESC_TYPE(desc) != typeAEList || result_type == typeAERecord
+       || AECountItems(desc, &count) != noErr || count != 1)
+        return false;
+    return AEGetNthDesc(desc, 1, result_type, &keyword, desc_out) == noErr;
+}
+
 static bool coerce_alias(AEDesc *desc, DescType result_type, AEDesc *desc_out)
 {
     DescType from = DESC_TYPE(desc);
@@ -712,7 +725,8 @@ OSErr Executor::C_AECoerceDesc(AEDesc *desc, DescType result_type,
         if(err != noErr)
         {
             if(coerce_integer(desc, result_type, desc_out)
-               || coerce_alias(desc, result_type, desc_out))
+               || coerce_alias(desc, result_type, desc_out)
+               || coerce_single_item_list(desc, result_type, desc_out))
                 AE_RETURN_ERROR(noErr);
             goto fail;
         }
