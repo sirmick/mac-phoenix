@@ -1,5 +1,6 @@
 #include <time/syncint.h>
 #include <time/time.h>
+#include <DeviceMgr.h>
 #include <base/cpu.h>
 #include <PowerCore.h>
 #include <base/debugger.h>
@@ -58,8 +59,29 @@ namespace
     constexpr uint64_t noDeadline = UINT64_MAX;
     uint64_t vDeadline = noDeadline, vLast = 0;
 
+    /* The VIA's timer 1 counter (VIA+$800 low byte, +$A00 high), counting
+       down at 783.36 kHz (IMIII-39) and free-running from $FFFF as on a Mac:
+       MacBench times the CPU against its low byte's top bit (a loop that
+       waits for it to turn over, which a still VIA never does). */
+    void viaTimer(uint64_t usec)
+    {
+        auto *via = (uint8_t *)LM(VIA);
+        if(!via)
+            return;
+        uint16_t t = 0xFFFF - (uint16_t)(usec * 78336 / 100000);
+        via[0x800] = t & 0xFF;
+        via[0xA00] = t >> 8;
+    }
+
+    uint64_t hostUsec()
+    {
+        using namespace std::chrono;
+        return duration_cast<microseconds>(steady_clock::now().time_since_epoch()).count();
+    }
+
     void vclockPoll()
     {
+        viaTimer(vclock_usec());
         if(vDeadline != noDeadline && vclock_usec() >= vDeadline)
         {
             vLast = vDeadline;
@@ -182,6 +204,7 @@ void SyncintTimer::start()
         vclock_poll_hook = vclockPoll;
     else
         syn68k_slice_hook = [] {
+            viaTimer(hostUsec());
             timer.poll();
             hostidle::tick();
         };
