@@ -13,6 +13,7 @@
 // below, not the disk record's launch list (which tab_site.mjs opens). Every
 // target is expected to work: one that doesn't fails the cell, with what it
 // got to (M1.md keeps the table). M1_APPS=Name,Name: only those.
+// M1_QUERY: more of the page's query (debug=fslog, logtraps=NAME...).
 // M1_RESULTS=FILE: one JSON line per application appended. The canvas after
 // each step goes to M1_SHOTS (default ~/storage/tmp/m1/shots) as
 // SYSTEM-NAME-STEP.png. M1_LOG=1: the Worker's console.
@@ -396,8 +397,14 @@ const t = {
         await t.until(async () => (await t.windows()).some((w) => /^M1CW/.test(w.title)), 60000, 'no M1CW project window');
         await t.key('Meta+KeyM');                          // Make
         await t.pause(5000);
+        // made: no "Errors & Warnings" (the failure's shot shows its lines)
+        if ((await t.windows()).some((w) => w.title === 'Errors & Warnings'))
+            throw new Error('Make: "Errors & Warnings"');
         await t.key('Meta+KeyR');                          // Run
-        await t.until(async () => (await t.app()) !== 'CodeWarrior IDE 3.2', 300000, 'the program never ran');
+        await t.until(async () => (await t.app()) === 'Std C Console 68K', 300000, 'the program never ran');
+        // its SIOUX console window, the program's output in it
+        await t.until(async () => (await t.windows()).some((w) => w.title === 'Std C Console 68K.out'), 60000,
+            'no console window');
     },
     // A game: its title screen, then taken on as a player would: a dialog
     // answered by its harmless button (a shareware notice's "Not Yet", never
@@ -457,7 +464,8 @@ if (!server) {
 const browser = await launch();
 async function openTab(target) {
     const query = `?disk=disks/${encodeURIComponent(boot)}&disk=disks/${encodeURIComponent(diskName)}`
-        + `&system=${encodeURIComponent(boot)}${system === '8.6' || target.ppc ? '&ppc=1' : ''}`;
+        + `&system=${encodeURIComponent(boot)}${system === '8.6' || target.ppc ? '&ppc=1' : ''}`
+        + (process.env.M1_QUERY ? `&${process.env.M1_QUERY}` : '');
     if (!page || crashed) {
         const context = page ? page.context() : null;
         if (page)

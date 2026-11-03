@@ -139,4 +139,31 @@ TEST_F(HFSUnmountTest, ForcedClosesFiles)
     EXPECT_FALSE(mounted());
     EXPECT_EQ(nullptr, ROMlib_refnumtofcbp(ref));
 }
+
+/* GetFInfo/SetFInfo of a folder's name: fnfErr, as on a Mac (and on
+   Executor's HFS+ and host volumes), not bdNamErr. CodeWarrior checks
+   its access paths with FSMakeFSSpec then FSpGetFInfo and takes any
+   other error for a folder that isn't there ("Couldn't find project
+   file"). */
+using HFSVolumeTest = HFSUnmountTest;
+TEST_F(HFSVolumeTest, FInfoOfAFolderIsFnfErr)
+{
+    FSSpec spec;
+    EXPECT_EQ(fnfErr, FSMakeFSSpec(vref, 2, name("Folder"), &spec));
+    GUEST<LONGINT> dirID;
+    ASSERT_EQ(noErr, FSpDirCreate(&spec, -1 /* smSystemScript */, &dirID));
+    FInfo fi;
+    EXPECT_EQ(fnfErr, HGetFInfo(vref, 2, name("Folder"), &fi));
+    ASSERT_EQ(noErr, FSMakeFSSpec(vref, 2, name("Folder"), &spec));
+    EXPECT_EQ(fnfErr, FSpGetFInfo(&spec, &fi));
+    memset(&fi, 0, sizeof fi);
+    EXPECT_EQ(fnfErr, FSpSetFInfo(&spec, &fi));
+    /* still bdNamErr for a name that can't be one; fnfErr for none */
+    EXPECT_EQ(bdNamErr, HGetFInfo(vref, 2, name(std::string(40, 'x')), &fi));
+    EXPECT_EQ(fnfErr, HGetFInfo(vref, 2, name("Nothing"), &fi));
+    /* a file is still found */
+    ASSERT_EQ(noErr, HCreate(vref, dirID, name("File"), "ttxt"_4, "TEXT"_4));
+    EXPECT_EQ(noErr, HGetFInfo(vref, dirID, name("File"), &fi));
+    EXPECT_EQ("TEXT"_4, fi.fdType);
+}
 #endif
