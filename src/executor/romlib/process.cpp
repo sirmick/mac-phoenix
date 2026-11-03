@@ -93,7 +93,8 @@ get_size_resource()
  *
  * As on 7.5.5, LaunchApplication only creates the process; it first runs
  * at the launcher's next event call, which switches to it.  A new process
- * starts from the low memory the first process had before its launch. */
+ * starts from the low memory the first process had before its launch,
+ * but for ApplScratch: its launcher's, as on a Mac. */
 
 struct process_info
 {
@@ -135,6 +136,11 @@ struct process_info
     bool desk_accessory = false;
     /* Its launcher supplied the opening Apple event (see process_launch). */
     bool posted_open_event = false;
+    /* Its launcher's ApplScratch: switched low memory that a new process
+       starts with on a Mac (THINK C 6's Run hands the project's runtime
+       stub its data there). */
+    bool appl_scratch_set = false;
+    uint8_t appl_scratch[12] = {};
     Str255 da_name = { 0 };
 
     /* Left by the process that quit and switched to us: screen to redraw,
@@ -1602,6 +1608,8 @@ static void process_body(process_info_t *p)
 {
     wait_turn();
     fresh_world(p);
+    if(p->appl_scratch_set)
+        memcpy(LMGetApplScratch(), p->appl_scratch, sizeof p->appl_scratch);
     p->state = process_info_t::running;
     try
     {
@@ -2165,6 +2173,8 @@ OSErr Executor::process_launch(LaunchParamBlockRec *lpbp)
     p->own_thread = true;
     p->app = *lpbp->launchAppSpec;
     p->launcher = current_process_info->serial_number;
+    memcpy(p->appl_scratch, LMGetApplScratch(), sizeof p->appl_scratch);
+    p->appl_scratch_set = true;
     /* Known as soon as LaunchApplication returns, as on 7.5.5, though the
        process first runs at our next event call: BridgeAgent looks a
        launched application up by its creator straight away. */
@@ -2354,6 +2364,8 @@ OSErr Executor::C_LaunchDeskAccessory(const FSSpec *spec, ConstStringPtr name)
     if(!spec && !name)
         return paramErr;
     p->launcher = current_process_info->serial_number;
+    memcpy(p->appl_scratch, LMGetApplScratch(), sizeof p->appl_scratch);
+    p->appl_scratch_set = true;
     pending_launch = p;
     return noErr;
 }

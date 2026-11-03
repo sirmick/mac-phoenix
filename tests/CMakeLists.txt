@@ -1230,6 +1230,19 @@ set_tests_properties(codewarrior_executor_86 PROPERTIES
   SKIP_RETURN_CODE 77
 )
 
+# THINK C 6 on Executor on 7.6.1's System: Project > Run launches the
+# project through MultiFinder's short 'LC' block, and its runtime stub finds
+# THINK's data in the ApplScratch it starts with.
+add_test(
+  NAME thinkc_run_executor
+  COMMAND bash ${TEST_DIR}/test_thinkc_run_executor.sh --timeout 150 --port 18780
+)
+set_tests_properties(thinkc_run_executor PROPERTIES
+  TIMEOUT 300
+  LABELS "guest;executor"
+  SKIP_RETURN_CODE 77
+)
+
 # MPW Shell (PowerPC) on Executor with 8.6's System: Startup builds the
 # Project, Directory and Build menus (commands found through StdCLib's
 # MakeResolvedPath), a do-script's output redirected to a file.
