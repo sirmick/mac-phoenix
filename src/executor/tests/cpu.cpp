@@ -180,6 +180,17 @@ TEST_F(CPU, ppcAEHandlersThatAreNoAddress)
     EXPECT_EQ(errAEHandlerNotFound, (int16_t)getPowerCore().r[3]);
 }
 
+/* AppleScript 1.4 (9.0.4) passes OpenComponentResFile its placeholder
+   $DEFACED2, no component: answered -1 as for any unknown component, not
+   a fatal "host pointer is not guest-addressable". */
+TEST_F(CPU, ppcComponentThatIsNoAddress)
+{
+    if(syn68k_is_guest_addr_in_window(0xDEFACED2, 1))
+        GTEST_SKIP() << "$DEFACED2 is in a window here";
+    ppcCall(*this, "OpenComponentResFile", { 0xDEFACED2 });
+    EXPECT_EQ(-1, (int16_t)getPowerCore().r[3]);
+}
+
 TEST_F(CPU, breakpoint68K)
 {
     thread_local syn68k_addr_t stoppedD0;

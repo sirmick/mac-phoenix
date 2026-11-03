@@ -4,9 +4,10 @@
  *                                 ==========                                *
  *                                                                           *
  * Needs:                                                                    *
- *     MacTypes.h    Boolean, Ptr, Handle, OSErr, OSType, StringPtr,         *
- *                   Str32, Str31, Str63                                     *
- *     FileMgr.h     CInfoPBPtr, FSSpecPtr, FSSpecArrayPtr                   *
+ *     MacTypes.h          Boolean, Ptr, Handle, OSErr, OSType,              *
+ *                         StringPtr, UInt32, Str32, Str31, Str63            *
+ *     FileMgr.h           CInfoPBPtr, FSSpecPtr, FSSpecArrayPtr             *
+ *     DriverServices.h    OSStatus                                          *
  *                                                                           *
  *                                                                           *
  *****************************************************************************/
@@ -19,6 +20,7 @@
 #include <base/lowglobals.h>
 #include "ExMacTypes.h"
 #include "FileMgr.h"
+#include "DriverServices.h"
 
 #define MODULE_NAME AliasMgr
 #include <base/api-module.h>
@@ -52,7 +54,7 @@ kCreateFolder = 1,
 kDontCreateFolder = 0,
 };
 
-DISPATCHER_TRAP(AliasDispatch, 0xA823, D0W);
+DISPATCHER_TRAP(AliasDispatch, 0xA823, D0<0xFF>);
 
 
 OSErr C_FindFolder(int16_t vRefNum, OSType folderType, Boolean createFolder, GUEST<int16_t> *foundVRefNum, GUEST<int32_t> *foundDirID);PASCAL_SUBTRAP(FindFolder, 0xA823, 0x0000, AliasDispatch);
@@ -68,6 +70,15 @@ OSErr C_FindFolderWithTable(int16_t vRefNum, OSType folderType, Boolean createFo
 // has a GetFolderName with these arguments). Finder Scripting Extension
 // asks it for the Trash's name.
 OSErr C_GetFolderName(int16_t vRefNum, OSType folderType, GUEST<int16_t> *foundVRefNum, StringPtr name);PASCAL_SUBTRAP(GetFolderName, 0xA823, 0x000E, AliasDispatch);
+
+
+using FolderManagerNotificationUPP = UPP<OSStatus(OSType message, void *arg, void *userRefCon)>;
+
+
+OSErr C_FolderManagerRegisterNotificationProc(FolderManagerNotificationUPP notificationProc, void *refCon, UInt32 options);PASCAL_SUBTRAP(FolderManagerRegisterNotificationProc, 0xA823, 0x062F, AliasDispatch);
+
+
+OSErr C_FolderManagerUnregisterNotificationProc(FolderManagerNotificationUPP notificationProc, void *refCon);PASCAL_SUBTRAP(FolderManagerUnregisterNotificationProc, 0xA823, 0x0430, AliasDispatch);
 
 
 OSErr C_NewAlias(FSSpecPtr fromFile, FSSpecPtr target, GUEST<AliasHandle> *alias);PASCAL_SUBTRAP(NewAlias, 0xA823, 0x0002, AliasDispatch);

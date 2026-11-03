@@ -27,10 +27,20 @@ AE_info_t *Executor::ROMlib_ae_private()
     return ae_private;
 }
 
+static AE_zone_tables_h new_zone_tables(THz zone);
+
 inline AE_zone_tables_h get_zone_tables(bool system_p)
 {
     auto info = ae_private;
-    return system_p ? info->system_zone_tables : info->appl_zone_tables;
+    if(system_p)
+        return info->system_zone_tables;
+    /* MacPhoenix: before the first application (9.0.4's AppleScript
+       component sends itself an event from its register routine at
+       startup): tables of the startup's own in the system heap, which the
+       first launch replaces (AE_reinit). */
+    if(!info->appl_zone_tables)
+        info->appl_zone_tables = new_zone_tables(LM(SysZone));
+    return info->appl_zone_tables;
 }
 #define hdlr_table(system_p, class) (*get_zone_tables(system_p))->class##_hdlr_table
 
@@ -75,33 +85,31 @@ void Executor::AE_init(void)
     ae_private = info;
 }
 
-void Executor::AE_reinit(void)
+static AE_zone_tables_h new_zone_tables(THz zone)
 {
-    AE_info_t *info;
-    OSErr err;
+    TheZoneGuard guard(zone);
 
-    info = ae_private;
-
-    TheZoneGuard guard(LM(ApplZone));
-
-    AE_zone_tables_h zone_tables;
-
-    zone_tables
+    AE_zone_tables_h zone_tables
         = (AE_zone_tables_h)NewHandleClear(sizeof(AE_zone_tables_t));
 
-    err = _AE_hdlr_table_alloc(16, 0x80008, 0,
-                               /* #### */
-                               false,
-                               &(*zone_tables)->event_hdlr_table);
-    err = _AE_hdlr_table_alloc(16, 0x80008, 0,
-                               /* #### */
-                               false,
-                               &(*zone_tables)->coercion_hdlr_table);
-    err = _AE_hdlr_table_alloc(16, 0x80008, 0,
-                               /* #### */
-                               false,
-                               &(*zone_tables)->special_hdlr_table);
-    info->appl_zone_tables = zone_tables;
+    _AE_hdlr_table_alloc(16, 0x80008, 0,
+                         /* #### */
+                         false,
+                         &(*zone_tables)->event_hdlr_table);
+    _AE_hdlr_table_alloc(16, 0x80008, 0,
+                         /* #### */
+                         false,
+                         &(*zone_tables)->coercion_hdlr_table);
+    _AE_hdlr_table_alloc(16, 0x80008, 0,
+                         /* #### */
+                         false,
+                         &(*zone_tables)->special_hdlr_table);
+    return zone_tables;
+}
+
+void Executor::AE_reinit(void)
+{
+    ae_private->appl_zone_tables = new_zone_tables(LM(ApplZone));
 }
 
 /* MacPhoenix: an entry's value size (_AE_hdlr_table_alloc's) */

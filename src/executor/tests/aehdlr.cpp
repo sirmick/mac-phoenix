@@ -12,6 +12,7 @@
 #include <base/common.h>
 #include <AppleEvents.h>
 #include <MemoryMgr.h>
+#include <appleevent/apple_events.h>
 
 using namespace Executor;
 
@@ -90,4 +91,26 @@ TEST(AEHdlr, Selector0830LooksUp)
     EXPECT_EQ(noErr, C__AE_hdlr_0830((AE_hdlr_table_h)table, 0, &oapp, &got));
     EXPECT_EQ(42, (int32_t)got.refcon);
     DisposeHandle((Handle)(AE_hdlr_table_h)table);
+}
+
+/* Before the first application there are no application tables (a fresh
+   process's world clears them until its launch makes them): 9.0.4's
+   AppleScript component sends itself an event from its register routine
+   at startup, and the lookup dereferenced the null handle. It now finds
+   tables of the startup's own, and nothing in them. */
+TEST(AEHdlr, ApplicationTablesBeforeTheFirstApplication)
+{
+    if(!ROMlib_ae_private())
+        AE_init();
+    AE_info_t *info = ROMlib_ae_private();
+    GUEST<AE_zone_tables_h> saved = info->appl_zone_tables;
+    info->appl_zone_tables = nullptr;
+
+    GUEST<AEEventHandlerUPP> hdlr;
+    GUEST<int32_t> refcon;
+    EXPECT_EQ(errAEHandlerNotFound,
+              AEGetEventHandler('ascr', 'gdut', &hdlr, &refcon, false));
+    EXPECT_NE(nullptr, (AE_zone_tables_h)info->appl_zone_tables);
+
+    info->appl_zone_tables = saved;
 }
