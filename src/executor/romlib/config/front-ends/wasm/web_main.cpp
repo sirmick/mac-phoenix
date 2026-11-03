@@ -51,6 +51,7 @@
 #include <hfs/hfs.h>
 #include <MemoryMgr.h>
 #include <base/cpu.h>
+#include <error/error.h>
 #include <ProcessMgr.h>
 #include <rsys/process.h>
 #include <SegmentLdr.h>
@@ -136,6 +137,13 @@ EM_JS(void, js_reply_pixels, (int id, int width, int height, const uint8_t *rgba
 EM_JS(void, js_ejected, (const char *path), {
     if (Module.onEjected)
         Module.onEjected(UTF8ToString(path));
+});
+
+/* A fatal error of Executor's: the page says Executor stopped (its own
+   alert is up in the guest meanwhile, waiting for Restart). */
+EM_JS(void, js_fatal, (const char *message), {
+    if (Module.onFatal)
+        Module.onFatal(UTF8ToString(message));
 });
 
 /* Time the front end spent producing frames (rendering, converting). */
@@ -508,6 +516,16 @@ void on_event_poll()
             }
             reply = "null";
         }
+        /* The page's side of Executor stopping (web/tests/tab_stopped.mjs):
+           a fatal error of its own, the wasm trapping (an access out of
+           bounds: far past any memory it has grown to) */
+        else if(op == "test-fatal")
+            gui_fatal("asked for by the page (%s)", arg.c_str());
+        else if(op == "test-trap")
+        {
+            volatile uint32_t *far = (volatile uint32_t *)(uintptr_t)0xFFFFFFF0u;
+            reply = std::to_string(*far);
+        }
         else
             reply = "{\"error\":" + json_string("unknown request " + op) + "}";
         js_reply(id, reply.c_str());
@@ -650,6 +668,7 @@ int main(int argc, char **argv)
     };
     Executor::hostidle::set_yield_hook(on_yield);
     executor_host::set_event_poll_hook(on_event_poll);
+    executor_host::set_fatal_hook([](const char *message) { js_fatal(message); });
     fprintf(stderr, "[web] Executor %dx%d\n", c.width, c.height);
     return executor_host::run(c);
 }
