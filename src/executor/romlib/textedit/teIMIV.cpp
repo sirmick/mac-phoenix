@@ -31,6 +31,10 @@ void Executor::C_TEPinScroll(int16_t dh, int16_t dv, TEHandle te) /* IMIV-57 */
     view_rect = &TEP_VIEW_RECT(tep);
     dest_rect = &TEP_DEST_RECT(tep);
 
+    /* MacPhoenix: the pin only shortens a scroll, never turns it round:
+       dv 0 (TESelView with the selection in view) took the else branch and
+       moved a short text's last line down to the view's bottom (MacPerl's
+       script window drew its first line at the bottom). */
     if(dv > 0)
     {
         int view_rect_top = view_rect->top;
@@ -39,9 +43,9 @@ void Executor::C_TEPinScroll(int16_t dh, int16_t dv, TEHandle te) /* IMIV-57 */
         /* `destRect.top' must stay below `viewRect.bottom' */
 
         if(dest_rect_top + dv > view_rect_top)
-            dv = view_rect_top - dest_rect_top;
+            dv = std::max(view_rect_top - dest_rect_top, 0);
     }
-    else
+    else if(dv < 0)
     {
         Point end_pt;
         int view_rect_bottom = view_rect->bottom;
@@ -62,7 +66,7 @@ void Executor::C_TEPinScroll(int16_t dh, int16_t dv, TEHandle te) /* IMIV-57 */
 
         /* `destRect.bottom' must stay above `viewRect.bottom' */
         if(dest_rect_bottom + dv < view_rect_bottom)
-            dv = view_rect_bottom - dest_rect_bottom;
+            dv = std::min(view_rect_bottom - dest_rect_bottom, 0);
     }
 
     {

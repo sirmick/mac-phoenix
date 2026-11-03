@@ -159,3 +159,31 @@ TEST_F(TextEditWrap, HiliteRegion)
     EXPECT_FALSE(PtInRgn(line1_before, rgn));
     DisposeRgn(rgn);
 }
+
+/* MacPhoenix: MacPerl's script window: a destination rectangle a little
+   inside the view, one short line, TESelView with autoview on after each
+   key. Nothing is out of view, so nothing scrolls; TEPinScroll only
+   shortens a scroll, never reverses it (Executor moved the line down to
+   the view's bottom). */
+TEST_F(TextEditWrap, PinScrollNeverReverses)
+{
+    Rect dest = { 5, 5, 284, 545 }, view = { 0, 0, 279, 425 };
+    te = TENew(&dest, &view);
+    TESetText((Ptr) "Ab", 2, te);
+    TESetSelect(2, 2, te);
+
+    TEAutoView(true, te);
+    TESelView(te);
+    EXPECT_EQ((*te)->destRect.top, 5);
+
+    TEPinScroll(0, 0, te);
+    EXPECT_EQ((*te)->destRect.top, 5);
+    TEPinScroll(0, -50, te); /* the last line is above the view's bottom */
+    EXPECT_EQ((*te)->destRect.top, 5);
+    TEPinScroll(0, 50, te);  /* the first line is below the view's top */
+    EXPECT_EQ((*te)->destRect.top, 5);
+
+    (*te)->destRect.top = -40; /* scrolled up: back down to the top only */
+    TEPinScroll(0, 100, te);
+    EXPECT_EQ((*te)->destRect.top, 0);
+}
