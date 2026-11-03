@@ -191,18 +191,21 @@ std::vector<std::string> EmulatorSubprocess::build_child_args()
         args.push_back(config_->rom_path);
     }
 
+    // Executor: the System's image is mounted too (its applications),
+    // always locked: the System Folder runs from a copy, and the image is
+    // the shared original even with --executor-writable-images.
+    std::string system_img;
+    if (config_->backend_string() == "executor")
+        system_img = executor_systems::system_image(*config_);
     for (const auto& d : config_->disk_paths) {
+        if (!system_img.empty() && d == system_img)
+            continue;
         args.push_back("--disk");
         args.push_back(d);
     }
-    // Executor: the System's image is mounted too (its applications).
-    if (config_->backend_string() == "executor") {
-        std::string img = executor_systems::system_image(*config_);
-        if (!img.empty() && std::find(config_->disk_paths.begin(), config_->disk_paths.end(), img)
-                            == config_->disk_paths.end()) {
-            args.push_back("--disk");
-            args.push_back(img);
-        }
+    if (!system_img.empty()) {
+        args.push_back("--executor-locked-disk");
+        args.push_back(system_img);
     }
     for (const auto& c : config_->cdrom_paths) {
         args.push_back("--cdrom");

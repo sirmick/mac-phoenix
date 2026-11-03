@@ -33,6 +33,9 @@ struct Config
     // CD images (--cdrom): mounted too, and locked even when disks are
     // writable, as a Mac's CD-ROM drive is.
     std::vector<std::string> cdroms;
+    // Disk images mounted locked whatever writable_images says (the
+    // --executor-system image, a shared original).
+    std::vector<std::string> locked_disks;
 
     // Host folders the guest sees as volumes (besides data_dir, which holds
     // the System Folder). Never the host root.

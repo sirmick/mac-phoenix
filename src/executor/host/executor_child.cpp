@@ -303,6 +303,7 @@ int executor_child_main(const config::EmulatorConfig& cfg, IPCBuffer *buf)
     c.unimplemented_log = expand_home(cfg.storage_dir) + "/executor/unimplemented.log";
     c.disks = cfg.disk_paths;
     c.cdroms = cfg.cdrom_paths;
+    c.locked_disks = cfg.executor_locked_disks;
     c.shared_folders = cfg.extfs_paths;
     c.cpu = cfg.cpu_core;
     c.app = expand_home(cfg.executor_app);
@@ -362,6 +363,7 @@ int executor_direct_main(const config::EmulatorConfig& cfg)
     c.unimplemented_log = expand_home(cfg.storage_dir) + "/executor/unimplemented.log";
     c.disks = cfg.disk_paths;
     c.cdroms = cfg.cdrom_paths;
+    c.locked_disks = cfg.executor_locked_disks;
     c.shared_folders = cfg.extfs_paths;
     c.cpu = cfg.cpu_core;
     c.app = expand_home(cfg.executor_app);
