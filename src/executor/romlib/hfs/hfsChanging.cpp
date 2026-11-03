@@ -36,6 +36,17 @@ static OSErr PBFInfoHelper(changeop op, FileParam *pb, LONGINT dirid,
         kind = regular;
         err = ROMlib_findvcbandfile((IOParam *)pb, dirid, &btparamrec, &kind,
                                     false);
+        if(err == bdNamErr)
+        {
+            /* the name is a folder's: a Mac says fnfErr (CodeWarrior's
+               access paths: FSMakeFSSpec, then FSpGetFInfo expecting
+               fnfErr for a folder that is there) */
+            kind = directory;
+            if(ROMlib_findvcbandfile((IOParam *)pb, dirid, &btparamrec, &kind,
+                                     false) == noErr
+               && btparamrec.success)
+                err = fnfErr;
+        }
         if(err == noErr)
         {
             if(btparamrec.success)
