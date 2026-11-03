@@ -254,6 +254,16 @@ What an app draws itself is found by its drawn text (`/api/text`):
   its own.
 * `{"type": "Mac Phoenix"}` types ASCII on a US keyboard into the field
   with the focus: a name, a serial number.
+* `{"serial": "photoshop-3.0.5"}` types that product's serial number from
+  the owner's serials file, `<storage>/serials.json` (private, mode 600,
+  never committed; `MACPHOENIX_SERIALS` names another); `"field": "name"`
+  or `"organization"` types those (the product's, else the file's
+  `defaults`). The value stays out of the bake's key, its log, the web UI's
+  annotations and `--do`'s answer; a screenshot taken while the field shows
+  it (`shot`, a failure's `failed.png`) stays in the work directory. A
+  missing or empty value stops the bake before a guest boots: `serial
+  needed for ID`, exit status 3 (`--all`: `NO SERIAL`). Never a serial
+  from an archive, a keygen or a crack.
 * `{"check": ...}` makes a click prove itself. It fails the bake at that
   step unless the front window shows the text (`text`, exact or a
   prefix), doesn't start any string with `text_not`, or a control has a

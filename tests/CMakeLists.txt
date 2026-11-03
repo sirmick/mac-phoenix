@@ -610,6 +610,14 @@ set_tests_properties(listcell_executor PROPERTIES
   SKIP_RETURN_CODE 77
 )
 
+# provisioning/bake.py's serial steps, with a fake serials file: typed, never
+# logged, annotated or keyed; a missing one stops the bake (no emulator).
+add_test(
+  NAME bake_serials
+  COMMAND ${Python3_EXECUTABLE} ${TEST_DIR}/test_bake_serials.py
+)
+set_tests_properties(bake_serials PROPERTIES TIMEOUT 60 LABELS "provisioning")
+
 # AppleWorks 5.0.3 on Executor's 7.6.1: a word-processing document made,
 # saved on the Host volume, opened again and saved (tests/test_appleworks.py),
 # with its 68k code and with its PowerPC code.

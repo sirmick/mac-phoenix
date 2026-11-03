@@ -55,6 +55,14 @@ bakes also the System's own preferences, and fonts and control panels by
 size: an installer picks fonts' resource IDs afresh, a control panel keeps
 its settings in itself), else the paths that changed.
 
+A step {"serial": ID} types the serial number of product ID from the
+owner's serials file (<storage>/serials.json, MACPHOENIX_SERIALS for
+another; private, never committed): "field": "name" or "organization"
+types those instead (the product's, else the file's "defaults"). The
+value stays out of the bake's key, the logs, the web UI's annotations and
+the explore answers; a missing or empty one stops the bake before the
+guest boots: "serial needed for ID" (exit status 3).
+
 Strings in steps may use {target}, {media}, {boot} (volume names) and
 {system} (the boot disk's System Folder path). A step with "backend"
 runs on that machine only.
@@ -114,6 +122,8 @@ STORAGE = macfetch.STORAGE
 BAKED = os.path.join(STORAGE, "baked")
 IMAGES = os.path.join(STORAGE, "images")
 SESSION = os.path.join(STORAGE, "work", "bake-session.json")
+SERIALS = os.environ.get("MACPHOENIX_SERIALS") or os.path.join(STORAGE, "serials.json")
+SERIAL_NEEDED = 3                       # exit status: a product's serial isn't in the file
 DEFAULT_TARGET = "Install"
 DEFAULT_OS = "7.6.1"
 BACKENDS = {"68k": "uae", "ppc": "kpx", "se": "se", "iici": "iici"}    # machine -> Guest backend (guest.py)
@@ -288,6 +298,50 @@ def current(path, key):
 
 def up_to_date(bake):
     return current(snapshot_path(bake["name"]), bake_key(bake))
+
+
+# ------------------------------------------------------------ serials
+
+class SerialNeeded(Exception):
+    """A product's serial (or name, organization) isn't in the serials file.
+    The message names the product, never a value."""
+
+
+SERIAL_FIELDS = ("serial", "name", "organization")
+
+
+def serial_value(product, field="serial"):
+    """What a {"serial": product} step types: the product's field from the
+    serials file; name and organization fall back to its "defaults"."""
+    if field not in SERIAL_FIELDS:
+        raise ValueError(f"serial step for {product}: field {field!r} is not one of {SERIAL_FIELDS}")
+    try:
+        with open(SERIALS) as f:
+            d = json.load(f)
+    except FileNotFoundError:
+        raise SerialNeeded(f"{field} needed for {product} (no {SERIALS})") from None
+    except ValueError:
+        raise SerialNeeded(f"{field} needed for {product} ({SERIALS} is not JSON)") from None
+    entry = next((p for p in d.get("products", []) if p.get("id") == product), None)
+    if entry is None:
+        raise SerialNeeded(f"{field} needed for {product} (not in {SERIALS})")
+    value = entry.get(field) or ("" if field == "serial" else d.get("defaults", {}).get(field, ""))
+    if not isinstance(value, str) or not value.strip():
+        raise SerialNeeded(f"{field} needed for {product}")
+    if any(ch not in guest_mod.TYPE_KEYS for ch in value):     # the error must not show the character
+        raise SerialNeeded(f"{field} for {product} has a character that can't be typed on a US keyboard")
+    return value
+
+
+def serial_steps(steps):
+    """The {"serial": ...} steps among a bake's (first-boot ones too)."""
+    return [s for s in steps if isinstance(s, dict) and "serial" in s]
+
+
+def check_serials(bake):
+    """Every serial a bake will type is there: before any guest boots."""
+    for s in serial_steps(bake.get("steps", []) + bake.get("first_boot", [])):
+        serial_value(s["serial"], s.get("field", "serial"))
 
 
 # ------------------------------------------------------------ preparing
@@ -533,6 +587,8 @@ class Session:
     def run_step(self, step):
         if "reboot" in step:
             self.reboot()
+        elif "serial" in step:                  # typed from the serials file, never shown
+            self.guest.type_text(serial_value(step["serial"], step.get("field", "serial")))
         else:
             self.guest.run(step)
 
@@ -841,6 +897,7 @@ def bake_one_(bake, force=False, keep=False, log=print, port=None, extra=()):
     """The product's snapshot: one run, or a run per machine merged."""
     if bake.get("kind") == "stage":
         sys.exit(f"{bake['name']}: a stage-only product (no snapshot); build.py puts it on an Installers disk")
+    check_serials(bake)
     out = snapshot_path(bake["name"])
     key = bake_key(bake) if bake.get("kind") != "derive" else None
     if bake.get("kind") == "derive":
@@ -970,6 +1027,8 @@ def bake_all(names, jobs, force):
                            stdout=open(logf, "w"), stderr=subprocess.STDOUT)
         if r.returncode:
             failed.append(b["name"])
+            if r.returncode == SERIAL_NEEDED:   # the log says which product
+                return f"NO SERIAL   {b['name']} (log {logf})"
             return f"FAILED      {b['name']} (log {logf})"
         return f"baked       {b['name']}"
 
@@ -1092,6 +1151,8 @@ class Explore:
             s.guest.annotate(f"{s.bake['name']} explore: {json.dumps(body, ensure_ascii=False)}")
             s.run_step(step)
             self.recorded.append(body)
+            if "serial" in body:                # the field now shows it: no UI text in the answer
+                return {"ok": True, "recorded": body}
             return {"ok": True, "recorded": body, "ui": s.guest.summary()}
         if path == "/finish":
             s.guest.shutdown()
@@ -1166,6 +1227,9 @@ def main():
         return 0
     try:
         bake_one(bake, args.force, args.keep, port=args.port, extra=args.emulator_arg)
+    except SerialNeeded as e:
+        print(f"{bake['name']}: {e}", file=sys.stderr)
+        return SERIAL_NEEDED
     except Exception:
         traceback.print_exc()
         return 1
