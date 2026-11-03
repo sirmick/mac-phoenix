@@ -64,7 +64,7 @@ async function photoshop(t, doc) {
     await t.key('Meta+KeyN');
     await t.until(async () => {
         await alert();
-        return (await t.windows(true)).some((w) => w.kind === DIALOG_KIND && w.title === 'New');
+        return (await t.windows(true)).some((w) => w.title === 'New');   // a movable modal (kind 8)
     }, 20000, 'no New dialog');
     await t.key('Enter');
     await t.until(async () => (await t.windows()).some((w) => /^Untitled/.test(w.title)), 20000, 'no Untitled window');

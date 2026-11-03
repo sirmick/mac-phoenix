@@ -33,9 +33,9 @@ Visual verdicts and owner overrides: `tools/executor/scoreboard_notes.json`.
 |---|---|---|---|---|
 | 7.6.1 | e761 | 78 | 8 | 23 |
 | 7.6.1 | e761ppc | 21 | 3 | 9 |
-| 7.6.1 | w761 | 18 | 0 | 4 |
+| 7.6.1 | w761 | 20 | 0 | 2 |
 | 8.6 | e86 | 77 | 6 | 29 |
-| 8.6 | w86 | 15 | 0 | 8 |
+| 8.6 | w86 | 17 | 0 | 6 |
 
 Gaps in the references and the method:
 
@@ -54,16 +54,15 @@ Rows with a fault, by owner:
 
 | System | Owner | rows |
 |---|---|---|
-| 7.6.1 | creative-pack | 1 |
 | 7.6.1 | fix-dev | 3 |
 | 7.6.1 | fix-games | 27 |
-| 7.6.1 | fix-prod | 3 |
+| 7.6.1 | fix-prod | 2 |
 | 7.6.1 | — | 5 |
-| 8.6 | creative-pack | 2 |
+| 8.6 | creative-pack | 1 |
 | 8.6 | fix-86 | 7 |
 | 8.6 | fix-dev | 2 |
 | 8.6 | fix-games | 22 |
-| 8.6 | fix-prod | 3 |
+| 8.6 | fix-prod | 2 |
 | 8.6 | platinum | 1 |
 | 8.6 | — | 4 |
 
@@ -74,9 +73,9 @@ Rows with a fault, by owner:
 | productivity-system-7 | AppleWorks 5.0.3 ƒ:AppleWorks | fat | runs | fails | runs | runs | e761ppc: PowerPC exception 7 at 00000000 (lr 0081695c) | e761ppc/prod/001.png | fix-prod |
 | productivity-system-7 | ClarisWorks 4.0v4 ƒ:ClarisWorks | 68k | runs |  | runs | runs |  | e761/prod/002.png |  |
 | productivity-system-7 | Microsoft Office 98 ƒ:Microsoft Word | fat | runs | runs |  | runs | (e761ppc: latent: unresolved imports BatteryStatus, IPCListPortsSync, WideMultiply (+14)) | e761ppc/prod2/001.png |  |
-| productivity-system-7 | Aldus Persuasion 3.0 ƒ:Aldus Persuasion 3.0 | 68k | runs |  | fails | runs | w761: no menu, alert "Persuasion requires a valid printer file in the System folder.  None was found.  Please check the Chooser." | w761/productivity/7.6.1-Aldus_Persuasion_3.0.png | fix-prod |
+| productivity-system-7 | Aldus Persuasion 3.0 ƒ:Aldus Persuasion 3.0 | 68k | runs |  | runs | runs |  | e761/prod2/001.png |  |
 | creative-system-7 | Kid Pix 2.5 ƒ:Kid Pix | 68k | runs |  | runs | runs |  | e761/creative/004.png |  |
-| creative-system-7 | Adobe Photoshop 4.0 ƒ:Adobe Photoshop® 4.0 | fat | runs? | runs? | fails | runs? | w761: alert "Could not personalize your copy of Adobe Photoshop® 4.0": its Pipeline Preferences are in creative-7.6.1's System Folder, not the tab's | w761/creative/7.6.1-Adobe_Photoshop_4.0.png | creative-pack |
+| creative-system-7 | Adobe Photoshop 4.0 ƒ:Adobe Photoshop® 4.0 | fat | runs? | runs? | runs | runs? | (e761: front process unknown) | e761/creative/002.png |  |
 | creative-system-7 | Adobe Illustrator 6.0 ƒ:Adobe Illustrator® 6.0 | 68k | runs? |  | runs | runs? | (e761: front process unknown) | e761/creative/001.png |  |
 | creative-system-7 | Macromedia FreeHand 5.5 ƒ:FreeHand 5.5 | 68k | runs |  | runs | runs |  | e761/creative/005.png |  |
 | creative-system-7 | Deneba Canvas 5.0.2 ƒ:Canvas™ 5 | 68k | runs? |  | fails | runs? | w761: no menu: stays behind its splash, no Untitled-1 (Executor; the Quadra and the G3 run it) | w761/creative/7.6.1-Canvas_5.png | fix-prod |
@@ -191,9 +190,9 @@ Rows with a fault, by owner:
 | productivity-system-7 | AppleWorks 5.0.3 ƒ:AppleWorks | fat | runs | runs | runs | (e86: unimplemented PowerPC OpenWD until wash/fix-prod lands) | e86/prod/001.png | platinum |
 | productivity-system-7 | ClarisWorks 4.0v4 ƒ:ClarisWorks | 68k | runs | runs | runs |  | e86/prod/002.png | fix-prod |
 | productivity-system-7 | Microsoft Office 98 ƒ:Microsoft Word | fat | runs | fails | runs | w86: "Word cannot load the Microsoft Office 98 shared libraries": Office First Run (it asks for the owner's CD key) not done on the library disk; it puts them in the System Folder. Expected until then | w86/productivity/8.6-Microsoft_Word.png | creative-pack (owner: CD key) |
-| productivity-system-7 | Aldus Persuasion 3.0 ƒ:Aldus Persuasion 3.0 | 68k | runs | fails | runs | w86: no menu, alert "Persuasion requires a valid printer file in the System folder.  None was found.  Please check the Chooser." | w86/productivity/8.6-Aldus_Persuasion_3.0.png | fix-prod |
+| productivity-system-7 | Aldus Persuasion 3.0 ƒ:Aldus Persuasion 3.0 | 68k | runs | runs | runs |  | e86/prod2/001.png |  |
 | creative-system-7 | Kid Pix 2.5 ƒ:Kid Pix | 68k | runs | runs | runs |  | e86/creative/004.png |  |
-| creative-system-7 | Adobe Photoshop 4.0 ƒ:Adobe Photoshop® 4.0 | fat | runs? | fails | runs? | w86: alert "Could not personalize your copy of Adobe Photoshop® 4.0": its Pipeline Preferences are in creative-7.6.1's System Folder, not the tab's | w86/creative/8.6-Adobe_Photoshop_4.0.png | creative-pack |
+| creative-system-7 | Adobe Photoshop 4.0 ƒ:Adobe Photoshop® 4.0 | fat | runs? | runs | runs? | (e86: front process unknown) | e86/creative/002.png |  |
 | creative-system-7 | Adobe Illustrator 6.0 ƒ:Adobe Illustrator® 6.0 | 68k | runs? | runs | runs? | (e86: front process unknown) | e86/creative/001.png |  |
 | creative-system-7 | Macromedia FreeHand 5.5 ƒ:FreeHand 5.5 | 68k | runs | runs | runs |  | e86/creative/005.png |  |
 | creative-system-7 | Deneba Canvas 5.0.2 ƒ:Canvas™ 5 | 68k | runs? | fails | runs? | w86: no menu: stays behind its splash, no Untitled-1 (Executor; the Quadra and the G3 run it) | w86/creative/8.6-Canvas_5.png | fix-prod |
