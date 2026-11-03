@@ -801,12 +801,6 @@ OSErr Executor::C_AEManagerInfo(AEKeyword keyWord, GUEST<LONGINT> *resultp)
 }
 
 /* stubs added by Cliff after reading documentation on Apple's web site;
-   MacPhoenix: the accessor table, AECallObjectAccessor, the callbacks and
-   AEDisposeToken are in AE_hdlr.cpp */
+   MacPhoenix: the accessor table, AECallObjectAccessor, the callbacks,
+   AEDisposeToken and AEResolve are in AE_hdlr.cpp */
 
-OSErr Executor::C_AEResolve(AEDesc *objectSpecifier, INTEGER callbackFlags,
-                             AEDesc *theToken)
-{
-    traps::log_unimplemented("AEResolve");
-    return noErr;
-}

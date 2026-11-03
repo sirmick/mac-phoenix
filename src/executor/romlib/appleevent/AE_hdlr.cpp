@@ -686,3 +686,85 @@ OSErr Executor::C_AEDisposeToken(AEDesc *theToken)
     }
     AE_RETURN_ERROR(AEDisposeDesc(theToken));
 }
+
+/* AEResolve: an object specifier ('obj ': a record of want, from, form,
+   seld) resolved container first, each step one accessor call, as 8.6's
+   ObjectSupportLib (difftest aevt resolve, G3): the application's
+   container (from: null) is a null token of class null; a container's
+   token goes back through AEDisposeToken once used; a failing step's
+   error is the answer and the token a null descriptor; no accessor is
+   errAEAccessorNotFound. Anything but an 'obj ' (a null descriptor, a
+   plain record) is errAENotAnObjSpec, the token left alone. The key data
+   goes to the accessor as it is: ranges and tests (formRange,
+   formTest) are the accessors' to take apart, no marking callbacks yet.
+   BBEdit Lite 6.1's 'save' handler resolves its document so; MacPerl's
+   'dosc' its window. */
+namespace
+{
+OSErr resolve_specifier(AEDesc *spec, AEDesc *token)
+{
+    AEDesc rec, from, seld, container;
+    GUEST<DescType> want, form, type;
+    GUEST<Size> size;
+    OSErr err = AECoerceDesc(spec, typeAERecord, &rec);
+    if(err != noErr)
+        return errAENotAnObjSpec;
+    from.descriptorType = seld.descriptorType = container.descriptorType = typeNull;
+    from.dataHandle = seld.dataHandle = container.dataHandle = nullptr;
+    if(AEGetParamPtr(&rec, "want"_4, typeType, &type, &want, sizeof want, &size) != noErr
+       || AEGetParamPtr(&rec, "form"_4, typeWildCard, &type, &form, sizeof form, &size) != noErr
+       || AEGetParamDesc(&rec, "from"_4, typeWildCard, &from) != noErr
+       || AEGetParamDesc(&rec, "seld"_4, typeWildCard, &seld) != noErr)
+    {
+        AEDisposeDesc(&from);
+        AEDisposeDesc(&rec);
+        return errAENotAnObjSpec;
+    }
+    AEDisposeDesc(&rec);
+
+    DescType container_class;
+    bool container_resolved = false;
+    if(from.descriptorType == "obj "_4)
+    {
+        AEDesc from_rec;
+        container_class = typeNull;
+        if(AECoerceDesc(&from, typeAERecord, &from_rec) == noErr)
+        {
+            GUEST<DescType> cls;
+            if(AEGetParamPtr(&from_rec, "want"_4, typeType, &type, &cls, sizeof cls, &size) == noErr)
+                container_class = cls;
+            AEDisposeDesc(&from_rec);
+        }
+        err = resolve_specifier(&from, &container);
+        container_resolved = err == noErr;
+    }
+    else
+    {
+        /* the null container, or a token given as the container */
+        container_class = from.descriptorType;
+        err = AEDuplicateDesc(&from, &container);
+    }
+    if(err == noErr)
+        err = AECallObjectAccessor(want, &container, container_class, form, &seld, token);
+    if(container_resolved)
+        AEDisposeToken(&container);
+    else
+        AEDisposeDesc(&container);
+    AEDisposeDesc(&from);
+    AEDisposeDesc(&seld);
+    if(err != noErr)
+    {
+        token->descriptorType = typeNull;
+        token->dataHandle = nullptr;
+    }
+    return err;
+}
+}
+
+OSErr Executor::C_AEResolve(AEDesc *objectSpecifier, INTEGER callbackFlags, AEDesc *theToken)
+{
+    (void)callbackFlags;
+    if(!objectSpecifier || !theToken || objectSpecifier->descriptorType != "obj "_4)
+        AE_RETURN_ERROR(errAENotAnObjSpec);
+    AE_RETURN_ERROR(resolve_specifier(objectSpecifier, theToken));
+}

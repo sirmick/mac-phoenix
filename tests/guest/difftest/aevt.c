@@ -244,6 +244,89 @@ static void osl_call(const char *key, DescType cls, DescType container)
     AEDisposeDesc(&data);
 }
 
+/* AEObjects.h's, which the Multiversal headers don't have yet */
+#define kAEDesiredClassKey 'want'
+#define kAEContainerKey 'from'
+#define kAEKeyFormKey 'form'
+#define kAEKeyDataKey 'seld'
+#define kObjectSpecifierType 'obj '
+#define kAbsolutePositionForm 'indx'
+#define kNameForm 'name'
+#define kNoSuchObjectErr (-1728)
+
+/* resolve: AEResolve walking a specifier's containers to the accessors */
+static int resolve_calls;
+static const char *resolve_key = "";
+
+static pascal OSErr resolve_accessor(DescType desiredClass, const AEDesc *container,
+                                     DescType containerClass, DescType form,
+                                     const AEDesc *selectionData, AEDesc *value, long refcon)
+{
+    char key[48], sel[40];
+    long token;
+    sprintf(key, "%s.accessor%d", resolve_key, ++resolve_calls);
+    if(selectionData->descriptorType == typeLongInteger)
+        sprintf(sel, "long %ld", **(long **)selectionData->dataHandle);
+    else if(selectionData->descriptorType == typeChar)
+        sprintf(sel, "TEXT %.*s", (int)GetHandleSize(selectionData->dataHandle),
+                *selectionData->dataHandle);
+    else
+        sprintf(sel, "%.4s", (char *)&selectionData->descriptorType);
+    hout(key, "%.4s in %.4s (token %.4s %ld) form %.4s seld %s refcon %ld", (char *)&desiredClass,
+         (char *)&containerClass, (char *)&container->descriptorType,
+         container->descriptorType == typeLongInteger ? **(long **)container->dataHandle : 0L,
+         (char *)&form, sel, refcon);
+    if(refcon == 99)
+        return kNoSuchObjectErr;
+    token = refcon * 100 + (selectionData->descriptorType == typeLongInteger
+                            ? **(long **)selectionData->dataHandle : 0);
+    return AECreateDesc(typeLongInteger, &token, sizeof token, value);
+}
+
+static pascal OSErr resolve_dispose(AEDesc *token)
+{
+    char key[48];
+    sprintf(key, "%s.dispose%d", resolve_key, ++resolve_calls);
+    hout(key, "%.4s %ld", (char *)&token->descriptorType,
+         token->descriptorType == typeLongInteger ? **(long **)token->dataHandle : 0L);
+    return AEDisposeDesc(token);
+}
+
+/* an object specifier made as CreateObjSpecifier makes one: a record of
+   want, from, form, seld coerced to 'obj ' */
+static void make_spec(DescType cls, const AEDesc *from, DescType form, const AEDesc *seld, AEDesc *spec)
+{
+    AEDesc rec;
+    AECreateList(NULL, 0, true, &rec);
+    AEPutParamPtr(&rec, kAEDesiredClassKey, typeType, &cls, sizeof cls);
+    AEPutParamDesc(&rec, kAEContainerKey, from);
+    AEPutParamPtr(&rec, kAEKeyFormKey, typeEnumerated, &form, sizeof form);
+    AEPutParamDesc(&rec, kAEKeyDataKey, seld);
+    AECoerceDesc(&rec, kObjectSpecifierType, spec);
+    AEDisposeDesc(&rec);
+}
+
+static void resolve_case(const char *key, const AEDesc *spec)
+{
+    AEDesc token;
+    char k[48];
+    OSErr err;
+    token.descriptorType = 'XXXX';
+    token.dataHandle = NULL;
+    resolve_calls = 0;
+    resolve_key = key;
+    err = AEResolve(spec, 0, &token);
+    flush_h();
+    out(key, "%d", err);
+    sprintf(k, "%s.token", key);
+    if(err == noErr && token.descriptorType == typeLongInteger)
+        out(k, "long %ld", **(long **)token.dataHandle);
+    else
+        out(k, "%.4s", (char *)&token.descriptorType);
+    if(err == noErr)
+        AEDisposeDesc(&token);
+}
+
 static void osl_get(const char *key, DescType cls, DescType container, ProcPtr expect)
 {
     ProcPtr p = (ProcPtr)0xA5A5A5A5;
@@ -402,6 +485,51 @@ int main(void)
         AERemoveObjectAccessor('Cls3', typeWildCard, acc, false);
         AERemoveObjectAccessor(typeWildCard, 'Cnt4', acc, false);
         AERemoveObjectAccessor(typeWildCard, typeWildCard, acc, false);
+    }
+    if(SECTION("resolve"))
+    {
+        ProcPtr acc = (ProcPtr)NewRoutineDescriptor((ProcPtr)resolve_accessor, 0x000FFFE0, kPowerPCISA);
+        ProcPtr dispose = (ProcPtr)NewRoutineDescriptor((ProcPtr)resolve_dispose, 0x000000E0, kPowerPCISA);
+        AEDesc null_desc, one, two, name, win, doc, bad, nowhere, plain;
+        long v1 = 1, v2 = 2;
+        OSErr (*init)(void) = (OSErr (*)(void))probe_bind("ObjectSupportLib", "AEObjectInit");
+        if(init)
+            init();
+        AEInstallObjectAccessor('cwin', typeNull, acc, 1, false);
+        AEInstallObjectAccessor('docu', typeWildCard, acc, 2, false);
+        AEInstallObjectAccessor('fail', typeWildCard, acc, 99, false);
+        AESetObjectCallbacks(NULL, NULL, dispose, NULL, NULL, NULL, NULL);
+        AECreateDesc(typeNull, NULL, 0, &null_desc);
+        AECreateDesc(typeLongInteger, &v1, sizeof v1, &one);
+        AECreateDesc(typeLongInteger, &v2, sizeof v2, &two);
+        AECreateDesc(typeChar, "x", 1, &name);
+        resolve_case("null", &null_desc);
+        make_spec('cwin', &null_desc, kAbsolutePositionForm, &one, &win);
+        resolve_case("window", &win);
+        make_spec('docu', &win, kNameForm, &name, &doc);
+        resolve_case("document", &doc);
+        make_spec('fail', &win, kAbsolutePositionForm, &two, &bad);
+        resolve_case("failing", &bad);
+        make_spec('cwin', &bad, kAbsolutePositionForm, &one, &nowhere);
+        resolve_case("in.failing", &nowhere);
+        AEDisposeDesc(&nowhere);
+        make_spec('none', &null_desc, kAbsolutePositionForm, &one, &nowhere);
+        resolve_case("no.accessor", &nowhere);
+        resolve_case("not.spec", &one);
+        AECreateList(NULL, 0, true, &plain);
+        resolve_case("empty.record", &plain);
+        AEDisposeDesc(&plain);
+        AESetObjectCallbacks(NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+        AERemoveObjectAccessor('cwin', typeNull, acc, false);
+        AERemoveObjectAccessor('docu', typeWildCard, acc, false);
+        AERemoveObjectAccessor('fail', typeWildCard, acc, false);
+        AEDisposeDesc(&nowhere);
+        AEDisposeDesc(&bad);
+        AEDisposeDesc(&doc);
+        AEDisposeDesc(&win);
+        AEDisposeDesc(&name);
+        AEDisposeDesc(&two);
+        AEDisposeDesc(&one);
     }
     if(SECTION("coerce"))
     {
