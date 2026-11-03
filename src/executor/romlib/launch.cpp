@@ -103,7 +103,6 @@ static void beginexecutingat(LONGINT startpc)
 }
 
 size_info_t Executor::size_info;
-LONGINT Executor::ROMlib_creator;
 
 
 uint32_t Executor::ROMlib_version_long;
@@ -334,7 +333,6 @@ static void launchchain(ConstStringPtr fName, INTEGER vRefNum, Boolean resetmemo
 
     process_create(false, finfo.fdType, finfo.fdCreator);
 
-    ROMlib_creator = finfo.fdCreator;
 
     h = GetResource("vers"_4, 2);
     if(!h)
