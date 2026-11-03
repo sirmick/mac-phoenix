@@ -980,10 +980,10 @@ void Executor::C_SetEntries(INTEGER start, INTEGER count, ColorSpec *atable)
         num_colors = max - min + 1;
     }
 
-    /* We need this hack in here so that Wolfenstein 3D will work.
-   * If we don't always update the real color table, the colors
-   * are simply wrong.
-   */
+    /* The table changes whether or not its colours do: the Quadra gives
+       the device's table a new seed for an entry set to the colour it
+       already had (upstream's note: Wolfenstein 3D's colours are wrong
+       without). */
     ctab_changed_p = true;
 
     if(ctab_changed_p)

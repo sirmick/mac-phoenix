@@ -9,6 +9,8 @@
 #include <base/common.h>
 #include <quickdraw/font.h>
 #include <DeviceMgr.h>
+#include <WindowMgr.h>
+#include <quickdraw/cquick.h>
 #else
 #include <Quickdraw.h>
 #include <QDOffscreen.h>
@@ -851,3 +853,45 @@ TEST(QuickDraw, MainDeviceHasDriver)
     EXPECT_NE(0, flags & (1 << 11));      // mainScreen
     EXPECT_NE(nullptr, GetDCtlEntry((*gd)->gdRefNum));
 }
+
+#ifndef EXECUTOR
+/* The 68k application's only (natively there is no screen device): the
+   main device at 8 bits (set for the test where it isn't), restored
+   after. */
+struct MainDevice8
+{
+    GDHandle gd = GetMainDevice();
+    short depth = (*(*gd)->gdPMap)->pixelSize;
+    bool ok;
+    MainDevice8()
+    {
+        if((*gd)->gdType != clutType)
+            SetDepth(gd, 8, 0, 0);
+        ok = (*gd)->gdType == clutType;
+    }
+    ~MainDevice8()
+    {
+        if((*(*gd)->gdPMap)->pixelSize != depth)
+            SetDepth(gd, depth, 0, 0);
+    }
+    CTabHandle table() { return (*(*gd)->gdPMap)->pmTable; }
+};
+
+/* SetEntries gives the device's table a new seed even for an entry set to
+   the colour it has (the Quadra: 40 -> 1096). */
+TEST(QuickDraw, SetEntriesSameColourNewSeed)
+{
+    MainDevice8 dev;
+    if(!dev.ok)
+        GTEST_SKIP() << "no 8-bit main device";
+    int32_t seed = (*dev.table())->ctSeed;
+    ColorSpec cs[1];
+    cs[0] = (*dev.table())->ctTable[5];
+    cs[0].value = 0;
+    GDHandle save = GetGDevice();
+    SetGDevice(dev.gd);
+    SetEntries(5, 0, cs);
+    SetGDevice(save);
+    EXPECT_NE(seed, (int32_t)(*dev.table())->ctSeed);
+}
+#endif
