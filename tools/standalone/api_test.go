@@ -9,6 +9,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"compress/gzip"
 	"crypto/rand"
 	"crypto/sha1"
 	"crypto/sha256"
@@ -363,6 +364,117 @@ func TestAPIVolumeSync(t *testing.T) {
 	l.req("DELETE", "/api/sync/volumes/own", nil)
 	if got := l.json("GET", "/api/sync/volumes/own", nil); got["version"] != version+1 || got["manifest"] != nil {
 		t.Errorf("deleted: %v", got)
+	}
+}
+
+// A bundle's records (volumes.go): sha -> bytes, the head's JSON first
+// when head; ended: the end record was there.
+func readBundle(data []byte, head bool) (map[string]any, map[string][]byte, bool) {
+	var vol map[string]any
+	if head {
+		n := binary.LittleEndian.Uint32(data)
+		json.Unmarshal(data[4:4+n], &vol)
+		data = data[4+n:]
+	}
+	objs := map[string][]byte{}
+	for len(data) >= 36 {
+		n := binary.LittleEndian.Uint32(data[32:])
+		if n == 0 && bytes.Equal(data[:36], bundleEnd[:]) {
+			return vol, objs, len(data) == 36
+		}
+		if int(n) > len(data)-36 {
+			break
+		}
+		objs[hex.EncodeToString(data[:32])] = data[36 : 36+n]
+		data = data[36+n:]
+	}
+	return vol, objs, false
+}
+
+func bundleOf(objs ...[]byte) []byte {
+	var b bytes.Buffer
+	for _, o := range objs {
+		sum := sha256.Sum256(o)
+		bundleRecord(&b, sum[:], o)
+	}
+	b.Write(bundleEnd[:])
+	return b.Bytes()
+}
+
+// The volume in one response, objects up in one request (sync.js).
+func TestAPIVolumeBundle(t *testing.T) {
+	l := liveServer(t)
+	blobs := [][]byte{[]byte("the System"), bytes.Repeat([]byte("Finder "), 50000), {}}
+	files := map[string]any{}
+	shas := []string{}
+	for i, b := range blobs {
+		sum := sha256.Sum256(b)
+		sha := hex.EncodeToString(sum[:])
+		shas = append(shas, sha)
+		files[fmt.Sprintf("/executor/f%d", i)] = map[string]any{"size": float64(len(b)), "mtime": 5.0, "sha": sha}
+	}
+	files["/executor/copy"] = files["/executor/f0"] // the same object twice: sent once
+	manifest := map[string]any{"dirs": []any{"/executor"}, "files": files}
+
+	// Up: one request, gzip-compressed; a record whose bytes aren't its sha refused.
+	var z bytes.Buffer
+	zw := gzip.NewWriter(&z)
+	zw.Write(bundleOf(blobs...))
+	zw.Close()
+	res, data := l.req("POST", "/api/sync/objects/bundle", z.Bytes(), "Content-Encoding: gzip")
+	if res.StatusCode != 200 || !strings.Contains(string(data), `"stored":3`) {
+		t.Fatalf("bundle up: %d %s", res.StatusCode, data)
+	}
+	if v := l.json("POST", "/api/sync/objects/missing", map[string]any{"shas": shas}); fmt.Sprint(v["missing"]) != "[]" {
+		t.Errorf("missing after the bundle: %v", v)
+	}
+	bad := bundleOf([]byte("x"))
+	bad[0] ^= 1
+	if code := l.status("POST", "/api/sync/objects/bundle", bad); code != 400 {
+		t.Errorf("a wrong sha: %d", code)
+	}
+	if code := l.status("POST", "/api/sync/objects/bundle", bundleOf([]byte("x"))[:20]); code != 400 {
+		t.Errorf("cut short: %d", code)
+	}
+	if code := l.status("POST", "/api/sync/objects/bundle", []byte("x"), "Content-Encoding: br"); code != 415 {
+		t.Errorf("brotli: %d", code)
+	}
+	version := l.json("PUT", "/api/sync/volumes/own", map[string]any{"manifest": manifest, "base": 0})["version"]
+
+	// Down: the volume, then each object once, then the end.
+	res, data = l.req("GET", "/api/sync/volumes/own/bundle", nil, "Accept-Encoding: identity")
+	vol, objs, ended := readBundle(data, true)
+	if res.StatusCode != 200 || res.Header.Get("Content-Encoding") != "" || !ended ||
+		vol["version"] != version || !jsonEqual(vol["manifest"], manifest) || len(objs) != 3 {
+		t.Fatalf("bundle down: %d %v %v %d", res.StatusCode, vol, ended, len(objs))
+	}
+	for i, sha := range shas {
+		if !bytes.Equal(objs[sha], blobs[i]) {
+			t.Errorf("object %d: %d bytes", i, len(objs[sha]))
+		}
+	}
+	// gzip-compressed when the browser takes it
+	res, data = l.req("GET", "/api/sync/volumes/own/bundle", nil, "Accept-Encoding: gzip")
+	if res.Header.Get("Content-Encoding") != "gzip" || len(data) > 20000 {
+		t.Fatalf("gzip: %v, %d bytes", res.Header, len(data))
+	}
+	zr, _ := gzip.NewReader(bytes.NewReader(data))
+	plain, _ := io.ReadAll(zr)
+	if _, objs, ended := readBundle(plain, true); !ended || !bytes.Equal(objs[shas[1]], blobs[1]) {
+		t.Errorf("gzip: decoded %d bytes", len(plain))
+	}
+	// None kept: the volume's null, then the end.
+	_, data = l.req("GET", "/api/sync/volumes/other/bundle", nil, "Accept-Encoding: identity")
+	if vol, objs, ended := readBundle(data, true); vol["manifest"] != nil || vol["version"] != 0.0 || len(objs) != 0 || !ended {
+		t.Errorf("none: %v %v", vol, ended)
+	}
+	// An object gone (collected under a newer manifest): the bundle ends short.
+	dir, name := l.s.volumes.objectDir(shas[1])
+	os.Remove(filepath.Join(dir, name))
+	if res, data := l.req("GET", "/api/sync/volumes/own/bundle", nil, "Accept-Encoding: identity"); res.StatusCode != 200 {
+		t.Errorf("an object gone: %d", res.StatusCode)
+	} else if _, _, ended := readBundle(data, true); ended {
+		t.Errorf("an object gone: the bundle still ended")
 	}
 }
 

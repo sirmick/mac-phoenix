@@ -75,14 +75,118 @@ const Sync = {
 
     // ---- volumes ----
     async sha256(bytes) {
-        const d = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
-        return Array.from(d, (b) => b.toString(16).padStart(2, '0')).join('');
+        return this.hex(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)));
     },
 
     async digest(form) {
         return form ? this.sha256(new TextEncoder().encode(JSON.stringify(form))) : null;
     },
+
+    // ---- bundles (tools/standalone volumes.go): records of a sha (32
+    // bytes), a length (uint32 LE) and the bytes, ended by a zero sha and
+    // length. The volume's starts with its JSON { version, manifest } (a
+    // length, uint32 LE, then the text). ----
+    hex(bytes) {
+        return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+    },
+
+    // shas -> bytes as one bundle, gzip-compressed when the browser can.
+    async bundle(objects) {
+        const parts = [];
+        for (const [sha, bytes] of objects) {
+            const head = new Uint8Array(36);
+            head.set(sha.match(/../g).map((h) => parseInt(h, 16)));
+            new DataView(head.buffer).setUint32(32, bytes.length, true);
+            parts.push(head, bytes);
+        }
+        parts.push(new Uint8Array(36));
+        const blob = new Blob(parts);
+        if (typeof CompressionStream === 'undefined')
+            return { body: new Uint8Array(await blob.arrayBuffer()), gzip: false };
+        const z = blob.stream().pipeThrough(new CompressionStream('gzip'));
+        return { body: new Uint8Array(await new Response(z).arrayBuffer()), gzip: true };
+    },
 };
+
+// A bundle as it streams in: take(n) the next n bytes (an Error when it
+// ends first).
+class BundleReader {
+    constructor(body) {
+        this.reader = body.getReader();
+        this.chunks = [];
+        this.have = 0;
+        this.bytes = 0;                  // read so far (decompressed)
+    }
+
+    async take(n) {
+        if (!n)
+            return new Uint8Array(0);
+        while (this.have < n) {
+            const { done, value } = await this.reader.read();
+            if (done)
+                throw new Error('the bundle was cut short');
+            this.chunks.push(value);
+            this.have += value.length;
+        }
+        this.have -= n;
+        this.bytes += n;
+        const first = this.chunks[0];
+        if (first.length >= n) {
+            const out = first.subarray(0, n);
+            if (first.length === n)
+                this.chunks.shift();
+            else
+                this.chunks[0] = first.subarray(n);
+            return out;
+        }
+        const out = new Uint8Array(n);
+        for (let at = 0; at < n;) {
+            const c = this.chunks[0];
+            const k = Math.min(c.length, n - at);
+            out.set(c.subarray(0, k), at);
+            at += k;
+            if (k === c.length)
+                this.chunks.shift();
+            else
+                this.chunks[0] = c.subarray(k);
+        }
+        return out;
+    }
+
+    async u32() {
+        const b = await this.take(4);
+        return new DataView(b.buffer, b.byteOffset, 4).getUint32(0, true);
+    }
+
+    // The next object: { sha, bytes }, or null at the end.
+    async record() {
+        const head = await this.take(36);
+        const n = new DataView(head.buffer, head.byteOffset + 32, 4).getUint32(0, true);
+        if (!n && head.subarray(0, 32).every((b) => !b))
+            return null;
+        const sha = Sync.hex(head.subarray(0, 32));
+        return { sha, bytes: await this.take(n) };
+    }
+
+    cancel() {
+        this.reader.cancel().catch(() => {});
+    }
+}
+
+// Requests a time when a bundle can't be had (a server without them, one
+// cut short): objects/SHA, this many at once.
+const OBJECT_REQUESTS = 6;
+const BUNDLE_UP = 8 << 20;              // bytes of objects a bundle up (before compression)
+
+// fn on each item, at most `width` at once.
+async function eachLimited(items, width, fn) {
+    let next = 0;
+    const run = async () => {
+        while (next < items.length)
+            await fn(items[next++]);
+    };
+    await Promise.all(Array.from({ length: Math.min(width, items.length) }, run));
+}
 
 // ---- standalone (the server says so: main.js): the server is the only
 // store. No OPFS: an overlay is in memory (overlay.js), its blocks come
@@ -145,20 +249,89 @@ const Store = {
         }
     },
 
-    // The volume's manifest (null: nothing kept), its files written into FS.
-    async volumeDown(key) {
+    // The volume's manifest (null: nothing kept), its files written into FS
+    // (not before ready: the module's runtime; what comes before waits).
+    // One request, the bundle, its objects written as they arrive; a
+    // server without bundles, or one cut short: the files still missing
+    // by objects/SHA, a few at once.
+    async volumeDown(key, ready = Promise.resolve()) {
         this.volume = { key, version: 0, digest: null };
-        const { version, manifest } = await Sync.request('GET', `volumes/${key}`);
-        this.volume.version = version;
-        if (!manifest)
-            return null;
-        for (const d of manifest.dirs)
-            FS.mkdirTree(d);
-        for (const [path, f] of Object.entries(manifest.files)) {
-            const res = await Sync.request('GET', `objects/${f.sha}`, undefined, { raw: true });
-            FS.writeFile(path, new Uint8Array(await res.arrayBuffer()));
-            FS.utime(path, f.mtime, f.mtime);
+        const t0 = performance.now();
+        let isReady = false;
+        ready.then(() => { isReady = true; });
+        const waiting = [];
+        let manifest = null, bySha = null, bundled = 0;
+        const write = (sha, bytes) => {
+            for (const path of bySha.get(sha) || []) {
+                const f = manifest.files[path];
+                FS.writeFile(path, bytes);
+                FS.utime(path, f.mtime, f.mtime);
+            }
+            bySha.delete(sha);
+        };
+        let begun = false;
+        const begin = () => {
+            if (!begun)
+                for (const d of manifest.dirs)
+                    FS.mkdirTree(d);
+            begun = true;
+            for (const [sha, bytes] of waiting.splice(0))
+                write(sha, bytes);
+        };
+        const res = await fetch(`api/sync/volumes/${key}/bundle`, { cache: 'no-store', credentials: 'same-origin' });
+        let r = null;
+        if (res.ok && res.body) {
+            try {
+                r = new BundleReader(res.body);
+                const head = JSON.parse(new TextDecoder().decode(await r.take(await r.u32())));
+                this.volume.version = head.version;
+                manifest = head.manifest;
+            } catch (e) {
+                console.log(`[web] Executor's disk: no bundle (${e.message || e})`);
+                r.cancel();
+                r = null;
+            }
         }
+        if (!r) {
+            const got = await Sync.request('GET', `volumes/${key}`);
+            this.volume.version = got.version;
+            manifest = got.manifest;
+        }
+        if (!manifest) {
+            if (r)
+                r.cancel();
+            return null;
+        }
+        bySha = new Map();
+        for (const [path, f] of Object.entries(manifest.files))
+            bySha.set(f.sha, [...(bySha.get(f.sha) || []), path]);
+        if (r) {
+            try {
+                for (let o; (o = await r.record());) {
+                    bundled++;
+                    if (isReady) {
+                        begin();
+                        write(o.sha, o.bytes);
+                    } else
+                        waiting.push([o.sha, o.bytes]);
+                }
+            } catch (e) {
+                if (e instanceof FS.ErrnoError)
+                    throw e;
+                console.log(`[web] Executor's disk: the bundle stopped after ${bundled} files (${e.message || e}): the rest one by one`);
+                r.cancel();
+            }
+        }
+        await ready;
+        begin();
+        const rest = [...bySha.keys()];
+        await eachLimited(rest, OBJECT_REQUESTS, async (sha) => {
+            const res = await Sync.request('GET', `objects/${sha}`, undefined, { raw: true });
+            write(sha, new Uint8Array(await res.arrayBuffer()));
+        });
+        const size = Object.values(manifest.files).reduce((n, f) => n + f.size, 0);
+        console.log(`[web] Executor's disk: ${Object.keys(manifest.files).length} files, ${(size / 1e6).toFixed(1)} MB in `
+                    + `${Math.round(performance.now() - t0)} ms (${bundled} objects bundled, ${rest.length} one by one)`);
         this.volume.digest = await Sync.digest(manifest);
         return manifest;
     },
@@ -174,10 +347,7 @@ const Store = {
         for (let attempt = 0; attempt < 3; attempt++) {
             const { missing } = await Sync.request('POST', 'objects/missing',
                 JSON.stringify({ shas: Object.values(form.files).map((f) => f.sha) }));
-            for (const sha of missing) {
-                const path = Object.keys(form.files).find((p) => form.files[p].sha === sha);
-                await Sync.request('PUT', `objects/${sha}`, bytes.get(sha) || FS.readFile(path));
-            }
+            await this.objectsUp(form, bytes, missing);
             try {
                 const { version } = await Sync.request('PUT', `volumes/${this.volume.key}`,
                     JSON.stringify({ manifest: form, base: this.volume.version }));
@@ -191,6 +361,34 @@ const Store = {
                     this.volume.version = e.version;
             }
         }
+    },
+
+    // The objects the server lacks, in bundles of BUNDLE_UP bytes or so
+    // (objects/bundle); a server without them: objects/SHA, a few at once.
+    noBundles: false,
+    async objectsUp(form, bytes, missing) {
+        const pathOf = new Map(Object.entries(form.files).map(([p, f]) => [f.sha, p]));
+        const read = (sha) => bytes.get(sha) || FS.readFile(pathOf.get(sha));
+        let at = 0;
+        while (!this.noBundles && at < missing.length) {
+            const batch = [];
+            for (let size = 0; at < missing.length && (!batch.length || size < BUNDLE_UP); at++) {
+                const data = read(missing[at]);
+                batch.push([missing[at], data]);
+                size += data.length;
+            }
+            const { body, gzip } = await Sync.bundle(batch);
+            const res = await fetch('api/sync/objects/bundle', {
+                method: 'POST', body, cache: 'no-store', credentials: 'same-origin',
+                headers: gzip ? { 'Content-Encoding': 'gzip' } : {} });
+            if (res.status === 404 || res.status === 405 || res.status === 415) {
+                this.noBundles = true;                  // (an older server)
+                at -= batch.length;
+            } else if (!res.ok)
+                throw new Error(`POST objects/bundle: ${res.status}`);
+        }
+        await eachLimited(missing.slice(at), OBJECT_REQUESTS,
+                          (sha) => Sync.request('PUT', `objects/${sha}`, read(sha)));
     },
 
     // A round: every overlay's changes, then the volume (volumeUp: worker.js's,

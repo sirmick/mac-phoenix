@@ -219,6 +219,11 @@ if(NODE_COMMAND AND GO_COMMAND)
     add_test(NAME executor.web.standalone
         COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_standalone.mjs
                 $<TARGET_FILE_DIR:executor-web>)
+    # Executor's volume saved in bundles and restored from one request
+    # (sync.js, volumes.go); without bundles, and from one cut short.
+    add_test(NAME executor.web.volume
+        COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_volume.mjs
+                $<TARGET_FILE_DIR:executor-web>)
     # The Disks panel (disks.js): a disk put in while the Finder runs, a
     # change to it reverted, put away in the Finder; a CD read-only, out by
     # the panel's eject (standalone; EXECUTOR_WEB_SYSTEM the System, picked
@@ -244,7 +249,7 @@ if(NODE_COMMAND AND GO_COMMAND)
     add_test(NAME executor.web.insecure
         COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_insecure.mjs
                 ${CMAKE_BINARY_DIR} ${EXECUTOR_WEB_SYSTEM})
-    set_tests_properties(executor.web.server_lazy executor.web.standalone executor.web.settings
+    set_tests_properties(executor.web.server_lazy executor.web.standalone executor.web.volume executor.web.settings
                          executor.web.claim executor.web.insecure PROPERTIES
         LABELS "executor;web" TIMEOUT 300 SKIP_RETURN_CODE 77 ENVIRONMENT "${EXECUTOR_WEB_ENV}")
 endif()
