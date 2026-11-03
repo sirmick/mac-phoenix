@@ -182,7 +182,8 @@ DISKS = [
      "tags": ["icons", "68k", "ppc"],
      "note": "Custom icons to paste onto folders and files (Get Info, then Paste): The Iconfactory's "
              "classic collection, MacUser's Custom Icon Pack IV (Mac models) and Nitrozac's icons from "
-             "MacAddict #63's CD, with their Read Mes. Mac OS 7.6.1 and 8.6.",
+             "MacAddict #63's CD, with their Read Mes. Mac OS 7.6.1 and 8.6 (the Iconfactory's are "
+             "Mac OS 8.5's 'icns' icons: they show on 8.6, not on 7.6.1).",
      "take": [("icons.img", ["Iconfactory Classic Icons ƒ", "MacUser Custom Icon Pack IV ƒ",
                              "Nitrozac Icons (MacAddict 63) ƒ"])],
      "launch": []},
