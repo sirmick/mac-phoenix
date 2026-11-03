@@ -1,6 +1,8 @@
 {
- "note": "Adobe Illustrator 6.0 (Adobe, 1996), the 68k floppy set (Install-Disk 1, Disks 2–7, ATM's Program Disk), staged only: installing it takes the product's serial number. The archive's folder named after its original owner's serial is left out",
- "kind": "stage",
+ "note": "Adobe Illustrator 6.0 (Adobe, 1996), 68k floppy set (Install-Disk 1, Disks 2-7, ATM's Program Disk, all attached): its Installer VISE run in the guest, Easy Install onto the target, the registration form filled (the owner's serial; Adobe Magazine: No, else its birthday field is required) and cancelled at its modem step, a restart, then a first launch personalised with the owner's name, organization and serial; the registration's folder (what was typed into it) and its reminder in Startup Items are left out. The archive's folder named after its original owner's serial is not used",
+ "kind": "install",
+ "os": "tools-7.6.1",
+ "target": "Applications",
  "disks": [
   {
    "file": "adobe_illustrator_6.0_68k.sit",
@@ -40,5 +42,282 @@
    "file": "adobe_illustrator_6.0_68k.sit",
    "take": "Adobe Illustrator 6.0 (68k)/Read Me First!"
   }
+ ],
+ "steps": [
+  {
+   "launch": "Install-Disk 1:Install Adobe Illustrator® 6.0"
+  },
+  {
+   "wait_for": {
+    "button": "Continue…"
+   },
+   "timeout": 60
+  },
+  {
+   "click": {
+    "button": "Continue…"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Save As…"
+   },
+   "timeout": 60,
+   "note": "the Read Me"
+  },
+  {
+   "click": {
+    "button": "Continue"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Switch Disk"
+   },
+   "timeout": 60
+  },
+  {
+   "click": {
+    "button": "Switch Disk"
+   },
+   "until": {
+    "text": "on the disk “{target}”",
+    "front": true
+   },
+   "max": 30
+  },
+  {
+   "click": {
+    "button": "Install"
+   }
+  },
+  {
+   "wait_for": {
+    "text": "This installation recommends you restart"
+   },
+   "timeout": 60
+  },
+  {
+   "click": {
+    "button": "Continue"
+   }
+  },
+  {
+   "wait_app": "Adobe Illustrator® Registration",
+   "timeout": 900,
+   "note": "Adobe Illustrator Registration, once the files are in: an intro, the region, intros, then the form; its full-screen pages take Return, not always a click"
+  },
+  {
+   "wait_for": {
+    "button": "Continue"
+   },
+   "timeout": 60
+  },
+  {
+   "click": {
+    "button": "Continue"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Other Countries"
+   },
+   "timeout": 60
+  },
+  {
+   "key": "return",
+   "until": {
+    "button": "Cancel"
+   },
+   "max": 8,
+   "note": "US/Canada, then the intros up to the form (the first page with Cancel since the first)"
+  },
+  {
+   "wait": 2
+  },
+  {
+   "serial": "illustrator-6.0"
+  },
+  {
+   "key": "tab"
+  },
+  {
+   "type": "Mac"
+  },
+  {
+   "key": "tab"
+  },
+  {
+   "key": "tab"
+  },
+  {
+   "type": "Phoenix",
+   "note": "the required fields as for Photoshop 4.0's registration; never sent (no modem)"
+  },
+  {
+   "key": "tab"
+  },
+  {
+   "serial": "illustrator-6.0",
+   "field": "organization"
+  },
+  {
+   "key": "tab"
+  },
+  {
+   "type": "1 Infinite Loop"
+  },
+  {
+   "key": "tab"
+  },
+  {
+   "type": "Cupertino"
+  },
+  {
+   "key": "tab"
+  },
+  {
+   "type": "CA"
+  },
+  {
+   "key": "tab"
+  },
+  {
+   "type": "95014"
+  },
+  {
+   "key": "tab"
+  },
+  {
+   "type": "USA"
+  },
+  {
+   "key": "tab"
+  },
+  {
+   "type": "408-996-1010"
+  },
+  {
+   "key": "tab"
+  },
+  {
+   "click": [
+    126,
+    361
+   ],
+   "note": "No, I don't want a free Adobe Magazine subscription"
+  },
+  {
+   "key": "return"
+  },
+  {
+   "wait_for": {
+    "button": "Market Screen Company Combo"
+   },
+   "timeout": 60,
+   "note": "Market Survey: nothing required"
+  },
+  {
+   "key": "return"
+  },
+  {
+   "wait_for": {
+    "button": "Find it for me"
+   },
+   "timeout": 60,
+   "note": "Port Selection (the modem): on to the failed attempt, whose Cancel ends the registration"
+  },
+  {
+   "click": {
+    "button": "OK"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Retry"
+   },
+   "timeout": 120
+  },
+  {
+   "click": {
+    "button": "Cancel"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "OK"
+   },
+   "timeout": 60,
+   "note": "reminded to register in 14 days"
+  },
+  {
+   "click": {
+    "button": "OK"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Restart"
+   },
+   "timeout": 900
+  },
+  {
+   "click": {
+    "button": "Restart"
+   }
+  },
+  {
+   "wait_finder": 240
+  },
+  {
+   "launch": "{target}:Adobe Illustrator® 6.0:Adobe Illustrator® 6.0"
+  },
+  {
+   "wait_for": {
+    "button": "Quit"
+   },
+   "timeout": 120,
+   "note": "Personalize: Name, Organization, Serial Number"
+  },
+  {
+   "serial": "illustrator-6.0",
+   "field": "name"
+  },
+  {
+   "key": "tab"
+  },
+  {
+   "serial": "illustrator-6.0",
+   "field": "organization"
+  },
+  {
+   "key": "tab"
+  },
+  {
+   "serial": "illustrator-6.0"
+  },
+  {
+   "click": {
+    "button": "OK"
+   }
+  },
+  {
+   "wait": 30
+  },
+  {
+   "close": "Adobe Illustrator® 6.0"
+  }
+ ],
+ "exclude": [
+  "Adobe Illustrator® Registration"
+ ],
+ "system_exclude": [
+  "Startup Items:Adobe Illustrator Reminder"
+ ],
+ "expect": [
+  "Adobe Illustrator® 6.0"
+ ],
+ "launch": [
+  "Adobe Illustrator® 6.0:Adobe Illustrator® 6.0"
  ]
 }
