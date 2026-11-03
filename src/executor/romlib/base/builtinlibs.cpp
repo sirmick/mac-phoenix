@@ -4,6 +4,7 @@
 #include <base/traps.h>
 #include <OSUtil.h>
 #include <MemoryMgr.h>
+#include <AppleEvents.h>
 #include <rsys/cfm.h>
 #include <PEFBinaryFormat.h>
 #include <unordered_map>
@@ -113,12 +114,41 @@ namespace
     };
 }
 
+/* MacPhoenix: Apple's ObjectSupportLib tells the AppleEvent Manager it
+   is there with handlers that are no address: AERemoveEventHandler('Stan',
+   'ford', 'Bite', true), then AEInstallEventHandler('Berk', 'eley', 'Win ',
+   0, false). Neither can be passed on as a pointer (the 68k patch on the
+   dispatcher, Executor's handler table): where the window it falls in is
+   smaller than natively (the tab's 64 MB pool), that's the fatal "host
+   pointer is not guest-addressable" (CodeWarrior IDE 3.2 with PowerPC, M1
+   #6). Answered as if done, and logged; natively the value was kept and
+   never called. */
+static bool ae_handler_not_an_address(const char *name, PowerCore& cpu)
+{
+    bool install = !strcmp(name, "AEInstallEventHandler");
+    if(!install && strcmp(name, "AERemoveEventHandler"))
+        return false;
+    uint32_t hdlr = cpu.r[5];
+    if(!hdlr || syn68k_is_guest_mapped((uintptr_t)SYN68K_TO_US(hdlr), 2))
+        return false;
+    auto code = [](uint32_t v) {
+        return std::string{ char(v >> 24), char(v >> 16), char(v >> 8), char(v) };
+    };
+    fprintf(stderr, "[Executor] PowerPC %s('%s', '%s', $%08X): the handler is no address, answered %s\n",
+            name, code(cpu.r[3]).c_str(), code(cpu.r[4]).c_str(), hdlr,
+            install ? "noErr" : "errAEHandlerNotFound");
+    cpu.r[3] = install ? noErr : errAEHandlerNotFound;
+    return true;
+}
+
 uint32_t builtinlibs::handleSC(PowerCore& cpu)
 {
     PPCCallback *cb = guestvalues::GuestTypeTraits<PPCCallback*>::reg_to_host(cpu.CIA - 8);
     int index = cb - callbacks;
     if(index >= 0 && index < nCallbacks)
     {
+        if(cb->name && cb->name[0] == 'A' && ae_handler_not_an_address(cb->name, cpu))
+            return cpu.lr;
         if(cb->implementation)
         {
             /* The call site, for the trap log (--executor-logtraps): a
