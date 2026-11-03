@@ -94,6 +94,13 @@ Flags hold for the run and are never saved; `settings.json` holds the
 rest. `os.UserConfigDir()` is `~/.config` (or `$XDG_CONFIG_HOME`) on
 Linux, `~/Library/Application Support` on macOS, `%AppData%` on Windows.
 
+While Executor starts, the tab shows its steps over the screen until the
+first frame (`web/executor/loading.js`): the module (about 70 MB the
+first time: megabytes and percent as it streams, then compiling; after
+that from the browser's Cache Storage, revalidated by ETag), the disks,
+the files the server keeps (Executor's disk, the disks' changes), the Mac
+starting. A step that fails says so there.
+
 ## Settings
 
 One file, version 2, nested by category, described by

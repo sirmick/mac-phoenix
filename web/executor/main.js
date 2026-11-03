@@ -29,6 +29,8 @@
 // page says it needs it): the server is the only store: disks read by
 // Range as needed, their changes and Executor's volume kept on the server
 // (sync.js: Store), the last of them in a beacon when the page goes.
+// Until Executor's first frame, loading.js shows the start's steps over the
+// screen (the module's download from the Worker, 'progress').
 // Uploads are this visit's: disk images held in memory, other files copied
 // onto Executor's volume (kept with it). One tab is in control
 // (api/session); the others show its screen until they take control or it
@@ -100,13 +102,18 @@ async function remove(name) {
 const imageIds = {};
 const plainKey = (name, size, time) => `${name}-${size}-${time}`.replace(/[^\w.-]/g, '_');
 
-async function fetchDisk(url) {
+// starting: the progress to the loading panel's Disks step (else the status).
+async function fetchDisk(url, { starting = false } = {}) {
     const absolute = new URL(url, location.href).href;
     const name = decodeURIComponent(new URL(absolute).pathname.split('/').pop());
     const progress = (got, total) => {
+        if (starting)
+            return Loading.step('disks', { got, total });
         status.textContent = total ? `Loading ${name}… ${Math.floor(got * 100 / total)}%`
                                    : `Loading ${name}… ${(got / 1e6).toFixed(0)} MB`;
     };
+    if (starting)
+        Loading.step('disks', { detail: `${name}…` });
     // A Range request for its first byte: a 206 says the server (and any
     // proxy) gives ranges, and the size.
     const lazy = params.get('lazy');
@@ -191,14 +198,21 @@ async function fetchDisks() {
     await modeKnown;
     await Settings.ready;
     loadLibrary();
-    for (const url of [...params.getAll('disk'), ...picked()]) {
+    const urls = [...params.getAll('disk'), ...picked()];
+    let failed = 0;
+    for (const url of urls) {
         try {
-            const file = await fetchDisk(url);
+            const file = await fetchDisk(url, { starting: true });
             sessionFiles = sessionFiles.filter((f) => f.name !== file.name).concat(file);
         } catch (e) {
+            failed++;
             status.textContent = `Cannot load ${url}: ${e.message}`;
         }
     }
+    // (read by Range: as Executor needs them, not now)
+    Loading.step('disks', { state: failed ? 'error' : 'done',
+                            detail: !urls.length ? 'none' : failed ? `${failed} of ${urls.length} not loaded`
+                                  : urls.length === 1 ? '1 disk' : `${urls.length} disks` });
 }
 
 // Disk images are writable through an overlay (overlay.js) kept by the
@@ -665,6 +679,7 @@ function lostClaim(code) {
     reload.id = 'reload';
     reload.textContent = 'Reload';
     reload.onclick = () => location.reload();
+    Loading.end();
     status.replaceChildren(code === 403 ? 'The server has restarted and another browser has it now. '
                                         : 'The server has restarted: reload this page to go on. ', reload);
     status.classList.add('lost');
@@ -691,6 +706,7 @@ async function watch() {
     if (s && s.control)
         return takeControl(s);
     viewer.hidden = false;
+    Loading.end();
     if (!claimLost)
         status.textContent = s ? 'Executor is open in another tab: watching it here' : 'The server can\'t be reached';
     let img = box.querySelector('img');
@@ -719,6 +735,7 @@ function executorStopped(reason) {
     window.executor.stopped = reason;
     console.log(`[web] Executor stopped: ${reason}`);
     autoShot(`stopped: ${reason}`);
+    Loading.end();
     if (claimLost)
         return;
     const again = document.createElement('button');
@@ -798,10 +815,17 @@ async function start() {
         status.classList.remove('lost');
         status.removeAttribute('role');
     }
-    status.textContent = 'Loading Executor…';
+    status.textContent = '';
+    Loading.begin();
+    box.replaceChildren(Loading.el);
 
-    // The Worker loads the module while the disks still download.
+    // The Worker loads the module while the disks still download; it
+    // says how far it has got from the start ('progress': loading.js).
     worker = new Worker('worker.js');
+    worker.addEventListener('message', (e) => {
+        if (e.data.type === 'progress' && mine === generation)
+            Loading.step(e.data.step, e.data);
+    });
     worker.addEventListener('error', (e) => {
         console.error(`worker: ${e.message} at ${e.filename}:${e.lineno}`);
         autoShot(e.message);
@@ -816,7 +840,7 @@ async function start() {
     canvas.width = width;
     canvas.height = height;
     canvas.tabIndex = 0;
-    box.replaceChildren(canvas);
+    box.replaceChildren(canvas, Loading.el);       // (over the screen until its first frame)
     fitCanvas();
     attachInput(canvas);
     cursor = new MacCursor(canvas, () => width);
@@ -839,8 +863,11 @@ async function start() {
         const m = e.data;
         if (m.type === 'frame') {
             // (a notice from the Worker before it stays)
-            if (window.executor.frames++ === 0 && status.textContent === 'Loading Executor…')
-                status.textContent = 'Executor';
+            if (window.executor.frames++ === 0) {
+                Loading.end();
+                if (!status.textContent)
+                    status.textContent = 'Executor';
+            }
         } else if (m.type === 'images') {
             const before = JSON.stringify(imageState);
             for (const i of m.images)

@@ -133,7 +133,38 @@ function imageKey(f) {
 let overlays = [];
 
 Module.noInitialRun = true;
-const runtimeReady = new Promise((resolve) => { Module.onRuntimeInitialized = resolve; });
+const runtimeReady = new Promise((resolve) => { Module.onRuntimeInitialized = resolve; })
+    .then(() => progress('module', { state: 'done', detail: 'ready' }));
+
+// How far the start has got (main.js: Loading): a step's state, detail,
+// bytes.
+const progress = (step, what) => postMessage({ type: 'progress', step, ...what });
+
+// The download's bytes counted as WebAssembly reads them (a few times a
+// second to the page). Compressed in transit, Content-Length is the
+// compressed size; tools/standalone says the real one (X-Decoded-Length).
+function counted(res) {
+    const total = Number(res.headers.get('X-Decoded-Length'))
+        || (res.headers.get('Content-Encoding') ? 0 : Number(res.headers.get('Content-Length')) || 0);
+    if (!res.body || typeof TransformStream === 'undefined')
+        return res;
+    let got = 0, last = -Infinity;
+    const body = res.body.pipeThrough(new TransformStream({
+        transform(chunk, out) {
+            got += chunk.byteLength;
+            if (performance.now() - last > 150) {
+                last = performance.now();
+                progress('module', { got, total });
+            }
+            out.enqueue(chunk);
+        },
+        flush() {
+            progress('module', { got, total });
+            progress('module', { detail: `${(got / 1e6).toFixed(0)} MB: compiling…` });
+        },
+    }));
+    return new Response(body, { status: res.status, statusText: res.statusText, headers: res.headers });
+}
 
 // The module, from Cache Storage when it is current: revalidated with its
 // ETag (a 304 costs nothing), downloaded again only when it changed. Not
@@ -152,21 +183,33 @@ async function wasmResponse() {
         res = await fetch(url, { cache: 'no-store', credentials: 'same-origin',
                                  headers: etag ? { 'If-None-Match': etag } : {} });
     } catch (e) {
-        if (cached)
+        if (cached) {
+            progress('module', { detail: 'from this browser (offline): compiling…' });
             return cached;                       // offline: what we have
+        }
         throw e;
     }
-    if (res.status === 304 && cached)
+    if (res.status === 304 && cached) {
+        progress('module', { detail: 'from this browser: compiling…' });
         return cached;
-    if (cache && res.ok && res.headers.get('ETag'))
-        await cache.put(url, res.clone());
-    return res;
+    }
+    if (!res.ok)
+        throw new Error(`${res.status} ${res.statusText}`);
+    // Kept as it streams (awaited, the put would read it all first: no
+    // progress until the end).
+    if (cache && res.headers.get('ETag'))
+        cache.put(url, res.clone()).catch((e) => console.log(`[web] ${WASM} not cached: ${e}`));
+    return counted(res);
 }
 Module.instantiateWasm = (imports, receive) => {
+    progress('module', { detail: 'downloading…' });
     wasmResponse()
         .then((res) => WebAssembly.instantiateStreaming(res, imports))
         .then((r) => receive(r.instance, r.module))
-        .catch((e) => console.log(`[web] cannot load ${WASM}: ${e}`));
+        .catch((e) => {
+            console.log(`[web] cannot load ${WASM}: ${e}`);
+            progress('module', { state: 'error', detail: `cannot load it: ${e.message || e}` });
+        });
     return {};                                   // asynchronous
 };
 importScripts('executor-web.js');
@@ -367,7 +410,9 @@ async function start(m) {
         Log.start(m.log, 'worker');
         Log.onError = (text) => postMessage({ type: 'error', text });
     }
+    progress('saved', { detail: 'the last session finishing its save…' });
     await previousGone();
+    progress('saved', { state: 'pending', detail: '' });
     canvas = m.canvas;
     ctx = canvas.getContext('2d');
     const images = m.files.filter((f) => IMAGE.test(f.name));
@@ -400,6 +445,9 @@ async function start(m) {
             args.push('--ppc-break', spec);
     await runtimeReady;
     Store.enabled = !!m.standalone;
+    let savedNote = Store.enabled ? '' : 'not kept: no server';
+    if (Store.enabled)
+        progress('saved', { detail: "Executor's disk, from the server…" });
     session = m.log || '';
     if (Store.enabled)
         setInterval(sessionBeat, 2000);
@@ -426,16 +474,22 @@ async function start(m) {
                 saved = kept;
                 console.log(`[web] restored ${Object.keys(kept.files).length} files of the volume from the server`);
             }
+            savedNote = kept ? `${Object.keys(kept.files).length} files on Executor's disk` : 'none yet';
         } catch (e) {
             notice(`Executor's disk: the server can't be reached (${e.message || e}): changes to it are not kept`);
+            savedNote = "the server can't be reached: not kept";
             Store.volumeOff = true;
         }
     }
     FS.mkdir('/host');              // Executor's "Host" volume
     cds = new Set([...(m.cds || []), ...images.map((f) => f.name).filter((n) => CD.test(n))]);
     overlays = [];
-    for (const f of images)
+    for (const f of images) {
+        if (Store.enabled && f.remote)
+            progress('saved', { detail: `your changes to ${f.name}…` });
         overlays.push(await openImage(f));
+    }
+    progress('saved', { state: Store.volumeOff ? 'error' : 'done', detail: savedNote });
     // Mounted with none too: the Disks panel puts images in later.
     FS.mkdir('/uploads');
     FS.mount(OVERLAYFS, { overlays }, '/uploads');
@@ -448,6 +502,7 @@ async function start(m) {
             FS.writeFile(`/executor/Uploads/${f.name}`,
                          new Uint8Array(reader.readAsArrayBuffer(f)));
     }
+    progress('start', { detail: m.system ? `on ${m.system}` : "on Executor's own System" });
     Module.callMain(args);
     // Runs while Executor yields to the browser (about every frame).
     if (Store.enabled) {

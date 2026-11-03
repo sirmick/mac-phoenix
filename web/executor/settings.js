@@ -14,7 +14,9 @@
 //                                          the default); throws an Error
 //                                          with .path for an invalid value
 //   Settings.on('sound.volume', (v) => …)  live changes ('*': any)
-//   Settings.open('input')                 the dialog, at a category
+//   Settings.open('input')                 the dialog, at a category: its
+//                                          changes are a draft until Save
+//                                          (Cancel, Escape: forgotten)
 //   Settings.provide('systems', () => […]) choices the page knows
 //   Settings.restart = async () => …       what "Restart Executor" does
 //   Settings.started()                     Executor (re)started: what the
@@ -361,8 +363,8 @@ const Settings = (() => {
             location.reload();
     }
 
-    // ---- the dialog ----
-    let dialog = null, current = null;
+    // ---- the dialog: a draft of the document, saved whole by Save ----
+    let dialog = null, current = null, draft = null;
 
     function button(text, cls, onclick) {
         const b = document.createElement('button');
@@ -387,7 +389,7 @@ const Settings = (() => {
         h.textContent = 'Settings';
         const kept = document.createElement('span');
         kept.className = 'settings-where';
-        head.append(h, kept, button('✕', 'settings-close', () => dialog.close()));
+        head.append(h, kept);
         const body = document.createElement('div');
         body.className = 'settings-body';
         const nav = document.createElement('nav');
@@ -398,8 +400,17 @@ const Settings = (() => {
         body.append(nav, panel);
         const notices = document.createElement('div');
         notices.className = 'settings-notices';
-        dialog.append(head, notices, body);
+        const actions = document.createElement('footer');
+        actions.className = 'settings-actions';
+        const note = document.createElement('span');
+        note.className = 'settings-unsaved';
+        note.setAttribute('aria-live', 'polite');
+        const save = button('Save', 'settings-save', () => saveDraft());
+        actions.append(note, button('Cancel', 'settings-cancel', () => dialog.close()), save);
+        dialog.append(head, notices, body, actions);
         document.body.append(dialog);
+        // Closed by Cancel, Escape or Save: the draft is gone.
+        dialog.addEventListener('close', () => { draft = null; });
         nav.addEventListener('keydown', (e) => {
             const tabs = [...nav.querySelectorAll('button')];
             const i = tabs.indexOf(document.activeElement);
@@ -438,6 +449,7 @@ const Settings = (() => {
             return;
         }
         const n = schema.properties[current];
+        autoRefresh = [];
         const h = document.createElement('h2');
         h.textContent = n.title;
         const desc = document.createElement('p');
@@ -454,31 +466,113 @@ const Settings = (() => {
             }
             rows.push(row(`${current}.${k}`, p));
         }
-        const foot = document.createElement('footer');
-        foot.append(button(`Reset ${n.title} to defaults`, 'settings-reset', async () => {
-            const reset = {};
-            for (const [k, p] of Object.entries(n.properties))
+        // Defaults into the draft (saved by Save, like any change).
+        const toDefaults = (c) => {
+            for (const [k, p] of Object.entries(schema.properties[c].properties))
                 if (visible(p) && !p.readOnly && (p['x-scope'] !== 'server' || canChangeServer))
-                    reset[k] = null;
-            await set({ [current]: reset }).catch((e) => alert(e.message));
+                    draft[c][k] = defaults(p);
+        };
+        const foot = document.createElement('div');
+        foot.className = 'settings-resets';
+        foot.append(button(`Reset ${n.title} to defaults`, 'settings-reset', () => {
+            toDefaults(current);
             render();
         }));
         if (current === 'advanced')
-            foot.append(button('Reset all settings', 'settings-reset-all', async () => {
-                if (!confirm('Put every setting back to its default?'))
+            foot.append(button('Reset all settings', 'settings-reset-all', () => {
+                if (!confirm('Put every setting back to its default? (Save to keep it.)'))
                     return;
-                const reset = {};
-                for (const [c, cn] of categories()) {
-                    reset[c] = {};
-                    for (const [k, p] of Object.entries(cn.properties))
-                        if (visible(p) && !p.readOnly && (p['x-scope'] !== 'server' || canChangeServer))
-                            reset[c][k] = null;
-                }
-                await set(reset).catch((e) => alert(e.message));
+                for (const [c] of categories())
+                    toDefaults(c);
                 render();
             }));
         panel.replaceChildren(h, desc, ...rows, foot);
         notice();
+        unsaved();
+    }
+
+    // What the draft changes, setting by setting ("machine.ram_mb").
+    function changedPaths() {
+        const out = [];
+        for (const [cat, n] of Object.entries(schema.properties))
+            for (const k of Object.keys(n.properties || {}))
+                if (JSON.stringify(at(draft, `${cat}.${k}`)) !== JSON.stringify(at(doc, `${cat}.${k}`)))
+                    out.push(`${cat}.${k}`);
+        return out;
+    }
+
+    // The footer: Save while there is something to save, and what it
+    // will take to apply.
+    function unsaved() {
+        if (!dialog || !draft)
+            return;
+        const changed = changedPaths();
+        const bad = [...dialog.querySelectorAll('.settings-row.invalid')];
+        dialog.querySelector('.settings-save').disabled = !changed.length;
+        for (const row of dialog.querySelectorAll('.settings-row'))
+            row.classList.toggle('changed', changed.includes(row.dataset.path));
+        const by = (how) => changed.filter((p) => lookup(p)['x-apply'] === how).map((p) => lookup(p).title);
+        const lines = [];
+        if (bad.length)
+            lines.push('A value is not right: see the setting marked in red.');
+        else if (!changed.length)
+            lines.push('No changes.');
+        else {
+            lines.push(`${changed.length} change${changed.length === 1 ? '' : 's'} not saved.`);
+            if (by('executor').length)
+                lines.push(`Executor restarts to apply ${by('executor').join(', ')}.`);
+            if (by('server').length)
+                lines.push(`The server applies ${by('server').join(', ')} when it starts again.`);
+        }
+        const note = dialog.querySelector('.settings-unsaved');
+        note.textContent = lines.join(' ');
+        note.classList.toggle('error', !!bad.length);
+    }
+
+    // A setting's error, under it (its category shown).
+    function showError(path, msg) {
+        const rowPath = path.replace(/\[.*$/, '').split('.').slice(0, 2).join('.');
+        if (!lookup(rowPath)) {
+            dialog.querySelector('.settings-unsaved').textContent = msg;
+            return;
+        }
+        if (current !== rowPath.split('.')[0]) {
+            current = rowPath.split('.')[0];
+            render();
+        }
+        const row = dialog.querySelector(`.settings-row[data-path="${rowPath}"]`);
+        if (row) {
+            row.querySelector('.settings-error').textContent = msg.replace(`${rowPath}: `, '');
+            row.classList.add('invalid');
+        }
+        unsaved();
+    }
+
+    // Save: the draft's changes in one patch (checked whole: none of it
+    // kept if any of it is wrong), then the dialog closes.
+    async function saveDraft() {
+        const bad = dialog.querySelector('.settings-row.invalid');
+        if (bad) {
+            const c = bad.querySelector('input, select');
+            if (c)
+                c.focus();
+            return;
+        }
+        const patch = {};
+        for (const p of changedPaths()) {
+            const [cat, k] = p.split('.'), v = at(draft, p);
+            (patch[cat] = patch[cat] || {})[k] = v === undefined ? null : clone(v);
+        }
+        const save = dialog.querySelector('.settings-save');
+        save.disabled = true;
+        try {
+            if (Object.keys(patch).length)
+                await set(patch);
+            dialog.close();
+        } catch (e) {
+            showError(e.path || '', e.message);
+            save.disabled = false;
+        }
     }
 
     // One setting: its label, control, help and error.
@@ -492,28 +586,49 @@ const Settings = (() => {
         label.textContent = p.title || path;
         const right = document.createElement('div');
         right.className = 'settings-control';
+        // The help: a tooltip, on the mouse over the setting or the
+        // keyboard's focus in it, and the control's description.
         const help = document.createElement('div');
         help.className = 'settings-help';
+        help.id = `${id}-help`;
+        help.setAttribute('role', 'tooltip');
         help.textContent = p.description || '';
         const error = document.createElement('div');
         error.className = 'settings-error';
         error.setAttribute('role', 'alert');
         const o = override(path);
         const locked = p.readOnly || (p['x-scope'] === 'server' && !canChangeServer);
-        const commit = async (value, control) => {
+        // Into the draft when it is valid; an Error (or an invalid value):
+        // said under it, the draft as it was.
+        const commit = (value) => {
             error.textContent = '';
             r.classList.remove('invalid');
             try {
+                if (value instanceof Error)
+                    throw value;
                 const [cat, key] = path.split('.');
-                await set({ [cat]: { [key]: value } });
-                if (control && control.refresh)
-                    control.refresh();
+                draft = patched(draft, { [cat]: { [key]: value } });
             } catch (e) {
                 error.textContent = e.message.replace(`${path}: `, '');
                 r.classList.add('invalid');
             }
+            for (const f of autoRefresh)
+                f();
+            unsaved();
         };
         const c = control(path, p, id, commit, locked);
+        const target = c.id === id ? c : c.querySelector(`[id="${id}"]`);
+        if (p.description)
+            for (const t of [target, c.querySelector(`[id="${id}-auto"]`)])
+                if (t)
+                    t.setAttribute('aria-describedby', help.id);
+        if (p.description) {
+            const i = document.createElement('span');
+            i.className = 'settings-info';
+            i.setAttribute('aria-hidden', 'true');
+            i.textContent = 'ⓘ';
+            label.append(i);
+        }
         right.append(c);
         if (p['x-apply'] === 'executor' || p['x-apply'] === 'server') {
             const tag = document.createElement('span');
@@ -533,18 +648,24 @@ const Settings = (() => {
             note.textContent = "Set by the server's owner.";
             right.append(note);
         }
-        right.append(help, error);
+        right.append(error);
         r.append(label, right);
+        if (p.description)
+            r.append(help);
         return r;
     }
 
     function control(path, p, id, commit, locked) {
-        const value = at(doc, path);
+        const value = at(draft, path);
         const widget = p['x-widget'];
         const types = [].concat(p.type || []);
         let el;
         if (widget === 'disk-list')
             return diskList(id, value, commit, locked);
+        if (widget === 'screen')
+            return screenSize(id, p, value, commit, locked);
+        if (p['x-auto'])
+            return automatic(path, id, p, value, commit, locked);
         if (p['x-choices']) {
             el = document.createElement('select');
             const names = providers[p['x-choices']] ? providers[p['x-choices']]() : [];
@@ -603,7 +724,7 @@ const Settings = (() => {
             el.type = 'text';
             el.value = value === undefined ? '' : value;
             if (p.readOnly && path === 'advanced.data' && doc.advanced)
-                el.value = doc.advanced.data || '';
+                el.value = doc.advanced.data || '';     // (not in the draft: readOnly)
             if (widget === 'path')
                 el.classList.add('mono');
             if (p.examples) {
@@ -645,11 +766,15 @@ const Settings = (() => {
             const move = (to) => {
                 const v = [...value];
                 v.splice(to, 0, v.splice(i, 1)[0]);
-                commit(v).then(render);
+                commit(v);
+                render();
             };
             const up = button('↑', '', () => move(i - 1));
             const down = button('↓', '', () => move(i + 1));
-            const rm = button('✕', '', () => commit(value.filter((_, j) => j !== i)).then(render));
+            const rm = button('✕', '', () => {
+                commit(value.filter((_, j) => j !== i));
+                render();
+            });
             up.title = 'Earlier';
             down.title = 'Later';
             rm.title = 'Remove (its changes are kept)';
@@ -672,9 +797,150 @@ const Settings = (() => {
             const add = document.createElement('select');
             add.append(new Option('Add a disk…', ''), ...offer.map((d) => new Option(d.title, d.url)));
             add.disabled = locked;
-            add.addEventListener('change', () => add.value && commit([...(value || []), add.value]).then(render));
+            add.addEventListener('change', () => {
+                if (add.value) {
+                    commit([...(value || []), add.value]);
+                    render();
+                }
+            });
             wrap.append(add);
         }
+        return wrap;
+    }
+
+    // A setting with an automatic value (x-auto: the value that means it,
+    // choices and labels): an Auto box, then the choices (or a number),
+    // disabled while it is ticked, showing what Auto picks.
+    const draftSystem = () => (draft && draft.machine && draft.machine.system) || '';
+    const AUTO_PICKS = {
+        'machine.ram_mb': () => (draftSystem() ? 128 : 32),
+        'machine.depth': () => (/(^|\D)(8|9)\.\d/.test(draftSystem()) ? 32 : 8),
+        'display.scale': () => Math.min(4, Math.max(1, Math.round(window.devicePixelRatio || 1))),
+        'network.secure_cookies': () => location.protocol === 'https:',
+    };
+    let autoRefresh = [];               // the shown picks, after a change (the System's)
+
+    function automatic(path, id, p, value, commit, locked) {
+        const auto = p['x-auto'], isAuto = JSON.stringify(value) === JSON.stringify(auto.value);
+        const wrap = document.createElement('span');
+        wrap.className = 'settings-auto';
+        const boxLabel = document.createElement('label');
+        const box = document.createElement('input');
+        box.type = 'checkbox';
+        box.id = `${id}-auto`;
+        box.checked = isAuto;
+        box.disabled = locked;
+        boxLabel.append(box, 'Auto');
+        const pick = AUTO_PICKS[path];
+        let el, read, show;
+        if (auto.choices) {
+            el = document.createElement('select');
+            const label = (v) => {
+                const i = auto.choices.indexOf(v);
+                return i >= 0 ? (auto.labels || [])[i] || String(v) : String(v);
+            };
+            const fill = (extra) => {
+                const vals = [...auto.choices];
+                if (extra !== undefined && !vals.includes(extra))
+                    vals.push(extra);
+                el.replaceChildren(...vals.map((v) => new Option(label(v), JSON.stringify(v))));
+            };
+            show = () => {
+                if (box.checked) {
+                    const v = pick ? pick() : auto.choices[0];
+                    fill(v);
+                    el.value = JSON.stringify(v);
+                    el.options[el.selectedIndex].textContent = `${label(v)} (Auto)`;
+                } else {
+                    const v = at(draft, path);
+                    fill(v);
+                    el.value = JSON.stringify(v);
+                }
+            };
+            read = () => JSON.parse(el.value);
+        } else {
+            el = document.createElement('input');
+            el.type = 'number';
+            if (p.minimum !== undefined)
+                el.min = p.minimum;
+            if (p.maximum !== undefined)
+                el.max = p.maximum;
+            el.step = 1;
+            show = () => {
+                el.value = box.checked ? '' : at(draft, path);
+                el.placeholder = box.checked ? 'any' : '';
+            };
+            read = () => (el.value === '' ? NaN : Number(el.value));
+        }
+        el.id = id;
+        const enable = () => { el.disabled = locked || box.checked; };
+        show();
+        enable();
+        box.addEventListener('change', () => {
+            if (box.checked)
+                commit(auto.value);
+            else    // what Auto picked, now chosen (a number: the default)
+                commit(auto.choices ? read() : (p.default !== auto.value ? p.default : 1));
+            show();
+            enable();
+            if (!box.checked)
+                el.focus();
+        });
+        el.addEventListener('change', () => commit(read()));
+        autoRefresh.push(() => { if (box.checked) show(); });
+        wrap.append(boxLabel, el);
+        return wrap;
+    }
+
+    // The screen's size: the classic Macs' (the schema's examples), or
+    // Custom… with a width and a height.
+    function screenSize(id, p, value, commit, locked) {
+        const wrap = document.createElement('span');
+        wrap.className = 'settings-screen';
+        const sel = document.createElement('select');
+        sel.id = id;
+        sel.disabled = locked;
+        const sizes = p.examples || [];
+        sel.append(...sizes.map((s, i) => new Option((p['x-labels'] || [])[i] || s, s)), new Option('Custom…', 'custom'));
+        const custom = document.createElement('span');
+        custom.className = 'settings-screen-custom';
+        const [w0, h0] = String(value || '').split('x');
+        const number = (suffix, v, label) => {
+            const n = document.createElement('input');
+            n.type = 'number';
+            n.id = `${id}-${suffix}`;
+            n.min = 100;
+            n.max = 9999;
+            n.step = 1;
+            n.value = v || '';
+            n.disabled = locked;
+            n.setAttribute('aria-label', label);
+            return n;
+        };
+        const w = number('w', w0, 'Width'), h = number('h', h0, 'Height');
+        custom.append(w, ' × ', h);
+        const show = () => { custom.hidden = sel.value !== 'custom'; };
+        sel.value = sizes.includes(value) ? value : 'custom';
+        show();
+        const typed = () => {
+            const [a, b] = [w.value, h.value].map(Number);
+            if (![a, b].every((x) => Number.isInteger(x) && x >= 100 && x <= 9999))
+                return commit(new Error('width and height are 100 to 9999 pixels'));
+            commit(`${a}x${b}`);
+        };
+        sel.addEventListener('change', () => {
+            show();
+            if (sel.value === 'custom') {
+                w.focus();
+                typed();
+            } else {
+                [w.value, h.value] = sel.value.split('x');
+                commit(sel.value);
+            }
+        });
+        w.addEventListener('change', typed);
+        h.addEventListener('change', typed);
+        wrap.append(sel, custom);
         return wrap;
     }
 
@@ -684,6 +950,8 @@ const Settings = (() => {
             build();
         if (category)
             current = category;
+        if (!dialog.open)
+            draft = clone(doc);
         render();
         if (!dialog.open)
             dialog.showModal();
