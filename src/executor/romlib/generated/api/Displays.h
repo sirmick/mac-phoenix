@@ -145,6 +145,16 @@ OSErr C_DMGetNameByAVID(uint32_t theID, uint32_t nameFlags, StringPtr name);PASC
 OSErr C_DMSaveScreenPrefs(uint32_t reserved1, uint32_t saveFlags, uint32_t reserved2);PASCAL_SUBTRAP(DMSaveScreenPrefs, 0xABEB, 0x0632, DisplayDispatch);
 
 
+// MacPhoenix: false and noErr, as a 7.6.1 Quadra answers (a probe on
+// the ROM machine). The desktop asks at boot.
+OSErr C_DMQDIsMirroringCapable(Boolean *qdIsMirroringCapable);PASCAL_SUBTRAP(DMQDIsMirroringCapable, 0xABEB, 0x0216, DisplayDispatch);
+
+
+// MacPhoenix: -6226 and the Boolean left alone, as a 7.6.1 Quadra with
+// one screen answers (a probe on the ROM machine).
+OSErr C_DMCanMirrorNow(Boolean *canMirrorNow);PASCAL_SUBTRAP(DMCanMirrorNow, 0xABEB, 0x0217, DisplayDispatch);
+
+
 OSErr C_DMIsMirroringOn(Boolean *isMirroringOn);PASCAL_SUBTRAP(DMIsMirroringOn, 0xABEB, 0x0218, DisplayDispatch);
 
 

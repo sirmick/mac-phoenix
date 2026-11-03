@@ -139,3 +139,22 @@ TEST_F(UnknownSelector, OSDispatchSelector2)
     EXPECT_EQ(0xAA, (uint8_t)buf[8]);
     DisposePtr(buf);
 }
+
+/* subq.w #2,sp; move.l #buf,-(sp); move.l #$021x,d0; _DisplayDispatch;
+   move.w (sp)+,d1 -- DMQDIsMirroringCapable ($16) and DMCanMirrorNow
+   ($17) as a 7.6.1 Quadra with one screen answers them (a probe): noErr
+   and false; -6226 with the Boolean left alone */
+TEST_F(UnknownSelector, DisplayDispatchMirroring)
+{
+    Ptr buf = NewPtrClear(2);
+    uint32_t a = ptr_to_longint(buf);
+    buf[0] = 0xAA;
+    uint32_t d1 = run({ 0x554F, 0x2F3C, (uint16_t)(a >> 16), (uint16_t)a, 0x203C, 0x0000, 0x0216, 0xABEB, 0x321F });
+    EXPECT_EQ(0, d1 & 0xFFFF);
+    EXPECT_EQ(0, (uint8_t)buf[0]);
+    buf[0] = 0xAA;
+    d1 = run({ 0x554F, 0x2F3C, (uint16_t)(a >> 16), (uint16_t)a, 0x203C, 0x0000, 0x0217, 0xABEB, 0x321F });
+    EXPECT_EQ((uint16_t)-6226, d1 & 0xFFFF);
+    EXPECT_EQ(0xAA, (uint8_t)buf[0]);
+    DisposePtr(buf);
+}
