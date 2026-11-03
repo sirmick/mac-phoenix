@@ -91,7 +91,7 @@ function memoryTip(m) {
             `• the module's heap: ${MB(m.heap)} (WebAssembly memory: Executor, its caches, and the Mac's RAM, ${MB(m.ram)})`,
             `• disk caches: ${MB(m.caches)} (library disks' pieces read from the server)`,
             `• disk changes: ${MB(m.changes)} (what the Mac wrote to its disks, kept here)`,
-            `• Executor's volume: ${MB(m.volume)} (its System Folder and files, in memory; estimated from the files' buffers)`,
+            `• Executor's volume: ${MB(m.volume)} (its System Folder and files, in memory; estimated from the files' sizes, counted every 5 s)`,
             'Not counted: the browser\'s own (the page, its scripts, uploaded files), so the total is an estimate.',
             ...(measured ? [`The browser's own measurement of this tab: ${MB(measured)}`
                             + ` (performance.measureUserAgentSpecificMemory, ${Math.round((Date.now() - measuredAt) / 1000)} s ago)`] : [])]

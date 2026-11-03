@@ -229,15 +229,11 @@ const VOLUME = '/executor';
 // What Executor holds, in bytes (the bar's memory meter; an estimate): the
 // module's heap (the Mac's RAM, given, is in it), the disk images' chunks
 // read from the server (RemoteImage) and their changes (Overlay), and the
-// files in its volume (MEMFS: each file's buffer). Not counted: the
+// files in its volume (their sizes, from scanVolume's walk: storeVolume's,
+// or one here when that is more than VOLUME_EVERY old). Not counted: the
 // browser's own (the page, the Worker's JavaScript, uploaded Files).
-function memfsBytes(node) {
-    if (!node)
-        return 0;
-    if (FS.isDir(node.mode))
-        return Object.values(node.contents || {}).reduce((n, c) => n + memfsBytes(c), 0);
-    return node.contents && node.contents.byteLength || 0;
-}
+const VOLUME_EVERY = 5000;
+let volumeBytes = 0, volumeAt = -Infinity;
 function memoryUse(ram) {
     const heap = HEAP8.buffer.byteLength;
     let caches = 0, changes = 0;
@@ -247,12 +243,12 @@ function memoryUse(ram) {
                 caches += c.byteLength;
         changes += o.data.bytes.byteLength;
     }
-    let volume = 0;
-    try {
-        volume = memfsBytes(FS.lookupPath(VOLUME).node);
-    } catch (e) { }
+    if (performance.now() - volumeAt > VOLUME_EVERY)
+        scanVolume();
+    const volume = volumeBytes;
     return { heap, ram, caches, changes, volume, total: heap + caches + changes + volume };
 }
+
 // Not kept: System 7.5's "Shutdown Check", which it makes at startup and
 // deletes at Shut Down; a tab never shuts down, and restored it would
 // bring up the improper-shutdown alert.
@@ -277,6 +273,8 @@ function scanVolume() {
         }
     };
     try { walk(VOLUME); } catch { }
+    volumeBytes = Object.values(files).reduce((n, f) => n + f.size, 0);    // (memoryUse)
+    volumeAt = performance.now();
     return { dirs, files };
 }
 

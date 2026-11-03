@@ -121,13 +121,14 @@ Beside it, Executor's memory (an estimate, worker.js `memoryUse`, with
 each CPU sample): the module's heap (`HEAP8.buffer`, the Mac's RAM in it:
 MemTop, from the module), the library disks' pieces read from the server
 (`RemoteImage` chunks), the disks' changes (`Overlay` data) and Executor's
-volume (`/executor` in MEMFS: the files' buffers). The tooltip gives the
+volume (`/executor` in MEMFS: the files' sizes, from the walk the server
+sync makes (`scanVolume`), or one when that is over 5 s old). The tooltip gives the
 parts; the browser's own memory (the page, its scripts, uploaded files) is
-not counted. On 7.6.1 with the games disk: about 320 MB (heap 256, of it
-RAM 126; caches 44; volume 20). Where the browser measures memory itself
+not counted. On 7.6.1 with the games disk: about 315 MB (heap 256, of it
+RAM 126; caches 44; volume 15). Where the browser measures memory itself
 (`performance.measureUserAgentSpecificMemory`: cross-origin isolated pages,
 Chromium; the tab is), the tooltip gives its figure too, taken at most
-every 10 s (it can wait for a garbage collection): 327 MB there.
+every 10 s (it can wait for a garbage collection): 331 MB there.
 
 ## Not yet
 

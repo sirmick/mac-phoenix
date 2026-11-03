@@ -65,7 +65,7 @@ extern "C" {
 /* ── Constants ───────────────────────────────────────────────────── */
 
 #define IPC_VIDEO_MAGIC 0x4D504850  /* "MPHP" */
-#define IPC_VERSION 4
+#define IPC_VERSION 5
 
 /* Must cover the per-axis max of every mode in
  * src/common/include/video_modes.h (mp::video::kMaxWidth_Ppc /
@@ -228,9 +228,6 @@ typedef struct IPCBuffer {
     char boot_phase[32];
     IPC_ATOMIC_UINT32 checkload_count;
     IPC_ATOMIC_UINT64 boot_start_us; /* CLOCK_MONOTONIC µs */
-    /* Executor: the emulator thread's busy share, per mille + 1 (0: none
-     * yet; the child writes it every half second, /api/status cpu_busy) */
-    IPC_ATOMIC_UINT32 cpu_busy;
 
     /* Current app name (child writes, parent reads for /api/app) */
     char cur_app_name[32];
@@ -292,6 +289,11 @@ typedef struct IPCBuffer {
     /* Frame buffers — packed pixels, width×height×4 bytes per frame.
      * Allocated for max resolution; only width×height bytes are valid. */
     uint8_t frames[IPC_NUM_BUFFERS][IPC_FRAME_SIZE];
+
+    /* Executor: the emulator thread's busy share, per mille + 1 (0: none
+     * yet; the child writes it every half second, /api/status cpu_busy).
+     * New fields go here, at the end, with IPC_VERSION bumped. */
+    IPC_ATOMIC_UINT32 cpu_busy;
 } IPCBuffer;
 
 /* ── Helpers ─────────────────────────────────────────────────────── */
