@@ -57,15 +57,26 @@ const TARGETS = {
             await t.codewarrior();
         } },
         { name: 'THINK Project Manager', app: 'Development:THINK C 6.0 ƒ:THINK C:THINK Project Manager', use: async (t) => {
-            // The Bullseye demo opened from the Open dialog, run (built first).
-            await t.sfOpen(['Development', 'THINK C', 'Demos', 'Bullseye', 'bullseye']);
-            await t.until(async () => (await t.windows()).some((w) => /bullseye/.test(w.title)), 30000, 'no bullseye project window');
-            await t.key('Meta+KeyR');
-            // "Bring the project up to date?" and the like: yes
+            // The Object Bullseye demo opened from the Open dialog, converted
+            // to THINK C 6's format, run (brought up to date first). Not the
+            // plain Bullseye demo: its bullWindow.c doesn't compile against
+            // THINK C 6's headers, on the Quadra either (FillOval's pattern).
+            await t.sfOpen(['Development', 'THINK C', 'Demos', 'OOP Demos', 'Object Bullseye', 'Object B']);
             await t.until(async () => {
-                if ((await t.windows()).some((w) => w.kind === 2))
+                const d = (await t.windows(true)).find((w) => w.kind === DIALOG_KIND);
+                if (d && (d.items || []).some((i) => i.title === 'Convert'))
+                    await t.clickButton('Convert'); // its default is Cancel
+                return (await t.windows()).some((w) => /Object Bullseye/.test(w.title));
+            }, 30000, 'no Object Bullseye project window');
+            await t.key('Meta+KeyR');
+            // "Bring the project up to date?": Update; anything else: its default
+            await t.until(async () => {
+                const d = (await t.windows(true)).find((w) => w.kind === DIALOG_KIND);
+                if (d && (d.items || []).some((i) => i.title === 'Update'))
+                    await t.clickButton('Update');
+                else if (d)
                     await t.key('Enter');
-                return (await t.app()) !== 'THINK Project Manager' || (await t.windows()).some((w) => /Bullseye/.test(w.title));
+                return (await t.app()) !== 'THINK Project Manager';
             }, 180000, 'the demo never ran');
         } },
         { name: 'THINK Pascal 4.5', app: 'Development:Languages ƒ:THINK Pascal 4.5d4 ƒ:Think Pascal:THINK Pascal 4.5d4:THINK Pascal 4.5',
@@ -185,7 +196,7 @@ const TARGETS = {
         ['SimCity 2000® 1.2', 'SimCity 2000® Collection ƒ:SimCity 2000® 1.2', ['Enter']],
         ['Wolfenstein 3D™', 'Wolfenstein 3D 1.0.2 ƒ:Wolfenstein 3D™'],
         ['EV Nova', 'EV Nova 1.0.10 ƒ:EV Nova'], ["Ferazel's Wand", "Ferazel's Wand 1.0.3 ƒ:Ferazel's Wand"],
-        ['Slithereens', 'Slithereens 1.0.1 ƒ:Slithereens'], ['Mars Rising', 'Mars Rising 1.0.2 ƒ:Mars Rising'],
+        ['Slithereens', 'Slithereens 1.0.1 ƒ:Slithereens'], ['Mars Rising', 'Mars Rising 1.0.2 ƒ:Mars Rising', [[465, 86]]],
     ].map(([name, app, start]) => ({ name, app: `Games PPC:${app}`, systems: ['8.6'], use: (t) => t.play(start) })),
 };
 

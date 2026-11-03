@@ -250,10 +250,12 @@ static void mungfmo(ctrip cp, FMOutput *fmop)
 static bool width_entry_mapped(GUEST<WHandle> *whp, int i)
 {
     WHandle h = *whp;
-    if(syn68k_is_guest_mapped((uintptr_t)h, sizeof(GUEST<WPtr>))
-       && (!*h || syn68k_is_guest_mapped((uintptr_t)(WPtr)*h, sizeof(WidthTable))))
+    /* By guest address: a host pointer made from junk can land in another
+       window's memory (natively the RAM is right below the 1 GB pool) */
+    bool mapped = syn68k_is_guest_addr_mapped(whp->raw_host_order(), sizeof(GUEST<WPtr>));
+    if(mapped
+       && (!*h || syn68k_is_guest_addr_mapped(GUEST<WPtr>(*h).raw_host_order(), sizeof(WidthTable))))
         return *h != nullptr;
-    bool mapped = syn68k_is_guest_mapped((uintptr_t)h, sizeof(GUEST<WPtr>));
     fprintf(stderr, "[bad handle] width list entry %d: handle $%08X %s $%08X\n", i,
             whp->raw_host_order(), mapped ? "with master pointer" : "outside memory",
             mapped ? GUEST<WPtr>(*h).raw_host_order() : 0u);
