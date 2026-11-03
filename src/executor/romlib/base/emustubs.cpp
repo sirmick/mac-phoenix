@@ -408,9 +408,9 @@ RAW_68K_IMPLEMENTATION(InitZone68K)
 // TimeMgr.h
 RAW_68K_IMPLEMENTATION(Microseconds)
 {
-    unsigned long ms = msecs_elapsed();
-    EM_D0 = ms * 1000;
-    EM_A0 = ((uint64_t)ms * 1000) >> 32;
+    uint64_t us = usecs_elapsed();
+    EM_D0 = (uint32_t)us;
+    EM_A0 = us >> 32;
     RTS();
 }
 
