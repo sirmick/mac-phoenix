@@ -3,6 +3,7 @@
 // it. Needs the playwright package (NODE_PATH; none: exit 77) and
 // CHROMIUM=PATH for a browser other than the one it expects.
 import fs from 'node:fs';
+import os from 'node:os';
 import { createRequire } from 'node:module';
 import { startServer } from './server.mjs';
 
@@ -32,9 +33,12 @@ function browser() {
                                'chromium-$1/chrome-linux64/chrome');
     return { executablePath: full !== shell && fs.existsSync(full) ? full : shell };
 }
+// (Chromium's singleton socket goes in its TMPDIR, at most 107 bytes of
+// path: a build tree's is too long; the profile stays in ours.)
 export function launch({ args: own = [] } = {}) {
     const args = [...own, ...(process.env.CHROMIUM_ARGS ? process.env.CHROMIUM_ARGS.split(' ') : [])];
-    return chromium.launch({ ...browser(), args });
+    const tmp = os.tmpdir().length < 60 ? os.tmpdir() : '/tmp';
+    return chromium.launch({ ...browser(), args, env: { ...process.env, TMPDIR: tmp } });
 }
 
 // A page of browser (a context of its own: another browser, to the
