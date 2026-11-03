@@ -1,7 +1,7 @@
 # wash-plan: written by Wash as the plan changes.
 # Edit it only between workspaces; plan_set {"from": "<this file>"} loads it.
 
-revision = 127
+revision = 172
 
 [[node]]
   id = "cuts"
@@ -471,8 +471,8 @@ revision = 127
   template = "note"
   parent = "p1"
   body = "(1) Standalone: settings.json without \"version\" refused: default to current. (2) uploads.go: replace=1 drops old overlay before rename. (3) Mixed Mode: stale vector when a SysZone accelerated resource is purged+reloaded. (4) SetBevelButtonContentInfo no dispatcher/selector. (5) BBEdit 6.1 survey while Finder menus up. (6) Servers died ~19:50 2026-11-02. (7) ShutDwnPower/Start skip ROMlib_OurClose. (8) Disks: busy Put Away; ghost icon; hfsPBEject no busy check. (9) font.cpp L757/L965 unchecked width-list derefs. (10) harness needs full Chromium. (11) resMod.cpp direct-append orphans bytes. (12) inputsprocket.cpp:177 Movement 12 B. (13) $A08E paramErr for every selector. (14) MPW New dialog folder pop-up blank. (15) AE 'Berk'/'eley' handler not stored. (16) EV Override 2-colour screen: needs a reference (68k clut probe on the Quadra, or 8-bit modes in the PPC video driver); clut.c merged. (17) localvolume.cpp:658 SetFInfo on a folder paramErr. (18) process.cpp launchProcessSN written back without EPBLength check. (19) THINK PM convert on a read-only image: UpdateResFile gui_assert resMod.cpp:455; hfsPBOpen grants write on a locked volume. (20) ResourceDispatch unknown-selector fallback relies on D0's high byte. (21) ctlMouse.cpp:246 control repeat every 6 ticks: KeyRepThresh? confirm on a Mac with another repeat setting."
-  state = "todo"
-  revision = 89
+  state = "active"
+  revision = 172
 
 [[node]]
   id = "m1-audit"
@@ -530,8 +530,8 @@ revision = 127
   emoji = "🎨"
   template = "package"
   body = "Owner 2026-11-03: the library is light on Adobe/DTP. Selection and status in ~/storage/serials.json (private, mode 600, never committed or baked into keys/records; owner fills 'serial'; empty = skip). Steps: (1) bake.py reads serials from that file (by product id) and types them at the installer's prompt; a missing serial stops the bake and names the product; never use archives' SN# folders, keygens or cracks. (2) Pin missing media (tools/macfetch, Garden mirror) for picks marked 68k/ppc/both. (3) Bake + build images; put WordPerfect 3.5e, Excel 4, Office 98 (already baked) on the tab's Productivity disk. (4) Each pick launched and used on Executor 7.6.1 / 8.6 (tab_m1-style cells); stop on disproportionate apps. ATM last; QuickTime-dependent apps wait for M2. Start when the M1 fixes free a member."
-  state = "active"
-  revision = 80
+  state = "reported"
+  revision = 160
 
 [[node]]
   id = "fix-86-7"
@@ -560,7 +560,7 @@ revision = 127
   needs = ["utils-disk"]
   body = "From the Utilities disk (utils-disk, docs/Provisioning.md results table): on 8.6 PPC Executor answers 'Mac Quadra 900 (20)' and not 32-bit capable (G3: Power Mac 9500/9600, capable); Clockometer sees 68030 with --executor-ppc and 'Unknown processor type' on 8.6; Gestalt.Appl lists 59 (7.6.1) / 65 (8.6) selectors vs the G3's 158; Speedometer 4.0 stuck on its splash (68k and PPC; idle in its event loop); TattleTech exits at once on 7.6.1. Decide what Executor should claim to be (a 68040 Quadra on 7.x 68k; a PowerPC machine on PPC), make Gestalt consistent (gestaltMachineType, gestaltNativeCPUtype, gestaltProcessorType, gestaltAddressingModeAttr, gestaltSysArchitecture...), add common selectors the G3 answers, then Speedometer and TattleTech. difftest probe (sys) for the selectors."
   state = "active"
-  revision = 124
+  revision = 141
 
 [[node]]
   id = "gamebox"
@@ -606,7 +606,7 @@ revision = 127
   template = "package"
   body = "From creative2's results (~/storage/tmp/creative-pack/results.md): Excel 4.0 stops at launch with 'Unknown selector 0x2 for trap OSDispatch'; Photoshop 4.0 says it 'lacks the required hardware or system software' after [unimplemented] OS trap $A074 and DisplayDispatch $16. Implement like a Mac (Process Manager / Display Manager docs; difftest where useful), a gtest each, then both apps launched and used on Executor 7.6.1 (68k). Images: productivity-system-7 / creative-system-7 (serial-personalised: never view screenshots after a serial step; use creative3's masking helper)."
   state = "reported"
-  revision = 118
+  revision = 147
 
 [[node]]
   id = "ui-polish"
@@ -617,3 +617,79 @@ revision = 127
   body = "Owner's notes on the tab UI: (1) Settings > Machine > RAM help text ('0: as the System needs (32 MB on Executor's own, 128 on Apple's). The browser holds it all: ...') is too long: make it short, e.g. '0 = automatic (32 MB for Executor's System, 128 MB for Apple's)'. (2) 'Largest image added (MB)' / 'A disk image the tab adds to the library (written to the disk as it comes)' is unclear: it is the size limit for disk images you upload (Add / drag-and-drop): retitle e.g. 'Largest disk image you can upload (MB)', description 'Bigger uploads are refused.'. Review every setting's title/description for the same plain-English bar. (3) The Disks panel's Library section: a table look (rows: cover/icon, title, tags, size, systems, mounted state; sortable/filterable) instead of the card grid. Both schema copies (web/executor and tools/standalone) stay identical (TestSchemaCopy). Screenshots before/after; tab tests pass."
   state = "reported"
   revision = 123
+
+[[node]]
+  id = "app-hacks"
+  title = "Remove app-specific hacks from Executor; replace guesses with measured Mac behaviour"
+  emoji = "🧽"
+  template = "package"
+  body = "Audit 2026-11-03 (orchestrator's Explore pass). Upstream creator-keyed hacks (all live): launch.cpp:339-350 ('Psyg'/'Psod' flushoften for Lemmings; 'Ult3' + res/resGet.cpp:287-291 zeroes a PREF byte), wind/windMisc.cpp:613-623 + qCGrafPort.cpp:193-200 (EVIL_ILLUSTRATOR_7_HACK, 'ART5' forces white back colour), mman/mman.cpp:1884 (MSWD/ddOr skip code-cache flush), qGDevice.cpp:291 ('RLMZ' noDriver), base/patches.cpp:154 ('KR09' CTB trap), res/resGet.cpp:249 ('rAnd' 128 nil), resGet.cpp:259-276 ICKYHACK (missing PACK -> ALRT -3995), plus unkeyed ones written for one app (windInit.cpp:467, ctlMouse.cpp:152, hfsVolume.cpp:765, qColorMgr.cpp:983 ctab_changed_p, qPaletteMgr.cpp:1139, stdfile.cpp:320-335, ROMlib_memnomove_p, AE_hdlr.cpp:329/370, gestalt.cpp:226-243 gestaltVMAttr hidden, prefs per-app config). Recent borderline: init.cpp:103-128 $FE09 whitelist (MacBench), cfm.cpp:1257-1266 MPLibrary declined (needs nanokernel), Pack8 $0830 meaning guessed (HyperCard), TranslationDispatch $24/$20 guessed, OSDispatch $2 meaning unknown. For each: find the general cause or the measured Mac answer (difftest probes on the Quadra/G3), remove the app check, keep the app working (guest cell), or document why it must stay. Corpus regression: grid + M1 cells."
+  state = "reported"
+  revision = 152
+
+[[node]]
+  id = "bench"
+  title = "Speed table: Executor 68k / PowerPC (native and in the tab) vs the ROM machines (Quadra, G3), with the Utilities disk's benchmarks"
+  emoji = "⏱️"
+  template = "package"
+  body = "Owner 2026-11-03: speed-test Executor in 68k and PPC, and the emulator ROM systems. Benchmarks from the Utilities disk: Speedometer 4.0 (68k+PPC; its splash waits for a click), MacBench 5.0 (PPC only; licence then a test suite), Gauge Series/Clockometer where they finish. Configurations: Executor 7.6.1 68k (mame-68k), Executor 7.6.1 with --executor-ppc, Executor 8.6 PPC (mame-ppc, JIT on/off), each natively and in the tab (wasm, Chromium); ROM machines: Quadra 650 on uae (interpreter, --jit) and mame-68k, G3 on kpx and mame-ppc (--jit, --no-jit), System 7.6.1 / 8.6 as applicable. Same screen size/depth; idlewait off for timing; 3 runs each, median. Result table (scores + relative to a real Quadra 650 / G3 266 where the benchmark gives that) in docs/executor/Speed.md, a script under tools/ to rerun it, screenshots of each benchmark result."
+  state = "active"
+  revision = 137
+
+[[node]]
+  id = "ui-polish-2"
+  title = "Settings dialog: resolution dropdown, explicit Save, help as tooltips; loading progress for Executor"
+  emoji = "✏️"
+  template = "package"
+  parent = "p1"
+  body = "Owner 2026-11-03: (1) Screen size: a dropdown of common classic Mac resolutions (512x342, 512x384, 640x400, 640x480, 800x600, 832x624, 1024x768, 1152x870, 1280x1024 ...) plus 'Custom...' for WxH. (2) An explicit Save button (and Cancel) instead of the X closing and saving; unsaved changes discarded on Cancel/Escape, a 'restart needed' note when applicable. (3) Help text out of the dialog body: shown as mouse-over tooltips (and accessible: title/aria-describedby, keyboard focus shows it). (4) A progress bar or step messages while Executor loads (module download with bytes/percent, System disk fetch, starting the Finder...), replacing the bare 'loading executor'. Both schema copies stay identical; tab tests (settings, standalone, disks) updated; before/after screenshots for the owner."
+  state = "reported"
+  revision = 155
+
+[[node]]
+  id = "sys-additions"
+  title = "Per-disk System Folder additions: app disks carry what their apps install into the System Folder; the tab copies them in on insert"
+  emoji = "🧩"
+  template = "package"
+  parent = "p1"
+  body = "Owner 2026-11-03: per-disk System additions. Provisioning: when a bake installs into the System Folder (Adobe Registration Database, shared libraries, Extensions, Preferences, RSRC folders, Office 98's First Run results), the library disk built by make_library.py carries them in a folder (e.g. ':System Folder Additions:' mirroring System Folder subfolders) plus a manifest in its record. Tab: on insert (and at boot for mounted disks) copy those items into Executor's running System (Extensions/shared libraries need a restart: say so, or copy at boot), never overwrite newer System files, remove them again on eject? (decide: keep them, like an installer would; document). Same for 7.6.1 and 8.6. Test: Photoshop 5.5, PageMaker 6.5, Illustrator 8 launch-and-use in the tab on 8.6 from creative-8.img; Word 98 after First Run is left to the owner. Merge conflicts: creative4 owns the creative bakes; coordinate."
+  state = "done"
+  revision = 170
+
+[[node]]
+  id = "library-metadata"
+  title = "Library disk metadata: what's on each disk"
+  emoji = "🏷️"
+  template = "package"
+  body = "Owner 2026-11-03: \"add meta data on images in the library, so there is some info about what's on the disks.\" Today each <disk>.img.json has title/tags/one-line note/launch (tools/web/make_library.py). Add a per-disk contents list: per item name, version (vers 1), publisher/year, kind (app/game/utility/docs), arch (68k/PPC/fat from cfrg/CODE), size, short description, which Systems it's for, serial/first-run notes; CDs too (top-level folders). Generated from the image where possible + hand descriptions in provisioning (bake/image definitions). Shown in the tab's Library table (expandable row/details) and the Go server listing. Tests + docs."
+  state = "active"
+  revision = 163
+
+[[node]]
+  id = "cpu-meter"
+  title = "Tab top bar: a small CPU meter (emulator thread busy vs sleeping)"
+  emoji = "📈"
+  template = "package"
+  parent = "p1"
+  body = "Owner 2026-11-03: \"add a little cpu meter in the top bar, you could measure the cpu thread sleep time.\" In the wasm tab: the thread running Executor measures time spent idle-waiting (WaitNextEvent/idle sleep, Atomics.wait or equivalent) vs running, per ~0.5-1 s window; the page shows a compact meter (bar or sparkline + % on hover) in the top bar. Cheap (no per-instruction cost), unobtrusive, matches the bar's look. Tests + docs."
+  state = "active"
+  revision = 165
+
+[[node]]
+  id = "creative-exec-3"
+  title = "Executor bugs from the creative pack on 8.6 (Photoshop 4/5.5, Illustrator 8, PageMaker 6.5)"
+  emoji = "🔧"
+  template = "package"
+  needs = ["sys-additions"]
+  body = "From sysadd 724415f6 report and creative4 3801a599: PS4 8.6 'fatal heap error' find_stretch mmansubr.cpp:933 last trap $AAFE during brush stroke; AI8 jumps to 0 at start (unresolved weak imports GetMenuItemRefCon/SetMenuItemRefCon likely); PM6.5 'Please find the RSRC Folder' (Prefs name bake volume 'Applications'); PS5.5 Cmd-S no Save dialog. Details ~/storage/tmp/sys-additions/results.md, docs/executor/M1.md."
+  state = "active"
+  revision = 171
+
+[[node]]
+  id = "works-icons"
+  title = "Microsoft Works 4.0b (Productivity 7.6.1 + 8.6/9) and icon packs (Iconfactory, MacUser IV, Nitrozac)"
+  emoji = "📦"
+  template = "package"
+  body = "Owner 2026-11-03: Works 4.0b on 7.6.1 + 8.6/9; icon packs Iconfactory classic collection, MacUser Custom Icon Pack IV, Nitrozac pack from MacAddict #63. Research + downloads (md5s verified) in ~/storage/tmp/iconresearch (dl/, hits.txt). Works: Macintosh_Garden_Apps_Collection_M/ms-works-4b-us.sit 8326094 md5 0974486b3291991aea1a4b714a1a4b82 (fat installer, writable Disk 1, no serial). Iconfactory: Macintosh_Garden_Apps_I_2019/IconfactoryIcons.sit 6567095 1648b2c9...; MacUser: Macintosh_Garden_Apps_2023_M/MacUser_Custom_Icon_Pack_IV.sit 149443 4dcf9784...; Nitrozac: MacAddict 063 ':Video & Goodies:Nitrozac comics!:Icons!:'."
+  state = "active"
+  revision = 168
