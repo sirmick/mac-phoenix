@@ -13,6 +13,7 @@
 /* get {C}PORT_... accessors */
 #include <quickdraw/cquick.h>
 #include <wind/wind.h>
+#include <hidpi/hidpi.h>
 
 using namespace Executor;
 
@@ -211,6 +212,7 @@ void Executor::C_ShowHide(WindowPtr w, Boolean flag)
         ThePortGuard guard(wmgr_port);
         SetClip(LM(GrayRgn));
         SetEmptyRgn(PORT_VIS_REGION(w));
+        hidpi::window_gone(w);
         PaintBehind(WINDOW_NEXT_WINDOW(w), WINDOW_STRUCT_REGION(w));
         CalcVisBehind(WINDOW_NEXT_WINDOW(w), WINDOW_STRUCT_REGION(w));
 

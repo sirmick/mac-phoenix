@@ -1055,6 +1055,21 @@ INTEGER Executor::C_FindWindowInLayer(Point pt, GUEST<WindowPtr> *window)
     return inContent;
 }
 
+/* LayerDispatch 19 (8.x): FindWindow in the front layer with a window at
+   the point, whichever it is: the window itself, not its layer. */
+INTEGER Executor::C_FindWindowInAnyLayer(Point pt, GUEST<WindowPtr> *window)
+{
+    *window = nullptr;
+    LONGINT pointaslong = ((LONGINT)pt.v << 16) | (unsigned short)pt.h;
+    if(MBDFCALL(mbHit, 0, pointaslong) != -1)
+        return inMenuBar;
+    Layer l = layer_with_window_at(pt);
+    if(!l)
+        return FindWindow(pt, window); /* inDesk (no processes yet: the current list) */
+    LayerView view(l);
+    return FindWindow(pt, window);
+}
+
 /* OSDispatch $F: the layer whose window is under the point, nil if none. */
 WindowPtr Executor::C_GetLayerAtPoint(Point pt)
 {
@@ -3033,6 +3048,15 @@ OSErr Executor::C_CallProcessRoutine(ProcessSerialNumber *psn, ProcPtr routine,
     root_current = saved_root;
     foreign_current = saved_foreign;
     return result;
+}
+
+/* OSDispatch $2: the 8 bytes Apple's 7.6.1 gives (measured: a probe
+   calling it on the Quadra), and 0. Excel 4.0 asks at start-up. */
+int32_t Executor::C_GetProcessManagerID(Ptr id)
+{
+    if(id)
+        memcpy(id, "TWIT1889", 8);
+    return 0;
 }
 
 /* General Controls' "Show Desktop when in background", stored inverted as

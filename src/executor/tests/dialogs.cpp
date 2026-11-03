@@ -5,6 +5,9 @@
 #include <ControlMgr.h>
 #include <MemoryMgr.h>
 #include <dial/dial.h>
+#include <ProcessMgr.h>
+#include <quickdraw/cquick.h>
+#include <wind/wind.h>
 
 using namespace Executor;
 
@@ -78,4 +81,54 @@ TEST(Windows, NewWindowWithNilTitle)
     ASSERT_NE(nullptr, (StringHandle)h);
     EXPECT_EQ(0, (*(StringHandle)h)[0]);
     DisposeWindow(w);
+}
+
+/* LayerDispatch 19, which 8.6's Drag Manager asks for the window under the
+   mouse in any process: the window itself and its part; nothing over the
+   desktop (a drop there is the desktop's). */
+TEST(Windows, FindWindowInAnyLayer)
+{
+    Rect r = { 100, 100, 200, 300 };
+    WindowPtr w = NewWindow(nullptr, &r, (StringPtr) "", true, documentProc,
+                            (WindowPtr)-1, false, 0);
+    ASSERT_NE(nullptr, w);
+    GUEST<WindowPtr> found = (WindowPtr)-1;
+    EXPECT_EQ(inContent, FindWindowInAnyLayer(Point{ 150, 200 }, &found));
+    EXPECT_EQ(w, (WindowPtr)found);
+    found = (WindowPtr)-1;
+    EXPECT_EQ(inDesk, FindWindowInAnyLayer(Point{ 300, 400 }, &found));
+    EXPECT_EQ(nullptr, (WindowPtr)found);
+    DisposeWindow(w);
+}
+
+/* Finder's desktop window takes the desktop layer's visRgn (TakeDesktopLayer)
+   and has no structure of its own; a window opened in front takes its area
+   out of that visRgn all the same (a disk put in then drew its icon, in the
+   desktop's update, over the window). */
+TEST(Windows, DesktopWindowLosesWhatAWindowInFrontCovers)
+{
+    GUEST<WindowPtr> layer;
+    ASSERT_EQ(noErr, C_TakeDesktopLayer(&layer));
+    Rect all = { 20, 0, 480, 640 };
+    WindowPtr desk = NewWindow(nullptr, &all, (StringPtr) "", true, plainDBox, nullptr, false, 0);
+    ASSERT_NE(nullptr, desk);
+    RgnHandle own = PORT_VIS_REGION(desk);
+    PORT_VIS_REGION(desk) = PORT_VIS_REGION((WindowPtr)layer);
+    SetEmptyRgn(WINDOW_STRUCT_REGION(desk));
+    CalcVis((WindowPeek)desk);
+    EXPECT_TRUE(PtInRgn(Point{ 150, 200 }, PORT_VIS_REGION(desk)));
+
+    Rect r = { 100, 100, 200, 300 };
+    WindowPtr front = NewWindow(nullptr, &r, (StringPtr) "", true, documentProc, (WindowPtr)-1, false, 0);
+    ASSERT_NE(nullptr, front);
+    /* as when the window came up: the desktop's visRgn the whole desktop,
+       what's behind the window worked out again */
+    CopyRgn(LM(GrayRgn), PORT_VIS_REGION(desk));
+    CalcVisBehind((WindowPeek)front, WINDOW_STRUCT_REGION(front));
+    EXPECT_FALSE(PtInRgn(Point{ 150, 200 }, PORT_VIS_REGION(desk)));
+    EXPECT_TRUE(PtInRgn(Point{ 300, 400 }, PORT_VIS_REGION(desk)));
+
+    DisposeWindow(front);
+    PORT_VIS_REGION(desk) = own;
+    DisposeWindow(desk);
 }

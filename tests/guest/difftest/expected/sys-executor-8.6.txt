@@ -7,7 +7,6 @@ gestalt.mmu 	the machine: Executor presents a Quadra-class 68k Mac with PowerPC,
 gestalt.qd  	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
 gestalt.qdrw	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
 gestalt.dict	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
-gestalt.drag	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
 gestalt.thds	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
 gestalt.ppc 	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
 gestalt.os  	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')

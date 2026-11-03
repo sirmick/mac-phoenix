@@ -2206,6 +2206,10 @@ OSStatus Executor::C_DrawThemeTab(const Rect *inRect, ThemeTabStyle inStyle, The
             title.bottom = std::min<int>(title.bottom, title.top + tabRows);
         else if(inDirection == kThemeTabSouth)
             title.top = std::max<int>(title.top, title.bottom - tabRows);
+        else if(inDirection == kThemeTabEast)
+            title.left = std::max<int>(title.left, title.right - tabRows);
+        else
+            title.right = std::min<int>(title.right, title.left + tabRows);
         labelProc(&title, inStyle, inDirection, depth, color, userData);
     }
     return noErr;

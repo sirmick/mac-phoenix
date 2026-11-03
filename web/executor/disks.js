@@ -14,13 +14,13 @@
 //   { system: { value, label }, mounted: [{ name, title, cover,
 //     kind: 'hd'|'cd'|'floppy'|'app', state: { modified, changed (bytes),
 //     writable, onServer }, inserting }],
-//     library: [{ title, url, note, tags, size, cover }], mountedUrls }
+//     library: [{ title, url, note, tags, size, cover, systems }], mountedUrls }
 // (one's own images are uploaded into the library: tagged "uploaded")
 'use strict';
 
 const Disks = (() => {
     let on = {}, state = { system: { value: '', label: "Executor's own" }, mounted: [], library: [], mountedUrls: [] };
-    let panel = null, button = null, drop = null, filter = '', tags = new Set();
+    let panel = null, button = null, drop = null, filter = '', tags = new Set(), sort = { key: 'title', up: true };
 
     const ICONS = {
         hd: '<svg viewBox="0 0 32 32"><rect x="2" y="9" width="28" height="15" rx="2" fill="#bbb" stroke="#555"/>'
@@ -194,7 +194,7 @@ const Disks = (() => {
         search.value = filter;
         search.addEventListener('input', () => {
             filter = search.value;
-            drawCards();
+            drawRows();
         });
         f.append(search);
         const tagBox = el('div', 'lib-tags');
@@ -203,23 +203,65 @@ const Disks = (() => {
             const b = btn(t, `Only disks tagged ${t}`, () => {
                 tags.has(t) ? tags.delete(t) : tags.add(t);
                 b.classList.toggle('on', tags.has(t));
-                drawCards();
+                drawRows();
             });
             b.classList.toggle('on', tags.has(t));
             tagBox.append(b);
         }
-        const grid = el('div', 'lib-grid');
-        function drawCards() {
+        // A table: a row per disk, sorted by the column clicked (again:
+        // the other way round), filtered by the words and the tags.
+        const table = el('table', 'lib-table');
+        const here = (d) => mounted.has(new URL(d.url, location.href).href);
+        const systems = (d) => (d.systems || []).join(', ');
+        const COLUMNS = [
+            { key: 'title', label: 'Disk', value: (d) => d.title.toLowerCase() },
+            { key: 'size', label: 'Size', value: (d) => d.size || 0 },
+            { key: 'systems', label: 'Systems', value: (d) => systems(d) },
+            { key: 'state', label: '', value: (d) => (here(d) ? 0 : 1) },
+        ];
+        const head = el('tr');
+        for (const c of COLUMNS) {
+            const th = el('th', `col-${c.key}`, c.label);
+            th.dataset.key = c.key;
+            if (c.key === 'title')
+                th.colSpan = 2;                 // over the picture too
+            if (c.label) {
+                th.tabIndex = 0;
+                th.title = `Sort by ${c.label.toLowerCase()}`;
+                const pick = () => {
+                    sort = { key: c.key, up: sort.key === c.key ? !sort.up : true };
+                    drawRows();
+                };
+                th.addEventListener('click', pick);
+                th.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(); } });
+            }
+            head.append(th);
+        }
+        const cols = el('colgroup');
+        for (const c of ['art', 'title', 'size', 'systems', 'state'])
+            cols.append(el('col', `col-${c}`));
+        const thead = el('thead');
+        thead.append(head);
+        const tbody = el('tbody');
+        table.append(cols, thead, tbody);
+        function drawRows() {
+            for (const th of head.children)
+                th.setAttribute('aria-sort', th.dataset.key === sort.key ? (sort.up ? 'ascending' : 'descending') : 'none');
             const words = filter.toLowerCase().split(/\s+/).filter(Boolean);
+            const col = COLUMNS.find((c) => c.key === sort.key) || COLUMNS[0];
             const shown = lib.filter((d) => [...tags].every((t) => (d.tags || []).includes(t))
-                && words.every((w) => `${d.title} ${d.note || ''} ${(d.tags || []).join(' ')}`.toLowerCase().includes(w)));
-            grid.replaceChildren(...shown.map((d) => {
-                const card = el('div', 'lib-card');
-                const here = mounted.has(new URL(d.url, location.href).href);
-                card.classList.toggle('mounted', here);
-                card.title = d.note ? `${d.title}: ${d.note}` : d.title;
-                card.dataset.url = d.url;
-                const art = el('div', 'art');
+                && words.every((w) => `${d.title} ${d.note || ''} ${(d.tags || []).join(' ')}`.toLowerCase().includes(w)))
+                .sort((a, b) => {
+                    const x = col.value(a), y = col.value(b);
+                    return (x < y ? -1 : x > y ? 1 : a.title.localeCompare(b.title)) * (sort.up ? 1 : -1);
+                });
+            tbody.replaceChildren(...shown.map((d) => {
+                const row = el('tr', 'lib-row');
+                const inMac = here(d);
+                row.classList.toggle('mounted', inMac);
+                row.title = d.note ? `${d.title}: ${d.note}` : d.title;
+                row.dataset.url = d.url;
+                const art = el('td', 'art');
                 if (d.cover) {
                     const img = new Image();
                     img.src = d.cover;
@@ -229,30 +271,41 @@ const Disks = (() => {
                 } else {
                     art.innerHTML = ICONS[isCD(d) ? 'cd' : (d.tags || []).includes('system') ? 'system' : 'hd'];
                 }
-                const ins = btn('Insert', 'Put this disk in the Mac', (e) => {
-                    e.stopPropagation();
-                    on.insert && on.insert(d);
-                });
-                ins.className = 'insert';
-                card.append(art, el('div', 'title', d.title),
-                            el('div', 'meta', [d.size ? size(d.size) : '', ...(d.tags || [])].filter(Boolean).join(' · ')), ins);
-                if ((d.tags || []).includes('uploaded') && !here) {
-                    const del = btn('✕', 'Delete this upload from the server (the image and its changes)', (e) => {
+                const name = el('td', 'name');
+                name.append(el('div', 'title', d.title), el('div', 'tags', (d.tags || []).join(' · ')));
+                const act = el('td', 'state');
+                if (inMac) {
+                    act.append(el('span', 'badge system', 'In the Mac'));
+                } else {
+                    const ins = btn('Insert', 'Put this disk in the Mac', (e) => {
                         e.stopPropagation();
-                        on.removeUpload && on.removeUpload(d);
+                        on.insert && on.insert(d);
                     });
-                    del.className = 'remove';
-                    card.append(del);
+                    ins.className = 'insert';
+                    act.append(ins);
+                    if ((d.tags || []).includes('uploaded')) {
+                        const del = btn('✕', 'Delete this upload from the server (the image and its changes)', (e) => {
+                            e.stopPropagation();
+                            on.removeUpload && on.removeUpload(d);
+                        });
+                        del.className = 'remove';
+                        act.append(del);
+                    }
+                    row.addEventListener('click', () => on.insert && on.insert(d));
                 }
-                if (!here)
-                    card.addEventListener('click', () => on.insert && on.insert(d));
-                return card;
+                row.append(art, name, el('td', 'size', d.size ? size(d.size) : ''), el('td', 'systems', systems(d)), act);
+                return row;
             }));
-            if (!shown.length)
-                grid.replaceChildren(el('div', 'empty-note', 'No disk matches.'));
+            if (!shown.length) {
+                const none = el('tr');
+                const td = el('td', 'empty-note', 'No disk matches.');
+                td.colSpan = 5;
+                none.append(td);
+                tbody.replaceChildren(none);
+            }
         }
-        drawCards();
-        wrap.append(f, tagBox, grid);
+        drawRows();
+        wrap.append(f, tagBox, table);
         return wrap;
     }
 

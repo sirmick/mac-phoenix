@@ -47,6 +47,27 @@ from aliases import HfsVolume, parse_alias  # noqa: E402
 ALIAS, INVISIBLE, HAS_CUSTOM_ICON = 0x8000, 0x4000, 0x0400
 ROOT = 2
 ICON = 32                       # an icon's box in icon view, without its label
+LABEL_GAP = 8                   # between two labels side by side
+
+
+def label_width(name):
+    """An icon label's width in pixels, a little over what the Finder draws:
+    the views font, Geneva 10 on 8.6 (Geneva 9 on 7.6.1 is narrower).
+    Measured: "MR Browser 0.39 ƒ" 95 (this says 98), "Serial MReader
+    0.03 ƒ" 109 (113)."""
+    w = 0
+    for c in name:
+        if c in "il|!.,:;'`":
+            w += 3
+        elif c in "jft1 rI()[]":
+            w += 4
+        elif c in "mwMW@%":
+            w += 9
+        elif c.isupper() or c in "&#\u0192":     # ƒ
+            w += 7
+        else:
+            w += 6
+    return w
 MENU_BAR = 20
 
 # Invisible items the System and the Finder make
@@ -351,6 +372,23 @@ class Audit:
                             self.add("warning", "icons", folder,
                                      f"overlap: {a.name!r} at {a.loc[1]},{a.loc[0]} and {b.name!r} "
                                      f"at {b.loc[1]},{b.loc[0]}")
+            # labels: centred under their icons, cut at the window's left
+            # edge (it opens scrolled to 0,0) or running into the next one's
+            for k in placed:
+                if k.loc[1] + ICON // 2 - label_width(k.name) // 2 < 0:
+                    self.add("warning", "icons", k, f"label {label_width(k.name)} px wide: cut at the "
+                             f"window's left edge (icon at {k.loc[1]},{k.loc[0]})")
+            rows = defaultdict(list)
+            for k in placed:
+                rows[k.loc[0]].append(k)
+            for row in rows.values():
+                row.sort(key=lambda k: k.loc[1])
+                for a, b in zip(row, row[1:]):
+                    room = b.loc[1] - a.loc[1]
+                    need = (label_width(a.name) + label_width(b.name)) // 2 + LABEL_GAP
+                    if need > room:
+                        self.add("warning", "icons", folder, f"labels wider than their cell: {a.name!r} and "
+                                 f"{b.name!r}, {room} px apart, {need} px needed")
             top, left, bottom, right = folder.rect or (0, 0, 0, 0)
             width, height = right - left, bottom - top
             beyond = []

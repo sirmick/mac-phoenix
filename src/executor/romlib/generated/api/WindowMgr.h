@@ -517,6 +517,16 @@ int16_t C_FindWindowInLayer(Point pt, GUEST<WindowPtr> *window);PASCAL_SUBTRAP(F
 LIBRARY_ALSO(PrivateInterfaceLib, FindWindowInLayer, InterfaceLib);
 
 
+// MacPhoenix (name is a guess). Selector 19, 8.x: FindWindow over every
+// layer, front first: the window under the point itself and its part
+// (inDesk and nil over the desktop, inMenuBar over the menu bar). 8.6's
+// Drag Manager asks it where 7.5.5's asked FindWindowInLayer ('proc'
+// -16513 +$43d0), then GetWindowProcess on the window, or on inDesk
+// the desktop layer and GetDesktopProcess.
+int16_t C_FindWindowInAnyLayer(Point pt, GUEST<WindowPtr> *window);PASCAL_SUBTRAP(FindWindowInAnyLayer, 0xA829, 0x0413, LayerDispatch);
+LIBRARY_ALSO(PrivateInterfaceLib, FindWindowInAnyLayer, InterfaceLib);
+
+
 // Selector 1. Apple's makes the layer a window of WDEF 127 in the
 // current layer (behind as NewWindow's: -1 in front); the Help Manager
 // makes its balloon layer in the root with refCon $BADFACE. Here a

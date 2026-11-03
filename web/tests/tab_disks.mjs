@@ -121,7 +121,7 @@ try {
 
     // In, live: no restart (the same Worker).
     await page.evaluate(() => { window.before = worker; });
-    await page.click('#disks-library .lib-card[data-url="disks/blank.img"]');
+    await page.click('#disks-library .lib-row[data-url="disks/blank.img"]');
     check(await until(() => hasVolume('Blank'), 60000), 'the blank disk is mounted while Executor runs');
     check(await page.evaluate(() => worker === window.before), 'without a restart');
     check(await until(() => row('blank.img').count(), 5000), 'the panel shows it in the Mac');
@@ -169,11 +169,11 @@ try {
     check(await until(async () => !(await hasVolume('Blank')), 20000), 'put away in the Finder: unmounted');
     check(await until(async () => !(await row('blank.img').count()), 10000), 'and out of the panel');
     check(!(await picked()).includes('disks/blank.img'), 'and of the setting');
-    check(!(await page.locator('.lib-card.mounted[data-url="disks/blank.img"]').count()), 'the library offers it again');
+    check(!(await page.locator('.lib-row.mounted[data-url="disks/blank.img"]').count()), 'the library offers it again');
     await shot('4-put-away.png');
 
     // A CD: read-only; out by the panel's eject.
-    await page.click('#disks-library .lib-card[data-url="disks/disc.iso"]');
+    await page.click('#disks-library .lib-row[data-url="disks/disc.iso"]');
     check(await until(() => hasVolume('Disc'), 60000), 'the CD is mounted');
     check(await until(() => row('disc.iso').locator('.badge.cd').count(), 5000), 'shown as a read-only CD');
     check(await page.evaluate(() => imageState['disc.iso'] && imageState['disc.iso'].writable === false), 'not writable');
@@ -185,7 +185,7 @@ try {
 
     // In use: SimpleText runs from it (its file open), the panel's eject
     // refuses (fBsyErr) and the disk stays; quit, and it comes out.
-    await page.click('#disks-library .lib-card[data-url="disks/apps.img"]');
+    await page.click('#disks-library .lib-row[data-url="disks/apps.img"]');
     check(await until(() => hasVolume('Apps'), 60000), 'the Apps disk is mounted');
     check(await request(page, 'launch', 'Apps:SimpleText') === 0, 'SimpleText launched from it');
     check(await until(() => request(page, 'app').then((a) => a === 'SimpleText'), 30000), 'SimpleText runs');
@@ -216,7 +216,7 @@ try {
     // Out by the panel, then deleted from the library by its card's ✕.
     await row('mine.img').locator('button.eject').click();
     check(await until(async () => !(await hasVolume('Mine')), 20000), 'the upload ejected');
-    const card = page.locator('#disks-library .lib-card[data-url$="mine.img"]');
+    const card = page.locator('#disks-library .lib-row[data-url$="mine.img"]');
     await card.hover();
     await card.locator('button.remove').click();
     check(await until(() => page.evaluate(() => !library.some((d) => d.url.endsWith('mine.img'))), 10000),

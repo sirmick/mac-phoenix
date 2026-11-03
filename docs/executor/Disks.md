@@ -32,11 +32,14 @@ page are added and open it.
   uploaded into the server's library (main.js `uploadImage`, tools/standalone
   `POST /api/uploads/NAME`, tagged `uploaded`) and put in; one the server
   refuses is held for this visit.
-- **Library**: `library.json`'s disks, one's uploads among them, as cards
-  (cover, or an icon for a hard disk, CD or System; title, size, tags); a
-  filter on title, note and tags; tag chips (all must match). A click
-  inserts; disks in the Mac are marked. An upload not in the Mac has a ✕:
-  deleted from the server (`DELETE api/uploads/NAME`: image, record, overlay).
+- **Library**: `library.json`'s disks, one's uploads among them, as a
+  table: a row per disk (cover, or an icon for a hard disk, CD or System;
+  title with its tags beneath; size; the Systems it is for, the record's
+  `systems` from make_library.py; Insert, or "In the Mac"), sorted by the
+  column header clicked (again: reversed); a filter on title, note and
+  tags; tag chips (all must match). A click on a row inserts. An upload
+  not in the Mac has a ✕: deleted from the server (`DELETE
+  api/uploads/NAME`: image, record, overlay).
 
 ## In and out while Executor runs
 

@@ -1,7 +1,7 @@
 /* The Disks panel (disks.js), in the bar's colours (index.html). */
 #disks-button .count { background: #4a5a74; border-radius: 8px; padding: 0 6px; margin-left: 5px; font-size: 11px; }
 #disks-button.open { background: #4a5a74; }
-#disks-panel { position: fixed; top: 0; right: 0; bottom: 0; width: min(400px, 92vw); z-index: 10;
+#disks-panel { position: fixed; top: 0; right: 0; bottom: 0; width: min(440px, 92vw); z-index: 10;
                background: #2b2b2b; color: #ddd; border-left: 1px solid #555; display: flex; flex-direction: column;
                box-shadow: -8px 0 30px rgba(0, 0, 0, .5); font: 13px system-ui, sans-serif; }
 #disks-panel[hidden] { display: none; }
@@ -44,7 +44,7 @@
 .badge.system { background: #3d5a3d; color: #cfc; }
 
 /* Open, the panel takes the right edge and the screen moves aside. */
-body.disks-open { padding-right: min(400px, 92vw); box-sizing: border-box; }
+body.disks-open { padding-right: min(440px, 92vw); box-sizing: border-box; }
 
 /* The System disk: what the Mac starts from. */
 .system-pick { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
@@ -70,20 +70,28 @@ body.disks-open { padding-right: min(400px, 92vw); box-sizing: border-box; }
 .lib-tags button { background: #3a3a3a !important; color: #bbb !important; border-radius: 10px !important;
                    padding: 1px 9px !important; font-size: 11px !important; }
 .lib-tags button.on { background: #4a5a74 !important; color: #fff !important; }
-.lib-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 8px; }
-.lib-card { background: #333; border-radius: 6px; padding: 6px; display: flex; flex-direction: column; gap: 3px;
-            cursor: pointer; border: 1px solid transparent; position: relative; }
-.lib-card:hover { border-color: #678; }
-.lib-card .art { height: 96px; display: flex; align-items: center; justify-content: center; background: #2a2a2a; border-radius: 4px; }
-.lib-card .art img { max-width: 100%; max-height: 96px; border-radius: 3px; }
-.lib-card .art svg { width: 48px; height: 48px; }
-.lib-card .title { color: #eee; font-size: 12px; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2;
-                   -webkit-box-orient: vertical; overflow: hidden; }
-.lib-card .meta { color: #888; font-size: 10px; }
-.lib-card.mounted { opacity: .55; cursor: default; }
-.lib-card.mounted::after { content: 'Mounted'; position: absolute; top: 10px; right: 10px; background: #3d5a3d; color: #cfc;
-                           font-size: 10px; font-weight: 600; padding: 1px 5px; border-radius: 3px; text-transform: uppercase; }
-.lib-card .insert { position: absolute; top: 10px; right: 10px; display: none; }
-.lib-card .remove { position: absolute; top: 10px; left: 10px; display: none; padding: 1px 6px !important; }
-.lib-card:not(.mounted):hover .remove { display: block; }
-.lib-card:not(.mounted):hover .insert { display: block; }
+.lib-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.lib-table th { text-align: left; font-size: 11px; font-weight: 600; color: #999; padding: 4px 4px; border-bottom: 1px solid #444;
+                user-select: none; white-space: nowrap; }
+.lib-table th[tabindex] { cursor: pointer; }
+.lib-table th[tabindex]:hover { color: #ddd; }
+.lib-table th[aria-sort=ascending]::after { content: ' ▲'; font-size: 9px; }
+.lib-table th[aria-sort=descending]::after { content: ' ▼'; font-size: 9px; }
+.lib-table col.col-art { width: 40px; }
+.lib-table col.col-size { width: 54px; }
+.lib-table col.col-systems { width: 72px; }
+.lib-table col.col-state { width: 78px; }
+.lib-table td { padding: 5px 4px; border-bottom: 1px solid #383838; vertical-align: middle; }
+.lib-row { cursor: pointer; }
+.lib-row:hover { background: #343a44; }
+.lib-row td.art img, .lib-row td.art svg { width: 32px; height: 32px; object-fit: contain; display: block; border-radius: 3px; }
+.lib-row td.name { overflow: hidden; }
+.lib-row .title { color: #eee; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lib-row .tags { color: #888; font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lib-row td.size, .lib-row td.systems { color: #aaa; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lib-row td.state { text-align: right; white-space: nowrap; }
+.lib-row td.state .badge { margin: 0; }
+.lib-row .insert { padding: 2px 8px !important; font-size: 11px !important; }
+.lib-row .remove { padding: 2px 6px !important; font-size: 11px !important; margin-left: 3px; }
+.lib-row.mounted { cursor: default; }
+.lib-row.mounted .title { color: #9a9; }

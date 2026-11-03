@@ -123,3 +123,38 @@ TEST_F(UnknownSelector, BTreeTrapA08E)
     EXPECT_EQ(0xFFCE, READUW(a + 0x10)) << "ioResult";
     DisposePtr(pb);
 }
+
+/* clr.l -(sp); move.l #buf,-(sp); move.w #2,-(sp); _OSDispatch;
+   move.l (sp)+,d1 -- the private selector Excel 4.0 calls at start-up:
+   Apple's 7.6.1 (a probe on the Quadra) writes 'TWIT' '1889' and returns
+   0, the selector and pointer popped */
+TEST_F(UnknownSelector, OSDispatchSelector2)
+{
+    Ptr buf = NewPtrClear(16);
+    memset(buf, 0xAA, 16);
+    uint32_t a = ptr_to_longint(buf);
+    uint32_t d1 = run({ 0x42A7, 0x2F3C, (uint16_t)(a >> 16), (uint16_t)a, 0x3F3C, 0x0002, 0xA88F, 0x221F });
+    EXPECT_EQ(0u, d1);
+    EXPECT_EQ(0, memcmp(buf, "TWIT1889", 8));
+    EXPECT_EQ(0xAA, (uint8_t)buf[8]);
+    DisposePtr(buf);
+}
+
+/* subq.w #2,sp; move.l #buf,-(sp); move.l #$021x,d0; _DisplayDispatch;
+   move.w (sp)+,d1 -- DMQDIsMirroringCapable ($16) and DMCanMirrorNow
+   ($17) as a 7.6.1 Quadra with one screen answers them (a probe): noErr
+   and false; -6226 with the Boolean left alone */
+TEST_F(UnknownSelector, DisplayDispatchMirroring)
+{
+    Ptr buf = NewPtrClear(2);
+    uint32_t a = ptr_to_longint(buf);
+    buf[0] = 0xAA;
+    uint32_t d1 = run({ 0x554F, 0x2F3C, (uint16_t)(a >> 16), (uint16_t)a, 0x203C, 0x0000, 0x0216, 0xABEB, 0x321F });
+    EXPECT_EQ(0, d1 & 0xFFFF);
+    EXPECT_EQ(0, (uint8_t)buf[0]);
+    buf[0] = 0xAA;
+    d1 = run({ 0x554F, 0x2F3C, (uint16_t)(a >> 16), (uint16_t)a, 0x203C, 0x0000, 0x0217, 0xABEB, 0x321F });
+    EXPECT_EQ((uint16_t)-6226, d1 & 0xFFFF);
+    EXPECT_EQ(0xAA, (uint8_t)buf[0]);
+    DisposePtr(buf);
+}

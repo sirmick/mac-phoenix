@@ -101,24 +101,31 @@ unhandled_trap(syn68k_addr_t callback_address, void *arg)
     trap_num = (intptr_t)arg;
 
     /* $FExx: a Power Mac's 68K emulator's own instructions (Mixed Mode's
-       stubs use them), not the FPU's. MacBench 5's 68k timing routine runs
-       $FE09 between two _Microseconds; nothing here has them: stepped over
-       (one word), as a no-op. */
+       stubs use them), not the FPU's. Nothing here has them. $FE09, which
+       MacBench 5's 68k timing routine runs between two _Microseconds, is
+       stepped over (one word) as a no-op; the others are logged and stay
+       the F-line they are here, until a program shows what it needs. */
     if(trap_num == 11)
     {
         syn68k_addr_t pc = READUL(EM_A7 + 2);
         uint16_t op = READUW(pc);
+        static const std::set<uint16_t> no_ops = { 0xFE09 };
         if((op & 0xFF00) == 0xFE00)
         {
+            bool step = no_ops.count(op) > 0;
             static std::set<uint16_t> logged;
             if(logged.insert(op).second)
             {
                 char what[64];
-                snprintf(what, sizeof what, "68K emulator instruction $%04X (a no-op)", op);
+                snprintf(what, sizeof what, "68K emulator instruction $%04X (%s)", op,
+                         step ? "a no-op" : "F-line");
                 traps::log_unimplemented(what);
             }
-            WRITEUL(EM_A7 + 2, pc + 2);
-            return MAGIC_RTE_ADDRESS;
+            if(step)
+            {
+                WRITEUL(EM_A7 + 2, pc + 2);
+                return MAGIC_RTE_ADDRESS;
+            }
         }
     }
 

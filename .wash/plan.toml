@@ -1,7 +1,7 @@
 # wash-plan: written by Wash as the plan changes.
 # Edit it only between workspaces; plan_set {"from": "<this file>"} loads it.
 
-revision = 106
+revision = 127
 
 [[node]]
   id = "cuts"
@@ -73,8 +73,8 @@ revision = 106
   emoji = "🎯"
   template = "milestone"
   body = "Executor as wasm in the tab, a private backend serving media and storage and relaying sockets, custom System cuts of 7.6.1 and 8.6. Target apps: AppleWorks 5.0.3; programming: MPW Shell, CodeWarrior IDE 3.2, THINK C 6, THINK Pascal 4.5, HyperCard 2.4.1, MacPerl, ResEdit, BBEdit Lite (4.1 on 7.6.1, 6.1.2 on 8.6); games: the 27 that run plus a pick of the fat/PPC ones (Marathon, SimCity 2000, Ferazel's Wand, Slithereens...). Out: A/UX, AltiVec, PMMU, QuickTime, 9.0.4, CarbonLib apps (M2). Done when each target app launches and is used in the tab (Playwright cell) from the site's library."
-  state = "todo"
-  revision = 2
+  state = "done"
+  revision = 127
 
 [[node]]
   id = "m2"
@@ -491,8 +491,8 @@ revision = 106
   template = "package"
   parent = "m1"
   body = "M1 cells (ctest -L m1, tab_m1.mjs) merged b6e92856; audit + triage: docs/executor/M1.md, ~/storage/tmp/m1-audit/results.md (rows #1-#17). Integration run 2026-11-02-2149 all green. Tracks: m1-fix-86 (Executor on 8.6), m1-fix-761 (Executor on 7.6.1 + games), m1-fix-tab (wasm tab). Not bugs: Pathways (manual copy protection), Ferazel's Wand (needs its CD), Populous II (test fixed)."
-  state = "todo"
-  revision = 39
+  state = "done"
+  revision = 115
 
 [[node]]
   id = "m1-fix-761"
@@ -559,8 +559,8 @@ revision = 106
   template = "package"
   needs = ["utils-disk"]
   body = "From the Utilities disk (utils-disk, docs/Provisioning.md results table): on 8.6 PPC Executor answers 'Mac Quadra 900 (20)' and not 32-bit capable (G3: Power Mac 9500/9600, capable); Clockometer sees 68030 with --executor-ppc and 'Unknown processor type' on 8.6; Gestalt.Appl lists 59 (7.6.1) / 65 (8.6) selectors vs the G3's 158; Speedometer 4.0 stuck on its splash (68k and PPC; idle in its event loop); TattleTech exits at once on 7.6.1. Decide what Executor should claim to be (a 68040 Quadra on 7.x 68k; a PowerPC machine on PPC), make Gestalt consistent (gestaltMachineType, gestaltNativeCPUtype, gestaltProcessorType, gestaltAddressingModeAttr, gestaltSysArchitecture...), add common selectors the G3 answers, then Speedometer and TattleTech. difftest probe (sys) for the selectors."
-  state = "todo"
-  revision = 79
+  state = "active"
+  revision = 124
 
 [[node]]
   id = "gamebox"
@@ -568,8 +568,8 @@ revision = 106
   emoji = "🕹️"
   template = "package"
   body = "Owner 2026-11-03: add https://manticore.nz/gamebox. GameBox is a free game-library manager for vintage Macs (organise/launch games, play time, virtual discs, chat rooms, scoreboards, profiles; registration optional). Classic 1.2.0 for Mac OS 8-9.2.2 (PowerPC), 12 MB RAM: http://files.mac-attic.com/downloads/manticoresw/gamebox/classic/GameBox-classic-latest.hqx (4 MB; the author's own download host). Steps: pin the .hqx in media.json (md5/sha256, page URL), check whether it's Carbon (needs CarbonLib: Executor has none until M2; if so, report and stop) or classic PPC; bake onto the PPC games disk (games-ppc / provisioning image) for 8.6; run it on Executor 8.6 natively and in the tab: add a few of the disk's games to its library, launch one from it; online features through the relay only if they work without setup. A tab cell. Rebuild the library image and tell the orchestrator before it goes to the owner's server."
-  state = "active"
-  revision = 84
+  state = "done"
+  revision = 112
 
 [[node]]
   id = "disk-audit"
@@ -587,8 +587,8 @@ revision = 106
   template = "package"
   parent = "m1"
   body = "Owner testing :8090 (69460445), 8.6 in the tab at 2x (Firefox/Windows); screenshots + logs in ~/storage/tmp/standalone-try/data/logs/2026-11-03 (read only), session mw065k3u-b466ec26a7cc9995: (1) 041032 'tab titles': ColorSync control panel's tab titles clipped ('rofiles', 'CMMs', 'About' cut at their left). (2) 041047 'alias missing': Apple menu 'Apple FM Radio' alias -> 'original item cannot be found' (the cut System lacks its target? then the cut should drop the alias). (3) 041312 'strange graphics issue' + 041319 'locked up': MacBench 5.0 splash over its window; desktop disk icons drawn as grey checker shapes (Utilities, executor, Host, Macintosh HD, Internet) and Internet listed twice; then Executor stopped answering (log: CFM unresolved imports InstallExceptionHandler, GetPhysical just before). (4) Finder: click-drag to rearrange icons doesn't work. (5) session mw0332ji 033737: Serial MReader's 'Cancel' button drawn as a white-on-grey ghost at 850,413. Compare each with the G3 under 8.6."
-  state = "active"
-  revision = 91
+  state = "done"
+  revision = 126
 
 [[node]]
   id = "disk-tidy"
@@ -598,3 +598,22 @@ revision = 106
   body = "Owner decisions 2026-11-03 on the disk audit (tools/diskaudit, report ~/storage/tmp/disk-audit/report.md): (1) make_boot_disk.py drops aliases whose targets the cut removes (8.6: Apple FM Radio, AppleCD Audio Player, Automated Tasks, Launcher Items:Script Editor, Recent Applications items; 7.6.1: Apple Video Player, AppleCD Audio Player, Automated Tasks, Script Editor); Recent Applications/Documents/Servers emptied in cuts. (2) A tidy step in make_boot_disk.py/make_library.py (and provisioning build where shared) places every root and folder icon on a grid inside its window and gives each folder window a sensible frame on 640x480 with scroll origin 0,0; Desktop Folder/Trash invisible as on a real disk. (3) Rebuild boot-7.6.1, boot-8.6 and every library image clean into a scratch library; the audit reports nothing; then the orchestrator installs them into ~/storage/web-library, backing up the owner's overlays first (owner OK'd dropping their boot-8.6 changes)."
   state = "done"
   revision = 106
+
+[[node]]
+  id = "creative-exec"
+  title = "Executor calls the creative pack needs: Excel 4 (OSDispatch selector 2), Photoshop 4 ($A074, DisplayDispatch $16)"
+  emoji = "🔧"
+  template = "package"
+  body = "From creative2's results (~/storage/tmp/creative-pack/results.md): Excel 4.0 stops at launch with 'Unknown selector 0x2 for trap OSDispatch'; Photoshop 4.0 says it 'lacks the required hardware or system software' after [unimplemented] OS trap $A074 and DisplayDispatch $16. Implement like a Mac (Process Manager / Display Manager docs; difftest where useful), a gtest each, then both apps launched and used on Executor 7.6.1 (68k). Images: productivity-system-7 / creative-system-7 (serial-personalised: never view screenshots after a serial step; use creative3's masking helper)."
+  state = "reported"
+  revision = 118
+
+[[node]]
+  id = "ui-polish"
+  title = "Settings and Disks panel wording/layout (owner's notes 2026-11-03)"
+  emoji = "✏️"
+  template = "package"
+  parent = "p1"
+  body = "Owner's notes on the tab UI: (1) Settings > Machine > RAM help text ('0: as the System needs (32 MB on Executor's own, 128 on Apple's). The browser holds it all: ...') is too long: make it short, e.g. '0 = automatic (32 MB for Executor's System, 128 MB for Apple's)'. (2) 'Largest image added (MB)' / 'A disk image the tab adds to the library (written to the disk as it comes)' is unclear: it is the size limit for disk images you upload (Add / drag-and-drop): retitle e.g. 'Largest disk image you can upload (MB)', description 'Bigger uploads are refused.'. Review every setting's title/description for the same plain-English bar. (3) The Disks panel's Library section: a table look (rows: cover/icon, title, tags, size, systems, mounted state; sortable/filterable) instead of the card grid. Both schema copies (web/executor and tools/standalone) stay identical (TestSchemaCopy). Screenshots before/after; tab tests pass."
+  state = "reported"
+  revision = 123

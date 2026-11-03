@@ -981,6 +981,7 @@ struct ItemKeys
     bool encoding_set = false;
     TextEncoding encoding = 0;
     SInt16 font_id = 0;      /* SetMenuItemFontID's; 0: the menu's font */
+    UInt32 command_id = 0;   /* SetMenuItemCommandID's */
 };
 std::map<std::pair<uint32_t, int>, ItemKeys> item_keys;
 std::set<uint32_t> parent_choosable;
@@ -1114,6 +1115,74 @@ Boolean Executor::C_IsMenuItemEnabled(MenuRef menu, UInt16 item)
     if(!(flags & 1))
         return false;
     return item == 0 || item > 31 || (flags & (1u << item));
+}
+
+/* MenusLib 8.5's EnableItem and DisableItem, the item a UInt16: items
+   past 31 have no bit of their own (they follow the menu's). REALbasic's
+   runtime calls them without checking its weak imports on 8.5 and later
+   (GameBox Classic). */
+void Executor::C_EnableMenuItem(MenuRef menu, UInt16 item)
+{
+    if(item < 32)
+        C_EnableItem(menu, item);
+}
+
+void Executor::C_DisableMenuItem(MenuRef menu, UInt16 item)
+{
+    if(item < 32)
+        C_DisableItem(menu, item);
+}
+
+/* AppearanceLib's per-item command ID: kept (REALbasic keeps its menu
+   item objects there). */
+OSErr Executor::C_SetMenuItemCommandID(MenuRef menu, SInt16 item, UInt32 commandID)
+{
+    if(!valid_item(menu, item))
+        return paramErr;
+    item_keys[{ US_TO_SYN68K(menu), item }].command_id = commandID;
+    return noErr;
+}
+
+OSErr Executor::C_GetMenuItemCommandID(MenuRef menu, SInt16 item, GUEST<UInt32> *outCommandID)
+{
+    if(!valid_item(menu, item) || !outCommandID)
+        return paramErr;
+    auto it = item_keys.find({ US_TO_SYN68K(menu), item });
+    *outCommandID = it == item_keys.end() ? 0 : it->second.command_id;
+    return noErr;
+}
+
+/* AppearanceLib's MenuEvent: MenuKey for a command-key event (MenuKey
+   already matches the items' SetMenuItemModifiers); 0 for any other. */
+UInt32 Executor::C_MenuEvent(const EventRecord *inEvent)
+{
+    if(!inEvent || (inEvent->what != keyDown && inEvent->what != autoKey)
+       || !(inEvent->modifiers & cmdKey))
+        return 0;
+    return C_MenuKey(inEvent->message & charCodeMask);
+}
+
+/* MenusLib 8.5's HideMenuBar and ShowMenuBar: the menu bar's height goes
+   to 0 and back, as programs that take the whole screen read it. Only
+   that: the desktop region keeps the bar's strip, which isn't redrawn
+   until something is drawn over it. */
+static INTEGER hidden_mbar_height;
+
+void Executor::C_HideMenuBar()
+{
+    if(LM(MBarHeight) == 0)
+        return;
+    hidden_mbar_height = LM(MBarHeight);
+    LM(MBarHeight) = 0;
+}
+
+void Executor::C_ShowMenuBar()
+{
+    if(LM(MBarHeight) != 0 || hidden_mbar_height == 0)
+        return;
+    LM(MBarHeight) = hidden_mbar_height;
+    hidden_mbar_height = 0;
+    C_DrawMenuBar();
 }
 
 OSStatus Executor::C_SetSubmenuParentChoosable(MenuRef menu, Boolean inChoosable)

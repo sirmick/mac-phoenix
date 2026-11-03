@@ -137,7 +137,8 @@
     {"name": "MacBench5.sit", "dir": "downloads/apps", "size": 1939135, "md5": "adc06e908dea9d3045da877eef490c02", "ia": "Macintosh_Garden_Apps_N_2019/M/MacBench5.sit", "garden": "apps/MacBench5.sit"},
     {"name": "tattletech-284.sit", "dir": "downloads/apps", "size": 385308, "md5": "f1d328a36e12a9e31e00aff7bc585416", "ia": "Macintosh_Garden_Apps_T_2019/tattletech-284.sit", "garden": "apps/tattletech-284.sit"},
     {"name": "Gauge_Series.sit", "dir": "downloads/apps", "size": 147694, "md5": "0d1f6abf5c89d5d07b234528dbe81a1c", "garden": "apps/Gauge_Series.sit"},
-    {"name": "gestalt-appl-279.hqx", "dir": "downloads/apps", "size": 162900, "md5": "9bb524cb48bd40df536587ed33e04061", "infomac": "cfg/gestalt-appl-279.hqx"}
+    {"name": "gestalt-appl-279.hqx", "dir": "downloads/apps", "size": 162900, "md5": "9bb524cb48bd40df536587ed33e04061", "infomac": "cfg/gestalt-appl-279.hqx"},
+    {"name": "GameBox-classic-latest.hqx", "as": "GameBox-classic-1.2.0.hqx", "dir": "downloads/games", "size": 4496185, "md5": "05ee7b277dc8aba27e763a0862ea6731", "sha256": "a2f84a6f4608589c7e27209250e7f2fc1efa3ef90f9e5282eacd5daf97a63a59", "url": "http://files.mac-attic.com/downloads/manticoresw/gamebox/classic/GameBox-classic-latest.hqx", "title": "GameBox Classic 1.2.0", "year": 2026, "page": "https://manticore.nz/gamebox", "note": "Manticore Software's game-library manager for Mac OS 8-9.2.2 (PowerPC; a REALbasic application, its runtime in the data fork, no CarbonLib); free, registration optional. The author's own download host; 'latest' was 1.2.0 (vers 1) on 2026-11-03"}
   ],
   "out": "."
 }

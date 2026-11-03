@@ -1356,6 +1356,26 @@
 # ####
 
 - function:
+    name: FindWindowInAnyLayer
+    return: int16_t
+    args:
+      - name: pt
+        type: Point
+      - name: window
+        type: WindowPtr*
+    dispatcher: LayerDispatch
+    selector: 0x0413
+    library: PrivateInterfaceLib
+    executor: C_
+    comment: |
+      MacPhoenix (name is a guess). Selector 19, 8.x: FindWindow over every
+      layer, front first: the window under the point itself and its part
+      (inDesk and nil over the desktop, inMenuBar over the menu bar). 8.6's
+      Drag Manager asks it where 7.5.5's asked FindWindowInLayer ('proc'
+      -16513 +$43d0), then GetWindowProcess on the window, or on inDesk
+      the desktop layer and GetDesktopProcess.
+
+- function:
     name: NewLayer
     return: OSErr
     args:

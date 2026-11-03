@@ -874,6 +874,15 @@ set_tests_properties(hidpi_chrome_executor PROPERTIES
   TIMEOUT 180 LABELS "executor" SKIP_RETURN_CODE 77
   ENVIRONMENT "MACEMU_BINARY=$<TARGET_FILE:mac-phoenix>")
 
+# HiDPI text runs behind windows: SimpleText's lines under its "Save changes"
+# alert (no 2x slivers in the alert), the alert's pressed Cancel after it closed
+# (no grey box left on the document's white).
+add_test(NAME hidpi_windows_executor
+  COMMAND bash ${TEST_DIR}/test_hidpi_windows.sh --port 18620)
+set_tests_properties(hidpi_windows_executor PROPERTIES
+  TIMEOUT 180 LABELS "executor" SKIP_RETURN_CODE 77
+  ENVIRONMENT "MACEMU_BINARY=$<TARGET_FILE:mac-phoenix>")
+
 # The 8.6 Finder's desktop labels after an update that covers only part of
 # them: a Finder window over half of two labels closed, the icon column as
 # before (Executor's DMDrawDesktopRegion clipped like the Finder's update).

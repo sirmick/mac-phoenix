@@ -854,6 +854,12 @@ OSErr Executor::C_AECountItems(AEDescList *list, GUEST<int32_t> *count_out)
     Handle aggr_desc_h;
     OSErr err;
 
+    /* MacPhoenix: not a list (8.6's Navigation Services counts a null
+       descriptor when GameBox adds a game): errAEWrongDataType, as
+       AEGetNthDesc answers, instead of reading through its nil data. */
+    if(!LIST_CLASS_P(list) || !DESC_DATA(list))
+        AE_RETURN_ERROR(errAEWrongDataType);
+
     aggr_desc_h = DESC_DATA(list);
     err = get_subdesc_info(aggr_desc_h, &info, false);
     if(err != noErr)

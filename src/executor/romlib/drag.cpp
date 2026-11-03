@@ -51,6 +51,7 @@
 #include <DragMgr.h>
 #include <Gestalt.h>
 #include <MemoryMgr.h>
+#include <OSUtil.h>
 #include <Package.h>
 #include <ProcessMgr.h>
 #include <QuickDraw.h>
@@ -88,8 +89,14 @@ enum
 
 /* gestaltDragMgrPresent, gestaltDragMgrFloatingWind,
    gestaltDragMgrHasImageSupport and bit 31, as 7.5.5 answers with Color
-   QuickDraw. */
-const uint32_t drag_attrs = 0x8000000B;
+   QuickDraw. 8.6 on the G3 answers $3F: gestaltPPCDragLibPresent (bit 2)
+   and the 8.x calls (bits 4 and 5) too, and its Finder installs its
+   tracking and receive handlers only then (without them every drop of
+   its own icons is cancelled: TrackDrag's userCanceledErr). */
+uint32_t drag_attrs()
+{
+    return LM(SysVersion) >= 0x0800 ? 0x3F : 0x8000000B;
+}
 
 /* A drag record's fields the trampolines touch. */
 enum
@@ -376,13 +383,13 @@ bool make_globals()
         return false;
     auto put = [g](int off, uint32_t v) { *(GUEST<uint32_t> *)(g + off) = v; };
     put(g_version, 0x01206001);
-    put(g_attrs, drag_attrs);
+    put(g_attrs, drag_attrs());
     put(g_handlers, US_TO_SYN68K(NewHandleSys(0)));
     put(g_tracking, tracking_stub);
     put(g_receive, receive_stub);
     globals = g;
-    if(NewGestaltValue("drag"_4, drag_attrs) == gestaltDupSelectorErr)
-        ReplaceGestaltValue("drag"_4, drag_attrs);
+    if(NewGestaltValue("drag"_4, drag_attrs()) == gestaltDupSelectorErr)
+        ReplaceGestaltValue("drag"_4, drag_attrs());
     /* gestaltTEAttr: gestaltTEHasGetHiliteRgn, which the patch registers
        too (applications ask it before they drag text). */
     if(NewGestaltValue("teat"_4, 1) == gestaltDupSelectorErr)

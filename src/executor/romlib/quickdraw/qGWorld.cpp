@@ -708,6 +708,11 @@ void Executor::C_SetPixelsState(PixMapHandle pixels, GWorldFlags state)
     }
 }
 
+LONGINT Executor::C_GetPixRowBytes(PixMapHandle pm)
+{
+    return pm ? (*pm)->rowBytes & 0x3FFF : 0; /* the top two bits are flags */
+}
+
 Ptr Executor::C_GetPixBaseAddr(PixMapHandle pixels)
 {
     gw_info_t *gw_info = lookup_gw_info_by_gw_pixmap(pixels);

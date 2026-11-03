@@ -34,6 +34,7 @@
 #include <rsys/segment.h>
 #include <file/file.h>
 #include <rsys/executor.h>
+#include <hidpi/hidpi.h>
 #include <prefs/options.h>
 #include <rsys/launch.h>
 #include <res/resource.h>
@@ -623,6 +624,7 @@ void Executor::C_CloseWindow(WindowPtr w)
 
     /* notify the palette manager this window has been deleted */
     pm_window_closed(w);
+    hidpi::window_gone(w);
 
     /* notify the palette manager that the `FrontWindow ()' may have
        changed */
