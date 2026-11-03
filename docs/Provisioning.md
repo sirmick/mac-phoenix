@@ -121,9 +121,10 @@ serial is typed for them, and serials that came inside an archive are left out
 of it (a bake's `"exclude"` paths, `"Folder:Name"`, leave them off the Installers
 disk too: Office 98's "Serial number" file). Photoshop 4.0, Illustrator 6.0,
 FileMaker Pro 4.0, Persuasion 3.0 and FreeHand 5.5 install with the owner's serial numbers
-(`{"serial": ID}` steps); what an installer or registration logged of them
-(registration data files, installer logs, a registration reminder) is left out,
-but the applications keep the personalisation they were given.
+(`{"serial": ID}` steps), and keep what their installers and registrations
+wrote about the owner's licence (registration data, preferences, installer logs:
+the images are private, and Photoshop 4.0 won't start without its Pipeline
+Preferences). Only what came from an archive's original owner is left out.
 
 ## The internet disk
 

@@ -41,7 +41,7 @@ snapshot's :Items:, each a path or {"app", facts...}: "no_quit",
 deletes them where the snapshot's System Folder part goes), "system_take"
 (System Folder files to take even if only changed: a control panel's
 settings), "system_exclude" (System Folder files left out though new: a
-registration app's preferences holding what was typed into it), "network" (the guest's --network: "socket" for net-bridge),
+registration reminder in Startup Items, an extension for older Systems), "network" (the guest's --network: "socket" for net-bridge),
 "exclude" (names at the top of the target left out of the capture: a self-extracting
 archive copied there to expand in place; "Folder:Name", that path only, on the Installers disk too: a
 serial number file that came with the archive), "volatile" (snapshot paths a run writes differently every time, compared by

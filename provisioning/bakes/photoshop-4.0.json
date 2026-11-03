@@ -1,5 +1,5 @@
 {
- "note": "Adobe Photoshop 4.0 (Adobe, 1996), 68k build: its Installer VISE run in the guest off the floppies (Install-Disk 1 attached: its 1,451K image Disk Copy calls damaged; Disks 2-21 and the two Program Disks mounted by Disk Copy: that many attached disks leave the target unmounted), Easy Install onto the target (QuickTime 2.1 and ATM go in the System Folder), the registration form filled (the owner's serial) and cancelled at its modem step, a restart, then a first launch personalised with the owner's name, organization and serial; the registration's data file and preferences (what was typed into it) are left out",
+ "note": "Adobe Photoshop 4.0 (Adobe, 1996), 68k build: its Installer VISE run in the guest off the floppies (Install-Disk 1 attached: its 1,451K image Disk Copy calls damaged; Disks 2-21 and the two Program Disks mounted by Disk Copy: that many attached disks leave the target unmounted), Easy Install onto the target (QuickTime 2.1 and ATM go in the System Folder), the registration form filled (the owner's serial) and cancelled at its modem step, a restart, then a first launch personalised with the owner's name, organization and serial; the registration's data file and Pipeline Preferences (the owner's licence, which Photoshop checks: without them 'Could not personalize your copy', -25310) are kept",
  "kind": "install",
  "os": "tools-7.6.1",
  "target": "Applications",
@@ -640,12 +640,6 @@
   {
    "close": "Adobe Photoshop® 4.0"
   }
- ],
- "exclude": [
-  "Adobe Photoshop® Registration"
- ],
- "system_exclude": [
-  "Preferences:Pipeline Preferences"
  ],
  "expect": [
   "Adobe Photoshop® 4.0"

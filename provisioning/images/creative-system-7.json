@@ -10,7 +10,9 @@
  "place": [
   {"snapshot": "kidpix-2.5", "take": "Kid Pix", "as": "Kid Pix 2.5 ƒ"},
   {"snapshot": "photoshop-4.0", "take": "Adobe Photoshop® 4.0", "as": "Adobe Photoshop 4.0 ƒ"},
+  {"snapshot": "photoshop-4.0", "take": "Adobe Photoshop® Registration", "to": "Adobe Photoshop 4.0 ƒ"},
   {"snapshot": "illustrator-6.0", "take": "Adobe Illustrator® 6.0", "as": "Adobe Illustrator 6.0 ƒ"},
+  {"snapshot": "illustrator-6.0", "take": "Adobe Illustrator® Registration", "to": "Adobe Illustrator 6.0 ƒ"},
   {"snapshot": "freehand-5.5", "take": "FreeHand 5.5", "as": "Macromedia FreeHand 5.5 ƒ"}
  ]
 }

@@ -1,5 +1,5 @@
 {
- "note": "Aldus Persuasion 3.0 (Aldus, 1993), its nine floppies attached: the Aldus Installer (Disk 1's Utilities) run in the guest, Basic install, the On Screen AutoTemplate, onto the target's top level (the volume opened in its install dialog; selecting it installs into its Desktop Folder), personalised with the owner's name, organization and serial (the installer writes them to the disk copies too: they stay in the bake's work directory). The installer's History (it logs the serial number) and Diagnostics logs and its 1993 Apple® Event Manager extension (System 6's) are left out",
+ "note": "Aldus Persuasion 3.0 (Aldus, 1993), its nine floppies attached: the Aldus Installer (Disk 1's Utilities) run in the guest, Basic install, the On Screen AutoTemplate, onto the target's top level (the volume opened in its install dialog; selecting it installs into its Desktop Folder), personalised with the owner's name, organization and serial (the installer writes them to the disk copies too: they stay in the bake's work directory). The installer's History and Diagnostics logs are kept; its 1993 Apple® Event Manager extension (System 6's) is left out",
  "kind": "install",
  "os": "tools-7.6.1",
  "target": "Applications",
@@ -219,10 +219,6 @@
   {
    "close": "Aldus Persuasion 3.0"
   }
- ],
- "exclude": [
-  "Aldus Persuasion 3.0:Aldus Installer History",
-  "Aldus Persuasion 3.0:Aldus Installer Diagnostics"
  ],
  "system_exclude": [
   "Extensions:Apple® Event Manager"
