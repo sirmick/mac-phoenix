@@ -610,6 +610,13 @@ int syn68k_is_guest_mapped(uintptr_t addr, size_t len)
     return 0;
 }
 
+int syn68k_is_guest_addr_mapped(uint32_t addr, size_t len)
+{
+    int w = addr >> 30;
+    uint64 off = addr & (WINDOW - 1);
+    return w < OFFSET_TABLE_SIZE && off + len <= ROMlib_sizes[w];
+}
+
 /* --watch: a write watchpoint on guest memory (guest_watch.h), asked for
  * before RAM exists and installed when it is mapped. */
 static uint32_t pending_watch_addr;
