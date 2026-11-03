@@ -682,22 +682,8 @@
   "status": "fails",
   "blocker": "no menu: stays behind its splash, no Untitled-1 (Executor; the Quadra and the G3 run it)"
  },
- "w761|Creative:Adobe Photoshop 4.0 ƒ:Adobe Photoshop® 4.0": {
-  "status": "fails",
-  "blocker": "alert \"Could not personalize your copy of Adobe Photoshop® 4.0\": its Pipeline Preferences are in creative-7.6.1's System Folder, not the tab's"
- },
  "w86|Creative:Deneba Canvas 5.0.2 ƒ:Canvas™ 5": {
   "status": "fails",
   "blocker": "no menu: stays behind its splash, no Untitled-1 (Executor; the Quadra and the G3 run it)"
- },
- "w86|Creative:Adobe Photoshop 4.0 ƒ:Adobe Photoshop® 4.0": {
-  "status": "fails",
-  "blocker": "alert \"Could not personalize your copy of Adobe Photoshop® 4.0\": its Pipeline Preferences are in creative-7.6.1's System Folder, not the tab's"
- },
- "7.6.1|Creative:Adobe Photoshop 4.0 ƒ:Adobe Photoshop® 4.0": {
-  "owner": "creative-pack"
- },
- "8.6|Creative:Adobe Photoshop 4.0 ƒ:Adobe Photoshop® 4.0": {
-  "owner": "creative-pack"
  }
 }
