@@ -97,3 +97,16 @@ TEST_F(UnknownSelector, TranslationDispatchSelector20)
     uint32_t d1 = run({ 0x554F, 0x4267, 0x4857, 0x4857, 0x7020, 0xABFC, 0x321F });
     EXPECT_EQ(0xF42F, d1 & 0xFFFF) << "noTranslationPathErr";
 }
+
+/* movea.l #pb,a0; moveq #$C,d0; _HFSDispatch; move.w d0,d1 -- a hole in
+   the File Manager's table (MPW Shell's File > New): paramErr in D0 and
+   in the parameter block's ioResult, a register call */
+TEST_F(UnknownSelector, FSDispatchHole)
+{
+    Ptr pb = NewPtrClear(128);
+    uint32_t a = ptr_to_longint(pb);
+    uint32_t d1 = run({ 0x207C, uint16_t(a >> 16), uint16_t(a), 0x700C, 0xA260, 0x3200 });
+    EXPECT_EQ(0xFFCE, d1 & 0xFFFF) << "paramErr";
+    EXPECT_EQ(0xFFCE, READUW(a + 16)) << "ioResult";
+    DisposePtr(pb);
+}
