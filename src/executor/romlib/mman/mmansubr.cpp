@@ -811,8 +811,6 @@ bool Executor::ROMlib_pushblock(block_header_t *block, block_header_t *after)
     return false;
 }
 
-bool Executor::ROMlib_memnomove_p = 0;
-
 /* Make space for a block of size SIZE starting at BLOCK.  If space
    exists return 1, else return 0.  */
 bool Executor::ROMlib_makespace(block_header_t **block_out, uint32_t size)
@@ -832,8 +830,7 @@ bool Executor::ROMlib_makespace(block_header_t **block_out, uint32_t size)
         (total_size < size && b != bk_lim
          && ((USE(b) == FREE)
              || ((USE(b) == REL)
-                 && !ROMlib_locked(b)
-                 && !ROMlib_memnomove_p)));
+                 && !ROMlib_locked(b))));
         b = BLOCK_NEXT(b))
     {
         if(PSIZE(b) < MIN_BLOCK_SIZE)
@@ -909,9 +906,8 @@ bool Executor::ROMlib_makespace(block_header_t **block_out, uint32_t size)
  * (HLockHi, NewPtr, HUnlock, HPurge per sound) left its pointers among the
  * sounds, the free space between them in pieces once those were purged,
  * and a 355K PICT failed with 4 MB free. */
-/* ROMlib_memnomove_p (no moves until the first event call, an Executor
-   hack for an old Excel) isn't heeded: a Mac moves blocks for NewPtr from
-   the start (the probe calls no event routine first). */
+/* A Mac moves blocks for NewPtr from the start (the probe calls no event
+   routine first). */
 static bool movable_p(block_header_t *b)
 {
     return USE(b) == REL && !ROMlib_locked(b);

@@ -944,7 +944,6 @@ void SetHandleSize(Handle h, Size newsize)
     int32_t oldpsize;
     GUEST<THz> save_zone;
     THz current_zone;
-    bool save_memnomove_p;
     unsigned int state;
 
     if(h == LM(TEScrpHandle))
@@ -983,12 +982,8 @@ void SetHandleSize(Handle h, Size newsize)
         nextblock = BLOCK_NEXT(block);
 
         /* First try and grow it forward */
-        save_memnomove_p = ROMlib_memnomove_p;
-        if(USE(nextblock) == REL && ROMlib_locked(block))
-            ROMlib_memnomove_p = false;
         if(ROMlib_makespace(&nextblock, newsize - oldpsize))
         {
-            ROMlib_memnomove_p = save_memnomove_p;
             ZONE_ZCB_FREE(current_zone)
 
                 = ZONE_ZCB_FREE(current_zone) - PSIZE(nextblock);
@@ -999,7 +994,6 @@ void SetHandleSize(Handle h, Size newsize)
         }
         else
         {
-            ROMlib_memnomove_p = save_memnomove_p;
             /* At this point, if the block is locked, we lose */
             if(ROMlib_locked(block))
                 goto bad;
@@ -1877,12 +1871,11 @@ void MoveHHi(Handle h)
    * to flush the cache.  We only nuke code whose checksums
    * have changed, for speed.
    *
-   * We make an exception for Microsoft Word, because the spelling checker
-   * will be real slow if we don't.
+   * MacPhoenix: for every program, as a 68040's BlockMove pushes the
+   * whole cache (upstream left out Microsoft Word, 'MSWD' and 'ddOr', for
+   * syn68k's speed; the cores are interpreters and flush nothing now).
    */
-
-    if(ROMlib_creator != "MSWD"_4 && ROMlib_creator != "ddOr"_4)
-        ROMlib_destroy_blocks(0, ~0, true);
+    ROMlib_destroy_blocks(0, ~0, true);
 
     THz zone = HandleZone(h);
     if(!zone)

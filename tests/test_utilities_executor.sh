@@ -5,9 +5,11 @@
 # application below launched from it in a session of its own and in front
 # 20 s later. 7.6.1 (68k): Gestalt.Appl. 8.6 (--executor-ppc): Gestalt.Appl,
 # TattleTech 2.84, MacBench 5.0 (its PowerPC code: up to its licence).
-# Screenshots and logs in $TMPDIR. Left out: TattleTech on 7.6.1 (it exits
-# at once, the Quadra runs it), Speedometer 4.0 (stays on its splash; the
-# Quadra and the G3 go on to the registration screen), Clockometer (hangs
+# Screenshots and logs in $TMPDIR. Left out: TattleTech on 7.6.1 68k (it
+# exits at once: UseResFile on a local only its Name Registry path sets, a
+# Power Mac's; stack junk on a Mac, zero on Executor: docs/Provisioning.md),
+# Speedometer 4.0 (its splash waits for a click, on the Quadra too),
+# Clockometer (hangs
 # the Quadra's ROM too: it times the CPU against hardware emulators don't
 # have), Cache-22 ("Unknown processor type" everywhere).
 #

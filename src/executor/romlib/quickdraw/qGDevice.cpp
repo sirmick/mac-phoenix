@@ -280,20 +280,10 @@ GDHandle Executor::C_GetDeviceList()
 
 GDHandle Executor::C_GetMainDevice()
 {
-    GDHandle retval;
-
-    retval = LM(MainDevice);
-
-    /* Unfortunately, Realmz winds up dereferencing non-existent
-     memory unless noDriver is set, but PacMan Deluxe will have
-     trouble if that bit is set. */
-
-    if(ROMlib_creator == "RLMZ"_4)
-        GD_FLAGS(retval) |= 1 << noDriver;
-    else
-        GD_FLAGS(retval) &= ~(1 << noDriver);
-
-    return retval;
+    /* MacPhoenix: the screen has a driver, so noDriver is clear, as on a
+       7.6.1 Quadra (upstream set it for Realmz alone, 'RLMZ'; Realmz 2.5
+       runs without it). */
+    return LM(MainDevice);
 }
 
 GDHandle Executor::C_GetMaxDevice(const Rect *globalRect)

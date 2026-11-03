@@ -39,9 +39,13 @@ The schema's own keywords, beside the standard ones:
 - `x-apply`: `live` (at once), `executor` (Executor restarts: the dialog
   and the bar say "Restart Executor to apply" until it has), `server` (at
   the server's next start: `restart_needed`).
-- `x-labels` (an `enum`'s), `x-group` (a heading before the setting),
-  `x-widget` (`number`, `range`, `path`, `words`,
-  `disk-list`), `x-choices` (options the page knows: `systems`).
+- `x-labels` (an `enum`'s, or its `examples`'), `x-group` (a heading
+  before the setting), `x-widget` (`number`, `range`, `path`, `words`,
+  `disk-list`, `screen`: the `examples` and Custom…), `x-choices`
+  (options the page knows: `systems`), `x-auto` (a setting with an
+  automatic value: `{ value, choices, labels }`, `value` the one stored
+  for Auto, `0` or `"auto"`; the dialog shows an Auto box, then the
+  choices, or a number without them).
 - `readOnly`: answered, never written (`advanced.data`: the data
   directory).
 - `x-version`: the document's version. A new version that renames or
@@ -59,6 +63,27 @@ can_change_server }` (the Go server adds `file`).
 value is 400 `{ error, path }` (`path` dotted: `machine.ram_mb`,
 `disks.mounted[1]`), a setting outside the server's scopes 403. The
 patch is checked whole: nothing changes if any of it is wrong.
+
+## The dialog
+
+The bar's Settings button opens it (`Settings.open(category)`). Its
+changes are a draft: **Save** sends them in one patch (checked whole; a
+refused value is said under its setting and the dialog stays open), then
+closes it; **Cancel** and Escape forget them. The footer says what is
+unsaved and, before Save, which changes Executor (`x-apply: executor`) or
+the server (`x-apply: server`) must restart for; a changed row has a blue
+dot, one saved but waiting for Executor's restart a yellow one (and the
+bar's "Restart Executor to apply"). The Reset buttons put defaults into
+the draft. A setting's `description` is its help: a tooltip
+(`role=tooltip`, the control's `aria-describedby`) shown when the mouse
+rests on the setting or the keyboard's focus is in it. The screen size is
+a list of the classic Macs' (`examples`, named by `x-labels`) with
+Custom… for a width and a height (100 to 9999). A setting with `x-auto`
+(Memory, Colours, Sharpness, Port, Secure cookies) has an Auto box; while
+it is ticked the choices beside it are disabled and show what Auto picks
+here (settings.js `AUTO_PICKS`: Memory and Colours from the System
+chosen, Sharpness from the display); unticked, that pick is the choice.
+No help text says "0 =": the stored 0 is the dialog's Auto.
 
 ## The page
 

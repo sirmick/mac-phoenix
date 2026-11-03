@@ -12,7 +12,6 @@
 #define BROWSER_NAME "Browser"
 namespace Executor
 {
-extern LONGINT ROMlib_creator;
 extern void executor_main();
 extern void InitLowMem();
 extern void InitPerProcessLowMem();

@@ -50,6 +50,8 @@
 #include <base/traps.impl.h>
 #include <prefs/prefs.h>
 
+#include <vector>
+
 using namespace Executor;
 
 typedef union {
@@ -313,32 +315,46 @@ static void flscroll(fltype *f, INTEGER from, INTEGER to)
     }
 }
 
-#define CTLFL(sh) \
-    (guest_cast<fltype *>(((WindowPeek)(*(sh))->contrlOwner)->refCon))
+/* MacPhoenix: a Standard File dialog's refCon is 'stdf' all along, as on
+   the Quadra (its hooks and filters see it, and so does anything else
+   that looks); Executor's state for it is in this list, by dialog.
+   (Upstream kept the state in the refCon and put 'stdf' there only
+   around hook and filter calls, with a copy of the state for Excel 4,
+   whose dialog over Standard File's came while the refCon was 'stdf'.) */
+static std::vector<std::pair<DialogPtr, fltype *>> open_dialogs;
 
-/*
- * this hack is necessary because Excel 4 can bring up a dialog on top of
- * stdfile at a time when the refcon has been set to 'stdf'.
- */
-
-static LONGINT emergency_save_ref_con;
+namespace
+{
+struct OpenDialog
+{
+    DialogPtr dp;
+    OpenDialog(DialogPtr dp_, fltype *fl) : dp(dp_)
+    {
+        open_dialogs.emplace_back(dp, fl);
+        SetWRefCon((WindowPtr)dp, "stdf"_4);
+    }
+    ~OpenDialog()
+    {
+        for(auto it = open_dialogs.begin(); it != open_dialogs.end(); ++it)
+            if(it->first == dp)
+            {
+                open_dialogs.erase(it);
+                break;
+            }
+    }
+};
+}
 
 static fltype *
 WINDFL(void *dp)
 {
-    GUEST<LONGINT> retval;
-
-    retval = ((WindowPeek)dp)->refCon;
-    if(retval == "stdf"_4)
-        return (fltype *)SYN68K_TO_US(emergency_save_ref_con);
-    else
-        return guest_cast<fltype *>(retval);
+    for(auto it = open_dialogs.rbegin(); it != open_dialogs.rend(); ++it)
+        if(it->first == (DialogPtr)dp)
+            return it->second;
+    return nullptr;
 }
 
-#if 0
-#define WINDFL(dp) \
-    ((fltype *)(long)((WindowPeek)dp)->refCon)
-#endif
+#define CTLFL(sh) WINDFL((*(sh))->contrlOwner)
 
 static void C_ROMlib_stdftrack(ControlHandle sh, INTEGER part)
 {
@@ -1035,10 +1051,7 @@ static Boolean
 call_magicfp(fltype *fl, DialogPtr dp, EventRecord *evt, GUEST<INTEGER> *ith)
 {
     Boolean retval;
-    LONGINT save_ref_con;
 
-    save_ref_con = GetWRefCon(dp);
-    SetWRefCon(dp, "stdf"_4);
     ROMlib_hook(stdfile_filtnumber);
 
     switch(fl->flavor)
@@ -1058,8 +1071,6 @@ call_magicfp(fltype *fl, DialogPtr dp, EventRecord *evt, GUEST<INTEGER> *ith)
             warning_unexpected("flavor = %d", fl->flavor);
             retval = false;
     }
-
-    SetWRefCon(dp, save_ref_con);
 
     return retval;
 }
@@ -1625,13 +1636,8 @@ static INTEGER
 ROMlib_CALLDHOOK(fltype *fl, INTEGER ihit, DialogPtr dp, dialog_hook_u dhu)
 {
     INTEGER retval;
-    LONGINT save_ref_con;
 
     ROMlib_hook(stdfile_dialhooknumber);
-
-    save_ref_con = GetWRefCon(dp);
-    emergency_save_ref_con = save_ref_con;
-    SetWRefCon(dp, "stdf"_4);
 
     switch(fl->flavor)
     {
@@ -1647,7 +1653,6 @@ ROMlib_CALLDHOOK(fltype *fl, INTEGER ihit, DialogPtr dp, dialog_hook_u dhu)
             retval = 0;
             break;
     }
-    SetWRefCon(dp, save_ref_con);
     return retval;
 }
 
@@ -2032,7 +2037,6 @@ void spfcommon(Point p, ConstStringPtr prompt, ConstStringPtr name, dialog_hook_
         Handle pnhand = nullptr, ejhand, drhand, sahand;
         OSErr err;
         ControlHandle scrollh;
-        // FIXME: #warning structure referenced using 32 bit pointer from refcon
         fltype f;
         GrafPtr gp;
         INTEGER openorsave, promptitem, nmlistitem, diskname, ejectitem, driveitem;
@@ -2216,8 +2220,7 @@ void spfcommon(Point p, ConstStringPtr prompt, ConstStringPtr name, dialog_hook_
             else
                 (SF_NAME(&f))[0] = 0;
         }
-        // FIXME: #warning not 64-bit clean
-        SetWRefCon((WindowPtr)dp, US_TO_SYN68K(&f));
+        OpenDialog open_dialog(dp, &f);
         if(dp->portRect.bottom + p.v + 7 > qdGlobals().screenBits.bounds.bottom)
             p.v = qdGlobals().screenBits.bounds.bottom - dp->portRect.bottom - 7;
         if(p.v < LM(MBarHeight) + 7)

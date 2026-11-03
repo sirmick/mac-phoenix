@@ -294,8 +294,6 @@ OSErr Executor::C__AE_hdlr_install(AE_hdlr_table_h table, int32_t unknown_1,
     AE_RETURN_ERROR(noErr);
 }
 
-bool Executor::application_accepts_open_app_aevt_p;
-
 OSErr Executor::C_AEInstallEventHandler(AEEventClass event_class,
                                         AEEventID event_id,
                                         AEEventHandlerUPP hdlr_fn,
@@ -325,10 +323,6 @@ OSErr Executor::C_AEInstallEventHandler(AEEventClass event_class,
 
     /* warning: `elt' is a pointer into an unlocked handle */
     elt->hdlr = hdlr;
-
-    /* hack because various applications complain if they get sent
-     an open application event and don't have a handler for it */
-    application_accepts_open_app_aevt_p = true;
 
     AE_RETURN_ERROR(noErr);
 }
@@ -366,10 +360,6 @@ OSErr Executor::C_AEGetEventHandler(AEEventClass event_class,
     /* warning: `elt' is a pointer into an unlocked handle */
     *hdlr = guest_cast<AEEventHandlerUPP>(elt->hdlr.fn);
     *refcon = elt->hdlr.refcon;
-
-    /* hack because various applications complain if they get sent
-     an open application event and don't have a handler for it */
-    application_accepts_open_app_aevt_p = true;
 
     AE_RETURN_ERROR(noErr);
 }

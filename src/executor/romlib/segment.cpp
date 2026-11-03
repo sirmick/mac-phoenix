@@ -148,9 +148,17 @@ void Executor::ClrAppFiles(INTEGER index) /* IMII-58 */
 void Executor::C_GetAppParms(StringPtr namep, GUEST<INTEGER> *rnp,
                              GUEST<Handle> *aphandp) /* IMII-58 */
 {
-    str255assign(namep, LM(CurApName));
-    *rnp = LM(CurApRefNum);
-    *aphandp = LM(AppParmHandle);
+    /* MacPhoenix: a nil output is skipped. The Mac's trap stores to
+       address 0 like any other (a 7.6.1 Quadra: the handle lands in the
+       long at 0), but here that long is nilhandle, kept 0 so nil
+       dereferences work (init.cpp); a program passing nil never reads it
+       back. Realmz passes nil for the handle. */
+    if(namep)
+        str255assign(namep, LM(CurApName));
+    if(rnp)
+        *rnp = LM(CurApRefNum);
+    if(aphandp)
+        *aphandp = LM(AppParmHandle);
 }
 
 static Boolean valid_browser(void)

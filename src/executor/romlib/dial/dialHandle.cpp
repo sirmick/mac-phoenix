@@ -659,6 +659,15 @@ void Executor::C_UpdateDialog(DialogPtr dp, RgnHandle rgn) /* IMIV-60 */
     SetPort((GrafPtr)dp);
     ShowWindow((WindowPtr)dp);
     DrawControls((WindowPtr)dp);
+    /* MacPhoenix: a window made dialogKind by its program has no item
+       list, only what follows its 156 bytes (Dark Castle Demo's): a Mac
+       reads whatever is there; here a list that isn't a handle draws no
+       items. */
+    if(!((DialogPeek)dp)->items || !ROMlib_live_handle_p(((DialogPeek)dp)->items))
+    {
+        SetPort(gp);
+        return;
+    }
     state = HGetState(((DialogPeek)dp)->items);
     HSetState(((DialogPeek)dp)->items, state | LOCKBIT);
     intp = (GUEST<INTEGER> *)*(((DialogPeek)dp)->items);

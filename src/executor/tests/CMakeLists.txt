@@ -48,11 +48,11 @@ set(NATIVE_TEST_SOURCES
         sane.cpp
         localvolume_macbinary.cpp
         typeselect.cpp datetime.cpp numformat.cpp textedit.cpp sysheap.cpp memorymgr.cpp
-        sysroutines.cpp resprivate.cpp unknownselectors.cpp dialogs.cpp
+        sysroutines.cpp resprivate.cpp unknownselectors.cpp dialogs.cpp printing.cpp
         aehdlr.cpp
         aedesc.cpp aeresolve.cpp
         hfsplus_unicode.cpp hfsplus_volume.cpp hfs_volume.cpp
-        exports.cpp cfm.cpp gestalt.cpp menus85.cpp ot_memory.cpp inputsprocket.cpp hidpi_layout.cpp appearance.cpp
+        exports.cpp cfm.cpp gestalt.cpp menus85.cpp ot_memory.cpp inputsprocket.cpp nameregistry.cpp hidpi_layout.cpp appearance.cpp
         # Native-only: drives the .IPP driver through the Device Manager.
         # The dual-mode ABI comparison against Apple's headers belongs in
         # TEST_SOURCES later, once the Retro68 side has MacTCP.h.
@@ -60,7 +60,7 @@ set(NATIVE_TEST_SOURCES
     )
 
 set(TEST_SOURCES
-        files.cpp quickdraw.cpp listmgr.cpp resources.cpp events.cpp
+        files.cpp quickdraw.cpp listmgr.cpp resources.cpp events.cpp commtoolbox.cpp segment.cpp windows.cpp standardfile.cpp
         # Dual-mode on purpose: natively this checks the generated
         # headers against defs/MacTCP.yaml, and under Retro68 -- built
         # against Apple's Universal Interfaces rather than generated

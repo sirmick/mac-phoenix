@@ -158,3 +158,18 @@ TEST_F(UnknownSelector, DisplayDispatchMirroring)
     EXPECT_EQ(0xAA, (uint8_t)buf[0]);
     DisposePtr(buf);
 }
+
+/* movea.l #zone,a0; moveq #$A,d0; _HeapDispatch; move.l a0,d1 -- a zone
+   about to go: a 7.6.1 Quadra (a probe) leaves the zone's header and A0
+   as they were (the System's component code calls it, D0 ignored) */
+TEST_F(UnknownSelector, HeapDispatchForgetZone)
+{
+    Ptr zone = NewPtrClear(64);
+    memset(zone, 0x5A, 64);
+    uint32_t a = ptr_to_longint(zone);
+    uint32_t d1 = run({ 0x207C, (uint16_t)(a >> 16), (uint16_t)a, 0x700A, 0xA0A4, 0x2208 });
+    EXPECT_EQ(a, d1);
+    for(int i = 0; i < 64; i++)
+        EXPECT_EQ(0x5A, (uint8_t)zone[i]);
+    DisposePtr(zone);
+}

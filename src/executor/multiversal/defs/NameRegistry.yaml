@@ -8,8 +8,11 @@
 #
 # Written from Designing PCI Cards and Drivers for Power Macintosh Computers
 # (Apple, 1995-1999), chapter 10, "Name Registry".  No Apple header text is
-# reproduced.  This covers the entry ID, iteration and property access; the
-# search, modifier and name-parsing routines are not declared yet.
+# reproduced.  This covers the entry ID, iteration, search, paths and
+# property access; the modifier routines are not declared yet.  Executor's
+# NameRegistryLib (nameregistry.cpp) is a registry with the root and its
+# "Devices" entry only; the answers, errors included, as a G3's on 8.6
+# (a probe through CFM, 2026-11-03).
 #
 # Natural (PowerPC) alignment through `align: power`, like DriverServices.yaml,
 # and for the same reason: RegEntryID is embedded in drivers' own structures.
@@ -101,11 +104,90 @@
 
 # ####
 
+- typedef:
+    name: RegPathNameSize
+    type: UInt32
+
+# ####
+
+- typedef:
+    name: RegCStrPathName
+    type: char
+
+# ####
+
+- typedef:
+    name: RegPropertyIter
+    type: void*
+
+# ####
+
+- enum:
+    values:
+      - name: nrInvalidNodeErr
+        value: -2538
+        comment: not an entry (an ID from RegistryEntryIDInit, one disposed of)
+      - name: nrNotFoundErr
+        value: -2539
+        comment: no such property
+      - name: nrDataTruncatedErr
+        value: -2543
+      - name: nrPathNotFound
+        value: -2550
+      - name: nrPathBufferTooSmall
+        value: -2551
+
+# ####
+
 - function:
-    name: RegistryEntryIDDispose
+    name: RegistryEntryIDInit
+    return: OSStatus
     args:
       - name: id
         type: RegEntryID*
+    library: NameRegistryLib
+    executor: C_
+    comment: |
+      Not an entry yet: compares equal to another such ID.
+
+# ####
+
+- function:
+    name: RegistryEntryIDCompare
+    return: Boolean
+    args:
+      - name: id1
+        type: const RegEntryID*
+      - name: id2
+        type: const RegEntryID*
+    library: NameRegistryLib
+    executor: C_
+
+# ####
+
+- function:
+    name: RegistryEntryIDCopy
+    return: OSStatus
+    args:
+      - name: src
+        type: const RegEntryID*
+      - name: dst
+        type: RegEntryID*
+    library: NameRegistryLib
+    executor: C_
+
+# ####
+
+- function:
+    name: RegistryEntryIDDispose
+    return: OSStatus
+    args:
+      - name: id
+        type: RegEntryID*
+    library: NameRegistryLib
+    executor: C_
+    comment: |
+      Clears the ID.
 
 # ####
 
@@ -115,14 +197,34 @@
     args:
       - name: cookie
         type: RegEntryIter*
+    library: NameRegistryLib
+    executor: C_
+    comment: |
+      An iterator at the root.
 
 # ####
 
 - function:
     name: RegistryEntryIterateDispose
+    return: OSStatus
     args:
       - name: cookie
         type: RegEntryIter*
+    library: NameRegistryLib
+    executor: C_
+
+# ####
+
+- function:
+    name: RegistryEntryIterateSet
+    return: OSStatus
+    args:
+      - name: cookie
+        type: RegEntryIter*
+      - name: startEntryID
+        type: const RegEntryID*
+    library: NameRegistryLib
+    executor: C_
 
 # ####
 
@@ -138,9 +240,162 @@
         type: RegEntryID*
       - name: done
         type: Boolean*
+    library: NameRegistryLib
+    executor: C_
     comment: |
       Each entry returned in foundEntry must be disposed of with
-      RegistryEntryIDDispose.
+      RegistryEntryIDDispose.  No more entries: done true, noErr.
+
+# ####
+
+- function:
+    name: RegistryEntrySearch
+    return: OSStatus
+    args:
+      - name: cookie
+        type: RegEntryIter*
+      - name: relationship
+        type: RegEntryIterationOp
+      - name: foundEntry
+        type: RegEntryID*
+      - name: done
+        type: Boolean*
+      - name: propertyName
+        type: const RegPropertyName*
+      - name: propertyValue
+        type: const void*
+      - name: propertySize
+        type: RegPropertyValueSize
+    library: NameRegistryLib
+    executor: C_
+    comment: |
+      As RegistryEntryIterate, entries with the property only (and that
+      value, when propertyValue isn't nil).
+
+# ####
+
+- function:
+    name: RegistryEntryToPathSize
+    return: OSStatus
+    args:
+      - name: entryID
+        type: const RegEntryID*
+      - name: pathSize
+        type: RegPathNameSize*
+    library: NameRegistryLib
+    executor: C_
+    comment: |
+      The path's length with its terminating zero.
+
+# ####
+
+- function:
+    name: RegistryCStrEntryToPath
+    return: OSStatus
+    args:
+      - name: entryID
+        type: const RegEntryID*
+      - name: pathName
+        type: RegCStrPathName*
+      - name: pathSize
+        type: RegPathNameSize
+    library: NameRegistryLib
+    executor: C_
+
+# ####
+
+- function:
+    name: RegistryCStrEntryLookup
+    return: OSStatus
+    args:
+      - name: searchPointID
+        type: const RegEntryID*
+      - name: pathName
+        type: const RegCStrPathName*
+      - name: foundEntry
+        type: RegEntryID*
+    library: NameRegistryLib
+    executor: C_
+    comment: |
+      A path of entry names separated by colons, from searchPointID (nil:
+      the root).
+
+# ####
+
+- function:
+    name: RegistryPropertyGetSize
+    return: OSStatus
+    args:
+      - name: entryID
+        type: const RegEntryID*
+      - name: propertyName
+        type: const RegPropertyName*
+      - name: propertySize
+        type: RegPropertyValueSize*
+    library: NameRegistryLib
+    executor: C_
+
+# ####
+
+- function:
+    name: RegistryPropertyGet
+    return: OSStatus
+    args:
+      - name: entryID
+        type: const RegEntryID*
+      - name: propertyName
+        type: const RegPropertyName*
+      - name: propertyValue
+        type: void*
+      - name: propertySize
+        type: RegPropertyValueSize*
+    library: NameRegistryLib
+    executor: C_
+    comment: |
+      propertySize is the buffer size on entry and the value's size on
+      return.
+
+# ####
+
+- function:
+    name: RegistryPropertyIterateCreate
+    return: OSStatus
+    args:
+      - name: entry
+        type: const RegEntryID*
+      - name: cookie
+        type: RegPropertyIter*
+    library: NameRegistryLib
+    executor: C_
+
+# ####
+
+- function:
+    name: RegistryPropertyIterateDispose
+    return: OSStatus
+    args:
+      - name: cookie
+        type: RegPropertyIter*
+    library: NameRegistryLib
+    executor: C_
+
+# ####
+
+- function:
+    name: RegistryPropertyIterate
+    return: OSStatus
+    args:
+      - name: cookie
+        type: RegPropertyIter*
+      - name: foundProperty
+        type: RegPropertyName*
+      - name: done
+        type: Boolean*
+    library: NameRegistryLib
+    executor: C_
+    comment: |
+      foundProperty: a buffer of 32 bytes (a property name's longest, with
+      its zero).
 
 # ####
 
@@ -159,37 +414,6 @@
     comment: |
       Fails if the property already exists; use RegistryPropertySet to
       change the value of an existing one.
-
-# ####
-
-- function:
-    name: RegistryPropertyGetSize
-    return: OSStatus
-    args:
-      - name: entryID
-        type: const RegEntryID*
-      - name: propertyName
-        type: const RegPropertyName*
-      - name: propertySize
-        type: RegPropertyValueSize*
-
-# ####
-
-- function:
-    name: RegistryPropertyGet
-    return: OSStatus
-    args:
-      - name: entryID
-        type: const RegEntryID*
-      - name: propertyName
-        type: const RegPropertyName*
-      - name: propertyValue
-        type: void*
-      - name: propertySize
-        type: RegPropertyValueSize*
-    comment: |
-      propertySize is the buffer size on entry and the value's size on
-      return.
 
 # ####
 

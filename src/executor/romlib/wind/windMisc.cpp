@@ -19,7 +19,6 @@
 #include <MemoryMgr.h>
 #include <MenuMgr.h>
 
-#include <rsys/evil.h>
 #include <rsys/executor.h>
 #include <hidpi/hidpi.h>
 #include <base/functions.impl.h>
@@ -580,10 +579,6 @@ void Executor::WINDCALLDESKHOOK(void)
     EM_A3 = savea3;
 }
 
-#if defined(EVIL_ILLUSTRATOR_7_HACK)
-Boolean Executor::ROMlib_evil_illustrator_7_hack = false;
-#endif
-
 int32_t Executor::ROMlib_windcall(WindowPtr wind, int16_t mess, int32_t param)
 {
     Handle defproc;
@@ -608,20 +603,9 @@ int32_t Executor::ROMlib_windcall(WindowPtr wind, int16_t mess, int32_t param)
 
     wp = (WindowDefUPP)*defproc;
 
-#if defined EVIL_ILLUSTRATOR_7_HACK
-    Boolean save_hack;
-
-    save_hack = ROMlib_evil_illustrator_7_hack;
-    ROMlib_evil_illustrator_7_hack = ROMlib_creator == "ART5"_4;
-#endif
-
     ROMlib_hook(wind_wdefnumber);
     HLockGuard guard(defproc);
     retval = wp(var(wind), wind, mess, param);
-
-#if defined EVIL_ILLUSTRATOR_7_HACK
-    ROMlib_evil_illustrator_7_hack = save_hack;
-#endif
 
     if(mess == wCalcRgns)
         wind->portBits.bounds = saverect;

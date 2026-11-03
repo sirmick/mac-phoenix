@@ -18,6 +18,7 @@
 #include <ProcessMgr.h>
 #include <CommTool.h>
 #include <rsys/segment.h>
+#include <base/traps.h>
 #include <res/resource.h>
 #include <rsys/toolutil.h>
 #include <rsys/osutil.h>
@@ -313,8 +314,12 @@ RAW_68K_IMPLEMENTATION(CommToolboxDispatch)
             EM_D0 = InitCRM();
             break;
         default:
-            warning_unimplemented(""); /* now Quicken 6 will limp */
-            EM_D0 = 0;
+        {
+            char what[64];
+            snprintf(what, sizeof what, "CommToolboxDispatch selector $%04X", selector & 0xFFFF);
+            traps::log_unimplemented(what);
+            EM_D0 = 0; /* now Quicken 6 will limp */
+        }
             break;
     }
     RTS();
