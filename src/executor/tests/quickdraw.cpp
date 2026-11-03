@@ -835,3 +835,33 @@ TEST(QuickDraw, WidthListBadEntry)
     TextSize(12);
 }
 #endif
+
+/* Random as the Quadra's ROM answers it (a probe on the ROM machine): a
+   seed with its top bit set counts as its low 31 bits plus one, 0 and
+   2^31-1 stay 0. Photoshop 4.0 decodes its personalization with it. */
+TEST(QuickDraw, RandomAsTheROM)
+{
+    static const struct { uint32_t seed; short r1; uint32_t s1; short r4; uint32_t s4; } cases[] = {
+        { 0x00000000, 0, 0x00000000, 0, 0x00000000 },
+        { 0x00000001, 16807, 0x000041a7, 3114, 0x3ab50c2a },
+        { 0x00bc614e, 18498, 0x4f984842, 1366, 0x6bf40556 },
+        { 0x7ffffffe, -16808, 0x7fffbe58, -3115, 0x454af3d5 },
+        { 0x7fffffff, 0, 0x00000000, 0, 0x00000000 },
+        { 0x80000001, -31922, 0x0000834e, 6228, 0x756a1854 },
+        { 0xfffffffb, 15114, 0x7fff3b0a, -9344, 0x4fe0db80 },
+        { 0x3fffffff, -8404, 0x3fffdf2c, 31210, 0x62a579ea },
+        { 0xdeadbeef, -20705, 0x60d2af1f, 14484, 0x38913894 },
+    };
+    int32_t saved = qd.randSeed;
+    for(auto &c : cases)
+    {
+        qd.randSeed = (int32_t)c.seed;
+        EXPECT_EQ(c.r1, Random()) << std::hex << c.seed;
+        EXPECT_EQ(c.s1, (uint32_t)qd.randSeed) << std::hex << c.seed;
+        Random();
+        Random();
+        EXPECT_EQ(c.r4, Random()) << std::hex << c.seed;
+        EXPECT_EQ(c.s4, (uint32_t)qd.randSeed) << std::hex << c.seed;
+    }
+    qd.randSeed = saved;
+}
