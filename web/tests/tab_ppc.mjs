@@ -88,8 +88,9 @@ await page.locator('#screen').screenshot({ path: path.join(dir, 'tab_ppc_desktop
 // The startup disk's window: the icons down the right edge, found by trying
 // the slots; timed from the double-click to the window in the list and to
 // the screen quiet (the Finder fills it from a thread). 8.6's slots are 64
-// pixels apart; a volume's icon (Executor's drive icon, as Basilisk II's)
-// is drawn and hit only in rows 19-27 of its 32: y 48-54, 112-118 here.
+// pixels apart; a volume's icon (8.6's hard disk icon; on 7.x Executor's
+// drive icon, as Basilisk II's, rows 19-27 of its 32) is hit at y 48-54,
+// 112-118 here.
 // The disks can come up after the desktop: the slots again, three times.
 const box = await page.locator('#screen').boundingBox();
 const at = (x, y) => [box.x + x * box.width / 640, box.y + y * box.height / 480];

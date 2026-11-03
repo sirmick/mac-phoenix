@@ -19,6 +19,7 @@
 #include <file/file.h>
 #include <file/fsm.h>
 #include <hfs/drive_flags.h>
+#include <prefs/prefs.h>
 #include <rsys/device.h>
 #include <rsys/hostdisk.h>
 #include <base/traps.impl.h>
@@ -29,9 +30,15 @@ using namespace Executor;
 
 namespace
 {
-/* ICN#: a drive outline with a light, rows 19..27 (Basilisk's shape). */
+/* ICN#: a drive outline with a light, rows 19..27 (Basilisk's shape),
+   for 7.x's Finder (with no drive icon it shows a document's). None on
+   8.x: its Finder and IconServices then show the System's own hard disk
+   icon, 8.6's platinum one, as on a Mac with Apple's drivers (the bar was
+   "small white bars instead of disk icons"). */
 Ptr drive_icon()
 {
+    if(system_version >= 0x800)
+        return nullptr;
     static Ptr icon;
     if(icon)
         return icon;
@@ -121,8 +128,12 @@ static OSErr C_hostdisk_ctl(ParmBlkPtr pbp, DCtlPtr dcp)
             return done(pbp, wPrErr);
         case 21: /* drive icon */
         case 22: /* media icon */
-            *param = US_TO_SYN68K(drive_icon());
-            return done(pbp, noErr);
+            if(Ptr icon = drive_icon())
+            {
+                *param = US_TO_SYN68K(icon);
+                return done(pbp, noErr);
+            }
+            return done(pbp, controlErr);
         case 23: /* drive info: unspecified fixed SCSI disk */
             *param = 0x0601;
             return done(pbp, noErr);
@@ -197,8 +208,13 @@ bool Executor::ROMlib_image_drive_control(ParmBlkPtr pbp, OSErr *err)
                DOS disk) shows the icon that file system gives it */
             if(Ptr icon = ROMlib_fsm_drive_icon(pbp->cntrlParam.ioVRefNum))
                 *param = US_TO_SYN68K(icon);
+            else if(Ptr icon = drive_icon())
+                *param = US_TO_SYN68K(icon);
             else
-                *param = US_TO_SYN68K(drive_icon());
+            {
+                *err = done(pbp, controlErr);
+                return true;
+            }
             break;
         case 23: /* drive info: unspecified fixed SCSI disk */
             *param = 0x0601;

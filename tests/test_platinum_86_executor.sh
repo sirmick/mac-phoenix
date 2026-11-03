@@ -9,6 +9,8 @@
 #  2. A Finder window's scroll bar thumb: fixed size with its grip, one
 #     black line between it and the pages (it was proportional, plain, and
 #     two lines thick against them).
+#  3. The desktop's disk icons: 8.6's hard disk icon (they were small white
+#     bars: Executor's drive icon, kept for 7.x).
 #
 # Usage:
 #   tests/test_platinum_86_executor.sh [--timeout N] [--port N]
@@ -94,6 +96,19 @@ EOF
 )
 echo "Apple menu icon: rows $ROWS (the G3: 2 16)"
 [[ "$ROWS" == "2 16" ]] || fail "the apple is not where the G3 draws it"
+
+# ---- 3. the startup disk's icon (x 575..611, y 96..125): 8.6's hard disk
+# icon, platinum greys; Executor's drive icon was a black and white bar
+GREYS=$(python3 - "$WORK/desktop.png" <<'EOF2'
+import sys
+from PIL import Image
+im = Image.open(sys.argv[1]).convert('RGB')
+grey = lambda p: p[0] == p[1] == p[2] and 0x80 <= p[0] <= 0xEE
+print(sum(1 for x in range(575, 612) for y in range(96, 126) if grey(im.getpixel((x, y)))))
+EOF2
+)
+echo "Macintosh HD icon: $GREYS grey pixels (8.6's hard disk icon: about 300; the bar: 0)"
+[[ "$GREYS" -gt 100 ]] || fail "the startup disk's icon is not 8.6's hard disk icon"
 
 # ---- 2. a scroll bar's thumb: the System Folder's window (as the image's
 # Finder keeps it: its vertical bar at x 402..417, the up arrow's bottom
