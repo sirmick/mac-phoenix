@@ -1,0 +1,13 @@
+{
+ "title": "Mac OS 8.6 for creative",
+ "tags": [
+  "creative",
+  "ppc"
+ ],
+ "note": "Mac OS 8.6 (PowerPC) with what the creative apps put in the System Folder (Illustrator 8.0's fonts, plug-in support and preferences); the apps themselves are on Creative (Mac OS 8).",
+ "base": "standard-8.6",
+ "system_from": [
+  "illustrator-8.0"
+ ],
+ "aliases_to": "creative-macos-8"
+}

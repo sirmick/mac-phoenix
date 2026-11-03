@@ -65,6 +65,11 @@
   "os": "8.6",
   "machines": ["ppc"]
  },
+ "tools-8.6-ai6": {
+  "built": "tools-8.6-ai6",
+  "os": "8.6",
+  "machines": ["ppc"]
+ },
  "standard-8.6": {
   "built": "8.6",
   "os": "8.6",
