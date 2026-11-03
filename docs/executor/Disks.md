@@ -140,7 +140,7 @@ seconds after the Finder started, an Executor bug: the Shared Library
 Manager's code ('root' 2, read with the System heap current) was in the
 startup application heap, as Executor read a resource into its file's
 map's zone rather than the current one (`ResourceTest.LoadsIntoCurrentZone`,
-res/resOpen.cpp `load_zone`); that heap is reused once the Finder runs
+res/resOpen.cpp `ROMlib_load_zone`); that heap is reused once the Finder runs
 (here as it launched Kodak's application in Startup Items), and the
 `.SLM` driver's accRun jumped into what was put there. The disk's record
 says what is there: `system_additions` `{folder, files, bytes, items,

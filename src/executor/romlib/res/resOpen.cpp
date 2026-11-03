@@ -274,7 +274,7 @@ decompress_setup(INTEGER rn, int32_t *dlenp, int32_t *final_sizep, int32_t *offs
    file, the font files chained to it, system-mode files: one map for
    every process): there the System heap, where the shared map never
    names a block of a heap that goes away with a process. */
-static GUEST<THz> load_zone(resmaphand map, resref *rr)
+GUEST<THz> Executor::ROMlib_load_zone(resmaphand map, resref *rr)
 {
     if((rr->ratr & resSysHeap) || HandleZone((Handle)map) == LM(SysZone))
         return LM(SysZone);
@@ -325,7 +325,7 @@ static Handle mgetres_helper(resmaphand map, resref *rr, int32_t dlen,
 
         if(!rr->rhand)
         {
-            LM(TheZone) = load_zone(map, rr);
+            LM(TheZone) = ROMlib_load_zone(map, rr);
             retval = NewHandle(uncompressed_size + dcmp_offset);
             rr->rhand = retval;
         }
@@ -443,7 +443,7 @@ Executor::ROMlib_mgetres2(resmaphand map, resref *rr)
                     retval = mgetres_helper(map, rr, dlen, retval);
                 else if(!rr->rhand)
                 {
-                    LM(TheZone) = load_zone(map, rr);
+                    LM(TheZone) = ROMlib_load_zone(map, rr);
                     retval = NewEmptyHandle();
                     rr->rhand = retval;
                 }
