@@ -92,6 +92,8 @@ struct Run
     std::vector<float> xs;           /* each glyph's origin */
     std::vector<float> advances;     /* and the pen's advance after it (1x) */
     std::vector<IRect> clip;         /* where QuickDraw could draw: vis & clip & box */
+    const void *port = nullptr;      /* the port it was drawn in: its visRgn shrinking
+                                        shrinks clip (vis_changed) */
     Shapes shapes;                   /* chrome (no glyphs): drawn instead of its pixels */
     bool noInk = false;              /* before == after: QuickDraw changed nothing (it was
                                         there already): any change in the box ends it */

@@ -86,6 +86,17 @@ void forget_offscreen(GWorldPtr gw);
    active(). */
 void chrome_draw(const Rect &r, Shapes shapes, const std::function<void()> &blit);
 
+/* PORT's visRgn was computed again (CalcVis): its runs on the screen
+   are clipped to it. A window put in front of them hides them where its
+   pixels happen to be what theirs were (an alert's white over a text
+   window's). */
+void vis_changed(GrafPtr port);
+
+/* The window PORT is hidden or closed: its runs on the screen go (what's
+   behind is drawn there; a closed alert's pressed Cancel left behind
+   showed wherever the pixels came back the same). */
+void window_gone(GrafPtr port);
+
 /* The presentation surface for the 1x frame ARGB (W x H, rows of W):
    RECTS (1x) changed since the last call, OUT (OW x OH) is redrawn there.
    On the front end's render thread, after ARGB is converted from the
@@ -108,6 +119,8 @@ inline void copy_bits(const PixMap *, const PixMap *, const Rect *, const Rect *
 inline void forget_offscreen(GWorldPtr) {}
 inline void text_draw(const TextParams &, const std::function<void()> &blit) { blit(); }
 inline void chrome_draw(const Rect &, Shapes, const std::function<void()> &blit) { blit(); }
+inline void vis_changed(GrafPtr) {}
+inline void window_gone(GrafPtr) {}
 inline void compose(const uint32_t *, int, int, const DirtyRects::Rects &, uint32_t *, int, int) {}
 inline void scaled_size(int w, int h, int *ow, int *oh) { *ow = w; *oh = h; }
 

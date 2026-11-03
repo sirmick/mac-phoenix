@@ -406,7 +406,14 @@ drawn again outside its update region). A run drawn over until no pixel
 it changed is left (a button drawn up again over its pressed look) goes:
 it could never be found stale. One whose drawing changed nothing (chrome
 drawn again over the same pixels) is stale at any change in its box. At
-most 4096 runs; stale ones go when text is drawn over them.
+most 4096 runs; stale ones go when text is drawn over them. A run knows its port: when the Window Manager computes that window's
+visRgn again (CalcVis: a window put in front), the run is clipped to it,
+and when the window is hidden or closed its runs go. The pixels alone
+can't tell: an alert's white over a text window's white left slivers of
+the outline glyphs inside the alert, and a closed alert's pressed Cancel
+(a grey box, its title white) came back over a document's white
+(`tests/test_hidpi_windows.sh`). Runs a menu's saved bits carry back keep
+their window's port.
 `tests/test_hidpi_chrome.sh` (ChromeGallery) has a case for each.
 
 Text modes: srcOr, srcBic (the text in the background colour: selected
