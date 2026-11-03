@@ -104,9 +104,13 @@ const imageIds = {};
 const plainKey = (name, size, time) => `${name}-${size}-${time}`.replace(/[^\w.-]/g, '_');
 
 // starting: the progress to the loading panel's Disks step (else the status).
+// Each disk image fetched: the url it came from, by its file's name (a
+// library System disk put in and the panel's choice of it, by url).
+const fetchedFrom = new Map();
 async function fetchDisk(url, { starting = false } = {}) {
     const absolute = new URL(url, location.href).href;
     const name = decodeURIComponent(new URL(absolute).pathname.split('/').pop());
+    fetchedFrom.set(name, absolute);
     const progress = (got, total) => {
         if (starting)
             return Loading.step('disks', { got, total });
@@ -590,42 +594,67 @@ document.addEventListener('visibilitychange', () => {
 
 // The System to run on: Executor's own (''), a disk image's (its name), or
 // a library System disk's (its url: put in, then that), remembered across
-// visits. The choice is in the Disks panel (disks.js).
+// visits (machine.system: the image's name). Chosen in the Disks panel
+// (disks.js) or Settings > Machine; the library System disk the last
+// choice put in comes out of disks.mounted when the choice changes.
+const systemDisks = () => library.filter((d) => (d.tags || []).includes('system'));
+const isSystemDisk = (u) => systemDisks().some((d) => href(d.url) === href(u));
+// The library System disk a file NAME came from (its url), if it did.
+const systemUrlOf = (name) => {
+    const u = name && fetchedFrom.get(name);
+    return u && isSystemDisk(u) ? u : undefined;
+};
+let lastSystem, lastSystemUrl;      // the System as last chosen: its name, its library disk's url
+async function pickSystem(value) {
+    // a library System disk: by its url, or by the name of the one in already
+    const url = value.includes('/') ? value : systemUrlOf(value);
+    const d = url ? systemDisks().find((x) => href(x.url) === href(url)) : null;
+    const prev = lastSystemUrl || systemUrlOf(lastSystem === undefined ? Settings.get('machine.system') : lastSystem);
+    let mounted = picked();
+    if (prev && !(d && href(prev) === href(d.url)))
+        mounted = mounted.filter((u) => href(u) !== href(prev));
+    // (one in already, as a disk of its own, stays in after: not ours)
+    const ours = d && !mounted.some((u) => href(u) === href(d.url));
+    if (ours)
+        mounted = [...mounted, d.url];
+    lastSystem = d ? fileName(d.url) : value;
+    lastSystemUrl = ours ? d.url : (d && prev && href(prev) === href(d.url) ? prev : undefined);
+    await Settings.set({ machine: { system: lastSystem }, disks: { mounted } });
+    return d;
+}
 systemSelect.addEventListener('change', async () => {
-    const value = systemSelect.value;
-    const d = library.find((x) => x.url === value);
     generation++;
     await saveAndStop();            // (not live: the disk waits for the start)
+    const d = await pickSystem(systemSelect.value).catch(() => null);
     if (d) {
-        const mounted = picked().some((u) => href(u) === href(d.url)) ? picked() : [...picked(), d.url];
-        await Settings.set({ machine: { system: fileName(d.url) }, disks: { mounted } });
         try {
             const file = await fetchDisk(d.url);
             sessionFiles = sessionFiles.filter((f) => f.name !== file.name).concat(file);
         } catch (e) {
             status.textContent = `Cannot load ${d.url}: ${e.message}`;
         }
-    } else {
-        await Settings.set({ machine: { system: value } }).catch(() => {});
     }
     start();
 });
-// The Settings dialog's System choices: the same as the panel's, by name
-// (a library System disk's file name: chosen there, it is put in).
-const systemDisks = () => library.filter((d) => (d.tags || []).includes('system'));
+// The Settings dialog's System choices: the panel's. A library System disk
+// not in yet by its url (chosen there, it goes in: below).
 Settings.provide('systems', () => [
     ...shownFiles.filter((f) => IMAGE.test(f.name) && !isCD(f.name))
         .map((f) => ({ value: f.name, label: (library.find((d) => fileName(d.url) === f.name) || {}).title || f.name })),
     ...systemDisks().filter((d) => !shownFiles.some((f) => f.name === fileName(d.url)))
-        .map((d) => ({ value: fileName(d.url), label: `${d.title} (from the library)` })),
+        .map((d) => (picked().some((u) => href(u) === href(d.url))
+            ? { value: fileName(d.url), label: d.title }                   // (in, on its way)
+            : { value: d.url, label: `${d.title} (from the library)` })),
 ]);
 // One source of truth: the machine.system setting. The panel's choice
-// writes it (above); a change from elsewhere (the Settings dialog) shows
-// in the panel, a library System disk picked there going in too.
+// writes it (pickSystem); one from elsewhere (the Settings dialog) goes
+// through pickSystem too (a library disk by url: put in, the name kept;
+// the last System's library disk out), and shows in the panel.
 Settings.on('machine.system', (v) => {
-    const d = systemDisks().find((x) => fileName(x.url) === v);
-    if (d && !picked().some((u) => href(u) === href(d.url)))
-        Settings.set({ disks: { mounted: [...picked(), d.url] } }).catch(() => {});
+    if (lastSystem === undefined && !(v || '').includes('/'))
+        lastSystem = v || '';           // (the saved one, as the page loads)
+    else if (v !== lastSystem)
+        pickSystem(v || '').catch(() => {});
     showSystems(shownFiles);
 });
 

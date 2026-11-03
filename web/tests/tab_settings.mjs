@@ -271,32 +271,50 @@ try {
                 return p.$eval('#setting-machine-system', (s) => ({ value: s.value, options: [...s.options].map((o) => [o.value, o.textContent]) }));
             };
             let m = await machine();
-            check(m.options.some(([v, t]) => v === 'sys-a.img' && t === 'System A (from the library)')
-                  && m.options.some(([v]) => v === 'sys-b.img'), `tools/standalone: Settings offers the library's Systems (${JSON.stringify(m.options)})`);
+            check(m.options.some(([v, t]) => v.endsWith('/sys-a.img') && t === 'System A (from the library)')
+                  && m.options.some(([v]) => v.endsWith('/sys-b.img')), `tools/standalone: Settings offers the library's Systems (${JSON.stringify(m.options)})`);
             await p.keyboard.press('Escape');
             // The panel's choice, then the dialog opened again
-            await p.evaluate(() => {
+            const panelPick = (n) => p.evaluate((n) => {
                 const s = systemSelect;     // (main.js; in the Disks panel when it is open)
-                s.value = [...s.options].find((o) => o.value.endsWith('sys-a.img')).value;
+                s.value = [...s.options].find((o) => o.value === n || o.value.endsWith(`/${n}`)).value;
                 s.dispatchEvent(new Event('change'));
-            });
+            }, n);
+            const systemsIn = () => p.evaluate(() => Settings.get('disks.mounted').map((u) => u.split('/').pop()).filter((n) => /^sys-/.test(n)));
+            await panelPick('sys-a.img');
             await p.waitForFunction(() => Settings.get('machine.system') === 'sys-a.img');
             m = await machine();
             const label = (m.options.find(([v]) => v === m.value) || [])[1] || '';
             check(m.value === 'sys-a.img' && !/not here/.test(label),
                   `tools/standalone: the panel's System shown in Settings when it opens (${m.value}: ${label})`);
             // ... and while it is open: a change from the page reaches it
-            await p.evaluate(() => Settings.set({ machine: { system: 'sys-b.img' } }));
-            check(await p.$eval('#setting-machine-system', (s) => s.value) === 'sys-b.img',
+            await p.keyboard.press('Escape');
+            m = await machine();
+            await p.evaluate(() => Settings.set({ machine: { system: 'blank.img' } }));
+            check(await p.$eval('#setting-machine-system', (s) => s.value) === 'blank.img',
                   'tools/standalone: the open dialog follows a change of the System');
-            // The dialog's choice, saved: the panel follows, the disk put in
-            await p.selectOption('#setting-machine-system', 'sys-a.img');
+            await p.waitForFunction(() => !Settings.get('disks.mounted').some((u) => u.endsWith('sys-a.img')));
+            check(true, "tools/standalone: ... the last System's library disk out of disks.mounted");
+            // The dialog's choice (a library System disk, by its url), saved:
+            // the panel follows, the disk put in
+            const bUrl = (await p.$$eval('#setting-machine-system option', (o) => o.map((x) => x.value))).find((v) => v.endsWith('/sys-b.img'));
+            await p.selectOption('#setting-machine-system', bUrl);
             await save(p);
-            await p.waitForFunction(() => Settings.get('machine.system') === 'sys-a.img');
+            await p.waitForFunction(() => Settings.get('machine.system') === 'sys-b.img');
             const panel = await p.evaluate(() => systemSelect.value);
-            check(/sys-a\.img$/.test(panel), `tools/standalone: Settings' System shown in the Disks panel (${panel})`);
-            check(await p.evaluate(() => Settings.get('disks.mounted').some((u) => u.endsWith('sys-a.img'))),
-                  "tools/standalone: ... the library's System disk put in (disks.mounted)");
+            check(/sys-b\.img$/.test(panel), `tools/standalone: Settings' System shown in the Disks panel (${panel})`);
+            await p.waitForFunction(() => Settings.get('disks.mounted').some((u) => u.endsWith('sys-b.img')));
+            check(true, "tools/standalone: ... the library's System disk put in (disks.mounted)");
+            // a -> b -> a in the panel: only the System's disk stays in, each time
+            const after = [];
+            for (const n of ['sys-a.img', 'sys-b.img', 'sys-a.img']) {
+                await panelPick(n);
+                await p.waitForFunction((n) => Settings.get('machine.system') === n, n);
+                await p.waitForTimeout(300);
+                after.push((await systemsIn()).join('+'));
+            }
+            check(after.join(' ') === 'sys-a.img sys-b.img sys-a.img',
+                  `tools/standalone: System a -> b -> a: only the System's library disk in disks.mounted (${after.join(', ')})`);
         }
         if (shots) {
             // Every tab, over Executor running.
