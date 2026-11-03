@@ -203,10 +203,13 @@ async function tryApp(app) {
             await page.waitForTimeout(1500);
             got.menu = await pressMenu();
         }
-        // No window of its own yet: File > New, as a user would.
+        // No window of its own yet: File > New, as a user would. (Windows
+        // can come after the first look: FreeHand 5.5's palettes.)
         if (!(await own()).length) {
             await key('Meta+KeyN');
             got.drawn = !!await until(async () => (await own()).length > 0, 8000, 500) || got.drawn;
+        } else {
+            got.drawn = true;
         }
     }
     // Still up: in front (or too busy to answer: a full-screen game), and

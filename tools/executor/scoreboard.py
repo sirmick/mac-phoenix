@@ -46,8 +46,8 @@ COLUMNS = {
 }
 # The tab's columns: the system and the site's library disks it is tried on.
 TAB_COLUMNS = {
-    "w761": ("7.6.1", ["productivity", "development", "games-68k"]),
-    "w86": ("8.6", ["productivity", "development", "games-ppc"]),
+    "w761": ("7.6.1", ["productivity", "creative", "development", "games-68k"]),
+    "w86": ("8.6", ["productivity", "creative", "development", "games-ppc"]),
 }
 # not programs: DOCMaker documents, registration, installers, patchers, help
 NOT_PROGRAMS = ["Dk@P", "Areg", "ercR", "kajr", "ZAPS", "EDOC", "eSRD", "MSH1", "MSH2",
@@ -69,14 +69,23 @@ SETS = {
         "Development:MPW:MPW Shell",
         "Development:Languages ƒ:MacPerl 5.6.1r2 ƒ:MacPerl",
         "Development:Tools ƒ:BBEdit Lite 6.1.2 ƒ:BBEdit Lite 6.1"], "fix-dev"),
+    "prod2": ("productivity-system-7.img", [
+        "Productivity:Microsoft Office 98 ƒ:Microsoft Word",
+        "Productivity:Aldus Persuasion 3.0 ƒ:Aldus Persuasion 3.0"], "fix-prod"),
+    "creative": ("creative-system-7.img", [
+        "Creative:Kid Pix 2.5 ƒ:Kid Pix",
+        "Creative:Adobe Photoshop 4.0 ƒ:Adobe Photoshop® 4.0",
+        "Creative:Adobe Illustrator 6.0 ƒ:Adobe Illustrator® 6.0",
+        "Creative:Macromedia FreeHand 5.5 ƒ:FreeHand 5.5",
+        "Creative:Deneba Canvas 5.0.2 ƒ:Canvas™ 5"], "fix-prod"),
     "games": ("games.img", None, "fix-games"),
     "classic": ("games-classic.img", None, "fix-games"),
     "gppc": ("games-ppc.img", None, "fix-games"),
 }
 # Afterlife's optional installs are copies of the game
 EXCLUDE = ["Optional Afterlife Installs"]
-SYSTEM_SETS = {"7.6.1": ["prod", "dev", "games", "classic", "gppc"],
-               "8.6": ["prod", "dev", "dev89", "games", "classic", "gppc"]}
+SYSTEM_SETS = {"7.6.1": ["prod", "prod2", "creative", "dev", "games", "classic", "gppc"],
+               "8.6": ["prod", "prod2", "creative", "dev", "dev89", "games", "classic", "gppc"]}
 
 
 def runs():

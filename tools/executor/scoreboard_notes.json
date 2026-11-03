@@ -670,5 +670,34 @@
  "e86|Games PPC:Ferazel's Wand 1.0.3 ƒ:Ferazel's Wand": {
   "status": "partial",
   "blocker": "wants its CD: alert \"Please insert the Ferazel's Wand CD and try again.\" at launch, as on the G3 (no CD image in the set)"
+ },
+ "w86|Productivity:Microsoft Office 98 ƒ:Microsoft Word": {
+  "status": "fails",
+  "blocker": "\"Word cannot load the Microsoft Office 98 shared libraries\": Office First Run (it asks for the owner's CD key) not done on the library disk; it puts them in the System Folder. Expected until then"
+ },
+ "8.6|Productivity:Microsoft Office 98 ƒ:Microsoft Word": {
+  "owner": "creative-pack (owner: CD key)"
+ },
+ "w761|Creative:Deneba Canvas 5.0.2 ƒ:Canvas™ 5": {
+  "status": "fails",
+  "blocker": "no menu: stays behind its splash, no Untitled-1 (Executor; the Quadra and the G3 run it)"
+ },
+ "w761|Creative:Adobe Photoshop 4.0 ƒ:Adobe Photoshop® 4.0": {
+  "status": "fails",
+  "blocker": "alert \"Could not personalize your copy of Adobe Photoshop® 4.0\": its Pipeline Preferences are in creative-7.6.1's System Folder, not the tab's"
+ },
+ "w86|Creative:Deneba Canvas 5.0.2 ƒ:Canvas™ 5": {
+  "status": "fails",
+  "blocker": "no menu: stays behind its splash, no Untitled-1 (Executor; the Quadra and the G3 run it)"
+ },
+ "w86|Creative:Adobe Photoshop 4.0 ƒ:Adobe Photoshop® 4.0": {
+  "status": "fails",
+  "blocker": "alert \"Could not personalize your copy of Adobe Photoshop® 4.0\": its Pipeline Preferences are in creative-7.6.1's System Folder, not the tab's"
+ },
+ "7.6.1|Creative:Adobe Photoshop 4.0 ƒ:Adobe Photoshop® 4.0": {
+  "owner": "creative-pack"
+ },
+ "8.6|Creative:Adobe Photoshop 4.0 ƒ:Adobe Photoshop® 4.0": {
+  "owner": "creative-pack"
  }
 }
