@@ -94,6 +94,24 @@ const TARGETS = {
             if (d)
                 throw new Error(`alert "${said(d).replace(/\s+/g, ' ')}"`);
         } },
+        { name: 'Adobe Photoshop® 4.0', app: 'Creative:Adobe Photoshop 4.0 ƒ:Adobe Photoshop® 4.0', use: async (t) => {
+            // File > New (its dialog's defaults), the paintbrush (B) drawn
+            // across the image, Save As
+            await t.until(async () => (await t.windows()).some((w) => w.title === 'Layers'), 60000, 'no palettes');
+            await t.key('Meta+KeyN');
+            await t.until(async () => (await t.windows()).some((w) => w.kind === DIALOG_KIND), 20000, 'no New dialog');
+            await t.key('Enter');
+            await t.until(async () => (await t.windows()).some((w) => /^Untitled/.test(w.title)), 20000, 'no Untitled window');
+            const w = (await t.windows()).find((x) => /^Untitled/.test(x.title));
+            const [top, left, bottom, right] = w.rect;
+            const before = await sample();
+            await t.key('KeyB');
+            await t.drag([[left + 20, top + 20], [right - 20, (top + bottom) / 2], [left + 20, bottom - 20]]);
+            await t.pause(1000);
+            if (changed(before, await sample()) < 0.002)
+                throw new Error('nothing drawn');
+            await t.saveAs('M1 PS');
+        } },
     ],
     'development.img': [
         { name: 'MPW Shell', app: 'Development:MPW:MPW Shell', use: async (t) => {
