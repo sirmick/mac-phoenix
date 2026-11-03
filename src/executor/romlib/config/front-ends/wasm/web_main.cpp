@@ -569,7 +569,7 @@ void on_yield()
  * the image whose System Folder to run on (Apple's System and Finder:
  * copied into Executor's volume, and the Finder started), fat
  * applications' PowerPC code run (as --executor-ppc), the memory (default:
- * 32 MB, 64 on Apple's System) and the depth the screen starts in (as
+ * 32 MB, 128 on Apple's System) and the depth the screen starts in (as
  * --depth; default: as the System's Macs), and an application to start
  * instead of Executor's Browser or the Finder (paths in the module's
  * filesystem). The page's settings (web/executor/settings.js) say which. */
@@ -615,6 +615,11 @@ int main(int argc, char **argv)
        to one colour of the standard palette, flat lavender). */
     c.bpp = bpp;
     c.ram_mb = 32;
+    /* On Apple's System: 128 MB, as a Quadra 650 or a G3 could have. EV
+       Nova asks for a 53 MB partition (M1.md): 64 left the Finder and it
+       no room. The browser commits it all (the wasm memory grows to
+       about twice it, up to the 4 GB a wasm32 module may have). */
+    const int apple_ram_mb = 128;
     c.data_dir = "/executor"; /* in memory; Executor makes its System Folder */
     /* Disk images are writable (CDs, --cdrom, are not): the page keeps
        their changes in an overlay (web/executor/overlay.js); the images
@@ -637,7 +642,7 @@ int main(int argc, char **argv)
             fprintf(stderr, "[web] the saved System Folder%s\n", finder ? ", starting the Finder" : "");
             if(finder && c.app.empty())
                 c.app = sys + "/Finder";
-            c.ram_mb = 64;
+            c.ram_mb = apple_ram_mb;
         }
         else if(executor_host::sideload_system(system_image, c.data_dir, &finder, &err))
         {
@@ -645,7 +650,7 @@ int main(int argc, char **argv)
                     finder ? ", starting the Finder" : "");
             if(finder && c.app.empty())
                 c.app = c.data_dir + "/System Folder/Finder";
-            c.ram_mb = 64;
+            c.ram_mb = apple_ram_mb;
         }
         else
             fprintf(stderr, "[web] no System Folder from %s: %s\n", system_image.c_str(), err.c_str());
