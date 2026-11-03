@@ -4,13 +4,16 @@
   "creative",
   "68k"
  ],
- "note": "Drawing, painting and layout software for the 7.5.5 / 7.6.1 profiles: Kid Pix 2.5 (68k), Adobe Photoshop 4.0, Adobe Illustrator 6.0 and Macromedia FreeHand 5.5 (68k; personalised with the owner's serial numbers). Boots with creative-7.6.1.",
+ "note": "Drawing, painting and layout software for the 7.5.5 / 7.6.1 profiles: Kid Pix 2.5 (68k), Adobe Photoshop 4.0, Adobe Illustrator 6.0, Macromedia FreeHand 5.5 and Deneba Canvas 5.0.2 (68k; personalised with the owner's serial numbers). Boots with creative-7.6.1.",
  "label": "Creative",
  "size_mb": 256,
  "place": [
   {"snapshot": "kidpix-2.5", "take": "Kid Pix", "as": "Kid Pix 2.5 ƒ"},
   {"snapshot": "photoshop-4.0", "take": "Adobe Photoshop® 4.0", "as": "Adobe Photoshop 4.0 ƒ"},
+  {"snapshot": "photoshop-4.0", "take": "Adobe Photoshop® Registration", "to": "Adobe Photoshop 4.0 ƒ"},
   {"snapshot": "illustrator-6.0", "take": "Adobe Illustrator® 6.0", "as": "Adobe Illustrator 6.0 ƒ"},
-  {"snapshot": "freehand-5.5", "take": "FreeHand 5.5", "as": "Macromedia FreeHand 5.5 ƒ"}
+  {"snapshot": "illustrator-6.0", "take": "Adobe Illustrator® Registration", "to": "Adobe Illustrator 6.0 ƒ"},
+  {"snapshot": "freehand-5.5", "take": "FreeHand 5.5", "as": "Macromedia FreeHand 5.5 ƒ"},
+  {"snapshot": "canvas-5", "take": "Canvas™ 5", "as": "Deneba Canvas 5.0.2 ƒ"}
  ]
 }

@@ -1,5 +1,5 @@
 {
- "note": "Adobe Illustrator 6.0 (Adobe, 1996), 68k floppy set (Install-Disk 1, Disks 2-7, ATM's Program Disk, all attached): its Installer VISE run in the guest, Easy Install onto the target, the registration form filled (the owner's serial; Adobe Magazine: No, else its birthday field is required) and cancelled at its modem step, a restart, then a first launch personalised with the owner's name, organization and serial; the registration's folder (what was typed into it) and its reminder in Startup Items are left out. The archive's folder named after its original owner's serial is not used",
+ "note": "Adobe Illustrator 6.0 (Adobe, 1996), 68k floppy set (Install-Disk 1, Disks 2-7, ATM's Program Disk, all attached): its Installer VISE run in the guest, Easy Install onto the target, the registration form filled (the owner's serial; Adobe Magazine: No, else its birthday field is required) and cancelled at its modem step, a restart, then a first launch personalised with the owner's name, organization and serial; the registration's folder (the owner's licence) is kept, its reminder in Startup Items left out. The archive's folder named after its original owner's serial is not used",
  "kind": "install",
  "os": "tools-7.6.1",
  "target": "Applications",
@@ -307,9 +307,6 @@
   {
    "close": "Adobe Illustrator® 6.0"
   }
- ],
- "exclude": [
-  "Adobe Illustrator® Registration"
  ],
  "system_exclude": [
   "Startup Items:Adobe Illustrator Reminder"

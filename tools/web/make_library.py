@@ -79,14 +79,15 @@ DISKS = [
      "title": "Creative",
      "tags": ["creative", "68k"],
      "note": "Kid Pix 2.5 (painting, stamps, sounds), Adobe Photoshop 4.0, Adobe Illustrator 6.0, "
-             "Macromedia FreeHand 5.5. For Mac OS 7.6.1 and 8.6.",
+             "Macromedia FreeHand 5.5, Deneba Canvas 5.0.2. For Mac OS 7.6.1 and 8.6.",
      "take": [("creative-system-7.img", ["Kid Pix 2.5 ƒ", "Adobe Photoshop 4.0 ƒ", "Adobe Illustrator 6.0 ƒ",
-                                          "Macromedia FreeHand 5.5 ƒ"])],
+                                          "Macromedia FreeHand 5.5 ƒ", "Deneba Canvas 5.0.2 ƒ"])],
      "launch": [
          {"app": "Kid Pix 2.5 ƒ:Kid Pix", "name": "Kid Pix"},
          {"app": "Adobe Photoshop 4.0 ƒ:Adobe Photoshop® 4.0", "name": "Adobe Photoshop® 4.0"},
          {"app": "Adobe Illustrator 6.0 ƒ:Adobe Illustrator® 6.0", "name": "Adobe Illustrator® 6.0"},
          {"app": "Macromedia FreeHand 5.5 ƒ:FreeHand 5.5", "name": "FreeHand 5.5"},
+         {"app": "Deneba Canvas 5.0.2 ƒ:Canvas™ 5", "name": "Canvas™ 5"},
      ]},
     {"name": "development.img", "label": "Development",
      "title": "Development",

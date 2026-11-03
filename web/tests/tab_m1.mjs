@@ -165,7 +165,12 @@ const TARGETS = {
         { name: 'Adobe Photoshop® 4.0', app: 'Creative:Adobe Photoshop 4.0 ƒ:Adobe Photoshop® 4.0', use: async (t) => {
             // File > New (its dialog's defaults), the paintbrush (B) drawn
             // across the image, Save As
-            await t.until(async () => (await t.windows()).some((w) => w.title === 'Layers'), 60000, 'no palettes');
+            await t.until(async () => {
+                const d = (await t.windows(true)).find((w) => w.kind === DIALOG_KIND);
+                if (d)
+                    throw new Error(`alert "${said(d).replace(/\s+/g, ' ')}"`);
+                return (await t.windows()).some((w) => w.title === 'Layers');
+            }, 60000, 'no palettes');
             await t.key('Meta+KeyN');
             await t.until(async () => (await t.windows()).some((w) => w.kind === DIALOG_KIND), 20000, 'no New dialog');
             await t.key('Enter');
@@ -215,6 +220,29 @@ const TARGETS = {
             if (changed(before, await sample()) < 0.002)
                 throw new Error('nothing drawn');
             await t.saveAs('M1 FH');
+        } },
+        { name: 'Canvas™ 5', app: 'Creative:Deneba Canvas 5.0.2 ƒ:Canvas™ 5', use: async (t) => {
+            // Untitled-1 opens at launch; the rectangle tool (the
+            // toolbox's third row, left) dragged across the page, Save As.
+            // On the Quadra the toolbox's content is 47x191 at the left.
+            await t.until(async () => {
+                const m = (await t.windows(true)).find((w) => w.title === 'Canvas Message' || w.kind === DIALOG_KIND);
+                if (m)
+                    throw new Error(`alert "${said(m).replace(/\s+/g, ' ')}"`);
+                return (await t.windows()).some((w) => /Untitled-1/.test(w.title));
+            }, 90000, 'no Untitled-1');
+            await t.pause(2000);
+            const tools = (await t.windows()).find((w) => w.title === '' && w.rect[2] - w.rect[0] > 150 && w.rect[3] - w.rect[1] < 70);
+            if (!tools)
+                throw new Error('no toolbox');
+            const before = await sample();
+            await t.click(tools.rect[1] + 11, tools.rect[0] + 58);
+            await t.pause(500);
+            await t.drag([[220, 160], [400, 330]]);
+            await t.pause(1000);
+            if (changed(before, await sample()) < 0.002)
+                throw new Error('nothing drawn');
+            await t.saveAs('M1 CV');
         } },
     ],
     'development.img': [

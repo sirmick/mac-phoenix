@@ -5,12 +5,13 @@
   "68k",
   "ppc"
  ],
- "note": "System 7.6.1 with what the creative apps put in the System Folder (Photoshop 4.0's and Illustrator 6.0's ATM, Type Reunion, KODAK Precision CMS and ColorSync profiles; FreeHand's fonts and Xtras); the apps themselves are on Creative.",
+ "note": "System 7.6.1 with what the creative apps put in the System Folder (Photoshop 4.0's and Illustrator 6.0's ATM, Type Reunion, KODAK Precision CMS and ColorSync profiles; FreeHand's fonts and Xtras; Canvas's filters and translators); the apps themselves are on Creative.",
  "base": "standard-7.6.1",
  "system_from": [
   "photoshop-4.0",
   "illustrator-6.0",
-  "freehand-5.5"
+  "freehand-5.5",
+  "canvas-5"
  ],
  "aliases_to": "creative-system-7"
 }

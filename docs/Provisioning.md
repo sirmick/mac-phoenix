@@ -102,7 +102,8 @@ check for the target's name can't match the Install button. An image's
 | Image | What | Boot with |
 |---|---|---|
 | `productivity-system-7.img` | AppleWorks 5.0.3, ClarisWorks 4.0v4, ClarisDraw 1.0v4 (68k), Corel WordPerfect 3.5e (with the 3.5e2 update), Microsoft Excel 4.0, Microsoft Office 98 (PowerPC), GraphicConverter 3.9.1, Acrobat Reader 3.01, FileMaker Pro 4.0 and Aldus Persuasion 3.0 (68k; personalised with the owner's serial numbers) | `productivity-7.6.1`, 68k or PowerPC |
-| `creative-system-7.img` | Kid Pix 2.5 (68k), Adobe Photoshop 4.0, Adobe Illustrator 6.0 and Macromedia FreeHand 5.5 (68k; personalised with the owner's serial numbers) | `creative-7.6.1`, 68k or PowerPC |
+| `creative-system-7.img` | Kid Pix 2.5 (68k), Adobe Photoshop 4.0, Adobe Illustrator 6.0, Macromedia FreeHand 5.5 and Deneba Canvas 5.0.2 (68k; personalised with the owner's serial numbers) | `creative-7.6.1`, 68k or PowerPC |
+| `creative-macos-8.img` | Adobe Illustrator 8.0 (PowerPC; personalised with the owner's serial number; its upgrade installer found the owner's Illustrator 6.0 on the bake's startup disk: base `tools-8.6-ai6`) | `creative-8.6` |
 | `productivity-macos-9.img` | AppleWorks 5.0.4, Corel WordPerfect 3.5e, Microsoft Excel 4.0, Microsoft Office 98, GraphicConverter 3.9.1, Acrobat Reader 3.01 | `productivity-9.0.4` |
 
 The boot disks are the standard ones plus the apps' System Folder parts
@@ -115,15 +116,16 @@ drag-install folder; its first launch asks for the CD key, which is left to
 the user (`needs_serial`). Products whose installer takes a serial number
 are `"kind": "stage"` bakes: pinned media, no snapshot, only on the
 Installers disk (PageMaker 6.5, FreeHand 8, the QuarkXPress 4.0 upgrade; Photoshop
-3.0.5, whose bake rejects the owner's serial, `"wip"`). Canvas 5.0's floppies install an
-application already personalised with an earlier owner's serial: `"wip"`, on no disk. No
+3.0.5, whose bake rejects the owner's serial, and QuarkXPress 3.31, whose installer
+waits for a disk-insert event: `"wip"`). Canvas comes from its 5.0.2 CD. No
 serial is typed for them, and serials that came inside an archive are left out
 of it (a bake's `"exclude"` paths, `"Folder:Name"`, leave them off the Installers
 disk too: Office 98's "Serial number" file). Photoshop 4.0, Illustrator 6.0,
-FileMaker Pro 4.0, Persuasion 3.0 and FreeHand 5.5 install with the owner's serial numbers
-(`{"serial": ID}` steps); what an installer or registration logged of them
-(registration data files, installer logs, a registration reminder) is left out,
-but the applications keep the personalisation they were given.
+FileMaker Pro 4.0, Persuasion 3.0, FreeHand 5.5 and Canvas 5.0.2 install with the owner's serial numbers
+(`{"serial": ID}` steps), and keep what their installers and registrations
+wrote about the owner's licence (registration data, preferences, installer logs:
+the images are private, and Photoshop 4.0 won't start without its Pipeline
+Preferences). Only what came from an archive's original owner is left out.
 
 ## The internet disk
 
@@ -197,7 +199,7 @@ cover used here.
 | Image | What |
 |---|---|
 | `installers-games.img` | every game bake's installer or archive |
-| `installers-productivity.img` | the productivity bakes' installers, and those only staged: PageMaker 6.5, FreeHand 8, QuarkXPress 4.0 upgrade, Word 5.1a, Photoshop 3.0.5 |
+| `installers-productivity.img` | the productivity bakes' installers, and those only staged: PageMaker 6.5, FreeHand 8, QuarkXPress 4.0 upgrade, Word 5.1a, Photoshop 3.0.5, QuarkXPress 3.31 |
 | `installers-development.img` | System 7's: CodeWarrior Pro 4, MPW 3.4.2, ToolServer, the ASLM SDK, THINK C/Pascal, Symantec C++, MacPerl 5.2, MacPython 1.5.2, HyperCard, Frontier, ResEdit, Resorcerer, BBEdit Lite 4.1, ZTerm, MacsBug |
 | `installers-development-macos-8-9.img` | Mac OS 8–9's: CodeWarrior Pro 7.2, MPW-GM, MacPerl 5.6.1, MacPython 2.3.5, BBEdit Lite 6.1.2 (one HFS volume can't hold both CodeWarrior CDs) |
 | `installers-internet.img` | the internet bakes' archives: MR Browser 0.39 (68k and PowerPC), Hotline Connect Client 1.9.1, Serial MReader 0.03 |
