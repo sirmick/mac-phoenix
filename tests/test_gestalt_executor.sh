@@ -11,7 +11,6 @@
 #   tests/test_gestalt_executor.sh CONFIG [--port N]
 #     7.6.1      the 68k probe on 7.6.1 against the Quadra 650's
 #     7.6.1-ppc  the PowerPC probe with --executor-ppc against the G3's 7.6.1
-#                ('sysa' stays 68k there: gestalt.cpp, gestalt_set_system_version)
 #     8.6        the PowerPC probe on 8.6 against the G3's
 set -uo pipefail
 
@@ -25,10 +24,10 @@ while [[ $# -gt 0 ]]; do
 done
 DIR="$(cd "$(dirname "$0")" && pwd)"
 G="$DIR/guest/gestalt"
-KEYS="mach proc cput sysa fpu_ mmu_ addr pgsz pclk bclk pop! micn kbd_ vers nmgr rsrc icon"
+KEYS="mach proc cput sysa fpu_ mmu_ addr pgsz pclk bclk nreg pop! micn kbd_ vers nmgr rsrc icon"
 case "$CONFIG" in
     7.6.1)     ARGS=(--os-version 7.6.1); APP="$G/GProbe68k.bin"; REF="$G/ref/quadra-7.6.1.txt"; SAME_AS="" ;;
-    7.6.1-ppc) ARGS=(--os-version 7.6.1 --executor-ppc); APP="$G/GProbePPC.bin"; REF="$G/ref/g3-7.6.1.txt"; SAME_AS="sysa=00000001" ;;
+    7.6.1-ppc) ARGS=(--os-version 7.6.1 --executor-ppc); APP="$G/GProbePPC.bin"; REF="$G/ref/g3-7.6.1.txt"; SAME_AS="" ;;
     8.6)       ARGS=(--image 8.6 --executor-ppc); APP="$G/GProbePPC.bin"; REF="$G/ref/g3-8.6.txt"; SAME_AS="" ;;
     *) echo "Unknown config: $CONFIG"; exit 1 ;;
 esac

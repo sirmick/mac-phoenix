@@ -101,6 +101,7 @@ TEST(Gestalt, SystemVersionSetsTheMachineBothWays)
     EXPECT_EQ(2, get(gestaltSysArchitecture));
     EXPECT_EQ(0, get(gestaltFPUType));
     EXPECT_EQ(100000000, get("pclk"_4));
+    EXPECT_EQ(0, get("nreg"_4));
     EXPECT_EQ(7, get(gestaltVersion));
     gestalt_set_system_version(0x0761);
     EXPECT_EQ(20, get(gestaltMachineType));
@@ -110,6 +111,8 @@ TEST(Gestalt, SystemVersionSetsTheMachineBothWays)
     EXPECT_EQ(0, get(gestaltMMUType));
     EXPECT_EQ(3, get("thds"_4));
     EXPECT_EQ(gestaltUndefSelectorErr, get("pclk"_4));
+    EXPECT_EQ(gestaltUndefSelectorErr, get("nreg"_4));
+    EXPECT_EQ(gestaltUndefSelectorErr, get("mixd"_4));
     EXPECT_EQ(6, get(gestaltVersion));
     EXPECT_EQ(1, get(gestaltAppleEventsAttr));
     EXPECT_EQ(0x0750, get(gestaltScriptMgrVersion));

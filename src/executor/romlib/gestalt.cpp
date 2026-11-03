@@ -148,6 +148,9 @@ static gestaltentry_t gtable[] = {
        (gestaltProcClkSpeed, gestaltBusClkSpeed: 100 MHz on mame-ppc's G3) */
     { "pclk"_4, 100000000 },
     { "bclk"_4, 100000000 },
+    /* MacPhoenix: the Name Registry (nameregistry.cpp), a Power Mac's only:
+       0, as the G3 answers on 7.6.1 and 8.6 (the Quadra doesn't) */
+    { "nreg"_4, 0 },
     {
         gestaltLogicalRAMSize, (LONGINT)3 * 1024 * 1024,
     },
@@ -412,6 +415,7 @@ find_selector_in_table(OSType selector, gestaltentry_t table[],
            no longer hidden behind ROMlib_pretend_alias. */
         case "pclk"_4:
         case "bclk"_4:
+        case "nreg"_4:
             if(!power_mac)
                 selector = -1;
             break;
@@ -432,10 +436,11 @@ find_selector_in_table(OSType selector, gestaltentry_t table[],
         for(size_t j = 0; j < std::size(since_table); j++)
             if(since_table[j].selector == selector
                && (system_version >= since_versions[j]
-                   /* CFM with PowerPC code on 7.x (--executor-ppc), as on a
-                      Power Mac (Mac OS Easy Open registers its PowerPC
-                      library with it) */
-                   || (selector == "cfrg"_4 && ROMlib_prefer_ppc)))
+                   /* CFM and Mixed Mode with PowerPC code on 7.x
+                      (--executor-ppc), as on a Power Mac (Mac OS Easy Open
+                      registers its PowerPC library with CFM; TattleTech
+                      reads the Name Registry with both) */
+                   || ((selector == "cfrg"_4 || selector == "mixd"_4) && ROMlib_prefer_ppc)))
                 retval = &since_table[j];
 
     return retval;
@@ -482,11 +487,12 @@ Executor::gestalt_set_system_version(uint32_t version)
        on a 100 MHz bus, its 68k emulator a 68020 with no FPU, the PowerPC
        MMU. Otherwise the Quadra the 68k ROM machine is: machine 20, a
        68040 with its FPU, no MMU (as it answers). The architecture says
-       PowerPC on 8.x only: on a 7.x System (--executor-ppc) it stays 68k,
-       as before, since the System's components then take their PowerPC
-       side, and one of Executor's own System's runs wild at boot
-       (guest_suite_ppc_executor: no BridgeAgent). */
-    REPLACE_SELECTOR_IN_TABLE(gestaltSysArchitecture, system8 ? gestaltPowerPC : gestalt68k, gtable);
+       PowerPC from 7.6 on: 7.5.5's System components then take their
+       PowerPC side, and one of them runs wild at boot (tests-7.5.5 with
+       --executor-ppc: no BridgeAgent, guest_suite_ppc_executor), so on 7.5.5
+       it stays 68k. TattleTech reads the Name Registry (nameregistry.cpp)
+       only on a PowerPC architecture. */
+    REPLACE_SELECTOR_IN_TABLE(gestaltSysArchitecture, system8 || (ppc && version >= 0x0760) ? gestaltPowerPC : gestalt68k, gtable);
     REPLACE_SELECTOR_IN_TABLE(gestaltNativeCPUtype, ppc ? gestaltCPU750 : gestaltCPU68040, gtable);
     REPLACE_SELECTOR_IN_TABLE(gestaltMachineType, ppc ? 67 : 20, gtable);
     REPLACE_SELECTOR_IN_TABLE(gestaltProcessorType, ppc ? 3 /* gestalt68020 */ : gestalt68040, gtable);

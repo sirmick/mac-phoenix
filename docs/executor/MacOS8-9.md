@@ -60,7 +60,7 @@ neither, i.e. the system's own code (ROM, or the System file's patches).
 
 | Source | 8.6 | 9.0.4 | On Executor |
 |---|---|---|---|
-| ROM | InterfaceLib, PrivateInterfaceLib, NameRegistryLib | InterfaceLib | Executor's |
+| ROM | InterfaceLib, PrivateInterfaceLib, NameRegistryLib | InterfaceLib | Executor's (NameRegistryLib: the root and `Devices` only, 17 routines, nameregistry.cpp) |
 | The system's own (no file: in fact the System file's data fork, step 3) | AppearanceLib (217 exports), WindowsLib (129), ControlsLib (83), MenusLib (45), MacDialogsLib (6), DragLib (43), IconServicesLib (50), Translation (58), ThreadsLib (31), ObjectSupportLib (13), FontManager (77), FontObjects (41), ToolboxUtils (135), NavigationLib (19), FoldersLib (14), CollectionsLib (39), ControlStripLib (26), ATSUnicodeLib (101), LocalesLib (13), DriverServicesLib (224), DebugLib, StdCLib, MathLib | the same (AppearanceLib 218, WindowsLib 135, ControlsLib 99, MenusLib 50, MacDialogsLib 10, IconServicesLib 53, FontManager 114, FontObjects 67), and PrivateInterfaceLib (1852), NameRegistryLib (70), DesktopItemsLib (4), StringCompare, NumberFormatting | Executor's job: StdCLib and MathLib are; the rest are missing or under InterfaceLib only |
 | System file `'nlib'` | TextCommon, UnicodeConverter, SoundLib, QuickdrawLib, Math64Lib, VideoServicesLib, DriverLoaderLib, CursorDevicesLib, UTCUtils, StringCompare | the same and PPCToolbox, DebugLib (not StringCompare) | not registered (SoundLib is Executor's) |
 | Extensions file | ContextualMenu, FileSharingLib, ColorPickerLib, AppleGuideGlueLib, AppleScriptLib, OTClientLib & co., QuickTimeLib, TextEncodingConverter | the same | Apple's file when the policy allows it; OT's and AppleScriptLib's are Executor's |

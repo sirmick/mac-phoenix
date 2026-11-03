@@ -1269,7 +1269,7 @@ set_tests_properties(thinkc_run_executor PROPERTIES
 )
 
 # The Utilities disk (system information and benchmarks) on Executor:
-# Gestalt.Appl on 7.6.1; Gestalt.Appl and MacBench 5.0 on 8.6.
+# Gestalt.Appl on 7.6.1; Gestalt.Appl, TattleTech and MacBench 5.0 on 8.6.
 foreach(_us IN ITEMS 7.6.1 8.6)
   add_test(
     NAME utilities_executor_${_us}
