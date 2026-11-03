@@ -1110,6 +1110,141 @@ static void dialogs(void)
     DisposeModalFilterUPP(filter);
 }
 
+/* A dialog with kDialogFlagsUseControlHierarchy (DLOG/dlgx 202, DITL 202:
+   a button, static text, edit text, a user item, an icon, a CNTL edit text):
+   which items are controls, their bounds, and what SetDialogItem,
+   MoveDialogItem and SizeDialogItem do to them (Navigation Services lays its
+   dialogs out with SetDialogItem). */
+static void dialog_items_out(DialogRef d, const char *key)
+{
+    char k[64];
+    for(DialogItemIndex i = 1; i <= CountDITL(d); i++)
+    {
+        DialogItemType type;
+        Handle h;
+        Rect rr;
+        ControlHandle c = NULL;
+        OSErr err;
+        GetDialogItem(d, i, &type, &h, &rr);
+        sprintf(k, "%s.%d.item", key, (int)i);
+        out_rect(k, &rr);
+        err = GetDialogItemAsControl(d, i, &c);
+        sprintf(k, "%s.%d.control", key, (int)i);
+        if(err || !c)
+            out(k, "err %d", (int)err);
+        else
+        {
+            Rect cb;
+            ControlHandle super = NULL;
+            cb = (*c)->contrlRect;
+            out(k, "err 0 same %d vis %d super %d", (Handle)c == h, IsControlVisible(c),
+                (int)GetSuperControl(c, &super));
+            sprintf(k, "%s.%d.bounds", key, (int)i);
+            out_rect(k, &cb);
+        }
+    }
+}
+
+static void dialog_items(void)
+{
+    DialogRef d;
+    char k[64];
+    if(!SECTION("dlgitems"))
+        return;
+    RegisterAppearanceClient();
+    d = GetNewDialog(202, NULL, (WindowRef)-1);
+    if(!d)
+    {
+        out("new", "nil");
+        return;
+    }
+    dialog_items_out(d, "new");
+    for(DialogItemIndex i = 1; i <= CountDITL(d); i++)
+    {
+        DialogItemType type;
+        Handle h;
+        Rect rr;
+        GetDialogItem(d, i, &type, &h, &rr);
+        OffsetRect(&rr, 3, 20);
+        SetDialogItem(d, i, type, h, &rr);
+    }
+    dialog_items_out(d, "set");
+    for(DialogItemIndex i = 1; i <= CountDITL(d); i++)
+    {
+        MoveDialogItem(d, i, 150 + 2 * i, 10 * i);
+        SizeDialogItem(d, i, 40, 18);
+    }
+    dialog_items_out(d, "move");
+    {
+        Str255 s;
+        DialogItemType type;
+        Handle h;
+        Rect rr;
+        HideDialogItem(d, 3);
+        dialog_items_out(d, "hide");
+        ShowDialogItem(d, 3);
+        GetDialogItem(d, 3, &type, &h, &rr);
+        SetDialogItemText(h, "\pabc");
+        GetDialogItemText(h, s);
+        sprintf(k, "text.3");
+        out_str(k, s);
+        /* an item's control given as its handle (Navigation Services does
+           this to its static text): what the item keeps */
+        for(DialogItemIndex i = 2; i <= 3; i++)
+        {
+            ControlHandle c = NULL;
+            Handle before, after;
+            GetDialogItem(d, i, &type, &before, &rr);
+            GetDialogItemAsControl(d, i, &c);
+            SetDialogItem(d, i, type, (Handle)c, &rr);
+            GetDialogItem(d, i, &type, &after, &rr);
+            sprintf(k, "setctl.%d", (int)i);
+            out(k, "type %d kept %d control %d", (int)type, after == before, c && after == (Handle)c);
+            GetDialogItemText(after, s);
+            sprintf(k, "setctl.%d.text", (int)i);
+            out_str(k, s);
+        }
+        /* SetDialogItemText and GetDialogItemText given an item's control
+           (BBEdit Lite 6.1 retitles an alert's button so): the control's
+           title, the item's text */
+        for(DialogItemIndex i = 1; i <= 3; i++)
+        {
+            ControlHandle c = NULL;
+            Handle th;
+            Str255 title;
+            GetDialogItemAsControl(d, i, &c);
+            if(!c)
+                continue;
+            SetDialogItemText((Handle)c, "\pRetitled");
+            sprintf(k, "settext.%d.size", (int)i);
+            out(k, "%ld", (long)GetHandleSize((Handle)c));
+            GetControlTitle(c, title);
+            sprintf(k, "settext.%d.title", (int)i);
+            out_str(k, title);
+            GetDialogItemText((Handle)c, s);
+            sprintf(k, "settext.%d.get", (int)i);
+            out_str(k, s);
+            GetDialogItem(d, i, &type, &th, &rr);
+            GetDialogItemText(th, s);
+            sprintf(k, "settext.%d.item", (int)i);
+            out_str(k, s);
+        }
+    }
+    {
+        /* a control item made a static text item with its control as the
+           handle (Navigation Services' separator): still that control */
+        DialogItemType type;
+        Handle h;
+        Rect rr;
+        ControlHandle c = NULL;
+        GetDialogItem(d, 6, &type, &h, &rr);
+        SetDialogItem(d, 6, statText | itemDisable, h, &rr);
+        GetDialogItemAsControl(d, 6, &c);
+        out("ctltext.6", "%s", c == NULL ? "nil" : (Handle)c == h ? "its control" : "another");
+    }
+    DisposeDialog(d);
+}
+
 /* The colours DrawThemeButton leaves for its label proc, by kind and
    state (the port: black on white before each call) */
 static char label_key[48];
@@ -1217,6 +1352,7 @@ int main(void)
     modes();
     title();
     dialogs();
+    dialog_items();
     labels();
     if(SECTION("unregister"))
     {

@@ -49,3 +49,5 @@ controls.16.*	the scroll bar (CDEF 1), through DrawThemeTrack/DrawThemeScrollBar
 controls.384.*	the scroll bar (8.6's CDEF 384), same gap as CDEF 1 (same DrawThemeTrack)
 
 # platinum-2 (open)
+# A control record: Executor's are 296 bytes (a whole Str255 title), 8.6's as long as the title.
+dlgitems.settext.*.size	Executor's control records are 296 bytes; 8.6 sizes them to the title (the point: SetDialogItemText leaves them alone)

@@ -29,6 +29,17 @@ extern INTEGER ROMlib_dialog_cancel_item(DialogPtr dialog);
 extern void ROMlib_dialog_forget(DialogPtr dialog);
 /* MacPhoenix: what dialMgr8.cpp keeps for a dialog */
 extern void ROMlib_dialog8_forget(DialogPtr dialog);
+/* the controls standing for items that are no controls in a dialog with
+   the control hierarchy (dialMgr8.cpp) */
+extern void ROMlib_dialog_item_controls(DialogPtr dp);
+extern void ROMlib_dialog_item_controls_shorten(DialogPtr dp, int count);
+extern ControlHandle ROMlib_dialog_item_control(DialogPtr dp, int item);
+extern bool ROMlib_dialog_item_of_control(ControlHandle c, DialogPtr *dp, int *item);
+extern bool ROMlib_dialog_handle_is_control(DialogPtr dp, Handle h);
+extern void ROMlib_dialog_item_control_sync(DialogPtr dp, int item, const Rect *r);
+extern int32_t C_ROMlib_cdef_dialog_item(int16_t var, ControlHandle c, int16_t mess,
+                                         int32_t param);
+EXTERN_PASCAL_FUNCTION_PTR(ROMlib_cdef_dialog_item);
 
 static_assert(sizeof(icon_item_template_t) == 18);
 }

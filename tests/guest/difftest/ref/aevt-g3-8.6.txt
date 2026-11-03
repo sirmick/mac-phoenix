@@ -1,4 +1,4 @@
-# probe dc51792fbe99237e22eac4b8fb14d99151c9775d71cec51f489923a7e2ed4d80
+# probe a697cf51ef7e18cb2249bf4e3875215453d378fa45e238390e83d3346b157e6d
 == received
 received.install: 0
 received.process: 0
@@ -211,6 +211,34 @@ osl.dispose.cb: 0
 osl.dispose: long
 osl.dispose.cb.calls: 1
 osl.dispose.cb.token: null
+== resolve
+resolve.bind.AEObjectInit: found
+resolve.null: -1727
+resolve.null.token: XXXX
+resolve.window.accessor1: cwin in null (token null 0) form indx seld long 1 refcon 1
+resolve.window: 0
+resolve.window.token: long 101
+resolve.document.accessor1: cwin in null (token null 0) form indx seld long 1 refcon 1
+resolve.document.accessor2: docu in cwin (token long 101) form name seld TEXT x refcon 2
+resolve.document.dispose3: long 101
+resolve.document: 0
+resolve.document.token: long 200
+resolve.failing.accessor1: cwin in null (token null 0) form indx seld long 1 refcon 1
+resolve.failing.accessor2: fail in cwin (token long 101) form indx seld long 2 refcon 99
+resolve.failing.dispose3: long 101
+resolve.failing: -1728
+resolve.failing.token: null
+resolve.in.failing.accessor1: cwin in null (token null 0) form indx seld long 1 refcon 1
+resolve.in.failing.accessor2: fail in cwin (token long 101) form indx seld long 2 refcon 99
+resolve.in.failing.dispose3: long 101
+resolve.in.failing: -1728
+resolve.in.failing.token: null
+resolve.no.accessor: -1723
+resolve.no.accessor.token: null
+resolve.not.spec: -1727
+resolve.not.spec.token: XXXX
+resolve.empty.record: -1727
+resolve.empty.record.token: XXXX
 == coerce
 coerce.alias.new: 0
 coerce.alis.fss: 0
@@ -220,6 +248,30 @@ coerce.list.fss: 0
 coerce.list.fss.result: fss  70 same file
 coerce.fss.alis: 0
 coerce.fss.alis.type: alis
+coerce.list.one.fss: 0 type fss  size 70
+coerce.list.one.alis: 0 type alis size 186
+coerce.list.two.fss: -1700 type null size -1
+coerce.list.none.fss: -1700 type null size -1
+coerce.list.one.long.shor: 0 type shor size 2
+coerce.list.one.long.list: 0 type list size 36
+coerce.reco.obj: 0 type obj 
+coerce.obj.reco: 0 type reco
+coerce.obj.reco.want: 0 7
+coerce.obj.want: -1704 0
+coerce.obj.abcd: -1700 type null
+coerce.reco.abcd: 0 type abcd
+coerce.abcd.reco: 0 type reco
+coerce.reco.list: 0 type list
+coerce.TEXT.list: 0 type list items 1
+coerce.TEXT.list.1: 0 TEXT 3 abc
+coerce.long.reco: -1700 type null
+coerce.null.obj : -1700 type null size -1
+coerce.null.null: -1700 type null size -1
+coerce.null.TEXT: -1700 type null size -1
+coerce.null.long: -1700 type null size -1
+coerce.null.list: -1700 type null size -1
+coerce.null.reco: -1700 type null size -1
+coerce.null.****: -1700 type null size -1
 coerce.vol.spec: 0 parent 1 same volume yes
 coerce.vol.alias.minimal: 0
 coerce.vol.alias.new: 0
@@ -232,7 +284,7 @@ coerce.vol.alis.fss.same: yes
 == layout
 layout.new: size 90 params at 90 attributes 0 parameters 0
 layout.new.end: ;;;;
-layout.new.bytes: 00 00 00 00 00 00 00 00 00 00 00 5a 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 54 65 73 74 4c 61 79 31 00 01 02 77 70 73
+layout.new.bytes: 00 00 00 00 00 00 00 00 00 00 00 5a 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 54 65 73 74 4c 61 79 31 00 01 02 7d 70 73
 layout.appended: 0
 layout.appended.value: TxtW
 layout.cleared44: 0

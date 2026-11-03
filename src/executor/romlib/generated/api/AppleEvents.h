@@ -232,6 +232,12 @@ OSErr C__AE_hdlr_delete(AE_hdlr_table_h , int32_t , GUEST<AE_hdlr_selector_t> *)
 OSErr C__AE_hdlr_lookup(AE_hdlr_table_h , int32_t , GUEST<AE_hdlr_selector_t> *, GUEST<AE_hdlr_t> *);PASCAL_SUBTRAP(_AE_hdlr_lookup, 0xA816, 0x0833, Pack8);
 
 
+// Private/undocumented entry point beside _AE_hdlr_install (0x0831):
+// a lookup, its arguments as _AE_hdlr_lookup's; HyperCard 2.4.1 calls
+// it right after _AE_hdlr_table_alloc.
+OSErr C__AE_hdlr_0830(AE_hdlr_table_h , int32_t , GUEST<AE_hdlr_selector_t> *, GUEST<AE_hdlr_t> *);PASCAL_SUBTRAP(_AE_hdlr_0830, 0xA816, 0x0830, Pack8);
+
+
 OSErr C__AE_hdlr_install(AE_hdlr_table_h , int32_t , GUEST<AE_hdlr_selector_t> *, GUEST<AE_hdlr_t> *);PASCAL_SUBTRAP(_AE_hdlr_install, 0xA816, 0x0831, Pack8);
 
 

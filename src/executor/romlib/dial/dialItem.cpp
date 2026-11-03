@@ -11,6 +11,7 @@
 #include <ControlMgr.h>
 
 #include <dial/itm.h>
+#include <dial/dial.h>
 #include <quickdraw/cquick.h>
 #include <mman/mman.h>
 #include <algorithm>
@@ -151,6 +152,9 @@ void Executor::AppendDITL(DialogPtr dp, Handle new_items_h, DITLMethod method)
         }
     }
 
+    /* MacPhoenix: the new items' controls (the control hierarchy) */
+    ROMlib_dialog_item_controls(dp);
+
     if(resize_p)
         SizeWindow((WindowPtr)dp, width, height,
                    /* cause the window to be redraw */
@@ -169,6 +173,9 @@ void Executor::ShortenDITL(DialogPtr dp, int16_t n_items)
     item_h = DIALOG_ITEMS(dp);
     if(item_h == nullptr)
         return;
+
+    /* MacPhoenix: the controls of the items that go (the control hierarchy) */
+    ROMlib_dialog_item_controls_shorten(dp, std::max(0, CountDITL(dp) - n_items));
 
     item_h_size = GetHandleSize(item_h);
 
@@ -221,7 +228,12 @@ void Executor::ShortenDITL(DialogPtr dp, int16_t n_items)
                         DIALOG_EDIT_OPEN(dp) = 0;
                     }
 
-                    DisposeHandle((Handle)itemp->itmhand);
+                    /* MacPhoenix: a text item that is a control (its
+                       control as the handle) goes as a control */
+                    if(ROMlib_dialog_handle_is_control(dp, itemp->itmhand))
+                        DisposeControl((ControlHandle)itemp->itmhand.get());
+                    else
+                        DisposeHandle((Handle)itemp->itmhand);
                     /* when editText items are drawn, the box around
 		      them is inset `-3', so we also need to do that
 		      when erasing */

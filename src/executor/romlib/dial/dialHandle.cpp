@@ -11,6 +11,7 @@
 #include <EventMgr.h>
 #include <DialogMgr.h>
 #include <ControlMgr.h>
+#include <ControlMgr8.h>
 #include <MemoryMgr.h>
 #include <OSUtil.h>
 #include <ToolboxUtil.h>
@@ -552,6 +553,11 @@ void Executor::dialog_draw_item(DialogPtr dp, itmp itemp, int itemno)
     {
         Rect r;
 
+        /* MacPhoenix: a text item whose handle is one of the dialog's
+           controls is that control, drawn with the controls */
+        if(ROMlib_dialog_handle_is_control(dp, itemp->itmhand))
+            return;
+
         // FIXME: #warning This fix helps Energy Scheming, but we really should find out the
         // FIXME: #warning exact semantics for when we should try to draw items, different
         // FIXME: #warning item types may have different behaviors, we also might want to
@@ -615,7 +621,10 @@ void Executor::C_DrawDialog(DialogPtr dp) /* IMI-418 */
         ip = (itmp)(intp + 1);
         for(i = *intp, inum = 1; i-- >= 0; inum++, BUMPIP(ip))
         {
-            dialog_draw_item(dp, ip, inum);
+            /* MacPhoenix: an item with a control of its own (the control
+               hierarchy) was drawn with the controls */
+            if(!ROMlib_dialog_item_control(dp, inum))
+                dialog_draw_item(dp, ip, inum);
         }
         if(((DialogPeek)dp)->editField != -1)
             TEActivate(((DialogPeek)dp)->textH);
@@ -656,7 +665,7 @@ void Executor::C_UpdateDialog(DialogPtr dp, RgnHandle rgn) /* IMIV-60 */
     ip = (itmp)(intp + 1);
     for(i = *intp, inum = 1; i-- >= 0; inum++, BUMPIP(ip))
     {
-        if(RectInRgn(&ip->itmr, rgn))
+        if(RectInRgn(&ip->itmr, rgn) && !ROMlib_dialog_item_control(dp, inum))
         {
             dialog_draw_item(dp, ip, inum);
         }
@@ -727,6 +736,42 @@ Boolean Executor::C_DialogSelect(EventRecord *evt, GUEST<DialogPtr> *dpp,
             break;
         case keyDown:
         case autoKey:
+        {
+            /* MacPhoenix: the control hierarchy (8.x): the key goes to the
+               control with the keyboard focus (Navigation Services' Name
+               field, an edit text control), Tab moves the focus; the item
+               hit is the focused control's */
+            GUEST<ControlHandle> root, focus;
+            if(GetRootControl((WindowPtr)dp, &root) == noErr
+               && GetKeyboardFocus((WindowPtr)dp, &focus) == noErr && focus)
+            {
+                if((evt->message & 0xff) == '\t')
+                {
+                    if(evt->modifiers & shiftKey)
+                        ReverseKeyboardFocus((WindowPtr)dp);
+                    else
+                        AdvanceKeyboardFocus((WindowPtr)dp);
+                    break;
+                }
+                HandleControlKey(focus, (evt->message >> 8) & 0xff, evt->message & 0xff,
+                                 evt->modifiers);
+                INTEGER n = CountDITL((DialogPtr)dp);
+                for(INTEGER item = 1; item <= n; item++)
+                {
+                    GUEST<INTEGER> type;
+                    GUEST<Handle> h;
+                    Rect r;
+                    GetDialogItem((DialogPtr)dp, item, &type, &h, &r);
+                    if(h == (Handle)focus.get())
+                    {
+                        *itemp = item;
+                        retval = !((INTEGER)type & itemDisable);
+                        break;
+                    }
+                }
+                break;
+            }
+        }
             if(dp->editField == -1)
                 break;
             c = evt->message & 0xff;

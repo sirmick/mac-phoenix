@@ -244,6 +244,89 @@ static void osl_call(const char *key, DescType cls, DescType container)
     AEDisposeDesc(&data);
 }
 
+/* AEObjects.h's, which the Multiversal headers don't have yet */
+#define kAEDesiredClassKey 'want'
+#define kAEContainerKey 'from'
+#define kAEKeyFormKey 'form'
+#define kAEKeyDataKey 'seld'
+#define kObjectSpecifierType 'obj '
+#define kAbsolutePositionForm 'indx'
+#define kNameForm 'name'
+#define kNoSuchObjectErr (-1728)
+
+/* resolve: AEResolve walking a specifier's containers to the accessors */
+static int resolve_calls;
+static const char *resolve_key = "";
+
+static pascal OSErr resolve_accessor(DescType desiredClass, const AEDesc *container,
+                                     DescType containerClass, DescType form,
+                                     const AEDesc *selectionData, AEDesc *value, long refcon)
+{
+    char key[48], sel[40];
+    long token;
+    sprintf(key, "%s.accessor%d", resolve_key, ++resolve_calls);
+    if(selectionData->descriptorType == typeLongInteger)
+        sprintf(sel, "long %ld", **(long **)selectionData->dataHandle);
+    else if(selectionData->descriptorType == typeChar)
+        sprintf(sel, "TEXT %.*s", (int)GetHandleSize(selectionData->dataHandle),
+                *selectionData->dataHandle);
+    else
+        sprintf(sel, "%.4s", (char *)&selectionData->descriptorType);
+    hout(key, "%.4s in %.4s (token %.4s %ld) form %.4s seld %s refcon %ld", (char *)&desiredClass,
+         (char *)&containerClass, (char *)&container->descriptorType,
+         container->descriptorType == typeLongInteger ? **(long **)container->dataHandle : 0L,
+         (char *)&form, sel, refcon);
+    if(refcon == 99)
+        return kNoSuchObjectErr;
+    token = refcon * 100 + (selectionData->descriptorType == typeLongInteger
+                            ? **(long **)selectionData->dataHandle : 0);
+    return AECreateDesc(typeLongInteger, &token, sizeof token, value);
+}
+
+static pascal OSErr resolve_dispose(AEDesc *token)
+{
+    char key[48];
+    sprintf(key, "%s.dispose%d", resolve_key, ++resolve_calls);
+    hout(key, "%.4s %ld", (char *)&token->descriptorType,
+         token->descriptorType == typeLongInteger ? **(long **)token->dataHandle : 0L);
+    return AEDisposeDesc(token);
+}
+
+/* an object specifier made as CreateObjSpecifier makes one: a record of
+   want, from, form, seld coerced to 'obj ' */
+static void make_spec(DescType cls, const AEDesc *from, DescType form, const AEDesc *seld, AEDesc *spec)
+{
+    AEDesc rec;
+    AECreateList(NULL, 0, true, &rec);
+    AEPutParamPtr(&rec, kAEDesiredClassKey, typeType, &cls, sizeof cls);
+    AEPutParamDesc(&rec, kAEContainerKey, from);
+    AEPutParamPtr(&rec, kAEKeyFormKey, typeEnumerated, &form, sizeof form);
+    AEPutParamDesc(&rec, kAEKeyDataKey, seld);
+    AECoerceDesc(&rec, kObjectSpecifierType, spec);
+    AEDisposeDesc(&rec);
+}
+
+static void resolve_case(const char *key, const AEDesc *spec)
+{
+    AEDesc token;
+    char k[48];
+    OSErr err;
+    token.descriptorType = 'XXXX';
+    token.dataHandle = NULL;
+    resolve_calls = 0;
+    resolve_key = key;
+    err = AEResolve(spec, 0, &token);
+    flush_h();
+    out(key, "%d", err);
+    sprintf(k, "%s.token", key);
+    if(err == noErr && token.descriptorType == typeLongInteger)
+        out(k, "long %ld", **(long **)token.dataHandle);
+    else
+        out(k, "%.4s", (char *)&token.descriptorType);
+    if(err == noErr)
+        AEDisposeDesc(&token);
+}
+
 static void osl_get(const char *key, DescType cls, DescType container, ProcPtr expect)
 {
     ProcPtr p = (ProcPtr)0xA5A5A5A5;
@@ -403,6 +486,51 @@ int main(void)
         AERemoveObjectAccessor(typeWildCard, 'Cnt4', acc, false);
         AERemoveObjectAccessor(typeWildCard, typeWildCard, acc, false);
     }
+    if(SECTION("resolve"))
+    {
+        ProcPtr acc = (ProcPtr)NewRoutineDescriptor((ProcPtr)resolve_accessor, 0x000FFFE0, kPowerPCISA);
+        ProcPtr dispose = (ProcPtr)NewRoutineDescriptor((ProcPtr)resolve_dispose, 0x000000E0, kPowerPCISA);
+        AEDesc null_desc, one, two, name, win, doc, bad, nowhere, plain;
+        long v1 = 1, v2 = 2;
+        OSErr (*init)(void) = (OSErr (*)(void))probe_bind("ObjectSupportLib", "AEObjectInit");
+        if(init)
+            init();
+        AEInstallObjectAccessor('cwin', typeNull, acc, 1, false);
+        AEInstallObjectAccessor('docu', typeWildCard, acc, 2, false);
+        AEInstallObjectAccessor('fail', typeWildCard, acc, 99, false);
+        AESetObjectCallbacks(NULL, NULL, dispose, NULL, NULL, NULL, NULL);
+        AECreateDesc(typeNull, NULL, 0, &null_desc);
+        AECreateDesc(typeLongInteger, &v1, sizeof v1, &one);
+        AECreateDesc(typeLongInteger, &v2, sizeof v2, &two);
+        AECreateDesc(typeChar, "x", 1, &name);
+        resolve_case("null", &null_desc);
+        make_spec('cwin', &null_desc, kAbsolutePositionForm, &one, &win);
+        resolve_case("window", &win);
+        make_spec('docu', &win, kNameForm, &name, &doc);
+        resolve_case("document", &doc);
+        make_spec('fail', &win, kAbsolutePositionForm, &two, &bad);
+        resolve_case("failing", &bad);
+        make_spec('cwin', &bad, kAbsolutePositionForm, &one, &nowhere);
+        resolve_case("in.failing", &nowhere);
+        AEDisposeDesc(&nowhere);
+        make_spec('none', &null_desc, kAbsolutePositionForm, &one, &nowhere);
+        resolve_case("no.accessor", &nowhere);
+        resolve_case("not.spec", &one);
+        AECreateList(NULL, 0, true, &plain);
+        resolve_case("empty.record", &plain);
+        AEDisposeDesc(&plain);
+        AESetObjectCallbacks(NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+        AERemoveObjectAccessor('cwin', typeNull, acc, false);
+        AERemoveObjectAccessor('docu', typeWildCard, acc, false);
+        AERemoveObjectAccessor('fail', typeWildCard, acc, false);
+        AEDisposeDesc(&nowhere);
+        AEDisposeDesc(&bad);
+        AEDisposeDesc(&doc);
+        AEDisposeDesc(&win);
+        AEDisposeDesc(&name);
+        AEDisposeDesc(&two);
+        AEDisposeDesc(&one);
+    }
     if(SECTION("coerce"))
     {
         /* The Apple Event Manager's own coercions between an alias and an
@@ -457,6 +585,142 @@ int main(void)
         {
             out("fss.alis.type", "%.4s", (char *)&ad.descriptorType);
             AEDisposeDesc(&ad);
+        }
+        /* A list coerced whole (Navigation Services' reply: BBEdit Lite 6.1
+           coerces its selection, a list of one FSSpec, to 'fss '): one item,
+           two, none; an item that itself needs coercing */
+        {
+            static const struct { const char *key; int items; DescType item, to; } lists[] = {
+                { "one.fss", 1, typeFSS, typeFSS },     { "one.alis", 1, typeFSS, typeAlias },
+                { "two.fss", 2, typeFSS, typeFSS },     { "none.fss", 0, typeFSS, typeFSS },
+                { "one.long.shor", 1, typeLongInteger, typeShortInteger },
+                { "one.long.list", 1, typeLongInteger, typeAEList },
+            };
+            for(int i = 0; i < (int)(sizeof lists / sizeof lists[0]); i++)
+            {
+                AEDesc l, item, result;
+                long n = 7;
+                char k[48];
+                AECreateList(NULL, 0, false, &l);
+                if(lists[i].item == typeFSS)
+                    AECreateDesc(typeFSS, &me, sizeof me, &item);
+                else
+                    AECreateDesc(typeLongInteger, &n, sizeof n, &item);
+                for(int j = 0; j < lists[i].items; j++)
+                    AEPutDesc(&l, 0, &item);
+                AEDisposeDesc(&item);
+                result.descriptorType = typeNull;
+                result.dataHandle = NULL;
+                err = AECoerceDesc(&l, lists[i].to, &result);
+                sprintf(k, "list.%s", lists[i].key);
+                out(k, "%d type %.4s size %ld", err, (char *)&result.descriptorType,
+                    result.dataHandle ? (long)GetHandleSize(result.dataHandle) : -1L);
+                AEDisposeDesc(&result);
+                AEDisposeDesc(&l);
+            }
+        }
+        /* records under other types (an object specifier is a record
+           coerced to 'obj '; the Object Support Library coerces it back to
+           read its keys: BBEdit Lite 6.1's 'save' handler) */
+        {
+            AEDesc rec, obj, back, other, num;
+            long n = 7, v = 0;
+            char k[48];
+            DescType type;
+            Size size;
+            AECreateList(NULL, 0, true, &rec);
+            AEPutParamPtr(&rec, 'want', typeLongInteger, &n, sizeof n);
+            obj.descriptorType = back.descriptorType = other.descriptorType = typeNull;
+            obj.dataHandle = back.dataHandle = other.dataHandle = NULL;
+            err = AECoerceDesc(&rec, 'obj ', &obj);
+            out("reco.obj", "%d type %.4s", err, (char *)&obj.descriptorType);
+            if(err == noErr)
+            {
+                err = AECoerceDesc(&obj, typeAERecord, &back);
+                out("obj.reco", "%d type %.4s", err, (char *)&back.descriptorType);
+                if(err == noErr)
+                {
+                    err = AEGetParamPtr(&back, 'want', typeLongInteger, &type, &v, sizeof v, &size);
+                    out("obj.reco.want", "%d %ld", err, v);
+                    AEDisposeDesc(&back);
+                }
+                v = 0;
+                err = AEGetParamPtr(&obj, 'want', typeLongInteger, &type, &v, sizeof v, &size);
+                out("obj.want", "%d %ld", err, v);
+                err = AECoerceDesc(&obj, 'abcd', &other);
+                out("obj.abcd", "%d type %.4s", err, (char *)&other.descriptorType);
+                if(err == noErr)
+                    AEDisposeDesc(&other);
+                AEDisposeDesc(&obj);
+            }
+            err = AECoerceDesc(&rec, 'abcd', &other);
+            out("reco.abcd", "%d type %.4s", err, (char *)&other.descriptorType);
+            if(err == noErr)
+            {
+                err = AECoerceDesc(&other, typeAERecord, &back);
+                out("abcd.reco", "%d type %.4s", err, (char *)&back.descriptorType);
+                if(err == noErr)
+                    AEDisposeDesc(&back);
+                AEDisposeDesc(&other);
+            }
+            err = AECoerceDesc(&rec, typeAEList, &other);
+            out("reco.list", "%d type %.4s", err, (char *)&other.descriptorType);
+            if(err == noErr)
+                AEDisposeDesc(&other);
+            /* a plain descriptor asked for as a list (MacPerl's 'dosc'
+               handler takes its script so) */
+            {
+                AEDesc text, l;
+                long cnt = -1;
+                AECreateDesc(typeChar, "abc", 3, &text);
+                l.descriptorType = typeNull;
+                l.dataHandle = NULL;
+                err = AECoerceDesc(&text, typeAEList, &l);
+                if(err == noErr)
+                    AECountItems(&l, &cnt);
+                out("TEXT.list", "%d type %.4s items %ld", err, (char *)&l.descriptorType, cnt);
+                if(err == noErr)
+                {
+                    DescType t;
+                    Size sz;
+                    AEKeyword kw;
+                    char buf[8] = {0};
+                    err = AEGetNthPtr(&l, 1, typeChar, &kw, &t, buf, sizeof buf, &sz);
+                    out("TEXT.list.1", "%d %.4s %ld %.3s", err, (char *)&t, (long)sz, buf);
+                    AEDisposeDesc(&l);
+                }
+                AEDisposeDesc(&text);
+            }
+            AECreateDesc(typeLongInteger, &n, sizeof n, &num);
+            back.descriptorType = typeNull;
+            err = AECoerceDesc(&num, typeAERecord, &back);
+            out("long.reco", "%d type %.4s", err, (char *)&back.descriptorType);
+            if(err == noErr)
+                AEDisposeDesc(&back);
+            AEDisposeDesc(&num);
+            AEDisposeDesc(&rec);
+            (void)k;
+        }
+        /* the null descriptor (an object specifier's container for the
+           application; BBEdit Lite 6.1's Save sends itself one) */
+        {
+            static const DescType tos[] = { 'obj ', typeNull, typeChar, typeLongInteger,
+                                            typeAEList, typeAERecord, typeWildCard };
+            for(int i = 0; i < (int)(sizeof tos / sizeof tos[0]); i++)
+            {
+                AEDesc nd, result;
+                char k[48];
+                nd.descriptorType = typeNull;
+                nd.dataHandle = NULL;
+                result.descriptorType = 'XXXX';
+                result.dataHandle = NULL;
+                err = AECoerceDesc(&nd, tos[i], &result);
+                sprintf(k, "null.%.4s", (char *)&tos[i]);
+                out(k, "%d type %.4s size %ld", err, (char *)&result.descriptorType,
+                    result.dataHandle ? (long)GetHandleSize(result.dataHandle) : -1L);
+                if(err == noErr)
+                    AEDisposeDesc(&result);
+            }
         }
         AEDisposeDesc(&fd);
         DisposeHandle((Handle)alias);

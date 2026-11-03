@@ -1,4 +1,4 @@
-# probe 21b8e584e00bc6d15b916b5998745d07d4c39dbf74908e71fa5838f11b131589
+# probe a6c0b757961863c51c7b780d8526593dda3cbe55afbdbbb627995d0e9d0123e0
 == gestalt
 gestalt.appr: 0 00000001
 gestalt.apvr: 0 00000110
@@ -1659,6 +1659,97 @@ dialogs.plain.standard.back: dddd dddd dddd
 dialogs.plain.standard.cport: 1
 dialogs.plain.standard: 48x28 depth 32 crc 9ea0b5ba
 dialogs.plain.standard.hit: err 0 1 dumped 1
+== dlgitems
+dlgitems.new.1.item: 180,270,200,340
+dlgitems.new.1.control: err 0 same 1 vis 1 super 0
+dlgitems.new.1.bounds: 180,270,200,340
+dlgitems.new.2.item: 10,10,26,66
+dlgitems.new.2.control: err 0 same 0 vis 1 super 0
+dlgitems.new.2.bounds: 10,10,26,66
+dlgitems.new.3.item: 10,72,26,286
+dlgitems.new.3.control: err 0 same 0 vis 1 super 0
+dlgitems.new.3.bounds: 10,72,26,286
+dlgitems.new.4.item: 40,10,100,100
+dlgitems.new.4.control: err 0 same 0 vis 1 super 0
+dlgitems.new.4.bounds: 40,10,100,100
+dlgitems.new.5.item: 40,120,72,152
+dlgitems.new.5.control: err 0 same 0 vis 1 super 0
+dlgitems.new.5.bounds: 40,120,72,152
+dlgitems.new.6.item: 80,120,96,280
+dlgitems.new.6.control: err 0 same 1 vis 1 super 0
+dlgitems.new.6.bounds: 80,120,96,280
+dlgitems.set.1.item: 200,273,220,343
+dlgitems.set.1.control: err 0 same 1 vis 1 super 0
+dlgitems.set.1.bounds: 200,273,220,343
+dlgitems.set.2.item: 30,13,46,69
+dlgitems.set.2.control: err 0 same 0 vis 1 super 0
+dlgitems.set.2.bounds: 30,13,46,69
+dlgitems.set.3.item: 30,75,46,289
+dlgitems.set.3.control: err 0 same 0 vis 1 super 0
+dlgitems.set.3.bounds: 30,75,46,289
+dlgitems.set.4.item: 60,13,120,103
+dlgitems.set.4.control: err 0 same 0 vis 1 super 0
+dlgitems.set.4.bounds: 60,13,120,103
+dlgitems.set.5.item: 60,123,92,155
+dlgitems.set.5.control: err 0 same 0 vis 1 super 0
+dlgitems.set.5.bounds: 60,123,92,155
+dlgitems.set.6.item: 100,123,116,283
+dlgitems.set.6.control: err 0 same 1 vis 1 super 0
+dlgitems.set.6.bounds: 100,123,116,283
+dlgitems.move.1.item: 10,152,28,192
+dlgitems.move.1.control: err 0 same 1 vis 1 super 0
+dlgitems.move.1.bounds: 10,152,28,192
+dlgitems.move.2.item: 20,154,38,194
+dlgitems.move.2.control: err 0 same 0 vis 1 super 0
+dlgitems.move.2.bounds: 20,154,38,194
+dlgitems.move.3.item: 30,156,48,196
+dlgitems.move.3.control: err 0 same 0 vis 1 super 0
+dlgitems.move.3.bounds: 30,156,48,196
+dlgitems.move.4.item: 40,158,58,198
+dlgitems.move.4.control: err 0 same 0 vis 1 super 0
+dlgitems.move.4.bounds: 40,158,58,198
+dlgitems.move.5.item: 50,160,68,200
+dlgitems.move.5.control: err 0 same 0 vis 1 super 0
+dlgitems.move.5.bounds: 50,160,68,200
+dlgitems.move.6.item: 60,162,78,202
+dlgitems.move.6.control: err 0 same 1 vis 1 super 0
+dlgitems.move.6.bounds: 60,162,78,202
+dlgitems.hide.1.item: 10,152,28,192
+dlgitems.hide.1.control: err 0 same 1 vis 1 super 0
+dlgitems.hide.1.bounds: 10,152,28,192
+dlgitems.hide.2.item: 20,154,38,194
+dlgitems.hide.2.control: err 0 same 0 vis 1 super 0
+dlgitems.hide.2.bounds: 20,154,38,194
+dlgitems.hide.3.item: 30,16540,48,16580
+dlgitems.hide.3.control: err 0 same 0 vis 1 super 0
+dlgitems.hide.3.bounds: 30,16540,48,16580
+dlgitems.hide.4.item: 40,158,58,198
+dlgitems.hide.4.control: err 0 same 0 vis 1 super 0
+dlgitems.hide.4.bounds: 40,158,58,198
+dlgitems.hide.5.item: 50,160,68,200
+dlgitems.hide.5.control: err 0 same 0 vis 1 super 0
+dlgitems.hide.5.bounds: 50,160,68,200
+dlgitems.hide.6.item: 60,162,78,202
+dlgitems.hide.6.control: err 0 same 1 vis 1 super 0
+dlgitems.hide.6.bounds: 60,162,78,202
+dlgitems.text.3: "abc" (3)
+dlgitems.setctl.2: type 136 kept 1 control 0
+dlgitems.setctl.2.text: "Name:" (5)
+dlgitems.setctl.3: type 16 kept 1 control 0
+dlgitems.setctl.3.text: "abc" (3)
+dlgitems.settext.1.size: 45
+dlgitems.settext.1.title: "Save" (4)
+dlgitems.settext.1.get: "abc" (3)
+dlgitems.settext.1.item: "abc" (3)
+dlgitems.settext.2.size: 41
+dlgitems.settext.2.title: "" (0)
+dlgitems.settext.2.get: "Retitled" (8)
+dlgitems.settext.2.item: "Retitled" (8)
+dlgitems.settext.3.size: 41
+dlgitems.settext.3.title: "" (0)
+dlgitems.settext.3.get: "Retitled" (8)
+dlgitems.settext.3.item: "Retitled" (8)
+dlgitems.ctltext.6: its control
 == labels
 labels.kind0.state1: fg 0000 0000 0000 bg dddd dddd dddd mode 1
 labels.kind0.state0: fg 7777 7777 7777 bg dddd dddd dddd mode 1
