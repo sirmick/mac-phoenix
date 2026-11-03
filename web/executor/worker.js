@@ -32,7 +32,10 @@ self.Module = {
     input: [],          // [kind, a, b] events; web_main.cpp takes them
     requests: [],       // [id, op, arg]; answered at the next event call
     print: (t) => console.log(t),
-    printErr: (t) => console.log(t),
+    printErr: (t) => {
+        lastErr = t;
+        console.log(t);
+    },
     // What changed: rects [top, left, bottom, right]..., their RGBA pixels
     // one after another (web_main.cpp).
     onRects(width, height, rects, rgba) {
@@ -94,7 +97,7 @@ self.Module = {
     },
     onAbort(what) {
         console.error(`[web] Executor aborted: ${what}`);
-        stopped(`aborted${what ? `: ${what}` : ''}`);
+        stopped(`aborted: ${what || lastErr}`);
     },
 };
 
@@ -102,7 +105,7 @@ self.Module = {
 // trapping: an access out of bounds): the page says so, once, and stays.
 // The reason: Executor's fatal message when there was one (an abort or a
 // trap may follow it).
-let fatal = '', stoppedSaid = false;
+let fatal = '', lastErr = '', stoppedSaid = false;     // (lastErr: what an abort said)
 function stopped(what) {
     if (stoppedSaid)
         return;
