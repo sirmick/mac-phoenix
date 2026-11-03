@@ -240,6 +240,12 @@ bool PowerCore::peek32(uint32_t addr, uint32_t &value) const
     return true;
 }
 
+void PowerCore::flushCache(uint32_t addr, uint32_t len)
+{
+    if(cpu::Core *c = the_core.load())
+        c->invalidate(addr, len);
+}
+
 void PowerCore::requestInterrupt()
 {
     interruptFlag.clear();
