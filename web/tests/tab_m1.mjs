@@ -69,6 +69,45 @@ const TARGETS = {
             await t.key('Enter');
             await t.saveAs('M1 XL');
         } },
+        { name: 'FileMaker Pro', app: 'Productivity:FileMaker Pro 4.0 ƒ:FileMaker Pro', use: async (t) => {
+            // New Database: an empty file, named; a text field defined; the
+            // first record's field typed (FileMaker saves as it goes)
+            await t.until(async () => (await t.windows()).some((w) => w.title === 'New Database'), 30000, 'no New Database dialog');
+            await t.clickButton('Create a new empty file');
+            await t.key('Enter');
+            await t.until(async () => !(await t.windows()).some((w) => w.title === 'New Database'), 20000, 'New Database stayed');
+            await t.until(async () => (await t.windows()).some((w) => w.kind === DIALOG_KIND), 20000, 'no Create dialog');
+            await t.pause(1000);
+            await t.type('M1 FM');
+            await t.key('Enter');
+            await t.until(async () => (await t.windows()).some((w) => /^Define Fields/.test(w.title)), 30000, 'no Define Fields');
+            await t.pause(1000);
+            await t.type('Greeting');
+            await t.clickButton('Create');
+            await t.pause(1000);
+            await t.clickButton('Done');
+            await t.until(async () => (await t.windows()).some((w) => w.title === 'M1 FM'), 30000, 'no M1 FM window');
+            await t.pause(2000);
+            await t.type(DOCUMENT);
+            await t.key('Enter');
+            await t.until(async () => (await t.drawn()).some((s) => s.includes('Hello')), 10000, 'the text never drawn');
+        } },
+        { name: 'Aldus Persuasion 3.0', app: 'Productivity:Aldus Persuasion 3.0 ƒ:Aldus Persuasion 3.0', use: async (t) => {
+            // a new presentation at launch (its Tools palette up), the text
+            // tool (T) on the slide, typed, saved; an alert instead fails
+            await t.until(async () => {
+                const d = (await t.windows(true)).find((w) => w.kind === DIALOG_KIND);
+                if (d)
+                    throw new Error(`alert "${said(d).replace(/\s+/g, ' ')}"`);
+                return (await t.windows()).some((w) => w.title === 'Tools');
+            }, 60000, 'no Tools palette');
+            await t.document();
+            await t.key('KeyT');
+            await t.click(320, 240);
+            await t.type(DOCUMENT);
+            await t.until(async () => (await t.drawn()).some((s) => s.includes('Hello')), 10000, 'the text never drawn');
+            await t.saveAs('M1 PE');
+        } },
     ],
     'creative.img': [
         { name: 'Kid Pix', app: 'Creative:Kid Pix 2.5 ƒ:Kid Pix', use: async (t) => {
@@ -111,6 +150,25 @@ const TARGETS = {
             if (changed(before, await sample()) < 0.002)
                 throw new Error('nothing drawn');
             await t.saveAs('M1 PS');
+        } },
+        { name: 'Adobe Illustrator® 6.0', app: 'Creative:Adobe Illustrator 6.0 ƒ:Adobe Illustrator® 6.0', use: async (t) => {
+            // Untitled art 1 opens at launch; the rectangle tool (the
+            // toolbox's sixth row, second column) dragged across it, Save As.
+            // On the Quadra the toolbox's content is 49x241 at the left.
+            await t.until(async () => (await t.windows()).some((w) => /^Untitled art/.test(w.title)), 60000, 'no Untitled art');
+            const tools = (await t.windows()).find((w) => w.title === '' && w.rect[2] - w.rect[0] > 200 && w.rect[3] - w.rect[1] < 70);
+            if (!tools)
+                throw new Error('no toolbox');
+            const w = (await t.windows()).find((x) => /^Untitled art/.test(x.title));
+            const [top, left, bottom, right] = w.rect;
+            const before = await sample();
+            await t.click(tools.rect[1] + 36, tools.rect[0] + 98);
+            await t.pause(500);
+            await t.drag([[left + 250, top + 100], [left + 450, top + 300]]);
+            await t.pause(1000);
+            if (changed(before, await sample()) < 0.002)
+                throw new Error('nothing drawn');
+            await t.saveAs('M1 AI');
         } },
     ],
     'development.img': [
