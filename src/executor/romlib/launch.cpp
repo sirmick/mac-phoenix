@@ -71,6 +71,7 @@
 #include <base/cpu.h>
 #include <PowerCore.h>
 
+#include <print/print.h>
 #include <util/macstrings.h>
 #include <algorithm>
 
@@ -435,6 +436,11 @@ static void launchchain(ConstStringPtr fName, INTEGER vRefNum, Boolean resetmemo
     LM(dodusesit) = LM(ROMBase);
     LM(QDExist) = LM(WWExist) = EXIST_NO;
     LM(TheZone) = LM(ApplZone);
+    /* no printer open in a new application, its driver (if the last one
+       left it open) closed with the rest of its files (a 7.6.1 Quadra's
+       PrRefNum is -1 at every launch) */
+    LM(PrRefNum) = -1;
+    ROMlib_printresfile = -1;
 
     // disallow moving relocatable blocks until this flag is reset
     // in OSEventCommon(). Allegedly (according to some old comment found
