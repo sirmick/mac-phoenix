@@ -2126,7 +2126,8 @@ prepare_container(void *addr, const load_origin& origin, GUEST<ConnectionID> *co
     ConnectionID conn;
 
     main_addr = 0;
-    *connp = 0;
+    if(connp)
+        *connp = 0;
 
     headp = (PEFContainerHeader*)addr;
 
@@ -2227,8 +2228,12 @@ prepare_container(void *addr, const load_origin& origin, GUEST<ConnectionID> *co
         release_fragments(closure, why.c_str());
         return retval;
     }
-    *connp = conn;
-    *mainAddrp = guest_cast<Ptr>(main_addr);
+    /* either may be nil: REALbasic's RBFramework loader (GameBox Classic)
+       asks no main address of the runtime it prepares from memory */
+    if(connp)
+        *connp = conn;
+    if(mainAddrp)
+        *mainAddrp = guest_cast<Ptr>(main_addr);
     return noErr;
 }
 

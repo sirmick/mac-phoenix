@@ -70,7 +70,9 @@ template<typename T, typename Loc> struct Out
     ~Out() { Loc::set(toRawHostOrder<T>(temp)); }
 
     static void set(GUEST<T>* p) {}
-    static void afterCall(GUEST<T>* p) { setRawHostOrder<T>(*p,Loc()); }
+    /* MacPhoenix: a nil out pointer, the result unwanted (PowerPC
+       REALbasic's Gestalt('qtim', nil) through a patched Gestalt) */
+    static void afterCall(GUEST<T>* p) { if(p) setRawHostOrder<T>(*p,Loc()); }
 };
 
 template<typename T, typename InLoc, typename OutLoc> struct InOut

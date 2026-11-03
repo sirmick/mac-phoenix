@@ -559,6 +559,12 @@ OSErr Executor::C_Gestalt(OSType selector, GUEST<LONGINT> *responsep)
                        (selector >> 8) & 0xFF,
                        (selector)&0xFF);
 
+    /* MacPhoenix: no response wanted (REALbasic's runtime, GameBox
+       Classic, asks so): a Mac writes it at 0, harmless there */
+    static GUEST<LONGINT> unwanted;
+    if(!responsep)
+        responsep = &unwanted;
+
     if(selector == "otan"_4 || selector == "otvr"_4)
     {
         /* MacPhoenix: Open Transport, native (opentransport/ot.cpp). */
