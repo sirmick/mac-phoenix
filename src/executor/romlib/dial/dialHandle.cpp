@@ -736,6 +736,42 @@ Boolean Executor::C_DialogSelect(EventRecord *evt, GUEST<DialogPtr> *dpp,
             break;
         case keyDown:
         case autoKey:
+        {
+            /* MacPhoenix: the control hierarchy (8.x): the key goes to the
+               control with the keyboard focus (Navigation Services' Name
+               field, an edit text control), Tab moves the focus; the item
+               hit is the focused control's */
+            GUEST<ControlHandle> root, focus;
+            if(GetRootControl((WindowPtr)dp, &root) == noErr
+               && GetKeyboardFocus((WindowPtr)dp, &focus) == noErr && focus)
+            {
+                if((evt->message & 0xff) == '\t')
+                {
+                    if(evt->modifiers & shiftKey)
+                        ReverseKeyboardFocus((WindowPtr)dp);
+                    else
+                        AdvanceKeyboardFocus((WindowPtr)dp);
+                    break;
+                }
+                HandleControlKey(focus, (evt->message >> 8) & 0xff, evt->message & 0xff,
+                                 evt->modifiers);
+                INTEGER n = CountDITL((DialogPtr)dp);
+                for(INTEGER item = 1; item <= n; item++)
+                {
+                    GUEST<INTEGER> type;
+                    GUEST<Handle> h;
+                    Rect r;
+                    GetDialogItem((DialogPtr)dp, item, &type, &h, &r);
+                    if(h == (Handle)focus.get())
+                    {
+                        *itemp = item;
+                        retval = !((INTEGER)type & itemDisable);
+                        break;
+                    }
+                }
+                break;
+            }
+        }
             if(dp->editField == -1)
                 break;
             c = evt->message & 0xff;
