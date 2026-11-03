@@ -486,7 +486,11 @@ void Executor::ROMlib_drawiptext(DialogPtr dp, itmp ip, int item_no)
     }
 
     r = ip->itmr;
-    if(ip->itmtype & statText)
+    /* MacPhoenix: no text (a nil handle: 8.6's Navigation Services' empty
+       static text item in its Save dialog), nothing to draw */
+    if(!ip->itmhand)
+        ;
+    else if(ip->itmtype & statText)
     {
         GUEST<Handle> nh_s;
         Handle nh;

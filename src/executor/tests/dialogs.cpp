@@ -66,3 +66,16 @@ TEST_F(Dialogs, EscapeAndCommandPeriodCancel)
     evt = key('\r', 0x24);
     EXPECT_FALSE(IsCancelEvent(&evt));
 }
+
+/* 8.6's Navigation Services (BBEdit Lite 6.1's Save) makes an invisible,
+   empty window with no title and no storage. */
+TEST(Windows, NewWindowWithNilTitle)
+{
+    Rect r = { 0, 0, -1, -1 };
+    WindowPtr w = NewWindow(nullptr, &r, nullptr, false, 0, nullptr, false, 0);
+    ASSERT_NE(nullptr, w);
+    GUEST<StringHandle> h = ((WindowPeek)w)->titleHandle;
+    ASSERT_NE(nullptr, (StringHandle)h);
+    EXPECT_EQ(0, (*(StringHandle)h)[0]);
+    DisposeWindow(w);
+}

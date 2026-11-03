@@ -1,13 +1,13 @@
-# probe 4072981907d6a09197eb9ec69c4eead1204ca4b9880e5f28a2d8f8185cecc1d1
+# probe b1f71fd2a75838693ba12dd5c98ca46a4727a04a5e4f2dae095e71dd3d67f8fc
 == preload
 preload.CODE: loaded
 preload.PRLD: loaded
 == container
-container.~dataFork: 100634
-container.~codeBlock: 100660
+container.~dataFork: 100680
+container.~codeBlock: 100708
 container.codeBlock: the container
 == partition
-partition.~heap: 1216544 stack 40974 rest 238
+partition.~heap: 1216592 stack 40970 rest 238
 partition.a5world: not reserved
 == video
 video.getGamma.err: 0
@@ -188,7 +188,7 @@ lowmem.0204: 0002
 lowmem.0206: 6300
 lowmem.0208: 1388
 lowmem.020a: 80cc
-lowmem.020c: e70d537a
+lowmem.020c: e70edc34
 lowmem.0938: cfff
 lowmem.0a60: 0000
 lowmem.0cca: 3cb4
@@ -199,11 +199,11 @@ lowmem.0b21: bf
 process.err: 0
 process.name: "MacPhoenixSuite" (15)
 process.type: APPL DfSy mode 00000080
-process.~size: 1257756 free 1076096
+process.~size: 1257800 free 1076080
 process.spec.name: "MacPhoenixSuite" (15)
 == script
 script.sm.0: 00000860
-script.sm.2: 00000054
+script.sm.2: 00000046
 script.sm.4: 00000001
 script.sm.6: 00000000
 script.sm.8: 00000000
@@ -327,6 +327,9 @@ screen.main.depth: 32
 screen.main.~rect: 0,0,2160,3840
 screen.main.type: 16
 == cfm
+cfm.find.ToolboxUtils: -2817
+cfm.find.CollectionsLib: -2817
+cfm.find.IconServicesLib: -2817
 cfm.find.InterfaceLib: 0
 cfm.find.AppearanceLib: -2817
 cfm.load.AppearanceLib: 0
@@ -337,6 +340,9 @@ cfm.find.ControlsLib: -2817
 cfm.find.FontManager: 0
 cfm.find.DialogsLib: -2817
 cfm.find.NoSuchLibrary: -2817
+cfm.find.after.AppearanceLib.ToolboxUtils: 0
+cfm.find.after.AppearanceLib.CollectionsLib: 0
+cfm.find.after.AppearanceLib.IconServicesLib: 0
 == heap
 heap.unlocked.ptr: below the handle
 heap.unlocked.handle: moved

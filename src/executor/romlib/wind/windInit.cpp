@@ -477,7 +477,9 @@ WindowPtr Executor::C_NewWindow(void* window_storage, const Rect *bounds,
 #define DARK_CASTLE_HACK
 #if defined(DARK_CASTLE_HACK)
             // FIXME: #warning DARK_CASTLE_HACK
-            if(strncmp((char *)title + 1, "Modal", 5) == 0)
+            /* MacPhoenix: a nil title is an empty one (8.6's Navigation
+               Services makes an invisible window with none) */
+            if(title && strncmp((char *)title + 1, "Modal", 5) == 0)
                 size = sizeof(DialogRecord);
             else
                 size = sizeof *w;
