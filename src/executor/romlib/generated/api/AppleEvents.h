@@ -75,6 +75,11 @@ kAEQueueReply = 2,
 kAEWaitReply = 3,
 };
 
+enum {kAEWantReceipt = 512,
+kAEDontRecord = 4096,
+kAEDontExecute = 8192,
+};
+
 enum {_kAEInteractMask = 48,
 };
 
@@ -380,6 +385,11 @@ keyAEGetErrDescProc = "indc"_4,
 keyAEBlock = "blck"_4,
 keyAEUnblock = "unbk"_4,
 keyAENavigate = "navt"_4,
+keyAEDesiredClass = "want"_4,
+keyAEContainer = "from"_4,
+keyAEKeyForm = "form"_4,
+keyAEKeyData = "seld"_4,
+typeObjectSpecifier = "obj "_4,
 formAbsolutePosition = "indx"_4,
 formRelativePosition = "rele"_4,
 formTest = "test"_4,

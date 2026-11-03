@@ -337,6 +337,11 @@ OSErr Executor::C_AESend(AppleEvent *evt, AppleEvent *reply,
     if(err != noErr)
         AE_RETURN_ERROR(err);
 
+    /* MacPhoenix: an event to be recorded only (MacPerl sends its typing
+       as 'setd' so): not executed, and no recording here */
+    if(send_mode & kAEDontExecute)
+        AE_RETURN_ERROR(noErr);
+
     if(target_type == keyProcessSerialNumber
        && target_size == sizeof *target_psn
        && target_psn->highLongOfPSN == 0 && target_psn->lowLongOfPSN == kCurrentProcess

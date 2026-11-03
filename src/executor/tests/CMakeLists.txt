@@ -50,7 +50,7 @@ set(NATIVE_TEST_SOURCES
         typeselect.cpp datetime.cpp numformat.cpp textedit.cpp sysheap.cpp memorymgr.cpp
         sysroutines.cpp resprivate.cpp unknownselectors.cpp dialogs.cpp
         aehdlr.cpp
-        aedesc.cpp
+        aedesc.cpp aeresolve.cpp
         hfsplus_unicode.cpp hfsplus_volume.cpp hfs_volume.cpp
         exports.cpp cfm.cpp inputsprocket.cpp
         # Native-only: drives the .IPP driver through the Device Manager.
