@@ -16,6 +16,7 @@
 #include <ControlMgr8.h>
 #include <QuickDraw.h>
 #include <CQuickDraw.h>
+#include <Appearance.h>
 #include <MemoryMgr.h>
 #include <ctl/ctl.h>
 #include <wind/wind.h>
@@ -374,6 +375,11 @@ bool Executor::ROMlib_control8_handles_tracking(ControlHandle c)
     return features(c) & kControlHandlesTracking;
 }
 
+bool Executor::ROMlib_control8_live_feedback(ControlHandle c)
+{
+    return features(c) & kControlSupportsLiveFeedback;
+}
+
 INTEGER Executor::ROMlib_control8_track(ControlHandle c, Point p, ControlActionUPP a,
                                         EventModifiers modifiers)
 {
@@ -489,9 +495,104 @@ OSErr Executor::C_SetUpControlBackground(ControlRef inControl, SInt16 inDepth, B
             CTLCALL(c, kControlMsgSetUpBackground, ptr_to_longint(&rec));
             return noErr;
         }
-    RGBColor *colors = validate_colors_for_window(CTL_OWNER(inControl));
-    RGBBackColor(&colors[wContentColor]);
+    /* Else nothing: the port's background stays (8.6 on the G3, even with
+       a theme background or a content colour: appr labels.background.*).
+       Its CDEFs call this before erasing; white here left white boxes
+       round controls on the theme's grey. */
     return noErr;
+}
+
+OSErr Executor::C_SetBevelButtonContentInfo(ControlRef inButton, ControlButtonContentInfoPtr inContent)
+{
+    if(!inContent)
+        return paramErr;
+    return C_SetControlData(inButton, kControlEntireControl, kControlBevelButtonContentTag,
+                            sizeof(ControlButtonContentInfo), inContent);
+}
+
+/* MacPhoenix: the rest of the bevel button's and the disclosure
+   triangle's calls (ControlDefinitions.h), each its control data tag:
+   8.6's Navigation Services' Shortcuts, Favorites and Recent buttons. */
+OSErr Executor::C_GetBevelButtonMenuValue(ControlRef inButton, GUEST<SInt16> *outValue)
+{
+    if(!outValue)
+        return paramErr;
+    return C_GetControlData(inButton, kControlEntireControl, kControlBevelButtonMenuValueTag,
+                            sizeof(SInt16), outValue, nullptr);
+}
+
+OSErr Executor::C_SetBevelButtonMenuValue(ControlRef inButton, SInt16 inValue)
+{
+    GUEST<SInt16> value = inValue;
+    return C_SetControlData(inButton, kControlEntireControl, kControlBevelButtonMenuValueTag,
+                            sizeof(SInt16), &value);
+}
+
+OSErr Executor::C_GetBevelButtonMenuHandle(ControlRef inButton, GUEST<MenuHandle> *outHandle)
+{
+    if(!outHandle)
+        return paramErr;
+    return C_GetControlData(inButton, kControlEntireControl, kControlBevelButtonMenuHandleTag,
+                            sizeof(MenuHandle), outHandle, nullptr);
+}
+
+OSErr Executor::C_SetBevelButtonTextPlacement(ControlRef inButton, BevelButtonTextPlacement inWhere)
+{
+    GUEST<BevelButtonTextPlacement> where = inWhere;
+    return C_SetControlData(inButton, kControlEntireControl, kControlBevelButtonTextPlaceTag,
+                            sizeof(BevelButtonTextPlacement), &where);
+}
+
+OSErr Executor::C_SetDisclosureTriangleLastValue(ControlRef inTabControl, SInt16 inValue)
+{
+    GUEST<SInt16> value = inValue;
+    return C_SetControlData(inTabControl, kControlEntireControl, kControlTriangleLastValueTag,
+                            sizeof(SInt16), &value);
+}
+
+/* MacPhoenix: the bevel button's content and alignments and the image
+   well's content, each its control data tag; an alignment and then its
+   offset, the offset only if the alignment took. */
+OSErr Executor::C_GetBevelButtonContentInfo(ControlRef inButton, ControlButtonContentInfoPtr outContent)
+{
+    if(!outContent)
+        return paramErr;
+    return C_GetControlData(inButton, kControlEntireControl, kControlBevelButtonContentTag,
+                            sizeof(ControlButtonContentInfo), outContent, nullptr);
+}
+
+OSErr Executor::C_SetBevelButtonTextAlignment(ControlRef inButton, ControlButtonTextAlignment inAlign,
+                                              SInt16 inHOffset)
+{
+    GUEST<ControlButtonTextAlignment> align = inAlign;
+    OSErr err = C_SetControlData(inButton, kControlEntireControl, kControlBevelButtonTextAlignTag,
+                                 sizeof(ControlButtonTextAlignment), &align);
+    if(err != noErr)
+        return err;
+    GUEST<SInt16> offset = inHOffset;
+    return C_SetControlData(inButton, kControlEntireControl, kControlBevelButtonTextOffsetTag,
+                            sizeof(SInt16), &offset);
+}
+
+OSErr Executor::C_SetBevelButtonGraphicAlignment(ControlRef inButton, ControlButtonGraphicAlignment inAlign,
+                                                 SInt16 inHOffset, SInt16 inVOffset)
+{
+    GUEST<ControlButtonGraphicAlignment> align = inAlign;
+    OSErr err = C_SetControlData(inButton, kControlEntireControl, kControlBevelButtonGraphicAlignTag,
+                                 sizeof(ControlButtonGraphicAlignment), &align);
+    if(err != noErr)
+        return err;
+    GUEST<SInt16> offset[2] = { inVOffset, inHOffset }; /* a Point, v then h */
+    return C_SetControlData(inButton, kControlEntireControl, kControlBevelButtonGraphicOffsetTag,
+                            sizeof offset, offset);
+}
+
+OSErr Executor::C_SetImageWellContentInfo(ControlRef inButton, ControlButtonContentInfoPtr inContent)
+{
+    if(!inContent)
+        return paramErr;
+    return C_SetControlData(inButton, kControlEntireControl, kControlImageWellContentTag,
+                            sizeof(ControlButtonContentInfo), inContent);
 }
 
 OSErr Executor::C_SetUpControlTextColor(ControlRef inControl, SInt16 inDepth, Boolean inIsColorDevice)
@@ -541,8 +642,28 @@ OSErr Executor::C_SetControlFontStyle(ControlRef inControl, const ControlFontSty
 {
     if(!inControl || !inStyle)
         return paramErr;
+    /* Not a control: REALbasic's runtime (GameBox Classic on 8.6) styles a
+       control field of an object it never made one for, leftover heap
+       bytes ($0000CCCC). Asking the definition through that crashed the
+       host. */
+    if(!C_IsValidControlHandle(inControl))
+        return paramErr;
     extras(inControl).font = *inStyle;
     extras(inControl).hasFont = inStyle->flags != 0;
+    /* and to a definition that keeps data: Apple's (ControlDefinitions:
+       static text, radio buttons) draw in the style they were given this
+       way, bold labels and all (the 8.6 Finder's View Options) */
+    if(features(inControl) & kControlSupportsDataAccess)
+    {
+        ControlFontStyleRec style = *inStyle;
+        ControlDataAccessRec rec;
+        rec.tag = kControlFontStyleTag;
+        rec.part = kControlEntireControl;
+        rec.size = sizeof style;
+        rec.dataPtr = (Ptr)&style;
+        CtlCallGuard guard(inControl);
+        CTLCALL(inControl, kControlMsgSetData, ptr_to_longint(&rec));
+    }
     return noErr;
 }
 

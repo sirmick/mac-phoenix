@@ -53,6 +53,7 @@ are MIT too, so they can go back upstream.
 | `src/executor/third_party/googletest/` | BSD-3-Clause |
 | `src/executor/third_party/minicoro/` | Unlicense or MIT-0 (minicoro 0.2.0, Eduardo Bart; the end of `minicoro.h`) |
 | `tools/macdecode/dcmp0_ext.py` | MIT (adapted from rsrcfork) |
+| Skia, with its FreeType, libpng and zlib (not in the tree: `tools/skia/fetch.sh` for the native/arm64 prebuilt, `tools/skia/build-wasm.sh` for the wasm one; linked only with `-DEXECUTOR_SKIA=ON`) | BSD-3-Clause (Skia); FreeType under the FTL (BSD-style, credit in the documentation); libpng under the libpng licence (BSD-style); zlib under the zlib licence (BSD-style) |
 
 ### GPL-2.0-or-later: UAE, Basilisk II, SheepShaver and code adapted from them
 

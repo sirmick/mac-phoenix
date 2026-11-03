@@ -52,6 +52,8 @@
 #include <textedit/tesave.h> /* ROMlib_dotext */
 
 #include <ctl/ctl.h>
+#include <base/traps.h>
+#include <set>
 #include <list/list.h>
 #include <menu/menu.h>
 #include <wind/wind.h>
@@ -97,6 +99,40 @@ unhandled_trap(syn68k_addr_t callback_address, void *arg)
     char pc_str[128];
 
     trap_num = (intptr_t)arg;
+
+    /* $FExx: a Power Mac's 68K emulator's own instructions (Mixed Mode's
+       stubs use them), not the FPU's. $FE09 reads the time base: on the
+       G3 (9.0.4) it leaves the upper word in A0 and the lower in D0, the
+       other registers as they were (MacBench 5's 68k timing routine runs
+       it between two _Microseconds). Here the count runs at 25 MHz on
+       Microseconds' clock, the rate the G3 states (its Name Registry's
+       timebase-frequency, a quarter of the 100 MHz bus Gestalt gives;
+       the emulated G3's own count runs slower, ~20M a second). The
+       others are logged and stay the F-line they are here, until a
+       program shows what it needs. */
+    if(trap_num == 11)
+    {
+        syn68k_addr_t pc = READUL(EM_A7 + 2);
+        uint16_t op = READUW(pc);
+        if(op == 0xFE09)
+        {
+            uint64_t tb = (uint64_t)msecs_elapsed() * 1000 * 25;
+            EM_A0 = (uint32_t)(tb >> 32);
+            EM_D0 = (uint32_t)tb;
+            WRITEUL(EM_A7 + 2, pc + 2);
+            return MAGIC_RTE_ADDRESS;
+        }
+        if((op & 0xFF00) == 0xFE00)
+        {
+            static std::set<uint16_t> logged;
+            if(logged.insert(op).second)
+            {
+                char what[64];
+                snprintf(what, sizeof what, "68K emulator instruction $%04X (F-line)", op);
+                traps::log_unimplemented(what);
+            }
+        }
+    }
 
     switch(trap_num)
     {
@@ -209,6 +245,7 @@ PASCAL_FUNCTION_PTR(mbdf0);
 PASCAL_FUNCTION_PTR(snth5);
 PASCAL_FUNCTION_PTR(wdef0);
 PASCAL_FUNCTION_PTR(wdef16);
+PASCAL_FUNCTION_PTR(wdef64);
 PASCAL_FUNCTION_PTR(unixmount);
 
 void Executor::InitLowMem()
@@ -244,7 +281,8 @@ void Executor::InitLowMem()
         guest_cast<LONGINT>(&mbdf0),
         guest_cast<LONGINT>(&snth5),
         guest_cast<LONGINT>(&unixmount),
-        guest_cast<LONGINT>(&cdef1008)
+        guest_cast<LONGINT>(&cdef1008),
+        guest_cast<LONGINT>(&wdef64)    /* $28: WDEF 64-67, resPolicy.cpp */
     };
 
     const LowMemGlobal<Ptr> magic_vector { 0x58 }; 

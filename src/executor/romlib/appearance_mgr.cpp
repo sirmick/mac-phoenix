@@ -19,6 +19,7 @@
 #include <quickdraw/cquick.h>
 #include <wind/wind.h>
 #include "appearance_draw.h"
+#include <rsys/appearance.h>
 #include <base/functions.impl.h>
 #include <set>
 #include <map>
@@ -331,6 +332,7 @@ OSStatus Executor::C_SetThemeWindowBackground(WindowRef inWindow, ThemeBrush inB
     SetPort(inWindow);
     BackPat(&qdGlobals().white);
     RGBBackColor(&c);
+    ROMlib_set_window_theme_background(inWindow, c);
     if(inUpdate)
     {
         Rect r = PORT_RECT(inWindow);
@@ -447,7 +449,7 @@ OSStatus Executor::C_GetThemeScrollBarThumbStyle(GUEST<ThemeScrollBarThumbStyle>
 {
     if(!outStyle)
         return paramErr;
-    *outStyle = kThemeScrollBarThumbProportional;
+    *outStyle = kThemeScrollBarThumbNormal; /* 8.6's default: Smart Scrolling off */
     return noErr;
 }
 
@@ -455,7 +457,7 @@ OSStatus Executor::C_GetThemeScrollBarArrowStyle(GUEST<ThemeScrollBarArrowStyle>
 {
     if(!outStyle)
         return paramErr;
-    *outStyle = kThemeScrollBarArrowsLowerRight;
+    *outStyle = kThemeScrollBarArrowsSingle; /* an arrow at each end, as 8.6 */
     return noErr;
 }
 
@@ -694,11 +696,90 @@ OSStatus Executor::C_DrawThemeWindowFrame(ThemeWindowType flavor, const Rect *co
                                           ThemeWindowAttributes attributes,
                                           WindowTitleDrawingUPP titleProc, UInt32 titleData)
 {
-    if(!contRect || flavor >= std::size(window_shapes))
+    /* no metrics: paramErr, nothing drawn (8.6) */
+    if(!contRect || !metrics || flavor >= std::size(window_shapes))
         return paramErr;
     const WindowShape &w = window_shapes[flavor];
     Frame f(w, *contRect);
     bool active = state == kThemeStateActive || state == kThemeStatePressed;
+    /* the platinum frames the window definitions draw (appearance_draw.cpp),
+       the title left to titleProc */
+    bool close = attributes & kThemeWindowHasCloseBox, collapse = attributes & kThemeWindowHasCollapseBox;
+    int zoom = ((attributes & kThemeWindowHasVerticalZoom) ? 4 : 0) | ((attributes & kThemeWindowHasHorizontalZoom) ? 8 : 0);
+    switch(flavor)
+    {
+        case kThemeDocumentWindow:
+            appearance::documentFrame(*contRect, active, { close, zoom != 0, collapse, false }, nullptr);
+            break;
+        case kThemeDialogWindow:
+        case kThemeAlertWindow:
+            appearance::dialogFrame(*contRect, active, true, flavor == kThemeAlertWindow);
+            break;
+        case kThemeMovableDialogWindow:
+        case kThemeMovableAlertWindow:
+        {
+            appearance::WindowParts parts = { close, zoom != 0, collapse, false };
+            appearance::movableDialogFrame(*contRect, active, true, nullptr, &parts,
+                                           flavor == kThemeMovableAlertWindow);
+            break;
+        }
+        case kThemePlainDialogWindow:
+        case kThemeShadowDialogWindow:
+        {
+            /* a black outline round the content; the shadowed one's shadow
+               2 deep, 2 in from the corners (8.6) */
+            DrawGuard guard;
+            const Rect &c = *contRect;
+            Rect outline = { (INTEGER)(c.top - 1), (INTEGER)(c.left - 1), (INTEGER)(c.bottom + 1), (INTEGER)(c.right + 1) };
+            frameGray(outline, kBlack);
+            if(flavor == kThemeShadowDialogWindow)
+            {
+                fillGray(Rect{ (INTEGER)(c.top + 1), (INTEGER)(c.right + 1), (INTEGER)(c.bottom + 3), (INTEGER)(c.right + 3) }, kBlack);
+                fillGray(Rect{ (INTEGER)(c.bottom + 1), (INTEGER)(c.left + 1), (INTEGER)(c.bottom + 3), (INTEGER)(c.right + 3) }, kBlack);
+            }
+            break;
+        }
+        case kThemePopupWindow:
+        {
+            /* the tab 27 wide unless told (the title's width doesn't
+               widen it), at the offset from the frame's left, centred on
+               the window, or centred on the offset, kept on the frame
+               (appr draw32.windowframe.popup.*) */
+            int fl = contRect->left - 4, fr = contRect->right + 3;
+            int width = metrics->popupTabWidth, left = fl + metrics->popupTabOffset;
+            if(width <= 0)
+                width = 27;
+            if(metrics->popupTabPosition == kThemePopupTabCenterOnWindow)
+                left = (fl + fr + 1) / 2 - width / 2;
+            else if(metrics->popupTabPosition == kThemePopupTabCenterOnOffset)
+                left -= width / 2;
+            left = std::max(fl, std::min(left, fr + 1 - width));
+            appearance::popupFrame(*contRect, active, left, width, std::max<int>(0, metrics->titleHeight));
+            break;
+        }
+        case kThemeUtilityWindow:
+        case kThemeUtilitySideWindow:
+            /* (the side one has no collapse box: 8.6) */
+            appearance::floatingFrame(*contRect, active,
+                                      { close, zoom != 0, collapse && flavor != kThemeUtilitySideWindow, false,
+                                        flavor == kThemeUtilitySideWindow, zoom,
+                                        false, true },
+                                      nullptr);
+            break;
+        default:
+            goto executor_look;
+    }
+    if(Rect text = title_text_rect(w, f.ft, f.fl, f.fr, metrics, attributes);
+       text.right > text.left && titleProc && !w.side_title)
+    {
+        SInt16 depth;
+        Boolean color;
+        portDepth(&depth, &color);
+        gray(active ? kBlack : kShadow);
+        titleProc(&text, depth, color, titleData);
+    }
+    return noErr;
+executor_look:
     {
         DrawGuard guard;
         Rect r = f.outline;
@@ -843,10 +924,9 @@ OSStatus Executor::C_DrawThemeScrollBarDelimiters(ThemeWindowType flavor, const 
 
 /* ── AppearanceLib's window and menu calls (MacWindows.h, Menus.h) ───── */
 
-/* A window's regions in global coordinates, from the Window Manager's
-   record: the structure, the content, the update region, the port. The
-   parts a window definition knows (title bar, boxes) need its
-   kWindowMsgGetRegion, not yet. */
+/* A window's regions in global coordinates: the structure and content its
+   definition makes, the update region, the port; the frame's parts as
+   Executor's definitions have them (windMgr8.cpp). */
 OSStatus Executor::C_GetWindowRegion(WindowRef window, WindowRegionCode inRegionCode, RgnHandle ioWinRgn)
 {
     if(!window || !ioWinRgn)
@@ -854,10 +934,10 @@ OSStatus Executor::C_GetWindowRegion(WindowRef window, WindowRegionCode inRegion
     switch(inRegionCode)
     {
         case kWindowStructureRgn:
-            CopyRgn(WINDOW_STRUCT_REGION(window), ioWinRgn);
+            ROMlib_window8_definition_regions(window, ioWinRgn, nullptr);
             return noErr;
         case kWindowContentRgn:
-            CopyRgn(WINDOW_CONT_REGION(window), ioWinRgn);
+            ROMlib_window8_definition_regions(window, nullptr, ioWinRgn);
             return noErr;
         case kWindowUpdateRgn:
             CopyRgn(WINDOW_UPDATE_REGION(window), ioWinRgn);
@@ -876,8 +956,7 @@ OSStatus Executor::C_GetWindowRegion(WindowRef window, WindowRegionCode inRegion
     }
 }
 
-/* What CollapseWindow set (windMgr8.cpp); Executor's definitions don't shade
-   a window yet. */
+/* What CollapseWindow set (windMgr8.cpp) */
 Boolean Executor::C_IsWindowCollapsed(WindowRef window)
 {
     return window && ROMlib_window8_collapsed(window);
@@ -885,11 +964,12 @@ Boolean Executor::C_IsWindowCollapsed(WindowRef window)
 
 Boolean Executor::C_IsWindowCollapsable(WindowRef window)
 {
-    return false;
+    GUEST<UInt32> features = 0;
+    return window && C_GetWindowFeatures(window, &features) == noErr && (features & kWindowCanCollapse);
 }
 
-/* A command key's glyph (Menus.h kMenu*Glyph): accepted; Executor's menu
-   definition draws the command character. */
+/* A command key's glyph (Menus.h kMenu*Glyph): 8.x's MDEF draws it
+   (menu/stdmdef.cpp) from the System's .Keyboard font. */
 namespace
 {
 /* Per item (menu, item): the glyph and modifiers the 8.x calls set. */
@@ -897,6 +977,11 @@ struct ItemKeys
 {
     SInt16 glyph = 0;
     UInt8 modifiers = 0;
+    SInt16 hier_id = 0;      /* SetMenuItemHierarchicalID's; 0: none set */
+    bool encoding_set = false;
+    TextEncoding encoding = 0;
+    SInt16 font_id = 0;      /* SetMenuItemFontID's; 0: the menu's font */
+    UInt32 command_id = 0;   /* SetMenuItemCommandID's */
 };
 std::map<std::pair<uint32_t, int>, ItemKeys> item_keys;
 std::set<uint32_t> parent_choosable;
@@ -905,6 +990,12 @@ bool valid_item(MenuRef m, int item)
 {
     return m && item >= 1 && item <= CountMItems(m);
 }
+}
+
+int16_t Executor::ROMlib_menu_item_key_glyph(MenuHandle mh, int item)
+{
+    auto it = item_keys.find({ US_TO_SYN68K(mh), item });
+    return it == item_keys.end() ? 0 : it->second.glyph;
 }
 
 OSErr Executor::C_SetMenuItemKeyGlyph(MenuRef inMenu, SInt16 inItem, SInt16 inGlyph)
@@ -941,6 +1032,79 @@ OSErr Executor::C_GetMenuItemModifiers(MenuRef inMenu, SInt16 inItem, UInt8 *out
     return noErr;
 }
 
+/* 8.6 keeps the ID apart from the item's command and mark; an item with
+   none set answers its mark when its command is hMenuCmd. Executor's
+   menus still open a submenu by command and mark only. */
+OSErr Executor::C_SetMenuItemHierarchicalID(MenuRef inMenu, SInt16 inItem, SInt16 inHierID)
+{
+    if(!valid_item(inMenu, inItem))
+        return paramErr;
+    item_keys[{ US_TO_SYN68K(inMenu), inItem }].hier_id = inHierID;
+    return noErr;
+}
+
+OSErr Executor::C_GetMenuItemHierarchicalID(MenuRef inMenu, SInt16 inItem, GUEST<SInt16> *outHierID)
+{
+    if(!valid_item(inMenu, inItem) || !outHierID)
+        return paramErr;
+    auto it = item_keys.find({ US_TO_SYN68K(inMenu), inItem });
+    if(it != item_keys.end() && it->second.hier_id)
+    {
+        *outHierID = it->second.hier_id;
+        return noErr;
+    }
+    GUEST<CharParameter> cmd, mark;
+    GetItemCmd(inMenu, inItem, &cmd);
+    GetItemMark(inMenu, inItem, &mark);
+    *outHierID = cmd == 0x1B ? (SInt16)mark : 0; /* hMenuCmd */
+    return noErr;
+}
+
+/* -2 (smCurrentScript) until set */
+OSErr Executor::C_SetMenuItemTextEncoding(MenuRef inMenu, SInt16 inItem, TextEncoding inScriptID)
+{
+    if(!valid_item(inMenu, inItem))
+        return paramErr;
+    ItemKeys& k = item_keys[{ US_TO_SYN68K(inMenu), inItem }];
+    k.encoding = inScriptID;
+    k.encoding_set = true;
+    return noErr;
+}
+
+OSErr Executor::C_GetMenuItemTextEncoding(MenuRef inMenu, SInt16 inItem, GUEST<TextEncoding> *outScriptID)
+{
+    if(!valid_item(inMenu, inItem) || !outScriptID)
+        return paramErr;
+    auto it = item_keys.find({ US_TO_SYN68K(inMenu), inItem });
+    *outScriptID = it != item_keys.end() && it->second.encoding_set ? it->second.encoding
+                                                                    : (TextEncoding)-2;
+    return noErr;
+}
+
+/* MacPhoenix: an item's own font (8.6's Navigation Services: its
+   Shortcuts menu); the MDEF draws the item's text in it. */
+OSErr Executor::C_SetMenuItemFontID(MenuRef inMenu, SInt16 inItem, SInt16 inFontID)
+{
+    if(!valid_item(inMenu, inItem))
+        return paramErr;
+    item_keys[{ US_TO_SYN68K(inMenu), inItem }].font_id = inFontID;
+    return noErr;
+}
+
+OSErr Executor::C_GetMenuItemFontID(MenuRef inMenu, SInt16 inItem, GUEST<SInt16> *outFontID)
+{
+    if(!valid_item(inMenu, inItem) || !outFontID)
+        return paramErr;
+    *outFontID = Executor::ROMlib_menu_item_font(inMenu, inItem);
+    return noErr;
+}
+
+int16_t Executor::ROMlib_menu_item_font(MenuHandle mh, int item)
+{
+    auto it = item_keys.find({ US_TO_SYN68K(mh), item });
+    return it == item_keys.end() ? 0 : it->second.font_id;
+}
+
 /* An item is enabled when the menu is and its own bit is (items past 31
    follow the menu's bit); item 0 is the menu itself. */
 Boolean Executor::C_IsMenuItemEnabled(MenuRef menu, UInt16 item)
@@ -951,6 +1115,74 @@ Boolean Executor::C_IsMenuItemEnabled(MenuRef menu, UInt16 item)
     if(!(flags & 1))
         return false;
     return item == 0 || item > 31 || (flags & (1u << item));
+}
+
+/* MenusLib 8.5's EnableItem and DisableItem, the item a UInt16: items
+   past 31 have no bit of their own (they follow the menu's). REALbasic's
+   runtime calls them without checking its weak imports on 8.5 and later
+   (GameBox Classic). */
+void Executor::C_EnableMenuItem(MenuRef menu, UInt16 item)
+{
+    if(item < 32)
+        C_EnableItem(menu, item);
+}
+
+void Executor::C_DisableMenuItem(MenuRef menu, UInt16 item)
+{
+    if(item < 32)
+        C_DisableItem(menu, item);
+}
+
+/* AppearanceLib's per-item command ID: kept (REALbasic keeps its menu
+   item objects there). */
+OSErr Executor::C_SetMenuItemCommandID(MenuRef menu, SInt16 item, UInt32 commandID)
+{
+    if(!valid_item(menu, item))
+        return paramErr;
+    item_keys[{ US_TO_SYN68K(menu), item }].command_id = commandID;
+    return noErr;
+}
+
+OSErr Executor::C_GetMenuItemCommandID(MenuRef menu, SInt16 item, GUEST<UInt32> *outCommandID)
+{
+    if(!valid_item(menu, item) || !outCommandID)
+        return paramErr;
+    auto it = item_keys.find({ US_TO_SYN68K(menu), item });
+    *outCommandID = it == item_keys.end() ? 0 : it->second.command_id;
+    return noErr;
+}
+
+/* AppearanceLib's MenuEvent: MenuKey for a command-key event (MenuKey
+   already matches the items' SetMenuItemModifiers); 0 for any other. */
+UInt32 Executor::C_MenuEvent(const EventRecord *inEvent)
+{
+    if(!inEvent || (inEvent->what != keyDown && inEvent->what != autoKey)
+       || !(inEvent->modifiers & cmdKey))
+        return 0;
+    return C_MenuKey(inEvent->message & charCodeMask);
+}
+
+/* MenusLib 8.5's HideMenuBar and ShowMenuBar: the menu bar's height goes
+   to 0 and back, as programs that take the whole screen read it. Only
+   that: the desktop region keeps the bar's strip, which isn't redrawn
+   until something is drawn over it. */
+static INTEGER hidden_mbar_height;
+
+void Executor::C_HideMenuBar()
+{
+    if(LM(MBarHeight) == 0)
+        return;
+    hidden_mbar_height = LM(MBarHeight);
+    LM(MBarHeight) = 0;
+}
+
+void Executor::C_ShowMenuBar()
+{
+    if(LM(MBarHeight) != 0 || hidden_mbar_height == 0)
+        return;
+    LM(MBarHeight) = hidden_mbar_height;
+    hidden_mbar_height = 0;
+    C_DrawMenuBar();
 }
 
 OSStatus Executor::C_SetSubmenuParentChoosable(MenuRef menu, Boolean inChoosable)

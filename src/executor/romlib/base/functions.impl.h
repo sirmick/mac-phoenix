@@ -70,7 +70,9 @@ template<typename T, typename Loc> struct Out
     ~Out() { Loc::set(toRawHostOrder<T>(temp)); }
 
     static void set(GUEST<T>* p) {}
-    static void afterCall(GUEST<T>* p) { setRawHostOrder<T>(*p,Loc()); }
+    /* MacPhoenix: a nil out pointer, the result unwanted (PowerPC
+       REALbasic's Gestalt('qtim', nil) through a patched Gestalt) */
+    static void afterCall(GUEST<T>* p) { if(p) setRawHostOrder<T>(*p,Loc()); }
 };
 
 template<typename T, typename InLoc, typename OutLoc> struct InOut
@@ -645,8 +647,16 @@ namespace callfromPPC
         template<typename F>
         static void invokeRet(PowerCore& cpu, const F& fptr, Args... args)
         {
+            uint32_t resultp = cpu.r[3];
             Ret ret = fptr(args...);
-            ParameterPasser{cpu,nullptr}.set(ret);
+            // A structure goes where the caller's hidden pointer says (it
+            // came in r3, ahead of the arguments: Mac OS Runtime
+            // Architectures, "Routine Calling Conventions").
+            if constexpr(detail::isGuestStruct<Ret>)
+                std::memcpy(guestvalues::GuestTypeTraits<uint8_t*>::reg_to_host(resultp),
+                            &ret, sizeof ret);
+            else
+                ParameterPasser{cpu,nullptr}.set(ret);
         }
     };
 
@@ -670,7 +680,10 @@ namespace callfromPPC
         static void invokeFromPPCHelper(PowerCore& cpu, const F& fptr, std::index_sequence<Is...>)
         {
             std::tuple<Args...> args;
-            ParameterPasser argGetter{cpu, guestvalues::GuestTypeTraits<uint8_t*>::reg_to_host(cpu.r[1]+24)};
+            // a structure result's hidden pointer takes the first word
+            constexpr int hidden = detail::isGuestStruct<Ret> ? 1 : 0;
+            ParameterPasser argGetter{cpu, guestvalues::GuestTypeTraits<uint8_t*>::reg_to_host(cpu.r[1]+24+4*hidden),
+                                      3 + hidden};
 
             (void)((argGetter >> ... >> std::get<Is>(args)));
             InvokerRet<Ret (Args...)>::invokeRet(cpu, fptr, std::get<Is>(args)...);

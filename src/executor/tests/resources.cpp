@@ -5,10 +5,14 @@
 #ifdef EXECUTOR
 #include <ResourceMgr.h>
 #include <FileMgr.h>
+#include <ToolboxUtil.h>
 #else
 #include <Resources.h>
 #include <Files.h>
+#include <TextUtils.h>
 #endif
+
+#include <string.h>
 
 class ResourceTest : public testing::Test
 {
@@ -72,6 +76,35 @@ TEST_F(ResourceTest, GetResourceNotFound)
     h = GetResource('QUUX', 128);
     EXPECT_EQ(nullptr, h);
     EXPECT_EQ(noErr, ResError());
+}
+
+/* What GetResource finds is the resource's data as stored, whatever its
+   type and ID (Executor once special-cased some for single programs). */
+static void expectStoredAsIs(ResourceTest &t, ResType type, short id)
+{
+    const unsigned char bytes[4] = { 0x01, 0x01, 0x02, 0x04 };
+    Handle h = NewHandle(sizeof bytes);
+    ASSERT_NE(nullptr, h);
+    memcpy(*h, bytes, sizeof bytes);
+    AddResource(h, type, id, PSTR(""));
+    ASSERT_EQ(noErr, ResError());
+    t.reopen();
+    Handle h2 = GetResource(type, id);
+    ASSERT_NE(nullptr, h2);
+    ASSERT_EQ((long)sizeof bytes, GetHandleSize(h2));
+    EXPECT_EQ(0, memcmp(*h2, bytes, sizeof bytes));
+}
+
+// Ultima III's preferences (upstream cleared their music byte)
+TEST_F(ResourceTest, PrefAsStored)
+{
+    expectStoredAsIs(*this, 'PREF', 400);
+}
+
+// Bob's Eyes Pro's (upstream answered nil for it)
+TEST_F(ResourceTest, RAnd128AsStored)
+{
+    expectStoredAsIs(*this, 'rAnd', 128);
 }
 
 TEST_F(ResourceTest, AddResource)
@@ -179,6 +212,123 @@ TEST_F(ResourceTest, Modify1)
     ASSERT_EQ(0xABABABAB, *(GUEST<uint32_t>*)*h1);
     ASSERT_EQ(0xFEEDFACE, *(GUEST<uint32_t>*)*h2);
 }
+
+/* A resource marked changed and then grown (ChangedResource before
+   SetHandleSize) is written where it fits, not over the resources after
+   it; with a resource removed too, the file is compacted on the way. THINK
+   C 6 converting an old project does both (resMod.cpp:398 `lc == size`,
+   M1.md). */
+static void changedThenGrown(ResourceTest& t, bool remove)
+{
+    for(short id = 128; id <= 131; id++)
+    {
+        Handle h = NewHandle(4);
+        *(GUEST<uint32_t>*)*h = 0xFEED0000 + id;
+        AddResource(h, 'QUUX', id, PSTR(""));
+        ASSERT_EQ(noErr, ResError());
+    }
+    t.reopen();
+
+    if(remove)
+    {
+        Handle gone = GetResource('QUUX', 128);
+        RemoveResource(gone);
+        ASSERT_EQ(noErr, ResError());
+        DisposeHandle(gone);
+    }
+    Handle h = GetResource('QUUX', 129);
+    ChangedResource(h);
+    SetHandleSize(h, 1024);
+    memset(*h, 0xAB, 1024);
+
+    t.reopen();
+    h = GetResource('QUUX', 128);
+    if(remove)
+        EXPECT_EQ(nullptr, h);
+    else
+    {
+        ASSERT_NE(nullptr, h);
+        EXPECT_EQ(0xFEED0080u, *(GUEST<uint32_t>*)*h);
+    }
+    h = GetResource('QUUX', 129);
+    ASSERT_NE(nullptr, h);
+    EXPECT_EQ(1024, GetHandleSize(h));
+    EXPECT_EQ(0xABABABAB, *(GUEST<uint32_t>*)(*h + 1020));
+    for(short id = 130; id <= 131; id++)
+    {
+        h = GetResource('QUUX', id);
+        ASSERT_NE(nullptr, h);
+        EXPECT_EQ(4, GetHandleSize(h));
+        EXPECT_EQ(0xFEED0000u + id, *(GUEST<uint32_t>*)*h);
+    }
+}
+
+TEST_F(ResourceTest, ChangedThenGrown)
+{
+    changedThenGrown(*this, false);
+}
+
+TEST_F(ResourceTest, ChangedThenGrownCompacted)
+{
+    changedThenGrown(*this, true);
+}
+
+/* Added and not written yet, a resource's size on disk is its handle's: 0
+   for an empty one (THINK C 6 re-adds an unloaded resource's empty handle
+   under another ID and asks), and it is written empty. */
+TEST_F(ResourceTest, AddedEmptySizeOnDisk)
+{
+    Handle h = NewHandle(4);
+    *(GUEST<uint32_t>*)*h = 0xFEEDFACE;
+    AddResource(h, 'QUUX', 128, PSTR(""));
+    reopen();
+    RemoveResource(GetResource('QUUX', 128)); /* compacted when written */
+
+    Handle e = NewEmptyHandle();
+    AddResource(e, 'QUUX', 1, PSTR(""));
+    ASSERT_EQ(noErr, ResError());
+    EXPECT_EQ(0, GetResourceSizeOnDisk(e));
+    Handle f = NewHandle(8);
+    AddResource(f, 'QUUX', 2, PSTR(""));
+    EXPECT_EQ(8, GetResourceSizeOnDisk(f));
+
+    reopen();
+    e = GetResource('QUUX', 1);
+    ASSERT_NE(nullptr, e);
+    EXPECT_EQ(0, GetHandleSize(e));
+    f = GetResource('QUUX', 2);
+    ASSERT_NE(nullptr, f);
+    EXPECT_EQ(8, GetHandleSize(f));
+    EXPECT_EQ(nullptr, GetResource('QUUX', 128));
+}
+
+/* An index outside the list gives the empty string and writes nothing
+   more, as on the Macs (tests/guest/strprobe; the count is big-endian: AppleWorks 5 asks for one string past its
+   list and passes a buffer smaller than 256 bytes). */
+TEST_F(ResourceTest, GetIndStringOutOfRange)
+{
+    static const unsigned char list[] = { 0, 2, 3, 'o', 'n', 'e', 3, 't', 'w', 'o' };
+    Handle h = NewHandle(sizeof list);
+    ASSERT_NE(nullptr, h);
+    memcpy(*h, list, sizeof list);
+    AddResource(h, 'STR#', 128, PSTR(""));
+    EXPECT_EQ(noErr, ResError());
+
+    Str255 s;
+    memset(s, 0xAA, sizeof s);
+    GetIndString(s, 128, 2);
+    EXPECT_EQ(3, s[0]);
+    EXPECT_EQ(0, memcmp(s + 1, "two", 3));
+
+    for(short index : { 3, 0, -1 })
+    {
+        memset(s, 0xAA, sizeof s);
+        GetIndString(s, 128, index);
+        EXPECT_EQ(0, s[0]) << index;
+        EXPECT_EQ(0xAA, s[1]) << index;
+    }
+}
+
 /* The standard color tables are ROM resources: RGetResource finds them
    (PC Exchange's start-up icon asks for 'clut' 8). */
 TEST(Resources, RGetResourceROMClut)
@@ -189,5 +339,22 @@ TEST(Resources, RGetResourceROMClut)
         ASSERT_NE(nullptr, h) << id;
         CTabHandle ct = (CTabHandle)h;
         EXPECT_EQ((1 << id) - 1, (*ct)->ctSize) << id;
+    }
+}
+
+/* The packages' 'PACK' resources GetResource finds, as on a 7.6.1 Quadra
+   (2026-11-03): its System file's 0, 2, 3, 6, 8, 9 and 11-15; 4, 5 and 7
+   live in ROM and 1 and 10 nowhere. Executor's own System has stand-ins
+   for those; a missing one is nil (Executor once answered an ALRT). */
+TEST(Resources, SystemPacks)
+{
+    for(short id = 0; id < 16; id++)
+    {
+        bool there = !(id == 1 || id == 4 || id == 5 || id == 7 || id == 10);
+        Handle h = GetResource('PACK', id);
+        EXPECT_EQ(there, h != nullptr) << id;
+        EXPECT_EQ(noErr, ResError()) << id;
+        if(h)
+            EXPECT_GE(GetHandleSize(h), 12) << id;
     }
 }

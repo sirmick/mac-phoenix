@@ -1,0 +1,129 @@
+{
+ "note": "Deneba Canvas 5.0.2 (Deneba, 1997): the 5.0.2 CD (Canvas-502-Mac-Win.zip; it installs the full product, 68k and PowerPC; replaces the 5.0 floppies, whose installer puts in an application already personalised with an earlier owner's serial): its Installer VISE, Easy Install onto the target, a restart, then a first launch personalised with the owner's name, organization and serial. The serial in the archive's About-This.txt is not used",
+ "kind": "install",
+ "os": "tools-7.6.1",
+ "target": "Applications",
+ "disks": [
+  {
+   "file": "Canvas-502-Mac-Win.zip",
+   "take": "Canvas-502-Mac-Win/Canvas-502-update.iso"
+  }
+ ],
+ "steps": [
+  {
+   "launch": "Canvas™ 5.0.2 Update:Canvas™ 5 Installer"
+  },
+  {
+   "wait_for": {
+    "button": "Continue…"
+   },
+   "timeout": 60
+  },
+  {
+   "click": {
+    "button": "Continue…"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Accept"
+   },
+   "timeout": 60,
+   "note": "the licence"
+  },
+  {
+   "click": {
+    "button": "Accept"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Switch Disk"
+   },
+   "timeout": 60
+  },
+  {
+   "click": {
+    "button": "Switch Disk"
+   },
+   "until": {
+    "text": "on the disk “{target}”",
+    "front": true
+   },
+   "max": 30
+  },
+  {
+   "click": {
+    "button": "Install"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Cancel"
+   },
+   "timeout": 60,
+   "note": "quit other applications and restart afterwards"
+  },
+  {
+   "click": {
+    "button": "Continue"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Restart"
+   },
+   "timeout": 900
+  },
+  {
+   "click": {
+    "button": "Restart"
+   }
+  },
+  {
+   "wait_finder": 240
+  },
+  {
+   "launch": "{target}:Canvas™ 5:Canvas™ 5"
+  },
+  {
+   "wait_for": {
+    "text": "Personalize your copy of Canvas™."
+   },
+   "timeout": 120,
+   "note": "drawn by Canvas itself: no dialog items"
+  },
+  {
+   "serial": "canvas-5",
+   "field": "name"
+  },
+  {
+   "key": "tab"
+  },
+  {
+   "serial": "canvas-5",
+   "field": "organization"
+  },
+  {
+   "key": "tab"
+  },
+  {
+   "serial": "canvas-5"
+  },
+  {
+   "key": "return"
+  },
+  {
+   "wait": 20
+  },
+  {
+   "close": "Canvas™ 5"
+  }
+ ],
+ "expect": [
+  "Canvas™ 5"
+ ],
+ "launch": [
+  "Canvas™ 5:Canvas™ 5"
+ ]
+}

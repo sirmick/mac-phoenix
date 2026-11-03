@@ -34,6 +34,8 @@ UniversalProcPtr Executor::C_NewRoutineDescriptor(
         RoutineDescriptor *p;
 
         p = (RoutineDescriptor *)NewPtr(sizeof *p);
+        if(!p)
+            return nullptr;
         p->goMixedModeTrap = MIXED_MODE_TRAP;
         ROMlib_destroy_blocks((syn68k_addr_t)
                                   US_TO_SYN68K(&p->goMixedModeTrap),
@@ -211,6 +213,17 @@ static uint32_t mode_switch(UniversalProcPtr theProcPtr, ProcInfoType procinfo,
 {
     // Step 1/5: Figure out what routine we are calling
 
+    if(!theProcPtr)
+    {
+        /* MacPhoenix: a nil UniversalProcPtr, usually one a caller never
+           checked after NewRoutineDescriptor/NewFatRoutineDescriptor
+           answered nil under heap pressure. A real Mac would fault the
+           same way the caller does on real hardware, but Executor's
+           fault would take the whole host process down with it. */
+        fprintf(stderr, "[Executor] Mixed Mode: CallUniversalProc of a nil UniversalProcPtr\n");
+        return 0;
+    }
+
     RoutineRecord m68kroutine = {};
     const RoutineRecord* routine = nullptr;
 
@@ -265,15 +278,25 @@ static uint32_t mode_switch(UniversalProcPtr theProcPtr, ProcInfoType procinfo,
         }
         if(rr->routineFlags & kFragmentNeedsPreparing)
         {
-            PreparedRecord was = { descriptor, ptr_to_longint(rr->procDescriptor.get()), rr->routineFlags };
+            PreparedRecord was = { descriptor, (uint32_t)ptr_to_longint(rr->procDescriptor.get()), rr->routineFlags };
             uint32_t container = was.procDescriptor;
             if(rr->routineFlags & kProcDescriptorIsRelative)
                 container += descriptor;
             GUEST<ConnectionID> conn;
             GUEST<Ptr> main;
             Str255 err;
+            /* A resource in the system heap (the System's WDEF 124 on 8.6)
+               keeps the prepared record after the application that first
+               called it quits: its fragment is the system's, or the next
+               application calls into the old one's heap (BBEdit Lite 6.1
+               launched a second time). */
+            THz sys = LM(SysZone);
+            bool in_sys = descriptor >= ptr_to_longint(sys)
+                && descriptor < ptr_to_longint(sys->bkLim.get());
+            bool was_owned = ROMlib_cfm_system_owned(in_sys);
             OSErr e = GetMemFragment(ptr_from_longint<void *>(container), 0, (StringPtr) "\0",
                                      kReferenceCFrag, &conn, &main, err);
+            ROMlib_cfm_system_owned(was_owned);
             if(e != noErr || !main)
             {
                 fprintf(stderr, "[Executor] Mixed Mode: preparing the fragment at $%08x failed (%d)\n",
@@ -362,6 +385,7 @@ static uint32_t mode_switch(UniversalProcPtr theProcPtr, ProcInfoType procinfo,
             break;
         case kPascalStackBased:
         case kCStackBased:
+        case kThinkCStackBased: /* MacPhoenix: as C's (AppleWorks 5's MDEF from PowerPC GetMenu) */
             for(uint32_t field = 6; field <= 30; field += 2)
             {
                 uint32_t argsize = (procinfo >> field) & 0x3;
@@ -455,7 +479,8 @@ static uint32_t mode_switch(UniversalProcPtr theProcPtr, ProcInfoType procinfo,
            call (a Time Manager task during a blocking OTRcv), whose return
            (cpu.lr) the routine would otherwise overwrite (STRAGGLERS 64). */
         PPCProcDescriptor& proc = *(PPCProcDescriptor*) routine->procDescriptor;
-        retval = callPPC(proc.code, proc.rtoc, paramValues, nParameters);
+        retval = callPPC(proc.code, proc.rtoc, paramValues, nParameters,
+                         guest_cast<uint32_t>(routine->procDescriptor.get()));
     }
     else if(toISA == kCFM68kISA)
     {
@@ -501,6 +526,7 @@ static uint32_t mode_switch(UniversalProcPtr theProcPtr, ProcInfoType procinfo,
                 break;
 
             case kCStackBased:
+            case kThinkCStackBased:
                 for(int i = nParameters-1; i >= firstStackParam; i--)
                     pusharg(paramSizes[i], paramValues[i]);
                 break;

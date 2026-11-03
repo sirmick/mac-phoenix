@@ -89,6 +89,8 @@ public:
     virtual void wake() override;
 
     void pumpEvents();
+    /* MacPhoenix: the host's scroll wheel, lines (osevent/wheel.cpp) */
+    void scrollWheel(int dh, int dv);
 
     static std::unique_ptr<EventSink> instance;
 private:
@@ -147,6 +149,10 @@ public:
     rgb_spec_t *rgbSpec() { return framebuffer_.rgbSpec; }
     bool isGrayscale() { return framebuffer_.grayscale; }
     bool isRootless() { return framebuffer_.rootless; }
+
+    // MacPhoenix: a framebuffer pixel's value (bpp() bits) as 0xAARRGGBB,
+    // as updateBuffer converts it.
+    uint32_t pixelARGB(uint32_t raw) const;
 
 protected:
     IEventListener *callbacks_ = nullptr;

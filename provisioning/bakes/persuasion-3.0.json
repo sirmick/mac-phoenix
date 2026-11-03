@@ -1,6 +1,8 @@
 {
- "note": "Aldus Persuasion 3.0 (Aldus, 1993): its nine installer floppies, staged only: installing it takes the product's serial number",
- "kind": "stage",
+ "note": "Aldus Persuasion 3.0 (Aldus, 1993), its nine floppies attached: the Aldus Installer (Disk 1's Utilities) run in the guest, Basic install, the On Screen AutoTemplate, onto the target's top level (the volume opened in its install dialog; selecting it installs into its Desktop Folder), personalised with the owner's name, organization and serial (the installer writes them to the disk copies too: they stay in the bake's work directory). The installer's History and Diagnostics logs are kept; its 1993 Apple® Event Manager extension (System 6's) is left out",
+ "kind": "install",
+ "os": "tools-7.6.1",
+ "target": "Applications",
  "disks": [
   {
    "file": "Persuasion3_0.zip",
@@ -38,5 +40,193 @@
    "file": "Persuasion3_0.zip",
    "take": "Persuasion3_0/Persuasion3_0_D9.dsk"
   }
+ ],
+ "steps": [
+  {
+   "launch": "1:Utilities:Aldus Installer/Utility"
+  },
+  {
+   "wait_for": {
+    "button": "Cancel Install"
+   },
+   "timeout": 60
+  },
+  {
+   "click": {
+    "button": "Continue"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Select all"
+   },
+   "timeout": 120,
+   "note": "Basic is ticked"
+  },
+  {
+   "click": {
+    "button": "Install"
+   }
+  },
+  {
+   "wait_for": {
+    "text": "Default AutoTemplate Selection"
+   },
+   "timeout": 60
+  },
+  {
+   "click": {
+    "text": "On Screen Size Default"
+   }
+  },
+  {
+   "click": {
+    "button": "OK"
+   }
+  },
+  {
+   "wait_for": {
+    "text": "Install in folder:"
+   },
+   "timeout": 60
+  },
+  {
+   "popup": {
+    "text": "Macintosh HD"
+   },
+   "choose": "Desktop"
+  },
+  {
+   "wait": 2
+  },
+  {
+   "click": [
+    280,
+    194
+   ],
+   "note": "the volume list's down arrow, to Applications: the list is the installer's own (no text-feed rows to scroll by)"
+  },
+  {
+   "click": [
+    280,
+    194
+   ]
+  },
+  {
+   "click": [
+    280,
+    194
+   ]
+  },
+  {
+   "click": [
+    280,
+    194
+   ]
+  },
+  {
+   "click": [
+    280,
+    194
+   ]
+  },
+  {
+   "dclick": [
+    160,
+    121
+   ],
+   "note": "opens Applications, the first row once scrolled (by text, the desktop's Applications label is hit instead)"
+  },
+  {
+   "wait_for": {
+    "text": "Space available:"
+   },
+   "timeout": 30
+  },
+  {
+   "click": {
+    "button": "Install"
+   }
+  },
+  {
+   "wait_for": {
+    "text": "Please personalize your copy"
+   },
+   "timeout": 120
+  },
+  {
+   "serial": "persuasion-3.0",
+   "field": "name"
+  },
+  {
+   "key": "tab"
+  },
+  {
+   "serial": "persuasion-3.0",
+   "field": "organization"
+  },
+  {
+   "key": "tab"
+  },
+  {
+   "serial": "persuasion-3.0"
+  },
+  {
+   "click": {
+    "button": "OK"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Change"
+   },
+   "timeout": 60,
+   "note": "Confirm your personalization information"
+  },
+  {
+   "click": {
+    "button": "OK"
+   }
+  },
+  {
+   "click": {
+    "button": "Continue"
+   },
+   "until": {
+    "button": "Restart"
+   },
+   "max": 40,
+   "note": "'Please remember to lock the disk' after each disk it personalises"
+  },
+  {
+   "click": {
+    "button": "Restart"
+   }
+  },
+  {
+   "wait_finder": 240
+  },
+  {
+   "launch": "{target}:Aldus Persuasion 3.0:Aldus Persuasion 3.0"
+  },
+  {
+   "wait_app": "Aldus Persuasion 3.0",
+   "timeout": 120
+  },
+  {
+   "wait": 15
+  },
+  {
+   "close": "Aldus Persuasion 3.0"
+  }
+ ],
+ "system_exclude": [
+  "Extensions:Apple® Event Manager"
+ ],
+ "expect": [
+  "Aldus Persuasion 3.0"
+ ],
+ "launch": [
+  "Aldus Persuasion 3.0:Aldus Persuasion 3.0"
  ]
 }

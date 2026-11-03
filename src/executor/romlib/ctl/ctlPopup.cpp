@@ -7,12 +7,14 @@
 #include <QuickDraw.h>
 #include <CQuickDraw.h>
 #include <ControlMgr.h>
+#include <Appearance.h>
 #include <MenuMgr.h>
 #include <ToolboxUtil.h>
 #include <Iconutil.h>
 #include <OSUtil.h>
 
 #include <ctl/ctl.h>
+#include <prefs/prefs.h>
 #include <menu/menu.h>
 
 #include <algorithm>
@@ -190,6 +192,12 @@ draw(ControlHandle ctl, draw_state_t draw_state,
     data = (popup_data_handle)CTL_DATA(ctl);
     flags = POPUP_FLAGS(data);
 
+    /* MacPhoenix: no such menu, nothing drawn (8.6 on the G3: appr
+       controls.1008.popupnomenu); it may still come later (Standard
+       File's folder pop-up), menu_of looks again at each draw. */
+    if(system_version >= 0x800 && !menu_of(data))
+        return;
+
     item_info = menu_of(data) ? ROMlib_mitemtop(menu_of(data), CTL_VALUE(ctl), &item_title) : nullptr;
 
     /* MacPhoenix: writable, not a literal: the title is cut to fit by
@@ -341,6 +349,42 @@ draw(ControlHandle ctl, draw_state_t draw_state,
 
     if(title_only_p)
         return;
+
+    /* MacPhoenix: 8.x's platinum pop-up button (tests/guest/difftest appr
+       controls.1008 and 1009): the theme's pop-up button past the title,
+       20 high from the control's top, as wide as the longest item and 53
+       more (the item's margins and the arrows) unless popupFixedWidth, the
+       item drawn in it */
+    if(system_version >= 0x800)
+    {
+        int box_right = right;
+        if(!(C_GetControlVariant(ctl) & popupFixedWidth) && menu_of(data))
+        {
+            MenuHandle mh = menu_of(data);
+            int widest = 0;
+            for(int i = 1, n = CountMItems(mh); i <= n; i++)
+            {
+                Str255 text;
+                GetMenuItemText(mh, i, text);
+                widest = std::max<int>(widest, StringWidth(text));
+            }
+            box_right = item_left + widest + 53;
+        }
+        Rect box = { (INTEGER)top, (INTEGER)item_left, (INTEGER)bottom, (INTEGER)box_right };
+        POPUP_BOX(data) = box;
+        ThemeButtonDrawInfo info;
+        info.state = CTL_HILITE(ctl) == 255 ? kThemeStateInactive
+            : CTL_HILITE(ctl) ? kThemeStatePressed : kThemeStateActive;
+        info.value = kThemeButtonOff;
+        info.adornment = kThemeAdornmentNone;
+        C_DrawThemeButton(&box, kThemePopupButton, &info, nullptr, nullptr, nullptr, 0);
+        set_text_face(true, flags, item_info);
+        RGBForeColor(CTL_HILITE(ctl) == 255 ? &ROMlib_gray_rgb_color : &ROMlib_black_rgb_color);
+        TextMode(srcOr);
+        MoveTo(item_left + item_pad + icon_info.width, baseline);
+        DrawString(item_title);
+        return;
+    }
 
     /* draw box; MacPhoenix: an inactive pop-up (hilite 255) has its box,
        item and arrow in grey, its title black, as 7.5.5's */

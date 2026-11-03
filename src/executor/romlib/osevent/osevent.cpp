@@ -331,8 +331,12 @@ static Boolean OSEventCommon(INTEGER evmask, EventRecord *eventp,
                                         (Ptr)&msg, sizeof msg);
         }
     }
-    if(send_application_open_aevt_p
-       && application_accepts_open_app_aevt_p)
+    /* With documents, an 'odoc' at the same first event call, whether or
+       not the application has its handlers yet: 7.5.5's Process Manager
+       posts the launch's event without looking (process.cpp's
+       AppParameters), and an event no handler takes is
+       errAEEventNotHandled from AEProcessAppleEvent, as there. */
+    if(send_application_open_aevt_p)
     {
         ProcessSerialNumber psn;
         OSErr err;
@@ -400,7 +404,6 @@ static Boolean OSEventCommon(INTEGER evmask, EventRecord *eventp,
     }
 
     eventp->message = 0;
-    ROMlib_memnomove_p = false; /* this is an icky hack needed for Excel */
     ticks = TickCount();
 
     if(auto *playback = EventPlayback::getInstance())
@@ -425,6 +428,7 @@ static Boolean OSEventCommon(INTEGER evmask, EventRecord *eventp,
         eventp->where = LM(MouseLocation2);
 
         eventp->modifiers = ROMlib_GetModifiers();
+        ROMlib_wheel_mouse(eventp);
         if((evmask & autoKeyMask) && lastdown != -1 && ticks > autoticks)
         {
             autoticks = ticks + LM(KeyRepThresh);

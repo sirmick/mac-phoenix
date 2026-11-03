@@ -63,7 +63,9 @@ struct PpcMachine
     TestHost host;
     std::unique_ptr<cpu::Core> core;
 
-    PpcMachine(const uint32_t *program, size_t words, bool jit, bool fast = false) : ram(cpu::GuestMemory::PAGE_BYTES)
+    PpcMachine(const uint32_t *program, size_t words, bool jit, bool fast = false, bool exceptions = true,
+               bool hooks = false)
+        : ram(cpu::GuestMemory::PAGE_BYTES)
     {
         mem.map(0, ram.size(), ram.data());
         for(size_t i = 0; i < words; i++)
@@ -72,6 +74,8 @@ struct PpcMachine
         config.arch = cpu::Arch::PPC;
         config.model = 750;
         config.jit = jit;
+        config.exceptions = exceptions;
+        config.instruction_hook = hooks;
         if(fast)
             config.fast_memory = { { 0, (uint32_t)ram.size(), false } };
         core = cpu::create_mame_ppc(config, mem, host);
@@ -125,13 +129,86 @@ static int test_ppc(bool jit)
     return 0;
 }
 
-/* --bench: a million iterations of lwz/addi/stw/addic./bne (5M
- * instructions) on each back-end, with and without inline memory. Prints
- * millions of guest instructions a second. */
-static void bench_ppc(bool jit, bool fast)
+/* A double stored to and loaded from an address that isn't word-aligned:
+ * the 750 takes an alignment exception, which the installer completes in
+ * software (as Mac OS's handler does; BBEdit Lite 4.1's setjmp).
+ * lfd f1,0x3000(0) ; addi r3,r0,0x2001 ; stfd f1,0(r3) ; lfd f2,0(r3) ;
+ * stfdu f2,4(r3) ; stfd f2,0x3010(0) ; host op 0 */
+static void test_ppc_misaligned_fp(bool jit)
 {
-    static const uint32_t prog[] = {
-        0x3CA00010,  /* addis r5,r0,0x10   (1M iterations) */
+    static const uint32_t prog[] = { 0xC8203000, 0x38602001, 0xD8230000, 0xC8430000,
+                                     0xDC430004, 0xD8403010, 0x18000000 };
+    PpcMachine p(prog, 7, jit, false, false);   /* as Executor and the kpx machine */
+    if(!p.core)
+        return;
+    p.core->reset();
+    p.mem.write32(0x3000, 0x400921FB);   /* pi */
+    p.mem.write32(0x3004, 0x54442D18);
+    p.core->set_pc(0x1000);
+    CHECK(p.core->run() == cpu::StopReason::HostOp);
+    CHECK(p.mem.read8(0x2001) == 0x40 && p.mem.read8(0x2004) == 0xFB && p.mem.read8(0x2008) == 0xFB);
+    CHECK(p.mem.read32(0x3010) == 0x400921FB && p.mem.read32(0x3014) == 0x54442D18);
+    CHECK(p.mem.read8(0x2005) == 0x40 && p.mem.read8(0x200C) == 0x18);   /* stfdu at 0x2005 */
+    CHECK(p.core->reg(cpu::ppc::GPR0 + 3) == 0x2005);
+
+    /* ... and stmw/lmw: addi r30,r0,0x1234 ; addi r31,r0,0x5678 ;
+     * addi r3,r0,0x2402 ; stmw r30,0(r3) ; addi r30,r0,0 ; addi r31,r0,0 ;
+     * lmw r30,0(r3) ; host op 0 */
+    static const uint32_t prog2[] = { 0x3BC01234, 0x3BE05678, 0x38602402, 0xBFC30000,
+                                      0x3BC00000, 0x3BE00000, 0xBBC30000, 0x18000000 };
+    PpcMachine q(prog2, 8, jit, false, false);
+    q.core->reset();
+    q.core->set_pc(0x1000);
+    CHECK(q.core->run() == cpu::StopReason::HostOp);
+    CHECK(q.mem.read8(0x2404) == 0x12 && q.mem.read8(0x2405) == 0x34 && q.mem.read8(0x2409) == 0x78);
+    CHECK(q.core->reg(cpu::ppc::GPR0 + 30) == 0x1234 && q.core->reg(cpu::ppc::GPR0 + 31) == 0x5678);
+}
+
+/* Config::instruction_hook: the hook sees every instruction, in order, the
+ * registers as the instructions before it left them; across a branch and
+ * a host op; then none once it is cleared. A core made without it refuses. */
+static void test_ppc_instruction_hook(bool jit)
+{
+    /* addi r3,r0,5 ; b +8 ; (addi r3,r0,99) ; addi r3,r3,1 ; host op 3 ;
+     * addi r4,r0,7 ; host op 0 */
+    static const uint32_t prog[] = { 0x38600005, 0x48000008, 0x38600063, 0x38630001,
+                                     0x18000003, 0x38800007, 0x18000000 };
+    PpcMachine plain(prog, 7, jit);
+    CHECK(!plain.core->set_instruction_hook([](cpu::Core &, uint32_t, void *) {}, nullptr));
+
+    struct Seen { uint32_t pc, r3; };
+    std::vector<Seen> seen;
+    PpcMachine p(prog, 7, jit, false, true, true);
+    p.core->reset();
+    CHECK(p.core->set_instruction_hook(
+        [](cpu::Core &c, uint32_t pc, void *ctx) {
+            CHECK(c.pc() == pc);
+            ((std::vector<Seen> *)ctx)->push_back({ pc, c.reg(cpu::ppc::GPR0 + 3) });
+        },
+        &seen));
+    p.core->set_pc(0x1000);
+    CHECK(p.core->run() == cpu::StopReason::HostOp);
+    static const Seen want[] = { { 0x1000, 0 }, { 0x1004, 5 }, { 0x100C, 5 }, { 0x1010, 6 },
+                                 { 0x1014, 6 }, { 0x1018, 6 } };
+    CHECK(seen.size() == std::size(want));
+    for(size_t i = 0; i < seen.size() && i < std::size(want); i++)
+        CHECK(seen[i].pc == want[i].pc && seen[i].r3 == want[i].r3);
+    CHECK(p.core->reg(cpu::ppc::GPR0 + 4) == 7);
+
+    seen.clear();
+    CHECK(p.core->set_instruction_hook(nullptr, nullptr));
+    p.core->set_pc(0x1000);
+    CHECK(p.core->run() == cpu::StopReason::HostOp);
+    CHECK(seen.empty() && p.core->reg(cpu::ppc::GPR0 + 3) == 6);
+}
+
+/* --bench [N]: N million (default 1) iterations of lwz/addi/stw/addic./bne
+ * (5N million instructions) on each back-end, with and without inline
+ * memory. Prints millions of guest instructions a second. */
+static void bench_ppc(bool jit, bool fast, unsigned millions)
+{
+    uint32_t prog[] = {
+        0x3CA00000 | (millions << 4),  /* addis r5,r0,N*0x10   (N*1M iterations) */
         0x38802000,  /* addi r4,r0,0x2000 */
         0x80640000,  /* loop: lwz r3,0(r4) */
         0x38630001,  /* addi r3,r3,1 */
@@ -147,7 +224,7 @@ static void bench_ppc(bool jit, bool fast)
     p.core->run();
     double s = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
     printf("bench ppc %-11s %-6s: %u iterations, %.3f s, %.1f MIPS\n", jit ? "native" : "uml-interp",
-           fast ? "inline" : "calls", p.mem.read32(0x2000), s, 5.0 / s);
+           fast ? "inline" : "calls", p.mem.read32(0x2000), s, 5.0 * millions / s);
 }
 
 struct Machine
@@ -179,9 +256,12 @@ int main(int argc, char **argv)
 {
     if(argc > 1 && strcmp(argv[1], "--bench") == 0)
     {
+        unsigned millions = argc > 2 ? (unsigned)atoi(argv[2]) : 1;
+        if(millions < 1 || millions > 0xfff)
+            millions = 1;
         for(int jit = 0; jit < 2; jit++)
             for(int fast = 0; fast < 2; fast++)
-                bench_ppc(jit, fast);
+                bench_ppc(jit, fast, millions);
         return 0;
     }
     /* A: d0 = 5 + 1; B: d0 = -1, d1 = 0x1234 via memory. */
@@ -241,6 +321,10 @@ int main(int argc, char **argv)
 
     test_ppc(false);
     test_ppc(true);
+    test_ppc_misaligned_fp(false);
+    test_ppc_misaligned_fp(true);
+    test_ppc_instruction_hook(false);
+    test_ppc_instruction_hook(true);
 
     if(failures)
     {

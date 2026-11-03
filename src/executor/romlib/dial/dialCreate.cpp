@@ -22,6 +22,10 @@
 #include <mman/mman.h>
 #include <res/resource.h>
 #include <textedit/textedit.h>
+#include <Appearance.h>
+#include <DialogMgr8.h>
+#include <ControlMgr8.h>
+#include <prefs/prefs.h>
 
 using namespace Executor;
 
@@ -364,18 +368,24 @@ DialogPtr Executor::C_GetNewDialog(INTEGER id, void* dst,
     bool color_p;
 
     dialog_res_h = (dlogh)ROMlib_getrestid("DLOG"_4, id);
+    if(!dialog_res_h)
+        return nullptr;
 
     dialog_item_list_res_h = ROMlib_getrestid("DITL"_4,
                                               (*dialog_res_h)->dlgditl);
-    HandToHand(inout(dialog_item_list_res_h));
-
-    if(!dialog_res_h || !dialog_item_list_res_h)
+    if(!dialog_item_list_res_h)
         return nullptr;
+    HandToHand(inout(dialog_item_list_res_h));
 
     dialog_ctab_res_h = ROMlib_getrestid("dctb"_4, id);
     item_ctab_res_h = ROMlib_getrestid("ictb"_4, id);
 
-    color_p = (dialog_ctab_res_h || item_ctab_res_h);
+    /* 8.x: a 'dlgx' asking for the theme's grey makes a colour dialog on
+       it; without one a dialog is white (appr dialogs.*.dlog/dlgx) */
+    Handle dlgx = ROMlib_getrestid("dlgx"_4, id);
+    bool theme_p = system_version >= 0x800 && dlgx && GetHandleSize(dlgx) >= 6
+                   && (*(GUEST<uint32_t> *)(*dlgx + 2) & kDialogFlagsUseThemeBackground);
+    color_p = (dialog_ctab_res_h || item_ctab_res_h || theme_p);
 
     HLockGuard guard(dialog_res_h);
     Rect adjusted_rect;
@@ -401,6 +411,16 @@ DialogPtr Executor::C_GetNewDialog(INTEGER id, void* dst,
                                    (*dialog_res_h)->dlgrc,
                                    dialog_item_list_res_h);
 
+    if(retval && theme_p)
+        SetThemeWindowBackground(retval, kThemeBrushDialogBackgroundActive, true);
+    /* ... and one asking for the control hierarchy has its item controls in
+       a root control (appr dlgitems; Navigation Services' dialogs) */
+    if(retval && system_version >= 0x800 && dlgx && GetHandleSize(dlgx) >= 6
+       && (*(GUEST<uint32_t> *)(*dlgx + 2) & kDialogFlagsUseControlHierarchy))
+    {
+        CreateRootControl(retval, nullptr);
+        ROMlib_dialog_item_controls(retval);
+    }
     return retval;
 }
 
@@ -420,7 +440,11 @@ void Executor::C_CloseDialog(DialogPtr dp) /* IMI-413 */
         itp = (itmp)(ip + 1);
         while(i-- >= 0)
         {
-            if(itp->itmtype & (editText | statText))
+            /* MacPhoenix: not a text item's handle that is one of the
+               window's controls (Navigation Services' separator): it goes
+               with the window's controls */
+            if((itp->itmtype & (editText | statText))
+               && !ROMlib_dialog_handle_is_control(dp, itp->itmhand))
                 DisposeHandle((Handle)itp->itmhand);
             BUMPIP(itp);
         }

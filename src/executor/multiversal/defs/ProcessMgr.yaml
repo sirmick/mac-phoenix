@@ -223,6 +223,22 @@
 # ####
 
 - function:
+    name: GetProcessManagerID
+    return: int32_t
+    args:
+      - name: id
+        type: Ptr
+    dispatcher: OSDispatch
+    selector: 0x0002
+    executor: C_
+    comment: |
+      MacPhoenix (name is a guess): OSDispatch $2, as Apple's 7.6.1 answers
+      it (a probe on the Quadra): the 8 bytes 'TWIT' '1889' at id, 0
+      returned, the selector and id popped. Excel 4.0's start-up asks.
+
+# ####
+
+- function:
     name: TakeDesktopLayer
     return: OSErr
     args:
@@ -456,12 +472,30 @@
     dispatcher: OSDispatch
     selector: 0x0039
     executor: C_
+    export: false
     comment: >
       The inline pushes a long -1 after the PSN pointer (Processes.h:
       moveq #-1,d0; move.l d0,-(sp)); dummy is that long. Apple's (scod
       -16463, RAM $29E94 on the reference boot) takes anything else as a
       layer or window and answers the process owning it (procNotFound if
       none): the Drag Manager finds a drop target's process that way.
+      InterfaceLib's export, below, takes the PSN pointer alone.
+
+# ####
+
+- only-for: Executor
+  function:
+    name: GetFrontProcess
+    return: OSErr
+    args:
+      - name: serial_number
+        type: ProcessSerialNumber*
+    library: InterfaceLib
+    executor: glue_GetFrontProcess
+    comment: >
+      MacPhoenix: one argument, as the inline's; the second the trap's
+      export took was whatever the caller left in r4 (BBEdit Lite 6.1:
+      -2, taken for a window and read).
 
 # ####
 

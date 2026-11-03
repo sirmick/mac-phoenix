@@ -8,12 +8,18 @@
  *     the same here.
  *   - A system task runs at system task time: from SystemTask (which
  *     WaitNextEvent calls), in its own process.
+ *   - A timer task (OT 1.1.1, OTClnt$NtvUtils / OTNtvUtilLib) runs at
+ *     deferred task time too, once the milliseconds it was scheduled for
+ *     have gone by. Each has a Time Manager task of its own whose routine
+ *     (a host callback) marks it due and raises the OT interrupt.
  * Both are called in the A5 world their creator had. A task may schedule
  * itself again; it then runs at the next opportunity, not inside itself.
  */
 
 #include "ot_provider.h"
 
+#include <MemoryMgr.h>
+#include <TimeMgr.h>
 #include <rsys/opentransport.h>
 
 #include <map>
@@ -34,6 +40,8 @@ struct Task
     bool system;
     bool ppc; /* a PowerPC client's (proc is a TV) */
     bool scheduled = false;
+    TMTask *tm = nullptr; /* a timer task's Time Manager task */
+    bool due = false;     /* its time has come: it runs at the next pump */
 };
 }
 
@@ -46,6 +54,7 @@ void run(uint32_t cookie)
     if(it == tasks.end() || !it->second.scheduled)
         return;
     it->second.scheduled = false;
+    it->second.due = false;
     Task t = it->second;
     if(t.ppc)
     {
@@ -68,7 +77,7 @@ void run_scheduled(bool system, uint32_t a5)
 {
     std::vector<uint32_t> due;
     for(auto &[cookie, t] : tasks)
-        if(t.scheduled && t.system == system && (!system || t.a5 == a5))
+        if(t.scheduled && t.system == system && (!system || t.a5 == a5) && (!t.tm || t.due))
             due.push_back(cookie);
     for(uint32_t cookie : due)
         run(cookie);
@@ -126,10 +135,109 @@ uint32_t cancel(const Call &c)
     return 1;
 }
 
+/* A task gone: a timer's Time Manager task out of the queue and freed. */
+void drop(std::map<uint32_t, Task>::iterator it)
+{
+    if(TMTask *tm = it->second.tm)
+    {
+        RmvTime((QElemPtr)tm);
+        DisposePtr((Ptr)tm);
+    }
+    tasks.erase(it);
+}
+
 /* OSStatus OTDestroyDeferredTask(long) */
 uint32_t destroy(const Call &c)
 {
-    return tasks.erase(c.l(0)) ? kOTNoError : kOTBadReferenceErr;
+    auto it = tasks.find(c.l(0));
+    if(it == tasks.end())
+        return kOTBadReferenceErr;
+    drop(it);
+    return kOTNoError;
+}
+
+/* ---- timer tasks (OT 1.1.1) ---- */
+
+/* A timer's Time Manager task expired (A1: the TMTask): it is due, at the
+   next pump. Called as the task's routine, so it returns past its return
+   address. */
+syn68k_addr_t timer_expired(syn68k_addr_t, void *)
+{
+    uint32_t tm = EM_A1;
+    for(auto &[cookie, t] : tasks)
+        if(t.tm && guest_addr(t.tm) == tm && t.scheduled)
+        {
+            t.due = true;
+            wake();
+        }
+    uint32_t ret = READUL(EM_A7);
+    EM_A7 += 4;
+    return ret;
+}
+
+/* long OTCreateTimerTask(OTProcessProcPtr, void *arg): 0 without a
+   procedure or the memory for its Time Manager task. */
+uint32_t create_timer(const Call &c)
+{
+    uint32_t cookie = create(c.l(0), c.l(1), false, c.ppc());
+    if(!cookie)
+        return 0;
+    static syn68k_addr_t routine = callback_install(timer_expired, nullptr);
+    TMTask *tm = (TMTask *)NewPtrSysClear(sizeof(TMTask));
+    if(!tm)
+    {
+        tasks.erase(cookie);
+        return 0;
+    }
+    tm->tmAddr = (ProcPtr)SYN68K_TO_US(routine);
+    InsTime((QElemPtr)tm);
+    tasks[cookie].tm = tm;
+    return cookie;
+}
+
+/* Boolean OTScheduleTimerTask(long, OTTimeout milliSeconds): it runs once
+   that long from now; scheduled again before it ran, from the new call. */
+uint32_t schedule_timer(const Call &c)
+{
+    auto it = tasks.find(c.l(0));
+    if(it == tasks.end() || !it->second.tm)
+        return false;
+    Task &t = it->second;
+    t.scheduled = true;
+    t.due = false;
+    uint32_t ms = c.l(1);
+    if(ms == 0)
+    {
+        t.due = true;
+        wake();
+    }
+    else
+        PrimeTime((QElemPtr)t.tm, std::min<uint32_t>(ms, 0x7FFFFFFF));
+    OT_LOG("timer task $%08x in %u ms\n", c.l(0), ms);
+    return true;
+}
+
+/* Boolean OTCancelTimerTask(long): true if it was scheduled; it won't run. */
+uint32_t cancel_timer(const Call &c)
+{
+    auto it = tasks.find(c.l(0));
+    if(it == tasks.end() || !it->second.tm || !it->second.scheduled)
+        return false;
+    Task &t = it->second;
+    t.scheduled = false;
+    t.due = false;
+    RmvTime((QElemPtr)t.tm); /* back in the queue, not counting down */
+    InsTime((QElemPtr)t.tm);
+    return true;
+}
+
+/* void OTDestroyTimerTask(long): cancelled and gone. */
+uint32_t destroy_timer(const Call &c)
+{
+    auto it = tasks.find(c.l(0));
+    if(it != tasks.end() && it->second.tm)
+        drop(it);
+    return 0;
 }
 
 /* Boolean OTCanMakeSyncCall(): not at interrupt or deferred task time. */
@@ -171,10 +279,10 @@ void Executor::ot::tasks_process_exit(uint32_t lo, uint32_t hi)
 {
     for(auto it = tasks.begin(); it != tasks.end();)
     {
+        auto next = std::next(it);
         if(it->second.proc >= lo && it->second.proc < hi)
-            it = tasks.erase(it);
-        else
-            ++it;
+            drop(it);
+        it = next;
     }
 }
 

@@ -6,6 +6,8 @@
  * definition right-aligns them (stdmbdf.cpp). Both come from the System
  * file: MENU -16490 with the balloon icon (ics# -16490), and MENU -16489,
  * whose "^0" becomes the application's name and which lists the processes.
+ * On 8.x the Help menu's title is text instead, the System's STR -20451,
+ * and the bar lays it out after the application's menus, as a G3 does.
  * Choosing one of their own items is handled here; items an application
  * adds to the Help menu are returned to it. */
 
@@ -28,6 +30,7 @@
 #include <menu/menu.h>
 #include <mman/mman.h>
 #include <rsys/helppkg.h>
+#include <prefs/prefs.h>
 
 #include <algorithm>
 #include <cstring>
@@ -42,6 +45,7 @@ enum
 {
     kHMHelpMenuID = -16490,
     kApplicationMenuID = -16489,
+    kHelpMenuTitleID = -20451, /* STR: 8.x's Help menu title */
 };
 
 MenuHandle help_menu;
@@ -65,6 +69,15 @@ void set_icon_title(MenuHandle mh, Handle suite)
     int oldlen = (*mh)->menuData[0];
     Munger((Handle)mh, offsetof(MenuInfo, menuData), nullptr, oldlen + 1,
            (Ptr)title, sizeof title);
+}
+
+void set_text_title(MenuHandle mh, StringHandle text)
+{
+    const uint8_t *t = (const uint8_t *)*text;
+    std::vector<uint8_t> title(t, t + t[0] + 1);
+    int oldlen = (*mh)->menuData[0];
+    Munger((Handle)mh, offsetof(MenuInfo, menuData), nullptr, oldlen + 1,
+           (Ptr)title.data(), title.size());
 }
 
 /* A system-heap copy of the members of an icon suite. */
@@ -217,8 +230,13 @@ void make_help_menu()
         return;
     DetachResource((Handle)mh);
     help_system_items = CountMItems(mh);
+    /* 8.x: the title is text, the System's STR -20451 ("Help"), and the
+       menu follows the application's (a G3 on 8.6); 7.x: the balloon. */
+    StringHandle text = system_version >= 0x800 ? GetString(kHelpMenuTitleID) : nullptr;
     Handle suite;
-    if(GetIconSuite(out(suite), kHMHelpMenuID, svAllSmallData) == noErr)
+    if(text && *text && (*text)[0])
+        set_text_title(mh, text);
+    else if(GetIconSuite(out(suite), kHMHelpMenuID, svAllSmallData) == noErr)
         set_icon_title(mh, suite);
     help_menu = mh;
 }
@@ -417,6 +435,14 @@ bool Executor::ROMlib_system_menu_select(INTEGER mid, INTEGER item)
     return false;
 }
 
+/* By ID: Apple's Help Manager gives an application that adds items its
+   own copy of the Help menu (HMGetHelpMenuHandle), title and all. */
+bool Executor::ROMlib_system_menu_at_right(MenuHandle mh)
+{
+    return ROMlib_system_menu_p((*mh)->menuID)
+        && !((*mh)->menuID == kHMHelpMenuID && !ROMlib_icon_title_p(mh));
+}
+
 bool Executor::ROMlib_icon_title_p(MenuHandle mh)
 {
     return (*mh)->menuData[0] == 5 && (*mh)->menuData[1] == 1;
@@ -520,6 +546,11 @@ void Executor::ROMlib_apple_menu_update()
         AppendMenu(apple_menu, (StringPtr) "\001x");
         SetMenuItemText(apple_menu, n, (StringPtr)item.text.data());
     }
+}
+
+bool Executor::ROMlib_apple_menu_p(MenuHandle mh)
+{
+    return mh && mh == apple_menu;
 }
 
 Handle Executor::ROMlib_apple_menu_icon(MenuHandle mh, INTEGER item)

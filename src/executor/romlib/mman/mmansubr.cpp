@@ -532,8 +532,9 @@ static void sledgehammer_zone(THz zone, bool print_p,
                 }
 
                 if(BLOCK_STATE(block) != FREE_BLOCK_STATE)
-                    mm_fatal("bogus free block state bits `%d'\n",
-                             BLOCK_STATE(block));
+                    mm_fatal("bogus free block state bits `%d' in block $%08X of zone $%08X\n",
+                             BLOCK_STATE(block), (unsigned)US_TO_SYN68K(block),
+                             (unsigned)US_TO_SYN68K(zone));
 
                 if(print_p)
                     fprintf(stderr, "FREE %p;                       S:%08x %c\n",
@@ -810,8 +811,6 @@ bool Executor::ROMlib_pushblock(block_header_t *block, block_header_t *after)
     return false;
 }
 
-bool Executor::ROMlib_memnomove_p = 0;
-
 /* Make space for a block of size SIZE starting at BLOCK.  If space
    exists return 1, else return 0.  */
 bool Executor::ROMlib_makespace(block_header_t **block_out, uint32_t size)
@@ -831,8 +830,7 @@ bool Executor::ROMlib_makespace(block_header_t **block_out, uint32_t size)
         (total_size < size && b != bk_lim
          && ((USE(b) == FREE)
              || ((USE(b) == REL)
-                 && !ROMlib_locked(b)
-                 && !ROMlib_memnomove_p)));
+                 && !ROMlib_locked(b))));
         b = BLOCK_NEXT(b))
     {
         if(PSIZE(b) < MIN_BLOCK_SIZE)
@@ -882,6 +880,169 @@ bool Executor::ROMlib_makespace(block_header_t **block_out, uint32_t size)
 
     SETPSIZE(block, total_size);
     return true;
+}
+
+/* MacPhoenix: room for a nonrelocatable block as low in the zone as it can
+ * go, as ResrvMem and NewPtr make it (Inside Macintosh: Memory, 2-38 and
+ * 2-64; measured on 8.6 by the difftest probe sys, section heap):
+ *
+ * 1. The lowest stretch of free and unlocked relocatable blocks (between
+ *    nonrelocatable or locked ones) whose free space adds up to the size:
+ *    its relocatable blocks move up out of the way (make_room), the free
+ *    space comes together at its bottom. Free space higher up is used before
+ *    anything is purged (a purgeable block under a locked one stays, the
+ *    pointer goes above the locked block).
+ * 2. Failing that, the lowest stretch where the purgeable blocks count as
+ *    free too: those in it are purged (only those: one above a locked
+ *    block it doesn't need stays), the rest move up.
+ * 3. Failing that, the zone's grow-zone procedure, and 1 and 2 again while
+ *    it says it freed something. A request purging couldn't satisfy reaches
+ *    it with nothing purged.
+ *
+ * Executor's ResrvMem moved a block only into one free block above the
+ * stretch as big as the block, so a pointer went above any handle it
+ * couldn't jump over, and NewPtr then allocated from the rover the moves
+ * left high, not where ResrvMem had made room: Slithereens' sound loading
+ * (HLockHi, NewPtr, HUnlock, HPurge per sound) left its pointers among the
+ * sounds, the free space between them in pieces once those were purged,
+ * and a 355K PICT failed with 4 MB free. */
+/* A Mac moves blocks for NewPtr from the start (the probe calls no event
+   routine first). */
+static bool movable_p(block_header_t *b)
+{
+    return USE(b) == REL && !ROMlib_locked(b);
+}
+
+static bool purgeable_p(block_header_t *b)
+{
+    return movable_p(b)
+        && (HANDLE_STATE(BLOCK_TO_HANDLE(LM(TheZone), b), b) & PURGEBIT);
+}
+
+/* The lowest stretch [*start, *end) with SIZE bytes free (purgeable blocks
+   counted when PURGE). */
+static bool find_stretch(uint32_t size, bool purge,
+                         block_header_t **start, block_header_t **end)
+{
+    THz zone = LM(TheZone);
+    block_header_t *s = nullptr;
+    uint32_t gain = 0;
+    for(block_header_t *b = ZONE_HEAP_DATA(zone); b != ZONE_BK_LIM(zone); b = BLOCK_NEXT(b))
+    {
+        if(PSIZE(b) < MIN_BLOCK_SIZE)
+            HEAP_DEATH();
+        if(USE(b) != FREE && !movable_p(b))
+        {
+            s = nullptr;
+            continue;
+        }
+        if(!s)
+        {
+            s = b;
+            gain = 0;
+        }
+        if(USE(b) == FREE || (purge && purgeable_p(b)))
+            gain += PSIZE(b);
+        if(gain >= size)
+        {
+            *start = s;
+            *end = BLOCK_NEXT(b);
+            return true;
+        }
+    }
+    return false;
+}
+
+/* Slide the relocatable blocks of [s, e) up against e; the free space
+   becomes one free block at s, returned. */
+static block_header_t *slide_up(block_header_t *s, block_header_t *e)
+{
+    THz zone = LM(TheZone);
+    std::vector<block_header_t *> rel;
+    for(block_header_t *b = s; b != e; b = BLOCK_NEXT(b))
+        if(USE(b) != FREE)
+            rel.push_back(b);
+    char *dst = (char *)e;
+    for(size_t i = rel.size(); i-- > 0;)
+    {
+        block_header_t *r = rel[i];
+        uint32_t size = PSIZE(r);
+        dst -= size;
+        if(dst == (char *)r)
+            continue;
+        move_history_record(dst, r, size, "reserve");
+        memmove(dst, r, size);
+        block_header_t *nr = (block_header_t *)dst;
+        ROMlib_destroy_blocks(ptr_to_longint(BLOCK_DATA(nr)), LSIZE(nr), true);
+        Handle mh = BLOCK_TO_HANDLE(zone, nr);
+        SETMASTER(mh, BLOCK_DATA(nr), HANDLE_STATE(mh, nr));
+    }
+    if(dst != (char *)s)
+        mm_set_block_fields_offset(s, FREE_BLOCK_STATE, FREE, 0, (uint32_t)(dst - (char *)s), 0);
+    /* The rover may have pointed into the stretch. */
+    if((char *)ZONE_ALLOC_PTR(zone) >= (char *)s && (char *)ZONE_ALLOC_PTR(zone) < (char *)e)
+        ZONE_ALLOC_PTR(zone) = s;
+    return s;
+}
+
+/* Room for SIZE bytes at S, the bottom of a stretch find_stretch found
+   (move-only): the stretch's relocatable blocks from the bottom up go each
+   to the lowest free block above it that holds it, as on 8.6 (an 8K handle
+   under a 1K pointer lands just past where it was); a block no free block
+   holds slides, with the rest of the stretch, up to the stretch's top. */
+static block_header_t *make_room(block_header_t *s, uint32_t size)
+{
+    THz zone = LM(TheZone);
+    for(;;)
+    {
+        block_header_t *b = s;
+        if(USE(s) == FREE)
+        {
+            ROMlib_coalesce(s);
+            if(PSIZE(s) >= size)
+                return s;
+            b = BLOCK_NEXT(s);
+        }
+        if(b == ZONE_BK_LIM(zone) || !movable_p(b) || !ROMlib_pushblock(b, BLOCK_NEXT(b)))
+            break;
+    }
+    block_header_t *e;
+    if(!find_stretch(size, false, &s, &e))
+        return nullptr;
+    return slide_up(s, e);
+}
+
+block_header_t *Executor::ROMlib_reserve(uint32_t size)
+{
+    THz zone = LM(TheZone);
+    for(int tries = 0;; tries++)
+    {
+        block_header_t *s, *e;
+        if(find_stretch(size, false, &s, &e))
+            return make_room(s, size);
+        if(find_stretch(size, true, &s, &e))
+        {
+            std::vector<Handle> victims;
+            for(block_header_t *b = s; b != e; b = BLOCK_NEXT(b))
+                if(USE(b) != FREE && purgeable_p(b))
+                    victims.push_back(BLOCK_TO_HANDLE(zone, b));
+            /* EmptyHandle coalesces free blocks, and the purge procedure
+               may do anything: find the stretch again afterwards. */
+            for(Handle h : victims)
+                EmptyHandle(h);
+            LM(TheZone) = zone;
+            if(find_stretch(size, false, &s, &e))
+                return make_room(s, size);
+        }
+        if(!ZONE_GZ_PROC(zone) || tries >= 16)
+            return nullptr;
+        ZONE_ALLOC_PTR(zone) = nullptr;
+        ROMlib_hook(memory_gznumber);
+        LONGINT freed = zone->gzProc(size);
+        LM(TheZone) = zone;
+        if(!freed)
+            return nullptr;
+    }
 }
 
 /* Tell if BLOCK is locked or not */

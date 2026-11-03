@@ -29,11 +29,15 @@ Executor::enable_stdtext(void)
     text_is_enabled_p = true;
 }
 
+void (*Executor::ROMlib_text_drawn)(const char *text, int len) = nullptr;
+
 void Executor::ROMlib_CALLTEXT(INTEGER bc, Ptr bufp, Point num, Point den)
 {
     QDProcsPtr gp;
     QDTextUPP pp;
 
+    if(ROMlib_text_drawn && bc > 0)
+        ROMlib_text_drawn((const char *)bufp, bc);
     if(text_is_enabled_p)
     {
         if((gp = qdGlobals().thePort->grafProcs)

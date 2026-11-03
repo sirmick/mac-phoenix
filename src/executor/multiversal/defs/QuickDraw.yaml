@@ -3336,3 +3336,110 @@
     args:
       - name: bm
         type: BitMap *
+
+# ####
+
+# InterfaceLib's lowercase C routines (multiversal/executor.rb, declare_cglue):
+# the Pascal routine with C strings, Points by address.
+
+- only-for: Executor
+  function:
+    name: addpt
+    cglue: AddPt
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: drawstring
+    cglue: DrawString
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: equalpt
+    cglue: EqualPt
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: pt2rect
+    cglue: Pt2Rect
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: ptinrect
+    cglue: PtInRect
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: ptinrgn
+    cglue: PtInRgn
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: pttoangle
+    cglue: PtToAngle
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: shieldcursor
+    cglue: ShieldCursor
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: stdline
+    cglue: StdLine
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: stdtext
+    cglue: StdText
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: stringwidth
+    cglue: StringWidth
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: stuffhex
+    cglue: StuffHex
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: subpt
+    cglue: SubPt
+    library: InterfaceLib

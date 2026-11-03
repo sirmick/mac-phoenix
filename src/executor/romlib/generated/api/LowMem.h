@@ -149,13 +149,15 @@ NOTRAP_FUNCTION2(LMGetJResUnknown2);
 NOTRAP_FUNCTION2(LMSetJResUnknown2);
 
 
-// * NOTE: The graphing program looks for a -1 in 0x952
-// rsys/misc WHOKNOWS (true-b);
-const LowMemGlobal<INTEGER > graphlooksat{ 0x952 };
-inline INTEGER  LMGetgraphlooksat() { return LM(graphlooksat); }
-inline void LMSetgraphlooksat(INTEGER val) { LM(graphlooksat) = val; }
-NOTRAP_FUNCTION2(LMGetgraphlooksat);
-NOTRAP_FUNCTION2(LMSetgraphlooksat);
+// The Printing Manager's driver resource file (PrintVars + $E): PrOpen
+// sets it, PrClose leaves it; -1 until a printer is opened (a 7.6.1
+// Quadra). Applications linked with the old printing glue (Persuasion
+// 3.0) call the driver's PDEFs themselves from this file.
+const LowMemGlobal<INTEGER > PrRefNum{ 0x952 };
+inline INTEGER  LMGetPrRefNum() { return LM(PrRefNum); }
+inline void LMSetPrRefNum(INTEGER val) { LM(PrRefNum) = val; }
+NOTRAP_FUNCTION2(LMGetPrRefNum);
+NOTRAP_FUNCTION2(LMSetPrRefNum);
 
 
 // * NOTE: MacWrite stores a copy of the trap address for LoadSeg in 954

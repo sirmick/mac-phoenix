@@ -1,0 +1,115 @@
+/* The Disks panel (disks.js), in the bar's colours (index.html). */
+#disks-button .count { background: #4a5a74; border-radius: 8px; padding: 0 6px; margin-left: 5px; font-size: 11px; }
+#disks-button.open { background: #4a5a74; }
+#disks-panel { position: fixed; top: 0; right: 0; bottom: 0; width: min(440px, 92vw); z-index: 10;
+               background: #2b2b2b; color: #ddd; border-left: 1px solid #555; display: flex; flex-direction: column;
+               box-shadow: -8px 0 30px rgba(0, 0, 0, .5); font: 13px system-ui, sans-serif; }
+#disks-panel[hidden] { display: none; }
+#disks-panel header { display: flex; align-items: center; gap: 8px; padding: 10px 14px;
+                      background: #3a3a3a; border-bottom: 1px solid #555; }
+#disks-panel h1 { font-size: 15px; font-weight: 600; margin: 0; flex: 1; }
+#disks-panel button { background: #555; color: #eee; border: 0; border-radius: 4px; padding: 3px 9px;
+                      font: inherit; cursor: pointer; }
+#disks-panel button:hover:not(:disabled) { background: #666; }
+#disks-panel button:disabled { opacity: .4; cursor: default; }
+#disks-panel button:focus-visible, #disks-panel input:focus-visible, #disks-panel select:focus-visible
+    { outline: 2px solid #7af; outline-offset: 1px; }
+#disks-panel .close { background: transparent; font-size: 15px; padding: 2px 8px; }
+#disks-panel .scroll { flex: 1; overflow-y: auto; padding: 0 14px 14px; }
+#disks-panel h2 { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em;
+                  color: #999; margin: 16px 0 6px; border-bottom: 1px solid #444; padding-bottom: 3px;
+                  display: flex; align-items: baseline; gap: 6px; }
+#disks-panel h2 .hint { text-transform: none; letter-spacing: 0; font-weight: 400; color: #777; }
+
+/* A disk: its picture, title and file, state, actions. */
+.disk { display: grid; grid-template-columns: 40px 1fr auto; gap: 2px 10px; align-items: center;
+        padding: 7px 8px; border-radius: 6px; background: #333; margin-bottom: 6px; }
+.disk .pic { grid-row: span 2; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; }
+.disk .pic img { max-width: 40px; max-height: 40px; border-radius: 3px; }
+.disk .pic svg { width: 34px; height: 34px; }
+.disk .title { color: #eee; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.disk .file { color: #888; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.disk .acts { grid-row: span 2; display: flex; gap: 4px; }
+.disk .acts button { padding: 3px 7px; }
+.disk .explain { grid-column: 2 / 4; color: #aaa; font-size: 11px; margin-top: 3px; }
+.disk.changed { box-shadow: inset 3px 0 0 #d9a440; }
+.disk.inserting { opacity: .6; }
+
+.badge { display: inline-block; font-size: 10px; font-weight: 600; letter-spacing: .03em; border-radius: 3px;
+         padding: 0 5px; margin-right: 6px; vertical-align: 1px; text-transform: uppercase; }
+.badge.original { background: #444; color: #bbb; }
+.badge.changed { background: #6b5320; color: #fd8; }
+.badge.cd { background: #2d4766; color: #bdf; }
+.badge.memory { background: #5a3434; color: #fbb; }
+.badge.system { background: #3d5a3d; color: #cfc; }
+
+/* Open, the panel takes the right edge and the screen moves aside. */
+body.disks-open { padding-right: min(440px, 92vw); box-sizing: border-box; }
+
+/* The System disk: what the Mac starts from. */
+.system-pick { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
+.system-pick select { flex: 1; background: #444; color: #eee; border: 1px solid #555; border-radius: 4px;
+                      padding: 4px 6px; font: inherit; }
+.system-pick .note { color: #888; font-size: 11px; }
+
+/* Adding: the button and the drop zone (the whole panel takes drops). */
+.add-zone { border: 1px dashed #666; border-radius: 6px; padding: 10px; text-align: center; color: #999; margin-top: 4px; }
+.add-zone button { margin-right: 6px; }
+#disks-panel.dragging .add-zone, body.disks-dragging .add-zone { border-color: #7af; background: #2f3b4f; color: #cdf; }
+#disks-drop { position: fixed; inset: 0; z-index: 20; background: rgba(40, 60, 90, .55); border: 3px dashed #7af;
+              display: flex; align-items: center; justify-content: center; color: #fff; font: 600 20px system-ui, sans-serif;
+              pointer-events: none; }
+#disks-drop[hidden] { display: none; }
+.empty-note { color: #888; padding: 6px 2px; }
+
+/* The library: a filter, tags, cards. */
+.lib-filter { display: flex; gap: 6px; margin-bottom: 6px; }
+.lib-filter input { flex: 1; background: #444; color: #eee; border: 1px solid #555; border-radius: 4px;
+                    padding: 4px 6px; font: inherit; }
+.lib-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+.lib-tags button { background: #3a3a3a !important; color: #bbb !important; border-radius: 10px !important;
+                   padding: 1px 9px !important; font-size: 11px !important; }
+.lib-tags button.on { background: #4a5a74 !important; color: #fff !important; }
+.lib-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.lib-table th { text-align: left; font-size: 11px; font-weight: 600; color: #999; padding: 4px 4px; border-bottom: 1px solid #444;
+                user-select: none; white-space: nowrap; }
+.lib-table th[tabindex] { cursor: pointer; }
+.lib-table th[tabindex]:hover { color: #ddd; }
+.lib-table th[aria-sort=ascending]::after { content: ' ▲'; font-size: 9px; }
+.lib-table th[aria-sort=descending]::after { content: ' ▼'; font-size: 9px; }
+.lib-table col.col-art { width: 40px; }
+.lib-table col.col-size { width: 54px; }
+.lib-table col.col-systems { width: 72px; }
+.lib-table col.col-state { width: 78px; }
+.lib-table td { padding: 5px 4px; border-bottom: 1px solid #383838; vertical-align: middle; }
+.lib-row { cursor: pointer; }
+.lib-row:hover { background: #343a44; }
+.lib-row td.art img, .lib-row td.art svg { width: 32px; height: 32px; object-fit: contain; display: block; border-radius: 3px; }
+.lib-row td.name { overflow: hidden; }
+.lib-row .title { color: #eee; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lib-row .tags { color: #888; font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lib-row td.size, .lib-row td.systems { color: #aaa; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lib-row td.state { text-align: right; white-space: nowrap; }
+.lib-row td.state .badge { margin: 0; }
+.lib-row .insert { padding: 2px 8px !important; font-size: 11px !important; }
+.lib-row .remove { padding: 2px 6px !important; font-size: 11px !important; margin-left: 3px; }
+.lib-row.mounted { cursor: default; }
+.lib-row.mounted .title { color: #9a9; }
+.lib-row .contents { background: none !important; border: none !important; color: #9ab !important; padding: 0 6px 0 0 !important;
+    font-size: 10px !important; cursor: pointer; }
+.lib-row .contents:hover { color: #cde !important; }
+.lib-details > td { padding: 2px 4px 10px 8px; background: #2c2f34; }
+.lib-note { color: #aaa; font-size: 11px; margin: 4px 0 6px; }
+.lib-items { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 11px; }
+.lib-items th { text-align: left; color: #888; font-weight: 600; padding: 2px 4px; border-bottom: 1px solid #444; }
+.lib-items th:nth-child(1) { width: auto; }
+.lib-items th:nth-child(2) { width: 58px; }
+.lib-items th:nth-child(3) { width: 54px; }
+.lib-items th:nth-child(4) { width: 50px; }
+.lib-items td { padding: 3px 4px; border-bottom: 1px solid #363636; vertical-align: top; color: #bbb;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lib-items td.item-name { white-space: normal; }
+.lib-items .item-title { color: #ddd; }
+.lib-items .item-about { color: #999; font-size: 10px; }
+.lib-items .item-notes { color: #c9a95c; font-size: 10px; }
+.lib-items tr.lib-group td { color: #8a9; font-weight: 600; padding-top: 6px; }

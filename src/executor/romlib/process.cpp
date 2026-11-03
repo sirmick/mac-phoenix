@@ -30,6 +30,7 @@
 #include <QuickDraw.h>
 #include <vector>
 #include <algorithm>
+#include <mutex>
 
 using namespace Executor;
 #include <AppleEvents.h>
@@ -92,7 +93,8 @@ get_size_resource()
  *
  * As on 7.5.5, LaunchApplication only creates the process; it first runs
  * at the launcher's next event call, which switches to it.  A new process
- * starts from the low memory the first process had before its launch. */
+ * starts from the low memory the first process had before its launch,
+ * but for ApplScratch: its launcher's, as on a Mac. */
 
 struct process_info
 {
@@ -134,6 +136,11 @@ struct process_info
     bool desk_accessory = false;
     /* Its launcher supplied the opening Apple event (see process_launch). */
     bool posted_open_event = false;
+    /* Its launcher's ApplScratch: switched low memory that a new process
+       starts with on a Mac (THINK C 6's Run hands the project's runtime
+       stub its data there). */
+    bool appl_scratch_set = false;
+    uint8_t appl_scratch[12] = {};
     Str255 da_name = { 0 };
 
     /* Left by the process that quit and switched to us: screen to redraw,
@@ -189,6 +196,21 @@ static process_info_t *pending_front;
 /* Layers, front first: whose windows are in front of whose. */
 static std::vector<process_info_t *> layer_order;
 static process_info_t *front_process;
+/* The front process's name for the host's video thread (/api/app): copied
+   at event calls, when a process comes to the front (one that never makes
+   an event call, Exile polling Button(), is still the front one) and when
+   a process ends, as CurApName at a frame names
+   whichever process runs then (the agent, while an application quits). */
+static std::mutex front_name_mutex;
+static std::string front_name;
+static void publish_front_name()
+{
+    std::string name;
+    if(front_process && front_process->state != process_info_t::dead)
+        name.assign((const char *)front_process->name + 1, front_process->name[0]);
+    std::lock_guard<std::mutex> lk(front_name_mutex);
+    front_name = name;
+}
 /* 7.5.5 numbers processes from $2000 (Jigsaw launched by Finder: $2001). */
 static uint32_t next_free_psn = 0x2000;
 
@@ -1033,6 +1055,21 @@ INTEGER Executor::C_FindWindowInLayer(Point pt, GUEST<WindowPtr> *window)
     return inContent;
 }
 
+/* LayerDispatch 19 (8.x): FindWindow in the front layer with a window at
+   the point, whichever it is: the window itself, not its layer. */
+INTEGER Executor::C_FindWindowInAnyLayer(Point pt, GUEST<WindowPtr> *window)
+{
+    *window = nullptr;
+    LONGINT pointaslong = ((LONGINT)pt.v << 16) | (unsigned short)pt.h;
+    if(MBDFCALL(mbHit, 0, pointaslong) != -1)
+        return inMenuBar;
+    Layer l = layer_with_window_at(pt);
+    if(!l)
+        return FindWindow(pt, window); /* inDesk (no processes yet: the current list) */
+    LayerView view(l);
+    return FindWindow(pt, window);
+}
+
 /* OSDispatch $F: the layer whose window is under the point, nil if none. */
 WindowPtr Executor::C_GetLayerAtPoint(Point pt)
 {
@@ -1296,6 +1333,12 @@ static void reap_dead()
     reap_list.clear();
 }
 
+std::string Executor::ROMlib_front_process_name()
+{
+    std::lock_guard<std::mutex> lk(front_name_mutex);
+    return front_name;
+}
+
 std::vector<ROMlib_process_entry> Executor::ROMlib_process_entries()
 {
     std::vector<ROMlib_process_entry> out;
@@ -1457,6 +1500,18 @@ static void switch_to(process_info_t *to)
     resumed();
 }
 
+bool Executor::process_in_other_partition(uint32_t addr)
+{
+    for(process_info_t *q = process_info_list; q; q = q->next)
+        if(q != current_process_info && q->partition && *q->partition)
+        {
+            uint32_t lo = US_TO_SYN68K((Ptr)*q->partition);
+            if(addr >= lo && addr - lo < q->partition_size)
+                return true;
+        }
+    return false;
+}
+
 /* Remove what a process leaves in system-wide queues: VBL and Time Manager
    tasks living in its partition. */
 static void remove_tasks_in(Ptr lo, Ptr hi)
@@ -1557,6 +1612,7 @@ static void exit_current()
         next->died_pending = true;
         next->died = me->serial_number;
     }
+    publish_front_name();
     hand_baton(next);
 }
 
@@ -1567,6 +1623,8 @@ static void process_body(process_info_t *p)
 {
     wait_turn();
     fresh_world(p);
+    if(p->appl_scratch_set)
+        memcpy(LMGetApplScratch(), p->appl_scratch, sizeof p->appl_scratch);
     p->state = process_info_t::running;
     try
     {
@@ -1626,6 +1684,7 @@ static void bring_to_front(process_info_t *q)
                 UnionRgn(WINDOW_STRUCT_REGION(w), covered, covered);
     raise_layer(q);
     front_process = q;
+    publish_front_name();
     q->modal_front = false;
     q->raised = covered;
     q->activate_pending = true;
@@ -1667,6 +1726,7 @@ void Executor::ROMlib_process_event_hook(INTEGER mask)
     if(!me)
         return;
     me->event_mask = mask;
+    publish_front_name();
     if(switch_hold > 0)
         return;
     quit_all_step();
@@ -1697,6 +1757,7 @@ void Executor::ROMlib_process_event_hook(INTEGER mask)
         step_back(me);
         raise_layer(p);
         front_process = p;
+        publish_front_name();
         switch_to(p);
         return;
     }
@@ -2127,6 +2188,8 @@ OSErr Executor::process_launch(LaunchParamBlockRec *lpbp)
     p->own_thread = true;
     p->app = *lpbp->launchAppSpec;
     p->launcher = current_process_info->serial_number;
+    memcpy(p->appl_scratch, LMGetApplScratch(), sizeof p->appl_scratch);
+    p->appl_scratch_set = true;
     /* Known as soon as LaunchApplication returns, as on 7.5.5, though the
        process first runs at our next event call: BridgeAgent looks a
        launched application up by its creator straight away. */
@@ -2142,6 +2205,12 @@ OSErr Executor::process_launch(LaunchParamBlockRec *lpbp)
         memcpy(&p->name[1], &p->app.name[1], len);
     }
     pending_launch = p;
+    /* It comes to the front after any SetFrontProcess asked for before:
+       BridgeAgent, started in front, hands it to the Finder, then launches
+       what it is asked to; the older request, left pending, took the front
+       back to the Finder at the new process's first idle event call
+       (text_hilite_executor typed into the Finder). */
+    pending_front = nullptr;
     lpbp->launchProcessSN = p->serial_number;
 
     /* As 7.5.5's Process Manager: the launcher's AppParameters (Finder's
@@ -2155,21 +2224,17 @@ OSErr Executor::process_launch(LaunchParamBlockRec *lpbp)
         /* No AppParameters: an 'oapp' (Apple event wire format, as
            osevent.cpp builds it), queued now so that it comes before
            anything sent to the new process later; BridgeAgent sends its
-           'dosc' while MacPerl is still starting. */
+           'dosc' while MacPerl is still starting. From the system process,
+           not the launcher (8.6, difftest aevt: the 'oapp' of an
+           application BridgeAgent launches comes from "MacOS"). */
         struct
         {
             GUEST<OSType> signature;
             GUEST<int16_t> major, minor;
             GUEST<OSType> marker;
         } msg = { "aevt"_4, 1, 1, ";;;;"_4 };
-        EventRecord evt = {};
-        evt.what = kHighLevelEvent;
-        evt.message = "aevt"_4;
-        GUEST<uint32_t> id = "oapp"_4;
-        memcpy(&evt.where, &id, sizeof id);
         ProcessSerialNumber to = p->serial_number;
-        PostHighLevelEvent(&evt, (Ptr)&to, 0, (Ptr)&msg, sizeof msg,
-                           0x8000 /* receiverIDisPSN */);
+        ROMlib_hle_post_from_system(&to, "aevt"_4, "oapp"_4, 0, (Ptr)&msg, sizeof msg);
         p->posted_open_event = true;
     }
     return noErr;
@@ -2320,6 +2385,8 @@ OSErr Executor::C_LaunchDeskAccessory(const FSSpec *spec, ConstStringPtr name)
     if(!spec && !name)
         return paramErr;
     p->launcher = current_process_info->serial_number;
+    memcpy(p->appl_scratch, LMGetApplScratch(), sizeof p->appl_scratch);
+    p->appl_scratch_set = true;
     pending_launch = p;
     return noErr;
 }
@@ -2358,6 +2425,34 @@ static uint32_t stack_extra()
 {
     return system_version >= 0x800 ? 16 * 1024 + 8 : 0;
 }
+
+/* A PowerPC application's fragment: with virtual memory off the Code
+   Fragment Manager loads its code and data into the application heap, and
+   the Process Manager adds the fragment's length to the partition, and
+   28K (7.6.1) or 50K (8.6, 9.0.4) more on top of partition_extra()
+   (tests/guest/partprobe's PartProbePPC on the G3, fragments of 60K and
+   584K). The fragment's length is its 'cfrg' entry's, or the data fork's
+   from its offset. */
+static uint32_t powerpc_fragment_extra(ConstStringPtr app_name)
+{
+    Handle cfrg0 = Get1Resource("cfrg"_4, 0);
+    if(!cfrg0 || ROMlib_cfm_launch_arch(cfrg0, Get1Resource("CODE"_4, 0) != nullptr) != "pwpc"_4)
+        return 0;
+    cfir_t *cfirp = ROMlib_find_cfrg(cfrg0, "pwpc"_4, kApplicationCFrag, (StringPtr) "");
+    if(!cfirp || CFIR_LOCATION(cfirp) != kOnDiskFlat)
+        return 0;
+    uint32_t length = CFIR_FRAGMENT_LENGTH(cfirp);
+    if(length == 0)
+    {
+        ParamBlockRec pb = {};
+        pb.fileParam.ioNamePtr = (StringPtr)app_name;
+        if(PBGetFInfo(&pb, false) == noErr
+           && (uint32_t)pb.fileParam.ioFlLgLen > (uint32_t)CFIR_OFFSET_TO_FRAGMENT(cfirp))
+            length = pb.fileParam.ioFlLgLen - CFIR_OFFSET_TO_FRAGMENT(cfirp);
+    }
+    /* Rounded up: the G3 gives a 584347-byte fragment 584348. */
+    return ((length + 3) & ~3u) + (system_version >= 0x800 ? 50 * 1024 : 28 * 1024);
+}
 /* No SIZE resource: Process Manager's default. */
 static const uint32_t default_partition = 512 * 1024;
 
@@ -2376,6 +2471,7 @@ void Executor::process_layout_partition(ConstStringPtr app_name)
     uint32_t preferred = default_partition;
     uint32_t minimum = default_partition;
     int32_t abovea5 = 4, belowa5 = 0; /* no CODE 0 (PowerPC): A5 at the top */
+    uint32_t fragment = 0;
 
     process_bootstrap();
     process_info_t *me = current_process_info;
@@ -2399,21 +2495,28 @@ void Executor::process_layout_partition(ConstStringPtr app_name)
             preferred = (*size)->pref_size;
             minimum = (*size)->min_size;
         }
-        if(Handle code0 = Get1Resource("CODE"_4, 0))
+        /* A fat application started as PowerPC gets no A5 world from its
+           CODE 0, as on 8.6 (difftest sys partition: Exile III's 411K
+           of 68k globals left its heap too small for a GWorld). */
+        Handle code0 = Get1Resource("CODE"_4, 0);
+        if(code0 && ROMlib_cfm_launch_arch(Get1Resource("cfrg"_4, 0), true) == "pwpc"_4)
+            code0 = nullptr;
+        if(code0)
         {
             auto lp = (GUEST<int32_t> *)*code0;
             abovea5 = lp[0];
             belowa5 = lp[1];
         }
+        fragment = powerpc_fragment_extra(app_name);
         CloseResFile(rn);
     }
     SetZone(ROMlib_pm_zone);
 
     GUEST<Size> grow;
     Size avail = MaxMem(&grow);
-    uint32_t want = preferred + partition_extra();
+    uint32_t want = preferred + partition_extra() + fragment;
     if(want > (uint32_t)avail)
-        want = minimum + partition_extra();
+        want = minimum + partition_extra() + fragment;
     if(want > (uint32_t)avail)
     {
         warning_unexpected("partition: %u wanted, %d available", want, (int)avail);
@@ -2650,6 +2753,13 @@ OSErr Executor::C_GetFrontProcess(ProcessSerialNumber *serial_number, int32_t du
     return noErr;
 }
 
+/* InterfaceLib's GetFrontProcess, for PowerPC and CFM-68K code: the PSN
+   pointer alone, the front process. */
+OSErr Executor::glue_GetFrontProcess(ProcessSerialNumber *serial_number)
+{
+    return C_GetFrontProcess(serial_number, -1);
+}
+
 /* Takes effect at the front process's next event call, as on 7.5.5. */
 OSErr Executor::C_SetFrontProcess(ProcessSerialNumber *serial_number)
 {
@@ -2710,8 +2820,9 @@ void Executor::ROMlib_process_port_name(PPCPortRec *port)
    too, so what it sends ('oapp' at launch, Quit All's Quits) is seen as
    coming from it, not from the receiver (the receiver's name was given
    for it, and the Apple Event Manager took such an event as the
-   application's own). */
-static const unsigned char system_port_name[] = "\x0fProcess Manager";
+   application's own). Its name is "MacOS", as an 8.6 'oapp''s sender
+   (difftest aevt). */
+static const unsigned char system_port_name[] = "\x05MacOS";
 
 static void system_port(PPCPortRec *port)
 {
@@ -2809,6 +2920,11 @@ OSErr Executor::C_TakeDesktopLayer(GUEST<WindowPtr> *layer)
 bool Executor::ROMlib_desktop_layer_region_p(RgnHandle rgn)
 {
     return desktop_layer && rgn && rgn == PORT_VIS_REGION(desktop_layer);
+}
+
+RgnHandle Executor::ROMlib_desktop_layer_vis_region()
+{
+    return desktop_layer ? PORT_VIS_REGION(desktop_layer) : nullptr;
 }
 
 void Executor::ROMlib_desktop_layer_invalidate(RgnHandle rgn)
@@ -2932,6 +3048,15 @@ OSErr Executor::C_CallProcessRoutine(ProcessSerialNumber *psn, ProcPtr routine,
     root_current = saved_root;
     foreign_current = saved_foreign;
     return result;
+}
+
+/* OSDispatch $2: the 8 bytes Apple's 7.6.1 gives (measured: a probe
+   calling it on the Quadra), and 0. Excel 4.0 asks at start-up. */
+int32_t Executor::C_GetProcessManagerID(Ptr id)
+{
+    if(id)
+        memcpy(id, "TWIT1889", 8);
+    return 0;
 }
 
 /* General Controls' "Show Desktop when in background", stored inverted as

@@ -43,6 +43,9 @@ extern int32_t C_mbdf0(int16_t, int16_t, int16_t, int32_t);
 #define SIZEOFMINFO (sizeof(MenuInfo) - sizeof(Str255) + 1)
 
 extern mextp ROMlib_mitemtop(MenuHandle mh, INTEGER item, StringPtr *ssp);
+/* MacPhoenix: mark a menu's size to be computed when next needed (-1 in
+   menuWidth and menuHeight), as 8.6 does for the calls that change it */
+extern void ROMlib_dirty_menu_size(MenuHandle mh);
 extern INTEGER ROMlib_mentosix(INTEGER mid);
 extern LONGINT ROMlib_menuhelper(MenuHandle mh, Rect *saver, LONGINT where,
                                  Boolean ispopup, INTEGER ndisplayed);
@@ -57,11 +60,16 @@ extern void ROMlib_install_system_menus();
 extern bool ROMlib_system_menu_select(INTEGER mid, INTEGER item);
 extern bool ROMlib_icon_title_p(MenuHandle mh);
 extern Handle ROMlib_icon_title_suite(MenuHandle mh);
+/* A system menu the menu bar right-aligns: all of them but 8.x's Help
+   menu, a text title after the application's menus. */
+extern bool ROMlib_system_menu_at_right(MenuHandle mh);
 extern void ROMlib_apple_menu_add(StringPtr name, int16_t group, Handle suite, int32_t key);
 extern bool ROMlib_apple_menu_remove(int32_t key);
 extern void ROMlib_apple_menu_attach(MenuHandle mh);
 extern void ROMlib_apple_menu_update();
 extern Handle ROMlib_apple_menu_icon(MenuHandle mh, INTEGER item);
+/* the Apple menu (the one the Apple Menu Items entries go in) */
+extern bool ROMlib_apple_menu_p(MenuHandle mh);
 extern bool ROMlib_apple_menu_open(ConstStringPtr name);
 extern Handle ROMlib_app_icon_suite();
 extern void ROMlib_app_menu_update();

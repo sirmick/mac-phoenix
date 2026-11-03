@@ -1,5 +1,12 @@
 # MacPhoenix: the Text Services Manager's trap, as far as Apple's Help
-# Manager (helppkg.cpp) needs it. Executor has no TSM.
+# Manager (helppkg.cpp) needs it, and a TSM without input methods: the
+# document calls accept, events and menus are never a text service's
+# (REALbasic's runtime makes a TSM document for every window on 8.6:
+# GameBox Classic).
+
+- typedef:
+    name: TSMDocumentID
+    type: Ptr
 
 - dispatcher:
     name: TextServicesDispatch
@@ -69,4 +76,120 @@
     return: OSErr
     dispatcher: TextServicesDispatch
     selector: 0x0015
+    executor: C_
+
+# ####
+
+- function:
+    name: NewTSMDocument
+    return: OSErr
+    args:
+      - name: numOfInterface
+        type: INTEGER
+      - name: supportedInterfaces
+        type: OSType*
+      - name: idocID
+        type: TSMDocumentID*
+      - name: refcon
+        type: LONGINT
+    dispatcher: TextServicesDispatch
+    selector: 0x0000
+    executor: C_
+
+# ####
+
+- function:
+    name: DeleteTSMDocument
+    return: OSErr
+    args:
+      - name: idocID
+        type: TSMDocumentID
+    dispatcher: TextServicesDispatch
+    selector: 0x0001
+    executor: C_
+
+# ####
+
+- function:
+    name: ActivateTSMDocument
+    return: OSErr
+    args:
+      - name: idocID
+        type: TSMDocumentID
+    dispatcher: TextServicesDispatch
+    selector: 0x0002
+    executor: C_
+
+# ####
+
+- function:
+    name: DeactivateTSMDocument
+    return: OSErr
+    args:
+      - name: idocID
+        type: TSMDocumentID
+    dispatcher: TextServicesDispatch
+    selector: 0x0003
+    executor: C_
+
+# ####
+
+- function:
+    name: TSMEvent
+    return: Boolean
+    args:
+      - name: event
+        type: EventRecord*
+    dispatcher: TextServicesDispatch
+    selector: 0x0004
+    executor: C_
+
+# ####
+
+- function:
+    name: TSMMenuSelect
+    return: Boolean
+    args:
+      - name: menuResult
+        type: LONGINT
+    dispatcher: TextServicesDispatch
+    selector: 0x0005
+    executor: C_
+
+# ####
+
+- function:
+    name: SetTSMCursor
+    return: Boolean
+    args:
+      - name: mousePos
+        type: Point
+    dispatcher: TextServicesDispatch
+    selector: 0x0006
+    executor: C_
+
+# ####
+
+- function:
+    name: FixTSMDocument
+    return: OSErr
+    args:
+      - name: idocID
+        type: TSMDocumentID
+    dispatcher: TextServicesDispatch
+    selector: 0x0007
+    executor: C_
+
+# ####
+
+- function:
+    name: UseInputWindow
+    return: OSErr
+    args:
+      - name: idocID
+        type: TSMDocumentID
+      - name: useWindow
+        type: Boolean
+    dispatcher: TextServicesDispatch
+    selector: 0x0010
     executor: C_

@@ -46,12 +46,12 @@ NOTRAP_FUNCTION2(LMGetWWExist);
 NOTRAP_FUNCTION2(LMSetWWExist);
 
 
-// SysError SysEqu.a (true);
+// SysError SysEqu.a (true); its accessors are PrivateInterfaceLib's.
 const LowMemGlobal<Byte > QDExist{ 0x8F3 };
 inline Byte  LMGetQDExist() { return LM(QDExist); }
 inline void LMSetQDExist(Byte val) { LM(QDExist) = val; }
-NOTRAP_FUNCTION2(LMGetQDExist);
-NOTRAP_FUNCTION2(LMSetQDExist);
+LIBRARY_FUNCTION(PrivateInterfaceLib, LMGetQDExist, LMGetQDExist);
+LIBRARY_FUNCTION(PrivateInterfaceLib, LMSetQDExist, LMSetQDExist);
 
 
 BEGIN_EXECUTOR_ONLY

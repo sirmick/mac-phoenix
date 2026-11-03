@@ -1,0 +1,134 @@
+{
+ "note": "Macromedia FreeHand 5.5 (Macromedia, 1995): its self-mounting installer image (FH_55ins.smi, attached), the Standard install (this machine's build: 68k) into a folder on the target, then a first launch personalised with the owner's name, organization and key number. The archive's ReadMe-1st.txt (its original owner's serial) is not used",
+ "kind": "install",
+ "os": "tools-7.6.1",
+ "target": "Applications",
+ "disks": [
+  {
+   "file": "m-freehand-55.sit",
+   "take": "m-freehand-55/FH_55ins.smi"
+  }
+ ],
+ "steps": [
+  {
+   "launch": "FH_55ins:FreeHand 5.5 Installer"
+  },
+  {
+   "wait_for": {
+    "button": "Continue"
+   },
+   "timeout": 60
+  },
+  {
+   "click": {
+    "button": "Continue"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Custom"
+   },
+   "timeout": 60,
+   "note": "Standard Install"
+  },
+  {
+   "click": {
+    "button": "Install"
+   }
+  },
+  {
+   "wait_for": {
+    "text": "Install software into folder:"
+   },
+   "timeout": 60
+  },
+  {
+   "click": {
+    "button": "Desktop"
+   }
+  },
+  {
+   "wait": 2
+  },
+  {
+   "dclick": {
+    "text": "{target}",
+    "outside_controls": true,
+    "exact": true
+   }
+  },
+  {
+   "wait": 2
+  },
+  {
+   "check": {
+    "text": "{target}",
+    "exact": true
+   }
+  },
+  {
+   "click": {
+    "button": "Install"
+   }
+  },
+  {
+   "wait_for": {
+    "text": "Installation was successful."
+   },
+   "timeout": 900
+  },
+  {
+   "click": {
+    "button": "Quit"
+   }
+  },
+  {
+   "wait_app": "Finder",
+   "timeout": 60
+  },
+  {
+   "launch": "{target}:FreeHand 5.5:FreeHand 5.5"
+  },
+  {
+   "wait_for": {
+    "text": "Key number:"
+   },
+   "timeout": 120,
+   "note": "FreeHand Personalization"
+  },
+  {
+   "serial": "freehand-5.5",
+   "field": "name"
+  },
+  {
+   "key": "tab"
+  },
+  {
+   "serial": "freehand-5.5",
+   "field": "organization"
+  },
+  {
+   "key": "tab"
+  },
+  {
+   "serial": "freehand-5.5"
+  },
+  {
+   "click": {
+    "button": "OK"
+   }
+  },
+  {
+   "wait": 20
+  },
+  {
+   "close": "FreeHand 5.5"
+  }
+ ],
+ "expect": [
+  "FreeHand 5.5"
+ ],
+ "launch": [
+  "FreeHand 5.5:FreeHand 5.5"
+ ]
+}

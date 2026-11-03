@@ -1790,6 +1790,228 @@
 
 # ####
 
+# MacPhoenix: the bevel button's content (ControlDefinitions.h): what
+# SetBevelButtonContentInfo sets through SetControlData (the 8.6 Finder's
+# help button in View Options, its icon).
+- enum:
+    values:
+      - name: kControlBevelButtonContentTag
+        value: "'cont'"
+
+- function:
+    name: SetBevelButtonContentInfo
+    return: OSErr
+    args:
+      - name: inButton
+        type: ControlRef
+      - name: inContent
+        type: ControlButtonContentInfoPtr
+    library: AppearanceLib
+    executor: C_
+
+# ####
+
+# MacPhoenix: the bevel button's menu, value and text placement and the
+# disclosure triangle's last value, through their control data tags
+# (ControlDefinitions.h); 8.6's Navigation Services imports them.
+- enum:
+    values:
+      - name: kControlBevelButtonTextPlaceTag
+        value: "'tplc'"
+      - name: kControlBevelButtonMenuValueTag
+        value: "'mval'"
+      - name: kControlBevelButtonMenuHandleTag
+        value: "'mhnd'"
+      - name: kControlTriangleLastValueTag
+        value: "'last'"
+
+- typedef:
+    name: BevelButtonTextPlacement
+    type: SInt16
+
+- enum:
+    values:
+      - name: kControlBevelButtonPlaceSysDirection
+        value: -1
+      - name: kControlBevelButtonPlaceNormally
+        value: 0
+      - name: kControlBevelButtonPlaceToRightOfGraphic
+        value: 1
+      - name: kControlBevelButtonPlaceToLeftOfGraphic
+        value: 2
+      - name: kControlBevelButtonPlaceBelowGraphic
+        value: 3
+      - name: kControlBevelButtonPlaceAboveGraphic
+        value: 4
+
+- function:
+    name: GetBevelButtonMenuValue
+    return: OSErr
+    args:
+      - name: inButton
+        type: ControlRef
+      - name: outValue
+        type: SInt16*
+    library: AppearanceLib
+    executor: C_
+
+- function:
+    name: SetBevelButtonMenuValue
+    return: OSErr
+    args:
+      - name: inButton
+        type: ControlRef
+      - name: inValue
+        type: SInt16
+    library: AppearanceLib
+    executor: C_
+
+- function:
+    name: GetBevelButtonMenuHandle
+    return: OSErr
+    args:
+      - name: inButton
+        type: ControlRef
+      - name: outHandle
+        type: MenuHandle*
+    library: AppearanceLib
+    executor: C_
+
+- function:
+    name: SetBevelButtonTextPlacement
+    return: OSErr
+    args:
+      - name: inButton
+        type: ControlRef
+      - name: inWhere
+        type: BevelButtonTextPlacement
+    library: AppearanceLib
+    executor: C_
+
+- function:
+    name: SetDisclosureTriangleLastValue
+    return: OSErr
+    args:
+      - name: inTabControl
+        type: ControlRef
+      - name: inValue
+        type: SInt16
+    library: AppearanceLib
+    executor: C_
+
+# ####
+
+# MacPhoenix: the bevel button's graphic and text alignment and its
+# content, and the image well's content, through their control data
+# tags (ControlDefinitions.h); REALbasic's runtime (GameBox) calls them
+# without checking the weak imports.
+- enum:
+    values:
+      - name: kControlBevelButtonTextAlignTag
+        value: "'tali'"
+      - name: kControlBevelButtonTextOffsetTag
+        value: "'toff'"
+      - name: kControlBevelButtonGraphicAlignTag
+        value: "'gali'"
+      - name: kControlBevelButtonGraphicOffsetTag
+        value: "'goff'"
+      - name: kControlImageWellContentTag
+        value: "'cont'"
+
+- typedef:
+    name: ControlButtonTextAlignment
+    type: SInt16
+
+- enum:
+    values:
+      - name: kControlBevelButtonAlignTextSysDirection
+        value: 0
+      - name: kControlBevelButtonAlignTextCenter
+        value: 1
+      - name: kControlBevelButtonAlignTextFlushRight
+        value: -1
+      - name: kControlBevelButtonAlignTextFlushLeft
+        value: -2
+
+- typedef:
+    name: ControlButtonGraphicAlignment
+    type: SInt16
+
+- enum:
+    values:
+      - name: kControlBevelButtonAlignSysDirection
+        value: -1
+      - name: kControlBevelButtonAlignCenter
+        value: 0
+      - name: kControlBevelButtonAlignLeft
+        value: 1
+      - name: kControlBevelButtonAlignRight
+        value: 2
+      - name: kControlBevelButtonAlignTop
+        value: 3
+      - name: kControlBevelButtonAlignBottom
+        value: 4
+      - name: kControlBevelButtonAlignTopLeft
+        value: 5
+      - name: kControlBevelButtonAlignBottomLeft
+        value: 6
+      - name: kControlBevelButtonAlignTopRight
+        value: 7
+      - name: kControlBevelButtonAlignBottomRight
+        value: 8
+
+- function:
+    name: GetBevelButtonContentInfo
+    return: OSErr
+    args:
+      - name: inButton
+        type: ControlRef
+      - name: outContent
+        type: ControlButtonContentInfoPtr
+    library: AppearanceLib
+    executor: C_
+
+- function:
+    name: SetBevelButtonTextAlignment
+    return: OSErr
+    args:
+      - name: inButton
+        type: ControlRef
+      - name: inAlign
+        type: ControlButtonTextAlignment
+      - name: inHOffset
+        type: SInt16
+    library: AppearanceLib
+    executor: C_
+
+- function:
+    name: SetBevelButtonGraphicAlignment
+    return: OSErr
+    args:
+      - name: inButton
+        type: ControlRef
+      - name: inAlign
+        type: ControlButtonGraphicAlignment
+      - name: inHOffset
+        type: SInt16
+      - name: inVOffset
+        type: SInt16
+    library: AppearanceLib
+    executor: C_
+
+- function:
+    name: SetImageWellContentInfo
+    return: OSErr
+    args:
+      - name: inButton
+        type: ControlRef
+      - name: inContent
+        type: ControlButtonContentInfoPtr
+    library: AppearanceLib
+    executor: C_
+
+# ####
+
 # MacPhoenix: ControlsLib's private calls that 8.6's ControlDefinitions
 # makes, as WindowsLib's system properties (WindowMgr8.yaml).
 - function:

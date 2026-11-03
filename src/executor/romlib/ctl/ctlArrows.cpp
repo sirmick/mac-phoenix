@@ -9,9 +9,11 @@
 #include <ControlMgr.h>
 #include <MemoryMgr.h>
 #include <ToolboxUtil.h>
+#include <Appearance.h>
 
 #include <quickdraw/cquick.h>
 #include <ctl/ctl.h>
+#include <prefs/prefs.h>
 
 #include <quickdraw/image.h>
 #include <wind/wind.h>
@@ -530,6 +532,52 @@ void Executor::C_new_draw_scroll(INTEGER depth, INTEGER flags, GDHandle target,
     }
 }
 
+static bool platinum()
+{
+    return system_version >= 0x800;
+}
+
+/* MacPhoenix: the 8.x bar as DrawThemeTrack draws it: its track's bounds
+   (the arrows carved off) and the control's state. */
+static ThemeTrackDrawInfo theme_track(ControlHandle c)
+{
+    Rect r = CTL_RECT(c);
+    bool horizontal = !SB_VERT_P(RECT_HEIGHT(&r), RECT_WIDTH(&r));
+    int hilite = CTL_HILITE(c);
+    ThemeTrackDrawInfo info = {};
+    info.kind = kThemeScrollBar;
+    info.min = CTL_MIN(c);
+    info.max = CTL_MAX(c);
+    info.value = CTL_VALUE(c);
+    info.attributes = kThemeTrackShowThumb | (horizontal ? kThemeTrackHorizontal : 0);
+    info.enableState = hilite == 255 ? kThemeTrackInactive
+                        : CTL_MIN(c) < CTL_MAX(c) ? kThemeTrackActive : kThemeTrackNothingToScroll;
+    C_GetThemeScrollBarTrackRect(&r, info.enableState, 0, horizontal, &info.bounds);
+    return info;
+}
+
+/* The thumb, local: on 8.x where the theme draws it, else the region the
+   classic drawing keeps (global) in contrlData. The hit test, thumbCntl
+   and calcThumbRgn go by it: on 8.x the classic region is never drawn,
+   and a click in the track above the thumb was "page down" (Standard
+   File's list). */
+static Rect thumb_now(ControlHandle ctl)
+{
+    Rect thumbr;
+    if(platinum())
+    {
+        ThemeTrackDrawInfo info = theme_track(ctl);
+        RgnHandle rh = NewRgn();
+        C_GetThemeTrackThumbRgn(&info, rh);
+        thumbr = (*rh)->rgnBBox;
+        DisposeRgn(rh);
+        return thumbr;
+    }
+    thumbr = (*static_cast<RgnHandle>(CTL_DATA(ctl)))->rgnBBox;
+    GlobalToLocalRect(&thumbr);
+    return thumbr;
+}
+
 LONGINT
 where(ControlHandle ctl, Point p)
 {
@@ -537,8 +585,7 @@ where(ControlHandle ctl, Point p)
     Rect r;
     Rect thumbr;
 
-    thumbr = (*static_cast<RgnHandle>(CTL_DATA(ctl)))->rgnBBox;
-    GlobalToLocalRect(&thumbr);
+    thumbr = thumb_now(ctl);
     if(PtInRect(p, &thumbr))
         return inThumb;
     else
@@ -684,6 +731,42 @@ restore(const save_t *sp)
     DisposeHandle((Handle)sp->cp.portPixMap);
 }
 
+/* MacPhoenix: on 8.x CDEF 1/16 (and 8.6's own 384) scroll bars draw via
+   DrawThemeTrack/DrawThemeScrollBarArrows (tests/guest/difftest appr,
+   controls.16/.384). No viewSize: 8.6's ThumbStyle metric defaults to 0
+   (non-proportional), so the thumb is DrawThemeTrack's fixed size. */
+
+static void draw_theme_scrollbar(ControlHandle c)
+{
+    Rect r = CTL_RECT(c);
+    bool horizontal = !SB_VERT_P(RECT_HEIGHT(&r), RECT_WIDTH(&r));
+    int hilite = CTL_HILITE(c);
+    ThemeTrackPressState press = 0;
+    switch(hilite)
+    {
+        case inUpButton: press = kThemeLeftOutsideArrowPressed; break;
+        case inDownButton: press = kThemeRightOutsideArrowPressed; break;
+        case inPageUp: press = kThemeLeftTrackPressed; break;
+        case inPageDown: press = kThemeRightTrackPressed; break;
+        case inThumb: press = kThemeThumbPressed; break;
+    }
+    ThemeTrackDrawInfo info = {};
+    info.kind = kThemeScrollBar;
+    info.min = CTL_MIN(c);
+    info.max = CTL_MAX(c);
+    info.value = CTL_VALUE(c);
+    info.attributes = kThemeTrackShowThumb | (horizontal ? kThemeTrackHorizontal : 0);
+    info.enableState = hilite == 255 ? kThemeTrackInactive
+                        : CTL_MIN(c) < CTL_MAX(c) ? kThemeTrackActive : kThemeTrackNothingToScroll;
+    info.trackInfo.scrollbar.pressState = press;
+    EraseRect(&r);
+    /* the arrows carve the track down from the full bounds (trackBounds
+       out): DrawThemeTrack's own geometry needs that, not the full rect,
+       or the thumb's position and the track panels encroach on them. */
+    C_DrawThemeScrollBarArrows(&r, info.enableState, press, horizontal, &info.bounds);
+    C_DrawThemeTrack(&info, nullptr, nullptr, 0);
+}
+
 LONGINT Executor::C_cdef16(INTEGER var, ControlHandle c, INTEGER mess,
                            LONGINT param) /* IMI-328 */
 {
@@ -721,6 +804,12 @@ LONGINT Executor::C_cdef16(INTEGER var, ControlHandle c, INTEGER mess,
                && SectRect(&(*PORT_VIS_REGION(qdGlobals().thePort))->rgnBBox,
                            &(*c)->contrlRect, &r))
             {
+                if(platinum())
+                {
+                    draw_theme_scrollbar(c);
+                    break;
+                }
+
                 validate_colors_for_control(c);
 
                 GetPenState(&ps);
@@ -754,6 +843,12 @@ LONGINT Executor::C_cdef16(INTEGER var, ControlHandle c, INTEGER mess,
             {
                 param &= 0x7FFFFFFF; /* IMI-331 */
                 case calcThumbRgn:
+                    if(platinum())
+                    {
+                        tempr = thumb_now(c);
+                        RectRgn(ptr_from_longint<RgnHandle>(param), &tempr);
+                        break;
+                    }
                     CopyRgn((RgnHandle)(*c)->contrlData,
                             ptr_from_longint<RgnHandle>(param));
                     GlobalToLocalRgn(ptr_from_longint<RgnHandle>(param));
@@ -782,6 +877,24 @@ LONGINT Executor::C_cdef16(INTEGER var, ControlHandle c, INTEGER mess,
             DisposeHandle((Handle)(*c)->contrlData);
             break;
         case posCntl:
+            if(platinum())
+            {
+                /* the thumb moved by param (v, h) from where the theme
+                   has it: the value DrawThemeTrack would draw there */
+                ThemeTrackDrawInfo info = theme_track(c);
+                Rect drag;
+                GUEST<SInt32> value;
+                C_GetThemeTrackDragRect(&info, &drag);
+                thumbr = thumb_now(c);
+                SInt32 at = SB_VERT_P(RECT_HEIGHT(&CTL_RECT(c)), RECT_WIDTH(&CTL_RECT(c)))
+                    ? thumbr.top + HiWord(param) - drag.top
+                    : thumbr.left + LoWord(param) - drag.left;
+                C_GetThemeTrackLiveValue(&info, at, &value);
+                CTL_VALUE(c) = value;
+                if(CTL_VIS(c))
+                    draw_theme_scrollbar(c);
+                break;
+            }
             validate_colors_for_control(c);
             {
                 RgnHandle rh;
@@ -800,12 +913,31 @@ LONGINT Executor::C_cdef16(INTEGER var, ControlHandle c, INTEGER mess,
             p.v = pl->limitRect.top;
             p.h = pl->limitRect.left;
             pl->slopRect = pl->limitRect = CTL_RECT(c);
-            thumbr = (*static_cast<RgnHandle>(CTL_DATA(c)))->rgnBBox;
-            GlobalToLocalRect(&thumbr);
+            thumbr = thumb_now(c);
             rp = &thumbr;
             height = pl->slopRect.bottom - pl->slopRect.top;
             width = pl->slopRect.right - pl->slopRect.left;
-            if(SB_VERT_P(height, width))
+            if(platinum())
+            {
+                /* the mouse held to where the thumb can go: the
+                   theme's drag rectangle, less the grab offset */
+                ThemeTrackDrawInfo info = theme_track(c);
+                Rect drag;
+                C_GetThemeTrackDragRect(&info, &drag);
+                if(SB_VERT_P(height, width))
+                {
+                    pl->axis = vAxisOnly;
+                    pl->limitRect.top = drag.top + (p.v - rp->top);
+                    pl->limitRect.bottom = drag.bottom - (rp->bottom - p.v) + 1;
+                }
+                else
+                {
+                    pl->axis = hAxisOnly;
+                    pl->limitRect.left = drag.left + (p.h - rp->left);
+                    pl->limitRect.right = drag.right - (rp->right - p.h) + 1;
+                }
+            }
+            else if(SB_VERT_P(height, width))
             {
                 pl->axis = vAxisOnly;
                 pl->limitRect.top = pl->limitRect.top

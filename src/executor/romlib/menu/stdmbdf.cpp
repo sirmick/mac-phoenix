@@ -22,10 +22,12 @@
 #include <quickdraw/image.h>
 #include <rsys/executor.h>
 #include <prefs/options.h>
+#include <prefs/prefs.h>
 #include <algorithm>
 #include <Iconutil.h>
 #include <TextEdit.h>
 #include <ScriptMgr.h>
+#include <Appearance.h>
 
 /* apple image */
 namespace Executor
@@ -40,13 +42,123 @@ enum
     INFINITY_CHAR = 0xB0
 };
 
+static bool platinum_bar();
+
+/* MacPhoenix: 8.x's Apple menu title is the System's colour apple (icon
+   family -16386), 16 wide in a 28-wide title, as 8.6 lays it out on a G3
+   (difftest menu bar.left.*) */
+enum { kAppleTitleIcon = -16386, kAppleTitleWidth = 28 };
+
+static bool apple_title_p(MenuHandle mh)
+{
+    return platinum_bar() && MI_DATA(mh)[0] == 1 && MI_DATA(mh)[1] == APPLE_CHAR;
+}
+
+/* MacPhoenix: where a title is drawn, hit and its menu hangs from: on 8.x
+   a pixel left of its menuLeft (the G3: the Apple title's highlight and
+   menu from 9, its menuLeft 10), the system menus at the right excepted */
+static int title_left(const muelem *mp)
+{
+    return mp->muleft - (platinum_bar() && !ROMlib_system_menu_at_right(mp->muhandle) ? 1 : 0);
+}
+
 /* MacPhoenix: a system menu's title is an icon suite (menu/sysmenu.cpp). */
 static int title_width(MenuHandle mh)
 {
     if(ROMlib_icon_title_p(mh))
         return kSystemMenuTitleWidth;
+    if(apple_title_p(mh))
+        return kAppleTitleWidth;
     HLockGuard guard(mh);
     return StringWidth((*mh)->menuData) + SLOP;
+}
+
+/* MacPhoenix: 8.x's menu bar is platinum (AppearanceLib's menu calls,
+   appearance_draw.cpp): titles over it in black, #777 when disabled, white
+   when selected. */
+static bool platinum_bar()
+{
+    return system_version >= 0x800;
+}
+
+static Rect bar_rect()
+{
+    Rect r = PORT_RECT(wmgr_port);
+    r.top = 0;
+    r.bottom = LM(MBarHeight);
+    return r;
+}
+
+static void platinum_title(muelem *elt, bool hilite_p, bool bar_selected)
+{
+    MenuHandle mh = elt->muhandle;
+    Rect bar = bar_rect(), tr = bar;
+    tr.left = title_left(elt);
+    tr.right = tr.left + title_width(mh);
+    if(hilite_p)
+        DrawThemeMenuTitle(&bar, &tr, kThemeMenuSelected, 0, nullptr, 0);
+    else if(!bar_selected)
+    {
+        RgnHandle save = NewRgn();
+        GetClip(save);
+        ClipRect(&tr);
+        DrawThemeMenuBarBackground(&bar, kThemeMenuBarNormal, 0);
+        SetClip(save);
+        DisposeRgn(save);
+    }
+    bool white = hilite_p || bar_selected;
+    if(apple_title_p(mh))
+    {
+        /* a pixel above the system menus' icons: the G3 draws the apple's
+           top row (icon row 1) at y 2 */
+        Rect ir;
+        ir.top = (LM(MBarHeight) - 16) / 2 - 1;
+        ir.bottom = ir.top + 16;
+        ir.left = title_left(elt) + (kAppleTitleWidth - 16) / 2;
+        ir.right = ir.left + 16;
+        PlotIconID(&ir, atNone, white ? ttSelected : !(MI_ENABLE_FLAGS(mh) & 1) ? ttDisabled : ttNone,
+                   kAppleTitleIcon);
+        return;
+    }
+    if(ROMlib_icon_title_p(mh))
+    {
+        Rect ir;
+        ir.top = (LM(MBarHeight) - 16) / 2;
+        ir.bottom = ir.top + 16;
+        ir.left = elt->muleft + (kSystemMenuTitleWidth - 16) / 2;
+        ir.right = ir.left + 16;
+        PlotIconSuite(&ir, atNone, white ? ttSelected : ttNone, ROMlib_icon_title_suite(mh));
+        return;
+    }
+    static RGBColor disabled = { 0x7777, 0x7777, 0x7777 };
+    RGBForeColor(white ? &ROMlib_white_rgb_color
+                 : !(MI_ENABLE_FLAGS(mh) & 1) ? &disabled
+                                               : &ROMlib_black_rgb_color);
+    PORT_TX_MODE(qdGlobals().thePort) = srcOr;
+    MoveTo(title_left(elt) + MENULEFT - 4, 14);
+    char *title = (char *)MI_DATA(mh);
+    if(ROMlib_AppleChar && title[0] == 1 && title[1] == APPLE_CHAR)
+        DrawChar((char)ROMlib_AppleChar);
+    else
+        DrawString((StringPtr)title);
+    PORT_TX_MODE(qdGlobals().thePort) = srcCopy;
+    RGBForeColor(&ROMlib_black_rgb_color);
+}
+
+/* The whole bar, selected or not, its titles over it */
+static void platinum_bar_draw(bool selected, bool titles)
+{
+    Rect bar = bar_rect();
+    DrawThemeMenuBarBackground(&bar, selected ? kThemeMenuBarSelected : kThemeMenuBarNormal, 0);
+    if(!titles)
+        return;
+    PORT_TX_FACE(wmgr_port) = (Style)0;
+    PORT_TX_FONT(wmgr_port) = LM(SysFontFam);
+    HLockGuard guard(LM(MenuList));
+    menulist *ml = *MENULIST;
+    muelem *end = ml->mulist + ml->muoff / sizeof(muelem);
+    for(muelem *mp = ml->mulist; mp != end; mp++)
+        platinum_title(mp, false, selected);
 }
 
 /*
@@ -64,6 +176,12 @@ draw_menu_title(muelem *elt,
     MenuHandle muhandle;
     char *title;
     Rect dstr;
+
+    if(platinum_bar())
+    {
+        platinum_title(elt, hilite_p, false);
+        return;
+    }
 
     muhandle = elt->muhandle;
 
@@ -174,6 +292,11 @@ realhilite(int16_t offset, highstate h)
             Rect r;
 
             /* toggle the entire menu bar */
+            if(platinum_bar())
+            {
+                platinum_bar_draw(h == HILITE, true);
+                return;
+            }
             mbar_height = LM(MBarHeight);
 
             r = PORT_RECT(wmgr_port);
@@ -209,6 +332,19 @@ mbdf_draw(int32_t draw_p)
     menulist *menulistp;
     muelem *mp, *mpend;
     Rect r;
+
+    if(platinum_bar())
+    {
+        r = bar_rect();
+        ClipRect(&r);
+        platinum_bar_draw(false, draw_p == DRAWMENUBAR);
+        if(draw_p == DRAWMENUBAR && LM(TheMenu))
+            realhilite(ROMlib_mentosix(LM(TheMenu)), HILITE);
+        ClipRect(&PORT_RECT(wmgr_port));
+        RGBForeColor(&ROMlib_black_rgb_color);
+        RGBBackColor(&ROMlib_white_rgb_color);
+        return;
+    }
 
     r = PORT_RECT(wmgr_port);
     r.bottom = LM(MBarHeight) - 1;
@@ -300,7 +436,7 @@ static LONGINT hit(LONGINT mousept)
            right */
         mpend = (*MENULIST)->mulist + (*MENULIST)->muoff / sizeof(muelem);
         for(mp = (*MENULIST)->mulist; mp != mpend; mp++)
-            if(p.h >= mp->muleft && p.h < mp->muleft + title_width(mp->muhandle))
+            if(p.h >= title_left(mp) && p.h < title_left(mp) + title_width(mp->muhandle))
                 /*-->*/ return (char *)mp - (char *)*LM(MenuList);
         /*-->*/ return NOTHITINMBAR;
     }
@@ -328,7 +464,8 @@ static void calc(LONGINT offset)
     PORT_TX_FONT(wmgr_port) = LM(SysFontFam);
 
     /* MacPhoenix: always lay out the whole bar: application menus from the
-       left (muright ends them), system menus right-aligned. */
+       left (muright ends them; 8.x's Help menu follows them), the other
+       system menus right-aligned. */
     (void)offset;
     HLock(LM(MenuList));
     menulistp = *MENULIST;
@@ -340,7 +477,7 @@ static void calc(LONGINT offset)
     {
         mh = mp->muhandle;
         titsize = title_width(mh);
-        if(ROMlib_system_menu_p((*mh)->menuID))
+        if(ROMlib_system_menu_at_right(mh))
         {
             system_width += titsize;
             continue;
@@ -353,7 +490,7 @@ static void calc(LONGINT offset)
     for(mp = firstmp; mp < mep; mp++)
     {
         mh = mp->muhandle;
-        if(!ROMlib_system_menu_p((*mh)->menuID))
+        if(!ROMlib_system_menu_at_right(mh))
             continue;
         mp->muleft = left;
         left += title_width(mh);
@@ -498,6 +635,15 @@ save(int16_t offset, Rect *rect)
     done:;
     }
 
+    /* MacPhoenix: 8.x's menu frame, platinum (the save area has room for
+       its outline and shadow) */
+    if(platinum_bar())
+    {
+        DrawThemeMenuBackground(rect, kThemeMenuTypePullDown);
+        ClipRect(rect);
+        return;
+    }
+
     /* Erase to white -- colored backgrounds can be drawn by individual
 	 mdefs.  If we erase this to the ostensible background color, MacClade
 	 will get a black background on its custom Tool menu. */
@@ -583,14 +729,16 @@ static Rect *getrect(LONGINT offset)
     { /* hierarchical */
         /* note 7 and 5 below are guesses */
         r.top = std::max<INTEGER>((*MBSAVELOC)->mbItemRect.top, LM(MBarHeight) + 7);
-        r.left = (*MBSAVELOC)->mbItemRect.right - 5;
+        /* 8.6: 4 in from the item's right */
+        r.left = (*MBSAVELOC)->mbItemRect.right - (platinum_bar() ? 4 : 5);
         r.bottom = r.top + (*mh)->menuHeight;
         r.right = r.left + (*mh)->menuWidth;
     }
     else
     { /* regular */
         r.top = LM(MBarHeight);
-        r.left = mp->muleft;
+        /* 8.6: the outline under the title's left */
+        r.left = title_left(mp) + (platinum_bar() ? 1 : 0);
         r.bottom = r.top + (*mh)->menuHeight;
         r.right = r.left + (*mh)->menuWidth;
     }
@@ -655,8 +803,7 @@ static RgnHandle menurgn(RgnHandle rgn)
 static bool system_menu_at(INTEGER offset)
 {
     muelem *mp = (muelem *)((char *)*MENULIST + offset);
-    MenuHandle mh = mp->muhandle;
-    return ROMlib_system_menu_p((*mh)->menuID);
+    return ROMlib_system_menu_at_right(mp->muhandle);
 }
 
 static Rect title_rect(INTEGER offset)
@@ -787,4 +934,12 @@ int32_t Executor::C_mbdf0(int16_t sel, int16_t mess, int16_t param1,
         SetPort(saveport);
     }
     return retval;
+}
+
+/* MenusLib's StandardMBDF: 8.x's MBDF 0 is a PowerPC stub that passes its
+   arguments on to it. */
+LONGINT Executor::C_StandardMBDF(INTEGER selector, INTEGER message,
+                                 INTEGER parameter1, LONGINT parameter2)
+{
+    return C_mbdf0(selector, message, parameter1, parameter2);
 }

@@ -6,8 +6,8 @@
  * Needs:                                                                    *
  *     MacTypes.h       Byte, INTEGER, LONGINT, Boolean, SignedByte,         *
  *                      QElemPtr, OSErr, Handle, ConstStringPtr,             *
- *                      StringPtr, ULONGINT, QHdrPtr, Str255,                *
- *                      ConstStr255Param, Ptr                                *
+ *                      StringPtr, ULONGINT, QHdrPtr, Ptr, Str255,           *
+ *                      ConstStr255Param                                     *
  *     VRetraceMgr.h    VBLTask                                              *
  *     FileMgr.h        ParamBlockRec, DrvQEl, VCB                           *
  *     OSEvent.h        EvQEl                                                *
@@ -298,7 +298,8 @@ Boolean EqualString(ConstStringPtr s1, ConstStringPtr s2, Boolean casesig, Boole
 
 void ROMlib_UprString(StringPtr s, Boolean diac, INTEGER len);
 
-void UpperString(StringPtr s, Boolean diac);
+void UpperString(StringPtr s, Boolean diac);LIBRARY_FUNCTION(InterfaceLib, UpperString, UpperString);
+
 
 void GetDateTime(GUEST<ULONGINT> *mactimepointer);NOTRAP_FUNCTION2(GetDateTime);
 
@@ -332,6 +333,12 @@ void Enqueue(QElemPtr e, QHdrPtr h);REGISTER_TRAP2(Enqueue, 0xA96F, void(A0, A1)
 
 
 OSErr Dequeue(QElemPtr e, QHdrPtr h);REGISTER_TRAP2(Dequeue, 0xA96E, D0(A0, A1), SaveA1D1D2);
+
+
+// The trap dispatch table's slot for a trap word (a UniversalProcPtr *):
+// Mac OS Easy Open's PowerPC Translation library reads $ABFC's
+// dispatcher through it.
+Ptr glue_GetTrapVector(uint16_t trapWord);LIBRARY_FUNCTION(InterfaceLib, GetTrapVector, glue_GetTrapVector);
 
 
 // extern LONGINT GetTrapAddress(INTEGER n); // 68K in emustubs, not supported on ppc
@@ -439,6 +446,22 @@ void glue_FlushInstructionCache();LIBRARY_FUNCTION(InterfaceLib, FlushInstructio
 
 
 void glue_FlushDataCache();LIBRARY_FUNCTION(InterfaceLib, FlushDataCache, glue_FlushDataCache);
+
+
+inline void cglue_debugstr(const char *p) {C_DebugStr(cglue::CString(p));}
+LIBRARY_FUNCTION(InterfaceLib, debugstr, cglue_debugstr);
+
+
+inline Boolean cglue_equalstring(const char *s1, const char *s2, Boolean casesig, Boolean diacsig) {return EqualString(cglue::CString(s1), cglue::CString(s2), casesig, diacsig);}
+LIBRARY_FUNCTION(InterfaceLib, equalstring, cglue_equalstring);
+
+
+inline INTEGER cglue_relstring(const char *s1, const char *s2, Boolean casesig, Boolean diacsig) {return RelString(cglue::CString(s1), cglue::CString(s2), casesig, diacsig);}
+LIBRARY_FUNCTION(InterfaceLib, relstring, cglue_relstring);
+
+
+inline void cglue_upperstring(char *s, Boolean diac) {cglue::c2p(s);UpperString((StringPtr)s, diac);cglue::p2c(s);}
+LIBRARY_FUNCTION(InterfaceLib, upperstring, cglue_upperstring);
 
 
 } /* namespace Executor */

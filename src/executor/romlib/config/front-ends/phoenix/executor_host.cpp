@@ -9,10 +9,13 @@
 #include <mman/mman_private.h>
 #include <hfs/hfs.h>
 #include <file/file.h>
+#include <rsys/process.h>
 #include <vdriver/vdriver.h>
 #include <rsys/toolevent.h>
 #include <error/error.h>
 #include <rsys/opentransport.h>
+#include <hidpi/hidpi.h>
+#include <rsys/ppc_break.h>
 
 #include <algorithm>
 #include <atomic>
@@ -60,7 +63,12 @@ int run(const Config& c)
         paths["PrintDef"] = (d / "printdef.ini").string();
     }
     std::string vols;
-    for(const auto& disk : c.disks)
+    ROMlib_locked_images.clear();
+    for(const auto& cd : c.cdroms)
+        ROMlib_locked_images.insert(cd);
+    std::vector<std::string> images = c.disks;
+    images.insert(images.end(), c.cdroms.begin(), c.cdroms.end());
+    for(const auto& disk : images)
     {
         if(!vols.empty())
             vols += ';';
@@ -94,6 +102,11 @@ int run(const Config& c)
     PhoenixVideoDriver::cursorX = c.width / 2;
     PhoenixVideoDriver::cursorY = c.height / 2;
     PhoenixVideoDriver::frameHook = c.on_frame;
+    hidpi::set_scale(c.scale);
+    if(hidpi::active())
+        PhoenixVideoDriver::scaledFrameHook = c.on_frame_scaled;
+    else if(c.scale > 1.0)
+        fprintf(stderr, "[Executor] --executor-scale: built without Skia (-DEXECUTOR_SKIA=ON), 1x\n");
     if(c.on_cursor)
         PhoenixVideoDriver::cursorHook = [f = c.on_cursor](const PhoenixVideoDriver::Cursor &k) {
             f(k.data, k.mask, k.hotX, k.hotY, k.visible);
@@ -110,9 +123,13 @@ int run(const Config& c)
     std::vector<std::string> args = {
         "mac-phoenix",
         "--size", std::to_string(c.width) + "x" + std::to_string(c.height),
-        "--bpp", std::to_string(c.bpp),
         "--applzone", std::to_string(applMB) + "M",
     };
+    if(c.bpp > 0)
+    {
+        args.push_back("--bpp");
+        args.push_back(std::to_string(c.bpp));
+    }
     if(c.prefer_ppc)
         args.push_back("--ppc");
     if(c.logtraps)
@@ -148,6 +165,16 @@ int run(const Config& c)
             syn68k_set_watch(addr, len);
         else
             fprintf(stderr, "[watch] bad --watch '%s' (ADDR[:LEN], hex address, 1-16 bytes)\n", c.watch.c_str());
+    }
+    if(!c.ppc_breaks.empty())
+    {
+        Executor::ppc_break_arm();
+        for(const std::string& spec : c.ppc_breaks)
+        {
+            std::string err;
+            if(spec != "on" && !Executor::ppc_break_add(spec, err))
+                fprintf(stderr, "[ppcbreak] %s\n", err.c_str());
+        }
     }
     running = true;
     int rc = executor_main_entry((int)args.size(), argv.data());
@@ -186,6 +213,12 @@ void key(bool down, uint8_t mac_keycode)
         s->keyboardEvent(down, mac_keycode);
 }
 
+void wheel(int dh, int dv)
+{
+    if(sink())
+        EventSink::instance->scrollWheel(dh, dv);
+}
+
 void get_mouse(int& x, int& y)
 {
     x = PhoenixVideoDriver::cursorX;
@@ -201,6 +234,16 @@ std::string current_app_name()
 {
     if(!running)
         return {};
+    // The front process; CurApName names whichever process runs at this
+    // frame (the agent's, while an application quits)
+    std::string front = ROMlib_front_process_name();
+    if(!front.empty())
+    {
+        for(char& ch : front)
+            if((uint8_t)ch < 0x20 || (uint8_t)ch >= 0x7F)
+                ch = '?';
+        return front;
+    }
     // CurApName ($910): Pascal string, max 31 chars.
     const uint8_t *p = (const uint8_t *)SYN68K_TO_US(0x910);
     if(p[0] > 31)
@@ -261,3 +304,8 @@ uint32_t guest_ram_size()
 }
 
 }  // namespace executor_host
+
+std::string executor_host::ppc_break_command(const std::string& command)
+{
+    return Executor::ppc_break_command(command);
+}

@@ -66,6 +66,70 @@ TEST(Files, GetWDInfo)
     EXPECT_GT(dirID, 0);
 }
 
+/* A volume's own reference number names its root directory, even with
+   the default directory a folder on it (a 7.6.1 Quadra: PBGetWDInfo says
+   2; OpenRFPerm and PBHGetFInfo with it look in the root); 0 names the
+   default directory. The tests run in a folder of their own. */
+TEST(Files, GetWDInfoVolumeIsRoot)
+{
+    WDPBRec wdpb;
+    memset(&wdpb, 0, sizeof(wdpb));
+    PBGetWDInfoSync(&wdpb);
+    ASSERT_EQ(noErr, wdpb.ioResult);
+    short vRefNum = wdpb.ioWDVRefNum;
+    long dirID = wdpb.ioWDDirID;
+    ASSERT_NE(2, dirID) << "the tests' folder isn't the root";
+
+    memset(&wdpb, 0, sizeof(wdpb));
+    wdpb.ioVRefNum = vRefNum;
+    PBGetWDInfoSync(&wdpb);
+    ASSERT_EQ(noErr, wdpb.ioResult);
+    EXPECT_EQ(vRefNum, wdpb.ioWDVRefNum);
+    EXPECT_EQ(2, wdpb.ioWDDirID);
+    EXPECT_EQ(0, wdpb.ioWDProcID);
+}
+
+/* Indexed (ioWDIndex > 0) on a volume: ioVRefNum comes back as each
+   working directory's own number (a 7.6.1 Quadra), not the volume's;
+   Persuasion 3.0 finds its folder's working directory this way. */
+TEST(Files, GetWDInfoIndexedGivesWDNumber)
+{
+    WDPBRec wdpb;
+    memset(&wdpb, 0, sizeof(wdpb));
+    PBGetWDInfoSync(&wdpb);
+    ASSERT_EQ(noErr, wdpb.ioResult);
+    short vRefNum = wdpb.ioWDVRefNum;
+    long dirID = wdpb.ioWDDirID;
+
+    memset(&wdpb, 0, sizeof(wdpb));
+    wdpb.ioVRefNum = vRefNum;
+    wdpb.ioWDDirID = dirID;
+    wdpb.ioWDProcID = 'Test';
+    PBOpenWDSync(&wdpb);
+    ASSERT_EQ(noErr, wdpb.ioResult);
+    short wd = wdpb.ioVRefNum;
+    ASSERT_NE(vRefNum, wd);
+
+    bool found = false;
+    for(short i = 1; i < 100 && !found; i++)
+    {
+        memset(&wdpb, 0, sizeof(wdpb));
+        wdpb.ioVRefNum = vRefNum;
+        wdpb.ioWDIndex = i;
+        PBGetWDInfoSync(&wdpb);
+        if(wdpb.ioResult != noErr)
+            break;
+        EXPECT_EQ(vRefNum, wdpb.ioWDVRefNum);
+        EXPECT_NE(vRefNum, wdpb.ioVRefNum) << "index " << i;
+        found = wdpb.ioVRefNum == wd;
+    }
+    EXPECT_TRUE(found) << "the working directory opened is among the volume's";
+
+    memset(&wdpb, 0, sizeof(wdpb));
+    wdpb.ioVRefNum = wd;
+    PBCloseWDSync(&wdpb);
+}
+
 TEST(Files, CreateDelete)
 {
     ParamBlockRec pb;
@@ -1661,6 +1725,64 @@ TEST_F(FileTest, MakeFSSpec)
     EXPECT_EQ(vRefNum, spec.vRefNum);
 }
 
+// A full path on a volume that isn't mounted: nsvErr (Mac OS 9.0.4, DevTest's
+// MakeResolvedPath; StdCLib's open gives ENXIO for "dev:test" from it).
+TEST(Files, NoSuchVolume)
+{
+    FSSpec spec;
+    EXPECT_EQ(nsvErr, FSMakeFSSpec(0, 0, PSTR("novolume:x"), &spec));
+    EXPECT_EQ(nsvErr, FSMakeFSSpec(0, 0, PSTR("novolume:"), &spec));
+    EXPECT_EQ(nsvErr, FSMakeFSSpec(0, 0, PSTR("novolume:a:b"), &spec));
+
+    HParamBlockRec hpb = {};
+    hpb.volumeParam.ioNamePtr = (StringPtr)PSTR("novolume:x");
+    hpb.volumeParam.ioVolIndex = -1;
+    EXPECT_EQ(nsvErr, PBHGetVInfoSync(&hpb));
+
+    CInfoPBRec ipb = {};
+    ipb.hFileInfo.ioNamePtr = (StringPtr)PSTR("novolume:x");
+    EXPECT_EQ(nsvErr, PBGetCatInfoSync(&ipb));
+}
+
+#ifdef EXECUTOR
+#include <Finder.h>
+#endif
+
+// The desktop database's refnum is an open path on its volume: PBGetFCBInfo
+// lists it, and its mark and EOF can be asked like any file's. Executor's is
+// an FCB with no file behind it; on a host folder these calls faulted
+// (FSGetForkCBInfo iterating the volume's paths, STRAGGLERS 57).
+TEST_F(FileTest, DesktopDBPath)
+{
+    DTPBRec dt;
+    memset(&dt, 0, sizeof(dt));
+    dt.ioVRefNum = vRefNum;
+    PBDTGetPath(&dt);
+    ASSERT_EQ(noErr, dt.ioResult);
+    short dtRef = dt.ioDTRefNum;
+
+    bool listed = false;
+    for(short i = 1; i < 100; i++)
+    {
+        FCBPBRec fpb;
+        memset(&fpb, 0, sizeof(fpb));
+        fpb.ioVRefNum = vRefNum;
+        fpb.ioFCBIndx = i;
+        if(PBGetFCBInfoSync(&fpb) != noErr)
+            break;
+        listed |= fpb.ioRefNum == dtRef;
+    }
+    EXPECT_TRUE(listed);
+
+    ParamBlockRec pb;
+    memset(&pb, 0, sizeof(pb));
+    pb.ioParam.ioRefNum = dtRef;
+    EXPECT_EQ(noErr, PBGetFPosSync(&pb));
+    memset(&pb, 0, sizeof(pb));
+    pb.ioParam.ioRefNum = dtRef;
+    EXPECT_EQ(noErr, PBGetEOFSync(&pb));
+}
+
 #ifdef EXECUTOR
 #include <AliasMgr.h>
 #else
@@ -1696,4 +1818,43 @@ TEST(Files, GetAliasInfo)
         EXPECT_EQ(c.want, got) << c.index;
     }
     DisposeHandle((Handle)alias);
+}
+
+/* A directory ID the volume hasn't is fnfErr, the default left where it
+   was: the Quadra's HFS answers so for negative IDs, 1, 999999. */
+#ifdef EXECUTOR
+#define WDPB(p) ((HParmBlkPtr)(p))
+#else
+#define WDPB(p) (p)
+#endif
+
+TEST_F(FileTest, HSetVolMissingDirectory)
+{
+    WDPBRec wpb;
+    memset(&wpb, 0, sizeof(wpb));
+    PBHGetVolSync(WDPB(&wpb));
+    short savedVRefNum = wpb.ioVRefNum;
+    long savedDirID = wpb.ioWDDirID;
+
+    memset(&wpb, 0, sizeof(wpb));
+    wpb.ioVRefNum = vRefNum;
+    wpb.ioWDDirID = dirID;
+    EXPECT_EQ(noErr, PBHSetVolSync(WDPB(&wpb)));
+
+    for(long id : { -5L, -65534L, 1L, 999999L })
+    {
+        memset(&wpb, 0, sizeof(wpb));
+        wpb.ioVRefNum = vRefNum;
+        wpb.ioWDDirID = id;
+        EXPECT_EQ(fnfErr, PBHSetVolSync(WDPB(&wpb))) << id;
+
+        memset(&wpb, 0, sizeof(wpb));
+        PBHGetVolSync(WDPB(&wpb));
+        EXPECT_EQ(dirID, wpb.ioWDDirID) << id;
+    }
+
+    memset(&wpb, 0, sizeof(wpb));
+    wpb.ioVRefNum = savedVRefNum;
+    wpb.ioWDDirID = savedDirID;
+    PBHSetVolSync(WDPB(&wpb));
 }

@@ -537,6 +537,18 @@ void put16(std::vector<uint8_t> &v, size_t at, int x)
 }
 }
 
+std::vector<uint16_t> Executor::ROMlib_sfnt_cmap(const uint8_t *data, size_t len)
+{
+    Font f;
+    f.r = { data, len };
+    if(!f.load())
+        return {};
+    std::vector<uint16_t> map(256);
+    for(int c = 0; c < 256; c++)
+        map[c] = f.glyph_for(c);
+    return map;
+}
+
 Handle Executor::ROMlib_sfnt_strike(Handle sfnt, int ppem, SfntMetrics *metrics)
 {
     if(!sfnt || !*sfnt || ppem <= 0 || ppem > 255)

@@ -1085,3 +1085,14 @@
       patch (System 'gpch' 668) adds the selector by drawing the hilite into
       an open region; applications ask it whether a click is on the selection
       before starting a drag.
+
+# ####
+
+# InterfaceLib's lowercase C routines (multiversal/executor.rb, declare_cglue):
+# the Pascal routine with C strings, Points by address.
+
+- only-for: Executor
+  function:
+    name: teclick
+    cglue: TEClick
+    library: InterfaceLib

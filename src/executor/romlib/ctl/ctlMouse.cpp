@@ -6,8 +6,11 @@
 
 #include <base/common.h>
 
+#include <algorithm>
+
 #include <WindowMgr.h>
 #include <ControlMgr.h>
+#include <ControlMgr8.h>
 #include <EventMgr.h>
 #include <ToolboxEvent.h>
 #include <OSEvent.h>
@@ -17,6 +20,7 @@
 #include <wind/wind.h>
 #include <rsys/stdfile.h>
 #include <rsys/hook.h>
+#include <osevent/osevent.h>
 #include <base/functions.impl.h>
 
 /*
@@ -74,6 +78,58 @@ INTEGER Executor::C_FindControl(Point p, WindowPtr w,
 
 
 
+/* MacPhoenix: an indicator with live feedback (8.x: Appearance's live
+   scroll bars) dragged: its region moved with the mouse (held to the
+   thumbCntl limits, back where it started outside the slop), the
+   definition setting the value from it (kControlMsgCalcValueFromPos), and
+   the action procedure called with the control and the part all along, as
+   for the arrows. 8.6's Finder scrolls its windows so, its procedure taking
+   those two (G3); DragTheRgn would call it with none. */
+static INTEGER track_live(ControlHandle c, Point p, INTEGER part, ControlActionUPP a)
+{
+    thumbstr thumb;
+    thumb._tlimit.left = p.h;
+    thumb._tlimit.top = p.v;
+    CTLCALL(c, thumbCntl, ptr_to_longint(&thumb));
+    Rect limit = thumb._tlimit, slop = thumb._tslop;
+    INTEGER axis = thumb._taxis;
+    RgnHandle start = NewRgn(), moved = NewRgn();
+    CTLCALL(c, calcThumbRgn, ptr_to_longint(start));
+    (*c)->contrlHilite = part;
+    CTLCALL(c, drawCntl, part);
+    Point last = p;
+    while(StillDown())
+    {
+        GUEST<Point> gm;
+        GetMouse(&gm);
+        Point m = gm.get();
+        if(!PtInRect(m, &slop))
+            m = p;
+        else
+        {
+            m.h = std::clamp<INTEGER>(m.h, limit.left, std::max<INTEGER>(limit.left, limit.right - 1));
+            m.v = std::clamp<INTEGER>(m.v, limit.top, std::max<INTEGER>(limit.top, limit.bottom - 1));
+        }
+        if(axis == hAxisOnly)
+            m.v = p.v;
+        else if(axis == vAxisOnly)
+            m.h = p.h;
+        if(m.h != last.h || m.v != last.v)
+        {
+            CopyRgn(start, moved);
+            OffsetRgn(moved, m.h - p.h, m.v - p.v);
+            CTLCALL(c, kControlMsgCalcValueFromPos, ptr_to_longint(moved));
+            last = m;
+        }
+        a(c, part);
+    }
+    DisposeRgn(moved);
+    DisposeRgn(start);
+    (*c)->contrlHilite = 0;
+    CTLCALL(c, drawCntl, 0);
+    return part;
+}
+
 INTEGER Executor::C_TrackControl(ControlHandle c, Point p,
                                  ControlActionUPP a) /* IMI-323 */
 {
@@ -93,16 +149,11 @@ INTEGER Executor::C_TrackControl(ControlHandle c, Point p,
     CtlCallGuard guard(c);
     partstart = inpart = TestControl(c, p);
 
-    /* Super-Dice-It hack: It appears that Super Dice It 1.1
-	  calls TrackControl with p in Global coordinates.  Without
-	  this mod, we get hosed */
+    /* A point outside the control is no part: the Quadra's TrackControl
+       answers 0 for one (upstream asked GetMouse again, for Super Dice It
+       1.1's global coordinates). */
     if(!partstart)
-    {
-        GUEST<Point> ptmp;
-        GetMouse(&ptmp);
-        p = ptmp.get();
-        partstart = inpart = TestControl(c, p);
-    }
+        return 0;
 
     if(CTL_ACTION_AS_LONG(c) == -1L)
     {
@@ -141,7 +192,9 @@ INTEGER Executor::C_TrackControl(ControlHandle c, Point p,
     }
     else
         /* #endif */
-        if(partstart > 128)
+        if(partstart > 128 && a && ROMlib_control8_live_feedback(c))
+        inpart = track_live(c, p, partstart, a);
+    else if(partstart > 128)
     {
         /* indicator */
         /* The code used to & the result of CTLCALL with 0xf000
@@ -172,6 +225,25 @@ INTEGER Executor::C_TrackControl(ControlHandle c, Point p,
         /* not an indicator */
         (*c)->contrlHilite = partstart;
         CTLCALL(c, drawCntl, partstart);
+        /* MacPhoenix: a part held repeats as 8.6's does on the G3: its
+           action at once, again after the keyboard's delay until repeat
+           (KeyThresh, 24 ticks), then every 6 ticks; a click up to about
+           0.4 s is one step (each pass of this loop called it: a short
+           click on a Finder window's page part scrolled it to the end).
+           The scroll wheel's clicks (osevent/wheel.cpp) count passes. */
+        uint32_t next_action = 0;
+        bool acted = false;
+        auto action_due = [&]() {
+            uint32_t now = TickCount();
+            if(ROMlib_wheel_active() || !acted)
+                next_action = now + std::max<int>(LM(KeyThresh), 1);
+            else if((int32_t)(now - next_action) >= 0)
+                next_action = now + 6;
+            else
+                return false;
+            acted = true;
+            return true;
+        };
         /* the action callback can remove mouse up events which is why the
 	      following line is not a GetOSEvent call. */
         while(!OSEventAvail(mUpMask, &ev) && StillDown())
@@ -187,7 +259,7 @@ INTEGER Executor::C_TrackControl(ControlHandle c, Point p,
                 (*c)->contrlHilite = inpart;
                 CTLCALL(c, drawCntl, partstart);
             }
-            if(a && inpart)
+            if(a && inpart && action_due())
                 a(c, inpart);
         }
         GetOSEvent(mUpMask, &ev);

@@ -149,4 +149,20 @@ void C_CustomPutFile(ConstStringPtr prompt, ConstStringPtr defaultName, Standard
 void C_CustomGetFile(FileFilterYDUPP filefilter, INTEGER numtypes, SFTypeList typelist, StandardFileReply *replyp, INTEGER dlgid, Point where, DlgHookYDUPP dlghook, ModalFilterYDUPP filterproc, Ptr activeList, ActivateYDUPP activateproc, void *yourdatap);PASCAL_SUBTRAP(CustomGetFile, 0xA9EA, 0x0008, Pack3);
 
 
+inline void cglue_sfgetfile(GUEST<Point> *p, const char *prompt, FileFilterUPP filef, INTEGER numt, SFTypeList tl, DlgHookUPP dh, SFReply *rep) {C_SFGetFile(*p, cglue::CString(prompt), filef, numt, tl, dh, rep);}
+LIBRARY_FUNCTION(InterfaceLib, sfgetfile, cglue_sfgetfile);
+
+
+inline void cglue_sfpgetfile(GUEST<Point> *p, const char *prompt, FileFilterUPP filef, INTEGER numt, SFTypeList tl, DlgHookUPP dh, SFReply *rep, INTEGER dig, ModalFilterUPP fp) {C_SFPGetFile(*p, cglue::CString(prompt), filef, numt, tl, dh, rep, dig, fp);}
+LIBRARY_FUNCTION(InterfaceLib, sfpgetfile, cglue_sfpgetfile);
+
+
+inline void cglue_sfpputfile(GUEST<Point> *p, const char *prompt, const char *name, DlgHookUPP dh, SFReply *rep, INTEGER dig, ModalFilterUPP fp) {C_SFPPutFile(*p, cglue::CString(prompt), cglue::CString(name), dh, rep, dig, fp);}
+LIBRARY_FUNCTION(InterfaceLib, sfpputfile, cglue_sfpputfile);
+
+
+inline void cglue_sfputfile(GUEST<Point> *p, const char *prompt, const char *name, DlgHookUPP dh, SFReply *rep) {C_SFPutFile(*p, cglue::CString(prompt), cglue::CString(name), dh, rep);}
+LIBRARY_FUNCTION(InterfaceLib, sfputfile, cglue_sfputfile);
+
+
 } /* namespace Executor */

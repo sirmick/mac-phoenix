@@ -1,0 +1,12 @@
+{
+ "note": "TattleTech 2.84 (John Mancino / Decision Maker's Software, 2002; shareware): system information (CPU, FPU, Gestalt, memory, devices, extensions), expanded by StuffIt Expander",
+ "kind": "expand",
+ "archive": "tattletech-284.sit",
+ "expect": [
+  "TattleTech 2.84ƒ"
+ ],
+ "launch": [
+  "TattleTech 2.84ƒ:TattleTech 2.84"
+ ],
+ "os": "tools-7.6.1"
+}

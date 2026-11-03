@@ -453,3 +453,14 @@ TEST_F(DetachedPackage, PurgedResourceReloads)
     CloseResFile(ref);
     FSDelete(name, 0);
 }
+
+/* $FE09, a Power Mac 68K emulator's own instruction: execution carries on
+   after it (MacBench 5's timing routine runs it), not the F-line death.
+   What it leaves in A0/D0: CPU.timeBaseFE09. */
+TEST_F(SysRoutines, EmulatorInstructionsStepOver)
+{
+    uint32_t routine = emit({ 0xFE09, 0x7001 /* moveq #1,d0 */, 0x5280 /* addq.l #1,d0 */, RTS });
+    call(routine, {}, 0, 0, 0);
+    EXPECT_EQ(2u, EM_D0);
+    EXPECT_EQ(resultSlot(0), EM_A7);
+}

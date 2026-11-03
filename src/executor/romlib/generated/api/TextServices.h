@@ -4,8 +4,9 @@
  *                               ==============                              *
  *                                                                           *
  * Needs:                                                                    *
- *     MacTypes.h     INTEGER, OSErr, Ptr                                    *
+ *     MacTypes.h     Ptr, INTEGER, OSErr, OSType, LONGINT, Boolean          *
  *     WindowMgr.h    WindowPtr                                              *
+ *     EventMgr.h     EventRecord                                            *
  *                                                                           *
  *                                                                           *
  *****************************************************************************/
@@ -18,12 +19,15 @@
 #include <base/lowglobals.h>
 #include "ExMacTypes.h"
 #include "WindowMgr.h"
+#include "EventMgr.h"
 
 #define MODULE_NAME TextServices
 #include <base/api-module.h>
 
 
 namespace Executor {
+
+typedef Ptr TSMDocumentID;
 
 // MacPhoenix: 7.5.5's handler is a table of 26 long addresses
 // (selectors 0-25: NewTSMDocument, DeleteTSMDocument, ...,
@@ -51,6 +55,33 @@ OSErr C_InitTSMAwareApplication();PASCAL_SUBTRAP(InitTSMAwareApplication, 0xAA54
 
 
 OSErr C_CloseTSMAwareApplication();PASCAL_SUBTRAP(CloseTSMAwareApplication, 0xAA54, 0x0015, TextServicesDispatch);
+
+
+OSErr C_NewTSMDocument(INTEGER numOfInterface, GUEST<OSType> *supportedInterfaces, GUEST<TSMDocumentID> *idocID, LONGINT refcon);PASCAL_SUBTRAP(NewTSMDocument, 0xAA54, 0x0000, TextServicesDispatch);
+
+
+OSErr C_DeleteTSMDocument(TSMDocumentID idocID);PASCAL_SUBTRAP(DeleteTSMDocument, 0xAA54, 0x0001, TextServicesDispatch);
+
+
+OSErr C_ActivateTSMDocument(TSMDocumentID idocID);PASCAL_SUBTRAP(ActivateTSMDocument, 0xAA54, 0x0002, TextServicesDispatch);
+
+
+OSErr C_DeactivateTSMDocument(TSMDocumentID idocID);PASCAL_SUBTRAP(DeactivateTSMDocument, 0xAA54, 0x0003, TextServicesDispatch);
+
+
+Boolean C_TSMEvent(EventRecord *event);PASCAL_SUBTRAP(TSMEvent, 0xAA54, 0x0004, TextServicesDispatch);
+
+
+Boolean C_TSMMenuSelect(LONGINT menuResult);PASCAL_SUBTRAP(TSMMenuSelect, 0xAA54, 0x0005, TextServicesDispatch);
+
+
+Boolean C_SetTSMCursor(Point mousePos);PASCAL_SUBTRAP(SetTSMCursor, 0xAA54, 0x0006, TextServicesDispatch);
+
+
+OSErr C_FixTSMDocument(TSMDocumentID idocID);PASCAL_SUBTRAP(FixTSMDocument, 0xAA54, 0x0007, TextServicesDispatch);
+
+
+OSErr C_UseInputWindow(TSMDocumentID idocID, Boolean useWindow);PASCAL_SUBTRAP(UseInputWindow, 0xAA54, 0x0010, TextServicesDispatch);
 
 
 } /* namespace Executor */

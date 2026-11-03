@@ -607,6 +607,8 @@
         type: StringPtr
       - name: diac
         type: Boolean
+    library: InterfaceLib
+    executor: true
 
 # ####
 
@@ -747,6 +749,22 @@
     trap: 0xA96E
     returnreg: D0
     executor_extras: SaveA1D1D2
+
+# ####
+
+- only-for: Executor
+  function:
+    name: GetTrapVector
+    return: Ptr
+    args:
+      - name: trapWord
+        type: uint16_t
+    library: InterfaceLib
+    executor: glue_GetTrapVector
+    comment: |
+      The trap dispatch table's slot for a trap word (a UniversalProcPtr *):
+      Mac OS Easy Open's PowerPC Translation library reads $ABFC's
+      dispatcher through it.
 
 # ####
 
@@ -1179,3 +1197,39 @@
     name: FlushDataCache
     library: InterfaceLib
     executor: glue_FlushDataCache
+
+# ####
+
+# InterfaceLib's lowercase C routines (multiversal/executor.rb, declare_cglue):
+# the Pascal routine with C strings, Points by address.
+
+- only-for: Executor
+  function:
+    name: debugstr
+    cglue: DebugStr
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: equalstring
+    cglue: EqualString
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: relstring
+    cglue: RelString
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: upperstring
+    cglue: UpperString
+    library: InterfaceLib
+    cstring-inout: s

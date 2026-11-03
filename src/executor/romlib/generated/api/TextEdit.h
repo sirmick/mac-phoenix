@@ -317,4 +317,8 @@ int16_t C_TEFeatureFlag(int16_t feature, int16_t action, TEHandle te);PASCAL_SUB
 OSErr C_TEGetHiliteRgn(RgnHandle region, TEHandle te);PASCAL_SUBTRAP(TEGetHiliteRgn, 0xA83D, 0x000F, TEDispatch);
 
 
+inline void cglue_teclick(GUEST<Point> *p, Boolean ext, TEHandle teh) {C_TEClick(*p, ext, teh);}
+LIBRARY_FUNCTION(InterfaceLib, teclick, cglue_teclick);
+
+
 } /* namespace Executor */

@@ -34,6 +34,18 @@ struct windrestype
 
 extern LONGINT C_wdef0(INTEGER, WindowPtr, INTEGER, LONGINT);
 extern LONGINT C_wdef16(INTEGER, WindowPtr, INTEGER, LONGINT);
+extern LONGINT C_wdef64(INTEGER, WindowPtr, INTEGER, LONGINT);
+/* set by C_wdef64 round its call of C_wdef0: WDEF 64's growable windows
+   have the grow box in their frame */
+extern bool ROMlib_wdef_grow_in_frame;
+/* ... and WDEF 65's modal and movable modal dialogs and alerts have the
+   thin frame */
+extern bool ROMlib_wdef_thin_dialog;
+/* WDEF 66/67's platinum floating windows (8.x; ZOOM: the variant's zoom
+   bits, 4 vertical, 8 horizontal): the message's result in
+   *RESULT, or false for C_wdef0's document window to answer */
+extern bool ROMlib_wdef_floating(WindowPtr w, bool close, bool grow, int zoom, bool side,
+                                 INTEGER message, LONGINT parm, LONGINT *result);
 
 extern WindowPeek ROMlib_firstvisible(WindowPtr w);
 
@@ -60,6 +72,18 @@ extern void ROMlib_window8_forget(WindowPtr w);
 /* windMgr8.cpp: CollapseWindow's state; a part of Executor's document
    frame as GetWindowRegion answers it (false: the window hasn't the part) */
 extern bool ROMlib_window8_collapsed(WindowPtr w);
+/* the colour the Window Manager erases a window's content with when it was
+   given one (SetWindowContentColor, SetThemeWindowBackground): false if not
+   (the window's colour table's content colour then) */
+extern bool ROMlib_window_background(WindowPtr w, RGBColor *color);
+extern void ROMlib_set_window_theme_background(WindowPtr w, const RGBColor &color);
+/* 8.x: a mouse-down in a window's collapse box, which the system tracks
+   and answers (CollapseWindow) for every application: true if it was one */
+extern bool ROMlib_window8_collapse_click(Point p);
+/* the structure and content its definition makes (invisible windows too;
+   EXPANDED: a collapsed window's as if it weren't) */
+extern void ROMlib_window8_definition_regions(WindowPtr w, RgnHandle structure, RgnHandle content,
+                                              bool expanded = false);
 extern bool ROMlib_window8_part_region(WindowPtr w, WindowRegionCode code, RgnHandle rgn, bool boxes = false);
 /* a floating window CreateNewWindow made (FrontWindow passes it over) */
 extern bool ROMlib_window8_floating_class(WindowPtr w);

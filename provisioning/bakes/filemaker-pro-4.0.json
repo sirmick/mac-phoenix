@@ -1,6 +1,8 @@
 {
- "note": "FileMaker Pro 4.0 (FileMaker, 1997): its installer (Start Here) and Read Me, staged only: installing it takes the product's serial number. The archive's Personalization Info (an earlier owner's) is left out",
- "kind": "stage",
+ "note": "FileMaker Pro 4.0 (FileMaker, 1997): its installer (Start Here) run in the guest, Easy Install onto the target, personalised with the owner's name, organization and installation code (the installer writes them into the application). The archive's Personalization Info (an earlier owner's) is not used",
+ "kind": "install",
+ "os": "tools-7.6.1",
+ "target": "Applications",
  "media": [
   {
    "file": "filemaker_pro_4.0.sit",
@@ -10,5 +12,94 @@
    "file": "filemaker_pro_4.0.sit",
    "take": "FileMaker Pro 4.0/Read Me"
   }
+ ],
+ "steps": [
+  {
+   "launch": "Media:Start Here"
+  },
+  {
+   "wait_for": {
+    "button": "Switch Disk"
+   },
+   "timeout": 60
+  },
+  {
+   "click": {
+    "button": "Switch Disk"
+   },
+   "until": {
+    "text": "on the disk “{target}”",
+    "front": true
+   },
+   "max": 30
+  },
+  {
+   "click": {
+    "button": "Install"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Exit"
+   },
+   "timeout": 60,
+   "note": "Please personalize this copy: Name, Company, Installation Code"
+  },
+  {
+   "serial": "filemaker-4.0",
+   "field": "name"
+  },
+  {
+   "key": "tab"
+  },
+  {
+   "serial": "filemaker-4.0",
+   "field": "organization"
+  },
+  {
+   "key": "tab"
+  },
+  {
+   "serial": "filemaker-4.0"
+  },
+  {
+   "click": {
+    "button": "OK"
+   }
+  },
+  {
+   "wait_for": {
+    "text": "Installation was successful."
+   },
+   "timeout": 900
+  },
+  {
+   "click": {
+    "button": "Quit"
+   }
+  },
+  {
+   "wait_app": "Finder",
+   "timeout": 60
+  },
+  {
+   "launch": "{target}:FileMaker Pro 4.0 Folder:FileMaker Pro"
+  },
+  {
+   "wait_app": "FileMaker Pro",
+   "timeout": 60
+  },
+  {
+   "wait": 10
+  },
+  {
+   "close": "FileMaker Pro"
+  }
+ ],
+ "expect": [
+  "FileMaker Pro 4.0 Folder"
+ ],
+ "launch": [
+  "FileMaker Pro 4.0 Folder:FileMaker Pro"
  ]
 }

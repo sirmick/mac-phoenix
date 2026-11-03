@@ -1136,9 +1136,9 @@ set_palette_common(WindowPtr dst_window, PaletteHandle src_palette,
 #else
     elt->c_update = c_update;
 #endif
-    /* FIXME: hack, i don't know if this is right, but lemmings creates
-     a window, sets the palette, and goes.  never calls `SelectWindow ()',
-     or anything */
+    /* The front window's palette is in effect at once: on the Quadra
+       SetPalette alone puts its colours in the device's table (Lemmings
+       sets one and calls nothing else). */
     if(dst_window == FrontWindow())
         ActivatePalette(dst_window);
 }

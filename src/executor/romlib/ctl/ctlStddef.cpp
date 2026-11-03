@@ -13,6 +13,8 @@
 
 #include <ctl/ctl.h>
 #include <quickdraw/cquick.h>
+#include <prefs/prefs.h>
+#include <Appearance.h>
 
 #include <algorithm>
 
@@ -234,9 +236,57 @@ mapvar(int v)
 #endif
 }
 
+/* MacPhoenix: on 8.x the classic buttons are the theme's, as 8.6's CDEF 0
+   draws them (the same pixels as procIDs 368-370: tests/guest/difftest
+   appr, controls); hilited by any part */
+static bool platinum()
+{
+    return system_version >= 0x800;
+}
+
+static void draw_theme_button(ControlHandle c, ThemeButtonKind kind)
+{
+    int hilite = CTL_HILITE(c), value = CTL_VALUE(c);
+    ThemeButtonDrawInfo info;
+    info.state = hilite == 255 ? kThemeStateInactive : hilite ? kThemeStatePressed : kThemeStateActive;
+    info.value = value == 1 ? kThemeButtonOn : value == 2 ? kThemeButtonMixed : kThemeButtonOff;
+    info.adornment = kThemeAdornmentNone;
+    Rect r = CTL_RECT(c);
+    C_DrawThemeButton(&r, kind, &info, nullptr, nullptr, nullptr, 0);
+}
+
 static void
 draw_push(ControlHandle c, int16_t part)
 {
+    if(platinum())
+    {
+        draw_theme_button(c, kThemePushButton);
+        Rect r = CTL_RECT(c);
+        GUEST<RgnHandle> save = PORT_CLIP_REGION(CTL_OWNER(c));
+        PORT_CLIP_REGION(CTL_OWNER(c)) = NewRgn();
+        InsetRect(&r, 2, 2);
+        RectRgn(PORT_CLIP_REGION(CTL_OWNER(c)), &r);
+        SectRgn(PORT_CLIP_REGION(CTL_OWNER(c)), save, PORT_CLIP_REGION(CTL_OWNER(c)));
+        /* the title white on the pressed face, #777 when inactive, as
+           DrawThemeButton sets them up for 8.6's label procs (appr
+           labels.kind0.*) */
+        if(CTL_HILITE(c) == 255)
+        {
+            static const RGBColor inactive = { 0x7777, 0x7777, 0x7777 };
+            current_control_colors[text_color] = inactive;
+            text_mode = srcOr;
+        }
+        else if(CTL_HILITE(c))
+            current_control_colors[text_color] = ROMlib_white_rgb_color;
+        if(text_mode == srcCopy)
+            text_mode = srcOr;
+        r = CTL_RECT(c);
+        drawlabel(CTL_TITLE(c), &r, justmiddle);
+        DisposeRgn(PORT_CLIP_REGION(CTL_OWNER(c)));
+        PORT_CLIP_REGION(CTL_OWNER(c)) = save;
+        return;
+    }
+
     GUEST<RgnHandle> save;
     int16_t h = 10, v = 10;
     Rect r;
@@ -296,6 +346,15 @@ draw_check(ControlHandle c, int16_t part)
 {
     Rect r;
 
+    if(platinum())
+    {
+        r = CTL_RECT(c);
+        EraseRect(&r);
+        draw_theme_button(c, kThemeCheckBox);
+        add_title(c);
+        return;
+    }
+
     if(!part)
     {
         r = CTL_RECT(c);
@@ -328,6 +387,15 @@ static void
 draw_radio(ControlHandle c, int16_t part)
 {
     Rect r;
+
+    if(platinum())
+    {
+        r = CTL_RECT(c);
+        EraseRect(&r);
+        draw_theme_button(c, kThemeRadioButton);
+        add_title(c);
+        return;
+    }
 
     if(!part)
     {

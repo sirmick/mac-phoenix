@@ -18,8 +18,10 @@
 #include <ProcessMgr.h>
 #include <CommTool.h>
 #include <rsys/segment.h>
+#include <base/traps.h>
 #include <res/resource.h>
 #include <rsys/toolutil.h>
+#include <rsys/osutil.h>
 #include <time/time.h>
 #include <prefs/prefs.h>
 #include <base/emustubs.h>
@@ -312,8 +314,12 @@ RAW_68K_IMPLEMENTATION(CommToolboxDispatch)
             EM_D0 = InitCRM();
             break;
         default:
-            warning_unimplemented(""); /* now Quicken 6 will limp */
-            EM_D0 = 0;
+        {
+            char what[64];
+            snprintf(what, sizeof what, "CommToolboxDispatch selector $%04X", selector & 0xFFFF);
+            traps::log_unimplemented(what);
+            EM_D0 = 0; /* now Quicken 6 will limp */
+        }
             break;
     }
     RTS();
@@ -363,9 +369,15 @@ RAW_68K_IMPLEMENTATION(UpperString)
     RTS();
 }
 
+/* MacPhoenix: _LwrText ($A056) and its flag forms, an OS trap: A0 the
+   text, D0 its length, the trap word in D1. $A256 StripText, $A456
+   UpperText, $A656 StripUpperText (Inside Macintosh: Text). Was a stub
+   answering resNotFound and leaving the text as it was. */
 RAW_68K_IMPLEMENTATION(IMVI_LowerText)
 {
-    EM_D0 = resNotFound;
+    if(EM_A0)
+        ROMlib_text_case((Ptr)SYN68K_TO_US(EM_A0), (INTEGER)EM_D0, EM_D1 & 0x600);
+    EM_D0 = noErr;
     RTS();
 }
 

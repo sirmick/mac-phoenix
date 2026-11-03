@@ -15,8 +15,35 @@
  * (executor_host::set_event_poll_hook), a safe point in a process's world:
  *
  *   app              the current application's name (CurApName)
- *   windows          its windows: title, global bounds, visible
+ *   windows          its windows: title, global bounds, visible, kind; a
+ *                    dialog's static text and ParamText's strings too (an
+ *                    alert's message); with "items", its items too: type,
+ *                    global rectangle, a control's title or a text item's text
+ *   menus            its menu bar: each menu's title and left edge
  *   launch PATH      LaunchApplication of "Volume:Folder:App"; its OSErr
+ *   mount PATH       a disk image put in now (the Disks panel's insert, the
+ *                    image in the module's filesystem already): its System
+ *                    Folder additions copied in (below), then mounted
+ *                    through _MountVol (the System's patches tell the Finder),
+ *                    a diskEvt posted, as for a floppy; the OSErr (-1: the
+ *                    image can't be opened; nsvErr: no Mac volume on it)
+ *   mount-cd PATH    the same, a CD: locked (ROMlib_locked_images, as --cdrom)
+ *   eject PATH       a disk image's volumes unmounted through _UnmountVol
+ *                    (fBsyErr: in use)
+ *   volumes          the volumes mounted: their names
+ *
+ * Disk images going away, ejected here or by the Finder (Put Away, or
+ * anything else that unmounts them), are told to the page at the next event
+ * call (Module.onEjected(path)): it takes them out of its Disks panel.
+ *
+ * A disk's System Folder additions (what its applications' installers put
+ * in the System Folder: tools/web/make_disk.py --system-from) are copied
+ * into Executor's System (hfs_sideload.h: system_additions; files it has
+ * newer stay): for the disks there at the start before Executor starts, so
+ * fonts and startup code are in use at once; for one put in later, before
+ * it is mounted. Module.onAdditions(path, {copied, kept, restart, live})
+ * tells the page; restart: what is in use only after a restart. They stay
+ * when the disk goes, as an installer's would (docs/executor/Disks.md).
  *
  * The Worker answers 'read' and 'write' itself: files in the module's
  * filesystem, such as the Host volume (/host).
@@ -27,24 +54,39 @@
 #include <rsys/hostidle.h>
 
 #include <base/common.h>
+#include <DialogMgr.h>
 #include <FileMgr.h>
+#include <OSEvent.h>
+#include <file/file.h>
+#include <hfs/hfs.h>
+#include <MemoryMgr.h>
+#include <base/cpu.h>
+#include <error/error.h>
 #include <ProcessMgr.h>
+#include <rsys/process.h>
 #include <SegmentLdr.h>
 #include <wind/wind.h>
+#include <menu/menu.h>
+#include <ControlMgr.h>
+#include <quickdraw/cquick.h>
 #include <util/macstrings.h>
+#include <quickdraw/quick.h>
 
 #include <emscripten.h>
 
 #include <cstdint>
+#include <cstdlib>
 #include <filesystem>
 #include <cstdio>
 #include <cstring>
+#include <deque>
+#include <map>
 #include <string>
 #include <vector>
 
 /* The page's input, oldest first: [kind, a, b] per event (kind 1: mouse to
- * a, b; 2: button down a; 3: key down a, Mac key code b). Returns how many
- * events it copied. */
+ * a, b; 2: button down a; 3: key down a, Mac key code b; 4: the wheel, a
+ * lines right and b down). Returns how many events it copied. */
 EM_JS(int, js_take_input, (int32_t *out, int max), {
     const q = Module.input || [];
     const n = Math.min(q.length, max);
@@ -95,6 +137,30 @@ EM_JS(void, js_rects, (int width, int height, const int32_t *rects, int n, const
 EM_JS(void, js_cursor, (const uint8_t *data, const uint8_t *mask, int hotX, int hotY, int visible), {
     if (Module.onCursor)
         Module.onCursor(HEAPU8.slice(data, data + 32), HEAPU8.slice(mask, mask + 32), hotX, hotY, !!visible);
+});
+
+/* The 1x frame as RGBA bytes, the answer to request id ('screen1x'). */
+EM_JS(void, js_reply_pixels, (int id, int width, int height, const uint8_t *rgba), {
+    if (Module.onReply)
+        Module.onReply(id, { width, height, data: HEAPU8.slice(rgba, rgba + width * height * 4) });
+});
+
+/* A disk image whose volumes are all gone (ejected). */
+EM_JS(void, js_ejected, (const char *path), {
+    if (Module.onEjected)
+        Module.onEjected(UTF8ToString(path));
+});
+
+/* A fatal error of Executor's: the page says Executor stopped (its own
+   alert is up in the guest meanwhile, waiting for Restart). */
+EM_JS(void, js_additions, (const char *path, const char *json), {
+    if (Module.onAdditions)
+        Module.onAdditions(UTF8ToString(path), JSON.parse(UTF8ToString(json)));
+});
+
+EM_JS(void, js_fatal, (const char *message), {
+    if (Module.onFatal)
+        Module.onFatal(UTF8ToString(message));
 });
 
 /* Time the front end spent producing frames (rendering, converting). */
@@ -171,7 +237,7 @@ std::string pstring(const unsigned char *p)
     return p ? std::string((const char *)p + 1, p[0]) : std::string();
 }
 
-std::string windows_json()
+std::string windows_json(bool items)
 {
     std::string out = "[";
     for(WindowPeek w = LM(WindowList); w; w = WINDOW_NEXT_WINDOW(w))
@@ -183,7 +249,79 @@ std::string windows_json()
         out += "{\"title\":" + json_string(t ? pstring(*t) : "")
                + ",\"rect\":[" + std::to_string(r.top) + "," + std::to_string(r.left) + ","
                + std::to_string(r.bottom) + "," + std::to_string(r.right) + "]"
-               + ",\"visible\":" + (WINDOW_VISIBLE(w) ? "true" : "false") + "}";
+               + ",\"visible\":" + (WINDOW_VISIBLE(w) ? "true" : "false")
+               + ",\"kind\":" + std::to_string((int)WINDOW_KIND(w));
+        if(WINDOW_KIND(w) == dialogKind)
+        {
+            std::string text;
+            for(int i = 1, n = CountDITL((DialogPtr)w); i <= n && text.size() < 1000; i++)
+            {
+                GUEST<INTEGER> type;
+                GUEST<Handle> h;
+                C_GetDialogItem((DialogPtr)w, i, &type, &h, nullptr);
+                if((type & 0x7F) != statText || !h)
+                    continue;
+                Str255 s;
+                C_GetDialogItemText(h, s);
+                text += (text.empty() ? "" : "\n") + pstring(s);
+            }
+            out += ",\"text\":" + json_string(text) + ",\"params\":[";
+            for(int i = 0; i < 4; i++)             // ParamText's ^0..^3
+            {
+                Handle h = LM(DAStrings)[i];
+                out += (i ? "," : "") + json_string(h && *h ? pstring((const unsigned char *)*h) : "");
+            }
+            out += "]";
+            if(!items)
+            {
+                out += "}";
+                continue;
+            }
+            /* Its items, on the screen: a control's title, a text item's
+               text (what a test clicks by name). */
+            out += ",\"items\":[";
+            Rect &bounds = PORT_BOUNDS((GrafPtr)w);
+            for(int i = 1, n = CountDITL((DialogPtr)w); i <= n; i++)
+            {
+                GUEST<INTEGER> type;
+                GUEST<Handle> h;
+                Rect ir;
+                C_GetDialogItem((DialogPtr)w, i, &type, &h, &ir);
+                int kind = type & 0x7F;
+                Str255 s = { 0 };
+                if(h && kind >= ctrlItem && kind < statText)   /* buttons, boxes, radios, resource controls */
+                    C_GetControlTitle((ControlHandle)(Handle)h, s);
+                else if(h && (kind == statText || kind == editText))
+                    C_GetDialogItemText(h, s);
+                out += (i > 1 ? "," : "") + std::string("{\"type\":") + std::to_string(kind)
+                       + ",\"rect\":[" + std::to_string(ir.top - bounds.top) + "," + std::to_string(ir.left - bounds.left)
+                       + "," + std::to_string(ir.bottom - bounds.top) + "," + std::to_string(ir.right - bounds.left)
+                       + "],\"title\":" + json_string(pstring(s)) + "}";
+            }
+            out += "]";
+        }
+        out += "}";
+    }
+    return out + "]";
+}
+
+std::string menus_json()
+{
+    std::string out = "[";
+    if(LM(MenuList))
+    {
+        muelem *mp = (*MENULIST)->mulist;
+        muelem *end = mp + (*MENULIST)->muoff / sizeof(muelem);
+        for(; mp != end; mp++)
+        {
+            MenuHandle mh = mp->muhandle;
+            if(!mh)
+                continue;
+            if(out.size() > 1)
+                out += ",";
+            out += "{\"title\":" + json_string(pstring((const unsigned char *)MI_DATA(mh)))
+                   + ",\"left\":" + std::to_string((int)mp->muleft) + "}";
+        }
     }
     return out + "]";
 }
@@ -225,24 +363,245 @@ OSErr launch(const std::string &utf8)
     return LaunchApplication(&pb);
 }
 
+/* ---- disk images in and out while Executor runs ---- */
+const char IMAGES[] = "/uploads/";
+
+/* The disk images' drives (by path) and whether a volume is on each now. */
+std::map<std::string, bool> image_drives()
+{
+    std::map<std::string, bool> out;
+    for(DrvQEl *dp = (DrvQEl *)LM(DrvQHdr).qHead; dp; dp = (DrvQEl *)dp->qLink)
+    {
+        auto *dqp = (DrvQExtra *)((char *)dp - sizeof(LONGINT));
+        const char *name = (const char *)dqp->devicename;
+        if(!name || strncmp(name, IMAGES, sizeof IMAGES - 1) != 0)
+            continue;
+        bool &on = out[name];
+        for(HVCB *v = (HVCB *)LM(VCBQHdr).qHead; v; v = (HVCB *)v->qLink)
+            if(v->vcbDrvNum == dp->dQDrive)
+                on = true;
+    }
+    return out;
+}
+
+/* A File Manager trap called as a program would, through the trap table:
+   the System's patches on _MountVol and _UnmountVol are how the Finder
+   hears of volumes coming and going. A0 the parameter block (in the
+   system heap: the patches read it), D0 the result. */
+OSErr fs_trap(uint16_t trap, INTEGER vref)
+{
+    static std::map<uint16_t, Ptr> stubs;
+    static ParmBlkPtr pb = nullptr;
+    Ptr &code = stubs[trap];
+    if(!code)
+    {
+        code = NewPtrSys(4);
+        ((GUEST<uint16_t> *)code)[0] = trap;          /* _MountVol, _UnmountVol */
+        ((GUEST<uint16_t> *)code)[1] = 0x4E75;        /* RTS */
+    }
+    if(!pb)
+        pb = (ParmBlkPtr)NewPtrSysClear(sizeof(ParamBlockRec));
+    memset((void *)pb, 0, sizeof(ParamBlockRec));
+    pb->volumeParam.ioVRefNum = vref;
+    uint32_t d[8], a[7];
+    for(int i = 0; i < 8; i++)
+        d[i] = EM_DREG(i);
+    for(int i = 0; i < 7; i++)
+        a[i] = EM_AREG(i);
+    EM_A0 = US_TO_SYN68K(pb);
+    execute68K(US_TO_SYN68K(code));
+    OSErr err = (int16_t)EM_D0;
+    for(int i = 0; i < 8; i++)
+        EM_DREG(i) = d[i];
+    for(int i = 0; i < 7; i++)
+        EM_AREG(i) = a[i];
+    return err;
+}
+
+/* Executor's volume: its System Folder is the one it runs on. */
+const char DATA_DIR[] = "/executor";
+
+/* The image's System Folder additions into Executor's System; the page
+   told what went in (LIVE: put in while Executor runs). */
+void add_to_system(const std::string &path, bool live)
+{
+    executor_host::Additions done;
+    std::string err;
+    if(!executor_host::system_additions(path, DATA_DIR, &done, &err) || (!done.copied && !done.kept))
+        return;
+    fprintf(stderr, "[web] %s: %d files added to the System Folder, %d there already\n",
+            path.c_str(), done.copied, done.kept);
+    std::string json = "{\"copied\":" + std::to_string(done.copied) + ",\"kept\":" + std::to_string(done.kept)
+        + ",\"live\":" + (live ? "true" : "false") + ",\"restart\":[";
+    for(size_t i = 0; i < done.restart.size(); i++)
+        json += (i ? "," : "") + json_string(done.restart[i]);
+    js_additions(path.c_str(), (json + "]}").c_str());
+}
+
+/* The disks there at the start whose additions wait for Executor's own
+   System Folder (made as it starts): at the first event call. */
+std::vector<std::string> additions_pending;
+
+/* The image's drive (ROMlib_image_drive: its flags worked out, locked for
+   a CD), then _MountVol on it, as GetNextEvent would for a disk put in; a
+   diskEvt for the program in front. */
+OSErr mount_image(const std::string &path)
+{
+    INTEGER drive = ROMlib_image_drive(path.c_str());
+    if(!drive)
+        return -1;
+    OSErr err = fs_trap(0xA00F, drive);
+    PPostEvent(diskEvt, ((LONGINT)err << 16) | (uint16_t)drive, nullptr);
+    return err;
+}
+
+/* The volumes on the image's drive at PATH (its drive queue element in
+   *DRIVE): on line, and with OFFLINE those ejected but still known (the
+   Finder's Eject: no drive number, the driver's left) */
+std::vector<INTEGER> image_volumes(const std::string &path, bool offline, DrvQEl **drive = nullptr)
+{
+    std::vector<INTEGER> out;
+    for(DrvQEl *dp = (DrvQEl *)LM(DrvQHdr).qHead; dp; dp = (DrvQEl *)dp->qLink)
+    {
+        auto *dqp = (DrvQExtra *)((char *)dp - sizeof(LONGINT));
+        if(!dqp->devicename || path != (const char *)dqp->devicename)
+            continue;
+        if(drive)
+            *drive = dp;
+        for(HVCB *v = (HVCB *)LM(VCBQHdr).qHead; v; v = (HVCB *)v->qLink)
+            if(v->vcbDrvNum == dp->dQDrive
+               || (offline && !v->vcbDrvNum && (v->vcbDRefNum == dp->dQDrive || v->vcbDRefNum == -dp->dQDrive)))
+                out.push_back(v->vcbVRefNum);
+    }
+    return out;
+}
+
+/* Through _UnmountVol, as the Finder's Put Away; one ejected by the
+   Finder but still known too. */
+OSErr eject_image(const std::string &path)
+{
+    DrvQEl *drive = nullptr;
+    for(INTEGER vref : image_volumes(path, true, &drive))
+        if(OSErr err = fs_trap(0xA00E, vref))
+            return err;
+    return drive ? noErr : nsvErr;
+}
+
+/* Drives that had a volume and have none now: ejected. A volume ejected
+   but still known (offline: the Finder's Eject) is unmounted too, the
+   image being gone from the page, so no grey icon stays on the desktop.
+   One that won't go (files open on it: an application running from it,
+   the Finder's "could not be put away") stays, and so does the image:
+   the page dropping it left the Mac reading a file that wasn't there,
+   and the disk added again was a second one. */
+std::map<std::string, bool> seen;
+void watch_images()
+{
+    auto now = image_drives();
+    for(auto &[path, on] : now)
+    {
+        if(seen[path] && !on)
+        {
+            for(INTEGER vref : image_volumes(path, true))
+                fs_trap(0xA00E, vref);
+            if(image_volumes(path, true).empty())
+                js_ejected(path.c_str());
+        }
+        seen[path] = on;
+    }
+}
+
+/* The strings drawn lately (ROMlib_text_drawn), oldest first: the page's
+   "drawn" request (web/tests/tab_m1.mjs: a program's output in its window) */
+std::deque<std::string> drawn;
+void text_drawn(const char *text, int len)
+{
+    drawn.emplace_back(text, len);
+    if(drawn.size() > 512)
+        drawn.pop_front();
+}
+
 /* At an event call of the running application. */
 void on_event_poll()
 {
     char buf[1024];
+    ROMlib_text_drawn = text_drawn;
+    for(const std::string &path : additions_pending)
+        add_to_system(path, true);
+    additions_pending.clear();
     while(int id = js_take_request(buf, sizeof buf))
     {
         std::string op = buf, arg = buf + op.size() + 1;
         std::string reply;
         if(op == "app")
-            reply = json_string(LM(CurApName)[0] <= 31 ? pstring(LM(CurApName)) : "");
+        {
+            /* The front process (as mac-phoenix's /api/app): CurApName
+               names whichever process makes this event call, the Finder in
+               the background behind a full-screen game. */
+            std::string front = ROMlib_front_process_name();
+            reply = json_string(!front.empty() ? front
+                                : LM(CurApName)[0] <= 31 ? pstring(LM(CurApName)) : "");
+        }
         else if(op == "windows")
-            reply = windows_json();
+            reply = windows_json(arg == "items");
+        else if(op == "menus")
+            reply = menus_json();
+        else if(op == "drawn")
+        {
+            reply = "[";
+            for(const std::string &d : drawn)
+                reply += (reply.size() > 1 ? "," : "") + json_string(d);
+            reply += "]";
+        }
         else if(op == "launch")
             reply = std::to_string(launch(arg));
+        else if(op == "volumes")
+        {
+            reply = "[";
+            for(HVCB *v = (HVCB *)LM(VCBQHdr).qHead; v; v = (HVCB *)v->qLink)
+                reply += (reply.size() > 1 ? "," : "") + json_string(pstring((const unsigned char *)v->vcbVN));
+            reply += "]";
+        }
+        else if(op == "mount")
+        {
+            add_to_system(arg, true);
+            reply = std::to_string(mount_image(arg));
+        }
+        else if(op == "mount-cd")
+        {
+            ROMlib_locked_images.insert(arg);
+            reply = std::to_string(mount_image(arg));
+        }
+        else if(op == "eject")
+            reply = std::to_string(eject_image(arg));
+        else if(op == "screen1x")
+        {
+            std::vector<uint32_t> px;
+            int w, h;
+            if(driver() && driver()->copyFrame(px, w, h))
+            {
+                for(uint32_t &p : px)
+                    p = (p & 0xFF00FF00) | (p >> 16 & 0xFF) | (p & 0xFF) << 16;
+                js_reply_pixels(id, w, h, (const uint8_t *)px.data());
+                continue;
+            }
+            reply = "null";
+        }
+        /* The page's side of Executor stopping (web/tests/tab_stopped.mjs):
+           a fatal error of its own, the wasm trapping (an access out of
+           bounds: far past any memory it has grown to) */
+        else if(op == "test-fatal")
+            gui_fatal("asked for by the page (%s)", arg.c_str());
+        else if(op == "test-trap")
+        {
+            volatile uint32_t *far = (volatile uint32_t *)(uintptr_t)0xFFFFFFF0u;
+            reply = std::to_string(*far);
+        }
         else
             reply = "{\"error\":" + json_string("unknown request " + op) + "}";
         js_reply(id, reply.c_str());
     }
+    watch_images();
 }
 
 void on_yield()
@@ -264,6 +623,9 @@ void on_yield()
                 case 3:
                     executor_host::key(e[1] != 0, (uint8_t)e[2]);
                     break;
+                case 4:
+                    executor_host::wheel(e[1], e[2]);
+                    break;
             }
         }
     if(auto *v = driver())
@@ -276,33 +638,71 @@ void on_yield()
 
 }
 
-/* web_main [--size WxH] [--disk IMAGE]... [--system IMAGE] [APP]: the
- * screen size, disk images to mount (read-only), the image whose System
- * Folder to run on (Apple's System and Finder: copied into Executor's
- * volume, and the Finder started), and an application to start instead of
- * Executor's Browser or the Finder (paths in the module's filesystem). */
+/* web_main [--size WxH] [--disk IMAGE]... [--system IMAGE] [--ppc] [--ram MB]
+ * [--depth BPP] [APP]: the screen size, disk images to mount (read-only),
+ * the image whose System Folder to run on (Apple's System and Finder:
+ * copied into Executor's volume, and the Finder started), fat
+ * applications' PowerPC code run (as --executor-ppc), the memory (default:
+ * 32 MB, 128 on Apple's System) and the depth the screen starts in (as
+ * --depth; default: as the System's Macs), and an application to start
+ * instead of Executor's Browser or the Finder (paths in the module's
+ * filesystem). The page's settings (web/executor/settings.js) say which. */
 int main(int argc, char **argv)
 {
     executor_host::Config c;
     std::string system_image;
+    int ram_mb = 0, bpp = 0;
     for(int i = 1; i < argc; i++)
     {
         std::string a = argv[i];
         if(a == "--size" && i + 1 < argc)
             sscanf(argv[++i], "%dx%d", &c.width, &c.height);
+        else if(a == "--scale" && i + 1 < argc)
+            c.scale = atof(argv[++i]);
         else if(a == "--disk" && i + 1 < argc)
             c.disks.push_back(argv[++i]);
+        else if(a == "--cdrom" && i + 1 < argc)  /* locked, as a Mac's CDs */
+            c.cdroms.push_back(argv[++i]);
         else if(a == "--system" && i + 1 < argc)
             system_image = argv[++i];
+        else if(a == "--ppc")
+            c.prefer_ppc = true;  /* fat applications' PowerPC code too */
+        else if(a == "--ram" && i + 1 < argc)
+            ram_mb = atoi(argv[++i]);
+        else if(a == "--depth" && i + 1 < argc)
+            bpp = atoi(argv[++i]);
+        else if(a == "--logtraps")  /* the page's ?logtraps= (main.js) */
+            c.logtraps = true;
+        else if(a == "--logtraps-filter" && i + 1 < argc)
+            c.logtraps_filter = argv[++i];
+        else if(a == "--logtraps-nesting" && i + 1 < argc)
+            c.logtraps_nesting = atoi(argv[++i]);
+        else if(a == "--debug" && i + 1 < argc)
+            c.debug_options = argv[++i];
+        else if(a == "--ppc-break" && i + 1 < argc)  /* ?ppcbreak= */
+            c.ppc_breaks.push_back(argv[++i]);
         else
             c.app = a;
     }
-    c.bpp = 8;
+    /* The depth the System's Macs start in, as natively: 8.x 32 bits, 7.x
+       and Executor's own System 8 (at 8 bits 8.6's desktop pattern maps
+       to one colour of the standard palette, flat lavender). */
+    c.bpp = bpp;
     c.ram_mb = 32;
-    c.data_dir = "/executor"; /* in memory; Executor makes its System Folder */
-    /* Disk images are writable: the page keeps their changes in an overlay
-       (web/executor/overlay.js); the images themselves are never written. */
+    /* On Apple's System: 128 MB, as a Quadra 650 or a G3 could have. EV
+       Nova asks for a 53 MB partition (M1.md): 64 left the Finder and it
+       no room. The browser commits it all (the wasm memory grows to
+       about twice it, up to the 4 GB a wasm32 module may have). */
+    const int apple_ram_mb = 128;
+    c.data_dir = DATA_DIR; /* in memory; Executor makes its System Folder */
+    /* Disk images are writable (CDs, --cdrom, are not): the page keeps
+       their changes in an overlay (web/executor/overlay.js); the images
+       themselves are never written. */
     c.writable_images = true;
+    /* Removable, as a floppy or a CD put in: the Finder puts them away
+       without asking (the System's image stays a fixed disk). */
+    ROMlib_ejectable_images = true;
+    ROMlib_fixed_image = system_image;
     if(!system_image.empty())
     {
         bool finder = false;
@@ -316,7 +716,7 @@ int main(int argc, char **argv)
             fprintf(stderr, "[web] the saved System Folder%s\n", finder ? ", starting the Finder" : "");
             if(finder && c.app.empty())
                 c.app = sys + "/Finder";
-            c.ram_mb = 64;
+            c.ram_mb = apple_ram_mb;
         }
         else if(executor_host::sideload_system(system_image, c.data_dir, &finder, &err))
         {
@@ -324,11 +724,19 @@ int main(int argc, char **argv)
                     finder ? ", starting the Finder" : "");
             if(finder && c.app.empty())
                 c.app = c.data_dir + "/System Folder/Finder";
-            c.ram_mb = 64;
+            c.ram_mb = apple_ram_mb;
         }
         else
             fprintf(stderr, "[web] no System Folder from %s: %s\n", system_image.c_str(), err.c_str());
     }
+    if(ram_mb > 0)
+        c.ram_mb = ram_mb;
+    /* The disks' System Folder additions (not the CDs': as they are) */
+    for(const std::string &disk : c.disks)
+        if(std::filesystem::exists(c.data_dir + "/System Folder/System"))
+            add_to_system(disk, false);
+        else
+            additions_pending.push_back(disk);
     /* "Host", as mac-phoenix names its first shared folder: files the page
        reads and writes (worker.js 'read', 'write'). */
     c.shared_folders.push_back("/host");
@@ -345,6 +753,7 @@ int main(int argc, char **argv)
     };
     Executor::hostidle::set_yield_hook(on_yield);
     executor_host::set_event_poll_hook(on_event_poll);
+    executor_host::set_fatal_hook([](const char *message) { js_fatal(message); });
     fprintf(stderr, "[web] Executor %dx%d\n", c.width, c.height);
     return executor_host::run(c);
 }

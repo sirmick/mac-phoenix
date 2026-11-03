@@ -14,7 +14,6 @@
 #include <mman/mman.h>
 
 #include <quickdraw/xdata.h>
-#include <rsys/evil.h>
 
 #include <util/handle_vector.h>
 
@@ -189,17 +188,6 @@ void Executor::C_RGBForeColor(RGBColor *color)
 
 void Executor::C_RGBBackColor(RGBColor *color)
 {
-
-#if defined(EVIL_ILLUSTRATOR_7_HACK)
-    if(ROMlib_evil_illustrator_7_hack)
-    {
-        color = (RGBColor *)alloca(sizeof(RGBColor));
-        color->red = 65535;
-        color->green = 65535;
-        color->blue = 65535;
-    }
-#endif
-
     if(CGrafPort_p(qdGlobals().thePort))
     {
         CPORT_RGB_BK_COLOR(theCPort) = *color;

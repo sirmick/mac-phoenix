@@ -133,6 +133,9 @@ Response APIRouter::handle(const Request& req, bool* handled) {
     if (req.path == "/api/executor/system" && req.method == "POST") {
         return handle_executor_system_create(req);
     }
+    if (req.path == "/api/executor/ppc-break") {
+        return handle_ppc_break(req);
+    }
     if (req.path == "/api/restart" && req.method == "POST") {
         return handle_restart(req);
     }
@@ -965,8 +968,9 @@ Response APIRouter::handle_config_save(const Request& req) {
     return Response::json("{\"success\": true}");
 }
 
+static std::string get_query_param(const std::string& query, const std::string& key);
+
 Response APIRouter::handle_screenshot(const Request& req) {
-    (void)req;
 
     if (!ctx_->video_output) {
         Response resp;
@@ -994,7 +998,29 @@ Response APIRouter::handle_screenshot(const Request& req) {
     std::vector<uint32_t> pixels(
         std::size_t(mp::video::kMaxWidth_Ppc) * mp::video::kMaxHeight_Ppc);
 
-    if (!ctx_->video_output->snapshot_frame(pixels.data(), &width, &height, &format)) {
+    // ?scale=1: the Mac's own pixels when the frames are at a display
+    // scale (Executor's --executor-scale; the 1x frame follows the scaled
+    // one in its IPC slot). The frames as they are otherwise.
+    bool base_frame = false;
+    if (get_query_param(req.query, "scale") == "1" && ctx_->subprocess) {
+        std::shared_lock<std::shared_mutex> shm_lock(g_ipc_shm_mutex);
+        const IPCBuffer* buf = ctx_->subprocess->ipc_client()->shm();
+        if (buf && buf->scale_milli > 1000 && buf->base_width && buf->base_height
+            && IPC_ATOMIC_LOAD(buf->frame_count) > 0) {
+            uint32_t idx = IPC_ATOMIC_LOAD(buf->ready_index) % IPC_NUM_BUFFERS;
+            width = (int)buf->base_width;
+            height = (int)buf->base_height;
+            size_t offset = (size_t)buf->width * buf->height * 4;
+            if (offset + (size_t)width * height * 4 <= IPC_FRAME_SIZE
+                && (size_t)width * height <= pixels.size()) {
+                std::memcpy(pixels.data(), buf->frames[idx] + offset, (size_t)width * height * 4);
+                format = buf->pixel_format == IPC_PIXFMT_BGRA ? PIXFMT_BGRA : PIXFMT_ARGB;
+                base_frame = true;
+            }
+        }
+    }
+
+    if (!base_frame && !ctx_->video_output->snapshot_frame(pixels.data(), &width, &height, &format)) {
         Response resp;
         resp.set_status(503, "Service Unavailable");
         resp.set_body("{\"error\": \"No frame available yet\"}");
@@ -1630,6 +1656,55 @@ std::string APIRouter::text_json(const std::string& query) {
 
 Response APIRouter::handle_text(const Request& req) {
     return Response::json(text_json(req.query));
+}
+
+// /api/executor/ppc-break — Executor's PowerPC breakpoints (docs/executor/
+// PPCTrace.md). GET [?since=N]: the breakpoints and the reports of hits
+// after N; POST {"add": SPEC} or {"remove": SPEC|"all"}: the same back.
+// The session must have been started with --executor-ppc-break (SPEC or on).
+Response APIRouter::handle_ppc_break(const Request& req) {
+    auto fail = [](int status, const std::string& why) {
+        Response r; r.set_status(status);
+        r.set_body("{\"error\": \"" + storage::json_escape(why) + "\"}");
+        r.set_content_type("application/json");
+        return r;
+    };
+    std::string command = "list";
+    if (req.method == "POST") {
+        QJsonObject j = QJsonDocument::fromJson(QByteArray::fromStdString(req.body)).object();
+        if (j.value("add").isString())
+            command = "add " + j.value("add").toString().toStdString();
+        else if (j.value("remove").isString())
+            command = "remove " + j.value("remove").toString().toStdString();
+        else
+            return fail(400, "want {\"add\": SPEC} or {\"remove\": SPEC}");
+    } else if (req.method == "GET") {
+        size_t at = req.query.find("since=");
+        if (at != std::string::npos)
+            command += " " + std::to_string(strtoul(req.query.c_str() + at + 6, nullptr, 10));
+    } else {
+        return fail(405, "GET or POST");
+    }
+    if (!ctx_->subprocess || !ctx_->config || ctx_->config->backend_string() != "executor")
+        return fail(409, "an Executor session only");
+    auto* buf = const_cast<IPCBuffer*>(ctx_->subprocess->ipc_client()->shm());
+    if (!buf || !ctx_->subprocess->is_running())
+        return fail(503, "emulator not running");
+    if (ctx_->config->executor_ppc_break.empty())
+        return fail(409, "start the session with --executor-ppc-break (a SPEC, or on)");
+    static std::mutex mutex;
+    std::lock_guard<std::mutex> lock(mutex);
+    if (command.size() >= sizeof(buf->debug_command))
+        return fail(400, "spec too long");
+    snprintf(buf->debug_command, sizeof(buf->debug_command), "%s", command.c_str());
+    uint32_t want = IPC_ATOMIC_LOAD(buf->debug_request) + 1;
+    IPC_ATOMIC_STORE(buf->debug_request, want);
+    for (int i = 0; i < 200; i++) {
+        if (IPC_ATOMIC_LOAD(buf->debug_done) == want)
+            return Response::json(std::string(buf->debug_json));
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    return fail(504, "no answer from the emulator");
 }
 
 Response APIRouter::handle_windows(const Request& req) {

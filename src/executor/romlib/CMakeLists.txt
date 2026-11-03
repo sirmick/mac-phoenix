@@ -292,7 +292,7 @@ set(qd_sources
      quickdraw/qPict2.cpp quickdraw/image.cpp
     quickdraw/image_inits.cpp quickdraw/default_ctab_values.cpp
     quickdraw/dcconvert.cpp quickdraw/rgbutil.cpp quickdraw/dcmaketables.cpp
-    quickdraw/fontIMVI.cpp quickdraw/font.cpp quickdraw/sfnt.cpp
+    quickdraw/fontIMVI.cpp quickdraw/font.cpp quickdraw/fontmgr85.cpp quickdraw/sfnt.cpp
     quickdraw/displays.cpp
 )
 
@@ -396,6 +396,8 @@ set(base_sources
         base/m68kint.h
         base/cpu.h
         base/cpu.cpp    
+        base/ppc_break.cpp
+        include/rsys/ppc_break.h
 
         base/traps.h
         base/traps.impl.h
@@ -472,6 +474,7 @@ set(osevent_sources
         osevent/hle.cpp
         osevent/ibm_keycodes.cpp
         osevent/osevent.cpp
+        osevent/wheel.cpp
     )
 source_group(OSEvent FILES ${osevent_sources})
 
@@ -555,7 +558,7 @@ source_group(MPW FILES ${mpw_sources})
 
 
 set(misc_sources
-  desk.cpp extensions.cpp sysroutines.cpp helppkg.cpp textservices.cpp component.cpp collections.cpp iconservices.cpp appearance_mgr.cpp appearance_draw.cpp device.cpp disk.cpp diskinit.cpp dump.cpp
+  desk.cpp extensions.cpp sysroutines.cpp helppkg.cpp textservices.cpp component.cpp collections.cpp inputsprocket.cpp nameregistry.cpp iconservices.cpp appearance_mgr.cpp appearance_draw.cpp device.cpp disk.cpp diskinit.cpp dump.cpp
   gestalt.cpp iu.cpp launch.cpp  notify.cpp 
    osutil.cpp pack.cpp scrap.cpp script.cpp segment.cpp serial.cpp hostdisk.cpp
   stdfile.cpp stdfilepkg.cpp romlib_stubs.cpp  toolevent.cpp toolutil.cpp 
@@ -586,7 +589,6 @@ set(include_sources
                   include/rsys/desk.h
                   include/rsys/device.h
                   include/rsys/dump.h
-                  include/rsys/evil.h
                   include/rsys/executor.h
                   include/rsys/filesystem.h
                   include/rsys/gestalt.h
@@ -636,11 +638,15 @@ set(sources ${base_sources} ${mman_sources} ${vdriver_sources}
     ${include_sources})
 
 # MacPhoenix: the host network edge (include/rsys/hostnet.h): host sockets,
-# or none (MacTCP and Open Transport answer with errors; no host threads).
-set(EXECUTOR_NET posix CACHE STRING "Executor's network backend: posix | none")
-set_property(CACHE EXECUTOR_NET PROPERTY STRINGS posix none)
-if(NOT EXECUTOR_NET MATCHES "^(posix|none)$")
-    message(FATAL_ERROR "EXECUTOR_NET must be posix or none, not ${EXECUTOR_NET}")
+# none (MacTCP and Open Transport answer with errors; no host threads), or
+# wasm (the tab's sockets, over tools/standalone's relay).
+set(EXECUTOR_NET posix CACHE STRING "Executor's network backend: posix | none | wasm")
+set_property(CACHE EXECUTOR_NET PROPERTY STRINGS posix none wasm)
+if(NOT EXECUTOR_NET MATCHES "^(posix|none|wasm)$")
+    message(FATAL_ERROR "EXECUTOR_NET must be posix, none or wasm, not ${EXECUTOR_NET}")
+endif()
+if(EXECUTOR_NET STREQUAL "wasm" AND NOT EMSCRIPTEN)
+    message(FATAL_ERROR "EXECUTOR_NET=wasm is for the WebAssembly build")
 endif()
 
 add_library(romlib ${sources}

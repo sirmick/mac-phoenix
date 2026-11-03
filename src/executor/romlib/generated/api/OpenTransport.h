@@ -312,6 +312,7 @@ T_REGNAMECOMPLETE = 536870925,
 T_DELNAMECOMPLETE = 536870926,
 T_LKUPNAMECOMPLETE = 536870927,
 T_LKUPNAMERESULT = 536870928,
+kOTSyncIdleEvent = 536870929,
 kSTREAMEVENT = 553648128,
 kSIGNALEVENT = 570425344,
 kPROTOCOLEVENT = 587202560,
@@ -550,6 +551,12 @@ namespace ot { uint32_t init_priv(const Call &); }OT_FUNCTION(OTClientUtilLib, I
 namespace ot { uint32_t close_priv(const Call &); }OT_FUNCTION(OTClientUtilLib, CloseOpenTransportPriv, "OTClnt$LclUtils", "CloseOpenTransportPriv", false, "L", 'V', close_priv);
 
 
+namespace ot { uint32_t exit_patch_priv(const Call &); }OT_FUNCTION(OTClientUtilLib, OTExitPatchPriv, "OTClnt$LclUtils", "OTExitPatchPriv", false, "L", 'V', exit_patch_priv);
+
+
+namespace ot { uint32_t set_memory_limits(const Call &); }OT_FUNCTION(OTNativeClientLib, OTSetMemoryLimits, "", "OTSetMemoryLimits", false, "LL", 'L', set_memory_limits);
+
+
 namespace ot { uint32_t register_priv(const Call &); }OT_FUNCTION(OTClientUtilLib, OTRegisterAsClientPriv, "OTClnt$LclUtils", "OTRegisterAsClientPriv", false, "LLL", 'L', register_priv);
 
 
@@ -599,6 +606,15 @@ namespace ot { uint32_t is_acking(const Call &); }OT_FUNCTION(OTClientLib, OTIsA
 
 
 namespace ot { uint32_t install_notifier(const Call &); }OT_FUNCTION(OTClientLib, OTInstallNotifier, "OTClnt$LclClnt", "OTINSTALLNOTIFIER", true, "LLL", 'L', install_notifier);
+
+
+namespace ot { uint32_t enter_notifier(const Call &); }OT_FUNCTION(OTClientLib, OTEnterNotifier, "", "OTEnterNotifier", false, "L", 'B', enter_notifier);
+
+
+namespace ot { uint32_t leave_notifier(const Call &); }OT_FUNCTION(OTClientLib, OTLeaveNotifier, "", "OTLeaveNotifier", false, "L", 'V', leave_notifier);
+
+
+namespace ot { uint32_t use_sync_idle_events(const Call &); }OT_FUNCTION(OTClientLib, OTUseSyncIdleEvents, "", "OTUseSyncIdleEvents", false, "LB", 'L', use_sync_idle_events);
 
 
 namespace ot { uint32_t remove_notifier(const Call &); }OT_FUNCTION(OTClientLib, OTRemoveNotifier, "OTClnt$LclClnt", "OTREMOVENOTIFIER", true, "L", 'V', remove_notifier);
@@ -737,6 +753,18 @@ namespace ot { uint32_t enter_interrupt(const Call &); }OT_FUNCTION(OTUtilityLib
 
 
 namespace ot { uint32_t leave_interrupt(const Call &); }OT_FUNCTION(OTUtilityLib, OTLeaveInterrupt, "OTClnt$CmnShared", "OTLEAVEINTERRUPT", true, "", 'V', leave_interrupt);
+
+
+namespace ot { uint32_t create_timer(const Call &); }OT_FUNCTION(OTNtvUtilLib, OTCreateTimerTask, "OTClnt$NtvUtils", "OTCREATETIMERTASK", true, "LL", 'L', create_timer);
+
+
+namespace ot { uint32_t schedule_timer(const Call &); }OT_FUNCTION(OTNtvUtilLib, OTScheduleTimerTask, "OTClnt$NtvUtils", "OTSCHEDULETIMERTASK", true, "LL", 'B', schedule_timer);
+
+
+namespace ot { uint32_t cancel_timer(const Call &); }OT_FUNCTION(OTNtvUtilLib, OTCancelTimerTask, "OTClnt$NtvUtils", "OTCANCELTIMERTASK", true, "L", 'B', cancel_timer);
+
+
+namespace ot { uint32_t destroy_timer(const Call &); }OT_FUNCTION(OTNtvUtilLib, OTDestroyTimerTask, "OTClnt$NtvUtils", "OTDESTROYTIMERTASK", true, "L", 'V', destroy_timer);
 
 
 namespace ot { uint32_t ot_memcpy(const Call &); }OT_FUNCTION(OTUtilityLib, OTMemcpy, "OTClnt$CmnShared", "OTMemcpy", false, "LLL", 'V', ot_memcpy);
@@ -896,6 +924,9 @@ namespace ot { uint32_t clone_configuration(const Call &); }OT_FUNCTION(OTClient
 
 
 namespace ot { uint32_t destroy_configuration(const Call &); }OT_FUNCTION(OTClientUtilLib, OTDestroyConfiguration, "OTClnt$LclUtils", "OTDESTROYCONFIGURATION", true, "L", 'V', destroy_configuration);
+
+
+namespace ot { uint32_t free_mem_priv(const Call &); }OT_FUNCTION(OTClientUtilLib, OTFreeMem, "", "OTFreeMem", false, "L", 'V', free_mem_priv);
 
 
 namespace ot { uint32_t cfg_open_db(const Call &); }OT_FUNCTION(OTConfigLib, OTOpenConfigurationsDB, "OTLib$CfigLib", "OTOpenConfigurationsDB", false, "LLL", 'L', cfg_open_db);

@@ -353,7 +353,10 @@ OSErr Executor::C_SndPlay(SndChannelPtr chanp, Handle sndh, Boolean async)
                 GUEST<SndChannelPtr> foo;
 
                 foo = nullptr;
-                SndNewChannel(&foo, sampledSynth, 0, 0);
+                /* MacPhoenix: no room for the channel (an alert's beep in a
+                   full heap): SndNewChannel's error, nothing played. */
+                if(OSErr err = SndNewChannel(&foo, sampledSynth, 0, 0))
+                    return err;
                 chanp = foo;
             }
 
@@ -414,10 +417,21 @@ OSErr Executor::C_SndNewChannel(GUEST<SndChannelPtr> *chanpp, INTEGER synth,
             break;
 
         case soundon:
+        {
+            /* MacPhoenix: memFullErr when the channel or its modifier block
+               doesn't fit (IM: Sound); both were used unchecked. */
+            Ptr mod = NewPtrClear(sizeof(ModifierStub));
+            if(!mod)
+                return memFullErr;
             if(*chanpp == nullptr)
             {
-                *chanpp = (SndChannelPtr)NewPtr(sizeof(SndChannel));
-                chanp = *chanpp;
+                chanp = (SndChannelPtr)NewPtr(sizeof(SndChannel));
+                if(!chanp)
+                {
+                    DisposePtr(mod);
+                    return memFullErr;
+                }
+                *chanpp = chanp;
                 chanp->flags = CHAN_ALLOC_FLAG;
             }
             else
@@ -427,7 +441,7 @@ OSErr Executor::C_SndNewChannel(GUEST<SndChannelPtr> *chanpp, INTEGER synth,
             }
             chanp->nextChan = allchans;
             allchans = chanp;
-            chanp->firstMod = (Ptr)NewPtr(sizeof(ModifierStub));
+            chanp->firstMod = mod;
             SND_CHAN_TIME(chanp) = 0;
             SND_CHAN_CURRENT_START(chanp) = 0;
             {
@@ -446,6 +460,8 @@ OSErr Executor::C_SndNewChannel(GUEST<SndChannelPtr> *chanpp, INTEGER synth,
             chanp->qHead = 0;
             chanp->qTail = 0;
             retval = noErr;
+            break;
+        }
     }
     return retval;
 }
@@ -758,9 +774,13 @@ do_current_db(SndChannelPtr chanp, HungerInfo info)
     unsigned char *sp;
 
     dbhp = SND_CHAN_DBHP(chanp);
-    dbp = dbhp->dbhBufferPtr[SND_CHAN_CURRENT_DB(chanp)];
+    /* MacPhoenix: a header or buffer pointer that is nil (Mars Rising: the
+       header's memory reused once its sound is over) is a buffer that isn't
+       ready, as a Mac reading low memory there finds it; was a host crash
+       at interrupt time. */
+    dbp = dbhp ? (SndDoubleBuffer *)dbhp->dbhBufferPtr[SND_CHAN_CURRENT_DB(chanp)] : nullptr;
 
-    if(!(dbp->dbFlags & dbBufferReady))
+    if(!dbp || !(dbp->dbFlags & dbBufferReady))
     {
         /* This buffer isn't ready */
         warning_sound_log("notready");
@@ -894,6 +914,8 @@ OSErr Executor::C_SndDoCommand(SndChannelPtr chanp, SndCommand *cmdp,
 {
     OSErr retval;
 
+    if(!chanp || !cmdp)
+        return badChannel;
 #if 1
     if(!cmdp)
         warning_sound_log("cmdp = nullptr");
@@ -959,6 +981,11 @@ OSErr Executor::C_SndDoImmediate(SndChannelPtr chanp, SndCommand *cmdp)
 {
     OSErr retval;
     SndCommand cmd;
+
+    /* MacPhoenix: no channel, as SndDisposeChannel says (Mars Rising
+       quiets the channel it never got) */
+    if(!chanp || !cmdp)
+        return badChannel;
 
     switch(ROMlib_PretendSound)
     {

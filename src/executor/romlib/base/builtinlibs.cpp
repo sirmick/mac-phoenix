@@ -4,6 +4,7 @@
 #include <base/traps.h>
 #include <OSUtil.h>
 #include <MemoryMgr.h>
+#include <AppleEvents.h>
 #include <rsys/cfm.h>
 #include <PEFBinaryFormat.h>
 #include <unordered_map>
@@ -113,12 +114,58 @@ namespace
     };
 }
 
+/* MacPhoenix: Apple's ObjectSupportLib tells the AppleEvent Manager it
+   is there with handlers that are no address: AERemoveEventHandler('Stan',
+   'ford', 'Bite', true), then AEInstallEventHandler('Berk', 'eley', 'Win ',
+   0, false). Neither can be passed on as a pointer (the 68k patch on the
+   dispatcher, Executor's handler table): where the window it falls in is
+   smaller than natively (the tab's 64 MB pool), that's the fatal "host
+   pointer is not guest-addressable" (CodeWarrior IDE 3.2 with PowerPC, M1
+   #6). Kept here instead, by value: removing one installed so answers
+   noErr, as the AppleEvent Manager would (ObjectSupportLib removes 'Berk'
+   'eley' 'Win ' right after installing it), anything else
+   errAEHandlerNotFound. Only a value that can't go to host memory and
+   back: one in its window's reservation goes to the AppleEvent Manager
+   as on a Mac (natively the pool's window is 1 GB: 'Win ' falls in it,
+   and AppleWorks 5's PowerPC code stops, "unhandled trap 11", when the
+   pair isn't in the table). */
+static bool ae_handler_not_an_address(const char *name, PowerCore& cpu)
+{
+    /* (class, ID, system) -> handler */
+    static std::map<std::tuple<uint32_t, uint32_t, bool>, uint32_t> kept;
+    bool install = !strcmp(name, "AEInstallEventHandler");
+    if(!install && strcmp(name, "AERemoveEventHandler"))
+        return false;
+    uint32_t hdlr = cpu.r[5];
+    if(!hdlr || syn68k_is_guest_addr_in_window(hdlr, 2))
+        return false;
+    auto code = [](uint32_t v) {
+        return std::string{ char(v >> 24), char(v >> 16), char(v >> 8), char(v) };
+    };
+    /* the system flag: AEInstallEventHandler's fifth argument, after the
+       refcon; AERemoveEventHandler's fourth */
+    auto key = std::make_tuple(cpu.r[3], cpu.r[4], ((install ? cpu.r[7] : cpu.r[6]) & 0xFF) != 0);
+    OSErr err = noErr;
+    if(install)
+        kept[key] = hdlr;
+    else if(auto it = kept.find(key); it != kept.end() && it->second == hdlr)
+        kept.erase(it);
+    else
+        err = errAEHandlerNotFound;
+    fprintf(stderr, "[Executor] PowerPC %s('%s', '%s', $%08X): the handler is no address, answered %d\n",
+            name, code(cpu.r[3]).c_str(), code(cpu.r[4]).c_str(), hdlr, err);
+    cpu.r[3] = err;
+    return true;
+}
+
 uint32_t builtinlibs::handleSC(PowerCore& cpu)
 {
     PPCCallback *cb = guestvalues::GuestTypeTraits<PPCCallback*>::reg_to_host(cpu.CIA - 8);
     int index = cb - callbacks;
     if(index >= 0 && index < nCallbacks)
     {
+        if(cb->name && cb->name[0] == 'A' && ae_handler_not_an_address(cb->name, cpu))
+            return cpu.lr;
         if(cb->implementation)
         {
             /* The call site, for the trap log (--executor-logtraps): a
@@ -140,6 +187,22 @@ uint32_t builtinlibs::handleSC(PowerCore& cpu)
         std::cerr << "Illegal PPC system call\n";
         std::abort();
     }
+}
+
+const char *builtinlibs::callbackName(uint32_t opPC)
+{
+    PPCCallback *cb = guestvalues::GuestTypeTraits<PPCCallback*>::reg_to_host(opPC - 8);
+    int index = cb - callbacks;
+    return index >= 0 && index < nCallbacks ? cb->name : nullptr;
+}
+
+std::vector<uint32_t> builtinlibs::callbackAddresses(const std::string& name)
+{
+    std::vector<uint32_t> found;
+    for(int i = 0; i < nCallbacks; i++)
+        if(callbacks[i].name && name == callbacks[i].name)
+            found.push_back(US_TO_SYN68K(&callbacks[i].sc));
+    return found;
 }
 
 static PPCCallback& new_callback(const char *function, std::function<uint32_t (PowerCore&)> code)
@@ -315,6 +378,16 @@ Ptr builtinlibs::makeUndefinedSymbolStub(const char *name, OSType arch)
     return (Ptr) &callback;
 }
 
+Ptr builtinlibs::makePPCRoutine(const char *name, std::function<uint32_t (PowerCore&)> code)
+{
+    return (Ptr)&new_callback(name, std::move(code));
+}
+
+Ptr builtinlibs::makeCFM68KRoutine(const char *name, std::function<syn68k_addr_t (syn68k_addr_t)> code)
+{
+    return (Ptr)new_vector68k(name, std::move(code));
+}
+
 /* By library: (routine, library whose entry it is). */
 static std::unordered_map<std::string, std::vector<std::pair<std::string, std::string>>>& alsoExports()
 {
@@ -452,7 +525,9 @@ std::map<std::string, std::vector<std::string>> builtinlibs::exportTable(OSType 
     return out;
 }
 
-ConnectionID builtinlibs::getBuiltinLib(ConstStr255Param libname, OSType arch)
+/* MacPhoenix: whether getBuiltinLib would answer libname, without making
+   a connection (GetSharedLibrary's kFindLib). */
+bool builtinlibs::haveBuiltinLib(ConstStr255Param libname, OSType arch)
 {
     addLazyEntrypoints();
 
@@ -461,22 +536,48 @@ ConnectionID builtinlibs::getBuiltinLib(ConstStr255Param libname, OSType arch)
     {
         if(std::find(std::begin(interfacelib_aliases68k), std::end(interfacelib_aliases68k), name)
            != std::end(interfacelib_aliases68k))
+            return true;
+        if(name == "NuStdCLib" || name == "NuIntEnv")
+            name = "StdCLib";
+        if(name != "InterfaceLib")
+            addAlsoExports(builtins68k, name);
+        return builtins68k.count(name) != 0;
+    }
+    if(name != "InterfaceLib")
+        addAlsoExports(builtins, name);
+    return libraryInThisSystem(name) && builtins.count(name) != 0;
+}
+
+ConnectionID builtinlibs::getBuiltinLib(ConstStr255Param libname, OSType arch)
+{
+    addLazyEntrypoints();
+
+    std::string name(libname + 1, libname + 1 + libname[0]);
+    if(arch == "m68k"_4)
+    {
+        /* MacPhoenix: the aliases are answered from InterfaceLib's table,
+           with what each exports under its own name merged in (DragLib's
+           and ThreadsLib's calls, PrivateInterfaceLib's accessors: `library:`
+           on a lowmem entry). All of them before InterfaceLib's connection
+           is made: its hash is a copy of the table, made once, and an
+           application imports InterfaceLib before DragLib. */
+        static bool merged = false;
+        if(!merged)
         {
-            /* MacPhoenix: answered from InterfaceLib's table, with what the
-               library exports under its own name merged in (PrivateInterface-
-               Lib's accessors: `library:` on a lowmem entry). */
-            static std::set<std::string> merged;
-            if(merged.insert(name).second)
+            merged = true;
+            for(const char *alias : interfacelib_aliases68k)
             {
-                addAlsoExports(builtins68k, name);
+                addAlsoExports(builtins68k, alias);
                 auto& into = builtins68k["InterfaceLib"];
-                for(const map_entry_t& e : builtins68k[name])
+                for(const map_entry_t& e : builtins68k[alias])
                     if(std::none_of(into.begin(), into.end(),
                                     [&](const map_entry_t& i) { return !strcmp(i.symbol_name, e.symbol_name); }))
                         into.push_back(e);
             }
-            name = "InterfaceLib";
         }
+        if(std::find(std::begin(interfacelib_aliases68k), std::end(interfacelib_aliases68k), name)
+           != std::end(interfacelib_aliases68k))
+            name = "InterfaceLib";
         /* MPW's CFM-68K programs import StdCLib as two libraries (the
            Enabler's): NuStdCLib (string, ctype, printf, time, ...) and
            NuIntEnv (stdio's files, errno, exit, signal, PL strings). One
@@ -514,12 +615,31 @@ ConnectionID builtinlibs::getBuiltinLib(ConstStr255Param libname, OSType arch)
         return nullptr;
     else
     {
-        /* An application's own StdCLib: a connection per application. */
+        /* An application's own StdCLib: its state starts afresh. */
         if(name == "StdCLib")
             clib::stdclibStart();
-        ConnectionID cid = ROMlib_new_connection(1);
-        cid->lihp = ROMlib_build_pef_hash(it->second.data(), it->second.size());
-        cid->ref_count = 1;
+        /* One connection per library, as for 68k: its exports never move.
+           One per request built the whole export table again in the System
+           heap each time; CodeWarrior IDE's plug-ins, thirty-odd fragments
+           importing InterfaceLib, ran it out, and the next import searched
+           a connection without exports. */
+        static std::unordered_map<std::string, std::pair<ConnectionID, size_t>> connections;
+        auto& [cid, size] = connections[name];
+        if(!cid || size != it->second.size())
+        {
+            PEFLoaderInfoHeader *lihp = ROMlib_build_pef_hash(it->second.data(), it->second.size());
+            if(!lihp)
+                return nullptr;
+            if(!cid)
+                cid = ROMlib_new_connection(1);
+            if(!cid)
+                return nullptr;
+            if(cid->lihp)
+                DisposePtr((Ptr)(PEFLoaderInfoHeader *)cid->lihp);
+            cid->lihp = lihp;
+            cid->ref_count = 1;
+            size = it->second.size();
+        }
         return cid;
     }
 }

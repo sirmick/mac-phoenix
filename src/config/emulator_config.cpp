@@ -5,6 +5,7 @@
 #include "emulator_config.h"
 #include "json_utils.h"
 #include "bridge_paths.h"
+#include <algorithm>
 #include <cstring>
 #include <cstdlib>
 #include <cstdio>
@@ -259,8 +260,10 @@ void EmulatorConfig::merge_json(const QJsonObject& j) {
         }
     }
     if (j.contains("depth")) {
+        // asked for, as --depth is: Executor then starts at it rather than
+        // at its System's own depth (the web UI doesn't send "depth" itself)
         int d = json_utils::get_int(j, "depth");
-        if (valid_depth(d)) screen_depth = (uint32_t)d;
+        if (valid_depth(d)) { screen_depth = (uint32_t)d; screen_depth_set = true; }
     }
     if (j.contains("audio")) audio_enabled = json_utils::get_bool(j, "audio");
     if (j.contains("rom")) {
@@ -469,8 +472,9 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             printf("  --rom PATH                 ROM file (or positional arg)\n");
             printf("  --ram MB                   RAM size in megabytes (default: 64)\n");
             printf("  --screen WxH               Display resolution (default: 640x480)\n");
-            printf("  --depth N                  68k: colour depth the screen starts in, bits\n");
-            printf("                             (1 2 4 8 16 32; default 32; 8 for 256-colour games)\n");
+            printf("  --depth N                  68k and Executor: colour depth the screen starts in, bits\n");
+            printf("                             (1 2 4 8 16 32; default 32, Executor 32 on 8.x and 8 on 7.x;\n");
+            printf("                             8 for 256-colour games)\n");
             printf("  --disk PATH                Disk image (repeatable)\n");
             printf("  --cdrom PATH               CD-ROM image (repeatable)\n");
             printf("  --extfs PATH               Shared folder (repeatable; the ROM machines mount only the first)\n");
@@ -486,10 +490,16 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             printf("  --executor-debug OPTS      Executor's own debug options, comma-separated: memcheck (heap\n");
             printf("                             consistency checks at every Memory Manager call, slow), allocs\n");
             printf("                             (allocations >= 4K and the code that asked), pcsample (where\n");
-            printf("                             PowerPC code spends its time, every 5 s), fslog,\n");
+            printf("                             PowerPC code spends its time, every 5 s), hidpi (the text\n");
+            printf("                             --executor-scale redraws, and what became of it), fslog,\n");
             printf("                             trace, trapfailure, unimplemented, unexpected, errno, sound, all\n");
             printf("  --watch ADDR[:LEN]         Report every write to guest memory ADDR (hex; LEN 1-16, default 4):\n");
             printf("                             old/new value, 68k PC and registers, last traps, host stack (Executor)\n");
+            printf("  --executor-ppc-break SPEC  PowerPC breakpoint (Executor; repeatable; docs/executor/PPCTrace.md):\n");
+            printf("                             WHERE[@N][*HITS][#MEM], WHERE $ADDR, FRAGMENT[:SECT]+OFF (hex) or\n");
+            printf("                             !Routine (Executor's); on a hit registers, back chain, stack, MEM\n");
+            printf("                             (rN+OFF:LEN, $ADDR:LEN, ^ reads through), then N instructions traced;\n");
+            printf("                             HITS hits reported (default 1, 0 all). \"on\": none yet, for the API\n");
             printf("  --executor-logtraps-nesting N  ... and calls nested N deep in Toolbox callbacks (default 1)\n");
             printf("  --executor-logtraps-filter LIST  ... only calls whose names match these comma-separated\n");
             printf("                             wildcards (\"Gestalt,HideWindow,PB*\"): less slowdown;\n");
@@ -498,6 +508,8 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             printf("  --[no-]executor-ot         Executor answers Open Transport (default: on)\n");
             printf("  --executor-ppc             Executor runs fat applications' PowerPC code (PowerPC-only\n");
             printf("                             applications always run it; default: off)\n");
+            printf("  --executor-scale X         Executor's display scale (2: text drawn from outlines at\n");
+            printf("                             twice the size; 1x for programs; needs -DEXECUTOR_SKIA=ON)\n");
             printf("\nCPU:\n");
             printf("  --backend NAME             uae | kpx | executor\n");
             printf("                             (default: uae)\n");
@@ -637,10 +649,10 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             argv[i] = nullptr; argv[++i] = nullptr; continue;
         }
 
-        // --depth <bits>  (the 68k Mac's starting colour depth)
+        // --depth <bits>  (the starting colour depth: 68k Macs, Executor)
         if (strcmp(argv[i], "--depth") == 0 && i+1 < argc) {
             int d = atoi(argv[i+1]);
-            if (valid_depth(d)) config.screen_depth = (uint32_t)d;
+            if (valid_depth(d)) { config.screen_depth = (uint32_t)d; config.screen_depth_set = true; }
             else fprintf(stderr, "[Config] --depth %s: not 1, 2, 4, 8, 16 or 32\n", argv[i+1]);
             argv[i] = nullptr; argv[++i] = nullptr; continue;
         }
@@ -666,6 +678,9 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
         if (strcmp(argv[i], "--executor-logtraps-filter") == 0 && i + 1 < argc) {
             config.executor_logtraps_filter = argv[i + 1]; argv[i] = argv[i + 1] = nullptr; i++; continue;
         }
+        if (strcmp(argv[i], "--executor-ppc-break") == 0 && i + 1 < argc) {
+            config.executor_ppc_break.push_back(argv[i + 1]); argv[i] = argv[i + 1] = nullptr; i++; continue;
+        }
         if (strcmp(argv[i], "--watch") == 0 && i + 1 < argc) {
             config.watch = argv[i + 1]; argv[i] = argv[i + 1] = nullptr; i++; continue;
         }
@@ -680,6 +695,10 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
         }
         if (strcmp(argv[i], "--executor-ppc") == 0) {
             config.executor_ppc = true; argv[i] = nullptr; continue;
+        }
+        if (strcmp(argv[i], "--executor-scale") == 0 && i + 1 < argc) {
+            config.executor_scale = std::clamp(atof(argv[i + 1]), 1.0, 4.0);
+            argv[i] = argv[i + 1] = nullptr; i++; continue;
         }
         if (strcmp(argv[i], "--executor-writable-images") == 0) {
             config.executor_writable_images = true; argv[i] = nullptr; continue;

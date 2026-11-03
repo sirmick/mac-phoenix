@@ -29,6 +29,9 @@
 #include <base/emustubs.h>
 #include <rsys/component.h>
 #include <Components.h>
+#include <CodeFragments.h>
+#include <Gestalt.h>
+#include <base/cpu.h>
 #include <base/traps.impl.h>
 
 #include <algorithm>
@@ -60,6 +63,7 @@ struct Comp
     FSSpec file = {};
     uint32_t code_type = 0;
     int16_t code_id = 0;
+    bool ppc = false;       /* the code is a PowerPC fragment */
     Handle name = nullptr, info = nullptr, icon = nullptr;
     int32_t refcon = 0;
     uint32_t version = 0;
@@ -155,11 +159,17 @@ int32_t call_entry(Comp *c, Inst *in, uint32_t params)
     uint32_t saved_a5 = EM_A5;
     if(in && in->a5)
         EM_A5 = in->a5;
-    PUSHUL(0); /* result */
-    PUSHUL(params);
-    PUSHUL(in ? in->storage : 0);
-    execute68K(c->entry);
-    int32_t result = POPUL();
+    int32_t result;
+    if(c->ppc)
+        result = callPPC(c->entry, { params, in ? in->storage : 0 });
+    else
+    {
+        PUSHUL(0); /* result */
+        PUSHUL(params);
+        PUSHUL(in ? in->storage : 0);
+        execute68K(c->entry);
+        result = POPUL();
+    }
     EM_A5 = saved_a5;
     return result;
 }
@@ -211,6 +221,33 @@ bool load_code(Comp *c)
     if(!h || !*h)
         return false;
     c->code = h;
+    if(c->ppc)
+    {
+        /* MacPhoenix: a PowerPC component: its fragment's main, called as
+           ComponentRoutine (the parameters and the storage, a long back) */
+        GUEST<ConnectionID> conn;
+        GUEST<Ptr> main;
+        Str255 errname;
+        OSErr err;
+        {
+            TheZoneGuard guard(LM(SysZone));
+            err = GetMemFragment(*h, GetHandleSize(h), (StringPtr) "", kLoadNewCopy, &conn, &main,
+                                 errname);
+        }
+        if(err != noErr || !main)
+        {
+            fprintf(stderr, "[Executor] component '%.4s' '%.4s': its PowerPC code doesn't prepare (%d)\n",
+                    (char *)&c->type, (char *)&c->subtype, err);
+            return false;
+        }
+        /* main is usually a routine descriptor (68k callers enter it
+           through Mixed Mode, as a 68k Component Manager does); else a
+           transition vector, called directly */
+        c->entry = ptr_to_longint((Ptr)main);
+        if(READUW(c->entry) == 0xAAFE /* _MixedModeMagic */)
+            c->ppc = false;
+        return true;
+    }
     c->entry = US_TO_SYN68K(*h);
     return true;
 }
@@ -322,7 +359,7 @@ void dispose(Handle h);
 
 /* Register one 'thng' (ComponentResource, maybe extended) of the current
    resource file, which is file. */
-Comp *register_thng(uint32_t tr, int16_t global, const FSSpec &file)
+Comp *register_thng(uint32_t tr, int16_t global, const FSSpec &file, bool allow_ppc = false)
 {
     auto c = std::make_unique<Comp>();
     c->type = rd32(tr);
@@ -364,18 +401,28 @@ Comp *register_thng(uint32_t tr, int16_t global, const FSSpec &file)
         auto_version = reg_flags & componentDoAutoVersion;
         if((reg_flags & componentHasMultiplePlatforms) && size >= 58)
         {
+            /* MacPhoenix: the 68K platform's code; else, on a PowerPC Mac
+               (Gestalt 'sysa': an 8.x System), the PowerPC platform's, a
+               PEF container (8.6's AppleScript has only that) */
             int32_t n = rd32(tr + 54);
-            bool found = false;
+            GUEST<LONGINT> arch = 0;
+            Gestalt(gestaltSysArchitecture, &arch);
+            int found = 0;
             for(int32_t i = 0; i < n && 58 + (i + 1) * 12 <= size; i++)
             {
                 uint32_t p = tr + 58 + i * 12;
-                if(rd16(p + 10) == 1) /* 68K */
+                int16_t platform = rd16(p + 10);
+                bool m68k = platform == 1 /* 68K */;
+                bool ppc = platform == 2 /* PowerPC */ && arch == gestaltPowerPC && allow_ppc;
+                if(m68k || (ppc && found != 1))
                 {
                     c->flags = rd32(p);
                     c->code_type = rd32(p + 4);
                     c->code_id = rd16(p + 8);
-                    found = true;
-                    break;
+                    c->ppc = ppc;
+                    found = m68k ? 1 : 2;
+                    if(m68k)
+                        break;
                 }
             }
             if(!found)
@@ -419,7 +466,7 @@ int32_t register_file(INTEGER refnum, int16_t global)
     for(Handle h : things)
     {
         HLock(h);
-        if(register_thng(US_TO_SYN68K(*h), global, file))
+        if(register_thng(US_TO_SYN68K(*h), global, file, refnum != LM(SysMap)))
             count++;
         HUnlock(h);
     }
@@ -965,6 +1012,30 @@ syn68k_addr_t call_component_function(syn68k_addr_t)
     return func;
 }
 
+/* MacPhoenix: CallComponentFunction[WithStorage] for PowerPC callers
+   (Components.yaml): the block's arguments onto the 68k stack as the
+   68k call lays them (the first argument highest; the storage above
+   them), room for the result, and the routine entered there: a routine
+   descriptor takes them through Mixed Mode. */
+static ComponentResult call_function(uint32_t storage, bool with_storage, ComponentParameters *params,
+                                     UniversalProcPtr func)
+{
+    if(!params || !func)
+        return badComponentSelector;
+    uint8_t size = params->paramSize;
+    uint32_t saved_sp = EM_A7;
+    PUSHUL(0); /* result */
+    if(with_storage)
+        PUSHUL(storage);
+    EM_A7 -= size;
+    memmove(SYN68K_TO_US(EM_A7), (uint8_t *)params + 4, size);
+    execute68K(ptr_to_longint((Ptr)func));
+    ComponentResult r = POPUL();
+    EM_A7 = saved_sp;
+    return r;
+}
+
+
 traps::Entrypoint call_component_ep("CallComponent");
 traps::Entrypoint call_component_function_ep("CallComponentFunction");
 
@@ -982,4 +1053,15 @@ void Executor::traps::registerComponentFunction(const char *component, int16_t w
                                                 std::function<int32_t (syn68k_addr_t)> code)
 {
     component_routines()[component][what] = ComponentRoutine{ name, std::move(code) };
+}
+
+ComponentResult Executor::C_CallComponentFunction(ComponentParameters *params, UniversalProcPtr func)
+{
+    return call_function(0, false, params, func);
+}
+
+ComponentResult Executor::C_CallComponentFunctionWithStorage(Handle storage, ComponentParameters *params,
+                                                             UniversalProcPtr func)
+{
+    return call_function(ptr_to_longint(storage), true, params, func);
 }

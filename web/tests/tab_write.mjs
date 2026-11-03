@@ -1,7 +1,8 @@
 // Writable disk images in the tab (overlay.js): a folder the Finder makes
-// on an uploaded image survives a reload, is in the image downloaded from
-// the page (read back with hfsutils), and Revert takes it away; the
-// uploaded image itself is never written.
+// on a library disk survives a reload (its changes kept by the server:
+// sync.js, Store), is in the image downloaded from the page (read back
+// with hfsutils), and Revert takes it away; the image itself is never
+// written.
 //
 //   node web/tests/tab_write.mjs DIR IMAGE
 //
@@ -11,7 +12,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { open, firstFrame, request, until } from './harness.mjs';
+import { open, firstFrame, request, until, pickSystem, diskButton } from './harness.mjs';
 
 const [dir, image] = process.argv.slice(2);
 if (!image || !fs.existsSync(image)) {
@@ -36,8 +37,14 @@ try {
     }
 }
 const before = fs.statSync(image).mtimeMs;
+const name = path.basename(image);
+const lib = path.join(scratch, 'library');
+fs.mkdirSync(lib);
+fs.symlinkSync(path.resolve(image), path.join(lib, name));
+fs.writeFileSync(path.join(lib, `${name}.json`), JSON.stringify({ title: name }));
 
-const { page, close } = await open(dir, { log: false });
+const { page, close } = await open(dir, { log: false, images: lib, include: [name],
+                                          query: `disk=disks/${encodeURIComponent(name)}&system=${encodeURIComponent(name)}` });
 page.on('dialog', (d) => d.accept());
 let failed = 0;
 const check = (ok, what) => {
@@ -60,14 +67,10 @@ async function openDisk() {
 }
 async function download(to) {
     const dl = page.waitForEvent('download');
-    await page.locator('#files a[title^="Download"]').first().click();
+    await diskButton(page, path.basename(image), 'download');
     fs.copyFileSync(await (await dl).path(), to);
 }
 
-await firstFrame(page);
-await page.setInputFiles('#add', image);
-await firstFrame(page);
-await page.selectOption('#system', path.basename(image));
 await firstFrame(page, 60000);
 check(await finder(), 'the Finder is up');
 const disk = await openDisk();
@@ -75,7 +78,7 @@ check(!!disk, "the image's disk window");
 await page.keyboard.press('Meta+n');                   // New Folder there
 await page.waitForTimeout(1200);
 await page.keyboard.press('Enter');
-await page.waitForTimeout(3500);                       // the overlay's index saved
+await page.waitForTimeout(3500);                       // the changes on the server
 
 await page.reload();
 await firstFrame(page, 60000);
@@ -84,12 +87,12 @@ await download(path.join(scratch, 'changed.img'));
 check(hls(path.join(scratch, 'changed.img')).includes('untitled folder'),
       'the downloaded image has the new folder');
 
-await page.locator('#files a[title^="Revert"]').first().click();
+await diskButton(page, path.basename(image), 'revert');
 await firstFrame(page, 60000);
 check(await finder(), 'the Finder after Revert');
 await download(path.join(scratch, 'reverted.img'));
 check(!hls(path.join(scratch, 'reverted.img')).includes('untitled folder'), 'Revert took it away');
-check(fs.statSync(image).mtimeMs === before, 'the uploaded image itself was never written');
+check(fs.statSync(image).mtimeMs === before, 'the image itself was never written');
 
 await close();
 fs.rmSync(scratch, { recursive: true, force: true });

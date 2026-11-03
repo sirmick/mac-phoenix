@@ -10,8 +10,11 @@ C++, as it does InterfaceLib and Open Transport: `src/executor/romlib/clib/`.
 ctest -R clib_executor             # CLibTest on Executor's libraries
 ctest -R clib_rom_ppc              # the same on Apple's (Mac OS 9.0.4, mame-ppc): the reference
 ctest -R clib_cfm68k               # CLibTest68K on Executor's (_executor) and Apple's NuStdCLib
+ctest -R devtest_                  # DevTest, the device table: Executor's and Apple's (9.0.4)
+ctest -R mpw_executor_86           # MPW Shell PowerPC on 8.6's System: its menus, redirection
 ctest -R guest_suite_ppc_executor  # the fat MacPhoenixSuite's PowerPC code (--executor-ppc)
 tools/mpw/mpw build tests/guest/clib   # CLibTest (MrC + PPCLink) and CLibTest68K (SC + ILink)
+tools/mpw/mpw build tests/guest/devtest  # DevTest; copy build/DevTest.bin next to the source
 ```
 
 ## What is there
@@ -51,6 +54,43 @@ test takes either on 68k, and Executor's gives Mac OS 9's on both.
 StdCLib's state (streams, `atexit`, signal handlers, `errno`) starts afresh
 for each application that imports it and its streams are flushed and closed
 when it ends (`ROMlib_cfm_terminate`).
+
+## The device table
+
+The low-level calls (`open`, `read`, `write`, `lseek`, `ioctl`, `close`,
+`faccess`, `unlink`, `rename`) and stdio above them go through StdCLib's
+device table, which a program can read and extend (`_getDevHandler`,
+`_addDevHandler`); MPW Shell installs its own devices there for its
+windows and pipes. `clib/stdio.cpp` keeps it as Apple's does on Mac OS 9.0.4
+(DevTest, and DevProbe's logs of each handler call before it):
+
+- Five slots: 0 `FSYS` (files, through the File Manager), 1 `CONS` (the
+  console), 2 `SYST` (`Dev:Null`, `Dev:StdIn`/`StdOut`/`StdErr`), 3 and 4
+  free. `_addDevHandler(slot, name, faccess, close, read, write, ioctl)`
+  returns the slot, -1 past 4; `_getDevHandler` 0, or -1 for an empty slot.
+  The handlers are Executor's own PowerPC or CFM-68K routines
+  (`builtinlibs`), so a program can wrap them and call the originals.
+- A name is offered to the devices from slot 4 down; `faccess` answers -1
+  (not mine), 0, an errno or `0x4000 | OSErr`. `open` and `unlink` turn
+  the OSErr into an errno (fnfErr ENOENT, nsvErr ENXIO: `dev:test`).
+  After a 0, the descriptor's device is set if the handler left it 0.
+- The descriptor a handler gets (20 bytes): flags (the `open` flags with
+  the access mode plus 1), an error word, the device entry, the device's
+  own word, the count left and the buffer; read and write move the last
+  two on. A handler's nonzero result goes to `errno` as it is and the call
+  returns -1.
+- `lseek` is `FIOLSEEK` ({whence, offset}, the new position in the second
+  word), `fcntl(F_DUPFD)` is `FIODUPFD` to the device, then the descriptor
+  copied. `FSYS` answers `FIOINTERACTIVE`, `FIOBUFSIZE` and `FIOFNAME`
+  with EINVAL (stdio asks the first two when it sets up a buffer),
+  `FIOREFNUM` with the refnum, `FIOSETEOF` with the argument as the EOF.
+  Its device word is a handle to {references, refnum, ...}; MPW reads the
+  refnum at +2.
+- `dev:stdout` and the others are dups of descriptors 0-2; the standard
+  streams open `dev:console` at their first use.
+- `MakeResolvedPath(vol, dir, path, resolveLeaf, buffer, ...)` puts the
+  path in buffer as a Pascal string, also when it fails; MPW Shell finds
+  its commands with it (`{Commands}`).
 
 ## Behaviour: Apple's, checked
 
@@ -98,8 +138,17 @@ approximation where Executor's gives `?`.
 - NaN codes for other invalid operations (pow 37, trig 33, remainder 9)
   are SANE's numbers but not checked against Apple's.
 - The native locale changes nothing but `setlocale`'s answer.
+- Not matched (DevProbe): a failing `ioctl` on descriptor 0 leaves ENOENT
+  in `errno` on Apple's (the console open's fnfErr kept in the
+  descriptor), EINVAL on Executor's.
 - `_RTInit`, `_RTExit`, `_DoExitProcs` and stdio's other internals not in
   the survey answer 0 and are logged (`[unimplemented] PowerPC NAME`).
+- MPLibrary (Multiprocessing Services): Apple's needs the nanokernel
+  (supervisor instructions, imports Executor doesn't answer), so
+  `GetSharedLibrary` declines it (`fragLibNotFound`) and weak imports of it
+  go nil, as programs that test `MPLibraryIsLoaded` expect (REALbasic's
+  plugins: GameBox Classic). Later: Executor's own, one processor
+  (`MPProcessors` 1, tasks run cooperatively), declared in YAML like OT's.
 
 ## On the way
 
@@ -109,6 +158,11 @@ approximation where Executor's gives `?`.
 - An exception out of a system call (ExitToShell's, from `exit`) can't
   unwind through the recompiler's native frames: `PowerCore` stops at the
   exit cell and rethrows from C++.
+- A full path on a volume that isn't mounted gave the default volume's
+  answer (fnfErr) where a Mac says nsvErr (hfsXbar.cpp `getVolume`).
+- MPW Shell PPC on 8.6: a routine called through its transition vector
+  gets the vector in r12 (`callPPC`, Mixed Mode), a call into a patched OS
+  trap's table entry the trap word in D1, `fputs` returns the count.
 - PowerPC imports nothing exports are logged and answer 0 instead of
   aborting; unresolved data imports get zeroed storage, not a routine.
 - `CallComponentUPP` for PowerPC (AppleScriptLib's component calls); the
@@ -125,7 +179,7 @@ approximation where Executor's gives `?`.
 
 From the MPW C headers' declarations and constants (stdio.h's `FILE`,
 fenv.h, fp.h's `decimal`, ...), the C standard, the Apple Numerics Manual,
-and CLibTest's answers on the Power Mac (and CLibTest68K's on the Quadra
+and CLibTest's and DevTest's answers on the Power Mac (and CLibTest68K's on the Quadra
 with the Enabler). No Apple library code was read. Which routines are in
 NuStdCLib and which in NuIntEnv came from the export tables (names only) of
 MPW's StdCLib stub library; the CFM-68K conventions from SC's code for our

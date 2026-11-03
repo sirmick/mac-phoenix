@@ -142,7 +142,7 @@ void Executor::canonical_from_bogo_color(uint32_t index,
                 if(pixel_out)
                     *pixel_out = CW_RAW(index);
                 if(rgb_out)
-                    (rgb_spec->pixel_to_rgbcolor)(rgb_spec, index, rgb_out);
+                    (rgb_spec->pixel_to_rgbcolor)(rgb_spec, CW_RAW(index), rgb_out);
                 return;
             }
         }
@@ -154,14 +154,17 @@ void Executor::canonical_from_bogo_color(uint32_t index,
                 if(pixel_out)
                     *pixel_out = CL_RAW(index);
                 if(rgb_out)
-                    (rgb_spec->pixel_to_rgbcolor)(rgb_spec, index, rgb_out);
+                    (rgb_spec->pixel_to_rgbcolor)(rgb_spec, CL_RAW(index), rgb_out);
                 return;
             }
         }
         else
             gui_fatal("unknown bpp");
 
-        (mac_rgb_spec->pixel_to_rgbcolor)(mac_rgb_spec, index, &t_color);
+        /* MacPhoenix: the port's colour is a host-order pixel (Color2Index);
+           the spec reads raw ones (#dddddd came out #dddd00) */
+        (mac_rgb_spec->pixel_to_rgbcolor)(mac_rgb_spec, rgb_spec->bpp == 16 ? CW_RAW(index) : CL_RAW(index),
+                                          &t_color);
         if(pixel_out)
             *pixel_out = (rgb_spec->rgbcolor_to_pixel)(rgb_spec, &t_color, true);
         if(rgb_out)
@@ -189,7 +192,14 @@ void Executor::ROMlib_fg_bk(uint32_t *fg_pixel_out, uint32_t *bk_pixel_out,
     current_port = qdGlobals().thePort;
     if(CGrafPort_p(current_port))
     {
-        if(indirect_p)
+        /* MacPhoenix: a direct destination (16/32 bits) whose depth isn't
+           the port's: fgColor/bkColor are pixel values of the port's own
+           device (index 255 for black on an 8-bit screen), so the RGB
+           colours, as for an indexed one (the screen copied into a 32-bit
+           GWorld with the screen's port current came out as indices:
+           tests/guest/difftest appr, frames) */
+        int port_depth = PIXMAP_PIXEL_SIZE(CPORT_PIXMAP(current_port));
+        if(indirect_p || port_depth != (rgb_spec ? rgb_spec->bpp : port_depth))
         {
             fg_rgb = CPORT_RGB_FG_COLOR(current_port);
             fg_pixel = pixel_from_rgb(&fg_rgb, rgb_spec);
@@ -455,10 +465,18 @@ void Executor::convert_pixmap(const PixMap *src, PixMap *dst,
             if(src_bpp != cached_src_bpp || dst_bpp != cached_dst_bpp
                || src_seed_x != cached_src_seed_x || dst_seed_x != cached_dst_seed_x)
             {
+                /* each pixel value's colour, from the entry with that
+                   value: a 'cicn' table may list only the values it uses
+                   (8.6's note icon: 0-8, then black as 15) */
+                int max_mapping_elt = (1 << src_bpp) - 1;
+                CTabHandle mapping = (CTabHandle)NewHandleClear(CTAB_STORAGE_FOR_SIZE(max_mapping_elt));
+                CTAB_SIZE(mapping) = max_mapping_elt;
+                sort_color_table(mapping, src_table);
                 conversion_func
                     = depthconv_make_ind_to_rgb_table(depth_table_space, src_bpp,
-                                                      nullptr, CTAB_TABLE(src_table),
+                                                      nullptr, CTAB_TABLE(mapping),
                                                       dst_rgb_spec);
+                DisposeHandle((Handle)mapping);
             }
             break;
         }

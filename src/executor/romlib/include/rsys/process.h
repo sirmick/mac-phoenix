@@ -6,6 +6,7 @@
 #include <ProcessMgr.h>
 #include <EventMgr.h>
 #include <functional>
+#include <string>
 #include <vector>
 
 namespace Executor
@@ -31,6 +32,10 @@ extern void process_reset_heap(THz pm_zone);
    HeapEnd, ApplLimit, CurStackBase, CurrentA5 and MemTop.  The heap is
    left as TheZone, so the application's resource map lands in it. */
 extern void process_layout_partition(ConstStringPtr app_name);
+
+/* Whether guest address addr lies in the partition of a process other
+   than the current one (a parked process's). */
+extern bool process_in_other_partition(uint32_t addr);
 
 /* MacPhoenix Process Manager (process.cpp). */
 
@@ -74,6 +79,9 @@ struct ROMlib_process_entry
     bool current;
 };
 extern std::vector<ROMlib_process_entry> ROMlib_process_entries();
+/* The front process's name as of its last event call (any thread); empty
+   before the first application's. */
+extern std::string ROMlib_front_process_name();
 /* The process whose signature this is; false if none. */
 extern bool ROMlib_process_with_signature(OSType sig, ProcessSerialNumber *psn);
 
@@ -126,6 +134,10 @@ extern bool ROMlib_process_os_event(EventRecord *evt, bool remove);
 extern void ROMlib_desktop_layer_invalidate(RgnHandle rgn);
 /* The desktop layer's visRgn (Finder's desktop window shares it). */
 extern bool ROMlib_desktop_layer_region_p(RgnHandle rgn);
+/* The desktop layer's visRgn, or null before TakeDesktopLayer: the desktop
+   less the windows in front, and inside the Finder's BeginUpdate (its
+   desktop window shares the region) only what is being updated. */
+extern RgnHandle ROMlib_desktop_layer_vis_region();
 /* Quit All (Finder's Restart and Shut Down, refcon 'rest' or 'shut'), and
    the applications' answers to its Quit events. */
 extern void ROMlib_process_quit_all(int32_t refcon);

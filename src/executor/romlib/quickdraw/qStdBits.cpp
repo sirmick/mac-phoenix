@@ -20,6 +20,7 @@
 #include <mman/mman.h>
 #include <commandline/flags.h>
 #include <mman/tempalloc.h>
+#include <hidpi/hidpi.h>
 
 using namespace Executor;
 
@@ -50,6 +51,7 @@ dy_zero_p(const Rect *srcr, const Rect *dstr,
 void Executor::canonicalize_bogo_map_cleanup(const BitMap *bogo_map,
                                              struct cleanup_info *info)
 {
+    ROMlib_unlock_handle_base(&info->base_lock);
     switch(info->cleanup_type)
     {
         case Executor::cleanup_info::cleanup_state:
@@ -84,6 +86,8 @@ void Executor::canonicalize_bogo_map(const BitMap *bogo_map, PixMap **canonical_
 {
     int high_bits = ((unsigned short)bogo_map->rowBytes) >> 14;
     int low_bit = ((unsigned short)bogo_map->rowBytes) & 1;
+
+    info->base_lock.h = nullptr;
 
     switch(high_bits)
     {
@@ -155,7 +159,12 @@ void Executor::canonicalize_bogo_map(const BitMap *bogo_map, PixMap **canonical_
                 info->data.gw_info = gw_info;
             }
             else
+            {
                 info->cleanup_type = Executor::cleanup_info::cleanup_none;
+                /* MacPhoenix: a copy of a GWorld's pixmap whose pixels
+                   are locked now, its baseAddr still their handle */
+                ROMlib_lock_handle_base(nullptr, (PixMap *)bogo_map, &info->base_lock);
+            }
 
             *canonical_addr = (PixMap *)bogo_map;
             break;
@@ -190,6 +199,10 @@ void Executor::canonicalize_bogo_map(const BitMap *bogo_map, PixMap **canonical_
 
                 /* lock the pixmap handle */
                 HSetState((Handle)pixmap_handle, info->h_state | LOCKBIT);
+
+                /* MacPhoenix: a port's pixmap whose baseAddr is a handle
+                   (a window opened while a GWorld's device was current) */
+                ROMlib_lock_handle_base(pixmap_handle, *pixmap_handle, &info->base_lock);
 
                 break;
             }
@@ -433,7 +446,10 @@ void Executor::ROMlib_bogo_stdbits(BitMap *src_bogo_map, BitMap *dst_bogo_map,
     if(PORT_PEN_VIS(qdGlobals().thePort) < 0)
         return;
 
-    ROMlib_real_copy_bits(src, dst, src_rect, dst_rect, mode, mask);
+    /* MacPhoenix: the high-resolution runs the source shows go with its
+       pixels (hidpi.h, GWorld shadows) */
+    hidpi::copy_bits(src, dst, src_rect, dst_rect, mode, mask,
+                     [&] { ROMlib_real_copy_bits(src, dst, src_rect, dst_rect, mode, mask); });
 
     canonicalize_bogo_map_cleanup(src_bogo_map, &cleanup_info[0]);
     canonicalize_bogo_map_cleanup(dst_bogo_map, &cleanup_info[1]);
@@ -487,7 +503,10 @@ static void StdBitsPicSaveFlag(const BitMap *src_bogo_map,
     if(PORT_PEN_VIS(qdGlobals().thePort) < 0)
         return;
 
-    ROMlib_real_copy_bits(src, dst, src_rect, dst_rect, mode, mask);
+    /* MacPhoenix: the high-resolution runs the source shows go with its
+       pixels (hidpi.h, GWorld shadows) */
+    hidpi::copy_bits(src, dst, src_rect, dst_rect, mode, mask,
+                     [&] { ROMlib_real_copy_bits(src, dst, src_rect, dst_rect, mode, mask); });
 
     canonicalize_bogo_map_cleanup(src_bogo_map, &cleanup_info[0]);
     canonicalize_bogo_map_cleanup(dst_bogo_map, &cleanup_info[1]);

@@ -50,6 +50,9 @@ extern void ROMlib_installhandle(Handle sh, Handle dh);
 
 /* Declare functions in qHooks.c. */
 extern void ROMlib_CALLTEXT(INTEGER bc, Ptr bufp, Point num, Point den);
+/* each string ROMlib_CALLTEXT draws (DrawText, DrawString, DrawChar), for
+   a front end that reads the screen's text (the tab's tests); null: none */
+extern void (*ROMlib_text_drawn)(const char *text, int len);
 extern void ROMlib_CALLLINE(Point p);
 extern void ROMlib_CALLRECT(GrafVerb v, const Rect *rp);
 extern void ROMlib_CALLOVAL(GrafVerb v, const Rect *rp);

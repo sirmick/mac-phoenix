@@ -34,6 +34,7 @@
 #include <rsys/segment.h>
 #include <file/file.h>
 #include <rsys/executor.h>
+#include <hidpi/hidpi.h>
 #include <prefs/options.h>
 #include <rsys/launch.h>
 #include <res/resource.h>
@@ -204,6 +205,11 @@ Executor may die without warning because of this mismatch",
             system_error("That application has a compressed CODE 0.  "
                          "It will not run under this version of Executor.",
                          0, "OK", nullptr, nullptr, nullptr, nullptr, nullptr);
+            break;
+
+        case launch_cfm_failed:
+            system_error(ROMlib_launch_failure_message.c_str(), 0, "OK",
+                         nullptr, nullptr, nullptr, nullptr, nullptr);
             break;
 
         default:
@@ -458,29 +464,11 @@ WindowPtr Executor::C_NewWindow(void* window_storage, const Rect *bounds,
     if(!window_storage)
     {
         allocated_p = 1;
-        /* Hack for Dark Castle Demo.  They call NewWindow and expect us to
-	 create the storage.  Immediately after calling NewWindow they set
-	 the windowKind field to dialogKind.  Later they call UpdateDialog
-	 on this window and we die a horrible death since we try to refer
-	 to a field that isn't present.  I don't know how they get away with
-	 it on the Mac, but I doubt that this particular hack will hurt us
-	 elsewhere.  At some point we should find out why it works on the
-	 Mac and then get rid of this evil hack.  ctm 97/06/01 */
-        {
-            int size;
-
-#define DARK_CASTLE_HACK
-#if defined(DARK_CASTLE_HACK)
-            // FIXME: #warning DARK_CASTLE_HACK
-            if(strncmp((char *)title + 1, "Modal", 5) == 0)
-                size = sizeof(DialogRecord);
-            else
-                size = sizeof *w;
-            w = (WindowPeek)_NewPtr_flags(size, false, true);
-#else
-            w = (WindowPeek)NewPtr(sizeof *w);
-#endif
-        }
+        /* A WindowRecord, whatever the title: the Quadra gives 156 bytes
+           for "Modal" too (upstream's Dark Castle Demo hack allocated a
+           DialogRecord for those; UpdateDialog copes with the demo's
+           window instead). */
+        w = (WindowPeek)_NewPtr_flags(sizeof *w, false, true);
     }
     else
         w = (WindowPeek)window_storage;
@@ -616,6 +604,7 @@ void Executor::C_CloseWindow(WindowPtr w)
 
     /* notify the palette manager this window has been deleted */
     pm_window_closed(w);
+    hidpi::window_gone(w);
 
     /* notify the palette manager that the `FrontWindow ()' may have
        changed */

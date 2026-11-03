@@ -1,10 +1,11 @@
-// Shared by the tab tests: serve the wasm build's page, start headless
-// Chromium on it. Needs the playwright package (NODE_PATH; none: exit 77)
-// and CHROMIUM=PATH for a browser other than the one it expects.
-import http from 'node:http';
+// Shared by the tab tests: the wasm build's page on tools/standalone
+// (server.mjs: built here with go; none: exit 77), headless Chromium on
+// it. Needs the playwright package (NODE_PATH; none: exit 77) and
+// CHROMIUM=PATH for a browser other than the one it expects.
 import fs from 'node:fs';
-import path from 'node:path';
+import os from 'node:os';
 import { createRequire } from 'node:module';
+import { startServer } from './server.mjs';
 
 let chromium;
 try {
@@ -14,25 +15,62 @@ try {
     process.exit(77);
 }
 
-const types = { '.html': 'text/html', '.js': 'text/javascript', '.wasm': 'application/wasm' };
+// Headless Chromium (CHROMIUM=PATH, or playwright's own).
+// CHROMIUM_ARGS: extra switches, space-separated (--enable-logging=stderr, say);
+// args: the test's own.
+// Not chrome-headless-shell: it turns the wasm trapping (an access out of
+// bounds) into the renderer's SIGSEGV, "Target crashed", where Chromium
+// throws a RuntimeError the tab reports (M1.md #4). A CHROMIUM that is
+// playwright's shell runs the full Chromium of its revision when that is
+// installed; TAB_HEADLESS_SHELL=1 keeps the shell.
+function browser() {
+    const shell = process.env.CHROMIUM;
+    if (process.env.TAB_HEADLESS_SHELL)
+        return shell ? { executablePath: shell } : {};
+    if (!shell)
+        return { channel: 'chromium' };
+    const full = shell.replace(/chromium_headless_shell-(\d+)\/chrome-headless-shell-linux64\/chrome-headless-shell$/,
+                               'chromium-$1/chrome-linux64/chrome');
+    return { executablePath: full !== shell && fs.existsSync(full) ? full : shell };
+}
+// (Chromium's singleton socket goes in its TMPDIR, at most 107 bytes of
+// path: a build tree's is too long; the profile stays in ours.)
+export function launch({ args: own = [] } = {}) {
+    const args = [...own, ...(process.env.CHROMIUM_ARGS ? process.env.CHROMIUM_ARGS.split(' ') : [])];
+    const tmp = os.tmpdir().length < 60 ? os.tmpdir() : '/tmp';
+    return chromium.launch({ ...browser(), args, env: { ...process.env, TMPDIR: tmp } });
+}
 
-export async function open(dir, { log = true } = {}) {
-    const server = http.createServer((req, res) => {
-        const f = path.join(dir, decodeURIComponent(new URL(req.url, 'http://x').pathname));
-        fs.readFile(f, (err, data) => {
-            if (err) { res.writeHead(404); res.end(); return; }
-            res.writeHead(200, { 'Content-Type': types[path.extname(f)] || 'application/octet-stream' });
-            res.end(data);
-        });
-    }).listen(0);
-    const browser = await chromium.launch(process.env.CHROMIUM ? { executablePath: process.env.CHROMIUM } : {});
+// A page of browser (a context of its own: another browser, to the
+// server), its errors and the Worker's console shown; scale: its
+// devicePixelRatio.
+export async function newPage(browser, { log = true, tag = '', scale = 1 } = {}) {
+    const context = await browser.newContext({ viewport: { width: 800, height: 640 }, deviceScaleFactor: scale });
+    const page = await context.newPage();
+    page.on('pageerror', (e) => console.log(`[page error${tag}]`, e.stack || e.message));
+    if (log)
+        page.on('worker', (w) => w.on('console', (m) => console.log(`[worker${tag}]`, m.text())));
+    return page;
+}
+
+// The tab from dir on tools/standalone (images: its library; include:
+// the patterns offered), in a browser of its own at index.html?query: the
+// page, close(), and the server ({ url, data, ... }: server.mjs).
+export async function open(dir, { log = true, query = '', images, include } = {}) {
+    const server = await startServer(dir, { images, include });
+    if (!server) {
+        console.log('SKIP: no go');
+        process.exit(77);
+    }
+    const browser = await launch();
     const page = await browser.newPage({ viewport: { width: 800, height: 640 } });
-    page.on('pageerror', (e) => console.log('[page error]', e.message));
+    page.on('pageerror', (e) => console.log('[page error]', e.stack || e.message));
+    page.on('crash', () => console.log('[page crashed]'));
     if (log)
         page.on('worker', (w) => w.on('console', (m) => console.log('[worker]', m.text())));
-    await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
-    const close = async () => { await browser.close(); server.close(); };
-    return { page, close };
+    await page.goto(`${server.url}/index.html${query ? `?${query}` : ''}`);
+    const close = async () => { await browser.close(); server.stop(); };
+    return { page, close, server };
 }
 
 // Until the Worker has drawn a frame (after a start or restart).
@@ -51,4 +89,35 @@ export async function until(fn, ms, every = 250) {
             return v;
         await new Promise((r) => setTimeout(r, every));
     }
+}
+
+// The Disks panel (web/executor/disks.js): open, closed (it moves the
+// screen aside), the System picked in it.
+// (through Disks: a small viewport can leave the panel's buttons outside
+// it; web/tests/tab_disks.mjs clicks the real ones)
+export async function openDisks(page) {
+    await page.evaluate(() => Disks.open());
+}
+export async function closeDisks(page) {
+    await page.evaluate(() => Disks.close());
+}
+export async function pickSystem(page, value) {
+    await openDisks(page);
+    await page.selectOption('#system', value);
+    await closeDisks(page);
+}
+// A disk's button in the panel (revert, download, eject; the System's
+// disk too), clicked with the panel open, then closed.
+export async function diskButton(page, name, button) {
+    await openDisks(page);
+    await page.locator(`#disks-panel [data-name="${name}"] button.${button}`).evaluate((b) => b.click());
+    await closeDisks(page);
+}
+// What the panel says of a disk: its badges and explanation.
+export async function diskState(page, name) {
+    await openDisks(page);
+    const row = page.locator(`#disks-panel [data-name="${name}"]`);
+    const text = (await row.count()) ? (await row.first().locator('.file, .explain').allTextContents()).join(' ') : '';
+    await closeDisks(page);
+    return text;
 }

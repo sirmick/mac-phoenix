@@ -84,6 +84,9 @@ static Boolean xTrackBox(WindowPtr wp, Point pt, INTEGER part) /* IMIV-50 */
             }
         }
     }
+    /* MacPhoenix: released inside, the box is unhighlighted (IM I-288) */
+    if(inpart)
+        WINDCALL(wp, wDraw, part);
 
     return inpart;
 }

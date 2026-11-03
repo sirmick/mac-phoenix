@@ -10,6 +10,8 @@
 #include <Processes.h>
 #include <Fonts.h>
 #include <Collections.h>
+#include <Controls.h>
+#include <Menus.h>
 
 #define SET(x) memset(&(x), SENTINEL, sizeof(x))
 
@@ -186,17 +188,23 @@ static void shapes(void)
     if(SECTION("track"))
     {
         int t;
-        for(t = 0; t < 3; t++)
+        /* 0 1 scroll bars, 2 a slider, 3 4 progress bars (determinate,
+           indeterminate), 5 a vertical slider */
+        for(t = 0; t < 6; t++)
         {
+            static const ThemeTrackKind kinds[] = { kThemeScrollBar, kThemeScrollBar, kThemeSlider,
+                kThemeMediumProgressBar, kThemeMediumIndeterminateBar, kThemeSlider };
             ThemeTrackDrawInfo d;
             memset(&d, 0, sizeof d);
-            d.kind = t == 2 ? kThemeSlider : kThemeScrollBar;
-            if(t == 1) SetRect(&d.bounds, 0, 0, 200, 16); else if(t == 0) SetRect(&d.bounds, 0, 0, 16, 200); else SetRect(&d.bounds, 0, 0, 150, 18);
+            d.kind = kinds[t];
+            if(t == 1) SetRect(&d.bounds, 0, 0, 200, 16); else if(t == 0) SetRect(&d.bounds, 0, 0, 16, 200);
+            else if(t == 3 || t == 4) SetRect(&d.bounds, 0, 0, 100, 14);
+            else if(t == 5) SetRect(&d.bounds, 0, 0, 18, 150); else SetRect(&d.bounds, 0, 0, 150, 18);
             d.min = 0; d.max = 100; d.value = 25;
-            d.attributes = t ? kThemeTrackHorizontal : 0;
+            d.attributes = t && t != 5 ? kThemeTrackHorizontal : 0;
             d.enableState = kThemeTrackActive;
             d.trackInfo.scrollbar.viewsize = 50;
-            if(t == 2) d.trackInfo.slider.thumbDir = kThemeThumbDownward;
+            if(t == 2 || t == 5) d.trackInfo.slider.thumbDir = kThemeThumbDownward;
             SET(o); err = GetThemeTrackBounds(&d, &o);
             sprintf(k, "%d.bounds", t); out(k, "err %d %d,%d,%d,%d", (int)err, o.top, o.left, o.bottom, o.right);
             SetEmptyRgn(r); err = GetThemeTrackThumbRgn(&d, r);
@@ -223,8 +231,10 @@ static void shapes(void)
             sprintf(k, "tab.%d", i); out(k, "err %d", (int)err);
             sprintf(k, "tab.%d.rgn", i); out_rgn(k, r);
         }
-        for(i = 0; i < 4; i++)
+        for(i = 0; i < 11; i++)
         {
+            if(i == 7)
+                continue;
             SET(o); err = GetThemeStandaloneGrowBoxBounds(p, i, false, &o);
             sprintf(k, "growbox.%d", i); out(k, "err %d %d,%d,%d,%d", (int)err, o.top, o.left, o.bottom, o.right);
             SET(o); err = GetThemeStandaloneGrowBoxBounds(p, i, true, &o);
@@ -575,6 +585,70 @@ static void drawing(void)
                 PRIM("growbox", DrawThemeStandaloneGrowBox(p, kThemeGrowRight | kThemeGrowDown, false, states[s]))
             }
         }
+        /* tabs facing each way, every style (across a 24-high bar, or down
+           a 24-wide one) */
+        for(i = 0; i < 4; i++)
+            for(s = 0; s <= 4; s++)
+            {
+                Rect tb;
+                if(i < 2)
+                    SetRect(&tb, 10, 10, 90, 34);
+                else
+                    SetRect(&tb, 10, 10, 34, 50);
+                begin(depths[d]);
+                DrawThemeTab(&tb, s, i, NULL, 0);
+                sprintf(k, "tabdir.%d.%d", i, s);
+                end(k);
+            }
+        /* grow boxes into each corner, large and small, and the no-grow
+           box */
+        for(i = 0; i < 4; i++)
+            for(s = 0; s < 4; s++)
+            {
+                static const ThemeGrowDirection dirs[] = { kThemeGrowRight | kThemeGrowDown,
+                    kThemeGrowLeft | kThemeGrowDown, kThemeGrowRight | kThemeGrowUp, kThemeGrowLeft | kThemeGrowUp };
+                Point p = { 30, 50 };
+                begin(depths[d]);
+                if(s < 2)
+                    DrawThemeStandaloneGrowBox(p, dirs[i], s, kThemeStateActive);
+                else
+                    DrawThemeStandaloneNoGrowBox(p, dirs[i], s - 2, kThemeStateActive);
+                sprintf(k, "%s.%d.%s", s < 2 ? "growdir" : "nogrowdir", dirs[i], s & 1 ? "small" : "large");
+                end(k);
+            }
+        /* progress bars: indeterminate at a few phases, medium and large,
+           and determinate inactive */
+        for(i = 0; i < 4; i++)
+        {
+            static const SInt8 phases[] = { 0, 1, 5, 12 };
+            int large;
+            for(large = 0; large < 2; large++)
+            {
+                ThemeTrackDrawInfo t;
+                memset(&t, 0, sizeof t);
+                t.kind = large ? kThemeLargeIndeterminateBar : kThemeMediumIndeterminateBar;
+                SetRect(&t.bounds, 8, 10, 108, large ? 26 : 24);
+                t.min = 0; t.max = 100; t.value = 25;
+                t.attributes = kThemeTrackHorizontal;
+                t.enableState = kThemeTrackActive;
+                t.trackInfo.progress.phase = phases[i];
+                begin(depths[d]);
+                DrawThemeTrack(&t, NULL, NULL, 0);
+                sprintf(k, "indeterminate.%s.%d", large ? "large" : "medium", phases[i]);
+                end(k);
+            }
+        }
+        {
+            ThemeTrackDrawInfo t;
+            memset(&t, 0, sizeof t);
+            t.kind = kThemeMediumIndeterminateBar;
+            SetRect(&t.bounds, 8, 10, 108, 24);
+            t.attributes = kThemeTrackHorizontal;
+            t.enableState = kThemeTrackInactive;
+            begin(depths[d]);
+            DrawThemeTrack(&t, NULL, NULL, 0);
+            end("indeterminate.inactive");
+        }
         SetRect(&b, 8, 8, 112, 52);
         begin(depths[d]); DrawThemeFocusRect(&b, true); end("focusrect");
         begin(depths[d]); DrawThemeMenuBarBackground(&b, kThemeMenuBarNormal, 0); end("menubar");
@@ -583,18 +657,664 @@ static void drawing(void)
             begin(depths[d]); DrawThemeMenuBackground(&b, i); sprintf(k, "menubg.%d", i); end(k);
         }
         begin(depths[d]); DrawThemeMenuSeparator(&b); end("menuseparator");
+        {
+            /* a 20-pixel bar as the MBDF has it: selected, and with a
+               title in each state; a menu's item in each state */
+            static const ThemeMenuState ms[] = { kThemeMenuActive, kThemeMenuSelected, kThemeMenuDisabled };
+            static const char *mn[] = { "active", "selected", "disabled" };
+            Rect bar, t, m, it;
+            SetRect(&bar, 8, 8, 112, 28);
+            begin(depths[d]); DrawThemeMenuBarBackground(&bar, kThemeMenuBarSelected, 0); end("menubar.selected");
+            for(i = 0; i < 3; i++)
+            {
+                SetRect(&t, 30, 8, 70, 28);
+                begin(depths[d]);
+                DrawThemeMenuBarBackground(&bar, kThemeMenuBarNormal, 0);
+                DrawThemeMenuTitle(&bar, &t, ms[i], 0, NULL, 0);
+                sprintf(k, "menutitle.%s", mn[i]);
+                end(k);
+                SetRect(&m, 8, 8, 112, 52);
+                SetRect(&it, 9, 20, 111, 38);
+                begin(depths[d]);
+                DrawThemeMenuBackground(&m, kThemeMenuTypePullDown);
+                DrawThemeMenuItem(&m, &it, 8, 52, ms[i], kThemeMenuItemPlain, NULL, 0);
+                sprintf(k, "menuitem.%s", mn[i]);
+                end(k);
+                begin(depths[d]);
+                DrawThemeMenuBackground(&m, kThemeMenuTypePullDown);
+                DrawThemeMenuItem(&m, &it, 8, 52, ms[i], kThemeMenuItemHierarchical, NULL, 0);
+                sprintf(k, "menuitem.hier.%s", mn[i]);
+                end(k);
+            }
+        }
         for(i = 0; i <= 10; i++)
         {
             Rect cont;
+            OSStatus err;
             SetRect(&cont, 10, 25, 110, 55);
             begin(depths[d]);
-            DrawThemeWindowFrame(i, &cont, kThemeStateActive, NULL,
-                                 kThemeWindowHasCloseBox | kThemeWindowHasFullZoom | kThemeWindowHasCollapseBox,
-                                 NULL, 0);
+            err = DrawThemeWindowFrame(i, &cont, kThemeStateActive, NULL,
+                                       kThemeWindowHasCloseBox | kThemeWindowHasFullZoom | kThemeWindowHasCollapseBox,
+                                       NULL, 0);
             sprintf(k, "windowframe.%d", i);
+            end(k);
+            sprintf(k, "windowframe.%d.err", i);
+            out(k, "%d", (int)err);
+        }
+        /* ... with the metrics (title width and height as GetThemeWindowRegion
+           takes them) */
+        for(i = 0; i <= 10; i++)
+        {
+            Rect cont;
+            OSStatus err;
+            ThemeWindowMetrics wm = { sizeof(ThemeWindowMetrics), 0, 0, 0, 0, 0 };
+            SetRect(&cont, 10, 25, 110, 55);
+            begin(depths[d]);
+            err = DrawThemeWindowFrame(i, &cont, kThemeStateActive, &wm,
+                                       kThemeWindowHasCloseBox | kThemeWindowHasFullZoom | kThemeWindowHasCollapseBox,
+                                       NULL, 0);
+            sprintf(k, "windowframe.metrics.%d", i);
+            end(k);
+            sprintf(k, "windowframe.metrics.%d.err", i);
+            out(k, "%d", (int)err);
+        }
+        /* the popup window inactive; with a title's width; its tab 50
+           wide at 20, and centred on the window and on the offset */
+        for(i = 0; i < 5; i++)
+        {
+            static const char *const pn[] = { "inactive", "title", "tab", "tabwindow", "taboffset" };
+            Rect cont;
+            ThemeWindowMetrics wm = { sizeof(ThemeWindowMetrics), 0, 0, 0, 0, 0 };
+            SetRect(&cont, 10, 25, 110, 55);
+            if(i == 1)
+            {
+                wm.titleWidth = 60;
+                wm.titleHeight = 12;
+            }
+            if(i >= 2)
+            {
+                wm.popupTabOffset = 20;
+                wm.popupTabWidth = 50;
+                wm.popupTabPosition = i - 2;
+            }
+            begin(depths[d]);
+            DrawThemeWindowFrame(kThemePopupWindow, &cont, i ? kThemeStateActive : kThemeStateInactive, &wm,
+                                 kThemeWindowHasCloseBox | kThemeWindowHasTitleText, NULL, 0);
+            sprintf(k, "windowframe.popup.%s", pn[i]);
             end(k);
         }
     }
+}
+
+/* Window frames as programs get them: windows of the classic and the
+   Appearance definitions (procIDs) on the screen, active and then
+   unhilited, the frame copied out. A plain dialog box behind them hides
+   the desktop (its pattern isn't what is compared). Active, the close,
+   zoom and collapse boxes pressed too: the window's definition called
+   with wDraw and the part, as TrackBox does (and again, and the whole
+   frame, to let go); and collapsed (CollapseWindow). */
+static void frame_out(const char *key)
+{
+    static Rect from = { 50, 20, 150, 220 };   /* the frame and some white round it */
+    static Rect to = { 0, 0, 100, 200 };
+    CGrafPort screen;
+    GWorldPtr g;
+    GrafPtr save;
+    GetPort(&save);
+    OpenCPort(&screen);
+    NewGWorld(&g, 32, &to, NULL, NULL, 0);
+    LockPixels(GetGWorldPixMap(g));
+    SetPort((GrafPtr)&screen);
+    CopyBits((BitMap *)*screen.portPixMap, (BitMap *)*GetGWorldPixMap(g), &from, &to, srcCopy, NULL);
+    SetPort(save);
+    CloseCPort(&screen);
+    probe_pixels(key, g);
+    DisposeGWorld(g);
+}
+
+static void wdef_draw(WindowRef w, long part)
+{
+    Handle def = ((WindowPeek)w)->windowDefProc;
+    GrafPtr save;
+    CGrafPtr wm;
+    RgnHandle clip = NewRgn();
+    GetPort(&save);
+    GetCWMgrPort(&wm);
+    SetPort((GrafPtr)wm);
+    GetClip(clip);
+    SetClip(GetGrayRgn());
+    HLock(def);
+    InvokeWindowDefUPP(GetWVariant(w), w, wDraw, part, (WindowDefUPP)*def);
+    HUnlock(def);
+    SetClip(clip);
+    DisposeRgn(clip);
+    SetPort(save);
+}
+
+static void frames(void)
+{
+    static const short procs[] = { 0, 1, 2, 3, 4, 5, 8, 16, 1024, 1031, 1040, 1041, 1042, 1043,
+                                   1057, 1059, 1073, 1061, 1075 };
+    static const short parts[] = { wInGoAway, wInZoomOut, wInCollapseBox };
+    Rect back, b;
+    WindowRef backing, w;
+    char k[48];
+    int i, j, active;
+    OSStatus err;
+    if(!SECTION("frames"))
+        return;
+    SetRect(&back, 0, 40, 400, 240);
+    backing = NewCWindow(NULL, &back, "\p", true, plainDBox, (WindowRef)-1, false, 0);
+    SetRect(&b, 40, 80, 200, 130);           /* content: 160 x 50 */
+    for(i = 0; i < (int)(sizeof procs / sizeof procs[0]); i++)
+    {
+        w = NewCWindow(NULL, &b, "\pFrame", true, procs[i], (WindowRef)-1, true, 0);
+        if(!w)
+        {
+            sprintf(k, "%d", procs[i]);
+            out(k, "nil");
+            continue;
+        }
+        for(active = 1; active >= 0; active--)
+        {
+            if(!active)
+                HiliteWindow(w, false);
+            sprintf(k, "%d.%s", procs[i], active ? "active" : "inactive");
+            frame_out(k);
+            if(!active)
+                continue;
+            for(j = 0; j < 3; j++)
+            {
+                wdef_draw(w, parts[j]);
+                sprintf(k, "%d.pressed%d", procs[i], parts[j]);
+                frame_out(k);
+                wdef_draw(w, parts[j]);
+                wdef_draw(w, 0);
+            }
+            /* collapsed to the title bar (the windows that can) and back */
+            err = CollapseWindow(w, true);
+            if(err == noErr)
+            {
+                sprintf(k, "%d.collapsed", procs[i]);
+                frame_out(k);
+                CollapseWindow(w, false);
+            }
+            else
+            {
+                sprintf(k, "%d.collapse", procs[i]);
+                out(k, "%d", (int)err);
+            }
+        }
+        DisposeWindow(w);
+    }
+    DisposeWindow(backing);
+}
+
+/* Controls as programs get them: real controls of the classic and the
+   Appearance definitions (procIDs) in a window on the screen, active,
+   inactive (hilite 255), pressed (the part a click hilites) and at their
+   values (max 1 or 2: check boxes, radio buttons, bevels, triangles),
+   copied out with 4 pixels round them; no titles (the glyphs
+   aren't what is compared). Then DrawThemeTab at a tab's usual width. */
+struct ctl
+{
+    short proc, w, h, min, max, value, part;
+    const char *name;
+};
+
+static void copy_out(const char *key, const Rect *local)
+{
+    CGrafPort screen;
+    GWorldPtr g;
+    GrafPtr save;
+    Rect from = *local, to;
+    LocalToGlobal((Point *)&from.top);
+    LocalToGlobal((Point *)&from.bottom);
+    InsetRect(&from, -4, -4);
+    SetRect(&to, 0, 0, from.right - from.left, from.bottom - from.top);
+    GetPort(&save);
+    OpenCPort(&screen);
+    NewGWorld(&g, 32, &to, NULL, NULL, 0);
+    LockPixels(GetGWorldPixMap(g));
+    SetPort((GrafPtr)&screen);
+    CopyBits((BitMap *)*screen.portPixMap, (BitMap *)*GetGWorldPixMap(g), &from, &to, srcCopy, NULL);
+    SetPort(save);
+    CloseCPort(&screen);
+    probe_pixels(key, g);
+    DisposeGWorld(g);
+}
+
+static void controls(void)
+{
+    static const struct ctl ctls[] = {
+        { 0, 60, 20, 0, 0, 0, 10, "push" },
+        { 1, 60, 16, 0, 2, 0, 11, "check" },
+        { 2, 60, 16, 0, 2, 0, 12, "radio" },
+        { 16, 16, 100, 0, 100, 30, 0, "vscroll" },
+        { 16, 100, 16, 0, 100, 30, 0, "hscroll" },
+        { 1008, 100, 20, 200, 0, 0, 0, "popup" },
+        /* its width: a longer menu (ten spaces: no glyphs), fixed width
+           (popupFixedWidth), a title's room */
+        { 1008, 100, 20, 201, 0, 0, 0, "popup10" },
+        { 1009, 100, 20, 200, 0, 0, 0, "popupfixed" },
+        { 1008, 160, 20, 200, 40, 0, 0, "popuptitle" },
+        /* no such menu (999); ChromeGallery's: menu 0, value 200 */
+        { 1008, 100, 20, 999, 0, 0, 0, "popupnomenu" },
+        { 1008, 120, 20, 0, 0, 200, 0, "popupgallery" },
+        { 368, 60, 20, 0, 0, 0, 10, "push" },
+        { 369, 60, 16, 0, 2, 0, 11, "check" },
+        { 370, 60, 16, 0, 2, 0, 12, "radio" },
+        { 384, 16, 100, 0, 100, 30, 0, "vscroll" },
+        { 400, 100, 20, 200, 0, 0, 0, "popup" },
+        { 32, 40, 30, 0, 1, 0, 10, "bevel" },
+        { 33, 40, 30, 0, 1, 0, 10, "bevel" },
+        { 34, 40, 30, 0, 1, 0, 10, "bevel" },
+        { 48, 100, 20, 0, 10, 5, 129, "slider" },
+        /* pointing up (reverse direction), non-directional */
+        { 52, 100, 20, 0, 10, 5, 129, "sliderup" },
+        { 56, 100, 20, 0, 10, 5, 129, "sliderplain" },
+        { 64, 12, 12, 0, 1, 0, 0, "triangle" },
+        { 80, 100, 14, 0, 100, 50, 0, "progress" },
+        { 96, 13, 23, 0, 10, 5, 20, "arrows" },
+        { 144, 100, 2, 0, 0, 0, 0, "separator" },
+        { 160, 100, 60, 0, 0, 0, 0, "group" },
+        { 224, 100, 20, 0, 0, 0, 0, "placard" },
+        { 336, 100, 20, 0, 0, 0, 0, "header" },
+    };
+    static const short scrollParts[] = { 20, 21, 22, 23, 129 };
+    Rect back, b, port;
+    WindowRef w;
+    MenuHandle m, m10;
+    char k[48];
+    int i, j;
+    if(!SECTION("controls"))
+        return;
+    RegisterAppearanceClient();
+    m = NewMenu(200, "\p");
+    AppendMenu(m, "\p ");
+    InsertMenu(m, -1);
+    m10 = NewMenu(201, "\p");
+    AppendMenu(m10, "\p ");
+    AppendMenu(m10, "\p          ");
+    InsertMenu(m10, -1);
+    SetRect(&back, 0, 40, 400, 240);
+    w = NewCWindow(NULL, &back, "\p", true, plainDBox, (WindowRef)-1, false, 0);
+    SetPort((GrafPtr)w);
+    port = ((GrafPtr)w)->portRect;
+    BackColor(whiteColor);
+    for(i = 0; i < (int)(sizeof ctls / sizeof ctls[0]); i++)
+    {
+        const struct ctl *c = &ctls[i];
+        ControlHandle h;
+        SetRect(&b, 20, 20, 20 + c->w, 20 + c->h);
+        EraseRect(&port);
+        h = NewControl(w, &b, "\p", true, c->value, c->min, c->max, c->proc, 0);
+        sprintf(k, "%d.%s", c->proc, c->name);
+        if(!h)
+        {
+            out(k, "nil");
+            continue;
+        }
+        Draw1Control(h);
+        sprintf(k, "%d.%s.active", c->proc, c->name);
+        copy_out(k, &b);
+        HiliteControl(h, 255);
+        sprintf(k, "%d.%s.inactive", c->proc, c->name);
+        copy_out(k, &b);
+        HiliteControl(h, 0);
+        if(c->proc == 16 || c->proc == 384)
+            for(j = 0; j < (int)(sizeof scrollParts / sizeof scrollParts[0]); j++)
+            {
+                HiliteControl(h, scrollParts[j]);
+                sprintf(k, "%d.%s.pressed%d", c->proc, c->name, scrollParts[j]);
+                copy_out(k, &b);
+                HiliteControl(h, 0);
+            }
+        else if(c->part)
+        {
+            HiliteControl(h, c->part);
+            sprintf(k, "%d.%s.pressed", c->proc, c->name);
+            copy_out(k, &b);
+            HiliteControl(h, 0);
+        }
+        if(c->max >= 1 && c->max <= 2)
+            for(j = 1; j <= c->max; j++)
+            {
+                SetControlValue(h, j);
+                sprintf(k, "%d.%s.value%d", c->proc, c->name, j);
+                copy_out(k, &b);
+            }
+        DisposeControl(h);
+    }
+    DisposeWindow(w);
+    DeleteMenu(200);
+    DisposeMenu(m);
+    DeleteMenu(201);
+    DisposeMenu(m10);
+    /* tabs 80 wide, every style */
+    for(i = 0; i <= 5; i++)
+    {
+        Rect tb;
+        SetRect(&tb, 10, 10, 90, 50);
+        begin(32);
+        DrawThemeTab(&tb, i, kThemeTabNorth, NULL, 0);
+        sprintf(k, "tab80.%d", i);
+        end(k);
+    }
+}
+
+/* Dialog and alert backgrounds: does 8.6 give a dialog the theme's grey?
+   A dialog from NewColorDialog, from a DLOG without and with a 'dlgx'
+   (kDialogFlagsUseThemeBackground), an alert from an ALRT without and with
+   an 'alrx' (kAlertFlagsUseThemeBackground), StandardAlert; as an
+   Appearance client and not. Each: the port's back colour and a patch of
+   the content away from the items (appr.r). */
+static int dlg_dumped;
+static char dlg_key[48];
+
+static void dlg_out(DialogRef d, const char *key)
+{
+    RGBColor c;
+    Rect patch;
+    char k[64];
+    SetPort((GrafPtr)d);
+    GetBackColor(&c);
+    sprintf(k, "%s.back", key);
+    out(k, "%04x %04x %04x", c.red, c.green, c.blue);
+    sprintf(k, "%s.cport", key);
+    out(k, "%d", (((CGrafPtr)d)->portVersion & 0xC000) == 0xC000);
+    SetRect(&patch, 14, 14, 54, 34);
+    copy_out(key, &patch);
+}
+
+static pascal Boolean dlg_filter(DialogRef d, EventRecord *e, DialogItemIndex *item)
+{
+    if(e->what != nullEvent || dlg_dumped)
+        return false;
+    dlg_dumped = 1;
+    dlg_out(d, dlg_key);
+    *item = 1;
+    return true;
+}
+
+static void dialogs(void)
+{
+    static const char *const pass[] = { "client", "plain" };
+    ModalFilterUPP filter = NewModalFilterUPP(dlg_filter);
+    char k[48];
+    int p;
+    if(!SECTION("dialogs"))
+        return;
+    RegisterAppearanceClient();
+    for(p = 0; p < 2; p++)
+    {
+        DialogRef d;
+        Rect b;
+        if(p == 1)
+            UnregisterAppearanceClient();
+        SetRect(&b, 100, 100, 300, 200);
+        {
+            /* the dialog owns its item list: a copy, not the resource */
+            Handle items = GetResource('DITL', 200);
+            HandToHand(&items);
+            d = NewColorDialog(NULL, &b, "\p", true, dBoxProc, (WindowRef)-1, false, 0, items);
+        }
+        sprintf(k, "%s.new", pass[p]);
+        if(d)
+        {
+            DrawDialog(d);
+            dlg_out(d, k);
+            DisposeDialog(d);
+        }
+        else
+            out(k, "nil");
+        for(int id = 200; id <= 201; id++)
+        {
+            d = GetNewDialog(id, NULL, (WindowRef)-1);
+            sprintf(k, "%s.%s", pass[p], id == 200 ? "dlog" : "dlgx");
+            if(!d)
+            {
+                out(k, "nil");
+                continue;
+            }
+            DrawDialog(d);
+            dlg_out(d, k);
+            DisposeDialog(d);
+        }
+        for(int id = 300; id <= 301; id++)
+        {
+            DialogItemIndex hit;
+            sprintf(dlg_key, "%s.%s", pass[p], id == 300 ? "alrt" : "alrx");
+            dlg_dumped = 0;
+            hit = Alert(id, filter);
+            sprintf(k, "%s.hit", dlg_key);
+            out(k, "%d dumped %d", (int)hit, dlg_dumped);
+        }
+        {
+            AlertStdAlertParamRec param;
+            DialogItemIndex hit = 0;
+            OSErr err;
+            memset(&param, 0, sizeof param);
+            param.filterProc = filter;
+            param.defaultText = (ConstStringPtr)kAlertDefaultOKText;
+            param.defaultButton = kAlertStdAlertOKButton;
+            param.position = kWindowDefaultPosition;
+            sprintf(dlg_key, "%s.standard", pass[p]);
+            dlg_dumped = 0;
+            err = StandardAlert(kAlertNoteAlert, "\pDialog", NULL, &param, &hit);
+            sprintf(k, "%s.hit", dlg_key);
+            out(k, "err %d %d dumped %d", (int)err, (int)hit, dlg_dumped);
+        }
+    }
+    RegisterAppearanceClient();
+    DisposeModalFilterUPP(filter);
+}
+
+/* A dialog with kDialogFlagsUseControlHierarchy (DLOG/dlgx 202, DITL 202:
+   a button, static text, edit text, a user item, an icon, a CNTL edit text):
+   which items are controls, their bounds, and what SetDialogItem,
+   MoveDialogItem and SizeDialogItem do to them (Navigation Services lays its
+   dialogs out with SetDialogItem). */
+static void dialog_items_out(DialogRef d, const char *key)
+{
+    char k[64];
+    for(DialogItemIndex i = 1; i <= CountDITL(d); i++)
+    {
+        DialogItemType type;
+        Handle h;
+        Rect rr;
+        ControlHandle c = NULL;
+        OSErr err;
+        GetDialogItem(d, i, &type, &h, &rr);
+        sprintf(k, "%s.%d.item", key, (int)i);
+        out_rect(k, &rr);
+        err = GetDialogItemAsControl(d, i, &c);
+        sprintf(k, "%s.%d.control", key, (int)i);
+        if(err || !c)
+            out(k, "err %d", (int)err);
+        else
+        {
+            Rect cb;
+            ControlHandle super = NULL;
+            cb = (*c)->contrlRect;
+            out(k, "err 0 same %d vis %d super %d", (Handle)c == h, IsControlVisible(c),
+                (int)GetSuperControl(c, &super));
+            sprintf(k, "%s.%d.bounds", key, (int)i);
+            out_rect(k, &cb);
+        }
+    }
+}
+
+static void dialog_items(void)
+{
+    DialogRef d;
+    char k[64];
+    if(!SECTION("dlgitems"))
+        return;
+    RegisterAppearanceClient();
+    d = GetNewDialog(202, NULL, (WindowRef)-1);
+    if(!d)
+    {
+        out("new", "nil");
+        return;
+    }
+    dialog_items_out(d, "new");
+    for(DialogItemIndex i = 1; i <= CountDITL(d); i++)
+    {
+        DialogItemType type;
+        Handle h;
+        Rect rr;
+        GetDialogItem(d, i, &type, &h, &rr);
+        OffsetRect(&rr, 3, 20);
+        SetDialogItem(d, i, type, h, &rr);
+    }
+    dialog_items_out(d, "set");
+    for(DialogItemIndex i = 1; i <= CountDITL(d); i++)
+    {
+        MoveDialogItem(d, i, 150 + 2 * i, 10 * i);
+        SizeDialogItem(d, i, 40, 18);
+    }
+    dialog_items_out(d, "move");
+    {
+        Str255 s;
+        DialogItemType type;
+        Handle h;
+        Rect rr;
+        HideDialogItem(d, 3);
+        dialog_items_out(d, "hide");
+        ShowDialogItem(d, 3);
+        GetDialogItem(d, 3, &type, &h, &rr);
+        SetDialogItemText(h, "\pabc");
+        GetDialogItemText(h, s);
+        sprintf(k, "text.3");
+        out_str(k, s);
+        /* an item's control given as its handle (Navigation Services does
+           this to its static text): what the item keeps */
+        for(DialogItemIndex i = 2; i <= 3; i++)
+        {
+            ControlHandle c = NULL;
+            Handle before, after;
+            GetDialogItem(d, i, &type, &before, &rr);
+            GetDialogItemAsControl(d, i, &c);
+            SetDialogItem(d, i, type, (Handle)c, &rr);
+            GetDialogItem(d, i, &type, &after, &rr);
+            sprintf(k, "setctl.%d", (int)i);
+            out(k, "type %d kept %d control %d", (int)type, after == before, c && after == (Handle)c);
+            GetDialogItemText(after, s);
+            sprintf(k, "setctl.%d.text", (int)i);
+            out_str(k, s);
+        }
+        /* SetDialogItemText and GetDialogItemText given an item's control
+           (BBEdit Lite 6.1 retitles an alert's button so): the control's
+           title, the item's text */
+        for(DialogItemIndex i = 1; i <= 3; i++)
+        {
+            ControlHandle c = NULL;
+            Handle th;
+            Str255 title;
+            GetDialogItemAsControl(d, i, &c);
+            if(!c)
+                continue;
+            SetDialogItemText((Handle)c, "\pRetitled");
+            sprintf(k, "settext.%d.size", (int)i);
+            out(k, "%ld", (long)GetHandleSize((Handle)c));
+            GetControlTitle(c, title);
+            sprintf(k, "settext.%d.title", (int)i);
+            out_str(k, title);
+            GetDialogItemText((Handle)c, s);
+            sprintf(k, "settext.%d.get", (int)i);
+            out_str(k, s);
+            GetDialogItem(d, i, &type, &th, &rr);
+            GetDialogItemText(th, s);
+            sprintf(k, "settext.%d.item", (int)i);
+            out_str(k, s);
+        }
+    }
+    {
+        /* a control item made a static text item with its control as the
+           handle (Navigation Services' separator): still that control */
+        DialogItemType type;
+        Handle h;
+        Rect rr;
+        ControlHandle c = NULL;
+        GetDialogItem(d, 6, &type, &h, &rr);
+        SetDialogItem(d, 6, statText | itemDisable, h, &rr);
+        GetDialogItemAsControl(d, 6, &c);
+        out("ctltext.6", "%s", c == NULL ? "nil" : (Handle)c == h ? "its control" : "another");
+    }
+    DisposeDialog(d);
+}
+
+/* The colours DrawThemeButton leaves for its label proc, by kind and
+   state (the port: black on white before each call) */
+static char label_key[48];
+static pascal void label_proc(const Rect *bounds, ThemeButtonKind kind, const ThemeButtonDrawInfo *info,
+                              UInt32 data, SInt16 depth, Boolean color)
+{
+    RGBColor fg, bg;
+    GetForeColor(&fg);
+    GetBackColor(&bg);
+    out(label_key, "fg %04x %04x %04x bg %04x %04x %04x mode %d", fg.red, fg.green, fg.blue, bg.red, bg.green,
+        bg.blue, qd.thePort->txMode);
+}
+
+static void background_out(const char *key, ControlHandle c)
+{
+    /* a colour of its own first: whether the call changes it at all */
+    RGBColor bg;
+    RGBColor mark = { 0x1111, 0x2222, 0x3333 }, white = { 0xFFFF, 0xFFFF, 0xFFFF };
+    RGBBackColor(&mark);
+    SetUpControlBackground(c, 32, true);
+    GetBackColor(&bg);
+    out(key, "%04x %04x %04x", bg.red, bg.green, bg.blue);
+    RGBBackColor(&white);
+}
+
+static void labels(void)
+{
+    /* every kind 8.6 knows (0-12) and a few states */
+    static const ThemeButtonKind kinds[] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 };
+    static const ThemeDrawState states[] = { kThemeStateActive, kThemeStateInactive, kThemeStatePressed,
+                                             kThemeStatePressedDown, kThemeStateUnavailable };
+    ThemeButtonDrawUPP proc = NewThemeButtonDrawUPP(label_proc);
+    RGBColor black = { 0, 0, 0 }, white = { 0xFFFF, 0xFFFF, 0xFFFF }, tint = { 0xCCCC, 0xEEEE, 0xFFFF };
+    Rect back, b;
+    WindowRef w;
+    ControlHandle c;
+    int i, j;
+    if(!SECTION("labels"))
+        return;
+    RegisterAppearanceClient();
+    SetRect(&back, 0, 40, 400, 240);
+    w = NewCWindow(NULL, &back, "\p", true, plainDBox, (WindowRef)-1, false, 0);
+    SetPort((GrafPtr)w);
+    SetRect(&b, 20, 20, 100, 40);
+    for(i = 0; i < (int)(sizeof kinds / sizeof kinds[0]); i++)
+        for(j = 0; j < (int)(sizeof states / sizeof states[0]); j++)
+        {
+            ThemeButtonDrawInfo info;
+            info.state = states[j];
+            info.value = kThemeButtonOff;
+            info.adornment = kThemeAdornmentNone;
+            RGBForeColor(&black);
+            RGBBackColor(&white);
+            TextMode(srcOr);
+            sprintf(label_key, "kind%d.state%d", (int)kinds[i], (int)states[j]);
+            DrawThemeButton(&b, kinds[i], &info, NULL, NULL, proc, 0);
+        }
+    RGBForeColor(&black);
+    RGBBackColor(&white);
+    /* SetUpControlBackground for a control in no embedding hierarchy: the
+       plain window, then with a theme background, then a content colour */
+    c = NewControl(w, &b, "\p", false, 0, 0, 1, pushButProc, 0);
+    background_out("background.plain", c);
+    SetThemeWindowBackground(w, kThemeBrushDialogBackgroundActive, false);
+    background_out("background.theme", c);
+    SetWindowContentColor(w, &tint);
+    background_out("background.content", c);
+    DisposeControl(c);
+    DisposeWindow(w);
+    DisposeThemeButtonDrawUPP(proc);
 }
 
 int main(void)
@@ -617,14 +1337,23 @@ int main(void)
         out("Register.again", "%d", (int)RegisterAppearanceClient());
         out("IsAppearanceClient.after", "%d", IsAppearanceClient(&psn));
     }
+    /* controls first: NewControl's accelerated CDEFs (8.6's own 384/400)
+       share Mixed Mode's prepared-fragment cache (mixed_mode.cpp) with
+       everything drawing()/frames() exercises afterward; run while that
+       cache is still fresh (docs/executor/DiffTest.md). */
+    controls();
     colours();
     fonts();
     metrics();
     shapes();
     theme();
     drawing();
+    frames();
     modes();
     title();
+    dialogs();
+    dialog_items();
+    labels();
     if(SECTION("unregister"))
     {
         RegisterAppearanceClient();   /* sections stand alone (a resumed run) */

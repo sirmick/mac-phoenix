@@ -222,10 +222,6 @@ pseudo_get_rom_resource(ResType typ, INTEGER id)
     return retval;
 }
 
-#if defined(ULTIMA_III_HACK)
-bool Executor::ROMlib_ultima_iii_hack;
-#endif
-
 Handle Executor::C_GetResource(ResType typ, INTEGER id)
 {
     resmaphand map;
@@ -239,43 +235,11 @@ Handle Executor::C_GetResource(ResType typ, INTEGER id)
     if(retval)
         /*-->*/ return retval;
 
-#define BOBSEYESHACK
-#if defined(BOBSEYESHACK)
-    /*
- * This gets around a bug in Bob's Eyes that references stray memory.
- * I'm trying to find the author of the program and get him to fix it.
- *  	--Cliff Sat Sep  3 08:02:51 MDT 1994
- */
-    if(typ == "rAnd"_4 && id == 128)
-        return 0;
-#endif
-
     ROMlib_setreserr(ROMlib_typidtop(typ, id, &map, &rr));
     if(LM(ResErr) == resNotFound)
     {
         ROMlib_setreserr(noErr);
         retval = 0; /* IMIV */
-
-        // "Icky hack"
-        // Truer words were never spoken.
-        // Instead of looking for 'PACK' resources, which aren't there
-        // in Executor, return a completely unrelated ALRT instead.
-        // For some reason, if this is not done, ResEdit's Pixel editor fails
-        // with memFullErr (-108).
-        // My current theory is that some programs are checking
-        // GetResource('PACK', ...) to check whether some packages can be
-        // loaded successfully.
-        // The hack had to be disabled for id 1 to support ResEdit's use of PACK 1.
-        // TODO: Verify theory and add some 'PACK' resources to system file instead of this hack.
-        // MacPhoenix: only once the real lookup found nothing. Apple's
-        // System file and extensions carry real 'PACK' resources (Color
-        // Picker 2.0 loads its PACK 12 from its own file), which the hack
-        // used to hide.
-#define ICKYHACK
-#if defined(ICKYHACK)
-        if(typ == "PACK"_4 && id != 1)
-            return GetResource("ALRT"_4, -3995);
-#endif /* ICKYHACK */
     }
     else
     {
@@ -284,12 +248,6 @@ Handle Executor::C_GetResource(ResType typ, INTEGER id)
         else
             retval = 0;
     }
-#if defined(ULTIMA_III_HACK)
-    if(ROMlib_ultima_iii_hack && typ == "PREF"_4 && retval)
-    {
-        *((char *)*retval + 1) = 0; /* turn off Music prefs */
-    }
-#endif
     return retval;
 }
 

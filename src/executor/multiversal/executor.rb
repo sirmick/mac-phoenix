@@ -307,7 +307,81 @@ class ExecutorGenerator < Generator
         @out << ", " << fun["executor_extras"] if fun["executor_extras"]
     end
 
+    # The C strings and Points of InterfaceLib's lowercase glue (base/cglue.h).
+    CGLUE_STRING_IN = ["ConstStringPtr", "ConstStr255Param", "ConstStr63Param",
+                       "ConstStr32Param", "ConstStr31Param", "ConstStr27Param", "ConstStr15Param"]
+    CGLUE_STRING_OUT = ["StringPtr", "Str255", "Str63", "Str32", "Str31", "Str27", "Str15"]
+    CGLUE_POINT = ["Point", "Cell"]
+
+    # MacPhoenix: one of InterfaceLib's lowercase C routines (numtostring,
+    # drawstring, ptinrect), for PowerPC and CFM-68K code: the Pascal routine
+    # `cglue:` names, defined in the same file. Its input strings are C
+    # strings, its output strings are made C strings, a Point is passed by
+    # address. `cstring-in:`/`cstring-inout:` name string arguments that the
+    # routine reads although they are typed as outputs (DIZero's volume
+    # name; UpperString's string). Not exported while the Pascal routine
+    # isn't implemented.
+    def declare_cglue(fun)
+        name = fun["name"]
+        item = $global_name_map[fun["cglue"]]
+        target = item && item["function"]
+        raise "#{name}: cglue: #{fun["cglue"]} is not a function" unless target
+        return unless target["executor"]
+        tname = target["name"]
+        cname = tname
+        if target["executor"].is_a?(String) then
+            cname = target["executor"] =~ /_$/ ? target["executor"] + tname : target["executor"]
+        end
+        ins = Array(fun["cstring-in"])
+        inouts = Array(fun["cstring-inout"])
+        params = []
+        call = []
+        before = []
+        after = []
+        (target["args"] or []).each_with_index do |arg, i|
+            n = arg["name"] || "arg#{i}"
+            t = arg["type"].strip
+            if inouts.include?(n) then
+                params << "char *#{n}"
+                before << "cglue::c2p(#{n});"
+                call << "(StringPtr)#{n}"
+                after << "cglue::p2c(#{n});"
+            elsif CGLUE_STRING_IN.include?(t) or ins.include?(n) then
+                params << "const char *#{n}"
+                call << "cglue::CString(#{n})"
+            elsif CGLUE_STRING_OUT.include?(t) then
+                params << "char *#{n}"
+                call << "(StringPtr)#{n}"
+                after << "cglue::p2c(#{n});"
+            elsif CGLUE_POINT.include?(t) then
+                params << decl("#{t}*", n)
+                call << "*#{n}"
+            else
+                params << decl(t, n)
+                call << n
+            end
+        end
+        ret = (target["return"] or "void")
+        @out << "inline #{ret} cglue_#{name}(#{params.join(", ")}) {"
+        @out << before.join
+        invoke = "#{cname}(#{call.join(", ")})"
+        if ret == "void" then
+            @out << "#{invoke};" << after.join
+        elsif after.empty? then
+            @out << "return #{invoke};"
+        else
+            @out << "#{ret} ret = #{invoke};" << after.join << "return ret;"
+        end
+        @out << "}\n"
+        @out << "LIBRARY_FUNCTION(#{Array(fun["library"] || "InterfaceLib")[0]}, #{name}, cglue_#{name});\n"
+    end
+
     def declare_function(fun)
+        if fun["cglue"] then
+            declare_cglue(fun)
+            return
+        end
+
         if fun["dispatcher"] && ! @available_dispatchers.include?(fun["dispatcher"]) then
             disp = $global_name_map[fun["dispatcher"]]
             if disp and disp["dispatcher"] then
@@ -384,12 +458,13 @@ class ExecutorGenerator < Generator
             libs = Array(fun["library"])
             lib = libs[0]
             libs[1..-1].each {|other| @out << "LIBRARY_ALSO(#{other}, #{name}, #{lib});\n" }
-            if fun["aslm"] then
+            if fun["aslm"] or fun["ot"] then
                 # Open Transport's: bound through the Shared Library Manager
-                # on 68k as well; the routine reads its arguments through
-                # ot::Call, so only their sizes matter here: a Boolean, a
-                # word (a byte is a word too, the way Pascal passes it), or
-                # a long.
+                # on 68k as well (`ot: native`: an OT 1.1.1 addition no 68k
+                # function set has, PowerPC only); the routine reads its
+                # arguments through ot::Call, so only their sizes matter
+                # here: a Boolean, a word (a byte is a word too, the way
+                # Pascal passes it), or a long.
                 letter = lambda do |t|
                     if t.nil? || t == "void" then "V"
                     elsif t == "Boolean" then "B"
@@ -400,8 +475,9 @@ class ExecutorGenerator < Generator
                 sig = args.map {|arg| letter.call(arg["type"])}.join
                 pascal = fun["callconv"].to_s.downcase == "pascal"
                 @out << "namespace ot { uint32_t #{cname}(const Call &); }"
-                @out << "OT_FUNCTION(#{lib}, #{name}, \"#{fun["aslm"]["set"]}\", "
-                @out << "\"#{fun["aslm"]["name"]}\", #{pascal}, \"#{sig}\", "
+                set, setname = fun["aslm"] ? [fun["aslm"]["set"], fun["aslm"]["name"]] : ["", name]
+                @out << "OT_FUNCTION(#{lib}, #{name}, \"#{set}\", "
+                @out << "\"#{setname}\", #{pascal}, \"#{sig}\", "
                 @out << "'#{letter.call(fun["return"])}', #{cname});\n"
             elsif fun["raw"] then
                 @out << "LIBRARY_RAW(#{lib}, #{name});\n"
@@ -490,7 +566,10 @@ class ExecutorGenerator < Generator
                 else
                 end
             else
-                @out << "PASCAL_TRAP(#{name}, #{hexlit(trap)});\n"
+                # `export: false`: the trap only; InterfaceLib's export is
+                # another definition's routine (GetItemStyle's).
+                @out << (fun["export"] == false ? "PASCAL_TRAP_UNEXPORTED(" : "PASCAL_TRAP(")
+                @out << "#{name}, #{hexlit(trap)});\n"
             end
         else
             @out << "NOTRAP_FUNCTION#{two}(#{name});\n"

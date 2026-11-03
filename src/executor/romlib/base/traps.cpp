@@ -113,6 +113,15 @@ void traps::installSystem8Traps()
             tooltraptable[system8_traps[i] & 0x3FF] = system8_entries[i];
 }
 
+/* ... and, with PowerPC code on a 7.x System (--executor-ppc: a Power
+   Mac's CFM), _CodeFragmentDispatch alone. */
+void traps::installCodeFragmentDispatch()
+{
+    if(system8_entries[0]
+       && tooltraptable[0xAA5A & 0x3FF] == US_TO_SYN68K((void*)&stub_Unimplemented))
+        tooltraptable[0xAA5A & 0x3FF] = system8_entries[0];
+}
+
 void traps::init(bool log, const std::string& trapFilter)
 {
     logging::setEnabled(log);
@@ -152,6 +161,12 @@ void traps::init(bool log, const std::string& trapFilter)
 
 /* ---- MacPhoenix: selectors no routine answers --------------------------- */
 
+void Executor::traps::putOSTrapWord(uint16_t trapno)
+{
+    if(!(trapno & TOOLBIT))
+        EM_D1 = (EM_D1 & 0xFFFF0000) | trapno;
+}
+
 void Executor::traps::log_unimplemented(const std::string &what)
 {
     static std::set<std::string> logged;
@@ -180,8 +195,7 @@ namespace
    is the size of the parameters (in words for most managers, in bytes for
    the Palette Manager's), and a selector outside its table gets them
    popped and paramErr in the word on top: the result, for the functions
-   that have one. ResourceDispatch's older selectors carry no size, so it
-   isn't here. */
+   that have one. */
 struct D0SizedDispatcher
 {
     const char *name;
@@ -192,6 +206,11 @@ const D0SizedDispatcher d0_sized[] = {
     { "PaletteDispatch", 1, 8 }, { "MenuDispatch", 2, 8 },   { "ThreadDispatch", 2, 8 },
     { "LayerDispatch", 2, 8 },   { "DisplayDispatch", 2, 8 }, { "GestaltValueDispatch", 2, 8 },
     { "DialogDispatch", 2, 8 },
+    /* ResourceMgr.yaml's ResourceDispatch dispatcher comment: the signed
+       low byte of D0 is the selector, the high byte the parameter size in
+       words (documented selectors bypass this, registered with their own
+       C++ signatures; only an unregistered one reaches this table). */
+    { "ResourceDispatch", 2, 8 },
     /* the Sound Manager's: $ssccgggg, ss the parameter words, cc the
        selector, gggg the part (GetSysBeepVolume $02240018) */
     { "SoundDispatch", 2, 24 },
@@ -218,6 +237,21 @@ uint32_t Executor::traps::unknown_selector_68k(const char *trap_name, uint32_t s
             EM_D0 = (uint32_t)-50;
             return ret;
         }
+    if(strcmp(trap_name, "FSDispatch") == 0)
+    {
+        /* The File Manager's: a register call, the parameter block in A0;
+           a selector with no routine (the table's holes, $3, $4, $C-$F)
+           answers paramErr in D0 and the block's ioResult. MPW Shell's
+           File > New calls $C, and carries on. */
+        uint32_t pb = EM_A0;
+        snprintf(what, sizeof what, "FSDispatch selector $%x (pb $%x): answered paramErr",
+                 (unsigned)sel, (unsigned)pb);
+        log_unimplemented(what);
+        if(pb)
+            WRITEUW(pb + 16, (uint16_t)-50); /* ioResult */
+        EM_D0 = (uint32_t)-50;
+        return POPADDR();
+    }
     if(strcmp(trap_name, "ScriptUtil") == 0)
     {
         /* The selector long: argument bytes in its second byte, the
@@ -249,6 +283,42 @@ uint32_t Executor::traps::unknown_selector_68k(const char *trap_name, uint32_t s
         else if(mixed_mode_call.result_bytes == 4)
             WRITEUL(EM_A7, (uint32_t)-50);
         EM_D0 = (uint32_t)-50;
+        return ret;
+    }
+    if(strcmp(trap_name, "TranslationDispatch") == 0 && sel == 0x24)
+    {
+        /* Selector $24's own call site (disassembled at the resident System
+           code THINK C's, THINK Pascal's and MacPerl's launches all go
+           through, its address varying run to run): subq.w #6,sp;
+           pea.l 2(sp); moveq #$24,d0; _TranslationDispatch -- one 4-byte
+           pointer argument, with 2 bytes reserved below it on the stack
+           for a word result. What the routine is for isn't known (no
+           public name covers it); GetFlavorTranslation's own stand-in
+           for a System without Mac OS Easy Open (drag.cpp) answers the
+           same way. */
+        snprintf(what, sizeof what,
+                 "TranslationDispatch selector $24 (4 argument bytes): answered noTranslationPathErr");
+        log_unimplemented(what);
+        syn68k_addr_t ret = POPADDR();
+        EM_A7 += 4;
+        WRITEUW(EM_A7, (uint16_t)-3025); /* noTranslationPathErr */
+        EM_D0 = (uint32_t)-3025;
+        return ret;
+    }
+    if(strcmp(trap_name, "TranslationDispatch") == 0 && sel == 0x20)
+    {
+        /* Selector $20, from the same resident System code as $24 (a
+           ResEdit launch from the Finder on 8.6 in the tab): subq.w #2,sp;
+           clr.w -(sp); pea $A92(a6); pea $A8E(a6); moveq #$20,d0;
+           _TranslationDispatch; addq.w #2,sp -- two pointers and a word,
+           10 argument bytes, a word result. No translation, as $24. */
+        snprintf(what, sizeof what,
+                 "TranslationDispatch selector $20 (10 argument bytes): answered noTranslationPathErr");
+        log_unimplemented(what);
+        syn68k_addr_t ret = POPADDR();
+        EM_A7 += 10;
+        WRITEUW(EM_A7, (uint16_t)-3025); /* noTranslationPathErr */
+        EM_D0 = (uint32_t)-3025;
         return ret;
     }
     snprintf(what, sizeof what, "%s selector $%x: no size in the selector, session stopped (called from $%x)",

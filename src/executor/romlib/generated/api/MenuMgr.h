@@ -6,10 +6,12 @@
  * Needs:                                                                    *
  *     MacTypes.h          INTEGER, Handle, LONGINT, Str255,                 *
  *                         ConstStringPtr, ResType, CharParameter,           *
- *                         StringPtr, Boolean, Byte, Rect, OSErr, SInt16,    *
- *                         UInt8, Ptr, UInt16                                *
+ *                         StringPtr, Boolean, Byte, Rect, UInt16, OSErr,    *
+ *                         SInt16, UInt8, Ptr, UInt32                        *
  *     QuickDraw.h         RGBColor, Style                                   *
  *     DriverServices.h    OSStatus                                          *
+ *     EventMgr.h          EventRecord                                       *
+ *     FileMgr.h           TextEncoding                                      *
  *                                                                           *
  *                                                                           *
  *****************************************************************************/
@@ -23,6 +25,8 @@
 #include "ExMacTypes.h"
 #include "QuickDraw.h"
 #include "DriverServices.h"
+#include "EventMgr.h"
+#include "FileMgr.h"
 
 #define MODULE_NAME MenuMgr
 #include <base/api-module.h>
@@ -277,9 +281,14 @@ void C_GetItemIcon(MenuHandle mh, INTEGER item, GUEST<INTEGER> *iconp);PASCAL_TR
 void C_SetItemStyle(MenuHandle mh, INTEGER item, INTEGER style);PASCAL_TRAP(SetItemStyle, 0xA942);
 
 
-// MacPhoenix: the style is a Style, a byte: 8.6 writes one byte there
-// (tests/guest/difftest menu); a word overwrote the caller's next byte.
-void C_GetItemStyle(MenuHandle mh, INTEGER item, Style *stylep);PASCAL_TRAP(GetItemStyle, 0xA941);
+// MacPhoenix: through the trap the style is Pascal's VAR Style, a word
+// with the style in its low byte (the Quadra 650 ROM, tests/guest/itemstyle;
+// AppleWorks 5's command keys read it so). InterfaceLib's export, below,
+// writes one byte, as 8.6's does (tests/guest/difftest menu).
+void C_GetItemStyle(MenuHandle mh, INTEGER item, Style *stylep);PASCAL_TRAP_UNEXPORTED(GetItemStyle, 0xA941);
+
+
+void glue_GetItemStyle(MenuHandle mh, INTEGER item, Style *stylep);LIBRARY_FUNCTION(InterfaceLib, GetItemStyle, glue_GetItemStyle);
 
 
 INTEGER C_CountMItems(MenuHandle mh);PASCAL_TRAP(CountMItems, 0xA950);
@@ -337,6 +346,10 @@ using MenuBarDefUPP = UPP<LONGINT(INTEGER selector, INTEGER message, INTEGER par
 
 void CheckMenuItem(MenuHandle mh, INTEGER item, Boolean cflag);
 
+void C_EnableMenuItem(MenuRef menu, UInt16 item);LIBRARY_FUNCTION(MenusLib, EnableMenuItem, C_EnableMenuItem);
+
+
+void C_DisableMenuItem(MenuRef menu, UInt16 item);LIBRARY_FUNCTION(MenusLib, DisableMenuItem, C_DisableMenuItem);
 
 
 INTEGER C_GetMBarHeight();NOTRAP_FUNCTION(GetMBarHeight);
@@ -393,6 +406,9 @@ OSErr C_GetMenuTitleRect(INTEGER menuID, Rect *rect);PASCAL_SUBTRAP(GetMenuTitle
 void C_StandardMDEF(INTEGER message, MenuHandle theMenu, Rect *menuRect, Point hitPt, GUEST<INTEGER> *whichItem);LIBRARY_FUNCTION(MenusLib, StandardMDEF, C_StandardMDEF);
 
 
+LONGINT C_StandardMBDF(INTEGER selector, INTEGER message, INTEGER parameter1, LONGINT parameter2);LIBRARY_FUNCTION(MenusLib, StandardMBDF, C_StandardMBDF);
+
+
 OSErr C_SetMenuItemKeyGlyph(MenuRef inMenu, SInt16 inItem, SInt16 inGlyph);LIBRARY_FUNCTION(AppearanceLib, SetMenuItemKeyGlyph, C_SetMenuItemKeyGlyph);
 
 
@@ -438,6 +454,21 @@ OSStatus C_SetMenuBarClockConfig(Ptr inConfig);LIBRARY_FUNCTION(MenusLib, SetMen
 Boolean C_IsMenuItemEnabled(MenuRef menu, UInt16 item);LIBRARY_FUNCTION(MenusLib, IsMenuItemEnabled, C_IsMenuItemEnabled);
 
 
+OSErr C_SetMenuItemCommandID(MenuRef inMenu, SInt16 inItem, UInt32 inCommandID);LIBRARY_FUNCTION(AppearanceLib, SetMenuItemCommandID, C_SetMenuItemCommandID);
+
+
+OSErr C_GetMenuItemCommandID(MenuRef inMenu, SInt16 inItem, GUEST<UInt32> *outCommandID);LIBRARY_FUNCTION(AppearanceLib, GetMenuItemCommandID, C_GetMenuItemCommandID);
+
+
+UInt32 C_MenuEvent(const EventRecord *inEvent);LIBRARY_FUNCTION(AppearanceLib, MenuEvent, C_MenuEvent);
+
+
+void C_HideMenuBar();LIBRARY_FUNCTION(MenusLib, HideMenuBar, C_HideMenuBar);
+
+
+void C_ShowMenuBar();LIBRARY_FUNCTION(MenusLib, ShowMenuBar, C_ShowMenuBar);
+
+
 OSStatus C_SetSubmenuParentChoosable(MenuRef menu, Boolean inChoosable);LIBRARY_FUNCTION(MenusLib, SetSubmenuParentChoosable, C_SetSubmenuParentChoosable);
 
 
@@ -450,10 +481,52 @@ OSErr C_SetMenuItemModifiers(MenuRef inMenu, SInt16 inItem, UInt8 inModifiers);L
 OSErr C_GetMenuItemModifiers(MenuRef inMenu, SInt16 inItem, UInt8 *outModifiers);LIBRARY_FUNCTION(AppearanceLib, GetMenuItemModifiers, C_GetMenuItemModifiers);
 
 
+OSErr C_SetMenuItemHierarchicalID(MenuRef inMenu, SInt16 inItem, SInt16 inHierID);LIBRARY_FUNCTION(AppearanceLib, SetMenuItemHierarchicalID, C_SetMenuItemHierarchicalID);
+
+
+OSErr C_GetMenuItemHierarchicalID(MenuRef inMenu, SInt16 inItem, GUEST<SInt16> *outHierID);LIBRARY_FUNCTION(AppearanceLib, GetMenuItemHierarchicalID, C_GetMenuItemHierarchicalID);
+
+
+OSErr C_SetMenuItemFontID(MenuRef inMenu, SInt16 inItem, SInt16 inFontID);LIBRARY_FUNCTION(AppearanceLib, SetMenuItemFontID, C_SetMenuItemFontID);
+
+
+OSErr C_GetMenuItemFontID(MenuRef inMenu, SInt16 inItem, GUEST<SInt16> *outFontID);LIBRARY_FUNCTION(AppearanceLib, GetMenuItemFontID, C_GetMenuItemFontID);
+
+
+OSErr C_SetMenuItemTextEncoding(MenuRef inMenu, SInt16 inItem, TextEncoding inScriptID);LIBRARY_FUNCTION(AppearanceLib, SetMenuItemTextEncoding, C_SetMenuItemTextEncoding);
+
+
+OSErr C_GetMenuItemTextEncoding(MenuRef inMenu, SInt16 inItem, GUEST<TextEncoding> *outScriptID);LIBRARY_FUNCTION(AppearanceLib, GetMenuItemTextEncoding, C_GetMenuItemTextEncoding);
+
+
 void C_InvalidateAllMenuSizes();LIBRARY_FUNCTION(MenusLib, InvalidateAllMenuSizes, C_InvalidateAllMenuSizes);
 
 
 void C_InvalidateAllCachedMenuPixels();LIBRARY_FUNCTION(MenusLib, InvalidateAllCachedMenuPixels, C_InvalidateAllCachedMenuPixels);
+
+
+inline void cglue_appendmenu(MenuHandle mh, const char *str) {C_AppendMenu(mh, cglue::CString(str));}
+LIBRARY_FUNCTION(InterfaceLib, appendmenu, cglue_appendmenu);
+
+
+inline void cglue_getmenuitemtext(MenuHandle mh, INTEGER item, char *str) {C_GetMenuItemText(mh, item, (StringPtr)str);cglue::p2c(str);}
+LIBRARY_FUNCTION(InterfaceLib, getmenuitemtext, cglue_getmenuitemtext);
+
+
+inline void cglue_insertmenuitem(MenuHandle mh, const char *str, INTEGER after) {C_InsertMenuItem(mh, cglue::CString(str), after);}
+LIBRARY_FUNCTION(InterfaceLib, insertmenuitem, cglue_insertmenuitem);
+
+
+inline LONGINT cglue_menuselect(GUEST<Point> *p) {return C_MenuSelect(*p);}
+LIBRARY_FUNCTION(InterfaceLib, menuselect, cglue_menuselect);
+
+
+inline MenuHandle cglue_newmenu(INTEGER mid, const char *str) {return C_NewMenu(mid, cglue::CString(str));}
+LIBRARY_FUNCTION(InterfaceLib, newmenu, cglue_newmenu);
+
+
+inline void cglue_setmenuitemtext(MenuHandle mh, INTEGER item, const char *str) {C_SetMenuItemText(mh, item, cglue::CString(str));}
+LIBRARY_FUNCTION(InterfaceLib, setmenuitemtext, cglue_setmenuitemtext);
 
 
 } /* namespace Executor */

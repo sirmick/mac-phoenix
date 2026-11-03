@@ -32,7 +32,11 @@ the policy.
     could not be found" (no name): its launcher loads the Finder's own
     1.8 MB library, Executor's CFM allocated it in the 930 KB application
     heap and answered "not found". CFM now falls back to temporary memory
-    (`cfm.cpp`, `cfm_new_ptr`), as Apple's does.
+    (`cfm.cpp`, `cfm_new_ptr`), as Apple's does. An import library's
+    image goes to temporary memory first, one in the application's own
+    file too (its data stays in the heap): Serial MReader's REALbasic
+    runtime (1.3 MB) filled its 2.8 MB partition, which on the G3's 8.6
+    (virtual memory off) is 2.1 MB in use with the program running.
 * Then (steps 1 and 2 below, "The Finder starting"): the 8.6 Finder ran
   to its menu bar and desktop pattern with 173 imports unresolved.
 * Now (step 3, 2026-10-28): CFM finds 8.x's Toolbox libraries in the
@@ -56,7 +60,7 @@ neither, i.e. the system's own code (ROM, or the System file's patches).
 
 | Source | 8.6 | 9.0.4 | On Executor |
 |---|---|---|---|
-| ROM | InterfaceLib, PrivateInterfaceLib, NameRegistryLib | InterfaceLib | Executor's |
+| ROM | InterfaceLib, PrivateInterfaceLib, NameRegistryLib | InterfaceLib | Executor's (NameRegistryLib: the root and `Devices` only, 17 routines, nameregistry.cpp) |
 | The system's own (no file: in fact the System file's data fork, step 3) | AppearanceLib (217 exports), WindowsLib (129), ControlsLib (83), MenusLib (45), MacDialogsLib (6), DragLib (43), IconServicesLib (50), Translation (58), ThreadsLib (31), ObjectSupportLib (13), FontManager (77), FontObjects (41), ToolboxUtils (135), NavigationLib (19), FoldersLib (14), CollectionsLib (39), ControlStripLib (26), ATSUnicodeLib (101), LocalesLib (13), DriverServicesLib (224), DebugLib, StdCLib, MathLib | the same (AppearanceLib 218, WindowsLib 135, ControlsLib 99, MenusLib 50, MacDialogsLib 10, IconServicesLib 53, FontManager 114, FontObjects 67), and PrivateInterfaceLib (1852), NameRegistryLib (70), DesktopItemsLib (4), StringCompare, NumberFormatting | Executor's job: StdCLib and MathLib are; the rest are missing or under InterfaceLib only |
 | System file `'nlib'` | TextCommon, UnicodeConverter, SoundLib, QuickdrawLib, Math64Lib, VideoServicesLib, DriverLoaderLib, CursorDevicesLib, UTCUtils, StringCompare | the same and PPCToolbox, DebugLib (not StringCompare) | not registered (SoundLib is Executor's) |
 | Extensions file | ContextualMenu, FileSharingLib, ColorPickerLib, AppleGuideGlueLib, AppleScriptLib, OTClientLib & co., QuickTimeLib, TextEncodingConverter | the same | Apple's file when the policy allows it; OT's and AppleScriptLib's are Executor's |
@@ -164,6 +168,42 @@ forever.
 The 9.0.4 Finder runs as far (no extensions), then says 'The disk ""
 cannot be used, because an error of type -35 occurred'.
 
+Desktop icons (2026-10-31): the aliases show their targets' icons with
+the alias arrow and the volumes their drivers' icons, as on the G3 (Icon
+Services: -16496, Control 22/21, 8.5's system icons from System
+Resources; docs/executor/IconServices.md 1.4.2). The Trash and the
+Apple menu's items (2026-10-31): the Finder makes its startup disk from
+GetWDInfo(BootDrive) (BootDrive is a working directory on 8.6 too,
+difftest sys "boot") and finds its VCB by that volume reference number;
+Executor's GetWDInfo gave back the working directory's own number, so
+the startup disk had no VCB, counted as off line (drive 0), and the
+Finder neither put its Trash on the desktop nor filled the Apple menu
+(AddAppleMenuItem never called). Apple Menu Options' submenus: on 8.x it
+is an 'APPC' (a control panel that is an application), and the loader
+ran INITs of INIT/cdev/RDEV/fext files only; it runs 'APPC' ones now
+when allowed (extensions.cpp; ctest applemenu_submenus_*). The items'
+icons as on the G3: an alias without a custom icon shows its kind's icon
+by its type ('fact' Control Panels, 'faet' a folder, 'adrp' its
+creator's application), not its target's; a 'badg' override with
+kExtendedFlagHasCustomBadge (Favorites); applications' icons from any
+volume's desktop database; and folders keep their Finder info when the
+System Folder is copied out (Recent Applications' custom icon). IconTest
+checks them on the G3 and Executor.
+Also: the "Finder Preferences" copied from the image hold that volume's
+folder IDs; with a Desktop Folder already on Executor's System volume at
+startup the Finder lists the Preferences folder (dir 12) as the desktop.
+Executor's fresh System volume has no Desktop Folder, so the default run
+is right.
+
+AppleScript on 8.6 (2026-10-31, not on in the extension policy yet): its
+INIT runs (CodeFragmentDispatch -2 prepares its PowerPC code; the AE
+private tables with 12-byte values), its 'thng's register as PowerPC
+components (PEF code, main a routine descriptor), Script Editor opens
+(wildcard Apple event dispatch, null targets). Starting it then says
+"Could not initialize the application because of a scripting-system
+(OSA) error": the next thing to find, with `AppleScript @ 8.0` added to
+src/executor/res/extension-policy.txt (8.6's file has no ™).
+
 Called and still unanswered (8.6, 2026-10-30): `GetQDGlobals`,
 `QDGet`/`SetPatternOrigin`, `LMGetBrianBits`, `LMGetCurLayer`,
 `IsMenuItemEnabled`, `SetSubmenuParentChoosable`, MenuDispatch $13; Icon
@@ -242,10 +282,24 @@ Third run (`~/storage/executor-grid/8.6-r3/`): no host crashes.
   a `'MOSS'/'prfl'` event (Executor's coercion was an old private format
   that read only `'odoc'` lists); an application's fragment carries its
   `'cfrg'` name, which the libraries in Communicator's file import from.
-  Communicator itself still quits: its allocator's pools don't fit in the
-  12.5MB partition once its ~10MB of code is loaded there. Open: whether
-  8.6's Process Manager adds a PowerPC application's code to the
-  partition with virtual memory off (Communicator runs on the G3).
+  Communicator itself quit: its allocator's pools didn't fit in the
+  12.5MB partition once its ~10MB of code was loaded there. With virtual
+  memory off a Mac's Process Manager adds a PowerPC application's
+  fragment to its partition: the fragment's length, rounded up to 4, and
+  50K more (8.6, 9.0.4; 28K on 7.6.1), the Code Fragment Manager loading
+  code and data into the application heap (`tests/guest/partprobe`'s
+  PartProbePPC on the G3, ctest `partition_fragment_*`); Executor does
+  the same (process.cpp `powerpc_fragment_extra`). CloseConnection gives
+  a fragment's memory back when its last connection closes (PartProbePPC
+  loads and closes 20 copies of itself): CodeWarrior IDE 3.2 prepares
+  each of its plug-ins, asks it what it is and closes it, and quit when
+  NewThread found no room left for its stack.
+* THINK C 6 and THINK Pascal 4.5 on 8.6 stop in Standard File: the
+  System's PowerPC "Translation" library (loaded for the Finder) says
+  Gestalt 'xlat', and 8.6's PACK 3 then calls `$ABFC` selectors $24 (one
+  `long *`: GetTranslationManagerStatus?) and $20. On a Mac the 68k
+  dispatcher reaches the library's exports; Executor's own dispatcher
+  (TranslationMgr.yaml) knows only the Drag Manager's selector. Open.
 * Date & Time: the menu bar clock calls (MenusLib, weak imports it makes
   from 8.2 on) are answered; it now spins in Apple's WindowDefinitions
   drawing its title (no traps: needs PC sampling). With Charcoal (the
@@ -253,6 +307,14 @@ Third run (`~/storage/executor-grid/8.6-r3/`): no host crashes.
   Services, `'cfrg'` 52), section 0 +$14..+$2c, a skip-list search that
   never meets its end node: the glyph cache ATS keeps isn't set up as 8.6
   sets it up (FMSharedCaches, FontObjects); its menus show, no window.
+  Two causes (2026-10-31): each application got its own copy of the ATS
+  libraries' global-share data (CFM now prepares those sections once per
+  system), and Apple's FontManager library, loaded beside Executor's Font
+  Manager, kept its own WidthListHand, which Executor's FMSwapFont then
+  trimmed under it. The FontManager library's exports are now Executor's
+  (`quickdraw/fontmgr85.cpp`, FontMgr.yaml; the text probe's `fm` keys):
+  Apple's never runs, Date & Time opens its window, and the appr probe's
+  controls run after its window frames without the crash.
 
 Differential probes (docs/executor/DiffTest.md) now ask Apple's 8.6
 libraries and Executor's the same questions: `appr` (the Appearance
@@ -284,6 +346,127 @@ Apple Type Services, which spins on Executor (Date & Time). Not yet:
 floating windows as a layer of their own (`'wind'` bit 2), proxy drags and
 the path menu (they answer as for a window without a proxy, or
 errUserWantsToDragWindow), collapsing drawn.
+
+The Appearance procIDs (2026-10-31, the `appr` probe's `frames`): a window
+of procID 1024-1087 (NewWindow, NewCWindow, 'WIND' resources) ran 8.6's
+WDEF 64-67 and spun in ATS drawing its title. Executor serves WDEFs 64-67
+itself now (resource-policy.txt; the entry `wdef64`, windMgr8.cpp), the
+window keeping its WDEF and variant for GetWVariant and GetWindowFeatures,
+drawn by WDEF 0's document frames and dialog boxes; floating ones (66,
+67) by their own platinum frame (8.6's WDEF 124 hands them back to WDEF
+66). Found with them: CopyBits into a
+16- or 32-bit pixmap colourised with the current colour port's
+fgColor/bkColor, pixel values for the port's own device (an 8-bit screen
+copied into a 32-bit GWorld came out as indices); the port's RGB colours
+are used when the depths differ (qPixMapConv.cpp).
+
+Platinum window frames (2026-10-31, `appr` frames): on 8.x WDEF 0 draws
+document windows (with and without grow and zoom; WDEF 64's too, its grow
+box part of the frame and not of the content), modal dialog boxes (6
+pixels; WDEF 65's 3) and movable modal dialogs (a title bar over the same
+frame) as 8.6 does, measured from the G3's pixels (appearance_draw.cpp:
+documentFrame, dialogFrame, movableDialogFrame; regions and hit testing
+in windDocdef.cpp); plain and shadowed dialog boxes stay black when
+inactive. 12 of the probe's 34 frames are 8.6's pixel for pixel, 14 more
+but for the title's glyphs (Charcoal from Executor's unhinted scaler).
+Floating windows (WDEF 66 and 67, 124's through 66; appearance_draw.cpp
+floatingFrame, windDocdef.cpp ROMlib_wdef_floating): a 16-pixel title
+bar, 10-pixel close, zoom and collapse boxes, stripes of dots on a
+3-pixel grid, the title in the small emphasized system font (Geneva 10
+bold), a 10-pixel grow box in the frame; 67's bar on the left, 14 wide,
+untitled; 1057, 1059, 1061, 1073 and 1075 are 8.6's pixel for pixel. The
+rounded window (procID 16) is classic on 8.6 too, its close box a pixel
+further left than 7.x's document window's: the frame is 8.6's, the title
+glyphs aren't. 8.6's platinum WDEFs draw nothing pressed for wDraw with a
+part code (the probe's `pressed` keys equal the active frame; only the
+rounded window inverts its close box) unless the button is down in the
+box. Measured from real clicks on the G3, a pressed document box keeps
+its ring and frame and has a darker ramp inside (#444 to #bbb, its right
+and bottom edges no lighter than #999); TrackBox redraws the box
+unpressed when the button comes up inside (IM I-288). Collapsing
+(CollapseWindow, and a click in the collapse box, which 8.6 answers for
+every application, one without an inCollapseBox case too): the title
+bar alone, the outline closing under it; windows that can't collapse
+get errMessageNotSupported (`appr` frames.N.collapsed / .collapse:
+floating ones 8.6's pixel for pixel, document ones but for the title
+glyphs). Window Manager 2.0's regions (`wind`) come from the
+definitions' geometry, invisible windows too: the title bar along the
+structure's top (22 deep; a floating window's down to the content), the
+title text 2 inside it and a pixel short of its width, the drag region
+the whole frame less the content's rectangle (a classic movable dialog's
+inner frame too; none collapsed); boxes, grow and collapse box have no
+region. CreateNewWindow makes WDEF 64-67 windows on 8.x, every procID
+window is kDocumentWindowClass with no attributes (paramErr), and the
+features carry the platinum definitions' bits. CreateNewWindow's
+floating windows have a 14-deep bar (the boxes a pixel nearer the
+content). DrawThemeWindowFrame (`appr` draw*.windowframe*) answers
+paramErr and draws nothing without metrics, as 8.6; with them it draws
+the definitions' frames: document, dialog, movable dialog (a document
+bar's boxes and stripes when the attributes ask), the alerts' edges and
+movable bar tinted red (#ff9999/#ff6666, face #ffcccc), plain and shadow
+outlines, the utility windows' 14-deep bars (the side one without a
+collapse box; full zoom's glyph a corner): all 8.6's pixel for pixel but
+the popup window. Not yet: a pressed floating box, the popup window's
+frame, the movable grow dialog's grow corner.
+
+Platinum tracks and tabs (2026-10-31, `appr` controls.48/80, tab80,
+track, misc.tab): 8.6's CDEF 80 clips to GetThemeTrackBounds, which for
+a progress bar is the bounds as given (no thumb, drag rectangle or live
+value: paramErr, the output left alone); the determinate bar is a tube
+in the accent ramp (#005 #339 #66c #99f #ccf #eee) up to a black line, the
+rest sunk grey. CDEF 48's slider: a 6-deep channel with cut corners
+(#222 outline, #aaa inside, a #aaa line over and before it) and a thumb
+pointing down (right, vertical: the same shape transposed), shaded in
+the same ramp with three grip ridges, a step darker pressed; its region
+is that shape (8.6's CRCs), its position rounded. DrawThemeTab (north):
+21 rows, a front tab 24 down over the pane's edge, the sides stepping out
+a pixel every 3 rows from 10 in; a row is the fill, a left piece and a
+right piece from 12 in from the right drawn last, which is what a narrow
+tab looks like on 8.6 too; GetThemeTabRegion is the same shape. 8.6
+draws nothing for kThemeTabNonFrontUnavailable (newer than its
+Appearance). All of these are 8.6's pixel for pixel. Not yet: tabs
+pointing other ways, the indeterminate bar, plain (non-directional)
+slider thumbs and tick marks.
+
+Dialog backgrounds (2026-11-01, `appr` dialogs): on 8.6 a dialog is white
+unless its 'dlgx' asks for the theme background
+(kDialogFlagsUseThemeBackground, NewFeaturesDialog's flag too); every
+alert (Alert and its kin, an 'alrx' or not, StandardAlert) is on the
+theme's grey (#dddddd); either way the dialog gets a colour port, which a
+plain DLOG doesn't. The Window Manager erases (ShowHide, PaintOne,
+EraseWindowRegion) with the background a window was given
+(SetThemeWindowBackground, SetWindowContentColor) before its colour
+table's. Found with it: a port's back colour on a 32-bit screen was read
+in the wrong byte order (qPixMapConv.cpp: #dddddd came out #dddd00, the
+grayishTextOr titles of inactive buttons brown). Not yet: StandardAlert's
+note icon (its black pixels transparent).
+
+Platinum menus (2026-10-31, `appr` draw*.menu*, and the Finder's File,
+Edit, View and Special menus on the G3). 8.x's MBDF 0 is a 68k loader for
+MBDF 63, PowerPC code that passes its arguments on to MenusLib's
+StandardMBDF; Executor exports that as its own MBDF 0 (as StandardMDEF is
+its MDEF 0), so AppleWorks 5.0.3 got its menu titles. AppearanceLib's
+menu calls draw platinum (appearance_draw.cpp: the bar with its rounded,
+shaded top corners, selected bar and titles in the default appearance's
+#6666cc/#333399/#000088, menu backgrounds with their outline and #222
+shadow and its region, items, hierarchical arrows, separators): every
+menu key of the probe is 8.6's pixel for pixel. On 8.x Executor's MBDF
+and MDEF 0 draw through them, laid out as 8.6's: titles StringWidth + 13
+(the Apple menu 27, the System's colour apple, icon family -16386), a
+menu's outline under its title's left and a submenu 4 in from its item's
+right, items 16 high and separators 6, the mark at 2, the text at 21, the
+command key's mark 33 from the right, a menu as wide as text + 31 (+ 63
+with a command key or submenu); titles and items black, #777 disabled,
+white selected. The Finder's four menus have 8.6's geometry exactly; the
+glyphs are 1 pixel to the right (the scaler, as the window titles). A
+SetMenuItemKeyGlyph glyph is drawn after the ⌘ as its character in the
+System's .Keyboard font (FOND 98; the Finder's Move To Trash: ⌘⌫). The
+Apple menu has its own layout on 8.6 (measured on the G3 with long items
+added to Apple Menu Items): plain items' text 15 in, an entry's icon 18
+and its text 40, then 18 to the right edge (31 with a submenu); the
+whole menu is still a pixel right of the G3's. Not
+yet: SetMenuItemModifiers' marks (kept, not drawn), scroll arrows in a
+long menu, popup menus' own look, the menu bar clock.
 
 The titles over dots (2026-10-31): 8.6's ToolboxUtils saves a colour
 port's old-style background pattern from the PixPat's `patData` handle,

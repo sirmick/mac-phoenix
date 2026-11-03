@@ -1,0 +1,109 @@
+{
+ "note": "Adobe Photoshop 3.0.5 (Adobe, 1995), 68k: the 3.0 floppies (Install-Disk 1, Disks 2-7, attached) and the 3.0.5 Updater. WIP: the installer puts Photoshop 3.0.4 on the boot disk (onto another volume VISE fails, 'Drive not found' -35; the ATM Program Disk it asks for isn't in the set: skipped), the registration and the first launch both reject the owner's serial ('invalid serial number'), and the 3.0.5 Updater reports success but leaves the application's vers at 3.0.4. The archive's folder named after its original owner's serial is not used",
+ "kind": "install",
+ "wip": true,
+ "os": "tools-7.6.1",
+ "from_boot": true,
+ "disks": [
+  {
+   "file": "Adobe_Photoshop_3.0.5.sit",
+   "take": "Adobe_Photoshop_3.0.5/Install-Disk 1.image.bin"
+  },
+  {
+   "file": "Adobe_Photoshop_3.0.5.sit",
+   "take": "Adobe_Photoshop_3.0.5/Disk 2.image.bin"
+  },
+  {
+   "file": "Adobe_Photoshop_3.0.5.sit",
+   "take": "Adobe_Photoshop_3.0.5/Disk 3.image.bin"
+  },
+  {
+   "file": "Adobe_Photoshop_3.0.5.sit",
+   "take": "Adobe_Photoshop_3.0.5/Disk 4.image.bin"
+  },
+  {
+   "file": "Adobe_Photoshop_3.0.5.sit",
+   "take": "Adobe_Photoshop_3.0.5/Disk 5.image.bin"
+  },
+  {
+   "file": "Adobe_Photoshop_3.0.5.sit",
+   "take": "Adobe_Photoshop_3.0.5/Disk 6.image.bin"
+  },
+  {
+   "file": "Adobe_Photoshop_3.0.5.sit",
+   "take": "Adobe_Photoshop_3.0.5/Disk 7.image.bin"
+  }
+ ],
+ "media": [
+  {
+   "file": "Adobe_Photoshop_3.0.5.sit",
+   "take": "Adobe_Photoshop_3.0.5/Adobe PhotoShop 3.0.5 Updater.bin!:Adobe PhotoShop 3.0.5 Updater"
+  }
+ ],
+ "steps": [
+  {
+   "launch": "Install-Disk 1:Install Adobe Photoshop™"
+  },
+  {
+   "wait_for": {
+    "button": "Continue…"
+   },
+   "timeout": 60
+  },
+  {
+   "click": {
+    "button": "Continue…"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Switch Disk"
+   },
+   "timeout": 60
+  },
+  {
+   "click": {
+    "button": "Install"
+   },
+   "note": "onto Macintosh HD"
+  },
+  {
+   "wait_for": {
+    "button": "Skip"
+   },
+   "timeout": 60,
+   "note": "Please insert the disk: ATM™ Program Disk"
+  },
+  {
+   "click": {
+    "button": "Skip"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Cancel"
+   },
+   "timeout": 60
+  },
+  {
+   "click": {
+    "button": "Continue"
+   }
+  },
+  {
+   "wait_for": {
+    "text": "Installation was successful."
+   },
+   "timeout": 900
+  },
+  {
+   "click": {
+    "button": "Continue"
+   }
+  },
+  {
+   "wait_app": "Adobe Photoshop™ Registration",
+   "timeout": 120
+  }
+ ]
+}

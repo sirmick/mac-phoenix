@@ -8,7 +8,10 @@ while programs keep seeing the 640x480-style 1x screen they were written
 for. The ROM machines can't do this: their QuickDraw is Apple's code in
 ROM.
 
-Status: design (2026-10-31). Nothing is implemented.
+Status: phase 1 (text on the screen) implemented, 2026-10-31; phase 2
+(chrome) and phase 4 (GWorld shadows) started 2026-11-01: see
+"Phase 1, as built" and the sections after it at the end. The rest is
+design.
 
 ## The idea in one paragraph
 
@@ -266,3 +269,381 @@ FreeType is FTL (BSD-style) when used through Skia.
 - Owning ATSUI's rendering (also the Date & Time hang).
 - Cost of Skia at full redraw rates on the CPU back-end; when to use the
   GPU.
+
+## Phase 1, as built (2026-10-31)
+
+### Building and running
+
+Skia is optional and off by default: `tools/skia/fetch.sh` fetches the
+prebuilt static Skia of JetBrains' skia-pack (release `m144-e2e6623374-4`,
+SHA-256 pinned in the script) into `~/storage/deps/skia-m144-linux-x64`, where
+`-DEXECUTOR_SKIA=ON` looks for it (`-DSKIA_DIR=...` otherwise). It links
+`libskia.a` and Skia's own `libfreetype2.a` (FreeType, FTL; static and not
+exported, so the system's FreeType that Qt loads is untouched); the binary
+grows by about 6 MB. Building Skia ourselves (GN, depot_tools, a vendored
+subset) was not needed: skia-pack also has `linux-Release-arm64` (for
+`tools/xarch` builds; `fetch.sh arm64`) and `wasm-Release-wasm` static
+libraries built with Emscripten (`fetch.sh wasm`), which the wasm build
+could link instead of CanvasKit (CanvasKit is Skia's JavaScript API; we
+draw from C++, so the static libraries are what we'd want).
+
+**wasm link: skia-pack's prebuilt doesn't link; build Skia ourselves
+instead (2026-10-31).** `-DEXECUTOR_SKIA=ON` configures `build-wasm`
+cleanly (the `find_library()` calls needed `NO_CMAKE_FIND_ROOT_PATH`:
+Emscripten's toolchain file restricts `find_library` to its own sysroot
+otherwise), but linking skia-pack's wasm package fails: `libskia.a`'s
+FreeType/libpng objects are undefined on `__wasm_longjmp`/`__c_longjmp`.
+skia-pack's wasm build was compiled with clang 21 using Emscripten's newer
+wasm-native setjmp/longjmp (`-sSUPPORT_LONGJMP=wasm`, paired with
+`-fwasm-exceptions`); our emsdk (clang 23, `~/emsdk`) defaults to the
+older JS-polyfill SjLj, paired with the JS-polyfill exception model we
+already build the rest of Executor's wasm target with. Passing
+`-sSUPPORT_LONGJMP=wasm` at link time alone just moves the break (our own
+`romlib` objects that call `setjmp`/`longjmp`, e.g. `launch.cpp`, were
+compiled expecting the old runtime's `emscripten_longjmp`, and the
+Emscripten `libc++.a` picked for the new mode is missing symbols the old
+one didn't need either); matching it at compile time too makes `clang++`
+refuse the combination outright (`'-wasm-enable-sjlj' not allowed with
+'-enable-emscripten-cxx-exceptions'`), because the new longjmp model
+requires the new wasm-exceptions model too — not a Skia-local flag, but a
+switch of Executor's *whole* wasm build's exception model (Asyncify,
+which our process switching relies on, doesn't support `-fwasm-exceptions`
+either, so that path is closed).
+
+So: `tools/skia/build-wasm.sh`, beside `fetch.sh`, builds Skia from
+source with *our* emsdk instead of using the prebuilt. A minimal config
+for what phase 1 actually needs — core, paths, fonts/glyphs from
+outlines (FreeType), raster backend — with no GPU, no image codecs
+(decoding isn't needed: fonts arrive as bytes already in memory, handed
+to Skia via `SkData`), no SVG/shaping/ICU. The one surprise: FreeType's
+own `BUILD.gn` depends on libpng (for color-emoji glyph support)
+unconditionally, and libpng on zlib, regardless of codec flags — those
+three stay, built minimally too (no codec use otherwise). GN
+(`bin/fetch-gn`, a direct download, no `depot_tools`/CIPD needed) and
+three `git fetch --depth 1` clones at DEPS-pinned commits (Skia itself
+pinned to `fetch.sh`'s same `m144-e2e6623374-4` revision; FreeType,
+libpng, zlib at the commits Skia's `DEPS` pins for it) are the only
+inputs; `ninja -j3 skia` builds in about 90 seconds. The script writes
+its output into `fetch.sh`'s own wasm destination
+(`~/storage/deps/skia-m144-wasm-wasm`), same directory layout, so
+`-DEXECUTOR_SKIA=ON`'s existing `SKIA_DIR` default picks it up with no
+further CMake changes for path resolution — `tools/skia/fetch.sh wasm`
+is superseded for this target; run `build-wasm.sh` instead. One addition
+*was* needed in `CMakeLists.txt`: the native/arm64 prebuilt's extra
+FreeType dependencies (libpng, zlib, skcms) get their symbols for free
+from the system zlib/libpng that Qt already links; the wasm build links
+no such thing, so `libpng`/`zlib`/`skcms` are now found and linked
+explicitly alongside `libskia`/`libfreetype2` (harmless if unreferenced:
+a static archive only pulls in the object files a symbol reference
+actually needs).
+
+Built this way, `executor-web.wasm` (Release, `source
+~/emsdk/emsdk_env.sh && emcmake cmake -B build-wasm -DEXECUTOR_SKIA=ON
+-DCMAKE_BUILD_TYPE=Release && cmake --build build-wasm -j3 --target
+executor-web`) is 63.8 MB (6.67 MB gzipped) versus 59.8 MB (5.39 MB
+gzipped) with `-DEXECUTOR_SKIA=OFF` — Skia costs about 4.0 MB
+uncompressed, 1.27 MB gzipped, in this minimal configuration.
+
+```
+tools/skia/fetch.sh && cmake -B build -DEXECUTOR_SKIA=ON && cmake --build build -j4
+./build/mac-phoenix --backend executor --executor-system 8.6.img --executor-ppc --executor-scale 2
+curl -o 2x.png localhost:11000/api/screenshot           # the presentation surface
+curl -o 1x.png 'localhost:11000/api/screenshot?scale=1' # the Mac's own pixels
+```
+
+`--executor-debug hidpi` logs each piece of text StdText draws on the screen
+and what became of it (recorded, replaced, or left 1x and why).
+
+### The pieces
+
+- `romlib/hidpi/hidpi.h`: the interface; inline no-ops without
+  `EXECUTOR_SKIA`, so QuickDraw's code has no `#if`s.
+- `romlib/hidpi/hidpi.cpp` (emulator thread): `text_helper`
+  (quickdraw/qStdText.cpp) hands over, for text drawn on the screen port
+  at 1:1 (no numer/denom scaling), each character with the pen position
+  the 1x layout gives it, the font the Font Manager chose (`WidthTable`
+  `fID`, size, face), and StdBits' call as a function. Around that call the
+  framebuffer's rows under its rectangle are copied (before, after): a
+  **run**. The family's outline is found through the Font Manager's own
+  search (`ROMlib_family_outline`, every FOND of the family) and copied
+  out of the guest once per font; an outline the Font Manager hadn't
+  loaded is loaded and emptied again, its error globals put back.
+- `romlib/hidpi/hidpi_skia.cpp` (render thread; no Executor headers): for
+  each rectangle the video driver redraws, the 1x pixels scaled up
+  (nearest neighbour; pixel edges `ceil(x * scale)`, so fractional scales
+  work), then each run over that rectangle that is still on the screen:
+  the pixels its 1x text changed back to what they were before it, then its
+  glyphs from the outline (anti-aliased, slight hinting, subpixel
+  positions) at ppem = size x scale, clipped to the port's vis and clip
+  regions (1x, scaled) and a pixel round the run.
+- `PhoenixVideoDriver` keeps the presentation surface beside the 1x frame
+  and composes it after each conversion; `executor_child` publishes both
+  in the IPC slot (the surface, then the 1x frame: `scale_milli`,
+  `base_width`, `base_height` in `IPCBuffer`). The parent sizes its video
+  frames for the largest mode then, divides the page's absolute mouse
+  positions by the scale, sends the scale with the cursor image (the page
+  draws the cursor at the Mac's size), and `/api/screenshot?scale=1`
+  answers the 1x frame.
+
+### Runs and staleness
+
+A run is shown while the screen still has what it left: the pixels it
+changed, and a pixel round them (a selected label's black box erased under
+its white srcBic text changes only those), or for srcCopy its whole box.
+What draws over a run without being text (an erase, a highlight, a window
+moving over it) makes it stale and the 1x pixels show; text drawn over a
+run updates what the run left (it is drawn after it). A run that a later
+one draws again glyph for glyph is replaced, the later one taking its
+"before" where its text is still underneath: TextEdit erases and draws the
+whole line again at each keystroke, and the two drawn together darkened
+the anti-aliasing; the caret blinking over a run is enough to make it
+stale, so replacement looks at stale runs too. srcXor drawn twice in the
+same place (erasing itself) removes both. The replacing run is also drawn
+inside the replaced one's clip (AppleWorks draws its font pop-up's name
+again through a clip of its right half). Text whose drawing the port's
+clip leaves nothing of is not a run and changes none (a dialog's items
+drawn again outside its update region). A run drawn over until no pixel
+it changed is left (a button drawn up again over its pressed look) goes:
+it could never be found stale. One whose drawing changed nothing (chrome
+drawn again over the same pixels) is stale at any change in its box. At
+most 4096 runs; stale ones go when text is drawn over them. A run knows its port: when the Window Manager computes that window's
+visRgn again (CalcVis: a window put in front), the run is clipped to it,
+and when the window is hidden or closed its runs go. The pixels alone
+can't tell: an alert's white over a text window's white left slivers of
+the outline glyphs inside the alert, and a closed alert's pressed Cancel
+(a grey box, its title white) came back over a document's white
+(`tests/test_hidpi_windows.sh`). Runs a menu's saved bits carry back keep
+their window's port.
+`tests/test_hidpi_chrome.sh` (ChromeGallery) has a case for each.
+
+Text modes: srcOr, srcBic (the text in the background colour: selected
+icon labels), srcCopy (the box filled first), grayishTextOr (grey, the
+foreground and background colours mixed, instead of the dither), srcXor
+(aliased glyphs inverting the surface). The others stay 1x. Styles: bold
+as QuickDraw makes it (the glyph again `FMOutput.bold` pixels to the
+right, at the device's pixels: Skia's embolden was far lighter than
+QuickDraw's bold), italic as a skew of 0.25, underline at the baseline + 1,
+`ulThick` thick, outline and shadow as strokes. An outline of the style
+asked for is used when the family has one.
+
+Each **word keeps its 1x place**, its glyphs evenly spaced in it: a
+bitmap strike's proportions aren't the outline's (Geneva 12's i, l and j
+are wide cells in the strike and thin glyphs in the outline, so placed at
+the pen they left uneven gaps, "qui ck"). Each glyph centred in its own 1x
+advance still left them ("P ro", "Regis ter"); now a word (glyphs each
+starting where the last's 1x advance ended, up to a space) takes the
+outline's own advances and spreads what's left of its 1x width evenly
+between them (`glyph_lefts`, hidpi_internal.h; a lone glyph is centred).
+
+### What it looks like (2026-10-31, 8.6 and 7.5.5 at 2x)
+
+- **Menus** (titles and items, dimmed items as grey, command-key glyphs),
+  window titles (Charcoal on 8.6), the BridgeAgent window, **General
+  Controls** (Geneva 9 and 9 bold), **SimpleText** (Geneva 12 in plain,
+  bold, italic, underline), dialogs: from outlines.
+- **7.5.5's Finder** draws its windows on the screen: icon labels and the
+  window headers are from outlines too. **8.6's Finder** draws window
+  contents offscreen and copies them: they stay 1x (GWorld shadows,
+  phase 4). The desktop's labels are drawn on the screen in both.
+- **Chicago** looks almost the same at 2x: its TrueType outline is drawn in
+  pixel steps like the bitmap. Charcoal, Geneva, New York and Monaco gain
+  the most.
+- Not covered (1x): transfer modes other than the five above, text scaled
+  by numer/denom (pictures), runs with a character the outline lacks,
+  bitmap-only families (no substitution table yet), everything drawn
+  offscreen.
+- Proportions: outline glyphs evenly spaced in each word's 1x width read
+  well; scaling glyphs to fill the advance wasn't needed. Synthesised italic
+  (QuickDraw slants about the strike's bottom, Skia about the baseline) is
+  shifted by about descent/2 pixels from the 1x one, inside the run's box.
+- Clipping: runs are clipped to the 1x vis and clip regions, scaled
+  (staircase edges at 2x: region twins are phase 2); no overflow past
+  window edges was seen.
+- `/api/text`, `/api/ui`, measurement, hit testing: unchanged (the 1x truth).
+
+### Open after phase 1
+
+- Text through GWorlds (8.6's Finder windows, most modern programs):
+  phase 4's shadows.
+- Selection highlighting (InvertRect over text) and other non-text drawing
+  over text show the 1x text until it is drawn again.
+- A substitute outline for bitmap-only families; ATSUI (8.6's
+  WindowDefinitions titles: Executor draws its own titles today).
+- The render thread's cost: every redrawn rectangle is scaled and its runs
+  drawn again (no cache of drawn runs). Measured (`--executor-debug hidpi`
+  prints it every 5 s) on 8.6 at 640x480 x 2, typing in SimpleText and
+  opening General Controls: at most 1.3 ms a frame, 30-40 ms per 5 s
+  (under 1% of a core), 25-44 runs on the screen. The GPU back-end can
+  wait.
+
+### The wasm tab
+
+Built with `tools/skia/build-wasm.sh` (above) and `--scale` on
+`executor-web`'s own argv (`web/executor/main.js`'s `?scale=`, default
+`devicePixelRatio`; `web/executor/worker.js` passes it through).
+`PhoenixVideoDriver::render()`'s `rectsHook` branch (wasm's only path)
+now calls `hidpi::compose()` and publishes the whole `scaled_` surface
+through the same `rectsHook` every time (`compose()` doesn't report how
+far outline-glyph padding extended the dirty area, and this matches
+`scaledFrameHook`'s own full-frame-every-publish cost on native, not a
+regression). `guestPoint()`'s mouse mapping needed no change: the
+canvas element's `width`/`height` IDL attributes freeze at the 1x size
+before `transferControlToOffscreen()` detaches the backing buffer that
+resizes to the scaled dimensions in the Worker.
+
+Gate: `ctest -R executor.web.hidpi` (needs a Playwright-capable
+`EXECUTOR_WEB_NODE_PATH`; `web/tests/tab_hidpi.mjs`). Boots the same
+7.6.1 Finder at `?scale=1` and `?scale=2`, and checks the 2x run's menu
+bar actually differs from a naive nearest-neighbor doubling of the 1x
+run by more than a sliver -- the plain-upscale look that not calling
+`hidpi::compose()` would silently produce otherwise. Measured on this
+box: canvas backing buffer doubles correctly (640x480 to 1280x960); 2.8-2.9%
+of the menu bar's pixels differ from the naive upscale (antialiasing and
+hinting at the glyph edges, which a bitmap blow-up has none of); the
+Worker's own per-frame draw cost (`Module.stats`, the 'stats' request)
+goes from about 0.1-0.14 ms/frame at scale=1 to 2.9-3.8 ms/frame at
+scale=2 -- noticeably higher than native's 1.3 ms worst case above,
+likely wasm's slower Skia raster path plus `compose()`'s full-surface
+republish on every change rather than the dirty rectangle alone;
+unoptimized (this was the first run through, not a target to chase
+yet). Module size (Release, gzipped over the wire): 59.8 MB/5.39 MB
+without Skia, 63.8 MB/6.67 MB with it -- about 4.0 MB/1.27 MB gzipped
+for HiDPI in this minimal configuration.
+
+## Phase 2, chrome (started 2026-11-01)
+
+Chrome runs beside the text runs (`hidpi::chrome_draw`): a theme drawing
+call that draws on the screen hands over its 1x rectangle, a function that
+draws its pixels, and the same piece as vector shapes (`hidpi::Shape`:
+circles, polygons, polylines; filled, stroked or a radial gradient; 1x
+coordinates). The run keeps the pixels before and after, as a text run
+does: while the screen still has what it left, the presentation surface
+puts back what was there before and draws the shapes anti-aliased at the
+display scale; anything else drawn over it shows the 1x pixels again. A
+piece drawn again unchanged replaces its run (keeping the first one's
+"before"). Shapes are built only at a scale above 1; the 1x truth is
+unchanged (the difftest probes).
+
+So far: radio buttons (a sphere as a radial gradient, its outline, the
+dot), the check box's tick (the box itself is lines: crisp at whole
+scales already), every triangle arrow `appearance::arrow` draws (scroll
+bar arrows, pop-up and little arrows), the slider's thumbs (pointing
+down, up or neither), north
+tabs (the top corners' curve into a straight slant), push buttons'
+rounded corners, the title-bar boxes of document and floating windows
+(their lines as they are, the face's diagonal steps a linear gradient:
+`gx2`/`gy2` with `gr` 0) and the menu bar's rounded top corners (two runs
+around the whole bar's drawing). A piece the port's clip leaves nothing
+of records no run, so the runs under it stay (the menu bar's background
+redrawn under one title).
+
+`tests/guest/chrome/ChromeGallery` keeps a window of this chrome on the
+screen; `hidpi_chrome_executor` (tests/test_hidpi_chrome.sh) runs it on
+8.6 at scale 2 and checks that inside each piece the 2x surface differs
+from the 1x frame scaled up, and inside a plain face does not.
+
+Not yet: other tab directions, the indeterminate progress bar, the
+disclosure triangle, pressed floating boxes,
+the grow corners; region twins for clipping (section 2: nothing in 8.6's
+chrome clips to a curved region yet).
+
+## Phase 4, GWorld shadows (started 2026-11-01)
+
+Text and chrome drawn into a GWorld, or any port whose pixels aren't the
+screen's (an old-style offscreen `BitMap` too), are recorded as runs of
+that pixel buffer exactly as on the screen (`hidpi::recording()`,
+`port_target()` in hidpi.cpp): the same `Run`, its box, "before" and
+"after" in the buffer's own pixels and coordinates. A buffer's runs are
+kept by its GWorld (whose pixels move while unlocked) or else by its base
+address, at most 1024 runs a buffer and 64 buffers (least recently used
+go); `DisposeGWorld` drops them, and a buffer whose size, `rowBytes` or
+depth changed (`UpdateGWorld`) starts again empty. They live on the
+emulator thread only: the render thread still sees only the screen's.
+
+So the shadow is not a bitmap at the display scale but the runs
+themselves, kept where they were drawn, until a copy puts them on the
+screen. `hidpi::copy_bits()` wraps `ROMlib_real_copy_bits`, which
+`StdBits`, `CopyBits`, `CopyMask` and `CopyDeepMask` all reach with their
+pixmaps canonicalised and locked. When the source has runs still valid in
+the rectangle copied, each lands in the destination (the screen, or
+another offscreen buffer: copied twice they still arrive) moved by the
+copy's offset: its box the part copied, its "after" the destination's
+pixels after the copy, its "before" the source run's "before" wherever the
+destination got the source's pixel (masked out or clipped: the
+destination's own, so not ink), its clip the run's own, moved, within the
+destination rectangle, the port's vis and clip and the mask region. A run
+nothing of whose ink landed isn't carried. Runs already in the destination
+that the copy brings again (a window's contents copied again unchanged)
+are replaced, as text drawn again is, so they aren't drawn twice.
+
+Staleness is checked at the copy, per run against the buffer's 1x pixels
+(`run_valid`, as on the screen), which is stricter than the hash of the
+copied rectangle the design proposed: a program that wrote the pixels
+behind QuickDraw (`GetPixBaseAddr`), or drew anything else over the text,
+leaves those runs behind and the copy shows the 1x pixels, upscaled. Page
+protection (section 5) is still to do: what it adds is catching writes
+that leave a run's ink pixels unchanged (which nothing visible needs yet).
+
+Copies across depths and colour tables carry runs too: a run's ink is
+where the destination has the colour the run left in the source pixel
+there (the pixmaps' colours: indexed through their tables, a device
+table by its entries' values when those are a pixel value each; 16 and
+32 bits direct), and its "before" the source's before in the
+destination's pixels. `srcOr` and `transparent` copies carry them where
+the source's before is the colour they leave out (white, the background
+colour): the "before" there is what the destination had before the copy
+(text on a coloured background stays on it). A copy to a rectangle of
+another size scales them: each destination pixel's source pixel sampled
+as `scale_blt_bitmap` does, the glyphs' positions, advances, baseline
+and size mapped (a horizontal scale besides, `Run::xscale`), chrome's
+points and strokes. Other transfer modes stay 1x.
+
+Scrolling (`ScrollRect`, and programs' own: AppleWorks copies the window
+onto itself and the strip it exposes from its GWorld) is a copy like any
+other. What it showed: a line cut in two by separate copies is two runs,
+each drawn through its own clip, so (1) a piece replaces an existing run
+only if it covers all of it, (2) a run's ink stays its own: drawn over by
+another (the next line's ascenders in its box), the pixels that one
+changed where this one hadn't go into this one's "before" too
+(`recapture`), else this one's restoring them erased the other's glyphs
+when the pieces came in the other order, (3) a carried run's ink only
+where the copy drew, and the render thread's restoring of "before" only
+inside the run's clip.
+
+`--executor-debug hidpi` logs each
+copy from a buffer with runs and what became of them.
+
+`tests/guest/gworld/GWorldGallery` draws text in GWorlds and copies it to
+its window (`CopyBits`, through a second GWorld, `CopyMask` through a
+mask of its left part, a GWorld whose pixels it then inverts itself);
+`hidpi_gworld_executor` (tests/test_hidpi_gworld.sh) runs it on 8.6 at
+scale 2 and checks that the copied text differs from the 1x frame scaled
+up and is anti-aliased, and that the inverted GWorld's text and the
+masked-out part don't differ. It also copies text from 8-, 16- and 1-bit
+GWorlds, with `srcOr` onto yellow and `transparent` onto blue; its Scroll
+Gallery window scrolls text three ways (TextEdit's `TEScroll`,
+`ScrollRect` in a GWorld, AppleWorks' copies) and every row with text
+must be anti-aliased; its Scale window copies text at 2x, 2x wide, half
+and 1.5x.
+
+What it gives (8.6, scale 2): the Finder's window contents (icon labels,
+the header) from outlines, selection and window moves clean; AppleWorks
+5's word processing text (drawn offscreen and copied) from outlines, and
+still while it scrolls; the Finder's windows scrolled; the
+menus' saved bits (copied to an offscreen buffer and back) keep their
+text. BBEdit Lite 6.1 and SimpleText draw on the screen (phase 1).
+
+Fixed on the way (phase 1): a run replacing an earlier one (text drawn
+again) took all of that one's clip, so a desktop label drawn again while
+a window covered most of it was drawn over the window at 2x; the old clip
+is taken now only round the old text still under the new one.
+
+The same in the wasm tab, nothing tab-specific (the runs reach the
+screen's list, which `compose()` draws): `executor.web.hidpi_gworld`
+(web/tests/tab_hidpi_gworld.mjs) launches GWorldGallery at `?scale=2` on
+8.6 with PowerPC and checks the canvas's pixels: the copied text has
+anti-aliasing greys, the inverted GWorld's text and the masked-out part
+none.
+
+Not yet: transfer modes other than `srcCopy`, `srcOr` and `transparent`;
+page protection.

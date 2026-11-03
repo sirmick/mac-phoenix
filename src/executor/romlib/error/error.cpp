@@ -43,6 +43,7 @@ static const struct
     { "mactcp", ERROR_BIT_MASK(ERROR_MACTCP_LOG) },
     { "ot", ERROR_BIT_MASK(ERROR_OT_LOG) },
     { "pcsample", ERROR_BIT_MASK(ERROR_PC_SAMPLE) },
+    { "hidpi", ERROR_BIT_MASK(ERROR_HIDPI_LOG) },
     { "textcheck", ERROR_BIT_MASK(ERROR_TEXT_EDIT_SLAM) },
     { "trace", ERROR_BIT_MASK(ERROR_TRACE_INFO) },
     { "trapfailure", ERROR_BIT_MASK(ERROR_TRAP_FAILURE) },

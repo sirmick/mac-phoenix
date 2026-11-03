@@ -54,6 +54,8 @@ test_image.py (launching what's on an image). Steps, as recipes give them:
                                          only (bake.py --do records a name if one
                                          is there); recipes don't use them
   {"drag": [[x, y], [x2, y2]]}           press, move, release (popup menus)
+  {"drag": {"text": T, "by": [dx, dy]}}  ... from the middle of drawn text: a window
+                                         moved by its title (one floating over another)
   {"key": "return"}                      an /api/keypress name or ADB keycode
   {"cmd_key": 12}                        Command + an ADB keycode (12 = Q)
   {"type": "Mac Phoenix"}                ASCII typed on a US keyboard (into the
@@ -123,6 +125,15 @@ def has_agent(backend):
 
 class NotFound(RuntimeError):
     """A step's control or text isn't on screen (yet): "until" retries these."""
+
+
+def free_port():
+    """A TCP port nothing listens on now, from the kernel's ephemeral range:
+    a fixed base plus the pid collided with other emulators on a shared box."""
+    import socket
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
 
 
 def watch_url(port):
@@ -758,11 +769,15 @@ class Guest:
                 self.stop()
             return
         self.post("/api/shutdown", {}, 60)
-        try:
-            self.proc.wait(timeout=120)
-        except subprocess.TimeoutExpired:
-            self.proc.terminate()
-            self.proc.wait(timeout=30)
+        # The guest is off when its child process is gone (emulator_running
+        # false); the emulator serving the web UI stays up after it, so
+        # waiting for it to exit took the whole timeout every time
+        deadline = time.time() + 120
+        while time.time() < deadline and self.proc.poll() is None:
+            if (self.get("/api/status", 5) or {}).get("emulator_running") is False:
+                break
+            time.sleep(0.5)
+        self.stop()
 
     def stop(self):
         if self.proc.poll() is None:
@@ -857,6 +872,13 @@ class Guest:
             self.dclick(*pos)
         elif "dclick" in step:
             self.dclick(*step["dclick"])
+        elif "drag" in step and isinstance(step["drag"], dict):
+            what = step["drag"]                 # a window by its drawn title
+            t = self.drawn(what["text"], app=self.app())
+            if not t:
+                raise NotFound(f"no {what['text']!r} drawn")
+            x, y = (t["rect"][0] + t["rect"][2]) // 2, (t["rect"][1] + t["rect"][3]) // 2
+            self.drag([x, y], [x + what["by"][0], y + what["by"][1]])
         elif "drag" in step:
             self.drag(*step["drag"])
         elif "key" in step:

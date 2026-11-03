@@ -173,10 +173,38 @@ extern Fract X2Frac(Extended *xp);
 END_EXECUTOR_ONLY
 
 
+double glue_Fix2X(Fixed x);LIBRARY_FUNCTION(InterfaceLib, Fix2X, glue_Fix2X);
+
+
+Fixed glue_X2Fix(double x);LIBRARY_FUNCTION(InterfaceLib, X2Fix, glue_X2Fix);
+
+
+double glue_Frac2X(Fract x);LIBRARY_FUNCTION(InterfaceLib, Frac2X, glue_Frac2X);
+
+
+Fract glue_X2Frac(double x);LIBRARY_FUNCTION(InterfaceLib, X2Frac, glue_X2Frac);
+
+
 Fixed C_R_X2Fix(GUEST<extended80> *x);PASCAL_TRAP(R_X2Fix, 0xA844);
 
 
 Fract C_R_X2Frac(GUEST<extended80> *x);PASCAL_TRAP(R_X2Frac, 0xA846);
+
+
+inline LONGINT cglue_deltapoint(GUEST<Point> *a, GUEST<Point> *b) {return C_DeltaPoint(*a, *b);}
+LIBRARY_FUNCTION(InterfaceLib, deltapoint, cglue_deltapoint);
+
+
+inline void cglue_getindstring(char *s, INTEGER sid, INTEGER index) {C_GetIndString((StringPtr)s, sid, index);cglue::p2c(s);}
+LIBRARY_FUNCTION(InterfaceLib, getindstring, cglue_getindstring);
+
+
+inline StringHandle cglue_newstring(const char *s) {return C_NewString(cglue::CString(s));}
+LIBRARY_FUNCTION(InterfaceLib, newstring, cglue_newstring);
+
+
+inline void cglue_setstring(StringHandle h, const char *s) {C_SetString(h, cglue::CString(s));}
+LIBRARY_FUNCTION(InterfaceLib, setstring, cglue_setstring);
 
 
 } /* namespace Executor */

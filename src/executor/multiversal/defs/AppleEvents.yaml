@@ -122,6 +122,17 @@
 
 - enum:
     values:
+      - name: kAEWantReceipt
+        value: 0x200
+      - name: kAEDontRecord
+        value: 0x1000
+      - name: kAEDontExecute
+        value: 0x2000
+
+# ####
+
+- enum:
+    values:
       - name: _kAEInteractMask
         value: 0x30
 
@@ -337,6 +348,38 @@
 
 # ####
 
+- only-for: Executor
+  funptr:
+    return: OSErr
+    args:
+      - name: desiredClass
+        type: DescType
+      - name: containerToken
+        type: AEDesc*
+      - name: containerClass
+        type: DescType
+      - name: keyForm
+        type: DescType
+      - name: keyData
+        type: AEDesc*
+      - name: theToken
+        type: AEDesc*
+      - name: refcon
+        type: int32_t
+    name: AEObjectAccessorUPP
+
+# ####
+
+- only-for: Executor
+  funptr:
+    return: OSErr
+    args:
+      - name: token
+        type: AEDesc*
+    name: AEDisposeTokenUPP
+
+# ####
+
 - struct:
     name: AE_hdlr
     members:
@@ -447,8 +490,14 @@
         type: AE_hdlr_table_h
       - name: special_hdlr_table
         type: AE_hdlr_table_h
+      # MacPhoenix: the Object Support Library's accessor table (made when
+      # first needed) and AESetObjectCallbacks's seven procedures (a handle)
+      - name: object_accessor_table
+        type: AE_hdlr_table_h
+      - name: object_callbacks
+        type: Handle
       - name: pad_1
-        type: char[28]
+        type: char[20]
       - name: unknown_appl_value
         type: char[4]
       - name: pad_2
@@ -602,6 +651,24 @@
 # ####
 
 - function:
+    name: _AE_hdlr_0830
+    return: OSErr
+    args:
+      - type: AE_hdlr_table_h
+      - type: int32_t
+      - type: AE_hdlr_selector_t*
+      - type: AE_hdlr_t*
+    comment: |
+      Private/undocumented entry point beside _AE_hdlr_install (0x0831):
+      a lookup, its arguments as _AE_hdlr_lookup's; HyperCard 2.4.1 calls
+      it right after _AE_hdlr_table_alloc.
+    dispatcher: Pack8
+    selector: 0x0830
+    executor: C_
+
+# ####
+
+- function:
     name: _AE_hdlr_install
     return: OSErr
     args:
@@ -620,7 +687,6 @@
     /* private */
     
     extern bool send_application_open_aevt_p;
-    extern bool application_accepts_open_app_aevt_p;
     
     /*  error codes */
     
@@ -759,6 +825,8 @@
         value: "'null'"
       - name: typeApplSignature
         value: "'sign'"
+      - name: typeTargetID
+        value: "'targ'"
       - name: typeType
         value: "'type'"
       - name: typeEnumerated
@@ -881,6 +949,16 @@
         value: "'unbk'"
       - name: keyAENavigate
         value: "'navt'"
+      - name: keyAEDesiredClass
+        value: "'want'"
+      - name: keyAEContainer
+        value: "'from'"
+      - name: keyAEKeyForm
+        value: "'form'"
+      - name: keyAEKeyData
+        value: "'seld'"
+      - name: typeObjectSpecifier
+        value: "'obj '"
       - name: formAbsolutePosition
         value: "'indx'"
       - name: formRelativePosition

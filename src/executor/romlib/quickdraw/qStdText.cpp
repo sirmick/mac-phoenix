@@ -16,6 +16,7 @@
 #include <quickdraw/font.h>
 #include <quickdraw/text.h>
 #include <prefs/prefs.h>
+#include <hidpi/hidpi.h>
 
 #include <rsys/safe_alloca.h>
 #include <algorithm>
@@ -369,6 +370,17 @@ Executor::text_helper(LONGINT n, Ptr textbufp, GUEST<Point> *nump, GUEST<Point> 
             ROMlib_styled_font_info(fmop, finfop);
     }
 
+    /* MacPhoenix: no strike in memory (FMSwapFont found none, or had no
+       room to load one): nothing to measure or draw with */
+    if(!ROMlib_fmo_has_font(fmop))
+    {
+        if(charlocp)
+            for(i = 0; i <= n; i++)
+                charlocp[i] = 0;
+        ALLOCAEND
+        return 0;
+    }
+
     extra = fmop->extra;
     fixed_extra = FIXED(extra);
     widthstate = HGetState((Handle)LM(WidthTabHandle));
@@ -407,6 +419,13 @@ Executor::text_helper(LONGINT n, Ptr textbufp, GUEST<Point> *nump, GUEST<Point> 
     hOutput = WIDTHPTR->hOutput;
     vOutput = WIDTHPTR->vOutput;
     hOutputInverse = FixRatio(1 << 8, hOutput);
+
+    /* MacPhoenix: text on the screen or offscreen recorded for the
+       high-resolution presentation (hidpi.h), each character where the pen is; not text
+       scaled by numer/denom */
+    std::vector<hidpi::Glyph> hd_glyphs;
+    bool hd_record = action == text_helper_draw && hidpi::active() && hOutput == 256
+        && vOutput == 256 && hidpi::recording();
 
     space_extra = PORT_SP_EXTRA(qdGlobals().thePort);
     spacewidth = (WIDTHPTR->tabData[(unsigned)' '] + space_extra
@@ -508,6 +527,8 @@ Executor::text_helper(LONGINT n, Ptr textbufp, GUEST<Point> *nump, GUEST<Point> 
         if(charlocp)
             *charlocp++ = (left - left_begin + 0xffff) >> 16;
         c = *p;
+        if(hd_record)
+            hd_glyphs.push_back({ (uint8_t)c, left - FIXEDONEHALF });
         width = widths[c];
         if((c -= fp->firstChar) < 0 || c > max
            || (wid = widp[c]) == -1)
@@ -699,15 +720,34 @@ Executor::text_helper(LONGINT n, Ptr textbufp, GUEST<Point> *nump, GUEST<Point> 
         srect = bmp->bounds;
         srect.left = leftmost;
         ASSERT_SAFE(stylemap.baseAddr);
-        StdBits(bmp, &srect, &drect, PORT_TX_MODE(qdGlobals().thePort) & 0x37, (RgnHandle)0);
-        ASSERT_SAFE(stylemap.baseAddr);
-        if(PORT_TX_FACE(qdGlobals().thePort) & (int)(outline | shadow))
+        auto blit = [&] {
+            StdBits(bmp, &srect, &drect, PORT_TX_MODE(qdGlobals().thePort) & 0x37, (RgnHandle)0);
+            ASSERT_SAFE(stylemap.baseAddr);
+            if(PORT_TX_FACE(qdGlobals().thePort) & (int)(outline | shadow))
+            {
+                ASSERT_SAFE(stylemap.baseAddr);
+                StdBits(&stylemap2, &srect, &drect, srcXor, (RgnHandle)0);
+                ASSERT_SAFE(stylemap.baseAddr);
+                ASSERT_SAFE(stylemap2.baseAddr);
+            }
+        };
+        if(hd_record)
         {
-            ASSERT_SAFE(stylemap.baseAddr);
-            StdBits(&stylemap2, &srect, &drect, srcXor, (RgnHandle)0);
-            ASSERT_SAFE(stylemap.baseAddr);
-            ASSERT_SAFE(stylemap2.baseAddr);
+            hidpi::TextParams tp;
+            tp.family = WIDTHPTR->fID;
+            tp.size = WIDTHPTR->aSize ? WIDTHPTR->aSize : WIDTHPTR->fSize;
+            tp.face = PORT_TX_FACE(qdGlobals().thePort);
+            tp.bold = fmop->bold;
+            tp.ulThick = fmop->ulThick;
+            tp.shadow = fmop->shadow;
+            tp.baseline = PORT_PEN_LOC(qdGlobals().thePort).v;
+            tp.dst = &drect;
+            tp.glyphs = std::move(hd_glyphs);
+            tp.end = left - FIXEDONEHALF;
+            hidpi::text_draw(tp, blit);
         }
+        else
+            blit();
 
         PORT_PEN_LOC(qdGlobals().thePort).h = drect.right - (FixMul((LONGINT)rightitalicoffset << 16,
                                                                (Fixed)hOutput << 8)

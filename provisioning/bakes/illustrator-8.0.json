@@ -1,0 +1,195 @@
+{
+ "note": "Adobe Illustrator 8.0 (Adobe, 1998), the US upgrade CD (VISE 'Install Adobe Illustrator® 8.0'), PowerPC: run on an 832x624 screen (its windows don't fit 640x480) with the owner's Illustrator 6.0 on the startup disk (base tools-8.6-ai6: the proof of ownership its 'Search hard drive(s)' finds), Easy Install onto the target, the User Information filled with the owner's name, organization and serial, registration cancelled, a restart, a first launch",
+ "kind": "install",
+ "os": "tools-8.6-ai6",
+ "target": "Applications",
+ "disks": [
+  {
+   "file": "Adober_Illustratorr8.toast_.zip",
+   "take": "Adobe® Illustrator®8.toast"
+  }
+ ],
+ "steps": [
+  {
+   "launch": "Adobe® Illustrator®:Install Adobe Illustrator® 8.0"
+  },
+  {
+   "wait_for": {
+    "button": "Continue"
+   },
+   "timeout": 120
+  },
+  {
+   "click": {
+    "button": "Continue"
+   },
+   "note": "Search hard drive(s) for prior installation: Illustrator 6.0 on the startup disk"
+  },
+  {
+   "wait_for": {
+    "text": "Choose the country where you"
+   },
+   "timeout": 300
+  },
+  {
+   "click": {
+    "button": "OK"
+   },
+   "note": "US and Canada"
+  },
+  {
+   "wait_for": {
+    "button": "Accept"
+   },
+   "timeout": 60
+  },
+  {
+   "click": {
+    "button": "Accept"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Save As…"
+   },
+   "timeout": 60,
+   "note": "the Read Me"
+  },
+  {
+   "click": {
+    "button": "Continue"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Read Me…"
+   },
+   "timeout": 60
+  },
+  {
+   "popup": {
+    "text": "Macintosh HD"
+   },
+   "choose": "{target}"
+  },
+  {
+   "check": {
+    "text": "the disk “{target}”"
+   }
+  },
+  {
+   "click": {
+    "button": "Install"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Next >"
+   },
+   "timeout": 120,
+   "note": "User Information: filled in from the Illustrator 6.0 found; tabbing selects each field"
+  },
+  {
+   "key": "tab"
+  },
+  {
+   "type": "Mac"
+  },
+  {
+   "key": "tab"
+  },
+  {
+   "key": "tab"
+  },
+  {
+   "type": "Phoenix"
+  },
+  {
+   "key": "tab"
+  },
+  {
+   "serial": "illustrator-8.0",
+   "field": "organization"
+  },
+  {
+   "key": "tab"
+  },
+  {
+   "serial": "illustrator-8.0"
+  },
+  {
+   "click": {
+    "button": "Next >"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Install Now…"
+   },
+   "timeout": 60
+  },
+  {
+   "click": {
+    "button": "Install Now…"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Other regions"
+   },
+   "timeout": 1500,
+   "note": "the registration, after the files: cancelled"
+  },
+  {
+   "click": {
+    "button": "Cancel"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Yes"
+   },
+   "timeout": 60
+  },
+  {
+   "click": {
+    "button": "Yes"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Restart"
+   },
+   "timeout": 300
+  },
+  {
+   "click": {
+    "button": "Restart"
+   }
+  },
+  {
+   "wait_finder": 300
+  },
+  {
+   "launch": "{target}:Adobe Illustrator® 8.0:Adobe Illustrator® 8.0"
+  },
+  {
+   "wait": 45
+  },
+  {
+   "close": "Adobe Illustrator® 8.0"
+  }
+ ],
+ "args": [
+  "--screen",
+  "832x624",
+  "--max-resolution",
+  "832x624"
+ ],
+ "expect": [
+  "Adobe Illustrator® 8.0"
+ ],
+ "launch": [
+  "Adobe Illustrator® 8.0:Adobe Illustrator® 8.0"
+ ]
+}

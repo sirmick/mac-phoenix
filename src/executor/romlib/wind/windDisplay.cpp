@@ -13,6 +13,7 @@
 /* get {C}PORT_... accessors */
 #include <quickdraw/cquick.h>
 #include <wind/wind.h>
+#include <hidpi/hidpi.h>
 
 using namespace Executor;
 
@@ -189,6 +190,11 @@ void Executor::C_ShowHide(WindowPtr w, Boolean flag)
                     content_color = &w_ctab_table[i].rgb;
             }
         }
+        /* MacPhoenix: the background it was given (SetThemeWindowBackground,
+           SetWindowContentColor) first */
+        RGBColor background;
+        if(ROMlib_window_background(w, &background))
+            content_color = &background;
         if(content_color)
             RGBBackColor(content_color);
         FillRgn(WINDOW_CONT_REGION(w), &qdGlobals().white);
@@ -206,6 +212,7 @@ void Executor::C_ShowHide(WindowPtr w, Boolean flag)
         ThePortGuard guard(wmgr_port);
         SetClip(LM(GrayRgn));
         SetEmptyRgn(PORT_VIS_REGION(w));
+        hidpi::window_gone(w);
         PaintBehind(WINDOW_NEXT_WINDOW(w), WINDOW_STRUCT_REGION(w));
         CalcVisBehind(WINDOW_NEXT_WINDOW(w), WINDOW_STRUCT_REGION(w));
 

@@ -16,9 +16,11 @@
 #include <commandline/flags.h>
 #include <rsys/version.h>
 #include <rsys/appearance.h>
+#include <rsys/extensions.h>
 #include <FileMgr.h>
 #include <AliasMgr.h>
 
+#include <algorithm>
 #include <cstring>
 
 using namespace Executor;
@@ -28,14 +30,14 @@ using namespace Executor;
    by `InitWindows ()' */
 bool Executor::system_file_version_skew_p = false;
 
-/* MacPhoenix: as System 7.1 and later, open the font files in the Fonts
-   folder read-only and chain their maps directly below the System file's,
-   in catalog order (so the first file ends up last, as on a real boot). */
-static void open_font_files()
+/* MacPhoenix: open a folder's files of the given types read-only and chain
+   their maps directly below the System file's, in catalog order (so the
+   first file ends up last, as on a real boot). */
+static void open_below_system(OSType folder, std::initializer_list<OSType> types)
 {
     GUEST<INTEGER> vref;
     GUEST<LONGINT> dirid;
-    if(FindFolder(-32768 /* kOnSystemDisk */, "font"_4, false, &vref, &dirid) != noErr)
+    if(FindFolder(-32768 /* kOnSystemDisk */, folder, false, &vref, &dirid) != noErr)
         return;
     INTEGER saved = LM(CurMap);
     for(INTEGER i = 1;; i++)
@@ -52,7 +54,7 @@ static void open_font_files()
         if(pb.hFileInfo.ioFlAttrib & ATTRIB_ISADIR)
             continue;
         OSType type = pb.hFileInfo.ioFlFndrInfo.fdType;
-        if(type != "FFIL"_4 && type != "ffil"_4 && type != "tfil"_4)
+        if(std::find(types.begin(), types.end(), type) == types.end())
             continue;
         if(HOpenResFile(vref, dirid, name, fsRdPerm) == -1)
             continue;
@@ -67,6 +69,52 @@ static void open_font_files()
         }
     }
     LM(CurMap) = saved;
+    ROMlib_resTypesChanged();
+}
+
+/* MacPhoenix: 8.5 and 8.6 keep a second resource file in the System
+   file's data fork, after its code fragments ('zsyr' 0 in the resource
+   fork: its offset and length): what 9.0 moved to "System Resources",
+   Navigation Services' strings, menus and dialogs among them (BBEdit Lite
+   6.1's Save). Its map goes directly below the System file's, read-only. */
+static void open_system_data_fork_resources()
+{
+    INTEGER saved = LM(CurMap);
+    LM(CurMap) = LM(SysMap);
+    Handle h = Get1Resource("zsyr"_4, 0);
+    LM(CurMap) = saved;
+    if(!h || GetHandleSize(h) < 8)
+        return;
+    uint32_t base = *(GUEST<uint32_t> *)*h;
+    uint32_t length = *(GUEST<uint32_t> *)(*h + 4);
+    ReleaseResource(h);
+
+    HParamBlockRec pb = {};
+    pb.ioParam.ioNamePtr = LM(SysResName);
+    pb.ioParam.ioVRefNum = LM(BootDrive);
+    pb.ioParam.ioPermssn = fsRdPerm;
+    if(PBHOpen(&pb, false) != noErr)
+        return;
+    INTEGER f = pb.ioParam.ioRefNum;
+    resmaphand map = ROMlib_read_res_map(f, base, length);
+    if(!map)
+    {
+        FSClose(f);
+        ROMlib_setreserr(noErr);
+        return;
+    }
+    (*map)->resfn = f;
+    (*map)->resfatr = (*map)->resfatr | mapReadOnly;
+    INTEGER i, j;
+    typref *tr;
+    resref *rr;
+    WALKTANDR(map, i, tr, j, rr)
+    rr->rhand = 0;
+    rr->ratr &= ~resChanged;
+    EWALKTANDR(tr, rr)
+    resmaphand sys = (resmaphand)LM(SysMapHndl);
+    (*map)->nextmap = (*sys)->nextmap;
+    (*sys)->nextmap = (Handle)map;
     ROMlib_resTypesChanged();
 }
 
@@ -92,7 +140,14 @@ INTEGER Executor::C_InitResources()
     LM(SysMapHndl) = LM(TopMapHndl);
     ROMlib_resTypesChanged();
     SetResLoad(true);
-    open_font_files();
+    /* as System 7.1 and later: the font files in the Fonts folder */
+    open_below_system("font"_4, { "FFIL"_4, "ffil"_4, "tfil"_4 });
+    /* 8.5 and later: "System Resources" in the System Folder, which holds
+       the icons Icon Services shows (the badges, 8.5's colour icons), the
+       Navigation Services and Appearance dialogs, ... */
+    open_below_system("macs"_4, { "zsyr"_4 });
+    open_system_data_fork_resources();
+    ROMlib_install_system_packs(); /* MacPhoenix: on Executor's own System */
 
     /*
     TODO: decide whether to re-instate a system file version check

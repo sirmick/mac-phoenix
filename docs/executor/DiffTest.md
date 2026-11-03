@@ -23,7 +23,9 @@ compares the answers line by line.
   - `SECTION("name")`: sections, so a crashed run can resume at the next
     one (`Host:<probe>.start`);
   - `probe_pixels(key, gworld)`: a CRC of an offscreen drawing and, when
-    `Host:<probe>.dump` exists, the pixels as a PPM;
+    `Host:<probe>.dump` exists, the pixels as a PPM (`<probe>-<crc of the
+    key>.ppm`, the key in a comment line: HFS names end at 31 characters;
+    the runner renames them `<probe>-<section>.<key>.ppm`);
   - `probe_bind(lib, name)`: a routine looked up with `FindSymbol` (private
     calls, calls that may be missing): `bind.<name>: found/missing`, and
     the probe carries on without it.
@@ -45,15 +47,23 @@ compares the answers line by line.
   run, extra lines, and expected entries that now match (remove them). With
   `--dump`, a side-by-side PNG of each differing drawing.
   `--accept` appends the current differences with reason "TODO".
+- **Runs side by side**: a git worktree's reports go to
+  `<storage>/difftest/wt-<name>/<probe>/` and its sessions use its own ports
+  ([Testing.md](../Testing.md#ports)), so worktrees don't meet; a second run
+  on the same directory waits for the first's `.lock` (saying whose), up to
+  `DIFFTEST_LOCK_TIMEOUT` seconds (1800). `DIFFTEST_NO_SKIP=1` turns a
+  target that can't run (exit 77) into a failure.
 
 ## Probes
 
 | Probe | Covers |
 |---|---|
-| `appr` | AppearanceLib: Gestalt, clients, brushes and text colours, fonts, metrics, styles, window/button/track/tab regions, the theme collection, the private theme and desktop calls of the 8.6 Appearance control panel, every drawing primitive offscreen at 32 and 8 bits; QuickDraw's arithmetic transfer modes (offscreen, basic and colour ports on the screen, CopyBits from `screenBits`) and a control panel's title drawing replayed |
+| `aevt` | Apple events: the attributes AECreateAppleEvent records and those the Apple Event Manager adds to a received event (the launch's `'oapp'`), AEGetAttributeDesc with coercions, AESend to `kCurrentProcess` (the handler called before AESend returns, the reply, errors), the Object Support Library's accessor table and callbacks, a new event's handle layout (parameters from its end: one appended by hand, as AEGizmos does, is found) |
+| `appr` | AppearanceLib: Gestalt, clients, brushes and text colours, fonts, metrics, styles, window/button/track/tab regions, the theme collection, the private theme and desktop calls of the 8.6 Appearance control panel, every drawing primitive offscreen at 32 and 8 bits; window frames of the classic and Appearance procIDs on the screen, active and inactive (`frames`: 8.6's `DrawThemeWindowFrame` draws nothing into a GWorld); QuickDraw's arithmetic transfer modes (offscreen, basic and colour ports on the screen, CopyBits from `screenBits`) and a control panel's title drawing replayed; real controls (`controls`); dialog and alert backgrounds (`dialogs`: DLOG with and without a 'dlgx', ALRT with and without an 'alrx', StandardAlert, from appr.r); dialog items under kDialogFlagsUseControlHierarchy (`dlgitems`: which items are controls, what SetDialogItem/MoveDialogItem/SizeDialogItem/HideDialogItem do to them) |
 | `ctl` | Control Manager 8: every standard kind (values, features, best rectangle, data sizes by tag), the classic definitions' best rectangles by title and font, embedding, disposal with subcontrols, keyboard focus, 32-bit values, control data with short buffers; Dialog Manager 8.0: items as controls, AppendDITL, ShortenDITL with embedded items |
 | `menu` | Menu Manager with 8.x's calls: metacharacters, insertion order, marks, styles, command keys and glyphs, item icons by number and handle, CalcMenuSize, hierarchical items, MenusLib's 8.5 and private calls, the menu bar clock |
 | `sys` | Gestalt (~120 selectors), FindFolder for each folder type and the folder's name, value-holding low-memory globals, the process's own information, Script Manager variables (system and Roman) |
+| `textutil` | the Text Utilities' case and diacritical calls on raw text: every MacRoman byte through LowerText, StripText, UpperText, StripUpperText (InterfaceLib's exports of `_LwrText`) and the Script Manager's LowercaseText, StripDiacritics, UppercaseText, UppercaseStripDiacritics for the system script and Roman |
 | `wind` | Window Manager 2.0: CreateNewWindow for each class and attribute set (class, attributes, features, structure widths, bounds and regions by region code), the classic definitions through the same calls, SetWindowBounds, MoveWindowStructure, RepositionWindow, standard and ideal states, collapsing, properties, the modified state, content colour, floating windows, proxies |
 | `text` | Font Manager and QuickDraw text: font numbers and names, RealFont, FMSwapFont's output, GetFontInfo, FontMetrics, every character's width, StringWidth, MeasureText, TruncString, for 10 fonts x 6 sizes x 9 styles |
 

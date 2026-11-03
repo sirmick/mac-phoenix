@@ -1,0 +1,234 @@
+{
+ "note": "Adobe Photoshop 5.5 (Adobe, 1999), the CD (VISE 'Install Adobe Photoshop® 5.5'), PowerPC, on an 832x624 screen (its Read Me: 832x624 8-bit): Easy Install onto the target, the User Information filled with the owner's name, organization and serial, the registration cancelled, a restart, a first launch past the Color Management Assistant (Cancel)",
+ "kind": "install",
+ "os": "tools-8.6",
+ "target": "Applications",
+ "disks": [
+  {
+   "file": "adb-pshop-55.zip",
+   "take": "adb-pshop-55/adb-pshop-55.iso"
+  }
+ ],
+ "steps": [
+  {
+   "launch": "Adobe® Photoshop®:Install Adobe Photoshop® 5.5"
+  },
+  {
+   "wait_for": {
+    "button": "Continue"
+   },
+   "timeout": 120
+  },
+  {
+   "click": {
+    "button": "Continue"
+   }
+  },
+  {
+   "wait_for": {
+    "text": "Choose the country where you"
+   },
+   "timeout": 120
+  },
+  {
+   "click": {
+    "button": "OK"
+   },
+   "note": "US and Canada"
+  },
+  {
+   "wait_for": {
+    "button": "Accept"
+   },
+   "timeout": 60
+  },
+  {
+   "click": {
+    "button": "Accept"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Save As…"
+   },
+   "timeout": 60,
+   "note": "the Read Me"
+  },
+  {
+   "click": {
+    "button": "Continue"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Read Me…"
+   },
+   "timeout": 60
+  },
+  {
+   "popup": {
+    "text": "Macintosh HD"
+   },
+   "choose": "{target}"
+  },
+  {
+   "check": {
+    "text": "the disk “{target}”"
+   }
+  },
+  {
+   "click": {
+    "button": "Install"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Next >"
+   },
+   "timeout": 120,
+   "note": "User Information, empty: each field clicked"
+  },
+  {
+   "click": {
+    "button": "An Individual"
+   }
+  },
+  {
+   "click": [
+    400,
+    262
+   ],
+   "note": "First Name"
+  },
+  {
+   "type": "Mac"
+  },
+  {
+   "click": [
+    400,
+    289
+   ],
+   "note": "Last (Family) Name"
+  },
+  {
+   "type": "Phoenix"
+  },
+  {
+   "click": [
+    400,
+    317
+   ],
+   "note": "Company"
+  },
+  {
+   "serial": "photoshop-5.5",
+   "field": "organization"
+  },
+  {
+   "click": [
+    400,
+    345
+   ],
+   "note": "Serial Number"
+  },
+  {
+   "serial": "photoshop-5.5"
+  },
+  {
+   "click": {
+    "button": "Next >"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Install Now…"
+   },
+   "timeout": 60
+  },
+  {
+   "click": {
+    "button": "Install Now…"
+   }
+  },
+  {
+   "wait_for": {
+    "text": "This installation recommends you restart"
+   },
+   "timeout": 120
+  },
+  {
+   "click": {
+    "button": "Continue"
+   },
+   "note": "quits the other applications"
+  },
+  {
+   "wait_for": {
+    "button": "Other regions"
+   },
+   "timeout": 1500,
+   "note": "the registration, after the files: cancelled"
+  },
+  {
+   "click": {
+    "button": "Cancel"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Yes"
+   },
+   "timeout": 60
+  },
+  {
+   "click": {
+    "button": "Yes"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Restart"
+   },
+   "timeout": 300
+  },
+  {
+   "click": {
+    "button": "Restart"
+   }
+  },
+  {
+   "wait_finder": 300
+  },
+  {
+   "launch": "{target}:Adobe® Photoshop® 5.5:Adobe® Photoshop® 5.5"
+  },
+  {
+   "wait": 45,
+   "note": "the Color Management Assistant (drawn text only: no dialog items)"
+  },
+  {
+   "click": {
+    "text": "Cancel",
+    "exact": true
+   }
+  },
+  {
+   "wait": 10
+  },
+  {
+   "close": "Adobe® Photoshop® 5.5"
+  }
+ ],
+ "args": [
+  "--screen",
+  "832x624",
+  "--max-resolution",
+  "832x624"
+ ],
+ "expect": [
+  "Adobe® Photoshop® 5.5"
+ ],
+ "launch": [
+  "Adobe® Photoshop® 5.5:Adobe® Photoshop® 5.5"
+ ]
+}

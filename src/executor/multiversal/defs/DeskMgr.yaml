@@ -112,3 +112,14 @@
         type: LONGINT
     trap: 0xA9B5
     executor: C_
+
+# ####
+
+# InterfaceLib's lowercase C routines (multiversal/executor.rb, declare_cglue):
+# the Pascal routine with C strings, Points by address.
+
+- only-for: Executor
+  function:
+    name: opendeskacc
+    cglue: OpenDeskAcc
+    library: InterfaceLib

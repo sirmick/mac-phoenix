@@ -1,0 +1,18 @@
+{
+ "title": "Utilities: CPU and speed",
+ "tags": [
+  "utilities",
+  "68k",
+  "ppc"
+ ],
+ "note": "System information and benchmarks, for any 7.x-9 profile, 68k or PowerPC: Speedometer 4.0 and MacBench 5.0 (benchmarks), TattleTech 2.84 and Gestalt.Appl 2.7.9 (what the System reports: CPU, FPU, Gestalt), Newer Technology's Gauge Series (Clockometer, Cache-22, RAMometer, SCSI Info, Slot Info).",
+ "label": "Utilities",
+ "size_mb": 32,
+ "place": [
+  {"snapshot": "speedometer-4.0", "take": "Speedometer", "as": "Speedometer 4.0 ƒ"},
+  {"snapshot": "macbench-5.0", "take": "MacBench® 5.0 ƒ", "as": "MacBench 5.0 ƒ"},
+  {"snapshot": "tattletech-2.84", "take": "TattleTech 2.84ƒ", "as": "TattleTech 2.84 ƒ"},
+  {"snapshot": "gestalt-appl-2.7.9", "take": "Gestalt.Appl 2.7.9", "as": "Gestalt.Appl 2.7.9 ƒ"},
+  {"snapshot": "gauge-series", "take": "Gauge Series", "as": "Gauge Series 1997 ƒ"}
+ ]
+}

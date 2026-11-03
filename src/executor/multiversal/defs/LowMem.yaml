@@ -147,12 +147,14 @@
 # ####
 
 - lowmem:
-    name: graphlooksat
+    name: PrRefNum
     type: INTEGER
     address: 0x952
     comment: |
-      * NOTE: The graphing program looks for a -1 in 0x952
-      rsys/misc WHOKNOWS (true-b);
+      The Printing Manager's driver resource file (PrintVars + $E): PrOpen
+      sets it, PrClose leaves it; -1 until a printer is opened (a 7.6.1
+      Quadra). Applications linked with the old printing glue (Persuasion
+      3.0) call the driver's PDEFs themselves from this file.
 
 # ####
 

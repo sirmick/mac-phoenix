@@ -83,6 +83,25 @@ to upstream files are described in
 | Debugging | `base/trap_history.*`, `mman/whatis.*` | the last traps and host memory moves for crash reports; what lives at a guest address |
 | PowerPC | `cfm.cpp`, `base/builtinlibs.cpp`, `base/functions.impl.h`, `base/cpu.cpp` | the PowerCore wiring, unresolved-import logging, upstream's PPC parameter passing |
 
+### Application special cases
+
+Upstream's per-application hacks (Illustrator's white back colour, Excel's
+"no block moves before the first event call", the 'odoc' held back until
+a handler is installed, ClarisWorks' VM answer, MacBench's `$FE09` no-op,
+Excel's Standard File refCon and others) are gone, each replaced by what
+a Quadra or the G3 was measured to do (November 2026). Nothing in romlib
+looks at the application's creator any more. What stays:
+
+* **MPLibrary declined** (`cfm.cpp`): there is no nanokernel MP; a Mac
+  without MPLibrary answers `fragLibNotFound` too, so weak imports go nil.
+* **Per-application `.ecf` files** (`prefs/prefs.cpp`): upstream's user
+  mechanism, `<Configuration>/<app name or creator>.ecf`; none ship.
+* **OSDispatch `$2`**: answered as measured on the Quadra; its name is a
+  guess.
+* **`_TranslationDispatch` `$24`/`$20` stand-ins** (`base/traps.cpp`): for a
+  System where Easy Open isn't running (Executor's own); on Apple's 7.5.5
+  and 7.6.1 Easy Open answers.
+
 ## Upstream since the import
 
 Upstream has moved on (81 commits by 2026-10-20). Taken so far:

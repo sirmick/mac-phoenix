@@ -1,11 +1,13 @@
 #pragma once
 
 #include <base/functions.h>
+#include <base/cglue.h>
 #include <syn68k_public.h>
 
 #include <stdint.h>
 #include <unordered_map>
 #include <functional>
+#include <type_traits>
 #include <string>
 
 class PowerCore;
@@ -68,6 +70,13 @@ struct MixedModeCall
 };
 extern MixedModeCall mixed_mode_call;
 void log_unimplemented(const std::string &what);
+
+/* MacPhoenix: before a call into an OS trap's table entry (something has
+   patched it), the trap word in D1's low word, as the trap dispatcher
+   leaves it: a patch shared by several traps tells them apart by it (MPW
+   Shell's file system patches; the flag bits are set afterwards, from the
+   call's arguments). Nothing for a Toolbox trap. */
+void putOSTrapWord(uint16_t trapno);
 extern std::string unimplemented_log_path; /* also appended to; empty: not */
 
 class Entrypoint : public internal::DeferredInit
@@ -114,13 +123,25 @@ public:
        if that is the stack). */
     bool isPatched() const
     {
-        return trapno && tooltraptable && originalFunction && tableEntry() != originalFunction;
+        /* _Unimplemented's own entry is not a patch: Executor leaves
+           $AA5A so on 7.x without PowerPC code (traps.cpp), and a library
+           call (CFM's, by stack selector) still reaches Executor's routine */
+        return trapno && tooltraptable && originalFunction && tableEntry() != originalFunction
+            && tableEntry() != tooltraptable[0xA89F & 0x3FF];
     }
     syn68k_addr_t tableEntry() const
     {
         return (trapno & TOOLBIT) ? tooltraptable[trapno & 0x3FF] : ostraptable[trapno & 0xFF];
     }
+    uint16_t trapNumber() const { return trapno; }
     virtual bool putSelector(uint32_t sel) const = 0;
+    /* 2 or 4: the selector is a word or long pushed after the arguments
+       (Pack3's: Apple's PACK 3 then answers InterfaceLib's Standard File
+       calls, as on a Power Mac); 0: none such */
+    virtual int stackSelectorBytes() const = 0;
+    /* false: library calls with a stack selector stay with Executor's
+       routines though the trap is patched (8.x's PACK 3, stdfilepkg.cpp) */
+    bool stackSelectorLibraryCalls = true;
 protected:
     syn68k_addr_t originalFunction = 0;
     struct SelectorEntry
@@ -140,6 +161,7 @@ public:
     virtual void init() override;
     virtual void addSelector(uint32_t sel, Entrypoint* entrypoint, std::function<syn68k_addr_t(syn68k_addr_t)> handler) override;
     virtual bool putSelector(uint32_t sel) const override;
+    virtual int stackSelectorBytes() const override;
 
     using GenericDispatcherTrap::GenericDispatcherTrap;
 };
@@ -219,6 +241,18 @@ private:
     }
 };
 
+/* MacPhoenix: a library call into a patched dispatcher whose selector is
+   on the stack: the arguments, then the selector, as the inline glue
+   leaves them (Pascal routines only). */
+template<typename Ret, typename CallConv, typename... Args>
+Ret callWithStackSelector(const GenericDispatcherTrap& dispatcher, uint32_t selector, Args... args)
+{
+    void *entry = SYN68K_TO_US(dispatcher.tableEntry());
+    if(dispatcher.stackSelectorBytes() == 2)
+        return (UPP<Ret (Args..., uint16_t), CallConv>(entry))(args..., (uint16_t)selector);
+    return (UPP<Ret (Args..., uint32_t), CallConv>(entry))(args..., selector);
+}
+
 template<typename F, F* fptr, int trapno, uint32_t selector, typename CallConv = callconv::Pascal>
 class SubTrapFunction {};
 
@@ -232,8 +266,14 @@ public:
 protected:
     Ret callFromLibrary(Args... args) const override
     {
+        if(dispatcher.isPatched())
+            putOSTrapWord(dispatcher.trapNumber());
         if(dispatcher.isPatched() && dispatcher.putSelector(selector))
             return (UPP<Ret (Args...), CallConv>(SYN68K_TO_US(dispatcher.tableEntry())))(args...);
+        if constexpr(std::is_same_v<CallConv, callconv::Pascal>)
+            if(dispatcher.isPatched() && dispatcher.stackSelectorBytes()
+               && dispatcher.stackSelectorLibraryCalls)
+                return callWithStackSelector<Ret, CallConv, Args...>(dispatcher, selector, args...);
         return fptr(args...);
     }
 private:
@@ -513,6 +553,11 @@ public:
 #define COMMA ,
 #define PASCAL_TRAP(NAME, TRAP) \
     CREATE_FUNCTION_WRAPPER(NAME, &C_##NAME, (#NAME, "InterfaceLib"), TrapFunction<decltype(C_##NAME) COMMA &C_##NAME COMMA TRAP>)
+/* MacPhoenix: the trap only, its InterfaceLib export another routine
+   (`export: false`: GetItemStyle's VAR Style is a word through the trap,
+   a byte from InterfaceLib). */
+#define PASCAL_TRAP_UNEXPORTED(NAME, TRAP) \
+    CREATE_FUNCTION_WRAPPER(NAME, &C_##NAME, (#NAME), TrapFunction<decltype(C_##NAME) COMMA &C_##NAME COMMA TRAP>)
 #define REGISTER_TRAP(NAME, TRAP, ...) \
     CREATE_FUNCTION_WRAPPER(NAME, &C_##NAME, (#NAME, "InterfaceLib"), TrapFunction<decltype(C_##NAME) COMMA &C_##NAME COMMA TRAP COMMA callconv::Register<__VA_ARGS__>>)
 #define REGISTER_TRAP2(NAME, TRAP, ...) \
@@ -658,6 +703,9 @@ void init(bool enableLogging, const std::string& trapFilter = std::string());
    CFM is always there, and the Appearance Manager's ($AA73, $AA74); 7.x's
    68k Mac goes without. */
 void installSystem8Traps();
+/* ... and $AA5A alone, for 7.x with PowerPC code (--executor-ppc), where
+   CFM is there too: Mac OS Easy Open's INIT gives it its PowerPC library */
+void installCodeFragmentDispatch();
 extern std::unordered_map<std::string, traps::Entrypoint*> entrypoints;
 
 }

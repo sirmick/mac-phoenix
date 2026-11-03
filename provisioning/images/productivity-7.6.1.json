@@ -5,14 +5,17 @@
   "68k",
   "ppc"
  ],
- "note": "System 7.6.1 with what the productivity apps put in the System Folder (ClarisWorks' and AppleWorks' translators, dictionaries and libraries, WordPerfect's and Excel's preferences, Acrobat Reader's fonts); the apps themselves are on Productivity.",
+ "note": "System 7.6.1 with what the productivity apps put in the System Folder (ClarisWorks' and AppleWorks' translators, ClarisDraw's font map, dictionaries and libraries, WordPerfect's and Excel's preferences, Acrobat Reader's fonts); the apps themselves are on Productivity.",
  "base": "standard-7.6.1",
  "system_from": [
   "clarisworks-4.0",
+  "clarisdraw-1.0",
   "appleworks-5.0.3",
   "wordperfect-3.5e",
   "excel-4.0",
-  "acrobat-reader-3.01"
+  "acrobat-reader-3.01",
+  "filemaker-pro-4.0",
+  "persuasion-3.0"
  ],
  "aliases_to": "productivity-system-7"
 }

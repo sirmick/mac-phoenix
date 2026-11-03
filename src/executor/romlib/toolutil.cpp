@@ -158,9 +158,18 @@ void Executor::C_GetIndString(StringPtr s, INTEGER sid, INTEGER index)
     Handle retval;
     unsigned char *p, *ep, *op;
 
+    /* An index outside the list, an empty list or none: the empty string,
+       and ResError noErr (the Quadra with 7.6.1 and the G3 with 8.6:
+       tests/guest/strprobe). */
     retval = GetResource("STR#"_4, sid);
+    if(!retval)
+    {
+        ROMlib_setreserr(noErr);
+        s[0] = 0;
+        /*-->*/ return;
+    }
     LoadResource(retval);
-    if(ResError() != noErr || *(INTEGER *)*retval < index)
+    if(ResError() != noErr || index < 1 || *(GUEST<INTEGER> *)*retval < index)
     {
         s[0] = 0;
         /*-->*/ return;
@@ -443,9 +452,16 @@ void Executor::GetIndPattern(Byte *op, INTEGER plistid, INTEGER index)
     Handle retval;
     char *p, *ep;
 
+    /* Outside the list, or no list: the pattern left alone, ResError
+       noErr (tests/guest/strprobe). */
     retval = GetResource("PAT#"_4, plistid);
+    if(!retval)
+    {
+        ROMlib_setreserr(noErr);
+        return;
+    }
     LoadResource(retval);
-    if(ResError() != noErr || *(INTEGER *)*retval < index)
+    if(ResError() != noErr || index < 1 || *(GUEST<INTEGER> *)*retval < index)
     {
         return;
     }
@@ -693,6 +709,30 @@ Fract Executor::X2Frac(Extended *xp) /* IMIV-65 */
     }
 }
 
+
+/* MacPhoenix: InterfaceLib's, a PowerPC double for an Extended
+   (ToolboxUtil.yaml) */
+double Executor::glue_Fix2X(Fixed x)
+{
+    return Fix2X(x);
+}
+
+Fixed Executor::glue_X2Fix(double x)
+{
+    Extended e = x;
+    return X2Fix(&e);
+}
+
+double Executor::glue_Frac2X(Fract x)
+{
+    return Frac2X(x);
+}
+
+Fract Executor::glue_X2Frac(double x)
+{
+    Extended e = x;
+    return X2Frac(&e);
+}
 
 void Executor::R_Fix2X(void *dummyretpc, Fixed x, extended80 *ret) /* INTERNAL */
 {

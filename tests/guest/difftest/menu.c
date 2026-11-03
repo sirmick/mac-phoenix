@@ -86,6 +86,39 @@ int main(void)
         out("MBarHeight", "%d", GetMBarHeight());
         DisposeMenu(m);
     }
+    /* which calls recompute the size at once and which only mark it
+       (-1, computed when next needed): PowerPlant fills a menu whose
+       menuProc still holds the MDEF's ID, not a handle */
+    if(SECTION("dirty"))
+    {
+        static const char *calls[] = { "SetItemCmd", "SetMenuItemText", "SetItemMark", "SetItemStyle",
+                                       "SetItemIcon", "CheckItem", "DisableItem", "AppendMenu",
+                                       "InsertMenuItem", "DeleteMenuItem" };
+        int i;
+        m = NewMenu(208, "\pDirty");
+        AppendMenu(m, "\pOne;Two;Three");
+        for(i = 0; i < (int)(sizeof calls / sizeof calls[0]); i++)
+        {
+            char k[64];
+            CalcMenuSize(m);
+            switch(i)
+            {
+                case 0: SetItemCmd(m, 1, 'W'); break;
+                case 1: SetMenuItemText(m, 2, "\pA longer second item"); break;
+                case 2: SetItemMark(m, 1, checkMark); break;
+                case 3: SetItemStyle(m, 3, bold); break;
+                case 4: SetItemIcon(m, 1, 1); break;
+                case 5: CheckItem(m, 2, true); break;
+                case 6: DisableItem(m, 3); break;
+                case 7: AppendMenu(m, "\pFour"); break;
+                case 8: InsertMenuItem(m, "\pZero", 0); break;
+                case 9: DeleteMenuItem(m, 1); break;
+            }
+            sprintf(k, "%s", calls[i]);
+            out(k, "%d x %d", (**m).menuWidth, (**m).menuHeight);
+        }
+        DisposeMenu(m);
+    }
     if(SECTION("marks"))
     {
         m = NewMenu(203, "\pMarks");
@@ -137,6 +170,57 @@ int main(void)
                 SET(v);
                 out("GetMenuItemModifiers", "%d %d", (int)gm(m, 1, &v), v);
             }
+        }
+        DisposeMenu(m);
+    }
+    /* 8.5's submenu ID and text encoding of an item (Mercutio's MDEF calls
+       them once Gestalt 'menu' says 8.5) */
+    if(SECTION("item85"))
+    {
+        typedef OSErr (*GetHier_t)(MenuHandle, SInt16, SInt16 *);
+        typedef OSErr (*SetHier_t)(MenuHandle, SInt16, SInt16);
+        typedef OSErr (*GetEnc_t)(MenuHandle, SInt16, UInt32 *);
+        typedef OSErr (*SetEnc_t)(MenuHandle, SInt16, UInt32);
+        GetHier_t gh = (GetHier_t)probe_bind("AppearanceLib", "GetMenuItemHierarchicalID");
+        SetHier_t sh = (SetHier_t)probe_bind("AppearanceLib", "SetMenuItemHierarchicalID");
+        GetEnc_t ge = (GetEnc_t)probe_bind("AppearanceLib", "GetMenuItemTextEncoding");
+        SetEnc_t se = (SetEnc_t)probe_bind("AppearanceLib", "SetMenuItemTextEncoding");
+        m = NewMenu(209, "\pItem85");
+        AppendMenu(m, "\pa;b;c");
+        if(gh && sh)
+        {
+            SInt16 v;
+            CharParameter cmd, mark;
+            SET(v);
+            out("GetMenuItemHierarchicalID.plain", "%d %d", (int)gh(m, 1, &v), v);
+            SetItemCmd(m, 2, 0x1B);   /* hMenuCmd */
+            SetItemMark(m, 2, 200);
+            SET(v);
+            out("GetMenuItemHierarchicalID.cmd", "%d %d", (int)gh(m, 2, &v), v);
+            out("SetMenuItemHierarchicalID", "%d", (int)sh(m, 3, 201));
+            GetItemCmd(m, 3, &cmd);
+            GetItemMark(m, 3, &mark);
+            SET(v);
+            out("GetMenuItemHierarchicalID.set", "%d %d cmd %d mark %d", (int)gh(m, 3, &v), v, (int)cmd, (int)mark);
+            out("SetMenuItemHierarchicalID.0", "%d", (int)sh(m, 3, 0));
+            GetItemCmd(m, 3, &cmd);
+            GetItemMark(m, 3, &mark);
+            SET(v);
+            out("GetMenuItemHierarchicalID.cleared", "%d %d cmd %d mark %d", (int)gh(m, 3, &v), v, (int)cmd, (int)mark);
+            SET(v);
+            out("GetMenuItemHierarchicalID.bad", "%d %d", (int)gh(m, 9, &v), v);
+            out("SetMenuItemHierarchicalID.bad", "%d", (int)sh(m, 9, 202));
+        }
+        if(ge && se)
+        {
+            UInt32 v;
+            SET(v);
+            out("GetMenuItemTextEncoding.plain", "%d %ld", (int)ge(m, 1, &v), (long)v);
+            out("SetMenuItemTextEncoding", "%d", (int)se(m, 1, 1));
+            SET(v);
+            out("GetMenuItemTextEncoding.set", "%d %ld", (int)ge(m, 1, &v), (long)v);
+            SET(v);
+            out("GetMenuItemTextEncoding.bad", "%d %ld", (int)ge(m, 9, &v), (long)v);
         }
         DisposeMenu(m);
     }
@@ -207,6 +291,42 @@ int main(void)
         probe_bind("MenusLib", "InvalidateAllMenuSizes");
         probe_bind("MenusLib", "InvalidateAllCachedMenuPixels");
         probe_bind("WindowsLib", "RecalculateAllWindowTitleWidths");
+    }
+    if(SECTION("bar"))
+    {
+        /* where the menu bar lays its titles out: an Apple menu, File, Edit
+           (the MenuList's lastRight and each menu's left) */
+        static const unsigned char *const titles[] = { "\p\024", "\pFile", "\pEdit" };
+        MenuHandle bar[3];
+        Handle list;
+        short n, j;
+        for(i = 0; i < 3; i++)
+        {
+            bar[i] = NewMenu(300 + i, titles[i]);
+            AppendMenu(bar[i], "\pItem");
+            InsertMenu(bar[i], 0);
+        }
+        DrawMenuBar();
+        list = LMGetMenuList();
+        n = *(short *)*list / 6;
+        out("lastRight", "%d", ((short *)*list)[1]);
+        for(j = 1; j <= n; j++)
+        {
+            unsigned char *e = (unsigned char *)*list + 6 * j;
+            MenuHandle mh = *(MenuHandle *)e;
+            short left = *(short *)(e + 4);
+            /* the system menus, right-aligned, depend on the screen */
+            if((**mh).menuID < 0)
+                continue;
+            sprintf(k, "left.%d", (int)(**mh).menuID);
+            out(k, "%d", left);
+        }
+        for(i = 0; i < 3; i++)
+        {
+            DeleteMenu(300 + i);
+            DisposeMenu(bar[i]);
+        }
+        DrawMenuBar();
     }
     probe_close();
     return 0;

@@ -19,6 +19,7 @@
 #include <prefs/prefs.h>
 
 #include <vector>
+#include <rsys/cfm.h>
 
 using namespace Executor;
 
@@ -29,15 +30,17 @@ static FHandle at_least_one_fond_entry(INTEGER family);
 static void
 reset_myfmi(void)
 {
-    LM(ROMlib_myfmi).family = -1;
-    LM(ROMlib_myfmi).size = -1;
-    LM(ROMlib_myfmi).face = -1;
+    LM(CurFMInput).family = -1;
+    LM(CurFMInput).size = -1;
+    LM(CurFMInput).face = -1;
 }
 
 void Executor::C_InitFonts() /* IMI-222 */
 {
     static Boolean beenhere = false;
     GUEST<THz> saveZone;
+
+    ROMlib_cfm_toolbox_library("FontManager");
 
     if(!beenhere)
     {
@@ -240,6 +243,26 @@ static void mungfmo(ctrip cp, FMOutput *fmop)
 
 #define MAXTABLES 12
 
+/* MacPhoenix: a listed table that isn't in memory (its handle or master
+   pointer outside every window: THINK Pascal 4.5's Run leaves one) is
+   taken out of the list rather than read; in the tab reading it is a wasm
+   out-of-bounds access */
+static bool width_entry_mapped(GUEST<WHandle> *whp, int i)
+{
+    WHandle h = *whp;
+    /* By guest address: a host pointer made from junk can land in another
+       window's memory (natively the RAM is right below the 1 GB pool) */
+    bool mapped = syn68k_is_guest_addr_mapped(whp->raw_host_order(), sizeof(GUEST<WPtr>));
+    if(mapped
+       && (!*h || syn68k_is_guest_addr_mapped(GUEST<WPtr>(*h).raw_host_order(), sizeof(WidthTable))))
+        return *h != nullptr;
+    fprintf(stderr, "[bad handle] width list entry %d: handle $%08X %s $%08X\n", i,
+            whp->raw_host_order(), mapped ? "with master pointer" : "outside memory",
+            mapped ? GUEST<WPtr>(*h).raw_host_order() : 0u);
+    *whp = nullptr;
+    return false;
+}
+
 static Boolean widthlistmatch(FMInput *fmip)
 {
 
@@ -247,7 +270,8 @@ static Boolean widthlistmatch(FMInput *fmip)
 
     for(whp = *WIDTHLISTHAND, ewhp = whp + MAXTABLES; whp != ewhp; whp++)
     {
-        if(*whp && (LONGINT)(*whp).raw() != (LONGINT)-1)
+        if(*whp && (LONGINT)(*whp).raw() != (LONGINT)-1
+           && width_entry_mapped(whp, whp - *WIDTHLISTHAND))
         {
             LM(WidthPtr) = *(*whp);
             if(WIDTHPTR->aFID == fmip->family && WIDTHPTR->aSize == fmip->size && (char)WIDTHPTR->aFace == (char)fmip->face && WIDTHPTR->device == fmip->device && WIDTHPTR->inNumer.h == fmip->numer.h && WIDTHPTR->inNumer.v == fmip->numer.v && WIDTHPTR->inDenom.h == fmip->denom.h && WIDTHPTR->inDenom.v == fmip->denom.v && WIDTHPTR->fSize != -1 && WIDTHPTR->fSize != 0 && !WIDTHPTR->usedFam == !LM(FractEnable))
@@ -263,7 +287,7 @@ static Boolean widthlistmatch(FMInput *fmip)
 
 /* MacPhoenix: is WidthTabHandle still one of the listed tables (WidthPtr
    then where it is now)? WidthTabHandle and the last request
-   (ROMlib_myfmi) are switched per process (7.5.5's 'lmem' -16458), but the
+   (CurFMInput) are switched per process (7.5.5's 'lmem' -16458), but the
    list is shared, so another process may have disposed of this process's
    table to make room for one of its own: the request still matches, the
    handle is gone. */
@@ -275,7 +299,7 @@ static bool width_table_listed()
     for(int i = 0; i < MAXTABLES; i++)
         if(whp[i] && whp[i].raw() == LM(WidthTabHandle).raw())
         {
-            if(!*whp[i])
+            if(!width_entry_mapped(&whp[i], i))
                 return false;
             LM(WidthPtr) = *(whp[i]);
             return true;
@@ -805,6 +829,12 @@ static bool fond_has_outline(FHandle fh)
     return fond_outline(fh, 0x7F, &style) != nullptr;
 }
 
+Handle Executor::ROMlib_family_outline(INTEGER family, INTEGER face, INTEGER *stylep)
+{
+    FHandle fh = find_fond(family, [](FHandle fh) { return fond_has_outline(fh); });
+    return fh ? fond_outline(fh, face, stylep) : nullptr;
+}
+
 Boolean Executor::C_RealFont(INTEGER fnum, INTEGER sz) /* IMI-223 */
 {
     Handle h;
@@ -927,6 +957,20 @@ static void newwidthtable(FMInput *fmip)
     LM(TheZone) = LM(SysZone);
     LM(WidthTabHandle) = (WidthTableHandle)NewHandle((Size)sizeof(WidthTable));
     LM(TheZone) = savezone;
+    /* MacPhoenix: no memory for one more: the oldest listed table, taken
+       out of the list (re-entered at the front below) */
+    if(!LM(WidthTabHandle))
+    {
+        GUEST<WHandle> *whp = *WIDTHLISTHAND;
+        int n = GetHandleSize((Handle)LM(WidthListHand)) / sizeof(GUEST<Handle>);
+        for(int i = n - 1; i >= 0 && !LM(WidthTabHandle); i--)
+            if(whp[i] && whp[i].raw() != (uint32_t)-1 && *whp[i])
+            {
+                LM(WidthTabHandle) = guest_cast<WidthTableHandle>(whp[i]);
+                Munger((Handle)LM(WidthListHand), i * sizeof(GUEST<Handle>), nullptr,
+                       sizeof(GUEST<Handle>), (Ptr) "", 0);
+            }
+    }
     Munger((Handle)LM(WidthListHand), (LONGINT)0, (Ptr)0, 0,
            (Ptr)&LM(WidthTabHandle), sizeof(LM(WidthTabHandle)));
 
@@ -1134,12 +1178,12 @@ FMOutPtr Executor::C_FMSwapFont(FMInput *fmip) /* IMI-223 */
         fmip->family = LM(SysFontFam);
     }
 
-    if(!width_table_listed() || fmip->family != LM(ROMlib_myfmi).family || fmip->size != LM(ROMlib_myfmi).size || fmip->face != LM(ROMlib_myfmi).face || fmip->device != LM(ROMlib_myfmi).device || fmip->numer.h != LM(ROMlib_myfmi).numer.h || fmip->numer.v != LM(ROMlib_myfmi).numer.v || fmip->denom.h != LM(ROMlib_myfmi).denom.h || fmip->denom.v != LM(ROMlib_myfmi).denom.v || WIDTHPTR->fSize == -1 || WIDTHPTR->fSize == 0 || (fmip->needBits && !LM(ROMlib_myfmi).needBits))
+    if(!width_table_listed() || fmip->family != LM(CurFMInput).family || fmip->size != LM(CurFMInput).size || fmip->face != LM(CurFMInput).face || fmip->device != LM(CurFMInput).device || fmip->numer.h != LM(CurFMInput).numer.h || fmip->numer.v != LM(CurFMInput).numer.v || fmip->denom.h != LM(CurFMInput).denom.h || fmip->denom.v != LM(CurFMInput).denom.v || WIDTHPTR->fSize == -1 || WIDTHPTR->fSize == 0 || (fmip->needBits && !LM(CurFMInput).needBits))
     {
         if((needtobuild = !widthlistmatch(fmip)))
             newwidthtable(fmip);
 
-        LM(ROMlib_myfmi) = *fmip;
+        LM(CurFMInput) = *fmip;
         LM(ROMlib_fmo).errNum = 0;
         LM(ROMlib_fmo).bold = 0;
         LM(ROMlib_fmo).italic = 0;
@@ -1148,15 +1192,22 @@ FMOutPtr Executor::C_FMSwapFont(FMInput *fmip) /* IMI-223 */
         LM(ROMlib_fmo).ulThick = 0;
         LM(ROMlib_fmo).shadow = 0;
         LM(ROMlib_fmo).extra = 0;
+        /* MacPhoenix: no strike of any family in memory (all of them
+           missing, or no room to load one): nothing to scale from, no
+           metrics, no widths; text measures 0 and draws nothing
+           (ROMlib_fmo_has_font) rather than reading a nil font */
+        LM(ROMlib_fmo).fontHandle = WIDTHPTR->tabFont;
+        if(LM(ROMlib_fmo).fontHandle)
+            LoadResource(LM(ROMlib_fmo).fontHandle);
+        bool have_font = ROMlib_fmo_has_font(&LM(ROMlib_fmo));
+        INTEGER fsize = WIDTHPTR->fSize > 0 ? (INTEGER)WIDTHPTR->fSize : (INTEGER)fmip->size;
         LM(ROMlib_fmo).numer.h = 
-            (LONGINT)fmip->numer.h * 256 * fmip->size / fmip->denom.h / WIDTHPTR->fSize;
+            (LONGINT)fmip->numer.h * 256 * fmip->size / fmip->denom.h / fsize;
         LM(ROMlib_fmo).numer.v = 
-            (LONGINT)fmip->numer.v * 256 * fmip->size / fmip->denom.v / WIDTHPTR->fSize;
+            (LONGINT)fmip->numer.v * 256 * fmip->size / fmip->denom.v / fsize;
         LM(ROMlib_fmo).denom.h = 256;
         LM(ROMlib_fmo).denom.v = 256;
-        LM(ROMlib_fmo).fontHandle = WIDTHPTR->tabFont;
-        LoadResource(LM(ROMlib_fmo).fontHandle);
-        fp = (FontRec *)*((LM(ROMlib_fmo).fontHandle));
+        fp = have_font ? (FontRec *)*((LM(ROMlib_fmo).fontHandle)) : nullptr;
         style = fmip->face ^ WIDTHPTR->face;
         if(style & (int)bold)
             mungfmo(ftstr.boldt, &LM(ROMlib_fmo));
@@ -1203,11 +1254,26 @@ FMOutPtr Executor::C_FMSwapFont(FMInput *fmip) /* IMI-223 */
                 }
             }
         }
-        if(needtobuild)
+        if(!have_font)
+        {
+            /* fSize stays 0: built again at the next call, when there
+               may be room. Unscaled, no widths. */
+            memset(WIDTHPTR->tabData, 0, sizeof WIDTHPTR->tabData);
+            WIDTHPTR->hOutput = WIDTHPTR->vOutput = 256;
+            WIDTHPTR->hFactor = WIDTHPTR->vFactor = 256;
+        }
+        else if(needtobuild)
             buildtable(LM(ROMlib_fmo).extra);
         /* the strike's own metrics, as 8.6 answers them: the style is in
            bold/shadow/extra (ROMlib_styled_font_info adds it) */
-        if(const SfntMetrics *m = outline_metrics(WIDTHPTR->tabFont))
+        if(!have_font)
+        {
+            LM(ROMlib_fmo).ascent = 0;
+            LM(ROMlib_fmo).descent = 0;
+            LM(ROMlib_fmo).widMax = 0;
+            LM(ROMlib_fmo).leading = 0;
+        }
+        else if(const SfntMetrics *m = outline_metrics(WIDTHPTR->tabFont))
         {
             /* the outline's, not the strike's (which holds every glyph) */
             LM(ROMlib_fmo).ascent = m->ascent;
@@ -1226,7 +1292,8 @@ FMOutPtr Executor::C_FMSwapFont(FMInput *fmip) /* IMI-223 */
     }
     else
     {
-        LoadResource(LM(ROMlib_fmo).fontHandle);
+        if(LM(ROMlib_fmo).fontHandle)
+            LoadResource(LM(ROMlib_fmo).fontHandle);
         LM(WidthPtr) = *LM(WidthTabHandle);
     }
     fmip->size = savesize;
@@ -1234,6 +1301,13 @@ FMOutPtr Executor::C_FMSwapFont(FMInput *fmip) /* IMI-223 */
     HUnlock((Handle)LM(WidthTabHandle));
     LM(LastFOND) = guest_cast<FamRecHandle>(WIDTHPTR->fHand);
     return &LM(ROMlib_fmo);
+}
+
+/* MacPhoenix: FMSwapFont's answer has a strike in memory to draw with */
+bool Executor::ROMlib_fmo_has_font(const FMOutput *fmop)
+{
+    Handle h = fmop->fontHandle;
+    return h && *h;
 }
 
 /* GetFontInfo's metrics for FMSwapFont's answer: shadow adds a line

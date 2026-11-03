@@ -1,4 +1,5 @@
 #include "appledouble.h"
+#include "itemcache.h"
 #include "plain.h"
 
 #include <algorithm>
@@ -30,11 +31,19 @@ bool AppleDoubleItemFactory::isHidden(const fs::directory_entry& e)
 ItemPtr AppleDoubleItemFactory::createItemForDirEntry(ItemCache& itemcache, CNID parID, CNID cnid,
     const fs::directory_entry& e, mac_string_view macname)
 {
-    if(fs::is_regular_file(e.path()))
+    if(e.is_regular_file())
     {
         for(auto scheme : { AppleDoubleScheme::percent, AppleDoubleScheme::dotunderscore })
         {
-            if(fs::is_regular_file(makeADPath(scheme, e.path())))
+            fs::path adpath = makeADPath(scheme, e.path());
+            /* Same-folder sidecar: the current cacheDirectory() scan
+               already has every name here, so most files (no sidecar)
+               skip the stat entirely; a name match still confirms it's a
+               regular file (the scan doesn't track type, just presence). */
+            auto known = itemcache.siblingExistsInScan(e.path().parent_path(), adpath.filename().string());
+            if(known == false)
+                continue;
+            if(fs::is_regular_file(adpath))
                 return std::make_shared<AppleDoubleFileItem>(scheme, itemcache, parID, cnid, e.path(), macname);
         }
     }
@@ -55,11 +64,27 @@ AppleDoubleFileItem::AppleDoubleFileItem(AppleDoubleScheme scheme, ItemCache& it
 {
 }
 
+/* MacPhoenix: the shared AppleSingle/AppleDouble file, read-write from now
+   on if the host lets it be (else left as it was: writes then fail) */
+static void reopen_writable(const std::shared_ptr<AppleSingleDoubleFile> &p, const fs::path &path)
+{
+    auto f = std::make_unique<PlainDataFork>(path, fsRdWrPerm);
+    if(f->canWrite())
+        p->reopen(std::move(f));
+}
+
 std::shared_ptr<AppleSingleDoubleFile> AppleDoubleFileItem::access(int8_t permission)
 {
     std::shared_ptr<AppleSingleDoubleFile> p;
     if((p = openedFile.lock()))
+    {
+        /* MacPhoenix: opened read-only first (a font's resource fork):
+           writing it (PBSetCatInfo's Finder info) hit a read-only
+           descriptor, lost the write and printed "short write" */
+        if(permission != fsRdPerm && !p->canWrite())
+            reopen_writable(p, makeADPath(scheme, path()));
         return p;
+    }
     else
     {
         fs::path adpath = makeADPath(scheme, path());
@@ -88,7 +113,9 @@ ItemInfo AppleDoubleFileItem::getInfo()
 void AppleDoubleFileItem::setInfo(ItemInfo info)
 {
     FileItem::setInfo(info);
-    access(fsRdWrPerm)->write(9, 0, &info, sizeof(info.file));
+    auto f = access(fsRdWrPerm);
+    if(f->canWrite()) /* MacPhoenix: a read-only host file keeps its info */
+        f->write(9, 0, &info, sizeof(info.file));
 }
 
 void AppleDoubleFileItem::deleteItem()
@@ -117,7 +144,7 @@ void AppleDoubleFileItem::moveItem(const fs::path& newPath, mac_string_view newN
 ItemPtr AppleSingleItemFactory::createItemForDirEntry(ItemCache& itemcache, CNID parID, CNID cnid,
     const fs::directory_entry& e, mac_string_view macname)
 {
-    if(!fs::is_regular_file(e.path()))
+    if(!e.is_regular_file())
         return nullptr;
     GUEST<uint64_t> magic = 0;
     fs::ifstream(e.path(), std::ios::binary).read((char*)&magic, 8);
@@ -139,7 +166,11 @@ std::shared_ptr<AppleSingleDoubleFile> AppleSingleFileItem::access(int8_t permis
 {
     std::shared_ptr<AppleSingleDoubleFile> p;
     if((p = openedFile.lock()))
+    {
+        if(permission != fsRdPerm && !p->canWrite())
+            reopen_writable(p, path());
         return p;
+    }
     else
     {
         p = std::make_shared<AppleSingleDoubleFile>(std::make_unique<PlainDataFork>(path(), permission));
@@ -167,7 +198,9 @@ ItemInfo AppleSingleFileItem::getInfo()
 void AppleSingleFileItem::setInfo(ItemInfo info)
 {
     FileItem::setInfo(info);
-    access(fsRdWrPerm)->write(9, 0, &info, sizeof(info.file));
+    auto f = access(fsRdWrPerm);
+    if(f->canWrite()) /* MacPhoenix: a read-only host file keeps its info */
+        f->write(9, 0, &info, sizeof(info.file));
 }
 
 AppleSingleDoubleFile::AppleSingleDoubleFile(std::unique_ptr<OpenFile> aFile)

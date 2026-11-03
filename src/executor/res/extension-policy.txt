@@ -4,7 +4,9 @@
 # where it is). As Extensions Manager does, any other file that runs code
 # at startup (INIT, RDEV, fext, appe, AINI, a cdev with INITs or AINIs) is moved into
 # "Extensions (Disabled)" / "Control Panels (Disabled)" / "System
-# Extensions (Disabled)", and moved back once it is listed. Override per
+# Extensions (Disabled)", and moved back once it is listed. 8.x's control
+# panels that are applications ('APPC') run their INITs when listed and
+# stay where they are when not. Override per
 # data directory with <data_dir>/extension-policy.txt (same format; it
 # replaces this list). "System AINI <id>" allows one of the System file's
 # 'AINI' resources, which the loader runs before any INIT (-32700 is the
@@ -21,6 +23,7 @@ Launcher
 Control Strip
 CloseView
 Mac OS Easy Open
+Macintosh Easy Open
 PC Exchange @ 7.6
 Clipping Extension
 AppleScript™

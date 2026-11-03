@@ -40,6 +40,7 @@
 #include <rsys/toolevent.h>
 #include <rsys/desk.h>
 #include <vdriver/vdriver.h>
+#include <rsys/cfm.h>
 
 using namespace Executor;
 
@@ -50,7 +51,6 @@ typedef LONGINT (*mbarhookp)(Rect *rp);
 #define CALLMENUHOOK(fp) ROMlib_CALLMENUHOOK((menuhookp)(fp))
 #define CALLMBARHOOK(arg, fp) ROMlib_CALLMBARHOOK(arg, (mbarhookp)(fp))
 
-static void dirtymenusize(MenuHandle);
 static Boolean findroot(INTEGER menuid, INTEGER *root_unswp);
 static inline void ROMlib_CALLMENUHOOK(menuhookp fp);
 static inline LONGINT ROMlib_CALLMBARHOOK(Rect *rp, mbarhookp fp);
@@ -62,7 +62,7 @@ static Boolean mtoggle(INTEGER mid, highstate h);
 static MenuHandle menunumtomh(INTEGER mid, INTEGER *sixp);
 static MenuHandle itemishierarchical(MenuHandle, INTEGER, INTEGER *);
 
-static void dirtymenusize(MenuHandle mh)
+void Executor::ROMlib_dirty_menu_size(MenuHandle mh)
 {
     if(mh)
     {
@@ -243,6 +243,10 @@ void Executor::C_InitMenus()
 {
     Handle default_mcinfo;
 
+    /* WindowsLib too: InitWindows calls InitMenus (wind/windInit.cpp) */
+    ROMlib_cfm_toolbox_library("MenusLib");
+    ROMlib_cfm_toolbox_library("WindowsLib");
+
     LM(MenuHook) = LM(MBarHook) = 0;
     ClearMenuBar();
     default_mcinfo = ROMlib_getrestid("mctb"_4, 0);
@@ -329,6 +333,12 @@ MenuHandle Executor::C_GetMenu(int16_t rid)
     MenuHandle retval;
     Handle mct_res_h;
 
+    /* MacPhoenix: whether this call reads the MENU from its file. Read now,
+       its menuProc is the MDEF's ID (high word), never a handle; only one
+       already in memory may hold a handle someone put there. */
+    SetResLoad(false);
+    Handle was = GetResource("MENU"_4, rid);
+    bool fresh = !was || !*was;
     SetResLoad(true);
     retval = (MenuHandle)GetResource("MENU"_4, rid);
 
@@ -360,7 +370,11 @@ MenuHandle Executor::C_GetMenu(int16_t rid)
         Handle current_proc;
 
         current_proc = (*retval)->menuProc;
-        if(!HandleZone(current_proc) || !GetHandleSize(current_proc))
+        /* MacPhoenix: a freshly read MENU's ID is not tried as a handle.
+           ClarisWorks 4's menu 136 names MDEF 200, $00C80000, which on
+           8.6 can be a master pointer of the Finder's (a routine
+           descriptor for FinderLib code): the menu ran the Finder's code. */
+        if(fresh || !HandleZone(current_proc) || !GetHandleSize(current_proc))
         {
             Handle temph;
 
@@ -538,7 +552,7 @@ void Executor::C_AppendMenu(MenuHandle mh, ConstStringPtr str)
         }
         if(tempstr[0])
             app(tempstr, icon, marker, style, keyequiv, disflag, &endinf);
-        dirtymenusize(mh);
+        ROMlib_dirty_menu_size(mh);
     }
 }
 
@@ -628,7 +642,7 @@ void Executor::C_AppendResMenu(MenuHandle mh, ResType restype)
         HUnlock(temph);
         DisposeHandle(temph);
         SetResLoad(true); /* IMI-353 says to do this. */
-        dirtymenusize(mh);
+        ROMlib_dirty_menu_size(mh);
     }
     /* FIXME - IMI-353 says to call SetResLoad(true), but we only do
    * this "if (mh)".
@@ -682,7 +696,7 @@ void Executor::C_DeleteMenuItem(MenuHandle mh, INTEGER item) /* IMIV-56 */
                 (*mh)->enableFlags = (((*mh)->enableFlags >> 1) & ~unchangedmask) | ((*mh)->enableFlags & unchangedmask) | 0x80000000;
             }
         }
-        dirtymenusize(mh);
+        ROMlib_dirty_menu_size(mh);
     }
 }
 
@@ -741,7 +755,7 @@ static void xInsertResMenu(MenuHandle mh, ConstStringPtr str, ResType restype,
 	/* CalcMenuSize shouldn't be called */
 	CalcMenuSize(mh);
 #else
-            dirtymenusize(mh);
+            ROMlib_dirty_menu_size(mh);
 #endif
             DisposeHandle(h);
         }
@@ -794,10 +808,10 @@ void Executor::C_InvalidateAllMenuSizes()
         return;
     muelem *mp, *mpend = (*MENULIST)->mulist + (*MENULIST)->muoff / sizeof(muelem);
     for(mp = (*MENULIST)->mulist; mp != mpend; mp++)
-        dirtymenusize(mp->muhandle);
+        ROMlib_dirty_menu_size(mp->muhandle);
     mpend = (*MENULIST)->mulist + HIEROFF / sizeof(muelem);
     for(mp = FIRSTHIER; mp < mpend; mp++)
-        dirtymenusize(mp->muhandle);
+        ROMlib_dirty_menu_size(mp->muhandle);
 }
 
 /* Executor keeps no menu pixels. */
@@ -1721,7 +1735,7 @@ void Executor::C_SetMenuItemText(MenuHandle mh, INTEGER item, ConstStringPtr str
             }
         }
         str255assign((char *)*mh + soff, str);
-        dirtymenusize(mh);
+        ROMlib_dirty_menu_size(mh);
     }
 }
 
@@ -1781,7 +1795,7 @@ void Executor::C_SetItemIcon(MenuHandle mh, INTEGER item, Byte icon)
     if((mep = ROMlib_mitemtop(mh, item, (StringPtr *)0)))
     {
         mep->micon = icon;
-        dirtymenusize(mh);
+        ROMlib_dirty_menu_size(mh);
     }
 }
 
@@ -1800,11 +1814,24 @@ void Executor::C_SetItemStyle(MenuHandle mh, INTEGER item, INTEGER style)
     if((mep = ROMlib_mitemtop(mh, item, (StringPtr *)0)))
     {
         mep->mstyle = style;
-        dirtymenusize(mh);
+        ROMlib_dirty_menu_size(mh);
     }
 }
 
+/* MacPhoenix: through the trap Pascal's VAR Style is a word, the style in
+   its low byte, as the Quadra's ROM writes it (tests/guest/itemstyle):
+   AppleWorks 5 passes a word and keeps the low byte. */
 void Executor::C_GetItemStyle(MenuHandle mh, INTEGER item, Style *stylep)
+{
+    mextp mep;
+
+    if((mep = ROMlib_mitemtop(mh, item, (StringPtr *)0)))
+        *(GUEST<INTEGER> *)stylep = (uint8_t)mep->mstyle;
+}
+
+/* InterfaceLib's GetItemStyle for PowerPC and CFM-68K code: one byte, a C
+   Style, as 8.6's (tests/guest/difftest menu). */
+void Executor::glue_GetItemStyle(MenuHandle mh, INTEGER item, Style *stylep)
 {
     mextp mep;
 

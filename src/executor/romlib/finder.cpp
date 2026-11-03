@@ -245,10 +245,12 @@ std::string pstring(ConstStringPtr p)
     return p ? std::string((const char *)p + 1, p[0]) : std::string();
 }
 
-/* MacPhoenix (status: stand-in): an HFS volume with no "Desktop DB" (Finder
-   does not rebuild one on a locked volume): its applications are found by
-   walking its catalog, enough for PBDTGetAPPL. */
-void addApplications(DesktopDB& db)
+/* MacPhoenix (status: stand-in): an HFS volume with no "Desktop DB": its
+   applications are found by walking its catalog, enough for PBDTGetAPPL,
+   and the other files with bundles (control panels, extensions, desk
+   accessories) go to *bundled, for their icons, as a Finder's rebuild
+   finds them. */
+void addApplications(DesktopDB& db, std::vector<DTAppl> *bundled)
 {
     std::vector<LONGINT> dirs = { 2 };
     while(!dirs.empty())
@@ -270,6 +272,9 @@ void addApplications(DesktopDB& db)
                 dirs.push_back(cpb.dirInfo.ioDrDirID);
             else if(cpb.hFileInfo.ioFlFndrInfo.fdType == "APPL"_4)
                 db.appls.push_back({ (uint32_t)cpb.hFileInfo.ioFlFndrInfo.fdCreator,
+                                     (uint32_t)cpb.hFileInfo.ioFlCrDat, dir, pstring(name) });
+            else if(bundled && (cpb.hFileInfo.ioFlFndrInfo.fdFlags & kHasBundle))
+                bundled->push_back({ (uint32_t)cpb.hFileInfo.ioFlFndrInfo.fdCreator,
                                      (uint32_t)cpb.hFileInfo.ioFlCrDat, dir, pstring(name) });
         }
     }
@@ -588,14 +593,23 @@ DesktopDB *openDB(DTPBPtr dtp, OSErr& err)
         }
         else
         {
-            if(readDesktopDB(db))
-                db.existed = true; /* Finder keeps it; without this it rebuilt the volume's desktop every boot */
-            else
-                addApplications(db);
+            std::vector<DTAppl> bundled;
+            if(!readDesktopDB(db))
+                addApplications(db, &bundled);
+            /* Finder keeps it; without this it rebuilt the volume's desktop
+               every boot. A database Executor builds from the catalog
+               counts as one too: Executor keeps none on an HFS volume, so a
+               writable one without a Desktop DB (the browser's cut boot
+               disks) was rebuilt by the Finder at every boot, after it was
+               up, and a window of the volume opened meanwhile closed when
+               the rebuild ended (executor.web.write). */
+            db.existed = true;
             /* MacPhoenix: applications whose icons the database lacks
                (a database Finder has not rebuilt since they arrived) get
                them from their bundles, as Finder's rebuild does. */
             for(const auto& a : std::vector<DTAppl>(db.appls))
+                addBundleIcons(db, a);
+            for(const auto& a : bundled)
                 addBundleIcons(db, a);
         }
         /* MacPhoenix: the record a Finder that knows of Mac OS Easy Open
@@ -696,6 +710,19 @@ bool Executor::ROMlib_desktop_refnum_p(short refnum)
         if(db.refNum == refnum && dbFCB(db))
             return true;
     return false;
+}
+
+/* MacPhoenix: the volume is going (hfsPBUnmountVol): its database is
+   written back and forgotten, so a volume mounted later with the same
+   vRefNum gets its own, not this one with an FCB that is gone. */
+void Executor::ROMlib_desktop_unmounting(short vRefNum)
+{
+    auto it = databases.find(vRefNum);
+    if(it == databases.end())
+        return;
+    if(it->second.dirty)
+        it->second.save();
+    databases.erase(it);
 }
 
 OSErr

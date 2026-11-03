@@ -280,20 +280,10 @@ GDHandle Executor::C_GetDeviceList()
 
 GDHandle Executor::C_GetMainDevice()
 {
-    GDHandle retval;
-
-    retval = LM(MainDevice);
-
-    /* Unfortunately, Realmz winds up dereferencing non-existent
-     memory unless noDriver is set, but PacMan Deluxe will have
-     trouble if that bit is set. */
-
-    if(ROMlib_creator == "RLMZ"_4)
-        GD_FLAGS(retval) |= 1 << noDriver;
-    else
-        GD_FLAGS(retval) &= ~(1 << noDriver);
-
-    return retval;
+    /* MacPhoenix: the screen has a driver, so noDriver is clear, as on a
+       7.6.1 Quadra (upstream set it for Realmz alone, 'RLMZ'; Realmz 2.5
+       runs without it). */
+    return LM(MainDevice);
 }
 
 GDHandle Executor::C_GetMaxDevice(const Rect *globalRect)
@@ -374,6 +364,10 @@ Boolean Executor::C_TestDeviceAttribute(GDHandle gdh, INTEGER attribute)
 {
     Boolean retval;
 
+    /* MacPhoenix: no device, no attributes (on a Mac a nil handle reads
+       low memory; 8.6's Navigation Services asks for one it never set) */
+    if(!gdh || !*gdh)
+        return false;
     retval = (GD_FLAGS(gdh) & (1 << attribute)) != 0;
     return retval;
 }
@@ -619,6 +613,15 @@ void Executor::ROMlib_InitGDevices(int width, int height, int bpp, bool grayscal
                     CL_RAW(GetCTSeed()));
 
     gd_allocate_main_device();
+    initialBpp = vdriver->bpp();
+}
+
+/* MacPhoenix: the depth the screen starts in after all, once the System
+   file is known (main.cpp: 8.x starts at 32 bits, as a G3 with 8.6 does);
+   what applications quitting go back to. */
+void Executor::ROMlib_set_initial_depth(int bpp)
+{
+    SetDepth(LM(MainDevice), bpp, 0, 0);
     initialBpp = vdriver->bpp();
 }
 

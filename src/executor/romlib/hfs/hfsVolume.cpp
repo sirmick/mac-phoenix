@@ -362,6 +362,17 @@ static INTEGER openxtnt(LONGINT filnum, LONGINT clpsize, LONGINT filsize,
 #define CTNUM 4
 
 INTEGER Executor::ROMlib_nextvrn = 0; /* TODO: low memory global */
+INTEGER Executor::ROMlib_mount_vrefnum = 0;
+
+INTEGER Executor::ROMlib_new_vrefnum()
+{
+    INTEGER want = ROMlib_mount_vrefnum;
+    ROMlib_mount_vrefnum = 0;
+    for(VCB *v = (VCB *)LM(VCBQHdr).qHead; want && v; v = (VCB *)v->qLink)
+        if(v->vcbVRefNum == want)
+            want = 0;                       /* taken meanwhile */
+    return want ? want : --ROMlib_nextvrn;
+}
 
 OSErr
 Executor::hfsPBMountVol(ParmBlkPtr pb, LONGINT floppyfd, LONGINT offset, LONGINT bsize,
@@ -426,7 +437,7 @@ Executor::hfsPBMountVol(ParmBlkPtr pb, LONGINT floppyfd, LONGINT offset, LONGINT
                 vcbp->vcbDRefNum = drvtodref(pb->volumeParam.ioVRefNum);
                 vcbp->vcbFSID = 0;
                 if(!alreadythere)
-                    vcbp->vcbVRefNum = --ROMlib_nextvrn;
+                    vcbp->vcbVRefNum = ROMlib_new_vrefnum();
                 vcbp->vcbDirIndex = 0;
                 vcbp->vcbDirBlk = 0;
                 vcbp->vcbFlags = 0;
@@ -750,13 +761,6 @@ static OSErr setvolhelper(VolumeParam *pb, Boolean aysnc, LONGINT dirid,
     GUEST<INTEGER> newDefVRefNum;
     CInfoPBRec cpb;
 
-    /*
- * CinemationCD hack ... they store a directory as a 2-byte quantity and
- *	sign extend it.  This will only help us recover the sign bit.
- */
-    if(dirid < 0)
-        dirid = 64 * 1024 + dirid;
-
     newdir = 0;
     vcbp = ROMlib_findvcb(pb->ioVRefNum, pb->ioNamePtr,
                           &newdir, false);
@@ -765,6 +769,22 @@ static OSErr setvolhelper(VolumeParam *pb, Boolean aysnc, LONGINT dirid,
     else
     {
         err = noErr;
+        /* MacPhoenix: a directory ID with no name is one the volume must
+           have: the Quadra answers fnfErr for one it hasn't (1, 16 on a
+           fresh volume, 999999, negative ones) and leaves the default
+           where it was. (Upstream added 64K to negative IDs, for
+           CinemationCD's sign-extended word.) */
+        if(!convertzeros && dirid != 0 && !(pb->ioNamePtr && pb->ioNamePtr[0]))
+        {
+            CInfoPBRec dpb;
+            memset(&dpb, 0, sizeof dpb);
+            dpb.dirInfo.ioVRefNum = vcbp->vcbVRefNum;
+            dpb.dirInfo.ioFDirIndex = -1;
+            dpb.dirInfo.ioDrDirID = dirid;
+            if(dirid == 1 || PBGetCatInfo(&dpb, false) != noErr
+               || !(dpb.dirInfo.ioFlAttrib & ATTRIB_ISADIR))
+                PBRETURN(pb, fnfErr);
+        }
         newDefVCBPtr = vcbp;
         newDefDirID = 0;
         if(newdir > 2)
@@ -846,24 +866,62 @@ OSErr Executor::hfsPBFlushVol(ParmBlkPtr pb, Boolean async)
     PBRETURN((VolumeParam *)pb, err);
 }
 
-static void closeallvcbfiles(HVCB *vcbp)
+/* MacPhoenix: the FCBs that are the volume's own (its B-trees, file
+   numbers below 16, and the desktop database's, finder.cpp) and not a
+   program's: they don't make the volume busy. */
+static bool system_fcb_p(filecontrolblock *fcbp, INTEGER refnum)
+{
+    return (uint32_t)fcbp->fcbFlNum < 16 || ROMlib_desktop_refnum_p(refnum);
+}
+
+/* MacPhoenix: as on a Mac, a volume with files open on it is busy
+   (fBsyErr) and stays mounted; ROMlib_OurClose (force) closes them
+   first. Unmounting, every FCB still pointing at the volume is freed: the
+   VCB goes, and an FCB left pointing at it would be read later. */
+static OSErr closeallvcbfiles(HVCB *vcbp, bool force)
 {
     filecontrolblock *fcbp, *efcbp;
     IOParam iopb;
     short length;
 
     length = *(GUEST<INTEGER> *)LM(FCBSPtr);
-    fcbp = (filecontrolblock *)((short *)LM(FCBSPtr) + 1);
     efcbp = (filecontrolblock *)((char *)LM(FCBSPtr) + length);
-    for(; fcbp < efcbp; fcbp = (filecontrolblock *)((char *)fcbp + LM(FSFCBLen)))
+    for(fcbp = (filecontrolblock *)((short *)LM(FCBSPtr) + 1); fcbp < efcbp;
+        fcbp = (filecontrolblock *)((char *)fcbp + LM(FSFCBLen)))
+        if(fcbp->fcbFlNum && fcbp->fcbVPtr == vcbp
+           && !system_fcb_p(fcbp, (char *)fcbp - (char *)LM(FCBSPtr)))
+        {
+            if(!force)
+                return fBsyErr;
+            memset(&iopb, 0, sizeof iopb);
+            iopb.ioRefNum = (char *)fcbp - (char *)LM(FCBSPtr);
+            /* my */ PBClose((ParmBlkPtr)&iopb, false);
+        }
+    for(fcbp = (filecontrolblock *)((short *)LM(FCBSPtr) + 1); fcbp < efcbp;
+        fcbp = (filecontrolblock *)((char *)fcbp + LM(FSFCBLen)))
         if(fcbp->fcbFlNum && fcbp->fcbVPtr == vcbp)
         {
+            memset(&iopb, 0, sizeof iopb);
             iopb.ioRefNum = (char *)fcbp - (char *)LM(FCBSPtr);
             /* my */ PBFlushFile((ParmBlkPtr)&iopb, false);
         }
+    return noErr;
 }
 
-OSErr Executor::hfsPBUnmountVol(ParmBlkPtr pb)
+static void freevcbfcbs(HVCB *vcbp)
+{
+    short length = *(GUEST<INTEGER> *)LM(FCBSPtr);
+    auto *efcbp = (filecontrolblock *)((char *)LM(FCBSPtr) + length);
+    for(auto *fcbp = (filecontrolblock *)((short *)LM(FCBSPtr) + 1); fcbp < efcbp;
+        fcbp = (filecontrolblock *)((char *)fcbp + LM(FSFCBLen)))
+        if(fcbp->fcbVPtr == vcbp)
+        {
+            fcbp->fcbFlNum = 0;
+            fcbp->fcbVPtr = nullptr;
+        }
+}
+
+OSErr Executor::hfsPBUnmountVol(ParmBlkPtr pb, bool force)
 {
     OSErr err;
     HVCB *vcbp;
@@ -872,8 +930,12 @@ OSErr Executor::hfsPBUnmountVol(ParmBlkPtr pb)
                           pb->volumeParam.ioNamePtr, (LONGINT *)0, false);
     if(vcbp)
     {
-        closeallvcbfiles(vcbp);
+        err = closeallvcbfiles(vcbp, force);
+        if(err != noErr)
+            PBRETURN((VolumeParam *)pb, err);
         err = ROMlib_flushvcbp(vcbp);
+        ROMlib_desktop_unmounting(vcbp->vcbVRefNum);
+        freevcbfcbs(vcbp);
         Dequeue((QElemPtr)vcbp, &LM(VCBQHdr));
         DisposePtr(vcbp->vcbMAdr);
         DisposePtr(vcbp->vcbBufAdr);

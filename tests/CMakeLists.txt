@@ -361,6 +361,42 @@ set_tests_properties(clib_rom_ppc PROPERTIES
   ENVIRONMENT "MACEMU_ROM=${TEST_PPC_ROM}"
 )
 
+# StdCLib's device table and descriptor layer (FSYS, CONS, SYST, a device of
+# the program's own in slot 3; MakeResolvedPath) by DevTest
+# (tests/guest/devtest, MPW): Executor's, and Apple's on Mac OS 9.0.4.
+add_test(
+  NAME devtest_executor
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --backend executor --app ${CMAKE_SOURCE_DIR}/tests/guest/devtest/DevTest.bin --results devtest_results.txt --network none --timeout 120 --port 18458
+)
+set_tests_properties(devtest_executor PROPERTIES
+  TIMEOUT 180
+  LABELS "guest;executor"
+  SKIP_RETURN_CODE 77
+)
+add_test(
+  NAME devtest_rom_ppc
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --backend kpx --core mame-ppc --jit --app ${CMAKE_SOURCE_DIR}/tests/guest/devtest/DevTest.bin --results devtest_results.txt --network none --timeout 150 --port 18478
+)
+set_tests_properties(devtest_rom_ppc PROPERTIES
+  TIMEOUT 220
+  LABELS "guest"
+  SKIP_RETURN_CODE 77
+  ENVIRONMENT "MACEMU_ROM=${TEST_PPC_ROM}"
+)
+
+# PowerPC breakpoints and traces in an Executor session (--executor-ppc-break,
+# /api/executor/ppc-break; docs/executor/PPCTrace.md): CLibTest, a routine
+# breakpoint from the command line and a fragment one over the API.
+add_test(
+  NAME ppc_break_executor
+  COMMAND bash ${TEST_DIR}/test_executor_ppc_break.sh $<TARGET_FILE:mac-phoenix> 18472
+)
+set_tests_properties(ppc_break_executor PROPERTIES
+  TIMEOUT 200
+  LABELS "guest;executor"
+  SKIP_RETURN_CODE 77
+)
+
 # The same for CFM-68K (CLibTest68K: SC -model cfmflat + ILink on NuStdCLib
 # and NuIntEnv, StdCLib's CFM-68K halves; MathLib's checks are PowerPC-only):
 # Executor's StdCLib, and Apple's NuStdCLib on the Quadra with the CFM-68K
@@ -500,6 +536,136 @@ set_tests_properties(notify_executor PROPERTIES
   LABELS "guest;executor"
   SKIP_RETURN_CODE 77
 )
+
+# SizeResource and MaxSizeRsrc for resources loaded and not (a loaded one
+# answers its handle's size: ClarisWorks 4's launch check): tests/guest/ressize.
+# The ROM machine is the reference.
+add_test(
+  NAME ressize_guest
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --os-version 7.6.1 --app ${CMAKE_SOURCE_DIR}/tests/guest/ressize/ResSizeTest.bin --results ressize_test.txt --network none --timeout 90 --port 18460
+)
+set_tests_properties(ressize_guest PROPERTIES
+  TIMEOUT 130
+  LABELS "guest"
+  SKIP_RETURN_CODE 77
+  ENVIRONMENT "MACEMU_ROM=${TEST_ROM}"
+)
+
+add_test(
+  NAME ressize_executor
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --backend executor --os-version 7.6.1 --app ${CMAKE_SOURCE_DIR}/tests/guest/ressize/ResSizeTest.bin --results ressize_test.txt --network none --timeout 150 --port 18462
+)
+set_tests_properties(ressize_executor PROPERTIES
+  TIMEOUT 200
+  LABELS "guest;executor"
+  SKIP_RETURN_CODE 77
+)
+
+# GetItemStyle through the trap writes a word, the style in its low byte
+# (AppleWorks 5's command keys): tests/guest/itemstyle. The ROM machine is
+# the reference.
+add_test(
+  NAME itemstyle_guest
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --os-version 7.6.1 --app ${CMAKE_SOURCE_DIR}/tests/guest/itemstyle/ItemStyleTest.bin --results itemstyle_test.txt --network none --timeout 90 --port 18464
+)
+set_tests_properties(itemstyle_guest PROPERTIES
+  TIMEOUT 130
+  LABELS "guest"
+  SKIP_RETURN_CODE 77
+  ENVIRONMENT "MACEMU_ROM=${TEST_ROM}"
+)
+
+add_test(
+  NAME itemstyle_executor
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --backend executor --os-version 7.6.1 --app ${CMAKE_SOURCE_DIR}/tests/guest/itemstyle/ItemStyleTest.bin --results itemstyle_test.txt --network none --timeout 150 --port 18466
+)
+set_tests_properties(itemstyle_executor PROPERTIES
+  TIMEOUT 200
+  LABELS "guest;executor"
+  SKIP_RETURN_CODE 77
+)
+
+# LNextCell always leaves the advanced cell, h back to 0 past a row's end,
+# with or without a next one (AppleWorks 5's Define Database Fields counts
+# selected cells until LGetSelect finds none): tests/guest/listcell. The ROM
+# machine is the reference.
+add_test(
+  NAME listcell_guest
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --os-version 7.6.1 --app ${CMAKE_SOURCE_DIR}/tests/guest/listcell/ListCellTest.bin --results listcell_test.txt --network none --timeout 90 --port 18468
+)
+set_tests_properties(listcell_guest PROPERTIES
+  TIMEOUT 130
+  LABELS "guest"
+  SKIP_RETURN_CODE 77
+  ENVIRONMENT "MACEMU_ROM=${TEST_ROM}"
+)
+
+add_test(
+  NAME listcell_executor
+  COMMAND bash ${TEST_DIR}/test_guest_suite.sh --backend executor --os-version 7.6.1 --app ${CMAKE_SOURCE_DIR}/tests/guest/listcell/ListCellTest.bin --results listcell_test.txt --network none --timeout 150 --port 18470
+)
+set_tests_properties(listcell_executor PROPERTIES
+  TIMEOUT 200
+  LABELS "guest;executor"
+  SKIP_RETURN_CODE 77
+)
+
+# provisioning/bake.py's serial steps, with a fake serials file: typed, never
+# logged, annotated or keyed; a missing one stops the bake (no emulator).
+add_test(
+  NAME bake_serials
+  COMMAND ${Python3_EXECUTABLE} ${TEST_DIR}/test_bake_serials.py
+)
+set_tests_properties(bake_serials PROPERTIES TIMEOUT 60 LABELS "provisioning")
+
+# A bake's "exclude" paths ("Folder:Name", a serial number file an archive came
+# with) left out of the snapshot and the Installers disk (no emulator).
+add_test(
+  NAME bake_exclude
+  COMMAND ${Python3_EXECUTABLE} ${TEST_DIR}/test_bake_exclude.py
+)
+set_tests_properties(bake_exclude PROPERTIES TIMEOUT 60 LABELS "provisioning")
+
+# A library disk's System Folder additions (tools/web/make_disk.py
+# --system-from, make_library.py's place mapping): hfsutils, no emulator.
+add_test(
+  NAME system_additions
+  COMMAND ${Python3_EXECUTABLE} ${TEST_DIR}/test_system_additions.py
+)
+set_tests_properties(system_additions PROPERTIES TIMEOUT 60 LABELS "provisioning" SKIP_RETURN_CODE 77)
+
+# build.py's "printer": the Chooser's STR and 'alis' -8192 as a 7.6.1 Quadra
+# writes them, inherited from a built base, not in its content identity.
+add_test(
+  NAME build_printer
+  COMMAND ${Python3_EXECUTABLE} ${TEST_DIR}/test_build_printer.py
+)
+set_tests_properties(build_printer PROPERTIES TIMEOUT 120 LABELS "provisioning")
+
+# HFS names hfsutils would glob ({ } [ ] * ?) made, copied and listed as they are
+add_test(
+  NAME hfs_glob
+  COMMAND ${Python3_EXECUTABLE} ${TEST_DIR}/test_hfs_glob.py
+)
+set_tests_properties(hfs_glob PROPERTIES TIMEOUT 60 LABELS "provisioning" SKIP_RETURN_CODE 77)
+
+# AppleWorks 5.0.3 on Executor's 7.6.1: a word-processing document made,
+# saved on the Host volume, opened again and saved (tests/test_appleworks.py),
+# with its 68k code and with its PowerPC code.
+set(_aw_68k_args)
+set(_aw_ppc_args --ppc)
+foreach(_aw IN ITEMS 68k ppc)
+  add_test(
+    NAME appleworks_executor_761_${_aw}
+    COMMAND ${Python3_EXECUTABLE} ${TEST_DIR}/test_appleworks.py --system 7.6.1 ${_aw_${_aw}_args}
+  )
+  set_tests_properties(appleworks_executor_761_${_aw} PROPERTIES
+    TIMEOUT 400
+    LABELS "guest;executor"
+    SKIP_RETURN_CODE 77
+    ENVIRONMENT "MACPHOENIX_EMULATOR=$<TARGET_FILE:mac-phoenix>"
+  )
+endforeach()
 
 # Host keystrokes (/api/keypress) reach the front application (the suite).
 add_test(
@@ -721,6 +887,93 @@ foreach(codec png h264)
     TIMEOUT 120 LABELS "executor" SKIP_RETURN_CODE 77
     ENVIRONMENT "NODE_PATH=${PLAYWRIGHT_NODE_PATH};CHROMIUM=${PLAYWRIGHT_CHROMIUM}")
 endforeach()
+
+# Executor's HiDPI chrome runs (docs/executor/HiDPI.md "Phase 2"): ChromeGallery
+# on 8.6 at --executor-scale 2, the 2x screen against the 1x frame scaled up
+# inside known pieces of chrome. Skips without Skia (-DEXECUTOR_SKIA=ON).
+add_test(NAME hidpi_chrome_executor
+  COMMAND bash ${TEST_DIR}/test_hidpi_chrome.sh --port 18474)
+set_tests_properties(hidpi_chrome_executor PROPERTIES
+  TIMEOUT 180 LABELS "executor" SKIP_RETURN_CODE 77
+  ENVIRONMENT "MACEMU_BINARY=$<TARGET_FILE:mac-phoenix>")
+
+# HiDPI text runs behind windows: SimpleText's lines under its "Save changes"
+# alert (no 2x slivers in the alert), the alert's pressed Cancel after it closed
+# (no grey box left on the document's white).
+add_test(NAME hidpi_windows_executor
+  COMMAND bash ${TEST_DIR}/test_hidpi_windows.sh --port 18620)
+set_tests_properties(hidpi_windows_executor PROPERTIES
+  TIMEOUT 180 LABELS "executor" SKIP_RETURN_CODE 77
+  ENVIRONMENT "MACEMU_BINARY=$<TARGET_FILE:mac-phoenix>")
+
+# The 8.6 Finder's desktop labels after an update that covers only part of
+# them: a Finder window over half of two labels closed, the icon column as
+# before (Executor's DMDrawDesktopRegion clipped like the Finder's update).
+add_test(NAME desktop_labels_executor
+  COMMAND bash ${TEST_DIR}/test_desktop_labels_executor.sh --port 18516)
+set_tests_properties(desktop_labels_executor PROPERTIES
+  TIMEOUT 150 LABELS "executor" SKIP_RETURN_CODE 77
+  ENVIRONMENT "MACEMU_BINARY=$<TARGET_FILE:mac-phoenix>")
+
+# 8.6's platinum chrome where the G3 was measured: the menu bar's apple,
+# a Finder window's scroll bar thumb, the disks' icons, a short click paging once.
+add_test(NAME platinum_86_executor
+  COMMAND bash ${TEST_DIR}/test_platinum_86_executor.sh --port 18518)
+set_tests_properties(platinum_86_executor PROPERTIES
+  TIMEOUT 200 LABELS "executor" SKIP_RETURN_CODE 77
+  ENVIRONMENT "MACEMU_BINARY=$<TARGET_FILE:mac-phoenix>")
+
+# Two sessions on one --executor-system at once: the second runs on a copy
+# of its own (executor-systems/run/<pid>), both keep their BridgeAgent.
+add_test(NAME system_sessions_executor
+  COMMAND bash ${TEST_DIR}/test_executor_system_sessions.sh --port 18540)
+set_tests_properties(system_sessions_executor PROPERTIES
+  TIMEOUT 180 LABELS "executor" SKIP_RETURN_CODE 77
+  ENVIRONMENT "MACEMU_BINARY=$<TARGET_FILE:mac-phoenix>")
+
+# A PowerPC application launched a second time (BBEdit Lite 6.1 on 8.6,
+# then an odoc): the System's accelerated WDEF, prepared by the first, is the
+# system's, not the first launch's heap.
+add_test(NAME relaunch_ppc_executor
+  COMMAND bash ${TEST_DIR}/test_relaunch_ppc_executor.sh --port 18542)
+set_tests_properties(relaunch_ppc_executor PROPERTIES
+  TIMEOUT 240 LABELS "executor" SKIP_RETURN_CODE 77
+  ENVIRONMENT "MACEMU_BINARY=$<TARGET_FILE:mac-phoenix>")
+
+# 8.6 at 2x: the desktop's labels sharp again after a Finder window has
+# been over part of them (their runs outlive being covered in part).
+add_test(NAME hidpi_labels_executor
+  COMMAND bash ${TEST_DIR}/test_hidpi_labels_executor.sh --port 18544)
+set_tests_properties(hidpi_labels_executor PROPERTIES
+  TIMEOUT 240 LABELS "executor" SKIP_RETURN_CODE 77
+  ENVIRONMENT "MACEMU_BINARY=$<TARGET_FILE:mac-phoenix>")
+
+# An alert left up idles the host and OK still answers: the 8.6 Finder's
+# Erase Disk alert on the read-only image, the emulator's CPU time while it
+# is up (Executor's ModalDialog waits a tick between events).
+add_test(NAME modal_idle_executor
+  COMMAND bash ${TEST_DIR}/test_modal_idle_executor.sh --port 18531)
+set_tests_properties(modal_idle_executor PROPERTIES
+  TIMEOUT 150 LABELS "executor" SKIP_RETURN_CODE 77
+  ENVIRONMENT "MACEMU_BINARY=$<TARGET_FILE:mac-phoenix>")
+
+# 8.x selects text in the highlight colour: SimpleText's selection in the
+# Mac OS Default theme's lavender with no colour saved in parameter RAM,
+# not inverted black.
+add_test(NAME text_hilite_executor
+  COMMAND bash ${TEST_DIR}/test_text_hilite_executor.sh --port 18532)
+set_tests_properties(text_hilite_executor PROPERTIES
+  TIMEOUT 150 LABELS "executor" SKIP_RETURN_CODE 77
+  ENVIRONMENT "MACEMU_BINARY=$<TARGET_FILE:mac-phoenix>")
+
+# Executor's HiDPI GWorld shadows (docs/executor/HiDPI.md "Phase 4"): GWorldGallery
+# on 8.6 at --executor-scale 2, text drawn offscreen and copied to the screen
+# against the 1x frame scaled up. Skips without Skia (-DEXECUTOR_SKIA=ON).
+add_test(NAME hidpi_gworld_executor
+  COMMAND bash ${TEST_DIR}/test_hidpi_gworld.sh --port 18476)
+set_tests_properties(hidpi_gworld_executor PROPERTIES
+  TIMEOUT 180 LABELS "executor" SKIP_RETURN_CODE 77
+  ENVIRONMENT "MACEMU_BINARY=$<TARGET_FILE:mac-phoenix>")
 
 # Executor's Toolbox gtests built with Retro68 into a 68k app and run in
 # the guest: on Apple's ROM and System (the ground truth) and on Executor.
@@ -976,20 +1229,136 @@ foreach(cell IN ITEMS "collections_ppc_executor_761;--backend executor;7.6.1;189
   )
 endforeach()
 
+# Apple Menu Options' submenus on 8.6 (its INIT, in an 'APPC' control
+# panel): the Apple menu held down on Control Panels shows a submenu. The
+# G3 the reference, Executor on 8.6's System.
+foreach(cell IN ITEMS "applemenu_submenus_executor_86;--backend executor;18184;guest;executor"
+                      "applemenu_submenus_rom_ppc_86;--backend kpx --core mame-ppc --jit;18186;guest;mame")
+  list(GET cell 0 name)
+  list(GET cell 1 backend)
+  list(GET cell 2 port)
+  list(SUBLIST cell 3 -1 labels)
+  separate_arguments(backend_args UNIX_COMMAND "${backend}")
+  add_test(
+    NAME ${name}
+    COMMAND bash ${TEST_DIR}/test_apple_menu_submenus.sh ${backend_args} --timeout 120 --port ${port}
+  )
+  set_tests_properties(${name} PROPERTIES
+    TIMEOUT 180
+    LABELS "${labels}"
+    SKIP_RETURN_CODE 77
+    ENVIRONMENT "MACEMU_ROM=${TEST_PPC_ROM}"
+  )
+endforeach()
+
+# Scroll bars on 8.6: the Finder's live scrolling (a thumb dragged scrolls
+# the window before the button is let go), and on Executor Standard File's
+# list paging both ways (AppleWorks' Open). The G3 the reference.
+foreach(cell IN ITEMS "scroll_bars_executor_86;--backend executor;18210;guest;executor"
+                      "scroll_bars_rom_ppc_86;--backend kpx --core mame-ppc --jit;18212;guest;mame")
+  list(GET cell 0 name)
+  list(GET cell 1 backend)
+  list(GET cell 2 port)
+  list(SUBLIST cell 3 -1 labels)
+  separate_arguments(backend_args UNIX_COMMAND "${backend}")
+  add_test(
+    NAME ${name}
+    COMMAND bash ${TEST_DIR}/test_scroll_bars_86.sh ${backend_args} --timeout 120 --port ${port}
+  )
+  set_tests_properties(${name} PROPERTIES
+    TIMEOUT 240
+    LABELS "${labels}"
+    SKIP_RETURN_CODE 77
+    ENVIRONMENT "MACEMU_ROM=${TEST_PPC_ROM}"
+  )
+endforeach()
+
+# CodeWarrior IDE 3.2 (PowerPC) on Executor on 8.6's System: runs, its
+# second preparation of Translation (a global data section) given the
+# system's instance, relocated, not freed memory.
+add_test(
+  NAME codewarrior_executor_86
+  COMMAND bash ${TEST_DIR}/test_codewarrior_86.sh --timeout 120 --port 18340
+)
+set_tests_properties(codewarrior_executor_86 PROPERTIES
+  TIMEOUT 240
+  LABELS "guest;executor"
+  SKIP_RETURN_CODE 77
+)
+
+# THINK C 6 on Executor on 7.6.1's System: Project > Run launches the
+# project through MultiFinder's short 'LC' block, and its runtime stub finds
+# THINK's data in the ApplScratch it starts with.
+add_test(
+  NAME thinkc_run_executor
+  COMMAND bash ${TEST_DIR}/test_thinkc_run_executor.sh --timeout 150 --port 18780
+)
+set_tests_properties(thinkc_run_executor PROPERTIES
+  TIMEOUT 300
+  LABELS "guest;executor"
+  SKIP_RETURN_CODE 77
+)
+
+# The Utilities disk (system information and benchmarks) on Executor:
+# Gestalt.Appl on 7.6.1; Gestalt.Appl, TattleTech and MacBench 5.0 on 8.6.
+foreach(_us IN ITEMS 7.6.1 8.6)
+  add_test(
+    NAME utilities_executor_${_us}
+    COMMAND bash ${TEST_DIR}/test_utilities_executor.sh ${_us} --port 18790
+  )
+  set_tests_properties(utilities_executor_${_us} PROPERTIES
+    TIMEOUT 400
+    LABELS "guest;executor"
+    SKIP_RETURN_CODE 77
+    RESOURCE_LOCK utilities_executor
+  )
+endforeach()
+
+# Executor's Gestalt against the Macs' (tests/guest/gestalt: the probe and
+# the answers measured on the Quadra 650 and the G3): identity and managers.
+foreach(_gc IN ITEMS 7.6.1 7.6.1-ppc 8.6)
+  add_test(
+    NAME gestalt_executor_${_gc}
+    COMMAND bash ${TEST_DIR}/test_gestalt_executor.sh ${_gc} --port 18874
+  )
+  set_tests_properties(gestalt_executor_${_gc} PROPERTIES
+    TIMEOUT 300
+    LABELS "guest;executor"
+    SKIP_RETURN_CODE 77
+    RESOURCE_LOCK gestalt_executor
+  )
+endforeach()
+
+# MPW Shell (PowerPC) on Executor with 8.6's System: Startup builds the
+# Project, Directory and Build menus (commands found through StdCLib's
+# MakeResolvedPath), a do-script's output redirected to a file.
+add_test(
+  NAME mpw_executor_86
+  COMMAND bash ${TEST_DIR}/test_mpw_86.sh --timeout 120 --port 18344
+)
+set_tests_properties(mpw_executor_86 PROPERTIES
+  TIMEOUT 240
+  LABELS "guest;executor"
+  SKIP_RETURN_CODE 77
+)
+
 # Icon Services from PowerPC code (IconServicesLib) by IconTest
 # (tests/guest/iconservices, Retro68): Executor's (iconservices.cpp), and
-# Apple's on the G3 with 9.0.4.
-foreach(cell IN ITEMS "icons_ppc_executor_761;--backend executor;7.6.1;18990;guest;761;executor"
-                      "icons_rom_ppc_904;--backend kpx --core mame-ppc --jit;9.0.4;18992;guest;mame")
+# Apple's on the G3 with 9.0.4 and 8.6; on 8.6 also Executor's with 8.6's System.
+foreach(cell IN ITEMS "icons_ppc_executor_761;--backend executor;--os-version 7.6.1;18990;guest;761;executor"
+                      "icons_rom_ppc_904;--backend kpx --core mame-ppc --jit;--os-version 9.0.4;18992;guest;mame"
+                      "icons_ppc_executor_86;--backend executor --executor-ppc;--image 8.6;18994;guest;executor"
+                      "icons_rom_ppc_86;--backend kpx --core mame-ppc --jit;--image 8.6;18996;guest;mame")
   list(GET cell 0 name)
   list(GET cell 1 backend)
   list(GET cell 2 os)
   list(GET cell 3 port)
   list(SUBLIST cell 4 -1 labels)
   separate_arguments(backend_args UNIX_COMMAND "${backend}")
+  separate_arguments(os_args UNIX_COMMAND "${os}")
   add_test(
     NAME ${name}
-    COMMAND bash ${TEST_DIR}/test_guest_suite.sh ${backend_args} --os-version ${os} --app ${CMAKE_SOURCE_DIR}/tests/guest/iconservices/IconTestPPC.bin --results icon_results.txt --network none --timeout 150 --port ${port}
+    COMMAND bash ${TEST_DIR}/test_guest_suite.sh ${backend_args} ${os_args} --app ${CMAKE_SOURCE_DIR}/tests/guest/iconservices/IconTestPPC.bin --results icon_results.txt --network none --timeout 150 --port ${port}
   )
   set_tests_properties(${name} PROPERTIES
     TIMEOUT 230
@@ -1002,17 +1371,28 @@ endforeach()
 # An application's partition (SIZE 100K: preferred + 56K on 8.6, the stack
 # DefltStack + 16K) as the Process Manager lays it out: tests/guest/partprobe,
 # 8.6 on the G3 the reference, Executor on 8.6's System
-# (process_layout_partition).
-foreach(cell "partition_rom_ppc_86;--backend kpx --core mame-ppc --jit;18490;guest;mame"
-             "partition_executor_86;--backend executor --executor-ppc;18492;guest;executor")
+# (process_layout_partition). The _default cell leaves out --executor-ppc:
+# on an 8.x System Executor runs fat applications' PowerPC code by itself
+# (version.cpp), the Finder's first of all. The _fragment cells run
+# PartProbePPC: a PowerPC application's partition grows by its fragment's
+# length (+ 28K on 7.6.1, + 50K on 8.6), the fragment loaded into its heap.
+foreach(cell "partition_rom_ppc_86;--backend kpx --core mame-ppc --jit;8.6;PartProbe;18490;guest;mame"
+             "partition_executor_86;--backend executor --executor-ppc;8.6;PartProbe;18492;guest;executor"
+             "partition_executor_86_default;--backend executor;8.6;PartProbe;18494;guest;executor"
+             "partition_fragment_rom_ppc_86;--backend kpx --core mame-ppc --jit;8.6;PartProbePPC;18496;guest;mame"
+             "partition_fragment_executor_86;--backend executor --executor-ppc;8.6;PartProbePPC;18498;guest;executor"
+             "partition_fragment_rom_ppc_761;--backend kpx --core mame-ppc --jit;7.6.1;PartProbePPC;18500;guest;mame"
+             "partition_fragment_executor_761;--backend executor --executor-ppc;7.6.1;PartProbePPC;18502;guest;executor")
   list(GET cell 0 name)
   list(GET cell 1 backend)
-  list(GET cell 2 port)
-  list(SUBLIST cell 3 -1 labels)
+  list(GET cell 2 image)
+  list(GET cell 3 app)
+  list(GET cell 4 port)
+  list(SUBLIST cell 5 -1 labels)
   separate_arguments(backend_args UNIX_COMMAND "${backend}")
   add_test(
     NAME ${name}
-    COMMAND bash ${TEST_DIR}/test_guest_suite.sh ${backend_args} --image 8.6 --app ${CMAKE_SOURCE_DIR}/tests/guest/partprobe/PartProbe.bin --results part_results.txt --network none --timeout 150 --port ${port}
+    COMMAND bash ${TEST_DIR}/test_guest_suite.sh ${backend_args} --image ${image} --app ${CMAKE_SOURCE_DIR}/tests/guest/partprobe/${app}.bin --results part_results.txt --network none --timeout 150 --port ${port}
   )
   set_tests_properties(${name} PROPERTIES
     TIMEOUT 230
@@ -1022,20 +1402,74 @@ foreach(cell "partition_rom_ppc_86;--backend kpx --core mame-ppc --jit;18490;gue
   )
 endforeach()
 
+# InterfaceLib's lowercase C routines (numtostring, getindstring, ptinrect,
+# sfputfile, ...; `cglue:` in the definitions) against their Pascal
+# routines: tests/guest/cglueprobe, 8.6 on the G3 the reference. Return
+# answers sfputfile's dialog.
+foreach(cell "cglue_rom_ppc_86;--backend kpx --core mame-ppc --jit;18504;mame"
+             "cglue_executor_86;--backend executor --executor-ppc;18506;executor")
+  list(GET cell 0 name)
+  list(GET cell 1 backend)
+  list(GET cell 2 port)
+  list(GET cell 3 label)
+  separate_arguments(backend_args UNIX_COMMAND "${backend}")
+  add_test(
+    NAME ${name}
+    COMMAND bash ${TEST_DIR}/test_guest_suite.sh ${backend_args} --image 8.6 --app ${CMAKE_SOURCE_DIR}/tests/guest/cglueprobe/CGlueProbePPC.bin --results cglue_results.txt --key-on "WAITING sfputfile:36" --network none --timeout 150 --port ${port}
+  )
+  set_tests_properties(${name} PROPERTIES
+    TIMEOUT 230
+    LABELS "guest;${label}"
+    SKIP_RETURN_CODE 77
+    ENVIRONMENT "MACEMU_ROM=${TEST_PPC_ROM}"
+  )
+endforeach()
+
+# GetIndString and GetIndPattern given an index outside the list, an empty
+# list, a missing one: tests/guest/strprobe. The Macs are the reference
+# (the Quadra with 7.6.1 through Apple's 68k glue, the G3 with 8.6 through
+# InterfaceLib; the same answers), Executor's own from PowerPC code.
+foreach(cell "strprobe_rom_761;;StrProbe.bin;--os-version 7.6.1;${TEST_ROM};18560;guest"
+             "strprobe_rom_ppc_86;--backend kpx --core mame-ppc --jit;StrProbePPC.bin;--image 8.6;${TEST_PPC_ROM};18562;guest;mame"
+             "strprobe_ppc_executor_86;--backend executor --executor-ppc;StrProbePPC.bin;--image 8.6;;18564;guest;executor"
+             "strprobe_ppc_executor_761;--backend executor;StrProbePPC.bin;--os-version 7.6.1;;18566;guest;761;executor")
+  list(GET cell 0 name)
+  list(GET cell 1 backend)
+  list(GET cell 2 app)
+  list(GET cell 3 disk)
+  list(GET cell 4 rom)
+  list(GET cell 5 port)
+  list(SUBLIST cell 6 -1 labels)
+  separate_arguments(backend_args UNIX_COMMAND "${backend}")
+  separate_arguments(disk_args UNIX_COMMAND "${disk}")
+  add_test(
+    NAME ${name}
+    COMMAND bash ${TEST_DIR}/test_guest_suite.sh ${backend_args} ${disk_args} --app ${CMAKE_SOURCE_DIR}/tests/guest/strprobe/${app} --results str_results.txt --network none --timeout 150 --port ${port}
+  )
+  set_tests_properties(${name} PROPERTIES
+    TIMEOUT 230
+    LABELS "${labels}"
+    SKIP_RETURN_CODE 77
+    ENVIRONMENT "MACEMU_ROM=${rom}"
+  )
+endforeach()
+
 # Differential probes (docs/executor/DiffTest.md): each probe's answers on
 # Executor (8.6 System) against the committed G3 8.6 reference, known
 # differences in tests/guest/difftest/expected/. Fails on a new difference.
-foreach(probe appr ctl menu sys text wind)
+foreach(probe aevt appr ctl menu sys text textutil wind)
   add_test(
     NAME difftest_${probe}_executor_86
     COMMAND python3 ${CMAKE_SOURCE_DIR}/tools/difftest/run.py ${probe} --no-refresh
   )
-  # one at a time: run.py's sessions for a target share its port
+  # one at a time: run.py's sessions for a target share its port and out
+  # dir (another run on it, outside this ctest: waited for, 300 s)
   set_tests_properties(difftest_${probe}_executor_86 PROPERTIES
-    TIMEOUT 900
+    TIMEOUT 1200
     LABELS "guest;executor"
     SKIP_RETURN_CODE 77
     RESOURCE_LOCK difftest_executor
+    ENVIRONMENT "DIFFTEST_LOCK_TIMEOUT=300"
   )
 endforeach()
 
@@ -1186,3 +1620,17 @@ get_property(_all_tests DIRECTORY PROPERTY TESTS)
 foreach(_t IN LISTS _all_tests)
   set_property(TEST ${_t} APPEND PROPERTY ENVIRONMENT "TMPDIR=${TEST_TMPDIR}")
 endforeach()
+
+# tools/diskaudit/disk_audit.py (host-side audit of disk images: aliases, Finder
+# icon positions, window frames and scroll, stray invisible files) on fixture
+# images the test makes: an HFS volume through hfsutils, a small HFS+ one.
+add_test(NAME disk_audit
+  COMMAND ${Python3_EXECUTABLE} ${TEST_DIR}/test_disk_audit.py)
+set_tests_properties(disk_audit PROPERTIES TIMEOUT 120 LABELS "tools" SKIP_RETURN_CODE 77)
+
+# tools/web/disk_contents.py: a library disk's "items" (make_library.py's
+# records: kind, arch, version, publisher, year, size, the hand table) on a
+# fixture HFS image it makes.
+add_test(NAME disk_contents
+  COMMAND ${Python3_EXECUTABLE} ${TEST_DIR}/test_disk_contents.py)
+set_tests_properties(disk_contents PROPERTIES TIMEOUT 120 LABELS "tools" SKIP_RETURN_CODE 77)

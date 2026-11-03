@@ -40,6 +40,15 @@ short ROMlib_GetModifiers();
 
 void ROMlib_SetAutokey(uint32_t message);
 
+/* MacPhoenix: the host's scroll wheel (osevent/wheel.cpp): lines turned
+   (right and down positive); started from GetNextEvent; while its click
+   is held, the mouse the Event Manager reports and Button's answer. */
+void ROMlib_wheel_add(int dh, int dv);
+void ROMlib_wheel_start();
+void ROMlib_wheel_mouse(EventRecord *evt);
+bool ROMlib_wheel_button(bool *down);
+bool ROMlib_wheel_active();
+
 extern bool hle_get_event(EventRecord *evt, bool remflag);
 extern void hle_init(void);
 extern void hle_reinit(void);

@@ -1,18 +1,12 @@
 # wind on Executor (8.6 System) against the G3 (8.6): known differences.
 # key-glob<TAB>reason. Remove a line when Executor matches (run.py lists those).
 
-# The frame: 8.6 draws windows with the platinum definitions (WDEF 64-67),
-# Executor with System 7's (MacOS8-9.md, "One Toolbox": the look is the fork).
-create.*.bounds.*	the frame: platinum's title bar, edges and drag region (the whole frame) against System 7's
-create.*.region.*	the frame: platinum's title bar, edges and drag region (the whole frame) against System 7's
-create.*.widths	the frame: platinum's edges against System 7's
-classic.*.bounds.*	the frame: platinum's title bar, edges and drag region (the whole frame) against System 7's
-classic.*.region.*	the frame: platinum's title bar, edges and drag region (the whole frame) against System 7's
-classic.*.widths	the frame: platinum's edges against System 7's
-classic.*.features	classic procIDs: 8.6 answers the platinum definitions' features (drag hilite, proxy image, title measuring), which Executor's System 7 definitions don't have
-bounds.structure	the frame's widths (structure from content)
-bounds.content.2	the frame's widths (content from structure)
-bounds.structure.moved	the frame's widths
+# The frames: Executor's platinum definitions (WDEF 64-67, classic procIDs
+# on them too) answer 8.6's regions, widths and features, apart from these.
+classic.*.1987.region.33	WDEF 124's grow box: 8.6 cuts 14x14 out of the content, WDEF 66 (and Executor) 10x10
+classic.*.1046.region.33	the movable modal grow dialog: 8.6 cuts a triangular grow corner out of the content; Executor's has no grow corner yet
+bounds.collapsed.bounds.*	the screen: the G3 runs at 3840x2160, Executor at 640x480
+bounds.collapsed.region.*	the screen: the G3 runs at 3840x2160, Executor at 640x480
 bounds.structure.centered	the screen: the G3 runs at 3840x2160, Executor at 640x480
 bounds.structure.alert	the screen: the G3 runs at 3840x2160, Executor at 640x480
 bounds.IsWindowInStandardState.state	the screen: the G3 runs at 3840x2160, Executor at 640x480

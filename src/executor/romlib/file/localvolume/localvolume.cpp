@@ -46,7 +46,7 @@ static void setFCBName(filecontrolblock *fcb, const mac_string& name)
 ItemPtr ExtensionItemFactory::createItemForDirEntry(ItemCache& itemcache, CNID parID, CNID cnid,
     const fs::directory_entry& e, mac_string_view macname)
 {
-    if(fs::is_regular_file(e.path()))
+    if(e.is_regular_file())
     {
         return std::make_shared<PlainFileItem>(itemcache, parID, cnid, e.path(), macname);
     }
@@ -60,8 +60,8 @@ void ExtensionItemFactory::createFile(const fs::path& newPath)
 
 struct LocalVolume::FCBExtension
 {
-    filecontrolblock *fcb;
-    short refNum;
+    filecontrolblock *fcb = nullptr;
+    short refNum = 0;
     std::unique_ptr<OpenFile> access;
     FileItemPtr file;
     bool written = false; /* the file's date is set at flush or close */
@@ -279,6 +279,10 @@ LocalVolume::FCBExtension& LocalVolume::getFCBX(short refNum)
     int index = (refNum - 2) / 94;
     if(refNum < 0 || refNum % 94 != 2 || index >= fcbExtensions.size())
         throw OSErrorException(paramErr);
+    /* an FCB on this volume that no open of ours made (closed since, or
+       the desktop database's, finder.cpp): no path to the host file */
+    if(!fcbExtensions[index].fcb || !fcbExtensions[index].access)
+        throw OSErrorException(rfNumErr);
     return fcbExtensions[index];
 }
 
@@ -894,13 +898,24 @@ void LocalVolume::PBClose(ParmBlkPtr pb)
     fcbx = FCBExtension();
 }
 
+/* The desktop database's path on this volume (finder.cpp): no host file
+   behind it, so its mark and EOF are the FCB's, as the HFS code answers
+   them; anything else on it is rfNumErr (getFCBX). */
+static filecontrolblock *desktopFCB(short refNum, VCB *vcb)
+{
+    filecontrolblock *fcb = ROMlib_desktop_refnum_p(refNum) ? ROMlib_refnumtofcbp(refNum) : nullptr;
+    return fcb && (VCB *)fcb->fcbVPtr == vcb ? fcb : nullptr;
+}
+
 void LocalVolume::PBGetFPos(ParmBlkPtr pb)
 {
-    auto& fcbx = getFCBX(pb->ioParam.ioRefNum);
+    filecontrolblock *fcb = desktopFCB(pb->ioParam.ioRefNum, &vcb);
+    if(!fcb)
+        fcb = getFCBX(pb->ioParam.ioRefNum).fcb;
     pb->ioParam.ioReqCount = 0;
     pb->ioParam.ioActCount = 0;
     pb->ioParam.ioPosMode = 0;
-    pb->ioParam.ioPosOffset = fcbx.fcb->fcbCrPs;
+    pb->ioParam.ioPosOffset = fcb->fcbCrPs;
 }
 
 void LocalVolume::setFPosCommon(ParmBlkPtr pb, bool checkEOF)
@@ -952,6 +967,11 @@ void LocalVolume::PBSetFPos(ParmBlkPtr pb)
 }
 void LocalVolume::PBGetEOF(ParmBlkPtr pb)
 {
+    if(filecontrolblock *fcb = desktopFCB(pb->ioParam.ioRefNum, &vcb))
+    {
+        pb->ioParam.ioMisc = fcb->fcbEOF;
+        return;
+    }
     auto& fcbx = getFCBX(pb->ioParam.ioRefNum);
     size_t n = fcbx.access->getEOF();
     pb->ioParam.ioMisc = n;

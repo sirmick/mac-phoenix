@@ -110,6 +110,13 @@ LONGINT Executor::ROMlib_SizeResource(Handle res, Boolean usehandle)
     if(LM(ResErr) != noErr)
         /*-->*/ return -1;
 
+    /* MacPhoenix: added and not written yet, nothing on disk: its handle's
+       size (0 for an empty one). THINK C 6 converting a project re-adds
+       an unloaded CODE resource's empty handle under a new ID, then asks
+       its size on disk; the read at offset $FFFFFF failed (eofErr). */
+    if(rr->doff[0] == 0xFF && rr->doff[1] == 0xFF && rr->doff[2] == 0xFF)
+        return *res ? GetHandleSize(res) : 0;
+
     if(usehandle && *res)
         retval = GetHandleSize(res);
     else
@@ -167,9 +174,15 @@ LONGINT Executor::ROMlib_SizeResource(Handle res, Boolean usehandle)
 
 LONGINT Executor::C_GetResourceSizeOnDisk(Handle res)
 {
-    /* MacPhoenix: the length stored on disk (for a compressed resource, its
-       compressed size), not the loaded handle's size. Finder 7.5 compares
-       this with the uncompressed size to decide whether to decompress the
-       code it reads straight from its resource fork. */
-    return ROMlib_SizeResource(res, false);
+    /* MacPhoenix: for a resource that isn't loaded, the length stored on
+       disk (for a compressed resource, its compressed size): Finder 7.5
+       compares this with the uncompressed size to decide whether to
+       decompress the code it reads straight from its resource fork. A
+       loaded resource answers its handle's size, as on a Mac
+       (tests/guest/ressize): ClarisWorks 4 sums this over its CODE
+       resources, whose loaded segments hold unpacked code. */
+    LONGINT size = ROMlib_SizeResource(res, false);
+    if(size >= 0 && *res)
+        size = GetHandleSize(res);
+    return size;
 }

@@ -413,6 +413,53 @@
 
 # ####
 
+# MacPhoenix: InterfaceLib's exports of the _LwrText trap family ($A056
+# with flags: $200 strip, $400 upper; base/emustubs.cpp has the trap), raw
+# MacRoman text converted in place (Inside Macintosh: Text). Serial
+# MReader's PowerPC build calls LowerText, Warcraft II's map editor
+# UpperText.
+- function:
+    name: LowerText
+    args:
+      - name: textPtr
+        type: Ptr
+      - name: len
+        type: INTEGER
+    library: InterfaceLib
+    executor: LowerText
+
+- function:
+    name: StripText
+    args:
+      - name: textPtr
+        type: Ptr
+      - name: len
+        type: INTEGER
+    library: InterfaceLib
+    executor: StripText
+
+- function:
+    name: UpperText
+    args:
+      - name: textPtr
+        type: Ptr
+      - name: len
+        type: INTEGER
+    library: InterfaceLib
+    executor: UpperText
+
+- function:
+    name: StripUpperText
+    args:
+      - name: textPtr
+        type: Ptr
+      - name: len
+        type: INTEGER
+    library: InterfaceLib
+    executor: StripUpperText
+
+# ####
+
 - function:
     name: IUMystery
     args:
@@ -762,3 +809,86 @@
         type: "Handle"
     library: InterfaceLib
     executor: glue_IUCompPString
+
+# ####
+
+# InterfaceLib's lowercase C routines (multiversal/executor.rb, declare_cglue):
+# the Pascal routine with C strings, Points by address.
+
+- only-for: Executor
+  function:
+    name: iucomppstring
+    cglue: IUCompPString
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: iucompstring
+    cglue: IUCompString
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: iudatepstring
+    cglue: IUDatePString
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: iudatestring
+    cglue: IUDateString
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: iuequalpstring
+    cglue: IUEqualPString
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: iuequalstring
+    cglue: IUEqualString
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: iuldatestring
+    cglue: IULDateString
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: iultimestring
+    cglue: IULTimeString
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: iutimepstring
+    cglue: IUTimePString
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: iutimestring
+    cglue: IUTimeString
+    library: InterfaceLib

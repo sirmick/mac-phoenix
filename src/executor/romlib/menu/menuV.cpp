@@ -62,7 +62,11 @@ void Executor::C_SetItemCmd(MenuHandle mh, INTEGER item, CharParameter cmd)
     if((mep = ROMlib_mitemtop(mh, item, (StringPtr *)0)))
     {
         mep->mkeyeq = cmd;
-        CalcMenuSize(mh);
+        /* MacPhoenix: the size marked, computed when next needed, as
+           8.6 does (the menu probe's dirty keys): PowerPlant sets command
+           keys while menuProc still holds the MDEF's ID (BBEdit Lite
+           6.1's Mercutio menus), and calling it then aborted. */
+        ROMlib_dirty_menu_size(mh);
     }
 }
 

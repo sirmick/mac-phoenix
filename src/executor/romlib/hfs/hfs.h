@@ -18,10 +18,13 @@
 #include <FileMgr.h>
 
 #include <file/file.h>
+#include <string>
 
 #if !defined(UNIX)
 #include <string.h>
 #endif
+#include <set>
+#include <string>
 
 #define HVCB VCB
 
@@ -483,7 +486,11 @@ extern OSErr ROMlib_writefcbp(filecontrolblock *fcbp);
 extern OSErr ROMlib_writevcbp(HVCB *vcbp);
 extern void ROMlib_openfloppy(const char *dname, GUEST<LONGINT> *messp);
 extern void ROMlib_openharddisk(const char *dname, GUEST<LONGINT> *messp);
+extern INTEGER ROMlib_image_drive(const char *path);
+extern bool ROMlib_ejectable_images;
+extern std::string ROMlib_fixed_image;
 extern bool ROMlib_readonly_images; /* MacPhoenix: open images read-only */
+extern std::set<std::string> ROMlib_locked_images; /* MacPhoenix: and these always (CDs) */
 extern void ROMlib_hfsinit(void);
 extern OSErr ROMlib_ejectfloppy(LONGINT floppyfd);
 extern OSErr ROMlib_readwrite(LONGINT fd, char *buffer, LONGINT count, LONGINT off,
@@ -567,7 +574,7 @@ extern OSErr hfsPBHGetVol(WDPBPtr ufsPB, Boolean a);
 extern OSErr hfsPBSetVol(ParmBlkPtr ufsPB, Boolean a);
 extern OSErr hfsPBHSetVol(WDPBPtr ufsPB, Boolean a);
 extern OSErr hfsPBFlushVol(ParmBlkPtr ufsPB, Boolean a);
-extern OSErr hfsPBUnmountVol(ParmBlkPtr ufsPB);
+extern OSErr hfsPBUnmountVol(ParmBlkPtr ufsPB, bool force = false);
 extern OSErr hfsPBOffLine(ParmBlkPtr ufsPB);
 extern OSErr hfsPBEject(ParmBlkPtr ufsPB);
 

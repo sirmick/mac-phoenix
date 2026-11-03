@@ -20,7 +20,7 @@ guest memory directly and need nothing in the guest. How both work:
 | Endpoint | | |
 |---|---|---|
 | `/api/status` | GET | `emulator_running`, `cpu_state`, `boot_phase`, `boot_elapsed`, `checkload_count`, `bridge_agent_connected`, `annotations`, the guest's text clipboard (`mac`), and a crash report if the child died |
-| `/api/screenshot` | GET | the screen as PNG (503 before the first frame) |
+| `/api/screenshot` | GET | the screen as PNG (503 before the first frame); as the frames are, so at Executor's `--executor-scale` the high-resolution screen; `?scale=1`: the Mac's own 1x pixels then |
 | `/api/frame` | GET | one frame for HTTP polling: 45-byte header (dirty rect, size, cursor) + PNG; `?sid=` from the `X-Frame-Sid` header of the first reply; 204 when nothing changed |
 | `/api/stream` | GET | the same frames as one chunked HTTP response (`?fps=N`) |
 | `/api/resolutions` | GET | screen modes the machine offers, with the configured cap |
@@ -50,6 +50,7 @@ guest memory directly and need nothing in the guest. How both work:
 | `/api/storage` | GET | ROMs (identified by checksum), disk images with their titles and tags, Executor Systems |
 | `/api/storage/create-image` | POST | `{"filename", "size_mb", "volume_name", "format": "hfs"/"hfs+"}`: a blank disk image in `<storage>/images` |
 | `/api/executor/system` | POST | `{"image": "7.5.5.img"[, "name"]}`: copy an image's System Folder out for Executor |
+| `/api/executor/ppc-break` | GET/POST | Executor's PowerPC breakpoints (session started with `--executor-ppc-break`): GET `[?since=N]` the breakpoints and hit reports; POST `{"add": SPEC}` / `{"remove": SPEC\|"all"}` (docs/executor/PPCTrace.md) |
 
 ## Reading the guest
 

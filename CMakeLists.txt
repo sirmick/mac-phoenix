@@ -342,6 +342,10 @@ if(BUILD_BRIDGE_AGENT)
       COMMENT "Generating the Multiversal Interfaces for guest programs"
       VERBATIM
     )
+    # One target owns the generation: bridge-agent and macbrowser-app both
+    # depend on the stamp, and the rule in each ran twice under -j (the
+    # second's ln failed on the first's links).
+    add_custom_target(multiversal-guest DEPENDS "${MV_STAMP}")
     set(BA_GCC_EXTRA_FLAGS -nostdinc -isystem "${RETRO68_GCC_INCLUDE}"
         -isystem "${MV_GUEST_DIR}/include" -L "${MV_GUEST_DIR}/out/lib68k")
     set(BA_REZ_EXTRA_FLAGS -I "${MV_GUEST_DIR}/out/RIncludes")
@@ -412,6 +416,7 @@ if(BUILD_BRIDGE_AGENT)
 
     if(RUBY_EXECUTABLE)
       add_custom_target(bridge-agent ALL DEPENDS "${BA_BIN}")
+      add_dependencies(bridge-agent multiversal-guest)
     endif()
     message(STATUS "bridge-agent: using Retro68 at ${RETRO68_BIN_DIR}")
   endif()
@@ -493,6 +498,9 @@ if(BUILD_MAC_BROWSER AND BUILD_BRIDGE_AGENT AND RETRO68_GCC AND RETRO68_REZ AND 
   )
 
   add_custom_target(macbrowser-app ALL DEPENDS "${MB_BIN}")
+  if(TARGET multiversal-guest)
+    add_dependencies(macbrowser-app multiversal-guest)
+  endif()
   message(STATUS "macbrowser-app: building from source")
 elseif(BUILD_MAC_BROWSER)
   message(STATUS "macbrowser-app: Retro68 unavailable — keeping committed MacBrowser.bin.")

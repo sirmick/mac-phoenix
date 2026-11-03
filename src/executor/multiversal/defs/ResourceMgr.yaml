@@ -741,6 +741,26 @@
 # ####
 
 - function:
+    name: SetScanOverride
+    args:
+      - name: scan
+        type: Boolean
+    dispatcher: ResourceDispatch
+    selector: 0x0007
+    executor: C_
+    comment: >
+      MacPhoenix. Private (selector 7, called with moveq #7; the name is
+      among the 8.6 System file's Resource Manager names): by its name,
+      whether searches go through the override maps; Executor takes the
+      Boolean and changes nothing. The call pops its Boolean whatever
+      D0's high byte says. ResEdit 2.1.3 turns it off around reading a
+      file's own map (Count1Types) and back on; unknown, the Boolean
+      stayed on the stack and ResEdit's saved registers came back
+      shifted (New file on 8.6: SizeWindow of a nil window).
+
+# ####
+
+- function:
     name: GetOverrideMap
     return: Handle
     args:
@@ -883,3 +903,70 @@
         type: INTEGER
     library: PrivateInterfaceLib
     executor: C_
+
+# ####
+
+# InterfaceLib's lowercase C routines (multiversal/executor.rb, declare_cglue):
+# the Pascal routine with C strings, Points by address.
+
+- only-for: Executor
+  function:
+    name: addresource
+    cglue: AddResource
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: createresfile
+    cglue: CreateResFile
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: get1namedresource
+    cglue: Get1NamedResource
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: getnamedresource
+    cglue: GetNamedResource
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: getresinfo
+    cglue: GetResInfo
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: openresfile
+    cglue: OpenResFile
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: openrfperm
+    cglue: OpenRFPerm
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: setresinfo
+    cglue: SetResInfo
+    library: InterfaceLib

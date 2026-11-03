@@ -1,0 +1,30 @@
+{
+ "title": "Build layer: Mac OS 8.6 with Illustrator 6.0",
+ "tags": [
+  "build",
+  "ppc"
+ ],
+ "note": "tools-8.6 with Adobe Illustrator 6.0 (the owner's, illustrator-6.0) on the startup disk: the proof of ownership Illustrator 8.0's upgrade installer searches the hard disk for. PowerPC only. The base for illustrator-8.0 (bases.json tools-8.6-ai6).",
+ "base": "os-8.6",
+ "system_from": [
+  "stuffit-expander-6.0.1",
+  "disk-copy-6.3.3",
+  "carbonlib-1.6"
+ ],
+ "place": [
+  {
+   "snapshot": "stuffit-expander-6.0.1",
+   "to": "Utilities"
+  },
+  {
+   "snapshot": "disk-copy-6.3.3",
+   "take": "Disk Copy",
+   "as": "Disk Copy 6.3.3",
+   "to": "Utilities"
+  },
+  {
+   "snapshot": "illustrator-6.0",
+   "take": "Adobe Illustrator® 6.0"
+  }
+ ]
+}

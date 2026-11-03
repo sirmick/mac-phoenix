@@ -101,7 +101,9 @@ check for the target's name can't match the Install button. An image's
 
 | Image | What | Boot with |
 |---|---|---|
-| `productivity-system-7.img` | AppleWorks 5.0.3, ClarisWorks 4.0v4, Corel WordPerfect 3.5e (with the 3.5e2 update), Microsoft Excel 4.0, Microsoft Office 98 (PowerPC), GraphicConverter 3.9.1, Acrobat Reader 3.01 | `productivity-7.6.1`, 68k or PowerPC |
+| `productivity-system-7.img` | AppleWorks 5.0.3, ClarisWorks 4.0v4, ClarisDraw 1.0v4 (68k), Corel WordPerfect 3.5e (with the 3.5e2 update), Microsoft Excel 4.0, Microsoft Office 98 (PowerPC), GraphicConverter 3.9.1, Acrobat Reader 3.01, FileMaker Pro 4.0 and Aldus Persuasion 3.0 (68k; personalised with the owner's serial numbers) | `productivity-7.6.1`, 68k or PowerPC |
+| `creative-system-7.img` | Kid Pix 2.5 (68k), Adobe Photoshop 4.0, Adobe Illustrator 6.0, Macromedia FreeHand 5.5 and Deneba Canvas 5.0.2 (68k; personalised with the owner's serial numbers) | `creative-7.6.1`, 68k or PowerPC |
+| `creative-macos-8.img` | Adobe Illustrator 8.0 (PowerPC; personalised with the owner's serial number; its upgrade installer found the owner's Illustrator 6.0 on the bake's startup disk: base `tools-8.6-ai6`) | `creative-8.6` |
 | `productivity-macos-9.img` | AppleWorks 5.0.4, Corel WordPerfect 3.5e, Microsoft Excel 4.0, Microsoft Office 98, GraphicConverter 3.9.1, Acrobat Reader 3.01 | `productivity-9.0.4` |
 
 The boot disks are the standard ones plus the apps' System Folder parts
@@ -113,18 +115,96 @@ personalisation is typed (`{"type": "Mac Phoenix"}`). Word 5.1a
 drag-install folder; its first launch asks for the CD key, which is left to
 the user (`needs_serial`). Products whose installer takes a serial number
 are `"kind": "stage"` bakes: pinned media, no snapshot, only on the
-Installers disk (Photoshop 4.0, Illustrator 6.0, PageMaker 6.5, FreeHand 8,
-the QuarkXPress 4.0 upgrade, Persuasion 3.0, FileMaker Pro 4.0). No serial
-is typed for them, and serials that came inside an archive are left out of it.
+Installers disk (PageMaker 6.5, FreeHand 8, the QuarkXPress 4.0 upgrade; Photoshop
+3.0.5, whose bake rejects the owner's serial, and QuarkXPress 3.31, whose installer
+waits for a disk-insert event: `"wip"`). Canvas comes from its 5.0.2 CD. No
+serial is typed for them, and serials that came inside an archive are left out
+of it (a bake's `"exclude"` paths, `"Folder:Name"`, leave them off the Installers
+disk too: Office 98's "Serial number" file). Photoshop 4.0, Illustrator 6.0,
+FileMaker Pro 4.0, Persuasion 3.0, FreeHand 5.5 and Canvas 5.0.2 install with the owner's serial numbers
+(`{"serial": ID}` steps), and keep what their installers and registrations
+wrote about the owner's licence (registration data, preferences, installer logs:
+the images are private, and Photoshop 4.0 won't start without its Pipeline
+Preferences). Only what came from an archive's original owner is left out.
+
+## The internet disk
+
+| Image | What | Boot with |
+|---|---|---|
+| `internet-macos-8-9.img` | MR Browser 0.39 (Macintosh Repository's own client: the classic 68k build, which runs on Executor too, and the PowerPC one, which needs CarbonLib; signing in takes an MR account's PIN), Hotline Connect Client 1.9.1 (the classic build, `HLclient19.Classic`, and the Carbon one), Serial MReader 0.03 with the Serial Box 2021-08 database (68k and PowerPC; an archive only: its serials are never used) | `8.6` / `9.0.4` |
+
+Each is its archive expanded in the guest (MR Browser's 68k build is the
+application in MacBinary, copied off the Media volume). MR Browser's files
+are pinned by Macintosh Repository's direct URLs; Serial MReader's has none (MR's
+downloads are a form POST, guests 10 minutes apart), so it is a local pin
+carrying MR's page, file id and SHA1. Hotline's bake adds ten trackers to the one it ships with (hltracker.com),
+through its own add-tracker dialog; the list was gathered on 2026-11-01 from
+hlwiki, preterhuman and the Hotline fandom wiki and not probed, so some may
+be gone. Both builds read it (`Data:Hotline Prefs`). Through the net bridge
+(`--network socket`) Hotline lists hltracker.com's servers and connects to
+them, and MR Browser reaches MR's API.
+
+## The utilities disk
+
+| Image | What | Boot with |
+|---|---|---|
+| `utilities.img` | Speedometer 4.0, MacBench 5.0 (PowerPC), TattleTech 2.84, Gestalt.Appl 2.7.9, Newer Technology's Gauge Series (Clockometer, Cache-22, RAMometer, SCSI Info, Slot Info) | any 7.x-9 profile |
+
+Each is its archive expanded in the guest. What they report (2026-11-03;
+Executor native = `tests/test_utilities_executor.sh`, the tab = the
+`executor.web.site.*.utilities` cell / `web/tests/tab_site.mjs`):
+
+| | Quadra 650, 7.6.1 | G3, 8.6 | Executor 7.6.1 (68k) | Executor 8.6 (PowerPC) | tab 7.6.1 / 8.6 |
+|---|---|---|---|---|---|
+| Gestalt.Appl: selectors | | 158 | 59; `cput` 68040 | | 59 / 65 |
+| TattleTech: machine | runs | Power Mac 9500/9600 (67), 32-bit capable | exits at once (below); `--executor-ppc`: as the G3 | as the G3 | — / not in front |
+| Clockometer | 68040, ??.?? MHz, hangs | | 68040, hangs (`--executor-ppc`: 68030) | "Unknown processor type" | |
+| Cache-22 | quits | quits | "Unknown processor type" | "Unknown processor type" | |
+| Speedometer 4.0 | splash until a click, then its registration screen | registration form | as the Quadra; Hardware Information: Macintosh, 68040 | as the Quadra; Power Macintosh | |
+| MacBench 5.0 | needs a PowerPC | licence | needs a PowerPC 601 | licence | — / quits at Cmd-. (its licence's Quit) |
+
+TattleTech switches to its own resource file with `UseResFile` on a local
+it sets only on its Name Registry path (Gestalt `'nreg'`, a PowerPC
+architecture, `NameRegistryLib`): the G3 takes that path, and so does
+Executor with PowerPC code (its Name Registry: the root and `Devices`);
+on the Quadra the local is stack junk, not a file, and the call does
+nothing; on Executor's 68k Mac the stack there is still zero, so it makes
+the System file current, doesn't find its own `'tCFG'`, and quits
+(2026-11-03).
+
+## CDs
+
+Magazine cover discs, kept as they came: `provisioning/cds.json` lists
+them (title, magazine, issue, date, publisher, notable contents, cover),
+`media.json` pins each image and its cover scan (dir `images`, MD5 and
+SHA-256, the archive.org item), and `provisioning/cds.py [--fetch]` checks
+them (pinned digests, an HFS volume behind the partition map with the
+expected name) and writes each record, `NAME.iso.json`, beside the image.
+They mount as CDs on the ROM machines (`--cdrom`) and as read-only disks on
+Executor (`--disk`); `tools/web/make_library.py` offers them on the site
+with their covers.
+
+| Image | Volume | What |
+|---|---|---|
+| `macaddict-016-1997-12.iso` | MacAddict16 | MacAddict #16, December 1997: Quake, Fallout and Photoshop 4.0 demos, Mac OS 7.6.1 Update, QuickDraw 3D 1.5.3, OpenDoc, SK8 |
+| `macaddict-025-1998-09.iso` | MacAddict 25 | #25, September 1998: Mac OS 8.5 Preview Pack, Myth demo, QuickTime 3.0, Drive Setup 1.5 |
+| `macaddict-058-2001-06.iso` | MacAddict 58 | #58, June 2001: Classic and early Mac OS X (Carbon) software, Marathon Rubicon |
+| `macaddict-063-2001-11.iso` | MacAddict 63 | #63, November 2001: Alice, Aliens vs. Predator and Escape from Monkey Island demos, REALbasic 3.5 |
+
+Toast made them all: an Apple partition map of 512-byte blocks, one
+`Apple_HFS` partition. #16 has a second dump on archive.org
+(`macaddict-cd-016`, 300 KB longer); its item has the sleeve scans, the
+cover used here.
 
 ## The Installers disks
 
 | Image | What |
 |---|---|
 | `installers-games.img` | every game bake's installer or archive |
-| `installers-productivity.img` | the productivity bakes' installers, and those only staged: Photoshop 4.0, Illustrator 6.0, PageMaker 6.5, FreeHand 8, QuarkXPress 4.0 upgrade, Persuasion 3.0, FileMaker Pro 4.0, Word 5.1a |
+| `installers-productivity.img` | the productivity bakes' installers, and those only staged: PageMaker 6.5, FreeHand 8, QuarkXPress 4.0 upgrade, Word 5.1a, Photoshop 3.0.5, QuarkXPress 3.31 |
 | `installers-development.img` | System 7's: CodeWarrior Pro 4, MPW 3.4.2, ToolServer, the ASLM SDK, THINK C/Pascal, Symantec C++, MacPerl 5.2, MacPython 1.5.2, HyperCard, Frontier, ResEdit, Resorcerer, BBEdit Lite 4.1, ZTerm, MacsBug |
 | `installers-development-macos-8-9.img` | Mac OS 8–9's: CodeWarrior Pro 7.2, MPW-GM, MacPerl 5.6.1, MacPython 2.3.5, BBEdit Lite 6.1.2 (one HFS volume can't hold both CodeWarrior CDs) |
+| `installers-internet.img` | the internet bakes' archives: MR Browser 0.39 (68k and PowerPC), Hotline Connect Client 1.9.1, Serial MReader 0.03 |
 | `installers-system.img` | System 6.0.8 to Mac OS 9.0.4, Open Transport 1.1.2, CarbonLib 1.6, Disk Copy, StuffIt Expander |
 
 One per category (development in two), a folder per product (`"installers"` in
@@ -213,6 +293,16 @@ What an app draws itself is found by its drawn text (`/api/text`):
   its own.
 * `{"type": "Mac Phoenix"}` types ASCII on a US keyboard into the field
   with the focus: a name, a serial number.
+* `{"serial": "photoshop-3.0.5"}` types that product's serial number from
+  the owner's serials file, `<storage>/serials.json` (private, mode 600,
+  never committed; `MACPHOENIX_SERIALS` names another); `"field": "name"`
+  or `"organization"` types those (the product's, else the file's
+  `defaults`). The value stays out of the bake's key, its log, the web UI's
+  annotations and `--do`'s answer; a screenshot taken while the field shows
+  it (`shot`, a failure's `failed.png`) stays in the work directory. A
+  missing or empty value stops the bake before a guest boots: `serial
+  needed for ID`, exit status 3 (`--all`: `NO SERIAL`). Never a serial
+  from an archive, a keygen or a crack.
 * `{"check": ...}` makes a click prove itself. It fails the bake at that
   step unless the front window shows the text (`text`, exact or a
   prefix), doesn't start any string with `text_not`, or a control has a

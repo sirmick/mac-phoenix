@@ -15,7 +15,10 @@
      (Host:<probe>.start names the first section to run).
 
    Pixel dumps: probe_pixels() prints a CRC of a GWorld's pixels and, when
-   Host:<probe>.dump exists, writes the GWorld as Host:<probe>-<key>.ppm. */
+   Host:<probe>.dump exists, writes the GWorld as Host:<probe>-<crc>.ppm,
+   the CRC of its key (HFS names end at 31 characters), the key in a
+   comment line ("# section.key"): tools/difftest/run.py renames it
+   <probe>-<section>.<key>.ppm. */
 #ifndef PROBE_H
 #define PROBE_H
 
@@ -203,13 +206,15 @@ static void probe_pixels(const char *key, GWorldPtr gw)
     out(key, "%ldx%ld depth %d crc %08lx", w, h, depth, crc);
     if(probe_dump && probe_running)
     {
-        char path[96];
+        char path[96], full[96];
         FILE *f;
-        sprintf(path, "Host:%s-%s.%s.ppm", probe_name, probe_section, key);
+        sprintf(full, "%s.%s", probe_section, key);
+        sprintf(path, "Host:%s-%08lx.ppm", probe_name,
+                probe_crc32((const unsigned char *)full, strlen(full), 0));
         if((f = fopen(path, "wb")))
         {
             CTabHandle ct = (**pm).pmTable;
-            fprintf(f, "P6\n%ld %ld\n255\n", w, h);
+            fprintf(f, "P6\n# %s\n%ld %ld\n255\n", full, w, h);
             for(y = 0; y < h; y++)
                 for(x = 0; x < w; x++)
                 {

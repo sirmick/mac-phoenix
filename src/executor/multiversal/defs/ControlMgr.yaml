@@ -674,3 +674,61 @@
         type: LONGINT
     name: ControlDefUPP
 
+# ####
+
+# InterfaceLib's lowercase C routines (multiversal/executor.rb, declare_cglue):
+# the Pascal routine with C strings, Points by address.
+
+- only-for: Executor
+  function:
+    name: dragcontrol
+    cglue: DragControl
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: findcontrol
+    cglue: FindControl
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: getcontroltitle
+    cglue: GetControlTitle
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: newcontrol
+    cglue: NewControl
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: setcontroltitle
+    cglue: SetControlTitle
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: testcontrol
+    cglue: TestControl
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: trackcontrol
+    cglue: TrackControl
+    library: InterfaceLib

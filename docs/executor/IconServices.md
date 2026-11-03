@@ -492,6 +492,22 @@ Hex is the big-endian OSType; `ƒ` is MacRoman $C4.
 | `kUnlockedIcon` | `'ulck'` | 0x756C636B |
 | `kConnectToIcon` | `'cnct'` | 0x636E6374 |
 
+#### 1.4.2 Observed on the G3 with 8.6 (2026-10-31)
+
+- Many system icons are in "System Resources" (type `'zsyr'`, the System
+  Folder; 8.5 and later) as `'icns'`, beside or instead of the System
+  file's classic icons; where both have an ID, System Resources' is the
+  one shown (`hdsk`, -3995). Executor opens that file below the System's
+  map and looks for system icons in the chain, `'icns'` first.
+- The resource ID each 8.5 type shows was found by hashing the ICN# and
+  icl8 that `GetIconRef(kOnSystemDisk, 'macs', type)` gives and matching
+  them with the System's and System Resources' icons: the badges are
+  `abdg` -20789, `sbdg` -20788, `mbdg` -20787, `lbdg` -20786, `scrp`
+  -20740; the full table is iconservices.cpp's `systemIcons`. `mntd`,
+  `shfl` and `ilge` hang 8.6's Icon Services; `lock`, `nwrt`, `shro` & co.
+  have no large icons. The 8.6 Finder asks for the badges by name at
+  startup and composites an alias's icon with `abdg`.
+
 ### 1.5 How GetIconRef finds an icon (creator, type)
 
 The documentation says only:
@@ -621,6 +637,15 @@ on 9.0.4:
   **UNSPECIFIED**, test it. For volumes the label is presumably 0.
 - Nonexistent `FSSpec`: `fnfErr`/`nsvErr` (File Manager's) presumably;
   **UNSPECIFIED**.
+
+Observed with IconTest on 9.0.4 and 8.6 (G3): a volume's root shows its
+driver's media icon (Control 22; the ROM machine's ExtFS answers 22
+only), else its drive icon (21), else (8.x) the System's hard disk icon:
+Executor's own drives answer 21/22 only on 7.x, whose Finder shows a
+document's icon for a volume without one; on 8.x they leave it to 8.6's
+platinum `hdsk` (`hostdisk.cpp`); a file with `kHasCustomIcon` shows
+-16455, else -16496 (where the Finder keeps an alias file's copy of its
+target's icon), alias or not; without the flag, neither.
 
 ### 1.7 Folders and special folders
 

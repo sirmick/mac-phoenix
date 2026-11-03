@@ -1,0 +1,689 @@
+{
+ "e761|Development:THINK C 6.0 ƒ:THINK C:THINK Project Manager": {
+  "status": "partial",
+  "blocker": "Standard File opens in the boot volume's System Folder, not the application's folder (Quadra: THINK C folder)"
+ },
+ "e761|Development:Languages ƒ:THINK Pascal 4.5d4 ƒ:Think Pascal:THINK Pascal 4.5d4:THINK Pascal 4.5": {
+  "status": "partial",
+  "blocker": "Standard File opens in the boot volume's System Folder, not the application's folder (Quadra: THINK Pascal 4.5d4 folder)"
+ },
+ "q761|Development:CodeWarrior Pro 4 ƒ:Metrowerks CodeWarrior:CodeWarrior IDE 3.2": {
+  "status": "fails",
+  "blocker": "no CFM-68K Enabler on 7.6.1: the reference cannot run it"
+ },
+ "e86|Productivity:AppleWorks 5.0.3 ƒ:AppleWorks": {
+  "status": "runs",
+  "blocker": "unimplemented PowerPC OpenWD until wash/fix-prod lands"
+ },
+ "8.6|Productivity:AppleWorks 5.0.3 ƒ:AppleWorks": {
+  "owner": "platinum"
+ },
+ "8.6|Productivity:ClarisWorks 4.0v4 ƒ:ClarisWorks": {
+  "owner": "fix-prod"
+ },
+ "e86|Development:Tools ƒ:BBEdit Lite 4.1 ƒ:BBEdit Lite 4.1": {
+  "status": "fails",
+  "blocker": "alert \"There is not enough memory to complete this command\" at launch (G3: untitled window)"
+ },
+ "e761|Games:Afterlife 1.0 ƒ:Afterlife": {
+  "status": "fails",
+  "blocker": "alert \"Afterlife has detected that you are running an out-of-date version of the Sound Manager that is incompatible with Afterlife.\" (ref fails too: \"Please insert the Afterlife CD-ROM and try running Afterlife again.\")"
+ },
+ "e761ppc|Games:Afterlife 1.0 ƒ:Afterlife": {
+  "status": "fails",
+  "blocker": "alert \"Afterlife has detected that you are running an out-of-date version of the Sound Manager that is incompatible with Afterlife.\" (ref fails too: CD-ROM alert)"
+ },
+ "e761|Games:Ares 1.2.0 ƒ:Ares": {
+  "status": "fails",
+  "blocker": "alert \"Without QuickTime 2.1 or later, you can't see any of the movies for “Ares.”\" (Quit/Continue); ref shows title screen"
+ },
+ "e761ppc|Games:Ares 1.2.0 ƒ:Ares": {
+  "status": "fails",
+  "blocker": "alert \"Without QuickTime 2.1 or later, you can't see any of the movies for “Ares.”\" (Quit/Continue); ref shows title screen"
+ },
+ "e761|Games:Ares 1.2.0 ƒ:Hera 1.0.0 ƒ:Hera": {
+  "status": "fails",
+  "blocker": "alert \"Initialization Error: An error of type -5551 occurred. Appearance Manager 1.0.1 (part of MacOS 8.1) or later is required.\" (no ref; PPC-only app, a real 7.6.1 lacks Appearance too)"
+ },
+ "e761|Games:Civilization II ƒ:Civ II Map Editor": {
+  "status": "partial",
+  "blocker": "desktop around the map window drawn black instead of grey; window and dialog otherwise match"
+ },
+ "e761|Games:Civilization II ƒ:Civilization II Files:Civilopedia:Civilopedia": {
+  "status": "fails",
+  "blocker": "just the desktop (File menu only); ref shows full-screen black Civilopedia screen"
+ },
+ "e761ppc|Games:Civilization II ƒ:Civilization II Files:Civilopedia:Civilopedia": {
+  "status": "fails",
+  "blocker": "just the desktop (File menu only); ref shows full-screen black Civilopedia screen"
+ },
+ "e761|Games:Cythera 1.0.4 ƒ:Cythera": {
+  "status": "fails",
+  "blocker": "alert \"Sorry - you need to install the QuickTime 3.0 or later\"; ref shows main menu"
+ },
+ "e761ppc|Games:Cythera 1.0.4 ƒ:Cythera": {
+  "status": "fails",
+  "blocker": "alert \"Sorry - you need to install the QuickTime 3.0 or later\"; ref shows main menu"
+ },
+ "e761ppc|Games:Exile III 1.0.3 ƒ:Exile III (fat) v1.0.3": {
+  "status": "fails",
+  "blocker": "not in front; unimplemented PowerPC HGetVol"
+ },
+ "e761|Games:Monkey Island 2 ƒ:LeChuck's Revenge": {
+  "status": "fails",
+  "blocker": "alert \"Sorry, the file 'Monkey2.005' could not be found. Please be sure that the data files are in the same folder as the application.\" on black screen"
+ },
+ "e761|Games:Oids 2.0.1 ƒ:OIDS": {
+  "status": "fails",
+  "blocker": "alert \"OIDS requires a newer version of SoundManager (try version 3.0) in order to run properly.\" on black screen (PPC-only, no reference)"
+ },
+ "e761ppc|Games:SimAnt ƒ:E-Doc 1.0.20": {
+  "status": "partial",
+  "blocker": "Standard File's directory popup drawn as a plain box without its arrow, list without icons"
+ },
+ "e761|Games:SimFarm ƒ:SimFarm": {
+  "status": "fails",
+  "blocker": "crashed: blank white screen (host signal 11)"
+ },
+ "e761ppc|Games:SimTower 1.2 ƒ:SimTower": {
+  "status": "fails",
+  "blocker": "crashed: blank white screen (host signal 11)"
+ },
+ "e761ppc|Games:Warcraft II 1.22 ƒ:Editors:Warcraft II Map Editor": {
+  "status": "fails",
+  "blocker": "desktop only, empty menu bar; the reference's \"You must have the Warcraft II CD in order to run the map editor\" alert never appears (PowerPC exception 7)"
+ },
+ "e761ppc|Games:Warcraft II 1.22 ƒ:Editors:Warcraft II Sound Editor": {
+  "status": "partial",
+  "blocker": "Standard File's directory popup drawn without its arrow, list without icons"
+ },
+ "e86|Games:A-Train ƒ:ATrain Editor 1.0Beta": {
+  "status": "fails",
+  "blocker": "crashed: blank screen (TranslationDispatch selector $24, session stopped)"
+ },
+ "e86|Games:Afterlife 1.0 ƒ:Afterlife": {
+  "status": "fails",
+  "blocker": "alert: \"Afterlife has detected that you are running an out-of-date version of the Sound Manager that is incompatible with Afterlife.\" (reference fails differently, on the CD-ROM driver)"
+ },
+ "e86|Games:Ares 1.2.0 ƒ:Ares": {
+  "status": "partial",
+  "blocker": "alert: \"Without QuickTime 2.1 or later, you can't see any of the movies for \"Ares.\"\" (Quit/Continue); no QuickTime on Executor"
+ },
+ "e86|Games:Ares 1.2.0 ƒ:Hera 1.0.0 ƒ:Hera": {
+  "status": "fails",
+  "blocker": "crashed: blank screen (host signal 11 at $c105eee0)"
+ },
+ "e86|Games:Civilization II ƒ:Civilization II Files:Civilopedia:Civilopedia": {
+  "status": "fails",
+  "blocker": "just the desktop with a File menu; Civilopedia never comes up (not in front, unresolved imports)"
+ },
+ "e86|Games:Cythera 1.0.4 ƒ:Cythera": {
+  "status": "fails",
+  "blocker": "crashed: blank screen (host signal 11 at $c105eee0)"
+ },
+ "e86|Games:Exile III 1.0.3 ƒ:Exile III (fat) v1.0.3": {
+  "status": "fails",
+  "blocker": "just the desktop, no game (PowerPC exception 7 after unimplemented HGetVol)"
+ },
+ "e86|Games:Marathon Infinity 1.5 ƒ:Marathon ∞ 1.5": {
+  "status": "fails",
+  "blocker": "crash, blank screen (host signal 11 at guest pc $c105eee0)"
+ },
+ "e86|Games:Monkey Island 2 ƒ:LeChuck's Revenge": {
+  "status": "fails",
+  "blocker": "alert: \"Sorry, the file 'Monkey2.005' could not be found. Please be sure that the data files are in the same folder as the application.\""
+ },
+ "e86|Games:Oids 2.0.1 ƒ:OIDS": {
+  "status": "fails",
+  "blocker": "alert: \"OIDS requires a newer version of SoundManager (try version 3.0) in order to run properly.\""
+ },
+ "e86|Games:Pararena 2.06 ƒ:Pararena 2.06M": {
+  "status": "runs",
+  "blocker": "asks for 16 colours: Executor's screen is 8-bit; the Quadra at 256 colours asks the same"
+ },
+ "e86|Games:Prince of Persia 2 ƒ:Prince of Persia 2": {
+  "status": "fails",
+  "blocker": "alert: \"Error = 10351 in OpenMohawkRsrcVerify().\""
+ },
+ "e86|Games:SimAnt ƒ:SimAnt™ Color": {
+  "status": "runs",
+  "blocker": "asks for 16 colours: Executor's screen is 8-bit; the Quadra at 256 colours asks the same"
+ },
+ "e86|Games:SimFarm ƒ:SimFarm": {
+  "status": "fails",
+  "blocker": "crash, blank screen (host signal 11 at guest pc $c1060970)"
+ },
+ "e86|Games:SimTower 1.2 ƒ:SimTower": {
+  "status": "fails",
+  "blocker": "crash, blank screen (host signal 11 at guest pc $c105eee0)"
+ },
+ "e86|Games:Warcraft II 1.22 ƒ:Editors:Warcraft II Map Editor": {
+  "status": "fails",
+  "blocker": "just the desktop, no app (PowerPC exception 7 loop after several more unimplemented PowerPC calls); reference shows \"You must have the WarCraft II CD in order to run the map editor\""
+ },
+ "_reviewed": [
+  "e761/classic",
+  "e761/dev",
+  "e761/dev89",
+  "e761/games",
+  "e761/gppc",
+  "e761/prod",
+  "e761ppc/dev",
+  "e761ppc/dev89",
+  "e761ppc/games",
+  "e761ppc/gppc",
+  "e761ppc/prod",
+  "e86/classic",
+  "e86/dev",
+  "e86/dev89",
+  "e86/games",
+  "e86/gppc",
+  "e86/prod"
+ ],
+ "e761|Classic Games:Airborne! ƒ:Airborne!": {
+  "status": "fails",
+  "blocker": "Fatal error alert: \"init.cpp:147: in 'syn68k_addr_t unhandled_trap(syn68k_addr_t, void*)' Fatal error: unhandled trap 14 at pc 0x3C0AE88 (Format error)\""
+ },
+ "e761|Classic Games:Apache Strike 1.2 ƒ:Apache Strike": {
+  "status": "fails",
+  "blocker": "blank screen (not in front)"
+ },
+ "e761|Classic Games:Beyond Dark Castle 1.1 ƒ:Beyond Dark Castle": {
+  "status": "fails",
+  "blocker": "crashed, blank screen"
+ },
+ "e761|Classic Games:Beyond Dark Castle 1.1 ƒ:Beyond Dark Castle Editor ": {
+  "status": "fails",
+  "blocker": "launch failed (err -43), same as reference"
+ },
+ "e761|Classic Games:Crystal Quest 2.2.5 ƒ:Crystal Quest": {
+  "status": "partial",
+  "blocker": "drawn in black and white instead of colour"
+ },
+ "e761|Classic Games:Crystal Quest 2.2.5 ƒ:Crystal Quest Sample": {
+  "status": "partial",
+  "blocker": "drawn in black and white instead of colour"
+ },
+ "e761|Classic Games:Dark Castle ƒ:Dark Castle": {
+  "status": "fails",
+  "blocker": "crashed, blank screen"
+ },
+ "e761|Classic Games:Enchanted Scepters ƒ:Scepters": {
+  "status": "fails",
+  "blocker": "blank screen (not in front)"
+ },
+ "e761|Classic Games:Rescue! 2.0.4 ƒ:Rescue! 2.0.4": {
+  "status": "fails",
+  "blocker": "crashed, blank screen"
+ },
+ "e761|Classic Games:Shufflepuck Café ƒ:Shufflepuck": {
+  "status": "partial",
+  "blocker": "game screen right but menu bar empty (reference has Game/Paddle/Blocker/Cheat menus)"
+ },
+ "e761|Classic Games:SimCity 1.3c ƒ:SimCity 1.3c": {
+  "status": "fails",
+  "blocker": "desktop only (menu bar shows just File), same as reference"
+ },
+ "e761|Classic Games:SimCity 1.3c ƒ:TerrainEdit1.1": {
+  "status": "fails",
+  "blocker": "desktop only (menu bar shows just File), same as reference"
+ },
+ "e86|Classic Games:Airborne! ƒ:Airborne!": {
+  "status": "fails",
+  "blocker": "Fatal error alert: \"init.cpp:147: in 'syn68k_addr_t unhandled_trap(syn68k_addr_t, void*)': Fatal error: unhandled trap 14 at pc 0x3B99838 (Format error)\" (Restart)"
+ },
+ "e86|Classic Games:Apache Strike 1.2 ƒ:Apache Strike": {
+  "status": "fails",
+  "blocker": "blank screen (not in front)"
+ },
+ "e86|Classic Games:Beyond Dark Castle 1.1 ƒ:Beyond Dark Castle": {
+  "status": "fails",
+  "blocker": "crashed, blank screen"
+ },
+ "e86|Classic Games:Beyond Dark Castle 1.1 ƒ:Beyond Dark Castle Editor ": {
+  "status": "fails",
+  "blocker": "launch failed, Finder only"
+ },
+ "e86|Classic Games:Dark Castle ƒ:Dark Castle": {
+  "status": "fails",
+  "blocker": "crashed, blank screen"
+ },
+ "e86|Classic Games:Enchanted Scepters ƒ:Scepters": {
+  "status": "fails",
+  "blocker": "blank screen (not in front); reference has Scepters menu bar"
+ },
+ "e86|Classic Games:Rescue! 2.0.4 ƒ:Rescue! 2.0.4": {
+  "status": "fails",
+  "blocker": "crashed, blank screen"
+ },
+ "e86|Classic Games:Shufflepuck Café ƒ:Shufflepuck": {
+  "status": "partial",
+  "blocker": "game screen drawn but menu bar has no menu titles (reference: File Edit Game Paddle Blocker Cheat Help)"
+ },
+ "e86|Classic Games:SimCity 1.3c ƒ:SimCity 1.3c": {
+  "status": "partial",
+  "blocker": "app in front with only a File menu, no window"
+ },
+ "e86|Classic Games:SimCity 1.3c ƒ:TerrainEdit1.1": {
+  "status": "partial",
+  "blocker": "app in front with only a File menu, no window"
+ },
+ "e86|Games PPC:EV Nova 1.0.10 ƒ:EV Nova": {
+  "status": "partial",
+  "blocker": "only a File menu over the desktop, no game window"
+ },
+ "e86|Games PPC:Mars Rising 1.0.2 ƒ:Mars Rising": {
+  "status": "fails",
+  "blocker": "crashed, blank screen"
+ },
+ "e86|Games PPC:Master of Orion II ƒ:Master of Orion II:MOO II": {
+  "status": "fails",
+  "blocker": "alert: \"Unable to activate the context. -50\""
+ },
+ "e86|Games PPC:Slithereens 1.0.1 ƒ:Slithereens": {
+  "status": "fails",
+  "blocker": "crashed, blank screen"
+ },
+ "e761|Games PPC:EV Nova 1.0.10 ƒ:EV Nova": {
+  "status": "partial",
+  "blocker": "only a File menu over the desktop, no game window"
+ },
+ "e761ppc|Games PPC:EV Nova 1.0.10 ƒ:EV Nova": {
+  "status": "partial",
+  "blocker": "only a File menu over the desktop, no game window"
+ },
+ "e761|Games PPC:Mars Rising 1.0.2 ƒ:Mars Rising": {
+  "status": "fails",
+  "blocker": "alert: \"InputSprocket Not Loaded: Sorry, but I couldn't initialise Apple's InputSprocket Shared Library...\""
+ },
+ "e761|Games PPC:Master of Orion II ƒ:Master of Orion II:MOO II": {
+  "status": "fails",
+  "blocker": "desktop only, empty menu bar, no game window"
+ },
+ "e761|Games PPC:Slithereens 1.0.1 ƒ:Slithereens": {
+  "status": "fails",
+  "blocker": "green error dialog: \"-7004 main\" (Quit)"
+ },
+ "e761ppc|Games PPC:Slithereens 1.0.1 ƒ:Slithereens": {
+  "status": "fails",
+  "blocker": "green error dialog: \"-7004 main\" (Quit)"
+ },
+ "e761ppc|Games:Escape Velocity 1.0.5 ƒ:Escape Velocity": {
+  "status": "runs",
+  "blocker": "PowerPC exception 6 logged, title screen up as on the reference"
+ },
+ "e86|Games:Escape Velocity 1.0.5 ƒ:Escape Velocity": {
+  "status": "runs",
+  "blocker": "PowerPC exception 6 logged, title screen up as on the reference"
+ },
+ "q761|Games:A-Train ƒ:A-Train": {
+  "status": "fails",
+  "blocker": "colour-depth prompt: 'The trains operate more efficiently if running on a 16-color display' (Make 16-Color / Leave Alone)"
+ },
+ "q761|Games:A-Train ƒ:AT Construction Set": {
+  "status": "fails",
+  "blocker": "colour-depth prompt: 'The trains operate more efficiently if running on a 16-color display' (Make 16-Color / Leave Alone)"
+ },
+ "q761|Games:Afterlife 1.0 ƒ:Afterlife": {
+  "status": "fails",
+  "blocker": "insert CD: 'Afterlife has detected that the Afterlife CD-ROM is not currently available on your system. Please insert the Afterlife CD-ROM and try running Afterlife again.'"
+ },
+ "q761|Games:Civilization II ƒ:Civilization II Files:Civilopedia:Civilopedia": {
+  "status": "fails",
+  "blocker": "blank black screen (cursor only)"
+ },
+ "q761|Games:Monkey Island 2 ƒ:LeChuck's Revenge": {
+  "status": "fails",
+  "blocker": "error alert: 'Sorry, the file 'Monkey2.005' could not be found. Please be sure that the data files are in the same folder as the application.'"
+ },
+ "q761|Games:Pararena 2.06 ƒ:Pararena 2.06M": {
+  "status": "fails",
+  "blocker": "colour-depth prompt: 'Pararena requires that the monitor display either 16, or 2-colors (black & white)' (Finder / B & W / 16 Colors)"
+ },
+ "q761|Games:Populous II ƒ:MacPopulousII:MacPopulousII": {
+  "status": "fails",
+  "blocker": "colour-depth prompt: 'MacPopulousII only runs if your monitor is set to 16 colours'"
+ },
+ "q761|Games:Populous II ƒ:MacPopulousII:MacPopulousII (Mono)": {
+  "status": "fails",
+  "blocker": "colour-depth prompt: 'MacPopulousII (BW) only runs if your monitor is set to Black & White'"
+ },
+ "q761|Games:Populous II ƒ:MacPopulousII:MacPopulousII (SC)": {
+  "status": "fails",
+  "blocker": "colour-depth prompt: 'MacPopulousII only runs if your monitor is set to 16 colours'"
+ },
+ "q761|Games:SimAnt ƒ:SimAnt™ Color": {
+  "status": "fails",
+  "blocker": "colour-depth prompt: 'SimAnt runs radically faster in 16-color mode' (Exit / Set Now! / No Change)"
+ },
+ "q761|Games:SimLife 1.0.1 ƒ:SimLife™ Color": {
+  "status": "fails",
+  "blocker": "colour-depth prompt: 'SimLife runs much faster in 16 color mode... switch to 16 colors?' (Quit / Run Slow / Switch)"
+ },
+ "q761|Games:Warcraft II 1.22 ƒ:Editors:Warcraft II Map Editor": {
+  "status": "fails",
+  "blocker": "insert CD: 'You must have the Warcraft II CD in order to run the map editor'"
+ },
+ "7.6.1|Games:Monkey Island 2 ƒ:LeChuck's Revenge": {
+  "owner": "— (disk: 'Monkey2.005' missing, the ROM machines fail alike)"
+ },
+ "8.6|Games:Monkey Island 2 ƒ:LeChuck's Revenge": {
+  "owner": "— (disk: 'Monkey2.005' missing, the ROM machines fail alike)"
+ },
+ "q761|Classic Games:Apache Strike 1.2 ƒ:Apache Strike": {
+  "status": "fails",
+  "blocker": "desktop only, no game"
+ },
+ "q761|Classic Games:Enchanted Scepters ƒ:Scepters": {
+  "status": "fails",
+  "blocker": "desktop only, no game"
+ },
+ "q761|Classic Games:Dark Castle ƒ:Dark Castle": {
+  "status": "fails",
+  "blocker": "alert \"You must set the main screen to two colors\""
+ },
+ "q761|Classic Games:Beyond Dark Castle 1.1 ƒ:Beyond Dark Castle": {
+  "status": "fails",
+  "blocker": "alert \"You must set the main screen to two colors\""
+ },
+ "q761|Classic Games:SimCity 1.3c ƒ:SimCity 1.3c": {
+  "status": "fails",
+  "blocker": "back in the Finder, no game"
+ },
+ "q761|Classic Games:SimCity 1.3c ƒ:TerrainEdit1.1": {
+  "status": "fails",
+  "blocker": "back in the Finder, no game"
+ },
+ "q761|Classic Games:Glider 4.0.4 ƒ:Glider™": {
+  "status": "runs",
+  "blocker": "its 2-colour/16-colour prompt, as on Executor"
+ },
+ "7.6.1|Games:Ares 1.2.0 ƒ:Hera 1.0.0 ƒ:Hera": {
+  "owner": "— (needs Appearance Manager 1.0.1, Mac OS 8.1: right on 7.6.1)"
+ },
+ "7.6.1|Classic Games:SimCity 1.3c ƒ:SimCity 1.3c": {
+  "owner": "— (the same on the Quadra)"
+ },
+ "7.6.1|Classic Games:SimCity 1.3c ƒ:TerrainEdit1.1": {
+  "owner": "— (the same on the Quadra)"
+ },
+ "7.6.1|Classic Games:Beyond Dark Castle 1.1 ƒ:Beyond Dark Castle Editor ": {
+  "owner": "— (the same on the Quadra)"
+ },
+ "g86|Games:Afterlife 1.0 ƒ:Afterlife": {
+  "status": "fails",
+  "blocker": "alert: \"Afterlife has detected that you are running an out-of-date Apple CD-ROM driver that is incompatible with Afterlife.\""
+ },
+ "g86|Games:Apeiron 1.0.2 ƒ:Apeiron": {
+  "status": "fails",
+  "blocker": "alert: \"Monitor Tool could not be opened. This program requires a color-capable Macintosh with a 256 color monitor that is 13\" or larger (640x480 or larger).\""
+ },
+ "g86|Games:Ares 1.2.0 ƒ:Ares": {
+  "status": "fails",
+  "blocker": "alert: \"Error: Couldn't find a large enough device of the minimum pixel depth.\""
+ },
+ "g86|Games:Barrack 1.0.4 ƒ:Barrack": {
+  "status": "fails",
+  "blocker": "alert: \"Error 8: Sorry, your system does not support the minimum color requirements 640x480 @ 8-bit.\""
+ },
+ "g86|Games:Bubble Trouble 1.0.1 ƒ:Bubble Trouble": {
+  "status": "fails",
+  "blocker": "alert: \"Sorry, but the music drivers couldn't be initialised. Try increasing Bubble Trouble's memory allocation. Error ID: -7\""
+ },
+ "g86|Games:Chiral 1.0.4 ƒ:Chiral": {
+  "status": "fails",
+  "blocker": "alert: \"Monitor Tool could not be opened. This program requires a color-capable Macintosh with a 256 color monitor.\""
+ },
+ "g86|Games:Chiral 1.0.4 ƒ:Chiral Basics": {
+  "status": "fails",
+  "blocker": "alert: \"Couldn't open the Monitor Tool.\""
+ },
+ "g86|Games:Civilization II ƒ:Civ II Map Editor": {
+  "status": "fails",
+  "blocker": "alert: \"Civ II Map Editor requires a computer capable of displaying 256 colors.\""
+ },
+ "g86|Games:Civilization II ƒ:Civilization II": {
+  "status": "fails",
+  "blocker": "alert: \"Civilization II requires a computer capable of displaying 256 colors.\""
+ },
+ "g86|Games:Civilization II ƒ:Civilization II Files:Civilopedia:Civilopedia": {
+  "status": "fails",
+  "blocker": "all-black screen (possibly still loading)"
+ },
+ "g86|Games:Cythera 1.0.4 ƒ:Cythera": {
+  "status": "fails",
+  "blocker": "256-colour prompt: \"This game runs faster in 256 colors. Would you like to automatically switch at startup?\""
+ },
+ "g86|Games:Digital Messiah ƒ:Digital Messiah 2.0": {
+  "status": "fails",
+  "blocker": "alert: \"Your MAIN monitor must be set to 256 (8-bit) color graphics in order to use Digital Messiah v.1.0.\""
+ },
+ "g86|Games:Escape Velocity 1.0.5 ƒ:Escape Velocity": {
+  "status": "fails",
+  "blocker": "alert: \"Sorry, an error occured while trying to open the Monitor Tool. ID = -3\""
+ },
+ "g86|Games:EV Override 1.0.2 ƒ:EV Override": {
+  "status": "fails",
+  "blocker": "alert: \"Sorry, an error occured while trying to open the Monitor Tool. ID = -3\""
+ },
+ "g86|Games:Exile 2.0.1 ƒ:Exile Editor v1.1.2:Exile.editor v1.1.2": {
+  "status": "fails",
+  "blocker": "256-colour prompt: \"Unfortunately, this game requires 8-bit Color Quickdraw to run optimally. It may work with less, albeit unaesthetically. Do you wish to try?\""
+ },
+ "g86|Games:Exile 2.0.1 ƒ:Exile v2.0.1": {
+  "status": "fails",
+  "blocker": "256-colour prompt: \"Unfortunately, this game requires 8-bit Color Quickdraw to run optimally...\""
+ },
+ "g86|Games:Exile II 2.0.3 ƒ:Exile II Editor v2.0.1": {
+  "status": "fails",
+  "blocker": "256-colour prompt: \"Unfortunately, this game requires 8-bit Color Quickdraw to run optimally...\""
+ },
+ "g86|Games:Exile II 2.0.3 ƒ:Exile II v2.0.3": {
+  "status": "fails",
+  "blocker": "256-colour prompt: \"Unfortunately, this game requires 8-bit Color Quickdraw to run optimally...\""
+ },
+ "g86|Games:Exile III 1.0.3 ƒ:Exile III (fat) v1.0.3": {
+  "status": "fails",
+  "blocker": "256-colour prompt: \"Unfortunately, this game requires 8-bit Color Quickdraw to run optimally. It might work with less, or it might not work at all. Do you wish to try?\""
+ },
+ "g86|Games:Exile III 1.0.3 ƒ:Exile III Editor v1.0.2": {
+  "status": "fails",
+  "blocker": "256-colour prompt: \"Unfortunately, this program requires 8-bit Color Quickdraw to run optimally...\""
+ },
+ "g86|Games:Flashback 1.0 ƒ:Flashback": {
+  "status": "fails",
+  "blocker": "alert: \"Flashback only runs in 256 color mode.\""
+ },
+ "g86|Games:Glider PRO 1.1.2 ƒ:Glider PRO™": {
+  "status": "fails",
+  "blocker": "alert: \"Need Color Monitor: Glider PRO runs only in 16 shades of gray or 256 colors. None of the monitors hooked up to this Mac are capable of either of these modes. (program error = 13)\""
+ },
+ "g86|Games:Lemmings 1.5.2 ƒ:Lemmings": {
+  "status": "fails",
+  "blocker": "alert: \"Lemmings only runs in 256 color mode, or Black and White.\""
+ },
+ "g86|Games:Maelstrom 1.4.2 ƒ:Maelstrom": {
+  "status": "fails",
+  "blocker": "alert: \"Maelstrom requires that you have a monitor that can display 256 colors; sorry about that...\""
+ },
+ "g86|Games:Marathon 1.2 ƒ:Marathon v1.2": {
+  "status": "fails",
+  "blocker": "alert: \"Marathon couldn't allocate enough sound channels to play sound because there isn't enough free system memory available (try giving Marathon less memory). ID = -1856\""
+ },
+ "g86|Games:Marathon 2 ƒ:Marathon 2": {
+  "status": "fails",
+  "blocker": "alert: \"Marathon couldn't allocate enough sound channels to play sound because there isn't enough free system memory available (try giving Marathon less memory). ID = -1856\""
+ },
+ "g86|Games:Marathon Infinity 1.5 ƒ:Marathon ∞ 1.5": {
+  "status": "fails",
+  "blocker": "alert: \"Marathon couldn't allocate enough sound channels to play sound because there isn't enough free system memory available (try giving Marathon less memory). ID = -1856\""
+ },
+ "g86|Games:Monkey Island 2 ƒ:LeChuck's Revenge": {
+  "status": "fails",
+  "blocker": "alert: \"I'm sorry, Monkey 2 runs only in 256 color mode. Please use the Control Panel to change the color mode.\""
+ },
+ "g86|Games:Oids 2.0.1 ƒ:OIDS": {
+  "status": "fails",
+  "blocker": "alert: \"OIDS cannot run on any screen in your system. OIDS Error #0\""
+ },
+ "g86|Games:Pathways into Darkness 1.1 ƒ:Pathways ƒ:Pathways Into Darkness": {
+  "status": "fails",
+  "blocker": "alert: \"Sorry, Pathways into Darkness requires a monitor which can be set to 256 colors or grays. ID= 0\""
+ },
+ "g86|Games:Populous II ƒ:MacPopulousII:MacPopulousII": {
+  "status": "fails",
+  "blocker": "game not in front, Finder only"
+ },
+ "g86|Games:Populous II ƒ:MacPopulousII:MacPopulousII (Mono)": {
+  "status": "fails",
+  "blocker": "game not in front, Finder only"
+ },
+ "g86|Games:Populous II ƒ:MacPopulousII:MacPopulousII (SC)": {
+  "status": "fails",
+  "blocker": "game not in front, Finder only"
+ },
+ "g86|Games:Prince of Persia 2 ƒ:Prince of Persia 2": {
+  "status": "fails",
+  "blocker": "alert: \"Requires System 6.0.7 or higher, with 256 colors and 32 Bit QuickDraw installed.\""
+ },
+ "g86|Games:Prince of Persia ƒ:Prince of Persia": {
+  "status": "fails",
+  "blocker": "alert: \"Prince of Persia only runs in Black and White, 4 color mode, 16 color mode or 256 color mode.\""
+ },
+ "g86|Games:SimCity 2000® Collection ƒ:SimCity 2000® 1.2": {
+  "status": "fails",
+  "blocker": "alert: \"SimCity 2000® Needs 256 Colors to Operate. This Application is Unable to Set Your Monitor to 256 Colors/Greys and Must Instead Quit.\""
+ },
+ "g86|Games:SimCity 2000® Collection ƒ:Urban Renewal Kit": {
+  "status": "fails",
+  "blocker": "alert: \"SimCity 2000™ Needs 256 Colors to Operate. This Application is Unable to Set Your Monitor to 256 Colors/Greys and Must Instead Quit.\""
+ },
+ "g86|Games:SimEarth 2.0 ƒ:SimEarth Color": {
+  "status": "fails",
+  "blocker": "system error: \"Sorry, a system error occurred. 'SimEarth Color' error type 10\""
+ },
+ "g86|Games:SimFarm ƒ:SimFarm": {
+  "status": "fails",
+  "blocker": "alert: \"SimFarm requires either a 256 color or monochrome monitor to run.\""
+ },
+ "g86|Games:SimLife 1.0.1 ƒ:SimLife™ Color": {
+  "status": "fails",
+  "blocker": "alert: \"Warning: SimLife™ Color needs 16 colors to run, but this machine supports fewer colors. Please consider running the monochrome version of SimLife™ instead.\""
+ },
+ "g86|Games:SimTower 1.2 ƒ:SimTower": {
+  "status": "fails",
+  "blocker": "alert: \"SimTower requires 256 color mode.\""
+ },
+ "g86|Games:Spectre 1.1 ƒ:Spectre 1.1": {
+  "status": "fails",
+  "blocker": "alert: \"Spectre requires a monitor in 1, 4 or 8 bit mode (2, 16, or 256 colors/grays).\""
+ },
+ "g86|Games:Swoop 1.0.2 ƒ:Swoop": {
+  "status": "fails",
+  "blocker": "alert: \"Sorry, but Swoop could not find an appropriate monitor to use. It requires a screen capable of 640x480 pixels in 256 colours.\""
+ },
+ "g86|Games:The Secret of Monkey Island ƒ:Monkey Island": {
+  "status": "fails",
+  "blocker": "alert: \"I'm sorry, Monkey Island runs only in 256 color mode. Please use the Control Panel to change the color mode.\""
+ },
+ "g86|Games:Warcraft II 1.22 ƒ:Editors:Warcraft II Sound Editor": {
+  "status": "fails",
+  "blocker": "alert: \"Can not continue because a Mac OS error occured. -1856\""
+ },
+ "g86|Games:Warcraft II 1.22 ƒ:Warcraft II v.1.22": {
+  "status": "fails",
+  "blocker": "alert: \"Sorry, Warcraft II requires a 13 inch color display. The display must be capable of 256 colors at a resolution of 640x480 or higher.\""
+ },
+ "g86|Games:Wolfenstein 3D 1.0.2 ƒ:Wolfenstein 3D™": {
+  "status": "fails",
+  "blocker": "alert: \"No color-capable monitors are connected to this system.\""
+ },
+ "g86|Classic Games:Apache Strike 1.2 ƒ:Apache Strike": {
+  "status": "fails",
+  "blocker": "depth prompt: \"To run Apache Strike, set the screen to 2 Colors/Grays in the Control Panel.\""
+ },
+ "g86|Classic Games:Beyond Dark Castle 1.1 ƒ:Beyond Dark Castle": {
+  "status": "fails",
+  "blocker": "depth prompt: \"You must set the main screen to two colors (using the Control Panel) before running Beyond Dark Castle.\""
+ },
+ "g86|Classic Games:Beyond Dark Castle 1.1 ƒ:Beyond Dark Castle Editor ": {
+  "status": "fails",
+  "blocker": "launch failed, Finder only"
+ },
+ "g86|Classic Games:Dark Castle ƒ:Dark Castle": {
+  "status": "fails",
+  "blocker": "depth prompt: \"You must set the main screen to two colors (using the Control Panel) before running Dark Castle.\""
+ },
+ "g86|Classic Games:Glider 4.0.4 ƒ:Editor 1.01": {
+  "status": "fails",
+  "blocker": "depth prompt: \"Room Editor requires 2-color (black & white) or 16-color mode...\" (Executor shows the same prompt)"
+ },
+ "g86|Classic Games:Glider 4.0.4 ƒ:Glider™": {
+  "status": "fails",
+  "blocker": "depth prompt: \"Glider requires 2-color (black & white) or 16-color mode...\" (Executor shows the same prompt)"
+ },
+ "g86|Classic Games:Rescue! 2.0.4 ƒ:Rescue! 2.0.4": {
+  "status": "fails",
+  "blocker": "blank screen (not in front)"
+ },
+ "g86|Classic Games:SimCity 1.3c ƒ:SimCity 1.3c": {
+  "status": "fails",
+  "blocker": "Finder in front (not in front)"
+ },
+ "g86|Classic Games:SimCity 1.3c ƒ:TerrainEdit1.1": {
+  "status": "fails",
+  "blocker": "Finder in front (not in front)"
+ },
+ "g86|Games PPC:EV Nova 1.0.10 ƒ:EV Nova": {
+  "status": "fails",
+  "blocker": "alert: \"Sorry, an error occurred while configuring the monitor.\""
+ },
+ "g86|Games PPC:Ferazel's Wand 1.0.3 ƒ:Ferazel's Wand": {
+  "status": "fails",
+  "blocker": "alert: \"Please insert the Ferazel's Wand CD and try again.\" (Executor shows the same)"
+ },
+ "g86|Games PPC:Mars Rising 1.0.2 ƒ:Mars Rising": {
+  "status": "fails",
+  "blocker": "depth prompt: \"Sorry, but Mars Rising requires a monitor capable of displaying at least 640x480 pixels with 256 colors.\""
+ },
+ "g86|Games PPC:Master of Orion II ƒ:Master of Orion II:MOO II": {
+  "status": "fails",
+  "blocker": "alert: \"Unable to find a suitable device.\""
+ },
+ "g86|Games PPC:Slithereens 1.0.1 ƒ:Slithereens": {
+  "status": "fails",
+  "blocker": "alert: \"I could not find an acceptable monitor to play Slithereens on. Sorry.\""
+ },
+ "8.6|Classic Games:SimCity 1.3c ƒ:SimCity 1.3c": {
+  "owner": "— (the same on the ROM machines)"
+ },
+ "8.6|Classic Games:SimCity 1.3c ƒ:TerrainEdit1.1": {
+  "owner": "— (the same on the ROM machines)"
+ },
+ "8.6|Classic Games:Beyond Dark Castle 1.1 ƒ:Beyond Dark Castle Editor ": {
+  "owner": "— (the same on the ROM machines)"
+ },
+ "e761|Games PPC:Ferazel's Wand 1.0.3 ƒ:Ferazel's Wand": {
+  "status": "partial",
+  "blocker": "wants its CD: alert \"Please insert the Ferazel's Wand CD and try again.\" at launch, as on the G3 (no CD image in the set)"
+ },
+ "e86|Games PPC:Ferazel's Wand 1.0.3 ƒ:Ferazel's Wand": {
+  "status": "partial",
+  "blocker": "wants its CD: alert \"Please insert the Ferazel's Wand CD and try again.\" at launch, as on the G3 (no CD image in the set)"
+ },
+ "w86|Productivity:Microsoft Office 98 ƒ:Microsoft Word": {
+  "status": "fails",
+  "blocker": "\"Word cannot load the Microsoft Office 98 shared libraries\": Office First Run (it asks for the owner's CD key) not done on the library disk; it puts them in the System Folder. Expected until then"
+ },
+ "8.6|Productivity:Microsoft Office 98 ƒ:Microsoft Word": {
+  "owner": "creative-pack (owner: CD key)"
+ },
+ "w761|Creative:Deneba Canvas 5.0.2 ƒ:Canvas™ 5": {
+  "status": "fails",
+  "blocker": "no menu: stays behind its splash, no Untitled-1 (Executor; the Quadra and the G3 run it)"
+ },
+ "w86|Creative:Deneba Canvas 5.0.2 ƒ:Canvas™ 5": {
+  "status": "fails",
+  "blocker": "no menu: stays behind its splash, no Untitled-1 (Executor; the Quadra and the G3 run it)"
+ }
+}

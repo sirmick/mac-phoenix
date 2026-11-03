@@ -31,10 +31,14 @@ namespace Executor
        (code, TOC) with integer arguments in r3..., on a frame below the
        stacks in use; the registers are as they were afterwards. The result
        is r3. From host code in a PowerPC system call (qsort's comparison
-       routine) or from 68k code (a fragment's init routine). */
+       routine) or from 68k code (a fragment's init routine). r12 is the
+       vector, as the PowerPC calling convention has it for a call through
+       a pointer: code can find data kept beside its vector there (MPW
+       Shell's callback thunks). */
     uint32_t callPPC(uint32_t tv, std::initializer_list<uint32_t> args);
-    /* ... the same for a routine's code and TOC, n arguments. */
-    uint32_t callPPC(uint32_t code, uint32_t toc, const uint32_t *args, int n);
+    /* ... the same for a routine's code and TOC, n arguments; tv, if known,
+       in r12. */
+    uint32_t callPPC(uint32_t code, uint32_t toc, const uint32_t *args, int n, uint32_t tv = 0);
 
     /* MacPhoenix: the CPU state that is a process's own, not the machine's:
        registered with the Process Manager (process.cpp), so a switch keeps

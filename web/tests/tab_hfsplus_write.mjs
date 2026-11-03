@@ -13,7 +13,7 @@ import os from 'node:os';
 import path from 'node:path';
 import zlib from 'node:zlib';
 import { execFileSync } from 'node:child_process';
-import { open, firstFrame, request, until } from './harness.mjs';
+import { open, firstFrame, request, until, diskButton } from './harness.mjs';
 
 const [dir, guest, fixture] = process.argv.slice(2);
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'tab-hfsplus-write-'));
@@ -98,7 +98,7 @@ try {
 if (docker) {
     await page.waitForTimeout(3500);                   // the overlay's index saved
     const dl = page.waitForEvent('download');
-    await page.locator('#files a[title^="Download"]').first().click();
+    await diskButton(page, path.basename(image), 'download');
     const changed = path.join(scratch, 'changed.img');
     fs.copyFileSync(await (await dl).path(), changed);
     let ok = true, out = '';

@@ -70,3 +70,23 @@
     dispatcher: Pack2
     selector: 0x000A
     executor: C_
+
+# ####
+
+# InterfaceLib's lowercase C routines (multiversal/executor.rb, declare_cglue):
+# the Pascal routine with C strings, Points by address.
+
+- only-for: Executor
+  function:
+    name: dibadmount
+    cglue: DIBadMount
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: dizero
+    cglue: DIZero
+    library: InterfaceLib
+    cstring-in: vname

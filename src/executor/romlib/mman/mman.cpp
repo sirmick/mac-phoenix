@@ -944,7 +944,6 @@ void SetHandleSize(Handle h, Size newsize)
     int32_t oldpsize;
     GUEST<THz> save_zone;
     THz current_zone;
-    bool save_memnomove_p;
     unsigned int state;
 
     if(h == LM(TEScrpHandle))
@@ -983,12 +982,8 @@ void SetHandleSize(Handle h, Size newsize)
         nextblock = BLOCK_NEXT(block);
 
         /* First try and grow it forward */
-        save_memnomove_p = ROMlib_memnomove_p;
-        if(USE(nextblock) == REL && ROMlib_locked(block))
-            ROMlib_memnomove_p = false;
         if(ROMlib_makespace(&nextblock, newsize - oldpsize))
         {
-            ROMlib_memnomove_p = save_memnomove_p;
             ZONE_ZCB_FREE(current_zone)
 
                 = ZONE_ZCB_FREE(current_zone) - PSIZE(nextblock);
@@ -999,7 +994,6 @@ void SetHandleSize(Handle h, Size newsize)
         }
         else
         {
-            ROMlib_memnomove_p = save_memnomove_p;
             /* At this point, if the block is locked, we lose */
             if(ROMlib_locked(block))
                 goto bad;
@@ -1291,8 +1285,12 @@ Ptr _NewPtr_flags(Size size, bool sys_p, bool clear_p)
 
     ZONE_ALLOC_PTR(current_zone) = nullptr;
 
-    ReserveMem(size);
-    if(ROMlib_relalloc(size, &b))
+    /* MacPhoenix: in the room ResrvMem makes (the lowest it can), not
+       wherever the rover is after it: the moves leave the rover above the
+       room. relalloc only if there is none (its compaction and purging
+       can't find more, but it's what Executor did). */
+    b = ROMlib_reserve(size);
+    if(!b && ROMlib_relalloc(size, &b))
     {
         ROMlib_report_alloc_failure(current_zone, size - HDRSIZE, "NewPtr");
 #if 0
@@ -1362,7 +1360,11 @@ void DisposePtr(Ptr p)
             ROMlib_freeblock(block);
         }
         else
+        {
+            /* Not a block: PtrZone's memWZErr stands. */
             warning_unexpected("");
+            return;
+        }
     }
     SET_MEM_ERR(noErr);
     MM_SLAM("exit");
@@ -1457,13 +1459,14 @@ void SetPtrSize(Ptr p, Size newsize)
     MM_SLAM("exit");
 }
 
+/* A zone header in guest memory. A block's zone field is whatever the
+   word before it holds when a program passes a pointer that isn't a block:
+   natively reading through it touches some host memory, in wasm it traps
+   and the tab is gone. */
 static bool
 legit_addr_p(void *addr)
 {
-    bool retval;
-
-    retval = true; /* all addresses are valid for now */
-    return retval;
+    return syn68k_is_guest_mapped((uintptr_t)addr, sizeof(Zone));
 }
 
 static bool
@@ -1507,6 +1510,9 @@ THz PtrZone(Ptr p)
 
     if(!legit_zone_p(zone))
     {
+        if(!legit_addr_p(zone))
+            fprintf(stderr, "[mm] PtrZone($%08X): not a block, its zone word $%08X is outside memory\n",
+                    (unsigned)ptr_to_longint(p), (unsigned)(uint32_t)block->location_u);
         SET_MEM_ERR(memWZErr); /* not sure what this should be */
         return nullptr;
     }
@@ -1750,14 +1756,11 @@ repeat:
     return amtfree;
 }
 
+/* MacPhoenix: ROMlib_reserve (mmansubr.cpp) makes the room, as low as it
+   can, moving, purging and calling the grow-zone procedure in a Mac's
+   order. */
 void _ResrvMem_flags(Size needed, bool sys_p)
 {
-    GUEST<THz> save_zone;
-    THz current_zone;
-    block_header_t *b;
-    long avail;
-    bool already_maxed_p;
-
     MM_SLAM("entry");
 
     if(needed <= 0)
@@ -1766,49 +1769,13 @@ void _ResrvMem_flags(Size needed, bool sys_p)
         return;
     }
 
-    save_zone = LM(TheZone);
+    GUEST<THz> save_zone = LM(TheZone);
     if(sys_p)
         LM(TheZone) = LM(SysZone);
-    current_zone = LM(TheZone);
-    already_maxed_p = false;
-
-again:
-    for(b = ZONE_HEAP_DATA(current_zone);
-        b != ZONE_BK_LIM(current_zone);
-        b = BLOCK_NEXT(b))
-    {
-        if(PSIZE(b) < MIN_BLOCK_SIZE)
-            HEAP_DEATH();
-
-        if(ROMlib_makespace(&b, needed))
-        {
-            LM(TheZone) = save_zone;
-            MM_SLAM("exit");
-            SET_MEM_ERR(noErr);
-            return;
-        }
-    }
-
-    GUEST<Size> free_s;
-    avail = MaxMem(&free_s);
-    Size free = free_s;
-    if(avail >= needed && !already_maxed_p)
-    {
-        already_maxed_p = true;
-        goto again;
-    }
-    if(free >= needed)
-    {
-        /* relalloc will do the actual extension. */
-        LM(TheZone) = save_zone;
-        MM_SLAM("exit");
-        SET_MEM_ERR(noErr);
-        return;
-    }
-
+    block_header_t *b = ROMlib_reserve(needed);
     LM(TheZone) = save_zone;
     MM_SLAM("exit");
-    SET_MEM_ERR(memFullErr);
+    SET_MEM_ERR(b ? noErr : memFullErr);
 }
 
 void _PurgeMem_flags(Size sizeneeded, bool sys_p)
@@ -1904,12 +1871,11 @@ void MoveHHi(Handle h)
    * to flush the cache.  We only nuke code whose checksums
    * have changed, for speed.
    *
-   * We make an exception for Microsoft Word, because the spelling checker
-   * will be real slow if we don't.
+   * MacPhoenix: for every program, as a 68040's BlockMove pushes the
+   * whole cache (upstream left out Microsoft Word, 'MSWD' and 'ddOr', for
+   * syn68k's speed; the cores are interpreters and flush nothing now).
    */
-
-    if(ROMlib_creator != "MSWD"_4 && ROMlib_creator != "ddOr"_4)
-        ROMlib_destroy_blocks(0, ~0, true);
+    ROMlib_destroy_blocks(0, ~0, true);
 
     THz zone = HandleZone(h);
     if(!zone)

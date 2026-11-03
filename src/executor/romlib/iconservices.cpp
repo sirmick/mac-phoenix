@@ -16,8 +16,8 @@
  *   Registered refs stay at no owners; others go away.
  * - Files: a custom icon (kHasCustomIcon: the file's resources, a folder's
  *   "Icon\r"), else by type and creator; folders the folder icon (the
- *   System Folder its own), a volume's root the hard disk icon; the label
- *   from the Finder flags.
+ *   System Folder its own), a volume's root its driver's icon (else the
+ *   hard disk's); the label from the Finder flags.
  * - Drawing and hit testing go through Icon Utilities' icon suites.
  * - A composite holds its two parts (one owner each).
  *
@@ -30,6 +30,7 @@
 #include <MemoryMgr.h>
 #include <ResourceMgr.h>
 #include <FileMgr.h>
+#include <DeviceMgr.h>
 #include <Finder.h>
 #include <AliasMgr.h>
 #include <mman/mman.h>
@@ -231,7 +232,7 @@ bool loadResources(IconRecord& rec, INTEGER id, bool onlyThisFile)
     return !rec.elements.empty();
 }
 
-/* The System's icons: type, then the resource ID (Icons.h). */
+/* The System's icons: type, then the resource ID (Icons.h's). */
 const std::pair<uint32_t, INTEGER> systemIcons[] = {
     { "docu"_4, -4000 }, { "sdoc"_4, -3985 }, { "edtf"_4, -3989 }, { "APPL"_4, -3996 },
     { "APPD"_4, -3991 }, { "fldr"_4, -3999 }, { "prvf"_4, -3994 }, { "flpy"_4, -3998 },
@@ -242,6 +243,29 @@ const std::pair<uint32_t, INTEGER> systemIcons[] = {
     { "ownd"_4, -3980 }, { "dbox"_4, -3979 }, { "shfl"_4, -3978 }, { "mntd"_4, -3977 },
     { "ctrl"_4, -3976 }, { "prnt"_4, -3975 }, { "prf "_4, -3974 }, { "extn"_4, -3973 },
     { "font"_4, -3968 }, { "ftrh"_4, -3984 },
+    /* 8.5 and later, most in "System Resources": which resource a type
+       shows on the G3 with 8.6, found by hashing the ICN# and icl8 that
+       GetIconRef gives for each type there and matching them with the
+       System's and System Resources' icons (2026-10-31; 'mntd', 'shfl' and
+       'ilge' hang 8.6's Icon Services; 'lock', 'nwrt', 'shro' & co. have
+       no large icons) */
+    { "abdg"_4, -20789 }, { "sbdg"_4, -20788 }, { "mbdg"_4, -20787 }, { "lbdg"_4, -20786 },
+    { "scrp"_4, -20740 }, { "CLIP"_4, -16509 }, { "clpu"_4, -3800 }, { "clpp"_4, -3801 },
+    { "clpt"_4, -3802 }, { "clps"_4, -3803 }, { "FFIL"_4, -3804 }, { "kfil"_4, -3806 },
+    { "ffil"_4, -3807 }, { "tfil"_4, -3808 }, { "ifil"_4, -3809 }, { "sfil"_4, -3810 },
+    { "ufld"_4, -3811 }, { "wfld"_4, -3812 }, { "rmov"_4, -3817 }, { "note"_4, -3820 },
+    { "caut"_4, -3821 }, { "stop"_4, -3822 }, { "APPC"_4, -3824 }, { "thng"_4, -3850 },
+    { "sdev"_4, -3851 }, { "cmnu"_4, -3942 }, { "asup"_4, -3944 }, { "macD"_4, -3947 },
+    { "extD"_4, -3950 }, { "ctrD"_4, -3951 }, { "fvoc"_4, -3952 }, { "ppdf"_4, -3953 },
+    { "rsrv"_4, -3964 }, { "apps"_4, -3965 }, { "rapp"_4, -3965 }, { "docs"_4, -3966 },
+    { "rdoc"_4, -3966 }, { "shlb"_4, -3967 }, { "worm"_4, -3987 }, { "shdf"_4, -3981 },
+    { "papp"_4, -3773 }, { "psys"_4, -3774 }, { "zsys"_4, -16494 }, { "FNDR"_4, -16482 },
+    { "sclr"_4, -20752 }, { "pcmc"_4, -20799 }, { "sfnt"_4, -20732 }, { "ttcf"_4, -20794 },
+    { "ilht"_4, -20733 }, { "ilft"_4, -20734 }, { "ilaf"_4, -20735 }, { "ilfi"_4, -20736 },
+    { "ilma"_4, -20737 }, { "ilnw"_4, -20738 }, { "ilat"_4, -20796 }, { "appr"_4, -20723 },
+    { "atlk"_4, -20726 }, { "atzn"_4, -20727 }, { "shrt"_4, -20728 }, { "favs"_4, -20729 },
+    { "favr"_4, -20729 }, { "rcnt"_4, -20730 }, { "isrv"_4, -20731 }, { "prof"_4, -20792 },
+    { "afps"_4, -20793 }, { "ftps"_4, -20795 }, { "issf"_4, -20801 }, { "cnct"_4, -20802 },
 };
 
 IconRef registerRecord(uint32_t creator, uint32_t type, IconRecord rec)
@@ -273,10 +297,12 @@ IconRef systemIcon(uint32_t type)
     for(const auto& [t, id] : systemIcons)
         if(t == type)
         {
+            /* the System file and the maps below it ("System Resources",
+               whose 'icns' comes first: 8.6's hard disk is its) */
             IconRecord rec;
             INTEGER save = CurResFile();
             UseResFile(LM(SysMap));
-            loadResources(rec, id, true);
+            loadResources(rec, id, false);
             UseResFile(save);
             if(rec.elements.empty())
                 return nullptr;
@@ -323,11 +349,84 @@ IconRef iconFor(INTEGER vRefNum, uint32_t creator, uint32_t type)
     IconRecord rec;
     if(creator != "macs"_4 && desktopIcons(rec, vRefNum, creator, type))
         return registerRecord(creator, type, std::move(rec));
+    /* the other volumes' databases (the G3's 8.6 finds Sherlock's icon,
+       on the System disk, asked on Host:: IconTest) */
+    if(creator != "macs"_4)
+    {
+        HParamBlockRec vpb = {};
+        vpb.volumeParam.ioVRefNum = vRefNum;
+        INTEGER self = PBHGetVInfo(&vpb, false) == noErr ? (INTEGER)vpb.volumeParam.ioVRefNum : 0;
+        for(INTEGER i = 1;; i++)
+        {
+            vpb = {};
+            vpb.volumeParam.ioVolIndex = i;
+            if(PBHGetVInfo(&vpb, false) != noErr)
+                break;
+            INTEGER v = vpb.volumeParam.ioVRefNum;
+            if(v != self && desktopIcons(rec, v, creator, type))
+                return registerRecord(creator, type, std::move(rec));
+        }
+    }
     /* Nobody's: the generic icon. */
     return systemIcon(type == "APPL"_4 ? "APPL"_4 : "docu"_4);
 }
 
-/* A file's custom icon (kHasCustomIcon: ID kCustomIconResource, -16455). */
+/* An alias file without an icon of its own: its kind's icon, by the
+   alias's type (Finder.h's alias types), not its target's (IconTest on
+   the G3's 8.6: an 'fdrp' alias to Control Panels shows a plain folder).
+   An application's alias is its creator's application; an alias of a
+   document has the document's type, so it needs nothing here. A 'badg'
+   override (the Apple menu's Favorites) is not applied here either. */
+IconRef aliasIcon(INTEGER vRefNum, uint32_t creator, uint32_t type)
+{
+    static const std::pair<uint32_t, uint32_t> kinds[] = {
+        { "fdrp"_4, "fldr"_4 }, { "faet"_4, "fldr"_4 }, { "fapn"_4, "fldr"_4 },
+        { "fact"_4, "ctrl"_4 }, { "faex"_4, "extn"_4 }, { "fapf"_4, "pref"_4 },
+        { "fasy"_4, "macs"_4 }, { "faam"_4, "amnu"_4 }, { "fast"_4, "strt"_4 },
+        { "fadr"_4, "dbox"_4 }, { "fash"_4, "shfl"_4 }, { "famn"_4, "mntd"_4 },
+        { "drop"_4, "dbox"_4 }, { "trsh"_4, "trsh"_4 }, { "hdsk"_4, "hdsk"_4 },
+        { "flpy"_4, "flpy"_4 }, { "srvr"_4, "srvr"_4 }, { "cddr"_4, "cddr"_4 },
+    };
+    if(type == "adrp"_4)
+        return iconFor(vRefNum, creator, "APPL"_4);
+    for(const auto& [alias, icon] : kinds)
+        if(alias == type)
+            return systemIcon(icon);
+    return nullptr;
+}
+
+/* A file's custom badge ('badg' kCustomBadgeResourceID, when the extended
+   Finder flags say kExtendedFlagHasCustomBadge): its override type and
+   creator replace the file's own icon (the Apple menu's Favorites alias:
+   'favs'/'macs'; IconTest on the G3's 8.6). The badges proper, drawn
+   over the icon, are not done. */
+IconRef badgeOverride(FSSpec *file)
+{
+    INTEGER save = CurResFile();
+    INTEGER rn = FSpOpenResFile(file, fsRdPerm);
+    if(rn == -1)
+        return nullptr;
+    uint32_t type = 0, creator = 0;
+    if(Handle h = Get1Resource("badg"_4, -16455))
+    {
+        LoadResource(h);
+        if(*h && GetHandleSize(h) >= 28)
+        {
+            const GUEST<uint32_t> *p = (const GUEST<uint32_t> *)((char *)*h + 20);
+            type = p[0];
+            creator = p[1];
+        }
+    }
+    CloseResFile(rn);
+    UseResFile(save);
+    if(!type)
+        return nullptr;
+    return iconFor(file->vRefNum, creator, type);
+}
+
+/* A file's custom icon (kHasCustomIcon): ID kCustomIconResource, -16455,
+   else -16496, where the Finder puts an alias file's copy of its target's
+   icon (9.0.4 looks there for any file, alias or not: IconTest). */
 IconRef customIcon(FSSpec *file)
 {
     INTEGER save = CurResFile();
@@ -336,11 +435,40 @@ IconRef customIcon(FSSpec *file)
         return nullptr;
     IconRecord rec;
     loadResources(rec, -16455, true);
+    if(rec.elements.empty())
+        loadResources(rec, -16496, true);
     CloseResFile(rn);
     UseResFile(save);
     if(rec.elements.empty())
         return nullptr;
     return newRef(std::move(rec));
+}
+
+/* A volume's icon from its driver: the media icon (Control 22), else the
+   drive icon (21), an 'ICN#' with its mask, as 9.0.4 shows a volume
+   (IconTest; the G3's ExtFS volume answers 22 only). */
+IconRef driverIcon(INTEGER vRefNum)
+{
+    HParamBlockRec vpb = {};
+    vpb.volumeParam.ioVRefNum = vRefNum;
+    if(PBHGetVInfo(&vpb, false) != noErr)
+        return nullptr;
+    for(INTEGER code : { 22, 21 })
+    {
+        ParamBlockRec cpb = {};
+        cpb.cntrlParam.ioVRefNum = vpb.volumeParam.ioVDrvInfo;
+        cpb.cntrlParam.ioCRefNum = vpb.volumeParam.ioVDRefNum;
+        cpb.cntrlParam.csCode = code;
+        if(PBControl(&cpb, false) != noErr)
+            continue;
+        Ptr icon = *(GUEST<Ptr> *)cpb.cntrlParam.csParam;
+        if(!icon)
+            continue;
+        IconRecord rec;
+        rec.elements["ICN#"_4].assign((uint8_t *)icon, (uint8_t *)icon + 256);
+        return newRef(std::move(rec));
+    }
+    return nullptr;
 }
 
 /* The icon suite to draw (the caller disposes of it, not its data). */
@@ -382,6 +510,24 @@ OSErr Executor::C_IconRefToIconFamily(IconRef theIconRef, IconSelectorValue whic
         return memFullErr;
     *iconFamily = (IconFamilyHandle)h;
     return noErr;
+}
+
+/* The private NewIconSuiteFromIconRef (IconServices.yaml): through an
+   icon family, as IconRefToIconFamily and IconFamilyToIconSuite. */
+OSErr Executor::C_NewIconSuiteFromIconRef(IconSelectorValue whichIcons, GUEST<Handle> *iconSuite,
+                                          UInt32 reserved, IconRef theIconRef)
+{
+    (void)reserved;
+    if(!iconSuite)
+        return paramErr;
+    *iconSuite = nullptr;
+    GUEST<IconFamilyHandle> family;
+    OSErr err = C_IconRefToIconFamily(theIconRef, whichIcons, &family);
+    if(err != noErr)
+        return err;
+    err = C_IconFamilyToIconSuite(family, whichIcons, iconSuite);
+    DisposeHandle((Handle)(IconFamilyHandle)family);
+    return err;
 }
 
 OSErr Executor::C_IconFamilyToIconSuite(IconFamilyHandle iconFamily, IconSelectorValue whichIcons,
@@ -534,8 +680,15 @@ OSErr Executor::C_GetIconRefFromFile(const FSSpec *theFile, GUEST<IconRef> *theI
     {
         if(custom)
             ref = customIcon(const_cast<FSSpec *>(theFile));
+        uint32_t creator = pb.hFileInfo.ioFlFndrInfo.fdCreator, type = pb.hFileInfo.ioFlFndrInfo.fdType;
+        const uint8_t *xinfo = (const uint8_t *)&pb.hFileInfo.ioFlXFndrInfo;
+        uint16_t xflags = xinfo[8] << 8 | xinfo[9];
+        if(!ref && (xflags & 0x8100) == 0x0100 /* kExtendedFlagHasCustomBadge, flags valid */)
+            ref = badgeOverride(const_cast<FSSpec *>(theFile));
+        if(!ref && (flags & 0x8000) /* kIsAlias */)
+            ref = aliasIcon(theFile->vRefNum, creator, type);
         if(!ref)
-            ref = iconFor(theFile->vRefNum, pb.hFileInfo.ioFlFndrInfo.fdCreator, pb.hFileInfo.ioFlFndrInfo.fdType);
+            ref = iconFor(theFile->vRefNum, creator, type);
     }
     if(!ref)
         return noSuchIconErr;
@@ -581,7 +734,15 @@ OSErr Executor::C_GetIconRefFromFolder(INTEGER vRefNum, LONGINT parentFolderID, 
         return paramErr;
     uint32_t type = "fldr"_4;
     if(folderID == 2)
-        type = "hdsk"_4; /* a volume's root */
+    {
+        /* a volume's root: its driver's icon, else the hard disk's */
+        if(IconRef ref = driverIcon(vRefNum))
+        {
+            *theIconRef = ref;
+            return noErr;
+        }
+        type = "hdsk"_4;
+    }
     else
     {
         GUEST<INTEGER> vref;

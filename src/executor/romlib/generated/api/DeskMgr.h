@@ -73,4 +73,8 @@ Boolean C_SystemEvent(EventRecord *evp);PASCAL_TRAP(SystemEvent, 0xA9B2);
 void C_SystemMenu(LONGINT menu);PASCAL_TRAP(SystemMenu, 0xA9B5);
 
 
+inline INTEGER cglue_opendeskacc(const char *acc) {return C_OpenDeskAcc(cglue::CString(acc));}
+LIBRARY_FUNCTION(InterfaceLib, opendeskacc, cglue_opendeskacc);
+
+
 } /* namespace Executor */

@@ -40,9 +40,11 @@ snapshot's :Items:, each a path or {"app", facts...}: "no_quit",
 (System Folder files the install supersedes but leaves behind: the build
 deletes them where the snapshot's System Folder part goes), "system_take"
 (System Folder files to take even if only changed: a control panel's
-settings), "network" (the guest's --network: "socket" for net-bridge),
+settings), "system_exclude" (System Folder files left out though new: a
+registration reminder in Startup Items, an extension for older Systems), "network" (the guest's --network: "socket" for net-bridge),
 "exclude" (names at the top of the target left out of the capture: a self-extracting
-archive copied there to expand in place), "volatile" (snapshot paths a run writes differently every time, compared by
+archive copied there to expand in place; "Folder:Name", that path only, on the Installers disk too: a
+serial number file that came with the archive), "volatile" (snapshot paths a run writes differently every time, compared by
 name only: a first launch's database or preferences). "wip": a bake still being
 worked out, left out of --all. "args": emulator arguments for every guest
 the bake starts ("--model-id", "5": Systems before 7.5). "first_boot_agent":
@@ -54,6 +56,14 @@ only run noise differs (aliases, installer logs, "volatile" paths; for os
 bakes also the System's own preferences, and fonts and control panels by
 size: an installer picks fonts' resource IDs afresh, a control panel keeps
 its settings in itself), else the paths that changed.
+
+A step {"serial": ID} types the serial number of product ID from the
+owner's serials file (<storage>/serials.json, MACPHOENIX_SERIALS for
+another; private, never committed): "field": "name" or "organization"
+types those instead (the product's, else the file's "defaults"). The
+value stays out of the bake's key, the logs, the web UI's annotations and
+the explore answers; a missing or empty one stops the bake before the
+guest boots: "serial needed for ID" (exit status 3).
 
 Strings in steps may use {target}, {media}, {boot} (volume names) and
 {system} (the boot disk's System Folder path). A step with "backend"
@@ -103,9 +113,9 @@ import macfetch  # noqa: E402
 import snapshot  # noqa: E402
 from containers import MAC_EPOCH, Volume, macbinary_to_files, mr, named, open_container, take  # noqa: E402
 import guest as guest_mod  # noqa: E402
-from guest import Guest, watch_url  # noqa: E402
+from guest import Guest, free_port, watch_url  # noqa: E402
 from populate_disk import build_macbinary  # noqa: E402
-from snapshot import Hfs  # noqa: E402
+from snapshot import Hfs, glob_quote  # noqa: E402
 
 BAKES = os.path.join(HERE, "bakes")
 MEDIA = os.path.join(HERE, "media.json")
@@ -114,6 +124,8 @@ STORAGE = macfetch.STORAGE
 BAKED = os.path.join(STORAGE, "baked")
 IMAGES = os.path.join(STORAGE, "images")
 SESSION = os.path.join(STORAGE, "work", "bake-session.json")
+SERIALS = os.environ.get("MACPHOENIX_SERIALS") or os.path.join(STORAGE, "serials.json")
+SERIAL_NEEDED = 3                       # exit status: a product's serial isn't in the file
 DEFAULT_TARGET = "Install"
 DEFAULT_OS = "7.6.1"
 BACKENDS = {"68k": "uae", "ppc": "kpx", "se": "se", "iici": "iici"}    # machine -> Guest backend (guest.py)
@@ -290,6 +302,50 @@ def up_to_date(bake):
     return current(snapshot_path(bake["name"]), bake_key(bake))
 
 
+# ------------------------------------------------------------ serials
+
+class SerialNeeded(Exception):
+    """A product's serial (or name, organization) isn't in the serials file.
+    The message names the product, never a value."""
+
+
+SERIAL_FIELDS = ("serial", "name", "organization")
+
+
+def serial_value(product, field="serial"):
+    """What a {"serial": product} step types: the product's field from the
+    serials file; name and organization fall back to its "defaults"."""
+    if field not in SERIAL_FIELDS:
+        raise ValueError(f"serial step for {product}: field {field!r} is not one of {SERIAL_FIELDS}")
+    try:
+        with open(SERIALS) as f:
+            d = json.load(f)
+    except FileNotFoundError:
+        raise SerialNeeded(f"{field} needed for {product} (no {SERIALS})") from None
+    except ValueError:
+        raise SerialNeeded(f"{field} needed for {product} ({SERIALS} is not JSON)") from None
+    entry = next((p for p in d.get("products", []) if p.get("id") == product), None)
+    if entry is None:
+        raise SerialNeeded(f"{field} needed for {product} (not in {SERIALS})")
+    value = entry.get(field) or ("" if field == "serial" else d.get("defaults", {}).get(field, ""))
+    if not isinstance(value, str) or not value.strip():
+        raise SerialNeeded(f"{field} needed for {product}")
+    if any(ch not in guest_mod.TYPE_KEYS for ch in value):     # the error must not show the character
+        raise SerialNeeded(f"{field} for {product} has a character that can't be typed on a US keyboard")
+    return value
+
+
+def serial_steps(steps):
+    """The {"serial": ...} steps among a bake's (first-boot ones too)."""
+    return [s for s in steps if isinstance(s, dict) and "serial" in s]
+
+
+def check_serials(bake):
+    """Every serial a bake will type is there: before any guest boots."""
+    for s in serial_steps(bake.get("steps", []) + bake.get("first_boot", [])):
+        serial_value(s["serial"], s.get("field", "serial"))
+
+
 # ------------------------------------------------------------ preparing
 
 def put(hfs, image, items, to=b""):
@@ -299,7 +355,7 @@ def put(hfs, image, items, to=b""):
         for rel, local in items:
             target = (to + b":" if to else b":") + rel
             if local is None:
-                hfs.run("hmkdir", target, check=False)
+                hfs.run("hmkdir", glob_quote(target), check=False)
             else:
                 hfs.run("hcopy", "-m", local, target)
     finally:
@@ -353,6 +409,15 @@ def clear_recent(hfs):
                     hfs.run("hdel", path + b":" + name)
                     removed.append((path + b":" + name).decode("mac_roman"))
     return removed
+
+
+def excluded_path(rel, exclude):
+    """Whether rel (MacRoman bytes) is, or is inside, one of exclude's
+    "Folder:Name" paths (a bake's "exclude" entries with a colon: a serial
+    number file an archive came with). Names without a colon are the
+    target's top level and are matched by the capture alone."""
+    return any(rel == e or rel.startswith(e + b":") for e in (mr(x) if isinstance(x, str) else x for x in exclude)
+               if b":" in e)
 
 
 def media_items(m, work):
@@ -533,6 +598,8 @@ class Session:
     def run_step(self, step):
         if "reboot" in step:
             self.reboot()
+        elif "serial" in step:                  # typed from the serials file, never shown
+            self.guest.type_text(serial_value(step["serial"], step.get("field", "serial")))
         else:
             self.guest.run(step)
 
@@ -644,6 +711,7 @@ class Session:
         hfs = Hfs(work)
         before = sysfolder_content(hfs, self.base_path, work)
         take = {mr(t) for t in self.bake.get("system_take", [])}
+        leave = {mr(t) for t in self.bake.get("system_exclude", [])}
         after = sysfolder_content(hfs, self.boot, work)
         added, changed, ignored = [], [], []
         for p, line in sorted(after.items()):
@@ -651,7 +719,9 @@ class Session:
                 continue
             leaf = p.rsplit(b":", 1)[1]
             prefs = p.startswith(b":System Folder:Preferences:")
-            if p[len(b":System Folder:"):] in take:          # named by the bake: always taken
+            if p[len(b":System Folder:"):] in leave:         # named by the bake: never taken
+                ignored.append(p)
+            elif p[len(b":System Folder:"):] in take:        # named by the bake: always taken
                 (added if p not in before else changed).append(p)
             elif leaf in NEVER or any(n in p for n in NOISE) or (prefs and (p in before or leaf in PREFS_NOISE)):
                 ignored.append(p)
@@ -667,8 +737,11 @@ class Session:
         if self.bake.get("archive"):            # an .hqx expands to a .sit and then a folder
             dropped |= {r.split(b":")[0] for r, l in items if b":" not in r and l
                         and os.path.splitext(r.decode("mac_roman"))[1].lower() in ARCHIVE_TYPES}
-        excluded = sorted({r.split(b":")[0] for r, _ in items if r.split(b":")[0] in dropped})
-        items = [(r, l) for r, l in items if r.split(b":")[0] not in dropped]
+        def left_out(r):
+            return r.split(b":")[0] in dropped or excluded_path(r, dropped)
+        excluded = sorted({e for e in dropped if b":" in e and any(excluded_path(r, [e]) for r, _ in items)}
+                          | {r.split(b":")[0] for r, _ in items if r.split(b":")[0] in dropped})
+        items = [(r, l) for r, l in items if not left_out(r)]
         if self.bake.get("from_boot"):
             hfs.mount(self.base_path)
             had = {n for n, _ in hfs.ls(b":")}
@@ -841,6 +914,7 @@ def bake_one_(bake, force=False, keep=False, log=print, port=None, extra=()):
     """The product's snapshot: one run, or a run per machine merged."""
     if bake.get("kind") == "stage":
         sys.exit(f"{bake['name']}: a stage-only product (no snapshot); build.py puts it on an Installers disk")
+    check_serials(bake)
     out = snapshot_path(bake["name"])
     key = bake_key(bake) if bake.get("kind") != "derive" else None
     if bake.get("kind") == "derive":
@@ -935,13 +1009,6 @@ def merge(bake, parts, out, key, log=print):
     return out
 
 
-def free_port():
-    import socket
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
-
-
 def base_deps(os_name, seen=None):
     """The snapshots a base System is made of: an os bake's, or a built
     image's (its base's, its System Folder parts', what it places)."""
@@ -977,6 +1044,8 @@ def bake_all(names, jobs, force):
                            stdout=open(logf, "w"), stderr=subprocess.STDOUT)
         if r.returncode:
             failed.append(b["name"])
+            if r.returncode == SERIAL_NEEDED:   # the log says which product
+                return f"NO SERIAL   {b['name']} (log {logf})"
             return f"FAILED      {b['name']} (log {logf})"
         return f"baked       {b['name']}"
 
@@ -1099,6 +1168,8 @@ class Explore:
             s.guest.annotate(f"{s.bake['name']} explore: {json.dumps(body, ensure_ascii=False)}")
             s.run_step(step)
             self.recorded.append(body)
+            if "serial" in body:                # the field now shows it: no UI text in the answer
+                return {"ok": True, "recorded": body}
             return {"ok": True, "recorded": body, "ui": s.guest.summary()}
         if path == "/finish":
             s.guest.shutdown()
@@ -1173,6 +1244,9 @@ def main():
         return 0
     try:
         bake_one(bake, args.force, args.keep, port=args.port, extra=args.emulator_arg)
+    except SerialNeeded as e:
+        print(f"{bake['name']}: {e}", file=sys.stderr)
+        return SERIAL_NEEDED
     except Exception:
         traceback.print_exc()
         return 1

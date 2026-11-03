@@ -21,6 +21,7 @@
 
 #include <quickdraw/xdblt.h>
 #include <quickdraw/srcblt.h>
+#include <quickdraw/gworld.h>
 #include <vdriver/dirtyrect.h>
 
 using namespace Executor;
@@ -653,6 +654,27 @@ Executor::ROMlib_blt_pn(RgnHandle rh, INTEGER mode)
     }
 }
 
+namespace
+{
+/* MacPhoenix: a port whose pixmap's baseAddr is a handle (pmVersion says
+   so) is drawn into through it (ROMlib_lock_handle_base); was drawn into
+   at the master pointer, over the heap (Mars Rising's 640x480 PaintRect). */
+class PortPixelsGuard
+{
+    handle_base_lock lock;
+
+public:
+    PortPixelsGuard()
+    {
+        lock.h = nullptr;
+        GrafPtr port = qdGlobals().thePort;
+        if(CGrafPort_p(port) && CPORT_PIXMAP(port))
+            ROMlib_lock_handle_base(CPORT_PIXMAP(port), *CPORT_PIXMAP(port), &lock);
+    }
+    ~PortPixelsGuard() { ROMlib_unlock_handle_base(&lock); }
+};
+}
+
 void Executor::C_StdRgn(GrafVerb verb, RgnHandle rgn)
 {
     RgnHandle rh;
@@ -660,6 +682,8 @@ void Executor::C_StdRgn(GrafVerb verb, RgnHandle rgn)
 
     if(!rgn || EmptyRgn(rgn))
         return;
+
+    PortPixelsGuard pixels_guard;
 
     if((*rgn)->rgnSize & 0x8000)
     {

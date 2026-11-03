@@ -150,9 +150,6 @@ static bool shouldHideTrap(bool tool, int index)
             case 0x7C: /* ADBOp */
             case 0x4F: /* RDrvrInstall */
                 return true;
-            case 0x8B: /* Communications Toolbox */
-                return ROMlib_creator == "KR09"_4; /* kermit */
-                break;
             default:
                 return false;
         }
@@ -193,6 +190,17 @@ ProcPtr Executor::C_GetToolboxTrapAddress(uint16_t n)
 ProcPtr Executor::C_NGetTrapAddress(uint16_t n, TrapType ttype) /* IMII-384 */
 {
     return _GetTrapAddress_flags(n, true, ttype != kOSTrapType);
+}
+
+/* MacPhoenix: InterfaceLib's GetTrapVector: where a trap word's address is
+   kept, its slot in the dispatch table (low memory, $400 and $E00 as on a
+   Mac). Mac OS Easy Open's PowerPC Translation library keeps what it
+   answers for $ABFC and calls through what the slot holds each time. */
+Ptr Executor::glue_GetTrapVector(uint16_t trapWord)
+{
+    bool tool = trapWord & 0x0800;
+    int index = getTrapIndex(trapWord, true, tool);
+    return (Ptr)&(tool ? tooltraptable : ostraptable)[index];
 }
 
 void Executor::C_NSetTrapAddress(ProcPtr addr, uint16_t n, TrapType ttype)

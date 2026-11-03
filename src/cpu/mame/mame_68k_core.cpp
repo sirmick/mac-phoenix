@@ -347,9 +347,12 @@ public:
             u32 r32(offs_t pc) const override { return m.read32(pc); }
             u64 r64(offs_t pc) const override { return (u64)m.read32(pc) << 32 | m.read32(pc + 4); }
         } data(memory_);
-        m68k_disassembler dasm(m68k_disassembler::TYPE_68040);
+        /* built once: its constructor fills the opcode tables (64K
+           entries), a few ms each time, and reports disassemble in runs */
+        if(!dasm_)
+            dasm_ = std::make_unique<m68k_disassembler>(m68k_disassembler::TYPE_68040);
         std::ostringstream out;
-        offs_t r = dasm.disassemble(out, addr, data, data);
+        offs_t r = dasm_->disassemble(out, addr, data, data);
         snprintf(buf, len, "%s", out.str().c_str());
         return (int)(r & util::disasm_interface::LENGTHMASK);
     }
@@ -397,6 +400,7 @@ private:
     Mame68kDevice dev_;
     Host &host_;
     GuestMemory &memory_;
+    std::unique_ptr<m68k_disassembler> dasm_;
     int irq_ = 0;
     /* The innermost run()'s. Part of the context: Executor's processes
        and Thread Manager threads are coroutines that park inside run() and

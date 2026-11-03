@@ -88,6 +88,10 @@ struct EmulatorConfig {
     // in; the guest can still switch in Monitors. Games that only run in
     // 256 colours want 8.
     uint32_t screen_depth = 32;
+    // A depth was asked for (--depth, or "depth" in the JSON config /
+    // /api/config). Executor starts 8.x Systems at 32 bits and 7.x at 8,
+    // as Macs do, unless asked.
+    bool screen_depth_set = false;
     bool screenshots = false;          // CLI-only: dump PPM frames to /tmp
 
     // Audio
@@ -145,9 +149,11 @@ struct EmulatorConfig {
     std::string executor_logtraps_filter; // ... only these names (comma-separated wildcards)
     std::string executor_debug;        // Executor's own --debug options ("memcheck,fslog,..."; romlib/error/error.cpp)
     std::string watch;                 // --watch ADDR[:LEN]: write watchpoint on guest memory (Executor; guest_watch.h)
+    std::vector<std::string> executor_ppc_break; // --executor-ppc-break SPEC (repeatable; "on": none yet): PowerPC breakpoints (rsys/ppc_break.h)
     bool executor_writable_images = false; // Executor mounts disk images read-write (test copies)
     bool executor_ot = true;               // Executor answers Open Transport (romlib/opentransport)
     bool executor_ppc = false;             // Executor runs the PowerPC code of fat applications (mame-ppc)
+    double executor_scale = 1.0;           // Executor's display scale (docs/executor/HiDPI.md; needs EXECUTOR_SKIA)
     std::string cpu_core = "uae";      // CPU core for the backend's architecture: 68k "uae", "mame-68k"; ppc "kpx", "mame-ppc"
 
     // System

@@ -1,19 +1,45 @@
-// The page side: keep uploads in OPFS, start the Worker with them, hand it
-// a canvas, send it input. Query string:
+// The page side: start the Worker with the disks and uploads, hand it a
+// canvas, send it input. The settings (settings.js: the Settings dialog,
+// kept by the server or in this browser) say how; the query string
+// overrides some of them for the visit:
 //   ?size=WxH        the screen (default 640x480)
-//   ?disk=URL        a disk image to fetch and mount (repeatable); kept in
-//                    OPFS (disk-cache/) and revalidated on later visits
-//                    with its ETag, so it downloads once
+//   ?scale=N         render at N times the screen, text from outlines
+//                    (docs/executor/HiDPI.md; default: devicePixelRatio,
+//                    EXECUTOR_SKIA builds only)
+//   ?disk=URL        a disk image to mount (repeatable): the server's, read
+//                    by Range as Executor needs it
 //   ?system=NAME     run on that image's System and Finder
+//   ?lazy=0          download ?disk= images whole first (default: read as
+//                    needed, when the server takes Range requests)
+//   ?ppc             run fat applications' PowerPC code (the PowerPC box;
+//                    PowerPC-only applications always run theirs)
+//   ?logtraps=LIST   Executor logs Toolbox calls (as --executor-logtraps):
+//                    LIST the names (wildcards, -NAME leaves out; 1: all);
+//                    &nesting=N calls nested N deep (default 6); ?debug=OPTS Executor's
+//                    --executor-debug options. Everything printed goes to the
+//                    server too (log.js; tools/standalone keeps it per session)
+//   ?ppcbreak=SPEC   PowerPC breakpoints (as --executor-ppc-break; several
+//                    separated by ';'; docs/executor/PPCTrace.md)
 // library.json beside the page (optional) offers more disks: [{ title,
-// url, note }]; the ones picked are remembered (localStorage) and loaded
-// like ?disk=.
-// Outside a secure context (plain http to another host) there is no OPFS
-// and no AudioWorklet: uploads last the visit, sound is off.
+// url, note, cover }]; the ones picked are remembered (the disks.mounted
+// setting) and loaded like ?disk=. The Disks panel (disks.js; docs/executor/Disks.md)
+// shows the System, the disks in the Mac and the library, and puts disks in
+// and takes them out while Executor runs.
+// Served by tools/standalone (api/me's mode; served by anything else the
+// page says it needs it): the server is the only store: disks read by
+// Range as needed, their changes and Executor's volume kept on the server
+// (sync.js: Store), the last of them in a beacon when the page goes.
+// Until Executor's first frame, loading.js shows the start's steps over the
+// screen (the module's download from the Worker, 'progress').
+// Uploads are this visit's: disk images held in memory, other files copied
+// onto Executor's volume (kept with it). One tab is in control
+// (api/session); the others show its screen until they take control or it
+// goes. Outside a secure context (plain http to another host) there is no
+// AudioWorklet: no sound.
 //
 // Automation: window.executor.request(op, arg) -> Promise. At the running
-// application's next event call (web_main.cpp): 'app', 'windows', 'launch'
-// "Volume:Folder:App". At once, by the Worker: 'read' PATH (text or null),
+// application's next event call (web_main.cpp): 'app', 'windows', 'menus',
+// 'drawn' (the strings drawn lately, oldest first), 'launch' "Volume:Folder:App". At once, by the Worker: 'read' PATH (text or null),
 // 'write' [PATH, TEXT], 'list' PATH (names or null); Executor's own volume
 // is /executor, its "Host" volume /host.
 // window.executor.frames counts frames.
@@ -22,7 +48,15 @@
 const box = document.getElementById('screen-box');
 const status = document.getElementById('status');
 const params = new URLSearchParams(location.search);
-const [width, height] = (params.get('size') || '640x480').split('x').map(Number);
+addEventListener('pagehide', storeLast);      // before log.js's: the beacons' room is shared
+Log.start(Log.newId(), 'page');
+// The screen and the scale Executor draws at, from the settings at each start.
+let width = 640, height = 480, scale = 1;
+function machine() {
+    [width, height] = Settings.get('machine.screen').split('x').map(Number);
+    // Executor scales by whole numbers (fractional scales: HiDPI.md phase 6).
+    scale = Math.max(1, Math.round(Settings.get('display.scale') || window.devicePixelRatio || 1));
+}
 
 let worker = null, canvas = null, cursor = null, nextId = 1;
 // Bumped when a restart begins: messages from an older Worker (still
@@ -33,6 +67,8 @@ window.executor = {
     frames: 0,
     audioFrames: 0,     // 20 ms frames of sound received
     cursor: null,       // the guest's last cursor message
+    stopped: null,      // why Executor stopped, when an error stopped it
+    additions: {},      // disk -> its System Folder additions copied in (copied, kept, restart, live)
     request(op, arg = '') {
         if (!worker)
             return Promise.resolve({ error: 'not running' });   // between Workers
@@ -44,134 +80,94 @@ window.executor = {
     },
 };
 
-// ---- uploads, kept in OPFS (or for this visit, where there is none) ----
-const opfs = window.isSecureContext && navigator.storage && navigator.storage.getDirectory;
-let sessionFiles = [];          // without OPFS; and ?disk= fetches
-
-async function uploads() {
-    return navigator.storage.getDirectory();
-}
+// ---- the disks: uploads and ?disk= fetches, for this visit ----
+let sessionFiles = [];
 
 async function storedFiles() {
-    const files = [...sessionFiles];
-    if (opfs) {
-        const dir = await uploads();
-        for await (const [, handle] of dir.entries())
-            if (handle.kind === 'file' && !files.some((f) => f.name === handle.name))
-                files.push(await handle.getFile());
-    }
-    return files.sort((a, b) => a.name.localeCompare(b.name));
+    return [...sessionFiles].sort((a, b) => a.name.localeCompare(b.name));
 }
 
 async function store(file) {
-    if (!opfs) {
-        sessionFiles = sessionFiles.filter((f) => f.name !== file.name).concat(file);
-        return;
-    }
-    const dir = await uploads();
-    const handle = await dir.getFileHandle(file.name, { create: true });
-    const w = await handle.createWritable();
-    await w.write(file);
-    await w.close();
+    sessionFiles = sessionFiles.filter((f) => f.name !== file.name).concat(file);
 }
 
 async function remove(name) {
     sessionFiles = sessionFiles.filter((f) => f.name !== name);
-    if (opfs)
-        await (await uploads()).removeEntry(name).catch(() => {});
 }
 
-// ?disk=URL: downloaded once into OPFS (disk-cache/: the image and a .json
-// with its URL and ETag), revalidated on later visits (304: the copy is
-// current), mounted from there: disk-backed, never whole in memory. If the
-// server can't be reached, the cached copy. Without OPFS: into memory, per
-// visit.
-async function diskCache() {
-    return (await uploads()).getDirectoryHandle('disk-cache', { create: true });
-}
+// A ?disk= is not downloaded first: the Worker reads it as Executor needs
+// it (overlay.js: RemoteImage). Where the server gives no ranges (or
+// ?lazy=0): downloaded into memory.
+// A disk's identity, for its overlay's key (overlay.js): the server's
+// content id (X-Image-Id, tools/standalone), name -> id.
+const imageIds = {};
+const plainKey = (name, size, time) => `${name}-${size}-${time}`.replace(/[^\w.-]/g, '_');
 
-async function cacheKey(url) {
-    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(url));
-    return Array.from(new Uint8Array(digest).slice(0, 12), (b) => b.toString(16).padStart(2, '0')).join('');
-}
-
-async function readJson(dir, name) {
-    try {
-        return JSON.parse(await (await (await dir.getFileHandle(name)).getFile()).text());
-    } catch {
-        return null;
-    }
-}
-
-async function fetchDisk(url) {
+// starting: the progress to the loading panel's Disks step (else the status).
+async function fetchDisk(url, { starting = false } = {}) {
     const absolute = new URL(url, location.href).href;
     const name = decodeURIComponent(new URL(absolute).pathname.split('/').pop());
     const progress = (got, total) => {
+        if (starting)
+            return Loading.step('disks', { got, total });
         status.textContent = total ? `Loading ${name}… ${Math.floor(got * 100 / total)}%`
                                    : `Loading ${name}… ${(got / 1e6).toFixed(0)} MB`;
     };
-    const dir = opfs ? await diskCache() : null;
-    const key = dir ? await cacheKey(absolute) : null;
-    const meta = dir ? await readJson(dir, `${key}.json`) : null;
-    // Its OPFS time kept: an image's overlay (overlay.js) is for this version.
-    const cached = async () => {
-        const f = await (await dir.getFileHandle(`${key}.img`)).getFile();
-        return new File([f], name, { lastModified: f.lastModified });
-    };
-
-    let res;
-    try {
-        // no-store: the browser's HTTP cache would keep a second copy.
-        res = await fetch(absolute, { cache: 'no-store',
-                                      headers: meta && meta.etag ? { 'If-None-Match': meta.etag } : {} });
-    } catch (e) {
-        if (meta)
-            return cached();            // offline: what we have
-        throw e;
+    if (starting)
+        Loading.step('disks', { detail: `${name}…` });
+    // A Range request for its first byte: a 206 says the server (and any
+    // proxy) gives ranges, and the size.
+    const lazy = params.get('lazy');
+    if (lazy !== '0') {
+        const abort = new AbortController();
+        let probe = null;
+        try {
+            probe = await fetch(absolute, { cache: 'no-store', headers: { Range: 'bytes=0-0' }, signal: abort.signal });
+        } catch { }
+        const range = probe && probe.status === 206 && /^bytes 0-0\/(\d+)$/.exec(probe.headers.get('Content-Range') || '');
+        abort.abort();
+        const size = range && Number(range[1]);
+        if (size) {
+            if (probe.headers.get('X-Image-Id'))
+                imageIds[name] = probe.headers.get('X-Image-Id');
+            return { name, size, lastModified: Date.parse(probe.headers.get('Last-Modified')) || 0,
+                     remote: { url: absolute, etag: probe.headers.get('ETag') } };
+        }
     }
-    if (res.status === 304 && meta)
-        return cached();
+
+    // no-store: the browser's HTTP cache would keep a second copy.
+    const res = await fetch(absolute, { cache: 'no-store' });
     if (!res.ok)
         throw new Error(`${name}: ${res.status}`);
     // Compressed in transit, Content-Length is the compressed size;
-    // tools/web/serve.py says the real one.
+    // tools/standalone says the real one (X-Decoded-Length).
     const total = Number(res.headers.get('X-Decoded-Length'))
         || (res.headers.get('Content-Encoding') ? 0 : Number(res.headers.get('Content-Length')) || 0);
     const reader = res.body.getReader();
     let got = 0;
-    if (!dir) {
-        const chunks = [];
-        for (let r; !(r = await reader.read()).done;) {
-            chunks.push(r.value);
-            progress(got += r.value.length, total);
-        }
-        return new File(chunks, name);
+    const chunks = [];
+    for (let r; !(r = await reader.read()).done;) {
+        chunks.push(r.value);
+        progress(got += r.value.length, total);
     }
-    // Into OPFS as it arrives; the file is replaced only when complete
-    // (createWritable writes a swap file and commits at close).
-    const out = await (await dir.getFileHandle(`${key}.img`, { create: true })).createWritable();
-    try {
-        for (let r; !(r = await reader.read()).done;) {
-            await out.write(r.value);
-            progress(got += r.value.length, total);
-        }
-        await out.close();
-    } catch (e) {
-        await out.abort();
-        throw e;
-    }
-    const w = await (await dir.getFileHandle(`${key}.json`, { create: true })).createWritable();
-    await w.write(JSON.stringify({ url: absolute, name, etag: res.headers.get('ETag'),
-                                   lastModified: res.headers.get('Last-Modified'), size: got }));
-    await w.close();
-    return cached();
+    if (res.headers.get('X-Image-Id'))
+        imageIds[name] = res.headers.get('X-Image-Id');
+    return new File(chunks, name);
 }
 
+const IMAGE = /\.(img|image|dsk|hfs|iso|toast|cdr)$/i;
+const systemSelect = document.createElement('select');
+systemSelect.id = 'system';
+
 // ---- the library: disks the site offers (library.json), picked by the user
-const libraryBox = document.getElementById('library-box');
-const librarySelect = document.getElementById('library');
+// (the disks.mounted setting: the Disks panel, or the Settings dialog's
+// list). The page follows the setting while Executor runs: a disk added
+// goes into the Mac at once, one taken off comes out.
 let library = [];
-const picked = () => JSON.parse(localStorage.getItem('executor-library') || '[]');
+const picked = () => Settings.get('disks.mounted') || [];
+Settings.provide('library', () => library);
+const href = (u) => new URL(u, location.href).href;
+const fileName = (url) => decodeURIComponent(new URL(url, location.href).pathname.split('/').pop());
 
 async function loadLibrary() {
     try {
@@ -184,89 +180,178 @@ async function loadLibrary() {
 }
 
 function showLibrary() {
-    const have = new Set([...params.getAll('disk'), ...picked()].map((u) => new URL(u, location.href).href));
-    const offer = library.filter((d) => !have.has(new URL(d.url, location.href).href));
-    librarySelect.replaceChildren(new Option('Add a disk…', ''),
-        ...offer.map((d) => {
-            const o = new Option(d.title, d.url);
-            o.title = d.note || '';
-            return o;
-        }));
-    libraryBox.hidden = offer.length === 0;
+    showSystems(shownFiles);        // (and the panel)
 }
 
-librarySelect.addEventListener('change', async () => {
-    const url = librarySelect.value;
-    if (!url)
-        return;
-    localStorage.setItem('executor-library', JSON.stringify([...picked(), url]));
-    showLibrary();
-    generation++;                   // restarting, once it is downloaded
-    window.executor.frames = 0;
-    try {
-        const file = await fetchDisk(url);
-        sessionFiles = sessionFiles.filter((f) => f.name !== file.name).concat(file);
-    } catch (e) {
-        status.textContent = `Cannot load ${url}: ${e.message}`;
-    }
-    start();
-});
+function addLibraryDisk(url) {
+    if (url && !picked().some((u) => href(u) === href(url)))
+        return Settings.set({ disks: { mounted: [...picked(), url] } });
+}
 
-// A library disk the user removes is forgotten too.
+// A library disk taken out is forgotten too.
 function forgetLibraryDisk(name) {
-    const keep = picked().filter((u) => decodeURIComponent(new URL(u, location.href).pathname.split('/').pop()) !== name);
-    localStorage.setItem('executor-library', JSON.stringify(keep));
-    showLibrary();
+    const keep = picked().filter((u) => fileName(u) !== name);
+    if (keep.length !== picked().length)
+        return Settings.set({ disks: { mounted: keep } });
 }
 
 async function fetchDisks() {
+    await modeKnown;
+    await Settings.ready;
     loadLibrary();
-    for (const url of [...params.getAll('disk'), ...picked()]) {
+    const urls = [...params.getAll('disk'), ...picked()];
+    let failed = 0;
+    for (const url of urls) {
         try {
-            const file = await fetchDisk(url);
+            const file = await fetchDisk(url, { starting: true });
             sessionFiles = sessionFiles.filter((f) => f.name !== file.name).concat(file);
         } catch (e) {
+            failed++;
             status.textContent = `Cannot load ${url}: ${e.message}`;
         }
     }
+    // (read by Range: as Executor needs them, not now)
+    Loading.step('disks', { state: failed ? 'error' : 'done',
+                            detail: !urls.length ? 'none' : failed ? `${failed} of ${urls.length} not loaded`
+                                  : urls.length === 1 ? '1 disk' : `${urls.length} disks` });
 }
 
-// Disk images are writable through an overlay in OPFS (overlay.js), per
-// exact version of the image (the Worker computes the same key).
+// Disk images are writable through an overlay (overlay.js) kept by the
+// server, per exact version of the image (the Worker computes the same key).
 function imageKey(f) {
-    return `${f.name}-${f.size}-${f.lastModified}`.replace(/[^\w.-]/g, '_');
+    return imageIds[f.name] ? `${f.name}-${imageIds[f.name]}`.replace(/[^\w.-]/g, '_')
+                            : plainKey(f.name, f.size, f.lastModified);
 }
-let imageState = {};                // name -> { modified, writable }, from the Worker
+let imageState = {};                // name -> { modified, changed, writable, onServer }, from the Worker
 
-function link(text, title, onclick) {
-    const a = document.createElement('a');
-    a.textContent = text;
-    a.title = title;
-    a.onclick = onclick;
-    return a;
+// ---- disks in and out of the running Mac ----
+// Executor running: a disk goes in at once (the Worker opens it, Executor
+// mounts it as a floppy put in: web_main.cpp 'mount'); not yet, at the start.
+const live = () => !!worker && window.executor.frames > 0;
+const inserting = new Set();        // names on their way in
+const reverting = new Set();        // taken out to be put back
+const ejectWaits = new Map();       // name -> resolve, for 'ejected'
+const FBSY = -47, NSV = -35;
+// CDs are read-only (Executor mounts them locked).
+const isCD = (name) => /\.(iso|toast|cdr)$/i.test(name)
+    || library.some((d) => fileName(d.url) === name && (d.tags || []).includes('cd'));
+
+async function putIn(file) {
+    if (!live())
+        return start();
+    inserting.add(file.name);
+    showDisks();
+    const r = await window.executor.request('insert', { file, cd: isCD(file.name), ids: { ...imageIds } });
+    inserting.delete(file.name);
+    if (r !== 0)
+        status.textContent = `${file.name}: not mounted (${r === NSV ? 'no Mac volume on it' : r === -1 ? 'cannot open it'
+                                                           : (r && r.error) || r})`;
+    showFiles(await storedFiles());
 }
 
-async function showFiles(files) {
-    const list = document.getElementById('files');
-    list.replaceChildren(...files.map((f) => {
-        const s = document.createElement('span');
-        const st = imageState[f.name];
-        s.textContent = f.name + (st && st.modified ? ' •' : '');
-        if (st)
-            s.title = st.modified ? 'changed (kept in this browser; the original is untouched)'
-                    : st.writable ? 'writable' : 'read-only (open in another tab?)';
-        if (IMAGE.test(f.name)) {
-            s.append(link('⤓', 'Download the image as it is now', () => download(f.name)));
-            if (st && st.modified)
-                s.append(link('↺', 'Revert: forget the changes to this image', () => revert(f)));
+// Out of the Mac: 0 when it is (the Worker has saved its changes and let it
+// go: 'ejected'), else the OSErr (fBsyErr: in use).
+function takeOut(name) {
+    return new Promise((resolve) => {
+        ejectWaits.set(name, resolve);
+        window.executor.request('eject', name).then((r) => {
+            if (r !== 0 && r !== NSV) {
+                ejectWaits.delete(name);
+                resolve(r && r.error ? -1 : r);
+            }
+        });
+    });
+}
+
+// Ejected, here or in the Finder: out of the panel. A library disk (an
+// upload too: it is in the library) is forgotten from the setting, still
+// in the library; one held for this visit only is dropped.
+async function ejected(name) {
+    delete imageState[name];
+    const wait = ejectWaits.get(name);
+    ejectWaits.delete(name);
+    if (wait)
+        wait(0);
+    if (reverting.has(name) || name === systemSelect.value)
+        return;
+    shownFiles = shownFiles.filter((f) => f.name !== name);    // (before the setting changes: followPicked)
+    await remove(name);
+    await forgetLibraryDisk(name);
+    showFiles(await storedFiles());
+}
+
+async function eject(name) {
+    if (!IMAGE.test(name) || !live()) {
+        // An application, or Executor not running: off the list (an
+        // application stays in "executor:Uploads" until Executor restarts).
+        await ejected(name);
+        return;
+    }
+    const r = await takeOut(name);
+    if (r === FBSY)
+        status.textContent = `${name} is in use: quit what has files open on it, then eject it`;
+    else if (r !== 0)
+        status.textContent = `${name}: not ejected (${r})`;
+}
+
+// Followed while Executor runs: library disks added (here, in the Settings
+// dialog, by an upload) go in; ones taken off come out.
+async function followPicked(urls) {
+    if (!live())
+        return showDisks();
+    const want = new Set(urls.map(href));
+    for (const url of urls) {
+        const name = fileName(url);
+        if (shownFiles.some((f) => f.name === name) || inserting.has(name))
+            continue;
+        inserting.add(name);
+        showDisks();
+        try {
+            const file = await fetchDisk(url);
+            sessionFiles = sessionFiles.filter((f) => f.name !== file.name).concat(file);
+            inserting.delete(name);
+            await putIn(file);
+        } catch (e) {
+            inserting.delete(name);
+            status.textContent = `Cannot load ${url}: ${e.message}`;
+            showDisks();
         }
-        s.append(link('✕', 'Remove', async () => {
-            await remove(f.name);
-            forgetLibraryDisk(f.name);
-            start();
-        }));
-        return s;
-    }));
+    }
+    for (const d of library)
+        if (!want.has(href(d.url)) && shownFiles.some((f) => f.name === fileName(d.url)) && !ejectWaits.has(fileName(d.url))
+            && fileName(d.url) !== systemSelect.value && !params.getAll('disk').some((u) => href(u) === href(d.url)))
+            takeOut(fileName(d.url));
+}
+Settings.on('disks.mounted', (v) => followPicked(v || []));
+
+// ---- the Disks panel (disks.js): what is in the Mac, from the files and
+// the Worker's word on each image, its title and cover from the library.
+let shownFiles = [];
+
+function showFiles(files) {
+    shownFiles = files;
+    showSystems(files);             // (and the panel)
+}
+
+function showDisks() {
+    const byName = new Map(library.map((d) => [fileName(d.url), d]));
+    const kind = (name, size) => !IMAGE.test(name) ? 'app' : isCD(name) ? 'cd'
+        : (size || 0) <= 1440 * 1024 ? 'floppy' : 'hd';
+    const mounted = shownFiles.filter((f) => f.name !== systemSelect.value).map((f) => {
+        const d = byName.get(f.name) || {};
+        return { name: f.name, title: d.title || f.name, cover: d.cover, kind: kind(f.name, f.size),
+                 state: imageState[f.name], inserting: inserting.has(f.name) };
+    });
+    for (const name of inserting)
+        if (!mounted.some((m) => m.name === name)) {
+            const d = byName.get(name) || {};
+            mounted.push({ name, title: d.title || name, cover: d.cover, kind: kind(name, d.size), inserting: true });
+        }
+    const sel = systemSelect.selectedOptions[0];
+    const sys = shownFiles.find((f) => f.name === systemSelect.value);
+    Disks.update({ system: { value: systemSelect.value, label: sel ? sel.textContent : "Executor's own",
+                             disk: sys && { name: sys.name, kind: 'hd', state: imageState[sys.name] } },
+                   mounted, library, mountedUrls: [...params.getAll('disk'), ...picked()] });
 }
 
 async function download(name) {
@@ -280,37 +365,120 @@ async function download(name) {
     setTimeout(() => URL.revokeObjectURL(a.href), 60000);
 }
 
-// The Worker goes without saving (its overlay handles with it), then the
-// overlay is deleted and Executor starts again on the original.
+// Revert: the disk out of the Mac, the server forgets its changes, back in
+// as it came. In use (or the System's): the Worker goes without saving and
+// Executor starts again on the original.
 async function revert(f) {
-    if (!confirm(`Forget all changes to ${f.name}?`))
+    if (!confirm(`Forget all changes to ${f.name}? The disk goes back to how it came.`))
         return;
+    if (live() && f.name !== systemSelect.value) {
+        reverting.add(f.name);
+        const r = await takeOut(f.name);
+        if (r === 0) {
+            await fetch(`api/sync/overlays/${imageKey(f)}`, { method: 'DELETE', cache: 'no-store' }).catch(() => {});
+            reverting.delete(f.name);
+            delete imageState[f.name];
+            await putIn(f);
+            return;
+        }
+        reverting.delete(f.name);
+        if (r === FBSY && !confirm(`${f.name} is in use. Restart Executor to revert it?`))
+            return;
+    }
     generation++;
     if (worker)
         worker.terminate();
     worker = null;
-    const overlays = await (await uploads()).getDirectoryHandle('overlays', { create: true });
-    for (let i = 0; i < 20; i++) {                  // until the old Worker lets go
-        try {
-            await overlays.removeEntry(imageKey(f), { recursive: true });
-            break;
-        } catch (e) {
-            if (e.name === 'NotFoundError')
-                break;
-            await new Promise((r) => setTimeout(r, 100));
-        }
-    }
     delete imageState[f.name];
+    await fetch(`api/sync/overlays/${imageKey(f)}`, { method: 'DELETE', cache: 'no-store' }).catch(() => {});
     start();
 }
 
+// A disk image the user adds goes into the server's library
+// (tools/standalone uploads.go) and is mounted from there, so it and its
+// changes are kept; resolves to its library entry. Rejects with .status
+// (409: there is one of that name, { replace: true } replaces it).
+async function uploadImage(file, { replace = false } = {}) {
+    status.textContent = `Uploading ${file.name}…`;
+    const res = await fetch(`api/uploads/${encodeURIComponent(file.name)}${replace ? '?replace=1' : ''}`,
+                            { method: 'POST', body: file, cache: 'no-store' });
+    if (!res.ok) {
+        const e = new Error((await res.json().catch(() => ({}))).error || `${res.status}`);
+        e.status = res.status;
+        throw e;
+    }
+    const entry = await res.json();
+    await loadLibrary();
+    await Settings.set({ disks: { mounted: [...picked().filter((u) => u !== entry.url), entry.url] } });
+    showLibrary();
+    const disk = await fetchDisk(entry.url);
+    sessionFiles = sessionFiles.filter((f) => f.name !== disk.name).concat(disk);
+    return entry;
+}
+
+// Added by the panel's button or dropped: disk images uploaded into the
+// library and put in (while Executor runs: followPicked, at once); an
+// application (into "executor:Uploads") restarts Executor, whose volume
+// doesn't see a file put there under it.
+async function addFiles(files) {
+    const restart = !live() || files.some((f) => !IMAGE.test(f.name));
+    if (restart) {
+        generation++;               // restarting (once the files are stored)
+        window.executor.frames = 0;
+    }
+    for (const f of files) {
+        if (!IMAGE.test(f.name)) {
+            await store(f);
+            continue;
+        }
+        try {
+            await uploadImage(f).catch((err) => {
+                if (err.status === 409 && confirm(`Replace the uploaded ${f.name} (and its changes)?`))
+                    return uploadImage(f, { replace: true });
+                throw err;
+            });
+        } catch (err) {
+            status.textContent = `${f.name} isn't kept on the server (${err.message}): for this visit only`;
+            await store(f);
+            if (!restart)
+                await putIn(f);
+        }
+    }
+    if (restart)
+        return start();
+    showFiles(await storedFiles());
+}
 document.getElementById('add').addEventListener('change', async (e) => {
-    generation++;                   // restarting (once the files are stored)
-    window.executor.frames = 0;
-    for (const f of e.target.files)
-        await store(f);
+    const files = [...e.target.files];
     e.target.value = '';
-    start();
+    addFiles(files);
+});
+
+// One's upload deleted from the server's library (tools/standalone: the
+// image, its record and its overlay).
+async function removeUpload(d) {
+    if (!confirm(`Delete ${d.title} from the server? The image and its changes are gone.`))
+        return;
+    const res = await fetch(`api/uploads/${encodeURIComponent(fileName(d.url))}`, { method: 'DELETE', cache: 'no-store' })
+        .catch(() => null);
+    if (!res || !res.ok)
+        status.textContent = `${d.title}: not deleted (${res ? res.status : 'the server can\'t be reached'})`;
+    await loadLibrary();
+}
+
+Disks.init({
+    add: addFiles,
+    insert: (d) => addLibraryDisk(d.url),
+    removeUpload,
+    eject,
+    revert(name) {
+        const f = shownFiles.find((x) => x.name === name);
+        if (f)
+            revert(f);
+    },
+    download,
+    reset,
+    systemSelect,
 });
 document.getElementById('restart').addEventListener('click', () => start());
 
@@ -321,39 +489,279 @@ function volumeKey(files) {
     return sys ? `${sys.name}-${sys.size}`.replace(/[^\w.-]/g, '_') : 'own';
 }
 
-document.getElementById('reset').addEventListener('click', async () => {
+// Screenshots, to the server beside this session's log (/api/shot): the
+// canvas's own pixels (the display scale) and Executor's 1x frame (when
+// Executor still answers), with a note. The button asks for the note;
+// errors take one by themselves (autoShot), a few a session at most.
+function pngOf(p) {
+    const c = document.createElement('canvas');
+    c.width = p.width;
+    c.height = p.height;
+    c.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(p.data), p.width, p.height), 0, 0);
+    return new Promise((resolve) => c.toBlob(resolve, 'image/png'));
+}
+
+async function postShot(png, note, tag = '') {
+    try {
+        const res = await fetch(`/api/shot?session=${Log.session}&note=${encodeURIComponent(note)}${tag ? '&tag=' + tag : ''}`, {
+            method: 'POST', body: png, credentials: 'same-origin', headers: { 'Content-Type': 'image/png' } });
+        return res.ok ? (await res.json()).name : `not sent (${res.status})`;
+    } catch {
+        return 'not sent (offline)';
+    }
+}
+
+const within = (promise, ms) => Promise.race([promise, new Promise((r) => setTimeout(() => r(null), ms))]);
+
+async function sendShots(note) {
+    if (!worker)
+        return 'no screen';
+    const scaled = await within(window.executor.request('pixels'), 3000);
+    if (!scaled || !scaled.width)
+        return 'no screen';
+    const name = await postShot(await pngOf(scaled), note);
+    if (scale !== 1) {
+        const base = await within(window.executor.request('screen1x'), 3000);   // Executor gone: none
+        if (base && base.width)
+            await postShot(await pngOf(base), `1x of ${name}`, '1x');
+    }
+    console.log(`[web] screenshot ${name}${note ? ': ' + note : ''}`);
+    return name;
+}
+
+document.getElementById('shot').addEventListener('click', async () => {
+    const note = prompt('A note to go with the screenshot (optional):', '');
+    if (note === null)
+        return;
+    const name = await sendShots(note);
+    status.textContent = /^\d/.test(name) ? `Screenshot sent (${name})` : `Screenshot ${name}`;
+});
+
+let autoShots = 0, lastAutoShot = 0;
+function autoShot(why) {
+    if (autoShots >= 8 || performance.now() - lastAutoShot < 20000)
+        return;
+    autoShots++;
+    lastAutoShot = performance.now();
+    sendShots(`auto: ${why}`.slice(0, 400));
+}
+
+// Watching from the server: which application is in front (when it
+// changes), and Executor no longer answering (3 requests in a row: hung,
+// or the module died).
+let lastApp = null, unanswered = 0;
+setInterval(async () => {
+    if (!worker || document.hidden || !window.executor.frames)
+        return;
+    const app = await within(window.executor.request('app'), 2500);
+    if (app === null) {
+        if (++unanswered === 3) {
+            console.log('[watch] Executor not answering');
+            autoShot('Executor not answering');
+        }
+        return;
+    }
+    if (unanswered >= 3)
+        console.log('[watch] Executor answering again');
+    unanswered = 0;
+    if (app !== lastApp) {
+        console.log(`[watch] front: ${app || '(none)'}`);
+        lastApp = app;
+    }
+}, 3000);
+
+async function reset() {
     if (!confirm("Forget everything saved on Executor's disk for this System?"))
         return;
     if (worker)
         worker.terminate();
     worker = null;
-    if (opfs) {
-        const volumes = await (await uploads()).getDirectoryHandle('volumes', { create: true });
-        await volumes.removeEntry(volumeKey(await storedFiles()), { recursive: true }).catch(() => {});
-    }
+    await fetch(`api/sync/volumes/${volumeKey(await storedFiles())}`, { method: 'DELETE', cache: 'no-store' }).catch(() => {});
     start();
-});
+}
 
 // Leaving or hiding the page: the Worker saves what changed now.
 document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden' && worker)
+    if (!worker)
+        return;
+    if (document.visibilityState === 'hidden')
         worker.postMessage({ type: 'save' });
 });
 
-// The System to run on: Executor's own (''), or a disk image's (its name),
-// remembered across visits.
-const IMAGE = /\.(img|image|dsk|hfs|iso|toast|cdr)$/i;
-const systemSelect = document.getElementById('system');
-systemSelect.addEventListener('change', () => {
-    localStorage.setItem('executor-system', systemSelect.value);
+// The System to run on: Executor's own (''), a disk image's (its name), or
+// a library System disk's (its url: put in, then that), remembered across
+// visits. The choice is in the Disks panel (disks.js).
+systemSelect.addEventListener('change', async () => {
+    const value = systemSelect.value;
+    const d = library.find((x) => x.url === value);
+    generation++;
+    await saveAndStop();            // (not live: the disk waits for the start)
+    if (d) {
+        const mounted = picked().some((u) => href(u) === href(d.url)) ? picked() : [...picked(), d.url];
+        await Settings.set({ machine: { system: fileName(d.url) }, disks: { mounted } });
+        try {
+            const file = await fetchDisk(d.url);
+            sessionFiles = sessionFiles.filter((f) => f.name !== file.name).concat(file);
+        } catch (e) {
+            status.textContent = `Cannot load ${d.url}: ${e.message}`;
+        }
+    } else {
+        await Settings.set({ machine: { system: value } }).catch(() => {});
+    }
     start();
+});
+Settings.provide('systems', () => [...systemSelect.options].map((o) => o.value).filter((v) => v && !v.includes('/')));
+
+// Fat applications' PowerPC code (mac-phoenix's --executor-ppc), remembered.
+const ppcBox = document.getElementById('ppc');
+Settings.on('machine.ppc', (v) => { ppcBox.checked = v; });
+ppcBox.addEventListener('change', () => {
+    Settings.set({ machine: { ppc: ppcBox.checked } }).finally(start);
 });
 
 function showSystems(files) {
-    const want = params.get('system') || localStorage.getItem('executor-system') || '';
+    const want = Settings.get('machine.system');
+    const title = (name) => (library.find((d) => fileName(d.url) === name) || {}).title;
+    const offered = library.filter((d) => (d.tags || []).includes('system') && !files.some((f) => f.name === fileName(d.url)));
     systemSelect.replaceChildren(new Option("Executor's own", ''),
-        ...files.filter((f) => IMAGE.test(f.name)).map((f) => new Option(f.name, f.name)));
+        ...files.filter((f) => IMAGE.test(f.name) && !isCD(f.name)).map((f) => new Option(title(f.name) || f.name, f.name)),
+        ...offered.map((d) => new Option(`${d.title} (from the library)`, d.url)));
     systemSelect.value = [...systemSelect.options].some((o) => o.value === want) ? want : '';
+    showDisks();
+}
+
+// ---- the server: tools/standalone (api/me's mode), the tab's store ----
+let standalone = false;
+const modeKnown = (async () => {
+    let me = null, code = 0;
+    try {
+        const res = await fetch('api/me', { cache: 'no-store' });
+        code = res.status;
+        me = res.ok ? await res.json() : null;
+    } catch { }
+    standalone = !!me && me.mode === 'standalone';
+    if (code === 401 || code === 403)
+        lostClaim(code);
+    else if (!standalone)
+        status.textContent = "Executor's tab needs its server: tools/standalone (docs/executor/Standalone.md)";
+})();
+
+// ---- standalone: one tab in control (tools/standalone's session.go) ----
+// This tab says it is there every BEAT ms while it watches; in control,
+// its Worker does (its timers aren't held back in a background tab) and
+// says what the server answered ('session'). Taken over: saved, stopped,
+// let go, watching. The beacons: what the Worker hasn't stored yet.
+const BEAT = 2000, HANDOVER = 6000;
+let control = false, watching = null, storeBeacons = [];
+const viewer = document.getElementById('viewer');
+
+async function beat(take = false) {
+    try {
+        const res = await fetch(`api/session?id=${Log.session}${take ? '&take=1' : ''}`,
+                                { method: 'POST', cache: 'no-store' });
+        if (res.status === 401 || res.status === 403)
+            lostClaim(res.status);
+        return res.ok ? await res.json() : null;
+    } catch {
+        return null;
+    }
+}
+
+// tools/standalone (claim.go): the first browser to load the tab has the
+// server until it stops. Refused now (401: it restarted; 403: and another
+// browser has it), this tab's cookie opens nothing: a reload claims it
+// again. Said once, and kept over other notices.
+let claimLost = false;
+function lostClaim(code) {
+    if (claimLost)
+        return;
+    claimLost = true;
+    const reload = document.createElement('button');
+    reload.id = 'reload';
+    reload.textContent = 'Reload';
+    reload.onclick = () => location.reload();
+    Loading.end();
+    status.replaceChildren(code === 403 ? 'The server has restarted and another browser has it now. '
+                                        : 'The server has restarted: reload this page to go on. ', reload);
+    status.classList.add('lost');
+}
+
+// In control (s: the server's answer): after the tab it was taken from
+// let go (it saves first), Executor starts.
+async function takeControl(s) {
+    control = true;
+    clearTimeout(watching);
+    watching = null;
+    viewer.hidden = true;
+    for (const end = Date.now() + HANDOVER; s && s.handing && Date.now() < end;) {
+        await new Promise((r) => setTimeout(r, 300));
+        s = await beat();
+    }
+    start();
+}
+
+// Another tab is in control: its screen, a PNG a second, until this one
+// takes control (the button) or gets it (the other one gone).
+async function watch() {
+    const s = await beat();
+    if (s && s.control)
+        return takeControl(s);
+    viewer.hidden = false;
+    Loading.end();
+    if (!claimLost)
+        status.textContent = s ? 'Executor is open in another tab: watching it here' : 'The server can\'t be reached';
+    let img = box.querySelector('img');
+    if (!img) {
+        img = document.createElement('img');
+        img.id = 'screen';
+        box.replaceChildren(img);
+    }
+    img.style.width = `${width}px`;
+    const next = new Image();
+    next.onload = () => { img.src = next.src; };
+    next.src = `api/session/screen?t=${Date.now()}`;
+    watching = setTimeout(watch, BEAT);
+}
+
+document.getElementById('take').addEventListener('click', async () => {
+    const s = await beat(true);
+    if (s && s.control)
+        takeControl(s);
+});
+
+// Executor stopped by an error (worker.js 'stopped': a fatal error of its
+// own, an abort, the wasm trapping): said here, with Restart, and the page
+// goes on (what the disks changed is kept as before).
+function executorStopped(reason) {
+    window.executor.stopped = reason;
+    console.log(`[web] Executor stopped: ${reason}`);
+    autoShot(`stopped: ${reason}`);
+    Loading.end();
+    if (claimLost)
+        return;
+    const again = document.createElement('button');
+    again.id = 'restart-stopped';
+    again.textContent = 'Restart';
+    again.onclick = () => start();
+    status.replaceChildren(`Executor stopped: ${reason} `, again);
+    status.classList.add('lost');
+    status.setAttribute('role', 'alert');
+}
+
+async function lostControl() {
+    control = false;
+    generation++;
+    await saveAndStop();
+    navigator.sendBeacon(`api/session/release?id=${Log.session}`);
+    watch();
+}
+
+function storeLast() {
+    if (!standalone || !control)
+        return;
+    for (const b of storeBeacons)
+        navigator.sendBeacon(b.url, b.body);
+    navigator.sendBeacon(`api/session/release?id=${Log.session}`);
 }
 
 // ---- the Worker ----
@@ -378,7 +786,22 @@ async function saveAndStop() {
         worker = null;
 }
 
+// The Settings dialog's "Restart Executor": what changed, saved, and the
+// page again (the library's disks too).
+Settings.restart = async () => {
+    generation++;
+    await saveAndStop();
+    location.reload();
+};
+
 async function start() {
+    await Settings.ready;
+    machine();
+    await modeKnown;
+    if (!standalone)
+        return;                     // (modeKnown said why)
+    if (!control)
+        return watching || watch();
     const mine = ++generation;
     window.executor.frames = 0;     // "running" means the new Worker's frames
     await saveAndStop();
@@ -388,14 +811,29 @@ async function start() {
         resolve({ error: 'restarted' });
     pending.clear();
     window.executor.frames = 0;
-    status.textContent = 'Loading Executor…';
+    window.executor.stopped = null;
+    if (!claimLost) {
+        status.classList.remove('lost');
+        status.removeAttribute('role');
+    }
+    status.textContent = '';
+    Loading.begin();
+    box.replaceChildren(Loading.el);
 
-    // The Worker loads the module while the disks still download.
+    // The Worker loads the module while the disks still download; it
+    // says how far it has got from the start ('progress': loading.js).
     worker = new Worker('worker.js');
+    worker.addEventListener('message', (e) => {
+        if (e.data.type === 'progress' && mine === generation)
+            Loading.step(e.data.step, e.data);
+    });
+    worker.addEventListener('error', (e) => {
+        console.error(`worker: ${e.message} at ${e.filename}:${e.lineno}`);
+        autoShot(e.message);
+    });
     await disksFetched;
     const files = await storedFiles();
     showFiles(files);
-    showSystems(files);
 
     // A canvas hands its control over once: a fresh one per start.
     canvas = document.createElement('canvas');
@@ -403,25 +841,38 @@ async function start() {
     canvas.width = width;
     canvas.height = height;
     canvas.tabIndex = 0;
-    box.replaceChildren(canvas);
+    box.replaceChildren(canvas, Loading.el);       // (over the screen until its first frame)
     fitCanvas();
     attachInput(canvas);
-    cursor = new MacCursor(canvas, () => canvas.width);
+    cursor = new MacCursor(canvas, () => width);
 
     const offscreen = canvas.transferControlToOffscreen();
-    worker.postMessage({ type: 'start', canvas: offscreen, width, height, files,
-                         system: systemSelect.value, volumeKey: volumeKey(files) }, [offscreen]);
+    worker.postMessage({ type: 'start', canvas: offscreen, width, height, scale, files,
+                         system: systemSelect.value, ppc: ppcBox.checked,
+                         volumeKey: volumeKey(files), relay: standalone,
+                         standalone,
+                         ids: imageIds, cds: files.map((f) => f.name).filter(isCD), log: Log.session,
+                         ram: Settings.get('machine.ram_mb'), depth: Settings.get('machine.depth'),
+                         logtraps: Settings.get('advanced.logtraps'),
+                         nesting: String(Settings.get('advanced.logtraps_nesting')),
+                         debug: Settings.get('advanced.debug'), ppcbreak: Settings.get('advanced.ppc_break') },
+                       [offscreen]);
+    Settings.started();
     worker.onmessage = (e) => {
         if (mine !== generation)
             return;
         const m = e.data;
         if (m.type === 'frame') {
-            if (window.executor.frames++ === 0)
-                status.textContent = 'Executor';
+            // (a notice from the Worker before it stays)
+            if (window.executor.frames++ === 0) {
+                Loading.end();
+                if (!status.textContent)
+                    status.textContent = 'Executor';
+            }
         } else if (m.type === 'images') {
             const before = JSON.stringify(imageState);
             for (const i of m.images)
-                imageState[i.name] = { modified: i.modified, writable: i.writable };
+                imageState[i.name] = { modified: i.modified, changed: i.changed, writable: i.writable, onServer: i.onServer };
             if (JSON.stringify(imageState) !== before)
                 storedFiles().then(showFiles);
         } else if (m.type === 'cursor') {
@@ -436,24 +887,56 @@ async function start() {
             pending.delete(m.id);
             if (resolve)
                 resolve(m.result);
+        } else if (m.type === 'notice') {
+            if (!claimLost && !window.executor.stopped)
+                status.textContent = m.text;
+        } else if (m.type === 'additions') {
+            // What a disk's applications put in the System Folder, copied
+            // in (web_main.cpp); put in while running, some of it (fonts,
+            // startup code) is in use only after a restart.
+            window.executor.additions[m.name] = m;
+            if (m.live && m.restart.length && !claimLost && !window.executor.stopped)
+                status.textContent = `${m.name}: ${m.copied} files added to the System Folder; `
+                    + `restart to use ${m.restart.join(', ')}`;
+        } else if (m.type === 'ejected') {
+            ejected(m.name);
+        } else if (m.type === 'restart') {
+            start();
+        } else if (m.type === 'beacons') {
+            storeBeacons = m.items;
+        } else if (m.type === 'claim') {
+            lostClaim(m.status);
+        } else if (m.type === 'session') {
+            if (!m.s.control && control)
+                lostControl();
+        } else if (m.type === 'error') {
+            autoShot(m.text);
+        } else if (m.type === 'stopped') {
+            executorStopped(m.reason);
         } else if (m.type === 'exit') {
-            status.textContent = `Executor exited (${m.code})`;
+            if (!window.executor.stopped)
+                status.textContent = `Executor exited (${m.code})`;
         }
     };
 }
 
 // ---- sound: an AudioWorklet (audio.js) fed 48 kHz stereo from the Worker.
-// Browsers start an AudioContext only after a click or key press.
-let audio = null;
+// Browsers start an AudioContext only after a click or key press. The
+// volume (the sound settings) applies at once.
+let audio = null, gain = null;
+const loudness = () => (Settings.get('sound.enabled') ? Settings.get('sound.volume') / 100 : 0);
 async function startAudio() {
-    if (audio || !window.isSecureContext || typeof AudioWorkletNode === 'undefined')
+    if (audio || !window.isSecureContext || typeof AudioWorkletNode === 'undefined' || !Settings.get('sound.enabled'))
         return;     // AudioWorklet: secure contexts only
     const ctx = new AudioContext({ sampleRate: 48000 });
     await ctx.audioWorklet.addModule('audio.js');
     audio = new AudioWorkletNode(ctx, 'executor-audio', { outputChannelCount: [2] });
-    audio.connect(ctx.destination);
+    gain = new GainNode(ctx, { gain: loudness() });
+    audio.connect(gain).connect(ctx.destination);
     await ctx.resume();
 }
+Settings.on('sound.volume', () => gain && (gain.gain.value = loudness()));
+Settings.on('sound.enabled', () => gain && (gain.gain.value = loudness()));
 
 // ---- the canvas's size: the largest whole number of device pixels a guest
 // pixel that fits the window, so every pixel is the same size (a
@@ -462,8 +945,11 @@ function fitCanvas() {
     if (!canvas)
         return;
     const dpr = window.devicePixelRatio || 1;
-    const bar = document.getElementById('bar').offsetHeight + document.getElementById('status').offsetHeight + 32;
-    const fit = Math.min(window.innerWidth * dpr / width, (window.innerHeight - bar) * dpr / height);
+    const bar = document.fullscreenElement ? 0 : document.getElementById('bar').offsetHeight
+        + document.getElementById('status').offsetHeight + 32;
+    // (the Disks panel open: what it leaves)
+    const across = window.innerWidth - (parseFloat(getComputedStyle(document.body).paddingRight) || 0);
+    const fit = Math.min(across * dpr / width, (window.innerHeight - bar) * dpr / height);
     const scale = Math.max(1, Math.floor(fit));     // device pixels a guest pixel
     canvas.style.width = `${width * scale / dpr}px`;
     canvas.style.height = `${height * scale / dpr}px`;
@@ -483,28 +969,59 @@ function send(...events) {
 function attachInput(canvas) {
     const guestPoint = (e) => {
         const r = canvas.getBoundingClientRect();
-        const x = Math.floor((e.clientX - r.left) * canvas.width / r.width);
-        const y = Math.floor((e.clientY - r.top) * canvas.height / r.height);
-        return [Math.max(0, Math.min(canvas.width - 1, x)),
-                Math.max(0, Math.min(canvas.height - 1, y))];
+        // The guest's 1x size: after transferControlToOffscreen the element's
+        // width follows the Worker's (scaled) canvas.
+        const x = Math.floor((e.clientX - r.left) * width / r.width);
+        const y = Math.floor((e.clientY - r.top) * height / r.height);
+        return [Math.max(0, Math.min(width - 1, x)),
+                Math.max(0, Math.min(height - 1, y))];
     };
     canvas.addEventListener('pointermove', (e) => send([1, ...guestPoint(e)]));
+    // The right button: a click, or a Control-click (input.right_click).
+    let controlClick = false;
     canvas.addEventListener('pointerdown', (e) => {
         startAudio();
         canvas.focus();
         canvas.setPointerCapture(e.pointerId);
-        send([1, ...guestPoint(e)], [2, 1, 0]);
+        const at = guestPoint(e);
+        controlClick = e.button === 2 && Settings.get('input.right_click') === 'control';
+        console.log(`[in] down ${at}${controlClick ? ' control' : ''}`);
+        send(...(controlClick ? [[3, 1, 0x36]] : []), [1, ...at], [2, 1, 0]);
         e.preventDefault();
     });
     canvas.addEventListener('pointerup', (e) => {
-        send([1, ...guestPoint(e)], [2, 0, 0]);
+        const at = guestPoint(e);
+        console.log(`[in] up ${at}`);
+        send([1, ...at], [2, 0, 0], ...(controlClick ? [[3, 0, 0x36]] : []));
+        controlClick = false;
         e.preventDefault();
     });
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+    // The wheel and trackpad: lines (a notch's 100 pixels about 3, a page
+    // 15: Executor clicks a page part from 15 on) to Executor, which
+    // clicks the front window's scroll bar under the pointer
+    // (osevent/wheel.cpp; input.wheel_scroll). A trackpad's fractions add up.
+    const wheelLines = [0, 0];
+    canvas.addEventListener('wheel', (e) => {
+        if (!Settings.get('input.wheel_scroll'))
+            return;
+        e.preventDefault();
+        const unit = e.deltaMode === 1 ? 1 : e.deltaMode === 2 ? 15 : 1 / 33;
+        wheelLines[0] += e.deltaX * unit;
+        wheelLines[1] += e.deltaY * unit;
+        const [h, v] = wheelLines.map(Math.trunc);
+        if (!h && !v)
+            return;
+        wheelLines[0] -= h;
+        wheelLines[1] -= v;
+        send([1, ...guestPoint(e)], [4, h, v]);
+    }, { passive: false });
     const onKey = (down, e) => {
         const code = macKeycodeForEvent(e);
         if (code === null)
             return;
+        if (down)
+            console.log(`[in] key ${['ctrlKey', 'altKey', 'metaKey', 'shiftKey'].filter((m) => e[m]).map((m) => m.slice(0, -3) + '+').join('')}${e.code} (${code})`);
         send([3, down ? 1 : 0, code]);
         e.preventDefault();
     };

@@ -42,6 +42,7 @@ while [[ $# -gt 0 ]]; do
         *) echo "Unknown arg: $1"; exit 1 ;;
     esac
 done
+source "$(dirname "$0")/lib/ports.sh"; PORT=$(mp_port "$PORT") || exit 1  # per-worktree (docs/Testing.md)
 
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$PROJECT_ROOT"
@@ -54,14 +55,15 @@ TOOL=tests/guest/ot/OTTest.bin
 [[ -f "$TOOL" ]] || { echo "FAIL: $TOOL missing"; exit 1; }
 
 export MPW_STATE=$(mktemp -d ${TMPDIR:-/tmp}/ottest.XXXXXX)
+export MPW_OWNER_PID=$$   # the session goes when this script does (killed at a timeout too)
 export MPW_PORT=$PORT
 export MPW_OS=$OS_VERSION
-export MPW_SYSTEM="test-ot${CORE:+-$CORE}${NO_ASLM:+-noaslm}-$OS_VERSION.img"
+export MPW_SYSTEM="test-ot${CORE:+-$CORE}${NO_ASLM:+-noaslm}-$OS_VERSION-$$.img"   # per run: worktrees run it at once
 cleanup() {
     $MPW stop
     [[ -n "${ECHO_PID:-}" ]] && kill "$ECHO_PID" 2>/dev/null
     [[ -n "${KEEP_LOG:-}" ]] && cp "$MPW_STATE/emulator.log" "$KEEP_LOG"
-    rm -rf "$MPW_STATE" "$STORAGE/images/$MPW_SYSTEM" \
+    rm -rf "$MPW_STATE" "$STORAGE/images/$MPW_SYSTEM" "$STORAGE/images/$MPW_SYSTEM.json" \
         "$STORAGE/executor-systems/$MPW_SYSTEM" "$STORAGE/executor-systems/$MPW_SYSTEM.clean"
 }
 trap cleanup EXIT

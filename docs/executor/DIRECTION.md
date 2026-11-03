@@ -209,8 +209,18 @@ discussed):
   AudioWorklet; the page stays responsive through long traps. No
   `SharedArrayBuffer` needed, so static hosting holds.
 * **No Apple software on the site.** It boots Executor's own System; users
-  upload a disk image (theirs: an Apple System, applications), kept in
-  OPFS.
+  add disk images (theirs: an Apple System, applications) to the
+  server's library, or upload them for a visit.
+* **One server: the standalone** (decided 2026-11-02). `tools/standalone`
+  (Go, one binary with the tab inside: Standalone.md, WebSite.md) is the
+  only server; it keeps what the tab changes, and the first browser to
+  open it has it until it stops. The hosted Python server
+  (`tools/web/server`: accounts, invitations, each user's changes synced
+  from OPFS) is retired; it is in git history up to the merge of
+  `wash/auth`. So is the static site (the tab on any host, keeping disks
+  and changes in the browser's OPFS; `tools/web/serve.py`,
+  `make_demo.sh`): one mode only, the tab on its server, which keeps
+  everything (W3's OPFS work below is history).
 * **Networking: none at first; the socket layer becomes a host
   interface.** A page can't open TCP/UDP, only fetch, WebSocket, WebRTC,
   WebTransport. Executor's MacTCP and OT are C++ over host sockets, so the
@@ -269,9 +279,87 @@ to use (RAM + 64KB tail, a 16–32MB pool) behind the memory host edge.
 | W1 | wasm under node | `ctest --test-dir build-wasm -L executor`. **Passed 2026-10-23** (Emscripten 5.0.7, node 22): 197/197, the two upstream failures disabled as natively, the network gtests skipped (`hostnet::available()`); 16 s. `emcmake cmake -B build-wasm` takes `cmake/ExecutorWasm.cmake`: Executor, the MAME cores (mame-ppc on `drcbec`, no asmjit), `cpu/host/wasm` (aligned allocations; window 1 64MB; window 3 all memory below `__heap_base`, so the C stack is guest-addressable and the tests run on it), `EXECUTOR_NET=none`, Asyncify, JS exceptions, `NODERAWFS`. What it took besides: libc++ (no `char_traits<unsigned char>`: `mac_string` has `mac_char_traits`; `vector` of an incomplete type in `LocalVolume`; narrowing), SANE's extended conversion by value where `long double` isn't the x87's (also arm64 Linux, macOS arm64), the blitters called through their real type (wasm checks indirect calls' signatures), termios on every POSIX host, `SetDateTime` never setting the host clock, `GuestMemory::PAGE_SIZE` renamed `PAGE_BYTES` (a libc macro), no `execinfo` backtrace. Not exercised yet: process and thread switches (coroutines under Asyncify) |
 | W2 | A tab: Worker, `OffscreenCanvas`, DOM input, Executor's own System | the built-in Browser app in a tab. **Passed 2026-10-23**: `web/executor` (page, Worker, key map) beside `executor-web.js`/`.wasm` (`romlib/config/front-ends/wasm/web_main.cpp`: the `executor_host` contract mac-phoenix uses, on the Worker's one thread). Executor runs on the calling thread wherever its stack is guest-addressable (`main.cpp`), its idle waits and a tick about once a frame between the cores' slices yield to the browser (`rsys/hostidle.h`, `host/wasm/idle.cpp`), and the yield hook takes the page's queued input and renders what changed (`PhoenixVideoDriver::pump`) as RGBA to the canvas. The render pool runs without threads where they can't start. First frame 0.2 s after load (local), menus track the mouse; ctest `executor.web.tab` (headless Chromium: frames, and a press on File opens the menu; skips without playwright). Not yet: process switches (the Browser launches nothing here), sound, files from the user |
 | W3 | A usable site: Finder, OPFS, disk image upload, WebAudio, JS automation (`/api/ui`/`/api/text` on the Worker) | Playwright drives an uploaded application. **Passed 2026-10-23** (`executor.web.apps`): PPCHello and MacPhoenixSuite uploaded through the page (kept in OPFS; disk images mounted read-only from the page's Files with WORKERFS, other files copied into `executor:Uploads`), launched from the Browser with the `launch` request (process switches: the coroutines under Asyncify), PPCHello's PowerPC code passing on mame-ppc's C back-end, the suite's keyboard section getting "hello 123" typed on the canvas, its SysBeep reaching the page's AudioWorklet. Automation is `window.executor.request(op, arg)`: `app`, `windows`, `launch` at the application's next event call, `read`/`write` of the module's files (the Host volume is `/host`). SysBeep where the System has no `'snd ' 1` (Executor's own) is a square wave. Apple's System and Finder from an uploaded image: the page's System choice; `executor_host::sideload_system` (`front-ends/phoenix/hfs_sideload.cpp`, an HFS reader from Inside Macintosh: Files: bare or Apple-partitioned HFS, not HFS+) copies the blessed folder's System, Finder and the six folders `sideload_system.py` takes into Executor's volume, byte-identical but for fuller Finder info, and the Finder starts (7.5.5's in 0.6 s; `executor.web.finder` opens the image's disk with a double-click). Native extraction uses it too now (`executor_systems::sideload_hook`; Python only without Executor). **Boot speed** (2026-10-23): `tools/web/make_boot_disk.py` cuts a boot disk from a System image (the System Folder Executor uses: the policy's extensions only, no Apple Guide, printer drivers, QuickTime or Apple's OT; SimpleText; no desktop database): 7.5.5.img 250 MB (34 used) -> 16 MB, 6 MB gzipped; `tools/web/serve.py` sends pre-compressed files (the module 38 -> 3.7 MB); `tools/web/make_demo.sh` assembles a demo directory. The HFS reader reads whole extents (per-block reads through WORKERFS cost 3 s), the Worker loads the module while the page fetches the disks. The Finder from a link: 0.6 s over loopback, 2.2 s at 50 Mbit/s (was ~49 s: 286 MB uncompressed). **Kept in OPFS** (2026-10-23): `?disk=` downloads stream into OPFS (`disk-cache/`, revalidated by ETag: later visits 0.6 s at 50 Mbit/s, two 304s), the module into Cache Storage the same way; Executor's own volume is saved per System choice (`volumes/KEY/`: a manifest and blobs, every 2 s while running, on hide and before a restart; restored before main, and a saved System Folder is used as is, preferences and all; not System 7.5's `Shutdown Check`), with a Reset button (`executor.web.persist`). **Writable disk images** (2026-10-23): `web/executor/overlay.js`, a copy-on-write overlay per exact image version in OPFS (`overlays/KEY/`: 4 KB blocks in `data`, a block index, written through FileSystemSyncAccessHandle; the index saved with the volume), mounted for Executor as OVERLAYFS in place of WORKERFS (`c.writable_images`); the image itself is never written; per image the page offers the image as changed (a Blob of the original's slices and the changed blocks) and Revert; a changed base image drops its old overlay; another tab holding it: read-only (`executor.web.write`). **Library** (2026-10-23): a `library.json` beside the page (`[{title, url, note}]`) offers disks to add; a pick is remembered (localStorage) and loaded like `?disk=`, ✕ forgets it. `tools/web/make_disk.py` cuts such a disk from chosen top-level folders of other images (MacBinary through hfsutils). Games checked on the tab (7.5.5's Finder, 33 games): 27 run, cut into Arcade (24 MB gzipped) and Strategy & Adventure (23 MB); out: Apache Strike and Dark Castle (illegal instruction), Beyond Dark Castle (FPU), Enchanted Scepters (heap error), SimCity 1.3c (quits to the Finder), Oids (PowerPC: `LMGetCurApName`). Glider PRO overflowed the stack: its sound callback queues more with `SndDoCommand` mid-mix, and the mix started there nested without end (the native stack is merely deeper); `PhoenixSoundDriver` mixes no more inside a mix. `app` and window titles are decoded from MacRoman, `launch` paths encoded to it |
-| W4 | PPC applications on `mame-ppc` + `drcbec` | a PPC application in a tab (StdCLib/MathLib native since 2026-10-26, D6) |
+| W4 | PPC applications on `mame-ppc` + `drcbec` | a PPC application in a tab (StdCLib/MathLib native since 2026-10-26, D6). **Measured 2026-10-31** (`executor.web.ppc`: Apple's 8.6 System from its HFS+ image through the page's System choice and the PowerPC box, `--executor-ppc`'s equivalent; headless Chromium, 640x480). The cores (`test_cpu_cores --bench 50`, a lwz/addi/stw/addic./bne loop, memory through calls as PowerCore has it, inline memory in brackets): native x86-64 back-end 1156 MIPS (1678), native `drcbec` 79 (89), `drcbec` in wasm under node 22 40 (62) before and 77 (66) after dropping `execute()`'s try/catch and fesetround pair on Emscripten (the try sent every call in the loop through a JS `invoke_*`); without Asyncify it would be 86, the instrumentation's price (a host op switches processes from inside `execute()`, so it can't be left out; JSPI later). 8.6, native (x86-64 back-end / `drcbec`) and the tab: the Finder's desktop 1.3 / 1.4 s and 3.0–4.4 s (first visit: 0.4 s of it copies the System Folder out of the image), a disk's window 0.21 / 0.21 and 0.21–0.25 s, PPCHello's report 0.57 / 0.62 and 0.63–0.69 s, Ferazel's Wand (games-ppc) to its CD prompt 0.26 and 0.48 s. The tab's boot profile: 3.2 s busy, 49% of it Executor's File Manager on Emscripten's JS MEMFS (every `stat`/`open` a path walk in JS: `LocalVolume`'s item factories stat and open each entry), 14% the System copy, `drcbec` itself 7%, Asyncify and the yield hook under 1%. Taken: the try/catch, the 68k disassembler built once (alloc-failure reports built a new one per line, 160 ms), the factories use the directory entry's type. A program's `DisposePtr` of a non-block read through a zone word outside memory and killed the tab (natively it reads stray host memory): `legit_addr_p` checks guest memory now. Open: AppleWorks 5.0.3 runs natively on both back-ends but in the tab jumps to 0 after four 68k-to-PowerPC callbacks (wasm only). Mars Rising and Slithereens crash in `FindSymbol`, EV Nova runs into garbage, natively too. **Recommendation: `drcbec` is enough for M1**, C4 stays in M2: in the tab PowerPC applications are bound by the Toolbox and the file system, not by the interpreter (native `drcbec` is within 10% of the x86-64 back-end on all of the above); the next M1 wins are the File Manager on MEMFS (fewer stats, or WASMFS) and the AppleWorks failure. C4's size: a `drcbe_wasm` emitting one module per hot-block batch (the x86-64 back-end is 6.7k lines, `drcbec` 2.6k): about 3–4k lines of C++ and 200 of JS, plus generated code that exits to `execute()` before every host op (Asyncify can't unwind through modules made at run time) |
 
 Then networking (the relay, WebRTC AppleTalk), HiDPI, C4.
+
+#### The network relay
+
+The tab's MacTCP and Open Transport are the native C++ over
+`rsys/hostnet.h`; in the tab that header's backend is
+`host/wasm/net.cpp` (`EXECUTOR_NET=wasm`, the wasm build's default), a
+table of the tab's own sockets. What leaves the tab goes over one
+WebSocket to `/relay` on `tools/standalone` (`relay.go`), opened at the
+first socket that needs it, served by it only (the page tells the Worker,
+`web/executor/net.js`; served elsewhere, or under node, `available()` is
+false). What stays in the tab:
+
+* **Listeners.** `bind`/`listen`/`accept` are the tab's; the relay never
+  listens (a public relay can't take connections for its users, and a
+  relay behind NAT couldn't). A connect to our own address (10.0.2.15,
+  what `ipctlGetAddr` and OT's interface report), or to 127/8 where a
+  socket of the tab has the port, is a pair of sockets here: MacTCP's
+  passive open and OT's `OTListen`/`OTAccept` with a client in the same
+  tab (the suite's `mactcp_passive`, OTTest's `tcp_listen`) work.
+* **Loopback nobody here has** goes to the relay, which takes 127.0.0.1
+  as its own host's and refuses it (as every private address) unless
+  `allow_private`. The tests' echo server is on the relay's host so.
+* UDP to our address with no socket on the port is lost; to another tab
+  socket it is delivered here.
+
+Waiting is yielding: messages arrive while the module yields to the
+browser; each yield (`host/wasm/idle.cpp`) pumps them into the sockets and
+looks at the `hostnet::Watcher`s (no thread: a watcher's interrupt is
+raised from there, or at once when a call in the tab makes its socket
+ready), and `poll`, lookups and blocking sockets yield until done.
+`run_detached` runs its work at once, waiting the same way.
+
+**Protocol** (version 1). One binary WebSocket message is one message:
+`op` (u8), `id` (u32), the op's fields; big-endian, addresses IPv4 as
+u32. `id` is the tab's: a socket's from `CONNECT`/`UDP` to `CLOSE`, a
+lookup's to its answer.
+
+| Tab → relay | Fields | |
+|---|---|---|
+| `0x01 CONNECT` | addr, port (u16) | TCP out; `CONNECTED` or `ERROR` |
+| `0x02 UDP` | | a UDP socket (the relay binds a port) |
+| `0x03 SEND` | bytes | TCP data; at most `window` unacknowledged |
+| `0x04 SENDTO` | addr, port, bytes | a datagram (dropped if the policy refuses it) |
+| `0x05 SHUTDOWN` | | our FIN, after what was sent |
+| `0x06 CLOSE` | flags (u8; 1: reset) | frees the id; also after `ERROR` |
+| `0x07 CREDIT` | n (u32) | n more bytes of `DATA` taken |
+| `0x10 LOOKUP` | name | A records → `ADDRS` |
+| `0x11 REVERSE` | addr | its name → `NAME` |
+| `0x12 QUERY` | class (u16), type (u16), name | `res_query` → `ANSWER` (the reply, wire format) |
+
+| Relay → tab | Fields | |
+|---|---|---|
+| `0x80 HELLO` | version (u16), max sockets (u16), window (u32) | first, id 0 |
+| `0x81 CONNECTED` | | |
+| `0x83 DATA` | bytes | at most `window` not yet credited |
+| `0x84 DATAFROM` | addr, port, bytes | only from hosts the socket sent to |
+| `0x85 EOF` | | the peer's FIN |
+| `0x86 ERROR` | code (u8) | the socket is dead: 1 refused, 2 network unreachable, 3 host unreachable, 4 timed out, 5 reset, 6 not allowed (policy), 7 too many sockets, 8 other |
+| `0x87 ACK` | n (u32) | n bytes of `SEND` written to the peer |
+| `0x90 ADDRS` | code (u8), addrs | code: 0 found, 1 no such name, 2 try again, 3 failed |
+| `0x91 NAME` | code, name | |
+| `0x92 ANSWER` | code, reply | |
+
+Flow control is the window both ways (64 KB a socket): the relay reads
+from a peer only while the tab has room, and holds no more than a window
+of the tab's. The relay pings every 30 s and drops a connection silent for
+90; a protocol error closes it (1008), its sockets with it. Policy
+(`network.relay_*` in its settings, Standalone.md): destination ports from an allow-list
+(the classic services by default), no private, loopback, link-local,
+multicast or broadcast hosts unless `allow_private`, `max_sockets`
+across the tabs, `max_connections` WebSockets; the Origin must be the
+server's. Gates: `executor.web.standalone_server` (go test: the protocol
+from a Go client: echo with flow control, refusals, the policy, UDP, DNS,
+limits) and `executor.web.relay` (MacPhoenixSuite's network and mactcp
+sections and OTTestRetro68K in the tab against `tests/lib/echo_server.py`).
+Not yet (v2): a connect-rate limit (only concurrency is capped now, so a
+tab could scan the allowed public hosts and ports), TLS
+stripping, WebRTC AppleTalk.
 
 ### 5. PPC: MAME's PowerPC recompiler
 
@@ -349,7 +437,7 @@ D2's clean-up of the 68k side; C2 and C3 are independent of D.
 | C1 | MAME's Musashi (PMMU, softfloat FPU, instanceable) as the 68k core | `--core mame-68k` passes every suite UAE and Musashi pass today; two instances in one process; vendored v3.32 retired. **C1a–c done 2026-10-10** (`src/cpu/mame/`); C1d PMMU gate open; **C1e done 2026-10-11** (v3.32 deleted, `musashi` an alias of `mame-68k`) |
 | C2 | MAME's PowerPC recompiler as the PPC core, one base offset | boot matrix PPC cells pass with the UML interpreter, then the x86-64 back-end, then arm64 on Apple Silicon; no `mmap_min_addr`. **C2a–c done 2026-10-10**: `--backend kpx --core mame-ppc` boots 7.5.5 to the Finder, 1.6 s with the x86-64 back-end (`--jit`), and Mac OS 9.0.4 in 10 s with the guest suite passing as on Kheperix; merged to main; arm64 (C2d) and the base offset open |
 | C3 | Host 68k core in place of the nanokernel's 68k emulator | PPC machine boots 7.5.5 to Finder and passes the bridge suites with Musashi running the 68k side; boot and benchmark numbers against the DR emulator. **C3a done 2026-10-10** as a hybrid: host-initiated routines start on Musashi, Apple's 68k dispatcher included, and hand off at routine descriptors; C3b (the main 68k thread) open |
-| C4 | UML→wasm back-end | PPC machine in a tab faster than the interpreter (after D4) |
+| C4 | UML→wasm back-end | PPC machine in a tab faster than the interpreter (after D4). Not needed for M1 (W4's measurements, 2026-10-31): M2 |
 
 D1–D3 and C1–C2 also make the native build portable (macOS, Windows).
 

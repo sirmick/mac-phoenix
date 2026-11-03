@@ -1,29 +1,22 @@
 # sys on Executor (8.6 System) against the G3 (8.6): known differences, one key each
 # (the census and the Gestalt table are where these get fixed). key<TAB>reason.
 gestalt.sysu	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
-gestalt.mach	the machine: Executor presents a Quadra-class 68k Mac with PowerPC, not a G3
-gestalt.proc	the machine: Executor presents a Quadra-class 68k Mac with PowerPC, not a G3
-gestalt.mmu 	the machine: Executor presents a Quadra-class 68k Mac with PowerPC, not a G3
 gestalt.qd  	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
 gestalt.qdrw	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
 gestalt.dict	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
-gestalt.drag	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
 gestalt.thds	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
 gestalt.ppc 	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
 gestalt.os  	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
 gestalt.ascv	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
 gestalt.ascr	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
-gestalt.edtn	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
 gestalt.fold	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
 gestalt.fs  	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
 gestalt.fxfr	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
 gestalt.help	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
 gestalt.icmp	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
-gestalt.kbd 	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
 gestalt.otan	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
 gestalt.otra	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
 gestalt.otvr	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
-gestalt.pclk	the machine: Executor presents a Quadra-class 68k Mac with PowerPC, not a G3
 gestalt.qtim	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
 gestalt.shut	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
 gestalt.snd 	Gestalt: 8.6's answer differs or Executor lacks the selector (per-version table, MacOS8-9.md 'One Toolbox')
@@ -65,3 +58,7 @@ script.roman.38	Script Manager variables: 8.6's (version 8.6, itl caches, ...) v
 script.roman.40	Script Manager variables: 8.6's (version 8.6, itl caches, ...) vs Executor's 7.5-era values
 script.roman.42	Script Manager variables: 8.6's (version 8.6, itl caches, ...) vs Executor's 7.5-era values
 script.roman.44	Script Manager variables: 8.6's (version 8.6, itl caches, ...) vs Executor's 7.5-era values
+gworld.1.new.state	pixPurge: 8.6 makes the pixels purgeable at NewGWorld (pixelsPurgeable); Executor not yet: LockPixels and the blitters would draw through purged pixels
+gworld.1.locked.state	pixPurge: 8.6 makes the pixels purgeable at NewGWorld (pixelsPurgeable); Executor not yet: LockPixels and the blitters would draw through purged pixels
+gworld.1.unlocked.state	pixPurge: 8.6 makes the pixels purgeable at NewGWorld (pixelsPurgeable); Executor not yet: LockPixels and the blitters would draw through purged pixels
+cfm.find.after.AppearanceLib.ToolboxUtils	Executor connects the libraries a library of its own imports only if they are its own too: ToolboxUtils is the System's fragment (cfm.cpp connect_builtin)

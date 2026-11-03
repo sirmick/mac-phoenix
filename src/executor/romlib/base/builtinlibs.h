@@ -14,6 +14,10 @@ namespace Executor
     namespace builtinlibs
     {
         uint32_t handleSC(PowerCore& cpu);
+        /* MacPhoenix: the routine whose system call op is at opPC, or null */
+        const char *callbackName(uint32_t opPC);
+        /* ... and the system call ops of the routines of that name */
+        std::vector<uint32_t> callbackAddresses(const std::string& name);
 
         void addPPCEntrypoint(const char *library, const char *function, std::function<uint32_t (PowerCore&)> code);
 
@@ -81,6 +85,7 @@ namespace Executor
         void checkASLMRawEntrypoints();
 
         ConnectionID getBuiltinLib(ConstStr255Param libname, OSType arch = "pwpc"_4);
+        bool haveBuiltinLib(ConstStr255Param libname, OSType arch);
 
         /* MacPhoenix: every library's exports, by name, as CFM binds them
            ("pwpc" or "m68k"), the libraries' added entries included
@@ -89,5 +94,12 @@ namespace Executor
         std::map<std::string, std::vector<std::string>> exportTable(OSType arch);
 
         Ptr makeUndefinedSymbolStub(const char *name, OSType arch = "pwpc"_4);
+
+        /* MacPhoenix: host routines a program calls through a pointer
+           (StdCLib's device handlers): a PowerPC transition vector, a
+           CFM-68K one (code: the return address on the stack; it answers
+           where execution goes on). Made once, never released. */
+        Ptr makePPCRoutine(const char *name, std::function<uint32_t (PowerCore&)> code);
+        Ptr makeCFM68KRoutine(const char *name, std::function<syn68k_addr_t (syn68k_addr_t)> code);
     }
 }

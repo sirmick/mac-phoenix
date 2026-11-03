@@ -15,6 +15,7 @@
 #include <TimeMgr.h>
 #include <MenuMgr.h>
 #include <ToolboxEvent.h>
+#include <IntlUtil.h>
 
 #include <mman/mman.h>
 #include <base/trapglue.h>
@@ -24,6 +25,8 @@
 #include <time/syncint.h>
 #include <base/emustubs.h>
 #include <base/cpu.h>
+#include <prefs/prefs.h>
+#include <rsys/version.h>
 #include <vdriver/vdriver.h>   /* for beepAtUser */
 #include <PowerCore.h>
 #include <base/traps.impl.h>
@@ -321,6 +324,33 @@ void Executor::ROMlib_UprString(StringPtr s, Boolean diac, INTEGER len)
 void Executor::UpperString(StringPtr s, Boolean diac)
 {
     ROMlib_UprString(s + 1, diac, (INTEGER)(unsigned char)s[0]);
+}
+
+/* MacPhoenix: the _LwrText family as InterfaceLib exports them, raw
+   MacRoman text converted in place, as the trap (base/emustubs.cpp) and
+   the Script Manager's case calls do (ROMlib_text_case, script.cpp). */
+void Executor::LowerText(Ptr textPtr, INTEGER len)
+{
+    if(textPtr)
+        ROMlib_text_case(textPtr, len, 0x000);
+}
+
+void Executor::StripText(Ptr textPtr, INTEGER len)
+{
+    if(textPtr)
+        ROMlib_text_case(textPtr, len, 0x200);
+}
+
+void Executor::UpperText(Ptr textPtr, INTEGER len)
+{
+    if(textPtr)
+        ROMlib_text_case(textPtr, len, 0x400);
+}
+
+void Executor::StripUpperText(Ptr textPtr, INTEGER len)
+{
+    if(textPtr)
+        ROMlib_text_case(textPtr, len, 0x600);
 }
 
 void Executor::GetDateTime(GUEST<ULONGINT> *mactimepointer)
@@ -630,7 +660,12 @@ static void setdefaults()
     LM(SPKbd) = 0x63;
     LM(SPVolCtl) = 3;
     LM(SPClikCaret) = 0x88;
-    LM(SPMisc2) = 0x4C;
+    /* MacPhoenix: Inside Macintosh's $4C, and bit 7, the colour desktop
+       pattern ('ppat' 16): a G3 with 8.6 has $CC (the sys probe's
+       lowmem.020a) and, its PRAM zapped, draws 8.6's colour pattern; with
+       the bit clear Executor drew the black-and-white 'PAT ' 16, a
+       checkerboard on 8.6. */
+    LM(SPMisc2) = 0xCC;
 }
 
 static OSErr openparam(GUEST<INTEGER> *rnp)
@@ -866,9 +901,13 @@ OSErr Executor::SysEnvirons(INTEGER vers, SysEnvRecPtr p)
     p->systemVersion = LM(SysVersion);
 
     p->processor = env68040;
-    p->hasFPU = false;
+    /* MacPhoenix: the 68040's FPU (Gestalt 'fpu ' 3); a Power Mac's 68k
+       emulator has none (an 8.x System, or PowerPC code on 7.x) */
+    p->hasFPU = !(system_version >= 0x800 || ROMlib_prefer_ppc);
     p->hasColorQD = true;
-    p->keyBoardType = envAExtendKbd;
+    /* MacPhoenix: envExtISOADBKbd, as KbdType (init.cpp) and Gestalt
+       'kbd ' say */
+    p->keyBoardType = 9;
     p->atDrvrVersNum = 0;
     p->sysVRefNum = LM(BootDrive);
 

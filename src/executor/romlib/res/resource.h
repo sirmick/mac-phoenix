@@ -12,11 +12,6 @@
 
 namespace Executor
 {
-#define ULTIMA_III_HACK
-#if defined(ULTIMA_III_HACK)
-extern bool ROMlib_ultima_iii_hack;
-#endif
-
 extern bool system_file_version_skew_p;
 
 struct reshead
@@ -86,6 +81,7 @@ struct empty_resource_template_t
 };
 
 extern resmaphand ROMlib_rntohandl(INTEGER rn, Handle *pph);
+extern resmaphand ROMlib_read_res_map(INTEGER f, uint32_t base, uint32_t length);
 extern Handle ROMlib_mgetres(resmaphand map, resref *rr);
 extern OSErr ROMlib_findres(Handle r, resmaphand *mapp, typref **trp,
                             resref **rrp);

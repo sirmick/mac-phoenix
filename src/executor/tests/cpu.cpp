@@ -3,6 +3,9 @@
 #include <base/functions.impl.h>
 #include <base/mactype.h>
 #include <PowerCore.h>
+#include <base/builtinlibs.h>
+#include <AppleEvents.h>
+#include <appleevent/apple_events.h>
 
 #define ABSOLUTE_ADDR 0
 
@@ -10,6 +13,7 @@
 #define BASE 0x1000
 #else
 #include <MemoryMgr.h>
+#include <time/time.h>
 
 uint32_t BASE;
 #endif
@@ -125,6 +129,56 @@ TEST_F(CPU, executePPC)
     EXPECT_EQ(42, getPowerCore().r[3]);
 }
 
+
+/* Apple's ObjectSupportLib tells the AppleEvent Manager it is there with
+   handlers that are no address: AEInstallEventHandler('Berk', 'eley',
+   'Win ', 0, false), AERemoveEventHandler('Stan', 'ford', 'Bite', true).
+   From PowerPC they are answered, not a fatal "host pointer is not
+   guest-addressable" where the value's window is small (the tab's 64 MB
+   pool: CodeWarrior IDE 3.2 with PowerPC, M1 #6). */
+static void ppcCall(CPU& t, const char *name, std::initializer_list<uint32_t> args)
+{
+    auto sc = builtinlibs::callbackAddresses(name);
+    ASSERT_FALSE(sc.empty()) << name;
+    auto& cpu = getPowerCore();
+    int r = 3;
+    for(uint32_t a : args)
+        cpu.r[r++] = a;
+    t.ppc({
+        0x3D800000 | (sc[0] >> 16),     //  lis r12, sc@h
+        0x618C0000 | (sc[0] & 0xFFFF),  //  ori r12, r12, sc@l
+        0x7D8903A6,                     //  mtctr r12
+        0x4E800420                      //  bctr
+    });
+}
+
+TEST_F(CPU, ppcAEHandlersThatAreNoAddress)
+{
+    if(!ROMlib_ae_private())
+    {
+        AE_init();
+        AE_reinit();
+    }
+    ppcCall(*this, "AERemoveEventHandler", { "Stan"_4, "ford"_4, "Bite"_4, 1 });
+    EXPECT_EQ(errAEHandlerNotFound, (int16_t)getPowerCore().r[3]);
+    ppcCall(*this, "AEInstallEventHandler", { "Berk"_4, "eley"_4, "Win "_4, 0, 0 });
+    EXPECT_EQ(noErr, (int16_t)getPowerCore().r[3]);
+    /* where the value can be a pointer (natively: the pool's window is
+       1 GB), it is in the AppleEvent Manager's table, as on a Mac
+       (AppleWorks 5 with its PowerPC code stops without it) */
+    if(syn68k_is_guest_addr_in_window("Win "_4, 2))
+    {
+        GUEST<AEEventHandlerUPP> hdlr;
+        GUEST<int32_t> refcon;
+        ASSERT_EQ(noErr, AEGetEventHandler("Berk"_4, "eley"_4, &hdlr, &refcon, false));
+        EXPECT_EQ("Win "_4, hdlr.raw_host_order());
+    }
+    /* removed as installed (AppleWorks 5 does it straight away) */
+    ppcCall(*this, "AERemoveEventHandler", { "Berk"_4, "eley"_4, "Win "_4, 0 });
+    EXPECT_EQ(noErr, (int16_t)getPowerCore().r[3]);
+    ppcCall(*this, "AERemoveEventHandler", { "Berk"_4, "eley"_4, "Win "_4, 0 });
+    EXPECT_EQ(errAEHandlerNotFound, (int16_t)getPowerCore().r[3]);
+}
 
 TEST_F(CPU, breakpoint68K)
 {
@@ -387,4 +441,31 @@ TEST_F(CPU, ppcArgumentsStructWrittenToStack)
     EXPECT_EQ(0xbb, params[37]);
     EXPECT_EQ(0xcc, params[38]);
     EXPECT_EQ(0xdd, params[39]);
+}
+
+/* $FE09, a Power Mac 68K emulator instruction: the time base, upper word
+   in A0 and lower in D0, nothing else touched (the G3 on 9.0.4). Executor
+   counts at 25 MHz on Microseconds' clock: the G3's Name Registry says
+   timebase-frequency 25000000 (a quarter of its 100 MHz bus). */
+TEST_F(CPU, timeBaseFE09)
+{
+    EM_D0 = 0x11111111;
+    EM_D1 = 0x22222222;
+    EM_A0 = 0xA0A0A0A0;
+    EM_A1 = 0xA1A1A1A1;
+    uint64_t before = msecs_elapsed();
+    m68k({
+        0xFE09,
+        0x2400,  //  MOVE.L d0, d2
+        0xFE09,
+        0x4E75   //  RTS
+    });
+    EXPECT_EQ(0x22222222u, EM_D1);
+    EXPECT_EQ(0xA1A1A1A1u, EM_A1);
+    EXPECT_NE(0xA0A0A0A0u, EM_A0);
+    uint64_t tb = (uint64_t)EM_A0 << 32 | EM_D0;
+    uint64_t after = msecs_elapsed();
+    EXPECT_GE((uint32_t)tb, EM_D2);
+    EXPECT_GE(tb, before * 25000);
+    EXPECT_LE(tb, after * 25000);
 }

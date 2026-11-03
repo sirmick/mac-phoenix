@@ -83,10 +83,13 @@ static void create(void)
 }
 
 /* the classic definitions: document, dialog box, plain, alt dialog, no
-   grow, zoom, movable modal, floating (WDEF 124) */
+   grow, zoom, movable modal, floating (WDEF 124); and the Appearance
+   Manager's (WDEF 64-67): document, the dialogs, floating, side floating */
 static void classic(void)
 {
-    static const short procs[] = { 0, 1, 2, 3, 4, 8, 12, 5, 1985, 1987 };
+    static const short procs[] = { 0, 1, 2, 3, 4, 8, 12, 5, 1985, 1987,
+                                   1024, 1031, 1040, 1041, 1042, 1043, 1044, 1045, 1046,
+                                   1057, 1071, 1073, 1075 };
     int i, color;
     char k[96];
     Rect b;
@@ -152,10 +155,19 @@ static void bounds(void)
     out("SetWindowIdealUserState", "err %ld", (long)err);
     SET(r); GetWindowIdealUserState(w, &r); out_rect("GetWindowIdealUserState.after", &r);
     out("IsWindowCollapsed", "%d", (int)IsWindowCollapsed(w));
+    out("IsWindowCollapsable", "%d", (int)IsWindowCollapsable(w));
     err = CollapseWindow(w, true);
     out("CollapseWindow", "err %ld %d", (long)err, (int)IsWindowCollapsed(w));
+    /* collapsed: the title bar alone */
+    describe("collapsed", w);
     err = CollapseWindow(w, false);
     out("CollapseWindow.back", "err %ld %d", (long)err, (int)IsWindowCollapsed(w));
+    /* SetWindowBounds by the structure, the window shown */
+    ShowWindow(w);
+    SetRect(&r, 40, 40, 260, 230);
+    err = SetWindowBounds(w, kWindowStructureRgn, &r);
+    out("SetWindowBounds.structure.visible", "err %ld", (long)err);
+    SET(r); GetWindowBounds(w, kWindowContentRgn, &r); out_rect("content.visible", &r);
     DisposeWindow(w);
 }
 
@@ -264,6 +276,58 @@ static void proxy(void)
     DisposeWindow(w);
 }
 
+/* SetGWorld with a nil device after a GWorld (Mars Rising: SetGWorld(gw,
+   nil), SetGWorld(nil, nil), then NewCWindow): the device then, and the
+   pixmap of a window opened next. */
+static const char *device_name(GDHandle d, GWorldPtr gw)
+{
+    return !d ? "nil" : d == GetMainDevice() ? "main" : d == GetGWorldDevice(gw) ? "gworld's" : "other";
+}
+
+static void gworld(void)
+{
+    GWorldPtr gw = NULL;
+    Rect r = { 0, 0, 64, 64 }, wr = { 100, 100, 164, 164 };
+    CGrafPtr savePort, port;
+    GDHandle saveDev, dev;
+    WindowPtr w, other;
+    int i;
+    if(!SECTION("gworld"))
+        return;
+    if(NewGWorld(&gw, 8, &r, NULL, NULL, 0) != noErr || !gw)
+        return;
+    GetGWorld(&savePort, &saveDev);
+    other = NewCWindow(NULL, &wr, "\p", false, documentProc, (WindowPtr)-1, false, 0);
+    for(i = 0; i < 2; i++)
+    {
+        const char *what = i ? "windowPort" : "nilPort";
+        char k[64];
+        SetGWorld(gw, NULL);
+        SetGWorld(i ? (CGrafPtr)other : NULL, NULL);
+        GetGWorld(&port, &dev);
+        sprintf(k, "%s.device", what);
+        out(k, "%s", device_name(GetGDevice(), gw));
+        if(!i)
+        {
+            sprintf(k, "%s.port", what);
+            out(k, "%s", !port ? "nil" : port == (CGrafPtr)gw ? "gworld" : "other");
+        }
+        w = NewCWindow(NULL, &wr, "\p", false, documentProc, (WindowPtr)-1, false, 0);
+        SetGWorld(savePort, saveDev);
+        if(w)
+        {
+            PixMapHandle wpm = ((CGrafPtr)w)->portPixMap;
+            sprintf(k, "%s.window.baseAddr", what);
+            out(k, "%s", (**wpm).baseAddr == (**(**GetMainDevice()).gdPMap).baseAddr ? "screen" : "other");
+            DisposeWindow(w);
+        }
+    }
+    SetGWorld(savePort, saveDev);
+    if(other)
+        DisposeWindow(other);
+    DisposeGWorld(gw);
+}
+
 int main(void)
 {
     probe_open("wind");
@@ -273,6 +337,7 @@ int main(void)
     props();
     floating();
     proxy();
+    gworld();
     probe_close();
     return 0;
 }

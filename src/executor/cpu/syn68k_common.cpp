@@ -610,6 +610,22 @@ int syn68k_is_guest_mapped(uintptr_t addr, size_t len)
     return 0;
 }
 
+int syn68k_is_guest_addr_mapped(uint32_t addr, size_t len)
+{
+    int w = addr >> 30;
+    uint64 off = addr & (WINDOW - 1);
+    /* the pool (window 1) up to what has been handed out: natively it is
+       1 GB, so most junk would fall inside it */
+    uint64 size = w == 1 ? pool_used : ROMlib_sizes[w];
+    return w < OFFSET_TABLE_SIZE && off + len <= size;
+}
+
+int syn68k_is_guest_addr_in_window(uint32_t addr, size_t len)
+{
+    int w = addr >> 30;
+    return w < OFFSET_TABLE_SIZE && (addr & (WINDOW - 1)) + len <= ROMlib_sizes[w];
+}
+
 /* --watch: a write watchpoint on guest memory (guest_watch.h), asked for
  * before RAM exists and installed when it is mapped. */
 static uint32_t pending_watch_addr;
@@ -686,8 +702,9 @@ void syn68k_describe_cpu(FILE *out)
     {
         PowerCore& ppc = PowerCore::instance();
         if(ppc.CIA || ppc.lr)
-            fprintf(out, "PowerPC at its last call out: CIA $%08X lr $%08X r1 $%08X r2 $%08X r3 $%08X r4 $%08X\n",
-                    ppc.CIA, ppc.lr, ppc.r[1], ppc.r[2], ppc.r[3], ppc.r[4]);
+            fprintf(out, "PowerPC at its last call out: CIA $%08X lr $%08X r1 $%08X r2 $%08X r3 $%08X r4 $%08X"
+                         " r5 $%08X r6 $%08X r7 $%08X\n",
+                    ppc.CIA, ppc.lr, ppc.r[1], ppc.r[2], ppc.r[3], ppc.r[4], ppc.r[5], ppc.r[6], ppc.r[7]);
     }
     uint32_t sp = r[15];
     if(syn68k_is_guest_mapped((uintptr_t)SYN68K_TO_US(sp), 32))
@@ -704,6 +721,7 @@ void syn68k_describe_cpu(FILE *out)
 void syn68k_bad_host_pointer(const void *p)
 {
     fprintf(stderr, "syn68k: host pointer %p is not guest-addressable (outside every window)\n", p);
+    syn68k_describe_cpu(stderr);    /* who passed it (the PowerPC's last call too) */
     abort();
 }
 
@@ -783,9 +801,10 @@ void initialize_68k_emulator(void (*)(int), int, uint32 trap_vector_storage[64],
     cpu::platform_set_memory(&guest_memory);
     cpu::Config config;
     config.model = 68040;
-    /* A 68040 with its FPU. Executor provides SANE natively and tells
-     * Gestalt there is no FPU, but applications built for one (MacPerl)
-     * execute FPU instructions regardless. Without this the mame-68k core
+    /* A 68040 with its FPU. Executor provides SANE natively; Gestalt
+     * 'fpu ' and SysEnvirons report the FPU as a Quadra does (Photoshop
+     * 4.0 asks), and applications built for one (MacPerl) execute FPU
+     * instructions regardless. Without this the mame-68k core
      * is an LC040 and every line-F word is a fatal trap 11 (STRAGGLERS.md
      * 22). */
     config.fpu = true;

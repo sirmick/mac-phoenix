@@ -1356,6 +1356,26 @@
 # ####
 
 - function:
+    name: FindWindowInAnyLayer
+    return: int16_t
+    args:
+      - name: pt
+        type: Point
+      - name: window
+        type: WindowPtr*
+    dispatcher: LayerDispatch
+    selector: 0x0413
+    library: PrivateInterfaceLib
+    executor: C_
+    comment: |
+      MacPhoenix (name is a guess). Selector 19, 8.x: FindWindow over every
+      layer, front first: the window under the point itself and its part
+      (inDesk and nil over the desktop, inMenuBar over the menu bar). 8.6's
+      Drag Manager asks it where 7.5.5's asked FindWindowInLayer ('proc'
+      -16513 +$43d0), then GetWindowProcess on the window, or on inDesk
+      the desktop layer and GetDesktopProcess.
+
+- function:
     name: NewLayer
     return: OSErr
     args:
@@ -1587,3 +1607,94 @@
       - name: collapse
         type: Boolean
     library: AppearanceLib
+
+# ####
+
+# InterfaceLib's lowercase C routines (multiversal/executor.rb, declare_cglue):
+# the Pascal routine with C strings, Points by address.
+
+- only-for: Executor
+  function:
+    name: draggrayrgn
+    cglue: DragGrayRgn
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: dragwindow
+    cglue: DragWindow
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: findwindow
+    cglue: FindWindow
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: getwtitle
+    cglue: GetWTitle
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: growwindow
+    cglue: GrowWindow
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: newcwindow
+    cglue: NewCWindow
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: newwindow
+    cglue: NewWindow
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: pinrect
+    cglue: PinRect
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: setwtitle
+    cglue: SetWTitle
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: trackbox
+    cglue: TrackBox
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: trackgoaway
+    cglue: TrackGoAway
+    library: InterfaceLib

@@ -1,9 +1,8 @@
 <!doctype html>
-<!-- Executor in a tab (docs/executor/DIRECTION.md, W2/W3): no ROM, no server
-     beyond static files. The module runs in worker.js; this page shows its
-     frames on an OffscreenCanvas, sends it mouse and keyboard input, and
-     keeps the disk images and applications you add in the browser's
-     private storage (OPFS). -->
+<!-- Executor in a tab (docs/executor/DIRECTION.md, W2/W3): no ROM, served by
+     tools/standalone, which keeps what it changes. The module runs in
+     worker.js; this page shows its frames on an OffscreenCanvas and sends
+     it mouse and keyboard input. -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -16,28 +15,54 @@
   #bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
   #bar button, #bar label { background: #555; color: #eee; border: 0;
          border-radius: 4px; padding: 4px 10px; font: inherit; cursor: pointer; }
-  #files span { background: #444; border-radius: 4px; padding: 2px 6px; margin-right: 4px; }
-  #files a { color: #f88; margin-left: 4px; cursor: pointer; }
   #bar select { background: #444; color: #eee; border: 0; font: inherit; }
+  #viewer { background: #345; color: #cdf; border-radius: 4px; padding: 4px 10px; }
+  #viewer button { background: #567; color: #eee; border: 0; border-radius: 4px; padding: 2px 8px; font: inherit; cursor: pointer; }
+  #status.lost { background: #543; color: #fda; border-radius: 4px; padding: 4px 10px; }
   /* Sized by main.js: a whole number of device pixels a guest pixel. */
   canvas { background: #000; image-rendering: pixelated; outline: none; }
+  /* The loading panel (loading.js): over the screen, until its first frame. */
+  #screen-box { position: relative; }
+  #screen-box canvas + #loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); }
+  #loading { background: #2b2b2b; border: 1px solid #555; border-radius: 8px; padding: 14px 18px;
+             width: 340px; box-shadow: 0 8px 28px rgba(0, 0, 0, .5); }
+  #loading[hidden] { display: none; }
+  #loading .loading-title { font-size: 14px; font-weight: 600; color: #eee; margin-bottom: 8px; }
+  #loading ol { list-style: none; margin: 0; padding: 0; }
+  #loading li { display: grid; grid-template-columns: 18px 1fr; column-gap: 6px; padding: 4px 0; color: #777; }
+  #loading li::before { content: '○'; grid-row: 1 / span 3; }
+  #loading li.active { color: #eee; }
+  #loading li.active::before { content: '●'; color: #7af; animation: loading-pulse 1s ease-in-out infinite alternate; }
+  @keyframes loading-pulse { from { opacity: 1; } to { opacity: .25; } }
+  #loading li.done { color: #aaa; }
+  #loading li.done::before { content: '✓'; color: #6c6; }
+  #loading li.error { color: #fda; }
+  #loading li.error::before { content: '!'; color: #f88; font-weight: 700; }
+  #loading .loading-detail { grid-column: 2; font-size: 12px; color: #999; }
+  #loading .loading-detail:empty { display: none; }
+  #loading progress { grid-column: 2; width: 100%; height: 6px; margin-top: 3px; accent-color: #6a8fd0; }
 </style>
+<link rel="stylesheet" href="settings.css">
+<link rel="stylesheet" href="disks.css">
 </head>
 <body>
 <div id="bar">
-  <label>Add disk image or application…<input id="add" type="file" multiple hidden></label>
-  <label id="library-box" hidden title="Disks offered by this site: downloaded once, kept in this browser">Library
-    <select id="library"><option value="">Add a disk…</option></select></label>
-  <span id="files"></span>
-  <label title="Apple's System and Finder from one of your disk images">System
-    <select id="system"><option value="">Executor's own</option></select></label>
+  <button id="disks-button" title="Disks: the System the Mac starts from, the disks in it, the library; add your own">Disks</button>
+  <input id="add" type="file" multiple hidden>
+  <label title="Run fat applications' PowerPC code (PowerPC-only ones always do)"><input id="ppc" type="checkbox">PowerPC</label>
   <button id="restart">Restart</button>
-  <button id="reset" title="Forget what was saved on Executor's disk for this System">Reset</button>
+  <button id="shot" title="Send a picture of the screen to the server, for a look later (with what this page printed)">Screenshot</button>
 </div>
+<div id="viewer" hidden>Executor is open in another tab, which has control: its screen, here.
+  <button id="take">Take control</button></div>
 <div id="screen-box"></div>
 <div id="status">Loading Executor…</div>
+<script src="log.js"></script>
 <script src="keys.js"></script>
+<script src="settings.js"></script>
 <script src="cursor.js"></script>
+<script src="disks.js"></script>
+<script src="loading.js"></script>
 <script src="main.js"></script>
 </body>
 </html>

@@ -529,6 +529,36 @@
 # ####
 
 - function:
+    name: DMQDIsMirroringCapable
+    return: OSErr
+    args:
+      - name: qdIsMirroringCapable
+        type: Boolean*
+    dispatcher: DisplayDispatch
+    selector: 0x0216
+    executor: C_
+    comment: |
+      MacPhoenix: false and noErr, as a 7.6.1 Quadra answers (a probe on
+      the ROM machine). The desktop asks at boot.
+
+# ####
+
+- function:
+    name: DMCanMirrorNow
+    return: OSErr
+    args:
+      - name: canMirrorNow
+        type: Boolean*
+    dispatcher: DisplayDispatch
+    selector: 0x0217
+    executor: C_
+    comment: |
+      MacPhoenix: -6226 and the Boolean left alone, as a 7.6.1 Quadra with
+      one screen answers (a probe on the ROM machine).
+
+# ####
+
+- function:
     name: DMIsMirroringOn
     return: OSErr
     args:

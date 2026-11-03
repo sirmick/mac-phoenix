@@ -65,6 +65,10 @@ npx playwright test
 # ctest -R 'clib_|guest_suite_ppc_executor'):
 ./build/mac-phoenix --backend executor --executor-system 7.5.5.img --executor-ppc
 ctest --test-dir build -L executor
+# High-resolution screen (docs/executor/HiDPI.md; phase 1: text from outlines over
+# the 1x screen scaled up): Skia, prebuilt, off by default
+tools/skia/fetch.sh && cmake -B build -DEXECUTOR_SKIA=ON
+./build/mac-phoenix --backend executor --executor-system 8.6.img --executor-ppc --executor-scale 2
 # Executor's API definitions (src/executor/multiversal/defs) are also Retro68's
 # Multiversal Interfaces: ctest -R multiversal_retro68 builds a program against
 # the C headers they generate, ctest -R retro68_ runs RetroTest (tests/guest/retro68,
@@ -80,6 +84,11 @@ tools/executor/grid.py 8.6.img --jobs 3        # -> ~/storage/executor-grid/8.6/
 tools/difftest/run.py appr [--dump]            # ctest -R difftest_
 tools/macdecode/libraries.py --census --rom ~/storage/roms/g3.rom --system FOLDER --logs GRID-DIR
 tools/executor/grid_compare.py ~/storage/executor-grid/8.6-r2 ~/storage/executor-grid/8.6-r3
+# PowerPC breakpoints/traces in an Executor session: break at $ADDR, FRAGMENT+OFF or
+# !Routine, dump registers/back chain/stack/#memory, trace N instructions
+# (docs/executor/PPCTrace.md; also /api/executor/ppc-break; ctest -R ppc_break_executor):
+./build/mac-phoenix --backend executor --executor-system 8.6.img --executor-ppc \
+    --executor-ppc-break 'BBEdit Lite 6.1+17a218@200*2#r30:40' --executor-ppc-break '!AESend'
 # Toolbox selectors/OT functions a session called that Executor lacks: "[unimplemented]"
 # in the log, collected in ~/storage/executor/unimplemented.log (date, app, call)
 
@@ -240,6 +249,7 @@ The main ones; every endpoint with its parameters: `docs/API.md`.
 | `/api/ui` | GET | Read command: front process's windows (screen rects), controls, dialog items, menus (open popups included) as JSON — click by name, fall back to pixels |
 | `/api/text` | GET | Text on screen now, as QuickDraw drew it (`src/core/text_feed.cpp`: `_StdText`/`_CopyBits`/`_ScrollRect` patched in the trap table; ROM machines): strings with screen rects, font, window/app, `inverted` (looks selected). `?since=N`: the draw log (offscreen too). For what `/api/ui` can't name: List Manager lists, self-drawn controls, open popups |
 | `/api/wait` | POST | Poll condition: `boot=Finder`, `app=Name`, `text=Substring` (drawn on screen) |
+| `/api/executor/ppc-break` | GET/POST | Executor's PowerPC breakpoints and hit reports (docs/executor/PPCTrace.md) |
 | `/api/annotate` | POST | `{"text": "..."}` — a line from whatever drives the guest (provisioning/bake.py posts each step); the last 6 are in `/api/status` `annotations` and shown over the screen by the web UI. `{"text": ""}` clears. Open the UI with `?view` to watch without sending input |
 | `/api/launch` | POST | Launch app via BridgeAgent: `{"path":"HD:App"}`. With `"open":true`, opens the document via generic `'aevt'/'odoc'` (any registered creator: Frontier `LAND`, MacPerl `McPL`, MPW `MPS `, …) |
 | `/api/script` | POST | Generic do-script via `'misc'/'dosc'`: `{"creator":"McPL","script":"..."}` (or `"script_b64"` for exact MacRoman bytes). Works for MacPerl, Frontier UserLand, MPW Shell, AppleScript editor — any app registered for `dosc`. |
@@ -263,7 +273,8 @@ Machine:
   --rom PATH                 ROM file (or positional arg)
   --ram MB                   RAM size in megabytes (default: 64)
   --screen WxH               Display resolution (default: 640x480)
-  --depth N                  68k: colour depth the screen starts in (1 2 4 8 16 32; default 32;
+  --depth N                  68k and Executor: colour depth the screen starts in (1 2 4 8 16 32;
+                             default 32; Executor 32 on 8.x Systems, 8 on 7.x;
                              8 for games that run only in 256 colours)
   --disk PATH                Disk image (repeatable)
   --cdrom PATH               CD-ROM image (repeatable)
@@ -283,6 +294,9 @@ Machine:
   --[no-]executor-ot         Executor answers Open Transport (default: on)
   --executor-ppc             Executor runs fat apps' PowerPC code on mame-ppc (PowerPC-only
                              apps always do; InterfaceLib only so far; default: off)
+  --executor-scale X         Executor's display scale (docs/executor/HiDPI.md; -DEXECUTOR_SKIA=ON):
+                             frames X times the Mac's screen, programs still see 1x;
+                             /api/screenshot?scale=1 the 1x screen (default: 1)
 
 CPU:
   --backend NAME             uae | kpx | executor
@@ -345,8 +359,13 @@ Logging:
                              Memory Manager call), allocs (log allocations >= 4K with the
                              calling code), drag (the Drag Manager's dispatch and Finder's
                              hook calls), pcsample (the PowerPC PC every 5 ms; every 5 s the
-                             top addresses as fragment+offset and nearest export), fslog,
+                             top addresses as fragment+offset and nearest export), hidpi (the
+                             text --executor-scale redraws from outlines), fslog,
                              trace, trapfailure, unimplemented, ...
+  --executor-ppc-break SPEC  PowerPC breakpoint (Executor; repeatable; "on": none, for the API):
+                             WHERE[@N][*HITS][#MEM], WHERE $ADDR | FRAGMENT[:SECT]+OFF | !Routine;
+                             registers, back chain, stack, then N instructions traced
+                             (docs/executor/PPCTrace.md)
   --watch ADDR[:LEN]         Report every write to guest memory ADDR (Executor, Linux x86-64):
                              old/new value, 68k PC/registers/code, last traps, host stack
 ```

@@ -152,7 +152,8 @@ int Executor::clib::errnoFromOSErr(int16_t err)
     switch(err)
     {
         case noErr: return 0;
-        case fnfErr: case dirNFErr: case nsvErr: case bdNamErr: return 2;   /* ENOENT */
+        case fnfErr: case dirNFErr: case bdNamErr: return 2;                /* ENOENT */
+        case nsvErr: return 6;                                              /* ENXIO, as Apple's */
         case tmfoErr: return 24;                                            /* EMFILE */
         case wPrErr: case vLckdErr: return 30;                              /* EROFS */
         case fLckdErr: case permErr: case wrPermErr: return 13; /* EACCES */
@@ -1375,18 +1376,18 @@ OSErr c_ResolvePath(const char *raw, char *resolved, Boolean *isFolder, Boolean 
     return err;
 }
 
+/* MakeResolvedPath: the path copied to buffer as a Pascal string (no NUL
+   after it), also when it fails (Apple's, 9.0.4: DevProbe). MPW Shell
+   searches {Commands} with it and hands buffer to PBGetCatInfo. */
 OSErr c_MakeResolvedPath(int16_t vol, int32_t dir, unsigned char *path, Boolean resolveLeaf,
-                         char *buffer, Boolean *isFolder, Boolean *hadAlias,
+                         unsigned char *buffer, Boolean *isFolder, Boolean *hadAlias,
                          Boolean *leafIsAlias)
 {
     FSSpec *spec = (FSSpec *)NewPtrClear(sizeof(FSSpec));
     OSErr err = c_ResolveFolderAliases(vol, dir, path, resolveLeaf, spec, isFolder,
                                        hadAlias, leafIsAlias);
     if(buffer)
-    {
-        memcpy(buffer, path + 1, path[0]);
-        buffer[path[0]] = 0;
-    }
+        memmove(buffer, path, path[0] + 1);
     DisposePtr((Ptr)spec);
     return err;
 }

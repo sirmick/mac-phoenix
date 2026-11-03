@@ -37,35 +37,24 @@ Boolean Executor::C_LNextCell(Boolean hnext, Boolean vnext, GUEST<Cell> *cellp,
     Point scratch;
     INTEGER right, bottom;
 
+    /* The cell is advanced whether or not there is a next one: past the
+       row's end h goes back to 0, vnext or not (AppleWorks 5 counts
+       selected cells with LGetSelect and LNextCell and stops only when
+       LGetSelect finds none past the end) */
     scratch.v = cellp->v;
     scratch.h = cellp->h;
     right = (*list)->dataBounds.right;
     bottom = (*list)->dataBounds.bottom;
-    if(hnext)
-    {
-        if(++scratch.h >= right)
-            if(vnext && ++scratch.v < bottom)
-            {
-                scratch.h = 0;
-                retval = true;
-            }
-            else
-                retval = false;
-        else
-            retval = true;
-    }
+    if(hnext && ++scratch.h < right)
+        retval = true;
     else
     {
-        if(vnext && ++scratch.v < bottom)
-            retval = true;
-        else
-            retval = false;
+        if(hnext)
+            scratch.h = 0;
+        retval = vnext && ++scratch.v < bottom;
     }
-    if(retval)
-    {
-        cellp->v = scratch.v;
-        cellp->h = scratch.h;
-    }
+    cellp->v = scratch.v;
+    cellp->h = scratch.h;
     return retval;
 }
 

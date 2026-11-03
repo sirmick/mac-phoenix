@@ -1,0 +1,17 @@
+# aevt on Executor (8.6 System) against the G3 (8.6): known differences.
+# key-glob<TAB>reason. Remove a line when Executor matches (run.py lists those).
+
+# A new event: 8.6 keeps the return ID, source, interaction level and
+# original address out of the handle (none inline, 90 bytes); Executor
+# stores them as inline attributes before the ;;;; marker. Parameters
+# still start at the end of a new event, so one appended by hand is found.
+layout.new	the return ID, source, interaction level and original address are inline attributes in Executor
+layout.put	the same four inline attributes: 64 bytes more, parameters from 154
+# The header: class, ID and target where 8.6 has them; the parameter
+# offset and attribute count differ for the inline attributes above, and
+# the long at 58 (8.6: 0x000102b8, perhaps the return ID) is zero.
+layout.new.bytes	the parameter offset and attribute count (inline attributes), and the long at 58
+coerce.list.one.alis	the alias record an FSSpec coerces to: Executor's NewAlias writes 178 bytes, 8.6's 186 (its tagged data)
+coerce.null.null	AECoerceDesc of a null descriptor fails on 8.6 even to null and ****; Executor answers it (its parameter getters coerce to typeWildCard)
+coerce.null.[*]*	the same, to typeWildCard
+coerce.obj.want	AEGetParamPtr of a descriptor that is no record ('obj '): 8.6 errAENotAERecord (-1704), Executor errAEWrongDataType (-1703)

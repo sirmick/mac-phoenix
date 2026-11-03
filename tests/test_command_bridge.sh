@@ -37,6 +37,7 @@ while [[ $# -gt 0 ]]; do
         *) echo "Unknown arg: $1"; exit 1 ;;
     esac
 done
+source "$(dirname "$0")/lib/ports.sh"; PORT=$(mp_port "$PORT") || exit 1  # per-worktree (docs/Testing.md)
 
 # --arch was deprecated; backend now determines arch. Derive ARCH from BACKEND
 # for the ROM/disk selection logic below (not passed to the binary).
@@ -173,11 +174,32 @@ for i in $(seq 1 8); do
 done
 check "/api/launch bad path stays Finder" "$APP_AFTER" 'Finder'
 
+# Test 5b: /api/launch of a volume's root opens its window, as a double-click
+# does (BridgeAgent sends the Finder an 'odoc' with an alias of the volume;
+# the test images are all "Macintosh HD").
+echo "Test 5b: POST /api/launch (volume)"
+LAUNCH=$(curl -s --max-time 20 -X POST "http://localhost:$PORT/api/launch" -d '{"path": "Macintosh HD:"}' || echo "CURL_FAILED")
+check "/api/launch volume" "$LAUNCH" '"success": true'
+WIN=""
+for i in $(seq 1 10); do
+    WIN=$(curl -s "http://localhost:$PORT/api/windows" || echo "CURL_FAILED")
+    if echo "$WIN" | grep -q '"Macintosh HD"'; then break; fi
+    sleep 1
+done
+if echo "$WIN" | grep -q 'not available'; then
+    echo "  (no /api/windows on this backend: the launch's answer only)"
+else
+    check "volume window open" "$WIN" '"Macintosh HD"'
+fi
+
 # Test 6 (--quit-app): an application launched, then quit with the Quit
 # Apple event (BridgeAgent's kAEQuitApplication).
 if [[ -n "$QUIT_APP" ]]; then
     echo "Test 6: POST /api/launch + /api/quit ($QUIT_NAME)"
-    APP_PATH="${QUIT_APP/#DISK:/$(basename "$DISK"):}"
+    # Executor names the System's volume after the image, cut to the 27
+    # characters a volume name has.
+    VOLUME="$(basename "$DISK")"
+    APP_PATH="${QUIT_APP/#DISK:/${VOLUME:0:27}:}"
     LAUNCH=$(curl -s --max-time 20 -X POST "http://localhost:$PORT/api/launch" -d "{\"path\": \"$APP_PATH\"}" || echo "CURL_FAILED")
     check "/api/launch $QUIT_NAME" "$LAUNCH" '"success": true'
     WAIT_APP=$(curl -s -X POST "http://localhost:$PORT/api/wait" -d "{\"condition\": \"app=$QUIT_NAME\", \"timeout\": 20}" || echo "CURL_FAILED")

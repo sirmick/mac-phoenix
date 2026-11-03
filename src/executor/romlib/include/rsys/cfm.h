@@ -22,6 +22,9 @@ struct section_info_t
     GUEST<uint32_t> ref_count;
     GUEST<uint8_t> perms;
     GUEST<uint8_t> pad[3];/* TODO: verifying that it works this way on a Mac. */
+    /* MacPhoenix: the section's PEF defaultAddress: the container's
+       pointers into it are relative to that, not to 0. */
+    GUEST<uint32_t> default_address;
 };
 
 typedef struct CFragConnection
@@ -40,7 +43,8 @@ enum
     fragSymbolNotFound = -2802,
     fragLibNotFound = -2804,
     cfragFragmentFormatErr = -2806,
-    fragNoMem = -2809
+    fragNoMem = -2809,
+    fragLibConnErr = -2817 /* cfragLibConnErr: there, not connected to this process */
 };
 
 struct lib_t
@@ -85,6 +89,11 @@ extern char *ROMlib_p2cstr(StringPtr str);
 extern cfir_t *ROMlib_find_cfrg(Handle cfrg, OSType arch, uint8_t type,
                                 ConstStr255Param name);
 
+/* MacPhoenix: the fragment an application with this 'cfrg' 0 (nil: none)
+   and CODE 0 (or not) starts through: 'pwpc', 'm68k' (CFM-68K), or 0 for
+   its CODE 0 launch (classic 68k). */
+extern OSType ROMlib_cfm_launch_arch(Handle cfrg0, bool have_code0);
+
 
 extern ConnectionID ROMlib_new_connection(uint32_t n_sects);
 
@@ -103,11 +112,26 @@ extern uint32_t ROMlib_call_cfm68k(uint32_t tvector, std::initializer_list<uint3
 extern void ROMlib_cfm_terminate();
 extern void ROMlib_cfm_process_exit(uint32_t part_lo, uint32_t part_hi);
 extern void ROMlib_cfm_application_start();
+/* MacPhoenix: fragments prepared while on are the system's, not the current
+   application's (an accelerated code resource in the system heap, which
+   outlives the application that first calls it): their sections in
+   temporary memory, kept and not terminated when the application quits.
+   Answers the previous setting. */
+extern bool ROMlib_cfm_system_owned(bool on);
+/* MacPhoenix: a Toolbox manager initialized (InitFonts, InitWindows,
+   InitMenus): from 8.5 the library it is in (FontManager, WindowsLib,
+   MenusLib) is connected to the application, so kFindLib finds it. */
+extern void ROMlib_cfm_toolbox_library(const char *library);
 /* MacPhoenix: addr is in a loaded PowerPC fragment's code (a transition
    vector's first word points there). */
 extern bool ROMlib_cfm_ppc_code(uint32_t addr);
 /* "Fragment sect N+$off (Export+$off)" for a PowerPC address, or "" */
 extern std::string ROMlib_cfm_describe(uint32_t addr);
+/* "Fragment N+$off", no export (cheap), or "" */
+extern std::string ROMlib_cfm_where(uint32_t addr);
+/* A loaded PowerPC fragment's (by its name or its file's) section sect
+   (< 0: its code) + off, or 0 (--executor-ppc-break) */
+extern uint32_t ROMlib_cfm_resolve(const std::string& name, int sect, uint32_t off);
 extern bool ROMlib_cfm_exports_sane(ConnectionID id);
 
 /* CallUniversalProc from CFM-68K code: the routine's arguments start at
@@ -118,7 +142,7 @@ extern uint32_t ROMlib_cfm68k_call_universal_proc(UniversalProcPtr theProcPtr,
 extern PEFLoaderInfoHeader *ROMlib_build_pef_hash(const map_entry_t table[],
                                                     int count);
 
-static_assert(sizeof(section_info_t) == 16);
+static_assert(sizeof(section_info_t) == 20);
 static_assert(sizeof(CFragConnection) == 28);
 static_assert(sizeof(lib_t) == 16);
 static_assert(sizeof(CFragClosure) == 4);

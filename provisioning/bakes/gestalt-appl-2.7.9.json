@@ -1,0 +1,12 @@
+{
+ "note": "Gestalt.Appl 2.7.9 (1998; freeware): every Gestalt selector the System answers, with names, expanded by StuffIt Expander",
+ "kind": "expand",
+ "archive": "gestalt-appl-279.hqx",
+ "expect": [
+  "Gestalt.Appl 2.7.9"
+ ],
+ "launch": [
+  "Gestalt.Appl 2.7.9:Gestalt.appl 2.7.9"
+ ],
+ "os": "tools-7.6.1"
+}

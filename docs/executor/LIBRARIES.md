@@ -86,6 +86,17 @@ name, in which calling convention:
   registered, or registered but not declared (`LIBRARY_RAW`).
 - `executor:` names the C++ routine as for traps (`c_` prefix + name, or
   the whole name, so aliases share one: `_memcpy` is `c_memcpy`).
+- `cglue: NumToString` makes the entry one of InterfaceLib's lowercase C
+  routines (`numtostring`, 108 of them): the Pascal routine named, in the
+  same file, called with its `ConstStringPtr` arguments as Pascal copies
+  of C strings, its `StringPtr`/`Str255` ones made C strings after the
+  call, and a `Point` or `Cell` from a pointer; `cstring-in:` and
+  `cstring-inout:` name a string argument the routine reads although it
+  is typed as an output (DIZero's, UpperString's). The generator writes
+  the wrapper (`cglue_numtostring`, helpers in `base/cglue.h`) and its
+  export; `only-for: Executor`, no args of its own. As on a Mac a
+  structure's string stays Pascal (`sfputfile`'s `fName`, measured on the
+  G3: `tests/guest/cglueprobe`, ctest `cglue_`).
 - A `lowmem:` entry's `LMGetX`/`LMSetX` are InterfaceLib's; `library:`
   names another (`ExpandMem`'s are PrivateInterfaceLib's).
 - A trap's selector a private call reaches, under a name of ours, is

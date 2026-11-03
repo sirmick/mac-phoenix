@@ -133,6 +133,10 @@ std::vector<std::string> EmulatorSubprocess::build_child_args()
         args.push_back("--watch");
         args.push_back(config_->watch);
     }
+    for (const std::string& spec : config_->executor_ppc_break) {
+        args.push_back("--executor-ppc-break");
+        args.push_back(spec);
+    }
     if (!config_->executor_debug.empty()) {
         args.push_back("--executor-debug");
         args.push_back(config_->executor_debug);
@@ -156,6 +160,10 @@ std::vector<std::string> EmulatorSubprocess::build_child_args()
     }
     if (config_->executor_ppc) {
         args.push_back("--executor-ppc");
+    }
+    if (config_->executor_scale > 1.0) {
+        args.push_back("--executor-scale");
+        args.push_back(std::to_string(config_->executor_scale));
     }
     args.push_back("--core");
     args.push_back(config_->cpu_core);
@@ -223,7 +231,7 @@ std::vector<std::string> EmulatorSubprocess::build_child_args()
     args.push_back("--screen");
     args.push_back(config_->screen_string());
 
-    if (config_->screen_depth != 32) {
+    if (config_->screen_depth != 32 || config_->screen_depth_set) {
         args.push_back("--depth");
         args.push_back(std::to_string(config_->screen_depth));
     }

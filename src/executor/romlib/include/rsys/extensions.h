@@ -9,4 +9,5 @@ void ROMlib_load_extensions();
 /* AppPacks holding the System file's PACK 0-7, as InitAllPacks leaves them
    (Apple's System file only; nothing otherwise). */
 void ROMlib_install_app_packs();
+void ROMlib_install_system_packs();
 }

@@ -2,9 +2,17 @@
 # key-glob<TAB>reason. Remove a line when Executor matches (run.py lists those).
 
 # The look: Executor's definitions and theme drawing draw System 7's look; the
-# platinum theme comes later (docs/executor/MacOS8-9.md "One Toolbox").
-draw32.*	platinum look not drawn yet
-draw8.*	platinum look not drawn yet
+# platinum theme comes later (docs/executor/MacOS8-9.md "One Toolbox"). Most
+# DrawThemeButton kinds now match (draw32.button.*/draw8.button.*, and the
+# controls section below); what's left:
+frames.0.*	the title's glyphs (Charcoal from Executor's unhinted scaler); the frame is 8.6's
+frames.4.*	the title's glyphs (Charcoal from Executor's unhinted scaler); the frame is 8.6's
+frames.8.*	the title's glyphs (Charcoal from Executor's unhinted scaler); the frame is 8.6's
+frames.1024.*	the title's glyphs (Charcoal from Executor's unhinted scaler); the frame is 8.6's
+frames.1031.*	the title's glyphs (Charcoal from Executor's unhinted scaler); the frame is 8.6's
+frames.5.*	the title's glyphs (Charcoal from Executor's unhinted scaler); the frame is 8.6's
+frames.1043.*	the title's glyphs (Charcoal from Executor's unhinted scaler); the frame is 8.6's
+frames.16.*	the title's glyphs (Charcoal from Executor's unhinted scaler); the frame is 8.6's (classic, not platinum, on 8.6 too)
 
 # Colours and styles
 color.brush.48.*	brush 48 is invalid on 8.6 (-30560); Executor answers a colour
@@ -12,22 +20,11 @@ color.text.45.*	text colours 45-47 invalid on 8.6 (-30563); Executor answers
 color.text.46.*	text colours 45-47 invalid on 8.6 (-30563); Executor answers
 color.text.47.*	text colours 45-47 invalid on 8.6 (-30563); Executor answers
 color.accent.data	accent colour table: ctSeed 0 on 8.6, Executor's differs
-metric.ThumbStyle	8.6's default is 0 (single arrows/proportional off); Executor answers 1
-metric.ArrowStyle	8.6's default is 0; Executor answers 1
 
 # Regions: shapes Executor simplifies to rectangles, part codes it answers or not
 winregion.*	window part regions: rounded corners, kinds 7 (utility side), parts 1 and 8 (-30593 on 8.6)
 button.4.*	bevel/round button regions are shapes on 8.6, rectangles in Executor
 button.5.*	bevel/round button regions are shapes on 8.6, rectangles in Executor
-button.10.*	button kinds 10, 13-15 are paramErr on 8.6; Executor answers
-button.13.*	button kinds 10, 13-15 are paramErr on 8.6; Executor answers
-button.14.*	button kinds 10, 13-15 are paramErr on 8.6; Executor answers
-button.15.*	button kinds 10, 13-15 are paramErr on 8.6; Executor answers
-track.*.live40	live value: 8.6 maps the thumb position differently (22 vs 30)
-track.2.thumb.rgn	slider thumb is a shape on 8.6, a rectangle in Executor
-misc.tab.*	tab regions: 8.6's are the tab shape (width from the title), Executor's the whole rect
-misc.menubg.*	menu background regions: shapes on 8.6
-misc.growbox.*	GetThemeStandaloneGrowBoxBounds not implemented (output left alone)
 
 # The theme collection and the private calls
 theme.GetTheme.count	8.6's theme has 17 items, Executor's 9
@@ -38,3 +35,16 @@ private.GetThemeSoundMask	8.6's mask is 0x0000000f (the theme's sounds)
 private.GetDesktopPixPat.name	"Mac OS Default" on 8.6; Executor answers ""
 private.GetDesktopPattern.name	"Mac OS Default" on 8.6; Executor answers ""
 title.*.system	the system font (Charcoal) is TrueType scaled without hinting: glyph shapes differ by a pixel here and there
+
+# Real controls (the controls section): push/check/radio/bevel buttons, group
+# boxes, edit text, list box, well, placard, window header, tabpane,
+# separator, focus rect, popup arrow and tickmark all match (classic CDEF 0
+# and 8.6's own 368-370 alike). What's left:
+controls.*.check.value1	the "on" tick is an approximation of 8.6's anti-aliased mark
+controls.*.radio.value1	the "on" dot is an approximation of 8.6's anti-aliased mark
+controls.16.*	the scroll bar (CDEF 1), through DrawThemeTrack/DrawThemeScrollBarArrows: the track and thumb are 8.6's; the arrows aren't (8.6's glyph rows 2/4/6/8 wide, Executor's 1/3/5/7), nor the pressed arrows' and the inactive bar's greys
+controls.384.*	the scroll bar (8.6's CDEF 384), same gap as CDEF 1 (same DrawThemeTrack)
+
+# platinum-2 (open)
+# A control record: Executor's are 296 bytes (a whole Str255 title), 8.6's as long as the title.
+dlgitems.settext.*.size	Executor's control records are 296 bytes; 8.6 sizes them to the title (the point: SetDialogItemText leaves them alone)

@@ -1,9 +1,9 @@
-// Executor's own volume is kept in OPFS (worker.js): a file written on it
+// Executor's own volume is kept by the server (sync.js, Store): a file written on it
 // survives a reload; Reset forgets it. Executor's own System, so no Apple
 // software is needed.
 //
 //   node web/tests/tab_persist.mjs DIR
-import { open, firstFrame, request, until } from './harness.mjs';
+import { open, firstFrame, request, until, openDisks, closeDisks } from './harness.mjs';
 
 const [dir] = process.argv.slice(2);
 const { page, close } = await open(dir, { log: false });
@@ -27,7 +27,9 @@ check(await request(page, 'read', '/executor/note.txt') === 'kept across reloads
 check(!(await request(page, 'list', '/executor')).includes('Shutdown Check'),
       'no Shutdown Check carried over');
 
-await page.click('#reset');
+await openDisks(page);
+await page.locator('#reset').evaluate((r) => r.click());
+await closeDisks(page);
 await firstFrame(page);
 await until(() => request(page, 'app').then((a) => a === 'Browser'), 20000);
 check(await request(page, 'read', '/executor/note.txt') === null, 'Reset forgets it');

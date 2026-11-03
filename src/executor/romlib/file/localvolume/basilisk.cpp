@@ -16,7 +16,7 @@ bool BasiliskItemFactory::isHidden(const fs::directory_entry& e)
 ItemPtr BasiliskItemFactory::createItemForDirEntry(ItemCache& itemcache, CNID parID, CNID cnid,
     const fs::directory_entry& e, mac_string_view macname)
 {
-    if(fs::is_regular_file(e.path()))
+    if(e.is_regular_file())
     {
         fs::path rsrc = e.path().parent_path() / ".rsrc" / e.path().filename();
         fs::path finf = e.path().parent_path() / ".finf" / e.path().filename();

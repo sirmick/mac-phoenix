@@ -532,6 +532,55 @@
     extern Extended Frac2X(Fract x);
     extern Fract X2Frac(Extended *xp);
 
+# InterfaceLib's, a double in f1 (AppleWorks 5's ruler; toolutil.cpp)
+# ####
+
+- only-for: Executor
+  function:
+    name: Fix2X
+    return: double
+    args:
+      - name: x
+        type: Fixed
+    library: InterfaceLib
+    executor: glue_Fix2X
+
+# ####
+
+- only-for: Executor
+  function:
+    name: X2Fix
+    return: Fixed
+    args:
+      - name: x
+        type: double
+    library: InterfaceLib
+    executor: glue_X2Fix
+
+# ####
+
+- only-for: Executor
+  function:
+    name: Frac2X
+    return: double
+    args:
+      - name: x
+        type: Fract
+    library: InterfaceLib
+    executor: glue_Frac2X
+
+# ####
+
+- only-for: Executor
+  function:
+    name: X2Frac
+    return: Fract
+    args:
+      - name: x
+        type: double
+    library: InterfaceLib
+    executor: glue_X2Frac
+
 # ####
 
 - function:
@@ -553,3 +602,38 @@
         type: extended80*
     trap: 0xA846
     executor: C_
+
+# ####
+
+# InterfaceLib's lowercase C routines (multiversal/executor.rb, declare_cglue):
+# the Pascal routine with C strings, Points by address.
+
+- only-for: Executor
+  function:
+    name: deltapoint
+    cglue: DeltaPoint
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: getindstring
+    cglue: GetIndString
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: newstring
+    cglue: NewString
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: setstring
+    cglue: SetString
+    library: InterfaceLib

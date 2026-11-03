@@ -608,8 +608,10 @@
 - function:
     name: GetItemStyle
     comment: |
-      MacPhoenix: the style is a Style, a byte: 8.6 writes one byte there
-      (tests/guest/difftest menu); a word overwrote the caller's next byte.
+      MacPhoenix: through the trap the style is Pascal's VAR Style, a word
+      with the style in its low byte (the Quadra 650 ROM, tests/guest/itemstyle;
+      AppleWorks 5's command keys read it so). InterfaceLib's export, below,
+      writes one byte, as 8.6's does (tests/guest/difftest menu).
     args:
       - name: mh
         type: MenuHandle
@@ -619,6 +621,22 @@
         type: Style*
     trap: 0xA941
     executor: C_
+    export: false
+
+# ####
+
+- only-for: Executor
+  function:
+    name: GetItemStyle
+    args:
+      - name: mh
+        type: MenuHandle
+      - name: item
+        type: INTEGER
+      - name: stylep
+        type: Style*
+    library: InterfaceLib
+    executor: glue_GetItemStyle
 
 # ####
 
@@ -833,25 +851,27 @@
 
 # ####
 
-- api: carbon
-  function:
+- function:
     name: EnableMenuItem
     args:
-      - name: mh
-        type: MenuHandle
+      - name: menu
+        type: MenuRef
       - name: item
-        type: INTEGER
+        type: UInt16
+    library: MenusLib
+    executor: C_
 
 # ####
 
-- api: carbon
-  function:
+- function:
     name: DisableMenuItem
     args:
-      - name: mh
-        type: MenuHandle
+      - name: menu
+        type: MenuRef
       - name: item
-        type: INTEGER
+        type: UInt16
+    library: MenusLib
+    executor: C_
 
 # ####
 
@@ -1032,6 +1052,27 @@
 
 # ####
 
+# MacPhoenix: MenusLib's StandardMBDF (8.5 and later, in no public
+# header): the standard menu bar definition, as MBDF 0. 8.x's MBDF 0
+# resource is PowerPC code that only calls it; Executor's is its own MBDF 0.
+# The arguments are an MBDF's (Inside Macintosh: Toolbox Essentials 3-114).
+- function:
+    name: StandardMBDF
+    return: LONGINT
+    args:
+      - name: selector
+        type: INTEGER
+      - name: message
+        type: INTEGER
+      - name: parameter1
+        type: INTEGER
+      - name: parameter2
+        type: LONGINT
+    library: MenusLib
+    executor: C_
+
+# ####
+
 # MacPhoenix: Menus.h's 8.0 per-item calls, exported by 8.x's AppearanceLib.
 - function:
     name: SetMenuItemKeyGlyph
@@ -1205,6 +1246,56 @@
 
 # ####
 
+# AppearanceLib 1.0's command IDs and MenuEvent, MenusLib 8.5's hiding of
+# the menu bar (REALbasic's runtime calls them unchecked where Appearance
+# is: GameBox Classic).
+- function:
+    name: SetMenuItemCommandID
+    return: OSErr
+    args:
+      - name: inMenu
+        type: MenuRef
+      - name: inItem
+        type: SInt16
+      - name: inCommandID
+        type: UInt32
+    library: AppearanceLib
+    executor: C_
+
+- function:
+    name: GetMenuItemCommandID
+    return: OSErr
+    args:
+      - name: inMenu
+        type: MenuRef
+      - name: inItem
+        type: SInt16
+      - name: outCommandID
+        type: UInt32*
+    library: AppearanceLib
+    executor: C_
+
+- function:
+    name: MenuEvent
+    return: UInt32
+    args:
+      - name: inEvent
+        type: "const EventRecord*"
+    library: AppearanceLib
+    executor: C_
+
+- function:
+    name: HideMenuBar
+    library: MenusLib
+    executor: C_
+
+- function:
+    name: ShowMenuBar
+    library: MenusLib
+    executor: C_
+
+# ####
+
 # Whether choosing a hierarchical item's parent itself is allowed; kept.
 - function:
     name: SetSubmenuParentChoosable
@@ -1264,6 +1355,100 @@
 
 # ####
 
+# An item's submenu ID and text encoding (8.5). 8.6 keeps a set ID apart
+# from the item's command and mark (they stay 0), and answers the mark of
+# an item whose command is hMenuCmd; an item's encoding starts as -2
+# (smCurrentScript); a bad item is paramErr (the menu probe's item85 keys).
+- function:
+    name: SetMenuItemHierarchicalID
+    return: OSErr
+    args:
+      - name: inMenu
+        type: MenuRef
+      - name: inItem
+        type: SInt16
+      - name: inHierID
+        type: SInt16
+    library: AppearanceLib
+    executor: C_
+
+# ####
+
+- function:
+    name: GetMenuItemHierarchicalID
+    return: OSErr
+    args:
+      - name: inMenu
+        type: MenuRef
+      - name: inItem
+        type: SInt16
+      - name: outHierID
+        type: SInt16*
+    library: AppearanceLib
+    executor: C_
+
+# ####
+
+- function:
+    name: SetMenuItemFontID
+    return: OSErr
+    args:
+      - name: inMenu
+        type: MenuRef
+      - name: inItem
+        type: SInt16
+      - name: inFontID
+        type: SInt16
+    library: AppearanceLib
+    executor: C_
+
+# ####
+
+- function:
+    name: GetMenuItemFontID
+    return: OSErr
+    args:
+      - name: inMenu
+        type: MenuRef
+      - name: inItem
+        type: SInt16
+      - name: outFontID
+        type: SInt16*
+    library: AppearanceLib
+    executor: C_
+
+# ####
+
+- function:
+    name: SetMenuItemTextEncoding
+    return: OSErr
+    args:
+      - name: inMenu
+        type: MenuRef
+      - name: inItem
+        type: SInt16
+      - name: inScriptID
+        type: TextEncoding
+    library: AppearanceLib
+    executor: C_
+
+# ####
+
+- function:
+    name: GetMenuItemTextEncoding
+    return: OSErr
+    args:
+      - name: inMenu
+        type: MenuRef
+      - name: inItem
+        type: SInt16
+      - name: outScriptID
+        type: TextEncoding*
+    library: AppearanceLib
+    executor: C_
+
+# ####
+
 # MenusLib's private calls the 8.6 Appearance control panel makes after a
 # font or theme change (no arguments at its call sites).
 - function:
@@ -1277,3 +1462,54 @@
     name: InvalidateAllCachedMenuPixels
     library: MenusLib
     executor: C_
+
+# ####
+
+# InterfaceLib's lowercase C routines (multiversal/executor.rb, declare_cglue):
+# the Pascal routine with C strings, Points by address.
+
+- only-for: Executor
+  function:
+    name: appendmenu
+    cglue: AppendMenu
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: getmenuitemtext
+    cglue: GetMenuItemText
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: insertmenuitem
+    cglue: InsertMenuItem
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: menuselect
+    cglue: MenuSelect
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: newmenu
+    cglue: NewMenu
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: setmenuitemtext
+    cglue: SetMenuItemText
+    library: InterfaceLib

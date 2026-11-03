@@ -438,3 +438,39 @@
     dispatcher: Pack3
     selector: 0x0008
     executor: C_
+
+# ####
+
+# InterfaceLib's lowercase C routines (multiversal/executor.rb, declare_cglue):
+# the prompt and name C strings; the reply's fName stays a Pascal string,
+# as on a Mac (tests/guest/cglueprobe, the G3 on 8.6).
+
+- only-for: Executor
+  function:
+    name: sfgetfile
+    cglue: SFGetFile
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: sfpgetfile
+    cglue: SFPGetFile
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: sfpputfile
+    cglue: SFPPutFile
+    library: InterfaceLib
+
+# ####
+
+- only-for: Executor
+  function:
+    name: sfputfile
+    cglue: SFPutFile
+    library: InterfaceLib

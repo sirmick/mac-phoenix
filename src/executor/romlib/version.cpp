@@ -13,6 +13,8 @@
 #include <OSUtil.h>
 #include <CQuickDraw.h>
 
+#include <algorithm>
+
 using namespace Executor;
 
 #if !defined(EXECUTOR_VERSION)
@@ -93,17 +95,29 @@ ROMlib_set_system_version(uint32_t version)
             }
             system_version = version;
             LM(SysVersion) = version;
+            /* An 8.x System runs on PowerPC Macs only, where fat
+               applications run their PowerPC code: 8.6's Finder's 68k code
+               only says it needs a 68k Mac (as without --executor-ppc,
+               which the browser tab has no way to give). */
+            if(version >= 0x0800)
+                ROMlib_prefer_ppc = true;
             gestalt_set_system_version(version);
             if(version >= 0x0800)
                 traps::installSystem8Traps();
+            else if(ROMlib_prefer_ppc)
+                traps::installCodeFragmentDispatch();
 
             /* The highlight colour is the one the Color control panel
                saved in extended parameter RAM ($82, 6 bytes; zero, black,
-               when it never has), not Executor's own light blue. */
+               when it never has), not Executor's own light blue. 8.x with
+               none saved: the Mac OS Default theme's lavender (a G3 on 8.6
+               with its parameter RAM zapped selects text in it). */
             const uint8_t *x = &::XPRAM[0x82];
             LM(HiliteRGB).red = (unsigned short)(x[0] << 8 | x[1]);
             LM(HiliteRGB).green = (unsigned short)(x[2] << 8 | x[3]);
             LM(HiliteRGB).blue = (unsigned short)(x[4] << 8 | x[5]);
+            if(version >= 0x0800 && std::all_of(x, x + 6, [](uint8_t b) { return b == 0; }))
+                LM(HiliteRGB) = RGBColor{ 0xCCCC, 0xCCCC, 0xFFFF };
             return;
         }
     }

@@ -128,6 +128,13 @@ its `FINDER.DAT`) is written back; a busy volume is flushed.
   INIT with D0 = 4 and an 80-byte block (it keeps the long at `+$1C` as a
   transfer size above which its I/O goes another way, 0 without): answered
   `paramErr` (it was the fatal "unimplemented trap" alert).
+  Measured on the Quadra's 7.6.1 (2026-11-03, a Retro68 probe, D0 = 4, A0
+  at 80 zero bytes, then 80 bytes of `$AA`): noErr in D0; the block's first
+  `$12` bytes filled as a File Manager parameter block's header (qLink 0,
+  qType 5, ioTrap `$A074`, ioCmdAddr a ROM address, ioCompletion 0,
+  ioResult 0), `$C2000040` at `+$1C` (ioMisc), the rest untouched. What the
+  value means is still unknown, so Executor keeps `paramErr` (PC Exchange
+  then has no limit and works).
 
 ## Not done
 

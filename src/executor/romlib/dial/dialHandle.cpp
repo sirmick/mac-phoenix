@@ -11,6 +11,7 @@
 #include <EventMgr.h>
 #include <DialogMgr.h>
 #include <ControlMgr.h>
+#include <ControlMgr8.h>
 #include <MemoryMgr.h>
 #include <OSUtil.h>
 #include <ToolboxUtil.h>
@@ -26,6 +27,9 @@
 #include <rsys/hook.h>
 #include <osevent/osevent.h>
 #include <rsys/process.h>
+#include <menu/menu.h>
+
+#include <iterator>
 #include <base/functions.impl.h>
 #include <base/traps.impl.h>
 
@@ -113,12 +117,86 @@ inline int _FindWindow(Point pt, WindowPtr *wp)
 #define ALLOW_MOVABLE_MODAL /* we've made so many other changes, we \
                    may as well go whole hog */
 
-/* MacPhoenix: System 7's menu bar setup around a modal dialog ($AA67).
-   Executor's ModalDialog leaves the menu bar alone, so there is nothing to
-   disable or restore. */
+/* MacPhoenix: the menu bar around a modal dialog ($AA67), as 7.5.5 (a
+   Quadra) and 8.6 (a G3) show it under an alert or Standard File: the
+   application's menus, the Apple menu among them, disabled and the bar
+   drawn with no title selected; the system menus (Help, Application) as
+   they were; the Edit menu (the one with Command-X, C and V) left on when
+   the dialog has a text field. Setting up again before the restore does
+   nothing. Per process: the menus it disabled, enabled again after. */
+namespace
+{
+struct ModalMenus
+{
+    int depth;
+    int n;
+    MenuHandle menus[32];
+};
+ModalMenus modal_menus;
+
+bool edit_menu_p(MenuHandle mh)
+{
+    int found = 0;
+    for(INTEGER i = 1, n = CountMItems(mh); i <= n; i++)
+    {
+        GUEST<CharParameter> c;
+        GetItemCmd(mh, i, &c);
+        if(c == 'X' || c == 'x' || c == 'C' || c == 'c' || c == 'V' || c == 'v')
+            found++;
+    }
+    return found >= 3;
+}
+}
+
 void Executor::C_ModalDialogMenuSetup(Boolean setup)
 {
-    (void)setup;
+    static bool registered;
+    if(!registered)
+    {
+        registered = true;
+        ROMlib_process_register_state(&modal_menus, sizeof modal_menus);
+    }
+    if(!LM(MenuList))
+        return;
+    if(setup)
+    {
+        if(modal_menus.depth++ > 0)
+            return;
+        modal_menus.n = 0;
+        DialogPeek dp = (DialogPeek)FrontWindow();
+        bool text = dp && dp->window.windowKind == dialogKind && dp->editField != -1;
+        menulist *ml = *MENULIST;
+        int count = ml->muoff / sizeof(muelem);
+        for(int i = 0; i < count && modal_menus.n < (int)std::size(modal_menus.menus); i++)
+        {
+            MenuHandle mh = (*MENULIST)->mulist[i].muhandle;
+            if(ROMlib_system_menu_p((*mh)->menuID) || !(MI_ENABLE_FLAGS(mh) & 1)
+               || (text && edit_menu_p(mh)))
+                continue;
+            MI_ENABLE_FLAGS(mh) = MI_ENABLE_FLAGS(mh) & ~1;
+            modal_menus.menus[modal_menus.n++] = mh;
+        }
+        HiliteMenu(0);
+        DrawMenuBar();
+    }
+    else
+    {
+        if(modal_menus.depth == 0 || --modal_menus.depth > 0)
+            return;
+        /* those still in the bar */
+        menulist *ml = *MENULIST;
+        int count = ml->muoff / sizeof(muelem);
+        for(int k = 0; k < modal_menus.n; k++)
+            for(int i = 0; i < count; i++)
+                if((*MENULIST)->mulist[i].muhandle == modal_menus.menus[k])
+                {
+                    MenuHandle mh = modal_menus.menus[k];
+                    MI_ENABLE_FLAGS(mh) = MI_ENABLE_FLAGS(mh) | 1;
+                    break;
+                }
+        modal_menus.n = 0;
+        DrawMenuBar();
+    }
 }
 
 #if !defined(ALLOW_MOVABLE_MODAL)
@@ -249,6 +327,13 @@ void Executor::C_ModalDialog(ModalFilterUPP fp, GUEST<INTEGER> *item) /* IMI-415
             fp2 = fp;
         else
             fp2 = &ROMlib_myfilt;
+        /* MacPhoenix: 7.5 and later disable the menu bar meanwhile */
+        struct MenuSetup
+        {
+            bool on = system_version >= 0x750;
+            MenuSetup() { if(on) C_ModalDialogMenuSetup(true); }
+            ~MenuSetup() { if(on) C_ModalDialogMenuSetup(false); }
+        } menu_setup;
         for(done = false; !done;)
         {
             WindowPtr temp_wp;
@@ -257,7 +342,11 @@ void Executor::C_ModalDialog(ModalFilterUPP fp, GUEST<INTEGER> *item) /* IMI-415
 
             if(idle)
                 TEIdle(idle);
-            GetNextEvent(DIALOGEVTS, &evt);
+            /* MacPhoenix: a tick's sleep between null events, so an alert
+               left up doesn't spin the host (GetNextEvent here took a core);
+               the filter still gets a null event every tick and processes
+               behind still run. */
+            WaitNextEvent(DIALOGEVTS, &evt, 1, nullptr);
             whereunswapped.h = evt.where.h;
             whereunswapped.v = evt.where.v;
 
@@ -288,6 +377,16 @@ void Executor::C_ModalDialog(ModalFilterUPP fp, GUEST<INTEGER> *item) /* IMI-415
                 if(IsDialogEvent(&evt)
                    && DialogSelect(&evt, &ndp, item))
                     done = true;
+            }
+            /* MacPhoenix: an update for a window behind that neither the
+               filter nor DialogSelect drew (AppleWorks' button bar behind
+               its alerts, blank on a Mac too) comes straight back from the
+               next event call: a tick's wait, or the host spins. */
+            if(!done && evt.what == updateEvt)
+            {
+                WindowPeek w = guest_cast<WindowPeek>(evt.message);
+                if(w && !EmptyRgn(w->updateRgn))
+                    Delay(1, nullptr);
             }
         }
     }
@@ -388,7 +487,11 @@ void Executor::ROMlib_drawiptext(DialogPtr dp, itmp ip, int item_no)
     }
 
     r = ip->itmr;
-    if(ip->itmtype & statText)
+    /* MacPhoenix: no text (a nil handle: 8.6's Navigation Services' empty
+       static text item in its Save dialog), nothing to draw */
+    if(!ip->itmhand)
+        ;
+    else if(ip->itmtype & statText)
     {
         GUEST<Handle> nh_s;
         Handle nh;
@@ -449,6 +552,11 @@ void Executor::dialog_draw_item(DialogPtr dp, itmp itemp, int itemno)
     else if(itemp->itmtype & (statText | editText))
     {
         Rect r;
+
+        /* MacPhoenix: a text item whose handle is one of the dialog's
+           controls is that control, drawn with the controls */
+        if(ROMlib_dialog_handle_is_control(dp, itemp->itmhand))
+            return;
 
         // FIXME: #warning This fix helps Energy Scheming, but we really should find out the
         // FIXME: #warning exact semantics for when we should try to draw items, different
@@ -513,7 +621,10 @@ void Executor::C_DrawDialog(DialogPtr dp) /* IMI-418 */
         ip = (itmp)(intp + 1);
         for(i = *intp, inum = 1; i-- >= 0; inum++, BUMPIP(ip))
         {
-            dialog_draw_item(dp, ip, inum);
+            /* MacPhoenix: an item with a control of its own (the control
+               hierarchy) was drawn with the controls */
+            if(!ROMlib_dialog_item_control(dp, inum))
+                dialog_draw_item(dp, ip, inum);
         }
         if(((DialogPeek)dp)->editField != -1)
             TEActivate(((DialogPeek)dp)->textH);
@@ -548,13 +659,22 @@ void Executor::C_UpdateDialog(DialogPtr dp, RgnHandle rgn) /* IMIV-60 */
     SetPort((GrafPtr)dp);
     ShowWindow((WindowPtr)dp);
     DrawControls((WindowPtr)dp);
+    /* MacPhoenix: a window made dialogKind by its program has no item
+       list, only what follows its 156 bytes (Dark Castle Demo's): a Mac
+       reads whatever is there; here a list that isn't a handle draws no
+       items. */
+    if(!((DialogPeek)dp)->items || !ROMlib_live_handle_p(((DialogPeek)dp)->items))
+    {
+        SetPort(gp);
+        return;
+    }
     state = HGetState(((DialogPeek)dp)->items);
     HSetState(((DialogPeek)dp)->items, state | LOCKBIT);
     intp = (GUEST<INTEGER> *)*(((DialogPeek)dp)->items);
     ip = (itmp)(intp + 1);
     for(i = *intp, inum = 1; i-- >= 0; inum++, BUMPIP(ip))
     {
-        if(RectInRgn(&ip->itmr, rgn))
+        if(RectInRgn(&ip->itmr, rgn) && !ROMlib_dialog_item_control(dp, inum))
         {
             dialog_draw_item(dp, ip, inum);
         }
@@ -625,6 +745,42 @@ Boolean Executor::C_DialogSelect(EventRecord *evt, GUEST<DialogPtr> *dpp,
             break;
         case keyDown:
         case autoKey:
+        {
+            /* MacPhoenix: the control hierarchy (8.x): the key goes to the
+               control with the keyboard focus (Navigation Services' Name
+               field, an edit text control), Tab moves the focus; the item
+               hit is the focused control's */
+            GUEST<ControlHandle> root, focus;
+            if(GetRootControl((WindowPtr)dp, &root) == noErr
+               && GetKeyboardFocus((WindowPtr)dp, &focus) == noErr && focus)
+            {
+                if((evt->message & 0xff) == '\t')
+                {
+                    if(evt->modifiers & shiftKey)
+                        ReverseKeyboardFocus((WindowPtr)dp);
+                    else
+                        AdvanceKeyboardFocus((WindowPtr)dp);
+                    break;
+                }
+                HandleControlKey(focus, (evt->message >> 8) & 0xff, evt->message & 0xff,
+                                 evt->modifiers);
+                INTEGER n = CountDITL((DialogPtr)dp);
+                for(INTEGER item = 1; item <= n; item++)
+                {
+                    GUEST<INTEGER> type;
+                    GUEST<Handle> h;
+                    Rect r;
+                    GetDialogItem((DialogPtr)dp, item, &type, &h, &r);
+                    if(h == (Handle)focus.get())
+                    {
+                        *itemp = item;
+                        retval = !((INTEGER)type & itemDisable);
+                        break;
+                    }
+                }
+                break;
+            }
+        }
             if(dp->editField == -1)
                 break;
             c = evt->message & 0xff;

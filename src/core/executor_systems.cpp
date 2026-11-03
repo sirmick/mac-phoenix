@@ -6,8 +6,13 @@
 #include <QStringList>
 
 #include <algorithm>
+#include <cerrno>
+#include <csignal>
 #include <cstdio>
+#include <cstdlib>
+#include <fcntl.h>
 #include <filesystem>
+#include <sys/file.h>
 #include <system_error>
 #include <unistd.h>
 
@@ -74,11 +79,10 @@ static bool copy_tree(const fs::path& from, const fs::path& to, std::error_code&
     return !ec;
 }
 
-// <name>.clean -> <name> (from scratch when fresh, or when it is missing).
-static bool prepare(const fs::path& work, bool fresh, std::string& err)
+// <name>.clean -> work (from scratch when fresh, or when it is missing).
+static bool prepare(const fs::path& clean, const fs::path& work, bool fresh, std::string& err)
 {
     std::error_code ec;
-    fs::path clean = work.string() + ".clean";
     if (!fs::is_directory(clean, ec)) {
         err = clean.string() + " missing";
         return false;
@@ -125,6 +129,72 @@ static void provision_bridge(const fs::path& work)
     }
 }
 
+// Sessions on one System: the first holds <root>/<name>.lock and runs on
+// <root>/<name>; one started while it runs gets a copy of its own,
+// <root>/run/<pid>/<name> (the folder's name is the volume's), so the two
+// don't wipe each other's folder at start or rewrite each other's
+// MacPhoenix.cfg (the bridge dir). Copies are removed at exit, and those of
+// processes that are gone (killed) at the next start.
+static int held_fd = -1;
+static std::string held_lock;
+static std::string own_run_dir;
+
+void remove_session_copy()
+{
+    std::error_code ec;
+    if (!own_run_dir.empty())
+        fs::remove_all(own_run_dir, ec);
+}
+
+static void sweep_run_dirs(const fs::path& run)
+{
+    std::error_code ec;
+    for (const auto& e : fs::directory_iterator(run, ec)) {
+        const std::string n = e.path().filename().string();
+        if (n.empty() || n.find_first_not_of("0123456789") != std::string::npos)
+            continue;
+        pid_t pid = (pid_t)strtol(n.c_str(), nullptr, 10);
+        if (pid != getpid() && kill(pid, 0) != 0 && errno == ESRCH)
+            fs::remove_all(e.path(), ec);
+    }
+}
+
+// The working folder for a run on <name>; copy: it is this session's own
+// (always made fresh: the shared one may be half-written by its run).
+static fs::path work_dir(const std::string& storage_dir, const std::string& name, bool& copy)
+{
+    fs::path systems = root(storage_dir);
+    std::error_code ec;
+    fs::create_directories(systems, ec);
+    std::string lock = (systems / (name + ".lock")).string();
+    if (held_lock != lock) {
+        if (held_fd >= 0)
+            close(held_fd);
+        held_fd = -1;
+        held_lock.clear();
+        int fd = open(lock.c_str(), O_RDWR | O_CREAT | O_CLOEXEC, 0644);
+        if (fd >= 0 && flock(fd, LOCK_EX | LOCK_NB) == 0) {
+            held_fd = fd;
+            held_lock = lock;
+        } else if (fd >= 0) {
+            close(fd);
+        }
+    }
+    sweep_run_dirs(systems / "run");
+    copy = held_fd < 0;
+    if (!copy)
+        return systems / name;
+    fs::path own = systems / "run" / std::to_string(getpid());
+    if (own_run_dir.empty()) {
+        own_run_dir = own.string();
+        atexit(remove_session_copy);
+    }
+    fprintf(stderr, "[Executor] system '%s' is in use: running on a copy in %s\n",
+            name.c_str(), own.c_str());
+    fs::create_directories(own, ec);
+    return own / name;
+}
+
 std::string system_image(const config::EmulatorConfig& config)
 {
     if (config.executor_system.empty() || !valid_name(config.executor_system))
@@ -153,9 +223,11 @@ void resolve(const config::EmulatorConfig& config, std::string& data_dir, std::s
         if (!valid_name(config.executor_system)) {
             fprintf(stderr, "[Executor] bad system name '%s'\n", config.executor_system.c_str());
         } else {
-            fs::path work = fs::path(root(config.storage_dir)) / config.executor_system;
+            bool copy = false;
+            fs::path work = work_dir(config.storage_dir, config.executor_system, copy);
+            fs::path clean = fs::path(root(config.storage_dir)) / (config.executor_system + ".clean");
             std::string err;
-            if (prepare(work, config.executor_fresh, err)) {
+            if (prepare(clean, work, config.executor_fresh || copy, err)) {
                 data_dir = work.string();
                 provision_bridge(work);
             }

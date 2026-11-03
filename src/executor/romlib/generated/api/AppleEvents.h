@@ -75,6 +75,11 @@ kAEQueueReply = 2,
 kAEWaitReply = 3,
 };
 
+enum {kAEWantReceipt = 512,
+kAEDontRecord = 4096,
+kAEDontExecute = 8192,
+};
+
 enum {_kAEInteractMask = 48,
 };
 
@@ -153,6 +158,12 @@ using AECoercePtrUPP = UPP<OSErr(DescType data_type, Ptr data, Size data_size, D
 using AECoerceDescUPP = UPP<OSErr(AEDesc *desc, DescType to_type, int32_t refcon, AEDesc *desc_out)>;
 
 
+using AEObjectAccessorUPP = UPP<OSErr(DescType desiredClass, AEDesc *containerToken, DescType containerClass, DescType keyForm, AEDesc *keyData, AEDesc *theToken, int32_t refcon)>;
+
+
+using AEDisposeTokenUPP = UPP<OSErr(AEDesc *token)>;
+
+
 struct AE_hdlr{GUEST_STRUCT;GUEST<void*> fn;GUEST<int32_t> refcon;};void describeStruct(const AE_hdlr&, std::ostream&);
 
 // #### internal
@@ -182,7 +193,7 @@ typedef GUEST<AE_hdlr_table_t> *AE_hdlr_table_ptr;
 
 typedef GUEST<AE_hdlr_table_ptr> *AE_hdlr_table_h;
 
-struct AE_zone_tables{GUEST_STRUCT;GUEST<AE_hdlr_table_h> event_hdlr_table;GUEST<AE_hdlr_table_h> coercion_hdlr_table;GUEST<AE_hdlr_table_h> special_hdlr_table;char pad_1[28];char unknown_appl_value[4];char pad_2[8];GUEST<Handle> unknown_sys_handle;};void describeStruct(const AE_zone_tables&, std::ostream&);
+struct AE_zone_tables{GUEST_STRUCT;GUEST<AE_hdlr_table_h> event_hdlr_table;GUEST<AE_hdlr_table_h> coercion_hdlr_table;GUEST<AE_hdlr_table_h> special_hdlr_table;GUEST<AE_hdlr_table_h> object_accessor_table;GUEST<Handle> object_callbacks;char pad_1[20];char unknown_appl_value[4];char pad_2[8];GUEST<Handle> unknown_sys_handle;};void describeStruct(const AE_zone_tables&, std::ostream&);
 
 // points to a 32byte handle of unknown contents (at least,
 //      sometimes)
@@ -226,6 +237,12 @@ OSErr C__AE_hdlr_delete(AE_hdlr_table_h , int32_t , GUEST<AE_hdlr_selector_t> *)
 OSErr C__AE_hdlr_lookup(AE_hdlr_table_h , int32_t , GUEST<AE_hdlr_selector_t> *, GUEST<AE_hdlr_t> *);PASCAL_SUBTRAP(_AE_hdlr_lookup, 0xA816, 0x0833, Pack8);
 
 
+// Private/undocumented entry point beside _AE_hdlr_install (0x0831):
+// a lookup, its arguments as _AE_hdlr_lookup's; HyperCard 2.4.1 calls
+// it right after _AE_hdlr_table_alloc.
+OSErr C__AE_hdlr_0830(AE_hdlr_table_h , int32_t , GUEST<AE_hdlr_selector_t> *, GUEST<AE_hdlr_t> *);PASCAL_SUBTRAP(_AE_hdlr_0830, 0xA816, 0x0830, Pack8);
+
+
 OSErr C__AE_hdlr_install(AE_hdlr_table_h , int32_t , GUEST<AE_hdlr_selector_t> *, GUEST<AE_hdlr_t> *);PASCAL_SUBTRAP(_AE_hdlr_install, 0xA816, 0x0831, Pack8);
 
 
@@ -233,7 +250,6 @@ BEGIN_EXECUTOR_ONLY
 /* private */
 
 extern bool send_application_open_aevt_p;
-extern bool application_accepts_open_app_aevt_p;
 
 /*  error codes */
 
@@ -308,6 +324,7 @@ typeAppleEvent = "aevt"_4,
 typeProcessSerialNumber = "psn "_4,
 typeNull = "null"_4,
 typeApplSignature = "sign"_4,
+typeTargetID = "targ"_4,
 typeType = "type"_4,
 typeEnumerated = "enum"_4,
 typeTrue = "true"_4,
@@ -367,6 +384,11 @@ keyAEGetErrDescProc = "indc"_4,
 keyAEBlock = "blck"_4,
 keyAEUnblock = "unbk"_4,
 keyAENavigate = "navt"_4,
+keyAEDesiredClass = "want"_4,
+keyAEContainer = "from"_4,
+keyAEKeyForm = "form"_4,
+keyAEKeyData = "seld"_4,
+typeObjectSpecifier = "obj "_4,
 formAbsolutePosition = "indx"_4,
 formRelativePosition = "rele"_4,
 formTest = "test"_4,

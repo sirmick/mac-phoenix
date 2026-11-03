@@ -559,10 +559,15 @@ OSErr build_alias(const FSSpec *fromFile, const FSSpec *target, std::vector<uint
 {
     Str63 name;
     memcpy(name, target->name, std::min<int>(target->name[0], 63) + 1);
+    /* A volume: parent fsRtParID, its name the volume's (FSMakeFSSpec of
+       "Macintosh HD:"); its own entry is the root directory, 2. */
+    bool volume = target->parID == fsRtParID;
+    Str63 root_name;
     CInfoPBRec fpb = {};
-    fpb.hFileInfo.ioNamePtr = name;
+    fpb.hFileInfo.ioNamePtr = volume ? root_name : name;
     fpb.hFileInfo.ioVRefNum = target->vRefNum;
-    fpb.hFileInfo.ioDirID = target->parID;
+    fpb.hFileInfo.ioDirID = volume ? (int32_t)2 : (int32_t)target->parID;
+    fpb.hFileInfo.ioFDirIndex = volume ? -1 : 0;
     OSErr err = PBGetCatInfo(&fpb, false);
     if(err != noErr)
         return err;
@@ -579,7 +584,7 @@ OSErr build_alias(const FSSpec *fromFile, const FSSpec *target, std::vector<uint
 
     std::vector<int32_t> ids;
     std::vector<std::string> names;
-    if(!folder_chain(vref, target->parID, ids, names))
+    if(!volume && !folder_chain(vref, target->parID, ids, names))
         return fnfErr;
 
     int16_t nlvl_from = -1, nlvl_to = -1;
@@ -628,11 +633,14 @@ OSErr build_alias(const FSSpec *fromFile, const FSSpec *target, std::vector<uint
     };
     if(!names.empty() && ids.size() > 1)
         tag(0, names[0]);             /* the parent folder's name */
-    std::string path((const char *)vname + 1, vname[0]);
-    for(size_t i = ids.size() - 1; i-- > 0;)  /* below the root, outermost first */
-        path += ":" + names[i];
-    path += ":" + std::string((const char *)name + 1, name[0]);
-    tag(2, path);                     /* the full path */
+    if(!volume)                       /* a volume's has none (a G3's) */
+    {
+        std::string path((const char *)vname + 1, vname[0]);
+        for(size_t i = ids.size() - 1; i-- > 0;)  /* below the root, outermost first */
+            path += ":" + names[i];
+        path += ":" + std::string((const char *)name + 1, name[0]);
+        tag(2, path);                 /* the full path */
+    }
     size_t at = rec.size();
     rec.resize(at + 4, 0);
     put16(rec, at, 0xFFFF);

@@ -63,3 +63,113 @@ TEST_F(UnknownSelector, ScriptUtil)
     uint32_t d1 = run({ 0x3F3C, 0x7777, 0x3F3C, 0x0007, 0x2F3C, 0x8202, 0xFF00, 0xA8B5, 0x321F });
     EXPECT_EQ(0, d1 & 0xFFFF);
 }
+
+/* subq.w #2,sp (result space); move.w #$5555,-(sp) (one word of params);
+   move.w #$0109,d0 (selector 9, one parameter word); _ResourceDispatch;
+   move.w (sp)+,d1 -- the signed low byte of D0 is the selector, the high
+   byte the parameter size in words (ResourceMgr.yaml's ResourceDispatch
+   dispatcher comment) */
+TEST_F(UnknownSelector, ResourceDispatchWords)
+{
+    uint32_t d1 = run({ 0x554F, 0x3F3C, 0x5555, 0x303C, 0x0109, 0xA822, 0x321F });
+    EXPECT_EQ(0xFFCE, d1 & 0xFFFF) << "paramErr";
+}
+
+/* subq.w #6,sp (2 bytes result + 4 bytes the pea below points into);
+   pea.l 2(sp) (one 4-byte pointer argument); moveq #$24,d0;
+   _TranslationDispatch -- THINK C's, THINK Pascal's and MacPerl's launches
+   on 8.6 all reach this exact sequence (base/traps.cpp's comment); the
+   callee pops only its own 4-byte argument, so the test cleans up the
+   other 4 bytes of its own reservation itself, same as the real caller
+   would. move.w (sp)+,d1 reads the 2-byte result. */
+TEST_F(UnknownSelector, TranslationDispatchSelector24)
+{
+    uint32_t d1 = run({ 0x5D4F, 0x486F, 0x0002, 0x7024, 0xABFC, 0x321F, 0x584F });
+    EXPECT_EQ(0xF42F, d1 & 0xFFFF) << "noTranslationPathErr";
+}
+
+/* subq.w #2,sp (result); clr.w -(sp); pea.l (sp) twice (two pointers, as
+   the resident System code's pea $A92(a6); pea $A8E(a6)); moveq #$20,d0;
+   _TranslationDispatch; move.w (sp)+,d1 -- 10 argument bytes, a word
+   result (ResEdit's launch from the Finder on 8.6) */
+TEST_F(UnknownSelector, TranslationDispatchSelector20)
+{
+    uint32_t d1 = run({ 0x554F, 0x4267, 0x4857, 0x4857, 0x7020, 0xABFC, 0x321F });
+    EXPECT_EQ(0xF42F, d1 & 0xFFFF) << "noTranslationPathErr";
+}
+
+/* movea.l #pb,a0; moveq #$C,d0; _HFSDispatch; move.w d0,d1 -- a hole in
+   the File Manager's table (MPW Shell's File > New): paramErr in D0 and
+   in the parameter block's ioResult, a register call */
+TEST_F(UnknownSelector, FSDispatchHole)
+{
+    Ptr pb = NewPtrClear(128);
+    uint32_t a = ptr_to_longint(pb);
+    uint32_t d1 = run({ 0x207C, uint16_t(a >> 16), uint16_t(a), 0x700C, 0xA260, 0x3200 });
+    EXPECT_EQ(0xFFCE, d1 & 0xFFFF) << "paramErr";
+    EXPECT_EQ(0xFFCE, READUW(a + 16)) << "ioResult";
+    DisposePtr(pb);
+}
+
+/* movea.l #pb,a0; moveq #1,d0; _A08E; move.w d0,d1 -- the System's
+   B*-tree trap, which 8.6's Navigation Services calls unchecked (BBEdit
+   Lite 6.1's Save): paramErr, in D0 and ioResult */
+TEST_F(UnknownSelector, BTreeTrapA08E)
+{
+    Ptr pb = NewPtrClear(80);
+    uint32_t a = ptr_to_longint(pb);
+    uint32_t d1 = run({ 0x207C, (uint16_t)(a >> 16), (uint16_t)a, 0x7001, 0xA08E, 0x3200 });
+    EXPECT_EQ(0xFFCE, d1 & 0xFFFF) << "paramErr";
+    EXPECT_EQ(0xFFCE, READUW(a + 0x10)) << "ioResult";
+    DisposePtr(pb);
+}
+
+/* clr.l -(sp); move.l #buf,-(sp); move.w #2,-(sp); _OSDispatch;
+   move.l (sp)+,d1 -- the private selector Excel 4.0 calls at start-up:
+   Apple's 7.6.1 (a probe on the Quadra) writes 'TWIT' '1889' and returns
+   0, the selector and pointer popped */
+TEST_F(UnknownSelector, OSDispatchSelector2)
+{
+    Ptr buf = NewPtrClear(16);
+    memset(buf, 0xAA, 16);
+    uint32_t a = ptr_to_longint(buf);
+    uint32_t d1 = run({ 0x42A7, 0x2F3C, (uint16_t)(a >> 16), (uint16_t)a, 0x3F3C, 0x0002, 0xA88F, 0x221F });
+    EXPECT_EQ(0u, d1);
+    EXPECT_EQ(0, memcmp(buf, "TWIT1889", 8));
+    EXPECT_EQ(0xAA, (uint8_t)buf[8]);
+    DisposePtr(buf);
+}
+
+/* subq.w #2,sp; move.l #buf,-(sp); move.l #$021x,d0; _DisplayDispatch;
+   move.w (sp)+,d1 -- DMQDIsMirroringCapable ($16) and DMCanMirrorNow
+   ($17) as a 7.6.1 Quadra with one screen answers them (a probe): noErr
+   and false; -6226 with the Boolean left alone */
+TEST_F(UnknownSelector, DisplayDispatchMirroring)
+{
+    Ptr buf = NewPtrClear(2);
+    uint32_t a = ptr_to_longint(buf);
+    buf[0] = 0xAA;
+    uint32_t d1 = run({ 0x554F, 0x2F3C, (uint16_t)(a >> 16), (uint16_t)a, 0x203C, 0x0000, 0x0216, 0xABEB, 0x321F });
+    EXPECT_EQ(0, d1 & 0xFFFF);
+    EXPECT_EQ(0, (uint8_t)buf[0]);
+    buf[0] = 0xAA;
+    d1 = run({ 0x554F, 0x2F3C, (uint16_t)(a >> 16), (uint16_t)a, 0x203C, 0x0000, 0x0217, 0xABEB, 0x321F });
+    EXPECT_EQ((uint16_t)-6226, d1 & 0xFFFF);
+    EXPECT_EQ(0xAA, (uint8_t)buf[0]);
+    DisposePtr(buf);
+}
+
+/* movea.l #zone,a0; moveq #$A,d0; _HeapDispatch; move.l a0,d1 -- a zone
+   about to go: a 7.6.1 Quadra (a probe) leaves the zone's header and A0
+   as they were (the System's component code calls it, D0 ignored) */
+TEST_F(UnknownSelector, HeapDispatchForgetZone)
+{
+    Ptr zone = NewPtrClear(64);
+    memset(zone, 0x5A, 64);
+    uint32_t a = ptr_to_longint(zone);
+    uint32_t d1 = run({ 0x207C, (uint16_t)(a >> 16), (uint16_t)a, 0x700A, 0xA0A4, 0x2208 });
+    EXPECT_EQ(a, d1);
+    for(int i = 0; i < 64; i++)
+        EXPECT_EQ(0x5A, (uint8_t)zone[i]);
+    DisposePtr(zone);
+}

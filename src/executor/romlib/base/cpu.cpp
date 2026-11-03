@@ -145,10 +145,10 @@ uint32_t Executor::callPPCOnStack(uint32_t tv, uint32_t stack_top, std::initiali
 uint32_t Executor::callPPC(uint32_t tv, std::initializer_list<uint32_t> args)
 {
     auto word = [](uint32_t addr) -> GUEST<uint32_t> & { return *ptr_from_longint<GUEST<uint32_t> *>(addr); };
-    return callPPC(word(tv), word(tv + 4), args.begin(), (int)args.size());
+    return callPPC(word(tv), word(tv + 4), args.begin(), (int)args.size(), tv);
 }
 
-uint32_t Executor::callPPC(uint32_t code, uint32_t toc, const uint32_t *args, int n)
+uint32_t Executor::callPPC(uint32_t code, uint32_t toc, const uint32_t *args, int n, uint32_t tv)
 {
     PowerCore &cpu = getPowerCore();
     PowerCoreState saved = cpu;
@@ -170,6 +170,8 @@ uint32_t Executor::callPPC(uint32_t code, uint32_t toc, const uint32_t *args, in
     }
     cpu.r[1] = frame;
     cpu.r[2] = toc;
+    if(tv)
+        cpu.r[12] = tv;
     EM_A7 = frame;
     executePPC(code);
     uint32_t result = cpu.r[3];

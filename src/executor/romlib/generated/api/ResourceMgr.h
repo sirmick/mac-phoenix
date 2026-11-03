@@ -304,6 +304,10 @@ LIBRARY_ALSO(PrivateInterfaceLib, GetMap, InterfaceLib);
 SignedByte C_GetResourceMapPrivateFlags(Handle map);PASCAL_SUBTRAP(GetResourceMapPrivateFlags, 0xA822, 0x0008, ResourceDispatch);
 
 
+// MacPhoenix. Private (selector 7, called with moveq #7; the name is among the 8.6 System file's Resource Manager names): by its name, whether searches go through the override maps; Executor takes the Boolean and changes nothing. The call pops its Boolean whatever D0's high byte says. ResEdit 2.1.3 turns it off around reading a file's own map (Count1Types) and back on; unknown, the Boolean stayed on the stack and ResEdit's saved registers came back shifted (New file on 8.6: SizeWindow of a nil window).
+void C_SetScanOverride(Boolean scan);PASCAL_SUBTRAP(SetScanOverride, 0xA822, 0x0007, ResourceDispatch);
+
+
 // MacPhoenix. Private in 7.5.5 (name is a guess): the topmost of the override maps (attribute bit 1) stacked directly above a map in the chain from TopMapHndl, or the map itself when none is; nil and ResErr resFNotFound when the map isn't in the chain. The Shared Library Manager calls it on the files it opens.
 Handle C_GetOverrideMap(Handle map);PASCAL_SUBTRAP(GetOverrideMap, 0xA822, 0x0006, ResourceDispatch);
 
@@ -333,6 +337,38 @@ INTEGER C_OpenResFileUnderSystemMap(const FSSpec *spec, SignedByte permission);L
 
 
 void C_CloseResFileUnderSystemMap(INTEGER refNum);LIBRARY_FUNCTION(PrivateInterfaceLib, CloseResFileUnderSystemMap, C_CloseResFileUnderSystemMap);
+
+
+inline void cglue_addresource(Handle data, ResType typ, INTEGER id, const char *name) {C_AddResource(data, typ, id, cglue::CString(name));}
+LIBRARY_FUNCTION(InterfaceLib, addresource, cglue_addresource);
+
+
+inline void cglue_createresfile(const char *fn) {C_CreateResFile(cglue::CString(fn));}
+LIBRARY_FUNCTION(InterfaceLib, createresfile, cglue_createresfile);
+
+
+inline Handle cglue_get1namedresource(ResType typ, const char *s) {return C_Get1NamedResource(typ, cglue::CString(s));}
+LIBRARY_FUNCTION(InterfaceLib, get1namedresource, cglue_get1namedresource);
+
+
+inline Handle cglue_getnamedresource(ResType typ, const char *nam) {return C_GetNamedResource(typ, cglue::CString(nam));}
+LIBRARY_FUNCTION(InterfaceLib, getnamedresource, cglue_getnamedresource);
+
+
+inline void cglue_getresinfo(Handle res, GUEST<INTEGER> *id1, GUEST<ResType> *typ, char *name) {C_GetResInfo(res, id1, typ, (StringPtr)name);cglue::p2c(name);}
+LIBRARY_FUNCTION(InterfaceLib, getresinfo, cglue_getresinfo);
+
+
+inline INTEGER cglue_openresfile(const char *fn) {return C_OpenResFile(cglue::CString(fn));}
+LIBRARY_FUNCTION(InterfaceLib, openresfile, cglue_openresfile);
+
+
+inline INTEGER cglue_openrfperm(const char *fn, INTEGER vref, Byte perm) {return C_OpenRFPerm(cglue::CString(fn), vref, perm);}
+LIBRARY_FUNCTION(InterfaceLib, openrfperm, cglue_openrfperm);
+
+
+inline void cglue_setresinfo(Handle res, INTEGER id, const char *name) {C_SetResInfo(res, id, cglue::CString(name));}
+LIBRARY_FUNCTION(InterfaceLib, setresinfo, cglue_setresinfo);
 
 
 } /* namespace Executor */

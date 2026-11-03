@@ -4,10 +4,19 @@
 
 #ifdef EXECUTOR
 #include <CQuickDraw.h>
+#include <FontMgr.h>
+#include <MemoryMgr.h>
+#include <base/common.h>
+#include <quickdraw/font.h>
+#include <DeviceMgr.h>
+#include <WindowMgr.h>
+#include <quickdraw/cquick.h>
 #else
 #include <Quickdraw.h>
 #include <QDOffscreen.h>
 #include <Windows.h>
+#include <Devices.h>
+#include <Palettes.h>
 #endif
 
 #include <bitset>
@@ -725,3 +734,223 @@ TEST(QuickDraw, PaintRoundRect_TooSmall)
     
     EXPECT_EQ(0, count);
 }
+
+#ifdef EXECUTOR
+/* useTempMem: the pixels go where TempNewHandle puts things (8.6: outside
+   the application heap; the 8.6 Finder's window offscreens filled its
+   1 MB partition when they went in it). */
+TEST(QuickDraw, GWorldUseTempMemPixels)
+{
+    if(!hasDeepGWorlds())
+        return;
+    GUEST<OSErr> err;
+    Handle temp = TempNewHandle(16, &err);
+    ASSERT_NE(nullptr, temp);
+    THz temp_zone = HandleZone(temp);
+    DisposeHandle(temp);
+
+    GWorldPtr gw = nullptr;
+    Rect r = { 0, 0, 218, 404 };
+    ASSERT_EQ(noErr, NewGWorld(PTR(gw), 32, &r, nullptr, nullptr, useTempMem));
+    ASSERT_NE(nullptr, gw);
+    PixMapHandle pm = GetGWorldPixMap(gw);
+    Handle pixels = (Handle)(*pm)->baseAddr;
+    EXPECT_EQ(temp_zone, HandleZone(pixels));
+    /* locked, unlocked, locked again (the 8.6 Finder): the pixels found
+       again though they aren't in the current zone */
+    for(int i = 0; i < 2; i++)
+    {
+        EXPECT_TRUE(LockPixels(pm));
+        EXPECT_EQ(*pixels, GetPixBaseAddr(pm));
+        UnlockPixels(pm);
+        EXPECT_EQ((Ptr)pixels, (Ptr)(*pm)->baseAddr);
+    }
+    LockPixels(pm);
+    DisposeGWorld(gw);
+}
+
+/* A GWorld no heap has room for: memFullErr and no GWorld, as on 8.6
+   (not one whose pixels are an empty handle, drawn into all the same) */
+TEST(QuickDraw, GWorldTooBig)
+{
+    if(!hasDeepGWorlds())
+        return;
+    Rect r = { 0, 0, 8000, 8000 };
+    for(GWorldFlags flags : { (GWorldFlags)0, (GWorldFlags)useTempMem })
+    {
+        GWorldPtr gw = (GWorldPtr)-1;
+        EXPECT_EQ(memFullErr, NewGWorld(PTR(gw), 32, &r, nullptr, nullptr, flags));
+        EXPECT_EQ(nullptr, gw);
+    }
+}
+
+/* No family's strike to be found (the port's, the application font and
+   the system font all missing; also what no room to load one comes to):
+   text measures 0 and has no metrics, rather than FMSwapFont dividing by
+   a size of 0 and reading a nil font (the 8.6 Finder in the tab). */
+TEST(QuickDraw, TextWithNoFont)
+{
+    OffscreenPort port(32, 16);
+    INTEGER sysfam = LM(SysFontFam), apfont = LM(ApFontID);
+    LM(SysFontFam) = 32001;
+    LM(ApFontID) = 32002;
+    TextFont(32003);
+    TextSize(12);
+    EXPECT_EQ(0, StringWidth((ConstStringPtr) "\003abc"));
+    FontInfo fi;
+    GetFontInfo(&fi);
+    EXPECT_EQ(0, fi.ascent);
+    EXPECT_EQ(0, fi.descent);
+    MoveTo(2, 12);
+    DrawString((ConstStringPtr) "\003abc");
+    EXPECT_EQ(2, port.port.pnLoc.h);
+    LM(SysFontFam) = sysfam;
+    LM(ApFontID) = apfont;
+    TextFont(0);
+    EXPECT_LT(0, StringWidth((ConstStringPtr) "\003abc"));
+}
+
+/* A width table in the list whose master pointer is outside memory (THINK
+   Pascal 4.5's Run leaves one): skipped and taken out of the list, not read
+   (in the tab reading it is a wasm out-of-bounds access, the renderer gone). */
+TEST(QuickDraw, WidthListBadEntry)
+{
+    OffscreenPort port(32, 16);
+    TextFont(0);
+    TextSize(12);
+    StringWidth((ConstStringPtr) "\003abc");     /* a table listed */
+    ASSERT_TRUE(LM(WidthListHand));
+    GUEST<WHandle> *list = *WIDTHLISTHAND;
+    int slot = 0;
+    while(slot < 12 && list[slot])
+        slot++;
+    ASSERT_LT(slot, 12);
+    Handle bad = NewHandle(4);
+    GUEST<Ptr> saved = *bad;
+    GUEST<Ptr> outside;
+    outside.raw_host_order(0x0FF81004);
+    *bad = outside;
+    list[slot] = guest_cast<WHandle>(bad);
+    TextSize(13);                                 /* not the table it has */
+    EXPECT_LT(0, StringWidth((ConstStringPtr) "\003abc"));
+    for(int i = 0; i < 12; i++)
+        EXPECT_NE((WHandle)bad, (WHandle)list[i]);
+    *bad = saved;
+    DisposeHandle(bad);
+    TextSize(12);
+}
+#endif
+
+/* Random as the Quadra's ROM answers it (a probe on the ROM machine): a
+   seed with its top bit set counts as its low 31 bits plus one, 0 and
+   2^31-1 stay 0. Photoshop 4.0 decodes its personalization with it. */
+TEST(QuickDraw, RandomAsTheROM)
+{
+    static const struct { uint32_t seed; short r1; uint32_t s1; short r4; uint32_t s4; } cases[] = {
+        { 0x00000000, 0, 0x00000000, 0, 0x00000000 },
+        { 0x00000001, 16807, 0x000041a7, 3114, 0x3ab50c2a },
+        { 0x00bc614e, 18498, 0x4f984842, 1366, 0x6bf40556 },
+        { 0x7ffffffe, -16808, 0x7fffbe58, -3115, 0x454af3d5 },
+        { 0x7fffffff, 0, 0x00000000, 0, 0x00000000 },
+        { 0x80000001, -31922, 0x0000834e, 6228, 0x756a1854 },
+        { 0xfffffffb, 15114, 0x7fff3b0a, -9344, 0x4fe0db80 },
+        { 0x3fffffff, -8404, 0x3fffdf2c, 31210, 0x62a579ea },
+        { 0xdeadbeef, -20705, 0x60d2af1f, 14484, 0x38913894 },
+    };
+    int32_t saved = qd.randSeed;
+    for(auto &c : cases)
+    {
+        qd.randSeed = (int32_t)c.seed;
+        EXPECT_EQ(c.r1, Random()) << std::hex << c.seed;
+        EXPECT_EQ(c.s1, (uint32_t)qd.randSeed) << std::hex << c.seed;
+        Random();
+        Random();
+        EXPECT_EQ(c.r4, Random()) << std::hex << c.seed;
+        EXPECT_EQ(c.s4, (uint32_t)qd.randSeed) << std::hex << c.seed;
+    }
+    qd.randSeed = saved;
+}
+
+/* The main screen has a driver, as on a 7.6.1 Quadra (2026-11-03: gdFlags
+   $B820, a DCE at its gdRefNum): noDriver clear, for every program
+   (Executor once set it for Realmz). */
+TEST(QuickDraw, MainDeviceHasDriver)
+{
+    GDHandle gd = GetMainDevice();
+    ASSERT_NE(nullptr, gd);
+    short flags = (*gd)->gdFlags;
+    EXPECT_EQ(0, flags & (1 << 14));      // noDriver
+    EXPECT_NE(0, flags & (1 << 13));      // screenDevice
+    EXPECT_NE(0, flags & (1 << 11));      // mainScreen
+    EXPECT_NE(nullptr, GetDCtlEntry((*gd)->gdRefNum));
+}
+
+#ifndef EXECUTOR
+/* The 68k application's only (natively there is no screen device): the
+   main device at 8 bits (set for the test where it isn't), restored
+   after. */
+struct MainDevice8
+{
+    GDHandle gd = GetMainDevice();
+    short depth = (*(*gd)->gdPMap)->pixelSize;
+    bool ok;
+    MainDevice8()
+    {
+        if((*gd)->gdType != clutType)
+            SetDepth(gd, 8, 0, 0);
+        ok = (*gd)->gdType == clutType;
+    }
+    ~MainDevice8()
+    {
+        if((*(*gd)->gdPMap)->pixelSize != depth)
+            SetDepth(gd, depth, 0, 0);
+    }
+    CTabHandle table() { return (*(*gd)->gdPMap)->pmTable; }
+};
+
+/* SetEntries gives the device's table a new seed even for an entry set to
+   the colour it has (the Quadra: 40 -> 1096). */
+TEST(QuickDraw, SetEntriesSameColourNewSeed)
+{
+    MainDevice8 dev;
+    if(!dev.ok)
+        GTEST_SKIP() << "no 8-bit main device";
+    int32_t seed = (*dev.table())->ctSeed;
+    ColorSpec cs[1];
+    cs[0] = (*dev.table())->ctTable[5];
+    cs[0].value = 0;
+    GDHandle save = GetGDevice();
+    SetGDevice(dev.gd);
+    SetEntries(5, 0, cs);
+    SetGDevice(save);
+    EXPECT_NE(seed, (int32_t)(*dev.table())->ctSeed);
+}
+
+/* SetPalette on the front window puts its colours in the device's table
+   at once, no ActivatePalette needed. */
+TEST(QuickDraw, SetPaletteFrontWindowActivates)
+{
+    MainDevice8 dev;
+    if(!dev.ok)
+        GTEST_SKIP() << "no 8-bit main device";
+    Rect r = { 60, 60, 160, 260 };
+    WindowPtr w = NewCWindow(nullptr, &r, PSTR("P"), true, 0, (WindowPtr)-1, false, 0);
+    ASSERT_NE(nullptr, w);
+    SelectWindow(w);
+    ASSERT_EQ(w, FrontWindow());
+    PaletteHandle pal = NewPalette(1, nullptr, pmTolerant, 0);
+    RGBColor odd = { 0x1234, 0x5678, 0x9ABC };
+    SetEntryColor(pal, 0, &odd);
+    SetPalette(w, pal, true);
+    CTabHandle ct = dev.table();
+    bool found = false;
+    for(int i = 0; i <= (*ct)->ctSize; i++)
+    {
+        RGBColor c = (*ct)->ctTable[i].rgb;
+        found |= c.red == odd.red && c.green == odd.green && c.blue == odd.blue;
+    }
+    EXPECT_TRUE(found);
+    DisposeWindow(w);
+    DisposePalette(pal);
+}
+#endif

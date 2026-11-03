@@ -78,6 +78,20 @@ public:
     void (*sliceHook)(PowerCore&, uint32_t pc) = nullptr;
     uint32_t (*getNextBreakpoint)(uint32_t addr) = nullptr;
 
+    /* MacPhoenix: before every instruction, with its address (the
+       breakpoints of --executor-ppc-break, ppc_break.cpp). The core must
+       be made with the calls in: instructionHooks set before the first
+       execute(). setInstructionHook() is false when it wasn't. */
+    bool instructionHooks = false;
+    bool setInstructionHook(void (*hook)(PowerCore&, uint32_t pc));
+    /* In the hook: the registers as the core has them (the host copy
+       above is stale while guest code runs). */
+    void liveState(PowerCoreState &s) const;
+    /* One instruction at addr, as text; its length (0: no disassembler). */
+    int disassemble(uint32_t addr, char *buf, size_t len) const;
+    /* The word at a guest address, false where nothing is mapped. */
+    bool peek32(uint32_t addr, uint32_t &value) const;
+
     /* Run guest code from CIA until it returns to exitAddress(). */
     void execute();
 

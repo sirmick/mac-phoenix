@@ -171,6 +171,35 @@
 
 - enum:
     values:
+      - name: gestaltStereoCapability
+        value: 0
+      - name: gestaltStereoMixing
+        value: 2
+      - name: gestaltSoundIOMgrPresent
+        value: 3
+      - name: gestaltBuiltInSoundInput
+        value: 4
+      - name: gestaltHasSoundInputDevice
+        value: 5
+      - name: gestaltPlayAndRecord
+        value: 6
+      - name: gestalt16BitSoundIO
+        value: 7
+      - name: gestaltStereoInput
+        value: 8
+      - name: gestaltLineLevelInput
+        value: 9
+      - name: gestaltSndPlayDoubleBuffer
+        value: 10
+      - name: gestaltMultiChannels
+        value: 11
+      - name: gestalt16BitAudioSupport
+        value: 12
+
+# ####
+
+- enum:
+    values:
       - name: gestaltHasVIA1
         value: 0
       - name: gestaltHasVIA2

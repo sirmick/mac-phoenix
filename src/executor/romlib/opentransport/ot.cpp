@@ -202,9 +202,13 @@ void Executor::ot::register_defs(const Def *d, size_t n)
 
 bool Executor::ROMlib_ot_library(const std::string &name)
 {
+    /* OTNtvUtilLib and OTNativeClientLib: what OT 1.1.1 added for PowerPC
+       clients there (timer tasks, OTSetMemoryLimits); Apple's files need
+       Apple's OT kernel. */
     return name == "OTClientLib" || name == "OTClientUtilLib" || name == "OTUtilityLib"
         || name == "OTInetClientLib" || name == "OTGlobalLib" || name == "OTConfigLib"
-        || name == "OTATalkClientLib" || name == "SLMGlobal";
+        || name == "OTATalkClientLib" || name == "OTNtvUtilLib" || name == "OTNativeClientLib"
+        || name == "SLMGlobal";
 }
 
 namespace
@@ -233,7 +237,8 @@ void Executor::traps::OTFunction::init()
 {
     static OTGlobalData global_data;
     const Def *d = new Def{ set, setName, pascal ? Conv::Pascal : Conv::C, sig, ret, impl };
-    register_defs(d, 1);
+    if(*set) /* not an OT 1.1.1 addition that only PowerPC code has */
+        register_defs(d, 1);
     builtinlibs::addPPCEntrypoint(library, name, [d](PowerCore &cpu) {
         /* Host code that runs 68k code (a notifier, a patched trap) pushes
            below the caller's frame. */
@@ -420,7 +425,11 @@ bool Executor::ROMlib_ot_gestalt(OSType selector, int32_t *value)
             slm_expect_ot_client();
             return true;
         case "otvr"_4:
-            *value = 0x01108000; /* 1.1 final, the glue's generation */
+            /* 1.1.1 final, as Apple's on Mac OS 7.6.1: its additions are
+               here (timer tasks, OTEnterNotifier/OTLeaveNotifier,
+               OTUseSyncIdleEvents, OTSetMemoryLimits), and applications
+               built for it ask (Hotline Connect 1.9: $01110000 or more). */
+            *value = 0x01118000;
             return true;
     }
     return false;

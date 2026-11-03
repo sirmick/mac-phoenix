@@ -4,10 +4,11 @@
  *                                 =========                                 *
  *                                                                           *
  * Needs:                                                                    *
- *     MacTypes.h     Fixed, Handle, INTEGER, LONGINT, Boolean, Byte,        *
- *                    SignedByte, StringPtr, ConstStringPtr, OSErr, Ptr,     *
- *                    Rect                                                   *
- *     QuickDraw.h    Style                                                  *
+ *     MacTypes.h          Fixed, Handle, INTEGER, LONGINT, Boolean,         *
+ *                         Byte, SignedByte, StringPtr, ConstStringPtr,      *
+ *                         OSErr, Ptr, Rect, SInt16                          *
+ *     QuickDraw.h         Style, FontInfo                                   *
+ *     DriverServices.h    OSStatus                                          *
  *                                                                           *
  *                                                                           *
  *****************************************************************************/
@@ -20,6 +21,7 @@
 #include <base/lowglobals.h>
 #include "ExMacTypes.h"
 #include "QuickDraw.h"
+#include "DriverServices.h"
 
 #define MODULE_NAME FontMgr
 #include <base/api-module.h>
@@ -157,12 +159,12 @@ typedef WidthTable *WidthTablePtr;
 
 typedef GUEST<WidthTablePtr> *WidthTableHandle;
 
-// FontMgr Private.a (true-b);
+// FontMgr Private.a (true-b); its accessors are PrivateInterfaceLib's.
 const LowMemGlobal<ProcPtr > JSwapFont{ 0x8E0 };
 inline ProcPtr  LMGetJSwapFont() { return LM(JSwapFont); }
 inline void LMSetJSwapFont(ProcPtr val) { LM(JSwapFont) = val; }
-NOTRAP_FUNCTION2(LMGetJSwapFont);
-NOTRAP_FUNCTION2(LMSetJSwapFont);
+LIBRARY_FUNCTION(PrivateInterfaceLib, LMGetJSwapFont, LMGetJSwapFont);
+LIBRARY_FUNCTION(PrivateInterfaceLib, LMSetJSwapFont, LMSetJSwapFont);
 
 
 // FontMgr IMIV-42 (true);
@@ -189,12 +191,15 @@ NOTRAP_FUNCTION2(LMGetApFontID);
 NOTRAP_FUNCTION2(LMSetApFontID);
 
 
-// FontMgr ToolEqu.a (true);
-const LowMemGlobal<FMInput > ROMlib_myfmi{ 0x988 };
-inline void LMGetROMlib_myfmi(FMInput *val) { *val = LM(ROMlib_myfmi); }
-inline void LMSetROMlib_myfmi(const FMInput *val) { LM(ROMlib_myfmi) = *val; }
-NOTRAP_FUNCTION2(LMGetROMlib_myfmi);
-NOTRAP_FUNCTION2(LMSetROMlib_myfmi);
+// FontMgr ToolEqu.a (true); the Font Manager's last input record. Its
+// accessors copy it out and in and are PrivateInterfaceLib's (8.6's
+// ControlDefinitions sets family and size to -1 with them, to make the
+// next font swap start afresh).
+const LowMemGlobal<FMInput > CurFMInput{ 0x988 };
+inline void LMGetCurFMInput(FMInput *val) { *val = LM(CurFMInput); }
+inline void LMSetCurFMInput(const FMInput *val) { LM(CurFMInput) = *val; }
+LIBRARY_FUNCTION(PrivateInterfaceLib, LMGetCurFMInput, LMGetCurFMInput);
+LIBRARY_FUNCTION(PrivateInterfaceLib, LMSetCurFMInput, LMSetCurFMInput);
 
 
 // FontMgr Private.a (true);
@@ -336,6 +341,18 @@ Boolean C_GetPreserveGlyph();PASCAL_SUBTRAP(GetPreserveGlyph, 0xA854, 0x000B, Fo
 OSErr C_FlushFonts();PASCAL_SUBTRAP(FlushFonts, 0xA854, 0x000C, FontDispatch);
 
 
+OSStatus C_SetAntiAliasedTextEnabled(Boolean iEnable, SInt16 iMinFontSize);LIBRARY_FUNCTION(FontManager, SetAntiAliasedTextEnabled, C_SetAntiAliasedTextEnabled);
+
+
+Boolean C_IsAntiAliasedTextEnabled(GUEST<SInt16> *oMinFontSize);LIBRARY_FUNCTION(FontManager, IsAntiAliasedTextEnabled, C_IsAntiAliasedTextEnabled);
+
+
+void C_QDTextBounds(INTEGER byteCount, const void *textAddr, Rect *bounds);LIBRARY_FUNCTION(FontManager, QDTextBounds, C_QDTextBounds);
+
+
+OSErr C_FetchFontInfo(SInt16 fontID, SInt16 fontSize, SInt16 fontStyle, FontInfo *info);LIBRARY_FUNCTION(FontManager, FetchFontInfo, C_FetchFontInfo);
+
+
 INTEGER glue_GetSysFont();LIBRARY_FUNCTION(InterfaceLib, GetSysFont, glue_GetSysFont);
 
 
@@ -346,6 +363,14 @@ INTEGER glue_LMGetSysFontSize();LIBRARY_FUNCTION(InterfaceLib, LMGetSysFontSize,
 
 
 void glue_LMSetSysFontSize(INTEGER size);LIBRARY_FUNCTION(InterfaceLib, LMSetSysFontSize, glue_LMSetSysFontSize);
+
+
+inline void cglue_getfnum(const char *fnam, GUEST<INTEGER> *fnum) {C_GetFNum(cglue::CString(fnam), fnum);}
+LIBRARY_FUNCTION(InterfaceLib, getfnum, cglue_getfnum);
+
+
+inline void cglue_getfontname(INTEGER fnum, char *fnam) {C_GetFontName(fnum, (StringPtr)fnam);cglue::p2c(fnam);}
+LIBRARY_FUNCTION(InterfaceLib, getfontname, cglue_getfontname);
 
 
 } /* namespace Executor */

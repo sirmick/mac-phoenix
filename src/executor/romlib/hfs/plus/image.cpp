@@ -102,10 +102,10 @@ bool FdImageReader::zero(uint64_t offset, uint64_t n)
     return ImageReader::zero(offset, n);
 }
 
+/* In the tab, a flush point for the image's overlay (web/executor/overlay.js),
+   as HFS's vcbsync is. */
 void FdImageReader::sync()
 {
-#ifndef __EMSCRIPTEN__
     if(writable_)
         fsync(fd_);
-#endif
 }

@@ -1,0 +1,12 @@
+{
+ "note": "Speedometer 4.0 (Scott Berfield, 1994; shareware): CPU, FPU, graphics and disk benchmarks against stored machine records, expanded by StuffIt Expander",
+ "kind": "expand",
+ "archive": "Speedometer-40.sit",
+ "expect": [
+  "Speedometer"
+ ],
+ "launch": [
+  "Speedometer:Speedometer 4.0"
+ ],
+ "os": "tools-7.6.1"
+}

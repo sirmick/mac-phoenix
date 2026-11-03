@@ -1,0 +1,201 @@
+/* ChromeGallery: a document window and a floating window of platinum
+   chrome (push buttons, check boxes, radio button, sliders, progress bars,
+   pop-up, little arrows, disclosure triangle, tabs) that stays on the
+   screen until it is told to quit. For looking at Executor's HiDPI chrome
+   (--executor-scale 2, docs/executor/HiDPI.md) and the ctest cell
+   hidpi_chrome_executor (tests/test_hidpi_chrome.sh), which compares the
+   2x surface with the 1x frame inside some of this chrome: keep its boxes
+   in step with the layout here. A press in a window's close or zoom box
+   is tracked, for looking at the boxes pressed (the document window's
+   close box hides it); a click elsewhere in a window brings it to the
+   front, and in the front one tracks its controls. */
+#include <Types.h>
+#include <Quickdraw.h>
+#include <Fonts.h>
+#include <MacWindows.h>
+#include <Menus.h>
+#include <TextEdit.h>
+#include <Dialogs.h>
+#include <Controls.h>
+#include <Events.h>
+#include <AppleEvents.h>
+#include <Appearance.h>
+#include <string.h>
+
+static Boolean quit = false;
+
+static pascal OSErr Quit(const AppleEvent *e, AppleEvent *reply, long refcon)
+{
+    quit = true;
+    return noErr;
+}
+
+struct ctl
+{
+    short proc, top, left, bottom, right, value, min, max;
+    const char *title;
+};
+
+/* the document window's controls, in its local coordinates */
+static const struct ctl ctls[] = {
+    { 368, 20, 20, 40, 90, 0, 0, 1, "\pOK" },
+    { 368, 20, 110, 40, 190, 0, 0, 1, "\pCancel" },
+    { 369, 50, 20, 66, 120, 1, 0, 1, "\pCheck" },
+    { 370, 70, 20, 86, 120, 1, 0, 1, "\pRadio" },
+    { 48, 100, 20, 124, 200, 5, 0, 10, "\p" },  /* pointing down */
+    { 52, 130, 20, 154, 200, 3, 0, 10, "\p" },  /* pointing up */
+    { 56, 160, 20, 184, 200, 7, 0, 10, "\p" },  /* non-directional */
+    { 80, 194, 20, 208, 200, 50, 0, 100, "\p" }, /* progress bar */
+    { 48, 20, 220, 200, 244, 5, 0, 10, "\p" },  /* vertical, pointing right */
+    { 1008, 50, 260, 70, 380, 200, 0, 0, "\p" }, /* pop-up, menu 200 */
+    { 96, 80, 260, 103, 273, 5, 0, 10, "\p" },  /* little arrows */
+    { 64, 80, 290, 92, 302, 1, 0, 1, "\p" },    /* disclosure triangle, open */
+    { 368, 110, 300, 130, 380, 0, 0, 1, "\pPress" }, /* pressed, then the window closed */
+    /* inactive: the last two */
+    { 368, 20, 260, 40, 340, 0, 0, 1, "\pOff" },
+    { 369, 214, 20, 230, 120, 1, 0, 1, "\pDim" },
+};
+
+static void DrawGallery(WindowRef w)
+{
+    Rect r;
+    ThemeTrackDrawInfo t;
+    RgnHandle clip = NewRgn();
+    SetPort((GrafPtr)w);
+    DrawControls(w);
+    /* a word drawn, then drawn again with nothing of it reaching the
+       screen (a dialog's items drawn outside its update region): still
+       there */
+    GetClip(clip);
+    MoveTo(305, 105);
+    DrawString("\pTwice");
+    SetRect(&r, 0, 0, 0, 0);
+    ClipRect(&r);
+    MoveTo(305, 105);
+    DrawString("\pTwice");
+    /* a line drawn, then its right half erased and drawn again through a
+       clip of that half (AppleWorks' font pop-up): all of it still there */
+    SetClip(clip);
+    MoveTo(260, 226);
+    DrawString("\pHelvetica field");
+    SetRect(&r, 330, 214, 420, 230);
+    ClipRect(&r);
+    EraseRect(&r);
+    MoveTo(260, 226);
+    DrawString("\pHelvetica field");
+    SetClip(clip);
+    DisposeRgn(clip);
+    /* an indeterminate progress bar, still */
+    memset(&t, 0, sizeof t);
+    t.kind = kThemeMediumIndeterminateBar;
+    SetRect(&t.bounds, 130, 214, 230, 228);
+    t.attributes = kThemeTrackHorizontal;
+    t.enableState = kThemeTrackActive;
+    DrawThemeTrack(&t, NULL, NULL, 0);
+    /* a pane, and on it north tabs: the front one, one behind, one
+       pressed */
+    SetRect(&r, 260, 161, 420, 210);
+    DrawThemeTabPane(&r, kThemeStateActive);
+    SetRect(&r, 260, 140, 313, 164);
+    DrawThemeTab(&r, kThemeTabFront, kThemeTabNorth, NULL, 0);
+    SetRect(&r, 313, 140, 366, 164);
+    DrawThemeTab(&r, kThemeTabNonFront, kThemeTabNorth, NULL, 0);
+    SetRect(&r, 366, 140, 419, 164);
+    DrawThemeTab(&r, kThemeTabNonFrontPressed, kThemeTabNorth, NULL, 0);
+}
+
+int main(void)
+{
+    WindowRef doc, floater;
+    ControlHandle h;
+    MenuHandle m;
+    Rect r;
+    int i;
+    EventRecord e;
+
+    InitGraf(&qd.thePort);
+    InitFonts();
+    InitWindows();
+    InitMenus();
+    TEInit();
+    InitDialogs(NULL);
+    InitCursor();
+    RegisterAppearanceClient();
+    AEInstallEventHandler(kCoreEventClass, kAEQuitApplication, NewAEEventHandlerUPP(Quit), 0, false);
+
+    m = NewMenu(200, "\p");
+    AppendMenu(m, "\pChrome");
+    InsertMenu(m, -1);
+
+    /* the floating window first: the document window in front, active */
+    SetRect(&r, 480, 80, 620, 160);
+    floater = NewCWindow(NULL, &r, "\pFloat", true, kWindowFloatProc, (WindowRef)-1, true, 0);
+    SetRect(&r, 20, 60, 460, 300);
+    doc = NewCWindow(NULL, &r, "\pChrome Gallery", true, zoomDocProc, (WindowRef)-1, true, 0);
+    SetPort((GrafPtr)doc);
+    SetThemeWindowBackground(doc, kThemeBrushDialogBackgroundActive, true);
+    for(i = 0; i < (int)(sizeof ctls / sizeof ctls[0]); i++)
+    {
+        const struct ctl *c = &ctls[i];
+        SetRect(&r, c->left, c->top, c->right, c->bottom);
+        h = NewControl(doc, &r, (ConstStr255Param)c->title, true, c->value, c->min, c->max, c->proc,
+                       c->top == 110 ? 'pres' : 0);
+        if(i >= (int)(sizeof ctls / sizeof ctls[0]) - 2)
+            HiliteControl(h, 255);
+    }
+
+    while(!quit)
+    {
+        if(!WaitNextEvent(everyEvent, &e, 30, NULL))
+            continue;
+        switch(e.what)
+        {
+            case updateEvt:
+                BeginUpdate((WindowRef)e.message);
+                SetPort((GrafPtr)e.message);
+                EraseRect(&((GrafPtr)e.message)->portRect);
+                if((WindowRef)e.message == doc)
+                    DrawGallery(doc);
+                EndUpdate((WindowRef)e.message);
+                break;
+            case mouseDown:
+            {
+                /* a window's boxes track the mouse (drawn pressed while
+                   it is down in them) and do nothing */
+                WindowRef w;
+                ControlHandle c;
+                Point pt = e.where;
+                short part = FindWindow(e.where, &w);
+                if(part == inGoAway)
+                {
+                    /* the document window's hides it */
+                    if(TrackGoAway(w, e.where) && w == doc)
+                        HideWindow(doc);
+                }
+                else if(part == inZoomIn || part == inZoomOut)
+                    TrackBox(w, e.where, part);
+                else if(part == inContent && w == FrontWindow())
+                {
+                    SetPort((GrafPtr)w);
+                    GlobalToLocal(&pt);
+                    /* Press puts up an alert (its OK pressed and the
+                       alert gone, nothing of the button may stay) */
+                    if(FindControl(pt, w, &c) && TrackControl(c, pt, NULL) && GetControlReference(c) == 'pres')
+                    {
+                        SInt16 item;
+                        StandardAlert(kAlertNoteAlert, "\pChromeGallery", "\pPressed.", NULL, &item);
+                    }
+                }
+                else if(part == inContent || part == inDrag)
+                    SelectWindow(w);
+                break;
+            }
+            case kHighLevelEvent:
+                AEProcessAppleEvent(&e);
+                break;
+        }
+    }
+    DisposeWindow(floater);
+    DisposeWindow(doc);
+    return 0;
+}

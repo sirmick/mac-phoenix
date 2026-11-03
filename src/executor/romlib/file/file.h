@@ -274,6 +274,7 @@ typedef struct
     ((pb).ioNamePtr && ((pb).ioFDirIndex != 0 || !(pb).ioNamePtr[0]))
 
 extern StringPtr ROMlib_exefname;
+extern void ROMlib_SFSaveDisk_update(INTEGER vrefnum, Str255 filename);
 
 
 extern OSErr ROMlib_maperrno(void);
@@ -291,6 +292,7 @@ extern DrvQExtra *ROMlib_addtodq(ULONGINT drvsize, const char *devicename,
 extern Byte open_attrib_bits(LONGINT file_id, VCB *vcbp, GUEST<INTEGER> *refnump);
 /* MacPhoenix: an open desktop database's FCB (finder.cpp). */
 extern bool ROMlib_desktop_refnum_p(short refnum);
+extern void ROMlib_desktop_unmounting(short vRefNum);
 
 
 #if !defined(NDEBUG)
@@ -317,6 +319,11 @@ extern LONGINT ROMlib_magic_offset;
 #endif
 
 extern INTEGER ROMlib_nextvrn;
+/* MacPhoenix: the vRefNum the next volume mounted takes (0: a new one):
+   a disk image put back on its drive keeps its number (PBMountVol), so
+   what the Finder keeps of it stays good. */
+extern INTEGER ROMlib_mount_vrefnum;
+INTEGER ROMlib_new_vrefnum();
 
 std::string expandPath(std::string);
 

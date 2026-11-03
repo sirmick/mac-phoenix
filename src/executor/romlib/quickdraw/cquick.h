@@ -640,6 +640,7 @@ extern void gd_update_colors();
 extern void ROMlib_InitGWorlds(void);
 extern void ROMlib_InitGDevices(int width, int height, int bpp, bool grayscale);
 extern void ResetToInitialDepth();
+extern void ROMlib_set_initial_depth(int bpp);
 
 extern void pixmap_set_pixel_fields(PixMap *pixmap, int bpp);
 extern const rgb_spec_t *pixmap_rgb_spec(const PixMap *pixmap);

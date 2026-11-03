@@ -211,6 +211,7 @@ static void sigterm_handler(int sig)
 		g_subprocess->stop();
 		g_subprocess = nullptr;
 	}
+	executor_systems::remove_session_copy();
 	_exit(0);
 }
 
@@ -876,10 +877,13 @@ int main(int argc, char **argv)
 		// will SIGSEGV the subprocess once the guest hops past the cap (the
 		// IPC reader keeps writing the new dimensions, encoder reads off
 		// the end of the smaller buffer).
-		const int vo_max_w = emu_config.is_ppc() ? mp::video::kMaxWidth_Ppc
-		                                         : mp::video::kMaxWidth_M68k;
-		const int vo_max_h = emu_config.is_ppc() ? mp::video::kMaxHeight_Ppc
-		                                         : mp::video::kMaxHeight_M68k;
+		// Executor at a display scale (--executor-scale) sends frames up to
+		// the PPC's largest too.
+		const bool big_frames = emu_config.is_ppc() || emu_config.executor_scale > 1.0;
+		const int vo_max_w = big_frames ? mp::video::kMaxWidth_Ppc
+		                                : mp::video::kMaxWidth_M68k;
+		const int vo_max_h = big_frames ? mp::video::kMaxHeight_Ppc
+		                                : mp::video::kMaxHeight_M68k;
 		auto video_output_owner = std::make_unique<VideoOutput>(vo_max_w, vo_max_h);
 		video::g_video_output = video_output_owner.get();
 

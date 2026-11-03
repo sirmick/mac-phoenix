@@ -3,7 +3,8 @@
  * Macintosh: Files, chapter 2 ("Data Organization on Volumes"): the master
  * directory block, the catalog and extents overflow B-trees, allocation
  * blocks. HFS+ volumes go through Executor's HFS+ reader (hfs/plus,
- * docs/executor/HFSPlus.md).
+ * docs/executor/HFSPlus.md). The same reader copies a disk's System Folder
+ * additions in (system_additions).
  */
 #include "hfs_sideload.h"
 
@@ -14,6 +15,7 @@
 #include <file/localvolume/item.h>
 #include <rsys/filesystem.h>
 
+#include <algorithm>
 #include <cctype>
 #include <cstdint>
 #include <cstdio>
@@ -243,10 +245,12 @@ private:
             uint32_t parent = be32(key + 2);
             Entry e;
             e.name.assign((const char *)key + 7, std::min<int>(key[6], 31));
-            if(data[0] == 1 && room >= 10)       // a folder
+            if(data[0] == 1 && room >= 54)       // a folder
             {
                 e.folder = true;
                 e.id = be32(data + 6);
+                memcpy(e.finfo, data + 22, 16);  // DInfo
+                memcpy(e.fxinfo, data + 38, 16); // DXInfo
             }
             else if(data[0] == 2 && room >= 98)  // a file
             {
@@ -408,12 +412,27 @@ void copyFile(Source& v, const Entry& e, const fs::path& folder)
     write(folder / ("%" + leaf.string()), appledouble(e, v.rsrcFork(e)), mod);
 }
 
+/* A folder's Finder info (DInfo, DXInfo) where Executor's local volume
+   keeps it: ".finf/NAME" beside the folder. Its flags matter: Apple Menu
+   Options' Recent Applications folder shows its custom icon ("Icon\r")
+   only with kHasCustomIcon. */
+void writeFolderInfo(const Entry& e, const fs::path& parent)
+{
+    fs::create_directories(parent / ".finf");
+    std::vector<uint8_t> info(e.finfo, e.finfo + 16);
+    info.insert(info.end(), e.fxinfo, e.fxinfo + 16);
+    write(parent / ".finf" / hostName(e.name), info, std::time(nullptr));
+}
+
 void copyTree(Source& v, uint32_t dirID, const fs::path& folder)
 {
     fs::create_directories(folder);
     for(const Entry& e : v.children(dirID))
         if(e.folder)
+        {
             copyTree(v, e.id, folder / hostName(e.name));
+            writeFolderInfo(e, folder);
+        }
         else
             copyFile(v, e, folder);
 }
@@ -438,7 +457,8 @@ bool sideload_system(const std::string& image, const std::string& data_dir,
     fs::path sys = fs::path(data_dir) / "System Folder";
     fs::create_directories(sys);
     bool finder = false;
-    static const std::vector<const char *> files = { "System", "Finder" };
+    /* MacPhoenix: and 8.5's "System Resources" (icons, dialogs) */
+    static const std::vector<const char *> files = { "System", "Finder", "System Resources" };
     /* MacPhoenix: Launcher Items too (the Launcher control panel's buttons,
        aliases to applications; it opened empty), Shutdown Items, and
        Control Strip Modules (Control Strip's modules) */
@@ -454,7 +474,10 @@ bool sideload_system(const std::string& image, const std::string& data_dir,
         if(!want)
             continue;
         if(e.folder)
+        {
             copyTree(v, e.id, sys / hostName(e.name));
+            writeFolderInfo(e, sys);
+        }
         else
         {
             copyFile(v, e, sys);
@@ -463,6 +486,101 @@ bool sideload_system(const std::string& image, const std::string& data_dir,
     }
     if(has_finder)
         *has_finder = finder;
+    return true;
+}
+
+}  // namespace executor_host
+
+namespace {
+
+/* The entry of DIR named NAME (as HFS compares: ASCII case aside), or
+   DIR / NAME when there is none. */
+fs::path findHost(const fs::path& dir, const fs::path& name)
+{
+    std::error_code ec;
+    if(fs::exists(dir / name, ec))
+        return dir / name;
+    std::string want = name.string();
+    for(auto& d : fs::directory_iterator(dir, ec))
+    {
+        std::string have = d.path().filename().string();
+        if(have.size() == want.size()
+           && std::equal(have.begin(), have.end(), want.begin(),
+                         [](char a, char b) { return tolower((unsigned char)a) == tolower((unsigned char)b); }))
+            return d.path();
+    }
+    return dir / name;
+}
+
+/* In use only after a restart: the fonts (the Font Manager lists the Fonts
+   folder at startup), startup items, and code that runs at startup in
+   Extensions or Control Panels. */
+std::string afterRestart(const std::vector<std::string>& path, const Entry& e)
+{
+    if(equalMac(path[0], "Fonts") || equalMac(path[0], "Startup Items"))
+        return path[0];
+    if(path.size() == 2 && (equalMac(path[0], "Extensions") || equalMac(path[0], "Control Panels"))
+       && (!memcmp(e.finfo, "INIT", 4) || !memcmp(e.finfo, "appe", 4) || !memcmp(e.finfo, "cdev", 4)))
+        return path[0] + ":" + path[1];
+    return {};
+}
+
+void addTree(Source& v, uint32_t dirID, const fs::path& folder, std::vector<std::string>& path,
+             executor_host::Additions& done)
+{
+    for(const Entry& e : v.children(dirID))
+    {
+        fs::path to = findHost(folder, hostName(e.name));
+        path.push_back(e.name);
+        std::error_code ec;
+        if(e.folder)
+        {
+            if(!fs::is_directory(to, ec))
+            {
+                fs::create_directories(to, ec);
+                writeFolderInfo(e, folder);
+            }
+            addTree(v, e.id, to, path, done);
+        }
+        else
+        {
+            std::time_t mod = (std::time_t)macToHostTime(e.modDate);
+            if(fs::exists(to, ec) && fs::last_write_time(to, ec) >= mod)
+                done.kept++;
+            else
+            {
+                copyFile(v, e, folder);
+                done.copied++;
+                std::string later = afterRestart(path, e);
+                if(!later.empty()
+                   && std::find(done.restart.begin(), done.restart.end(), later) == done.restart.end())
+                    done.restart.push_back(later);
+            }
+        }
+        path.pop_back();
+    }
+}
+
+}  // namespace
+
+namespace executor_host {
+
+bool system_additions(const std::string& image, const std::string& data_dir,
+                      Additions *done, std::string *error)
+{
+    std::unique_ptr<Source> source = openSource(image, error);
+    if(!source)
+        return false;
+    Additions ignored;
+    Additions& out = done ? *done : ignored;
+    for(const Entry& e : source->children(2))  /* the root folder */
+        if(e.folder && equalMac(e.name, "System Folder Additions"))
+        {
+            fs::path sys = fs::path(data_dir) / "System Folder";
+            fs::create_directories(sys);
+            std::vector<std::string> path;
+            addTree(*source, e.id, sys, path, out);
+        }
     return true;
 }
 

@@ -415,9 +415,21 @@
 
 # ####
 
-- typedef:
+- struct:
     name: NumVersion
-    type: LONGINT
+    members:
+      - name: majorRev
+        type: uint8_t
+      - name: minorAndBugRev
+        type: uint8_t
+      - name: stage
+        type: uint8_t
+      - name: nonRelRev
+        type: uint8_t
+    size: 4
+    comment: |
+      A structure, not a long: PowerPC code gets it back through a hidden
+      pointer (Mac OS Runtime Architectures, routine calling conventions).
 
 # ####
 

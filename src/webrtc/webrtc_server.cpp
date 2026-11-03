@@ -162,6 +162,16 @@ private:
  *   5 = mouse move absolute: x:uint16LE, y:uint16LE, ts:float64LE (13 bytes)
  *   6 = mouse mode change: mode:uint8 (2 bytes, 0=absolute, 1=relative)
  */
+// The frames' scale over the Mac's screen in thousandths (Executor's
+// --executor-scale): the page's absolute positions are in frame pixels.
+static uint32_t ipc_frame_scale_milli() {
+    std::shared_lock<std::shared_mutex> shm_lock(g_ipc_shm_mutex);
+    if (!g_ipc_client || !g_ipc_client->is_connected() || !g_ipc_client->shm())
+        return 1000;
+    uint32_t s = g_ipc_client->shm()->scale_milli;
+    return s > 1000 ? s : 1000;
+}
+
 static void process_input_message(const std::byte* data, size_t size) {
     if (size < 2) return;
 
@@ -205,7 +215,8 @@ static void process_input_message(const std::byte* data, size_t size) {
                 uint16_t x, y;
                 std::memcpy(&x, data + 1, 2);
                 std::memcpy(&y, data + 3, 2);
-                g_ipc_client->send_mouse(x, y, ipc_buttons, true);
+                uint32_t scale = ipc_frame_scale_milli();
+                g_ipc_client->send_mouse(x * 1000 / scale, y * 1000 / scale, ipc_buttons, true);
                 break;
             }
         }
@@ -874,6 +885,9 @@ void WebRTCServer::send_cursor_image() {
                 msg["hotX"] = hot_x;
                 msg["hotY"] = hot_y;
                 msg["visible"] = visible;
+                // frame pixels a Mac pixel (Executor's --executor-scale)
+                if (uint32_t scale = ipc_frame_scale_milli(); scale > 1000)
+                    msg["scale"] = scale / 1000.0;
             } else {
                 msg["none"] = true;  // the frames hold the cursor again
             }
