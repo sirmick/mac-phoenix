@@ -79,3 +79,21 @@ TEST(Windows, NewWindowWithNilTitle)
     EXPECT_EQ(0, (*(StringHandle)h)[0]);
     DisposeWindow(w);
 }
+
+/* LayerDispatch 19, which 8.6's Drag Manager asks for the window under the
+   mouse in any process: the window itself and its part; nothing over the
+   desktop (a drop there is the desktop's). */
+TEST(Windows, FindWindowInAnyLayer)
+{
+    Rect r = { 100, 100, 200, 300 };
+    WindowPtr w = NewWindow(nullptr, &r, (StringPtr) "", true, documentProc,
+                            (WindowPtr)-1, false, 0);
+    ASSERT_NE(nullptr, w);
+    GUEST<WindowPtr> found = (WindowPtr)-1;
+    EXPECT_EQ(inContent, FindWindowInAnyLayer(Point{ 150, 200 }, &found));
+    EXPECT_EQ(w, (WindowPtr)found);
+    found = (WindowPtr)-1;
+    EXPECT_EQ(inDesk, FindWindowInAnyLayer(Point{ 300, 400 }, &found));
+    EXPECT_EQ(nullptr, (WindowPtr)found);
+    DisposeWindow(w);
+}
