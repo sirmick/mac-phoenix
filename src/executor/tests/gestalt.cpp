@@ -117,6 +117,19 @@ TEST(Gestalt, SystemVersionSetsTheMachineBothWays)
     EXPECT_EQ(1, get(gestaltAppleEventsAttr));
     EXPECT_EQ(0x0750, get(gestaltScriptMgrVersion));
     EXPECT_EQ(0, get(gestaltFSAttr) & (1 << 8));
+    /* PowerPC code on 7.x (--executor-ppc): the Power Mac's selectors go
+       with the architecture, PowerPC from 7.6 */
+    ROMlib_prefer_ppc = true;
+    gestalt_set_system_version(0x0761);
+    EXPECT_EQ(2, get(gestaltSysArchitecture));
+    EXPECT_EQ(0, get("nreg"_4));
+    EXPECT_EQ(100000000, get("pclk"_4));
+    EXPECT_EQ(100000000, get("bclk"_4));
+    gestalt_set_system_version(0x0755);
+    EXPECT_EQ(1, get(gestaltSysArchitecture));
+    EXPECT_EQ(gestaltUndefSelectorErr, get("nreg"_4));
+    EXPECT_EQ(gestaltUndefSelectorErr, get("pclk"_4));
+    EXPECT_EQ(gestaltUndefSelectorErr, get("bclk"_4));
     ROMlib_prefer_ppc = prefer_ppc;
     gestalt_set_system_version((LONGINT)sysv);
 }

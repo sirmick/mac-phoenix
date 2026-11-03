@@ -491,14 +491,17 @@ Executor::gestalt_set_system_version(uint32_t version)
        PowerPC side, and one of them runs wild at boot (tests-7.5.5 with
        --executor-ppc: no BridgeAgent, guest_suite_ppc_executor), so on 7.5.5
        it stays 68k. TattleTech reads the Name Registry (nameregistry.cpp)
-       only on a PowerPC architecture. */
-    REPLACE_SELECTOR_IN_TABLE(gestaltSysArchitecture, system8 || (ppc && version >= 0x0760) ? gestaltPowerPC : gestalt68k, gtable);
+       only on a PowerPC architecture. The selectors only a Power Mac has
+       ('nreg', 'pclk', 'bclk') go with the architecture, so 7.5.5 with
+       PowerPC code has none of them. */
+    bool ppc_architecture = system8 || (ppc && version >= 0x0760);
+    REPLACE_SELECTOR_IN_TABLE(gestaltSysArchitecture, ppc_architecture ? gestaltPowerPC : gestalt68k, gtable);
     REPLACE_SELECTOR_IN_TABLE(gestaltNativeCPUtype, ppc ? gestaltCPU750 : gestaltCPU68040, gtable);
     REPLACE_SELECTOR_IN_TABLE(gestaltMachineType, ppc ? 67 : 20, gtable);
     REPLACE_SELECTOR_IN_TABLE(gestaltProcessorType, ppc ? 3 /* gestalt68020 */ : gestalt68040, gtable);
     REPLACE_SELECTOR_IN_TABLE(gestaltFPUType, ppc ? 0 : 3, gtable);
     REPLACE_SELECTOR_IN_TABLE(gestaltMMUType, ppc ? 5 : gestaltNoMMU, gtable);
-    power_mac = ppc;
+    power_mac = ppc_architecture;
     /* An 8.x System runs on PowerPC Macs only: a G3, as the G3 the 8.6 and
        9.0.4 images come from (Microsoft's installers refuse a 68k Mac).
        As 8.6 answers them on the G3: the Script Manager's version is the
