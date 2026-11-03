@@ -4,7 +4,7 @@
   "productivity",
   "ppc"
  ],
- "note": "Office software for the Mac OS 9.0.4 profile: AppleWorks 5.0.4 (word processing, drawing, painting, spreadsheet, database), Corel WordPerfect 3.5e, Microsoft Excel 4.0, Microsoft Office 98 (asks for its CD key at first launch), GraphicConverter 3.9.1, Acrobat Reader 3.01. Boots with productivity-9.0.4.",
+ "note": "Office software for the Mac OS 9.0.4 profile: AppleWorks 5.0.4 (word processing, drawing, painting, spreadsheet, database), Corel WordPerfect 3.5e, Microsoft Excel 4.0, Microsoft Office 98 (asks for its CD key at first launch), GraphicConverter 3.9.1, Acrobat Reader 3.01. Microsoft Works 4.0b (word processing, spreadsheet, database, drawing, communications; 68k), with Microsoft's shared tools (spelling, Equation Editor, WordArt) in its folder. Boots with productivity-9.0.4.",
  "label": "Productivity",
  "size_mb": 512,
  "place": [
@@ -42,6 +42,16 @@
    "snapshot": "acrobat-reader-3.01",
    "take": "Adobe Acrobat 3.0",
    "as": "Acrobat Reader 3.01 ƒ"
+  },
+  {
+   "snapshot": "ms-works-4.0b",
+   "take": "Microsoft Works 4.0",
+   "as": "Microsoft Works 4.0b ƒ"
+  },
+  {
+   "snapshot": "ms-works-4.0b",
+   "take": "Microsoft",
+   "to": "Microsoft Works 4.0b ƒ"
   }
  ]
 }

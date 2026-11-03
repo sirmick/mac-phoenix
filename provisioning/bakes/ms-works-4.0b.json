@@ -1,0 +1,236 @@
+{
+ "note": "Microsoft Works 4.0b (Microsoft, 1994-95; US English): its six installer floppies, copied by the guest into folders on the boot disk (Microsoft Setup waits for a disk-insert event for each next floppy, which disk images attached at boot never give; from folders named as the disks it finds them), Microsoft Setup run from there (it writes the name and organisation into its Disk 1), Complete Installation onto the target; name Executor, organisation OpenSource. Baked on the 68k machine: Works 4.0b is 68k code only (the PowerPC machine's Setup installs the same application, personalised differently), which PowerPC Macs run under their 68k emulator",
+ "kind": "install",
+ "os": "tools-7.6.1",
+ "target": "Productivity",
+ "disks": [
+  {
+   "file": "ms-works-4b-us.sit",
+   "take": "Ms Works 4.0b US/Install Disk 1.img"
+  },
+  {
+   "file": "ms-works-4b-us.sit",
+   "take": "Ms Works 4.0b US/Install Disk 2.image"
+  },
+  {
+   "file": "ms-works-4b-us.sit",
+   "take": "Ms Works 4.0b US/Install Disk 3.image"
+  },
+  {
+   "file": "ms-works-4b-us.sit",
+   "take": "Ms Works 4.0b US/Install Disk 4.image"
+  },
+  {
+   "file": "ms-works-4b-us.sit",
+   "take": "Ms Works 4.0b US/Install Disk 5.image"
+  },
+  {
+   "file": "ms-works-4b-us.sit",
+   "take": "Ms Works 4.0b US/Install Disk 6.image"
+  }
+ ],
+ "steps": [
+  {
+   "copy": {
+    "from": "Install Disk 1:",
+    "to": "{boot}:"
+   }
+  },
+  {
+   "copy": {
+    "from": "Install Disk 2:",
+    "to": "{boot}:"
+   }
+  },
+  {
+   "copy": {
+    "from": "Install Disk 3:",
+    "to": "{boot}:"
+   }
+  },
+  {
+   "copy": {
+    "from": "Install Disk 4:",
+    "to": "{boot}:"
+   }
+  },
+  {
+   "copy": {
+    "from": "Install Disk 5:",
+    "to": "{boot}:"
+   }
+  },
+  {
+   "copy": {
+    "from": "Install Disk 6:",
+    "to": "{boot}:"
+   }
+  },
+  {
+   "launch": "{boot}:Install Disk 1:Setup Folder:Microsoft Setup"
+  },
+  {
+   "wait_for": {
+    "text": "Welcome to the Microsoft Works 4.0 Setup"
+   },
+   "timeout": 60
+  },
+  {
+   "click": {
+    "text": "OK",
+    "exact": true,
+    "front": true
+   }
+  },
+  {
+   "wait_for": {
+    "text": "Organization:"
+   },
+   "timeout": 30
+  },
+  {
+   "type": "Executor"
+  },
+  {
+   "key": "tab"
+  },
+  {
+   "type": "OpenSource"
+  },
+  {
+   "click": {
+    "text": "OK",
+    "exact": true,
+    "front": true
+   }
+  },
+  {
+   "wait_for": {
+    "text": "Please confirm that the information"
+   },
+   "timeout": 30
+  },
+  {
+   "click": {
+    "text": "OK",
+    "exact": true,
+    "front": true
+   }
+  },
+  {
+   "wait_for": {
+    "text": "For your records, please write this number"
+   },
+   "timeout": 30
+  },
+  {
+   "click": {
+    "text": "OK",
+    "exact": true,
+    "front": true
+   }
+  },
+  {
+   "wait_for": {
+    "text": "Please select a destination folder"
+   },
+   "timeout": 30
+  },
+  {
+   "click": {
+    "text": "Desktop",
+    "exact": true,
+    "front": true
+   }
+  },
+  {
+   "click": {
+    "text": "{target}",
+    "exact": true,
+    "front": true
+   }
+  },
+  {
+   "click": {
+    "text": "Open",
+    "exact": true,
+    "front": true
+   }
+  },
+  {
+   "wait_for": {
+    "text": "Space Available:"
+   },
+   "timeout": 10
+  },
+  {
+   "click": {
+    "text": "New Folder",
+    "exact": true,
+    "front": true
+   }
+  },
+  {
+   "wait_for": {
+    "text": "New Folder Name:"
+   },
+   "timeout": 10
+  },
+  {
+   "click": {
+    "text": "OK",
+    "exact": true,
+    "front": true
+   },
+   "note": "its name as Setup offers it: Microsoft Works 4.0"
+  },
+  {
+   "wait_for": {
+    "text": "Install Folder:"
+   },
+   "timeout": 10
+  },
+  {
+   "click": {
+    "text": "Setup",
+    "exact": true,
+    "front": true
+   }
+  },
+  {
+   "wait_for": {
+    "text": "Complete Installation"
+   },
+   "timeout": 30
+  },
+  {
+   "click": [
+    118,
+    137
+   ],
+   "note": "Complete Installation's button (its label isn't a control)"
+  },
+  {
+   "wait_for": {
+    "text": "Setup has successfully installed all the files"
+   },
+   "timeout": 900
+  },
+  {
+   "click": {
+    "text": "Restart",
+    "exact": true,
+    "front": true
+   }
+  },
+  {
+   "wait_finder": 240
+  }
+ ],
+ "expect": [
+  "Microsoft Works 4.0"
+ ],
+ "launch": [
+  "Microsoft Works 4.0:Microsoft Works 4.0"
+ ]
+}

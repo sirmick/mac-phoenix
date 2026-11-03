@@ -626,6 +626,15 @@ add_test(
 )
 set_tests_properties(bake_exclude PROPERTIES TIMEOUT 60 LABELS "provisioning")
 
+# Folders' custom icons through the pipeline: snapshot.py lists the invisible
+# "Icon\r" files, a capture keeps them (top-level noise and .DS_Store out,
+# reported), tidy.py sets their folders' kHasCustomIcon (no emulator).
+add_test(
+  NAME custom_icons
+  COMMAND ${Python3_EXECUTABLE} ${TEST_DIR}/test_custom_icons.py
+)
+set_tests_properties(custom_icons PROPERTIES TIMEOUT 60 LABELS "provisioning" SKIP_RETURN_CODE 77)
+
 # A library disk's System Folder additions (tools/web/make_disk.py
 # --system-from, make_library.py's place mapping): hfsutils, no emulator.
 add_test(
