@@ -457,7 +457,12 @@ void Executor::C_CalcVisBehind(WindowPeek w, RgnHandle clobbered)
         if(WINDOW_VISIBLE(wp))
         {
             SectRgn(rh, WINDOW_STRUCT_REGION(wp), testrgn);
-            if(!EmptyRgn(testrgn))
+            /* MacPhoenix: Finder's desktop window (its visRgn the desktop
+               layer's, TakeDesktopLayer) has no structure of its own, so
+               nothing ever touched it: a window opened in front left its
+               visRgn the whole desktop, and a disk put in then had its
+               icon drawn over the window (the desktop's update) */
+            if(!EmptyRgn(testrgn) || ROMlib_desktop_layer_region_p(PORT_VIS_REGION(wp)))
             {
                 CalcVis((WindowPeek)wp);
                 DiffRgn(rh, WINDOW_STRUCT_REGION(wp), rh);
