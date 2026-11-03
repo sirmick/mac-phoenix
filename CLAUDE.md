@@ -360,7 +360,8 @@ Logging:
                              calling code), drag (the Drag Manager's dispatch and Finder's
                              hook calls), pcsample (the PowerPC PC every 5 ms; every 5 s the
                              top addresses as fragment+offset and nearest export), hidpi (the
-                             text --executor-scale redraws from outlines), fslog,
+                             text --executor-scale redraws from outlines), ppcinterp
+                             (mame-ppc without its native back-end), fslog,
                              trace, trapfailure, unimplemented, ...
   --executor-ppc-break SPEC  PowerPC breakpoint (Executor; repeatable; "on": none, for the API):
                              WHERE[@N][*HITS][#MEM], WHERE $ADDR | FRAGMENT[:SECT]+OFF | !Routine;

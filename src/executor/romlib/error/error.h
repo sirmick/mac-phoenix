@@ -57,6 +57,7 @@ extern "C" {
 #define ERROR_OT_LOG 14 /* MacPhoenix: log Open Transport binds and calls (opentransport/) */
 #define ERROR_PC_SAMPLE 15 /* MacPhoenix: sample the PowerPC PC, report where it is (base/cpu.cpp) */
 #define ERROR_HIDPI_LOG 16 /* MacPhoenix: log the text recorded for the high-resolution screen (hidpi/) */
+#define ERROR_PPC_INTERP 17 /* MacPhoenix: mame-ppc's UML interpreter, not its native back-end (base/cpu.cpp) */
 
 /* This is a bit mask for those errors for which we should compile
  * in support.  This way we can conditionally compile in only
