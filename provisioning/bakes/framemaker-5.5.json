@@ -1,0 +1,218 @@
+{
+ "note": "Adobe FrameMaker 5.5 (Adobe, 1996), its floppies' VISE installer ('Install FrameMaker 5.5' and segment.2-26, gathered in one folder on Media; the archive's own Disk 26 fails its checksum: the copy shipped beside it is taken; the folder named after the archive's original owner's serial is left out): WIP, the set is incomplete: past the PPD choice (None) and 400-odd items it asks 'Please insert the disk: Disk 28' for 'Site Dictionary', also with only the PowerPC application chosen (Custom Install). No serial was asked before that",
+ "kind": "install",
+ "wip": true,
+ "os": "tools-8.6",
+ "target": "Applications",
+ "media": [
+  {
+   "file": "adb-framemaker-550.zip",
+   "take": "Adobe FrameMaker 5.5/Adobe FrameMaker 5.5.sit!:FrameMaker 5.5/Disk 1",
+   "as": "FrameMaker 5.5"
+  },
+  {
+   "file": "adb-framemaker-550.zip",
+   "take": "Adobe FrameMaker 5.5/Adobe FrameMaker 5.5.sit!:FrameMaker 5.5/Disk 2/segment.2",
+   "as": "FrameMaker 5.5:segment.2"
+  },
+  {
+   "file": "adb-framemaker-550.zip",
+   "take": "Adobe FrameMaker 5.5/Adobe FrameMaker 5.5.sit!:FrameMaker 5.5/Disk 3/segment.3",
+   "as": "FrameMaker 5.5:segment.3"
+  },
+  {
+   "file": "adb-framemaker-550.zip",
+   "take": "Adobe FrameMaker 5.5/Adobe FrameMaker 5.5.sit!:FrameMaker 5.5/Disk 4/segment.4",
+   "as": "FrameMaker 5.5:segment.4"
+  },
+  {
+   "file": "adb-framemaker-550.zip",
+   "take": "Adobe FrameMaker 5.5/Adobe FrameMaker 5.5.sit!:FrameMaker 5.5/Disk 5/segment.5",
+   "as": "FrameMaker 5.5:segment.5"
+  },
+  {
+   "file": "adb-framemaker-550.zip",
+   "take": "Adobe FrameMaker 5.5/Adobe FrameMaker 5.5.sit!:FrameMaker 5.5/Disk 6/segment.6",
+   "as": "FrameMaker 5.5:segment.6"
+  },
+  {
+   "file": "adb-framemaker-550.zip",
+   "take": "Adobe FrameMaker 5.5/Adobe FrameMaker 5.5.sit!:FrameMaker 5.5/Disk 7/segment.7",
+   "as": "FrameMaker 5.5:segment.7"
+  },
+  {
+   "file": "adb-framemaker-550.zip",
+   "take": "Adobe FrameMaker 5.5/Adobe FrameMaker 5.5.sit!:FrameMaker 5.5/Disk 8/segment.8",
+   "as": "FrameMaker 5.5:segment.8"
+  },
+  {
+   "file": "adb-framemaker-550.zip",
+   "take": "Adobe FrameMaker 5.5/Adobe FrameMaker 5.5.sit!:FrameMaker 5.5/Disk 9/segment.9",
+   "as": "FrameMaker 5.5:segment.9"
+  },
+  {
+   "file": "adb-framemaker-550.zip",
+   "take": "Adobe FrameMaker 5.5/Adobe FrameMaker 5.5.sit!:FrameMaker 5.5/Disk 10/segment.10",
+   "as": "FrameMaker 5.5:segment.10"
+  },
+  {
+   "file": "adb-framemaker-550.zip",
+   "take": "Adobe FrameMaker 5.5/Adobe FrameMaker 5.5.sit!:FrameMaker 5.5/Disk 11/segment.11",
+   "as": "FrameMaker 5.5:segment.11"
+  },
+  {
+   "file": "adb-framemaker-550.zip",
+   "take": "Adobe FrameMaker 5.5/Adobe FrameMaker 5.5.sit!:FrameMaker 5.5/Disk 12/segment.12",
+   "as": "FrameMaker 5.5:segment.12"
+  },
+  {
+   "file": "adb-framemaker-550.zip",
+   "take": "Adobe FrameMaker 5.5/Adobe FrameMaker 5.5.sit!:FrameMaker 5.5/Disk 13/segment.13",
+   "as": "FrameMaker 5.5:segment.13"
+  },
+  {
+   "file": "adb-framemaker-550.zip",
+   "take": "Adobe FrameMaker 5.5/Adobe FrameMaker 5.5.sit!:FrameMaker 5.5/Disk 14/segment.14",
+   "as": "FrameMaker 5.5:segment.14"
+  },
+  {
+   "file": "adb-framemaker-550.zip",
+   "take": "Adobe FrameMaker 5.5/Adobe FrameMaker 5.5.sit!:FrameMaker 5.5/Disk 15/segment.15",
+   "as": "FrameMaker 5.5:segment.15"
+  },
+  {
+   "file": "adb-framemaker-550.zip",
+   "take": "Adobe FrameMaker 5.5/Adobe FrameMaker 5.5.sit!:FrameMaker 5.5/Disk 16/segment.16",
+   "as": "FrameMaker 5.5:segment.16"
+  },
+  {
+   "file": "adb-framemaker-550.zip",
+   "take": "Adobe FrameMaker 5.5/Adobe FrameMaker 5.5.sit!:FrameMaker 5.5/Disk 17/segment.17",
+   "as": "FrameMaker 5.5:segment.17"
+  },
+  {
+   "file": "adb-framemaker-550.zip",
+   "take": "Adobe FrameMaker 5.5/Adobe FrameMaker 5.5.sit!:FrameMaker 5.5/Disk 18/segment.18",
+   "as": "FrameMaker 5.5:segment.18"
+  },
+  {
+   "file": "adb-framemaker-550.zip",
+   "take": "Adobe FrameMaker 5.5/Adobe FrameMaker 5.5.sit!:FrameMaker 5.5/Disk 19/segment.19",
+   "as": "FrameMaker 5.5:segment.19"
+  },
+  {
+   "file": "adb-framemaker-550.zip",
+   "take": "Adobe FrameMaker 5.5/Adobe FrameMaker 5.5.sit!:FrameMaker 5.5/Disk 20/segment.20",
+   "as": "FrameMaker 5.5:segment.20"
+  },
+  {
+   "file": "adb-framemaker-550.zip",
+   "take": "Adobe FrameMaker 5.5/Adobe FrameMaker 5.5.sit!:FrameMaker 5.5/Disk 21/segment.21",
+   "as": "FrameMaker 5.5:segment.21"
+  },
+  {
+   "file": "adb-framemaker-550.zip",
+   "take": "Adobe FrameMaker 5.5/Adobe FrameMaker 5.5.sit!:FrameMaker 5.5/Disk 22/segment.22",
+   "as": "FrameMaker 5.5:segment.22"
+  },
+  {
+   "file": "adb-framemaker-550.zip",
+   "take": "Adobe FrameMaker 5.5/Adobe FrameMaker 5.5.sit!:FrameMaker 5.5/Disk 23/segment.23",
+   "as": "FrameMaker 5.5:segment.23"
+  },
+  {
+   "file": "adb-framemaker-550.zip",
+   "take": "Adobe FrameMaker 5.5/Adobe FrameMaker 5.5.sit!:FrameMaker 5.5/Disk 24/segment.24",
+   "as": "FrameMaker 5.5:segment.24"
+  },
+  {
+   "file": "adb-framemaker-550.zip",
+   "take": "Adobe FrameMaker 5.5/Adobe FrameMaker 5.5.sit!:FrameMaker 5.5/Disk 25/segment.25",
+   "as": "FrameMaker 5.5:segment.25"
+  },
+  {
+   "file": "adb-framemaker-550.zip",
+   "take": "Adobe FrameMaker 5.5/Adobe FrameMaker 5.5 - Disk 26.sit!:Disk 26/segment.26",
+   "as": "FrameMaker 5.5:segment.26"
+  }
+ ],
+ "steps": [
+  {
+   "launch": "{media}:FrameMaker 5.5:Install FrameMaker 5.5"
+  },
+  {
+   "wait_for": {
+    "button": "Continue…"
+   },
+   "timeout": 120
+  },
+  {
+   "click": {
+    "button": "Continue…"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Accept"
+   },
+   "timeout": 60
+  },
+  {
+   "click": {
+    "button": "Accept"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Save As…"
+   },
+   "timeout": 60
+  },
+  {
+   "click": {
+    "button": "Continue"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Switch Disk"
+   },
+   "timeout": 60
+  },
+  {
+   "click": {
+    "button": "Switch Disk"
+   },
+   "until": {
+    "text": "on the disk “{target}”",
+    "front": true
+   }
+  },
+  {
+   "click": {
+    "button": "Continue..."
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Cancel Install"
+   },
+   "timeout": 60,
+   "note": "the PPDs"
+  },
+  {
+   "click": {
+    "text": "None",
+    "offset": [
+     -20,
+     6
+    ]
+   }
+  },
+  {
+   "click": {
+    "button": "OK"
+   }
+  }
+ ]
+}

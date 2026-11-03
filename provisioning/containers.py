@@ -98,8 +98,16 @@ class Archive:
     def __init__(self, path, work):
         self.root = tempfile.mkdtemp(prefix="unar.", dir=work)
         r = subprocess.run(["unar", "-q", "-f", "-o", self.root, path], capture_output=True)
-        if r.returncode:
-            raise RuntimeError(f"unar {path}: {r.stderr.decode(errors='replace').strip()}")
+        # Members that fail their checksum (FrameMaker 5.5's archive has a damaged Disk 26,
+        # shipped again beside it) are an error only for a take that holds them.
+        err = r.stderr.decode(errors="replace")
+        self.failed = [m.group(1) for m in re.finditer(r"^\s*(.+?)\s+\(\d+ B\)\.\.\. Failed!", err, re.M)]
+        if r.returncode and not self.failed:
+            raise RuntimeError(f"unar {path}: {err.strip()}")
+        for f in self.failed:                   # no partial files to export
+            for part in (f, f + ".rsrc"):
+                if os.path.isfile(self.local(part)):
+                    os.remove(self.local(part))
         self.finder = {}
         r = subprocess.run(["lsar", "-json", path], capture_output=True, text=True, errors="replace")
         try:
@@ -119,6 +127,10 @@ class Archive:
 
     def export(self, path, stage):
         top = self.local(path.lstrip(":"))     # ":X" after a nested "!:" is X at the top
+        want = path.lstrip(":").rstrip("/*").rstrip("/")
+        bad = [f for f in self.failed if not want or f == want or f.startswith(want + "/")]
+        if bad:
+            raise RuntimeError(f"archive's {', '.join(bad)} failed to extract (checksum)")
         if not os.path.exists(top) and not os.path.exists(top + ".rsrc"):
             raise RuntimeError(f"archive has no {path}")
         items = []
