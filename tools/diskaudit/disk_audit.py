@@ -21,9 +21,10 @@ What a user of the image would trip over in the Finder, per image:
             menu bar, past its right or bottom edge), too small to use;
             scroll origins (DXInfo frScroll) past the folder's content.
   invisible invisible files and folders the Finder doesn't make (stray
-            Snapshot Info, ._ files, ...), the Finder's own folders left
-            visible (Desktop Folder, Trash), items a session leaves behind
-            (Recent Applications/Documents/Servers).
+            Snapshot Info, ._ files, ...), items a session leaves behind
+            (Recent Applications/Documents/Servers). (Desktop Folder and
+            Trash may be visible: the 7.6 and 8.6 Finders leave them so and
+            hide them themselves.)
 
   disk_audit.py IMAGE... [--with IMAGE]... [--report FILE.md] [--json] [--screen 640x480]
 
@@ -55,8 +56,6 @@ FINDER_INVISIBLE = {
     "Cleanup At Startup", "OpenFolderListDF\r", "DesktopPrinters DB", "AppleShare PDS", "Move&Rename",
     "VM Storage", "Desktop Pictures", "Find.idx", "Shared Libraries", "Serial Port Monitor",
 }
-# The Finder's own folders: invisible at the volume's top level
-FINDER_FOLDERS = {"Desktop Folder", "Trash", "Temporary Items"}
 # Folders a session fills (Apple Menu Items' Recent ...)
 SESSION_FOLDERS = {"Recent Applications", "Recent Documents", "Recent Servers"}
 
@@ -409,9 +408,7 @@ class Audit:
             if n.id == ROOT:
                 continue
             parent = v.nodes.get(n.parent)
-            if n.parent == ROOT and n.is_dir and n.name in FINDER_FOLDERS and not n.flags & INVISIBLE:
-                self.add("warning", "invisible", n, "the Finder's own folder is visible")
-            elif n.flags & INVISIBLE and n.name not in FINDER_INVISIBLE:
+            if n.flags & INVISIBLE and n.name not in FINDER_INVISIBLE:
                 self.stats["invisible"] += 1
                 system = self.in_system_folder(n)       # Apple's own preferences hide some
                 self.add("info" if system else "warning", "invisible", n,

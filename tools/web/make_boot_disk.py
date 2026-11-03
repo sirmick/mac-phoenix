@@ -40,7 +40,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools/macdecode"))
+sys.path.insert(0, str(ROOT / "tools/diskaudit"))
 from rsrc import Disk  # noqa: E402
+import tidy  # noqa: E402
 
 POLICY = ROOT / "src/executor/res/extension-policy.txt"
 EXTENSION_FOLDERS = {b"Scripting Additions", b"Voices"}
@@ -48,6 +50,8 @@ EXTENSION_FOLDERS = {b"Scripting Additions", b"Voices"}
 # the provisioning record: not copied.
 TOP_SKIP = {b"Desktop DB", b"Desktop DF", b"Desktop", b"Snapshot Info"}
 SYSTEM_FOLDER_SKIP = {b"MacsBug"}
+# What a session leaves in Apple Menu Items: made empty.
+SESSION_FOLDERS = {b"Recent Applications", b"Recent Documents", b"Recent Servers"}
 # The Finder's own folders, made empty and invisible as on the source.
 FINDER_FOLDERS = [b"Desktop Folder", b"Trash"]
 # Extensions files that run no code at startup but are found there: CFM's
@@ -169,6 +173,8 @@ def plan(disk, allowed, keep=()):
     libraries = {mac(n) for n in LIBRARIES}
 
     def tree(path, keep_file=lambda name: True, keep_folder=lambda name: True):
+        if path.rsplit(b":", 1)[-1] in SESSION_FOLDERS:
+            return
         for name in disk.files(path):
             if keep_file(name) and name not in drop:
                 files.append(path + b":" + name)
@@ -295,6 +301,7 @@ def main():
             w.bless(b"System Folder")
         finally:
             w.close()
+        tidy.tidy(str(out))                              # icons and windows placed
     print(f"{out}: {size / 1e6:.1f} MB, {len(blobs)} files in {len(folders)} folders, "
           f"\"{label}\"")
 

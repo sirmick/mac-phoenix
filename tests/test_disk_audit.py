@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""test_disk_audit.py — tools/diskaudit/disk_audit.py on fixture images it makes.
+"""test_disk_audit.py — tools/diskaudit/disk_audit.py and tidy.py on fixture images it makes.
 
 An HFS volume (hfsutils: hformat, hmkdir, hcopy of MacBinary files) whose
 Finder info the test then writes into the catalog records disk_audit.py
@@ -20,6 +20,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "tools", "diskaudit"))
 sys.path.insert(0, os.path.join(ROOT, "provisioning"))
 import disk_audit  # noqa: E402
+import tidy  # noqa: E402
 import fat_cfm  # noqa: E402
 
 FAILS = []
@@ -232,11 +233,28 @@ def main():
         check(has(fs, "windows", "Fixture", "off a 640x480 screen", "error"), "window off the screen")
         check(has(fs, "windows", "Fixture:Scrolled", "scroll origin 5000,5000"), "scroll past the content")
         check(has(fs, "invisible", "Fixture:Junk", "stray"), "stray invisible file")
-        check(has(fs, "invisible", "Fixture:Desktop Folder", "visible"), "the Finder's folder left visible")
-        check(len(fs) == 10, f"nothing else reported ({len(fs)} findings)")
+        check(not any(f["path"] == "Fixture:Desktop Folder" for f in fs),
+              "a visible Desktop Folder isn't reported (the Finder hides it itself)")
+        check(len(fs) == 9, f"nothing else reported ({len(fs)} findings)")
         check(open(image, "rb").read() == before, "the image is unchanged")
         rc, fs = findings([image], "--screen", "1600x1200")
         check(not has(fs, "windows", "Fixture", "off a"), "the window fits a bigger screen")
+
+        # tidy.py puts the Finder info right: icons and windows placed
+        tidy.tidy(image)
+        rc, fs = findings([image])
+        for f in fs:
+            print("    ", f["severity"], f["category"], f["path"], f["message"])
+        left = [f for f in fs if f["severity"] != "info" and f["path"] != "Fixture:Junk"
+                and f["category"] != "alias"]
+        check(not left, "after tidy: no error or warning but the stray file and the aliases")
+        v = disk_audit.Volume(image)
+        placed = [n for n in v.nodes.values() if n.id != 2 and not n.flags & disk_audit.INVISIBLE]
+        check(all(n.loc != (0, 0) and n.flags & tidy.INITED for n in placed), "every icon placed and inited")
+        check(all(n.rect != (0, 0, 0, 0) and n.scroll == (0, 0) for n in v.nodes.values()
+                  if n.is_dir and n.name not in tidy.FINDER_FOLDERS), "every folder window framed, scroll 0,0")
+        check(all(n.flags & disk_audit.INVISIBLE for n in v.nodes.values()
+                  if n.is_dir and n.parent == 2 and n.name in tidy.FINDER_FOLDERS), "Desktop Folder invisible")
 
         plus = hfsplus_fixture(work)
         v = disk_audit.Volume(plus)
