@@ -38,3 +38,12 @@ TEST(Gestalt, QuadraFPUAndEditionManager)
     ASSERT_EQ(noErr, SysEnvirons(2, &env));
     EXPECT_TRUE(env.hasFPU);
 }
+
+/* One script system (Roman), as 7.6.1's Quadra and 8.6's G3 answer
+   'scr#': Canvas 5 can't initialize without it (-5551) */
+TEST(Gestalt, ScriptCount)
+{
+    GUEST<LONGINT> v;
+    ASSERT_EQ(noErr, C_Gestalt(gestaltScriptCount, &v));
+    EXPECT_EQ(1, (LONGINT)v);
+}
