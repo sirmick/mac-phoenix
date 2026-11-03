@@ -1,5 +1,5 @@
 {
- "note": "QuarkXPress 4.0 upgrade (Quark, 1997): the upgrade installer and its CD, staged only: installing it takes the product's serial number (an upgrade: the QuarkXPress 3 serial it upgrades)",
+ "note": "QuarkXPress 4.0 upgrade (Quark, 1997): the upgrade installer and its CD, staged only: installing it takes the product's serial number (an upgrade: its Upgrader finds an installed QuarkXPress 3.x and asks for the validation code that goes with that copy's serial, from the upgrade data sheet; there is no working 3.x bake, quarkxpress-3.32)",
  "kind": "stage",
  "media": [
   {

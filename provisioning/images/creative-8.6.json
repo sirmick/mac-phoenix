@@ -4,10 +4,12 @@
   "creative",
   "ppc"
  ],
- "note": "Mac OS 8.6 (PowerPC) with what the creative apps put in the System Folder (Illustrator 8.0's fonts, plug-in support and preferences); the apps themselves are on Creative (Mac OS 8).",
+ "note": "Mac OS 8.6 (PowerPC) with what the creative apps put in the System Folder (Illustrator 8.0's, Photoshop 5.5's and PageMaker 6.5's fonts, plug-in support, ColorSync profiles and preferences, the owner's Adobe Registration Database); the apps themselves are on Creative (Mac OS 8).",
  "base": "standard-8.6",
  "system_from": [
-  "illustrator-8.0"
+  "illustrator-8.0",
+  "photoshop-5.5",
+  "pagemaker-6.5"
  ],
  "aliases_to": "creative-macos-8"
 }

@@ -286,7 +286,8 @@ if(NODE_COMMAND AND GO_COMMAND)
     # screen: web/tests/tab_m1.mjs). Long, and every target must work: label
     # m1 (ctest -L m1), not site.
     foreach(cell "7.6.1 productivity" "7.6.1 creative" "7.6.1 development" "7.6.1 games-68k"
-                 "8.6 productivity" "8.6 creative" "8.6 development" "8.6 tools-8" "8.6 games-ppc")
+                 "8.6 productivity" "8.6 creative" "8.6 creative-8" "8.6 development" "8.6 tools-8"
+                 "8.6 games-ppc")
         separate_arguments(cell)
         list(GET cell 0 system)
         list(GET cell 1 disk)

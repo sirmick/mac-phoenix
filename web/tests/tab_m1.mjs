@@ -17,7 +17,8 @@
 // M1_QUERY: more of the page's query (debug=fslog, logtraps=NAME...).
 // M1_RESULTS=FILE: one JSON line per application appended. The canvas after
 // each step goes to M1_SHOTS (default ~/storage/tmp/m1/shots) as
-// SYSTEM-NAME-STEP.png. M1_LOG=1: the Worker's console.
+// SYSTEM-NAME-STEP.png. M1_LOG=1: the Worker's console. M1_WINDOWS=1: the
+// window list (dialogs' text too) when a target fails.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -46,6 +47,36 @@ const KNOWN = {
 function game(name, app, system, start) {
     const known = KNOWN[name];
     return { name, app, systems: [system], known, use: (t) => known ? t.stopsAt(known) : t.play(start) };
+}
+// Photoshop (4.0, 5.5): File > New (its dialog, titled New: any other dialog
+// is the alert that stopped it), the paintbrush (B) drawn across the image,
+// Save As.
+async function photoshop(t, doc) {
+    const alert = async () => {
+        const d = (await t.windows(true)).find((w) => w.kind === DIALOG_KIND && w.title !== 'New');
+        if (d)
+            throw new Error(`alert "${said(d).replace(/\s+/g, ' ')}"`);
+    };
+    await t.until(async () => {
+        await alert();
+        return (await t.windows()).some((w) => w.title === 'Layers');
+    }, 60000, 'no palettes');
+    await t.key('Meta+KeyN');
+    await t.until(async () => {
+        await alert();
+        return (await t.windows(true)).some((w) => w.kind === DIALOG_KIND && w.title === 'New');
+    }, 20000, 'no New dialog');
+    await t.key('Enter');
+    await t.until(async () => (await t.windows()).some((w) => /^Untitled/.test(w.title)), 20000, 'no Untitled window');
+    const w = (await t.windows()).find((x) => /^Untitled/.test(x.title));
+    const [top, left, bottom, right] = w.rect;
+    const before = await sample();
+    await t.key('KeyB');
+    await t.drag([[left + 20, top + 20], [right - 20, (top + bottom) / 2], [left + 20, bottom - 20]]);
+    await t.pause(1000);
+    if (changed(before, await sample()) < 0.002)
+        throw new Error('nothing drawn');
+    await t.saveAs(doc);
 }
 const TARGETS = {
     'productivity.img': [
@@ -162,29 +193,8 @@ const TARGETS = {
             if (d)
                 throw new Error(`alert "${said(d).replace(/\s+/g, ' ')}"`);
         } },
-        { name: 'Adobe Photoshop® 4.0', app: 'Creative:Adobe Photoshop 4.0 ƒ:Adobe Photoshop® 4.0', use: async (t) => {
-            // File > New (its dialog's defaults), the paintbrush (B) drawn
-            // across the image, Save As
-            await t.until(async () => {
-                const d = (await t.windows(true)).find((w) => w.kind === DIALOG_KIND);
-                if (d)
-                    throw new Error(`alert "${said(d).replace(/\s+/g, ' ')}"`);
-                return (await t.windows()).some((w) => w.title === 'Layers');
-            }, 60000, 'no palettes');
-            await t.key('Meta+KeyN');
-            await t.until(async () => (await t.windows()).some((w) => w.kind === DIALOG_KIND), 20000, 'no New dialog');
-            await t.key('Enter');
-            await t.until(async () => (await t.windows()).some((w) => /^Untitled/.test(w.title)), 20000, 'no Untitled window');
-            const w = (await t.windows()).find((x) => /^Untitled/.test(x.title));
-            const [top, left, bottom, right] = w.rect;
-            const before = await sample();
-            await t.key('KeyB');
-            await t.drag([[left + 20, top + 20], [right - 20, (top + bottom) / 2], [left + 20, bottom - 20]]);
-            await t.pause(1000);
-            if (changed(before, await sample()) < 0.002)
-                throw new Error('nothing drawn');
-            await t.saveAs('M1 PS');
-        } },
+        { name: 'Adobe Photoshop® 4.0', app: 'Creative:Adobe Photoshop 4.0 ƒ:Adobe Photoshop® 4.0',
+          use: (t) => photoshop(t, 'M1 PS') },
         { name: 'Adobe Illustrator® 6.0', app: 'Creative:Adobe Illustrator 6.0 ƒ:Adobe Illustrator® 6.0', use: async (t) => {
             // Untitled art 1 opens at launch; the rectangle tool (the
             // toolbox's sixth row, second column) dragged across it, Save As.
@@ -243,6 +253,49 @@ const TARGETS = {
             if (changed(before, await sample()) < 0.002)
                 throw new Error('nothing drawn');
             await t.saveAs('M1 CV');
+        } },
+    ],
+    'creative-8.img': [
+        { name: 'Adobe Illustrator® 8.0', app: 'Creative:Adobe Illustrator 8.0 ƒ:Adobe Illustrator® 8.0', use: async (t) => {
+            // File > New, the rectangle tool (M) dragged across it, Save As
+            await t.until(async () => (await t.windows()).some((w) => w.title === '' && w.rect[2] - w.rect[0] > 200), 60000, 'no toolbox');
+            await t.key('Meta+KeyN');
+            await t.until(async () => (await t.windows()).some((w) => /^Untitled/.test(w.title)), 30000, 'no Untitled window');
+            await t.pause(2000);
+            const w = (await t.windows()).find((x) => /^Untitled/.test(x.title));
+            const [top, left] = w.rect;
+            const before = await sample();
+            await t.key('KeyM');
+            await t.pause(500);
+            await t.drag([[left + 150, top + 100], [left + 350, top + 260]]);
+            await t.pause(1000);
+            if (changed(before, await sample()) < 0.002)
+                throw new Error('nothing drawn');
+            await t.saveAs('M1 AI8');
+        } },
+        { name: 'Adobe® Photoshop® 5.5', app: 'Creative:Adobe Photoshop 5.5 ƒ:Adobe® Photoshop® 5.5',
+          use: (t) => photoshop(t, 'M1 PS5') },
+        { name: 'Adobe® PageMaker® 6.5', app: 'Creative:Adobe PageMaker 6.5 ƒ:Adobe® PageMaker® 6.5', use: async (t) => {
+            // File > New (Document Setup's defaults), text typed with the
+            // text tool (Shift+F4) on the page, Save As
+            await t.until(async () => (await t.windows()).some((w) => w.title === 'Styles' || w.title === 'Colors'), 90000, 'no palettes');
+            await t.key('Meta+KeyN');
+            await t.until(async () => (await t.windows(true)).some((w) => w.kind === DIALOG_KIND), 20000, 'no Document Setup');
+            await t.key('Enter');
+            await t.until(async () => (await t.windows()).some((w) => /^Untitled/.test(w.title)), 30000, 'no Untitled window');
+            await t.pause(2000);
+            const w = (await t.windows()).find((x) => /^Untitled/.test(x.title));
+            const [top, left, bottom, right] = w.rect;
+            const before = await sample();
+            await t.key('Shift+F4');
+            await t.pause(500);
+            await t.click((left + right) / 2 - 60, (top + bottom) / 2 - 40);
+            await t.pause(500);
+            await t.type(DOCUMENT);
+            await t.pause(1000);
+            if (changed(before, await sample()) < 0.0005)
+                throw new Error('nothing typed');
+            await t.saveAs('M1 PM');
         } },
     ],
     'development.img': [
@@ -787,6 +840,9 @@ try {
             const stopped = crashed ? null : await page.evaluate(() => window.executor.stopped).catch(() => null);
             if (stopped)
                 why += ` (Executor stopped: ${stopped})`;
+            if (!crashed && process.env.M1_WINDOWS)
+                for (const w of await t.windows(true).catch(() => []))
+                    console.log(`  window "${w.title}" kind ${w.kind} [${w.rect}]${said(w) ? `: ${said(w).replace(/\s+/g, ' ')}` : ''}`);
         }
         if (!crashed)
             await shot(ok ? 'done' : 'failed');

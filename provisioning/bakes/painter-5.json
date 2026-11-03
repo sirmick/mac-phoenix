@@ -1,0 +1,64 @@
+{
+ "note": "MetaCreations Painter 5.0 (MetaCreations, 1997), its VISE installer (painter_5.sit; 'Serial Number.txt', its original owner's, is left out), PowerPC only (its installer says so on a 68k Mac): WIP. The installer's data is damaged: 'eMaps 1 Patterns' decompresses into a file that fills the target (1 GB) and the install stops with 'An unexpected error occurred while installing “eMaps 1 Patterns”. 1008:17,-34 The disk is full', on the G3 (kpx) and the Quadra alike; the archive tests clean, so it was damaged before it was stuffed. Needs other media",
+ "kind": "install",
+ "wip": true,
+ "os": "tools-8.6",
+ "target": "Applications",
+ "media": [
+  {
+   "file": "painter_5.sit",
+   "take": "Painter 5.0/Painter 5.0 Installer"
+  },
+  {
+   "file": "painter_5.sit",
+   "take": "Painter 5.0/Read Me.txt"
+  }
+ ],
+ "steps": [
+  {
+   "launch": "{media}:Painter 5.0 Installer"
+  },
+  {
+   "wait_for": {
+    "button": "Continue…"
+   },
+   "timeout": 120
+  },
+  {
+   "click": {
+    "button": "Continue…"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Save As…"
+   },
+   "timeout": 60
+  },
+  {
+   "click": {
+    "button": "Continue"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Switch Disk"
+   },
+   "timeout": 60
+  },
+  {
+   "click": {
+    "button": "Switch Disk"
+   },
+   "until": {
+    "text": "on the disk “{target}”",
+    "front": true
+   }
+  },
+  {
+   "click": {
+    "button": "Install"
+   }
+  }
+ ]
+}

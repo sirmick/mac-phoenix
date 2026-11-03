@@ -115,7 +115,7 @@ from containers import MAC_EPOCH, Volume, macbinary_to_files, mr, named, open_co
 import guest as guest_mod  # noqa: E402
 from guest import Guest, free_port, watch_url  # noqa: E402
 from populate_disk import build_macbinary  # noqa: E402
-from snapshot import Hfs  # noqa: E402
+from snapshot import Hfs, glob_quote  # noqa: E402
 
 BAKES = os.path.join(HERE, "bakes")
 MEDIA = os.path.join(HERE, "media.json")
@@ -355,7 +355,7 @@ def put(hfs, image, items, to=b""):
         for rel, local in items:
             target = (to + b":" if to else b":") + rel
             if local is None:
-                hfs.run("hmkdir", target, check=False)
+                hfs.run("hmkdir", glob_quote(target), check=False)
             else:
                 hfs.run("hcopy", "-m", local, target)
     finally:
