@@ -16,6 +16,7 @@
 #include <QDOffscreen.h>
 #include <Windows.h>
 #include <Devices.h>
+#include <Palettes.h>
 #endif
 
 #include <bitset>
@@ -893,5 +894,33 @@ TEST(QuickDraw, SetEntriesSameColourNewSeed)
     SetEntries(5, 0, cs);
     SetGDevice(save);
     EXPECT_NE(seed, (int32_t)(*dev.table())->ctSeed);
+}
+
+/* SetPalette on the front window puts its colours in the device's table
+   at once, no ActivatePalette needed. */
+TEST(QuickDraw, SetPaletteFrontWindowActivates)
+{
+    MainDevice8 dev;
+    if(!dev.ok)
+        GTEST_SKIP() << "no 8-bit main device";
+    Rect r = { 60, 60, 160, 260 };
+    WindowPtr w = NewCWindow(nullptr, &r, PSTR("P"), true, 0, (WindowPtr)-1, false, 0);
+    ASSERT_NE(nullptr, w);
+    SelectWindow(w);
+    ASSERT_EQ(w, FrontWindow());
+    PaletteHandle pal = NewPalette(1, nullptr, pmTolerant, 0);
+    RGBColor odd = { 0x1234, 0x5678, 0x9ABC };
+    SetEntryColor(pal, 0, &odd);
+    SetPalette(w, pal, true);
+    CTabHandle ct = dev.table();
+    bool found = false;
+    for(int i = 0; i <= (*ct)->ctSize; i++)
+    {
+        RGBColor c = (*ct)->ctTable[i].rgb;
+        found |= c.red == odd.red && c.green == odd.green && c.blue == odd.blue;
+    }
+    EXPECT_TRUE(found);
+    DisposeWindow(w);
+    DisposePalette(pal);
 }
 #endif
