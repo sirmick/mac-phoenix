@@ -121,9 +121,12 @@ static gestaltentry_t gtable[] = {
         gestaltOSTable, OSTRAPTABLE_ADDR,
     },
 
+    /* MacPhoenix: gestalt68040FPU, as a Quadra 650 answers. The core is a
+       68040 with its FPU (cpu/syn68k_common.cpp); Photoshop 4.0 refuses
+       to start without one ("lacks the required hardware"). */
     {
-        gestaltFPUType, 0,
-    }, /* gestaltNoFPU */
+        gestaltFPUType, 3,
+    },
     {
         gestaltKeyboardType, gestaltMacKbd,
     },
@@ -266,7 +269,8 @@ static gestaltentry_t gtable[] = {
     { gestaltHelpMgrAttr, 1 }, /* must be 1 */
     /* MacPhoenix: smVersion's value (script.cpp); always answered */
     { gestaltScriptMgrVersion, 0x0750 },
-    { gestaltEditionMgrAttr, 1 }, /* must be 1 */
+    /* MacPhoenix: present, translation-aware: a 7.6.1 Quadra's 3 */
+    { gestaltEditionMgrAttr, 3 },
     /* gestaltAliasMgrAttr: 7, above (MacPhoenix) */
 
 #define SYSTEM_7_EXTRAS 2
@@ -373,8 +377,11 @@ find_selector_in_table(OSType selector, gestaltentry_t table[],
             break;
         /* MacPhoenix: the Script Manager (script.cpp) is no longer hidden
            behind ROMlib_pretend_script; see patches.cpp's ScriptUtil. */
+        /* MacPhoenix: every System 7 has the Edition Manager and
+           applications require it (Photoshop 4.0: "lacks the required
+           hardware or system software"); Executor's is edition.cpp */
         case gestaltEditionMgrAttr:
-            if(!ROMlib_pretend_edition)
+            if(!ROMlib_pretend_edition && system_version < 0x700)
                 selector = -1;
             break;
         /* MacPhoenix: the Alias Manager resolves records now (alias.cpp);
