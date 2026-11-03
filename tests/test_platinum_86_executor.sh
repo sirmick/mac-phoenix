@@ -6,6 +6,9 @@
 #  1. The menu bar's apple: the colour apple's rows 2..16 of the 20-high
 #     bar, a pixel above the system menus' icons (it was drawn at 3..17,
 #     "right at the bottom of the menu bar").
+#  2. A Finder window's scroll bar thumb: fixed size with its grip, one
+#     black line between it and the pages (it was proportional, plain, and
+#     two lines thick against them).
 #
 # Usage:
 #   tests/test_platinum_86_executor.sh [--timeout N] [--port N]
@@ -91,6 +94,29 @@ EOF
 )
 echo "Apple menu icon: rows $ROWS (the G3: 2 16)"
 [[ "$ROWS" == "2 16" ]] || fail "the apple is not where the G3 draws it"
+
+# ---- 2. a scroll bar's thumb: the System Folder's window (as the image's
+# Finder keeps it: its vertical bar at x 402..417, the up arrow's bottom
+# outline at y 82). 8.6's thumb is the bar's width (Smart Scrolling off),
+# its outlines shared with the arrow above and the page below (black at
+# 82 and 98 only: not 125 and 126 under a proportional thumb), and has four
+# grip ridges (#333399 at 87, 89, 91, 93).
+api launch '{"path":"Macintosh HD:System Folder"}' >/dev/null || true
+sleep 4
+api mouse '{"x":300,"y":400}' >/dev/null
+sleep 1
+shot folder
+THUMB=$(python3 - "$WORK/folder.png" <<'EOF'
+import sys
+from PIL import Image
+im = Image.open(sys.argv[1]).convert('RGB')
+black = [y for y in range(78, 140) if im.getpixel((410, y)) == (0, 0, 0)]
+grip = [y for y in range(83, 98) if im.getpixel((410, y)) == (0x33, 0x33, 0x99)]
+print(f"black {' '.join(map(str, black))} grip {' '.join(map(str, grip))}")
+EOF
+)
+echo "Scroll bar thumb: $THUMB (the G3: black 82 98 grip 87 89 91 93)"
+[[ "$THUMB" == "black 82 98 grip 87 89 91 93" ]] || fail "the thumb is not drawn as the G3 draws it"
 
 [[ $FAILED -eq 0 ]] && echo "PASS: platinum chrome as the G3's"
 exit $FAILED

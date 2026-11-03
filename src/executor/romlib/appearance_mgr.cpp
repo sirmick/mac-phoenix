@@ -449,7 +449,7 @@ OSStatus Executor::C_GetThemeScrollBarThumbStyle(GUEST<ThemeScrollBarThumbStyle>
 {
     if(!outStyle)
         return paramErr;
-    *outStyle = kThemeScrollBarThumbProportional;
+    *outStyle = kThemeScrollBarThumbNormal; /* 8.6's default: Smart Scrolling off */
     return noErr;
 }
 
@@ -457,7 +457,7 @@ OSStatus Executor::C_GetThemeScrollBarArrowStyle(GUEST<ThemeScrollBarArrowStyle>
 {
     if(!outStyle)
         return paramErr;
-    *outStyle = kThemeScrollBarArrowsLowerRight;
+    *outStyle = kThemeScrollBarArrowsSingle; /* an arrow at each end, as 8.6 */
     return noErr;
 }
 

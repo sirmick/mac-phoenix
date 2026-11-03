@@ -29,6 +29,9 @@ namespace
 
 constexpr int arrowSize = 16; /* a scroll bar's arrow boxes, its width */
 constexpr int sliderThumbLength = 15, sliderPlainThumbLength = 13, sliderInset = 5;
+/* the viewsize sizes the thumb only with Smart Scrolling on: never, as
+   GetThemeScrollBarThumbStyle answers (8.6's default) */
+constexpr bool proportionalThumbs = false;
 
 /* Where a track's parts are. The axis: v (vertical) or h; `lo`/`hi` the
    ends along it. */
@@ -89,8 +92,11 @@ TrackGeometry trackGeometry(const ThemeTrackDrawInfo &info)
         int length = g.hi(g.drag) - g.lo(g.drag);
         int32_t viewSize = info.trackInfo.scrollbar.viewsize;
         int width = horizontal ? info.bounds.bottom - info.bounds.top : info.bounds.right - info.bounds.left;
-        g.thumbLength = width;
-        if(viewSize > 0 && max > min)
+        /* 8.6's thumb, Smart Scrolling off (GetThemeScrollBarThumbStyle):
+           its outlines shared with the pages either side, so a pixel longer
+           than the bar is wide (appr controls.16/.384) */
+        g.thumbLength = width + 1;
+        if(proportionalThumbs && viewSize > 0 && max > min)
             g.thumbLength = std::max<int>(width, (int64_t)length * viewSize / ((int64_t)max - min + viewSize));
         g.hasThumb = (info.attributes & kThemeTrackShowThumb) && max > min
                      && info.enableState == kThemeTrackActive && g.thumbLength < length;
@@ -133,9 +139,9 @@ TrackGeometry trackGeometry(const ThemeTrackDrawInfo &info)
     {
         int travel = g.hi(g.drag) - g.lo(g.drag) - g.thumbLength;
         int pos = g.lo(g.drag);
-        if(max > min && g.scrollBar)
-            pos += (int64_t)travel * (std::clamp(value, min, max) - (int64_t)min) / ((int64_t)max - min);
-        else if(max > min) /* a slider's rounded (8.6: 37.5 is 38, appr controls.48) */
+        /* rounded (8.6: a slider's 37.5 is 38, appr controls.48; a scroll
+           bar's 15.9 is 16, controls.16) */
+        if(max > min)
             pos += ((int64_t)travel * (std::clamp(value, min, max) - (int64_t)min) * 2 + ((int64_t)max - min))
                    / (2 * ((int64_t)max - min));
         g.setAxis(g.thumb, pos, pos + g.thumbLength);
@@ -463,50 +469,62 @@ void sliderThumbPixels(const TrackGeometry &g, Thumb shape, bool active, bool pr
     }
 }
 
-/* A scroll bar's thumb and the page above/below it: three panels, each
-   scrollFace's own frame+fill+bevel (not one continuous track) - measured
-   from the G3 (appr controls.16/.384); the thumb's tint is the accent
-   colour (the same blue C_DrawThemeTrack's progress bar fills with). */
+/* A scroll bar's thumb and the page above/below it, measured from the G3
+   (appr controls.16/.384): the thumb and the pages share their black
+   outlines (one line between them, not two). A page is #aaa sunk under a
+   2-pixel #777/#888 edge before and across its start, #bbb/#ccc after; the
+   thumb is the accent ramp lit from the top left with four grip ridges, a
+   step darker pressed. A vertical bar is a horizontal one transposed. */
 void drawScrollTrack(const TrackGeometry &g, bool pressed)
 {
-    RGBColor accent = { 0x9999, 0x9999, 0xFFFF };
     if(!g.hasThumb)
     {
         scrollFace(g.track, kFace, false);
         return;
     }
-    Rect pageLo = g.track, pageHi = g.track;
-    g.setAxis(pageLo, g.lo(g.track), g.lo(g.thumb));
-    g.setAxis(pageHi, g.hi(g.thumb), g.hi(g.track));
-    auto page = [](const Rect &pr) {
+    int across = g.horizontal ? g.track.bottom - g.track.top : g.track.right - g.track.left;
+    int c0 = g.horizontal ? g.track.top : g.track.left;
+    auto page = [&](int lo, int hi) {
+        Rect pr = g.track;
+        g.setAxis(pr, lo, hi);
         frameGray(pr, kBlack);
-        Rect in = pr;
-        InsetRect(&in, 1, 1);
-        fillGray(in, 0xAAAA);
-        if(in.right - in.left > 2 && in.bottom - in.top > 2)
-            bevel(in, kShadow, kTrack);
+        int len = hi - lo, w = across;
+        if(len < 3 || w < 6)
+            return;
+        SliderAxes ax{ g.horizontal, lo, c0 };
+        for(int c = 1; c <= w - 2; c++)
+            ax.line(1, c, len - 2, c, 0xAAAA);
+        ax.line(1, w - 2, len - 2, w - 2, 0xCCCC);
+        ax.line(1, w - 3, len - 2, w - 3, 0xBBBB);
+        ax.line(1, 2, len - 2, 2, 0x8888);
+        if(len > 3)
+            ax.line(2, 2, 2, w - 4, 0x8888);
+        ax.line(1, 1, 1, w - 3, 0x7777);
+        ax.line(1, 1, len - 2, 1, 0x7777);
     };
-    if(g.lo(pageLo) < g.hi(pageLo))
-        page(pageLo);
-    if(g.lo(pageHi) < g.hi(pageHi))
-        page(pageHi);
+    page(g.lo(g.track), g.lo(g.thumb) + 1);
+    page(g.hi(g.thumb) - 1, g.hi(g.track));
+
     frameGray(g.thumb, kBlack);
-    Rect in = g.thumb;
-    InsetRect(&in, 1, 1);
-    RGBForeColor(&accent);
-    PaintRect(&in);
-    if(!pressed && in.right - in.left > 2 && in.bottom - in.top > 2)
-    {
-        RGBColor lit = { 0xCCCC, 0xCCCC, 0xFFFF }, shade = { 0x6666, 0x6666, 0xCCCC };
-        RGBForeColor(&lit);
-        MoveTo(in.left, in.bottom - 2);
-        LineTo(in.left, in.top);
-        LineTo(in.right - 2, in.top);
-        RGBForeColor(&shade);
-        MoveTo(in.right - 1, in.top + 1);
-        LineTo(in.right - 1, in.bottom - 1);
-        LineTo(in.left + 1, in.bottom - 1);
-    }
+    int len = g.thumbLength, w = across, d = pressed ? 1 : 0;
+    SliderAxes ax{ g.horizontal, g.lo(g.thumb), c0 };
+    auto ramp = [&](int idx) { return accentRamp[std::max(0, idx - d)]; };
+    for(int c = 1; c <= w - 2; c++)
+        ax.line(1, c, len - 2, c, ramp(3));
+    ax.line(2, 1, len - 3, 1, ramp(4));       /* lit before */
+    ax.line(1, 2, 1, w - 3, ramp(4));         /* and across the start */
+    ax.line(1, 1, 1, 1, ramp(5));
+    ax.line(1, w - 2, 1, w - 2, ramp(3));
+    ax.line(2, w - 2, len - 3, w - 2, ramp(2)); /* shaded after */
+    ax.line(len - 2, 2, len - 2, w - 2, ramp(2)); /* and across the end */
+    ax.line(len - 2, 1, len - 2, 1, ramp(3));
+    if(len >= 13 && w >= 13)
+        for(int a = 4; a <= 10; a += 2)
+        {
+            ax.line(a, 4, a, 4, ramp(5));
+            ax.line(a, 5, a, 10, ramp(4));
+            ax.line(a + 1, 5, a + 1, 11, ramp(1));
+        }
 }
 
 ControlPartCode hitTrack(const TrackGeometry &g, Point p)
