@@ -312,6 +312,11 @@ void syn68k_free_low(void *p, size_t size);
 /* True if [addr, addr+len) lies inside memory the facade knows the guest
  * can touch: guest RAM, low allocations, and the binary's own image. */
 int syn68k_is_guest_mapped(uintptr_t addr, size_t len);
+/* The same for a guest address: [addr, addr+len) inside its own window,
+ * the low-allocation pool's part handed out so far. (A host pointer made
+ * from a junk guest address can land in another window's host memory:
+ * the windows' host ranges may be adjacent.) */
+int syn68k_is_guest_addr_mapped(uint32_t addr, size_t len);
 /* Turn a JIT on before initialize_68k_emulator() (none yet). */
 void syn68k_set_jit(int enabled);
 /* Pick the 68k core, "mame-68k" (the default and only one), before

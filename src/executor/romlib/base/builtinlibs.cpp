@@ -121,15 +121,16 @@ namespace
    dispatcher, Executor's handler table): where the window it falls in is
    smaller than natively (the tab's 64 MB pool), that's the fatal "host
    pointer is not guest-addressable" (CodeWarrior IDE 3.2 with PowerPC, M1
-   #6). Answered as if done, and logged; natively the value was kept and
-   never called. */
+   #6). Answered as if done, and logged, natively too: a value outside the
+   memory handed out (natively the pool's window is 1 GB: 'Bite' falls in
+   it, and the handler tables were used with it). */
 static bool ae_handler_not_an_address(const char *name, PowerCore& cpu)
 {
     bool install = !strcmp(name, "AEInstallEventHandler");
     if(!install && strcmp(name, "AERemoveEventHandler"))
         return false;
     uint32_t hdlr = cpu.r[5];
-    if(!hdlr || syn68k_is_guest_mapped((uintptr_t)SYN68K_TO_US(hdlr), 2))
+    if(!hdlr || syn68k_is_guest_addr_mapped(hdlr, 2))
         return false;
     auto code = [](uint32_t v) {
         return std::string{ char(v >> 24), char(v >> 16), char(v >> 8), char(v) };
