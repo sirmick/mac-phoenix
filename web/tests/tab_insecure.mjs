@@ -87,7 +87,7 @@ try {
 
     // The 50 MB disk from the Disks panel's library: into the running Mac.
     await openDisks(page);
-    await page.click('#disks-library .lib-card[data-url="disks/library-disk.img"]');
+    await page.click('#disks-library .lib-row[data-url="disks/library-disk.img"]');
     await closeDisks(page);
     check(await until(() => request(page, 'volumes').then((v) => Array.isArray(v) && v.includes(LABEL)), 90000),
           'the library disk is mounted, Executor running');

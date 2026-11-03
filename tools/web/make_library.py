@@ -204,9 +204,11 @@ def record(d):
          "label": d["label"], "made_by": "tools/web/make_library.py"}
     if "boot" in d:
         r["system"] = next(s for s, n in SYSTEMS.items() if n == d["name"])
+        r["systems"] = [r["system"]]
     else:
         r["sources"] = [img for img, _ in d["take"]]
         systems = d.get("systems", list(SYSTEMS))
+        r["systems"] = systems          # the Systems it is offered on (the Disks panel's column)
         r["launch"] = [{"app": f"{d['label']}:{a['app']}", "name": a["name"],
                         "source": a.get("source", d["take"][0][0]), "source_app": a["app"],
                         "systems": a.get("systems", systems)} for a in d["launch"]]
