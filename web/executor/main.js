@@ -36,8 +36,8 @@
 // AudioWorklet: no sound.
 //
 // Automation: window.executor.request(op, arg) -> Promise. At the running
-// application's next event call (web_main.cpp): 'app', 'windows', 'menus', 'launch'
-// "Volume:Folder:App". At once, by the Worker: 'read' PATH (text or null),
+// application's next event call (web_main.cpp): 'app', 'windows', 'menus',
+// 'drawn' (the strings drawn lately, oldest first), 'launch' "Volume:Folder:App". At once, by the Worker: 'read' PATH (text or null),
 // 'write' [PATH, TEXT], 'list' PATH (names or null); Executor's own volume
 // is /executor, its "Host" volume /host.
 // window.executor.frames counts frames.

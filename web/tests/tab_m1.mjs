@@ -301,6 +301,8 @@ const t = {
         trace('windows', JSON.stringify(ws.filter((w) => w.visible).map((w) => [w.title, w.kind, (w.items || []).length])));
         return ws.filter((w) => w.visible && w.title !== 'Desktop');
     },
+    // the strings drawn lately, oldest first (web_main.cpp's 'drawn')
+    drawn: async () => (await request('drawn')) || [],
     shot,
     async key(...combos) {
         trace('key', combos.join(' '));
@@ -395,16 +397,31 @@ const t = {
         await t.type('M1CW');
         await t.key('Enter');
         await t.until(async () => (await t.windows()).some((w) => /^M1CW/.test(w.title)), 60000, 'no M1CW project window');
+        // "Errors & Warnings" after a make: errors fail, with their lines
+        // (as drawn); warnings only: closed
+        const checkMade = async () => {
+            if (!(await t.windows()).some((w) => w.title === 'Errors & Warnings'))
+                return;
+            const errors = (await t.drawn()).filter((s) => /couldn.t|error|undefined|not found/i.test(s))
+                .filter((s) => !/^Errors (&|and) warnings/i.test(s));
+            if (errors.length)
+                throw new Error(`Make: ${[...new Set(errors)].slice(0, 4).join(' | ')}`);
+            await t.key('Meta+KeyW');
+            await t.pause(1500);
+        };
         await t.key('Meta+KeyM');                          // Make
-        await t.pause(5000);
-        // made: no "Errors & Warnings" (the failure's shot shows its lines)
-        if ((await t.windows()).some((w) => w.title === 'Errors & Warnings'))
-            throw new Error('Make: "Errors & Warnings"');
-        await t.key('Meta+KeyR');                          // Run
-        await t.until(async () => (await t.app()) === 'Std C Console 68K', 300000, 'the program never ran');
+        await t.pause(10000);
+        await checkMade();
+        await t.key('Meta+KeyR');                          // Run (makes first if it must)
+        await t.until(async () => {
+            await checkMade();
+            return (await t.app()) === 'Std C Console 68K';
+        }, 300000, 'the program never ran');
         // its SIOUX console window, the program's output in it
         await t.until(async () => (await t.windows()).some((w) => w.title === 'Std C Console 68K.out'), 60000,
             'no console window');
+        await t.until(async () => (await t.drawn()).some((s) => /Hello World/.test(s)), 30000,
+            'no "Hello World" in the console');
     },
     // A game: its title screen, then taken on as a player would: a dialog
     // answered by its harmless button (a shareware notice's "Not Yet", never

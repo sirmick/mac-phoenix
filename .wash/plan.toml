@@ -1,7 +1,7 @@
 # wash-plan: written by Wash as the plan changes.
 # Edit it only between workspaces; plan_set {"from": "<this file>"} loads it.
 
-revision = 34
+revision = 62
 
 [[node]]
   id = "cuts"
@@ -470,6 +470,56 @@ revision = 34
   emoji = "📌"
   template = "note"
   parent = "p1"
-  body = "(1) Standalone: a settings.json without \"version\" is read as v1 and refused ('disks: no such setting'): default to the current version. (2) uploads.go: replace=1 drops the old overlay before the rename/record write succeeds (review-dp). (3) Mixed Mode: prepared_at / loaded entries never erased when a SysZone accelerated resource is purged and reloaded: stale vector (review-lf2, pre-existing). (4) ControlMgr8.yaml SetBevelButtonContentInfo has no dispatcher/selector unlike its AppearanceLib siblings: confirm PPC-only is deliberate (review-lf3). (5) BBEdit Lite 6.1's survey dialog shows while the Finder's menus are still up and a click goes to the Finder: launch order (live-fix4). (6) Both servers died ~19:50 2026-11-02 with no reboot: cause unknown (a test's cleanup?)."
+  body = "(1) Standalone: settings.json without \"version\" refused: default to current. (2) uploads.go: replace=1 drops old overlay before rename. (3) Mixed Mode: stale vector when a SysZone accelerated resource is purged+reloaded. (4) SetBevelButtonContentInfo no dispatcher/selector: confirm PPC-only. (5) BBEdit 6.1 survey shows while Finder menus up. (6) Servers died ~19:50 2026-11-02: cause unknown. (7) ShutDwnPower/Start skip ROMlib_OurClose: HFS not flushed. (8) Disks: busy Put Away untested; ghost icon; hfsPBEject no busy check. (9) font.cpp L757/L965 unchecked width-list derefs. (10) harness needs full Chromium. (11) resMod.cpp direct-append path (349-355) orphans old bytes without mapCompact (review-761). (12) inputsprocket.cpp:177 Movement size hardcoded 12 B. (13) $A08E answers paramErr for every selector: check vs a real 7.x. (14) MPW New dialog folder pop-up blank. (15) AE: 'Berk'/'eley' handler not stored (AEGetEventHandler would say not found)."
   state = "todo"
-  revision = 25
+  revision = 54
+
+[[node]]
+  id = "m1-audit"
+  title = "Close M1: every target app has a tab cell from the library; write the missing ones"
+  emoji = "✅"
+  template = "package"
+  parent = "m1"
+  body = "Owner 2026-11-02: close M1. M1's done criterion: each target app launches and is used in the tab (Playwright cell) from the site's library. Targets (m1 body): AppleWorks 5.0.3; MPW Shell, CodeWarrior IDE 3.2, THINK C 6, THINK Pascal 4.5, HyperCard 2.4.1, MacPerl, ResEdit, BBEdit Lite (4.1 on 7.6.1, 6.1.2 on 8.6); the 27 games that run plus the fat/PPC pick (Marathon, SimCity 2000, Ferazel's Wand, Slithereens, ...). Step 1: a table target x System (7.6.1, 8.6) -> existing ctest site/tab cell (name), what it does (launch only / used), its last result (integration run ~/storage/ci/latest), in docs/executor/M1.md. Step 2: write the missing cells (tab, Go server, library disks) so each target is launched AND used (a document made/saved, a build run, a game past its title screen). Step 3: run them; failures go to m1-fails."
+  state = "done"
+  revision = 39
+
+[[node]]
+  id = "m1-fails"
+  title = "Close M1: fix what the M1 cells fail (three tracks below)"
+  emoji = "🚨"
+  template = "package"
+  parent = "m1"
+  body = "M1 cells (ctest -L m1, tab_m1.mjs) merged b6e92856; audit + triage: docs/executor/M1.md, ~/storage/tmp/m1-audit/results.md (rows #1-#17). Integration run 2026-11-02-2149 all green. Tracks: m1-fix-86 (Executor on 8.6), m1-fix-761 (Executor on 7.6.1 + games), m1-fix-tab (wasm tab). Not bugs: Pathways (manual copy protection), Ferazel's Wand (needs its CD), Populous II (test fixed)."
+  state = "todo"
+  revision = 39
+
+[[node]]
+  id = "m1-fix-761"
+  title = "M1 fixes, Executor on 7.6.1 and games: MPW FSDispatch $C, THINK C resMod fatal, SimEarth illegal instruction, InputSprocket, EV Override dither"
+  emoji = "🛠️"
+  template = "package"
+  parent = "m1"
+  body = "Rows #1 (MPW File>New: FSDispatch selector $C unimplemented, session stopped), #2 (THINK C 6 opening bullseye π: fatal resMod.cpp:398 getdat lc == size), #13 (SimEarth Color: mame-68k illegal instruction 173e at 03dce3de), #15 (Slithereens, Mars Rising on 8.6: InputSprocketLib not found: a native InputSprocket stub like Executor's other libraries, answering 'no devices', so games use the keyboard), #17 (EV Override's ship-entry screen dithered B&W). Native repro first."
+  state = "active"
+  revision = 56
+
+[[node]]
+  id = "m1-fix-86"
+  title = "M1 fixes, Executor on 8.6: CodeWarrior/BBEdit 6.1.2 unimplemented trap handler, HyperCard, MacPerl AEResolve, ResEdit trap 4, THINK C TranslationDispatch"
+  emoji = "🪟"
+  template = "package"
+  parent = "m1"
+  body = "Rows #5, #7 (fatal 'Jumped to unimplemented trap handler [0xa08a,0xa89f,0xa08e/0xa09f]': CW New Project, BBEdit Cmd-S), #8 (HyperCard never in front; native AE_hdlr.cpp:165 assertion), #9 (PowerPC MacPerl: AEResolve unimplemented), #10 (ResEdit New file: unhandled trap 4 at 0xC0000014), #3 (THINK C: TranslationDispatch $24/$20 -> -1700, STRAGGLERS 71) in ~/storage/tmp/m1-audit/results.md. Reproduce natively first (e86), fix, then the tab cell executor.web.m1.8.6.{development,tools-8}."
+  state = "active"
+  revision = 49
+
+[[node]]
+  id = "m1-fix-tab"
+  title = "M1 fixes, the wasm tab: THINK Pascal renderer crash, CodeWarrior PPC hang, EV Nova partition, fatal kills the page, tools-8 in the library"
+  emoji = "🌐"
+  template = "package"
+  parent = "m1"
+  body = "Rows #4 (THINK Pascal Run: renderer SIGSEGV in V8/wasm, intermittent; ~/storage/tmp/m1-audit/tp-crash3.log), #6 (CodeWarrior IDE 3.2 on 7.6.1 with PowerPC ticked: hangs after its menu bar; native e761ppc runs it), #14 (EV Nova: 53 MB partition > the tab's 56 MB applzone: a RAM setting / bigger default), #13's tab half (an Executor fatal kills the page: show an alert, keep the page), and building tools-8.img into ~/storage/web-library (make_library.py; additive) so executor.web.m1.8.6.tools-8 stops skipping."
+  state = "done"
+  revision = 62
