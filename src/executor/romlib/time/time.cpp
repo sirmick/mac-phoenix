@@ -233,6 +233,10 @@ static void ROMlib_PrimeTime(QElemPtr taskp, LONGINT count)
 
 void Executor::InsTime(QElemPtr taskp)
 {
+    /* A task installed afresh has no PrimeTime yet: forget one primed at
+       this address before (a task freed without RmvTime, its memory
+       reused), so the map doesn't keep it. */
+    primed.erase((TMTask *)taskp);
     ((TMTask *)taskp)->tmCount = -1;
     Enqueue(taskp, &ROMlib_timehead);
 }

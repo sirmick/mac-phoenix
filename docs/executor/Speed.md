@@ -13,7 +13,7 @@ own scale; a real Quadra 650 is 1.3 on CPU, a Power Mac 8100/80 4.2):
 | | 68k code (CPU / Mix) | PowerPC code (CPU / Mix) | QuickDraw (Graphics) |
 |---|---|---|---|
 | Executor, native | 8.5 / 14.3 (mame-68k) | 56–60 / 171–182 (mame-ppc JIT); 4.6 / 18.5 without | 280–415 |
-| Executor, the tab | 1.5 / 2.0 | 3.0 / 9.5 | 55–97 |
+| Executor, the tab | 1.5 / 2.0 | 3.0–3.1 / 8.7–9.5 | 55–87 |
 | Quadra 650 ROM machine | 30.9 / 42.1 (uae), 8.3 / 12.1 (mame-68k) | — | 25.6 (uae), 8.0 (mame-68k) |
 | G3 ROM machine | — | 17.5 / 97.6 (kpx), 16–17.5 / 65–74 (mame-ppc) | — (no 1-bit: skipped) |
 
@@ -26,7 +26,7 @@ own scale; a real Quadra 650 is 1.3 on CPU, a Power Mac 8100/80 4.2):
   emulator). Without the native back-end (`ppcinterp`) it drops to 4.6.
 - The tab runs at about a fifth of native for 68k code and a twentieth
   for PowerPC code (wasm has no mame-ppc back-end: the UML interpreter);
-  QuickDraw in the tab is still 2–4 times the ROM machines'.
+  QuickDraw in the tab is still 2–3.5 times the uae Quadra's.
 
 ## The table
 
