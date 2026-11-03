@@ -36,8 +36,13 @@ page are added and open it.
   table: a row per disk (cover, or an icon for a hard disk, CD or System;
   title with its tags beneath; size; the Systems it is for, the record's
   `systems` from make_library.py; Insert, or "In the Mac"), sorted by the
-  column header clicked (again: reversed); a filter on title, note and
-  tags; tag chips (all must match). A click on a row inserts. An upload
+  column header clicked (again: reversed); a filter on title, note, tags
+  and what is on the disk; tag chips (all must match). A click on a row
+  inserts. A disk whose record lists its contents (`items`, WebSite.md
+  "What is on a disk") has "▸ N items" under its title: a row opens under
+  it, without inserting, with the note and a table of the items (name with
+  publisher, year, description; version, arch, size; groups such as
+  "Tools ƒ" as headings). An upload
   not in the Mac has a ✕: deleted from the server (`DELETE
   api/uploads/NAME`: image, record, overlay).
 
