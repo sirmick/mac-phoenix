@@ -241,6 +241,12 @@ const Store = {
     round: null,                         // the round running (a promise)
     again: false,                        // asked for meanwhile: another after it
     volumeOff: false,                    // not restored: not saved either
+    // Restored (or none to restore) and Executor started: saved from then
+    // on. A save before (the page hidden, gone, while the volume came
+    // down) was of what had come so far, and took the rest off the
+    // server: System among it, the next start sideloaded over the
+    // preferences.
+    restored: false,
     failing: false,                      // the last round failed (said once)
     volume: { key: '', version: 0, digest: null },
     flying: new Map(),                   // overlay -> its blocks on their way up
@@ -390,7 +396,7 @@ const Store = {
     // form: { dirs, files: { path: { size, mtime, sha } } }; bytes: sha ->
     // contents read for it (the others read again if the server lacks them).
     async volumeUp(form, bytes) {
-        if (this.volumeOff || !form.dirs.length)
+        if (this.volumeOff || !this.restored || !form.dirs.length)
             return;
         const digest = await Sync.digest(form);
         if (digest === this.volume.digest)
