@@ -192,7 +192,7 @@ static gestaltentry_t gtable[] = {
     { "dply"_4, 7 },
     { "dplv"_4, 0x00020006 },
     { "hdwr"_4, 0x0008489D },
-    { "vm  "_4, 0 },
+    { "vm  "_4, 0 }, /* no virtual memory (the Quadra, VM off) */
     /* The Component Manager's version (component.cpp; on 7.5.5 a Gestalt
        function calling ComponentDispatch $19). 3.0 is a guess. */
     { "cpnt"_4, 0x00030000 },
@@ -222,26 +222,6 @@ static gestaltentry_t gtable[] = {
     {
         gestaltVersion, 1,
     },
-
-/* We don't want ClarisWorks 3 calling funky IMVI memory manager
-   * routines so we don't recognize gestaltVMAddr at all.  NOTE:
-   * ClarisWorks 3 will also not call those "funky routines" if we
-   * recognize the gestaltVMAttr selector, but say we don't support
-   * it.  Furthermore, saying we don't support it breaks MacBench
-   * (which is kludgily worked around elsewhere).  The ONLY REASON we
-   * say we don't even recognize this selector (and do the MacBench
-   * hack elsewhere) is paranoia: "our original ClarisWorks workaround
-   * was to not recognize this selector, and we've done much testing
-   * since then.  Perhaps some other program out there would die if we
-   * recognized the VM selector."
-   *
-   * Once Executor 2 is out and we are next free to potentially break
-   * programs, we should take out this #if 0 and recognize the VMAttr
-   * selector, but claim we don't have any VM.
-   */
-#if 0
-  { gestaltVMAttr, 0 },
-#endif
     {
         gestaltMachineIcon, UNKNOWN,
     },
