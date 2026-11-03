@@ -22,6 +22,7 @@
 
 using namespace Executor;
 
+static bool control_item_text(Handle h, ConstStringPtr set, StringPtr get);
 static itmp htoip(Handle h, WindowPeek *wp_return, int16_t *nop_return,
                   SignedByte *flags_return);
 
@@ -59,6 +60,7 @@ itmp Executor::ROMlib_dpnotoip(DialogPeek dp, INTEGER itemno,
     return retval;
 }
 
+static bool control_item_text(Handle h, ConstStringPtr set, StringPtr get);
 static itmp htoip(Handle h, WindowPeek *wp_return, int16_t *nop_return,
                   SignedByte *flags_return)
 {
@@ -307,6 +309,8 @@ void Executor::C_GetDialogItemText(Handle item, StringPtr text) /* IMI-422 */
 {
     Size hs;
 
+    if(text && control_item_text(item, nullptr, text))
+        return;
     if(text)
     {
         if(!item)
@@ -322,8 +326,61 @@ void Executor::C_GetDialogItemText(Handle item, StringPtr text) /* IMI-422 */
     }
 }
 
+/* MacPhoenix: a handle that is a control of a window (8.x programs give
+   SetDialogItemText and GetDialogItemText the controls
+   GetDialogItemAsControl answers: BBEdit Lite 6.1 an alert's button) */
+static bool is_window_control(Handle h)
+{
+    for(WindowPeek wp = LM(WindowList); wp; wp = WINDOW_NEXT_WINDOW(wp))
+        for(ControlHandle c = WINDOW_CONTROL_LIST(wp); c; c = CTL_NEXT_CONTROL(c))
+            if((Handle)c == h)
+                return true;
+    return false;
+}
+
+/* The text of an item's control, as 8.x (appr dlgitems.settext): a text
+   item's control stands for the item's text; another control takes it as
+   its 'text' data if its definition has that (edit and static text),
+   else nothing changes (a button keeps its title, the handle its size);
+   'text': kControlEditTextTextTag, kControlStaticTextTextTag. */
+static bool control_item_text(Handle h, ConstStringPtr set, StringPtr get)
+{
+    if(!h || !is_window_control(h))
+        return false;
+    ControlHandle c = (ControlHandle)h;
+    DialogPtr dp;
+    int item;
+    if(ROMlib_dialog_item_of_control(c, &dp, &item))
+    {
+        GUEST<INTEGER> type;
+        GUEST<Handle> th;
+        Rect r;
+        GetDialogItem(dp, item, &type, &th, &r);
+        if((INTEGER)type & (statText | editText))
+        {
+            if(set)
+                SetDialogItemText(th, set);
+            else
+                GetDialogItemText(th, get);
+        }
+        return true;
+    }
+    if(set)
+        SetControlData(c, kControlEntireControl, "text"_4, set[0], (Ptr)set + 1);
+    else
+    {
+        GUEST<Size> size;
+        if(GetControlData(c, kControlEntireControl, "text"_4, 255, (Ptr)get + 1,
+                          &size) == noErr)
+            get[0] = std::min<Size>(size, 255);
+    }
+    return true;
+}
+
 void Executor::C_SetDialogItemText(Handle item, ConstStringPtr text) /* IMI-422 */
 {
+    if(control_item_text(item, text, nullptr))
+        return;
     if(item) /* put this test in for Golf 6.0's sake */
     {
         WindowPeek wp;

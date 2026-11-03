@@ -1,4 +1,4 @@
-# probe 7ea04fa839446968e98068fb14a54323f753e69818bbc3314361897fe9cf23ec
+# probe 5ee312ece4c0380f3de93d6f469a35f5ace84dd9abbb4a73ed8513a965693f04
 == gestalt
 gestalt.appr: 0 00000001
 gestalt.apvr: 0 00000110
@@ -1737,6 +1737,18 @@ dlgitems.setctl.2: type 136 kept 1 control 0
 dlgitems.setctl.2.text: "Name:" (5)
 dlgitems.setctl.3: type 16 kept 1 control 0
 dlgitems.setctl.3.text: "abc" (3)
+dlgitems.settext.1.size: 45
+dlgitems.settext.1.title: "Save" (4)
+dlgitems.settext.1.get: "abc" (3)
+dlgitems.settext.1.item: "abc" (3)
+dlgitems.settext.2.size: 41
+dlgitems.settext.2.title: "" (0)
+dlgitems.settext.2.get: "Retitled" (8)
+dlgitems.settext.2.item: "Retitled" (8)
+dlgitems.settext.3.size: 41
+dlgitems.settext.3.title: "" (0)
+dlgitems.settext.3.get: "Retitled" (8)
+dlgitems.settext.3.item: "Retitled" (8)
 == labels
 labels.kind0.state1: fg 0000 0000 0000 bg dddd dddd dddd mode 1
 labels.kind0.state0: fg 7777 7777 7777 bg dddd dddd dddd mode 1

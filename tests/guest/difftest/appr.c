@@ -1204,6 +1204,31 @@ static void dialog_items(void)
             sprintf(k, "setctl.%d.text", (int)i);
             out_str(k, s);
         }
+        /* SetDialogItemText and GetDialogItemText given an item's control
+           (BBEdit Lite 6.1 retitles an alert's button so): the control's
+           title, the item's text */
+        for(DialogItemIndex i = 1; i <= 3; i++)
+        {
+            ControlHandle c = NULL;
+            Handle th;
+            Str255 title;
+            GetDialogItemAsControl(d, i, &c);
+            if(!c)
+                continue;
+            SetDialogItemText((Handle)c, "\pRetitled");
+            sprintf(k, "settext.%d.size", (int)i);
+            out(k, "%ld", (long)GetHandleSize((Handle)c));
+            GetControlTitle(c, title);
+            sprintf(k, "settext.%d.title", (int)i);
+            out_str(k, title);
+            GetDialogItemText((Handle)c, s);
+            sprintf(k, "settext.%d.get", (int)i);
+            out_str(k, s);
+            GetDialogItem(d, i, &type, &th, &rr);
+            GetDialogItemText(th, s);
+            sprintf(k, "settext.%d.item", (int)i);
+            out_str(k, s);
+        }
     }
     DisposeDialog(d);
 }

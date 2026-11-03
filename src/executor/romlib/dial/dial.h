@@ -34,6 +34,7 @@ extern void ROMlib_dialog8_forget(DialogPtr dialog);
 extern void ROMlib_dialog_item_controls(DialogPtr dp);
 extern void ROMlib_dialog_item_controls_shorten(DialogPtr dp, int count);
 extern ControlHandle ROMlib_dialog_item_control(DialogPtr dp, int item);
+extern bool ROMlib_dialog_item_of_control(ControlHandle c, DialogPtr *dp, int *item);
 extern void ROMlib_dialog_item_control_sync(DialogPtr dp, int item, const Rect *r);
 extern int32_t C_ROMlib_cdef_dialog_item(int16_t var, ControlHandle c, int16_t mess,
                                          int32_t param);

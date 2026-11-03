@@ -261,6 +261,21 @@ void Executor::ROMlib_dialog_item_controls_shorten(DialogPtr dp, int count)
     }
 }
 
+bool Executor::ROMlib_dialog_item_of_control(ControlHandle c, DialogPtr *dp, int *item)
+{
+    for(auto &e : itemControlsTable())
+    {
+        auto pos = std::find(e.second.begin(), e.second.end(), c);
+        if(pos != e.second.end())
+        {
+            *dp = e.first;
+            *item = pos - e.second.begin() + 1;
+            return true;
+        }
+    }
+    return false;
+}
+
 ControlHandle Executor::ROMlib_dialog_item_control(DialogPtr dp, int item)
 {
     auto it = itemControlsTable().find(dp);
