@@ -1,7 +1,7 @@
 # wash-plan: written by Wash as the plan changes.
 # Edit it only between workspaces; plan_set {"from": "<this file>"} loads it.
 
-revision = 126
+revision = 127
 
 [[node]]
   id = "cuts"
@@ -73,8 +73,8 @@ revision = 126
   emoji = "🎯"
   template = "milestone"
   body = "Executor as wasm in the tab, a private backend serving media and storage and relaying sockets, custom System cuts of 7.6.1 and 8.6. Target apps: AppleWorks 5.0.3; programming: MPW Shell, CodeWarrior IDE 3.2, THINK C 6, THINK Pascal 4.5, HyperCard 2.4.1, MacPerl, ResEdit, BBEdit Lite (4.1 on 7.6.1, 6.1.2 on 8.6); games: the 27 that run plus a pick of the fat/PPC ones (Marathon, SimCity 2000, Ferazel's Wand, Slithereens...). Out: A/UX, AltiVec, PMMU, QuickTime, 9.0.4, CarbonLib apps (M2). Done when each target app launches and is used in the tab (Playwright cell) from the site's library."
-  state = "todo"
-  revision = 2
+  state = "done"
+  revision = 127
 
 [[node]]
   id = "m2"
