@@ -65,6 +65,7 @@ window.executor = {
     frames: 0,
     audioFrames: 0,     // 20 ms frames of sound received
     cursor: null,       // the guest's last cursor message
+    stopped: null,      // why Executor stopped, when an error stopped it
     request(op, arg = '') {
         if (!worker)
             return Promise.resolve({ error: 'not running' });   // between Workers
@@ -711,6 +712,24 @@ document.getElementById('take').addEventListener('click', async () => {
         takeControl(s);
 });
 
+// Executor stopped by an error (worker.js 'stopped': a fatal error of its
+// own, an abort, the wasm trapping): said here, with Restart, and the page
+// goes on (what the disks changed is kept as before).
+function executorStopped(reason) {
+    window.executor.stopped = reason;
+    console.log(`[web] Executor stopped: ${reason}`);
+    autoShot(`stopped: ${reason}`);
+    if (claimLost)
+        return;
+    const again = document.createElement('button');
+    again.id = 'restart-stopped';
+    again.textContent = 'Restart';
+    again.onclick = () => start();
+    status.replaceChildren(`Executor stopped: ${reason} `, again);
+    status.classList.add('lost');
+    status.setAttribute('role', 'alert');
+}
+
 async function lostControl() {
     control = false;
     generation++;
@@ -774,6 +793,11 @@ async function start() {
         resolve({ error: 'restarted' });
     pending.clear();
     window.executor.frames = 0;
+    window.executor.stopped = null;
+    if (!claimLost) {
+        status.classList.remove('lost');
+        status.removeAttribute('role');
+    }
     status.textContent = 'Loading Executor…';
 
     // The Worker loads the module while the disks still download.
@@ -836,7 +860,7 @@ async function start() {
             if (resolve)
                 resolve(m.result);
         } else if (m.type === 'notice') {
-            if (!claimLost)
+            if (!claimLost && !window.executor.stopped)
                 status.textContent = m.text;
         } else if (m.type === 'ejected') {
             ejected(m.name);
@@ -851,8 +875,11 @@ async function start() {
                 lostControl();
         } else if (m.type === 'error') {
             autoShot(m.text);
+        } else if (m.type === 'stopped') {
+            executorStopped(m.reason);
         } else if (m.type === 'exit') {
-            status.textContent = `Executor exited (${m.code})`;
+            if (!window.executor.stopped)
+                status.textContent = `Executor exited (${m.code})`;
         }
     };
 }

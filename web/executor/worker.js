@@ -32,7 +32,10 @@ self.Module = {
     input: [],          // [kind, a, b] events; web_main.cpp takes them
     requests: [],       // [id, op, arg]; answered at the next event call
     print: (t) => console.log(t),
-    printErr: (t) => console.log(t),
+    printErr: (t) => {
+        lastErr = t;
+        console.log(t);
+    },
     // What changed: rects [top, left, bottom, right]..., their RGBA pixels
     // one after another (web_main.cpp).
     onRects(width, height, rects, rgba) {
@@ -83,12 +86,40 @@ self.Module = {
     onExit(code) {
         console.log(`[web] Executor exited (${code})`);
         Log.flush();
+        if (code)
+            stopped(`exited (${code})`);
         postMessage({ type: 'exit', code });
+    },
+    // (web_main.cpp: Executor's fatal error alert is up in the guest)
+    onFatal(message) {
+        fatal = message;
+        stopped(message);
     },
     onAbort(what) {
         console.error(`[web] Executor aborted: ${what}`);
+        stopped(`aborted: ${what || lastErr}`);
     },
 };
+
+// Executor stopped by an error (a fatal one of its own, an abort, the wasm
+// trapping: an access out of bounds): the page says so, once, and stays.
+// The reason: Executor's fatal message when there was one (an abort or a
+// trap may follow it).
+let fatal = '', lastErr = '', stoppedSaid = false;     // (lastErr: what an abort said)
+function stopped(what) {
+    if (stoppedSaid)
+        return;
+    stoppedSaid = true;
+    postMessage({ type: 'stopped', reason: fatal || what });
+}
+// (the module's errors only: the wasm trapping, or Emscripten's abort;
+// Asyncify resumes it from timers and promises)
+function moduleError(error) {
+    if (error instanceof WebAssembly.RuntimeError || (typeof ABORT !== 'undefined' && ABORT))
+        stopped(String(error && error.message || error));
+}
+self.addEventListener('error', (e) => moduleError(e.error || e.message));
+self.addEventListener('unhandledrejection', (e) => moduleError(e.reason));
 
 importScripts('log.js', 'overlay.js', 'sync.js', 'net.js');
 
