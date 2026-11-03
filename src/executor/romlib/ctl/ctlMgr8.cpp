@@ -597,6 +597,12 @@ OSErr Executor::C_SetControlFontStyle(ControlRef inControl, const ControlFontSty
 {
     if(!inControl || !inStyle)
         return paramErr;
+    /* Not a control: REALbasic's runtime (GameBox Classic on 8.6) styles a
+       control field of an object it never made one for, leftover heap
+       bytes ($0000CCCC). Asking the definition through that crashed the
+       host. */
+    if(!C_IsValidControlHandle(inControl))
+        return paramErr;
     extras(inControl).font = *inStyle;
     extras(inControl).hasFont = inStyle->flags != 0;
     /* and to a definition that keeps data: Apple's (ControlDefinitions:

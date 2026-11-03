@@ -851,25 +851,27 @@
 
 # ####
 
-- api: carbon
-  function:
+- function:
     name: EnableMenuItem
     args:
-      - name: mh
-        type: MenuHandle
+      - name: menu
+        type: MenuRef
       - name: item
-        type: INTEGER
+        type: UInt16
+    library: MenusLib
+    executor: C_
 
 # ####
 
-- api: carbon
-  function:
+- function:
     name: DisableMenuItem
     args:
-      - name: mh
-        type: MenuHandle
+      - name: menu
+        type: MenuRef
       - name: item
-        type: INTEGER
+        type: UInt16
+    library: MenusLib
+    executor: C_
 
 # ####
 
@@ -1239,6 +1241,56 @@
         type: MenuRef
       - name: item
         type: UInt16
+    library: MenusLib
+    executor: C_
+
+# ####
+
+# AppearanceLib 1.0's command IDs and MenuEvent, MenusLib 8.5's hiding of
+# the menu bar (REALbasic's runtime calls them unchecked where Appearance
+# is: GameBox Classic).
+- function:
+    name: SetMenuItemCommandID
+    return: OSErr
+    args:
+      - name: inMenu
+        type: MenuRef
+      - name: inItem
+        type: SInt16
+      - name: inCommandID
+        type: UInt32
+    library: AppearanceLib
+    executor: C_
+
+- function:
+    name: GetMenuItemCommandID
+    return: OSErr
+    args:
+      - name: inMenu
+        type: MenuRef
+      - name: inItem
+        type: SInt16
+      - name: outCommandID
+        type: UInt32*
+    library: AppearanceLib
+    executor: C_
+
+- function:
+    name: MenuEvent
+    return: UInt32
+    args:
+      - name: inEvent
+        type: "const EventRecord*"
+    library: AppearanceLib
+    executor: C_
+
+- function:
+    name: HideMenuBar
+    library: MenusLib
+    executor: C_
+
+- function:
+    name: ShowMenuBar
     library: MenusLib
     executor: C_
 

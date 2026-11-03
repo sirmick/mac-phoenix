@@ -1254,6 +1254,16 @@ OSErr Executor::C_GetSharedLibrary(ConstStr63Param library, OSType arch,
     if((loadflags & 0xF) != kLoadNewCopy)
         retval = check_existing_connections(library, arch, loadflags, cidp,
                                             mainaddrp, errName);
+    /* MacPhoenix: Apple's libraries that need what Executor hasn't got,
+       declined as if absent, so weak imports of them go nil: MPLibrary
+       (Multiprocessing Services) runs on the nanokernel, its supervisor
+       instructions and imports Executor doesn't answer (REALbasic's
+       plugins import it weakly: GameBox Classic). Executor's own
+       Multiprocessing Services would go in its place (docs/executor/
+       PPCLibs.md). */
+    if(retval == fragLibNotFound && arch == "pwpc"_4
+       && EqualString(library, (StringPtr) "\011MPLibrary", false, true))
+        return fragLibNotFound;
     /* Executor's own Open Transport libraries are always there, so they
        are found with kFindLib too. */
     if(retval == fragLibNotFound && loadflags == kFindLib && arch == "pwpc"_4
@@ -2126,7 +2136,8 @@ prepare_container(void *addr, const load_origin& origin, GUEST<ConnectionID> *co
     ConnectionID conn;
 
     main_addr = 0;
-    *connp = 0;
+    if(connp)
+        *connp = 0;
 
     headp = (PEFContainerHeader*)addr;
 
@@ -2227,8 +2238,12 @@ prepare_container(void *addr, const load_origin& origin, GUEST<ConnectionID> *co
         release_fragments(closure, why.c_str());
         return retval;
     }
-    *connp = conn;
-    *mainAddrp = guest_cast<Ptr>(main_addr);
+    /* either may be nil: REALbasic's RBFramework loader (GameBox Classic)
+       asks no main address of the runtime it prepares from memory */
+    if(connp)
+        *connp = conn;
+    if(mainAddrp)
+        *mainAddrp = guest_cast<Ptr>(main_addr);
     return noErr;
 }
 

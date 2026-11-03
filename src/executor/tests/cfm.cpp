@@ -15,6 +15,7 @@
 #include <rsys/cfm.h>
 #include <PEFBinaryFormat.h>
 
+#include <algorithm>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -36,8 +37,9 @@ struct Bytes : std::vector<uint8_t>
 /* A container with a code section (li r3,init_result; blr), a data section
    (that code's transition vector, relocated) and a loader section importing
    the libraries named, no symbols; with an init routine (the vector) if
-   with_init. */
-Bytes pef(const std::vector<std::string>& imports, bool with_init, int16_t init_result = 0)
+   with_init; imports named in weak are weak. */
+Bytes pef(const std::vector<std::string>& imports, bool with_init, int16_t init_result = 0,
+          const std::vector<std::string>& weak = {})
 {
     const uint32_t header = 40, section_headers = 3 * 28;
     const uint32_t code_at = header + section_headers, data_at = code_at + 8;
@@ -82,10 +84,11 @@ Bytes pef(const std::vector<std::string>& imports, bool with_init, int16_t init_
     b.u32(imports.size()); b.u32(0); b.u32(1);
     b.u32(reloc_instrs_at); b.u32(strings_at); b.u32(hash_at);
     b.u32(0); b.u32(0);
-    for(uint32_t at : name_at)
+    for(size_t i = 0; i < imports.size(); i++)
     {
-        b.u32(at); b.u32(0); b.u32(0); b.u32(0); b.u32(0);
-        b.u8(0); b.u8(0); b.u16(0);
+        bool is_weak = std::find(weak.begin(), weak.end(), imports[i]) != weak.end();
+        b.u32(name_at[i]); b.u32(0); b.u32(0); b.u32(0); b.u32(0);
+        b.u8(is_weak ? kPEFWeakImportLibMask : 0); b.u8(0); b.u16(0);
     }
     b.u16(1); b.u16(0); b.u32(1); b.u32(0);  /* data: one instruction */
     b.u16(0x4000); b.u16(0);                 /* RelocBySectC, 1 word */
@@ -335,4 +338,44 @@ TEST(CFM, PrivateInterfaceLibExportsLowMemAccessors)
     EXPECT_EQ(guest_cast<uint32_t>(p), (uint32_t)*(GUEST<uint32_t> *)SYN68K_TO_US(0x316));
     LMSetHpChk(saved);
     DisposePtr(p);
+}
+
+/* Apple's MPLibrary needs the nanokernel: Executor declines it, file or
+   not, and a weak import of it goes nil (REALbasic's plugins, GameBox
+   Classic on 8.6). */
+TEST(CFM, AppleMPLibraryIsDeclined)
+{
+    write_library("MPLibrary", pef({}, true));
+    write_library("CfmTestNotMP", pef({}, true));
+    EXPECT_FALSE(prepared("MPLibrary"));
+    GUEST<ConnectionID> cid;
+    GUEST<Ptr> main;
+    Str255 errname;
+    EXPECT_EQ(fragLibNotFound, GetSharedLibrary((StringPtr) "\011MPLibrary", "pwpc"_4,
+                                                kReferenceCFrag, &cid, &main, errname));
+    EXPECT_EQ(noErr, load(pef({ "CfmTestNotMP", "MPLibrary" }, false, 0, { "MPLibrary" })));
+    EXPECT_TRUE(prepared("CfmTestNotMP"));
+    std::string missing;
+    EXPECT_EQ(fragLibNotFound, load(pef({ "MPLibrary" }, false), &missing));
+    EXPECT_EQ("MPLibrary", missing);
+}
+
+/* GetMemFragment with no connection or main-address pointer prepares the
+   fragment all the same (REALbasic's RBFramework loader asks no main
+   address of the runtime). */
+TEST(CFM, GetMemFragmentTakesNilOutPointers)
+{
+    write_library("CfmTestNilOut", pef({}, true));
+    Bytes c = pef({ "CfmTestNilOut" }, false);
+    Ptr p = NewPtr(c.size());
+    memcpy(p, c.data(), c.size());
+    GUEST<ConnectionID> cid;
+    Str255 errname = { 0 };
+    EXPECT_EQ(noErr, GetMemFragment(p, c.size(), (StringPtr) "\4Root", kReferenceCFrag,
+                                    &cid, nullptr, errname));
+    EXPECT_TRUE(prepared("CfmTestNilOut"));
+    Ptr q = NewPtr(c.size());
+    memcpy(q, c.data(), c.size());
+    EXPECT_EQ(noErr, GetMemFragment(q, c.size(), (StringPtr) "\4Root", kReferenceCFrag,
+                                    nullptr, nullptr, errname));
 }
