@@ -243,6 +243,24 @@ static void mungfmo(ctrip cp, FMOutput *fmop)
 
 #define MAXTABLES 12
 
+/* MacPhoenix: a listed table that isn't in memory (its handle or master
+   pointer outside every window: THINK Pascal 4.5's Run leaves one) is
+   taken out of the list rather than read; in the tab reading it is a wasm
+   out-of-bounds access */
+static bool width_entry_mapped(GUEST<WHandle> *whp, int i)
+{
+    WHandle h = *whp;
+    if(syn68k_is_guest_mapped((uintptr_t)h, sizeof(GUEST<WPtr>))
+       && (!*h || syn68k_is_guest_mapped((uintptr_t)(WPtr)*h, sizeof(WidthTable))))
+        return *h != nullptr;
+    bool mapped = syn68k_is_guest_mapped((uintptr_t)h, sizeof(GUEST<WPtr>));
+    fprintf(stderr, "[bad handle] width list entry %d: handle $%08X %s $%08X\n", i,
+            whp->raw_host_order(), mapped ? "with master pointer" : "outside memory",
+            mapped ? GUEST<WPtr>(*h).raw_host_order() : 0u);
+    *whp = nullptr;
+    return false;
+}
+
 static Boolean widthlistmatch(FMInput *fmip)
 {
 
@@ -250,7 +268,8 @@ static Boolean widthlistmatch(FMInput *fmip)
 
     for(whp = *WIDTHLISTHAND, ewhp = whp + MAXTABLES; whp != ewhp; whp++)
     {
-        if(*whp && (LONGINT)(*whp).raw() != (LONGINT)-1)
+        if(*whp && (LONGINT)(*whp).raw() != (LONGINT)-1
+           && width_entry_mapped(whp, whp - *WIDTHLISTHAND))
         {
             LM(WidthPtr) = *(*whp);
             if(WIDTHPTR->aFID == fmip->family && WIDTHPTR->aSize == fmip->size && (char)WIDTHPTR->aFace == (char)fmip->face && WIDTHPTR->device == fmip->device && WIDTHPTR->inNumer.h == fmip->numer.h && WIDTHPTR->inNumer.v == fmip->numer.v && WIDTHPTR->inDenom.h == fmip->denom.h && WIDTHPTR->inDenom.v == fmip->denom.v && WIDTHPTR->fSize != -1 && WIDTHPTR->fSize != 0 && !WIDTHPTR->usedFam == !LM(FractEnable))
@@ -278,7 +297,7 @@ static bool width_table_listed()
     for(int i = 0; i < MAXTABLES; i++)
         if(whp[i] && whp[i].raw() == LM(WidthTabHandle).raw())
         {
-            if(!*whp[i])
+            if(!width_entry_mapped(&whp[i], i))
                 return false;
             LM(WidthPtr) = *(whp[i]);
             return true;

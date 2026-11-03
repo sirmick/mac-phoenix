@@ -32,6 +32,14 @@ if(NODE_COMMAND)
     set_tests_properties(executor.web.tab PROPERTIES
         LABELS "executor;web" TIMEOUT 120 SKIP_RETURN_CODE 77
         ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM}")
+    # Executor stopped by an error (a fatal error, the wasm trapping): said
+    # in the page, with a Restart that works, the renderer alive.
+    add_test(NAME executor.web.stopped
+        COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_stopped.mjs
+                $<TARGET_FILE_DIR:executor-web>)
+    set_tests_properties(executor.web.stopped PROPERTIES
+        LABELS "executor;web" TIMEOUT 300 SKIP_RETURN_CODE 77
+        ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM}")
     # W3: uploaded applications driven in the tab (PPCHello, the suite's
     # keyboard and audio sections).
     add_test(NAME executor.web.apps

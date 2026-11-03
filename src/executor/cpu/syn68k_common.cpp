@@ -686,8 +686,9 @@ void syn68k_describe_cpu(FILE *out)
     {
         PowerCore& ppc = PowerCore::instance();
         if(ppc.CIA || ppc.lr)
-            fprintf(out, "PowerPC at its last call out: CIA $%08X lr $%08X r1 $%08X r2 $%08X r3 $%08X r4 $%08X\n",
-                    ppc.CIA, ppc.lr, ppc.r[1], ppc.r[2], ppc.r[3], ppc.r[4]);
+            fprintf(out, "PowerPC at its last call out: CIA $%08X lr $%08X r1 $%08X r2 $%08X r3 $%08X r4 $%08X"
+                         " r5 $%08X r6 $%08X r7 $%08X\n",
+                    ppc.CIA, ppc.lr, ppc.r[1], ppc.r[2], ppc.r[3], ppc.r[4], ppc.r[5], ppc.r[6], ppc.r[7]);
     }
     uint32_t sp = r[15];
     if(syn68k_is_guest_mapped((uintptr_t)SYN68K_TO_US(sp), 32))
@@ -704,6 +705,7 @@ void syn68k_describe_cpu(FILE *out)
 void syn68k_bad_host_pointer(const void *p)
 {
     fprintf(stderr, "syn68k: host pointer %p is not guest-addressable (outside every window)\n", p);
+    syn68k_describe_cpu(stderr);    /* who passed it (the PowerPC's last call too) */
     abort();
 }
 
