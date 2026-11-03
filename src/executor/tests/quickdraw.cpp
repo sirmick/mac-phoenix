@@ -11,12 +11,14 @@
 #include <DeviceMgr.h>
 #include <WindowMgr.h>
 #include <quickdraw/cquick.h>
+#include <OSUtil.h>
 #else
 #include <Quickdraw.h>
 #include <QDOffscreen.h>
 #include <Windows.h>
 #include <Devices.h>
 #include <Palettes.h>
+#include <OSUtils.h>
 #endif
 
 #include <bitset>
@@ -1084,3 +1086,55 @@ TEST(QuickDraw, RgnOpsInFragmentedHeap)
     DisposeRgn(rx);
 }
 #endif
+
+/* A picture that changes the pen, fill and background pixel patterns:
+   drawing it leaves the heap as it was (Executor kept every pattern the
+   picture replaced; Speedometer 4.0's heap filled up with them). A
+   version 2 PICT made by hand: OpenPicture doesn't record these opcodes
+   in Executor. */
+TEST(QuickDraw, DrawPictureWithPixPatsNoLeak)
+{
+    if(!hasDeepGWorlds())
+        return;
+    OffscreenWorld world(8);
+    std::vector<unsigned char> b;
+    auto w = [&b](unsigned v) { b.push_back(v >> 8); b.push_back(v & 0xFF); };
+    auto rect = [&w](int t, int l, int bo, int r) { w(t); w(l); w(bo); w(r); };
+    w(0);                       /* picSize, set below */
+    rect(0, 0, 40, 40);         /* picFrame */
+    w(0x0011); w(0x02FF);       /* version 2 */
+    w(0x0C00);                  /* header: -2, 72 dpi, the frame */
+    w(0xFFFE); w(0);
+    w(0x0048); w(0); w(0x0048); w(0);
+    rect(0, 0, 40, 40);
+    w(0); w(0);
+    for(int i = 0; i < 6; i++)
+    {
+        for(unsigned op : { 0x0012u, 0x0013u, 0x0014u }) /* Bk, Pn, Fill */
+        {
+            w(op);
+            w(2);               /* RGB pattern */
+            for(int j = 0; j < 4; j++)
+                w(0xAA55);      /* its 1-bit pattern */
+            w(i * 10000); w(20000); w(60000 - i * 9000);
+        }
+        w(0x0031);              /* paintRect */
+        rect(i * 6, 0, i * 6 + 5, 40);
+    }
+    w(0x00FF);
+    b[0] = b.size() >> 8;
+    b[1] = b.size() & 0xFF;
+    Handle h = nullptr;
+    GUEST<Handle> gh;
+    ASSERT_EQ(noErr, PtrToHand((Ptr)b.data(), &gh, b.size()));
+    h = gh;
+    PicHandle pic = (PicHandle)h;
+    Rect frame = { 0, 0, 40, 40 };
+
+    DrawPicture(pic, &frame);
+    long before = FreeMem();
+    for(int i = 0; i < 50; i++)
+        DrawPicture(pic, &frame);
+    EXPECT_GE(FreeMem(), before - 512) << "before " << before;
+    DisposeHandle(h);
+}

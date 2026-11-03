@@ -24,6 +24,7 @@
 #include <rsys/executor.h>
 #include <base/functions.impl.h>
 #include <algorithm>
+#include <vector>
 
 using namespace Executor;
 
@@ -402,15 +403,25 @@ static void hilitemode()
     LM(HiliteMode) &= ~(0x80);
 }
 
+/* The pixel patterns the picture being drawn gave the port: they are
+   DrawPicture's (the port's own were put aside), so those replaced while
+   it plays are disposed at its end, with the ones left in the port. They
+   used to stay in the heap, one per PnPixPat/BkPixPat/FillPixPat opcode
+   (Speedometer 4.0's heap filled up with them). */
+static std::vector<PixPatHandle> pic_pixpats;
+
 static void fillpixpat(PixPatHandle ph)
 {
     if(CGrafPort_p(qdGlobals().thePort))
     {
-        GUEST<Handle> tmp = (Handle)ph;
-        HandToHand(&tmp);
-
-        CPORT_FILL_PIXPAT(theCPort) = guest_cast<PixPatHandle>(tmp);
+        pic_pixpats.push_back(ph);
+        PixPatHandle old_fill = CPORT_FILL_PIXPAT(theCPort);
+        if(old_fill && PIXPAT_TYPE(old_fill) == pixpat_type_orig)
+            DisposePixPat(old_fill); /* as PenPixPat and BackPixPat do */
+        CPORT_FILL_PIXPAT(theCPort) = ph;
     }
+    else
+        DisposePixPat(ph);
 }
 
 static void pnsize(INTEGER pv, INTEGER ph)
@@ -601,11 +612,13 @@ static void W_BackColor(LONGINT c)
 
 static void W_BackPixPat(PixPatHandle ph)
 {
+    pic_pixpats.push_back(ph);
     BackPixPat(ph);
 }
 
 static void W_PenPixPat(PixPatHandle ph)
 {
+    pic_pixpats.push_back(ph);
     PenPixPat(ph);
 }
 
@@ -1581,6 +1594,9 @@ void Executor::C_DrawPicture(PicHandle pic, const Rect *destrp)
     saveclip = NewRgn();
     CopyRgn(PORT_CLIP_REGION(&saveport), saveclip);
 
+    std::vector<PixPatHandle> outer_pic_pixpats; /* a picture drawn by one */
+    outer_pic_pixpats.swap(pic_pixpats);
+
     if(CGrafPort_p(the_port))
     {
         junk_pen_pixpat = NewPixPat();
@@ -2025,10 +2041,18 @@ void Executor::C_DrawPicture(PicHandle pic, const Rect *destrp)
         DisposeHandle(hand);
     if(CGrafPort_p(the_port))
     {
-        DisposePixPat(CPORT_PEN_PIXPAT(the_cport));
-        DisposePixPat(CPORT_BK_PIXPAT(the_cport));
-        DisposePixPat(CPORT_FILL_PIXPAT(the_cport));
+        PixPatHandle pen = CPORT_PEN_PIXPAT(the_cport);
+        PixPatHandle bk = CPORT_BK_PIXPAT(the_cport);
+        PixPatHandle fill = CPORT_FILL_PIXPAT(the_cport);
+        for(PixPatHandle ph : pic_pixpats)
+            if(ph != pen && ph != bk && ph != fill
+               && ROMlib_live_handle_p((Handle)ph))
+                DisposePixPat(ph);
+        DisposePixPat(pen);
+        DisposePixPat(bk);
+        DisposePixPat(fill);
     }
+    pic_pixpats.swap(outer_pic_pixpats);
 
     do_textend(); /* in case some clowns included a textbegin without
 		      a textend */
