@@ -1,0 +1,75 @@
+{
+ "note": "QuarkXPress 3.31 for Power Macintosh (Quark, 1994), English floppies (quarkexpress332.sit: Installer Disk 1-5, the 3.31r8 updater; replaces the multilingual 3.32 CD, whose installer disk is German and keyed). WIP: the installer runs only from its floppy, only with no other application open (BridgeAgent quits itself first) and only on a PowerPC; kpx crashes at boot with these floppies attached (mame-ppc boots); it then asks for 'Installer Disk 2' though it is mounted: it waits for a disk-insert event, as Kid Pix 2's installer does",
+ "kind": "install",
+ "wip": true,
+ "os": "tools-7.6.1",
+ "machines": [
+  "ppc"
+ ],
+ "target": "Applications",
+ "disks": [
+  {
+   "file": "quarkexpress332.sit",
+   "take": "Quark Express 3.32/Installer Disk.image"
+  },
+  {
+   "file": "quarkexpress332.sit",
+   "take": "Quark Express 3.32/Installer Disk 2.image"
+  },
+  {
+   "file": "quarkexpress332.sit",
+   "take": "Quark Express 3.32/Installer Disk 3.image"
+  },
+  {
+   "file": "quarkexpress332.sit",
+   "take": "Quark Express 3.32/Installer Disk 4.image"
+  },
+  {
+   "file": "quarkexpress332.sit",
+   "take": "Quark Express 3.32/Installer Disk 5.image"
+  }
+ ],
+ "steps": [
+  {
+   "agent_exit": true,
+   "note": "the installer won't run beside another application, BridgeAgent included"
+  },
+  {
+   "dclick": {
+    "text": "Installer Disk",
+    "exact": true,
+    "logged": true
+   }
+  },
+  {
+   "wait": 4
+  },
+  {
+   "dclick": {
+    "text": "Press™ 3.31 Installer"
+   },
+   "note": "its label, cut short in the window"
+  },
+  {
+   "wait_for": {
+    "button": "Quit"
+   },
+   "timeout": 60
+  },
+  {
+   "click": {
+    "button": "OK"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Destination Folder"
+   },
+   "timeout": 60
+  }
+ ],
+ "args": [
+  "--core",
+  "mame-ppc"
+ ]
+}
