@@ -1,7 +1,7 @@
 # wash-plan: written by Wash as the plan changes.
 # Edit it only between workspaces; plan_set {"from": "<this file>"} loads it.
 
-revision = 112
+revision = 126
 
 [[node]]
   id = "cuts"
@@ -491,8 +491,8 @@ revision = 112
   template = "package"
   parent = "m1"
   body = "M1 cells (ctest -L m1, tab_m1.mjs) merged b6e92856; audit + triage: docs/executor/M1.md, ~/storage/tmp/m1-audit/results.md (rows #1-#17). Integration run 2026-11-02-2149 all green. Tracks: m1-fix-86 (Executor on 8.6), m1-fix-761 (Executor on 7.6.1 + games), m1-fix-tab (wasm tab). Not bugs: Pathways (manual copy protection), Ferazel's Wand (needs its CD), Populous II (test fixed)."
-  state = "todo"
-  revision = 39
+  state = "done"
+  revision = 115
 
 [[node]]
   id = "m1-fix-761"
@@ -559,8 +559,8 @@ revision = 112
   template = "package"
   needs = ["utils-disk"]
   body = "From the Utilities disk (utils-disk, docs/Provisioning.md results table): on 8.6 PPC Executor answers 'Mac Quadra 900 (20)' and not 32-bit capable (G3: Power Mac 9500/9600, capable); Clockometer sees 68030 with --executor-ppc and 'Unknown processor type' on 8.6; Gestalt.Appl lists 59 (7.6.1) / 65 (8.6) selectors vs the G3's 158; Speedometer 4.0 stuck on its splash (68k and PPC; idle in its event loop); TattleTech exits at once on 7.6.1. Decide what Executor should claim to be (a 68040 Quadra on 7.x 68k; a PowerPC machine on PPC), make Gestalt consistent (gestaltMachineType, gestaltNativeCPUtype, gestaltProcessorType, gestaltAddressingModeAttr, gestaltSysArchitecture...), add common selectors the G3 answers, then Speedometer and TattleTech. difftest probe (sys) for the selectors."
-  state = "todo"
-  revision = 79
+  state = "active"
+  revision = 124
 
 [[node]]
   id = "gamebox"
@@ -587,8 +587,8 @@ revision = 112
   template = "package"
   parent = "m1"
   body = "Owner testing :8090 (69460445), 8.6 in the tab at 2x (Firefox/Windows); screenshots + logs in ~/storage/tmp/standalone-try/data/logs/2026-11-03 (read only), session mw065k3u-b466ec26a7cc9995: (1) 041032 'tab titles': ColorSync control panel's tab titles clipped ('rofiles', 'CMMs', 'About' cut at their left). (2) 041047 'alias missing': Apple menu 'Apple FM Radio' alias -> 'original item cannot be found' (the cut System lacks its target? then the cut should drop the alias). (3) 041312 'strange graphics issue' + 041319 'locked up': MacBench 5.0 splash over its window; desktop disk icons drawn as grey checker shapes (Utilities, executor, Host, Macintosh HD, Internet) and Internet listed twice; then Executor stopped answering (log: CFM unresolved imports InstallExceptionHandler, GetPhysical just before). (4) Finder: click-drag to rearrange icons doesn't work. (5) session mw0332ji 033737: Serial MReader's 'Cancel' button drawn as a white-on-grey ghost at 850,413. Compare each with the G3 under 8.6."
-  state = "active"
-  revision = 91
+  state = "done"
+  revision = 126
 
 [[node]]
   id = "disk-tidy"
@@ -605,5 +605,15 @@ revision = 112
   emoji = "🔧"
   template = "package"
   body = "From creative2's results (~/storage/tmp/creative-pack/results.md): Excel 4.0 stops at launch with 'Unknown selector 0x2 for trap OSDispatch'; Photoshop 4.0 says it 'lacks the required hardware or system software' after [unimplemented] OS trap $A074 and DisplayDispatch $16. Implement like a Mac (Process Manager / Display Manager docs; difftest where useful), a gtest each, then both apps launched and used on Executor 7.6.1 (68k). Images: productivity-system-7 / creative-system-7 (serial-personalised: never view screenshots after a serial step; use creative3's masking helper)."
-  state = "active"
-  revision = 110
+  state = "reported"
+  revision = 118
+
+[[node]]
+  id = "ui-polish"
+  title = "Settings and Disks panel wording/layout (owner's notes 2026-11-03)"
+  emoji = "✏️"
+  template = "package"
+  parent = "p1"
+  body = "Owner's notes on the tab UI: (1) Settings > Machine > RAM help text ('0: as the System needs (32 MB on Executor's own, 128 on Apple's). The browser holds it all: ...') is too long: make it short, e.g. '0 = automatic (32 MB for Executor's System, 128 MB for Apple's)'. (2) 'Largest image added (MB)' / 'A disk image the tab adds to the library (written to the disk as it comes)' is unclear: it is the size limit for disk images you upload (Add / drag-and-drop): retitle e.g. 'Largest disk image you can upload (MB)', description 'Bigger uploads are refused.'. Review every setting's title/description for the same plain-English bar. (3) The Disks panel's Library section: a table look (rows: cover/icon, title, tags, size, systems, mounted state; sortable/filterable) instead of the card grid. Both schema copies (web/executor and tools/standalone) stay identical (TestSchemaCopy). Screenshots before/after; tab tests pass."
+  state = "reported"
+  revision = 123

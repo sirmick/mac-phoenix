@@ -103,6 +103,10 @@ def patch(vol, node, field, data):
     raise ValueError("past the catalog's first extents")
 
 
+# The Internet library disk's folders: labels wider than a 128-pixel cell
+LONG = ("Hotline Connect Client 1.9.1 \u0192", "MR Browser 0.39 \u0192", "Serial MReader 0.03 \u0192")
+
+
 def hfs_fixture(work):
     image = os.path.join(work, "fixture.img")
     with open(image, "wb") as f:
@@ -117,13 +121,15 @@ def hfs_fixture(work):
         h.run("hcopy", "-m", p, folder)
 
     with Hfs(image, work) as h:
-        for d in ("Piles", "Scrolled", "Desktop Folder", "Elsewhere"):
+        for d in ("Piles", "Scrolled", "Desktop Folder", "Elsewhere", "Labels"):
             h.run("hmkdir", ":" + d)
         put(h, ":", macbinary("Here", b"TEXT", b"ttxt"))
         put(h, ":Elsewhere:", macbinary("Moved", b"TEXT", b"ttxt"))
         put(h, ":", macbinary("Junk", b"????", b"????", flags=0x4000))
         for n in "ABCD":
             put(h, ":Piles:", macbinary(n, b"TEXT", b"ttxt"))
+        for n in LONG:
+            put(h, ":Labels:", macbinary(n, b"TEXT", b"ttxt"))
     vol = disk_audit.Volume(image)
     ids = {vol.path_of(n): n for n in vol.nodes.values()}
     created = vol.created
@@ -141,6 +147,8 @@ def hfs_fixture(work):
     loc = lambda n, v, h: patch(vol, by[n], 14, struct.pack(">hh", v, h))          # noqa: E731 FInfo fdLocation
     loc("Fixture:Piles:A", 40, 40)
     loc("Fixture:Piles:D", 50, 45)                       # overlaps A; B and C stay at (0,0)
+    for i, n in enumerate(LONG):                         # the old 128-pixel grid: labels too wide
+        loc("Fixture:Labels:" + n, 8, 48 + 128 * i)
     patch(vol, by["Fixture"], 22, struct.pack(">4h", 300, 700, 600, 900))      # the root window: off screen
     patch(vol, by["Fixture:Scrolled"], 38, struct.pack(">hh", 5000, 5000))     # DXInfo frScroll
     return image
@@ -235,7 +243,10 @@ def main():
         check(has(fs, "invisible", "Fixture:Junk", "stray"), "stray invisible file")
         check(not any(f["path"] == "Fixture:Desktop Folder" for f in fs),
               "a visible Desktop Folder isn't reported (the Finder hides it itself)")
-        check(len(fs) == 9, f"nothing else reported ({len(fs)} findings)")
+        check(has(fs, "icons", "Fixture:Labels:" + LONG[0], "cut at the window's left edge"),
+              "a long label cut at the window's left edge")
+        check(has(fs, "icons", "Fixture:Labels", "labels wider than their cell"), "labels wider than their cell")
+        check(len(fs) == 11, f"nothing else reported ({len(fs)} findings)")
         check(open(image, "rb").read() == before, "the image is unchanged")
         rc, fs = findings([image], "--screen", "1600x1200")
         check(not has(fs, "windows", "Fixture", "off a"), "the window fits a bigger screen")
@@ -255,6 +266,12 @@ def main():
                   if n.is_dir and n.name not in tidy.FINDER_FOLDERS), "every folder window framed, scroll 0,0")
         check(all(n.flags & disk_audit.INVISIBLE for n in v.nodes.values()
                   if n.is_dir and n.parent == 2 and n.name in tidy.FINDER_FOLDERS), "Desktop Folder invisible")
+        labels = next(n for n in v.nodes.values() if n.is_dir and n.name == "Labels")
+        kids = list(v.children(labels.id))
+        right = max(k.loc[1] + disk_audit.ICON // 2 + disk_audit.label_width(k.name) // 2 for k in kids)
+        top, left, bottom, rright = labels.rect
+        check(len({k.loc[0] for k in kids}) == 1 and right + 16 <= rright - left,
+              f"long labels: one row, the last label inside the window ({right} of {rright - left})")
 
         plus = hfsplus_fixture(work)
         v = disk_audit.Volume(plus)
