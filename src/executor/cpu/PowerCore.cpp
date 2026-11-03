@@ -140,7 +140,7 @@ cpu::Core &core()
     config.mmu = false;
     config.timers = false;      /* Executor's own timer thread */
     config.exceptions = false;  /* skip and log */
-    config.jit = true;          /* the native back-end where there is one */
+    config.jit = PowerCore::instance().jit;  /* the native back-end where there is one */
     config.instruction_hook = PowerCore::instance().instructionHooks;
     cpu::Core *c = cpu::create("mame-ppc", config, syn68k_guest_memory(), ppc_host).release();
     if(!c)

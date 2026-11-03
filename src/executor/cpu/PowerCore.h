@@ -76,6 +76,9 @@ public:
     /* MacPhoenix: after each of the core's time slices, with the PC there
        (the PC sampler, --executor-debug pcsample) */
     void (*sliceHook)(PowerCore&, uint32_t pc) = nullptr;
+    /* MacPhoenix: mame-ppc's native back-end (false: its UML interpreter,
+       --executor-debug ppcinterp); set before the first execute() */
+    bool jit = true;
     uint32_t (*getNextBreakpoint)(uint32_t addr) = nullptr;
 
     /* MacPhoenix: before every instruction, with its address (the

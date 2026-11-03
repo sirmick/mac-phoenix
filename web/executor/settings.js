@@ -26,6 +26,7 @@ const Settings = (() => {
     // ?param -> setting, and how to read it.
     const OVERRIDES = {
         size: ['machine.screen', String], scale: ['display.scale', Number], ppc: ['machine.ppc', () => true],
+        depth: ['machine.depth', Number],
         system: ['machine.system', String], logtraps: ['advanced.logtraps', String],
         nesting: ['advanced.logtraps_nesting', Number], debug: ['advanced.debug', String],
         ppcbreak: ['advanced.ppc_break', String],

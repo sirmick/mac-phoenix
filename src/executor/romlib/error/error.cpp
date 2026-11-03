@@ -44,6 +44,7 @@ static const struct
     { "ot", ERROR_BIT_MASK(ERROR_OT_LOG) },
     { "pcsample", ERROR_BIT_MASK(ERROR_PC_SAMPLE) },
     { "hidpi", ERROR_BIT_MASK(ERROR_HIDPI_LOG) },
+    { "ppcinterp", ERROR_BIT_MASK(ERROR_PPC_INTERP) },
     { "textcheck", ERROR_BIT_MASK(ERROR_TEXT_EDIT_SLAM) },
     { "trace", ERROR_BIT_MASK(ERROR_TRACE_INFO) },
     { "trapfailure", ERROR_BIT_MASK(ERROR_TRAP_FAILURE) },
