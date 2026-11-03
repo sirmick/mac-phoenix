@@ -6,6 +6,7 @@ MacBinary next to the snapshot so later runs don't re-extract.
 """
 import hashlib
 import os
+import re
 import struct
 import subprocess
 import tempfile
@@ -24,6 +25,12 @@ except ImportError:
     _compress = None
 
 COMPRESSED_MAGIC = b"\xa8\x9f\x65\x72"
+
+
+def glob_quote(path):
+    """An HFS path hfsutils takes literally: it globs its arguments, so names
+    holding \\ * ? [ ] { } need them escaped (as provisioning/snapshot.py's)."""
+    return re.sub(rb"([\\*?\[\]{}])", rb"\\\1", path)
 
 
 def decompress(data):
@@ -96,7 +103,7 @@ class Disk:
     def files(self, folder):
         """Plain files in a folder, as raw Mac names (bytes)."""
         self._mount()
-        r = self._run("hls", "-1aF", b":" + folder)
+        r = self._run("hls", "-1aF", glob_quote(b":" + folder))
         names = []
         for line in r.stdout.split(b"\n"):
             if line and not line.endswith(b":") and not line.endswith(b"/"):
@@ -106,7 +113,7 @@ class Disk:
     def folders(self, folder):
         """Sub-folders of a folder, as raw Mac names (bytes)."""
         self._mount()
-        r = self._run("hls", "-1aF", b":" + folder)
+        r = self._run("hls", "-1aF", glob_quote(b":" + folder))
         return [line[:-1] for line in r.stdout.split(b"\n") if line.endswith(b":")]
 
     def macbinary(self, path):
@@ -115,7 +122,7 @@ class Disk:
         cached = self.cache / f"{key}.bin"
         if not cached.exists():
             self._mount()
-            r = self._run("hcopy", "-m", b":" + path, str(cached))
+            r = self._run("hcopy", "-m", glob_quote(b":" + path), str(cached))
             if r.returncode or not cached.exists():
                 return None
         return cached.read_bytes()
