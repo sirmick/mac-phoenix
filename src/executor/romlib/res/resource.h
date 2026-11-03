@@ -8,6 +8,7 @@
 #if !defined(__MYRESOURCE__)
 
 #include <ResourceMgr.h>
+#include <MemoryMgr.h>
 #include <util/string.h>
 
 namespace Executor
@@ -97,6 +98,8 @@ extern Handle ROMlib_getrestid(ResType restype, INTEGER id);
 extern INTEGER ROMlib_setreserr(INTEGER reserr);
 extern LONGINT ROMlib_SizeResource(Handle res, Boolean usehandle);
 extern Handle ROMlib_mgetres2(resmaphand map, resref *rr);
+/* The zone a resource is read into (res/resOpen.cpp). */
+extern GUEST<THz> ROMlib_load_zone(resmaphand map, resref *rr);
 /* MacPhoenix: resource policy (res/resPolicy.cpp). */
 extern Handle ROMlib_policy_load(resmaphand map, resref *rr);
 

@@ -416,9 +416,15 @@ void LocalVolume::openCommon(GUEST<short>& refNum, ItemPtr item, Fork fork, int8
     {
         short& writeAccessRef = fork == Fork::resource ? fileItem->resWriteAccessRefNum : fileItem->dataWriteAccessRefNum;
 
-        if(permission != fsRdPerm)
+        /* MacPhoenix: a path for writing is refused while another has the
+           fork for writing (opWrErr, that path's refNum), unless both ask
+           for shared read/write (fsRdWrShPerm), as Executor's HFS and HFS+
+           volumes allow: Microsoft OLE opens its compound files that way,
+           and two made in the same tick share a name. */
+        if(permission != fsRdPerm && writeAccessRef > 0)
         {
-            if(writeAccessRef > 0)
+            auto& writer = getFCBX(writeAccessRef);
+            if(permission != fsRdWrShPerm || !(writer.fcb->fcbMdRByt & SHAREDBIT))
             {
                 refNum = writeAccessRef;
                 throw OSErrorException(opWrErr);
@@ -436,15 +442,15 @@ void LocalVolume::openCommon(GUEST<short>& refNum, ItemPtr item, Fork fork, int8
            Manager (UpdateResFile, HOpenResFile) sees it. */
         if(permission != fsRdPerm && fcbx.access->canWrite())
             fcbx.fcb->fcbMdRByt |= WRITEBIT;
+        if(permission == fsRdWrShPerm && fcbx.access->canWrite())
+            fcbx.fcb->fcbMdRByt |= SHAREDBIT;
         fcbx.file = fileItem;
         refNum = fcbx.refNum;
         fcbx.fcb->fcbDirID = item->parID();
         setFCBName(fcbx.fcb, fileItem->name());
 
-        if(permission != fsRdPerm)
-        {
+        if(permission != fsRdPerm && writeAccessRef <= 0)
             writeAccessRef = fcbx.refNum;
-        }
     }
     else
         throw OSErrorException(paramErr);    // TODO: what's the correct error?
@@ -890,10 +896,19 @@ void LocalVolume::PBClose(ParmBlkPtr pb)
     stampWritten(fcbx);
     fcbx.fcb->fcbFlNum = 0;
 
+    /* Another shared writer of the fork, if any, is its writer now. */
+    auto nextWriter = [&](bool resource) -> short {
+        for(auto& other : fcbExtensions)
+            if(&other != &fcbx && other.fcb && other.access && other.file == fcbx.file
+               && (other.fcb->fcbMdRByt & WRITEBIT)
+               && bool(other.fcb->fcbMdRByt & RESOURCEBIT) == resource)
+                return other.refNum;
+        return -1;
+    };
     if(fcbx.file->resWriteAccessRefNum == refNum)
-        fcbx.file->resWriteAccessRefNum = -1;
+        fcbx.file->resWriteAccessRefNum = nextWriter(true);
     if(fcbx.file->dataWriteAccessRefNum == refNum)
-        fcbx.file->dataWriteAccessRefNum = -1;
+        fcbx.file->dataWriteAccessRefNum = nextWriter(false);
 
     fcbx = FCBExtension();
 }

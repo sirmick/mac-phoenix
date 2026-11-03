@@ -525,7 +525,9 @@ std::string afterRestart(const std::vector<std::string>& path, const Entry&)
    themselves (INITs, control panels, background applications, components,
    Shared Library Manager libraries, ...); CarbonLib, which Executor
    doesn't run. Installers' extensions run on every boot brought the tab
-   down. */
+   down. Kept by name: startup code an application can't do without that
+   runs clean on Executor (allowed in res/extension-policy.txt), the
+   Microsoft OLE Extension (Works 4.0b). */
 bool startupCode(const std::vector<std::string>& path, const Entry& e)
 {
     static const char *folders[] = { "Control Panels", "Startup Items", "Shutdown Items",
@@ -539,6 +541,8 @@ bool startupCode(const std::vector<std::string>& path, const Entry& e)
             if(equalMac(e.name, f))
                 return true;
     if(e.folder)
+        return false;
+    if(equalMac(e.name, "Microsoft OLE Extension"))
         return false;
     for(const char *t : types)
         if(!memcmp(e.finfo, t, 4))

@@ -164,8 +164,7 @@ Handle Executor::ROMlib_policy_load(resmaphand map, resref *rr)
         return nullptr;   // Executor has no copy: fall back to Apple's
 
     const std::vector<uint8_t>& data = b->second;
-    TheZoneGuard guard((rr->ratr & resSysHeap) ? LM(SysZone)
-                                               : (GUEST<THz>)HandleZone((Handle)map));
+    TheZoneGuard guard(ROMlib_load_zone(map, rr));
     Handle h = rr->rhand;
     if(h)
         ReallocateHandle(h, data.size());

@@ -496,6 +496,16 @@ OSErr C_UnlockMemory(void *address, uint32_t count);REGISTER_SUBTRAP(UnlockMemor
 OSErr C_LockMemoryContiguous(void *address, uint32_t count);REGISTER_SUBTRAP(LockMemoryContiguous, 0xA05C, 0x0004, MemoryDispatch, D0(A0, A1));
 
 
+using UserFnUPP = UPP<void(void *parameter), Register<void(A0)>>;
+
+
+// Calls userFunction (argument in A0) once paging is safe: at once
+// without virtual memory. Every System 7 has it; the MPW far-model
+// runtime (Microsoft Works) takes an unimplemented $A08F for "no
+// Process Manager" and drops its segment loader before _Launch.
+OSErr C_DeferUserFn(Ptr userFunction, void *argument);REGISTER_TRAP(DeferUserFn, 0xA08F, D0(A0, D0));
+
+
 THz glue_GetMyZone();LIBRARY_FUNCTION(InterfaceLib, GetMyZone, glue_GetMyZone);
 
 

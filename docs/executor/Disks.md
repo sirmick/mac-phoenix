@@ -128,12 +128,21 @@ Finder, Clipboard ...) and what the boot disks' cuts leave out
 the System Folder's folders of startup items (Control Panels, Startup
 Items, Launcher Items, ...) and files of the types that run at startup or
 register themselves anywhere (INIT, cdev, appe, thng, libr, RDEV, fext,
-AINI, ...), and CarbonLib. Installers' extensions, components and
-Shared Library Manager libraries, run at every boot, brought the tab down
-(an illegal instruction a few seconds after the Finder started: Kodak's
-CMS components, translators, Type Reunion, ATM, OLE, CarbonLib on 7.6.1);
-what applications need to start is their preferences, support files,
-fonts and shared libraries. The disk's record
+AINI, ...), and CarbonLib. Kept by name: startup code an application
+can't do without that runs clean on Executor (allowed in
+`src/executor/res/extension-policy.txt`): the Microsoft OLE Extension,
+which Works 4.0b won't start without (make_disk.py `STARTUP_KEPT`,
+hfs_sideload.cpp `startupCode`). What applications need to start is their
+preferences, support files, fonts and shared libraries; installers'
+extensions and startup items run at every boot on whatever System the tab
+runs. They once brought the tab down, with an illegal instruction a few
+seconds after the Finder started, an Executor bug: the Shared Library
+Manager's code ('root' 2, read with the System heap current) was in the
+startup application heap, as Executor read a resource into its file's
+map's zone rather than the current one (`ResourceTest.LoadsIntoCurrentZone`,
+res/resOpen.cpp `ROMlib_load_zone`); that heap is reused once the Finder runs
+(here as it launched Kodak's application in Startup Items), and the
+`.SLM` driver's accRun jumped into what was put there. The disk's record
 says what is there: `system_additions` `{folder, files, bytes, items,
 restart}`, `items` one level into the System Folder's folders, `restart`
 what is in use only after a restart. A disk entry with `"additions":

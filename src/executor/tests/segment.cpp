@@ -6,9 +6,15 @@
 #include <SegmentLdr.h>
 #include <base/common.h>
 #include <LowMem.h>
+#include <MemoryMgr.h>
+#include <OSUtil.h>
+#include <base/cpu.h>
 #else
 #include <SegLoad.h>
 #include <LowMem.h>
+#include <Memory.h>
+#include <OSUtils.h>
+#include <Traps.h>
 #endif
 
 // GetAppParms with a nil output carries on: a 7.6.1 Quadra (2026-11-03)
@@ -70,4 +76,47 @@ TEST(Process, PartitionFromSizeZero)
     ASSERT_EQ(noErr, GetProcessInformation(&psn, &info));
     EXPECT_GE((long)info.processSize, 3072L * 1024) << (long)info.processSize;
     EXPECT_LT((long)info.processSize, 3072L * 1024 + 256 * 1024) << (long)info.processSize;
+}
+
+// _DeferUserFn ($A08F) is there on a 7.x Quadra (7.5.5's trap table: not
+// _Unimplemented, with virtual memory off). MPW's far-model runtime
+// (Microsoft Works 4.0b) reads an unimplemented $A08F as "no Process
+// Manager" and takes its segment loader out before a _Launch that, with
+// launchContinue, comes back: its far jump table entries then reached the
+// System's _LoadSeg.
+TEST(SegmentLoader, DeferUserFnPresent)
+{
+#ifdef EXECUTOR
+    EXPECT_NE(NGetTrapAddress(_Unimplemented, kToolboxTrapType), NGetTrapAddress(0xA08F, kOSTrapType));
+#else
+    EXPECT_NE(NGetTrapAddress(_Unimplemented, ToolTrap), NGetTrapAddress(0xA08F, OSTrap));
+#endif
+}
+
+// Without virtual memory DeferUserFn calls the function at once, its
+// argument (here the routine's own address) in A0: MOVE.L A0,(abs).L; RTS.
+TEST(SegmentLoader, DeferUserFnCallsAtOnce)
+{
+    Ptr code = NewPtr(16);
+    Ptr seen = NewPtrClear(4);
+    ASSERT_NE(nullptr, code);
+    ASSERT_NE(nullptr, seen);
+#ifdef EXECUTOR
+    uint32_t target = US_TO_SYN68K(seen);
+#else
+    uint32_t target = (uint32_t)seen;
+#endif
+    uint8_t routine[] = { 0x23, 0xC8, uint8_t(target >> 24), uint8_t(target >> 16),
+                          uint8_t(target >> 8), uint8_t(target), 0x4E, 0x75 };
+    BlockMoveData(routine, code, sizeof routine);
+#ifdef EXECUTOR
+    EXPECT_EQ(noErr, DeferUserFn(code, code));
+    EXPECT_EQ(US_TO_SYN68K(code), (uint32_t) * (GUEST<uint32_t> *)seen);
+#else
+    FlushInstructionCache();
+    EXPECT_EQ(noErr, DeferUserFn((UserFnUPP)code, code));
+    EXPECT_EQ((uint32_t)code, *(uint32_t *)seen);
+#endif
+    DisposePtr(seen);
+    DisposePtr(code);
 }
