@@ -52,6 +52,8 @@
 #include <textedit/tesave.h> /* ROMlib_dotext */
 
 #include <ctl/ctl.h>
+#include <base/traps.h>
+#include <set>
 #include <list/list.h>
 #include <menu/menu.h>
 #include <wind/wind.h>
@@ -97,6 +99,28 @@ unhandled_trap(syn68k_addr_t callback_address, void *arg)
     char pc_str[128];
 
     trap_num = (intptr_t)arg;
+
+    /* $FExx: a Power Mac's 68K emulator's own instructions (Mixed Mode's
+       stubs use them), not the FPU's. MacBench 5's 68k timing routine runs
+       $FE09 between two _Microseconds; nothing here has them: stepped over
+       (one word), as a no-op. */
+    if(trap_num == 11)
+    {
+        syn68k_addr_t pc = READUL(EM_A7 + 2);
+        uint16_t op = READUW(pc);
+        if((op & 0xFF00) == 0xFE00)
+        {
+            static std::set<uint16_t> logged;
+            if(logged.insert(op).second)
+            {
+                char what[64];
+                snprintf(what, sizeof what, "68K emulator instruction $%04X (a no-op)", op);
+                traps::log_unimplemented(what);
+            }
+            WRITEUL(EM_A7 + 2, pc + 2);
+            return MAGIC_RTE_ADDRESS;
+        }
+    }
 
     switch(trap_num)
     {

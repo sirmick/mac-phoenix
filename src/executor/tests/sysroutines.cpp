@@ -453,3 +453,13 @@ TEST_F(DetachedPackage, PurgedResourceReloads)
     CloseResFile(ref);
     FSDelete(name, 0);
 }
+
+/* $FExx, a Power Mac 68K emulator's own instructions: stepped over as a
+   no-op (MacBench 5's timing routine runs $FE09), not the F-line death. */
+TEST_F(SysRoutines, EmulatorInstructionsStepOver)
+{
+    uint32_t routine = emit({ 0x7001 /* moveq #1,d0 */, 0xFE09, 0x5280 /* addq.l #1,d0 */, RTS });
+    call(routine, {}, 0, 0, 0);
+    EXPECT_EQ(2u, EM_D0);
+    EXPECT_EQ(resultSlot(0), EM_A7);
+}
