@@ -336,15 +336,6 @@ static void launchchain(ConstStringPtr fName, INTEGER vRefNum, Boolean resetmemo
 
     ROMlib_creator = finfo.fdCreator;
 
-#define LEMMINGSHACK
-#if defined(LEMMINGSHACK)
-    {
-        if(finfo.fdCreator == "Psyg"_4
-           || finfo.fdCreator == "Psod"_4)
-            ROMlib_flushoften = true;
-    }
-#endif /* defined(LEMMINGSHACK) */
-
     h = GetResource("vers"_4, 2);
     if(!h)
         h = GetResource("vers"_4, 1);
