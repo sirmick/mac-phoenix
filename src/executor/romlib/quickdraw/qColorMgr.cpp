@@ -905,10 +905,8 @@ void Executor::C_SetEntries(INTEGER start, INTEGER count, ColorSpec *atable)
 
     CTabHandle ctab;
     ColorSpec *ctab_table;
-    int ctab_changed_p, i;
-    RGBColor *r1, *r2;
-    /* for calling `vdriver->setColors ()' */
-    int first_color, num_colors;
+    int i;
+    int num_colors;
 
     gd = LM(TheGDevice);
 
@@ -918,7 +916,6 @@ void Executor::C_SetEntries(INTEGER start, INTEGER count, ColorSpec *atable)
 
     ctab = PIXMAP_TABLE(GD_PMAP(gd));
     ctab_table = CTAB_TABLE(ctab);
-    ctab_changed_p = false;
 
     /* MacPhoenix: entries beyond the device's table are a range error,
        not writes past it into the next heap block. */
@@ -938,18 +935,7 @@ void Executor::C_SetEntries(INTEGER start, INTEGER count, ColorSpec *atable)
     if(start >= 0)
     {
         for(i = 0; i <= count; i++)
-        {
-            r1 = &ctab_table[start + i].rgb;
-            r2 = &atable[i].rgb;
-            if(r1->red != r2->red
-               || r1->green != r2->green
-               || r1->blue != r2->blue)
-            {
-                *r1 = *r2;
-                ctab_changed_p = true;
-            }
-        }
-        first_color = start;
+            ctab_table[start + i].rgb = atable[i].rgb;
         num_colors = count + 1;
     }
     else
@@ -965,18 +951,9 @@ void Executor::C_SetEntries(INTEGER start, INTEGER count, ColorSpec *atable)
             if(index > max)
                 max = index;
 
-            r1 = &ctab_table[index].rgb;
-            r2 = &atable[i].rgb;
-            if(r1->red != r2->red
-               || r1->green != r2->green
-               || r1->blue != r2->blue)
-            {
-                *r1 = *r2;
-                ctab_changed_p = true;
-            }
+            ctab_table[index].rgb = atable[i].rgb;
         }
 
-        first_color = min;
         num_colors = max - min + 1;
     }
 
@@ -984,19 +961,9 @@ void Executor::C_SetEntries(INTEGER start, INTEGER count, ColorSpec *atable)
        the device's table a new seed for an entry set to the colour it
        already had (upstream's note: Wolfenstein 3D's colours are wrong
        without). */
-    ctab_changed_p = true;
-
-    if(ctab_changed_p)
-    {
-        CTAB_SEED(ctab) = GetCTSeed();
-        if(gd == LM(MainDevice))
-        {
-            if(num_colors > 0)
-            {
-                gd_update_colors();
-            }
-        }
-    }
+    CTAB_SEED(ctab) = GetCTSeed();
+    if(gd == LM(MainDevice) && num_colors > 0)
+        gd_update_colors();
 }
 
 void Executor::C_AddSearch(ProcPtr searchProc)
