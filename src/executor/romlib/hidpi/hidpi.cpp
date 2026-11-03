@@ -633,6 +633,7 @@ void Executor::hidpi::text_draw(const TextParams &p, const std::function<void()>
     run->clip = port_clip(port, dx, dy,
                           intersection({ box.top - 1, box.left - 1, box.bottom + 1, box.right + 1 },
                                        { 0, 0, s.height, s.width }));
+    run->port = port;
 
     std::lock_guard lk(g_mutex);
     /* the runs under it: what they left is what's there now (this one is
@@ -763,6 +764,7 @@ void Executor::hidpi::chrome_draw(const Rect &r, Shapes shapes, const std::funct
     }
     run->shapes = std::move(shapes);
     run->clip = std::move(clip);
+    run->port = port;
 
     std::lock_guard lk(g_mutex);
     for(auto &u : under)
@@ -791,6 +793,73 @@ void Executor::hidpi::chrome_draw(const Rect &r, Shapes shapes, const std::funct
                 under.size(), runs.size() + 1);
     runs.push_back(run);
     trim(runs, t);
+}
+
+namespace
+{
+/* PORT's runs on the screen clipped to VIS (framebuffer coordinates) */
+void clip_port_runs(GrafPtr port, const std::vector<IRect> &vis)
+{
+    std::lock_guard lk(g_mutex);
+    int clipped = 0, gone = 0;
+    for(auto it = g_runs.begin(); it != g_runs.end();)
+    {
+        const Run &run = **it;
+        if(run.port != port)
+        {
+            ++it;
+            continue;
+        }
+        std::vector<IRect> clip;
+        long before = 0, after = 0;
+        for(const IRect &c : run.clip)
+        {
+            before += (long)(c.bottom - c.top) * (c.right - c.left);
+            for(const IRect &v : vis)
+            {
+                IRect r = intersection(c, v);
+                if(!empty(r))
+                {
+                    clip.push_back(r);
+                    after += (long)(r.bottom - r.top) * (r.right - r.left);
+                }
+            }
+        }
+        if(after == before)
+            ++it;
+        else if(clip.empty())
+        {
+            it = g_runs.erase(it);
+            gone++;
+        }
+        else
+        {
+            auto copy = std::make_shared<Run>(run);
+            copy->clip = std::move(clip);
+            *it++ = copy;
+            clipped++;
+        }
+    }
+    if(ERROR_ENABLED_P(ERROR_HIDPI_LOG) && (clipped || gone))
+        fprintf(stderr, "[hidpi] vis of port %p: %d runs clipped, %d gone\n", (const void *)port, clipped, gone);
+}
+}
+
+void Executor::hidpi::vis_changed(GrafPtr port)
+{
+    Target t;
+    if(!active() || !port_target(port, &t) || !t.screen)
+        return;
+    const Rect &bounds = PORT_BOUNDS(port);
+    std::vector<IRect> vis;
+    region_rects(PORT_VIS_REGION(port), bounds.left, bounds.top, vis);
+    clip_port_runs(port, vis);
+}
+
+void Executor::hidpi::window_gone(GrafPtr port)
+{
+    if(active())
+        clip_port_runs(port, {});
 }
 
 bool Executor::hidpi::impl::run_damage(const Run &run, const Screen &s, const IRect &area,
@@ -1294,7 +1363,14 @@ void Executor::hidpi::copy_bits(const PixMap *src, const PixMap *dst, const Rect
     Runs made;
     for(const auto &r : runs)
         if(auto n = carried(*r, at, src_area, clip, to.s, sc, dc, how, bg, old))
+        {
+            /* the port it lands in, but through the Window Manager's (a
+               menu's saved bits put back) it's still its own window's */
+            GrafPtr p = qdGlobals().thePort;
+            if(p != LM(WMgrPort) && p != (GrafPtr)LM(WMgrCPort))
+                n->port = p;
             made.push_back(n);
+        }
     if(made.empty())
     {
         log_copy("nothing landed", src_area, runs.size());

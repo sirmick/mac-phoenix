@@ -11,7 +11,8 @@
 // SYSTEM 7.6.1 or 8.6, DISK a library disk there (productivity.img,
 // development.img, tools-8.img, games-68k.img, games-ppc.img). The targets are TARGETS
 // below, not the disk record's launch list (which tab_site.mjs opens). Every
-// target is expected to work: one that doesn't fails the cell, with what it
+// target is expected to work, but the known exceptions (KNOWN: stopped at
+// exactly their message): one that doesn't fails the cell, with what it
 // got to (M1.md keeps the table). M1_APPS=Name,Name: only those.
 // M1_QUERY: more of the page's query (debug=fslog, logtraps=NAME...).
 // M1_RESULTS=FILE: one JSON line per application appended. The canvas after
@@ -30,7 +31,22 @@ const SHOTS = process.env.M1_SHOTS || path.join(os.homedir(), 'storage/tmp/m1/sh
 // app: the path on the library disk; name: CurApName in front; systems; ppc:
 // the page's PowerPC box for it (8.6 always); use(t): what it does with it,
 // throwing (fail) with what went wrong. t: the helpers below.
+// known: a known exception (M1.md): the target passes when it stops at
+// exactly this message, and fails on anything else.
 const DOCUMENT = 'Hello from M1';
+
+// The games that stop at a message of their own, on any Mac: Pathways'
+// manual copy protection, EV Nova wants QuickTime 3 (M2), Ferazel's Wand
+// its CD.
+const KNOWN = {
+    'Pathways Into Darkness': /in the order they appear on the right side of page \d+ in your manual/,
+    'EV Nova': /^Sorry, Nova requires Quicktime 3\.0 or newer\.$/,
+    "Ferazel's Wand": /^Please insert the Ferazel's Wand CD and try again\.$/,
+};
+function game(name, app, system, start) {
+    const known = KNOWN[name];
+    return { name, app, systems: [system], known, use: (t) => known ? t.stopsAt(known) : t.play(start) };
+}
 const TARGETS = {
     'productivity.img': [
         { name: 'AppleWorks', app: 'Productivity:AppleWorks 5.0.3 ƒ:AppleWorks', use: async (t) => {
@@ -187,7 +203,7 @@ const TARGETS = {
         ['SimEarth Color', 'SimEarth 2.0 ƒ:SimEarth Color'], ['SimLife™ Color', 'SimLife 1.0.1 ƒ:SimLife™ Color'],
         ['Spectre 1.1', 'Spectre 1.1 ƒ:Spectre 1.1', [[503, 139], 'KeyP']], ['Swoop', 'Swoop 1.0.2 ƒ:Swoop', ['KeyN']],
         ['Monkey Island', 'The Secret of Monkey Island ƒ:Monkey Island'],
-    ].map(([name, app, start]) => ({ name, app: `Games:${app}`, systems: ['7.6.1'], use: (t) => t.play(start) })),
+    ].map(([name, app, start]) => game(name, `Games:${app}`, '7.6.1', start)),
     'games-ppc.img': [
         ['Marathon v1.2', 'Marathon 1.2 ƒ:Marathon v1.2', [[316, 156]]], ['Marathon 2', 'Marathon 2 ƒ:Marathon 2', [[144, 192]]],
         ['Escape Velocity', 'Escape Velocity 1.0.5 ƒ:Escape Velocity', [[200, 274], 'Enter', 'Enter', [440, 270]]], ['EV Override', 'EV Override 1.0.2 ƒ:EV Override', [[200, 272], 'Enter', 'Enter', [440, 270]]],
@@ -197,7 +213,7 @@ const TARGETS = {
         ['Wolfenstein 3D™', 'Wolfenstein 3D 1.0.2 ƒ:Wolfenstein 3D™'],
         ['EV Nova', 'EV Nova 1.0.10 ƒ:EV Nova'], ["Ferazel's Wand", "Ferazel's Wand 1.0.3 ƒ:Ferazel's Wand"],
         ['Slithereens', 'Slithereens 1.0.1 ƒ:Slithereens'], ['Mars Rising', 'Mars Rising 1.0.2 ƒ:Mars Rising', [[465, 86]]],
-    ].map(([name, app, start]) => ({ name, app: `Games PPC:${app}`, systems: ['8.6'], use: (t) => t.play(start) })).concat([
+    ].map(([name, app, start]) => game(name, `Games PPC:${app}`, '8.6', start)).concat([
         { name: 'GameBox', app: 'Games PPC:GameBox Classic 1.2.0 ƒ:GameBox', systems: ['8.6'], use: async (t) => {
             // REALbasic: Welcome -> Continue, Choose Profile -> New, a
             // profile named and saved, then its library window
@@ -440,6 +456,25 @@ const t = {
         await t.until(async () => (await t.drawn()).some((s) => /Hello World/.test(s)), 30000,
             'no "Hello World" in the console');
     },
+    // A known exception: a dialog saying exactly re, nothing else (an
+    // error alert of another kind fails at once).
+    async stopsAt(re) {
+        let last = '';
+        const ok = await until(async () => {
+            const d = (await t.windows()).find((w) => w.kind === DIALOG_KIND);
+            if (!d)
+                return false;
+            last = said(d).replace(/\s+/g, ' ');
+            if (re.test(last))
+                return true;
+            if (failing(d))
+                throw new Error(`alert "${last}", not ${re}`);
+            return false;
+        }, 60000, 1000);
+        await shot('known');
+        if (!ok)
+            throw new Error(`never stopped at ${re}${last ? ` (last dialog: "${last}")` : ''}`);
+    },
     // A game: its title screen, then taken on as a player would: a dialog
     // answered by its harmless button (a shareware notice's "Not Yet", never
     // its default "Register..."), a splash clicked away, then the game's
@@ -551,6 +586,8 @@ try {
         if (!crashed)
             await shot(ok ? 'done' : 'failed');
         failed += !ok;
+        if (ok && target.known)
+            why = `known exception (${target.known.source})`;
         const line = `${ok ? 'PASS' : 'FAIL'} ${system} ${target.name}${why ? `: ${why}` : ''}`;
         console.log(line);
         table.push({ system, disk: diskName, app: target.name, ok, why, seconds: Math.round((Date.now() - t0) / 1000) });

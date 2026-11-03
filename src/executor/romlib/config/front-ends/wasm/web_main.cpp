@@ -416,30 +416,45 @@ OSErr mount_image(const std::string &path)
     return err;
 }
 
-/* Through _UnmountVol, as the Finder's Put Away. */
-OSErr eject_image(const std::string &path)
+/* The volumes on the image's drive at PATH (its drive queue element in
+   *DRIVE): on line, and with OFFLINE those ejected but still known (the
+   Finder's Eject: no drive number, the driver's left) */
+std::vector<INTEGER> image_volumes(const std::string &path, bool offline, DrvQEl **drive = nullptr)
 {
+    std::vector<INTEGER> out;
     for(DrvQEl *dp = (DrvQEl *)LM(DrvQHdr).qHead; dp; dp = (DrvQEl *)dp->qLink)
     {
         auto *dqp = (DrvQExtra *)((char *)dp - sizeof(LONGINT));
         if(!dqp->devicename || path != (const char *)dqp->devicename)
             continue;
-        for(HVCB *v = (HVCB *)LM(VCBQHdr).qHead, *next; v; v = next)
-        {
-            next = (HVCB *)v->qLink;
-            if(v->vcbDrvNum != dp->dQDrive)
-                continue;
-            if(OSErr err = fs_trap(0xA00E, v->vcbVRefNum))
-                return err;
-        }
-        return noErr;
+        if(drive)
+            *drive = dp;
+        for(HVCB *v = (HVCB *)LM(VCBQHdr).qHead; v; v = (HVCB *)v->qLink)
+            if(v->vcbDrvNum == dp->dQDrive
+               || (offline && !v->vcbDrvNum && (v->vcbDRefNum == dp->dQDrive || v->vcbDRefNum == -dp->dQDrive)))
+                out.push_back(v->vcbVRefNum);
     }
-    return nsvErr;
+    return out;
+}
+
+/* Through _UnmountVol, as the Finder's Put Away; one ejected by the
+   Finder but still known too. */
+OSErr eject_image(const std::string &path)
+{
+    DrvQEl *drive = nullptr;
+    for(INTEGER vref : image_volumes(path, true, &drive))
+        if(OSErr err = fs_trap(0xA00E, vref))
+            return err;
+    return drive ? noErr : nsvErr;
 }
 
 /* Drives that had a volume and have none now: ejected. A volume ejected
    but still known (offline: the Finder's Eject) is unmounted too, the
-   image being gone from the page, so no grey icon stays on the desktop. */
+   image being gone from the page, so no grey icon stays on the desktop.
+   One that won't go (files open on it: an application running from it,
+   the Finder's "could not be put away") stays, and so does the image:
+   the page dropping it left the Mac reading a file that wasn't there,
+   and the disk added again was a second one. */
 std::map<std::string, bool> seen;
 void watch_images()
 {
@@ -448,19 +463,10 @@ void watch_images()
     {
         if(seen[path] && !on)
         {
-            for(DrvQEl *dp = (DrvQEl *)LM(DrvQHdr).qHead; dp; dp = (DrvQEl *)dp->qLink)
-            {
-                auto *dqp = (DrvQExtra *)((char *)dp - sizeof(LONGINT));
-                if(!dqp->devicename || path != (const char *)dqp->devicename)
-                    continue;
-                for(HVCB *v = (HVCB *)LM(VCBQHdr).qHead, *next; v; v = next)
-                {
-                    next = (HVCB *)v->qLink;
-                    if(!v->vcbDrvNum && (v->vcbDRefNum == dp->dQDrive || v->vcbDRefNum == -dp->dQDrive))
-                        fs_trap(0xA00E, v->vcbVRefNum);
-                }
-            }
-            js_ejected(path.c_str());
+            for(INTEGER vref : image_volumes(path, true))
+                fs_trap(0xA00E, vref);
+            if(image_volumes(path, true).empty())
+                js_ejected(path.c_str());
         }
         seen[path] = on;
     }

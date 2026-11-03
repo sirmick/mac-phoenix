@@ -21,6 +21,7 @@
 
 #include <rsys/evil.h>
 #include <rsys/executor.h>
+#include <hidpi/hidpi.h>
 #include <base/functions.impl.h>
 #include <algorithm>
 
@@ -432,6 +433,7 @@ void Executor::C_CalcVis(WindowPeek w)
         OffsetRgn(PORT_VIS_REGION(w),
                   PORT_BOUNDS(w).left,
                   PORT_BOUNDS(w).top);
+        hidpi::vis_changed((GrafPtr)w);
     }
 }
 void Executor::C_CalcVisBehind(WindowPeek w, RgnHandle clobbered)
