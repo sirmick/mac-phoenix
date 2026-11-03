@@ -387,8 +387,6 @@ static void launchchain(ConstStringPtr fName, INTEGER vRefNum, Boolean resetmemo
         }
         size_info.application_p = true;
 
-        /* we don't accept open app events until a handler is installed */
-        application_accepts_open_app_aevt_p = false;
         send_application_open_aevt_p
             = !ROMlib_process_open_event_posted() && system_version >= 0x700
             && ((size_info.size_flags & SZisHighLevelEventAware)
