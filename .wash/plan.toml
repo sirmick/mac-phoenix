@@ -1,7 +1,7 @@
 # wash-plan: written by Wash as the plan changes.
 # Edit it only between workspaces; plan_set {"from": "<this file>"} loads it.
 
-revision = 65
+revision = 82
 
 [[node]]
   id = "cuts"
@@ -470,9 +470,9 @@ revision = 65
   emoji = "📌"
   template = "note"
   parent = "p1"
-  body = "(1) Standalone: settings.json without \"version\" refused: default to current. (2) uploads.go: replace=1 drops old overlay before rename. (3) Mixed Mode: stale vector when a SysZone accelerated resource is purged+reloaded. (4) SetBevelButtonContentInfo no dispatcher/selector: confirm PPC-only. (5) BBEdit 6.1 survey shows while Finder menus up. (6) Servers died ~19:50 2026-11-02: cause unknown. (7) ShutDwnPower/Start skip ROMlib_OurClose: HFS not flushed. (8) Disks: busy Put Away untested; ghost icon; hfsPBEject no busy check. (9) font.cpp L757/L965 unchecked width-list derefs. (10) harness needs full Chromium. (11) resMod.cpp direct-append path (349-355) orphans old bytes without mapCompact (review-761). (12) inputsprocket.cpp:177 Movement size hardcoded 12 B. (13) $A08E answers paramErr for every selector: check vs a real 7.x. (14) MPW New dialog folder pop-up blank. (15) AE: 'Berk'/'eley' handler not stored (AEGetEventHandler would say not found)."
+  body = "(1) Standalone: settings.json without \"version\" refused: default to current. (2) uploads.go: replace=1 drops old overlay before rename. (3) Mixed Mode: stale vector when a SysZone accelerated resource is purged+reloaded. (4) SetBevelButtonContentInfo no dispatcher/selector: confirm PPC-only. (5) BBEdit 6.1 survey shows while Finder menus up. (6) Servers died ~19:50 2026-11-02: cause unknown. (7) ShutDwnPower/Start skip ROMlib_OurClose: HFS not flushed. (8) Disks: busy Put Away untested; ghost icon; hfsPBEject no busy check. (9) font.cpp L757/L965 unchecked width-list derefs. (10) harness needs full Chromium. (11) resMod.cpp direct-append orphans old bytes. (12) inputsprocket.cpp:177 Movement size 12 B. (13) $A08E paramErr for every selector. (14) MPW New dialog folder pop-up blank. (15) AE 'Berk'/'eley' handler not stored. (16) EV Override 2-colour screen (SetEntries always new ctSeed -> itab from black CLUT): needs a reference; G3 8.6 has no 8-bit modes (video_ppc.cpp VideoInit 32-bit only). Options: 68k clut probe on the Quadra 7.6.1 --depth 8 (cheaper), or 8-bit modes in the PPC video driver. Probe clut.c merged cb7c1a82. (17) localvolume.cpp:658 SetFInfo on a folder paramErr not fnfErr. (18) process.cpp:2164/2193 launchProcessSN written back without EPBLength check."
   state = "todo"
-  revision = 54
+  revision = 66
 
 [[node]]
   id = "m1-audit"
@@ -530,5 +530,34 @@ revision = 65
   emoji = "🎨"
   template = "package"
   body = "Owner 2026-11-03: the library is light on Adobe/DTP. Selection and status in ~/storage/serials.json (private, mode 600, never committed or baked into keys/records; owner fills 'serial'; empty = skip). Steps: (1) bake.py reads serials from that file (by product id) and types them at the installer's prompt; a missing serial stops the bake and names the product; never use archives' SN# folders, keygens or cracks. (2) Pin missing media (tools/macfetch, Garden mirror) for picks marked 68k/ppc/both. (3) Bake + build images; put WordPerfect 3.5e, Excel 4, Office 98 (already baked) on the tab's Productivity disk. (4) Each pick launched and used on Executor 7.6.1 / 8.6 (tab_m1-style cells); stop on disproportionate apps. ATM last; QuickTime-dependent apps wait for M2. Start when the M1 fixes free a member."
+  state = "active"
+  revision = 80
+
+[[node]]
+  id = "fix-86-7"
+  title = "Owner's reports 2026-11-03: 8.6 Apple menu position, TrueType spacing, Trash label, scroll thumb line, scroll wheel, MR Browser"
+  emoji = "🪟"
+  template = "package"
+  parent = "m1"
+  body = "Owner testing :8090 (cb7c1a82), 8.6 unless said: (1) the Apple menu sits right at the bottom of the menu bar: looks odd (compare the G3's 8.6 menu bar: icon vertical position, the menu's top edge). (2) TrueType text spacing looks odd: kerning / fractional widths / width tables vs the G3 (Executor draws outlines itself; compare string widths per font/size). (3) The Trash's label isn't centred under its icon. (4) Scroll bar thumb: a thick black line above it (platinum scroll thumb drawing vs the G3). (5) Feature: the browser's scroll wheel / trackpad scrolls the Mac window under the pointer (System 7/8 have no wheel API: scroll the window's vertical/horizontal scroll bar under the pointer as clicks on its arrows (or page parts for big deltas), without moving the visible cursor; a setting to turn it off). (6) MR Browser (Macintosh Repository browser) on the tab's Internet disk: the pinned 0.39 needs CarbonLib (Executor has none: M2); check for a non-Carbon (classic PPC/68k) MR Browser build first; if none, report and stop."
+  state = "active"
+  revision = 76
+
+[[node]]
+  id = "utils-disk"
+  title = "Utilities disk: CPU capabilities and speed (Gestalt/system info, benchmarks), 68k + PPC, in the tab's library"
+  emoji = "🧰"
+  template = "package"
+  body = "Owner 2026-11-03: a new provisioned disk with utilities to check CPU capabilities and speed. Candidates (verify each on the media, prefer freeware/shareware needing no serial): Apple System Profiler (from the System CDs, 7.6+/8.x), Speedometer 4.x, MacBench 4/5 (Ziff-Davis, free), TattleTech, Gauge Pro / Gauge series, Snooper, a Gestalt viewer (e.g. Gestalt Manager tools), FPU/AltiVec checkers. Pipeline: pin media (tools/macfetch, Garden mirror / Info-Mac, never macintoshgarden.org) -> bakes -> image provisioning/images/utilities.json (title/tags/note; 'ƒ' folder names) -> tools/web/make_library.py entry with launch list -> run each on Executor 7.6.1 (68k + PPC) and 8.6 and in the tab (a tab_m1-style cell: launch, run a benchmark or read the CPU line, screenshot). Results are interesting in themselves: what Executor reports as CPU/FPU/Gestalt vs the Quadra/G3, and the benchmark numbers native vs wasm; record them in the image note / docs."
+  state = "done"
+  revision = 82
+
+[[node]]
+  id = "gestalt-truth"
+  title = "Executor reports the machine truthfully: Gestalt (machine type, CPU, 32-bit, selector coverage), Speedometer, TattleTech"
+  emoji = "🧮"
+  template = "package"
+  needs = ["utils-disk"]
+  body = "From the Utilities disk (utils-disk, docs/Provisioning.md results table): on 8.6 PPC Executor answers 'Mac Quadra 900 (20)' and not 32-bit capable (G3: Power Mac 9500/9600, capable); Clockometer sees 68030 with --executor-ppc and 'Unknown processor type' on 8.6; Gestalt.Appl lists 59 (7.6.1) / 65 (8.6) selectors vs the G3's 158; Speedometer 4.0 stuck on its splash (68k and PPC; idle in its event loop); TattleTech exits at once on 7.6.1. Decide what Executor should claim to be (a 68040 Quadra on 7.x 68k; a PowerPC machine on PPC), make Gestalt consistent (gestaltMachineType, gestaltNativeCPUtype, gestaltProcessorType, gestaltAddressingModeAttr, gestaltSysArchitecture...), add common selectors the G3 answers, then Speedometer and TattleTech. difftest probe (sys) for the selectors."
   state = "todo"
-  revision = 63
+  revision = 79

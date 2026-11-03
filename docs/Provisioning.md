@@ -134,6 +134,25 @@ be gone. Both builds read it (`Data:Hotline Prefs`). Through the net bridge
 (`--network socket`) Hotline lists hltracker.com's servers and connects to
 them, and MR Browser reaches MR's API.
 
+## The utilities disk
+
+| Image | What | Boot with |
+|---|---|---|
+| `utilities.img` | Speedometer 4.0, MacBench 5.0 (PowerPC), TattleTech 2.84, Gestalt.Appl 2.7.9, Newer Technology's Gauge Series (Clockometer, Cache-22, RAMometer, SCSI Info, Slot Info) | any 7.x-9 profile |
+
+Each is its archive expanded in the guest. What they report (2026-11-03;
+Executor native = `tests/test_utilities_executor.sh`, the tab = the
+`executor.web.site.*.utilities` cell / `web/tests/tab_site.mjs`):
+
+| | Quadra 650, 7.6.1 | G3, 8.6 | Executor 7.6.1 (68k) | Executor 8.6 (PowerPC) | tab 7.6.1 / 8.6 |
+|---|---|---|---|---|---|
+| Gestalt.Appl: selectors | | 158 | 59; `cput` 68040 | | 59 / 65 |
+| TattleTech: machine | runs | Power Mac 9500/9600 (67), 32-bit capable | exits at once | Mac Quadra 900 (20), not 32-bit capable | — / not in front |
+| Clockometer | 68040, ??.?? MHz, hangs | | 68040, hangs (`--executor-ppc`: 68030) | "Unknown processor type" | |
+| Cache-22 | quits | quits | "Unknown processor type" | "Unknown processor type" | |
+| Speedometer 4.0 | registration screen | registration form | stays on its splash | stays on its splash | |
+| MacBench 5.0 | needs a PowerPC | licence | needs a PowerPC 601 | licence | — / quits at Cmd-. (its licence's Quit) |
+
 ## CDs
 
 Magazine cover discs, kept as they came: `provisioning/cds.json` lists

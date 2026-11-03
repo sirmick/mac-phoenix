@@ -153,6 +153,20 @@ DISKS = [
          {"app": "Serial MReader 0.03 ƒ:Serial MReader v0.03 68K", "name": "Serial MReader v0.03 68K",
           "systems": ["7.6.1", "8.6"]},
      ]},
+    {"name": "utilities.img", "label": "Utilities",
+     "title": "Utilities: CPU and speed",
+     "tags": ["utilities", "68k", "ppc"],
+     "note": "What the Mac says it is, and how fast it runs: Gestalt.Appl 2.7.9 (every Gestalt "
+             "selector), TattleTech 2.84 (machine, CPU, FPU, memory; Mac OS 8.6), MacBench 5.0 "
+             "(PowerPC: Mac OS 8.6 with PowerPC ticked), Speedometer 4.0 and Newer Technology's "
+             "Gauge Series (Clockometer waits for a timer emulators don't give it: it hangs).",
+     "take": [("utilities.img", ["Gestalt.Appl 2.7.9 ƒ", "TattleTech 2.84 ƒ", "MacBench 5.0 ƒ",
+                                 "Speedometer 4.0 ƒ", "Gauge Series 1997 ƒ"])],
+     "launch": [
+         {"app": "Gestalt.Appl 2.7.9 ƒ:Gestalt.appl 2.7.9", "name": "Gestalt.appl 2.7.9"},
+         {"app": "TattleTech 2.84 ƒ:TattleTech 2.84", "name": "TattleTech 2.84", "systems": ["8.6"]},
+         {"app": "MacBench 5.0 ƒ:MacBench® 5.0", "name": "MacBench® 5.0", "systems": ["8.6"]},
+     ]},
 ]
 
 

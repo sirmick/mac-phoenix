@@ -1,0 +1,14 @@
+{
+ "note": "Newer Technology's Gauge Series (1995-97; freeware): Clockometer (CPU clock), Cache-22 (cache tests), RAMometer, SCSI Info, Slot Info, expanded by StuffIt Expander",
+ "kind": "expand",
+ "archive": "Gauge_Series.sit",
+ "expect": [
+  "Gauge Series"
+ ],
+ "launch": [
+  "Gauge Series:Clockometer v1.7.2",
+  "Gauge Series:Cache-22 v1.4.1 (level2-tester)",
+  "Gauge Series:RAMometer 1.0d4"
+ ],
+ "os": "tools-7.6.1"
+}
