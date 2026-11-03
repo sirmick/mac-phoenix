@@ -4,7 +4,7 @@
   "games",
   "ppc"
  ],
- "note": "PowerPC games for the Mac OS 8.6 and 9 profiles: EV Nova, Ferazel's Wand, Mars Rising, Slithereens, Master of Orion II",
+ "note": "PowerPC games for the Mac OS 8.6 and 9 profiles: EV Nova, Ferazel's Wand, Mars Rising, Slithereens, Master of Orion II; GameBox Classic, a library to launch them from",
  "label": "Games PPC",
  "place": [
   {
@@ -43,6 +43,14 @@
    "to": "Master of Orion II ƒ",
    "launch": [
     "Master of Orion II:MOO II"
+   ]
+  },
+  {
+   "snapshot": "gamebox-classic-1.2.0",
+   "take": "GameBox Classic",
+   "as": "GameBox Classic 1.2.0 ƒ",
+   "launch": [
+    "GameBox Classic:GameBox"
    ]
   }
  ]
