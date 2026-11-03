@@ -45,5 +45,16 @@ TEST(Appearance, TabTitleRect)
     EXPECT_EQ(105, titleRect.left);
     EXPECT_EQ(31, titleRect.bottom);
     EXPECT_EQ(151, titleRect.right);
+    /* sideways tabs: inset along their length, their 21 rows from the
+       outer edge (the front tab is taller: its title keeps the same rows) */
+    Rect side = { 93, 10, 163, 34 };
+    EXPECT_EQ(noErr, C_DrawThemeTab(&side, kThemeTabFront, kThemeTabEast, proc, 0));
+    EXPECT_EQ(105, titleRect.top);
+    EXPECT_EQ(151, titleRect.bottom);
+    EXPECT_EQ(13, titleRect.left);
+    EXPECT_EQ(34, titleRect.right);
+    EXPECT_EQ(noErr, C_DrawThemeTab(&side, kThemeTabFront, kThemeTabWest, proc, 0));
+    EXPECT_EQ(10, titleRect.left);
+    EXPECT_EQ(31, titleRect.right);
     DisposeWindow(w);
 }
