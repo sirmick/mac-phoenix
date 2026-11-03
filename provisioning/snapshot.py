@@ -58,7 +58,7 @@ class Hfs:
     def ls(self, folder):
         """(name, is_dir) of the items in an HFS folder (MacRoman bytes)."""
         out = []
-        for line in self.run("hls", "-l", "-a", folder).split(b"\n"):      # not \r: names can hold one
+        for line in self.run("hls", "-l", "-a", glob_quote(folder)).split(b"\n"):      # not \r: names can hold one
             m = LS.match(line)
             if m:
                 out.append((m.group(2), m.group(1) == b"d"))
@@ -87,6 +87,14 @@ def fork_md5(data, rsrc=False):
     return hashlib.md5(data).hexdigest()
 
 
+def glob_quote(path):
+    """An HFS path hcopy takes literally: it globs its arguments, so a name
+    holding \\ * ? [ ] { } (AppleScript's "Edit the Current Page\\E", Photoshop 5.5's
+    "{Adobe ImageReady™ 2.0 alias}") needs them escaped. hmkdir, hdel, hls and
+    hrename's source glob too; hcopy's destination, a new name, is literal."""
+    return re.sub(rb"([\\*?\[\]{}])", rb"\\\1", path)
+
+
 def listing(hfs, root, work):
     """Content listing of everything under HFS folder `root` (mounted):
     [{path, type, creator, flags, data, rsrc, data_len, rsrc_len}] and the
@@ -102,7 +110,7 @@ def listing(hfs, root, work):
                 walk(hpath + b":" + name, r)
                 continue
             local = os.path.join(tmp, "f.bin")
-            hfs.run("hcopy", "-m", hpath + b":" + name, local)
+            hfs.run("hcopy", "-m", glob_quote(hpath + b":" + name), local)
             with open(local, "rb") as f:
                 ftype, creator, flags, data, rsrc = macbinary_forks(f.read())
             out.append({"path": r.decode("mac_roman"), "type": ftype.decode("mac_roman"),

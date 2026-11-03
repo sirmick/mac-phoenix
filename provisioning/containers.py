@@ -22,7 +22,7 @@ import tempfile
 
 import ndif
 from populate_disk import build_macbinary
-from snapshot import Hfs
+from snapshot import Hfs, glob_quote
 
 ARCHIVE_EXTS = (".sit", ".hqx", ".bin", ".sea", ".zip", ".cpt", ".sitx", ".gz", ".tgz")
 MAC_EPOCH = 2082844800
@@ -87,12 +87,6 @@ class Volume:
         local = os.path.join(stage, f"{len(os.listdir(stage))}.bin")
         self.hfs.run("hcopy", "-m", glob_quote(hpath), local)
         return local
-
-
-def glob_quote(path):
-    """An HFS path hcopy takes literally: it globs its arguments, so a name
-    holding \\ * ? [ ] (AppleScript's "Edit the Current Page\\E") needs them escaped."""
-    return re.sub(rb"([\\*?\[\]])", rb"\\\1", path)
 
 
 class Archive:

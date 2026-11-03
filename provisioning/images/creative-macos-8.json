@@ -4,7 +4,7 @@
   "creative",
   "ppc"
  ],
- "note": "Drawing, painting and layout software for the Mac OS 8.6 profile, PowerPC: Adobe Illustrator 8.0 (personalised with the owner's serial number). Boots with creative-8.6.",
+ "note": "Drawing, painting and layout software for the Mac OS 8.6 profile, PowerPC: Adobe Illustrator 8.0, Photoshop 5.5 (with ImageReady 2.0) and PageMaker 6.5 (with the Acrobat 3.0 it installs: Reader, Distiller), personalised with the owner's serial numbers. Boots with creative-8.6.",
  "label": "Creative",
  "size_mb": 512,
  "place": [
@@ -12,6 +12,21 @@
    "snapshot": "illustrator-8.0",
    "take": "Adobe Illustrator® 8.0",
    "as": "Adobe Illustrator 8.0 ƒ"
+  },
+  {
+   "snapshot": "photoshop-5.5",
+   "take": "Adobe® Photoshop® 5.5",
+   "as": "Adobe Photoshop 5.5 ƒ"
+  },
+  {
+   "snapshot": "pagemaker-6.5",
+   "take": "Adobe PageMaker 6.5",
+   "as": "Adobe PageMaker 6.5 ƒ"
+  },
+  {
+   "snapshot": "pagemaker-6.5",
+   "take": "Adobe Acrobat 3.0",
+   "as": "Adobe Acrobat 3.0 ƒ"
   }
  ]
 }

@@ -1,10 +1,38 @@
 {
- "note": "Macromedia FreeHand 8 (Macromedia, 1998): its installer folder, staged only: installing it takes the product's serial number. The archive's file of its original owner's serial is left out",
- "kind": "stage",
+ "note": "Macromedia FreeHand 8 (Macromedia, 1998), its installer folder (freehand_8.hqx), PowerPC: WIP. Its VISE installer (Easy Install, Switch Disk to the target) stops with 'An unexpected error occurred while installing “Macromedia Help Player 4.3.5”. 1008:17,-7' and installs nothing, on kpx and mame-ppc alike (the archive tests clean; the Help Player is in every package of its Custom Install): damaged installer data, as Painter 5's (painter-5); needs other media. The archive's file of its original owner's serial is left out",
+ "kind": "install",
+ "wip": true,
+ "os": "tools-8.6",
+ "target": "Applications",
  "media": [
   {
    "file": "freehand_8.hqx",
    "take": "Freehand 8/FreeHand 8"
+  }
+ ],
+ "steps": [
+  {
+   "launch": "{media}:FreeHand 8:FreeHand 8 Installer"
+  },
+  {
+   "wait_for": {
+    "button": "Switch Disk"
+   },
+   "timeout": 120
+  },
+  {
+   "click": {
+    "button": "Switch Disk"
+   },
+   "until": {
+    "text": "on the disk “{target}”",
+    "front": true
+   }
+  },
+  {
+   "click": {
+    "button": "Install"
+   }
   }
  ]
 }

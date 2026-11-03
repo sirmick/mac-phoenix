@@ -77,7 +77,7 @@ import fat_cfm  # noqa: E402
 import installers  # noqa: E402
 import snapshot  # noqa: E402
 from containers import Volume, mr  # noqa: E402
-from snapshot import Hfs  # noqa: E402
+from snapshot import Hfs, glob_quote  # noqa: E402
 
 DEFS = os.path.join(HERE, "images")
 FORMAT = 9                  # bumped when what build.py writes changes: images rebuild
@@ -309,7 +309,7 @@ def set_alias_ids(local, parent, cnid):
 
 
 def catalog_id(hfs, path):
-    out = hfs.run("hls", "-i", "-d", path).split()
+    out = hfs.run("hls", "-i", "-d", glob_quote(path)).split()
     return int(out[0])
 
 
@@ -387,14 +387,14 @@ class Builder:
 
             parts = [p for p in dest.split(b":") if p]
             for i in range(len(parts)):
-                self.hfs.run("hmkdir", b":" + b":".join(parts[:i + 1]), check=False)
+                self.hfs.run("hmkdir", glob_quote(b":" + b":".join(parts[:i + 1])), check=False)
             for rel, local in items:
                 segs = rel.split(b":")
                 if rename:
                     segs[0] = mr(rename)
                 target = dest + b":" + b":".join(segs)
                 if local is None:
-                    self.hfs.run("hmkdir", target, check=False)
+                    self.hfs.run("hmkdir", glob_quote(target), check=False)
                     continue
                 key = target.decode("mac_roman")
                 if exists(target):
@@ -403,7 +403,7 @@ class Builder:
                     if not replace and key not in self.placed:
                         raise SystemExit(f"{self.d['name']}: {key} from {snap} is already on the base")
                     replaced.append(key)
-                    self.hfs.run("hdel", target)
+                    self.hfs.run("hdel", glob_quote(target))
                 self.hfs.run("hcopy", "-m", local, target)
                 self.placed[key] = snap
         finally:
@@ -449,9 +449,9 @@ class Builder:
                 if key not in ids:
                     continue
                 local = os.path.join(st, f"{n}.bin")
-                self.hfs.run("hcopy", "-m", alias, local)
+                self.hfs.run("hcopy", "-m", glob_quote(alias), local)
                 set_alias_ids(local, *ids[key])
-                self.hfs.run("hdel", alias)
+                self.hfs.run("hdel", glob_quote(alias))
                 self.hfs.run("hcopy", "-m", local, alias)
         finally:
             self.hfs.umount()
@@ -474,8 +474,8 @@ class Builder:
                 for rel in sorted(man["system_remove"], key=lambda r: -r.count(":")):   # deepest first
                     path = sysf + b":" + mr(rel)
                     if self.hfs.exists(path):
-                        if self.hfs.run("hdel", path, check=False) == b"" and self.hfs.exists(path):
-                            self.hfs.run("hrmdir", path, check=False)                     # a folder
+                        if self.hfs.run("hdel", glob_quote(path), check=False) == b"" and self.hfs.exists(path):
+                            self.hfs.run("hrmdir", glob_quote(path), check=False)                     # a folder
                         removed.append(rel)
             finally:
                 self.hfs.umount()
@@ -591,7 +591,7 @@ def build(d, force=False, log=print):
                     src = b":System Folder:" + mr(name)
                     if not b.hfs.exists(src):
                         raise SystemExit(f"{d['name']}: no {name} in the System Folder to disable")
-                    b.hfs.run("hrename", src, b":Disabled Items:" + mr(name))
+                    b.hfs.run("hrename", glob_quote(src), b":Disabled Items:" + mr(name))
                     log(f"  disabled: {name} (now in :Disabled Items)")
             finally:
                 b.hfs.umount()

@@ -1,6 +1,8 @@
 {
- "note": "Adobe PageMaker 6.5 (Adobe, 1996): the CD's installer folder, staged only: installing it takes the product's serial number. Acrobat Reader 3.01, on the same CD, is its own product (acrobat-reader-3.01)",
- "kind": "stage",
+ "note": "Adobe PageMaker 6.5 (Adobe, 1996), the CD's VISE 'Install Adobe® PageMaker® 6.5', PowerPC: US English, Easy Install onto the target, the User Information filled with the owner's name, organization and serial, no colour profiles or PPDs (None), the registration cancelled, a restart, a first launch. Acrobat Reader 3.01, on the same CD, is its own product (acrobat-reader-3.01); the Easy Install puts Acrobat 3.0 (Reader, Distiller) beside PageMaker",
+ "kind": "install",
+ "os": "tools-8.6",
+ "target": "Applications",
  "disks": [
   {
    "file": "Adobe_Pagemaker_6.5_CD.iso_.sit",
@@ -10,6 +12,224 @@
  "steps": [
   {
    "launch": "Adobe® PageMaker® 6.5:Adobe PageMaker 6.5:Install Adobe® PageMaker® 6.5"
+  },
+  {
+   "wait_for": {
+    "button": "US English"
+   },
+   "timeout": 120
+  },
+  {
+   "click": {
+    "button": "US English"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Save As…"
+   },
+   "timeout": 60,
+   "note": "the Read Me"
+  },
+  {
+   "click": {
+    "button": "Continue"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Switch Disk"
+   },
+   "timeout": 60
+  },
+  {
+   "click": {
+    "button": "Switch Disk"
+   },
+   "until": {
+    "text": "on the disk “{target}”",
+    "front": true
+   }
+  },
+  {
+   "click": {
+    "button": "Continue..."
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Next >"
+   },
+   "timeout": 120,
+   "note": "User Information, empty: each field clicked"
+  },
+  {
+   "click": {
+    "button": "An Individual"
+   }
+  },
+  {
+   "click": [
+    300,
+    233
+   ],
+   "note": "First Name"
+  },
+  {
+   "type": "Mac"
+  },
+  {
+   "click": [
+    300,
+    260
+   ],
+   "note": "Last (Family) Name"
+  },
+  {
+   "type": "Phoenix"
+  },
+  {
+   "click": [
+    300,
+    288
+   ],
+   "note": "Company"
+  },
+  {
+   "serial": "pagemaker-6.5",
+   "field": "organization"
+  },
+  {
+   "click": [
+    300,
+    316
+   ],
+   "note": "Serial Number"
+  },
+  {
+   "serial": "pagemaker-6.5"
+  },
+  {
+   "click": {
+    "button": "Next >"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Install Now…"
+   },
+   "timeout": 60
+  },
+  {
+   "click": {
+    "button": "Install Now…"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Cancel Install"
+   },
+   "timeout": 120,
+   "note": "Color Management Device Profiles"
+  },
+  {
+   "click": {
+    "text": "None",
+    "offset": [
+     -20,
+     6
+    ]
+   }
+  },
+  {
+   "click": {
+    "button": "OK"
+   }
+  },
+  {
+   "wait_for": {
+    "text": "PostScript Printer Description"
+   },
+   "timeout": 60
+  },
+  {
+   "click": {
+    "text": "None",
+    "offset": [
+     -20,
+     6
+    ]
+   }
+  },
+  {
+   "click": {
+    "button": "OK"
+   }
+  },
+  {
+   "wait_for": {
+    "text": "This installation requires your computer to"
+   },
+   "timeout": 60
+  },
+  {
+   "click": {
+    "button": "Continue"
+   },
+   "note": "quits the other applications"
+  },
+  {
+   "wait_for": {
+    "button": "Next >"
+   },
+   "timeout": 1500,
+   "note": "the registration, after the files: cancelled"
+  },
+  {
+   "click": {
+    "button": "Cancel"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Yes"
+   },
+   "timeout": 60
+  },
+  {
+   "click": {
+    "button": "Yes"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Restart"
+   },
+   "timeout": 300
+  },
+  {
+   "click": {
+    "button": "Restart"
+   }
+  },
+  {
+   "wait_finder": 300
+  },
+  {
+   "launch": "{target}:Adobe PageMaker 6.5:Adobe® PageMaker® 6.5"
+  },
+  {
+   "wait": 40
+  },
+  {
+   "close": "Adobe® PageMaker® 6.5"
   }
+ ],
+ "expect": [
+  "Adobe PageMaker 6.5",
+  "Adobe Acrobat 3.0"
+ ],
+ "launch": [
+  "Adobe PageMaker 6.5:Adobe® PageMaker® 6.5"
  ]
 }
