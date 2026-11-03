@@ -224,6 +224,14 @@ if(NODE_COMMAND AND GO_COMMAND)
     add_test(NAME executor.web.volume
         COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_volume.mjs
                 $<TARGET_FILE_DIR:executor-web>)
+    # Apple's System sideloaded once, then the saved System Folder: a
+    # preference kept; the page hidden while the volume comes down saves
+    # none of it; a volume without System's data fork recovers.
+    add_test(NAME executor.web.system_kept
+        COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_system_kept.mjs
+                $<TARGET_FILE_DIR:executor-web> ${EXECUTOR_WEB_SYSTEM})
+    set_tests_properties(executor.web.system_kept PROPERTIES
+        LABELS "executor;web" TIMEOUT 400 SKIP_RETURN_CODE 77 ENVIRONMENT "${EXECUTOR_WEB_ENV}")
     # The Disks panel (disks.js): a disk put in while the Finder runs, a
     # change to it reverted, put away in the Finder; a CD read-only, out by
     # the panel's eject (standalone; EXECUTOR_WEB_SYSTEM the System, picked

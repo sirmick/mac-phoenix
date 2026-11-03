@@ -283,6 +283,38 @@ function scanVolume() {
     return { dirs, files };
 }
 
+// A file's resource fork and Finder info are "%NAME" beside its data fork,
+// NAME, which Executor needs to see the file at all (localvolume
+// appledouble.cpp). A volume saved without some data forks (a save of a
+// volume only partly restored, before Store.restored: System's empty one
+// among them, so web_main.cpp sideloaded the System again over the
+// preferences) gets them back, empty, as most of a System Folder's are.
+function recoverDataForks() {
+    let n = 0;
+    const walk = (dir) => {
+        let names;
+        try { names = FS.readdir(dir); } catch { return; }
+        const here = new Set(names);
+        for (const name of names) {
+            if (name === '.' || name === '..')
+                continue;
+            const path = `${dir}/${name}`;
+            const st = FS.stat(path);
+            if (FS.isDir(st.mode))
+                walk(path);
+            else if (name.startsWith('%') && name.length > 1 && !here.has(name.slice(1))
+                     && !here.has(`%${name}`)) {                // (a file named "%..." itself)
+                FS.writeFile(`${dir}/${name.slice(1)}`, new Uint8Array(0));
+                FS.utime(`${dir}/${name.slice(1)}`, st.mtime.getTime(), st.mtime.getTime());
+                n++;
+            }
+        }
+    };
+    walk(VOLUME);
+    if (n)
+        console.log(`[web] Executor's disk: ${n} files without their data fork recovered (empty)`);
+}
+
 // ---- disks in and out while Executor runs (main.js: the Disks panel) ----
 // The image's overlay opened, its changes fetched, then in /uploads;
 // Executor mounts it at the running application's next event call
@@ -523,6 +555,7 @@ async function start(m) {
             if (kept) {
                 saved = kept;
                 console.log(`[web] restored ${Object.keys(kept.files).length} files of the volume from the server`);
+                recoverDataForks();
             }
             savedNote = kept ? `${Object.keys(kept.files).length} files on Executor's disk` : 'none yet';
         } catch (e) {
@@ -531,6 +564,7 @@ async function start(m) {
             Store.volumeOff = true;
         }
     }
+    Store.restored = true;          // (saved from now on: Store.restored)
     FS.mkdir('/host');              // Executor's "Host" volume
     cds = new Set([...(m.cds || []), ...images.map((f) => f.name).filter((n) => CD.test(n))]);
     if (Store.enabled && images.some((f) => f.remote))
