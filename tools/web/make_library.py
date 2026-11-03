@@ -6,7 +6,10 @@
 Makes every disk in DISKS below from the provisioned images (provisioning/
 build.py's, in ~/storage/images) into OUT_DIR (default ~/storage/web-library),
 each with its record, NAME.json: the title, tags and note tools/standalone's
-library shows, and "launch", the applications on it, which the site's cells
+library shows, "items", what is on the disk (disk_contents.py: name, kind,
+version, publisher, year, architecture, size, applications, from the disk
+itself; a description and notes from provisioning/library_items.json), and
+"launch", the applications on it, which the site's cells
 (web/tests/tab_site.mjs) open on each of their systems. A disk is made again
 only when an image it comes from is newer, or with --force.
 
@@ -18,7 +21,7 @@ server's [library] images at OUT_DIR (docs/executor/WebSite.md).
 The CDs (provisioning/cds.json: magazine cover discs, pinned in media.json,
 checked and given their records by provisioning/cds.py) go in as they are,
 hard-linked, each with its cover scan cut down to COVER_PX for the site:
-the record's "cover".
+the record's "cover", and "items", their top-level folders and files.
 """
 import argparse
 import json
@@ -30,6 +33,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "diskaudit"))
 import tidy  # noqa: E402  (disk_audit.py's checks put right)
+import disk_contents  # noqa: E402
 CDS = HERE.parent.parent / "provisioning" / "cds.json"
 COVER_PX = 480
 
@@ -238,7 +242,8 @@ def make(d, images, out):
     os.replace(tmp, img)
 
 
-def record(d):
+def record(d, img=None):
+    """The disk's record; its "items" read from img, the disk made."""
     r = {"title": d["title"], "tags": d["tags"], "note": d["note"],
          "label": d["label"], "made_by": "tools/web/make_library.py"}
     if "boot" in d:
@@ -251,6 +256,8 @@ def record(d):
         r["launch"] = [{"app": f"{d['label']}:{a['app']}", "name": a["name"],
                         "source": a.get("source", d["take"][0][0]), "source_app": a["app"],
                         "systems": a.get("systems", systems)} for a in d["launch"]]
+    if img is not None:
+        r["items"] = disk_contents.items(img, r["systems"], d["tags"], d.get("launch", []))
     return r
 
 
@@ -280,6 +287,7 @@ def make_cd(cd, images, out, force):
     rec = {k: r[k] for k in ("title", "tags", "note", "magazine", "issue", "date", "publisher", "contents")}
     rec.update({"label": r["volume"], "cover": cover, "source": r["source"],
                 "made_by": "tools/web/make_library.py"})
+    rec["items"] = disk_contents.items(img, tags=r["tags"], cd=True)
     new = json.dumps(rec, indent=1, ensure_ascii=False) + "\n"
     p = out / (cd["name"] + ".json")
     if not p.exists() or p.read_text() != new:
@@ -306,13 +314,13 @@ def main():
         if missing:
             sys.exit(f"{d['name']}: no {', '.join(map(str, missing))} (provisioning/build.py makes it)")
         rec = out / (d["name"] + ".json")
-        new = json.dumps(record(d), indent=1, ensure_ascii=False) + "\n"
         stale = (args.force or not img.exists()
                  or any(s.stat().st_mtime > img.stat().st_mtime for s in srcs))
         if stale:
             make(d, images, out)
         else:
             print(f"{img}: up to date")
+        new = json.dumps(record(d, img), indent=1, ensure_ascii=False) + "\n"
         if not rec.exists() or rec.read_text() != new:
             rec.write_text(new)
 
