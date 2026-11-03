@@ -1,7 +1,7 @@
 # wash-plan: written by Wash as the plan changes.
 # Edit it only between workspaces; plan_set {"from": "<this file>"} loads it.
 
-revision = 96
+revision = 106
 
 [[node]]
   id = "cuts"
@@ -577,8 +577,8 @@ revision = 96
   emoji = "🔎"
   template = "package"
   body = "Owner 2026-11-03: scan/audit all files on a disk for alias correctness and icon location / scrollbar sensibility. A host-side tool (tools/macdecode or Executor's HFS/HFS+ readers via a small CLI; no emulator) over an image: every 'alis' (alias files, Apple Menu Items, Startup Items, Launcher) resolves on that image or the images it's shipped with (volume name, dirID/name chain); Finder info: icon locations inside their window's view, no overlaps, not at (0,0) piles; folder window frames (DInfo frRect) on a 640x480 screen and scroll positions within content; invisible/stray files (Desktop DB/DF, Icon\\r). Report per image (Markdown), run over ~/storage/web-library and provisioning/images outputs; optionally a provisioning/build.py 'tidy' step that fixes what it can (clean-up arrangement, drop dangling aliases) with the owner's OK. ctest on a fixture image."
-  state = "active"
-  revision = 94
+  state = "done"
+  revision = 102
 
 [[node]]
   id = "fix-86-8"
@@ -589,3 +589,12 @@ revision = 96
   body = "Owner testing :8090 (69460445), 8.6 in the tab at 2x (Firefox/Windows); screenshots + logs in ~/storage/tmp/standalone-try/data/logs/2026-11-03 (read only), session mw065k3u-b466ec26a7cc9995: (1) 041032 'tab titles': ColorSync control panel's tab titles clipped ('rofiles', 'CMMs', 'About' cut at their left). (2) 041047 'alias missing': Apple menu 'Apple FM Radio' alias -> 'original item cannot be found' (the cut System lacks its target? then the cut should drop the alias). (3) 041312 'strange graphics issue' + 041319 'locked up': MacBench 5.0 splash over its window; desktop disk icons drawn as grey checker shapes (Utilities, executor, Host, Macintosh HD, Internet) and Internet listed twice; then Executor stopped answering (log: CFM unresolved imports InstallExceptionHandler, GetPhysical just before). (4) Finder: click-drag to rearrange icons doesn't work. (5) session mw0332ji 033737: Serial MReader's 'Cancel' button drawn as a white-on-grey ghost at 850,413. Compare each with the G3 under 8.6."
   state = "active"
   revision = 91
+
+[[node]]
+  id = "disk-tidy"
+  title = "Library disks tidied: cuts drop dangling aliases, icons and folder windows placed, boot-8.6 rebuilt clean"
+  emoji = "🧹"
+  template = "package"
+  body = "Owner decisions 2026-11-03 on the disk audit (tools/diskaudit, report ~/storage/tmp/disk-audit/report.md): (1) make_boot_disk.py drops aliases whose targets the cut removes (8.6: Apple FM Radio, AppleCD Audio Player, Automated Tasks, Launcher Items:Script Editor, Recent Applications items; 7.6.1: Apple Video Player, AppleCD Audio Player, Automated Tasks, Script Editor); Recent Applications/Documents/Servers emptied in cuts. (2) A tidy step in make_boot_disk.py/make_library.py (and provisioning build where shared) places every root and folder icon on a grid inside its window and gives each folder window a sensible frame on 640x480 with scroll origin 0,0; Desktop Folder/Trash invisible as on a real disk. (3) Rebuild boot-7.6.1, boot-8.6 and every library image clean into a scratch library; the audit reports nothing; then the orchestrator installs them into ~/storage/web-library, backing up the owner's overlays first (owner OK'd dropping their boot-8.6 changes)."
+  state = "done"
+  revision = 106
