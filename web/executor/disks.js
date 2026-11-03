@@ -246,7 +246,8 @@ const Disks = (() => {
         table.append(cols, thead, tbody);
         function drawRows() {
             for (const th of head.children)
-                th.setAttribute('aria-sort', th.dataset.key === sort.key ? (sort.up ? 'ascending' : 'descending') : 'none');
+                if (th.tabIndex >= 0)           // the sortable headers only
+                    th.setAttribute('aria-sort', th.dataset.key === sort.key ? (sort.up ? 'ascending' : 'descending') : 'none');
             const words = filter.toLowerCase().split(/\s+/).filter(Boolean);
             const col = COLUMNS.find((c) => c.key === sort.key) || COLUMNS[0];
             const shown = lib.filter((d) => [...tags].every((t) => (d.tags || []).includes(t))
