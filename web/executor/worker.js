@@ -62,10 +62,10 @@ self.Module = {
         postMessage({ type: 'cursor', data, mask, hotX, hotY, visible });
     },
     // The emulator thread's busy share (0..1), each half second
-    // (web_main.cpp js_cpu): the page's CPU meter.
-    onCpu(busy) {
+    // (web_main.cpp js_cpu), and the memory estimate: the page's meters.
+    onCpu(busy, ram) {
         Module.stats.cpu = busy;
-        postMessage({ type: 'cpu', busy });
+        postMessage({ type: 'cpu', busy, memory: memoryUse(ram) });
     },
     // 48 kHz big-endian 16-bit stereo -> interleaved floats for the page.
     onAudio(bytes) {
@@ -225,6 +225,34 @@ importScripts('executor-web.js');
 // main, saved with its manifest (every folder, every file's size, time
 // and SHA-256; sync.js, Store).
 const VOLUME = '/executor';
+
+// What Executor holds, in bytes (the bar's memory meter; an estimate): the
+// module's heap (the Mac's RAM, given, is in it), the disk images' chunks
+// read from the server (RemoteImage) and their changes (Overlay), and the
+// files in its volume (MEMFS: each file's buffer). Not counted: the
+// browser's own (the page, the Worker's JavaScript, uploaded Files).
+function memfsBytes(node) {
+    if (!node)
+        return 0;
+    if (FS.isDir(node.mode))
+        return Object.values(node.contents || {}).reduce((n, c) => n + memfsBytes(c), 0);
+    return node.contents && node.contents.byteLength || 0;
+}
+function memoryUse(ram) {
+    const heap = HEAP8.buffer.byteLength;
+    let caches = 0, changes = 0;
+    for (const o of overlays) {
+        if (o.image instanceof RemoteImage)
+            for (const c of o.image.memory.values())
+                caches += c.byteLength;
+        changes += o.data.bytes.byteLength;
+    }
+    let volume = 0;
+    try {
+        volume = memfsBytes(FS.lookupPath(VOLUME).node);
+    } catch (e) { }
+    return { heap, ram, caches, changes, volume, total: heap + caches + changes + volume };
+}
 // Not kept: System 7.5's "Shutdown Check", which it makes at startup and
 // deletes at Shut Down; a tab never shuts down, and restored it would
 // bring up the improper-shutdown alert.

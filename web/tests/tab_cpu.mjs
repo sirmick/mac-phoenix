@@ -6,7 +6,8 @@
 // LIBRARY tools/web/make_library.py's output, with boot-7.6.1.img and
 // games-68k.img (skips, 77, without them). Checks: the meter hidden while
 // the tab loads; shown once the Mac is up, low at the idle Finder; high
-// while a game runs (it doesn't wait for events); its % and tooltip.
+// while a game runs (it doesn't wait for events); its % and tooltip;
+// the memory beside it (the parts adding up, the Mac's RAM in the heap).
 // CPU_APP=Name: the game (default SimEarth Color: its simulation runs on;
 // Maelstrom's title screen waits). The top bar as it is: DIR/tab_cpu_bar.png.
 import fs from 'node:fs';
@@ -40,6 +41,8 @@ const check = (ok, what) => {
 const meter = () => page.evaluate(() => ({
     hidden: document.getElementById('cpu').hidden,
     pct: document.getElementById('cpu-pct').textContent,
+    mem: document.getElementById('mem').textContent,
+    memTitle: document.getElementById('mem').title,
     title: document.getElementById('cpu').title,
     frames: window.executor.frames,
     cpu: window.executor.cpu,
@@ -73,6 +76,17 @@ try {
     check(idle < 0.3, 'low at the idle Finder');
     check(/^\d+%$/.test(m.pct), `its % (${m.pct})`);
     check(/Mac CPU busy/.test(m.title), 'its tooltip');
+    // Memory beside it: the parts add up, the Mac's RAM in the heap (MemTop:
+    // most of the 128 MB on Apple's System), the library disks' pieces cached, the System
+    // Folder in Executor's volume.
+    const u = m.cpu.memory, mb = (n) => Math.round(n / (1 << 20));
+    console.log(`memory: ${m.mem} (heap ${mb(u.heap)}, RAM ${mb(u.ram)}, caches ${mb(u.caches)}, changes ${mb(u.changes)}, volume ${mb(u.volume)} MB)`);
+    check(/^\d+ MB$|^\d+\.\d GB$/.test(m.mem), `its memory (${m.mem})`);
+    check(u.total === u.heap + u.caches + u.changes + u.volume, 'the parts add up');
+    check(u.ram > 100 << 20 && u.ram <= 128 << 20 && u.heap > u.ram, "the Mac's RAM (MemTop, of 128 MB) inside the heap");
+    check(u.caches > 0 && u.volume > 0, 'disk caches and the volume counted');
+    check(/Mac's RAM/.test(m.memTitle) && /disk caches/.test(m.memTitle) && /Executor's volume/.test(m.memTitle)
+          && /estimate/.test(m.memTitle), 'the memory tooltip: the parts, an estimate');
 
     const err = await request(page, 'launch', game.app, 60000);
     check(err === 0 || err === '0', `${game.name} launched (${err})`);

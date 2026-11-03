@@ -117,6 +117,15 @@ request `cpu`. The idle Finder reads a few %, a game running on 100%
 (`executor.web.cpu`). Natively the same number is `/api/status`'s
 `cpu_busy`.
 
+Beside it, Executor's memory (an estimate, worker.js `memoryUse`, with
+each CPU sample): the module's heap (`HEAP8.buffer`, the Mac's RAM in it:
+MemTop, from the module), the library disks' pieces read from the server
+(`RemoteImage` chunks), the disks' changes (`Overlay` data) and Executor's
+volume (`/executor` in MEMFS: the files' buffers). The tooltip gives the
+parts; the browser's own memory (the page, its scripts, uploaded files) is
+not counted. On 7.6.1 with the games disk: about 320 MB (heap 256, of it
+RAM 126; caches 44; volume 20).
+
 ## Not yet
 
 - Disks: the overlays' revert and download are in the Disks panel

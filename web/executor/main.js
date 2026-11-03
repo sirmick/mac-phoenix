@@ -68,7 +68,7 @@ window.executor = {
     audioFrames: 0,     // 20 ms frames of sound received
     cursor: null,       // the guest's last cursor message
     stopped: null,      // why Executor stopped, when an error stopped it
-    cpu: null,          // the CPU meter: { busy (0..1, the last half second), history }
+    cpu: null,          // the CPU meter: { busy (0..1, the last half second), history, memory (worker.js memoryUse) }
     request(op, arg = '') {
         if (!worker)
             return Promise.resolve({ error: 'not running' });   // between Workers
@@ -82,11 +82,22 @@ window.executor = {
 
 // ---- the CPU meter in the top bar: the emulator thread's busy share
 // (the time it isn't waiting for events: hostidle::busy), each half second
-// from the Worker; a sparkline of the last 30 and the latest as a %.
-// Hidden until the first frame and when Executor stops.
+// from the Worker; a sparkline of the last 30 and the latest as a %. Beside
+// it Executor's memory, an estimate (worker.js memoryUse), its parts in the
+// tooltip. Hidden until the first frame and when Executor stops.
+const MB = (n) => (n >= 1 << 30 ? `${(n / (1 << 30)).toFixed(1)} GB` : `${Math.round(n / (1 << 20))} MB`);
+function memoryTip(m) {
+    return [`Executor's memory: about ${MB(m.total)}`,
+            `• the module's heap: ${MB(m.heap)} (WebAssembly memory: Executor, its caches, and the Mac's RAM, ${MB(m.ram)})`,
+            `• disk caches: ${MB(m.caches)} (library disks' pieces read from the server)`,
+            `• disk changes: ${MB(m.changes)} (what the Mac wrote to its disks, kept here)`,
+            `• Executor's volume: ${MB(m.volume)} (its System Folder and files, in memory; estimated from the files' buffers)`,
+            'Not counted: the browser\'s own (the page, its scripts, uploaded files), so the total is an estimate.'].join('\n');
+}
 const CpuMeter = (() => {
     const el = document.getElementById('cpu');
     const pct = document.getElementById('cpu-pct');
+    const mem = document.getElementById('mem');
     const ctx = el.querySelector('canvas').getContext('2d');
     const N = 30, history = [];
     function draw() {
@@ -102,12 +113,16 @@ const CpuMeter = (() => {
         });
     }
     return {
-        add(busy) {
+        add(busy, memory) {
             history.push(busy);
             if (history.length > N)
                 history.shift();
             pct.textContent = `${Math.round(busy * 100)}%`;
-            window.executor.cpu = { busy, history: [...history] };
+            if (memory) {
+                mem.textContent = MB(memory.total);
+                mem.title = memoryTip(memory);
+            }
+            window.executor.cpu = { busy, history: [...history], memory };
             el.hidden = false;
             draw();
         },
@@ -912,7 +927,7 @@ async function start() {
             }
         } else if (m.type === 'cpu') {
             if (window.executor.frames > 0 && !window.executor.stopped)
-                CpuMeter.add(m.busy);
+                CpuMeter.add(m.busy, m.memory);
         } else if (m.type === 'images') {
             const before = JSON.stringify(imageState);
             for (const i of m.images)

@@ -24,6 +24,7 @@
   #cpu[hidden] { display: none; }
   #cpu canvas { display: block; }
   #cpu-pct { min-width: 3.2em; text-align: right; color: #eee; }
+  #mem { border-left: 1px solid #666; padding-left: 6px; color: #eee; }
   #status.lost { background: #543; color: #fda; border-radius: 4px; padding: 4px 10px; }
   /* Sized by main.js: a whole number of device pixels a guest pixel. */
   canvas { background: #000; image-rendering: pixelated; outline: none; }
@@ -58,7 +59,7 @@
   <label title="Run fat applications' PowerPC code (PowerPC-only ones always do)"><input id="ppc" type="checkbox">PowerPC</label>
   <button id="restart">Restart</button>
   <button id="shot" title="Send a picture of the screen to the server, for a look later (with what this page printed)">Screenshot</button>
-  <span id="cpu" hidden title="Mac CPU busy: how much of the last half second the emulated Mac spent working rather than waiting for events (the last 15 seconds drawn)"><canvas width="60" height="14"></canvas><span id="cpu-pct"></span></span>
+  <span id="cpu" hidden title="Mac CPU busy: how much of the last half second the emulated Mac spent working rather than waiting for events (the last 15 seconds drawn)"><canvas width="60" height="14"></canvas><span id="cpu-pct"></span><span id="mem"></span></span>
 </div>
 <div id="viewer" hidden>Executor is open in another tab, which has control: its screen, here.
   <button id="take">Take control</button></div>
