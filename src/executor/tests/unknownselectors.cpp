@@ -97,3 +97,16 @@ TEST_F(UnknownSelector, TranslationDispatchSelector20)
     uint32_t d1 = run({ 0x554F, 0x4267, 0x4857, 0x4857, 0x7020, 0xABFC, 0x321F });
     EXPECT_EQ(0xF42F, d1 & 0xFFFF) << "noTranslationPathErr";
 }
+
+/* movea.l #pb,a0; moveq #1,d0; _A08E; move.w d0,d1 -- the System's
+   B*-tree trap, which 8.6's Navigation Services calls unchecked (BBEdit
+   Lite 6.1's Save): paramErr, in D0 and ioResult */
+TEST_F(UnknownSelector, BTreeTrapA08E)
+{
+    Ptr pb = NewPtrClear(80);
+    uint32_t a = ptr_to_longint(pb);
+    uint32_t d1 = run({ 0x207C, (uint16_t)(a >> 16), (uint16_t)a, 0x7001, 0xA08E, 0x3200 });
+    EXPECT_EQ(0xFFCE, d1 & 0xFFFF) << "paramErr";
+    EXPECT_EQ(0xFFCE, READUW(a + 0x10)) << "ioResult";
+    DisposePtr(pb);
+}
