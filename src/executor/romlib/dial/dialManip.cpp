@@ -7,11 +7,13 @@
 #include <base/common.h>
 
 #include <ControlMgr.h>
+#include <ControlMgr8.h>
 #include <DialogMgr.h>
 #include <OSUtil.h>
 #include <MemoryMgr.h>
 
 #include <dial/itm.h>
+#include <dial/dial.h>
 #include <wind/wind.h>
 #include <ctl/ctl.h>
 #include <quickdraw/cquick.h>
@@ -264,9 +266,29 @@ void Executor::C_SetDialogItem(DialogPtr dp, INTEGER itemno, INTEGER itype,
 
     if(ip)
     {
+        /* MacPhoenix: the item's own control as its handle (Navigation
+           Services' static text): the item keeps its text, as 8.x
+           (appr dlgitems.setctl) */
+        if(item && item == (Handle)ROMlib_dialog_item_control(dp, itemno))
+            item = ip->itmhand;
         ip->itmtype = itype;
         ip->itmhand = item;
         ip->itmr = *r;
+        /* MacPhoenix: with the control hierarchy (8.x), a control item's
+           control goes where its item goes (appr dlgitems.set; Navigation
+           Services lays its dialogs out this way) */
+        ROMlib_dialog_item_control_sync(dp, itemno, r);
+        GUEST<ControlHandle> root;
+        if((itype & ctrlItem) && item && GetRootControl(dp, &root) == noErr)
+        {
+            ControlHandle ctl = (ControlHandle)item;
+            Rect old = CTL_RECT(ctl);
+            if(old.top != r->top || old.left != r->left)
+                MoveControl(ctl, r->left, r->top);
+            if(old.bottom - old.top != r->bottom - r->top
+               || old.right - old.left != r->right - r->left)
+                SizeControl(ctl, r->right - r->left, r->bottom - r->top);
+        }
         if(itemno - 1 == DIALOG_EDIT_FIELD(dp)
            && (itype & editText)
            && !(itype & itemDisable))
@@ -411,6 +433,7 @@ void Executor::C_HideDialogItem(DialogPtr dp, INTEGER item) /* IMIV-59 */
         r = ip->itmr;
         ip->itmr.left = ip->itmr.left + 16384;
         ip->itmr.right = ip->itmr.right + 16384;
+        ROMlib_dialog_item_control_sync(dp, item, &ip->itmr);
         if(ip->itmtype & editText)
         {
             InsetRect(&r, -3, -3);
@@ -454,6 +477,7 @@ void Executor::C_ShowDialogItem(DialogPtr dp, INTEGER item) /* IMIV-59 */
     {
         ip->itmr.left = ip->itmr.left - 16384;
         ip->itmr.right = ip->itmr.right - 16384;
+        ROMlib_dialog_item_control_sync(dp, item, &ip->itmr);
         r = ip->itmr;
         if(ip->itmtype & editText)
         {

@@ -70,6 +70,10 @@ using ctlfuncp = UPP<LONGINT (INTEGER var, ControlHandle ctl, INTEGER mess, LONG
 extern LONGINT ROMlib_ctlcall(ControlHandle c, INTEGER i, LONGINT l);
 extern ControlHandle ROMlib_new_control_at(INTEGER cid, WindowPtr wst,
                                            const Point *topleft);
+extern ControlHandle ROMlib_new_control_with_def(WindowPtr wst, const Rect *r, ConstStringPtr title,
+                                                 Boolean vis, INTEGER value, INTEGER min,
+                                                 INTEGER max, INTEGER procid, Handle defproc,
+                                                 LONGINT rc);
 #define CTLCALL(c, i, l) ROMlib_ctlcall((c), (i), (l))
 
 /* MacPhoenix: the Control Manager of Mac OS 8 (ctlMgr8.cpp): embedding,

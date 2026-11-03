@@ -615,7 +615,10 @@ void Executor::C_DrawDialog(DialogPtr dp) /* IMI-418 */
         ip = (itmp)(intp + 1);
         for(i = *intp, inum = 1; i-- >= 0; inum++, BUMPIP(ip))
         {
-            dialog_draw_item(dp, ip, inum);
+            /* MacPhoenix: an item with a control of its own (the control
+               hierarchy) was drawn with the controls */
+            if(!ROMlib_dialog_item_control(dp, inum))
+                dialog_draw_item(dp, ip, inum);
         }
         if(((DialogPeek)dp)->editField != -1)
             TEActivate(((DialogPeek)dp)->textH);
@@ -656,7 +659,7 @@ void Executor::C_UpdateDialog(DialogPtr dp, RgnHandle rgn) /* IMIV-60 */
     ip = (itmp)(intp + 1);
     for(i = *intp, inum = 1; i-- >= 0; inum++, BUMPIP(ip))
     {
-        if(RectInRgn(&ip->itmr, rgn))
+        if(RectInRgn(&ip->itmr, rgn) && !ROMlib_dialog_item_control(dp, inum))
         {
             dialog_draw_item(dp, ip, inum);
         }

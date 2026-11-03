@@ -18,12 +18,21 @@
 #include <Appearance.h>
 #include <dial/itm.h>
 #include <dial/dial.h>
+#include <ctl/ctl.h>
+#include <textedit/textedit.h>
 #include <quickdraw/cquick.h>
 #include <base/functions.impl.h>
+#include <base/traps.impl.h>
+#include <algorithm>
 #include <map>
 #include <vector>
 
 using namespace Executor;
+
+namespace Executor
+{
+PASCAL_FUNCTION_PTR(ROMlib_cdef_dialog_item);
+}
 
 namespace
 {
@@ -40,6 +49,15 @@ std::map<DialogPtr, DialogExtras>& extrasTable()
     static std::map<DialogPtr, DialogExtras> table;
     return table;
 }
+
+/* the controls standing for the items that are no controls, by item */
+std::map<DialogPtr, std::vector<ControlHandle>>& itemControlsTable()
+{
+    static std::map<DialogPtr, std::vector<ControlHandle>> table;
+    return table;
+}
+
+constexpr INTEGER kControlUserPaneProc = 256;
 
 /* A DITL built in memory: items appended one by one. */
 class ItemList
@@ -123,6 +141,139 @@ ConstStringPtr buttonText(ConstStringPtr text, ConstStringPtr standard)
 void Executor::ROMlib_dialog8_forget(DialogPtr dialog)
 {
     extrasTable().erase(dialog);
+    itemControlsTable().erase(dialog);
+}
+
+/* The control hierarchy (kDialogFlagsUseControlHierarchy): on 8.x every
+   item is a control in the root control, static and edit text, icons,
+   pictures and user items too (appr dlgitems). Executor's Dialog Manager
+   draws and edits those items itself; each gets a control whose
+   definition draws the item, so that a dialog drawn through its controls
+   (Navigation Services': DrawControls, Draw1Control on the root, never
+   DrawDialog) shows them, and GetDialogItemAsControl, SetDialogItem &c.
+   find a control. The control takes no clicks: DialogSelect has them. */
+int32_t Executor::C_ROMlib_cdef_dialog_item(int16_t var, ControlHandle c, int16_t mess,
+                                           int32_t param)
+{
+    switch(mess)
+    {
+        case drawCntl:
+        {
+            if(!CTL_VIS(c))
+                break;
+            DialogPtr dp = CTL_OWNER(c);
+            auto it = itemControlsTable().find(dp);
+            if(it == itemControlsTable().end())
+                break;
+            auto &v = it->second;
+            auto pos = std::find(v.begin(), v.end(), c);
+            if(pos == v.end())
+                break;
+            int item = pos - v.begin() + 1;
+            SignedByte flags;
+            itmp ip = ROMlib_dpnotoip((DialogPeek)dp, item, &flags);
+            if(ip && ip->itmr.left < 8192)
+            {
+                ThePortGuard guard(dp);
+                dialog_draw_item(dp, ip, item);
+                if((ip->itmtype & editText) && item - 1 == DIALOG_EDIT_FIELD(dp))
+                {
+                    Rect r = ip->itmr;
+                    TEUpdate(&r, DIALOG_TEXTH(dp));
+                }
+            }
+            HSetState(DIALOG_ITEMS(dp), flags);
+            break;
+        }
+        case calcCntlRgn:
+        case calcThumbRgn:
+            if(mess == calcCntlRgn)
+                RectRgn(ptr_from_longint<RgnHandle>(param), &CTL_RECT(c));
+            else
+                SetEmptyRgn(ptr_from_longint<RgnHandle>(param));
+            break;
+        case calcCRgns: /* the high bit asks for the indicator: none */
+            if(!(param & 0x80000000))
+                RectRgn(ptr_from_longint<RgnHandle>(param), &CTL_RECT(c));
+            else
+                SetEmptyRgn(ptr_from_longint<RgnHandle>(param & 0x7FFFFFFF));
+            break;
+    }
+    return 0;
+}
+
+namespace
+{
+/* JMP to the definition above: the code a control's defproc handle holds */
+Handle itemControlDef()
+{
+    static Handle def;
+    static GUEST<THz> zone;
+    if(!def || zone != LM(SysZone))
+    {
+        TheZoneGuard guard(LM(SysZone));
+        def = NewHandle(6);
+        zone = LM(SysZone);
+        uint32_t target = guest_cast<uint32_t>(&ROMlib_cdef_dialog_item);
+        uint8_t code[6] = { 0x4E, 0xF9, (uint8_t)(target >> 24), (uint8_t)(target >> 16),
+                            (uint8_t)(target >> 8), (uint8_t)target };
+        memcpy(*def, code, 6);
+    }
+    return def;
+}
+}
+
+void Executor::ROMlib_dialog_item_controls(DialogPtr dp)
+{
+    GUEST<ControlHandle> root;
+    if(!dp || GetRootControl(dp, &root) != noErr)
+        return;
+    int count = CountDITL(dp);
+    auto &v = itemControlsTable()[dp];
+    v.resize(count);
+    for(int item = 1; item <= count; item++)
+    {
+        GUEST<INTEGER> type;
+        GUEST<Handle> h;
+        Rect r;
+        if(v[item - 1])
+            continue;
+        GetDialogItem(dp, item, &type, &h, &r);
+        if((INTEGER)type & ctrlItem)
+            continue;
+        v[item - 1] = ROMlib_new_control_with_def(dp, &r, (StringPtr) "", true, 0, 0, 0,
+                                                  kControlUserPaneProc, itemControlDef(), 0);
+    }
+}
+
+void Executor::ROMlib_dialog_item_controls_shorten(DialogPtr dp, int count)
+{
+    auto it = itemControlsTable().find(dp);
+    if(it == itemControlsTable().end())
+        return;
+    auto &v = it->second;
+    while((int)v.size() > count)
+    {
+        ControlHandle c = v.back();
+        v.pop_back();
+        if(c)
+            DisposeControl(c);
+    }
+}
+
+ControlHandle Executor::ROMlib_dialog_item_control(DialogPtr dp, int item)
+{
+    auto it = itemControlsTable().find(dp);
+    if(it == itemControlsTable().end() || item < 1 || item > (int)it->second.size())
+        return nullptr;
+    return it->second[item - 1];
+}
+
+/* the item's rectangle moved (SetDialogItem, HideDialogItem, ...) */
+void Executor::ROMlib_dialog_item_control_sync(DialogPtr dp, int item, const Rect *r)
+{
+    if(ControlHandle c = ROMlib_dialog_item_control(dp, item))
+        CTL_RECT(c) = *r;
 }
 
 OSErr Executor::C_StandardAlert(AlertType inAlertType, ConstStr255Param inError,
@@ -245,7 +396,10 @@ DialogPtr Executor::C_NewFeaturesDialog(void *inStorage, const Rect *inBoundsRec
     /* The item controls go into a root control (CreateRootControl embeds
        the window's controls). */
     if(inFlags & kDialogFlagsUseControlHierarchy)
+    {
         CreateRootControl(dlg, nullptr);
+        ROMlib_dialog_item_controls(dlg);
+    }
     if(inFlags & kDialogFlagsUseThemeBackground)
         SetThemeWindowBackground(dlg, kThemeBrushDialogBackgroundActive, false);
     if(inIsVisible)
@@ -268,12 +422,14 @@ OSErr Executor::C_GetDialogItemAsControl(DialogRef inDialog, SInt16 inItemNo,
     GUEST<Handle> h;
     Rect r;
     GetDialogItem(inDialog, inItemNo, &type, &h, &r);
-    if(!((INTEGER)type & ctrlItem) || !h)
+    ControlHandle c = ((INTEGER)type & ctrlItem) ? (ControlHandle)h.get()
+                                                 : ROMlib_dialog_item_control(inDialog, inItemNo);
+    if(!c)
     {
         *outControl = nullptr;
         return errItemNotControl;
     }
-    *outControl = (ControlHandle)h.get();
+    *outControl = c;
     return noErr;
 }
 

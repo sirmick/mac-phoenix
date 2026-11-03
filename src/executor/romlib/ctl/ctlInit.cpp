@@ -23,20 +23,27 @@ ControlHandle Executor::C_NewControl(WindowPtr wst, const Rect *r, ConstStringPt
                                      INTEGER max, INTEGER procid,
                                      LONGINT rc) /* IMI-319 */
 {
+    Handle defproc = GetResource("CDEF"_4, procid >> 4);
+    if(!defproc)
+        return nullptr;
+    return ROMlib_new_control_with_def(wst, r, title, vis, value, min, max, procid, defproc, rc);
+}
+
+/* MacPhoenix: NewControl with a definition that is no CDEF resource
+   (the Dialog Manager's item controls, dialMgr8.cpp). */
+ControlHandle Executor::ROMlib_new_control_with_def(WindowPtr wst, const Rect *r, ConstStringPtr title,
+                                                    Boolean vis, INTEGER value, INTEGER min,
+                                                    INTEGER max, INTEGER procid, Handle defproc,
+                                                    LONGINT rc)
+{
     ControlHandle retval;
     GrafPtr gp;
     AuxCtlHandle tmp, auxctlhead;
-    GUEST<Handle> temph;
 
     retval = (ControlHandle)NewHandle((Size)sizeof(ControlRecord));
     if(!retval) /* MacPhoenix: no memory, no control */
         return nullptr;
-    temph = GetResource("CDEF"_4, procid >> 4);
-    if(!((*retval)->contrlDefProc = temph))
-    {
-        DisposeHandle((Handle)retval);
-        return 0;
-    }
+    (*retval)->contrlDefProc = defproc;
 
     if(!title)
         title = (StringPtr) ""; /* nothing ("\p" == "") */

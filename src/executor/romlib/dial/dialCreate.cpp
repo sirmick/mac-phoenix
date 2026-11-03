@@ -24,6 +24,7 @@
 #include <textedit/textedit.h>
 #include <Appearance.h>
 #include <DialogMgr8.h>
+#include <ControlMgr8.h>
 #include <prefs/prefs.h>
 
 using namespace Executor;
@@ -412,6 +413,14 @@ DialogPtr Executor::C_GetNewDialog(INTEGER id, void* dst,
 
     if(retval && theme_p)
         SetThemeWindowBackground(retval, kThemeBrushDialogBackgroundActive, true);
+    /* ... and one asking for the control hierarchy has its item controls in
+       a root control (appr dlgitems; Navigation Services' dialogs) */
+    if(retval && system_version >= 0x800 && dlgx && GetHandleSize(dlgx) >= 6
+       && (*(GUEST<uint32_t> *)(*dlgx + 2) & kDialogFlagsUseControlHierarchy))
+    {
+        CreateRootControl(retval, nullptr);
+        ROMlib_dialog_item_controls(retval);
+    }
     return retval;
 }
 
