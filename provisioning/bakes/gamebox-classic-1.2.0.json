@@ -1,0 +1,12 @@
+{
+ "note": "GameBox Classic 1.2.0 (Manticore Software, 2026; Mac OS 8-9.2.2, PowerPC, free): a game-library manager, expanded by StuffIt Expander in the guest",
+ "kind": "expand",
+ "archive": "GameBox-classic-latest.hqx",
+ "expect": [
+  "GameBox Classic"
+ ],
+ "launch": [
+  "GameBox Classic:GameBox"
+ ],
+ "os": "tools-8.6"
+}
