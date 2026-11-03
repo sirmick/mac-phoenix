@@ -8,6 +8,7 @@
 #include <sound/soundopts.h>
 #include <rsys/executor.h>
 #include <rsys/helppkg.h>
+#include <base/traps.h>
 
 using namespace Executor;
 
@@ -66,6 +67,17 @@ RAW_68K_IMPLEMENTATION(bad_trap_unimplemented)
         }
     }
     strcat(buf, "].");
+    /* MacPhoenix: the log says where from (a patch chaining to the address
+       GetTrapAddress gave it for a trap Executor lacks) */
+    {
+        char what[256];
+        snprintf(what, sizeof what,
+                 "jumped to the unimplemented-trap address: top of stack $%08x, "
+                 "last trap $%04x, traps whose address was taken [%s",
+                 (unsigned)READUL(EM_A7), (unsigned)mostrecenttrap,
+                 strchr(buf, '[') + 1);
+        traps::log_unimplemented(what);
+    }
     system_error(buf, 0,
                     "Restart", nullptr, nullptr,
                     nullptr, nullptr, nullptr);

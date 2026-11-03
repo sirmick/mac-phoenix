@@ -564,7 +564,7 @@ set(misc_sources
   stdfile.cpp stdfilepkg.cpp romlib_stubs.cpp  toolevent.cpp toolutil.cpp 
    aboutbox.cpp
   version.cpp shutdown.cpp screen-dump.cpp
-  process.cpp alias.cpp edition.cpp  balloon.cpp
+  process.cpp alias.cpp cursordev.cpp edition.cpp  balloon.cpp
    adb.cpp color_wheel_bits.cpp finder.cpp  
   icon.cpp redrawscreen.cpp quicktime.cpp
   commtool.cpp cfm.cpp cfm68k_glue.cpp pef_hash.cpp

@@ -324,6 +324,38 @@ OSErr Executor::C_FindFolder(int16_t vRefNum, OSType folderType,
     return retval;
 }
 
+/* MacPhoenix: the Folder Manager's notification procedures (9.0). A Mac
+   calls them when Multiple Users logs a user in or out and the special
+   folders move; there are no users here, so they are kept and never
+   called. */
+namespace
+{
+std::vector<std::pair<FolderManagerNotificationUPP, void *>> folder_notification_procs;
+}
+
+OSErr Executor::C_FolderManagerRegisterNotificationProc(
+    FolderManagerNotificationUPP notificationProc, void *refCon, UInt32 options)
+{
+    (void)options;
+    if(!notificationProc)
+        return paramErr;
+    folder_notification_procs.emplace_back(notificationProc, refCon);
+    return noErr;
+}
+
+OSErr Executor::C_FolderManagerUnregisterNotificationProc(
+    FolderManagerNotificationUPP notificationProc, void *refCon)
+{
+    auto &procs = folder_notification_procs;
+    auto it = std::find_if(procs.begin(), procs.end(), [&](const auto &p) {
+        return p.first == notificationProc && p.second == refCon;
+    });
+    if(it == procs.end())
+        return paramErr;
+    procs.erase(it);
+    return noErr;
+}
+
 namespace
 {
 OSErr build_alias(const FSSpec *fromFile, const FSSpec *target, std::vector<uint8_t> &rec);

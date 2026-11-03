@@ -63,7 +63,9 @@
 - dispatcher:
     name: AliasDispatch
     trap: 0xA823
-    selector-location: D0W
+    # The low byte: Folders.h's glue has the argument size in the high
+    # byte (0x062F), 9.0.4's Apple Menu Options calls with moveq #$2F.
+    selector-location: D0<0xFF>
 
 # ####
 
@@ -131,6 +133,51 @@
         type: StringPtr
     dispatcher: AliasDispatch
     selector: 0x000E
+    executor: C_
+
+# ####
+
+- funptr:
+    return: OSStatus
+    args:
+      - name: message
+        type: OSType
+      - name: arg
+        type: void*
+      - name: userRefCon
+        type: void*
+    name: FolderManagerNotificationUPP
+
+# ####
+
+# Folders.h, InterfaceLib 9.0. 9.0.4's Apple Menu Options INIT registers
+# one at startup.
+- function:
+    name: FolderManagerRegisterNotificationProc
+    return: OSErr
+    args:
+      - name: notificationProc
+        type: FolderManagerNotificationUPP
+      - name: refCon
+        type: void*
+      - name: options
+        type: UInt32
+    dispatcher: AliasDispatch
+    selector: 0x062F
+    executor: C_
+
+# ####
+
+- function:
+    name: FolderManagerUnregisterNotificationProc
+    return: OSErr
+    args:
+      - name: notificationProc
+        type: FolderManagerNotificationUPP
+      - name: refCon
+        type: void*
+    dispatcher: AliasDispatch
+    selector: 0x0430
     executor: C_
 
 # ####

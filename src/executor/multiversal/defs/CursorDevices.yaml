@@ -1,0 +1,682 @@
+# The Cursor Device Manager (CursorDevices.h): pointing devices as
+# records the Mouse control panel (9.0.4's INIT sets the double-click time
+# and acceleration through it) and games (Marathon 2's CrsrDevMoveTo,
+# CrsrDevNextDevice) use. One device, the mouse (romlib/cursordev.cpp).
+
+- struct:
+    name: CursorData
+
+# ####
+
+- struct:
+    name: CursorDevice
+    members:
+      - name: nextCursorDevice
+        type: CursorDevice*
+      - name: whichCursor
+        type: CursorData*
+      - name: refCon
+        type: int32_t
+      - name: unused
+        type: int32_t
+      - name: devID
+        type: OSType
+      - name: resolution
+        type: Fixed
+      - name: devClass
+        type: UInt8
+      - name: cntButtons
+        type: UInt8
+      - name: filler1
+        type: UInt8
+      - name: buttons
+        type: UInt8
+      - name: buttonOp
+        type: UInt8[8]
+      - name: buttonTicks
+        type: uint32_t[8]
+      - name: buttonData
+        type: int32_t[8]
+      - name: doubleClickTime
+        type: uint32_t
+      - name: acceleration
+        type: Fixed
+      - name: privateFields
+        type: short[15]
+    size: 138
+
+# ####
+
+- typedef:
+    name: CursorDevicePtr
+    type: CursorDevice*
+
+# ####
+
+- typedef:
+    name: ButtonOpcode
+    type: short
+
+# ####
+
+- enum:
+    values:
+      - name: kButtonNoOp
+        value: 0
+      - name: kButtonSingleClick
+        value: 1
+      - name: kButtonDoubleClick
+        value: 2
+      - name: kButtonClickLock
+        value: 3
+      - name: kButtonCustom
+        value: 6
+
+# ####
+
+- enum:
+    values:
+      - name: kDeviceClassAbsolute
+        value: 0
+      - name: kDeviceClassMouse
+        value: 1
+      - name: kDeviceClassTrackball
+        value: 2
+      - name: kDeviceClassTrackPad
+        value: 3
+      - name: kDeviceClass3D
+        value: 6
+
+# ####
+
+- dispatcher:
+    name: CursorDeviceDispatch
+    trap: 0xAADB
+    selector-location: D0W
+
+# ####
+
+- function:
+    name: CursorDeviceMove
+    return: OSErr
+    args:
+      - name: ourDevice
+        type: CursorDevicePtr
+      - name: deltaX
+        type: int32_t
+      - name: deltaY
+        type: int32_t
+    dispatcher: CursorDeviceDispatch
+    selector: 0x0000
+    executor: C_
+
+# ####
+
+- function:
+    name: CursorDeviceMoveTo
+    return: OSErr
+    args:
+      - name: ourDevice
+        type: CursorDevicePtr
+      - name: absX
+        type: int32_t
+      - name: absY
+        type: int32_t
+    dispatcher: CursorDeviceDispatch
+    selector: 0x0001
+    executor: C_
+
+# ####
+
+- function:
+    name: CursorDeviceFlush
+    return: OSErr
+    args:
+      - name: ourDevice
+        type: CursorDevicePtr
+    dispatcher: CursorDeviceDispatch
+    selector: 0x0002
+    executor: C_
+
+# ####
+
+- function:
+    name: CursorDeviceButtons
+    return: OSErr
+    args:
+      - name: ourDevice
+        type: CursorDevicePtr
+      - name: buttons
+        type: short
+    dispatcher: CursorDeviceDispatch
+    selector: 0x0003
+    executor: C_
+
+# ####
+
+- function:
+    name: CursorDeviceButtonDown
+    return: OSErr
+    args:
+      - name: ourDevice
+        type: CursorDevicePtr
+    dispatcher: CursorDeviceDispatch
+    selector: 0x0004
+    executor: C_
+
+# ####
+
+- function:
+    name: CursorDeviceButtonUp
+    return: OSErr
+    args:
+      - name: ourDevice
+        type: CursorDevicePtr
+    dispatcher: CursorDeviceDispatch
+    selector: 0x0005
+    executor: C_
+
+# ####
+
+- function:
+    name: CursorDeviceButtonOp
+    return: OSErr
+    args:
+      - name: ourDevice
+        type: CursorDevicePtr
+      - name: buttonNumber
+        type: short
+      - name: opcode
+        type: ButtonOpcode
+      - name: data
+        type: int32_t
+    dispatcher: CursorDeviceDispatch
+    selector: 0x0006
+    executor: C_
+
+# ####
+
+- function:
+    name: CursorDeviceSetButtons
+    return: OSErr
+    args:
+      - name: ourDevice
+        type: CursorDevicePtr
+      - name: numberOfButtons
+        type: short
+    dispatcher: CursorDeviceDispatch
+    selector: 0x0007
+    executor: C_
+
+# ####
+
+- function:
+    name: CursorDeviceSetAcceleration
+    return: OSErr
+    args:
+      - name: ourDevice
+        type: CursorDevicePtr
+      - name: acceleration
+        type: Fixed
+    dispatcher: CursorDeviceDispatch
+    selector: 0x0008
+    executor: C_
+
+# ####
+
+- function:
+    name: CursorDeviceDoubleTime
+    return: OSErr
+    args:
+      - name: ourDevice
+        type: CursorDevicePtr
+      - name: durationTicks
+        type: int32_t
+    dispatcher: CursorDeviceDispatch
+    selector: 0x0009
+    executor: C_
+
+# ####
+
+- function:
+    name: CursorDeviceUnitsPerInch
+    return: OSErr
+    args:
+      - name: ourDevice
+        type: CursorDevicePtr
+      - name: resolution
+        type: Fixed
+    dispatcher: CursorDeviceDispatch
+    selector: 0x000A
+    executor: C_
+
+# ####
+
+- function:
+    name: CursorDeviceNextDevice
+    return: OSErr
+    args:
+      - name: ourDevice
+        type: CursorDevicePtr*
+    dispatcher: CursorDeviceDispatch
+    selector: 0x000B
+    executor: C_
+
+# ####
+
+- function:
+    name: CursorDeviceNewDevice
+    return: OSErr
+    args:
+      - name: ourDevice
+        type: CursorDevicePtr*
+    dispatcher: CursorDeviceDispatch
+    selector: 0x000C
+    executor: C_
+
+# ####
+
+- function:
+    name: CursorDeviceDisposeDevice
+    return: OSErr
+    args:
+      - name: ourDevice
+        type: CursorDevicePtr
+    dispatcher: CursorDeviceDispatch
+    selector: 0x000D
+    executor: C_
+
+# ####
+
+# CursorDevicesLib (the System file's 'nlib' on 7.6 to 9): the same
+# routines for PowerPC code, under shorter names (CursorDevices.h declares
+# two of them; the Mouse control panel and Marathon 2 import more).
+
+# ####
+
+- only-for: Executor
+  function:
+    name: CrsrDevMove
+    return: OSErr
+    args:
+      - name: ourDevice
+        type: CursorDevicePtr
+      - name: deltaX
+        type: int32_t
+      - name: deltaY
+        type: int32_t
+    library: CursorDevicesLib
+    executor: C_CursorDeviceMove
+
+# ####
+
+- only-for: Executor
+  function:
+    name: CrsrDevMoveTo
+    return: OSErr
+    args:
+      - name: ourDevice
+        type: CursorDevicePtr
+      - name: absX
+        type: int32_t
+      - name: absY
+        type: int32_t
+    library: CursorDevicesLib
+    executor: C_CursorDeviceMoveTo
+
+# ####
+
+- only-for: Executor
+  function:
+    name: CrsrDevFlush
+    return: OSErr
+    args:
+      - name: ourDevice
+        type: CursorDevicePtr
+    library: CursorDevicesLib
+    executor: C_CursorDeviceFlush
+
+# ####
+
+- only-for: Executor
+  function:
+    name: CrsrDevButtons
+    return: OSErr
+    args:
+      - name: ourDevice
+        type: CursorDevicePtr
+      - name: buttons
+        type: short
+    library: CursorDevicesLib
+    executor: C_CursorDeviceButtons
+
+# ####
+
+- only-for: Executor
+  function:
+    name: CrsrDevButtonDown
+    return: OSErr
+    args:
+      - name: ourDevice
+        type: CursorDevicePtr
+    library: CursorDevicesLib
+    executor: C_CursorDeviceButtonDown
+
+# ####
+
+- only-for: Executor
+  function:
+    name: CrsrDevButtonUp
+    return: OSErr
+    args:
+      - name: ourDevice
+        type: CursorDevicePtr
+    library: CursorDevicesLib
+    executor: C_CursorDeviceButtonUp
+
+# ####
+
+- only-for: Executor
+  function:
+    name: CrsrDevButtonOp
+    return: OSErr
+    args:
+      - name: ourDevice
+        type: CursorDevicePtr
+      - name: buttonNumber
+        type: short
+      - name: opcode
+        type: ButtonOpcode
+      - name: data
+        type: int32_t
+    library: CursorDevicesLib
+    executor: C_CursorDeviceButtonOp
+
+# ####
+
+- only-for: Executor
+  function:
+    name: CrsrDevSetButtons
+    return: OSErr
+    args:
+      - name: ourDevice
+        type: CursorDevicePtr
+      - name: numberOfButtons
+        type: short
+    library: CursorDevicesLib
+    executor: C_CursorDeviceSetButtons
+
+# ####
+
+- only-for: Executor
+  function:
+    name: CrsrDevSetAcceleration
+    return: OSErr
+    args:
+      - name: ourDevice
+        type: CursorDevicePtr
+      - name: acceleration
+        type: Fixed
+    library: CursorDevicesLib
+    executor: C_CursorDeviceSetAcceleration
+
+# ####
+
+- only-for: Executor
+  function:
+    name: CrsrDevDoubleTime
+    return: OSErr
+    args:
+      - name: ourDevice
+        type: CursorDevicePtr
+      - name: durationTicks
+        type: int32_t
+    library: CursorDevicesLib
+    executor: C_CursorDeviceDoubleTime
+
+# ####
+
+- only-for: Executor
+  function:
+    name: CrsrDevUnitsPerInch
+    return: OSErr
+    args:
+      - name: ourDevice
+        type: CursorDevicePtr
+      - name: resolution
+        type: Fixed
+    library: CursorDevicesLib
+    executor: C_CursorDeviceUnitsPerInch
+
+# ####
+
+- only-for: Executor
+  function:
+    name: CrsrDevNextDevice
+    return: OSErr
+    args:
+      - name: ourDevice
+        type: CursorDevicePtr*
+    library: CursorDevicesLib
+    executor: C_CursorDeviceNextDevice
+
+# ####
+
+- only-for: Executor
+  function:
+    name: CrsrDevNewDevice
+    return: OSErr
+    args:
+      - name: ourDevice
+        type: CursorDevicePtr*
+    library: CursorDevicesLib
+    executor: C_CursorDeviceNewDevice
+
+# ####
+
+- only-for: Executor
+  function:
+    name: CrsrDevDisposeDevice
+    return: OSErr
+    args:
+      - name: ourDevice
+        type: CursorDevicePtr
+    library: CursorDevicesLib
+    executor: C_CursorDeviceDisposeDevice
+
+# ####
+
+# InterfaceLib exports them too (9.0.4's Mouse control panel imports
+# CrsrDevDoubleTime, CrsrDevSetAcceleration and CrsrDevNextDevice from it).
+
+# ####
+
+- only-for: Executor
+  function:
+    name: CrsrDevMove
+    return: OSErr
+    args:
+      - name: ourDevice
+        type: CursorDevicePtr
+      - name: deltaX
+        type: int32_t
+      - name: deltaY
+        type: int32_t
+    library: InterfaceLib
+    executor: C_CursorDeviceMove
+
+# ####
+
+- only-for: Executor
+  function:
+    name: CrsrDevMoveTo
+    return: OSErr
+    args:
+      - name: ourDevice
+        type: CursorDevicePtr
+      - name: absX
+        type: int32_t
+      - name: absY
+        type: int32_t
+    library: InterfaceLib
+    executor: C_CursorDeviceMoveTo
+
+# ####
+
+- only-for: Executor
+  function:
+    name: CrsrDevFlush
+    return: OSErr
+    args:
+      - name: ourDevice
+        type: CursorDevicePtr
+    library: InterfaceLib
+    executor: C_CursorDeviceFlush
+
+# ####
+
+- only-for: Executor
+  function:
+    name: CrsrDevButtons
+    return: OSErr
+    args:
+      - name: ourDevice
+        type: CursorDevicePtr
+      - name: buttons
+        type: short
+    library: InterfaceLib
+    executor: C_CursorDeviceButtons
+
+# ####
+
+- only-for: Executor
+  function:
+    name: CrsrDevButtonDown
+    return: OSErr
+    args:
+      - name: ourDevice
+        type: CursorDevicePtr
+    library: InterfaceLib
+    executor: C_CursorDeviceButtonDown
+
+# ####
+
+- only-for: Executor
+  function:
+    name: CrsrDevButtonUp
+    return: OSErr
+    args:
+      - name: ourDevice
+        type: CursorDevicePtr
+    library: InterfaceLib
+    executor: C_CursorDeviceButtonUp
+
+# ####
+
+- only-for: Executor
+  function:
+    name: CrsrDevButtonOp
+    return: OSErr
+    args:
+      - name: ourDevice
+        type: CursorDevicePtr
+      - name: buttonNumber
+        type: short
+      - name: opcode
+        type: ButtonOpcode
+      - name: data
+        type: int32_t
+    library: InterfaceLib
+    executor: C_CursorDeviceButtonOp
+
+# ####
+
+- only-for: Executor
+  function:
+    name: CrsrDevSetButtons
+    return: OSErr
+    args:
+      - name: ourDevice
+        type: CursorDevicePtr
+      - name: numberOfButtons
+        type: short
+    library: InterfaceLib
+    executor: C_CursorDeviceSetButtons
+
+# ####
+
+- only-for: Executor
+  function:
+    name: CrsrDevSetAcceleration
+    return: OSErr
+    args:
+      - name: ourDevice
+        type: CursorDevicePtr
+      - name: acceleration
+        type: Fixed
+    library: InterfaceLib
+    executor: C_CursorDeviceSetAcceleration
+
+# ####
+
+- only-for: Executor
+  function:
+    name: CrsrDevDoubleTime
+    return: OSErr
+    args:
+      - name: ourDevice
+        type: CursorDevicePtr
+      - name: durationTicks
+        type: int32_t
+    library: InterfaceLib
+    executor: C_CursorDeviceDoubleTime
+
+# ####
+
+- only-for: Executor
+  function:
+    name: CrsrDevUnitsPerInch
+    return: OSErr
+    args:
+      - name: ourDevice
+        type: CursorDevicePtr
+      - name: resolution
+        type: Fixed
+    library: InterfaceLib
+    executor: C_CursorDeviceUnitsPerInch
+
+# ####
+
+- only-for: Executor
+  function:
+    name: CrsrDevNextDevice
+    return: OSErr
+    args:
+      - name: ourDevice
+        type: CursorDevicePtr*
+    library: InterfaceLib
+    executor: C_CursorDeviceNextDevice
+
+# ####
+
+- only-for: Executor
+  function:
+    name: CrsrDevNewDevice
+    return: OSErr
+    args:
+      - name: ourDevice
+        type: CursorDevicePtr*
+    library: InterfaceLib
+    executor: C_CursorDeviceNewDevice
+
+# ####
+
+- only-for: Executor
+  function:
+    name: CrsrDevDisposeDevice
+    return: OSErr
+    args:
+      - name: ourDevice
+        type: CursorDevicePtr
+    library: InterfaceLib
+    executor: C_CursorDeviceDisposeDevice
