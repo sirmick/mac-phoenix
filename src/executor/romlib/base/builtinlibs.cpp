@@ -158,6 +158,34 @@ static bool ae_handler_not_an_address(const char *name, PowerCore& cpu)
     return true;
 }
 
+/* MacPhoenix: Component Manager calls whose component (or instance) is no
+   address. Components and instances are opaque IDs, declared as pointers;
+   a value that can't go to host memory and back is none of them, and a Mac
+   answers as for any ID it doesn't know: AppleScript 1.4 (9.0.4) fills its
+   globals with $DEFACED1 and $DEFACED2 until it knows its component, and
+   its 'ascr'/'gdut' handler, called at startup, passes the second to
+   OpenComponentResFile. Such a call is made with nil instead, which is no
+   component either (only calls where nil means none). */
+static void component_not_an_id(const char *name, PowerCore& cpu)
+{
+    static const char *const calls[] = {
+        "OpenComponentResFile", "OpenAComponentResFile", "GetComponentInfo",
+        "OpenComponent", "CloseComponent", "GetComponentRefcon", "SetComponentRefcon",
+        "GetComponentVersion", "CountComponentInstances", "GetComponentIconSuite",
+        "GetComponentInstanceStorage", "GetComponentInstanceError",
+    };
+    uint32_t id = cpu.r[3];
+    if(!id || syn68k_is_guest_addr_in_window(id, 1))
+        return;
+    for(const char *c : calls)
+        if(!strcmp(name, c))
+        {
+            fprintf(stderr, "[Executor] PowerPC %s($%08X): no component, called with nil\n", name, id);
+            cpu.r[3] = 0;
+            return;
+        }
+}
+
 uint32_t builtinlibs::handleSC(PowerCore& cpu)
 {
     PPCCallback *cb = guestvalues::GuestTypeTraits<PPCCallback*>::reg_to_host(cpu.CIA - 8);
@@ -166,6 +194,8 @@ uint32_t builtinlibs::handleSC(PowerCore& cpu)
     {
         if(cb->name && cb->name[0] == 'A' && ae_handler_not_an_address(cb->name, cpu))
             return cpu.lr;
+        if(cb->name && strstr(cb->name, "Component"))
+            component_not_an_id(cb->name, cpu);
         if(cb->implementation)
         {
             /* The call site, for the trap log (--executor-logtraps): a
