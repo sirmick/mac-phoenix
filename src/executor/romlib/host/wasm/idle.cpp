@@ -17,11 +17,14 @@ namespace
 {
 void (*yield_hook)();
 hostidle::Clock::time_point last_yield;
+hostidle::Load load;
 constexpr auto frame = std::chrono::milliseconds(16);
 
+/* -1: slept already (wait()) */
 void yield(int ms)
 {
-    emscripten_sleep(ms);
+    if(ms >= 0)
+        emscripten_sleep(ms);
     last_yield = hostidle::Clock::now();
     if(executor_hostnet_pump)
         executor_hostnet_pump();
@@ -39,7 +42,11 @@ void hostidle::wait(Clock::time_point deadline, bool (*pending)())
             return;
         /* A frame at most, so the screen and input keep flowing. */
         auto left = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now);
-        yield((int)std::clamp<long long>(left.count(), 0, frame.count()));
+        /* Asleep: the browser's time (the hook's rendering is work). */
+        load.asleep(now);
+        emscripten_sleep((int)std::clamp<long long>(left.count(), 0, frame.count()));
+        load.awake(hostidle::Clock::now());
+        yield(-1);
     }
 }
 
@@ -51,6 +58,11 @@ void hostidle::tick()
 {
     if(Clock::now() - last_yield >= frame)
         yield(0);
+}
+
+double hostidle::busy()
+{
+    return load.busy(Clock::now());
 }
 
 void hostidle::set_yield_hook(void (*hook)())

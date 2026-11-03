@@ -105,6 +105,31 @@ Ctrl+W and the like reach the Mac; holding Esc leaves.
 
 "Restart Executor" in the dialog saves what changed and reloads the page.
 
+The bar's CPU meter (main.js `CpuMeter`, `#cpu`): how much of each half
+second the Mac's emulator thread spent working rather than waiting for
+events (`hostidle::busy()`: time inside its waits, which yield to the
+browser, against the clock; timestamps around the waits only). The Worker
+passes it on each half second (`'cpu'`); the bar shows the last 15 seconds
+as bars (orange above 90%) and the latest as a %, "Mac CPU busy" as the
+tooltip; hidden until the first frame and when Executor stops.
+`window.executor.cpu` has `{ busy, history }`; the Worker's `stats`
+request `cpu`. The idle Finder reads a few %, a game running on 100%
+(`executor.web.cpu`). Natively the same number is `/api/status`'s
+`cpu_busy`.
+
+Beside it, Executor's memory (an estimate, worker.js `memoryUse`, with
+each CPU sample): the module's heap (`HEAP8.buffer`, the Mac's RAM in it:
+MemTop, from the module), the library disks' pieces read from the server
+(`RemoteImage` chunks), the disks' changes (`Overlay` data) and Executor's
+volume (`/executor` in MEMFS: the files' sizes, from the walk the server
+sync makes (`scanVolume`), or one when that is over 5 s old). The tooltip gives the
+parts; the browser's own memory (the page, its scripts, uploaded files) is
+not counted. On 7.6.1 with the games disk: about 315 MB (heap 256, of it
+RAM 126; caches 44; volume 15). Where the browser measures memory itself
+(`performance.measureUserAgentSpecificMemory`: cross-origin isolated pages,
+Chromium; the tab is), the tooltip gives its figure too, taken at most
+every 10 s (it can wait for a garbage collection): 331 MB there.
+
 ## Not yet
 
 - Disks: the overlays' revert and download are in the Disks panel

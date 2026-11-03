@@ -69,6 +69,7 @@ window.executor = {
     cursor: null,       // the guest's last cursor message
     stopped: null,      // why Executor stopped, when an error stopped it
     additions: {},      // disk -> its System Folder additions copied in (copied, kept, restart, live)
+    cpu: null,          // the CPU meter: { busy (0..1, the last half second), history, memory (worker.js memoryUse), measured (the browser's figure, 0: none) }
     request(op, arg = '') {
         if (!worker)
             return Promise.resolve({ error: 'not running' });   // between Workers
@@ -79,6 +80,78 @@ window.executor = {
         });
     },
 };
+
+// ---- the CPU meter in the top bar: the emulator thread's busy share
+// (the time it isn't waiting for events: hostidle::busy), each half second
+// from the Worker; a sparkline of the last 30 and the latest as a %. Beside
+// it Executor's memory, an estimate (worker.js memoryUse), its parts in the
+// tooltip. Hidden until the first frame and when Executor stops.
+const MB = (n) => (n >= 1 << 30 ? `${(n / (1 << 30)).toFixed(1)} GB` : `${Math.round(n / (1 << 20))} MB`);
+function memoryTip(m) {
+    return [`Executor's memory: about ${MB(m.total)}`,
+            `• the module's heap: ${MB(m.heap)} (WebAssembly memory: Executor, its caches, and the Mac's RAM, ${MB(m.ram)})`,
+            `• disk caches: ${MB(m.caches)} (library disks' pieces read from the server)`,
+            `• disk changes: ${MB(m.changes)} (what the Mac wrote to its disks, kept here)`,
+            `• Executor's volume: ${MB(m.volume)} (its System Folder and files, in memory; estimated from the files' sizes, counted every 5 s)`,
+            'Not counted: the browser\'s own (the page, its scripts, uploaded files), so the total is an estimate.',
+            ...(measured ? [`The browser's own measurement of this tab: ${MB(measured)}`
+                            + ` (performance.measureUserAgentSpecificMemory, ${Math.round((Date.now() - measuredAt) / 1000)} s ago)`] : [])]
+        .join('\n');
+}
+// The browser's measurement, where it has one (cross-origin isolated
+// pages, Chromium): slow (it may wait for a garbage collection), so every
+// 10 s at most, one at a time.
+let measured = 0, measuredAt = 0, measuring = false;
+function measure() {
+    if (measuring || Date.now() - measuredAt < 10000 || !window.crossOriginIsolated
+        || !performance.measureUserAgentSpecificMemory)
+        return;
+    measuring = true;
+    performance.measureUserAgentSpecificMemory()
+        .then((r) => { measured = r.bytes; measuredAt = Date.now(); })
+        .catch(() => { measuredAt = Date.now(); })
+        .finally(() => { measuring = false; });
+}
+const CpuMeter = (() => {
+    const el = document.getElementById('cpu');
+    const pct = document.getElementById('cpu-pct');
+    const mem = document.getElementById('mem');
+    const ctx = el.querySelector('canvas').getContext('2d');
+    const N = 30, history = [];
+    function draw() {
+        const { width: w, height: h } = ctx.canvas;
+        ctx.clearRect(0, 0, w, h);
+        ctx.fillStyle = '#333';
+        ctx.fillRect(0, 0, w, h);
+        const step = w / N;
+        history.forEach((v, i) => {
+            ctx.fillStyle = v > 0.9 ? '#e96' : '#7af';
+            const bh = Math.max(1, Math.round(v * h));
+            ctx.fillRect(Math.floor((N - history.length + i) * step), h - bh, Math.ceil(step), bh);
+        });
+    }
+    return {
+        add(busy, memory) {
+            history.push(busy);
+            if (history.length > N)
+                history.shift();
+            pct.textContent = `${Math.round(busy * 100)}%`;
+            if (memory) {
+                measure();
+                mem.textContent = MB(memory.total);
+                mem.title = memoryTip(memory);
+            }
+            window.executor.cpu = { busy, history: [...history], memory, measured };
+            el.hidden = false;
+            draw();
+        },
+        reset() {
+            history.length = 0;
+            window.executor.cpu = null;
+            el.hidden = true;
+        },
+    };
+})();
 
 // ---- the disks: uploads and ?disk= fetches, for this visit ----
 let sessionFiles = [];
@@ -734,6 +807,7 @@ document.getElementById('take').addEventListener('click', async () => {
 // goes on (what the disks changed is kept as before).
 function executorStopped(reason) {
     window.executor.stopped = reason;
+    CpuMeter.reset();
     console.log(`[web] Executor stopped: ${reason}`);
     autoShot(`stopped: ${reason}`);
     Loading.end();
@@ -817,6 +891,7 @@ async function start() {
         status.removeAttribute('role');
     }
     status.textContent = '';
+    CpuMeter.reset();
     Loading.begin();
     box.replaceChildren(Loading.el);
 
@@ -869,6 +944,9 @@ async function start() {
                 if (!status.textContent)
                     status.textContent = 'Executor';
             }
+        } else if (m.type === 'cpu') {
+            if (window.executor.frames > 0 && !window.executor.stopped)
+                CpuMeter.add(m.busy, m.memory);
         } else if (m.type === 'images') {
             const before = JSON.stringify(imageState);
             for (const i of m.images)

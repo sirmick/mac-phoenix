@@ -263,6 +263,16 @@ int executor_child_main(const config::EmulatorConfig& cfg, IPCBuffer *buf)
             }
         }).detach();
 
+    // /api/status cpu_busy: the emulator thread's load, each half second.
+    std::thread([buf] {
+        for (;;) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+            double busy = executor_host::cpu_busy();
+            if (busy >= 0)
+                IPC_ATOMIC_STORE(buf->cpu_busy, (uint32_t)(busy * 1000 + 0.5) + 1);
+        }
+    }).detach();
+
     // POST /api/snapshot: dump guest RAM (guest address 0 up) when the
     // app next asks for events, where the heap is consistent.
     executor_host::set_event_poll_hook([] {

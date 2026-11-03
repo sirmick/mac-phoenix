@@ -169,6 +169,13 @@ EM_JS(void, js_frame_time, (double ms), {
         Module.stats.hostMs += ms;
 });
 
+/* The emulator thread's load (hostidle::busy), each half second, and the
+   Mac's RAM (in the module's heap): the page's CPU and memory meter. */
+EM_JS(void, js_cpu, (double busy, double ram), {
+    if (Module.onCpu)
+        Module.onCpu(busy, ram);
+});
+
 namespace {
 
 std::vector<uint32_t> rgba;
@@ -633,6 +640,15 @@ void on_yield()
         double t0 = emscripten_get_now();
         v->pump();
         js_frame_time(emscripten_get_now() - t0);
+    }
+    static double cpu_at;
+    double now = emscripten_get_now();
+    if(now - cpu_at >= 500)
+    {
+        cpu_at = now;
+        double busy = Executor::hostidle::busy();
+        if(busy >= 0)
+            js_cpu(busy, executor_host::guest_ram_size());
     }
 }
 
