@@ -4,6 +4,7 @@
     tools/web/make_disk.py OUT.img --label NAME --take IMAGE FOLDER [FOLDER...]
                            [--take IMAGE FOLDER...] [--skip PATH...]
                            [--system-from SNAPSHOT...] [--additions-record JSON]
+                           [--with IMAGE...]
 
 Copies the named top-level folders (recursively) of each IMAGE into a new
 volume sized to what it holds, as MacBinary through hfsutils, so forks,
@@ -29,6 +30,13 @@ disks leave out (make_boot_disk.py's DROP). --additions-record writes what
 went in (the disk's record's "system_additions") as JSON. Startup code
 (extensions, control panels, components: STARTUP_TYPES) is left out too:
 the additions are what applications need to start.
+
+Aliases whose target isn't there are left out, as make_boot_disk.py's cut
+does: one into this disk whose target wasn't taken, one into a --with image
+(the boot disks of the Systems the disk is for: their volumes are
+"Macintosh HD") whose target that image doesn't have and the disk's
+additions don't bring (Photoshop 5.5's Preview In aliases to browsers no
+disk has). An alias to any other volume (a CD) stays.
 """
 import argparse
 import json
@@ -37,7 +45,7 @@ import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from make_boot_disk import DROP, DROP_CREATORS, SYSTEM_SUBFOLDER_DROP, Disk, Writer  # noqa: E402
+from make_boot_disk import DROP, DROP_CREATORS, SYSTEM_SUBFOLDER_DROP, Disk, Writer, alias_target  # noqa: E402
 
 ADDITIONS = b"System Folder Additions"
 # The System's own files, and what a session leaves at the System Folder's
@@ -98,6 +106,36 @@ def additions(snapshots, scratch):
     return files, [f for f in folders if f in used]
 
 
+def dangling(blobs, folders, label, companions):
+    """The aliases among blobs whose target is on this disk, or on a
+    companion image's volume, and not there (paths, bytes)."""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "diskaudit"))
+    import disk_audit
+    vols = {}
+    for c in companions:
+        v = disk_audit.Volume(c)
+        vols.setdefault(v.name.encode("mac_roman"), set()).update(
+            v.path_of(n).encode("mac_roman").lower() for n in v.nodes.values())
+    have = {p.lower() for p in folders} | {p.lower() for p in blobs}
+    out = []
+    for path, blob in blobs.items():
+        target = alias_target(blob)
+        if not target:
+            continue
+        vol, where = target
+        if vol == label.encode("mac_roman"):
+            ok = where.lower() in have
+        elif vol in vols:
+            ok = (vol + b":" + where).lower() in vols[vol] or (
+                where.startswith(b"System Folder:")
+                and (ADDITIONS + where[len(b"System Folder"):]).lower() in have)
+        else:
+            continue                                    # another volume: a CD
+        if not ok:
+            out.append(path)
+    return out
+
+
 def additions_record(files):
     """What the disk adds to the System Folder, for its record: the items
     one level into the System Folder's folders (a folder of fonts is one
@@ -146,6 +184,8 @@ def main():
     ap.add_argument("--system-from", nargs="+", default=[], metavar="SNAPSHOT",
                     help="snapshot images whose System Folder part the disk carries")
     ap.add_argument("--additions-record", help="write what the disk adds to the System Folder here (JSON)")
+    ap.add_argument("--with", dest="companions", nargs="+", default=[], metavar="IMAGE",
+                    help="images aliases on the disk may point into (the boot disks of its Systems)")
     args = ap.parse_args()
     skip = [s.encode("mac_roman").lstrip(b":") for s in args.skip]
 
@@ -188,6 +228,9 @@ def main():
         if args.additions_record:
             with open(args.additions_record, "w") as f:
                 json.dump(additions_record(extra) if extra else None, f, ensure_ascii=False)
+        for path in dangling(blobs, folders, args.label, args.companions):
+            print(f"left out (an alias to nothing here): {path.decode('mac_roman')}")
+            del blobs[path]
         size = volume_size(blobs.values(), len(folders))
         w = Writer(Path(args.out))
         try:

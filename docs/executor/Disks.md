@@ -137,7 +137,12 @@ fonts and shared libraries. The disk's record
 says what is there: `system_additions` `{folder, files, bytes, items,
 restart}`, `items` one level into the System Folder's folders, `restart`
 what is in use only after a restart. A disk entry with `"additions":
-false` carries none.
+false` carries none. Aliases to nothing are left off the disk (make_disk.py
+`--with`, the boot disks of its Systems: Photoshop 5.5's Preview In aliases
+to browsers no disk has, its Adobe Gamma alias into Control Panels), and
+`tools/diskaudit/disk_audit.py` knows the folder (not a stray invisible
+one), resolves aliases into a System Folder against it, and checks a disk's
+aliases only against the boot disks of the Systems its record lists.
 
 In the tab (web_main.cpp `add_to_system`, hfs_sideload.cpp
 `system_additions`, the same HFS/HFS+ reader the System is copied from):
