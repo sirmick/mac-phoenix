@@ -8,10 +8,12 @@
 #include <MemoryMgr.h>
 #include <base/common.h>
 #include <quickdraw/font.h>
+#include <DeviceMgr.h>
 #else
 #include <Quickdraw.h>
 #include <QDOffscreen.h>
 #include <Windows.h>
+#include <Devices.h>
 #endif
 
 #include <bitset>
@@ -835,3 +837,17 @@ TEST(QuickDraw, WidthListBadEntry)
     TextSize(12);
 }
 #endif
+
+/* The main screen has a driver, as on a 7.6.1 Quadra (2026-11-03: gdFlags
+   $B820, a DCE at its gdRefNum): noDriver clear, for every program
+   (Executor once set it for Realmz). */
+TEST(QuickDraw, MainDeviceHasDriver)
+{
+    GDHandle gd = GetMainDevice();
+    ASSERT_NE(nullptr, gd);
+    short flags = (*gd)->gdFlags;
+    EXPECT_EQ(0, flags & (1 << 14));      // noDriver
+    EXPECT_NE(0, flags & (1 << 13));      // screenDevice
+    EXPECT_NE(0, flags & (1 << 11));      // mainScreen
+    EXPECT_NE(nullptr, GetDCtlEntry((*gd)->gdRefNum));
+}
