@@ -38,3 +38,14 @@ TEST(Gestalt, QuadraFPUAndEditionManager)
     ASSERT_EQ(noErr, SysEnvirons(2, &env));
     EXPECT_TRUE(env.hasFPU);
 }
+
+/* The addressing mode is the three flags' bits (7, as the Quadra and the
+   G3 answer: 32-bit capable), the page size the Quadra's 4K. */
+TEST(Gestalt, AddressingModeAndPageSize)
+{
+    GUEST<LONGINT> v;
+    ASSERT_EQ(noErr, C_Gestalt(gestaltAddressingModeAttr, &v));
+    EXPECT_EQ(7, (LONGINT)v);
+    ASSERT_EQ(noErr, C_Gestalt(gestaltLogicalPageSize, &v));
+    EXPECT_EQ(4096, (LONGINT)v);
+}

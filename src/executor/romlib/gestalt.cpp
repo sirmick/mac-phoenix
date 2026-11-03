@@ -31,9 +31,15 @@ typedef struct
 
 #define UNKNOWN 0xFFFF
 
+/* MacPhoenix: PowerPC code runs (gestalt_set_system_version): a Power Mac */
+static bool power_mac;
+
 static gestaltentry_t gtable[] = {
     {
-        gestaltAddressingModeAttr, gestalt32BitAddressing | gestalt32BitSysZone | gestalt32BitCapable,
+        /* MacPhoenix: the bits, not their numbers (that was 3: "not 32-bit
+           capable" in TattleTech); 7 on the Quadra and the G3 */
+        gestaltAddressingModeAttr,
+        1 << gestalt32BitAddressing | 1 << gestalt32BitSysZone | 1 << gestalt32BitCapable,
     },
 
     /*
@@ -131,8 +137,12 @@ static gestaltentry_t gtable[] = {
         gestaltKeyboardType, gestaltMacKbd,
     },
     {
-        gestaltLogicalPageSize, 8 * 1024,
+        gestaltLogicalPageSize, 4 * 1024, /* MacPhoenix: the Quadra's and the G3's */
     },
+    /* MacPhoenix: the processor's and the bus's clock, a Power Mac's only
+       (gestaltProcClkSpeed, gestaltBusClkSpeed: 100 MHz on mame-ppc's G3) */
+    { "pclk"_4, 100000000 },
+    { "bclk"_4, 100000000 },
     {
         gestaltLogicalRAMSize, (LONGINT)3 * 1024 * 1024,
     },
@@ -386,6 +396,11 @@ find_selector_in_table(OSType selector, gestaltentry_t table[],
             break;
         /* MacPhoenix: the Alias Manager resolves records now (alias.cpp);
            no longer hidden behind ROMlib_pretend_alias. */
+        case "pclk"_4:
+        case "bclk"_4:
+            if(!power_mac)
+                selector = -1;
+            break;
         case gestaltSpeechAttr:
             if(!ROMlib_speech_enabled)
                 selector = -1;
@@ -442,13 +457,25 @@ Executor::gestalt_set_system_version(uint32_t version)
        Executor's. The 8.6 Finder takes its thread task reference only with
        it, and its threads wait on that reference (opening a window). */
     if(version >= 0x0800 || ROMlib_prefer_ppc)
+    {
         REPLACE_SELECTOR_IN_TABLE("thds"_4, 7, gtable);
+        /* MacPhoenix: PowerPC code runs (an 8.x System, or --executor-ppc
+           on 7.x): the machine is a Power Mac, the one mame-ppc's G3 says
+           it is on 7.6.1 and 8.6 alike (tests/guest/gestalt): machine 67,
+           a PowerPC 750 at 100 MHz on a 100 MHz bus, its 68k emulator a
+           68020 with no FPU, the PowerPC MMU. */
+        REPLACE_SELECTOR_IN_TABLE(gestaltSysArchitecture, gestaltPowerPC, gtable);
+        REPLACE_SELECTOR_IN_TABLE(gestaltNativeCPUtype, gestaltCPU750, gtable);
+        REPLACE_SELECTOR_IN_TABLE(gestaltMachineType, 67, gtable);
+        REPLACE_SELECTOR_IN_TABLE(gestaltProcessorType, 3, gtable); /* gestalt68020 */
+        REPLACE_SELECTOR_IN_TABLE(gestaltFPUType, 0, gtable);
+        REPLACE_SELECTOR_IN_TABLE(gestaltMMUType, 5, gtable);
+        power_mac = true;
+    }
     /* An 8.x System runs on PowerPC Macs only: a G3, as the G3 the 8.6 and
        9.0.4 images come from (Microsoft's installers refuse a 68k Mac). */
     if(version >= 0x0800)
     {
-        REPLACE_SELECTOR_IN_TABLE(gestaltSysArchitecture, gestaltPowerPC, gtable);
-        REPLACE_SELECTOR_IN_TABLE(gestaltNativeCPUtype, gestaltCPU750, gtable);
         /* as 8.6 answers them on the G3: the Script Manager's version is
            the System's; Apple events with scripting support and the
            Object Support Library in the System (ObjectSupportLib's calls
