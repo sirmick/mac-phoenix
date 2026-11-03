@@ -419,10 +419,14 @@ QuickDraw's bold), italic as a skew of 0.25, underline at the baseline + 1,
 `ulThick` thick, outline and shadow as strokes. An outline of the style
 asked for is used when the family has one.
 
-Each glyph is **centred in its 1x advance**: a bitmap strike's
-proportions aren't the outline's (Geneva 12's i, l and j are wide cells in
-the strike and thin glyphs in the outline, so placed at the pen they left
-uneven gaps, "qui ck").
+Each **word keeps its 1x place**, its glyphs evenly spaced in it: a
+bitmap strike's proportions aren't the outline's (Geneva 12's i, l and j
+are wide cells in the strike and thin glyphs in the outline, so placed at
+the pen they left uneven gaps, "qui ck"). Each glyph centred in its own 1x
+advance still left them ("P ro", "Regis ter"); now a word (glyphs each
+starting where the last's 1x advance ended, up to a space) takes the
+outline's own advances and spreads what's left of its 1x width evenly
+between them (`glyph_lefts`, hidpi_internal.h; a lone glyph is centred).
 
 ### What it looks like (2026-10-31, 8.6 and 7.5.5 at 2x)
 
@@ -441,8 +445,8 @@ uneven gaps, "qui ck").
   by numer/denom (pictures), runs with a character the outline lacks,
   bitmap-only families (no substitution table yet), everything drawn
   offscreen.
-- Proportions: outline glyphs centred in bitmap advances read well;
-  scaling glyphs to fill the advance wasn't needed. Synthesised italic
+- Proportions: outline glyphs evenly spaced in each word's 1x width read
+  well; scaling glyphs to fill the advance wasn't needed. Synthesised italic
   (QuickDraw slants about the strike's bottom, Skia about the baseline) is
   shifted by about descent/2 pixels from the 1x one, inside the run's box.
 - Clipping: runs are clipped to the 1x vis and clip regions, scaled

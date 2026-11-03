@@ -140,16 +140,13 @@ void draw_run(SkCanvas *canvas, const Scaler &sc, const Run &run)
     /* bold as QuickDraw makes it: the glyph again BOLD pixels to the right */
     float smear = run.synth & synthBold ? run.bold * s : 0;
 
-    /* each glyph centred in the advance the 1x layout gives it (a bitmap
-       strike's proportions aren't the outline's: Geneva 12's i and l) */
+    /* words at their 1x places, glyphs evenly spaced in them (glyph_lefts) */
     std::vector<SkScalar> widths(run.glyphs.size());
     font.getWidths(run.glyphs, widths);
+    std::vector<float> lefts = glyph_lefts(run, widths, smear, s, font.unicharToGlyph(' '));
     std::vector<SkPoint> pos(run.glyphs.size());
     for(size_t i = 0; i < pos.size(); i++)
-    {
-        float slack = run.advances[i] > 0 ? (run.advances[i] * s - widths[i] - smear) / 2 : 0;
-        pos[i] = { run.xs[i] * s + slack, run.baseline * s };
-    }
+        pos[i] = { lefts[i], run.baseline * s };
     auto draw_glyphs = [&](SkPoint origin, const SkPaint &p) {
         for(float d = 0; d <= smear; d += 1)
             canvas->drawGlyphs(run.glyphs, pos, { origin.fX + d, origin.fY }, font, p);
