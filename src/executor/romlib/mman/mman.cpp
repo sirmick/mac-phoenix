@@ -1877,12 +1877,11 @@ void MoveHHi(Handle h)
    * to flush the cache.  We only nuke code whose checksums
    * have changed, for speed.
    *
-   * We make an exception for Microsoft Word, because the spelling checker
-   * will be real slow if we don't.
+   * MacPhoenix: for every program, as a 68040's BlockMove pushes the
+   * whole cache (upstream left out Microsoft Word, 'MSWD' and 'ddOr', for
+   * syn68k's speed; the cores are interpreters and flush nothing now).
    */
-
-    if(ROMlib_creator != "MSWD"_4 && ROMlib_creator != "ddOr"_4)
-        ROMlib_destroy_blocks(0, ~0, true);
+    ROMlib_destroy_blocks(0, ~0, true);
 
     THz zone = HandleZone(h);
     if(!zone)
