@@ -201,4 +201,15 @@ OSErr C_GetComponentResource(Component aComponent, OSType resType, INTEGER resID
 LONGINT C_GetComponentMgrVersion();PASCAL_SUBTRAP(GetComponentMgrVersion, 0xA82A, 0x0019, ComponentDispatch);
 
 
+
+
+COMPONENT_CALL(InterfaceLib, ComponentFunctionImplemented, 0xFFFD, "2");
+
+
+COMPONENT_CALL(InterfaceLib, GetComponentVersion, 0xFFFC, "");
+
+
+COMPONENT_CALL(InterfaceLib, ComponentSetTarget, 0xFFFA, "4");
+
+
 } /* namespace Executor */

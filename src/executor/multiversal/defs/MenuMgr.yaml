@@ -1246,7 +1246,8 @@
 
 # ####
 
-# AppearanceLib 1.0's command IDs and MenuEvent, MenusLib 8.5's hiding of
+# AppearanceLib 1.0's command IDs, reference constants (Illustrator
+# 8.0) and MenuEvent, MenusLib 8.5's hiding of
 # the menu bar (REALbasic's runtime calls them unchecked where Appearance
 # is: GameBox Classic).
 - function:
@@ -1271,6 +1272,58 @@
       - name: inItem
         type: SInt16
       - name: outCommandID
+        type: UInt32*
+    library: AppearanceLib
+    executor: C_
+
+- function:
+    name: SetMenuItemRefCon
+    return: OSErr
+    args:
+      - name: inMenu
+        type: MenuRef
+      - name: inItem
+        type: SInt16
+      - name: inRefCon
+        type: UInt32
+    library: AppearanceLib
+    executor: C_
+
+- function:
+    name: GetMenuItemRefCon
+    return: OSErr
+    args:
+      - name: inMenu
+        type: MenuRef
+      - name: inItem
+        type: SInt16
+      - name: outRefCon
+        type: UInt32*
+    library: AppearanceLib
+    executor: C_
+
+- function:
+    name: SetMenuItemRefCon2
+    return: OSErr
+    args:
+      - name: inMenu
+        type: MenuRef
+      - name: inItem
+        type: SInt16
+      - name: inRefCon2
+        type: UInt32
+    library: AppearanceLib
+    executor: C_
+
+- function:
+    name: GetMenuItemRefCon2
+    return: OSErr
+    args:
+      - name: inMenu
+        type: MenuRef
+      - name: inItem
+        type: SInt16
+      - name: outRefCon2
         type: UInt32*
     library: AppearanceLib
     executor: C_

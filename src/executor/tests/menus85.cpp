@@ -1,5 +1,5 @@
-/* MacPhoenix: the Mac OS 8.5 menu calls (AppearanceLib's command IDs and
-   MenuEvent, MenusLib's EnableMenuItem and DisableMenuItem) and the Text
+/* MacPhoenix: the Mac OS 8.5 menu calls (AppearanceLib's command IDs, reference
+   constants and MenuEvent, MenusLib's EnableMenuItem and DisableMenuItem) and the Text
    Services Manager's document calls, as REALbasic's runtime makes them
    (GameBox Classic on 8.6), and a junk control handle given to
    SetControlFontStyle; the bevel button's and image well's calls and
@@ -44,6 +44,29 @@ TEST(Menus85, CommandIDs)
     EXPECT_EQ(noErr, C_GetMenuItemCommandID(m, 2, &id));
     EXPECT_EQ(0x07654321u, (UInt32)id);
     EXPECT_EQ(paramErr, C_SetMenuItemCommandID(m, 3, 1));
+    DisposeMenu(m);
+}
+
+/* The two reference constants are each item's own, apart from its
+   command ID (Illustrator 8.0 keeps its menu commands there). */
+TEST(Menus85, RefCons)
+{
+    MenuHandle m = NewMenu(9303, (StringPtr) "\4Test");
+    AppendMenu(m, (StringPtr) "\3A;B");
+    GUEST<UInt32> v = 1;
+    EXPECT_EQ(noErr, C_GetMenuItemRefCon(m, 1, &v));
+    EXPECT_EQ(0u, (UInt32)v);
+    EXPECT_EQ(noErr, C_SetMenuItemRefCon(m, 1, 0x11223344));
+    EXPECT_EQ(noErr, C_SetMenuItemRefCon2(m, 1, 0x55667788));
+    EXPECT_EQ(noErr, C_SetMenuItemCommandID(m, 1, 'cmd1'));
+    EXPECT_EQ(noErr, C_GetMenuItemRefCon(m, 1, &v));
+    EXPECT_EQ(0x11223344u, (UInt32)v);
+    EXPECT_EQ(noErr, C_GetMenuItemRefCon2(m, 1, &v));
+    EXPECT_EQ(0x55667788u, (UInt32)v);
+    EXPECT_EQ(noErr, C_GetMenuItemRefCon(m, 2, &v));
+    EXPECT_EQ(0u, (UInt32)v);
+    EXPECT_EQ(paramErr, C_SetMenuItemRefCon(m, 3, 1));
+    EXPECT_EQ(paramErr, C_GetMenuItemRefCon2(m, 0, &v));
     DisposeMenu(m);
 }
 

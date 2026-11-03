@@ -982,6 +982,8 @@ struct ItemKeys
     TextEncoding encoding = 0;
     SInt16 font_id = 0;      /* SetMenuItemFontID's; 0: the menu's font */
     UInt32 command_id = 0;   /* SetMenuItemCommandID's */
+    UInt32 refcon = 0;       /* SetMenuItemRefCon's */
+    UInt32 refcon2 = 0;      /* SetMenuItemRefCon2's */
 };
 std::map<std::pair<uint32_t, int>, ItemKeys> item_keys;
 std::set<uint32_t> parent_choosable;
@@ -1149,6 +1151,42 @@ OSErr Executor::C_GetMenuItemCommandID(MenuRef menu, SInt16 item, GUEST<UInt32> 
         return paramErr;
     auto it = item_keys.find({ US_TO_SYN68K(menu), item });
     *outCommandID = it == item_keys.end() ? 0 : it->second.command_id;
+    return noErr;
+}
+
+/* AppearanceLib's two per-item reference constants, kept like the
+   command ID (Illustrator 8.0 calls them unchecked, weak imports). */
+OSErr Executor::C_SetMenuItemRefCon(MenuRef inMenu, SInt16 inItem, UInt32 inRefCon)
+{
+    if(!valid_item(inMenu, inItem))
+        return paramErr;
+    item_keys[{ US_TO_SYN68K(inMenu), inItem }].refcon = inRefCon;
+    return noErr;
+}
+
+OSErr Executor::C_GetMenuItemRefCon(MenuRef inMenu, SInt16 inItem, GUEST<UInt32> *outRefCon)
+{
+    if(!valid_item(inMenu, inItem) || !outRefCon)
+        return paramErr;
+    auto it = item_keys.find({ US_TO_SYN68K(inMenu), inItem });
+    *outRefCon = it == item_keys.end() ? 0 : it->second.refcon;
+    return noErr;
+}
+
+OSErr Executor::C_SetMenuItemRefCon2(MenuRef inMenu, SInt16 inItem, UInt32 inRefCon2)
+{
+    if(!valid_item(inMenu, inItem))
+        return paramErr;
+    item_keys[{ US_TO_SYN68K(inMenu), inItem }].refcon2 = inRefCon2;
+    return noErr;
+}
+
+OSErr Executor::C_GetMenuItemRefCon2(MenuRef inMenu, SInt16 inItem, GUEST<UInt32> *outRefCon2)
+{
+    if(!valid_item(inMenu, inItem) || !outRefCon2)
+        return paramErr;
+    auto it = item_keys.find({ US_TO_SYN68K(inMenu), inItem });
+    *outRefCon2 = it == item_keys.end() ? 0 : it->second.refcon2;
     return noErr;
 }
 

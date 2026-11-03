@@ -697,3 +697,53 @@
     comment: |
       MacPhoenix: private; Gestalt 'cpnt' on 7.5.5 calls it. Name and value
       guessed (3.0).
+
+# ####
+
+# The calls every component answers itself (Components.h: the instance,
+# then a negative selector through CallComponent), exported by InterfaceLib:
+# Illustrator 8.0's plug-ins import GetComponentVersion.
+- dispatcher:
+    name: ComponentInstanceCall
+    trap: 0xA82A
+    selector-location: Component
+
+# ####
+
+- function:
+    name: ComponentFunctionImplemented
+    return: LONGINT
+    args:
+      - name: ci
+        type: ComponentInstance
+      - name: ftnNumber
+        type: INTEGER
+    dispatcher: ComponentInstanceCall
+    selector: 0xFFFD
+    library: InterfaceLib
+
+# ####
+
+- function:
+    name: GetComponentVersion
+    return: LONGINT
+    args:
+      - name: ci
+        type: ComponentInstance
+    dispatcher: ComponentInstanceCall
+    selector: 0xFFFC
+    library: InterfaceLib
+
+# ####
+
+- function:
+    name: ComponentSetTarget
+    return: LONGINT
+    args:
+      - name: ci
+        type: ComponentInstance
+      - name: target
+        type: ComponentInstance
+    dispatcher: ComponentInstanceCall
+    selector: 0xFFFA
+    library: InterfaceLib
