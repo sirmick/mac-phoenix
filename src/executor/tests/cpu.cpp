@@ -3,6 +3,8 @@
 #include <base/functions.impl.h>
 #include <base/mactype.h>
 #include <PowerCore.h>
+#include <base/builtinlibs.h>
+#include <AppleEvents.h>
 
 #define ABSOLUTE_ADDR 0
 
@@ -125,6 +127,36 @@ TEST_F(CPU, executePPC)
     EXPECT_EQ(42, getPowerCore().r[3]);
 }
 
+
+/* Apple's ObjectSupportLib tells the AppleEvent Manager it is there with
+   handlers that are no address: AEInstallEventHandler('Berk', 'eley',
+   'Win ', 0, false), AERemoveEventHandler('Stan', 'ford', 'Bite', true).
+   From PowerPC they are answered, not a fatal "host pointer is not
+   guest-addressable" where the value's window is small (the tab's 64 MB
+   pool: CodeWarrior IDE 3.2 with PowerPC, M1 #6). */
+static void ppcCall(CPU& t, const char *name, std::initializer_list<uint32_t> args)
+{
+    auto sc = builtinlibs::callbackAddresses(name);
+    ASSERT_FALSE(sc.empty()) << name;
+    auto& cpu = getPowerCore();
+    int r = 3;
+    for(uint32_t a : args)
+        cpu.r[r++] = a;
+    t.ppc({
+        0x3D800000 | (sc[0] >> 16),     //  lis r12, sc@h
+        0x618C0000 | (sc[0] & 0xFFFF),  //  ori r12, r12, sc@l
+        0x7D8903A6,                     //  mtctr r12
+        0x4E800420                      //  bctr
+    });
+}
+
+TEST_F(CPU, ppcAEHandlersThatAreNoAddress)
+{
+    ppcCall(*this, "AERemoveEventHandler", { "Stan"_4, "ford"_4, "Bite"_4, 1 });
+    ppcCall(*this, "AEInstallEventHandler", { "Berk"_4, "eley"_4, "Win "_4, 0, 0 });
+    EXPECT_EQ(noErr, (int16_t)getPowerCore().r[3]);
+    ppcCall(*this, "AERemoveEventHandler", { "Berk"_4, "eley"_4, "Win "_4, 0 });
+}
 
 TEST_F(CPU, breakpoint68K)
 {
