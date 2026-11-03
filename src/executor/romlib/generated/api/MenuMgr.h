@@ -6,10 +6,11 @@
  * Needs:                                                                    *
  *     MacTypes.h          INTEGER, Handle, LONGINT, Str255,                 *
  *                         ConstStringPtr, ResType, CharParameter,           *
- *                         StringPtr, Boolean, Byte, Rect, OSErr, SInt16,    *
- *                         UInt8, Ptr, UInt16                                *
+ *                         StringPtr, Boolean, Byte, Rect, UInt16, OSErr,    *
+ *                         SInt16, UInt8, Ptr, UInt32                        *
  *     QuickDraw.h         RGBColor, Style                                   *
  *     DriverServices.h    OSStatus                                          *
+ *     EventMgr.h          EventRecord                                       *
  *     FileMgr.h           TextEncoding                                      *
  *                                                                           *
  *                                                                           *
@@ -24,6 +25,7 @@
 #include "ExMacTypes.h"
 #include "QuickDraw.h"
 #include "DriverServices.h"
+#include "EventMgr.h"
 #include "FileMgr.h"
 
 #define MODULE_NAME MenuMgr
@@ -344,6 +346,10 @@ using MenuBarDefUPP = UPP<LONGINT(INTEGER selector, INTEGER message, INTEGER par
 
 void CheckMenuItem(MenuHandle mh, INTEGER item, Boolean cflag);
 
+void C_EnableMenuItem(MenuRef menu, UInt16 item);LIBRARY_FUNCTION(MenusLib, EnableMenuItem, C_EnableMenuItem);
+
+
+void C_DisableMenuItem(MenuRef menu, UInt16 item);LIBRARY_FUNCTION(MenusLib, DisableMenuItem, C_DisableMenuItem);
 
 
 INTEGER C_GetMBarHeight();NOTRAP_FUNCTION(GetMBarHeight);
@@ -446,6 +452,21 @@ OSStatus C_SetMenuBarClockConfig(Ptr inConfig);LIBRARY_FUNCTION(MenusLib, SetMen
 
 
 Boolean C_IsMenuItemEnabled(MenuRef menu, UInt16 item);LIBRARY_FUNCTION(MenusLib, IsMenuItemEnabled, C_IsMenuItemEnabled);
+
+
+OSErr C_SetMenuItemCommandID(MenuRef inMenu, SInt16 inItem, UInt32 inCommandID);LIBRARY_FUNCTION(AppearanceLib, SetMenuItemCommandID, C_SetMenuItemCommandID);
+
+
+OSErr C_GetMenuItemCommandID(MenuRef inMenu, SInt16 inItem, GUEST<UInt32> *outCommandID);LIBRARY_FUNCTION(AppearanceLib, GetMenuItemCommandID, C_GetMenuItemCommandID);
+
+
+UInt32 C_MenuEvent(const EventRecord *inEvent);LIBRARY_FUNCTION(AppearanceLib, MenuEvent, C_MenuEvent);
+
+
+void C_HideMenuBar();LIBRARY_FUNCTION(MenusLib, HideMenuBar, C_HideMenuBar);
+
+
+void C_ShowMenuBar();LIBRARY_FUNCTION(MenusLib, ShowMenuBar, C_ShowMenuBar);
 
 
 OSStatus C_SetSubmenuParentChoosable(MenuRef menu, Boolean inChoosable);LIBRARY_FUNCTION(MenusLib, SetSubmenuParentChoosable, C_SetSubmenuParentChoosable);

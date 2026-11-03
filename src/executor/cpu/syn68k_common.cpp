@@ -620,6 +620,12 @@ int syn68k_is_guest_addr_mapped(uint32_t addr, size_t len)
     return w < OFFSET_TABLE_SIZE && off + len <= size;
 }
 
+int syn68k_is_guest_addr_in_window(uint32_t addr, size_t len)
+{
+    int w = addr >> 30;
+    return w < OFFSET_TABLE_SIZE && (addr & (WINDOW - 1)) + len <= ROMlib_sizes[w];
+}
+
 /* --watch: a write watchpoint on guest memory (guest_watch.h), asked for
  * before RAM exists and installed when it is mapped. */
 static uint32_t pending_watch_addr;
@@ -795,9 +801,10 @@ void initialize_68k_emulator(void (*)(int), int, uint32 trap_vector_storage[64],
     cpu::platform_set_memory(&guest_memory);
     cpu::Config config;
     config.model = 68040;
-    /* A 68040 with its FPU. Executor provides SANE natively and tells
-     * Gestalt there is no FPU, but applications built for one (MacPerl)
-     * execute FPU instructions regardless. Without this the mame-68k core
+    /* A 68040 with its FPU. Executor provides SANE natively; Gestalt
+     * 'fpu ' and SysEnvirons report the FPU as a Quadra does (Photoshop
+     * 4.0 asks), and applications built for one (MacPerl) execute FPU
+     * instructions regardless. Without this the mame-68k core
      * is an LC040 and every line-F word is a fatal trap 11 (STRAGGLERS.md
      * 22). */
     config.fpu = true;

@@ -2205,6 +2205,12 @@ OSErr Executor::process_launch(LaunchParamBlockRec *lpbp)
         memcpy(&p->name[1], &p->app.name[1], len);
     }
     pending_launch = p;
+    /* It comes to the front after any SetFrontProcess asked for before:
+       BridgeAgent, started in front, hands it to the Finder, then launches
+       what it is asked to; the older request, left pending, took the front
+       back to the Finder at the new process's first idle event call
+       (text_hilite_executor typed into the Finder). */
+    pending_front = nullptr;
     lpbp->launchProcessSN = p->serial_number;
 
     /* As 7.5.5's Process Manager: the launcher's AppParameters (Finder's
@@ -3042,6 +3048,15 @@ OSErr Executor::C_CallProcessRoutine(ProcessSerialNumber *psn, ProcPtr routine,
     root_current = saved_root;
     foreign_current = saved_foreign;
     return result;
+}
+
+/* OSDispatch $2: the 8 bytes Apple's 7.6.1 gives (measured: a probe
+   calling it on the Quadra), and 0. Excel 4.0 asks at start-up. */
+int32_t Executor::C_GetProcessManagerID(Ptr id)
+{
+    if(id)
+        memcpy(id, "TWIT1889", 8);
+    return 0;
 }
 
 /* General Controls' "Show Desktop when in background", stored inverted as

@@ -5,6 +5,7 @@
 #include <PowerCore.h>
 #include <base/builtinlibs.h>
 #include <AppleEvents.h>
+#include <appleevent/apple_events.h>
 
 #define ABSOLUTE_ADDR 0
 
@@ -152,10 +153,30 @@ static void ppcCall(CPU& t, const char *name, std::initializer_list<uint32_t> ar
 
 TEST_F(CPU, ppcAEHandlersThatAreNoAddress)
 {
+    if(!ROMlib_ae_private())
+    {
+        AE_init();
+        AE_reinit();
+    }
     ppcCall(*this, "AERemoveEventHandler", { "Stan"_4, "ford"_4, "Bite"_4, 1 });
+    EXPECT_EQ(errAEHandlerNotFound, (int16_t)getPowerCore().r[3]);
     ppcCall(*this, "AEInstallEventHandler", { "Berk"_4, "eley"_4, "Win "_4, 0, 0 });
     EXPECT_EQ(noErr, (int16_t)getPowerCore().r[3]);
+    /* where the value can be a pointer (natively: the pool's window is
+       1 GB), it is in the AppleEvent Manager's table, as on a Mac
+       (AppleWorks 5 with its PowerPC code stops without it) */
+    if(syn68k_is_guest_addr_in_window("Win "_4, 2))
+    {
+        GUEST<AEEventHandlerUPP> hdlr;
+        GUEST<int32_t> refcon;
+        ASSERT_EQ(noErr, AEGetEventHandler("Berk"_4, "eley"_4, &hdlr, &refcon, false));
+        EXPECT_EQ("Win "_4, hdlr.raw_host_order());
+    }
+    /* removed as installed (AppleWorks 5 does it straight away) */
     ppcCall(*this, "AERemoveEventHandler", { "Berk"_4, "eley"_4, "Win "_4, 0 });
+    EXPECT_EQ(noErr, (int16_t)getPowerCore().r[3]);
+    ppcCall(*this, "AERemoveEventHandler", { "Berk"_4, "eley"_4, "Win "_4, 0 });
+    EXPECT_EQ(errAEHandlerNotFound, (int16_t)getPowerCore().r[3]);
 }
 
 TEST_F(CPU, breakpoint68K)

@@ -1872,6 +1872,19 @@
 
 # ####
 
+# InterfaceLib 8.5's: a PixMap's row bytes without the flag bits.
+# REALbasic's plugins call it unchecked on 8.5 and later (GameBox Classic).
+- function:
+    name: GetPixRowBytes
+    return: LONGINT
+    args:
+      - name: pm
+        type: PixMapHandle
+    library: InterfaceLib
+    executor: C_
+
+# ####
+
 - function:
     name: NewScreenBuffer
     return: QDErr

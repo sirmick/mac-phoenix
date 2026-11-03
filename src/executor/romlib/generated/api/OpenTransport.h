@@ -926,6 +926,9 @@ namespace ot { uint32_t clone_configuration(const Call &); }OT_FUNCTION(OTClient
 namespace ot { uint32_t destroy_configuration(const Call &); }OT_FUNCTION(OTClientUtilLib, OTDestroyConfiguration, "OTClnt$LclUtils", "OTDESTROYCONFIGURATION", true, "L", 'V', destroy_configuration);
 
 
+namespace ot { uint32_t free_mem_priv(const Call &); }OT_FUNCTION(OTClientUtilLib, OTFreeMem, "", "OTFreeMem", false, "L", 'V', free_mem_priv);
+
+
 namespace ot { uint32_t cfg_open_db(const Call &); }OT_FUNCTION(OTConfigLib, OTOpenConfigurationsDB, "OTLib$CfigLib", "OTOpenConfigurationsDB", false, "LLL", 'L', cfg_open_db);
 
 

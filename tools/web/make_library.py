@@ -28,6 +28,8 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE.parent / "diskaudit"))
+import tidy  # noqa: E402  (disk_audit.py's checks put right)
 CDS = HERE.parent.parent / "provisioning" / "cds.json"
 COVER_PX = 480
 
@@ -117,14 +119,15 @@ DISKS = [
      "tags": ["games", "ppc"],
      "note": "Fat and PowerPC games, on Mac OS 8.6 with PowerPC ticked: Marathon, Marathon 2, "
              "Escape Velocity, EV Override, EV Nova, Bubble Trouble, Barrack, Chiral, Flashback, "
-             "SimCity 2000, Wolfenstein 3D, Ferazel's Wand, Slithereens, Mars Rising.",
+             "SimCity 2000, Wolfenstein 3D, Ferazel's Wand, Slithereens, Mars Rising; "
+             "GameBox Classic, a library to launch them from.",
      "systems": ["8.6"],
      "take": [("games.img", ["Marathon 1.2 ƒ", "Marathon 2 ƒ", "Escape Velocity 1.0.5 ƒ",
                              "EV Override 1.0.2 ƒ", "Bubble Trouble 1.0.1 ƒ", "Barrack 1.0.4 ƒ",
                              "Chiral 1.0.4 ƒ", "Flashback 1.0 ƒ", "SimCity 2000® Collection ƒ",
                              "Wolfenstein 3D 1.0.2 ƒ"]),
               ("games-ppc.img", ["EV Nova 1.0.10 ƒ", "Ferazel's Wand 1.0.3 ƒ", "Slithereens 1.0.1 ƒ",
-                                 "Mars Rising 1.0.2 ƒ"])],
+                                 "Mars Rising 1.0.2 ƒ", "GameBox Classic 1.2.0 ƒ"])],
      "launch": [
          {"app": "Marathon 2 ƒ:Marathon 2", "name": "Marathon 2"},
          {"app": "Escape Velocity 1.0.5 ƒ:Escape Velocity", "name": "Escape Velocity"},
@@ -132,6 +135,7 @@ DISKS = [
          {"app": "EV Nova 1.0.10 ƒ:EV Nova", "name": "EV Nova", "source": "games-ppc.img"},
          {"app": "Ferazel's Wand 1.0.3 ƒ:Ferazel's Wand", "name": "Ferazel's Wand", "source": "games-ppc.img"},
          {"app": "Slithereens 1.0.1 ƒ:Slithereens", "name": "Slithereens", "source": "games-ppc.img"},
+         {"app": "GameBox Classic 1.2.0 ƒ:GameBox", "name": "GameBox", "source": "games-ppc.img"},
      ]},
     {"name": "internet.img", "label": "Internet",
      "title": "Internet",
@@ -189,6 +193,9 @@ def make(d, images, out):
         for src, folders in d["take"]:
             cmd += ["--take", str(images / src), *folders]
     subprocess.run(cmd, check=True)
+    if "boot" not in d:                 # make_boot_disk.py tidies its own
+        done = tidy.tidy(str(tmp))
+        print(f"{d['name']}: {done['icons']} icons placed in {done['folders']} folders")
     os.replace(tmp, img)
 
 

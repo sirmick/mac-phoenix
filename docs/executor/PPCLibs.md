@@ -143,6 +143,12 @@ approximation where Executor's gives `?`.
   descriptor), EINVAL on Executor's.
 - `_RTInit`, `_RTExit`, `_DoExitProcs` and stdio's other internals not in
   the survey answer 0 and are logged (`[unimplemented] PowerPC NAME`).
+- MPLibrary (Multiprocessing Services): Apple's needs the nanokernel
+  (supervisor instructions, imports Executor doesn't answer), so
+  `GetSharedLibrary` declines it (`fragLibNotFound`) and weak imports of it
+  go nil, as programs that test `MPLibraryIsLoaded` expect (REALbasic's
+  plugins: GameBox Classic). Later: Executor's own, one processor
+  (`MPProcessors` 1, tasks run cooperatively), declared in YAML like OT's.
 
 ## On the way
 

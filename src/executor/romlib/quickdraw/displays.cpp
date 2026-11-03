@@ -272,6 +272,21 @@ OSErr Executor::C_DMMoveDisplay(GDHandle moveDevice, INTEGER x, INTEGER y, Handl
     return moveDevice == LM(MainDevice) ? noErr : paramErr;
 }
 
+/* MacPhoenix: one screen, no mirroring, answered as a 7.6.1 Quadra does
+   (measured: a probe on the ROM machine) */
+OSErr Executor::C_DMQDIsMirroringCapable(Boolean *qdIsMirroringCapable)
+{
+    if(qdIsMirroringCapable)
+        *qdIsMirroringCapable = false;
+    return noErr;
+}
+
+OSErr Executor::C_DMCanMirrorNow(Boolean *canMirrorNow)
+{
+    (void)canMirrorNow;
+    return -6226;
+}
+
 OSErr Executor::C_DMIsMirroringOn(Boolean *isMirroringOn)
 {
     *isMirroringOn = false;

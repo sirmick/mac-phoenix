@@ -899,7 +899,7 @@ OSErr Executor::SysEnvirons(INTEGER vers, SysEnvRecPtr p)
     p->systemVersion = LM(SysVersion);
 
     p->processor = env68040;
-    p->hasFPU = false;
+    p->hasFPU = true; /* MacPhoenix: the 68040's FPU (Gestalt 'fpu ' 3) */
     p->hasColorQD = true;
     p->keyBoardType = envAExtendKbd;
     p->atDrvrVersNum = 0;
