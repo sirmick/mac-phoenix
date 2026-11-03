@@ -466,6 +466,9 @@ DISPATCHER_TRAP(HeapDispatch, 0xA0A4, D0W);
 THz C_HeapDispatchSharedZone();PASCAL_SUBTRAP_UNEXPORTED(HeapDispatchSharedZone, 0xA0A4, 0x0020, HeapDispatch);
 
 
+void C_HeapDispatchForgetZone();PASCAL_SUBTRAP_UNEXPORTED(HeapDispatchForgetZone, 0xA0A4, 0x000A, HeapDispatch);
+
+
 void C_BlockZero(void *destPtr, Size byteCount);NOTRAP_FUNCTION(BlockZero);
 
 

@@ -1162,6 +1162,23 @@
 
 # ####
 
+# Selector $A, A0 a zone (the name is ours): the 7.6.1 System's code that
+# runs a component in a zone of its own calls it (when $A0A4 is
+# implemented) before it lets the zone go, ignoring D0. A 7.6.1 Quadra
+# (a probe) leaves the zone's header and A0 as they were, for a zone,
+# a block that isn't one, the system or application zone, or nil; D0
+# comes back 4 or 5. Executor keeps no list of zones: nothing to do.
+- only-for: Executor
+  function:
+    name: HeapDispatchForgetZone
+    trap: 0xA0A4
+    dispatcher: HeapDispatch
+    selector: 0x000A
+    executor: C_
+    export: false
+
+# ####
+
 # BlockZero and BlockZeroUncached (Universal Interfaces' MacMemory.h):
 # InterfaceLib 8.5 and later, and DriverServicesLib; no trap.
 - function:
