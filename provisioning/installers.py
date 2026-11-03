@@ -132,8 +132,7 @@ def bake_items(b, work, volumes=None):
         items += disk_items(spec, b, work, volumes)
     # The bake's "exclude" paths ("Folder:Name": a serial number file the
     # archive came with) are left out here too.
-    left = [mr(e) for e in b.get("exclude", []) if ":" in e]
-    return [(r, l) for r, l in items if not any(r == e or r.startswith(e + b":") for e in left)]
+    return [(r, l) for r, l in items if not bake.excluded_path(r, b.get("exclude", []))]
 
 
 def has_media(b):

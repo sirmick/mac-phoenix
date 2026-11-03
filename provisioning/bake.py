@@ -411,6 +411,15 @@ def clear_recent(hfs):
     return removed
 
 
+def excluded_path(rel, exclude):
+    """Whether rel (MacRoman bytes) is, or is inside, one of exclude's
+    "Folder:Name" paths (a bake's "exclude" entries with a colon: a serial
+    number file an archive came with). Names without a colon are the
+    target's top level and are matched by the capture alone."""
+    return any(rel == e or rel.startswith(e + b":") for e in (mr(x) if isinstance(x, str) else x for x in exclude)
+               if b":" in e)
+
+
 def media_items(m, work):
     """A bake's "media" entry as the items put on its Media volume."""
     if m.get("as_is"):                      # a MacBinary file put there whole, not opened
@@ -728,9 +737,9 @@ class Session:
         if self.bake.get("archive"):            # an .hqx expands to a .sit and then a folder
             dropped |= {r.split(b":")[0] for r, l in items if b":" not in r and l
                         and os.path.splitext(r.decode("mac_roman"))[1].lower() in ARCHIVE_TYPES}
-        def left_out(r):                        # "A:B" in "exclude": that path (and under it) only
-            return r.split(b":")[0] in dropped or any(r == e or r.startswith(e + b":") for e in dropped if b":" in e)
-        excluded = sorted({e for e in dropped if b":" in e and any(left_out(r) for r, _ in items if r.startswith(e))}
+        def left_out(r):
+            return r.split(b":")[0] in dropped or excluded_path(r, dropped)
+        excluded = sorted({e for e in dropped if b":" in e and any(excluded_path(r, [e]) for r, _ in items)}
                           | {r.split(b":")[0] for r, _ in items if r.split(b":")[0] in dropped})
         items = [(r, l) for r, l in items if not left_out(r)]
         if self.bake.get("from_boot"):

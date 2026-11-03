@@ -618,6 +618,14 @@ add_test(
 )
 set_tests_properties(bake_serials PROPERTIES TIMEOUT 60 LABELS "provisioning")
 
+# A bake's "exclude" paths ("Folder:Name", a serial number file an archive came
+# with) left out of the snapshot and the Installers disk (no emulator).
+add_test(
+  NAME bake_exclude
+  COMMAND ${Python3_EXECUTABLE} ${TEST_DIR}/test_bake_exclude.py
+)
+set_tests_properties(bake_exclude PROPERTIES TIMEOUT 60 LABELS "provisioning")
+
 # AppleWorks 5.0.3 on Executor's 7.6.1: a word-processing document made,
 # saved on the Host volume, opened again and saved (tests/test_appleworks.py),
 # with its 68k code and with its PowerPC code.
