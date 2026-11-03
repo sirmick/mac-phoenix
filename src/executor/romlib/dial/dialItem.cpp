@@ -228,7 +228,12 @@ void Executor::ShortenDITL(DialogPtr dp, int16_t n_items)
                         DIALOG_EDIT_OPEN(dp) = 0;
                     }
 
-                    DisposeHandle((Handle)itemp->itmhand);
+                    /* MacPhoenix: a text item that is a control (its
+                       control as the handle) goes as a control */
+                    if(ROMlib_dialog_handle_is_control(dp, itemp->itmhand))
+                        DisposeControl((ControlHandle)itemp->itmhand.get());
+                    else
+                        DisposeHandle((Handle)itemp->itmhand);
                     /* when editText items are drawn, the box around
 		      them is inset `-3', so we also need to do that
 		      when erasing */

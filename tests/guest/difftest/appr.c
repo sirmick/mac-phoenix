@@ -1230,6 +1230,18 @@ static void dialog_items(void)
             out_str(k, s);
         }
     }
+    {
+        /* a control item made a static text item with its control as the
+           handle (Navigation Services' separator): still that control */
+        DialogItemType type;
+        Handle h;
+        Rect rr;
+        ControlHandle c = NULL;
+        GetDialogItem(d, 6, &type, &h, &rr);
+        SetDialogItem(d, 6, statText | itemDisable, h, &rr);
+        GetDialogItemAsControl(d, 6, &c);
+        out("ctltext.6", "%s", c == NULL ? "nil" : (Handle)c == h ? "its control" : "another");
+    }
     DisposeDialog(d);
 }
 

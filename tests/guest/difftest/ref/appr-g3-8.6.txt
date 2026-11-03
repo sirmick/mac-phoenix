@@ -1,4 +1,4 @@
-# probe 5ee312ece4c0380f3de93d6f469a35f5ace84dd9abbb4a73ed8513a965693f04
+# probe a6c0b757961863c51c7b780d8526593dda3cbe55afbdbbb627995d0e9d0123e0
 == gestalt
 gestalt.appr: 0 00000001
 gestalt.apvr: 0 00000110
@@ -1749,6 +1749,7 @@ dlgitems.settext.3.size: 41
 dlgitems.settext.3.title: "" (0)
 dlgitems.settext.3.get: "Retitled" (8)
 dlgitems.settext.3.item: "Retitled" (8)
+dlgitems.ctltext.6: its control
 == labels
 labels.kind0.state1: fg 0000 0000 0000 bg dddd dddd dddd mode 1
 labels.kind0.state0: fg 7777 7777 7777 bg dddd dddd dddd mode 1

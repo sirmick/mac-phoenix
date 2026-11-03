@@ -11,6 +11,7 @@
 #include <EventMgr.h>
 #include <DialogMgr.h>
 #include <ControlMgr.h>
+#include <ControlMgr8.h>
 #include <MemoryMgr.h>
 #include <OSUtil.h>
 #include <ToolboxUtil.h>
@@ -551,6 +552,11 @@ void Executor::dialog_draw_item(DialogPtr dp, itmp itemp, int itemno)
     else if(itemp->itmtype & (statText | editText))
     {
         Rect r;
+
+        /* MacPhoenix: a text item whose handle is one of the dialog's
+           controls is that control, drawn with the controls */
+        if(ROMlib_dialog_handle_is_control(dp, itemp->itmhand))
+            return;
 
         // FIXME: #warning This fix helps Energy Scheming, but we really should find out the
         // FIXME: #warning exact semantics for when we should try to draw items, different

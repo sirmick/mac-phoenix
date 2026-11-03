@@ -440,7 +440,11 @@ void Executor::C_CloseDialog(DialogPtr dp) /* IMI-413 */
         itp = (itmp)(ip + 1);
         while(i-- >= 0)
         {
-            if(itp->itmtype & (editText | statText))
+            /* MacPhoenix: not a text item's handle that is one of the
+               window's controls (Navigation Services' separator): it goes
+               with the window's controls */
+            if((itp->itmtype & (editText | statText))
+               && !ROMlib_dialog_handle_is_control(dp, itp->itmhand))
                 DisposeHandle((Handle)itp->itmhand);
             BUMPIP(itp);
         }

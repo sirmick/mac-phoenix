@@ -19,6 +19,7 @@
 #include <dial/itm.h>
 #include <dial/dial.h>
 #include <ctl/ctl.h>
+#include <wind/wind.h>
 #include <textedit/textedit.h>
 #include <quickdraw/cquick.h>
 #include <base/functions.impl.h>
@@ -261,6 +262,19 @@ void Executor::ROMlib_dialog_item_controls_shorten(DialogPtr dp, int count)
     }
 }
 
+/* A handle that is one of the dialog's controls: Navigation Services makes
+   a separator item (a CNTL) a static text item with its control as the
+   handle; that item is the control, never text. */
+bool Executor::ROMlib_dialog_handle_is_control(DialogPtr dp, Handle h)
+{
+    if(!dp || !h)
+        return false;
+    for(ControlHandle c = WINDOW_CONTROL_LIST(dp); c; c = CTL_NEXT_CONTROL(c))
+        if((Handle)c == h)
+            return true;
+    return false;
+}
+
 bool Executor::ROMlib_dialog_item_of_control(ControlHandle c, DialogPtr *dp, int *item)
 {
     for(auto &e : itemControlsTable())
@@ -437,8 +451,9 @@ OSErr Executor::C_GetDialogItemAsControl(DialogRef inDialog, SInt16 inItemNo,
     GUEST<Handle> h;
     Rect r;
     GetDialogItem(inDialog, inItemNo, &type, &h, &r);
-    ControlHandle c = ((INTEGER)type & ctrlItem) ? (ControlHandle)h.get()
-                                                 : ROMlib_dialog_item_control(inDialog, inItemNo);
+    ControlHandle c = ((INTEGER)type & ctrlItem) || ROMlib_dialog_handle_is_control(inDialog, h)
+                          ? (ControlHandle)h.get()
+                          : ROMlib_dialog_item_control(inDialog, inItemNo);
     if(!c)
     {
         *outControl = nullptr;
