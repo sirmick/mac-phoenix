@@ -161,6 +161,9 @@ Executor native = `tests/test_utilities_executor.sh`, the tab = the
 | Speedometer 4.0 | splash until a click, then its registration screen | registration form | as the Quadra; Hardware Information: Macintosh, 68040 | as the Quadra; Power Macintosh | |
 | MacBench 5.0 | needs a PowerPC | licence | needs a PowerPC 601 | licence | — / quits at Cmd-. (its licence's Quit) |
 
+The benchmarks' numbers, every machine and core: docs/executor/Speed.md
+(`tools/bench/run.py`).
+
 TattleTech switches to its own resource file with `UseResFile` on a local
 it sets only on its Name Registry path (Gestalt `'nreg'`, a PowerPC Mac,
 `NameRegistryLib`): the G3 takes that path; on the Quadra the local is
