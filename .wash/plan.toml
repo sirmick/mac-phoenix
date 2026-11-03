@@ -1,7 +1,7 @@
 # wash-plan: written by Wash as the plan changes.
 # Edit it only between workspaces; plan_set {"from": "<this file>"} loads it.
 
-revision = 106
+revision = 112
 
 [[node]]
   id = "cuts"
@@ -568,8 +568,8 @@ revision = 106
   emoji = "🕹️"
   template = "package"
   body = "Owner 2026-11-03: add https://manticore.nz/gamebox. GameBox is a free game-library manager for vintage Macs (organise/launch games, play time, virtual discs, chat rooms, scoreboards, profiles; registration optional). Classic 1.2.0 for Mac OS 8-9.2.2 (PowerPC), 12 MB RAM: http://files.mac-attic.com/downloads/manticoresw/gamebox/classic/GameBox-classic-latest.hqx (4 MB; the author's own download host). Steps: pin the .hqx in media.json (md5/sha256, page URL), check whether it's Carbon (needs CarbonLib: Executor has none until M2; if so, report and stop) or classic PPC; bake onto the PPC games disk (games-ppc / provisioning image) for 8.6; run it on Executor 8.6 natively and in the tab: add a few of the disk's games to its library, launch one from it; online features through the relay only if they work without setup. A tab cell. Rebuild the library image and tell the orchestrator before it goes to the owner's server."
-  state = "active"
-  revision = 84
+  state = "done"
+  revision = 112
 
 [[node]]
   id = "disk-audit"
@@ -598,3 +598,12 @@ revision = 106
   body = "Owner decisions 2026-11-03 on the disk audit (tools/diskaudit, report ~/storage/tmp/disk-audit/report.md): (1) make_boot_disk.py drops aliases whose targets the cut removes (8.6: Apple FM Radio, AppleCD Audio Player, Automated Tasks, Launcher Items:Script Editor, Recent Applications items; 7.6.1: Apple Video Player, AppleCD Audio Player, Automated Tasks, Script Editor); Recent Applications/Documents/Servers emptied in cuts. (2) A tidy step in make_boot_disk.py/make_library.py (and provisioning build where shared) places every root and folder icon on a grid inside its window and gives each folder window a sensible frame on 640x480 with scroll origin 0,0; Desktop Folder/Trash invisible as on a real disk. (3) Rebuild boot-7.6.1, boot-8.6 and every library image clean into a scratch library; the audit reports nothing; then the orchestrator installs them into ~/storage/web-library, backing up the owner's overlays first (owner OK'd dropping their boot-8.6 changes)."
   state = "done"
   revision = 106
+
+[[node]]
+  id = "creative-exec"
+  title = "Executor calls the creative pack needs: Excel 4 (OSDispatch selector 2), Photoshop 4 ($A074, DisplayDispatch $16)"
+  emoji = "🔧"
+  template = "package"
+  body = "From creative2's results (~/storage/tmp/creative-pack/results.md): Excel 4.0 stops at launch with 'Unknown selector 0x2 for trap OSDispatch'; Photoshop 4.0 says it 'lacks the required hardware or system software' after [unimplemented] OS trap $A074 and DisplayDispatch $16. Implement like a Mac (Process Manager / Display Manager docs; difftest where useful), a gtest each, then both apps launched and used on Executor 7.6.1 (68k). Images: productivity-system-7 / creative-system-7 (serial-personalised: never view screenshots after a serial step; use creative3's masking helper)."
+  state = "active"
+  revision = 110

@@ -612,6 +612,47 @@ OSErr C_SetBevelButtonTextPlacement(ControlRef inButton, BevelButtonTextPlacemen
 OSErr C_SetDisclosureTriangleLastValue(ControlRef inTabControl, SInt16 inValue);LIBRARY_FUNCTION(AppearanceLib, SetDisclosureTriangleLastValue, C_SetDisclosureTriangleLastValue);
 
 
+enum {kControlBevelButtonTextAlignTag = "tali"_4,
+kControlBevelButtonTextOffsetTag = "toff"_4,
+kControlBevelButtonGraphicAlignTag = "gali"_4,
+kControlBevelButtonGraphicOffsetTag = "goff"_4,
+kControlImageWellContentTag = "cont"_4,
+};
+
+typedef SInt16 ControlButtonTextAlignment;
+
+enum {kControlBevelButtonAlignTextSysDirection = 0,
+kControlBevelButtonAlignTextCenter = 1,
+kControlBevelButtonAlignTextFlushRight = -1,
+kControlBevelButtonAlignTextFlushLeft = -2,
+};
+
+typedef SInt16 ControlButtonGraphicAlignment;
+
+enum {kControlBevelButtonAlignSysDirection = -1,
+kControlBevelButtonAlignCenter = 0,
+kControlBevelButtonAlignLeft = 1,
+kControlBevelButtonAlignRight = 2,
+kControlBevelButtonAlignTop = 3,
+kControlBevelButtonAlignBottom = 4,
+kControlBevelButtonAlignTopLeft = 5,
+kControlBevelButtonAlignBottomLeft = 6,
+kControlBevelButtonAlignTopRight = 7,
+kControlBevelButtonAlignBottomRight = 8,
+};
+
+OSErr C_GetBevelButtonContentInfo(ControlRef inButton, ControlButtonContentInfoPtr outContent);LIBRARY_FUNCTION(AppearanceLib, GetBevelButtonContentInfo, C_GetBevelButtonContentInfo);
+
+
+OSErr C_SetBevelButtonTextAlignment(ControlRef inButton, ControlButtonTextAlignment inAlign, SInt16 inHOffset);LIBRARY_FUNCTION(AppearanceLib, SetBevelButtonTextAlignment, C_SetBevelButtonTextAlignment);
+
+
+OSErr C_SetBevelButtonGraphicAlignment(ControlRef inButton, ControlButtonGraphicAlignment inAlign, SInt16 inHOffset, SInt16 inVOffset);LIBRARY_FUNCTION(AppearanceLib, SetBevelButtonGraphicAlignment, C_SetBevelButtonGraphicAlignment);
+
+
+OSErr C_SetImageWellContentInfo(ControlRef inButton, ControlButtonContentInfoPtr inContent);LIBRARY_FUNCTION(AppearanceLib, SetImageWellContentInfo, C_SetImageWellContentInfo);
+
+
 OSStatus C_GetControlSystemProperty(ControlRef control, PropertyTag tag, UInt32 bufferSize, GUEST<UInt32> *actualSize, void *buffer);LIBRARY_FUNCTION(ControlsLib, GetControlSystemProperty, C_GetControlSystemProperty);
 
 

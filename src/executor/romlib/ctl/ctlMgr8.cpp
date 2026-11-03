@@ -550,6 +550,51 @@ OSErr Executor::C_SetDisclosureTriangleLastValue(ControlRef inTabControl, SInt16
                             sizeof(SInt16), &value);
 }
 
+/* MacPhoenix: the bevel button's content and alignments and the image
+   well's content, each its control data tag; an alignment and then its
+   offset, the offset only if the alignment took. */
+OSErr Executor::C_GetBevelButtonContentInfo(ControlRef inButton, ControlButtonContentInfoPtr outContent)
+{
+    if(!outContent)
+        return paramErr;
+    return C_GetControlData(inButton, kControlEntireControl, kControlBevelButtonContentTag,
+                            sizeof(ControlButtonContentInfo), outContent, nullptr);
+}
+
+OSErr Executor::C_SetBevelButtonTextAlignment(ControlRef inButton, ControlButtonTextAlignment inAlign,
+                                              SInt16 inHOffset)
+{
+    GUEST<ControlButtonTextAlignment> align = inAlign;
+    OSErr err = C_SetControlData(inButton, kControlEntireControl, kControlBevelButtonTextAlignTag,
+                                 sizeof(ControlButtonTextAlignment), &align);
+    if(err != noErr)
+        return err;
+    GUEST<SInt16> offset = inHOffset;
+    return C_SetControlData(inButton, kControlEntireControl, kControlBevelButtonTextOffsetTag,
+                            sizeof(SInt16), &offset);
+}
+
+OSErr Executor::C_SetBevelButtonGraphicAlignment(ControlRef inButton, ControlButtonGraphicAlignment inAlign,
+                                                 SInt16 inHOffset, SInt16 inVOffset)
+{
+    GUEST<ControlButtonGraphicAlignment> align = inAlign;
+    OSErr err = C_SetControlData(inButton, kControlEntireControl, kControlBevelButtonGraphicAlignTag,
+                                 sizeof(ControlButtonGraphicAlignment), &align);
+    if(err != noErr)
+        return err;
+    GUEST<SInt16> offset[2] = { inVOffset, inHOffset }; /* a Point, v then h */
+    return C_SetControlData(inButton, kControlEntireControl, kControlBevelButtonGraphicOffsetTag,
+                            sizeof offset, offset);
+}
+
+OSErr Executor::C_SetImageWellContentInfo(ControlRef inButton, ControlButtonContentInfoPtr inContent)
+{
+    if(!inContent)
+        return paramErr;
+    return C_SetControlData(inButton, kControlEntireControl, kControlImageWellContentTag,
+                            sizeof(ControlButtonContentInfo), inContent);
+}
+
 OSErr Executor::C_SetUpControlTextColor(ControlRef inControl, SInt16 inDepth, Boolean inIsColorDevice)
 {
     if(!inControl)
