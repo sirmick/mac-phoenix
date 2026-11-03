@@ -79,3 +79,7 @@ dialog.settings .settings-reset-all { background: #644; }
 /* Smooth scaling (display.smoothing), fullscreen. */
 body.executor-smooth #screen-box canvas { image-rendering: auto; }
 #screen-box:fullscreen { display: flex; align-items: center; justify-content: center; background: #000; }
+/* An automatic value (x-auto): Auto, then the choices. */
+.settings-auto { display: inline-flex; align-items: center; gap: 12px; }
+.settings-auto label { display: inline-flex; align-items: center; gap: 5px; color: #ddd; }
+.settings-control .settings-auto input[type=checkbox] { margin: 0; }

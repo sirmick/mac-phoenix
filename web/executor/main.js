@@ -29,6 +29,8 @@
 // page says it needs it): the server is the only store: disks read by
 // Range as needed, their changes and Executor's volume kept on the server
 // (sync.js: Store), the last of them in a beacon when the page goes.
+// Until Executor's first frame, loading.js shows the start's steps over the
+// screen (the module's download from the Worker, 'progress').
 // Uploads are this visit's: disk images held in memory, other files copied
 // onto Executor's volume (kept with it). One tab is in control
 // (api/session); the others show its screen until they take control or it

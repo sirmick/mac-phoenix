@@ -449,6 +449,7 @@ const Settings = (() => {
             return;
         }
         const n = schema.properties[current];
+        autoRefresh = [];
         const h = document.createElement('h2');
         h.textContent = n.title;
         const desc = document.createElement('p');
@@ -611,12 +612,16 @@ const Settings = (() => {
                 error.textContent = e.message.replace(`${path}: `, '');
                 r.classList.add('invalid');
             }
+            for (const f of autoRefresh)
+                f();
             unsaved();
         };
         const c = control(path, p, id, commit, locked);
         const target = c.id === id ? c : c.querySelector(`[id="${id}"]`);
-        if (p.description && target)
-            target.setAttribute('aria-describedby', help.id);
+        if (p.description)
+            for (const t of [target, c.querySelector(`[id="${id}-auto"]`)])
+                if (t)
+                    t.setAttribute('aria-describedby', help.id);
         if (p.description) {
             const i = document.createElement('span');
             i.className = 'settings-info';
@@ -659,6 +664,8 @@ const Settings = (() => {
             return diskList(id, value, commit, locked);
         if (widget === 'screen')
             return screenSize(id, p, value, commit, locked);
+        if (p['x-auto'])
+            return automatic(path, id, p, value, commit, locked);
         if (p['x-choices']) {
             el = document.createElement('select');
             const names = providers[p['x-choices']] ? providers[p['x-choices']]() : [];
@@ -798,6 +805,90 @@ const Settings = (() => {
             });
             wrap.append(add);
         }
+        return wrap;
+    }
+
+    // A setting with an automatic value (x-auto: the value that means it,
+    // choices and labels): an Auto box, then the choices (or a number),
+    // disabled while it is ticked, showing what Auto picks.
+    const draftSystem = () => (draft && draft.machine && draft.machine.system) || '';
+    const AUTO_PICKS = {
+        'machine.ram_mb': () => (draftSystem() ? 128 : 32),
+        'machine.depth': () => (/(^|\D)(8|9)\.\d/.test(draftSystem()) ? 32 : 8),
+        'display.scale': () => Math.min(4, Math.max(1, Math.round(window.devicePixelRatio || 1))),
+        'network.secure_cookies': () => location.protocol === 'https:',
+    };
+    let autoRefresh = [];               // the shown picks, after a change (the System's)
+
+    function automatic(path, id, p, value, commit, locked) {
+        const auto = p['x-auto'], isAuto = JSON.stringify(value) === JSON.stringify(auto.value);
+        const wrap = document.createElement('span');
+        wrap.className = 'settings-auto';
+        const boxLabel = document.createElement('label');
+        const box = document.createElement('input');
+        box.type = 'checkbox';
+        box.id = `${id}-auto`;
+        box.checked = isAuto;
+        box.disabled = locked;
+        boxLabel.append(box, 'Auto');
+        const pick = AUTO_PICKS[path];
+        let el, read, show;
+        if (auto.choices) {
+            el = document.createElement('select');
+            const label = (v) => {
+                const i = auto.choices.indexOf(v);
+                return i >= 0 ? (auto.labels || [])[i] || String(v) : String(v);
+            };
+            const fill = (extra) => {
+                const vals = [...auto.choices];
+                if (extra !== undefined && !vals.includes(extra))
+                    vals.push(extra);
+                el.replaceChildren(...vals.map((v) => new Option(label(v), JSON.stringify(v))));
+            };
+            show = () => {
+                if (box.checked) {
+                    const v = pick ? pick() : auto.choices[0];
+                    fill(v);
+                    el.value = JSON.stringify(v);
+                    el.options[el.selectedIndex].textContent = `${label(v)} (Auto)`;
+                } else {
+                    const v = at(draft, path);
+                    fill(v);
+                    el.value = JSON.stringify(v);
+                }
+            };
+            read = () => JSON.parse(el.value);
+        } else {
+            el = document.createElement('input');
+            el.type = 'number';
+            if (p.minimum !== undefined)
+                el.min = p.minimum;
+            if (p.maximum !== undefined)
+                el.max = p.maximum;
+            el.step = 1;
+            show = () => {
+                el.value = box.checked ? '' : at(draft, path);
+                el.placeholder = box.checked ? 'any' : '';
+            };
+            read = () => (el.value === '' ? NaN : Number(el.value));
+        }
+        el.id = id;
+        const enable = () => { el.disabled = locked || box.checked; };
+        show();
+        enable();
+        box.addEventListener('change', () => {
+            if (box.checked)
+                commit(auto.value);
+            else    // what Auto picked, now chosen (a number: the default)
+                commit(auto.choices ? read() : (p.default !== auto.value ? p.default : 1));
+            show();
+            enable();
+            if (!box.checked)
+                el.focus();
+        });
+        el.addEventListener('change', () => commit(read()));
+        autoRefresh.push(() => { if (box.checked) show(); });
+        wrap.append(boxLabel, el);
         return wrap;
     }
 

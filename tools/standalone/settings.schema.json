@@ -22,9 +22,10 @@
         },
         "ram_mb": {
           "type": "integer", "minimum": 0, "maximum": 512, "default": 0, "x-scope": "page", "x-apply": "executor",
-          "title": "Memory (MB)",
-          "description": "0 = automatic (32 MB for Executor's System, 128 MB for Apple's).",
-          "x-widget": "number"
+          "title": "Memory",
+          "description": "Auto: 32 MB for Executor's System, 128 MB for Apple's.",
+          "x-auto": { "value": 0, "choices": [8, 16, 32, 64, 128, 256, 512],
+                      "labels": ["8 MB", "16 MB", "32 MB", "64 MB", "128 MB", "256 MB", "512 MB"] }
         },
         "screen": {
           "type": "string", "pattern": "^[1-9][0-9]{2,3}x[1-9][0-9]{2,3}$", "default": "640x480",
@@ -40,7 +41,10 @@
         "depth": {
           "type": "integer", "enum": [0, 1, 2, 4, 8, 16, 32], "default": 0, "x-scope": "page", "x-apply": "executor",
           "title": "Colours",
-          "description": "How many colours the screen starts with. Some games need 256.",
+          "description": "How many colours the screen starts with (Auto: millions on Mac OS 8 and 9, 256 on System 7). Some games need 256.",
+          "x-auto": { "value": 0, "choices": [1, 2, 4, 8, 16, 32],
+                      "labels": ["1-bit: black and white", "2-bit: 4 greys", "4-bit: 16 colours", "8-bit: 256 colours",
+                                 "16-bit: thousands", "32-bit: millions"] },
           "x-labels": ["Automatic (8.x millions, 7.x 256)", "Black and white", "4 greys", "16 colours", "256 colours", "Thousands", "Millions"]
         },
         "ppc": {
@@ -124,7 +128,8 @@
         "scale": {
           "type": "integer", "minimum": 0, "maximum": 4, "default": 0, "x-scope": "page", "x-apply": "executor",
           "title": "Sharpness",
-          "description": "Draw the screen this many times larger, with smooth text (0 = match your display). Programs still see the same screen size."
+          "description": "Draw the screen this many times larger, with smooth text (Auto: as sharp as your display). Programs still see the same screen size.",
+          "x-auto": { "value": 0, "choices": [1, 2, 3, 4], "labels": ["1×", "2×", "3×", "4×"] }
         },
         "smoothing": {
           "type": "boolean", "default": false, "x-scope": "page", "x-apply": "live",
@@ -168,7 +173,8 @@
         },
         "port": {
           "type": "integer", "minimum": 0, "maximum": 65535, "default": 8090, "x-scope": "server", "x-apply": "server",
-          "title": "Port", "description": "0 = any free port."
+          "title": "Port", "description": "Auto: any free port (the server prints which).",
+          "x-auto": { "value": 0 }
         },
         "relay_enabled": {
           "type": "boolean", "default": true, "x-scope": "server", "x-apply": "live",
@@ -206,8 +212,9 @@
         },
         "secure_cookies": {
           "type": ["string", "boolean"], "enum": ["auto", true, false], "default": "auto", "x-scope": "server", "x-apply": "live",
-          "title": "Secure cookies", "description": "auto: when the page is served over HTTPS (here or by a trusted proxy).",
-          "x-labels": ["Auto", "On", "Off"]
+          "title": "Secure cookies", "description": "Auto: when the page is served over HTTPS (here or by a trusted proxy).",
+          "x-labels": ["Auto", "On", "Off"],
+          "x-auto": { "value": "auto", "choices": [true, false], "labels": ["On", "Off"] }
         },
         "tls_cert": {
           "type": "string", "maxLength": 4096, "default": "", "x-scope": "server", "x-apply": "server",

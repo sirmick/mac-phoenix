@@ -74,27 +74,28 @@ async function exercise(page, url, what, { network }) {
         const h = document.getElementById(e.getAttribute('aria-describedby'));
         return h && { role: h.getAttribute('role'), text: h.textContent, shown: getComputedStyle(h).visibility };
     });
-    check(help && help.role === 'tooltip' && /automatic/.test(help.text) && help.shown === 'hidden',
+    check(help && help.role === 'tooltip' && /Auto: 32 MB/.test(help.text) && help.shown === 'hidden',
           `${what}: Memory's help is its tooltip, hidden (${JSON.stringify(help)})`);
-    await page.focus('#setting-machine-ram_mb');
-    check(await page.waitForSelector('#setting-machine-ram_mb-help', { state: 'visible', timeout: 2000 }).then(() => true, () => false),
+    await page.focus('#setting-machine-ram_mb-auto');
+    check(await page.$eval('#setting-machine-ram_mb-auto', (e) => e.getAttribute('aria-describedby')) === 'setting-machine-ram_mb-help'
+          && await page.waitForSelector('#setting-machine-ram_mb-help', { state: 'visible', timeout: 2000 }).then(() => true, () => false),
           `${what}: ... shown with the keyboard's focus`);
 
-    await page.fill('#setting-machine-ram_mb', '96');
-    await page.press('#setting-machine-ram_mb', 'Tab');
+    // Memory: Auto, the choices disabled showing what it picks; unticked,
+    // that pick chosen, then 128.
+    const shown = () => page.$eval('#setting-machine-ram_mb', (e) => [e.disabled, e.selectedOptions[0].textContent]);
+    const auto0 = await shown();
+    check(await page.isChecked('#setting-machine-ram_mb-auto') && auto0[0] && auto0[1] === '32 MB (Auto)',
+          `${what}: Memory on Auto, showing its pick (${auto0})`);
+    check(!/0 =/.test(await page.textContent('dialog#settings')), `${what}: no "0 =" in the dialog`);
+    await page.uncheck('#setting-machine-ram_mb-auto');
+    const manual = await shown();
+    check(!manual[0] && manual[1] === '32 MB', `${what}: Auto unticked: 32 MB, chosen (${manual})`);
+    await page.selectOption('#setting-machine-ram_mb', '128');
     await page.waitForFunction(() => document.querySelector('[data-path="machine.ram_mb"]').classList.contains('changed'));
     check(await get(page, 'machine.ram_mb') === 0 && !await page.isDisabled('dialog#settings .settings-save')
           && /Executor restarts to apply Memory/.test(await page.textContent('.settings-unsaved')),
           `${what}: Memory changed, not saved yet; the footer says Executor restarts for it`);
-    await page.fill('#setting-machine-ram_mb', '9999');
-    await page.press('#setting-machine-ram_mb', 'Tab');
-    await page.waitForFunction(() => document.querySelector('[data-path="machine.ram_mb"] .settings-error').textContent);
-    const err = await page.textContent('[data-path="machine.ram_mb"] .settings-error');
-    await page.click('dialog#settings .settings-save');
-    check(/at most 512/.test(err) && await page.isVisible('dialog#settings[open]') && await get(page, 'machine.ram_mb') === 0,
-          `${what}: 9999 MB refused ("${err}"), Save holds the dialog open`);
-    await page.fill('#setting-machine-ram_mb', '96');
-    await page.press('#setting-machine-ram_mb', 'Tab');
 
     // The screen: a size from the list, Custom… with a bad width, then a good one.
     const sizes = await page.$$eval('#setting-machine-screen option', (o) => o.map((x) => x.value));
@@ -105,7 +106,10 @@ async function exercise(page, url, what, { network }) {
     await page.fill('#setting-machine-screen-w', '64');
     await page.press('#setting-machine-screen-w', 'Tab');
     await page.waitForFunction(() => document.querySelector('[data-path="machine.screen"] .settings-error').textContent);
-    check(true, `${what}: a screen 64 wide refused`);
+    const err = await page.textContent('[data-path="machine.screen"] .settings-error');
+    await page.click('dialog#settings .settings-save');
+    check(/100 to 9999/.test(err) && await page.isVisible('dialog#settings[open]') && await get(page, 'machine.screen') === '640x480',
+          `${what}: a screen 64 wide refused ("${err}"), Save holds the dialog open`);
     await page.fill('#setting-machine-screen-w', '700');
     await page.press('#setting-machine-screen-w', 'Tab');
     await page.waitForFunction(() => !document.querySelector('[data-path="machine.screen"]').classList.contains('invalid'));
@@ -115,7 +119,7 @@ async function exercise(page, url, what, { network }) {
     await page.click('nav button[data-category=sound]');
     await page.$eval('#setting-sound-volume', (e) => { e.value = 35; e.dispatchEvent(new Event('change')); });
     await save(page);
-    check(await get(page, 'machine.ram_mb') === 96 && await get(page, 'machine.screen') === '700x480'
+    check(await get(page, 'machine.ram_mb') === 128 && await get(page, 'machine.screen') === '700x480'
           && await get(page, 'sound.volume') === 35, `${what}: Save keeps them`);
     check(await page.evaluate(() => macKeycodeForEvent({ code: 'ControlLeft' }) === 0x37
                                  && macKeycodeForEvent({ code: 'MetaLeft' }) === 0x36),
@@ -146,11 +150,12 @@ async function exercise(page, url, what, { network }) {
 
     await page.reload();
     await ready(page);
-    check(await get(page, 'machine.ram_mb') === 96 && await get(page, 'input.command_key') === 'ctrl'
+    check(await get(page, 'machine.ram_mb') === 128 && await get(page, 'input.command_key') === 'ctrl'
           && await get(page, 'sound.volume') === 35, `${what}: kept across a reload`);
     check(await page.evaluate(() => macKeycodeForEvent({ code: 'ControlLeft' })) === 0x37, `${what}: ... and applied`);
     await openDialog(page);
-    check(await page.inputValue('#setting-machine-ram_mb') === '96', `${what}: the dialog shows it`);
+    check(await page.inputValue('#setting-machine-ram_mb') === '128' && !await page.isChecked('#setting-machine-ram_mb-auto'),
+          `${what}: the dialog shows it`);
     // Reset the category: its defaults again, once saved.
     await page.click('nav button[data-category=input]');
     await page.click('dialog#settings .settings-reset');
@@ -206,7 +211,7 @@ try {
         await p.goto(`${go.url}/`);
         await ready(p);
         const file = JSON.parse(fs.readFileSync(go.settingsFile, 'utf8'));
-        check(file.version === 2 && file.machine.ram_mb === 96 && file.sound.volume === 35,
+        check(file.version === 2 && file.machine.ram_mb === 128 && file.sound.volume === 35,
               `tools/standalone: in ${go.settingsFile} (version ${file.version})`);
         const res = await p.evaluate(() => fetch('api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' },
                                                                    body: '{"display":{"scale":9}}' })
