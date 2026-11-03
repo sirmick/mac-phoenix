@@ -34,7 +34,12 @@ System's own files (later snapshots win over earlier ones); it can "place"
 items too, and "disable" System Folder items: moved to a "Disabled Items"
 folder at its top, to put back by hand (6.0.8's AppleShare, whose INIT takes
 high memory Silicon Beach's games won't share). Two snapshots placing the
-same file fail the build.
+same file fail the build. "printer" (a driver in the System Folder's
+Extensions: "ImageWriter") is the printer chosen in the Chooser, as the
+Chooser leaves it: the System file's STR -8192 names the driver and its
+'alis' -8192 points at it (applications that print, or check for a printer
+at launch, need one: Persuasion 3.0); images on a base built with one get
+it too. Written last, after the System Folder parts.
 
 Aliases a snapshot holds point at its bake's target volume. Those whose
 target is among the items placed are rewritten to where it landed (volume
@@ -127,6 +132,8 @@ def image_key(d, mans):
             pass
     if d.get("base"):
         h.update(bake.base_identity(d["base"]).encode())
+        if printer_of(d):                       # a built base's too: not in its identity
+            h.update(b"printer " + mr(printer_of(d)))
     for s in sorted(mans):
         h.update(mans[s]["content_hash"].encode())
         h.update(json.dumps(mans[s].get("system_remove", [])).encode())   # not in the content hash
@@ -145,7 +152,10 @@ def content_identity(d):
     contents, its base's identity. Not FORMAT: how build.py writes an image
     doesn't change what is on it."""
     mans = manifests(d)
-    h = hashlib.md5(json.dumps({k: v for k, v in d.items() if k not in META + ("note",)}, sort_keys=True).encode())
+    # "printer" neither: a setting in the System file, not software bakes
+    # build on (and the bakes on 7.6.1 and 8.6 keep their keys)
+    h = hashlib.md5(json.dumps({k: v for k, v in d.items() if k not in META + ("note", "printer")},
+                               sort_keys=True).encode())
     if d.get("base"):
         h.update(bake.base_identity(d["base"]).encode())
     for s in sorted(mans):
@@ -338,6 +348,49 @@ def launch_paths(place, man):
     return out
 
 
+def printer_of(d):
+    """The printer chosen on a boot image: its own "printer", or its built
+    base's (the base's System file is this image's, unless a snapshot's
+    replaces it: written again either way)."""
+    if d.get("printer"):
+        return d["printer"]
+    built = bake.bases().get(d.get("base") or "", {}).get("built")
+    return printer_of(load_def(built)) if built else None
+
+
+# The Chooser's 'alis' -8192 for the ImageWriter on a 7.6.1 Quadra's
+# "Macintosh HD" (version 2 record, its folder and file IDs, the path); the
+# volume, date, IDs and path are rewritten for each image.
+CHOOSER_ALIAS = bytes.fromhex(
+    "0000000000ea000200000c4d6163696e746f7368204844000000000000000000000000000000e6fb45ae424400000000"
+    "00130b496d61676557726974657200000000000000000000000000000000000000000000000000000000000000000000"
+    "00000000000000000000000000000000000000000105a5da6c405052455349575254000100020000000000000000000000"
+    "00000000000000000a457874656e73696f6e73000100080000001300000012000200314d6163696e746f73682048443a53"
+    "797374656d20466f6c6465723a457874656e73696f6e733a496d61676557726974657200ffff0000")
+
+
+def chooser_resources(driver, label, date, ids, cnid):
+    """STR -8192 and 'alis' -8192 as the Chooser writes them for `driver` in
+    the Extensions folder of volume `label` created at `date` (its STR: the
+    name, padded with zeros to 32 bytes; the alias: the driver's file ID,
+    `ids` the folder IDs from Extensions up, the path)."""
+    name = mr(driver)
+    head = bytearray(CHOOSER_ALIAS[:150])
+    vol = mr(label)[:27]
+    head[10:38] = bytes([len(vol)]) + vol.ljust(27, b"\0")
+    struct.pack_into(">I", head, 38, date)
+    struct.pack_into(">I", head, 46, ids[0])                 # parent folder ID
+    head[50:114] = (bytes([len(name)]) + name).ljust(64, b"\0")
+    struct.pack_into(">I", head, 114, cnid)
+    body = b""
+    for tag, data in ((0, b"Extensions"), (1, b"".join(struct.pack(">I", i) for i in ids)),
+                      (2, vol + b":System Folder:Extensions:" + name)):
+        body += struct.pack(">hH", tag, len(data)) + data + b"\0" * (len(data) & 1)
+    rec = bytes(head) + body + struct.pack(">hH", -1, 0)
+    rec = rec[:4] + struct.pack(">H", len(rec)) + rec[6:]
+    return (bytes([len(name)]) + name).ljust(32, b"\0"), rec
+
+
 class Builder:
     def __init__(self, d, work, log=print):
         self.d, self.work, self.log = d, work, log
@@ -455,6 +508,36 @@ class Builder:
                 self.hfs.run("hcopy", "-m", local, alias)
         finally:
             self.hfs.umount()
+
+    def printer(self, image, label, driver):
+        """The Chooser's choice in the System file (see the docstring)."""
+        ext = b":System Folder:Extensions:"
+        st = tempfile.mkdtemp(prefix="printer.", dir=self.work)
+        local = os.path.join(st, "System.bin")
+        self.hfs.mount(image)
+        try:
+            if not self.hfs.exists(ext + mr(driver)):
+                raise SystemExit(f"{self.d['name']}: printer {driver}: not in the System Folder's Extensions")
+            ids = [catalog_id(self.hfs, ext), catalog_id(self.hfs, b":System Folder:")]
+            cnid = catalog_id(self.hfs, ext + mr(driver))
+            self.hfs.run("hcopy", "-m", b":System Folder:System", local)
+            with open(local, "rb") as f:
+                header, data, rsrc = fat_cfm.macbinary(f.read())
+            string, alias = chooser_resources(driver, label, self.date, ids, cnid)
+            res = [r for r in fat_cfm.read_rsrc(rsrc) if not (r[1] == -8192 and r[0] in (b"STR ", b"alis"))]
+            res += [(b"STR ", -8192, 0, None, string), (b"alis", -8192, 0, None, alias)]
+            rsrc = fat_cfm.write_rsrc(res)
+            header = bytearray(header)
+            struct.pack_into(">II", header, 83, len(data), len(rsrc))
+            header[124:126] = struct.pack(">H", fat_cfm.crc(bytes(header[:124])))
+            with open(local, "wb") as f:
+                f.write(bytes(header) + data + bytes((-len(data)) % 128) + rsrc + bytes((-len(rsrc)) % 128))
+            self.hfs.run("hdel", b":System Folder:System")
+            self.hfs.run("hcopy", "-m", local, b":System Folder:System")
+        finally:
+            self.hfs.umount()
+            shutil.rmtree(st, ignore_errors=True)
+        self.log(f"  printer: {driver} (STR and 'alis' -8192 in the System file)")
 
     def system(self, image, snap, man):
         sysf = b":System Folder"
@@ -595,6 +678,8 @@ def build(d, force=False, log=print):
                     log(f"  disabled: {name} (now in :Disabled Items)")
             finally:
                 b.hfs.umount()
+        if d.get("base") and printer_of(d):
+            b.printer(part, label, printer_of(d))
         b.alias_ids(part)
         if not d.get("base"):
             check_names(b.hfs, part, d["name"])
