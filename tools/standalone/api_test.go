@@ -131,7 +131,7 @@ func TestAPIPageAndLibrary(t *testing.T) {
 	img := l.images()
 	os.WriteFile(filepath.Join(img, "secret.img"), []byte("x"), 0o644) // no record: not offered
 	os.WriteFile(filepath.Join(img, "c.iso"), make([]byte, 4096), 0o644)
-	os.WriteFile(filepath.Join(img, "c.iso.json"), []byte(`{"title":"CD C","tags":["cd"],"cover":"c.jpg"}`), 0o644)
+	os.WriteFile(filepath.Join(img, "c.iso.json"), []byte(`{"title":"CD C","tags":["cd"],"cover":"c.jpg","items":[{"name":"Software","kind":"folder","size":9}]}`), 0o644)
 	os.WriteFile(filepath.Join(img, "c.jpg"), []byte("cover"), 0o644)
 	os.WriteFile(filepath.Join(img, "d.jpg"), []byte("not a cover"), 0o644)
 	if res, data := l.req("GET", "/", nil); res.StatusCode != 200 || string(data) != "<p>tab</p>" {
@@ -146,6 +146,10 @@ func TestAPIPageAndLibrary(t *testing.T) {
 	if len(lib) != 2 || lib[0]["title"] != "A" || lib[0]["url"] != "disks/a.img" || lib[0]["size"] != float64(64<<10) ||
 		lib[0]["cover"] != nil || lib[1]["url"] != "disks/c.iso" || lib[1]["cover"] != "covers/c.jpg" {
 		t.Errorf("library.json: %s", data)
+	}
+	// A record's items pass through (the library's details row)
+	if items, _ := lib[1]["items"].([]any); len(items) != 1 || items[0].(map[string]any)["name"] != "Software" || lib[0]["items"] != nil {
+		t.Errorf("library.json items: %s", data)
 	}
 	for path, want := range map[string]int{"/disks/secret.img": 404, "/covers/c.jpg": 200, "/covers/d.jpg": 404} {
 		if code := l.status("GET", path, nil); code != want {
