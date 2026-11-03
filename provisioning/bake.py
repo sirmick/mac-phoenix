@@ -415,6 +415,23 @@ def clear_recent(hfs):
     return removed
 
 
+def capture_filter(items, dropped):
+    """(items kept, paths left out) of a capture's (path, local file)
+    items: top-level names in dropped (TOP_NOISE, the bake's "exclude"),
+    "Folder:Name" paths in it and what is under them, and Mac OS X's
+    .DS_Store files anywhere. Invisible files stay ("Icon\r": a folder's
+    custom icon)."""
+    def osx(r):
+        return r.rsplit(b":", 1)[-1] in MAC_OS_X_NOISE
+
+    def left_out(r):
+        return r.split(b":")[0] in dropped or excluded_path(r, dropped) or osx(r)
+    excluded = sorted({e for e in dropped if b":" in e and any(excluded_path(r, [e]) for r, _ in items)}
+                      | {r.split(b":")[0] for r, _ in items if r.split(b":")[0] in dropped}
+                      | {r for r, _ in items if osx(r)})
+    return [(r, l) for r, l in items if not left_out(r)], excluded
+
+
 def excluded_path(rel, exclude):
     """Whether rel (MacRoman bytes) is, or is inside, one of exclude's
     "Folder:Name" paths (a bake's "exclude" entries with a colon: a serial
@@ -742,12 +759,7 @@ class Session:
         if self.bake.get("archive"):            # an .hqx expands to a .sit and then a folder
             dropped |= {r.split(b":")[0] for r, l in items if b":" not in r and l
                         and os.path.splitext(r.decode("mac_roman"))[1].lower() in ARCHIVE_TYPES}
-        def left_out(r):
-            return (r.split(b":")[0] in dropped or excluded_path(r, dropped)
-                    or r.rsplit(b":", 1)[-1] in MAC_OS_X_NOISE)
-        excluded = sorted({e for e in dropped if b":" in e and any(excluded_path(r, [e]) for r, _ in items)}
-                          | {r.split(b":")[0] for r, _ in items if r.split(b":")[0] in dropped})
-        items = [(r, l) for r, l in items if not left_out(r)]
+        items, excluded = capture_filter(items, dropped)
         if self.bake.get("from_boot"):
             hfs.mount(self.base_path)
             had = {n for n, _ in hfs.ls(b":")}

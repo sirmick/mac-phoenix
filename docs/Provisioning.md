@@ -101,10 +101,11 @@ check for the target's name can't match the Install button. An image's
 
 | Image | What | Boot with |
 |---|---|---|
-| `productivity-system-7.img` | AppleWorks 5.0.3, ClarisWorks 4.0v4, ClarisDraw 1.0v4 (68k), Corel WordPerfect 3.5e (with the 3.5e2 update), Microsoft Excel 4.0, Microsoft Office 98 (PowerPC), GraphicConverter 3.9.1, Acrobat Reader 3.01, FileMaker Pro 4.0 and Aldus Persuasion 3.0 (68k; personalised with the owner's serial numbers) | `productivity-7.6.1`, 68k or PowerPC |
+| `productivity-system-7.img` | AppleWorks 5.0.3, ClarisWorks 4.0v4, ClarisDraw 1.0v4 (68k), Corel WordPerfect 3.5e (with the 3.5e2 update), Microsoft Excel 4.0, Microsoft Office 98 (PowerPC), GraphicConverter 3.9.1, Acrobat Reader 3.01, FileMaker Pro 4.0 and Aldus Persuasion 3.0 (68k; personalised with the owner's serial numbers), Microsoft Works 4.0b (68k; Microsoft's shared tools in its folder) | `productivity-7.6.1`, 68k or PowerPC |
 | `creative-system-7.img` | Kid Pix 2.5 (68k), Adobe Photoshop 4.0, Adobe Illustrator 6.0, Macromedia FreeHand 5.5 and Deneba Canvas 5.0.2 (68k; personalised with the owner's serial numbers) | `creative-7.6.1`, 68k or PowerPC |
 | `creative-macos-8.img` | Adobe Illustrator 8.0 (PowerPC; personalised with the owner's serial number; its upgrade installer found the owner's Illustrator 6.0 on the bake's startup disk: base `tools-8.6-ai6`) | `creative-8.6` |
-| `productivity-macos-9.img` | AppleWorks 5.0.4, Corel WordPerfect 3.5e, Microsoft Excel 4.0, Microsoft Office 98, GraphicConverter 3.9.1, Acrobat Reader 3.01 | `productivity-9.0.4` |
+| `productivity-macos-9.img` | AppleWorks 5.0.4, Corel WordPerfect 3.5e, Microsoft Excel 4.0, Microsoft Office 98, GraphicConverter 3.9.1, Acrobat Reader 3.01, Microsoft Works 4.0b (68k) | `productivity-9.0.4` |
+| `icons.img` | Custom icon collections: The Iconfactory's classic collection (its icons are 'icns', shown by 8.5 and later), MacUser's Custom Icon Pack IV, Nitrozac's icons from MacAddict #63 | any 7.x-9 boot disk |
 
 The boot disks are the standard ones plus the apps' System Folder parts
 (AppleWorks' translators, dictionaries and libraries). AppleWorks' 5.0.4

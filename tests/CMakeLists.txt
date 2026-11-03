@@ -626,6 +626,15 @@ add_test(
 )
 set_tests_properties(bake_exclude PROPERTIES TIMEOUT 60 LABELS "provisioning")
 
+# Folders' custom icons through the pipeline: snapshot.py lists the invisible
+# "Icon\r" files, a capture keeps them (top-level noise and .DS_Store out,
+# reported), tidy.py sets their folders' kHasCustomIcon (no emulator).
+add_test(
+  NAME custom_icons
+  COMMAND ${Python3_EXECUTABLE} ${TEST_DIR}/test_custom_icons.py
+)
+set_tests_properties(custom_icons PROPERTIES TIMEOUT 60 LABELS "provisioning" SKIP_RETURN_CODE 77)
+
 # build.py's "printer": the Chooser's STR and 'alis' -8192 as a 7.6.1 Quadra
 # writes them, inherited from a built base, not in its content identity.
 add_test(
