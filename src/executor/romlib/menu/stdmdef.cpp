@@ -351,6 +351,19 @@ draw_arrow(Rect *menu_rect, MenuHandle mh, arrowtype arrdir)
     RGBBackColor(&ROMlib_white_rgb_color);
 }
 
+/* MacPhoenix: the item's text, in its own font if it has one
+   (SetMenuItemFontID) */
+static void draw_name(struct table::tableentry *tp, MenuHandle mh, int item)
+{
+    INTEGER font = PORT_TX_FONT(qdGlobals().thePort);
+    int16_t own = ROMlib_menu_item_font(mh, item);
+    if(own)
+        TextFont(own);
+    DrawString(tp->name);
+    if(own)
+        TextFont(font);
+}
+
 static void erasearrow(Rect *, tablePtr, Boolean);
 static void popuprect(MenuHandle, Rect *, Point, GUEST<INTEGER> *, tablePtr);
 
@@ -442,7 +455,7 @@ static void platinum_item(Rect *rp, struct table::tableentry *tp, int item, Menu
         DrawText((Ptr)tp->name, 1 + kApplePlaceholder, tp->name[0] - kApplePlaceholder);
     }
     else
-        DrawString(tp->name);
+        draw_name(tp, mh, item);
     TextFace(0);
     if(iskeyequiv(tp))
     {
@@ -610,7 +623,7 @@ draw_item(Rect *rp, struct table::tableentry *tp, int32_t bit, int item, MenuHan
             DrawText((Ptr)tp->name, 1 + kApplePlaceholder, tp->name[0] - kApplePlaceholder);
         }
         else
-            DrawString(tp->name);
+            draw_name(tp, mh, item);
         TextFace(0);
     }
     rtmp.left = rp->left;

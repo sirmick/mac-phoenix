@@ -510,6 +510,46 @@ OSErr Executor::C_SetBevelButtonContentInfo(ControlRef inButton, ControlButtonCo
                             sizeof(ControlButtonContentInfo), inContent);
 }
 
+/* MacPhoenix: the rest of the bevel button's and the disclosure
+   triangle's calls (ControlDefinitions.h), each its control data tag:
+   8.6's Navigation Services' Shortcuts, Favorites and Recent buttons. */
+OSErr Executor::C_GetBevelButtonMenuValue(ControlRef inButton, GUEST<SInt16> *outValue)
+{
+    if(!outValue)
+        return paramErr;
+    return C_GetControlData(inButton, kControlEntireControl, kControlBevelButtonMenuValueTag,
+                            sizeof(SInt16), outValue, nullptr);
+}
+
+OSErr Executor::C_SetBevelButtonMenuValue(ControlRef inButton, SInt16 inValue)
+{
+    GUEST<SInt16> value = inValue;
+    return C_SetControlData(inButton, kControlEntireControl, kControlBevelButtonMenuValueTag,
+                            sizeof(SInt16), &value);
+}
+
+OSErr Executor::C_GetBevelButtonMenuHandle(ControlRef inButton, GUEST<MenuHandle> *outHandle)
+{
+    if(!outHandle)
+        return paramErr;
+    return C_GetControlData(inButton, kControlEntireControl, kControlBevelButtonMenuHandleTag,
+                            sizeof(MenuHandle), outHandle, nullptr);
+}
+
+OSErr Executor::C_SetBevelButtonTextPlacement(ControlRef inButton, BevelButtonTextPlacement inWhere)
+{
+    GUEST<BevelButtonTextPlacement> where = inWhere;
+    return C_SetControlData(inButton, kControlEntireControl, kControlBevelButtonTextPlaceTag,
+                            sizeof(BevelButtonTextPlacement), &where);
+}
+
+OSErr Executor::C_SetDisclosureTriangleLastValue(ControlRef inTabControl, SInt16 inValue)
+{
+    GUEST<SInt16> value = inValue;
+    return C_SetControlData(inTabControl, kControlEntireControl, kControlTriangleLastValueTag,
+                            sizeof(SInt16), &value);
+}
+
 OSErr Executor::C_SetUpControlTextColor(ControlRef inControl, SInt16 inDepth, Boolean inIsColorDevice)
 {
     if(!inControl)

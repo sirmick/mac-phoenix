@@ -28,5 +28,7 @@ extern appearance_t ROMlib_get_appearance(void);
 
 /* MacPhoenix: the glyph SetMenuItemKeyGlyph gave an item (0: none) */
 extern int16_t ROMlib_menu_item_key_glyph(MenuHandle mh, int item);
+/* SetMenuItemFontID's font for the item; 0: none */
+extern int16_t ROMlib_menu_item_font(MenuHandle mh, int item);
 }
 #endif
