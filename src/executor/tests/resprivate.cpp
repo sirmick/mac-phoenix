@@ -286,3 +286,19 @@ TEST_F(ResPrivate, ResourceMapIsSystemSystemMode)
     EXPECT_EQ(noErr, ResError());
     EXPECT_NE(0, trap_byte_of_handle(0x02FF, map_of(ref)));
 }
+
+/* Selector 7 (SetScanOverride) pops its Boolean though D0's high byte is
+   0: ResEdit 2.1.3 calls it so (move.b flag,-(sp); moveq #7,d0;
+   _ResourceDispatch), and ResErr is left as it was. */
+TEST_F(ResPrivate, SetScanOverridePopsItsBoolean)
+{
+    for(uint16_t flag : { 0x0000, 0x0100 })
+    {
+        ROMlib_setreserr(-1);
+        /* movea.l sp,a2; move.w #flag,-(sp); moveq #7,d0;
+           _ResourceDispatch; move.l a2,d1; sub.l sp,d1; movea.l a2,sp:
+           D1 what the call left on the stack */
+        EXPECT_EQ(0u, run({ 0x244F, 0x3F3C, flag, 0x7007, 0xA822, 0x220A, 0x928F, 0x2E4A }));
+        EXPECT_EQ(-1, ResError());
+    }
+}

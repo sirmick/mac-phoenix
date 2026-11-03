@@ -304,6 +304,10 @@ LIBRARY_ALSO(PrivateInterfaceLib, GetMap, InterfaceLib);
 SignedByte C_GetResourceMapPrivateFlags(Handle map);PASCAL_SUBTRAP(GetResourceMapPrivateFlags, 0xA822, 0x0008, ResourceDispatch);
 
 
+// MacPhoenix. Private (selector 7, called with moveq #7; the name is among the 8.6 System file's Resource Manager names): by its name, whether searches go through the override maps; Executor takes the Boolean and changes nothing. The call pops its Boolean whatever D0's high byte says. ResEdit 2.1.3 turns it off around reading a file's own map (Count1Types) and back on; unknown, the Boolean stayed on the stack and ResEdit's saved registers came back shifted (New file on 8.6: SizeWindow of a nil window).
+void C_SetScanOverride(Boolean scan);PASCAL_SUBTRAP(SetScanOverride, 0xA822, 0x0007, ResourceDispatch);
+
+
 // MacPhoenix. Private in 7.5.5 (name is a guess): the topmost of the override maps (attribute bit 1) stacked directly above a map in the chain from TopMapHndl, or the map itself when none is; nil and ResErr resFNotFound when the map isn't in the chain. The Shared Library Manager calls it on the files it opens.
 Handle C_GetOverrideMap(Handle map);PASCAL_SUBTRAP(GetOverrideMap, 0xA822, 0x0006, ResourceDispatch);
 
