@@ -89,6 +89,8 @@ public:
     virtual void wake() override;
 
     void pumpEvents();
+    /* MacPhoenix: the host's scroll wheel, lines (osevent/wheel.cpp) */
+    void scrollWheel(int dh, int dv);
 
     static std::unique_ptr<EventSink> instance;
 private:

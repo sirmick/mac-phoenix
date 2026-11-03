@@ -1,10 +1,10 @@
 {
  "title": "Installers (internet)",
  "tags": ["installers", "internet"],
- "note": "The archives the internet bakes expanded, a folder per product: MR Browser 0.39 (PowerPC), Hotline Connect Client 1.9.1, Serial MReader 0.03 with Serial Box 2021-08 (archive only). Installed on internet-macos-8-9.",
+ "note": "The archives the internet bakes expanded, a folder per product: MR Browser 0.39 (68k and PowerPC), Hotline Connect Client 1.9.1, Serial MReader 0.03 with Serial Box 2021-08 (archive only). Installed on internet-macos-8-9.",
  "label": "Internet Installers",
  "installers": [
-  {"as": "MR Browser 0.39 ƒ", "bakes": ["mr-browser-0.39"]},
+  {"as": "MR Browser 0.39 ƒ", "bakes": ["mr-browser-68k-0.39", "mr-browser-0.39"]},
   {"as": "Hotline Connect Client 1.9.1 ƒ", "bakes": ["hotline-client-1.9.1"]},
   {"as": "Serial MReader 0.03 ƒ", "bakes": ["serial-mreader-0.03"]}
  ]

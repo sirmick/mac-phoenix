@@ -875,6 +875,14 @@ set_tests_properties(desktop_labels_executor PROPERTIES
   TIMEOUT 150 LABELS "executor" SKIP_RETURN_CODE 77
   ENVIRONMENT "MACEMU_BINARY=$<TARGET_FILE:mac-phoenix>")
 
+# 8.6's platinum chrome where the G3 was measured: the menu bar's apple,
+# a Finder window's scroll bar thumb.
+add_test(NAME platinum_86_executor
+  COMMAND bash ${TEST_DIR}/test_platinum_86_executor.sh --port 18518)
+set_tests_properties(platinum_86_executor PROPERTIES
+  TIMEOUT 200 LABELS "executor" SKIP_RETURN_CODE 77
+  ENVIRONMENT "MACEMU_BINARY=$<TARGET_FILE:mac-phoenix>")
+
 # Two sessions on one --executor-system at once: the second runs on a copy
 # of its own (executor-systems/run/<pid>), both keep their BridgeAgent.
 add_test(NAME system_sessions_executor

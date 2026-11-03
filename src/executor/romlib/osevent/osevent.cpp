@@ -425,6 +425,7 @@ static Boolean OSEventCommon(INTEGER evmask, EventRecord *eventp,
         eventp->where = LM(MouseLocation2);
 
         eventp->modifiers = ROMlib_GetModifiers();
+        ROMlib_wheel_mouse(eventp);
         if((evmask & autoKeyMask) && lastdown != -1 && ticks > autoticks)
         {
             autoticks = ticks + LM(KeyRepThresh);

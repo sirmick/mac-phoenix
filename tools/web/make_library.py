@@ -136,13 +136,18 @@ DISKS = [
     {"name": "internet.img", "label": "Internet",
      "title": "Internet",
      "tags": ["internet", "ppc"],
-     "note": "Hotline Connect Client 1.9.1 (the classic PowerPC build: trackers, servers, chat, "
+     "note": "MR Browser 0.39 (Macintosh Repository's own client, the 68k build: signing in takes "
+             "an MR account's PIN, from MY ACCOUNT on the website), "
+             "Hotline Connect Client 1.9.1 (the classic PowerPC build: trackers, servers, chat, "
              "files; on Mac OS 8.6 with PowerPC ticked; it writes into its folder, so let the disk be "
              "changed) and Serial MReader 0.03 with the Serial Box 2021-08 database (68k and PowerPC; "
-             "an archive only). MR Browser and Hotline's Carbon build need CarbonLib: not here.",
+             "an archive only). MR Browser's PowerPC build and Hotline's Carbon one need CarbonLib: "
+             "not here.",
      "systems": ["8.6"],
-     "take": [("internet-macos-8-9.img", ["Hotline Connect Client 1.9.1 ƒ", "Serial MReader 0.03 ƒ"])],
+     "take": [("internet-macos-8-9.img", ["MR Browser 0.39 ƒ", "Hotline Connect Client 1.9.1 ƒ",
+                                          "Serial MReader 0.03 ƒ"])],
      "launch": [
+         {"app": "MR Browser 0.39 ƒ:MR Browser 68K v0.39", "name": "MR Browser 68K v0.39"},
          {"app": "Hotline Connect Client 1.9.1 ƒ:HLclient19.Classic", "name": "HLclient19.Classic"},
          {"app": "Serial MReader 0.03 ƒ:Serial MReader v0.03 PPC", "name": "Serial MReader v0.03 PPC"},
          {"app": "Serial MReader 0.03 ƒ:Serial MReader v0.03 68K", "name": "Serial MReader v0.03 68K",

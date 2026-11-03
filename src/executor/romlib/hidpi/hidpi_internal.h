@@ -2,6 +2,7 @@
 /* MacPhoenix: what hidpi.cpp (recording, Executor's side) and
    hidpi_skia.cpp (drawing, no Executor headers) share. Plain C++. */
 
+#include <cmath>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -97,6 +98,47 @@ struct Run
 };
 
 using Runs = std::vector<std::shared_ptr<const Run>>;
+
+/* Where a run's glyphs go along the baseline at scale S (device pixels):
+   a word where the 1x layout puts it, its glyphs at the outline's own
+   advances (WIDTHS, device pixels, each plus SMEAR) with what's left of the
+   1x width spread evenly between them. A bitmap strike's proportions
+   aren't the outline's (Geneva 12's i and l are wide cells): each glyph
+   centred in its own cell left uneven gaps ("P ro", "Regis ter"). A word is
+   glyphs each starting where the last's 1x advance ended, up to a space
+   (SPACE, or no advance), which stays at its 1x origin; a lone glyph is
+   centred in its advance. */
+inline std::vector<float> glyph_lefts(const Run &run, const std::vector<float> &widths, float smear, float s,
+                                      uint16_t space)
+{
+    size_t n = run.glyphs.size();
+    std::vector<float> at(n);
+    auto spaced = [&](size_t k) { return run.glyphs[k] == space || run.advances[k] <= 0; };
+    for(size_t i = 0; i < n;)
+    {
+        if(spaced(i))
+        {
+            at[i] = run.xs[i] * s;
+            i++;
+            continue;
+        }
+        size_t j = i + 1;
+        while(j < n && !spaced(j) && std::abs(run.xs[j] - run.xs[j - 1] - run.advances[j - 1]) < 0.01f)
+            j++;
+        float ink = 0;
+        for(size_t k = i; k < j; k++)
+            ink += widths[k] + smear;
+        float x = run.xs[i] * s, gap = ((run.xs[j - 1] + run.advances[j - 1]) * s - x - ink) / (j - i);
+        x += gap / 2;
+        for(size_t k = i; k < j; k++)
+        {
+            at[k] = x;
+            x += widths[k] + smear + gap;
+        }
+        i = j;
+    }
+    return at;
+}
 
 /* A pixel's raw value in a row of BPP bits a pixel. */
 inline uint32_t raw_pixel(const uint8_t *row, int x, int bpp)
