@@ -1304,6 +1304,36 @@
 
 # ####
 
+- funptr:
+    name: UserFnUPP
+    args:
+      - name: parameter
+        type: void*
+        register: A0
+
+# ####
+
+- function:
+    name: DeferUserFn
+    return: OSErr
+    args:
+      - name: userFunction
+        type: Ptr
+        register: A0
+      - name: argument
+        type: void*
+        register: D0
+    trap: 0xA08F
+    returnreg: D0
+    executor: C_
+    comment: |
+      Calls userFunction (argument in A0) once paging is safe: at once
+      without virtual memory. Every System 7 has it; the MPW far-model
+      runtime (Microsoft Works) takes an unimplemented $A08F for "no
+      Process Manager" and drops its segment loader before _Launch.
+
+# ####
+
 # InterfaceLib exports with no trap (Executor's glue, cfm68k_glue.cpp):
 # for PowerPC and CFM-68K code. Only for Executor until the C side has
 # 68k glue for them.
