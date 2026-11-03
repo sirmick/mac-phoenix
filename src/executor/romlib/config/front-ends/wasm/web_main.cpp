@@ -22,11 +22,12 @@
  *   menus            its menu bar: each menu's title and left edge
  *   launch PATH      LaunchApplication of "Volume:Folder:App"; its OSErr
  *   mount PATH       a disk image put in now (the Disks panel's insert, the
- *                    image in the module's filesystem already): its System
- *                    Folder additions copied in (below), then mounted
+ *                    image in the module's filesystem already): mounted
  *                    through _MountVol (the System's patches tell the Finder),
  *                    a diskEvt posted, as for a floppy; the OSErr (-1: the
  *                    image can't be opened; nsvErr: no Mac volume on it)
+ *   mount-additions PATH  the same, its System Folder additions copied in
+ *                    first (below)
  *   mount-cd PATH    the same, a CD: locked (ROMlib_locked_images, as --cdrom)
  *   eject PATH       a disk image's volumes unmounted through _UnmountVol
  *                    (fBsyErr: in use)
@@ -39,9 +40,10 @@
  * A disk's System Folder additions (what its applications' installers put
  * in the System Folder: tools/web/make_disk.py --system-from) are copied
  * into Executor's System (hfs_sideload.h: system_additions; files it has
- * newer stay): for the disks there at the start before Executor starts, so
- * fonts and startup code are in use at once; for one put in later, before
- * it is mounted. Module.onAdditions(path, {copied, kept, restart, live})
+ * newer stay), for the disks the page names (--additions, mount-additions:
+ * those whose record lists the System running, main.js additionsFor): for
+ * the disks there at the start before Executor starts, so fonts are in use
+ * at once; for one put in later, before it is mounted. Module.onAdditions(path, {copied, kept, restart, live})
  * tells the page; restart: what is in use only after a restart. They stay
  * when the disk goes, as an installer's would (docs/executor/Disks.md).
  *
@@ -570,6 +572,8 @@ void on_event_poll()
             reply += "]";
         }
         else if(op == "mount")
+            reply = std::to_string(mount_image(arg));
+        else if(op == "mount-additions")
         {
             add_to_system(arg, true);
             reply = std::to_string(mount_image(arg));
@@ -654,7 +658,7 @@ void on_yield()
 
 }
 
-/* web_main [--size WxH] [--disk IMAGE]... [--system IMAGE] [--ppc] [--ram MB]
+/* web_main [--size WxH] [--disk IMAGE]... [--additions IMAGE]... [--system IMAGE] [--ppc] [--ram MB]
  * [--depth BPP] [APP]: the screen size, disk images to mount (read-only),
  * the image whose System Folder to run on (Apple's System and Finder:
  * copied into Executor's volume, and the Finder started), fat
@@ -667,6 +671,7 @@ int main(int argc, char **argv)
 {
     executor_host::Config c;
     std::string system_image;
+    std::vector<std::string> additions;
     int ram_mb = 0, bpp = 0;
     for(int i = 1; i < argc; i++)
     {
@@ -681,6 +686,8 @@ int main(int argc, char **argv)
             c.cdroms.push_back(argv[++i]);
         else if(a == "--system" && i + 1 < argc)
             system_image = argv[++i];
+        else if(a == "--additions" && i + 1 < argc)  /* a --disk's System Folder additions */
+            additions.push_back(argv[++i]);
         else if(a == "--ppc")
             c.prefer_ppc = true;  /* fat applications' PowerPC code too */
         else if(a == "--ram" && i + 1 < argc)
@@ -747,8 +754,8 @@ int main(int argc, char **argv)
     }
     if(ram_mb > 0)
         c.ram_mb = ram_mb;
-    /* The disks' System Folder additions (not the CDs': as they are) */
-    for(const std::string &disk : c.disks)
+    /* The disks' System Folder additions the page asked for */
+    for(const std::string &disk : additions)
         if(std::filesystem::exists(c.data_dir + "/System Folder/System"))
             add_to_system(disk, false);
         else

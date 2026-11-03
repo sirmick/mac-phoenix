@@ -285,6 +285,9 @@ def make(d, images, out, baked):
         if snaps:
             cmd += ["--system-from", *map(str, snaps)]
         cmd += ["--additions-record", str(additions_path(out, d))]
+        boots = [out / SYSTEMS[s] for s in d.get("systems", list(SYSTEMS)) if (out / SYSTEMS[s]).exists()]
+        if boots:                       # (the boot disks are made first: aliases into them checked)
+            cmd += ["--with", *map(str, boots)]
     subprocess.run(cmd, check=True)
     if "boot" not in d:                 # make_boot_disk.py tidies its own
         done = tidy.tidy(str(tmp))

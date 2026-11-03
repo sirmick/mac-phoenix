@@ -69,9 +69,16 @@ snap1 = image("snap1.img", "snap1", [":Items", ":System Folder", ":System Folder
                ":System Folder:Fonts:Thing Font": "a font",
                ":System Folder:Help:Thing Help": "left out (a boot cut's)",
                ":System Folder:Clipboard": "left out (the System's own)"})
-snap2 = image("snap2.img", "snap2", [":Items", ":System Folder", ":System Folder:Preferences"],
+snap2 = image("snap2.img", "snap2", [":Items", ":System Folder", ":System Folder:Preferences",
+                                     ":System Folder:Control Panels", ":System Folder:Extensions"],
               {":System Folder:Preferences:Thing Prefs": "second",
-               ":System Folder:System": "left out"})
+               ":System Folder:System": "left out",
+               ":System Folder:Control Panels:Thing Panel": "left out (startup code)",
+               ":System Folder:Extensions:Thing INIT": "left out (startup code)",
+               ":System Folder:Extensions:CarbonLib": "left out (not for Executor)"})
+hfs("hmount", snap2)
+hfs("hattrib", "-t", "INIT", ":System Folder:Extensions:Thing INIT")
+hfs("humount")
 out = os.path.join(work, "disk.img")
 rec = os.path.join(work, "additions.json")
 subprocess.run([sys.executable, os.path.join(ROOT, "tools", "web", "make_disk.py"), out, "--label", "Apps",
@@ -90,7 +97,8 @@ hfs("hcopy", "-t", ":System Folder Additions:Preferences:Thing Prefs", local)
 with open(local) as f:
     expect(f.read().strip() == "second", "the later snapshot's file wins")
 rest = [n for n in hfs("hls", "-1a", ":System Folder Additions").decode("mac_roman").split("\n") if n]
-expect(sorted(rest) == ["Fonts", "Preferences"], f"the System's own files and a boot cut's drops left out ({rest})")
+expect(sorted(rest) == ["Fonts", "Preferences"],
+       f"the System's own files, a boot cut's drops and startup code left out ({rest})")
 hfs("humount")
 
 with open(rec) as f:

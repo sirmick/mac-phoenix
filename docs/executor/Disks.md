@@ -124,30 +124,49 @@ out, later snapshots' files winning over earlier ones' as in a boot
 image's `system_from` (the Creative disks' Adobe Registration Database is
 the last Adobe product's). Not added: the System's own files (System,
 Finder, Clipboard ...) and what the boot disks' cuts leave out
-(`make_boot_disk.py`: Help, ColorSync Profiles, DROP). The disk's record
+(`make_boot_disk.py`: Help, ColorSync Profiles, DROP), and startup code:
+the System Folder's folders of startup items (Control Panels, Startup
+Items, Launcher Items, ...) and files of the types that run at startup or
+register themselves anywhere (INIT, cdev, appe, thng, libr, RDEV, fext,
+AINI, ...), and CarbonLib. Installers' extensions, components and
+Shared Library Manager libraries, run at every boot, brought the tab down
+(an illegal instruction a few seconds after the Finder started: Kodak's
+CMS components, translators, Type Reunion, ATM, OLE, CarbonLib on 7.6.1);
+what applications need to start is their preferences, support files,
+fonts and shared libraries. The disk's record
 says what is there: `system_additions` `{folder, files, bytes, items,
 restart}`, `items` one level into the System Folder's folders, `restart`
 what is in use only after a restart. A disk entry with `"additions":
-false` carries none.
+false` carries none. Aliases to nothing are left off the disk (make_disk.py
+`--with`, the boot disks of its Systems: Photoshop 5.5's Preview In aliases
+to browsers no disk has, its Adobe Gamma alias into Control Panels), and
+`tools/diskaudit/disk_audit.py` knows the folder (not a stray invisible
+one), resolves aliases into a System Folder against it, and checks a disk's
+aliases only against the boot disks of the Systems its record lists.
 
 In the tab (web_main.cpp `add_to_system`, hfs_sideload.cpp
 `system_additions`, the same HFS/HFS+ reader the System is copied from):
 
+- Which disks: those whose record lists the System running (the
+  library System disk's version, its record's `systems`: main.js
+  `additionsFor`); an 8.6-only disk's libraries stay out of 7.6.1, and a
+  disk or System not from the library gets none. The page passes them as
+  `--additions IMAGE` at the start and inserts them with
+  `mount-additions` (plain `mount` for the rest).
 - When: for the disks there at the start, before Executor starts (fonts
-  and startup code in use at once; on Executor's own System, which it
+  in use at once; on Executor's own System, which it
   makes as it starts, at the first event call); for a disk put in later,
   at `mount`, before `_MountVol`. Executor's volume lists a folder again
   after a second (localvolume's directory cache), CFM looks in Extensions
   when a library is asked for, and applications open their preferences
   when they start: the rest is in use at once.
 - What: each file the System hasn't, or has older (by modification date)
-  than the disk's. A newer one (preferences the user changed since) stays.
+  than the disk's; startup code skipped here too (disks made before the
+  cut left it out carry it). A newer one (preferences the user changed since) stays.
   Folder names match without case, as HFS's do.
-- Restart: what was copied while Executor runs and needs one (Fonts,
-  Startup Items, INIT/cdev/appe files in Extensions or Control Panels)
-  the page says in its status line ("NAME: N files added to the System
-  Folder; restart to use Fonts, ..."). Code at startup runs only as
-  Executor's extension policy allows (`src/executor/res/extension-policy.txt`).
+- Restart: fonts copied while Executor runs are in use after one: the
+  page says so in its status line ("NAME: N files added to the System
+  Folder; restart to use Fonts").
   `Module.onAdditions` -> the Worker's `additions` message ->
   `executor.additions[NAME]` `{copied, kept, restart, live}`.
 - Eject: the additions stay, as an installer's would on a Mac: other

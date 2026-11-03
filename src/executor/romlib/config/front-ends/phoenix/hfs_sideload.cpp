@@ -513,16 +513,37 @@ fs::path findHost(const fs::path& dir, const fs::path& name)
 }
 
 /* In use only after a restart: the fonts (the Font Manager lists the Fonts
-   folder at startup), startup items, and code that runs at startup in
-   Extensions or Control Panels. */
-std::string afterRestart(const std::vector<std::string>& path, const Entry& e)
+   folder at startup). */
+std::string afterRestart(const std::vector<std::string>& path, const Entry&)
 {
-    if(equalMac(path[0], "Fonts") || equalMac(path[0], "Startup Items"))
-        return path[0];
-    if(path.size() == 2 && (equalMac(path[0], "Extensions") || equalMac(path[0], "Control Panels"))
-       && (!memcmp(e.finfo, "INIT", 4) || !memcmp(e.finfo, "appe", 4) || !memcmp(e.finfo, "cdev", 4)))
-        return path[0] + ":" + path[1];
-    return {};
+    return equalMac(path[0], "Fonts") ? path[0] : std::string();
+}
+
+/* Startup code is not added (tools/web/make_disk.py leaves it off the disks
+   too; those made before it did carry it): the System Folder's folders of
+   startup items, and files of the types that run at startup or register
+   themselves (INITs, control panels, background applications, components,
+   Shared Library Manager libraries, ...); CarbonLib, which Executor
+   doesn't run. Installers' extensions run on every boot brought the tab
+   down. */
+bool startupCode(const std::vector<std::string>& path, const Entry& e)
+{
+    static const char *folders[] = { "Control Panels", "Startup Items", "Shutdown Items",
+                                     "Control Strip Modules", "Launcher Items", "Apple Menu Items",
+                                     "Extensions (Disabled)", "Control Panels (Disabled)",
+                                     "System Extensions (Disabled)" };
+    static const char *types[] = { "INIT", "cdev", "appe", "thng", "libr", "RDEV", "fext", "AINI",
+                                   "dbgr", "scri", "ADBS" };
+    if(path.size() == 1 && e.folder)
+        for(const char *f : folders)
+            if(equalMac(e.name, f))
+                return true;
+    if(e.folder)
+        return false;
+    for(const char *t : types)
+        if(!memcmp(e.finfo, t, 4))
+            return true;
+    return equalMac(e.name, "CarbonLib");
 }
 
 void addTree(Source& v, uint32_t dirID, const fs::path& folder, std::vector<std::string>& path,
@@ -532,6 +553,11 @@ void addTree(Source& v, uint32_t dirID, const fs::path& folder, std::vector<std:
     {
         fs::path to = findHost(folder, hostName(e.name));
         path.push_back(e.name);
+        if(startupCode(path, e))
+        {
+            path.pop_back();
+            continue;
+        }
         std::error_code ec;
         if(e.folder)
         {
