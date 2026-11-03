@@ -932,6 +932,14 @@ set_tests_properties(platinum_86_executor PROPERTIES
   TIMEOUT 200 LABELS "executor" SKIP_RETURN_CODE 77
   ENVIRONMENT "MACEMU_BINARY=$<TARGET_FILE:mac-phoenix>")
 
+# Mac OS 9.0.4's own System starts to the Finder on Executor (its
+# extensions to the end, BridgeAgent, a folder window).
+add_test(NAME finder_executor_904
+  COMMAND bash ${TEST_DIR}/test_finder_904_executor.sh --port 18624)
+set_tests_properties(finder_executor_904 PROPERTIES
+  TIMEOUT 200 LABELS "executor" SKIP_RETURN_CODE 77
+  ENVIRONMENT "MACEMU_BINARY=$<TARGET_FILE:mac-phoenix>")
+
 # Two sessions on one --executor-system at once: the second runs on a copy
 # of its own (executor-systems/run/<pid>), both keep their BridgeAgent.
 add_test(NAME system_sessions_executor
