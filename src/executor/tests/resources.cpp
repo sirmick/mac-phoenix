@@ -341,3 +341,20 @@ TEST(Resources, RGetResourceROMClut)
         EXPECT_EQ((1 << id) - 1, (*ct)->ctSize) << id;
     }
 }
+
+/* The packages' 'PACK' resources GetResource finds, as on a 7.6.1 Quadra
+   (2026-11-03): its System file's 0, 2, 3, 6, 8, 9 and 11-15; 4, 5 and 7
+   live in ROM and 1 and 10 nowhere. Executor's own System has stand-ins
+   for those; a missing one is nil (Executor once answered an ALRT). */
+TEST(Resources, SystemPacks)
+{
+    for(short id = 0; id < 16; id++)
+    {
+        bool there = !(id == 1 || id == 4 || id == 5 || id == 7 || id == 10);
+        Handle h = GetResource('PACK', id);
+        EXPECT_EQ(there, h != nullptr) << id;
+        EXPECT_EQ(noErr, ResError()) << id;
+        if(h)
+            EXPECT_GE(GetHandleSize(h), 12) << id;
+    }
+}
