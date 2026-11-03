@@ -197,7 +197,24 @@ const TARGETS = {
         ['Wolfenstein 3D™', 'Wolfenstein 3D 1.0.2 ƒ:Wolfenstein 3D™'],
         ['EV Nova', 'EV Nova 1.0.10 ƒ:EV Nova'], ["Ferazel's Wand", "Ferazel's Wand 1.0.3 ƒ:Ferazel's Wand"],
         ['Slithereens', 'Slithereens 1.0.1 ƒ:Slithereens'], ['Mars Rising', 'Mars Rising 1.0.2 ƒ:Mars Rising', [[465, 86]]],
-    ].map(([name, app, start]) => ({ name, app: `Games PPC:${app}`, systems: ['8.6'], use: (t) => t.play(start) })),
+    ].map(([name, app, start]) => ({ name, app: `Games PPC:${app}`, systems: ['8.6'], use: (t) => t.play(start) })).concat([
+        { name: 'GameBox', app: 'Games PPC:GameBox Classic 1.2.0 ƒ:GameBox', systems: ['8.6'], use: async (t) => {
+            // REALbasic: Welcome -> Continue, Choose Profile -> New, a
+            // profile named and saved, then its library window
+            const shown = (title) => async () => (await t.windows()).some((w) => w.title === title);
+            await t.until(shown('Welcome to GameBox'), 60000, 'no Welcome window');
+            await t.click(459, 307);
+            await t.until(shown('Choose Profile'), 30000, 'no Choose Profile window');
+            await t.click(264, 165);
+            await t.until(shown('New Profile'), 30000, 'no New Profile window');
+            await t.click(370, 113);
+            await t.type('M1');
+            await t.click(221, 181);
+            await t.until(shown('GameBox'), 60000, 'no library window');
+            await t.pause(5000);
+            await shot('library');
+        } },
+    ]),
 };
 
 // ---- the page ----
