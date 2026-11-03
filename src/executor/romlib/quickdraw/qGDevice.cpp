@@ -88,6 +88,11 @@ static void gd_setup_main_device()
 
     if(bpp <= 8)
     {
+        /* the System's heap, not the application's: the screen's colours
+           are System state (Speedometer 4.0 changes depth with its heap
+           full, a palette left behind per window: "unable to get color
+           table" was fatal) */
+        TheZoneGuard guard(LM(SysZone));
         CTabHandle gd_color_table;
 
         gd_color_table = PIXMAP_TABLE(gd_pixmap);

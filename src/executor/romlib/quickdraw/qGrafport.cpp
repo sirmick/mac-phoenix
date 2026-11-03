@@ -327,6 +327,8 @@ void Executor::ROMlib_fill_pat(const Pattern& pp) /* INTERNAL */
         else
         {
             PixPatHandle new_fill = NewPixPat();
+            if(!new_fill) /* the heap full: the fill stays as it was */
+                return;
 
             PIXPAT_TYPE(new_fill) = 0;
             ROMlib_set_pixpat_pattern(new_fill, pp);

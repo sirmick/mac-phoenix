@@ -20,6 +20,7 @@
 #endif
 
 #include <bitset>
+#include <vector>
 
 struct OffscreenPort
 {
@@ -952,5 +953,134 @@ TEST(QuickDraw, SetPaletteFrontWindowActivates)
     EXPECT_TRUE(found);
     DisposeWindow(w);
     DisposePalette(pal);
+}
+#endif
+
+/* Speedometer 4.0's Color QuickDraw test: a polygon recorded as a region
+   (OpenRgn, LineTo, CloseRgn), inset by 1 and framed, over and over. The
+   heap's free space stays as it was. */
+TEST(QuickDraw, InsetFrameRgnNoLeak)
+{
+    OffscreenPort port(300, 300);
+    auto once = [] {
+        RgnHandle r = NewRgn();
+        OpenRgn();
+        MoveTo(150, 10);
+        LineTo(290, 120);
+        LineTo(240, 290);
+        LineTo(60, 290);
+        LineTo(10, 120);
+        LineTo(150, 10);
+        LineTo(150, 150);
+        LineTo(20, 280);
+        LineTo(150, 10);
+        CloseRgn(r);
+        InsetRgn(r, 1, 1);
+        FrameRgn(r);
+        DisposeRgn(r);
+    };
+    once();
+    long before = FreeMem();
+    for(int i = 0; i < 200; i++)
+        once();
+    EXPECT_GE(FreeMem(), before - 1024) << "before " << before;
+}
+
+
+#ifdef EXECUTOR
+/* Region calls in a heap with plenty free but no large block (Speedometer
+   4.0's Color QuickDraw tests: MaxBlock 6K of 225K free, behind locked
+   blocks). InsetRgn needs no more than its result; a call whose result
+   doesn't fit fails with QDError and leaves the region as it was; the
+   palette GetNewCWindow gives each window isn't made (nil). Not on
+   the Mac side: on a 7.6.1 Quadra InsetRgn hangs the machine here. */
+TEST(QuickDraw, RgnOpsInFragmentedHeap)
+{
+    OffscreenPort port(300, 300);
+    auto poly = [](RgnHandle rg, int k) {
+        OpenRgn();
+        MoveTo(150, 10);
+        for(int i = 0; i < 40; i++)
+            LineTo(10 + (i * 37 + k) % 280, 10 + (i * 53) % 280);
+        LineTo(150, 10);
+        CloseRgn(rg);
+    };
+    RgnHandle r = NewRgn(), a = NewRgn(), b = NewRgn(), c = NewRgn();
+    RgnHandle a0 = NewRgn(), ri = NewRgn(), rx = NewRgn();
+    poly(r, 0);
+    poly(a, 5);
+    poly(b, 11);
+    CopyRgn(a, a0);
+    CopyRgn(r, ri);
+    InsetRgn(ri, 1, 1);
+    XorRgn(a, b, rx);
+    ASSERT_GT(GetHandleSize((Handle)rx), 8192);
+
+    MaxApplZone();
+    std::vector<Ptr> ps;
+    while(MaxBlock() > 256 * 1024)
+    {
+        Ptr p = NewPtr(64 * 1024);
+        if(!p)
+            break;
+        ps.push_back(p);
+    }
+    std::vector<Ptr> chunks;
+    for(int n = 0; n < 2000 && MaxBlock() > 1024 + 64; n++)
+    {
+        Ptr p = NewPtr(1024);
+        if(!p)
+            break;
+        chunks.push_back(p);
+    }
+    for(size_t i = 0; i < chunks.size(); i++)
+        if(i % 2 == 0)
+            DisposePtr(chunks[i]);
+        else
+            ps.push_back(chunks[i]);
+    EXPECT_LT(MaxBlock(), 4096);
+    EXPECT_GT(FreeMem(), 64 * 1024);
+
+    InsetRgn(r, 1, 1);
+    EXPECT_EQ(QDError(), noErr);
+    EXPECT_TRUE(EqualRgn(r, ri));
+
+    XorRgn(a, b, c);
+    EXPECT_EQ(QDError(), memFullErr);
+    EXPECT_TRUE(EmptyRgn(c));
+
+    XorRgn(a, b, a);
+    EXPECT_EQ(QDError(), memFullErr);
+    EXPECT_TRUE(EqualRgn(a, a0));
+
+    UnionRgn(a, b, c);
+    EXPECT_EQ(QDError(), memFullErr);
+    EXPECT_TRUE(EmptyRgn(c));
+
+    CopyRgn(b, c);
+    EXPECT_EQ(QDError(), memFullErr);
+    EXPECT_TRUE(EmptyRgn(c));
+
+    FrameRgn(b);
+    Rect oval = { 20, 20, 280, 280 };
+    FrameOval(&oval);
+    PaintOval(&oval);
+    /* a 256-colour palette (4112 bytes) doesn't fit: nil */
+    EXPECT_EQ(NewPalette(256, nullptr, pmTolerant, 0), nullptr);
+
+    for(Ptr p : ps)
+        DisposePtr(p);
+
+    XorRgn(a, b, a);
+    EXPECT_EQ(QDError(), noErr);
+    EXPECT_TRUE(EqualRgn(a, rx));
+
+    DisposeRgn(r);
+    DisposeRgn(a);
+    DisposeRgn(b);
+    DisposeRgn(c);
+    DisposeRgn(a0);
+    DisposeRgn(ri);
+    DisposeRgn(rx);
 }
 #endif

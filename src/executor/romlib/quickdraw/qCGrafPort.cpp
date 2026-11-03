@@ -345,8 +345,13 @@ PixMapHandle Executor::C_NewPixMap()
     }
 
     /* The ColorTable is set to an empty ColorTable (IMV-70). */
-    PIXMAP_TABLE(pixmap)
-        = (CTabHandle)NewHandleClear(sizeof(ColorTable));
+    CTabHandle table = (CTabHandle)NewHandleClear(sizeof(ColorTable));
+    if(!table) /* the heap full: nil, as on a Mac */
+    {
+        DisposeHandle((Handle)pixmap);
+        return nullptr;
+    }
+    PIXMAP_TABLE(pixmap) = table;
 
     HUnlock((Handle)pixmap);
     return pixmap;
@@ -384,13 +389,26 @@ PixPatHandle Executor::C_NewPixPat()
     PixPatHandle pixpat;
     Handle xdata;
 
+    /* the heap full: nil, and nothing left behind, as on a Mac */
     pixpat = (PixPatHandle)NewHandle(sizeof(PixPat));
-
+    if(!pixpat)
+        return nullptr;
     xdata = NewHandleClear(sizeof(xdata_t));
+    PixMapHandle map = xdata ? NewPixMap() : nullptr;
+    Handle data = map ? NewHandle(0) : nullptr;
+    if(!data)
+    {
+        if(map)
+            DisposePixMap(map);
+        if(xdata)
+            DisposeHandle(xdata);
+        DisposeHandle((Handle)pixpat);
+        return nullptr;
+    }
 
     HASSIGN_6(pixpat,
-              patMap, NewPixMap(),
-              patData, NewHandle(0),
+              patMap, map,
+              patData, data,
               patType, pixpat_type_color,
               patXMap, nullptr,
               patXData, xdata,
