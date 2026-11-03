@@ -626,6 +626,13 @@ add_test(
 )
 set_tests_properties(bake_exclude PROPERTIES TIMEOUT 60 LABELS "provisioning")
 
+# HFS names hfsutils would glob ({ } [ ] * ?) made, copied and listed as they are
+add_test(
+  NAME hfs_glob
+  COMMAND ${Python3_EXECUTABLE} ${TEST_DIR}/test_hfs_glob.py
+)
+set_tests_properties(hfs_glob PROPERTIES TIMEOUT 60 LABELS "provisioning" SKIP_RETURN_CODE 77)
+
 # AppleWorks 5.0.3 on Executor's 7.6.1: a word-processing document made,
 # saved on the Host volume, opened again and saved (tests/test_appleworks.py),
 # with its 68k code and with its PowerPC code.

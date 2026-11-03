@@ -181,7 +181,7 @@ def write(work, out, label, items, system, meta):
             for rel, local in tree:
                 target = folder + b":" + rel
                 if local is None:
-                    hfs.run("hmkdir", target, check=False)
+                    hfs.run("hmkdir", glob_quote(target), check=False)
                 else:
                     hfs.run("hcopy", "-m", local, target)
     finally:
