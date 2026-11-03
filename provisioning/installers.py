@@ -130,7 +130,9 @@ def bake_items(b, work, volumes=None):
         items += bake.media_items(m, work)
     for spec in b.get("disks", []) + b.get("first_boot_disks", []) + b.get("cdroms", []):
         items += disk_items(spec, b, work, volumes)
-    return items
+    # The bake's "exclude" paths ("Folder:Name": a serial number file the
+    # archive came with) are left out here too.
+    return [(r, l) for r, l in items if not bake.excluded_path(r, b.get("exclude", []))]
 
 
 def has_media(b):

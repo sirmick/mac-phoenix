@@ -56,12 +56,37 @@ DISKS = [
     {"name": "productivity.img", "label": "Productivity",
      "title": "Productivity",
      "tags": ["productivity", "68k", "ppc"],
-     "note": "AppleWorks 5.0.3 (word processing, drawing, painting, spreadsheet, database) and "
-             "ClarisWorks 4.0v4. For Mac OS 7.6.1 and 8.6.",
-     "take": [("productivity-system-7.img", ["AppleWorks 5.0.3 ƒ", "ClarisWorks 4.0v4 ƒ"])],
+     "note": "AppleWorks 5.0.3 (word processing, drawing, painting, spreadsheet, database), "
+             "ClarisWorks 4.0v4, ClarisDraw 1.0v4, Corel WordPerfect 3.5e, Microsoft Excel 4.0, "
+             "FileMaker Pro 4.0, Aldus Persuasion 3.0: "
+             "for Mac OS 7.6.1 and 8.6. Microsoft Office 98 (Word, Excel, PowerPoint; PowerPC: "
+             "Mac OS 8.6 with PowerPC ticked) asks for its CD key at first launch.",
+     "take": [("productivity-system-7.img", ["AppleWorks 5.0.3 ƒ", "ClarisWorks 4.0v4 ƒ", "ClarisDraw 1.0v4 ƒ",
+                                              "Corel WordPerfect 3.5e ƒ", "Microsoft Excel 4.0 ƒ",
+                                              "Microsoft Office 98 ƒ", "FileMaker Pro 4.0 ƒ",
+                                              "Aldus Persuasion 3.0 ƒ"])],
      "launch": [
          {"app": "AppleWorks 5.0.3 ƒ:AppleWorks", "name": "AppleWorks"},
          {"app": "ClarisWorks 4.0v4 ƒ:ClarisWorks", "name": "ClarisWorks"},
+         {"app": "ClarisDraw 1.0v4 ƒ:ClarisDraw 1.0v4", "name": "ClarisDraw 1.0v4"},
+         {"app": "Corel WordPerfect 3.5e ƒ:Corel WordPerfect", "name": "Corel WordPerfect"},
+         {"app": "Microsoft Excel 4.0 ƒ:Microsoft Excel", "name": "Microsoft Excel"},
+         {"app": "Microsoft Office 98 ƒ:Microsoft Word", "name": "Microsoft Word", "systems": ["8.6"]},
+         {"app": "FileMaker Pro 4.0 ƒ:FileMaker Pro", "name": "FileMaker Pro"},
+         {"app": "Aldus Persuasion 3.0 ƒ:Aldus Persuasion 3.0", "name": "Aldus Persuasion 3.0"},
+     ]},
+    {"name": "creative.img", "label": "Creative",
+     "title": "Creative",
+     "tags": ["creative", "68k"],
+     "note": "Kid Pix 2.5 (painting, stamps, sounds), Adobe Photoshop 4.0, Adobe Illustrator 6.0, "
+             "Macromedia FreeHand 5.5. For Mac OS 7.6.1 and 8.6.",
+     "take": [("creative-system-7.img", ["Kid Pix 2.5 ƒ", "Adobe Photoshop 4.0 ƒ", "Adobe Illustrator 6.0 ƒ",
+                                          "Macromedia FreeHand 5.5 ƒ"])],
+     "launch": [
+         {"app": "Kid Pix 2.5 ƒ:Kid Pix", "name": "Kid Pix"},
+         {"app": "Adobe Photoshop 4.0 ƒ:Adobe Photoshop® 4.0", "name": "Adobe Photoshop® 4.0"},
+         {"app": "Adobe Illustrator 6.0 ƒ:Adobe Illustrator® 6.0", "name": "Adobe Illustrator® 6.0"},
+         {"app": "Macromedia FreeHand 5.5 ƒ:FreeHand 5.5", "name": "FreeHand 5.5"},
      ]},
     {"name": "development.img", "label": "Development",
      "title": "Development",

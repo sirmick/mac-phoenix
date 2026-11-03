@@ -1,5 +1,5 @@
 {
- "note": "Microsoft Office 98 (Microsoft, 1998), PowerPC only: its folder (the CD's drag-install folder) copied by the guest. Word, Excel and PowerPoint's first launch runs Office First Run, which asks for a name and then the CD key (10 digits, the CD sleeve's sticker): left for the user (no key is typed here), so the shared libraries First Run puts in the System Folder come then",
+ "note": "Microsoft Office 98 (Microsoft, 1998), PowerPC only: its folder (the CD's drag-install folder) copied by the guest. Word, Excel and PowerPoint's first launch runs Office First Run, which asks for a name and then the CD key (10 digits, the CD sleeve's sticker): left for the user (no key is typed here), so the shared libraries First Run puts in the System Folder come then. The archive's \"Serial number\" file is left out",
  "kind": "copy",
  "os": "tools-7.6.1",
  "machines": [
@@ -15,6 +15,9 @@
   "Microsoft Office 98"
  ],
  "target": "Productivity",
+ "exclude": [
+  "Microsoft Office 98:Serial number"
+ ],
  "steps": [
   {
    "copy": {

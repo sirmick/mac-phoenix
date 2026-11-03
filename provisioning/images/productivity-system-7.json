@@ -3,7 +3,7 @@
  "tags": [
   "productivity"
  ],
- "note": "Office software for the 7.5.5 / 7.6.1 profiles, 68k and PowerPC: AppleWorks 5.0.3 (word processing, drawing, painting, spreadsheet, database), ClarisWorks 4.0v4, Corel WordPerfect 3.5e, Microsoft Excel 4.0, Microsoft Office 98 (PowerPC; asks for its CD key at first launch), GraphicConverter 3.9.1 (68k and PowerPC builds), Acrobat Reader 3.01. Boots with productivity-7.6.1.",
+ "note": "Office software for the 7.5.5 / 7.6.1 profiles, 68k and PowerPC: AppleWorks 5.0.3 (word processing, drawing, painting, spreadsheet, database), ClarisWorks 4.0v4, ClarisDraw 1.0v4 (68k), Corel WordPerfect 3.5e, Microsoft Excel 4.0, Microsoft Office 98 (PowerPC; asks for its CD key at first launch), GraphicConverter 3.9.1 (68k and PowerPC builds), Acrobat Reader 3.01, FileMaker Pro 4.0 and Aldus Persuasion 3.0 (68k; personalised with the owner's serial numbers). Boots with productivity-7.6.1.",
  "label": "Productivity",
  "size_mb": 512,
  "place": [
@@ -28,6 +28,11 @@
    "as": "ClarisWorks 4.0v4 ƒ"
   },
   {
+   "snapshot": "clarisdraw-1.0",
+   "take": "ClarisDraw Folder",
+   "as": "ClarisDraw 1.0v4 ƒ"
+  },
+  {
    "snapshot": "graphicconverter-3.9.1",
    "take": "GraphicConverter 3.9.1US 68K",
    "to": "GraphicConverter 3.9.1 ƒ"
@@ -46,6 +51,16 @@
    "snapshot": "acrobat-reader-3.01",
    "take": "Adobe Acrobat 3.0",
    "as": "Acrobat Reader 3.01 ƒ"
+  },
+  {
+   "snapshot": "filemaker-pro-4.0",
+   "take": "FileMaker Pro 4.0 Folder",
+   "as": "FileMaker Pro 4.0 ƒ"
+  },
+  {
+   "snapshot": "persuasion-3.0",
+   "take": "Aldus Persuasion 3.0",
+   "as": "Aldus Persuasion 3.0 ƒ"
   }
  ]
 }

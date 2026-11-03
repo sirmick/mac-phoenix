@@ -1,98 +1,656 @@
 {
- "note": "Adobe Photoshop 4.0 (Adobe, 1996), 68k and PowerPC: its installer floppies (Install-Disk 1, Disks 2–21, the two Program Disks), staged only: installing it takes the product's serial number",
- "kind": "stage",
+ "note": "Adobe Photoshop 4.0 (Adobe, 1996), 68k build: its Installer VISE run in the guest off the floppies (Install-Disk 1 attached: its 1,451K image Disk Copy calls damaged; Disks 2-21 and the two Program Disks mounted by Disk Copy: that many attached disks leave the target unmounted), Easy Install onto the target (QuickTime 2.1 and ATM go in the System Folder), the registration form filled (the owner's serial) and cancelled at its modem step, a restart, then a first launch personalised with the owner's name, organization and serial; the registration's data file and preferences (what was typed into it) are left out",
+ "kind": "install",
+ "os": "tools-7.6.1",
+ "target": "Applications",
  "disks": [
   {
    "file": "Photoshop_4.0.sit",
    "take": "Photoshop 4.0/Install-Disk 1.img"
-  },
-  {
-   "file": "Photoshop_4.0.sit",
-   "take": "Photoshop 4.0/Disk 2.img"
-  },
-  {
-   "file": "Photoshop_4.0.sit",
-   "take": "Photoshop 4.0/Disk 3.img"
-  },
-  {
-   "file": "Photoshop_4.0.sit",
-   "take": "Photoshop 4.0/Disk 4.img"
-  },
-  {
-   "file": "Photoshop_4.0.sit",
-   "take": "Photoshop 4.0/Disk 5.img"
-  },
-  {
-   "file": "Photoshop_4.0.sit",
-   "take": "Photoshop 4.0/Disk 6.img"
-  },
-  {
-   "file": "Photoshop_4.0.sit",
-   "take": "Photoshop 4.0/Disk 7.img"
-  },
-  {
-   "file": "Photoshop_4.0.sit",
-   "take": "Photoshop 4.0/Disk 8.img"
-  },
-  {
-   "file": "Photoshop_4.0.sit",
-   "take": "Photoshop 4.0/Disk 9.img"
-  },
-  {
-   "file": "Photoshop_4.0.sit",
-   "take": "Photoshop 4.0/Disk 10.img"
-  },
-  {
-   "file": "Photoshop_4.0.sit",
-   "take": "Photoshop 4.0/Disk 11.img"
-  },
-  {
-   "file": "Photoshop_4.0.sit",
-   "take": "Photoshop 4.0/Disk 12.img"
-  },
-  {
-   "file": "Photoshop_4.0.sit",
-   "take": "Photoshop 4.0/Disk 13.img"
-  },
-  {
-   "file": "Photoshop_4.0.sit",
-   "take": "Photoshop 4.0/Disk 14.img"
-  },
-  {
-   "file": "Photoshop_4.0.sit",
-   "take": "Photoshop 4.0/Disk 15.img"
-  },
-  {
-   "file": "Photoshop_4.0.sit",
-   "take": "Photoshop 4.0/Disk 16.img"
-  },
-  {
-   "file": "Photoshop_4.0.sit",
-   "take": "Photoshop 4.0/Disk 17.img"
-  },
-  {
-   "file": "Photoshop_4.0.sit",
-   "take": "Photoshop 4.0/Disk 18.img"
-  },
-  {
-   "file": "Photoshop_4.0.sit",
-   "take": "Photoshop 4.0/Disk 19.img"
-  },
-  {
-   "file": "Photoshop_4.0.sit",
-   "take": "Photoshop 4.0/Disk 20.img"
-  },
-  {
-   "file": "Photoshop_4.0.sit",
-   "take": "Photoshop 4.0/Disk 21.img"
-  },
-  {
-   "file": "Photoshop_4.0.sit",
-   "take": "Photoshop 4.0/Program Disk.img"
-  },
-  {
-   "file": "Photoshop_4.0.sit",
-   "take": "Photoshop 4.0/Program Disk 2.img"
   }
+ ],
+ "media": [
+  {
+   "file": "Photoshop_4.0.sit",
+   "take": "Photoshop 4.0/Disk 2.img",
+   "dc42": true
+  },
+  {
+   "file": "Photoshop_4.0.sit",
+   "take": "Photoshop 4.0/Disk 3.img",
+   "dc42": true
+  },
+  {
+   "file": "Photoshop_4.0.sit",
+   "take": "Photoshop 4.0/Disk 4.img",
+   "dc42": true
+  },
+  {
+   "file": "Photoshop_4.0.sit",
+   "take": "Photoshop 4.0/Disk 5.img",
+   "dc42": true
+  },
+  {
+   "file": "Photoshop_4.0.sit",
+   "take": "Photoshop 4.0/Disk 6.img",
+   "dc42": true
+  },
+  {
+   "file": "Photoshop_4.0.sit",
+   "take": "Photoshop 4.0/Disk 7.img",
+   "dc42": true
+  },
+  {
+   "file": "Photoshop_4.0.sit",
+   "take": "Photoshop 4.0/Disk 8.img",
+   "dc42": true
+  },
+  {
+   "file": "Photoshop_4.0.sit",
+   "take": "Photoshop 4.0/Disk 9.img",
+   "dc42": true
+  },
+  {
+   "file": "Photoshop_4.0.sit",
+   "take": "Photoshop 4.0/Disk 10.img",
+   "dc42": true
+  },
+  {
+   "file": "Photoshop_4.0.sit",
+   "take": "Photoshop 4.0/Disk 11.img",
+   "dc42": true
+  },
+  {
+   "file": "Photoshop_4.0.sit",
+   "take": "Photoshop 4.0/Disk 12.img",
+   "dc42": true
+  },
+  {
+   "file": "Photoshop_4.0.sit",
+   "take": "Photoshop 4.0/Disk 13.img",
+   "dc42": true
+  },
+  {
+   "file": "Photoshop_4.0.sit",
+   "take": "Photoshop 4.0/Disk 14.img",
+   "dc42": true
+  },
+  {
+   "file": "Photoshop_4.0.sit",
+   "take": "Photoshop 4.0/Disk 15.img",
+   "dc42": true
+  },
+  {
+   "file": "Photoshop_4.0.sit",
+   "take": "Photoshop 4.0/Disk 16.img",
+   "dc42": true
+  },
+  {
+   "file": "Photoshop_4.0.sit",
+   "take": "Photoshop 4.0/Disk 17.img",
+   "dc42": true
+  },
+  {
+   "file": "Photoshop_4.0.sit",
+   "take": "Photoshop 4.0/Disk 18.img",
+   "dc42": true
+  },
+  {
+   "file": "Photoshop_4.0.sit",
+   "take": "Photoshop 4.0/Disk 19.img",
+   "dc42": true
+  },
+  {
+   "file": "Photoshop_4.0.sit",
+   "take": "Photoshop 4.0/Disk 20.img",
+   "dc42": true
+  },
+  {
+   "file": "Photoshop_4.0.sit",
+   "take": "Photoshop 4.0/Disk 21.img",
+   "dc42": true
+  },
+  {
+   "file": "Photoshop_4.0.sit",
+   "take": "Photoshop 4.0/Program Disk.img",
+   "dc42": true
+  },
+  {
+   "file": "Photoshop_4.0.sit",
+   "take": "Photoshop 4.0/Program Disk 2.img",
+   "dc42": true
+  }
+ ],
+ "steps": [
+  {
+   "open": "{media}:Disk 2.img"
+  },
+  {
+   "wait_for": {
+    "text": "Disk 2",
+    "exact": true,
+    "logged": true
+   },
+   "timeout": 120
+  },
+  {
+   "open": "{media}:Disk 3.img"
+  },
+  {
+   "wait_for": {
+    "text": "Disk 3",
+    "exact": true,
+    "logged": true
+   },
+   "timeout": 120
+  },
+  {
+   "open": "{media}:Disk 4.img"
+  },
+  {
+   "wait_for": {
+    "text": "Disk 4",
+    "exact": true,
+    "logged": true
+   },
+   "timeout": 120
+  },
+  {
+   "open": "{media}:Disk 5.img"
+  },
+  {
+   "wait_for": {
+    "text": "Disk 5",
+    "exact": true,
+    "logged": true
+   },
+   "timeout": 120
+  },
+  {
+   "open": "{media}:Disk 6.img"
+  },
+  {
+   "wait_for": {
+    "text": "Disk 6",
+    "exact": true,
+    "logged": true
+   },
+   "timeout": 120
+  },
+  {
+   "open": "{media}:Disk 7.img"
+  },
+  {
+   "wait_for": {
+    "text": "Disk 7",
+    "exact": true,
+    "logged": true
+   },
+   "timeout": 120
+  },
+  {
+   "open": "{media}:Disk 8.img"
+  },
+  {
+   "wait_for": {
+    "text": "Disk 8",
+    "exact": true,
+    "logged": true
+   },
+   "timeout": 120
+  },
+  {
+   "open": "{media}:Disk 9.img"
+  },
+  {
+   "wait_for": {
+    "text": "Disk 9",
+    "exact": true,
+    "logged": true
+   },
+   "timeout": 120
+  },
+  {
+   "open": "{media}:Disk 10.img"
+  },
+  {
+   "wait_for": {
+    "text": "Disk 10",
+    "exact": true,
+    "logged": true
+   },
+   "timeout": 120
+  },
+  {
+   "open": "{media}:Disk 11.img"
+  },
+  {
+   "wait_for": {
+    "text": "Disk 11",
+    "exact": true,
+    "logged": true
+   },
+   "timeout": 120
+  },
+  {
+   "open": "{media}:Disk 12.img"
+  },
+  {
+   "wait_for": {
+    "text": "Disk 12",
+    "exact": true,
+    "logged": true
+   },
+   "timeout": 120
+  },
+  {
+   "open": "{media}:Disk 13.img"
+  },
+  {
+   "wait_for": {
+    "text": "Disk 13",
+    "exact": true,
+    "logged": true
+   },
+   "timeout": 120
+  },
+  {
+   "open": "{media}:Disk 14.img"
+  },
+  {
+   "wait_for": {
+    "text": "Disk 14",
+    "exact": true,
+    "logged": true
+   },
+   "timeout": 120
+  },
+  {
+   "open": "{media}:Disk 15.img"
+  },
+  {
+   "wait_for": {
+    "text": "Disk 15",
+    "exact": true,
+    "logged": true
+   },
+   "timeout": 120
+  },
+  {
+   "open": "{media}:Disk 16.img"
+  },
+  {
+   "wait_for": {
+    "text": "Disk 16",
+    "exact": true,
+    "logged": true
+   },
+   "timeout": 120
+  },
+  {
+   "open": "{media}:Disk 17.img"
+  },
+  {
+   "wait_for": {
+    "text": "Disk 17",
+    "exact": true,
+    "logged": true
+   },
+   "timeout": 120
+  },
+  {
+   "open": "{media}:Disk 18.img"
+  },
+  {
+   "wait_for": {
+    "text": "Disk 18",
+    "exact": true,
+    "logged": true
+   },
+   "timeout": 120
+  },
+  {
+   "open": "{media}:Disk 19.img"
+  },
+  {
+   "wait_for": {
+    "text": "Disk 19",
+    "exact": true,
+    "logged": true
+   },
+   "timeout": 120
+  },
+  {
+   "open": "{media}:Disk 20.img"
+  },
+  {
+   "wait_for": {
+    "text": "Disk 20",
+    "exact": true,
+    "logged": true
+   },
+   "timeout": 120
+  },
+  {
+   "open": "{media}:Disk 21.img"
+  },
+  {
+   "wait_for": {
+    "text": "Disk 21",
+    "exact": true,
+    "logged": true
+   },
+   "timeout": 120
+  },
+  {
+   "open": "{media}:Program Disk.img"
+  },
+  {
+   "wait_for": {
+    "text": "Program Disk",
+    "exact": true,
+    "logged": true
+   },
+   "timeout": 120
+  },
+  {
+   "open": "{media}:Program Disk 2.img"
+  },
+  {
+   "wait_for": {
+    "text": "Program Disk 2",
+    "exact": true,
+    "logged": true
+   },
+   "timeout": 120
+  },
+  {
+   "launch": "Install-Disk 1:Install Adobe Photoshop®"
+  },
+  {
+   "wait_for": {
+    "button": "Continue…"
+   },
+   "timeout": 60
+  },
+  {
+   "click": {
+    "button": "Continue…"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Switch Disk"
+   },
+   "timeout": 60
+  },
+  {
+   "click": {
+    "button": "Switch Disk"
+   },
+   "until": {
+    "text": "on the disk “{target}”",
+    "front": true
+   },
+   "max": 30
+  },
+  {
+   "click": {
+    "button": "Install"
+   }
+  },
+  {
+   "wait_for": {
+    "text": "This installation recommends you restart"
+   },
+   "timeout": 60
+  },
+  {
+   "click": {
+    "button": "Continue"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "OK"
+   },
+   "timeout": 900,
+   "note": "Adobe Photoshop Registration, once the files are in: its intro, the region, an intro, then the form"
+  },
+  {
+   "click": {
+    "button": "OK"
+   }
+  },
+  {
+   "wait_for": {
+    "text": "Select the region in which you are registering."
+   },
+   "timeout": 60
+  },
+  {
+   "click": {
+    "button": "Continue"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Previous"
+   },
+   "timeout": 60
+  },
+  {
+   "click": {
+    "button": "Continue"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Cancel"
+   },
+   "timeout": 60
+  },
+  {
+   "serial": "photoshop-4.0"
+  },
+  {
+   "key": "tab"
+  },
+  {
+   "type": "Mac"
+  },
+  {
+   "key": "tab"
+  },
+  {
+   "key": "tab"
+  },
+  {
+   "type": "Phoenix",
+   "note": "First and Last Name, Street, City, State, ZIP, Country and Phone are required (an alert on leaving one empty); the registration is never sent (no modem) and its data file is left out (exclude)"
+  },
+  {
+   "key": "tab"
+  },
+  {
+   "serial": "photoshop-4.0",
+   "field": "organization"
+  },
+  {
+   "key": "tab"
+  },
+  {
+   "type": "1 Infinite Loop"
+  },
+  {
+   "key": "tab"
+  },
+  {
+   "type": "Cupertino"
+  },
+  {
+   "key": "tab"
+  },
+  {
+   "type": "CA"
+  },
+  {
+   "key": "tab"
+  },
+  {
+   "type": "95014"
+  },
+  {
+   "key": "tab"
+  },
+  {
+   "type": "USA"
+  },
+  {
+   "key": "tab"
+  },
+  {
+   "type": "408-996-1010"
+  },
+  {
+   "key": "tab"
+  },
+  {
+   "click": {
+    "button": "Continue"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Previous"
+   },
+   "timeout": 60
+  },
+  {
+   "click": {
+    "button": "Continue"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Previous"
+   },
+   "timeout": 60,
+   "note": "a second intro"
+  },
+  {
+   "click": {
+    "button": "Continue"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Previous"
+   },
+   "timeout": 60,
+   "note": "Disk Info"
+  },
+  {
+   "click": {
+    "button": "Continue"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Continue…"
+   },
+   "timeout": 60,
+   "note": "Port Selection (the modem): on to the failed attempt, whose Cancel ends the registration"
+  },
+  {
+   "click": {
+    "button": "Continue…"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Retry"
+   },
+   "timeout": 120
+  },
+  {
+   "click": {
+    "button": "Cancel"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Yes"
+   },
+   "timeout": 60
+  },
+  {
+   "click": {
+    "button": "Yes"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Restart"
+   },
+   "timeout": 900
+  },
+  {
+   "click": {
+    "button": "Restart"
+   }
+  },
+  {
+   "wait_finder": 240
+  },
+  {
+   "launch": "{target}:Adobe Photoshop® 4.0:Adobe Photoshop® 4.0"
+  },
+  {
+   "wait_for": {
+    "text": "Please personalize your copy of Adobe Photoshop:"
+   },
+   "timeout": 120
+  },
+  {
+   "serial": "photoshop-4.0",
+   "field": "name"
+  },
+  {
+   "key": "tab"
+  },
+  {
+   "serial": "photoshop-4.0",
+   "field": "organization"
+  },
+  {
+   "key": "tab"
+  },
+  {
+   "serial": "photoshop-4.0"
+  },
+  {
+   "click": {
+    "button": "OK"
+   }
+  },
+  {
+   "wait": 30
+  },
+  {
+   "close": "Adobe Photoshop® 4.0"
+  }
+ ],
+ "exclude": [
+  "Adobe Photoshop® Registration"
+ ],
+ "system_exclude": [
+  "Preferences:Pipeline Preferences"
+ ],
+ "expect": [
+  "Adobe Photoshop® 4.0"
+ ],
+ "launch": [
+  "Adobe Photoshop® 4.0:Adobe Photoshop® 4.0"
  ]
 }

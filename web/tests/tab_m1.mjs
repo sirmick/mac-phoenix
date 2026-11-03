@@ -8,7 +8,7 @@
 //   node web/tests/tab_m1.mjs DIR LIBRARY SYSTEM DISK
 //
 // DIR the wasm build's page, LIBRARY tools/web/make_library.py's output,
-// SYSTEM 7.6.1 or 8.6, DISK a library disk there (productivity.img,
+// SYSTEM 7.6.1 or 8.6, DISK a library disk there (productivity.img, creative.img,
 // development.img, tools-8.img, games-68k.img, games-ppc.img). The targets are TARGETS
 // below, not the disk record's launch list (which tab_site.mjs opens). Every
 // target is expected to work, but the known exceptions (KNOWN: stopped at
@@ -56,6 +56,152 @@ const TARGETS = {
             await t.until(async () => (await t.windows()).some((w) => /^untitled/.test(w.title)), 20000, 'no untitled document');
             await t.type(DOCUMENT);
             await t.saveAs('M1 AW');
+        } },
+        { name: 'ClarisDraw 1.0v4', app: 'Productivity:ClarisDraw 1.0v4 ƒ:ClarisDraw 1.0v4', use: async (t) => {
+            // no window at launch: File > New, the text tool (the palette's
+            // second), a click on the page, typed, saved
+            await t.pause(5000);
+            await t.key('Meta+KeyN');
+            await t.until(async () => (await t.windows()).some((w) => /^Untitled/.test(w.title)), 30000, 'no Untitled window');
+            await t.pause(2000);
+            await t.click(14, 68);
+            await t.pause(500);
+            await t.click(200, 160);
+            await t.pause(500);
+            await t.type(DOCUMENT);
+            await t.saveAs('M1 CD');
+        } },
+        { name: 'Corel WordPerfect', app: 'Productivity:Corel WordPerfect 3.5e ƒ:Corel WordPerfect', use: async (t) => {
+            await t.document();
+            await t.type(DOCUMENT);
+            await t.shot('typed');
+            await t.until(async () => (await t.drawn()).some((s) => s.includes('Hello')), 10000, 'the text never drawn');
+            await t.saveAs('M1 WP');
+        } },
+        { name: 'Microsoft Excel', app: 'Productivity:Microsoft Excel 4.0 ƒ:Microsoft Excel', use: async (t) => {
+            // Worksheet1, A1 typed
+            await t.until(async () => (await t.windows()).some((w) => w.title === 'Worksheet1'), 30000, 'no Worksheet1');
+            await t.type(DOCUMENT);
+            await t.key('Enter');
+            await t.saveAs('M1 XL');
+        } },
+        { name: 'FileMaker Pro', app: 'Productivity:FileMaker Pro 4.0 ƒ:FileMaker Pro', use: async (t) => {
+            // New Database: an empty file, named; a text field defined; the
+            // first record's field typed (FileMaker saves as it goes)
+            await t.until(async () => (await t.windows()).some((w) => w.title === 'New Database'), 30000, 'no New Database dialog');
+            await t.clickButton('Create a new empty file');
+            await t.key('Enter');
+            await t.until(async () => !(await t.windows()).some((w) => w.title === 'New Database'), 20000, 'New Database stayed');
+            await t.until(async () => (await t.windows()).some((w) => w.kind === DIALOG_KIND), 20000, 'no Create dialog');
+            await t.pause(1000);
+            await t.type('M1 FM');
+            await t.key('Enter');
+            await t.until(async () => (await t.windows()).some((w) => /^Define Fields/.test(w.title)), 30000, 'no Define Fields');
+            await t.pause(1000);
+            await t.type('Greeting');
+            await t.clickButton('Create');
+            await t.pause(1000);
+            await t.clickButton('Done');
+            await t.until(async () => (await t.windows()).some((w) => w.title === 'M1 FM'), 30000, 'no M1 FM window');
+            await t.pause(2000);
+            await t.type(DOCUMENT);
+            await t.key('Enter');
+            await t.until(async () => (await t.drawn()).some((s) => s.includes('Hello')), 10000, 'the text never drawn');
+        } },
+        { name: 'Aldus Persuasion 3.0', app: 'Productivity:Aldus Persuasion 3.0 ƒ:Aldus Persuasion 3.0', use: async (t) => {
+            // a new presentation at launch (its Tools palette up), the text
+            // tool (T) on the slide, typed, saved; an alert instead fails
+            await t.until(async () => {
+                const d = (await t.windows(true)).find((w) => w.kind === DIALOG_KIND);
+                if (d)
+                    throw new Error(`alert "${said(d).replace(/\s+/g, ' ')}"`);
+                return (await t.windows()).some((w) => w.title === 'Tools');
+            }, 60000, 'no Tools palette');
+            await t.document();
+            await t.key('KeyT');
+            await t.click(320, 240);
+            await t.type(DOCUMENT);
+            await t.until(async () => (await t.drawn()).some((s) => s.includes('Hello')), 10000, 'the text never drawn');
+            await t.saveAs('M1 PE');
+        } },
+    ],
+    'creative.img': [
+        { name: 'Kid Pix', app: 'Creative:Kid Pix 2.5 ƒ:Kid Pix', use: async (t) => {
+            // its full-screen page (no title): the pencil (the palette's
+            // first) drawn across it, the page then different; Save As
+            // (Standard File), the dialog gone and no alert
+            await t.pause(5000);
+            const blank = await sample();
+            await t.click(20, 40);
+            await t.pause(500);
+            await t.drag([[150, 150], [450, 160], [460, 350], [160, 340], [150, 150]]);
+            await t.pause(1000);
+            if (changed(blank, await sample()) < 0.002)
+                throw new Error('nothing drawn');
+            await t.key('Meta+KeyS');
+            await t.until(async () => (await t.windows()).some((w) => w.kind === DIALOG_KIND), 20000, 'no Save dialog');
+            await t.pause(1000);
+            await t.type('M1 KP');
+            await t.key('Enter');
+            await t.until(async () => !(await t.windows()).some((w) => w.kind === DIALOG_KIND), 30000, 'the Save dialog stayed');
+            await t.pause(2000);
+            const d = (await t.windows()).find((w) => w.kind === DIALOG_KIND);
+            if (d)
+                throw new Error(`alert "${said(d).replace(/\s+/g, ' ')}"`);
+        } },
+        { name: 'Adobe Photoshop® 4.0', app: 'Creative:Adobe Photoshop 4.0 ƒ:Adobe Photoshop® 4.0', use: async (t) => {
+            // File > New (its dialog's defaults), the paintbrush (B) drawn
+            // across the image, Save As
+            await t.until(async () => (await t.windows()).some((w) => w.title === 'Layers'), 60000, 'no palettes');
+            await t.key('Meta+KeyN');
+            await t.until(async () => (await t.windows()).some((w) => w.kind === DIALOG_KIND), 20000, 'no New dialog');
+            await t.key('Enter');
+            await t.until(async () => (await t.windows()).some((w) => /^Untitled/.test(w.title)), 20000, 'no Untitled window');
+            const w = (await t.windows()).find((x) => /^Untitled/.test(x.title));
+            const [top, left, bottom, right] = w.rect;
+            const before = await sample();
+            await t.key('KeyB');
+            await t.drag([[left + 20, top + 20], [right - 20, (top + bottom) / 2], [left + 20, bottom - 20]]);
+            await t.pause(1000);
+            if (changed(before, await sample()) < 0.002)
+                throw new Error('nothing drawn');
+            await t.saveAs('M1 PS');
+        } },
+        { name: 'Adobe Illustrator® 6.0', app: 'Creative:Adobe Illustrator 6.0 ƒ:Adobe Illustrator® 6.0', use: async (t) => {
+            // Untitled art 1 opens at launch; the rectangle tool (the
+            // toolbox's sixth row, second column) dragged across it, Save As.
+            // On the Quadra the toolbox's content is 49x241 at the left.
+            await t.until(async () => (await t.windows()).some((w) => /^Untitled art/.test(w.title)), 60000, 'no Untitled art');
+            const tools = (await t.windows()).find((w) => w.title === '' && w.rect[2] - w.rect[0] > 200 && w.rect[3] - w.rect[1] < 70);
+            if (!tools)
+                throw new Error('no toolbox');
+            const w = (await t.windows()).find((x) => /^Untitled art/.test(x.title));
+            const [top, left, bottom, right] = w.rect;
+            const before = await sample();
+            await t.click(tools.rect[1] + 36, tools.rect[0] + 98);
+            await t.pause(500);
+            await t.drag([[left + 250, top + 100], [left + 450, top + 300]]);
+            await t.pause(1000);
+            if (changed(before, await sample()) < 0.002)
+                throw new Error('nothing drawn');
+            await t.saveAs('M1 AI');
+        } },
+        { name: 'FreeHand 5.5', app: 'Creative:Macromedia FreeHand 5.5 ƒ:FreeHand 5.5', use: async (t) => {
+            // File > New, the rectangle tool (the toolbox's second row,
+            // left) dragged across the page, Save As
+            await t.until(async () => (await t.windows()).some((w) => w.title === '_Tools'), 60000, 'no toolbox');
+            await t.key('Meta+KeyN');
+            await t.until(async () => (await t.windows()).some((w) => /^Untitled/.test(w.title)), 30000, 'no Untitled window');
+            await t.pause(2000);
+            const tools = (await t.windows()).find((w) => w.title === '_Tools');
+            const before = await sample();
+            await t.click(tools.rect[1] + 13, tools.rect[0] + 39);
+            await t.pause(500);
+            await t.drag([[220, 160], [420, 300]]);
+            await t.pause(1000);
+            if (changed(before, await sample()) < 0.002)
+                throw new Error('nothing drawn');
+            await t.saveAs('M1 FH');
         } },
     ],
     'development.img': [
@@ -361,6 +507,15 @@ const t = {
         await page.waitForTimeout(200);
         await page.mouse.up();
     },
+    // the button held along points (a pencil stroke)
+    async drag(points) {
+        trace('drag', JSON.stringify(points));
+        await page.mouse.move(...await at(...points[0]));
+        await page.mouse.down();
+        for (const p of points.slice(1))
+            await page.mouse.move(...await at(...p), { steps: 10 });
+        await page.mouse.up();
+    },
     async until(fn, ms, why) {
         if (!await until(fn, ms, 500))
             throw new Error(why);
@@ -401,6 +556,15 @@ const t = {
             throw new Error(`no ${title} in the dialog (${d ? d.items.map((i) => i.title).filter(Boolean).join(', ') : 'none'})`);
         const [top, left, bottom, right] = item.rect;
         await t.click((left + right) / 2, (top + bottom) / 2);
+    },
+    // A document window: the one the application opened at launch, or
+    // File > New's.
+    async document() {
+        const doc = async () => (await t.windows()).some((w) => w.kind !== DIALOG_KIND);
+        if (!await until(doc, 20000, 1000))
+            await t.key('Meta+KeyN');
+        await t.until(doc, 30000, 'no document window');
+        await t.pause(1000);
     },
     // Standard File's Open: from the Desktop, each name typed (type-select)
     // and opened.

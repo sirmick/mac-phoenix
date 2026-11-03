@@ -1,0 +1,59 @@
+{
+ "note": "Kid Pix 2.0 (Broderbund, 1994): the floppies' Kid Pix Installer (Broderbund's own: an installer and segment files) asks \"Please insert the disk Disk 2\" in a loop of its own that waits for a disk-insert event: Disk 2 attached at boot is ignored, and Disk Copy, opened then, never gets the processor. Not baked (wip)",
+ "kind": "install",
+ "os": "tools-7.6.1",
+ "target": "Applications",
+ "disks": [
+  {
+   "file": "Kid-Pix-2-fdisks.sit",
+   "take": "Kid Pix 2.0 disks/Disk 1.image"
+  }
+ ],
+ "steps": [
+  {
+   "launch": "Disk 1:Kid Pix Installer"
+  },
+  {
+   "wait_for": {
+    "button": "Install"
+   },
+   "timeout": 60
+  },
+  {
+   "popup": {
+    "text": "Macintosh HD"
+   },
+   "choose": "{target}"
+  },
+  {
+   "check": {
+    "text": "{target}",
+    "exact": true
+   }
+  },
+  {
+   "click": {
+    "button": "Install"
+   }
+  },
+  {
+   "wait_for": {
+    "text": "“Disk 2”"
+   },
+   "timeout": 300
+  }
+ ],
+ "media": [
+  {
+   "file": "Kid-Pix-2-fdisks.sit",
+   "take": "Kid Pix 2.0 disks/Disk 2.image",
+   "dc42": true
+  },
+  {
+   "file": "Kid-Pix-2-fdisks.sit",
+   "take": "Kid Pix 2.0 disks/Disk 3.image",
+   "dc42": true
+  }
+ ],
+ "wip": true
+}

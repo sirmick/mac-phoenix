@@ -40,9 +40,11 @@ snapshot's :Items:, each a path or {"app", facts...}: "no_quit",
 (System Folder files the install supersedes but leaves behind: the build
 deletes them where the snapshot's System Folder part goes), "system_take"
 (System Folder files to take even if only changed: a control panel's
-settings), "network" (the guest's --network: "socket" for net-bridge),
+settings), "system_exclude" (System Folder files left out though new: a
+registration app's preferences holding what was typed into it), "network" (the guest's --network: "socket" for net-bridge),
 "exclude" (names at the top of the target left out of the capture: a self-extracting
-archive copied there to expand in place), "volatile" (snapshot paths a run writes differently every time, compared by
+archive copied there to expand in place; "Folder:Name", that path only, on the Installers disk too: a
+serial number file that came with the archive), "volatile" (snapshot paths a run writes differently every time, compared by
 name only: a first launch's database or preferences). "wip": a bake still being
 worked out, left out of --all. "args": emulator arguments for every guest
 the bake starts ("--model-id", "5": Systems before 7.5). "first_boot_agent":
@@ -409,6 +411,15 @@ def clear_recent(hfs):
     return removed
 
 
+def excluded_path(rel, exclude):
+    """Whether rel (MacRoman bytes) is, or is inside, one of exclude's
+    "Folder:Name" paths (a bake's "exclude" entries with a colon: a serial
+    number file an archive came with). Names without a colon are the
+    target's top level and are matched by the capture alone."""
+    return any(rel == e or rel.startswith(e + b":") for e in (mr(x) if isinstance(x, str) else x for x in exclude)
+               if b":" in e)
+
+
 def media_items(m, work):
     """A bake's "media" entry as the items put on its Media volume."""
     if m.get("as_is"):                      # a MacBinary file put there whole, not opened
@@ -700,6 +711,7 @@ class Session:
         hfs = Hfs(work)
         before = sysfolder_content(hfs, self.base_path, work)
         take = {mr(t) for t in self.bake.get("system_take", [])}
+        leave = {mr(t) for t in self.bake.get("system_exclude", [])}
         after = sysfolder_content(hfs, self.boot, work)
         added, changed, ignored = [], [], []
         for p, line in sorted(after.items()):
@@ -707,7 +719,9 @@ class Session:
                 continue
             leaf = p.rsplit(b":", 1)[1]
             prefs = p.startswith(b":System Folder:Preferences:")
-            if p[len(b":System Folder:"):] in take:          # named by the bake: always taken
+            if p[len(b":System Folder:"):] in leave:         # named by the bake: never taken
+                ignored.append(p)
+            elif p[len(b":System Folder:"):] in take:        # named by the bake: always taken
                 (added if p not in before else changed).append(p)
             elif leaf in NEVER or any(n in p for n in NOISE) or (prefs and (p in before or leaf in PREFS_NOISE)):
                 ignored.append(p)
@@ -723,8 +737,11 @@ class Session:
         if self.bake.get("archive"):            # an .hqx expands to a .sit and then a folder
             dropped |= {r.split(b":")[0] for r, l in items if b":" not in r and l
                         and os.path.splitext(r.decode("mac_roman"))[1].lower() in ARCHIVE_TYPES}
-        excluded = sorted({r.split(b":")[0] for r, _ in items if r.split(b":")[0] in dropped})
-        items = [(r, l) for r, l in items if r.split(b":")[0] not in dropped]
+        def left_out(r):
+            return r.split(b":")[0] in dropped or excluded_path(r, dropped)
+        excluded = sorted({e for e in dropped if b":" in e and any(excluded_path(r, [e]) for r, _ in items)}
+                          | {r.split(b":")[0] for r, _ in items if r.split(b":")[0] in dropped})
+        items = [(r, l) for r, l in items if not left_out(r)]
         if self.bake.get("from_boot"):
             hfs.mount(self.base_path)
             had = {n for n, _ in hfs.ls(b":")}

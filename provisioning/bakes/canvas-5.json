@@ -1,0 +1,154 @@
+{
+ "note": "Deneba Canvas 5.0 (Deneba, 1996). WIP, an owner decision: these floppies install an application already personalised with an original owner's serial (the archive's MSPC- folder's; it shows when Canvas has no preferences), so the owner's serial typed at first launch doesn't make it the owner's copy. Its ten floppies attached: the Installer VISE (Disk 1) run in the guest, Easy Install onto the target (this machine's build: 68k), a restart, then a first launch personalised with the owner's name, organization and serial. The archive's folder named after its original owner's serial is not used",
+ "kind": "install",
+ "wip": true,
+ "os": "tools-7.6.1",
+ "target": "Applications",
+ "disks": [
+  {
+   "file": "Deneba-Canvas-5.0-floppies.sit",
+   "take": "Deneba Canvas v5.0/Canvas 5.0 install images/Disk 1.img"
+  },
+  {
+   "file": "Deneba-Canvas-5.0-floppies.sit",
+   "take": "Deneba Canvas v5.0/Canvas 5.0 install images/Disk 2.img"
+  },
+  {
+   "file": "Deneba-Canvas-5.0-floppies.sit",
+   "take": "Deneba Canvas v5.0/Canvas 5.0 install images/Disk 3.img"
+  },
+  {
+   "file": "Deneba-Canvas-5.0-floppies.sit",
+   "take": "Deneba Canvas v5.0/Canvas 5.0 install images/Disk 4.img"
+  },
+  {
+   "file": "Deneba-Canvas-5.0-floppies.sit",
+   "take": "Deneba Canvas v5.0/Canvas 5.0 install images/Disk 5.img"
+  },
+  {
+   "file": "Deneba-Canvas-5.0-floppies.sit",
+   "take": "Deneba Canvas v5.0/Canvas 5.0 install images/Disk 6.img"
+  },
+  {
+   "file": "Deneba-Canvas-5.0-floppies.sit",
+   "take": "Deneba Canvas v5.0/Canvas 5.0 install images/Disk 7.img"
+  },
+  {
+   "file": "Deneba-Canvas-5.0-floppies.sit",
+   "take": "Deneba Canvas v5.0/Canvas 5.0 install images/Disk 8.img"
+  },
+  {
+   "file": "Deneba-Canvas-5.0-floppies.sit",
+   "take": "Deneba Canvas v5.0/Canvas 5.0 install images/Disk 9.img"
+  },
+  {
+   "file": "Deneba-Canvas-5.0-floppies.sit",
+   "take": "Deneba Canvas v5.0/Canvas 5.0 install images/Disk 10.img"
+  }
+ ],
+ "steps": [
+  {
+   "launch": "Disk 1:Canvas™ 5 Installer"
+  },
+  {
+   "wait_for": {
+    "button": "Continue…"
+   },
+   "timeout": 60
+  },
+  {
+   "click": {
+    "button": "Continue…"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Switch Disk"
+   },
+   "timeout": 60
+  },
+  {
+   "click": {
+    "button": "Switch Disk"
+   },
+   "until": {
+    "text": "on the disk “{target}”",
+    "front": true
+   },
+   "max": 30
+  },
+  {
+   "click": {
+    "button": "Install"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Cancel"
+   },
+   "timeout": 60,
+   "note": "quit other applications and restart afterwards"
+  },
+  {
+   "click": {
+    "button": "Continue"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Restart"
+   },
+   "timeout": 900
+  },
+  {
+   "click": {
+    "button": "Restart"
+   }
+  },
+  {
+   "wait_finder": 240
+  },
+  {
+   "launch": "{target}:Canvas™ 5:Canvas™ 5"
+  },
+  {
+   "wait_for": {
+    "text": "Personalize your copy of Canvas™."
+   },
+   "timeout": 120,
+   "note": "drawn by Canvas itself: no dialog items"
+  },
+  {
+   "serial": "canvas-5",
+   "field": "name"
+  },
+  {
+   "key": "tab"
+  },
+  {
+   "serial": "canvas-5",
+   "field": "organization"
+  },
+  {
+   "key": "tab"
+  },
+  {
+   "serial": "canvas-5"
+  },
+  {
+   "key": "return"
+  },
+  {
+   "wait": 20
+  },
+  {
+   "close": "Canvas™ 5"
+  }
+ ],
+ "expect": [
+  "Canvas™ 5"
+ ],
+ "launch": [
+  "Canvas™ 5:Canvas™ 5"
+ ]
+}
