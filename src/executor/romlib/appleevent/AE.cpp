@@ -17,6 +17,7 @@
 #include <AliasMgr.h>
 
 #include <mman/mman.h>
+#include <appleevent/apple_events.h>
 #include <commandline/flags.h>
 #include <base/functions.impl.h>
 #include <base/traps.h>
@@ -633,10 +634,6 @@ static bool coerce_integer(AEDesc *desc, DescType result_type, AEDesc *desc_out)
     return false;
 }
 
-/* MacPhoenix: the Apple Event Manager's own coercions between an alias and
-   an FSSpec, after the installed handlers (8.6, difftest aevt coerce): the
-   Finder gives an 'odoc's documents as aliases and applications ask for
-   'fss ' (SimpleText and BBEdit Lite 6.1 opened nothing). */
 /* MacPhoenix: a list of one item is that item, coerced (aevt
    coerce.list.*; Navigation Services' reply, its selection coerced to
    'fss ' by BBEdit Lite 6.1's Save). Two items or none don't coerce. */
@@ -650,6 +647,31 @@ static bool coerce_single_item_list(AEDesc *desc, DescType result_type, AEDesc *
     return AEGetNthDesc(desc, 1, result_type, &keyword, desc_out) == noErr;
 }
 
+/* MacPhoenix: a record is any type its holder asks for, its data as it
+   is, and a descriptor whose data is a record is a record again (aevt
+   coerce.reco.*, coerce.obj.reco: an object specifier is a record coerced
+   to 'obj ', and the Object Support Library coerces it back to read its
+   keys; BBEdit Lite 6.1's 'save' handler failed with -1700). Not between
+   two other types ('obj ' to 'abcd'), nor from data that is no record. */
+static bool coerce_record(AEDesc *desc, DescType result_type, AEDesc *desc_out)
+{
+    Handle h = DESC_DATA(desc);
+    if(!h)
+        return false;
+    if(DESC_TYPE(desc) != typeAERecord
+       && !(result_type == typeAERecord && GetHandleSize(h) >= (Size)sizeof(list_header_t)
+            && ATTRIBUTE_COUNT(h) == typeAERecord))
+        return false;
+    if(AEDuplicateDesc(desc, desc_out) != noErr)
+        return false;
+    desc_out->descriptorType = result_type;
+    return true;
+}
+
+/* MacPhoenix: the Apple Event Manager's own coercions between an alias and
+   an FSSpec, after the installed handlers (8.6, difftest aevt coerce): the
+   Finder gives an 'odoc's documents as aliases and applications ask for
+   'fss ' (SimpleText and BBEdit Lite 6.1 opened nothing). */
 static bool coerce_alias(AEDesc *desc, DescType result_type, AEDesc *desc_out)
 {
     DescType from = DESC_TYPE(desc);
@@ -726,7 +748,8 @@ OSErr Executor::C_AECoerceDesc(AEDesc *desc, DescType result_type,
         {
             if(coerce_integer(desc, result_type, desc_out)
                || coerce_alias(desc, result_type, desc_out)
-               || coerce_single_item_list(desc, result_type, desc_out))
+               || coerce_single_item_list(desc, result_type, desc_out)
+               || coerce_record(desc, result_type, desc_out))
                 AE_RETURN_ERROR(noErr);
             goto fail;
         }

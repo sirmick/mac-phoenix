@@ -491,6 +491,64 @@ int main(void)
                 AEDisposeDesc(&l);
             }
         }
+        /* records under other types (an object specifier is a record
+           coerced to 'obj '; the Object Support Library coerces it back to
+           read its keys: BBEdit Lite 6.1's 'save' handler) */
+        {
+            AEDesc rec, obj, back, other, num;
+            long n = 7, v = 0;
+            char k[48];
+            DescType type;
+            Size size;
+            AECreateList(NULL, 0, true, &rec);
+            AEPutParamPtr(&rec, 'want', typeLongInteger, &n, sizeof n);
+            obj.descriptorType = back.descriptorType = other.descriptorType = typeNull;
+            obj.dataHandle = back.dataHandle = other.dataHandle = NULL;
+            err = AECoerceDesc(&rec, 'obj ', &obj);
+            out("reco.obj", "%d type %.4s", err, (char *)&obj.descriptorType);
+            if(err == noErr)
+            {
+                err = AECoerceDesc(&obj, typeAERecord, &back);
+                out("obj.reco", "%d type %.4s", err, (char *)&back.descriptorType);
+                if(err == noErr)
+                {
+                    err = AEGetParamPtr(&back, 'want', typeLongInteger, &type, &v, sizeof v, &size);
+                    out("obj.reco.want", "%d %ld", err, v);
+                    AEDisposeDesc(&back);
+                }
+                v = 0;
+                err = AEGetParamPtr(&obj, 'want', typeLongInteger, &type, &v, sizeof v, &size);
+                out("obj.want", "%d %ld", err, v);
+                err = AECoerceDesc(&obj, 'abcd', &other);
+                out("obj.abcd", "%d type %.4s", err, (char *)&other.descriptorType);
+                if(err == noErr)
+                    AEDisposeDesc(&other);
+                AEDisposeDesc(&obj);
+            }
+            err = AECoerceDesc(&rec, 'abcd', &other);
+            out("reco.abcd", "%d type %.4s", err, (char *)&other.descriptorType);
+            if(err == noErr)
+            {
+                err = AECoerceDesc(&other, typeAERecord, &back);
+                out("abcd.reco", "%d type %.4s", err, (char *)&back.descriptorType);
+                if(err == noErr)
+                    AEDisposeDesc(&back);
+                AEDisposeDesc(&other);
+            }
+            err = AECoerceDesc(&rec, typeAEList, &other);
+            out("reco.list", "%d type %.4s", err, (char *)&other.descriptorType);
+            if(err == noErr)
+                AEDisposeDesc(&other);
+            AECreateDesc(typeLongInteger, &n, sizeof n, &num);
+            back.descriptorType = typeNull;
+            err = AECoerceDesc(&num, typeAERecord, &back);
+            out("long.reco", "%d type %.4s", err, (char *)&back.descriptorType);
+            if(err == noErr)
+                AEDisposeDesc(&back);
+            AEDisposeDesc(&num);
+            AEDisposeDesc(&rec);
+            (void)k;
+        }
         /* the null descriptor (an object specifier's container for the
            application; BBEdit Lite 6.1's Save sends itself one) */
         {
