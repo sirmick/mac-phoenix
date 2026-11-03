@@ -1,0 +1,13 @@
+{
+ "title": "Creative (System 7)",
+ "tags": [
+  "creative",
+  "68k"
+ ],
+ "note": "Drawing, painting and layout software for the 7.5.5 / 7.6.1 profiles: Kid Pix 2.5 (68k).",
+ "label": "Creative",
+ "size_mb": 256,
+ "place": [
+  {"snapshot": "kidpix-2.5", "take": "Kid Pix", "as": "Kid Pix 2.5 ƒ"}
+ ]
+}

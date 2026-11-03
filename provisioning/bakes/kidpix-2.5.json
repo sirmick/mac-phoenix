@@ -1,0 +1,90 @@
+{
+ "note": "Kid Pix 2.5 (Broderbund, 1996): the CD's Kid Pix Installer (Broderbund's own, its segments beside it) run in the guest onto the target, then a first launch",
+ "kind": "install",
+ "os": "tools-7.6.1",
+ "target": "Applications",
+ "disks": [
+  {
+   "file": "KidPix_2.5_CD.sit",
+   "take": "KidPix_2.5.iso"
+  }
+ ],
+ "steps": [
+  {
+   "launch": "Kid Pix 2.5:Kid Pix Installer"
+  },
+  {
+   "wait_for": {
+    "button": "Install"
+   },
+   "timeout": 60
+  },
+  {
+   "popup": {
+    "text": "Macintosh HD"
+   },
+   "choose": "{target}"
+  },
+  {
+   "check": {
+    "text": "{target}",
+    "exact": true
+   }
+  },
+  {
+   "click": {
+    "button": "Install"
+   }
+  },
+  {
+   "wait_for": {
+    "text": "Kid Pix will be installed on the hard"
+   },
+   "timeout": 30
+  },
+  {
+   "click": {
+    "button": "OK"
+   }
+  },
+  {
+   "wait_for": {
+    "text": "Kid Pix installed successfully."
+   },
+   "timeout": 600
+  },
+  {
+   "click": {
+    "button": "Quit"
+   }
+  },
+  {
+   "wait_app": "Finder",
+   "timeout": 60
+  },
+  {
+   "launch": "{target}:Kid Pix:Kid Pix"
+  },
+  {
+   "wait_app": "Kid Pix",
+   "timeout": 60
+  },
+  {
+   "wait": 5
+  },
+  {
+   "cmd_key": 12,
+   "note": "Kid Pix doesn't answer the Quit Apple event"
+  },
+  {
+   "wait_app": "Finder",
+   "timeout": 60
+  }
+ ],
+ "expect": [
+  "Kid Pix"
+ ],
+ "launch": [
+  "Kid Pix:Kid Pix"
+ ]
+}
