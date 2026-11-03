@@ -149,16 +149,11 @@ INTEGER Executor::C_TrackControl(ControlHandle c, Point p,
     CtlCallGuard guard(c);
     partstart = inpart = TestControl(c, p);
 
-    /* Super-Dice-It hack: It appears that Super Dice It 1.1
-	  calls TrackControl with p in Global coordinates.  Without
-	  this mod, we get hosed */
+    /* A point outside the control is no part: the Quadra's TrackControl
+       answers 0 for one (upstream asked GetMouse again, for Super Dice It
+       1.1's global coordinates). */
     if(!partstart)
-    {
-        GUEST<Point> ptmp;
-        GetMouse(&ptmp);
-        p = ptmp.get();
-        partstart = inpart = TestControl(c, p);
-    }
+        return 0;
 
     if(CTL_ACTION_AS_LONG(c) == -1L)
     {
