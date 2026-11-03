@@ -31,3 +31,25 @@ TEST(AEDesc, DuplicateCopiesData)
     C_AEDisposeDesc(&src);
     C_AEDisposeDesc(&dst);
 }
+
+/* AECountItems of what isn't a list (8.6's Navigation Services counts a
+   null descriptor when GameBox adds a game): errAEWrongDataType, not a
+   read through the nil data handle (a host crash). */
+TEST(AEDesc, CountItemsOfNonList)
+{
+    GUEST<int32_t> count = 7;
+    AEDesc null = { typeNull, nullptr };
+    EXPECT_EQ(errAEWrongDataType, C_AECountItems(&null, &count));
+    AEDesc text;
+    ASSERT_EQ(noErr, C_AECreateDesc(typeChar, "abc", 3, &text));
+    EXPECT_EQ(errAEWrongDataType, C_AECountItems(&text, &count));
+    EXPECT_EQ(7, (int32_t)count);
+    C_AEDisposeDesc(&text);
+
+    AEDescList list;
+    ASSERT_EQ(noErr, C_AECreateList(nullptr, 0, false, &list));
+    ASSERT_EQ(noErr, C_AEPutPtr(&list, 1, typeChar, "x", 1));
+    EXPECT_EQ(noErr, C_AECountItems(&list, &count));
+    EXPECT_EQ(1, (int32_t)count);
+    C_AEDisposeDesc(&list);
+}
