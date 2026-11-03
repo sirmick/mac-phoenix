@@ -1338,6 +1338,36 @@
 # ####
 
 - function:
+    name: SetMenuItemFontID
+    return: OSErr
+    args:
+      - name: inMenu
+        type: MenuRef
+      - name: inItem
+        type: SInt16
+      - name: inFontID
+        type: SInt16
+    library: AppearanceLib
+    executor: C_
+
+# ####
+
+- function:
+    name: GetMenuItemFontID
+    return: OSErr
+    args:
+      - name: inMenu
+        type: MenuRef
+      - name: inItem
+        type: SInt16
+      - name: outFontID
+        type: SInt16*
+    library: AppearanceLib
+    executor: C_
+
+# ####
+
+- function:
     name: SetMenuItemTextEncoding
     return: OSErr
     args:

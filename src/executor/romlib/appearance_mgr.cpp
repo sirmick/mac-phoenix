@@ -980,6 +980,7 @@ struct ItemKeys
     SInt16 hier_id = 0;      /* SetMenuItemHierarchicalID's; 0: none set */
     bool encoding_set = false;
     TextEncoding encoding = 0;
+    SInt16 font_id = 0;      /* SetMenuItemFontID's; 0: the menu's font */
 };
 std::map<std::pair<uint32_t, int>, ItemKeys> item_keys;
 std::set<uint32_t> parent_choosable;
@@ -1077,6 +1078,30 @@ OSErr Executor::C_GetMenuItemTextEncoding(MenuRef inMenu, SInt16 inItem, GUEST<T
     *outScriptID = it != item_keys.end() && it->second.encoding_set ? it->second.encoding
                                                                     : (TextEncoding)-2;
     return noErr;
+}
+
+/* MacPhoenix: an item's own font (8.6's Navigation Services: its
+   Shortcuts menu); the MDEF draws the item's text in it. */
+OSErr Executor::C_SetMenuItemFontID(MenuRef inMenu, SInt16 inItem, SInt16 inFontID)
+{
+    if(!valid_item(inMenu, inItem))
+        return paramErr;
+    item_keys[{ US_TO_SYN68K(inMenu), inItem }].font_id = inFontID;
+    return noErr;
+}
+
+OSErr Executor::C_GetMenuItemFontID(MenuRef inMenu, SInt16 inItem, GUEST<SInt16> *outFontID)
+{
+    if(!valid_item(inMenu, inItem) || !outFontID)
+        return paramErr;
+    *outFontID = Executor::ROMlib_menu_item_font(inMenu, inItem);
+    return noErr;
+}
+
+int16_t Executor::ROMlib_menu_item_font(MenuHandle mh, int item)
+{
+    auto it = item_keys.find({ US_TO_SYN68K(mh), item });
+    return it == item_keys.end() ? 0 : it->second.font_id;
 }
 
 /* An item is enabled when the menu is and its own bit is (items past 31

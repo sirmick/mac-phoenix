@@ -17,6 +17,7 @@
  *     Collections.h       Collection                                        *
  *     FileMgr.h           FSSpec                                            *
  *     DragMgr.h           DragTrackingMessage, DragReference                *
+ *     MenuMgr.h           MenuHandle                                        *
  *     WindowMgr8.h        PropertyTag                                       *
  *                                                                           *
  *                                                                           *
@@ -39,6 +40,7 @@
 #include "Collections.h"
 #include "FileMgr.h"
 #include "DragMgr.h"
+#include "MenuMgr.h"
 #include "WindowMgr8.h"
 
 #define MODULE_NAME ControlMgr8
@@ -577,6 +579,37 @@ enum {kControlBevelButtonContentTag = "cont"_4,
 };
 
 OSErr C_SetBevelButtonContentInfo(ControlRef inButton, ControlButtonContentInfoPtr inContent);LIBRARY_FUNCTION(AppearanceLib, SetBevelButtonContentInfo, C_SetBevelButtonContentInfo);
+
+
+enum {kControlBevelButtonTextPlaceTag = "tplc"_4,
+kControlBevelButtonMenuValueTag = "mval"_4,
+kControlBevelButtonMenuHandleTag = "mhnd"_4,
+kControlTriangleLastValueTag = "last"_4,
+};
+
+typedef SInt16 BevelButtonTextPlacement;
+
+enum {kControlBevelButtonPlaceSysDirection = -1,
+kControlBevelButtonPlaceNormally = 0,
+kControlBevelButtonPlaceToRightOfGraphic = 1,
+kControlBevelButtonPlaceToLeftOfGraphic = 2,
+kControlBevelButtonPlaceBelowGraphic = 3,
+kControlBevelButtonPlaceAboveGraphic = 4,
+};
+
+OSErr C_GetBevelButtonMenuValue(ControlRef inButton, GUEST<SInt16> *outValue);LIBRARY_FUNCTION(AppearanceLib, GetBevelButtonMenuValue, C_GetBevelButtonMenuValue);
+
+
+OSErr C_SetBevelButtonMenuValue(ControlRef inButton, SInt16 inValue);LIBRARY_FUNCTION(AppearanceLib, SetBevelButtonMenuValue, C_SetBevelButtonMenuValue);
+
+
+OSErr C_GetBevelButtonMenuHandle(ControlRef inButton, GUEST<MenuHandle> *outHandle);LIBRARY_FUNCTION(AppearanceLib, GetBevelButtonMenuHandle, C_GetBevelButtonMenuHandle);
+
+
+OSErr C_SetBevelButtonTextPlacement(ControlRef inButton, BevelButtonTextPlacement inWhere);LIBRARY_FUNCTION(AppearanceLib, SetBevelButtonTextPlacement, C_SetBevelButtonTextPlacement);
+
+
+OSErr C_SetDisclosureTriangleLastValue(ControlRef inTabControl, SInt16 inValue);LIBRARY_FUNCTION(AppearanceLib, SetDisclosureTriangleLastValue, C_SetDisclosureTriangleLastValue);
 
 
 OSStatus C_GetControlSystemProperty(ControlRef control, PropertyTag tag, UInt32 bufferSize, GUEST<UInt32> *actualSize, void *buffer);LIBRARY_FUNCTION(ControlsLib, GetControlSystemProperty, C_GetControlSystemProperty);

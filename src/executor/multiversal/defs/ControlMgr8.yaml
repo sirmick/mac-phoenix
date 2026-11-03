@@ -1811,6 +1811,96 @@
 
 # ####
 
+# MacPhoenix: the bevel button's menu, value and text placement and the
+# disclosure triangle's last value, through their control data tags
+# (ControlDefinitions.h); 8.6's Navigation Services imports them.
+- enum:
+    values:
+      - name: kControlBevelButtonTextPlaceTag
+        value: "'tplc'"
+      - name: kControlBevelButtonMenuValueTag
+        value: "'mval'"
+      - name: kControlBevelButtonMenuHandleTag
+        value: "'mhnd'"
+      - name: kControlTriangleLastValueTag
+        value: "'last'"
+
+- typedef:
+    name: BevelButtonTextPlacement
+    type: SInt16
+
+- enum:
+    values:
+      - name: kControlBevelButtonPlaceSysDirection
+        value: -1
+      - name: kControlBevelButtonPlaceNormally
+        value: 0
+      - name: kControlBevelButtonPlaceToRightOfGraphic
+        value: 1
+      - name: kControlBevelButtonPlaceToLeftOfGraphic
+        value: 2
+      - name: kControlBevelButtonPlaceBelowGraphic
+        value: 3
+      - name: kControlBevelButtonPlaceAboveGraphic
+        value: 4
+
+- function:
+    name: GetBevelButtonMenuValue
+    return: OSErr
+    args:
+      - name: inButton
+        type: ControlRef
+      - name: outValue
+        type: SInt16*
+    library: AppearanceLib
+    executor: C_
+
+- function:
+    name: SetBevelButtonMenuValue
+    return: OSErr
+    args:
+      - name: inButton
+        type: ControlRef
+      - name: inValue
+        type: SInt16
+    library: AppearanceLib
+    executor: C_
+
+- function:
+    name: GetBevelButtonMenuHandle
+    return: OSErr
+    args:
+      - name: inButton
+        type: ControlRef
+      - name: outHandle
+        type: MenuHandle*
+    library: AppearanceLib
+    executor: C_
+
+- function:
+    name: SetBevelButtonTextPlacement
+    return: OSErr
+    args:
+      - name: inButton
+        type: ControlRef
+      - name: inWhere
+        type: BevelButtonTextPlacement
+    library: AppearanceLib
+    executor: C_
+
+- function:
+    name: SetDisclosureTriangleLastValue
+    return: OSErr
+    args:
+      - name: inTabControl
+        type: ControlRef
+      - name: inValue
+        type: SInt16
+    library: AppearanceLib
+    executor: C_
+
+# ####
+
 # MacPhoenix: ControlsLib's private calls that 8.6's ControlDefinitions
 # makes, as WindowsLib's system properties (WindowMgr8.yaml).
 - function:

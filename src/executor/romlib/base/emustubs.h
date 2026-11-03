@@ -99,6 +99,8 @@ RAW_68K_TRAP(FSMDispatch, 0xA0AC);
 RAW_68K_TRAP(HFSUtilDispatch, 0xA824);
 /* MacPhoenix: $A074, a private OS trap PC Exchange's INIT calls (file/fsm.cpp). */
 RAW_68K_TRAP(OSTrapA074, 0xA074);
+/* MacPhoenix: $A08E, the System's B*-tree file trap (file/fsm.cpp). */
+RAW_68K_TRAP(OSTrapA08E, 0xA08E);
 RAW_68K_TRAP(Fix2X, 0xA843);
 RAW_68K_TRAP(Frac2X, 0xA845);
 RAW_68K_TRAP(SCSIDispatch, 0xA815);
