@@ -13,9 +13,10 @@ user sees, and leaves out the rest:
            Scrapbook File (8.x: Appearance, Scripting Additions, ...); of
            Extensions only the files the policy allows on the source's
            System version, the shared libraries CFM finds there (LIBRARIES),
-           Scripting Additions and Voices; the volume's top-level files
+           Scripting Additions and Voices, the printer driver chosen in the
+           Chooser (STR -8192); the volume's top-level files
            (SimpleText, the About documents) and what --keep names
-  left out the rest of Extensions (Apple Guide help, printer drivers,
+  left out the rest of Extensions (Apple Guide help, other printer drivers,
            QuickTime, Apple's Open Transport, ...), what doesn't work on
            Executor (DROP: Energy Saver, AppleTalk's and QuickTime's
            items), MacsBug, the top-level folders (Apple Extras,
@@ -106,6 +107,15 @@ def system_version(disk):
     return ((data[0] >> 4) * 10 + (data[0] & 0xF)) << 8 | data[1]
 
 
+def chosen_printer(disk):
+    """The driver the Chooser chose: the System file's STR -8192 (a Pascal
+    string; provisioning/build.py's "printer"), or None. Kept with
+    Extensions: applications that print, or check for a printer at launch
+    (Persuasion 3.0), open it through the Printing Manager."""
+    data = disk.resources(b"System Folder:System").get(("STR ", -8192), (None, b""))[1]
+    return data[1:1 + data[0]] if data and data[0] else None
+
+
 def policy_names(path, version):
     """The policy's names, read as Executor reads them (extensions.cpp):
     '#' comments and spaces cut, "NAME @ 7.6" only from that version."""
@@ -171,6 +181,7 @@ def plan(disk, allowed, keep=()):
     folders, files = [], []
     drop = {mac(n) for n in DROP}
     libraries = {mac(n) for n in LIBRARIES}
+    printer = chosen_printer(disk)
 
     def tree(path, keep_file=lambda name: True, keep_folder=lambda name: True):
         if path.rsplit(b":", 1)[-1] in SESSION_FOLDERS:
@@ -197,7 +208,7 @@ def plan(disk, allowed, keep=()):
         path = sysf + b":" + name
         folders.append(path)
         if name == b"Extensions":
-            tree(path, keep_file=lambda n: trimmed(n) in allowed or trimmed(n) in libraries,
+            tree(path, keep_file=lambda n: trimmed(n) in allowed or trimmed(n) in libraries or n == printer,
                  keep_folder=lambda n: n in EXTENSION_FOLDERS)
         else:
             tree(path)
