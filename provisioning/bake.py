@@ -40,7 +40,8 @@ snapshot's :Items:, each a path or {"app", facts...}: "no_quit",
 (System Folder files the install supersedes but leaves behind: the build
 deletes them where the snapshot's System Folder part goes), "system_take"
 (System Folder files to take even if only changed: a control panel's
-settings), "network" (the guest's --network: "socket" for net-bridge),
+settings), "system_exclude" (System Folder files left out though new: a
+registration app's preferences holding what was typed into it), "network" (the guest's --network: "socket" for net-bridge),
 "exclude" (names at the top of the target left out of the capture: a self-extracting
 archive copied there to expand in place), "volatile" (snapshot paths a run writes differently every time, compared by
 name only: a first launch's database or preferences). "wip": a bake still being
@@ -700,6 +701,7 @@ class Session:
         hfs = Hfs(work)
         before = sysfolder_content(hfs, self.base_path, work)
         take = {mr(t) for t in self.bake.get("system_take", [])}
+        leave = {mr(t) for t in self.bake.get("system_exclude", [])}
         after = sysfolder_content(hfs, self.boot, work)
         added, changed, ignored = [], [], []
         for p, line in sorted(after.items()):
@@ -707,7 +709,9 @@ class Session:
                 continue
             leaf = p.rsplit(b":", 1)[1]
             prefs = p.startswith(b":System Folder:Preferences:")
-            if p[len(b":System Folder:"):] in take:          # named by the bake: always taken
+            if p[len(b":System Folder:"):] in leave:         # named by the bake: never taken
+                ignored.append(p)
+            elif p[len(b":System Folder:"):] in take:        # named by the bake: always taken
                 (added if p not in before else changed).append(p)
             elif leaf in NEVER or any(n in p for n in NOISE) or (prefs and (p in before or leaf in PREFS_NOISE)):
                 ignored.append(p)

@@ -1,0 +1,14 @@
+{
+ "title": "Mac OS 7.6.1 for creative",
+ "tags": [
+  "creative",
+  "68k",
+  "ppc"
+ ],
+ "note": "System 7.6.1 with what the creative apps put in the System Folder (Photoshop 4.0's ATM, Type Reunion, KODAK Precision CMS and ColorSync profiles); the apps themselves are on Creative.",
+ "base": "standard-7.6.1",
+ "system_from": [
+  "photoshop-4.0"
+ ],
+ "aliases_to": "creative-system-7"
+}
