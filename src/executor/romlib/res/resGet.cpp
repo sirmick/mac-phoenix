@@ -235,17 +235,6 @@ Handle Executor::C_GetResource(ResType typ, INTEGER id)
     if(retval)
         /*-->*/ return retval;
 
-#define BOBSEYESHACK
-#if defined(BOBSEYESHACK)
-    /*
- * This gets around a bug in Bob's Eyes that references stray memory.
- * I'm trying to find the author of the program and get him to fix it.
- *  	--Cliff Sat Sep  3 08:02:51 MDT 1994
- */
-    if(typ == "rAnd"_4 && id == 128)
-        return 0;
-#endif
-
     ROMlib_setreserr(ROMlib_typidtop(typ, id, &map, &rr));
     if(LM(ResErr) == resNotFound)
     {

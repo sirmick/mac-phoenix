@@ -101,6 +101,12 @@ TEST_F(ResourceTest, PrefAsStored)
     expectStoredAsIs(*this, 'PREF', 400);
 }
 
+// Bob's Eyes Pro's (upstream answered nil for it)
+TEST_F(ResourceTest, RAnd128AsStored)
+{
+    expectStoredAsIs(*this, 'rAnd', 128);
+}
+
 TEST_F(ResourceTest, AddResource)
 {
     Handle h;
