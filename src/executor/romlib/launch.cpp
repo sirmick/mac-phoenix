@@ -423,11 +423,6 @@ static void launchchain(ConstStringPtr fName, INTEGER vRefNum, Boolean resetmemo
     LM(QDExist) = LM(WWExist) = EXIST_NO;
     LM(TheZone) = LM(ApplZone);
 
-    // disallow moving relocatable blocks until this flag is reset
-    // in OSEventCommon(). Allegedly (according to some old comment found
-    // in that function), this is needed for some unspecified version of Excel.
-    ROMlib_memnomove_p = true;
-
     SetCursor(*GetCursor(watchCursor));
 
     /* Call this routine in case the refresh value changed, either just

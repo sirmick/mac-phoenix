@@ -400,7 +400,6 @@ static Boolean OSEventCommon(INTEGER evmask, EventRecord *eventp,
     }
 
     eventp->message = 0;
-    ROMlib_memnomove_p = false; /* this is an icky hack needed for Excel */
     ticks = TickCount();
 
     if(auto *playback = EventPlayback::getInstance())

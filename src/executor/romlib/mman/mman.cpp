@@ -944,7 +944,6 @@ void SetHandleSize(Handle h, Size newsize)
     int32_t oldpsize;
     GUEST<THz> save_zone;
     THz current_zone;
-    bool save_memnomove_p;
     unsigned int state;
 
     if(h == LM(TEScrpHandle))
@@ -983,12 +982,8 @@ void SetHandleSize(Handle h, Size newsize)
         nextblock = BLOCK_NEXT(block);
 
         /* First try and grow it forward */
-        save_memnomove_p = ROMlib_memnomove_p;
-        if(USE(nextblock) == REL && ROMlib_locked(block))
-            ROMlib_memnomove_p = false;
         if(ROMlib_makespace(&nextblock, newsize - oldpsize))
         {
-            ROMlib_memnomove_p = save_memnomove_p;
             ZONE_ZCB_FREE(current_zone)
 
                 = ZONE_ZCB_FREE(current_zone) - PSIZE(nextblock);
@@ -999,7 +994,6 @@ void SetHandleSize(Handle h, Size newsize)
         }
         else
         {
-            ROMlib_memnomove_p = save_memnomove_p;
             /* At this point, if the block is locked, we lose */
             if(ROMlib_locked(block))
                 goto bad;
