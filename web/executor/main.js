@@ -68,6 +68,7 @@ window.executor = {
     audioFrames: 0,     // 20 ms frames of sound received
     cursor: null,       // the guest's last cursor message
     stopped: null,      // why Executor stopped, when an error stopped it
+    cpu: null,          // the CPU meter: { busy (0..1, the last half second), history }
     request(op, arg = '') {
         if (!worker)
             return Promise.resolve({ error: 'not running' });   // between Workers
@@ -78,6 +79,45 @@ window.executor = {
         });
     },
 };
+
+// ---- the CPU meter in the top bar: the emulator thread's busy share
+// (the time it isn't waiting for events: hostidle::busy), each half second
+// from the Worker; a sparkline of the last 30 and the latest as a %.
+// Hidden until the first frame and when Executor stops.
+const CpuMeter = (() => {
+    const el = document.getElementById('cpu');
+    const pct = document.getElementById('cpu-pct');
+    const ctx = el.querySelector('canvas').getContext('2d');
+    const N = 30, history = [];
+    function draw() {
+        const { width: w, height: h } = ctx.canvas;
+        ctx.clearRect(0, 0, w, h);
+        ctx.fillStyle = '#333';
+        ctx.fillRect(0, 0, w, h);
+        const step = w / N;
+        history.forEach((v, i) => {
+            ctx.fillStyle = v > 0.9 ? '#e96' : '#7af';
+            const bh = Math.max(1, Math.round(v * h));
+            ctx.fillRect(Math.floor((N - history.length + i) * step), h - bh, Math.ceil(step), bh);
+        });
+    }
+    return {
+        add(busy) {
+            history.push(busy);
+            if (history.length > N)
+                history.shift();
+            pct.textContent = `${Math.round(busy * 100)}%`;
+            window.executor.cpu = { busy, history: [...history] };
+            el.hidden = false;
+            draw();
+        },
+        reset() {
+            history.length = 0;
+            window.executor.cpu = null;
+            el.hidden = true;
+        },
+    };
+})();
 
 // ---- the disks: uploads and ?disk= fetches, for this visit ----
 let sessionFiles = [];
@@ -733,6 +773,7 @@ document.getElementById('take').addEventListener('click', async () => {
 // goes on (what the disks changed is kept as before).
 function executorStopped(reason) {
     window.executor.stopped = reason;
+    CpuMeter.reset();
     console.log(`[web] Executor stopped: ${reason}`);
     autoShot(`stopped: ${reason}`);
     Loading.end();
@@ -816,6 +857,7 @@ async function start() {
         status.removeAttribute('role');
     }
     status.textContent = '';
+    CpuMeter.reset();
     Loading.begin();
     box.replaceChildren(Loading.el);
 
@@ -868,6 +910,9 @@ async function start() {
                 if (!status.textContent)
                     status.textContent = 'Executor';
             }
+        } else if (m.type === 'cpu') {
+            if (window.executor.frames > 0 && !window.executor.stopped)
+                CpuMeter.add(m.busy);
         } else if (m.type === 'images') {
             const before = JSON.stringify(imageState);
             for (const i of m.images)

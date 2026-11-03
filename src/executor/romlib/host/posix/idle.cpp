@@ -10,6 +10,7 @@ namespace
 {
 std::mutex wake_mutex;
 std::condition_variable wake_cond;
+hostidle::Load load;
 }
 
 void hostidle::wait(Clock::time_point deadline, bool (*pending)())
@@ -18,10 +19,12 @@ void hostidle::wait(Clock::time_point deadline, bool (*pending)())
     std::unique_lock<std::mutex> lock(wake_mutex);
     if(pending())
         return;
+    load.asleep(Clock::now());
     if(deadline != Clock::time_point::max())
         wake_cond.wait_until(lock, deadline);
     else
         wake_cond.wait(lock);
+    load.awake(Clock::now());
 }
 
 void hostidle::wake()
@@ -31,5 +34,10 @@ void hostidle::wake()
 }
 
 void hostidle::tick() {}
+
+double hostidle::busy()
+{
+    return load.busy(Clock::now());
+}
 
 void hostidle::set_yield_hook(void (*)()) {}

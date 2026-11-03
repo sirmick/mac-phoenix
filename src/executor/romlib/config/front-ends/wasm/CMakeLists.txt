@@ -269,6 +269,16 @@ endif()
 # the library.
 set(EXECUTOR_WEB_LIBRARY "$ENV{HOME}/storage/web-library" CACHE PATH
     "tools/web/make_library.py's output, for the executor.web.site cells")
+# The top bar's CPU meter: hidden while loading, low at the idle Finder,
+# high while a game runs (web/tests/tab_cpu.mjs; the library's boot-7.6.1
+# and games-68k disks).
+if(NODE_COMMAND AND GO_COMMAND)
+    add_test(NAME executor.web.cpu
+        COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_cpu.mjs
+                $<TARGET_FILE_DIR:executor-web> ${EXECUTOR_WEB_LIBRARY})
+    set_tests_properties(executor.web.cpu PROPERTIES
+        LABELS "executor;web" TIMEOUT 600 SKIP_RETURN_CODE 77 ENVIRONMENT "${EXECUTOR_WEB_ENV}")
+endif()
 if(NODE_COMMAND AND GO_COMMAND)
     foreach(cell "7.6.1 productivity" "7.6.1 creative" "7.6.1 development" "7.6.1 games-68k" "7.6.1 utilities"
                  "8.6 productivity" "8.6 creative" "8.6 development" "8.6 games-ppc")

@@ -105,6 +105,18 @@ Ctrl+W and the like reach the Mac; holding Esc leaves.
 
 "Restart Executor" in the dialog saves what changed and reloads the page.
 
+The bar's CPU meter (main.js `CpuMeter`, `#cpu`): how much of each half
+second the Mac's emulator thread spent working rather than waiting for
+events (`hostidle::busy()`: time inside its waits, which yield to the
+browser, against the clock; timestamps around the waits only). The Worker
+passes it on each half second (`'cpu'`); the bar shows the last 15 seconds
+as bars (orange above 90%) and the latest as a %, "Mac CPU busy" as the
+tooltip; hidden until the first frame and when Executor stops.
+`window.executor.cpu` has `{ busy, history }`; the Worker's `stats`
+request `cpu`. The idle Finder reads a few %, a game running on 100%
+(`executor.web.cpu`). Natively the same number is `/api/status`'s
+`cpu_busy`.
+
 ## Not yet
 
 - Disks: the overlays' revert and download are in the Disks panel

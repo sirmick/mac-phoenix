@@ -228,6 +228,9 @@ typedef struct IPCBuffer {
     char boot_phase[32];
     IPC_ATOMIC_UINT32 checkload_count;
     IPC_ATOMIC_UINT64 boot_start_us; /* CLOCK_MONOTONIC µs */
+    /* Executor: the emulator thread's busy share, per mille + 1 (0: none
+     * yet; the child writes it every half second, /api/status cpu_busy) */
+    IPC_ATOMIC_UINT32 cpu_busy;
 
     /* Current app name (child writes, parent reads for /api/app) */
     char cur_app_name[32];

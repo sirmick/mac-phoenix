@@ -154,6 +154,13 @@ EM_JS(void, js_frame_time, (double ms), {
         Module.stats.hostMs += ms;
 });
 
+/* The emulator thread's load (hostidle::busy), each half second: the
+   page's CPU meter. */
+EM_JS(void, js_cpu, (double busy), {
+    if (Module.onCpu)
+        Module.onCpu(busy);
+});
+
 namespace {
 
 std::vector<uint32_t> rgba;
@@ -588,6 +595,15 @@ void on_yield()
         double t0 = emscripten_get_now();
         v->pump();
         js_frame_time(emscripten_get_now() - t0);
+    }
+    static double cpu_at;
+    double now = emscripten_get_now();
+    if(now - cpu_at >= 500)
+    {
+        cpu_at = now;
+        double busy = Executor::hostidle::busy();
+        if(busy >= 0)
+            js_cpu(busy);
     }
 }
 

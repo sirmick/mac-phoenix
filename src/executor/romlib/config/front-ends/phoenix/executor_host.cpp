@@ -9,6 +9,7 @@
 #include <mman/mman_private.h>
 #include <hfs/hfs.h>
 #include <file/file.h>
+#include <rsys/hostidle.h>
 #include <rsys/process.h>
 #include <vdriver/vdriver.h>
 #include <rsys/toolevent.h>
@@ -301,6 +302,11 @@ uint32_t guest_ram_size()
 {
     /* ROMlib_memtop is the host address of MemTop. */
     return US_TO_SYN68K(ROMlib_memtop);
+}
+
+double cpu_busy()
+{
+    return Executor::hostidle::busy();
 }
 
 }  // namespace executor_host

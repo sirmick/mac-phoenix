@@ -12,7 +12,8 @@
 # Selects Macintosh HD (the read-only 8.6 image) and picks Special > Erase
 # Disk..., which answers with a stop alert ("could not be erased, because
 # the disk is locked"); measures the emulator's CPU time over 3 seconds,
-# then clicks OK and checks the alert is gone. While the alert is up the
+# and /api/status's cpu_busy (Executor's own measure), then clicks OK and
+# checks the alert is gone. While the alert is up the
 # menu bar is as a G3's: the application's menus disabled (File drawn
 # grey, no Special title selected), Help as it was; after OK, File black
 # again (ModalDialogMenuSetup). The coordinates are those of a fresh 8.6
@@ -144,6 +145,13 @@ HZ=$(getconf CLK_TCK)
 t0=$(ticks); sleep 3; t1=$(ticks)
 pct=$(( (t1 - t0) * 100 / (3 * HZ) ))
 echo "CPU with the alert up: ${pct}%"
+# Executor's own measure (/api/status cpu_busy: its emulator thread's time
+# out of its waits, the last half second): low too
+busy=$(curl -sf "http://localhost:$PORT/api/status" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("cpu_busy", ""))')
+echo "cpu_busy with the alert up: ${busy:-none}"
+if [[ -z "$busy" ]] || ! python3 -c "import sys; sys.exit(0 if float('$busy') < 0.5 else 1)"; then
+    echo "FAIL: /api/status cpu_busy ${busy:-missing} with an alert up"; exit 1
+fi
 
 # OK at 463,167
 click 463 167

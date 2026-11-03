@@ -61,6 +61,12 @@ self.Module = {
     onCursor(data, mask, hotX, hotY, visible) {
         postMessage({ type: 'cursor', data, mask, hotX, hotY, visible });
     },
+    // The emulator thread's busy share (0..1), each half second
+    // (web_main.cpp js_cpu): the page's CPU meter.
+    onCpu(busy) {
+        Module.stats.cpu = busy;
+        postMessage({ type: 'cpu', busy });
+    },
     // 48 kHz big-endian 16-bit stereo -> interleaved floats for the page.
     onAudio(bytes) {
         const n = bytes.length >> 1;
