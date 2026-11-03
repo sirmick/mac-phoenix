@@ -223,6 +223,22 @@
 # ####
 
 - function:
+    name: GetProcessManagerID
+    return: int32_t
+    args:
+      - name: id
+        type: Ptr
+    dispatcher: OSDispatch
+    selector: 0x0002
+    executor: C_
+    comment: |
+      MacPhoenix (name is a guess): OSDispatch $2, as Apple's 7.6.1 answers
+      it (a probe on the Quadra): the 8 bytes 'TWIT' '1889' at id, 0
+      returned, the selector and id popped. Excel 4.0's start-up asks.
+
+# ####
+
+- function:
     name: TakeDesktopLayer
     return: OSErr
     args:
