@@ -54,16 +54,18 @@ export async function newPage(browser, { log = true, tag = '', scale = 1 } = {})
 }
 
 // The tab from dir on tools/standalone (images: its library; include:
-// the patterns offered), in a browser of its own at index.html?query: the
-// page, close(), and the server ({ url, data, ... }: server.mjs).
-export async function open(dir, { log = true, query = '', images, include } = {}) {
+// the patterns offered), in a browser of its own at index.html?query
+// (viewport and dpr: the window's size and devicePixelRatio): the page,
+// close(), and the server ({ url, data, ... }: server.mjs).
+export async function open(dir, { log = true, query = '', images, include,
+                                  viewport = { width: 800, height: 640 }, dpr = 1 } = {}) {
     const server = await startServer(dir, { images, include });
     if (!server) {
         console.log('SKIP: no go');
         process.exit(77);
     }
     const browser = await launch();
-    const page = await browser.newPage({ viewport: { width: 800, height: 640 } });
+    const page = await browser.newPage({ viewport, deviceScaleFactor: dpr });
     page.on('pageerror', (e) => console.log('[page error]', e.stack || e.message));
     page.on('crash', () => console.log('[page crashed]'));
     if (log)

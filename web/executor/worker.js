@@ -28,6 +28,7 @@ self.Module = {
     // Drawing: frames, pixels drawn, ms in the front end (web_main.cpp)
     // and here; the page's 'stats' request.
     stats: { frames: 0, pixels: 0, hostMs: 0, drawMs: 0 },
+    screen: { width: 0, height: 0 },    // the Mac's, as the page last heard it
     arguments: [],
     input: [],          // [kind, a, b] events; web_main.cpp takes them
     requests: [],       // [id, op, arg]; answered at the next event call
@@ -38,11 +39,17 @@ self.Module = {
     },
     // What changed: rects [top, left, bottom, right]..., their RGBA pixels
     // one after another (web_main.cpp).
-    onRects(width, height, rects, rgba) {
+    onRects(width, height, rects, rgba, macWidth, macHeight) {
         const t0 = performance.now();
         if (canvas.width !== width || canvas.height !== height) {
             canvas.width = width;
             canvas.height = height;
+        }
+        // The Mac's screen, when it isn't what the page was told (the page
+        // fits the canvas and maps clicks with it).
+        if (macWidth !== Module.screen.width || macHeight !== Module.screen.height) {
+            Module.screen = { width: macWidth, height: macHeight };
+            postMessage({ type: 'screen', width: macWidth, height: macHeight });
         }
         let at = 0, pixels = 0;
         for (let i = 0; i < rects.length; i += 4) {
@@ -446,6 +453,7 @@ function previousGone() {
 }
 
 async function start(m) {
+    Module.screen = { width: m.width, height: m.height };
     if (m.log) {
         Log.start(m.log, 'worker');
         Log.onError = (text) => postMessage({ type: 'error', text });
