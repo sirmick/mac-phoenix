@@ -1,7 +1,7 @@
 # wash-plan: written by Wash as the plan changes.
 # Edit it only between workspaces; plan_set {"from": "<this file>"} loads it.
 
-revision = 88
+revision = 96
 
 [[node]]
   id = "cuts"
@@ -470,9 +470,9 @@ revision = 88
   emoji = "📌"
   template = "note"
   parent = "p1"
-  body = "(1) Standalone: settings.json without \"version\" refused: default to current. (2) uploads.go: replace=1 drops old overlay before rename. (3) Mixed Mode: stale vector when a SysZone accelerated resource is purged+reloaded. (4) SetBevelButtonContentInfo no dispatcher/selector: confirm PPC-only. (5) BBEdit 6.1 survey shows while Finder menus up. (6) Servers died ~19:50 2026-11-02: cause unknown. (7) ShutDwnPower/Start skip ROMlib_OurClose: HFS not flushed. (8) Disks: busy Put Away untested; ghost icon; hfsPBEject no busy check. (9) font.cpp L757/L965 unchecked width-list derefs. (10) harness needs full Chromium. (11) resMod.cpp direct-append orphans old bytes. (12) inputsprocket.cpp:177 Movement size 12 B. (13) $A08E paramErr for every selector. (14) MPW New dialog folder pop-up blank. (15) AE 'Berk'/'eley' handler not stored. (16) EV Override 2-colour screen (SetEntries always new ctSeed -> itab from black CLUT): needs a reference; G3 8.6 has no 8-bit modes (video_ppc.cpp VideoInit 32-bit only). Options: 68k clut probe on the Quadra 7.6.1 --depth 8 (cheaper), or 8-bit modes in the PPC video driver. Probe clut.c merged cb7c1a82. (17) localvolume.cpp:658 SetFInfo on a folder paramErr not fnfErr. (18) process.cpp:2164/2193 launchProcessSN written back without EPBLength check."
+  body = "(1) Standalone: settings.json without \"version\" refused: default to current. (2) uploads.go: replace=1 drops old overlay before rename. (3) Mixed Mode: stale vector when a SysZone accelerated resource is purged+reloaded. (4) SetBevelButtonContentInfo no dispatcher/selector. (5) BBEdit 6.1 survey while Finder menus up. (6) Servers died ~19:50 2026-11-02. (7) ShutDwnPower/Start skip ROMlib_OurClose. (8) Disks: busy Put Away; ghost icon; hfsPBEject no busy check. (9) font.cpp L757/L965 unchecked width-list derefs. (10) harness needs full Chromium. (11) resMod.cpp direct-append orphans bytes. (12) inputsprocket.cpp:177 Movement 12 B. (13) $A08E paramErr for every selector. (14) MPW New dialog folder pop-up blank. (15) AE 'Berk'/'eley' handler not stored. (16) EV Override 2-colour screen: needs a reference (68k clut probe on the Quadra, or 8-bit modes in the PPC video driver); clut.c merged. (17) localvolume.cpp:658 SetFInfo on a folder paramErr. (18) process.cpp launchProcessSN written back without EPBLength check. (19) THINK PM convert on a read-only image: UpdateResFile gui_assert resMod.cpp:455; hfsPBOpen grants write on a locked volume. (20) ResourceDispatch unknown-selector fallback relies on D0's high byte. (21) ctlMouse.cpp:246 control repeat every 6 ticks: KeyRepThresh? confirm on a Mac with another repeat setting."
   state = "todo"
-  revision = 66
+  revision = 89
 
 [[node]]
   id = "m1-audit"
@@ -511,8 +511,8 @@ revision = 88
   template = "package"
   parent = "m1"
   body = "Rows #5, #7 (fatal 'Jumped to unimplemented trap handler [0xa08a,0xa89f,0xa08e/0xa09f]': CW New Project, BBEdit Cmd-S), #8 (HyperCard never in front; native AE_hdlr.cpp:165 assertion), #9 (PowerPC MacPerl: AEResolve unimplemented), #10 (ResEdit New file: unhandled trap 4 at 0xC0000014), #3 (THINK C: TranslationDispatch $24/$20 -> -1700, STRAGGLERS 71) in ~/storage/tmp/m1-audit/results.md. Reproduce natively first (e86), fix, then the tab cell executor.web.m1.8.6.{development,tools-8}."
-  state = "active"
-  revision = 49
+  state = "done"
+  revision = 96
 
 [[node]]
   id = "m1-fix-tab"
@@ -570,3 +570,22 @@ revision = 88
   body = "Owner 2026-11-03: add https://manticore.nz/gamebox. GameBox is a free game-library manager for vintage Macs (organise/launch games, play time, virtual discs, chat rooms, scoreboards, profiles; registration optional). Classic 1.2.0 for Mac OS 8-9.2.2 (PowerPC), 12 MB RAM: http://files.mac-attic.com/downloads/manticoresw/gamebox/classic/GameBox-classic-latest.hqx (4 MB; the author's own download host). Steps: pin the .hqx in media.json (md5/sha256, page URL), check whether it's Carbon (needs CarbonLib: Executor has none until M2; if so, report and stop) or classic PPC; bake onto the PPC games disk (games-ppc / provisioning image) for 8.6; run it on Executor 8.6 natively and in the tab: add a few of the disk's games to its library, launch one from it; online features through the relay only if they work without setup. A tab cell. Rebuild the library image and tell the orchestrator before it goes to the owner's server."
   state = "active"
   revision = 84
+
+[[node]]
+  id = "disk-audit"
+  title = "Disk audit tool: aliases resolve, Finder icon positions and window frames/scroll sensible, on every library image"
+  emoji = "🔎"
+  template = "package"
+  body = "Owner 2026-11-03: scan/audit all files on a disk for alias correctness and icon location / scrollbar sensibility. A host-side tool (tools/macdecode or Executor's HFS/HFS+ readers via a small CLI; no emulator) over an image: every 'alis' (alias files, Apple Menu Items, Startup Items, Launcher) resolves on that image or the images it's shipped with (volume name, dirID/name chain); Finder info: icon locations inside their window's view, no overlaps, not at (0,0) piles; folder window frames (DInfo frRect) on a 640x480 screen and scroll positions within content; invisible/stray files (Desktop DB/DF, Icon\\r). Report per image (Markdown), run over ~/storage/web-library and provisioning/images outputs; optionally a provisioning/build.py 'tidy' step that fixes what it can (clean-up arrangement, drop dangling aliases) with the owner's OK. ctest on a fixture image."
+  state = "active"
+  revision = 94
+
+[[node]]
+  id = "fix-86-8"
+  title = "Owner's reports 2026-11-03 (2): ColorSync tab titles, missing alias, MacBench lock-up, disk icon look, Finder drag, Cancel button"
+  emoji = "🪟"
+  template = "package"
+  parent = "m1"
+  body = "Owner testing :8090 (69460445), 8.6 in the tab at 2x (Firefox/Windows); screenshots + logs in ~/storage/tmp/standalone-try/data/logs/2026-11-03 (read only), session mw065k3u-b466ec26a7cc9995: (1) 041032 'tab titles': ColorSync control panel's tab titles clipped ('rofiles', 'CMMs', 'About' cut at their left). (2) 041047 'alias missing': Apple menu 'Apple FM Radio' alias -> 'original item cannot be found' (the cut System lacks its target? then the cut should drop the alias). (3) 041312 'strange graphics issue' + 041319 'locked up': MacBench 5.0 splash over its window; desktop disk icons drawn as grey checker shapes (Utilities, executor, Host, Macintosh HD, Internet) and Internet listed twice; then Executor stopped answering (log: CFM unresolved imports InstallExceptionHandler, GetPhysical just before). (4) Finder: click-drag to rearrange icons doesn't work. (5) session mw0332ji 033737: Serial MReader's 'Cancel' button drawn as a white-on-grey ghost at 850,413. Compare each with the G3 under 8.6."
+  state = "active"
+  revision = 91

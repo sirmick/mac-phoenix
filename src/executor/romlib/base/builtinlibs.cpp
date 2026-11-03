@@ -121,24 +121,40 @@ namespace
    dispatcher, Executor's handler table): where the window it falls in is
    smaller than natively (the tab's 64 MB pool), that's the fatal "host
    pointer is not guest-addressable" (CodeWarrior IDE 3.2 with PowerPC, M1
-   #6). Answered as if done, and logged, natively too: a value outside the
-   memory handed out (natively the pool's window is 1 GB: 'Bite' falls in
-   it, and the handler tables were used with it). */
+   #6). Kept here instead, by value: removing one installed so answers
+   noErr, as the AppleEvent Manager would (ObjectSupportLib removes 'Berk'
+   'eley' 'Win ' right after installing it), anything else
+   errAEHandlerNotFound. Only a value that can't go to host memory and
+   back: one in its window's reservation goes to the AppleEvent Manager
+   as on a Mac (natively the pool's window is 1 GB: 'Win ' falls in it,
+   and AppleWorks 5's PowerPC code stops, "unhandled trap 11", when the
+   pair isn't in the table). */
 static bool ae_handler_not_an_address(const char *name, PowerCore& cpu)
 {
+    /* (class, ID, system) -> handler */
+    static std::map<std::tuple<uint32_t, uint32_t, bool>, uint32_t> kept;
     bool install = !strcmp(name, "AEInstallEventHandler");
     if(!install && strcmp(name, "AERemoveEventHandler"))
         return false;
     uint32_t hdlr = cpu.r[5];
-    if(!hdlr || syn68k_is_guest_addr_mapped(hdlr, 2))
+    if(!hdlr || syn68k_is_guest_addr_in_window(hdlr, 2))
         return false;
     auto code = [](uint32_t v) {
         return std::string{ char(v >> 24), char(v >> 16), char(v >> 8), char(v) };
     };
-    fprintf(stderr, "[Executor] PowerPC %s('%s', '%s', $%08X): the handler is no address, answered %s\n",
-            name, code(cpu.r[3]).c_str(), code(cpu.r[4]).c_str(), hdlr,
-            install ? "noErr" : "errAEHandlerNotFound");
-    cpu.r[3] = install ? noErr : errAEHandlerNotFound;
+    /* the system flag: AEInstallEventHandler's fifth argument, after the
+       refcon; AERemoveEventHandler's fourth */
+    auto key = std::make_tuple(cpu.r[3], cpu.r[4], ((install ? cpu.r[7] : cpu.r[6]) & 0xFF) != 0);
+    OSErr err = noErr;
+    if(install)
+        kept[key] = hdlr;
+    else if(auto it = kept.find(key); it != kept.end() && it->second == hdlr)
+        kept.erase(it);
+    else
+        err = errAEHandlerNotFound;
+    fprintf(stderr, "[Executor] PowerPC %s('%s', '%s', $%08X): the handler is no address, answered %d\n",
+            name, code(cpu.r[3]).c_str(), code(cpu.r[4]).c_str(), hdlr, err);
+    cpu.r[3] = err;
     return true;
 }
 
