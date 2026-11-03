@@ -491,7 +491,8 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             printf("                             consistency checks at every Memory Manager call, slow), allocs\n");
             printf("                             (allocations >= 4K and the code that asked), pcsample (where\n");
             printf("                             PowerPC code spends its time, every 5 s), hidpi (the text\n");
-            printf("                             --executor-scale redraws, and what became of it), fslog,\n");
+            printf("                             --executor-scale redraws, and what became of it), ppcinterp\n");
+            printf("                             (mame-ppc's UML interpreter, not its native back-end), fslog,\n");
             printf("                             trace, trapfailure, unimplemented, unexpected, errno, sound, all\n");
             printf("  --watch ADDR[:LEN]         Report every write to guest memory ADDR (hex; LEN 1-16, default 4):\n");
             printf("                             old/new value, 68k PC and registers, last traps, host stack (Executor)\n");
