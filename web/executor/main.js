@@ -68,7 +68,7 @@ window.executor = {
     audioFrames: 0,     // 20 ms frames of sound received
     cursor: null,       // the guest's last cursor message
     stopped: null,      // why Executor stopped, when an error stopped it
-    cpu: null,          // the CPU meter: { busy (0..1, the last half second), history, memory (worker.js memoryUse) }
+    cpu: null,          // the CPU meter: { busy (0..1, the last half second), history, memory (worker.js memoryUse), measured (the browser's figure, 0: none) }
     request(op, arg = '') {
         if (!worker)
             return Promise.resolve({ error: 'not running' });   // between Workers
@@ -92,7 +92,24 @@ function memoryTip(m) {
             `• disk caches: ${MB(m.caches)} (library disks' pieces read from the server)`,
             `• disk changes: ${MB(m.changes)} (what the Mac wrote to its disks, kept here)`,
             `• Executor's volume: ${MB(m.volume)} (its System Folder and files, in memory; estimated from the files' buffers)`,
-            'Not counted: the browser\'s own (the page, its scripts, uploaded files), so the total is an estimate.'].join('\n');
+            'Not counted: the browser\'s own (the page, its scripts, uploaded files), so the total is an estimate.',
+            ...(measured ? [`The browser's own measurement of this tab: ${MB(measured)}`
+                            + ` (performance.measureUserAgentSpecificMemory, ${Math.round((Date.now() - measuredAt) / 1000)} s ago)`] : [])]
+        .join('\n');
+}
+// The browser's measurement, where it has one (cross-origin isolated
+// pages, Chromium): slow (it may wait for a garbage collection), so every
+// 10 s at most, one at a time.
+let measured = 0, measuredAt = 0, measuring = false;
+function measure() {
+    if (measuring || Date.now() - measuredAt < 10000 || !window.crossOriginIsolated
+        || !performance.measureUserAgentSpecificMemory)
+        return;
+    measuring = true;
+    performance.measureUserAgentSpecificMemory()
+        .then((r) => { measured = r.bytes; measuredAt = Date.now(); })
+        .catch(() => { measuredAt = Date.now(); })
+        .finally(() => { measuring = false; });
 }
 const CpuMeter = (() => {
     const el = document.getElementById('cpu');
@@ -119,10 +136,11 @@ const CpuMeter = (() => {
                 history.shift();
             pct.textContent = `${Math.round(busy * 100)}%`;
             if (memory) {
+                measure();
                 mem.textContent = MB(memory.total);
                 mem.title = memoryTip(memory);
             }
-            window.executor.cpu = { busy, history: [...history], memory };
+            window.executor.cpu = { busy, history: [...history], memory, measured };
             el.hidden = false;
             draw();
         },

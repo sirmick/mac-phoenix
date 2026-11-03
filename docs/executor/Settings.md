@@ -124,7 +124,10 @@ MemTop, from the module), the library disks' pieces read from the server
 volume (`/executor` in MEMFS: the files' buffers). The tooltip gives the
 parts; the browser's own memory (the page, its scripts, uploaded files) is
 not counted. On 7.6.1 with the games disk: about 320 MB (heap 256, of it
-RAM 126; caches 44; volume 20).
+RAM 126; caches 44; volume 20). Where the browser measures memory itself
+(`performance.measureUserAgentSpecificMemory`: cross-origin isolated pages,
+Chromium; the tab is), the tooltip gives its figure too, taken at most
+every 10 s (it can wait for a garbage collection): 327 MB there.
 
 ## Not yet
 

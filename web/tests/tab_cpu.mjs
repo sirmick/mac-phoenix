@@ -87,6 +87,16 @@ try {
     check(u.caches > 0 && u.volume > 0, 'disk caches and the volume counted');
     check(/Mac's RAM/.test(m.memTitle) && /disk caches/.test(m.memTitle) && /Executor's volume/.test(m.memTitle)
           && /estimate/.test(m.memTitle), 'the memory tooltip: the parts, an estimate');
+    // The browser's own figure where it measures (cross-origin isolated):
+    // then in the tooltip too.
+    const iso = await page.evaluate(() => window.crossOriginIsolated && !!performance.measureUserAgentSpecificMemory);
+    if (iso) {
+        await until(async () => (await meter()).cpu.measured > 0, 30000, 500);
+        const w = await meter();
+        console.log(`the browser's measurement: ${mb(w.cpu.measured)} MB`);
+        check(w.cpu.measured > 0 && /browser's own measurement/.test(w.memTitle), "the browser's measurement in the tooltip");
+    } else
+        console.log("(no performance.measureUserAgentSpecificMemory here: not cross-origin isolated)");
 
     const err = await request(page, 'launch', game.app, 60000);
     check(err === 0 || err === '0', `${game.name} launched (${err})`);
