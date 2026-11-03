@@ -199,6 +199,9 @@ OSErr C_GetProcessSerialNumberFromPortName(PPCPortPtr port_name, ProcessSerialNu
 OSErr C_LaunchDeskAccessory(const FSSpec *pFileSpec, ConstStringPtr pDAName);PASCAL_SUBTRAP(LaunchDeskAccessory, 0xA88F, 0x0036, OSDispatch);
 
 
+OSErr C_LaunchControlPanel(const FSSpec *pFileSpec);PASCAL_SUBTRAP(LaunchControlPanel, 0xA88F, 0x007B, OSDispatch);
+
+
 OSErr C_BeginSystemMode();PASCAL_SUBTRAP(BeginSystemMode, 0xA88F, 0x0040, OSDispatch);
 LIBRARY_ALSO(PrivateInterfaceLib, BeginSystemMode, InterfaceLib);
 

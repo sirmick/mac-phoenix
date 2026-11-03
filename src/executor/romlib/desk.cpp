@@ -405,6 +405,34 @@ void Executor::C_SystemMenu(LONGINT menu)
     }
 }
 
+/* The DA Handler's menu bar (7.5.5's Process Manager): "About ^0…" (^0
+   the process's name) and the Apple menu's items, File (Close, Quit),
+   Edit. The control panel shell has the same (9.0.4 on the G3). */
+void Executor::ROMlib_install_da_handler_menus()
+{
+    if(MenuHandle apple = GetMenu(-kDAAppleMenu))
+    {
+        /* "About ^0…": ^0 is the DA's name. */
+        Str255 text;
+        GetMenuItemText(apple, 1, text);
+        std::string t((char *)text + 1, text[0]);
+        auto at = t.find("^0");
+        if(at != std::string::npos)
+        {
+            t.replace(at, 2, std::string((char *)LM(CurApName) + 1, LM(CurApName)[0]));
+            text[0] = std::min<size_t>(t.size(), 255);
+            memcpy(text + 1, t.data(), text[0]);
+            SetMenuItemText(apple, 1, text);
+        }
+        AppendResMenu(apple, "DRVR"_4);
+        InsertMenu(apple, 0);
+    }
+    if(MenuHandle m = GetMenu(-kDAFileMenu))
+        InsertMenu(m, 0);
+    if(MenuHandle m = GetMenu(-kDAEditMenu))
+        InsertMenu(m, 0);
+}
+
 /* ── DA Handler ─────────────────────────────────────────────────────────
  * MacPhoenix.  On 7.5.5 a desk accessory opened from its file runs in a
  * process of its own, named after it, whose menu bar is the System's DA
@@ -478,27 +506,7 @@ void Executor::ROMlib_run_desk_accessory(const FSSpec *file_arg, ConstStringPtr 
     InitDialogs(nullptr);
     InitCursor();
 
-    if(MenuHandle apple = GetMenu(-kDAAppleMenu))
-    {
-        /* "About ^0…": ^0 is the DA's name. */
-        Str255 text;
-        GetMenuItemText(apple, 1, text);
-        std::string t((char *)text + 1, text[0]);
-        auto at = t.find("^0");
-        if(at != std::string::npos)
-        {
-            t.replace(at, 2, std::string((char *)LM(CurApName) + 1, LM(CurApName)[0]));
-            text[0] = std::min<size_t>(t.size(), 255);
-            memcpy(text + 1, t.data(), text[0]);
-            SetMenuItemText(apple, 1, text);
-        }
-        AppendResMenu(apple, "DRVR"_4);
-        InsertMenu(apple, 0);
-    }
-    if(MenuHandle m = GetMenu(-kDAFileMenu))
-        InsertMenu(m, 0);
-    if(MenuHandle m = GetMenu(-kDAEditMenu))
-        InsertMenu(m, 0);
+    ROMlib_install_da_handler_menus();
     DrawMenuBar();
 
     if(drvr[0])

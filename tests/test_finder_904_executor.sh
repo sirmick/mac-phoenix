@@ -9,7 +9,8 @@
 #     through Mixed Mode), no host crash (AppleScript 1.4's component).
 #  2. The Finder is the front process, with its menu bar.
 #  3. A folder opens: "Macintosh HD:System Folder", its window on the
-#     desktop.
+#     desktop (ControlDefinitions prepared: UTCUtils from the System file).
+#  4. General Controls opens in the control panel shell (LaunchControlPanel).
 #
 # Usage:
 #   tests/test_finder_904_executor.sh [--timeout N] [--port N]
@@ -120,6 +121,27 @@ EOF
 echo "System Folder window: ${CHANGED/ /x} pixels changed"
 read -r W H <<<"$CHANGED"
 [[ "$W" -gt 150 && "$H" -gt 100 ]] || fail "no folder window"
+
+# A classic control panel: the Finder hands it to LaunchControlPanel, the
+# shell runs it in a process of its own (the G3: "General Controls" in
+# front, its window's content at (6, 46), the dialog grey behind it).
+api launch '{"path":"Macintosh HD:System Folder:Control Panels:General Controls"}' >/dev/null || true
+sleep 5
+APP=$(curl -sf "$URL/app" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("app",""))')
+echo "Front process: $APP"
+[[ "$APP" == "General Controls" ]] || fail "General Controls is not in front"
+api mouse '{"x":600,"y":460}' >/dev/null
+sleep 1
+shot panel
+GREY=$(python3 - "$WORK/panel.png" <<'EOF'
+import sys
+from PIL import Image
+im = Image.open(sys.argv[1]).convert('RGB')
+print(sum(1 for x in range(20, 280) for y in range(150, 170) if im.getpixel((x, y)) == (238, 238, 238)))
+EOF
+)
+echo "General Controls: $GREY dialog-grey pixels (the G3: most of 5200)"
+[[ "$GREY" -gt 3000 ]] || fail "the control panel's window is not there"
 
 kill -0 "$EMU_PID" 2>/dev/null || fail "the emulator died"
 if [[ "$FAILED" -ne 0 ]]; then tail -30 "$WORK/emu.log"; exit 1; fi
