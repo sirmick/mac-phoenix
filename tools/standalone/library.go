@@ -38,7 +38,11 @@ type Disk struct {
 	// The Systems the disk is for (make_library.py's record), shown in the
 	// Disks panel's library table
 	Systems []string `json:"systems,omitempty"`
-	cover   string
+	// What is on the disk (make_library.py's "items": name, kind, version,
+	// arch, size, description, ...), passed through for the library's
+	// details row
+	Items json.RawMessage `json:"items,omitempty"`
+	cover string
 }
 
 func catalog(images string, include, exclude []string) []Disk {
@@ -84,11 +88,12 @@ func catalogDir(out []Disk, dir, prefix string, offer func(name string) bool) []
 			continue
 		}
 		var r struct {
-			Title   string   `json:"title"`
-			Note    string   `json:"note"`
-			Tags    []string `json:"tags"`
-			Cover   string   `json:"cover"`
-			Systems []string `json:"systems"`
+			Title   string          `json:"title"`
+			Note    string          `json:"note"`
+			Tags    []string        `json:"tags"`
+			Cover   string          `json:"cover"`
+			Systems []string        `json:"systems"`
+			Items   json.RawMessage `json:"items"`
 		}
 		if json.Unmarshal(b, &r) != nil {
 			continue
@@ -101,6 +106,9 @@ func catalogDir(out []Disk, dir, prefix string, offer func(name string) bool) []
 		}
 		d := Disk{Name: prefix + name, Title: r.Title, Note: r.Note, Tags: r.Tags, Size: st.Size(),
 			URL: "disks/" + pyQuote(prefix+name, "/"), Systems: r.Systems}
+		if len(r.Items) > 0 && r.Items[0] == '[' {
+			d.Items = r.Items
+		}
 		if r.Cover != "" && r.Cover == filepath.Base(r.Cover) {
 			if cst, err := os.Stat(filepath.Join(dir, r.Cover)); err == nil && cst.Mode().IsRegular() {
 				d.cover, d.Cover = prefix+r.Cover, "covers/"+pyQuote(prefix+r.Cover, "/")

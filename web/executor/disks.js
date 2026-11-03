@@ -14,13 +14,17 @@
 //   { system: { value, label }, mounted: [{ name, title, cover,
 //     kind: 'hd'|'cd'|'floppy'|'app', state: { modified, changed (bytes),
 //     writable, onServer }, inserting }],
-//     library: [{ title, url, note, tags, size, cover, systems }], mountedUrls }
+//     library: [{ title, url, note, tags, size, cover, systems, items }], mountedUrls }
+// (items: what is on the disk, make_library.py's: name, kind, version, arch,
+// size, publisher, year, description, notes, group; a library row opens to
+// them, "▸ N items")
 // (one's own images are uploaded into the library: tagged "uploaded")
 'use strict';
 
 const Disks = (() => {
     let on = {}, state = { system: { value: '', label: "Executor's own" }, mounted: [], library: [], mountedUrls: [] };
     let panel = null, button = null, drop = null, filter = '', tags = new Set(), sort = { key: 'title', up: true };
+    const opened = new Set();               // library rows showing their contents, by url
 
     const ICONS = {
         hd: '<svg viewBox="0 0 32 32"><rect x="2" y="9" width="28" height="15" rx="2" fill="#bbb" stroke="#555"/>'
@@ -175,6 +179,68 @@ const Disks = (() => {
         return wrap;
     }
 
+    // What is on a library disk: its note, then a row per item (a group's
+    // name above its items), name with publisher, year, description and
+    // its kind (unless an application or game) under it, version, arch
+    // (short: PPC) and size: four columns, the panel being narrow.
+    const ARCH = { 'PowerPC': 'PPC', '68k, PowerPC': '68k/PPC' };
+    function details(d) {
+        const tr = el('tr', 'lib-details');
+        tr.dataset.url = d.url;
+        const td = el('td');
+        td.colSpan = 5;
+        if (d.note)
+            td.append(el('div', 'lib-note', d.note));
+        const t = el('table', 'lib-items');
+        const head = el('tr');
+        for (const c of ['Name', 'Version', 'Arch', 'Size'])
+            head.append(el('th', '', c));
+        const body = el('tbody');
+        let group = null;
+        for (const it of d.items || []) {
+            if ((it.group || null) !== group) {
+                group = it.group || null;
+                if (group) {
+                    const g = el('tr', 'lib-group');
+                    const gc = el('td', '', group);
+                    gc.colSpan = 4;
+                    g.append(gc);
+                    body.append(g);
+                }
+            }
+            const r = el('tr', 'lib-item');
+            const name = el('td', 'item-name');
+            name.append(el('div', 'item-title', it.name));
+            const by = [it.publisher, it.year].filter(Boolean).join(', ');
+            const kind = it.kind && !['application', 'game'].includes(it.kind) ? it.kind : '';
+            const about = [by, it.description, kind].filter(Boolean).join(' · ');
+            if (about)
+                name.append(el('div', 'item-about', about));
+            const only = (it.systems || []).join(', ');
+            if (it.notes || (only && only !== (d.systems || []).join(', ')))
+                name.append(el('div', 'item-notes', [only && only !== (d.systems || []).join(', ') ? `Mac OS ${only} only.` : '',
+                                                     it.notes || ''].filter(Boolean).join(' ')));
+            if (it.apps && it.apps.length)
+                name.title = `Applications: ${it.apps.map((a) => a.name).join(', ')}${it.more_apps ? ` and ${it.more_apps} more` : ''}`;
+            r.dataset.kind = it.kind || '';
+            const version = el('td', 'item-version', it.version || '');
+            version.title = it.version || '';
+            const arch = el('td', 'item-arch', ARCH[it.arch] || it.arch || '');
+            arch.title = it.arch || '';
+            r.append(name, version, arch, el('td', 'item-size', it.size ? size(it.size) : ''));
+            body.append(r);
+        }
+        const thead = el('thead');
+        thead.append(head);
+        t.append(thead, body);
+        td.append(t);
+        tr.append(td);
+        return tr;
+    }
+    const itemsText = (d) => (d.items || []).map((it) => `${it.name} ${it.group || ''} ${it.publisher || ''} `
+        + `${it.description || ''} ${(it.apps || []).map((a) => a.name).join(' ')}`).join(' ')
+        + ` ${(d.contents || []).join(' ')}`;
+
     function librarySection() {
         const wrap = el('section');
         wrap.id = 'disks-library';
@@ -251,12 +317,13 @@ const Disks = (() => {
             const words = filter.toLowerCase().split(/\s+/).filter(Boolean);
             const col = COLUMNS.find((c) => c.key === sort.key) || COLUMNS[0];
             const shown = lib.filter((d) => [...tags].every((t) => (d.tags || []).includes(t))
-                && words.every((w) => `${d.title} ${d.note || ''} ${(d.tags || []).join(' ')}`.toLowerCase().includes(w)))
+                && words.every((w) => `${d.title} ${d.note || ''} ${(d.tags || []).join(' ')} ${itemsText(d)}`
+                    .toLowerCase().includes(w)))
                 .sort((a, b) => {
                     const x = col.value(a), y = col.value(b);
                     return (x < y ? -1 : x > y ? 1 : a.title.localeCompare(b.title)) * (sort.up ? 1 : -1);
                 });
-            tbody.replaceChildren(...shown.map((d) => {
+            tbody.replaceChildren(...shown.flatMap((d) => {
                 const row = el('tr', 'lib-row');
                 const inMac = here(d);
                 row.classList.toggle('mounted', inMac);
@@ -273,7 +340,22 @@ const Disks = (() => {
                     art.innerHTML = ICONS[isCD(d) ? 'cd' : (d.tags || []).includes('system') ? 'system' : 'hd'];
                 }
                 const name = el('td', 'name');
-                name.append(el('div', 'title', d.title), el('div', 'tags', (d.tags || []).join(' · ')));
+                name.append(el('div', 'title', d.title));
+                const sub = el('div', 'tags', (d.tags || []).join(' · '));
+                const open = opened.has(d.url);
+                if (d.items && d.items.length) {
+                    // Its contents, in a row under it (not an insert)
+                    const more = btn(`${open ? '▾' : '▸'} ${d.items.length} item${d.items.length === 1 ? '' : 's'}`,
+                                     open ? 'Hide what is on this disk' : 'Show what is on this disk', (e) => {
+                                         e.stopPropagation();
+                                         opened.has(d.url) ? opened.delete(d.url) : opened.add(d.url);
+                                         drawRows();
+                                     });
+                    more.className = 'contents';
+                    more.setAttribute('aria-expanded', String(open));
+                    sub.prepend(more);
+                }
+                name.append(sub);
                 const act = el('td', 'state');
                 if (inMac) {
                     act.append(el('span', 'badge system', 'In the Mac'));
@@ -295,7 +377,7 @@ const Disks = (() => {
                     row.addEventListener('click', () => on.insert && on.insert(d));
                 }
                 row.append(art, name, el('td', 'size', d.size ? size(d.size) : ''), el('td', 'systems', systems(d)), act);
-                return row;
+                return open && d.items && d.items.length ? [row, details(d)] : [row];
             }));
             if (!shown.length) {
                 const none = el('tr');

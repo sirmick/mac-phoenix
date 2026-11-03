@@ -6,7 +6,10 @@
 Makes every disk in DISKS below from the provisioned images (provisioning/
 build.py's, in ~/storage/images) into OUT_DIR (default ~/storage/web-library),
 each with its record, NAME.json: the title, tags and note tools/standalone's
-library shows, and "launch", the applications on it, which the site's cells
+library shows, "items", what is on the disk (disk_contents.py: name, kind,
+version, publisher, year, architecture, size, applications, from the disk
+itself; a description and notes from provisioning/library_items.json), and
+"launch", the applications on it, which the site's cells
 (web/tests/tab_site.mjs) open on each of their systems. A disk is made again
 only when an image it comes from is newer, or with --force.
 
@@ -27,7 +30,7 @@ disk goes in; the record's "system_additions" lists them
 The CDs (provisioning/cds.json: magazine cover discs, pinned in media.json,
 checked and given their records by provisioning/cds.py) go in as they are,
 hard-linked, each with its cover scan cut down to COVER_PX for the site:
-the record's "cover".
+the record's "cover", and "items", their top-level folders and files.
 """
 import argparse
 import json
@@ -43,6 +46,7 @@ sys.path.insert(0, str(HERE.parent / "diskaudit"))
 import tidy  # noqa: E402  (disk_audit.py's checks put right)
 sys.path.insert(0, str(HERE.parent / "macdecode"))
 from rsrc import Disk  # noqa: E402
+import disk_contents  # noqa: E402
 CDS = HERE.parent.parent / "provisioning" / "cds.json"
 COVER_PX = 480
 
@@ -296,7 +300,8 @@ def additions_path(out, d):
     return out / ".additions" / (d["name"] + ".json")
 
 
-def record(d, out):
+def record(d, out, img=None):
+    """The disk's record; its "items" read from img, the disk made."""
     r = {"title": d["title"], "tags": d["tags"], "note": d["note"],
          "label": d["label"], "made_by": "tools/web/make_library.py"}
     if "boot" in d:
@@ -314,6 +319,8 @@ def record(d, out):
                 adds = json.load(f)
             if adds:
                 r["system_additions"] = adds
+    if img is not None:
+        r["items"] = disk_contents.items(img, r["systems"], d["tags"], d.get("launch", []))
     return r
 
 
@@ -343,6 +350,7 @@ def make_cd(cd, images, out, force):
     rec = {k: r[k] for k in ("title", "tags", "note", "magazine", "issue", "date", "publisher", "contents")}
     rec.update({"label": r["volume"], "cover": cover, "source": r["source"],
                 "made_by": "tools/web/make_library.py"})
+    rec["items"] = disk_contents.items(img, tags=r["tags"], cd=True)
     new = json.dumps(rec, indent=1, ensure_ascii=False) + "\n"
     p = out / (cd["name"] + ".json")
     if not p.exists() or p.read_text() != new:
@@ -377,7 +385,7 @@ def main():
             make(d, images, out, baked)
         else:
             print(f"{img}: up to date")
-        new = json.dumps(record(d, out), indent=1, ensure_ascii=False) + "\n"
+        new = json.dumps(record(d, out, img), indent=1, ensure_ascii=False) + "\n"
         if not rec.exists() or rec.read_text() != new:
             rec.write_text(new)
 

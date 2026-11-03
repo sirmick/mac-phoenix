@@ -1627,3 +1627,10 @@ endforeach()
 add_test(NAME disk_audit
   COMMAND ${Python3_EXECUTABLE} ${TEST_DIR}/test_disk_audit.py)
 set_tests_properties(disk_audit PROPERTIES TIMEOUT 120 LABELS "tools" SKIP_RETURN_CODE 77)
+
+# tools/web/disk_contents.py: a library disk's "items" (make_library.py's
+# records: kind, arch, version, publisher, year, size, the hand table) on a
+# fixture HFS image it makes.
+add_test(NAME disk_contents
+  COMMAND ${Python3_EXECUTABLE} ${TEST_DIR}/test_disk_contents.py)
+set_tests_properties(disk_contents PROPERTIES TIMEOUT 120 LABELS "tools" SKIP_RETURN_CODE 77)

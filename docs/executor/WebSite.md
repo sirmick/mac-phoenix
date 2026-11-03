@@ -52,8 +52,9 @@ its server: served by anything else it says so and does not start.
 
 `tools/web/make_library.py` makes the site's disks from the provisioned
 images (`provisioning/build.py`'s, in `~/storage/images`), each with its
-record (`NAME.img.json`: title, tags and note for the library, and the
-applications on it, which the site's cells open):
+record (`NAME.img.json`: title, tags and note for the library, what is on
+the disk (`items`, below), and the applications on it, which the site's
+cells open):
 
 ```bash
 TMPDIR=~/storage/tmp tools/web/make_library.py /srv/executor-web/library
@@ -83,6 +84,38 @@ hard links to the pinned images, each with its record (`NAME.iso.json`)
 and its cover cut down to 480 pixels (`NAME.cover.jpg`, the record's
 `cover`). `library.json` gives a disk's cover as `covers/NAME`, and the
 tab's Disks panel shows those disks by their covers (Disks.md).
+
+### What is on a disk
+
+Each record's `items` lists the disk's contents, as
+`tools/web/disk_contents.py` reads them from the disk made (read-only,
+`tools/diskaudit`'s HFS/HFS+ reader). There is one entry per top-level
+item. A folder that only groups ƒ folders ("Tools ƒ") is opened, and its
+folders carry `group`. Each entry has:
+
+| Field | From |
+|---|---|
+| `name`, `group` | the disk |
+| `kind` | application, game (games disks), utility (utilities), documents, folder, system (a System Folder) |
+| `arch` | 68k, PowerPC, fat, or "68k, PowerPC" when its applications differ (`CODE`; a `cfrg`'s fragments) |
+| `size` | bytes, both forks of everything inside |
+| `version` | the main application's `vers` 1 (the System file's for a System Folder) |
+| `publisher`, `year` | its `vers` 1 long string ("©1993-97 MindVision Software") |
+| `apps` | the applications inside, up to 8 (`more_apps`: the rest): name, path, arch, version |
+| `systems` | the Systems it is offered on: the launch list's, else the disk's |
+| `description`, `notes` | `provisioning/library_items.json`, by item name |
+
+`provisioning/library_items.json` holds what can't be read off a disk: a
+one-sentence description, notes (first launch, registration; never a
+serial number), and `publisher`, `year`, `kind` or `version` where the
+disk's `vers` resources are silent or wrong (`null` drops what the disk
+says). On a CD, `items` are the top-level folders and files, with their
+sizes; folders aren't opened. `tools/standalone` passes `items` through in
+`/library.json`. In the tab, a library row's "▸ N items" opens a row under
+it with the disk's note and the items (Name, Version, Arch, Size; the
+description and kind under the name). Tests: `disk_contents` (a fixture
+image) and `executor.web.site.library` (`web/tests/tab_library.mjs`,
+`ctest -L site`).
 
 A link opens a System with disks already added, e.g.
 `/?disk=disks/boot-8.6.img&disk=disks/games-ppc.img&system=boot-8.6.img&ppc=1`

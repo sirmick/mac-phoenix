@@ -83,7 +83,7 @@ SESSION_FOLDERS = {"Recent Applications", "Recent Documents", "Recent Servers"}
 
 class Node:
     __slots__ = ("id", "parent", "name", "is_dir", "type", "creator", "flags", "loc", "rect", "scroll",
-                 "view", "rsrc", "offset")
+                 "view", "rsrc", "offset", "size")
 
     def __init__(self, **kw):
         for k in self.__slots__:
@@ -166,8 +166,10 @@ class Volume:
                 flags, = struct.unpack(">H", data[12:14])
                 loc = struct.unpack(">2h", data[14:18])
                 rsrc = (v._extents(data[86:98]), struct.unpack(">I", data[36:40])[0])
+                dsize, = struct.unpack(">I", data[26:30])
                 self.nodes[fid] = Node(id=fid, parent=parent, name=name, is_dir=False, type=ftype,
-                                       creator=creator, flags=flags, loc=loc, rsrc=rsrc, offset=off)
+                                       creator=creator, flags=flags, loc=loc, rsrc=rsrc, offset=off,
+                                       size=dsize + rsrc[1])
 
     # HFS+ (TN1150) ---------------------------------------------------------
 
@@ -197,7 +199,9 @@ class Volume:
                 flags, = struct.unpack(">H", data[56:58])
                 self.nodes[fid] = Node(id=fid, parent=parent, name=name, is_dir=False, type=data[48:52],
                                        creator=data[52:56], flags=flags, loc=struct.unpack(">2h", data[58:62]),
-                                       rsrc=data[168:248], offset=off)
+                                       rsrc=data[168:248], offset=off,
+                                       size=struct.unpack(">Q", data[88:96])[0]
+                                       + struct.unpack(">Q", data[168:176])[0])
             elif rtype == 3 and parent == 1:
                 threads[parent] = name
         root = self.nodes.get(ROOT)
