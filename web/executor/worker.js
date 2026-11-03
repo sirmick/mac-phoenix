@@ -486,8 +486,26 @@ async function start(m) {
     if (m.ppcbreak)
         for (const spec of m.ppcbreak.split(';').filter(Boolean))
             args.push('--ppc-break', spec);
-    await runtimeReady;
     Store.enabled = !!m.standalone;
+    // Executor's disk on its way while the module may still be loading
+    // (its files written once it is: volumeDown's ready). A connection that
+    // drops (the server restarted under the download: "Content-Length ...
+    // exceeds response Body") is tried again a few times; an HTTP error
+    // is not.
+    const volumeDown = m.volumeKey && Store.enabled ? (async () => {
+        for (let attempt = 1; ; attempt++) {
+            try {
+                return await Store.volumeDown(m.volumeKey, runtimeReady);
+            } catch (e) {
+                if (!(e instanceof TypeError) || attempt === 4)
+                    throw e;
+                console.log(`[web] Executor's disk: ${e.message || e}; trying again`);
+                await new Promise((r) => setTimeout(r, 1500 * attempt));
+            }
+        }
+    })() : null;
+    volumeDown?.catch(() => {});           // (awaited below)
+    await runtimeReady;
     let savedNote = Store.enabled ? '' : 'not kept: no server';
     if (Store.enabled)
         progress('saved', { detail: "Executor's disk, from the server…" });
@@ -496,23 +514,9 @@ async function start(m) {
         setInterval(sessionBeat, 2000);
     Module.net.enable(!!m.relay);
     ids = m.ids || {};
-    if (m.volumeKey && Store.enabled) {
+    if (volumeDown) {
         try {
-            // A connection that drops (the server restarted under the
-            // download: "Content-Length ... exceeds response Body") is tried
-            // again a few times; an HTTP error is not.
-            let kept;
-            for (let attempt = 1; ; attempt++) {
-                try {
-                    kept = await Store.volumeDown(m.volumeKey);
-                    break;
-                } catch (e) {
-                    if (!(e instanceof TypeError) || attempt === 4)
-                        throw e;
-                    console.log(`[web] Executor's disk: ${e.message || e}; trying again`);
-                    await new Promise((r) => setTimeout(r, 1500 * attempt));
-                }
-            }
+            const kept = await volumeDown;
             if (kept) {
                 saved = kept;
                 console.log(`[web] restored ${Object.keys(kept.files).length} files of the volume from the server`);
@@ -526,12 +530,9 @@ async function start(m) {
     }
     FS.mkdir('/host');              // Executor's "Host" volume
     cds = new Set([...(m.cds || []), ...images.map((f) => f.name).filter((n) => CD.test(n))]);
-    overlays = [];
-    for (const f of images) {
-        if (Store.enabled && f.remote)
-            progress('saved', { detail: `your changes to ${f.name}…` });
-        overlays.push(await openImage(f));
-    }
+    if (Store.enabled && images.some((f) => f.remote))
+        progress('saved', { detail: 'your changes to the disks…' });
+    overlays = await Promise.all(images.map(openImage));        // (their requests at once)
     progress('saved', { state: Store.volumeOff ? 'error' : 'done', detail: savedNote });
     // Mounted with none too: the Disks panel puts images in later.
     FS.mkdir('/uploads');

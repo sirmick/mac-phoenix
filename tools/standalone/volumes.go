@@ -12,9 +12,11 @@ package main
 
 import (
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -236,6 +238,106 @@ func (v *VolumeStore) collect() {
 				os.Remove(filepath.Join(v.objects, sub.Name(), f.Name()))
 			}
 		}
+	}
+}
+
+// ---- bundles: a volume's objects in one response, objects up in one
+// request (web/executor/sync.js) ----
+//
+// A bundle is records: a sha (32 bytes), a length (uint32 LE), that many
+// bytes; ended by a record with a zero sha and length (a bundle without
+// it was cut short). The one down starts with the volume itself: a
+// length (uint32 LE) and the JSON { version, manifest }.
+
+var bundleEnd [36]byte
+
+func bundleRecord(w io.Writer, sha []byte, data []byte) error {
+	var head [36]byte
+	copy(head[:32], sha)
+	binary.LittleEndian.PutUint32(head[32:], uint32(len(data)))
+	if _, err := w.Write(head[:]); err != nil {
+		return err
+	}
+	_, err := w.Write(data)
+	return err
+}
+
+// writeBundle writes KEY's volume and every object its manifest names
+// (each once) to w. An object gone meanwhile (a newer manifest's
+// collection) ends the bundle short: the tab asks again.
+func (v *VolumeStore) writeBundle(w io.Writer, key string) error {
+	version, manifest, err := v.get(key)
+	if err != nil {
+		return err
+	}
+	head, _ := json.Marshal(map[string]any{"version": version, "manifest": manifest})
+	var n [4]byte
+	binary.LittleEndian.PutUint32(n[:], uint32(len(head)))
+	if _, err := w.Write(n[:]); err != nil {
+		return err
+	}
+	if _, err := w.Write(head); err != nil {
+		return err
+	}
+	var m struct {
+		Files map[string]struct {
+			Sha string `json:"sha"`
+		} `json:"files"`
+	}
+	json.Unmarshal(manifest, &m)
+	paths := make([]string, 0, len(m.Files))
+	for p := range m.Files {
+		paths = append(paths, p)
+	}
+	sort.Strings(paths) // (a folder's files together, the System Folder's first)
+	seen := map[string]bool{}
+	for _, p := range paths {
+		sha := m.Files[p].Sha
+		if seen[sha] || !shaRe.MatchString(sha) {
+			continue
+		}
+		seen[sha] = true
+		dir, name := v.objectDir(sha)
+		data, err := os.ReadFile(filepath.Join(dir, name))
+		if err != nil {
+			return err
+		}
+		raw, _ := hex.DecodeString(sha)
+		if err := bundleRecord(w, raw, data); err != nil {
+			return err
+		}
+	}
+	_, err = w.Write(bundleEnd[:])
+	return err
+}
+
+// putBundle stores a bundle's objects (each checked against its sha); how
+// many. limit: the bytes it may hold in all.
+func (v *VolumeStore) putBundle(r io.Reader, limit int64) (int, error) {
+	n := 0
+	var head [36]byte
+	for {
+		if _, err := io.ReadFull(r, head[:]); err != nil {
+			if err == io.EOF && n == 0 {
+				return 0, nil
+			}
+			return n, httpErr(400, "a bundle cut short")
+		}
+		size := int64(binary.LittleEndian.Uint32(head[32:]))
+		if head == bundleEnd {
+			return n, nil
+		}
+		if limit -= size; limit < 0 {
+			return n, httpErr(413, "too large")
+		}
+		data := make([]byte, size)
+		if _, err := io.ReadFull(r, data); err != nil {
+			return n, httpErr(400, "a bundle cut short")
+		}
+		if err := v.putObject(hex.EncodeToString(head[:32]), data); err != nil {
+			return n, err
+		}
+		n++
 	}
 }
 

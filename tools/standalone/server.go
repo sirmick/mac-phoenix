@@ -18,7 +18,8 @@ package main
 //	    DELETE overlays/KEY           Revert -> { version }
 //	    POST   overlays/KEY/merge     into the library image -> { blocks, id, key }
 //	    GET/PUT/DELETE volumes/KEY    { version, manifest }
-//	    POST   objects/missing; PUT/GET objects/SHA
+//	    GET    volumes/KEY/bundle     the volume and its objects (volumes.go)
+//	    POST   objects/missing; objects/bundle; PUT/GET objects/SHA
 //	    GET    (nothing after sync/)  { overlays, volumes }
 //	/api/uploads/NAME POST the image as the body: into the library as uploads/NAME
 //	                  -> its entry; DELETE: it, its record and overlay (uploads.go)
@@ -33,6 +34,8 @@ package main
 // Every answer is cross-origin isolated (COOP/COEP).
 
 import (
+	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -551,6 +554,30 @@ func init() {
 		}
 		return c.sendJSON(200, map[string]any{"version": v, "manifest": manifest})
 	})
+	// The volume and its objects in one response (volumes.go: writeBundle),
+	// gzip-compressed for a browser that takes it.
+	handle("GET", "/api/sync/volumes/([^/]+)/bundle", true, func(c *ctx, m []string) error {
+		if err := checkKey(m[1]); err != nil {
+			return err
+		}
+		h := c.w.Header()
+		h.Set("Content-Type", "application/octet-stream")
+		h.Set("Cache-Control", "no-store")
+		h.Set("Vary", "Accept-Encoding")
+		var w io.Writer = c.w
+		if strings.Contains(c.r.Header.Get("Accept-Encoding"), "gzip") {
+			h.Set("Content-Encoding", "gzip")
+			zw, _ := gzip.NewWriterLevel(c.w, gzip.BestSpeed)
+			defer zw.Close()
+			w = zw
+		}
+		c.w.WriteHeader(200)
+		// (headers sent: an error now cuts the bundle short, which the tab sees)
+		if err := c.s.volumes.writeBundle(w, m[1]); err != nil && !c.s.quiet {
+			fmt.Fprintf(os.Stderr, "GET %s: %v\n", c.r.URL.Path, err)
+		}
+		return nil
+	})
 	handle("PUT", "/api/sync/volumes/([^/]+)", true, func(c *ctx, m []string) error {
 		b, err := c.jsonBody()
 		if err != nil {
@@ -591,6 +618,32 @@ func init() {
 			shas = append(shas, sha)
 		}
 		return c.sendJSON(200, map[string]any{"missing": c.s.volumes.missing(shas)})
+	})
+	// Objects up in one request: a bundle (volumes.go), gzip-compressed if
+	// Content-Encoding says so; max_upload_mb either way.
+	handle("POST", "/api/sync/objects/bundle", true, func(c *ctx, m []string) error {
+		body, err := c.bodyBytes()
+		if err != nil {
+			return err
+		}
+		limit := int64(c.s.settings().MaxUploadMB) << 20
+		var r io.Reader = bytes.NewReader(body)
+		switch c.r.Header.Get("Content-Encoding") {
+		case "", "identity":
+		case "gzip":
+			zr, err := gzip.NewReader(r)
+			if err != nil {
+				return httpErr(400, "not gzip")
+			}
+			r = zr
+		default:
+			return httpErr(415, "gzip or nothing")
+		}
+		n, err := c.s.volumes.putBundle(r, limit)
+		if err != nil {
+			return err
+		}
+		return c.sendJSON(200, map[string]any{"stored": n})
 	})
 	handle("PUT", "/api/sync/objects/([0-9a-f]{64})", true, func(c *ctx, m []string) error {
 		body, err := c.bodyBytes()

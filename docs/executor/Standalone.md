@@ -170,7 +170,12 @@ the reload claims it again. Loopback is nothing special.
     DELETE overlays/KEY           Revert -> { version }
     POST   overlays/KEY/merge     into the library image -> { blocks, id, key }
     GET/PUT/DELETE volumes/KEY    { version, manifest }
-    POST   objects/missing; PUT/GET objects/SHA
+    GET    volumes/KEY/bundle     the volume and every object it names, one stream
+                                  (gzip for a browser that takes it; below)
+    POST   objects/missing        { shas } -> { missing }
+    POST   objects/bundle         objects up, a bundle (Content-Encoding: gzip or none)
+                                  -> { stored }
+    PUT/GET objects/SHA           one object
     GET    (nothing after sync/)  { overlays, volumes }
 /api/uploads/NAME POST the image as the body[?replace=1] -> its library entry
                   (uploads/NAME); DELETE: it, its record and its overlay (uploads.go)
@@ -207,6 +212,23 @@ Sec-Fetch-Site). In more detail:
 - **Volumes and objects** are files: `DATA/volumes/KEY.json` (`{ version,
   manifest }`) and `DATA/objects/AB/SHA`; an object no manifest names
   is removed an hour after it was written.
+- **Bundles** (`volumes.go`): records of a sha (32 bytes), a length
+  (uint32 LE) and that many bytes, ended by a record of a zero sha and
+  length (without it, the bundle was cut short). `GET volumes/KEY/bundle`
+  starts with the volume itself (a uint32 LE length, then the JSON `{
+  version, manifest }`) and has each object once, the manifest's paths
+  in order; gzip (`BestSpeed`) as `Content-Encoding`, so the browser
+  decompresses it as it streams. An object gone meanwhile (collected
+  under a newer manifest) ends it short. `POST objects/bundle` checks
+  each object against its sha; `network.max_upload_mb` limits the body
+  and, decompressed, the objects. The tab (`sync.js`) restores the volume
+  from the bundle, writing each file into Executor's MEMFS as it arrives
+  (the request goes out while the module may still be compiling; the
+  files wait for it); a server without bundles (404) or a bundle cut
+  short: the files still missing by `GET objects/SHA`, six at once. It
+  saves with `objects/missing`, then bundles of about 8 MB
+  (CompressionStream gzip), `PUT objects/SHA` six at once on a server
+  without them, then the manifest.
 - **Uploads** (`uploads.go`): a disk image the tab adds (main.js
   `uploadImage`) is `POST /api/uploads/NAME` with the image as the body
   (an image's extension, no path; at most `disks.max_image_mb`, written
@@ -226,6 +248,47 @@ Sec-Fetch-Site). In more detail:
   any tool is a backup.
 - Every answer is cross-origin isolated (COOP `same-origin`, COEP
   `require-corp`, CORP `same-origin`).
+
+## Start-up costs
+
+Measured 2026-11-03 with `web/tests/bench_start.mjs SITE DATA IMAGES
+[RUNS] [--slow]` (a copy of a server's data directory each run: its
+settings, the disks mounted, the saved volumes; times from the
+navigation; `--slow` is Chromium's network emulation, 50 Mbit/s down,
+20 down/up, 20 ms latency; `BENCH_TRACE=FILE` writes every request and
+Worker line with its time). The owner's settings: Mac OS 8.6, nine
+library disks mounted; the volume a saved 7.6.1 one of 1010 files, 45 MB
+(732 objects).
+
+| | before | after |
+|---|---|---|
+| the volume restored, loopback | 0.70 s (1010 sequential GETs) | 0.28 s (one bundle) |
+| the volume restored, 50 Mbit/s | 31.4 s | 4.5 s |
+| the Finder, loopback | 4.0–5.6 s | 3.8–4.2 s |
+| the Finder, 50 Mbit/s | 47.1 s | 21.1 s |
+| the same with the owner's saved 8.6 volume (108 files, 16 MB) | 24.9 s | 21.3 s |
+| first save of a fresh 8.6 System (363 files, 31 MB), loopback | 1.8 s (251 PUTs) | 1.5 s (4 bundles) |
+| the same at 20 Mbit/s up | 19.3 s | 7.5 s |
+
+What else a start costs at 50 Mbit/s (the trace of the run above):
+the module 2.2 s (6.9 MB gzip; Cache Storage after the first visit);
+the nine disks' overlays 0.05 s (their requests at once now, one after
+another before); **the System sideloaded from boot-8.6.img when the
+volume has no `System Folder/System`: 5.9 s** (`sideload_system`, 23
+Range reads of ~1 MB one after another, RemoteImage's chunks; 0.25 s on
+loopback); **the disks' System Folder additions: 10 s** (creative.img 3.9
+s, games-ppc.img 1.7 s, productivity.img 4.1 s: their files read by
+Range, one chunk at a time, when they aren't in the System Folder yet;
+fewer reads but still a few seconds when most are); Executor from main
+to the Finder 2.6 s. Both are Range reads in sequence and
+bandwidth-bound (the chunks are the image's bytes, uncompressed).
+
+Open: the saved volumes of the owner's server (8.6 and 7.6.1) have
+`%System` but no `System` (its empty data fork), so web_main.cpp doesn't
+take the System Folder as saved: every start sideloads it again over the
+restored one and copies the additions again (the 16 s above at 50 Mbit/s,
+both in the 21 s). A fresh volume keeps `System`; what removes it later
+is not known yet.
 
 ## Tests
 
@@ -248,6 +311,9 @@ browser's in-use page and refusals; a restart, the tab's reload notice
 and Reload; another browser first after a restart; screenshots in
 `claim-shots/`). The tab's other cells on it (each builds it with go):
 `executor.web.standalone` (a change survives a reload; a second tab
-watches, then takes control), `server_lazy` (a large disk read by Range),
+watches, then takes control), `volume` (`tab_volume.mjs`: 150 files saved
+in bundles, no PUT; restored from the one bundle request, every file the
+same; through `objects/SHA` and PUTs when the bundle routes answer 404;
+from a bundle cut in half), `server_lazy` (a large disk read by Range),
 `settings`, `insecure` (plain http to a LAN name), `relay` (MacTCP and
 Open Transport through `/relay`), and the `site` cells (WebSite.md).
