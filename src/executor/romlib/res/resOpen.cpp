@@ -604,12 +604,110 @@ already_open_res_file(GUEST<INTEGER> swapped_vref, GUEST<LONGINT> swapped_file_n
     return retval;
 }
 
+/* MacPhoenix: read the resource map of the resource file at `base` in
+   the open fork `f` (`length` bytes; 0: to the fork's end), its header's
+   offsets made the file's. nullptr with ResErr set if there is none; f
+   stays open either way. A fork is a resource file at 0; 8.6's System
+   file has a second one in its data fork (res/resInit.cpp). */
+resmaphand Executor::ROMlib_read_res_map(INTEGER f, uint32_t base, uint32_t length)
+{
+    reshead hd;
+    LONGINT lc;
+    resmaphand map;
+    OSErr err;
+
+    lc = sizeof(hd);
+    ROMlib_setreserr(SetFPos(f, fsFromStart, base));
+    if(LM(ResErr) == noErr)
+        ROMlib_setreserr(FSReadAll(f, inout(lc), (Ptr)&hd));
+    if(LM(ResErr) != noErr)
+    {
+        return nullptr;
+    }
+    /* MacPhoenix: a fork that holds no resource file (its header's map
+       outside the fork) is mapReadErr, as on a Mac, before its map length
+       goes to NewHandle. */
+    {
+        GUEST<LONGINT> eof;
+        GetEOF(f, &eof);
+        uint32_t end = length ? length : (uint32_t)(LONGINT)eof - base;
+        uint32_t mapoff = hd.rmapoff, maplen = hd.maplen, datoff = hd.rdatoff, datlen = hd.datlen;
+        if(maplen < sizeof(resmap) || (uint64_t)mapoff + maplen > end
+           || (uint64_t)datoff + datlen > end)
+        {
+            ROMlib_setreserr(mapReadErr);
+            return nullptr;
+        }
+    }
+    /* MacPhoenix: a file opened in system mode is in every process's
+       chain (below), so its map goes in the System heap; in the current
+       heap it would go with the process (the Shared Library Manager opens
+       a library while an MPW tool's heap is current). */
+    {
+        TheZoneGuard guard(ROMlib_in_system_mode() ? LM(SysZone) : LM(TheZone));
+        map = (resmaphand)NewHandle(hd.maplen);
+        err = MemError();
+    }
+    if(ROMlib_setreserr(err))
+    {
+        return nullptr;
+    }
+
+    ROMlib_setreserr(SetFPos(f, fsFromStart, base + hd.rmapoff));
+    if(LM(ResErr) != noErr)
+    {
+        DisposeHandle((Handle)map);
+        return nullptr;
+    }
+    lc = hd.maplen;
+    ROMlib_setreserr(FSReadAll(f, inout(lc), (Ptr)*map));
+    if(LM(ResErr) != noErr)
+    {
+        DisposeHandle((Handle)map);
+        return nullptr;
+    }
+
+    (*map)->rh = hd;
+
+    /* IMIV: consistency checks */
+
+    if(
+#if 0 /* See NOTE below */
+	(*map)->rh.rdatoff != sizeof(reshead) + sizeof(rsrvrec) ||
+        (*map)->rh.rmapoff < (*map)->rh.rdatoff + (*map)->rh.datlen ||
+#else
+        (*map)->rh.rdatoff < (int)sizeof(reshead) + (int)sizeof(rsrvrec) ||
+#endif
+        (*map)->rh.datlen < 0 || (*map)->rh.maplen < (int)sizeof(resmap) + (int)sizeof(INTEGER) || (*map)->typoff < (int)sizeof(resmap)
+#if 0
+/*
+ * NOTE:  I used to have the following test in here, but when I ran
+ *	  Disinfectant 1.5 from the BCS Mac PD-CD, we found 6 files
+ *	  that were "corrupt" here, but not there.  The first file
+ *	  that gave us trouble didn't pass the following test, so
+ *	  presumably, the Mac doesn't make this test.
+ */
+	||
+        (*map)->namoff < sizeof(resmap) +
+                (NUMTMINUS1(map)+1) * (sizeof(resref) + sizeof(typref))
+#endif
+            )
+    {
+        ROMlib_setreserr(mapReadErr);
+        DisposeHandle((Handle)map);
+        return nullptr;
+    }
+    /* every read goes from the in-memory header's offsets: from the
+       file's start */
+    (*map)->rh.rdatoff = (*map)->rh.rdatoff + base;
+    (*map)->rh.rmapoff = (*map)->rh.rmapoff + base;
+    return map;
+}
+
 INTEGER Executor::C_HOpenResFile(INTEGER vref, LONGINT dirid, ConstStringPtr fn,
                                  SignedByte perm)
 {
     INTEGER f;
-    reshead hd;
-    LONGINT lc;
     resmaphand map;
     INTEGER i, j;
     typref *tr;
@@ -686,87 +784,9 @@ INTEGER Executor::C_HOpenResFile(INTEGER vref, LONGINT dirid, ConstStringPtr fn,
     if(LM(ResErr) != noErr)
         return (-1);
     f = pbr.ioParam.ioRefNum;
-    lc = sizeof(hd);
-    ROMlib_setreserr(FSReadAll(f, inout(lc), (Ptr)&hd));
-    if(LM(ResErr) != noErr)
+    map = ROMlib_read_res_map(f, 0, 0);
+    if(!map)
     {
-        FSClose(f);
-        return (-1);
-    }
-    /* MacPhoenix: a fork that holds no resource file (its header's map
-       outside the fork) is mapReadErr, as on a Mac, before its map length
-       goes to NewHandle. */
-    {
-        GUEST<LONGINT> eof;
-        GetEOF(f, &eof);
-        uint32_t mapoff = hd.rmapoff, maplen = hd.maplen, datoff = hd.rdatoff, datlen = hd.datlen;
-        if(maplen < sizeof(resmap) || (uint64_t)mapoff + maplen > (uint32_t)(LONGINT)eof
-           || (uint64_t)datoff + datlen > (uint32_t)(LONGINT)eof)
-        {
-            FSClose(f);
-            ROMlib_setreserr(mapReadErr);
-            return -1;
-        }
-    }
-    /* MacPhoenix: a file opened in system mode is in every process's
-       chain (below), so its map goes in the System heap; in the current
-       heap it would go with the process (the Shared Library Manager opens
-       a library while an MPW tool's heap is current). */
-    {
-        TheZoneGuard guard(ROMlib_in_system_mode() ? LM(SysZone) : LM(TheZone));
-        map = (resmaphand)NewHandle(hd.maplen);
-        err = MemError();
-    }
-    if(ROMlib_setreserr(err))
-    {
-        FSClose(f);
-        return (-1);
-    }
-
-    ROMlib_setreserr(SetFPos(f, fsFromStart, hd.rmapoff));
-    if(LM(ResErr) != noErr)
-    {
-        DisposeHandle((Handle)map);
-        FSClose(f);
-        return (-1);
-    }
-    lc = hd.maplen;
-    ROMlib_setreserr(FSReadAll(f, inout(lc), (Ptr)*map));
-    if(LM(ResErr) != noErr)
-    {
-        DisposeHandle((Handle)map);
-        FSClose(f);
-        return (-1);
-    }
-
-    (*map)->rh = hd;
-
-    /* IMIV: consistency checks */
-
-    if(
-#if 0 /* See NOTE below */
-	(*map)->rh.rdatoff != sizeof(reshead) + sizeof(rsrvrec) ||
-        (*map)->rh.rmapoff < (*map)->rh.rdatoff + (*map)->rh.datlen ||
-#else
-        (*map)->rh.rdatoff < (int)sizeof(reshead) + (int)sizeof(rsrvrec) ||
-#endif
-        (*map)->rh.datlen < 0 || (*map)->rh.maplen < (int)sizeof(resmap) + (int)sizeof(INTEGER) || (*map)->typoff < (int)sizeof(resmap)
-#if 0
-/*
- * NOTE:  I used to have the following test in here, but when I ran
- *	  Disinfectant 1.5 from the BCS Mac PD-CD, we found 6 files
- *	  that were "corrupt" here, but not there.  The first file
- *	  that gave us trouble didn't pass the following test, so
- *	  presumably, the Mac doesn't make this test.
- */
-	||
-        (*map)->namoff < sizeof(resmap) +
-                (NUMTMINUS1(map)+1) * (sizeof(resref) + sizeof(typref))
-#endif
-            )
-    {
-        ROMlib_setreserr(mapReadErr);
-        DisposeHandle((Handle)map);
         FSClose(f);
         return (-1);
     }
