@@ -109,8 +109,10 @@ static void platinum_title(muelem *elt, bool hilite_p, bool bar_selected)
     bool white = hilite_p || bar_selected;
     if(apple_title_p(mh))
     {
+        /* a pixel above the system menus' icons: the G3 draws the apple's
+           top row (icon row 1) at y 2 */
         Rect ir;
-        ir.top = (LM(MBarHeight) - 16) / 2;
+        ir.top = (LM(MBarHeight) - 16) / 2 - 1;
         ir.bottom = ir.top + 16;
         ir.left = title_left(elt) + (kAppleTitleWidth - 16) / 2;
         ir.right = ir.left + 16;
