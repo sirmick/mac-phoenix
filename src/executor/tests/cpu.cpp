@@ -441,3 +441,26 @@ TEST_F(CPU, ppcArgumentsStructWrittenToStack)
     EXPECT_EQ(0xcc, params[38]);
     EXPECT_EQ(0xdd, params[39]);
 }
+
+/* $FE09, a Power Mac 68K emulator instruction: the time base, upper word
+   in A0 and lower in D0, nothing else touched (the G3 on 9.0.4: two reads
+   1.23 s apart differ by 24.5M; Executor counts at 25 MHz). */
+TEST_F(CPU, timeBaseFE09)
+{
+    EM_D0 = 0x11111111;
+    EM_D1 = 0x22222222;
+    EM_A0 = 0xA0A0A0A0;
+    EM_A1 = 0xA1A1A1A1;
+    m68k({
+        0xFE09,
+        0x2400,  //  MOVE.L d0, d2
+        0xFE09,
+        0x4E75   //  RTS
+    });
+    EXPECT_EQ(0x22222222u, EM_D1);
+    EXPECT_EQ(0xA1A1A1A1u, EM_A1);
+    EXPECT_NE(0xA0A0A0A0u, EM_A0);
+    uint64_t tb = (uint64_t)EM_A0 << 32 | EM_D0;
+    EXPECT_GE((uint32_t)tb, EM_D2);
+    EXPECT_LT(tb, (uint64_t)1 << 48);
+}

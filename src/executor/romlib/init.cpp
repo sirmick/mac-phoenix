@@ -101,30 +101,32 @@ unhandled_trap(syn68k_addr_t callback_address, void *arg)
     trap_num = (intptr_t)arg;
 
     /* $FExx: a Power Mac's 68K emulator's own instructions (Mixed Mode's
-       stubs use them), not the FPU's. Nothing here has them. $FE09, which
-       MacBench 5's 68k timing routine runs between two _Microseconds, is
-       stepped over (one word) as a no-op; the others are logged and stay
-       the F-line they are here, until a program shows what it needs. */
+       stubs use them), not the FPU's. $FE09 reads the time base: on the
+       G3 (9.0.4) it leaves the upper word in A0 and the lower in D0, the
+       other registers as they were (MacBench 5's 68k timing routine runs
+       it between two _Microseconds). Here the count runs at 25 MHz on
+       Microseconds' clock. The others are logged and stay the F-line
+       they are here, until a program shows what it needs. */
     if(trap_num == 11)
     {
         syn68k_addr_t pc = READUL(EM_A7 + 2);
         uint16_t op = READUW(pc);
-        static const std::set<uint16_t> no_ops = { 0xFE09 };
+        if(op == 0xFE09)
+        {
+            uint64_t tb = (uint64_t)msecs_elapsed() * 1000 * 25;
+            EM_A0 = (uint32_t)(tb >> 32);
+            EM_D0 = (uint32_t)tb;
+            WRITEUL(EM_A7 + 2, pc + 2);
+            return MAGIC_RTE_ADDRESS;
+        }
         if((op & 0xFF00) == 0xFE00)
         {
-            bool step = no_ops.count(op) > 0;
             static std::set<uint16_t> logged;
             if(logged.insert(op).second)
             {
                 char what[64];
-                snprintf(what, sizeof what, "68K emulator instruction $%04X (%s)", op,
-                         step ? "a no-op" : "F-line");
+                snprintf(what, sizeof what, "68K emulator instruction $%04X (F-line)", op);
                 traps::log_unimplemented(what);
-            }
-            if(step)
-            {
-                WRITEUL(EM_A7 + 2, pc + 2);
-                return MAGIC_RTE_ADDRESS;
             }
         }
     }
