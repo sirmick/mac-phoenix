@@ -6,10 +6,12 @@
 #include <ResourceMgr.h>
 #include <FileMgr.h>
 #include <ToolboxUtil.h>
+#include <ScriptMgr.h>
 #else
 #include <Resources.h>
 #include <Files.h>
 #include <TextUtils.h>
+#include <Script.h>
 #endif
 
 #include <string.h>
@@ -356,5 +358,50 @@ TEST(Resources, SystemPacks)
         EXPECT_EQ(noErr, ResError()) << id;
         if(h)
             EXPECT_GE(GetHandleSize(h), 12) << id;
+    }
+}
+
+/* The word break tables are in the script's 'itl2' (itlbSort): the
+   word-selection and line-break tables' 16-bit offsets at 22 and 24 of
+   its header, their lengths at 54 and 56, each an NBreakTable (flags1's
+   high bit set, its own length at 14). Microsoft Works 4.0b takes a nil
+   word-selection table for "not enough memory" when it makes a document.
+   On Executor an 'itl2' 0 of the test's own (its System has none) at the
+   top of the chain; on a Mac, the System's. */
+TEST_F(ResourceTest, IntlWordBreakTables)
+{
+#ifdef EXECUTOR
+    Handle h = NewHandleClear(200);
+    char *p = (char *)*h;
+    auto put = [&](int at, short v) { p[at] = v >> 8; p[at + 1] = v; };
+    put(8, -1);                               /* 6.0.4 and later format */
+    put(22, 64), put(54, 40);                 /* word-selection table */
+    put(24, 120), put(56, 30);                /* line-break table */
+    p[64] = p[120] = (char)0x80;
+    put(64 + 14, 40), put(120 + 14, 30);
+    AddResource(h, 'itl2', 0, PSTR(""));
+    ASSERT_EQ(noErr, ResError());
+#endif
+    for(short code : { smWordSelectTable, smWordWrapTable })
+    {
+        Handle table = nullptr;
+        long offset = -1, length = -1;
+#ifdef EXECUTOR
+        GUEST<Handle> th;
+        GUEST<LONGINT> to, tl;
+        GetIntlResourceTable(smSystemScript, code, &th, &to, &tl);
+        table = th, offset = to, length = tl;
+#else
+        GetIntlResourceTable(smSystemScript, code, &table, &offset, &length);
+#endif
+        ASSERT_NE(nullptr, table) << code;
+        ASSERT_GT(offset, 0) << code;
+        ASSERT_GT(length, 16) << code;
+        const unsigned char *t = (const unsigned char *)*table + offset;
+        EXPECT_EQ(0x80, t[0] & 0x80) << code;
+        EXPECT_EQ(length, (t[14] << 8) | t[15]) << code;
+#ifdef EXECUTOR
+        EXPECT_EQ(code == smWordSelectTable ? 64 : 120, offset);
+#endif
     }
 }

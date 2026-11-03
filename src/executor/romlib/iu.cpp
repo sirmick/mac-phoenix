@@ -722,16 +722,30 @@ void Executor::C_GetIntlResourceTable(ScriptCode script, INTEGER tablecode,
                                GUEST<Handle> *itlhandlep, GUEST<LONGINT> *offsetp,
                                GUEST<LONGINT> *lengthp)
 {
-    /* MacPhoenix. The tables in the script's 'itl4' (its ID is itlbToken,
-       offset 8 of the script's 'itlb'): NItl4Rec keeps each table's offset
-       from the start of the resource and its length. The word break tables
-       in 'itl2' (codes 0 and 1) are not looked up yet: nil. */
+    /* MacPhoenix. The word break tables are in the script's 'itl2' (its
+       ID is itlbSort, offset 4 of the script's 'itlb'), the others in its
+       'itl4' (itlbToken, offset 8). The 'itl2' header is 16-bit words:
+       the version flag (-1: the 6.0.4 and later format) at 8, the
+       word-selection and line-break tables' offsets from the start of the
+       resource at 22 and 24, their lengths at 54 and 56 (Inside Macintosh:
+       Text, B-4; 7.6.1's 'itl2' 0 has them there). NItl4Rec keeps each of
+       its tables' offset (a long) and length. Microsoft Works 4.0b takes
+       a nil word-selection table for "not enough memory" when it makes a
+       document. */
     *itlhandlep = nullptr;
     *offsetp = 0;
     *lengthp = 0;
     int offset_at, length_at;
+    ResType type = "itl4"_4;
+    int id_at = 8;
     switch(tablecode)
     {
+        case smWordSelectTable:
+            type = "itl2"_4, id_at = 4, offset_at = 22, length_at = 54;
+            break;
+        case smWordWrapTable:
+            type = "itl2"_4, id_at = 4, offset_at = 24, length_at = 56;
+            break;
         case smNumberPartsTable:
             offset_at = 36, length_at = 60;
             break;
@@ -751,16 +765,29 @@ void Executor::C_GetIntlResourceTable(ScriptCode script, INTEGER tablecode,
         script = smRoman;
     INTEGER id = 0;
     if(Handle itlb = GetResource("itlb"_4, script))
-        id = *(GUEST<INTEGER> *)(*itlb + 8);
+        id = *(GUEST<INTEGER> *)(*itlb + id_at);
     else if(script != smRoman)
         return;
-    Handle itl4 = GetResource("itl4"_4, id);
-    if(!itl4)
+    Handle itl = GetResource(type, id);
+    if(!itl)
         return;
-    LoadResource(itl4);
-    *itlhandlep = itl4;
-    *offsetp = *(GUEST<LONGINT> *)(*itl4 + offset_at);
-    *lengthp = *(GUEST<INTEGER> *)(*itl4 + length_at);
+    LoadResource(itl);
+    if(type == "itl2"_4)
+    {
+        if(GetHandleSize(itl) < 58 || *(GUEST<INTEGER> *)(*itl + 8) != -1)
+            return;
+        INTEGER offset = *(GUEST<INTEGER> *)(*itl + offset_at);
+        INTEGER length = *(GUEST<INTEGER> *)(*itl + length_at);
+        if(offset <= 0 || length <= 0 || offset + length > GetHandleSize(itl))
+            return;
+        *itlhandlep = itl;
+        *offsetp = offset;
+        *lengthp = length;
+        return;
+    }
+    *itlhandlep = itl;
+    *offsetp = *(GUEST<LONGINT> *)(*itl + offset_at);
+    *lengthp = *(GUEST<INTEGER> *)(*itl + length_at);
 }
 
 /* ── Type Select (System 7.5; Lists.h in Universal Interfaces 3.x) ──────
