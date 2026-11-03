@@ -761,13 +761,6 @@ static OSErr setvolhelper(VolumeParam *pb, Boolean aysnc, LONGINT dirid,
     GUEST<INTEGER> newDefVRefNum;
     CInfoPBRec cpb;
 
-    /*
- * CinemationCD hack ... they store a directory as a 2-byte quantity and
- *	sign extend it.  This will only help us recover the sign bit.
- */
-    if(dirid < 0)
-        dirid = 64 * 1024 + dirid;
-
     newdir = 0;
     vcbp = ROMlib_findvcb(pb->ioVRefNum, pb->ioNamePtr,
                           &newdir, false);
@@ -776,6 +769,22 @@ static OSErr setvolhelper(VolumeParam *pb, Boolean aysnc, LONGINT dirid,
     else
     {
         err = noErr;
+        /* MacPhoenix: a directory ID with no name is one the volume must
+           have: the Quadra answers fnfErr for one it hasn't (1, 16 on a
+           fresh volume, 999999, negative ones) and leaves the default
+           where it was. (Upstream added 64K to negative IDs, for
+           CinemationCD's sign-extended word.) */
+        if(!convertzeros && dirid != 0 && !(pb->ioNamePtr && pb->ioNamePtr[0]))
+        {
+            CInfoPBRec dpb;
+            memset(&dpb, 0, sizeof dpb);
+            dpb.dirInfo.ioVRefNum = vcbp->vcbVRefNum;
+            dpb.dirInfo.ioFDirIndex = -1;
+            dpb.dirInfo.ioDrDirID = dirid;
+            if(dirid == 1 || PBGetCatInfo(&dpb, false) != noErr
+               || !(dpb.dirInfo.ioFlAttrib & ATTRIB_ISADIR))
+                PBRETURN(pb, fnfErr);
+        }
         newDefVCBPtr = vcbp;
         newDefDirID = 0;
         if(newdir > 2)
