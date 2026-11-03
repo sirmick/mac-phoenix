@@ -1,7 +1,7 @@
 # wash-plan: written by Wash as the plan changes.
 # Edit it only between workspaces; plan_set {"from": "<this file>"} loads it.
 
-revision = 62
+revision = 65
 
 [[node]]
   id = "cuts"
@@ -501,8 +501,8 @@ revision = 62
   template = "package"
   parent = "m1"
   body = "Rows #1 (MPW File>New: FSDispatch selector $C unimplemented, session stopped), #2 (THINK C 6 opening bullseye π: fatal resMod.cpp:398 getdat lc == size), #13 (SimEarth Color: mame-68k illegal instruction 173e at 03dce3de), #15 (Slithereens, Mars Rising on 8.6: InputSprocketLib not found: a native InputSprocket stub like Executor's other libraries, answering 'no devices', so games use the keyboard), #17 (EV Override's ship-entry screen dithered B&W). Native repro first."
-  state = "active"
-  revision = 56
+  state = "done"
+  revision = 65
 
 [[node]]
   id = "m1-fix-86"
@@ -523,3 +523,12 @@ revision = 62
   body = "Rows #4 (THINK Pascal Run: renderer SIGSEGV in V8/wasm, intermittent; ~/storage/tmp/m1-audit/tp-crash3.log), #6 (CodeWarrior IDE 3.2 on 7.6.1 with PowerPC ticked: hangs after its menu bar; native e761ppc runs it), #14 (EV Nova: 53 MB partition > the tab's 56 MB applzone: a RAM setting / bigger default), #13's tab half (an Executor fatal kills the page: show an alert, keep the page), and building tools-8.img into ~/storage/web-library (make_library.py; additive) so executor.web.m1.8.6.tools-8 stops skipping."
   state = "done"
   revision = 62
+
+[[node]]
+  id = "creative-pack"
+  title = "Creative pack: graphics, illustration, DTP, office (68k on 7.6.1, PPC on 8.6), serials from the owner"
+  emoji = "🎨"
+  template = "package"
+  body = "Owner 2026-11-03: the library is light on Adobe/DTP. Selection and status in ~/storage/serials.json (private, mode 600, never committed or baked into keys/records; owner fills 'serial'; empty = skip). Steps: (1) bake.py reads serials from that file (by product id) and types them at the installer's prompt; a missing serial stops the bake and names the product; never use archives' SN# folders, keygens or cracks. (2) Pin missing media (tools/macfetch, Garden mirror) for picks marked 68k/ppc/both. (3) Bake + build images; put WordPerfect 3.5e, Excel 4, Office 98 (already baked) on the tab's Productivity disk. (4) Each pick launched and used on Executor 7.6.1 / 8.6 (tab_m1-style cells); stop on disproportionate apps. ATM last; QuickTime-dependent apps wait for M2. Start when the M1 fixes free a member."
+  state = "todo"
+  revision = 63
