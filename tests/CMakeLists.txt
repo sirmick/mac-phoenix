@@ -1243,6 +1243,21 @@ set_tests_properties(thinkc_run_executor PROPERTIES
   SKIP_RETURN_CODE 77
 )
 
+# The Utilities disk (system information and benchmarks) on Executor:
+# Gestalt.Appl on 7.6.1; Gestalt.Appl, TattleTech and MacBench 5.0 on 8.6.
+foreach(_us IN ITEMS 7.6.1 8.6)
+  add_test(
+    NAME utilities_executor_${_us}
+    COMMAND bash ${TEST_DIR}/test_utilities_executor.sh ${_us} --port 18790
+  )
+  set_tests_properties(utilities_executor_${_us} PROPERTIES
+    TIMEOUT 400
+    LABELS "guest;executor"
+    SKIP_RETURN_CODE 77
+    RESOURCE_LOCK utilities_executor
+  )
+endforeach()
+
 # MPW Shell (PowerPC) on Executor with 8.6's System: Startup builds the
 # Project, Directory and Build menus (commands found through StdCLib's
 # MakeResolvedPath), a do-script's output redirected to a file.
