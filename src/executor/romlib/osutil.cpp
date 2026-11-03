@@ -25,6 +25,8 @@
 #include <time/syncint.h>
 #include <base/emustubs.h>
 #include <base/cpu.h>
+#include <prefs/prefs.h>
+#include <rsys/version.h>
 #include <vdriver/vdriver.h>   /* for beepAtUser */
 #include <PowerCore.h>
 #include <base/traps.impl.h>
@@ -899,9 +901,13 @@ OSErr Executor::SysEnvirons(INTEGER vers, SysEnvRecPtr p)
     p->systemVersion = LM(SysVersion);
 
     p->processor = env68040;
-    p->hasFPU = true; /* MacPhoenix: the 68040's FPU (Gestalt 'fpu ' 3) */
+    /* MacPhoenix: the 68040's FPU (Gestalt 'fpu ' 3); a Power Mac's 68k
+       emulator has none (an 8.x System, or PowerPC code on 7.x) */
+    p->hasFPU = !(system_version >= 0x800 || ROMlib_prefer_ppc);
     p->hasColorQD = true;
-    p->keyBoardType = envAExtendKbd;
+    /* MacPhoenix: envExtISOADBKbd, as KbdType (init.cpp) and Gestalt
+       'kbd ' say */
+    p->keyBoardType = 9;
     p->atDrvrVersNum = 0;
     p->sysVRefNum = LM(BootDrive);
 

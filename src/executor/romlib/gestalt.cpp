@@ -31,9 +31,15 @@ typedef struct
 
 #define UNKNOWN 0xFFFF
 
+/* MacPhoenix: PowerPC code runs (gestalt_set_system_version): a Power Mac */
+static bool power_mac;
+
 static gestaltentry_t gtable[] = {
     {
-        gestaltAddressingModeAttr, gestalt32BitAddressing | gestalt32BitSysZone | gestalt32BitCapable,
+        /* MacPhoenix: the bits, not their numbers (that was 3: "not 32-bit
+           capable" in TattleTech); 7 on the Quadra and the G3 */
+        gestaltAddressingModeAttr,
+        1 << gestalt32BitAddressing | 1 << gestalt32BitSysZone | 1 << gestalt32BitCapable,
     },
 
     /*
@@ -85,7 +91,9 @@ static gestaltentry_t gtable[] = {
     /*  gestaltNotificatinMgrAttr,	0,	*/
     /*  gestaltNuBusConnectors,	0,	*/
     /*  gestaltOSAttr,		0,	*/
-    /*  gestaltPopupAttr,		0,	*/
+    /* MacPhoenix: the pop-up menu CDEF (ctl/ctlPopup.cpp), as every
+       System 7 and 8 answers */
+    { gestaltPopupAttr, 1 },
     /*  gestaltPowerMgrAttr,	0,	*/
     /*  gestaltPPCToolboxAttr,	0,	*/
     /*  gestaltResourceMgrAttr,	0,	*/
@@ -127,12 +135,19 @@ static gestaltentry_t gtable[] = {
     {
         gestaltFPUType, 3,
     },
+    /* MacPhoenix: the keyboard KbdType says (init.cpp: 5, an ISO Apple
+       Extended Keyboard), gestaltExtISOADBKbd, as the Quadra and the G3
+       answer (was gestaltMacKbd) */
     {
-        gestaltKeyboardType, gestaltMacKbd,
+        gestaltKeyboardType, 9,
     },
     {
-        gestaltLogicalPageSize, 8 * 1024,
+        gestaltLogicalPageSize, 4 * 1024, /* MacPhoenix: the Quadra's and the G3's */
     },
+    /* MacPhoenix: the processor's and the bus's clock, a Power Mac's only
+       (gestaltProcClkSpeed, gestaltBusClkSpeed: 100 MHz on mame-ppc's G3) */
+    { "pclk"_4, 100000000 },
+    { "bclk"_4, 100000000 },
     {
         gestaltLogicalRAMSize, (LONGINT)3 * 1024 * 1024,
     },
@@ -219,8 +234,10 @@ static gestaltentry_t gtable[] = {
     {
         gestaltTimeMgrVersion, 3, /* gestaltExtendedTimeMgr */
     },
+    /* MacPhoenix: Gestalt 6 on 7.x (the Quadra's and the G3's 7.6.1;
+       GestaltValue & co. are here), 7 from 8.0 (below) */
     {
-        gestaltVersion, 1,
+        gestaltVersion, 6,
     },
 
 /* We don't want ClarisWorks 3 calling funky IMVI memory manager
@@ -242,8 +259,11 @@ static gestaltentry_t gtable[] = {
 #if 0
   { gestaltVMAttr, 0 },
 #endif
+    /* MacPhoenix: the System's machine icon (-16396), as the Quadra and
+       the G3 answer; was gestaltUnknownErr (Speedometer's Hardware
+       Information shows it) */
     {
-        gestaltMachineIcon, UNKNOWN,
+        gestaltMachineIcon, -16396,
     },
     {
         gestaltROMSize, (LONGINT)128 * 1024,
@@ -338,7 +358,9 @@ static gestalt_value_t *find_value(OSType selector)
 static gestaltentry_t since_table[] = {
     { "appr"_4, 0x00000001 }, /* the Appearance Manager (8.0) */
     { "apvr"_4, 0x00000110 }, /* ... 1.1, as in 8.5 and 8.6 */
-    { "icon"_4, 0x0000001F }, /* Icon Services (8.5) */
+    /* the Icon Utilities (icon.cpp; 7.6.1's 1), then Icon Services (8.5) */
+    { "icon"_4, 0x00000001 },
+    { "icon"_4, 0x0000001F },
     { "cfrg"_4, 0x00000001 }, /* the Code Fragment Manager */
     { "cltn"_4, 0x01108000 }, /* the Collection Manager 1.1 (collections.cpp) */
     /* measured on the G3 with 8.6 (tests/guest/difftest/sys.c) */
@@ -353,9 +375,11 @@ static gestaltentry_t since_table[] = {
        library is Executor's (quickdraw/fontmgr85.cpp) */
     { "qdtx"_4, 0x00000100 },
 };
+/* the Notification Manager's and the Resource Manager's from 7.0: a
+   Quadra on 7.6.1 answers them (tests/guest/gestalt) */
 static const uint16_t since_versions[std::size(since_table)] = {
-    0x0800, 0x0800, 0x0850, 0x0800, 0x0800,
-    0x0850, 0x0800, 0x0800, 0x0800,
+    0x0800, 0x0800, 0x0700, 0x0850, 0x0800, 0x0800,
+    0x0850, 0x0800, 0x0700, 0x0700,
     0x0850, 0x0850,
 };
 
@@ -386,6 +410,11 @@ find_selector_in_table(OSType selector, gestaltentry_t table[],
             break;
         /* MacPhoenix: the Alias Manager resolves records now (alias.cpp);
            no longer hidden behind ROMlib_pretend_alias. */
+        case "pclk"_4:
+        case "bclk"_4:
+            if(!power_mac)
+                selector = -1;
+            break;
         case gestaltSpeechAttr:
             if(!ROMlib_speech_enabled)
                 selector = -1;
@@ -437,28 +466,48 @@ void
 Executor::gestalt_set_system_version(uint32_t version)
 {
     REPLACE_SELECTOR_IN_TABLE(gestaltSystemVersion, version, gtable);
-    /* MacPhoenix: gestaltThreadsLibraryPresent (bit 2) with PowerPC code:
-       an 8.x System's (PowerPC only) and --executor-ppc's, ThreadsLib being
+    /* MacPhoenix: each answer below is set both ways, so that a later
+       call (another System, --executor-ppc changed) leaves no answer of
+       the earlier one behind. */
+    bool ppc = version >= 0x0800 || ROMlib_prefer_ppc;
+    bool system8 = version >= 0x0800;
+    /* gestaltThreadsLibraryPresent (bit 2) with PowerPC code: an 8.x
+       System's (PowerPC only) and --executor-ppc's, ThreadsLib being
        Executor's. The 8.6 Finder takes its thread task reference only with
        it, and its threads wait on that reference (opening a window). */
-    if(version >= 0x0800 || ROMlib_prefer_ppc)
-        REPLACE_SELECTOR_IN_TABLE("thds"_4, 7, gtable);
+    REPLACE_SELECTOR_IN_TABLE("thds"_4, ppc ? 7 : 3, gtable);
+    /* PowerPC code runs (an 8.x System, or --executor-ppc on 7.x): the
+       machine is a Power Mac, the one mame-ppc's G3 says it is on 7.6.1 and
+       8.6 alike (tests/guest/gestalt): machine 67, a PowerPC 750 at 100 MHz
+       on a 100 MHz bus, its 68k emulator a 68020 with no FPU, the PowerPC
+       MMU. Otherwise the Quadra the 68k ROM machine is: machine 20, a
+       68040 with its FPU, no MMU (as it answers). The architecture says
+       PowerPC on 8.x only: on a 7.x System (--executor-ppc) it stays 68k,
+       as before, since the System's components then take their PowerPC
+       side, and one of Executor's own System's runs wild at boot
+       (guest_suite_ppc_executor: no BridgeAgent). */
+    REPLACE_SELECTOR_IN_TABLE(gestaltSysArchitecture, system8 ? gestaltPowerPC : gestalt68k, gtable);
+    REPLACE_SELECTOR_IN_TABLE(gestaltNativeCPUtype, ppc ? gestaltCPU750 : gestaltCPU68040, gtable);
+    REPLACE_SELECTOR_IN_TABLE(gestaltMachineType, ppc ? 67 : 20, gtable);
+    REPLACE_SELECTOR_IN_TABLE(gestaltProcessorType, ppc ? 3 /* gestalt68020 */ : gestalt68040, gtable);
+    REPLACE_SELECTOR_IN_TABLE(gestaltFPUType, ppc ? 0 : 3, gtable);
+    REPLACE_SELECTOR_IN_TABLE(gestaltMMUType, ppc ? 5 : gestaltNoMMU, gtable);
+    power_mac = ppc;
     /* An 8.x System runs on PowerPC Macs only: a G3, as the G3 the 8.6 and
-       9.0.4 images come from (Microsoft's installers refuse a 68k Mac). */
-    if(version >= 0x0800)
+       9.0.4 images come from (Microsoft's installers refuse a 68k Mac).
+       As 8.6 answers them on the G3: the Script Manager's version is the
+       System's; Apple events with scripting support and the Object Support
+       Library in the System (ObjectSupportLib's calls are Executor's);
+       Gestalt 7 (GestaltValue & co.); no MFS volumes, HFS Plus ones from
+       8.1. 7.x: the table's own values. */
+    REPLACE_SELECTOR_IN_TABLE(gestaltScriptMgrVersion, system8 ? version : 0x0750, gtable);
+    REPLACE_SELECTOR_IN_TABLE(gestaltAppleEventsAttr, system8 ? 7 : 1, gtable);
+    REPLACE_SELECTOR_IN_TABLE(gestaltVersion, system8 ? 7 : 6, gtable);
+    gestaltentry_t *fs = find_selector_in_table(gestaltFSAttr, gtable, std::size(gtable));
+    if(fs)
     {
-        REPLACE_SELECTOR_IN_TABLE(gestaltSysArchitecture, gestaltPowerPC, gtable);
-        REPLACE_SELECTOR_IN_TABLE(gestaltNativeCPUtype, gestaltCPU750, gtable);
-        /* as 8.6 answers them on the G3: the Script Manager's version is
-           the System's; Apple events with scripting support and the
-           Object Support Library in the System (ObjectSupportLib's calls
-           are Executor's); Gestalt 7 (GestaltValue & co.); no MFS
-           volumes, HFS Plus ones from 8.1 */
-        REPLACE_SELECTOR_IN_TABLE(gestaltScriptMgrVersion, version, gtable);
-        REPLACE_SELECTOR_IN_TABLE(gestaltAppleEventsAttr, 7, gtable);
-        REPLACE_SELECTOR_IN_TABLE(gestaltVersion, 7, gtable);
-        gestaltentry_t *fs = find_selector_in_table(gestaltFSAttr, gtable, std::size(gtable));
-        if(fs)
+        fs->value &= ~(1 << 8 | 1 << 9);
+        if(system8)
             fs->value |= 1 << 8 | (version >= 0x0810 ? 1 << 9 : 0);
     }
 }

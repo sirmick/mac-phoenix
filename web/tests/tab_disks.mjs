@@ -56,8 +56,8 @@ try {
 }
 fs.symlinkSync(path.resolve(system), path.join(images, 'sys.img'));
 const record = (name, r) => fs.writeFileSync(path.join(images, `${name}.json`), JSON.stringify(r));
-record('sys.img', { title: 'The System', tags: ['system'] });
-record('blank.img', { title: 'Blank', tags: [] });
+record('sys.img', { title: 'The System', tags: ['system'], systems: ['7.6.1'] });
+record('blank.img', { title: 'Blank', tags: [], systems: ['7.6.1', '8.6'] });
 record('disc.iso', { title: 'Disc', tags: ['cd'] });
 record('apps.img', { title: 'Apps', tags: [] });
 
@@ -111,6 +111,20 @@ try {
     await page.click('#disks-button');
     check(await page.locator('#disks-panel').isVisible(), 'the Disks button opens the panel');
     check(await page.locator('#disks-system #system').isVisible(), 'the System choice is in the panel');
+
+    // The library table: sorted by title, a header click reverses it
+    // (aria-sort on the sortable headers only); the Systems column.
+    const titles = () => page.$$eval('#disks-library .lib-row .title', (t) => t.map((x) => x.textContent));
+    const ariaSort = (key) => page.getAttribute(`#disks-library th[data-key=${key}]`, 'aria-sort');
+    check(JSON.stringify(await titles()) === JSON.stringify(['Apps', 'Blank', 'Disc', 'The System']), 'the library sorted by title');
+    check(await ariaSort('title') === 'ascending' && await ariaSort('size') === 'none', 'aria-sort says so');
+    check(await ariaSort('state') === null, 'no aria-sort on the unsortable column');
+    await page.click('#disks-library th[data-key=title]');
+    check((await titles())[0] === 'The System' && await ariaSort('title') === 'descending', 'a second click reverses it');
+    await page.click('#disks-library th[data-key=title]');
+    check(await page.textContent('#disks-library .lib-row[data-url="disks/sys.img"] .systems') === '7.6.1'
+          && await page.textContent('#disks-library .lib-row[data-url="disks/blank.img"] .systems') === '7.6.1, 8.6',
+          'the Systems column has the records\' systems');
 
     // The library's System disk, picked in the panel: Executor starts on it.
     await page.selectOption('#system', 'disks/sys.img');
