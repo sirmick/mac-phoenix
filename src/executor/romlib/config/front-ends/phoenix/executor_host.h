@@ -85,6 +85,9 @@ void mouse_moved(int x, int y);
 void mouse_moved_relative(int dx, int dy);
 void mouse_button(bool down);
 void key(bool down, uint8_t mac_keycode);
+// The scroll wheel, lines (right and down positive): the front window's
+// scroll bar under the pointer clicked (osevent/wheel.cpp).
+void wheel(int dh, int dv);
 void get_mouse(int& x, int& y);
 
 // True once the application has reached its event loop.

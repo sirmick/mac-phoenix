@@ -103,6 +103,11 @@
           "title": "Right button",
           "description": "What the right mouse button does.",
           "x-labels": ["Click, as the left one", "Control-click (contextual menus)"]
+        },
+        "wheel_scroll": {
+          "type": "boolean", "default": true, "x-scope": "page", "x-apply": "live",
+          "title": "Scroll wheel scrolls the window under the pointer",
+          "description": "The wheel or trackpad clicks the scroll bar of the Mac's front window under the pointer: its arrows a line at a time, its page parts for a big turn, both ways (System 7 and 8 have no wheel). The pointer stays where it is."
         }
       }
     },

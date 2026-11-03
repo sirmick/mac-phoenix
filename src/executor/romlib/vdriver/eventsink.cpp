@@ -30,6 +30,11 @@ void EventSink::mouseButtonEvent(bool down)
     });
 }
 
+void EventSink::scrollWheel(int dh, int dv)
+{
+    runOnEmulatorThread([=]() { ROMlib_wheel_add(dh, dv); });
+}
+
 void EventSink::mouseMoved(int h, int v)
 {
     runOnEmulatorThread([=]() {

@@ -495,6 +495,10 @@ Boolean Executor::C_GetNextEvent(INTEGER em, EventRecord *evt)
        device drivers with dNeedTime get their accRun from here. */
     SystemTask();
 
+    /* MacPhoenix: the scroll wheel's next click, for the front process */
+    if(em & mDownMask)
+        ROMlib_wheel_start();
+
     TRACE(1);
     retval = doevent(em, evt, true);
     TRACE(0);
@@ -616,6 +620,9 @@ Boolean Executor::C_Button()
     EventRecord evt;
     Boolean retval;
 
+    bool wheel;
+    if(ROMlib_wheel_button(&wheel)) /* MacPhoenix: a scroll wheel's click */
+        return wheel;
     GetOSEvent(0, &evt);
     retval = (evt.modifiers & btnState) ? false : true;
     return retval;

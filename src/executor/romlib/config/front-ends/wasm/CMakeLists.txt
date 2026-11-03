@@ -143,6 +143,17 @@ if(NODE_COMMAND)
         ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM};TMPDIR=${CMAKE_CURRENT_BINARY_DIR}")
 endif()
 
+# The scroll wheel on 8.6 in the tab: the System Folder's window scrolled
+# down, back, a page, across; nothing with the setting off (web/tests/tab_wheel.mjs).
+if(NODE_COMMAND)
+    add_test(NAME executor.web.wheel
+        COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_wheel.mjs
+                $<TARGET_FILE_DIR:executor-web> ${EXECUTOR_WEB_SYSTEM_PPC})
+    set_tests_properties(executor.web.wheel PROPERTIES
+        LABELS "executor;web" TIMEOUT 300 SKIP_RETURN_CODE 77
+        ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM};TMPDIR=${CMAKE_CURRENT_BINARY_DIR}")
+endif()
+
 # The 8.6 Finder's folder windows in the tab: their offscreens (useTempMem)
 # don't fill its heap, and the Worker lives on (web/tests/tab_finder_heap.mjs).
 if(NODE_COMMAND)

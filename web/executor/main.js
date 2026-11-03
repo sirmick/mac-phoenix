@@ -961,6 +961,25 @@ function attachInput(canvas) {
         e.preventDefault();
     });
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+    // The wheel and trackpad: lines (a notch's 100 pixels about 3, a page
+    // 15: Executor clicks a page part from 15 on) to Executor, which
+    // clicks the front window's scroll bar under the pointer
+    // (osevent/wheel.cpp; input.wheel_scroll). A trackpad's fractions add up.
+    const wheelLines = [0, 0];
+    canvas.addEventListener('wheel', (e) => {
+        if (!Settings.get('input.wheel_scroll'))
+            return;
+        e.preventDefault();
+        const unit = e.deltaMode === 1 ? 1 : e.deltaMode === 2 ? 15 : 1 / 33;
+        wheelLines[0] += e.deltaX * unit;
+        wheelLines[1] += e.deltaY * unit;
+        const [h, v] = wheelLines.map(Math.trunc);
+        if (!h && !v)
+            return;
+        wheelLines[0] -= h;
+        wheelLines[1] -= v;
+        send([1, ...guestPoint(e)], [4, h, v]);
+    }, { passive: false });
     const onKey = (down, e) => {
         const code = macKeycodeForEvent(e);
         if (code === null)

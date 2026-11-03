@@ -75,8 +75,8 @@
 #include <vector>
 
 /* The page's input, oldest first: [kind, a, b] per event (kind 1: mouse to
- * a, b; 2: button down a; 3: key down a, Mac key code b). Returns how many
- * events it copied. */
+ * a, b; 2: button down a; 3: key down a, Mac key code b; 4: the wheel, a
+ * lines right and b down). Returns how many events it copied. */
 EM_JS(int, js_take_input, (int32_t *out, int max), {
     const q = Module.input || [];
     const n = Math.min(q.length, max);
@@ -571,6 +571,9 @@ void on_yield()
                     break;
                 case 3:
                     executor_host::key(e[1] != 0, (uint8_t)e[2]);
+                    break;
+                case 4:
+                    executor_host::wheel(e[1], e[2]);
                     break;
             }
         }

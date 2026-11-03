@@ -213,6 +213,12 @@ void key(bool down, uint8_t mac_keycode)
         s->keyboardEvent(down, mac_keycode);
 }
 
+void wheel(int dh, int dv)
+{
+    if(sink())
+        EventSink::instance->scrollWheel(dh, dv);
+}
+
 void get_mouse(int& x, int& y)
 {
     x = PhoenixVideoDriver::cursorX;
