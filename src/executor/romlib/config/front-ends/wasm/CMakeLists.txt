@@ -269,6 +269,16 @@ endif()
 # the library.
 set(EXECUTOR_WEB_LIBRARY "$ENV{HOME}/storage/web-library" CACHE PATH
     "tools/web/make_library.py's output, for the executor.web.site cells")
+# The top bar's CPU meter: hidden while loading, low at the idle Finder,
+# high while a game runs (web/tests/tab_cpu.mjs; the library's boot-7.6.1
+# and games-68k disks).
+if(NODE_COMMAND AND GO_COMMAND)
+    add_test(NAME executor.web.cpu
+        COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_cpu.mjs
+                $<TARGET_FILE_DIR:executor-web> ${EXECUTOR_WEB_LIBRARY})
+    set_tests_properties(executor.web.cpu PROPERTIES
+        LABELS "executor;web" TIMEOUT 600 SKIP_RETURN_CODE 77 ENVIRONMENT "${EXECUTOR_WEB_ENV}")
+endif()
 if(NODE_COMMAND AND GO_COMMAND)
     foreach(cell "7.6.1 productivity" "7.6.1 creative" "7.6.1 development" "7.6.1 games-68k" "7.6.1 utilities"
                  "8.6 productivity" "8.6 creative" "8.6 development" "8.6 games-ppc")
@@ -281,6 +291,14 @@ if(NODE_COMMAND AND GO_COMMAND)
         set_tests_properties(executor.web.site.${system}.${disk} PROPERTIES
             LABELS "web;site" TIMEOUT 1800 SKIP_RETURN_CODE 77 ENVIRONMENT "${EXECUTOR_WEB_ENV}")
     endforeach()
+    # The library's details: what is on a disk (its record's items), opened
+    # under its row in the Disks panel (web/tests/tab_library.mjs). Skips
+    # with a library made before make_library.py wrote items.
+    add_test(NAME executor.web.site.library
+        COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_library.mjs
+                $<TARGET_FILE_DIR:executor-web> ${EXECUTOR_WEB_LIBRARY} development.img)
+    set_tests_properties(executor.web.site.library PROPERTIES
+        LABELS "web;site" TIMEOUT 300 SKIP_RETURN_CODE 77 ENVIRONMENT "${EXECUTOR_WEB_ENV}")
     # M1 (docs/executor/M1.md): the same disks' targets used, not only opened
     # (a document saved, a script or build run, a game past its title
     # screen: web/tests/tab_m1.mjs). Long, and every target must work: label

@@ -635,6 +635,14 @@ add_test(
 )
 set_tests_properties(custom_icons PROPERTIES TIMEOUT 60 LABELS "provisioning" SKIP_RETURN_CODE 77)
 
+# A library disk's System Folder additions (tools/web/make_disk.py
+# --system-from, make_library.py's place mapping): hfsutils, no emulator.
+add_test(
+  NAME system_additions
+  COMMAND ${Python3_EXECUTABLE} ${TEST_DIR}/test_system_additions.py
+)
+set_tests_properties(system_additions PROPERTIES TIMEOUT 60 LABELS "provisioning" SKIP_RETURN_CODE 77)
+
 # build.py's "printer": the Chooser's STR and 'alis' -8192 as a 7.6.1 Quadra
 # writes them, inherited from a built base, not in its content identity.
 add_test(
@@ -1628,3 +1636,10 @@ endforeach()
 add_test(NAME disk_audit
   COMMAND ${Python3_EXECUTABLE} ${TEST_DIR}/test_disk_audit.py)
 set_tests_properties(disk_audit PROPERTIES TIMEOUT 120 LABELS "tools" SKIP_RETURN_CODE 77)
+
+# tools/web/disk_contents.py: a library disk's "items" (make_library.py's
+# records: kind, arch, version, publisher, year, size, the hand table) on a
+# fixture HFS image it makes.
+add_test(NAME disk_contents
+  COMMAND ${Python3_EXECUTABLE} ${TEST_DIR}/test_disk_contents.py)
+set_tests_properties(disk_contents PROPERTIES TIMEOUT 120 LABELS "tools" SKIP_RETURN_CODE 77)

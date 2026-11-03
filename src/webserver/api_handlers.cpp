@@ -546,6 +546,9 @@ Response APIRouter::handle_status(const Request& req) {
                 elapsed = (now_us - start_us) / 1e6;
             }
             json << ", \"boot_elapsed\": " << elapsed;
+            /* Executor: its emulator thread's busy share, the last half second */
+            if (uint32_t busy = IPC_ATOMIC_LOAD(buf->cpu_busy))
+                json << ", \"cpu_busy\": " << (busy - 1) / 1000.0;
 
             finder_reached = boot_progress_phase_reached_by_name(buf->boot_phase, "Finder");
 

@@ -3,7 +3,8 @@
  * Macintosh: Files, chapter 2 ("Data Organization on Volumes"): the master
  * directory block, the catalog and extents overflow B-trees, allocation
  * blocks. HFS+ volumes go through Executor's HFS+ reader (hfs/plus,
- * docs/executor/HFSPlus.md).
+ * docs/executor/HFSPlus.md). The same reader copies a disk's System Folder
+ * additions in (system_additions).
  */
 #include "hfs_sideload.h"
 
@@ -14,6 +15,7 @@
 #include <file/localvolume/item.h>
 #include <rsys/filesystem.h>
 
+#include <algorithm>
 #include <cctype>
 #include <cstdint>
 #include <cstdio>
@@ -484,6 +486,127 @@ bool sideload_system(const std::string& image, const std::string& data_dir,
     }
     if(has_finder)
         *has_finder = finder;
+    return true;
+}
+
+}  // namespace executor_host
+
+namespace {
+
+/* The entry of DIR named NAME (as HFS compares: ASCII case aside), or
+   DIR / NAME when there is none. */
+fs::path findHost(const fs::path& dir, const fs::path& name)
+{
+    std::error_code ec;
+    if(fs::exists(dir / name, ec))
+        return dir / name;
+    std::string want = name.string();
+    for(auto& d : fs::directory_iterator(dir, ec))
+    {
+        std::string have = d.path().filename().string();
+        if(have.size() == want.size()
+           && std::equal(have.begin(), have.end(), want.begin(),
+                         [](char a, char b) { return tolower((unsigned char)a) == tolower((unsigned char)b); }))
+            return d.path();
+    }
+    return dir / name;
+}
+
+/* In use only after a restart: the fonts (the Font Manager lists the Fonts
+   folder at startup). */
+std::string afterRestart(const std::vector<std::string>& path, const Entry&)
+{
+    return equalMac(path[0], "Fonts") ? path[0] : std::string();
+}
+
+/* Startup code is not added (tools/web/make_disk.py leaves it off the disks
+   too; those made before it did carry it): the System Folder's folders of
+   startup items, and files of the types that run at startup or register
+   themselves (INITs, control panels, background applications, components,
+   Shared Library Manager libraries, ...); CarbonLib, which Executor
+   doesn't run. Installers' extensions run on every boot brought the tab
+   down. */
+bool startupCode(const std::vector<std::string>& path, const Entry& e)
+{
+    static const char *folders[] = { "Control Panels", "Startup Items", "Shutdown Items",
+                                     "Control Strip Modules", "Launcher Items", "Apple Menu Items",
+                                     "Extensions (Disabled)", "Control Panels (Disabled)",
+                                     "System Extensions (Disabled)" };
+    static const char *types[] = { "INIT", "cdev", "appe", "thng", "libr", "RDEV", "fext", "AINI",
+                                   "dbgr", "scri", "ADBS" };
+    if(path.size() == 1 && e.folder)
+        for(const char *f : folders)
+            if(equalMac(e.name, f))
+                return true;
+    if(e.folder)
+        return false;
+    for(const char *t : types)
+        if(!memcmp(e.finfo, t, 4))
+            return true;
+    return equalMac(e.name, "CarbonLib");
+}
+
+void addTree(Source& v, uint32_t dirID, const fs::path& folder, std::vector<std::string>& path,
+             executor_host::Additions& done)
+{
+    for(const Entry& e : v.children(dirID))
+    {
+        fs::path to = findHost(folder, hostName(e.name));
+        path.push_back(e.name);
+        if(startupCode(path, e))
+        {
+            path.pop_back();
+            continue;
+        }
+        std::error_code ec;
+        if(e.folder)
+        {
+            if(!fs::is_directory(to, ec))
+            {
+                fs::create_directories(to, ec);
+                writeFolderInfo(e, folder);
+            }
+            addTree(v, e.id, to, path, done);
+        }
+        else
+        {
+            std::time_t mod = (std::time_t)macToHostTime(e.modDate);
+            if(fs::exists(to, ec) && fs::last_write_time(to, ec) >= mod)
+                done.kept++;
+            else
+            {
+                copyFile(v, e, folder);
+                done.copied++;
+                std::string later = afterRestart(path, e);
+                if(!later.empty()
+                   && std::find(done.restart.begin(), done.restart.end(), later) == done.restart.end())
+                    done.restart.push_back(later);
+            }
+        }
+        path.pop_back();
+    }
+}
+
+}  // namespace
+
+namespace executor_host {
+
+bool system_additions(const std::string& image, const std::string& data_dir,
+                      Additions *done, std::string *error)
+{
+    std::unique_ptr<Source> source = openSource(image, error);
+    if(!source)
+        return false;
+    Additions ignored;
+    Additions& out = done ? *done : ignored;
+    for(const Entry& e : source->children(2))  /* the root folder */
+        if(e.folder && equalMac(e.name, "System Folder Additions"))
+        {
+            fs::path sys = fs::path(data_dir) / "System Folder";
+            fs::create_directories(sys);
+            std::vector<std::string> path;
+            addTree(*source, e.id, sys, path, out);
+        }
     return true;
 }
 

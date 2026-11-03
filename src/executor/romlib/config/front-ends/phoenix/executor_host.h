@@ -112,6 +112,11 @@ void get_registers(uint32_t d[8], uint32_t a[8]);
 const uint8_t *guest_ram();
 uint32_t guest_ram_size();
 
+// The emulator thread's load: the share of the last half second it spent
+// working rather than waiting for events (rsys/hostidle.h busy(); 0..1,
+// -1 before the first half second). Any thread.
+double cpu_busy();
+
 // PowerPC breakpoints (--executor-ppc-break, /api/executor/ppc-break):
 // "add SPEC", "remove SPEC" ("all"), "list [SINCE]"; JSON. Any thread.
 std::string ppc_break_command(const std::string& command);

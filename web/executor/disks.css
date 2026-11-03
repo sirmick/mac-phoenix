@@ -95,3 +95,21 @@ body.disks-open { padding-right: min(440px, 92vw); box-sizing: border-box; }
 .lib-row .remove { padding: 2px 6px !important; font-size: 11px !important; margin-left: 3px; }
 .lib-row.mounted { cursor: default; }
 .lib-row.mounted .title { color: #9a9; }
+.lib-row .contents { background: none !important; border: none !important; color: #9ab !important; padding: 0 6px 0 0 !important;
+    font-size: 10px !important; cursor: pointer; }
+.lib-row .contents:hover { color: #cde !important; }
+.lib-details > td { padding: 2px 4px 10px 8px; background: #2c2f34; }
+.lib-note { color: #aaa; font-size: 11px; margin: 4px 0 6px; }
+.lib-items { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 11px; }
+.lib-items th { text-align: left; color: #888; font-weight: 600; padding: 2px 4px; border-bottom: 1px solid #444; }
+.lib-items th:nth-child(1) { width: auto; }
+.lib-items th:nth-child(2) { width: 58px; }
+.lib-items th:nth-child(3) { width: 54px; }
+.lib-items th:nth-child(4) { width: 50px; }
+.lib-items td { padding: 3px 4px; border-bottom: 1px solid #363636; vertical-align: top; color: #bbb;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lib-items td.item-name { white-space: normal; }
+.lib-items .item-title { color: #ddd; }
+.lib-items .item-about { color: #999; font-size: 10px; }
+.lib-items .item-notes { color: #c9a95c; font-size: 10px; }
+.lib-items tr.lib-group td { color: #8a9; font-weight: 600; padding-top: 6px; }

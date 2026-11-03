@@ -19,7 +19,7 @@ guest memory directly and need nothing in the guest. How both work:
 
 | Endpoint | | |
 |---|---|---|
-| `/api/status` | GET | `emulator_running`, `cpu_state`, `boot_phase`, `boot_elapsed`, `checkload_count`, `bridge_agent_connected`, `annotations`, the guest's text clipboard (`mac`), and a crash report if the child died |
+| `/api/status` | GET | `emulator_running`, `cpu_state`, `boot_phase`, `boot_elapsed`, `checkload_count`, `cpu_busy` (Executor: the share of the last half second its emulator thread worked rather than waited for events, 0..1), `bridge_agent_connected`, `annotations`, the guest's text clipboard (`mac`), and a crash report if the child died |
 | `/api/screenshot` | GET | the screen as PNG (503 before the first frame); as the frames are, so at Executor's `--executor-scale` the high-resolution screen; `?scale=1`: the Mac's own 1x pixels then |
 | `/api/frame` | GET | one frame for HTTP polling: 45-byte header (dirty rect, size, cursor) + PNG; `?sid=` from the `X-Frame-Sid` header of the first reply; 204 when nothing changed |
 | `/api/stream` | GET | the same frames as one chunked HTTP response (`?fps=N`) |

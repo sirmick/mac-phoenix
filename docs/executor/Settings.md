@@ -92,7 +92,20 @@ applies: the saved value, unless the page's address overrides it for the
 visit (`?size=`, `?scale=`, `?ppc`, `?system=`, `?logtraps=`,
 `?nesting=`, `?debug=`, `?ppcbreak=`; the dialog says so). main.js reads
 the machine's at each start of Executor; the bar's PowerPC box and the
-Disks panel's System choice write them. The library disks picked:
+Disks panel's System choice write them. The System is one setting,
+`machine.system` (a disk image's name): the Disks panel's choice and
+Settings > Machine's follow it both ways, both through main.js
+`pickSystem`. A library System disk chosen (by its url; the dialog offers
+one not in yet by its url) goes into `disks.mounted`; the one the last
+choice put in comes out when the choice changes (a disk that was in
+already, as a disk of its own, stays). Library disks are known by url
+(`fetchedFrom`: the url each fetched image came from), local images by
+name. The dialog's list is the page's
+(`Settings.provide('systems', draft => …)`: the disks in, and the library's
+System disks): made again when the dialog opens, after each change in it,
+and when the page's disks change while it is open
+(`Settings.choicesChanged()`); a setting changed by the page while the
+dialog is open reaches the draft unless the draft had changed it. The library disks picked:
 `disks.mounted`, in order (live: the page puts them in and takes them out
 of the running Mac, Disks.md).
 
@@ -104,6 +117,31 @@ keyboard through the Keyboard Lock API (Chromium-based browsers), so
 Ctrl+W and the like reach the Mac; holding Esc leaves.
 
 "Restart Executor" in the dialog saves what changed and reloads the page.
+
+The bar's CPU meter (main.js `CpuMeter`, `#cpu`): how much of each half
+second the Mac's emulator thread spent working rather than waiting for
+events (`hostidle::busy()`: time inside its waits, which yield to the
+browser, against the clock; timestamps around the waits only). The Worker
+passes it on each half second (`'cpu'`); the bar shows the last 15 seconds
+as bars (orange above 90%) and the latest as a %, "Mac CPU busy" as the
+tooltip; hidden until the first frame and when Executor stops.
+`window.executor.cpu` has `{ busy, history }`; the Worker's `stats`
+request `cpu`. The idle Finder reads a few %, a game running on 100%
+(`executor.web.cpu`). Natively the same number is `/api/status`'s
+`cpu_busy`.
+
+Beside it, Executor's memory (an estimate, worker.js `memoryUse`, with
+each CPU sample): the module's heap (`HEAP8.buffer`, the Mac's RAM in it:
+MemTop, from the module), the library disks' pieces read from the server
+(`RemoteImage` chunks), the disks' changes (`Overlay` data) and Executor's
+volume (`/executor` in MEMFS: the files' sizes, from the walk the server
+sync makes (`scanVolume`), or one when that is over 5 s old). The tooltip gives the
+parts; the browser's own memory (the page, its scripts, uploaded files) is
+not counted. On 7.6.1 with the games disk: about 315 MB (heap 256, of it
+RAM 126; caches 44; volume 15). Where the browser measures memory itself
+(`performance.measureUserAgentSpecificMemory`: cross-origin isolated pages,
+Chromium; the tab is), the tooltip gives its figure too, taken at most
+every 10 s (it can wait for a garbage collection): 331 MB there.
 
 ## Not yet
 

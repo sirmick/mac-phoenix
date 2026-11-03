@@ -15,6 +15,7 @@
  * its cached segment table on its own date).
  */
 #include <string>
+#include <vector>
 
 namespace executor_host {
 
@@ -23,5 +24,23 @@ namespace executor_host {
 // *has_finder: a Finder was among what it copied.
 bool sideload_system(const std::string& image, const std::string& data_dir,
                      bool *has_finder, std::string *error);
+
+// What system_additions() did: files copied, files left as they were (the
+// System's newer or the same), and what it copied that is in use only after
+// a restart ("Fonts").
+struct Additions
+{
+    int copied = 0, kept = 0;
+    std::vector<std::string> restart;  // MacRoman
+};
+
+// Copies the image's "System Folder Additions" (what its applications'
+// installers put in the System Folder: tools/web/make_disk.py
+// --system-from) into data_dir/System Folder: each file it hasn't, or has
+// older than the image's, but startup code (extensions, control panels,
+// components); the folders' names matched as HFS does, without case. False, with why in *error, if the image can't be read; true with
+// nothing done if it has none.
+bool system_additions(const std::string& image, const std::string& data_dir,
+                      Additions *done, std::string *error);
 
 }  // namespace executor_host

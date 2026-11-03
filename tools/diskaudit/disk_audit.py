@@ -6,8 +6,12 @@ What a user of the image would trip over in the Finder, per image:
   alias     every alias file ('alis': Apple Menu Items, Startup Items,
             Launcher Items, anywhere) resolved on its own volume or on the
             companion images (--with; images named together are each
-            other's companions): its volume by name (its own first, then
-            the one with the alias's creation date), then its path, then its
+            other's companions; a library boot disk, whose record beside it
+            names its "system", only for disks whose record lists that
+            System in "systems"): its volume by name (its own first, then
+            the one with the alias's creation date), then its path (one
+            into a System Folder found also in the disk's own System Folder
+            Additions, which the tab copies there), then its
             target's ID *with the same name* (the Alias Manager would find
             it moved). "dangling": the volume is there, the target isn't (a
             reused ID is said); "external": no such volume here (a CD, the
@@ -21,7 +25,8 @@ What a user of the image would trip over in the Finder, per image:
             menu bar, past its right or bottom edge), too small to use;
             scroll origins (DXInfo frScroll) past the folder's content.
   invisible invisible files and folders the Finder doesn't make (stray
-            Snapshot Info, ._ files, ...), items a session leaves behind
+            Snapshot Info, ._ files, ...; a library disk's "System Folder
+            Additions", tools/web/make_disk.py's, is not one), items a session leaves behind
             (Recent Applications/Documents/Servers). (Desktop Folder and
             Trash may be visible: the 7.6 and 8.6 Finders leave them so and
             hide them themselves.)
@@ -45,6 +50,7 @@ import fat_cfm  # noqa: E402
 from aliases import HfsVolume, parse_alias  # noqa: E402
 
 ALIAS, INVISIBLE, HAS_CUSTOM_ICON = 0x8000, 0x4000, 0x0400
+ADDITIONS = "System Folder Additions"     # tools/web/make_disk.py --system-from
 ROOT = 2
 ICON = 32                       # an icon's box in icon view, without its label
 LABEL_GAP = 8                   # between two labels side by side
@@ -83,7 +89,7 @@ SESSION_FOLDERS = {"Recent Applications", "Recent Documents", "Recent Servers"}
 
 class Node:
     __slots__ = ("id", "parent", "name", "is_dir", "type", "creator", "flags", "loc", "rect", "scroll",
-                 "view", "rsrc", "offset")
+                 "view", "rsrc", "offset", "size")
 
     def __init__(self, **kw):
         for k in self.__slots__:
@@ -108,6 +114,11 @@ class Volume:
     def __init__(self, path):
         self.path = path
         self.image = os.path.basename(path)
+        try:                                    # make_library.py's record, beside it
+            with open(path + ".json") as f:
+                self.record = json.load(f)
+        except (OSError, ValueError):
+            self.record = {}
         self.nodes = {}
         f = open(path, "rb")
         self.f = f
@@ -166,8 +177,10 @@ class Volume:
                 flags, = struct.unpack(">H", data[12:14])
                 loc = struct.unpack(">2h", data[14:18])
                 rsrc = (v._extents(data[86:98]), struct.unpack(">I", data[36:40])[0])
+                dsize, = struct.unpack(">I", data[26:30])
                 self.nodes[fid] = Node(id=fid, parent=parent, name=name, is_dir=False, type=ftype,
-                                       creator=creator, flags=flags, loc=loc, rsrc=rsrc, offset=off)
+                                       creator=creator, flags=flags, loc=loc, rsrc=rsrc, offset=off,
+                                       size=dsize + rsrc[1])
 
     # HFS+ (TN1150) ---------------------------------------------------------
 
@@ -197,7 +210,9 @@ class Volume:
                 flags, = struct.unpack(">H", data[56:58])
                 self.nodes[fid] = Node(id=fid, parent=parent, name=name, is_dir=False, type=data[48:52],
                                        creator=data[52:56], flags=flags, loc=struct.unpack(">2h", data[58:62]),
-                                       rsrc=data[168:248], offset=off)
+                                       rsrc=data[168:248], offset=off,
+                                       size=struct.unpack(">Q", data[88:96])[0]
+                                       + struct.unpack(">Q", data[168:176])[0])
             elif rtype == 3 and parent == 1:
                 threads[parent] = name
         root = self.nodes.get(ROOT)
@@ -279,6 +294,10 @@ def _leaves(tree, node_size, plus=False):
 
 class Audit:
     def __init__(self, vol, companions, screen):
+        # a boot disk for a System this disk isn't for: not one of its companions
+        systems = vol.record.get("systems")
+        companions = [w for w in companions
+                      if w is vol or not systems or not w.record.get("system") or w.record["system"] in systems]
         self.v, self.companions, self.screen = vol, companions, screen
         self.findings = []
         self.stats = Counter()
@@ -323,6 +342,11 @@ class Audit:
                 continue
             paths = {w: {w.path_of(n): n for n in w.nodes.values()} for w in vols}
             if any(t["path"] in ps for ps in paths.values()):
+                self.stats["aliases ok"] += 1
+                continue
+            # into the System Folder: the disk's own additions go there
+            _, sep, rest = t["path"].partition(":System Folder:")
+            if sep and v is not vols[0] and f"{v.name}:{ADDITIONS}:{rest}" in {v.path_of(n) for n in v.nodes.values()}:
                 self.stats["aliases ok"] += 1
                 continue
             by_id = [(w, w.nodes[t["id"]]) for w in vols if t["id"] in w.nodes]
@@ -446,6 +470,8 @@ class Audit:
             if n.id == ROOT:
                 continue
             parent = v.nodes.get(n.parent)
+            if n.parent == ROOT and n.is_dir and n.name == ADDITIONS:
+                continue                                # (the tab's: make_disk.py)
             if n.flags & INVISIBLE and n.name not in FINDER_INVISIBLE:
                 self.stats["invisible"] += 1
                 system = self.in_system_folder(n)       # Apple's own preferences hide some

@@ -68,6 +68,8 @@ window.executor = {
     audioFrames: 0,     // 20 ms frames of sound received
     cursor: null,       // the guest's last cursor message
     stopped: null,      // why Executor stopped, when an error stopped it
+    additions: {},      // disk -> its System Folder additions copied in (copied, kept, restart, live)
+    cpu: null,          // the CPU meter: { busy (0..1, the last half second), history, memory (worker.js memoryUse), measured (the browser's figure, 0: none) }
     request(op, arg = '') {
         if (!worker)
             return Promise.resolve({ error: 'not running' });   // between Workers
@@ -78,6 +80,78 @@ window.executor = {
         });
     },
 };
+
+// ---- the CPU meter in the top bar: the emulator thread's busy share
+// (the time it isn't waiting for events: hostidle::busy), each half second
+// from the Worker; a sparkline of the last 30 and the latest as a %. Beside
+// it Executor's memory, an estimate (worker.js memoryUse), its parts in the
+// tooltip. Hidden until the first frame and when Executor stops.
+const MB = (n) => (n >= 1 << 30 ? `${(n / (1 << 30)).toFixed(1)} GB` : `${Math.round(n / (1 << 20))} MB`);
+function memoryTip(m) {
+    return [`Executor's memory: about ${MB(m.total)}`,
+            `• the module's heap: ${MB(m.heap)} (WebAssembly memory: Executor, its caches, and the Mac's RAM, ${MB(m.ram)})`,
+            `• disk caches: ${MB(m.caches)} (library disks' pieces read from the server)`,
+            `• disk changes: ${MB(m.changes)} (what the Mac wrote to its disks, kept here)`,
+            `• Executor's volume: ${MB(m.volume)} (its System Folder and files, in memory; estimated from the files' sizes, counted every 5 s)`,
+            'Not counted: the browser\'s own (the page, its scripts, uploaded files), so the total is an estimate.',
+            ...(measured ? [`The browser's own measurement of this tab: ${MB(measured)}`
+                            + ` (performance.measureUserAgentSpecificMemory, ${Math.round((Date.now() - measuredAt) / 1000)} s ago)`] : [])]
+        .join('\n');
+}
+// The browser's measurement, where it has one (cross-origin isolated
+// pages, Chromium): slow (it may wait for a garbage collection), so every
+// 10 s at most, one at a time.
+let measured = 0, measuredAt = 0, measuring = false;
+function measure() {
+    if (measuring || Date.now() - measuredAt < 10000 || !window.crossOriginIsolated
+        || !performance.measureUserAgentSpecificMemory)
+        return;
+    measuring = true;
+    performance.measureUserAgentSpecificMemory()
+        .then((r) => { measured = r.bytes; measuredAt = Date.now(); })
+        .catch(() => { measuredAt = Date.now(); })
+        .finally(() => { measuring = false; });
+}
+const CpuMeter = (() => {
+    const el = document.getElementById('cpu');
+    const pct = document.getElementById('cpu-pct');
+    const mem = document.getElementById('mem');
+    const ctx = el.querySelector('canvas').getContext('2d');
+    const N = 30, history = [];
+    function draw() {
+        const { width: w, height: h } = ctx.canvas;
+        ctx.clearRect(0, 0, w, h);
+        ctx.fillStyle = '#333';
+        ctx.fillRect(0, 0, w, h);
+        const step = w / N;
+        history.forEach((v, i) => {
+            ctx.fillStyle = v > 0.9 ? '#e96' : '#7af';
+            const bh = Math.max(1, Math.round(v * h));
+            ctx.fillRect(Math.floor((N - history.length + i) * step), h - bh, Math.ceil(step), bh);
+        });
+    }
+    return {
+        add(busy, memory) {
+            history.push(busy);
+            if (history.length > N)
+                history.shift();
+            pct.textContent = `${Math.round(busy * 100)}%`;
+            if (memory) {
+                measure();
+                mem.textContent = MB(memory.total);
+                mem.title = memoryTip(memory);
+            }
+            window.executor.cpu = { busy, history: [...history], memory, measured };
+            el.hidden = false;
+            draw();
+        },
+        reset() {
+            history.length = 0;
+            window.executor.cpu = null;
+            el.hidden = true;
+        },
+    };
+})();
 
 // ---- the disks: uploads and ?disk= fetches, for this visit ----
 let sessionFiles = [];
@@ -103,9 +177,13 @@ const imageIds = {};
 const plainKey = (name, size, time) => `${name}-${size}-${time}`.replace(/[^\w.-]/g, '_');
 
 // starting: the progress to the loading panel's Disks step (else the status).
+// Each disk image fetched: the url it came from, by its file's name (a
+// library System disk put in and the panel's choice of it, by url).
+const fetchedFrom = new Map();
 async function fetchDisk(url, { starting = false } = {}) {
     const absolute = new URL(url, location.href).href;
     const name = decodeURIComponent(new URL(absolute).pathname.split('/').pop());
+    fetchedFrom.set(name, absolute);
     const progress = (got, total) => {
         if (starting)
             return Loading.step('disks', { got, total });
@@ -235,12 +313,24 @@ const FBSY = -47, NSV = -35;
 const isCD = (name) => /\.(iso|toast|cdr)$/i.test(name)
     || library.some((d) => fileName(d.url) === name && (d.tags || []).includes('cd'));
 
+// A disk's System Folder additions (web_main.cpp) go in only on a System
+// its record lists: the library System's own ("systems" of a boot disk is
+// its version). An 8.6 disk's libraries in 7.6.1's System Folder, or a
+// disk or System not from the library: none.
+function additionsFor(name) {
+    const rec = (n) => library.find((d) => fileName(d.url) === n);
+    const sys = rec(systemSelect.value), disk = rec(name);
+    const version = sys && (sys.systems || []).length === 1 && sys.systems[0];
+    return !!(version && disk && (disk.systems || []).includes(version));
+}
+
 async function putIn(file) {
     if (!live())
         return start();
     inserting.add(file.name);
     showDisks();
-    const r = await window.executor.request('insert', { file, cd: isCD(file.name), ids: { ...imageIds } });
+    const r = await window.executor.request('insert', { file, cd: isCD(file.name), ids: { ...imageIds },
+                                                         additions: additionsFor(file.name) });
     inserting.delete(file.name);
     if (r !== 0)
         status.textContent = `${file.name}: not mounted (${r === NSV ? 'no Mac volume on it' : r === -1 ? 'cannot open it'
@@ -589,27 +679,69 @@ document.addEventListener('visibilitychange', () => {
 
 // The System to run on: Executor's own (''), a disk image's (its name), or
 // a library System disk's (its url: put in, then that), remembered across
-// visits. The choice is in the Disks panel (disks.js).
+// visits (machine.system: the image's name). Chosen in the Disks panel
+// (disks.js) or Settings > Machine; the library System disk the last
+// choice put in comes out of disks.mounted when the choice changes.
+const systemDisks = () => library.filter((d) => (d.tags || []).includes('system'));
+const isSystemDisk = (u) => systemDisks().some((d) => href(d.url) === href(u));
+// The library System disk a file NAME came from (its url), if it did.
+const systemUrlOf = (name) => {
+    const u = name && fetchedFrom.get(name);
+    return u && isSystemDisk(u) ? u : undefined;
+};
+let lastSystem, lastSystemUrl;      // the System as last chosen: its name, its library disk's url
+async function pickSystem(value) {
+    // a library System disk: by its url, or by the name of the one in already
+    const url = value.includes('/') ? value : systemUrlOf(value);
+    const d = url ? systemDisks().find((x) => href(x.url) === href(url)) : null;
+    const prev = lastSystemUrl || systemUrlOf(lastSystem === undefined ? Settings.get('machine.system') : lastSystem);
+    let mounted = picked();
+    if (prev && !(d && href(prev) === href(d.url)))
+        mounted = mounted.filter((u) => href(u) !== href(prev));
+    // (one in already, as a disk of its own, stays in after: not ours)
+    const ours = d && !mounted.some((u) => href(u) === href(d.url));
+    if (ours)
+        mounted = [...mounted, d.url];
+    lastSystem = d ? fileName(d.url) : value;
+    lastSystemUrl = ours ? d.url : (d && prev && href(prev) === href(d.url) ? prev : undefined);
+    await Settings.set({ machine: { system: lastSystem }, disks: { mounted } });
+    return d;
+}
 systemSelect.addEventListener('change', async () => {
-    const value = systemSelect.value;
-    const d = library.find((x) => x.url === value);
     generation++;
     await saveAndStop();            // (not live: the disk waits for the start)
+    const d = await pickSystem(systemSelect.value).catch(() => null);
     if (d) {
-        const mounted = picked().some((u) => href(u) === href(d.url)) ? picked() : [...picked(), d.url];
-        await Settings.set({ machine: { system: fileName(d.url) }, disks: { mounted } });
         try {
             const file = await fetchDisk(d.url);
             sessionFiles = sessionFiles.filter((f) => f.name !== file.name).concat(file);
         } catch (e) {
             status.textContent = `Cannot load ${d.url}: ${e.message}`;
         }
-    } else {
-        await Settings.set({ machine: { system: value } }).catch(() => {});
     }
     start();
 });
-Settings.provide('systems', () => [...systemSelect.options].map((o) => o.value).filter((v) => v && !v.includes('/')));
+// The Settings dialog's System choices: the panel's. A library System disk
+// not in yet by its url (chosen there, it goes in: below).
+Settings.provide('systems', () => [
+    ...shownFiles.filter((f) => IMAGE.test(f.name) && !isCD(f.name))
+        .map((f) => ({ value: f.name, label: (library.find((d) => fileName(d.url) === f.name) || {}).title || f.name })),
+    ...systemDisks().filter((d) => !shownFiles.some((f) => f.name === fileName(d.url)))
+        .map((d) => (picked().some((u) => href(u) === href(d.url))
+            ? { value: fileName(d.url), label: d.title }                   // (in, on its way)
+            : { value: d.url, label: `${d.title} (from the library)` })),
+]);
+// One source of truth: the machine.system setting. The panel's choice
+// writes it (pickSystem); one from elsewhere (the Settings dialog) goes
+// through pickSystem too (a library disk by url: put in, the name kept;
+// the last System's library disk out), and shows in the panel.
+Settings.on('machine.system', (v) => {
+    if (lastSystem === undefined && !(v || '').includes('/'))
+        lastSystem = v || '';           // (the saved one, as the page loads)
+    else if (v !== lastSystem)
+        pickSystem(v || '').catch(() => {});
+    showSystems(shownFiles);
+});
 
 // Fat applications' PowerPC code (mac-phoenix's --executor-ppc), remembered.
 const ppcBox = document.getElementById('ppc');
@@ -625,8 +757,10 @@ function showSystems(files) {
     systemSelect.replaceChildren(new Option("Executor's own", ''),
         ...files.filter((f) => IMAGE.test(f.name) && !isCD(f.name)).map((f) => new Option(title(f.name) || f.name, f.name)),
         ...offered.map((d) => new Option(`${d.title} (from the library)`, d.url)));
-    systemSelect.value = [...systemSelect.options].some((o) => o.value === want) ? want : '';
+    const opt = [...systemSelect.options].find((o) => o.value === want || (o.value.includes('/') && fileName(o.value) === want));
+    systemSelect.value = opt ? opt.value : '';
     showDisks();
+    Settings.choicesChanged();      // (the Settings dialog's list, if open)
 }
 
 // ---- the server: tools/standalone (api/me's mode), the tab's store ----
@@ -733,6 +867,7 @@ document.getElementById('take').addEventListener('click', async () => {
 // goes on (what the disks changed is kept as before).
 function executorStopped(reason) {
     window.executor.stopped = reason;
+    CpuMeter.reset();
     console.log(`[web] Executor stopped: ${reason}`);
     autoShot(`stopped: ${reason}`);
     Loading.end();
@@ -816,6 +951,7 @@ async function start() {
         status.removeAttribute('role');
     }
     status.textContent = '';
+    CpuMeter.reset();
     Loading.begin();
     box.replaceChildren(Loading.el);
 
@@ -851,6 +987,7 @@ async function start() {
                          volumeKey: volumeKey(files), relay: standalone,
                          standalone,
                          ids: imageIds, cds: files.map((f) => f.name).filter(isCD), log: Log.session,
+                         additions: files.map((f) => f.name).filter(additionsFor),
                          ram: Settings.get('machine.ram_mb'), depth: Settings.get('machine.depth'),
                          logtraps: Settings.get('advanced.logtraps'),
                          nesting: String(Settings.get('advanced.logtraps_nesting')),
@@ -868,6 +1005,9 @@ async function start() {
                 if (!status.textContent)
                     status.textContent = 'Executor';
             }
+        } else if (m.type === 'cpu') {
+            if (window.executor.frames > 0 && !window.executor.stopped)
+                CpuMeter.add(m.busy, m.memory);
         } else if (m.type === 'images') {
             const before = JSON.stringify(imageState);
             for (const i of m.images)
@@ -889,6 +1029,14 @@ async function start() {
         } else if (m.type === 'notice') {
             if (!claimLost && !window.executor.stopped)
                 status.textContent = m.text;
+        } else if (m.type === 'additions') {
+            // What a disk's applications put in the System Folder, copied
+            // in (web_main.cpp); put in while running, some of it (fonts,
+            // startup code) is in use only after a restart.
+            window.executor.additions[m.name] = m;
+            if (m.live && m.restart.length && !claimLost && !window.executor.stopped)
+                status.textContent = `${m.name}: ${m.copied} files added to the System Folder; `
+                    + `restart to use ${m.restart.join(', ')}`;
         } else if (m.type === 'ejected') {
             ejected(m.name);
         } else if (m.type === 'restart') {
