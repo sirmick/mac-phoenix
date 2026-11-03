@@ -640,6 +640,24 @@
 # ####
 
 - function:
+    name: _AE_hdlr_0830
+    return: OSErr
+    args:
+      - type: AE_hdlr_table_h
+      - type: int32_t
+      - type: AE_hdlr_selector_t*
+      - type: AE_hdlr_t*
+    comment: |
+      Private/undocumented entry point beside _AE_hdlr_install (0x0831):
+      a lookup, its arguments as _AE_hdlr_lookup's; HyperCard 2.4.1 calls
+      it right after _AE_hdlr_table_alloc.
+    dispatcher: Pack8
+    selector: 0x0830
+    executor: C_
+
+# ####
+
+- function:
     name: _AE_hdlr_install
     return: OSErr
     args:

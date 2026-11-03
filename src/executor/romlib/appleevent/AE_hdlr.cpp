@@ -252,6 +252,28 @@ OSErr Executor::C__AE_hdlr_lookup(AE_hdlr_table_h table, int32_t unknown_1,
     AE_RETURN_ERROR(noErr);
 }
 
+/* MacPhoenix: Pack8 $0830, beside install ($0831), delete ($0832) and
+   lookup ($0833): a lookup, its key and value buffers laid out as
+   _AE_hdlr_lookup's. HyperCard 2.4.1 calls it on its fresh tables, an
+   event handler's key ('aevt' 'oapp') and a property's ('pnam' '????'),
+   and goes on when they aren't there; unknown before, it stopped the
+   session ("Unknown selector 0x830 for trap Pack8") and HyperCard never
+   came up. */
+OSErr Executor::C__AE_hdlr_0830(AE_hdlr_table_h table, int32_t unknown_1,
+                                AE_hdlr_selector_t *selector, AE_hdlr_t *hdlr_return)
+{
+    AE_hdlr_table_elt_t *elt;
+    (void)unknown_1;
+    if(!table || !selector)
+        AE_RETURN_ERROR(paramErr);
+    OSErr err = hdlr_table_elt(table, selector, nullptr, false, &elt);
+    if(err != noErr)
+        AE_RETURN_ERROR(err);
+    if(hdlr_return)
+        memcpy(hdlr_return, &elt->hdlr, value_size(table));
+    AE_RETURN_ERROR(noErr);
+}
+
 OSErr Executor::C__AE_hdlr_install(AE_hdlr_table_h table, int32_t unknown_1,
                                    AE_hdlr_selector_t *selector,
                                    AE_hdlr_t *hdlr)

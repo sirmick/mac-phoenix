@@ -75,3 +75,19 @@ TEST(AEHdlr, InstallHonoursReservedCapacity)
 
     DisposeHandle((Handle)(AE_hdlr_table_h)table);
 }
+
+/* Pack8 $0830 (a lookup beside install $0831 and lookup $0833): HyperCard
+   2.4.1 calls it on its fresh tables; unknown, it stopped the session. */
+TEST(AEHdlr, Selector0830LooksUp)
+{
+    GUEST<AE_hdlr_table_h> table = nullptr;
+    ASSERT_EQ(noErr, C__AE_hdlr_table_alloc(175, 0x80008, 0, 0, &table));
+    AE_hdlr_selector_t oapp = { "aevt"_4, "oapp"_4 };
+    AE_hdlr_t got = {}, put = {};
+    put.refcon = 42;
+    EXPECT_EQ(errAEHandlerNotFound, C__AE_hdlr_0830((AE_hdlr_table_h)table, 0, &oapp, &got));
+    EXPECT_EQ(noErr, C__AE_hdlr_install((AE_hdlr_table_h)table, 0, &oapp, &put));
+    EXPECT_EQ(noErr, C__AE_hdlr_0830((AE_hdlr_table_h)table, 0, &oapp, &got));
+    EXPECT_EQ(42, (int32_t)got.refcon);
+    DisposeHandle((Handle)(AE_hdlr_table_h)table);
+}
