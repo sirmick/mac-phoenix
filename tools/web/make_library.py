@@ -28,6 +28,8 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE.parent / "diskaudit"))
+import tidy  # noqa: E402  (disk_audit.py's checks put right)
 CDS = HERE.parent.parent / "provisioning" / "cds.json"
 COVER_PX = 480
 
@@ -189,6 +191,9 @@ def make(d, images, out):
         for src, folders in d["take"]:
             cmd += ["--take", str(images / src), *folders]
     subprocess.run(cmd, check=True)
+    if "boot" not in d:                 # make_boot_disk.py tidies its own
+        done = tidy.tidy(str(tmp))
+        print(f"{d['name']}: {done['icons']} icons placed in {done['folders']} folders")
     os.replace(tmp, img)
 
 

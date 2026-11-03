@@ -2193,7 +2193,20 @@ OSStatus Executor::C_DrawThemeTab(const Rect *inRect, ThemeTabStyle inStyle, The
         SInt16 depth;
         Boolean color;
         portDepth(&depth, &color);
-        labelProc(inRect, inStyle, inDirection, depth, color, userData);
+        /* the title's room between the sloped sides, the tab's 21 rows: 8.6's
+           tab CDEF makes a tab its title's width + 24 and draws the title at
+           the left of this rect, centred down it (ColorSync's tabs, as on
+           the G3) */
+        Rect title = *inRect;
+        if(inDirection == kThemeTabNorth || inDirection == kThemeTabSouth)
+            InsetRect(&title, 12, 0);
+        else
+            InsetRect(&title, 0, 12);
+        if(inDirection == kThemeTabNorth)
+            title.bottom = std::min<int>(title.bottom, title.top + tabRows);
+        else if(inDirection == kThemeTabSouth)
+            title.top = std::max<int>(title.top, title.bottom - tabRows);
+        labelProc(&title, inStyle, inDirection, depth, color, userData);
     }
     return noErr;
 }
