@@ -1,4 +1,4 @@
-# probe 74e38fcbea59498001e4f88bf590c0993548306391bcf6df19893b52dd242153
+# probe a697cf51ef7e18cb2249bf4e3875215453d378fa45e238390e83d3346b157e6d
 == received
 received.install: 0
 received.process: 0
@@ -262,6 +262,8 @@ coerce.obj.abcd: -1700 type null
 coerce.reco.abcd: 0 type abcd
 coerce.abcd.reco: 0 type reco
 coerce.reco.list: 0 type list
+coerce.TEXT.list: 0 type list items 1
+coerce.TEXT.list.1: 0 TEXT 3 abc
 coerce.long.reco: -1700 type null
 coerce.null.obj : -1700 type null size -1
 coerce.null.null: -1700 type null size -1
@@ -282,7 +284,7 @@ coerce.vol.alis.fss.same: yes
 == layout
 layout.new: size 90 params at 90 attributes 0 parameters 0
 layout.new.end: ;;;;
-layout.new.bytes: 00 00 00 00 00 00 00 00 00 00 00 5a 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 54 65 73 74 4c 61 79 31 00 01 02 80 70 73
+layout.new.bytes: 00 00 00 00 00 00 00 00 00 00 00 5a 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 54 65 73 74 4c 61 79 31 00 01 02 7d 70 73
 layout.appended: 0
 layout.appended.value: TxtW
 layout.cleared44: 0

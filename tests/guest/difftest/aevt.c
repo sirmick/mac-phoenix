@@ -667,6 +667,30 @@ int main(void)
             out("reco.list", "%d type %.4s", err, (char *)&other.descriptorType);
             if(err == noErr)
                 AEDisposeDesc(&other);
+            /* a plain descriptor asked for as a list (MacPerl's 'dosc'
+               handler takes its script so) */
+            {
+                AEDesc text, l;
+                long cnt = -1;
+                AECreateDesc(typeChar, "abc", 3, &text);
+                l.descriptorType = typeNull;
+                l.dataHandle = NULL;
+                err = AECoerceDesc(&text, typeAEList, &l);
+                if(err == noErr)
+                    AECountItems(&l, &cnt);
+                out("TEXT.list", "%d type %.4s items %ld", err, (char *)&l.descriptorType, cnt);
+                if(err == noErr)
+                {
+                    DescType t;
+                    Size sz;
+                    AEKeyword kw;
+                    char buf[8] = {0};
+                    err = AEGetNthPtr(&l, 1, typeChar, &kw, &t, buf, sizeof buf, &sz);
+                    out("TEXT.list.1", "%d %.4s %ld %.3s", err, (char *)&t, (long)sz, buf);
+                    AEDisposeDesc(&l);
+                }
+                AEDisposeDesc(&text);
+            }
             AECreateDesc(typeLongInteger, &n, sizeof n, &num);
             back.descriptorType = typeNull;
             err = AECoerceDesc(&num, typeAERecord, &back);

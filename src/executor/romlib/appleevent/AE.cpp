@@ -653,18 +653,76 @@ static bool coerce_single_item_list(AEDesc *desc, DescType result_type, AEDesc *
    to 'obj ', and the Object Support Library coerces it back to read its
    keys; BBEdit Lite 6.1's 'save' handler failed with -1700). Not between
    two other types ('obj ' to 'abcd'), nor from data that is no record. */
+/* MacPhoenix: any other descriptor asked for as a list is a list of it
+   (aevt coerce.TEXT.list; MacPerl's 'dosc' handler takes its script so). */
+static bool coerce_to_list(AEDesc *desc, DescType result_type, AEDesc *desc_out)
+{
+    if(result_type != typeAEList || DESC_TYPE(desc) == typeAEList || DESC_TYPE(desc) == typeNull)
+        return false;
+    if(AECreateList(nullptr, 0, false, desc_out) != noErr)
+        return false;
+    if(AEPutDesc(desc_out, 0, desc) != noErr)
+    {
+        AEDisposeDesc(desc_out);
+        return false;
+    }
+    return true;
+}
+
+/* A record's items as they are inside another descriptor (a record
+   parameter of another type, 'obj ', taken out of an event): the count,
+   a long, then key, type, size and data (padded to even) each, to the
+   end: Executor's own record without its first 16 header bytes. */
+static bool nested_record_p(Handle h)
+{
+    Size size = GetHandleSize(h);
+    if(size < 8)
+        return false;
+    const uint8_t *p = (const uint8_t *)*h;
+    auto be32 = [](const uint8_t *q) { return (uint32_t)q[0] << 24 | q[1] << 16 | q[2] << 8 | q[3]; };
+    uint32_t count = be32(p);
+    Size at = 8;
+    for(uint32_t i = 0; i < count; i++)
+    {
+        if(at + 12 > size)
+            return false;
+        uint32_t n = be32(p + at + 8);
+        at += 12 + n + (n & 1);
+    }
+    return at == size;
+}
+
 static bool coerce_record(AEDesc *desc, DescType result_type, AEDesc *desc_out)
 {
     Handle h = DESC_DATA(desc);
     if(!h)
         return false;
-    if(DESC_TYPE(desc) != typeAERecord
-       && !(result_type == typeAERecord && GetHandleSize(h) >= (Size)sizeof(list_header_t)
-            && ATTRIBUTE_COUNT(h) == typeAERecord))
+    constexpr Size prefix = offsetof(list_header_t, param_count);
+    bool header_p = GetHandleSize(h) >= (Size)sizeof(list_header_t) && ATTRIBUTE_COUNT(h) == typeAERecord;
+    if(DESC_TYPE(desc) != typeAERecord && !(result_type == typeAERecord && (header_p || nested_record_p(h))))
         return false;
-    if(AEDuplicateDesc(desc, desc_out) != noErr)
+    if(header_p || DESC_TYPE(desc) == typeAERecord)
+    {
+        if(AEDuplicateDesc(desc, desc_out) != noErr)
+            return false;
+        desc_out->descriptorType = result_type;
+        return true;
+    }
+    /* the nested layout given its header (AECreateList's) */
+    list_header_t header;
+    memset(&header, 0, sizeof header);
+    header.param_offset = sizeof header;
+    header.attribute_count = typeAERecord;
+    if(AECreateDesc(typeAERecord, &header, prefix, desc_out) != noErr)
         return false;
-    desc_out->descriptorType = result_type;
+    Size n = GetHandleSize(h);
+    SetHandleSize(DESC_DATA(desc_out), prefix + n);
+    if(LM(MemErr) != noErr)
+    {
+        AEDisposeDesc(desc_out);
+        return false;
+    }
+    memcpy(*DESC_DATA(desc_out) + prefix, *h, n);
     return true;
 }
 
@@ -749,7 +807,8 @@ OSErr Executor::C_AECoerceDesc(AEDesc *desc, DescType result_type,
             if(coerce_integer(desc, result_type, desc_out)
                || coerce_alias(desc, result_type, desc_out)
                || coerce_single_item_list(desc, result_type, desc_out)
-               || coerce_record(desc, result_type, desc_out))
+               || coerce_record(desc, result_type, desc_out)
+               || coerce_to_list(desc, result_type, desc_out))
                 AE_RETURN_ERROR(noErr);
             goto fail;
         }
