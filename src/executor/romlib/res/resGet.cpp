@@ -222,10 +222,6 @@ pseudo_get_rom_resource(ResType typ, INTEGER id)
     return retval;
 }
 
-#if defined(ULTIMA_III_HACK)
-bool Executor::ROMlib_ultima_iii_hack;
-#endif
-
 Handle Executor::C_GetResource(ResType typ, INTEGER id)
 {
     resmaphand map;
@@ -284,12 +280,6 @@ Handle Executor::C_GetResource(ResType typ, INTEGER id)
         else
             retval = 0;
     }
-#if defined(ULTIMA_III_HACK)
-    if(ROMlib_ultima_iii_hack && typ == "PREF"_4 && retval)
-    {
-        *((char *)*retval + 1) = 0; /* turn off Music prefs */
-    }
-#endif
     return retval;
 }
 

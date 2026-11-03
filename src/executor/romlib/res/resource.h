@@ -12,11 +12,6 @@
 
 namespace Executor
 {
-#define ULTIMA_III_HACK
-#if defined(ULTIMA_III_HACK)
-extern bool ROMlib_ultima_iii_hack;
-#endif
-
 extern bool system_file_version_skew_p;
 
 struct reshead

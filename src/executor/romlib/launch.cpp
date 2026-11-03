@@ -345,10 +345,6 @@ static void launchchain(ConstStringPtr fName, INTEGER vRefNum, Boolean resetmemo
     }
 #endif /* defined(LEMMINGSHACK) */
 
-#if defined(ULTIMA_III_HACK)
-    ROMlib_ultima_iii_hack = (finfo.fdCreator == "Ult3"_4);
-#endif
-
     h = GetResource("vers"_4, 2);
     if(!h)
         h = GetResource("vers"_4, 1);

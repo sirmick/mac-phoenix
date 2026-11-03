@@ -12,6 +12,8 @@
 #include <TextUtils.h>
 #endif
 
+#include <string.h>
+
 class ResourceTest : public testing::Test
 {
 public:
@@ -74,6 +76,29 @@ TEST_F(ResourceTest, GetResourceNotFound)
     h = GetResource('QUUX', 128);
     EXPECT_EQ(nullptr, h);
     EXPECT_EQ(noErr, ResError());
+}
+
+/* What GetResource finds is the resource's data as stored, whatever its
+   type and ID (Executor once special-cased some for single programs). */
+static void expectStoredAsIs(ResourceTest &t, ResType type, short id)
+{
+    const unsigned char bytes[4] = { 0x01, 0x01, 0x02, 0x04 };
+    Handle h = NewHandle(sizeof bytes);
+    ASSERT_NE(nullptr, h);
+    memcpy(*h, bytes, sizeof bytes);
+    AddResource(h, type, id, PSTR(""));
+    ASSERT_EQ(noErr, ResError());
+    t.reopen();
+    Handle h2 = GetResource(type, id);
+    ASSERT_NE(nullptr, h2);
+    ASSERT_EQ((long)sizeof bytes, GetHandleSize(h2));
+    EXPECT_EQ(0, memcmp(*h2, bytes, sizeof bytes));
+}
+
+// Ultima III's preferences (upstream cleared their music byte)
+TEST_F(ResourceTest, PrefAsStored)
+{
+    expectStoredAsIs(*this, 'PREF', 400);
 }
 
 TEST_F(ResourceTest, AddResource)
