@@ -24,24 +24,21 @@ static Boolean EquivRect(const Rect *rp1, const Rect *rp2)
     return rp1->bottom - rp1->top == rp2->bottom - rp2->top && rp1->right - rp1->left == rp2->right - rp2->left;
 }
 
-#define RANDSEED ((ULONGINT)randSeed)
+/* MacPhoenix: as the Quadra's ROM answers (a probe, 14 seeds x 4 calls,
+   tests/Random.cpp): a seed with its top bit set counts as its low 31
+   bits plus one, then seed * 16807 mod 2^31-1, the low word returned
+   (-32768 as 0). Was the same in int32 arithmetic whose overflow the
+   compiler doesn't wrap: half the seeds gave other numbers, and Photoshop
+   4.0, which decodes its personalization with Random, said it was
+   invalid. */
 INTEGER Executor::C_Random()
 {
-    INTEGER retval;
-
-        // FIXME: what is going on here?
-    LM(RndSeed) = TickCount(); /* what better? */
-
-    int32_t randSeed = qdGlobals().randSeed;
-    if(randSeed >= 0x80000000)
-        randSeed = (randSeed & 0x7FFFFFFF) + 1;
-    randSeed = (randSeed * 16807 + ((((randSeed >> 14) * 16807) + (((randSeed & ((1 << 14) - 1)) * 16807) >> 14))
-                                        >> 17))
-                   & 0x7FFFFFFF;
-    if(randSeed == 0x7FFFFFFF)
-        randSeed = 0;
-    qdGlobals().randSeed = randSeed;
-    retval = randSeed;
+    uint32_t seed = (uint32_t)qdGlobals().randSeed;
+    if(seed & 0x80000000)
+        seed = (seed & 0x7FFFFFFF) + 1;
+    seed = (uint32_t)((uint64_t)seed * 16807 % 0x7FFFFFFF);
+    qdGlobals().randSeed = seed;
+    INTEGER retval = (INTEGER)(uint16_t)seed;
     return retval == -32768 ? 0 : retval;
 }
 
