@@ -1,7 +1,7 @@
 # wash-plan: written by Wash as the plan changes.
 # Edit it only between workspaces; plan_set {"from": "<this file>"} loads it.
 
-revision = 172
+revision = 176
 
 [[node]]
   id = "cuts"
@@ -662,8 +662,8 @@ revision = 172
   emoji = "🏷️"
   template = "package"
   body = "Owner 2026-11-03: \"add meta data on images in the library, so there is some info about what's on the disks.\" Today each <disk>.img.json has title/tags/one-line note/launch (tools/web/make_library.py). Add a per-disk contents list: per item name, version (vers 1), publisher/year, kind (app/game/utility/docs), arch (68k/PPC/fat from cfrg/CODE), size, short description, which Systems it's for, serial/first-run notes; CDs too (top-level folders). Generated from the image where possible + hand descriptions in provisioning (bake/image definitions). Shown in the tab's Library table (expandable row/details) and the Go server listing. Tests + docs."
-  state = "active"
-  revision = 163
+  state = "done"
+  revision = 176
 
 [[node]]
   id = "cpu-meter"
