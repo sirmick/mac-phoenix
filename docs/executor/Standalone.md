@@ -172,6 +172,8 @@ the reload claims it again. Loopback is nothing special.
     GET/PUT/DELETE volumes/KEY    { version, manifest }
     GET    volumes/KEY/bundle     the volume and every object it names, one stream
                                   (gzip for a browser that takes it; below)
+    POST   volumes/KEY/bundle     { have: [sha] }: the same, less the objects the
+                                  browser's cache has
     POST   objects/missing        { shas } -> { missing }
     POST   objects/bundle         objects up, a bundle (Content-Encoding: gzip or none)
                                   -> { stored }
@@ -229,6 +231,19 @@ Sec-Fetch-Site). In more detail:
   saves with `objects/missing`, then bundles of about 8 MB
   (CompressionStream gzip), `PUT objects/SHA` six at once on a server
   without them, then the manifest.
+- **The browser caches, never the store** (`overlay.js` `IdbCache`:
+  IndexedDB, bytes by key and `{ size, used }` for the eviction, the least
+  recently used out past a cap). `executor-objects` (512 MB): the volume's
+  objects by sha, from the bundles and the saves; a start POSTs the
+  shas it has, the server's manifest decides what the volume is, each
+  cached object read back is checked against its sha (a bad one is
+  dropped and fetched). `executor-chunks` (256 MB): disk image chunks
+  (256 KB) by the image's ETag (its content id here) and number; Executor
+  reads them synchronously, so an image's most recently read ones (8 MB
+  at most: what the last start read) go into its memory before Executor
+  starts, the ones fetched and read written back every 2 s. Nothing goes
+  to the server from either; no IndexedDB, an error, or a deleted
+  database: the network, said only in the log.
 - **Uploads** (`uploads.go`): a disk image the tab adds (main.js
   `uploadImage`) is `POST /api/uploads/NAME` with the image as the body
   (an image's extension, no path; at most `disks.max_image_mb`, written
@@ -269,6 +284,21 @@ library disks mounted; the volume a saved 7.6.1 one of 1010 files, 45 MB
 | the same with the owner's saved 8.6 volume (108 files, 16 MB) | 24.9 s | 21.3 s |
 | first save of a fresh 8.6 System (363 files, 31 MB), loopback | 1.8 s (251 PUTs) | 1.5 s (4 bundles) |
 | the same at 20 Mbit/s up | 19.3 s | 7.5 s |
+
+Cold and warm (`--warm`: the tab loaded once to settle the volume, then
+with the browser's caches deleted, then twice with them; the same
+server state, 1378 files / 78 MB, nine disks):
+
+| | cold | warm |
+|---|---|---|
+| the volume restored, loopback | 0.66 s | 0.31 s (every object from the cache) |
+| the volume restored, 50 Mbit/s | 8.1 s | 0.36 s |
+| the Finder, loopback | 2.7 s | 2.3–2.5 s |
+| the Finder, 50 Mbit/s | 12.1 s | 2.9 s (0–3 Range requests, was 14) |
+
+The objects cache alone took the 50 Mbit/s warm start to 4.6–6.5 s;
+the chunk cache the rest (the disks' catalogs and the System Folder
+additions' reads).
 
 What else a start costs at 50 Mbit/s (the trace of the run above):
 the module 2.2 s (6.9 MB gzip; Cache Storage after the first visit);
@@ -313,7 +343,9 @@ and Reload; another browser first after a restart; screenshots in
 `executor.web.standalone` (a change survives a reload; a second tab
 watches, then takes control), `volume` (`tab_volume.mjs`: 150 files saved
 in bundles, no PUT; restored from the one bundle request, every file the
-same; through `objects/SHA` and PUTs when the bundle routes answer 404;
+same; warm, every object from the browser's cache and a disk's chunks
+too; two cached objects spoiled, the cache deleted: from the server, no
+notice; through `objects/SHA` and PUTs when the bundle routes answer 404;
 from a bundle cut in half), `server_lazy` (a large disk read by Range),
 `settings`, `insecure` (plain http to a LAN name), `relay` (MacTCP and
 Open Transport through `/relay`), and the `site` cells (WebSite.md).

@@ -188,6 +188,41 @@ async function eachLimited(items, width, fn) {
     await Promise.all(Array.from({ length: Math.min(width, items.length) }, run));
 }
 
+// This browser's copies of the volume's objects (overlay.js: IdbCache,
+// "executor-objects", by sha), so a start fetches only what changed.
+// Never the store: the server's manifest says what the volume is, nothing
+// goes to the server from here, and an object read back is checked
+// against its sha (dropped when it isn't: the server's then).
+const ObjectCache = {
+    db: new IdbCache('executor-objects', 512 << 20),
+
+    async keys() {
+        return (await this.db.metas()).map(([k]) => k);
+    },
+
+    // sha -> bytes of those it has, each checked; marked used.
+    async get(shas) {
+        const got = await this.db.get(shas);
+        const bad = [];
+        await Promise.all([...got].map(async ([sha, b]) => {
+            if (await Sync.sha256(b) !== sha) {
+                got.delete(sha);
+                bad.push(sha);
+            }
+        }));
+        if (bad.length) {
+            console.log(`[web] this browser's cache of Executor's disk: ${bad.length} objects not what they should be; from the server`);
+            this.db.drop(bad);
+        }
+        this.db.touch([...got.keys()], new Map([...got].map(([k, b]) => [k, b.length])));
+        return got;
+    },
+
+    put(entries) {
+        return this.db.put(entries);
+    },
+};
+
 // ---- standalone (the server says so: main.js): the server is the only
 // store. No OPFS: an overlay is in memory (overlay.js), its blocks come
 // from the server before Executor mounts the image and go back about
@@ -251,15 +286,18 @@ const Store = {
 
     // The volume's manifest (null: nothing kept), its files written into FS
     // (not before ready: the module's runtime; what comes before waits).
-    // One request, the bundle, its objects written as they arrive; a
-    // server without bundles, or one cut short: the files still missing
-    // by objects/SHA, a few at once.
+    // One request, the bundle (its objects written as they arrive), less
+    // the objects this browser's cache has (ObjectCache; read meanwhile,
+    // checked against their sha); a server without bundles, or one cut
+    // short, or a cached object gone bad: the files still missing by
+    // objects/SHA, a few at once. What came from the server goes into the
+    // cache afterwards.
     async volumeDown(key, ready = Promise.resolve()) {
         this.volume = { key, version: 0, digest: null };
         const t0 = performance.now();
         let isReady = false;
         ready.then(() => { isReady = true; });
-        const waiting = [];
+        const waiting = [], fetched = [];
         let manifest = null, bySha = null, bundled = 0;
         const write = (sha, bytes) => {
             for (const path of bySha.get(sha) || []) {
@@ -278,7 +316,10 @@ const Store = {
             for (const [sha, bytes] of waiting.splice(0))
                 write(sha, bytes);
         };
-        const res = await fetch(`api/sync/volumes/${key}/bundle`, { cache: 'no-store', credentials: 'same-origin' });
+        const have = await ObjectCache.keys();
+        const res = await fetch(`api/sync/volumes/${key}/bundle`, {
+            method: 'POST', cache: 'no-store', credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ have }) });
         let r = null;
         if (res.ok && res.body) {
             try {
@@ -305,10 +346,13 @@ const Store = {
         bySha = new Map();
         for (const [path, f] of Object.entries(manifest.files))
             bySha.set(f.sha, [...(bySha.get(f.sha) || []), path]);
+        // (a server without bundles sent none of them: those too, from the cache)
+        const cached = ObjectCache.get(have.filter((sha) => bySha.has(sha)));
         if (r) {
             try {
                 for (let o; (o = await r.record());) {
                     bundled++;
+                    fetched.push([o.sha, o.bytes]);
                     if (isReady) {
                         begin();
                         write(o.sha, o.bytes);
@@ -324,14 +368,21 @@ const Store = {
         }
         await ready;
         begin();
+        const fromCache = await cached;
+        for (const [sha, bytes] of fromCache)
+            write(sha, bytes);
         const rest = [...bySha.keys()];
         await eachLimited(rest, OBJECT_REQUESTS, async (sha) => {
             const res = await Sync.request('GET', `objects/${sha}`, undefined, { raw: true });
-            write(sha, new Uint8Array(await res.arrayBuffer()));
+            const bytes = new Uint8Array(await res.arrayBuffer());
+            fetched.push([sha, bytes]);
+            write(sha, bytes);
         });
         const size = Object.values(manifest.files).reduce((n, f) => n + f.size, 0);
         console.log(`[web] Executor's disk: ${Object.keys(manifest.files).length} files, ${(size / 1e6).toFixed(1)} MB in `
-                    + `${Math.round(performance.now() - t0)} ms (${bundled} objects bundled, ${rest.length} one by one)`);
+                    + `${Math.round(performance.now() - t0)} ms (${fromCache.size} objects from this browser's cache, `
+                    + `${bundled} bundled, ${rest.length} one by one)`);
+        ObjectCache.put(fetched);               // (not waited for)
         this.volume.digest = await Sync.digest(manifest);
         return manifest;
     },
@@ -386,6 +437,8 @@ const Store = {
                 at -= batch.length;
             } else if (!res.ok)
                 throw new Error(`POST objects/bundle: ${res.status}`);
+            else
+                ObjectCache.put(batch);         // (the next start has them; not waited for)
         }
         await eachLimited(missing.slice(at), OBJECT_REQUESTS,
                           (sha) => Sync.request('PUT', `objects/${sha}`, read(sha)));

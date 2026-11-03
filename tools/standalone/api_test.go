@@ -463,6 +463,16 @@ func TestAPIVolumeBundle(t *testing.T) {
 	if _, objs, ended := readBundle(plain, true); !ended || !bytes.Equal(objs[shas[1]], blobs[1]) {
 		t.Errorf("gzip: decoded %d bytes", len(plain))
 	}
+	// POSTed with what the browser has: only the rest (bad shas ignored).
+	res, data = l.req("POST", "/api/sync/volumes/own/bundle", map[string]any{"have": []any{shas[1], "nonsense", 5}},
+		"Accept-Encoding: identity")
+	if vol, objs, ended := readBundle(data, true); res.StatusCode != 200 || !ended || vol["version"] != version ||
+		len(objs) != 2 || objs[shas[1]] != nil {
+		t.Errorf("have: %d %v %d", res.StatusCode, ended, len(objs))
+	}
+	if code := l.status("POST", "/api/sync/volumes/own/bundle", map[string]any{"have": "x"}); code != 400 {
+		t.Errorf("have not a list: %d", code)
+	}
 	// None kept: the volume's null, then the end.
 	_, data = l.req("GET", "/api/sync/volumes/other/bundle", nil, "Accept-Encoding: identity")
 	if vol, objs, ended := readBundle(data, true); vol["manifest"] != nil || vol["version"] != 0.0 || len(objs) != 0 || !ended {
