@@ -626,8 +626,11 @@ OSErr Executor::OpenWD(INTEGER vref, LONGINT dirid, LONGINT procid,
     wpb.ioWDDirID = dirid;
     wpb.ioWDProcID = procid;
     retval = PBOpenWD(&wpb, false);
+    /* PBOpenWD answers the working directory in ioVRefNum (IMIV-158);
+       ioWDVRefNum is GetWDInfo's. Illustrator 8 opens its Startup file
+       through the one it gets here. */
     if(retval == noErr)
-        *wdrefp = wpb.ioWDVRefNum;
+        *wdrefp = wpb.ioVRefNum;
     return retval;
 }
 
