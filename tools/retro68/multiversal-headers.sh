@@ -34,7 +34,7 @@ mkdir -p "$DIR/include"
 for f in "$SYSINC"/*; do
     case "$(readlink "$f")" in
         *Interfaces*/CIncludes/*|*universal/CIncludes/*|*multiversal/CIncludes/*) ;;
-        *) ln -s "$f" "$DIR/include/" ;;
+        *) ln -sf "$f" "$DIR/include/" ;;
     esac
 done
 ln -sf "$DIR/out/CIncludes/"* "$DIR/include/"
