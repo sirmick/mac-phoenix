@@ -47,6 +47,7 @@ void ROMlib_wheel_add(int dh, int dv);
 void ROMlib_wheel_start();
 void ROMlib_wheel_mouse(EventRecord *evt);
 bool ROMlib_wheel_button(bool *down);
+bool ROMlib_wheel_active();
 
 extern bool hle_get_event(EventRecord *evt, bool remflag);
 extern void hle_init(void);

@@ -20,6 +20,7 @@
 #include <wind/wind.h>
 #include <rsys/stdfile.h>
 #include <rsys/hook.h>
+#include <osevent/osevent.h>
 #include <base/functions.impl.h>
 
 /*
@@ -229,6 +230,25 @@ INTEGER Executor::C_TrackControl(ControlHandle c, Point p,
         /* not an indicator */
         (*c)->contrlHilite = partstart;
         CTLCALL(c, drawCntl, partstart);
+        /* MacPhoenix: a part held repeats as 8.6's does on the G3: its
+           action at once, again after the keyboard's delay until repeat
+           (KeyThresh, 24 ticks), then every 6 ticks; a click up to about
+           0.4 s is one step (each pass of this loop called it: a short
+           click on a Finder window's page part scrolled it to the end).
+           The scroll wheel's clicks (osevent/wheel.cpp) count passes. */
+        uint32_t next_action = 0;
+        bool acted = false;
+        auto action_due = [&]() {
+            uint32_t now = TickCount();
+            if(ROMlib_wheel_active() || !acted)
+                next_action = now + std::max<int>(LM(KeyThresh), 1);
+            else if((int32_t)(now - next_action) >= 0)
+                next_action = now + 6;
+            else
+                return false;
+            acted = true;
+            return true;
+        };
         /* the action callback can remove mouse up events which is why the
 	      following line is not a GetOSEvent call. */
         while(!OSEventAvail(mUpMask, &ev) && StillDown())
@@ -244,7 +264,7 @@ INTEGER Executor::C_TrackControl(ControlHandle c, Point p,
                 (*c)->contrlHilite = inpart;
                 CTLCALL(c, drawCntl, partstart);
             }
-            if(a && inpart)
+            if(a && inpart && action_due())
                 a(c, inpart);
         }
         GetOSEvent(mUpMask, &ev);
