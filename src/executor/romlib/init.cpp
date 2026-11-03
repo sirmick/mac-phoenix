@@ -105,8 +105,11 @@ unhandled_trap(syn68k_addr_t callback_address, void *arg)
        G3 (9.0.4) it leaves the upper word in A0 and the lower in D0, the
        other registers as they were (MacBench 5's 68k timing routine runs
        it between two _Microseconds). Here the count runs at 25 MHz on
-       Microseconds' clock. The others are logged and stay the F-line
-       they are here, until a program shows what it needs. */
+       Microseconds' clock, the rate the G3 states (its Name Registry's
+       timebase-frequency, a quarter of the 100 MHz bus Gestalt gives;
+       the emulated G3's own count runs slower, ~20M a second). The
+       others are logged and stay the F-line they are here, until a
+       program shows what it needs. */
     if(trap_num == 11)
     {
         syn68k_addr_t pc = READUL(EM_A7 + 2);
