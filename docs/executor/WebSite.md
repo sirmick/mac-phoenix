@@ -64,7 +64,7 @@ TMPDIR=~/storage/tmp tools/web/make_library.py /srv/executor-web/library
 | `boot-7.6.1.img` | 20 MB | Mac OS 7.6.1, `make_boot_disk.py`'s cut (APPLE-DISKS.md) | |
 | `boot-8.6.img` | 44 MB | Mac OS 8.6, the same, with SimpleText | |
 | `productivity.img` | 208 MB | AppleWorks 5.0.3, ClarisWorks 4.0v4, ClarisDraw 1.0v4, Corel WordPerfect 3.5e, Microsoft Excel 4.0, FileMaker Pro 4.0 and Aldus Persuasion 3.0 (personalised with the owner's serials); Microsoft Office 98 (PowerPC, asks for its CD key) | 7.6.1, 8.6 (Office: 8.6, PowerPC ticked) |
-| `creative.img` | 79 MB | Kid Pix 2.5, Adobe Photoshop 4.0, Adobe Illustrator 6.0 and Macromedia FreeHand 5.5 (personalised with the owner's serials) | 7.6.1, 8.6 |
+| `creative.img` | 106 MB | Kid Pix 2.5, Adobe Photoshop 4.0, Adobe Illustrator 6.0, Macromedia FreeHand 5.5 and Deneba Canvas 5.0.2 (personalised with the owner's serials) | 7.6.1, 8.6 |
 | `development.img` | 392 MB | MPW, CodeWarrior Pro 4 (IDE 3.2), THINK C 6, THINK Pascal 4.5, HyperCard 2.4.1, MacPerl 5.2, ResEdit 2.1.3, BBEdit Lite 4.1 | 7.6.1, 8.6 |
 | `games-68k.img` | 71 MB | 18 games that run on the 68k side (Lemmings, Maelstrom, SimEarth, Monkey Island, ...) | 7.6.1 |
 | `games-ppc.img` | 476 MB | fat and PowerPC games (Marathon 2, Escape Velocity, EV Nova, Ferazel's Wand, ...) | 8.6, PowerPC ticked |
