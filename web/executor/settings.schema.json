@@ -23,7 +23,7 @@
         "ram_mb": {
           "type": "integer", "minimum": 0, "maximum": 512, "default": 0, "x-scope": "page", "x-apply": "executor",
           "title": "Memory (MB)",
-          "description": "0: as the System needs (32 MB on Executor's own, 64 on Apple's).",
+          "description": "0: as the System needs (32 MB on Executor's own, 128 on Apple's). The browser holds it all: more than the System and its applications need only costs memory.",
           "x-widget": "number"
         },
         "screen": {

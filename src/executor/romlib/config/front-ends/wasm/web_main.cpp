@@ -51,6 +51,7 @@
 #include <hfs/hfs.h>
 #include <MemoryMgr.h>
 #include <base/cpu.h>
+#include <error/error.h>
 #include <ProcessMgr.h>
 #include <rsys/process.h>
 #include <SegmentLdr.h>
@@ -136,6 +137,13 @@ EM_JS(void, js_reply_pixels, (int id, int width, int height, const uint8_t *rgba
 EM_JS(void, js_ejected, (const char *path), {
     if (Module.onEjected)
         Module.onEjected(UTF8ToString(path));
+});
+
+/* A fatal error of Executor's: the page says Executor stopped (its own
+   alert is up in the guest meanwhile, waiting for Restart). */
+EM_JS(void, js_fatal, (const char *message), {
+    if (Module.onFatal)
+        Module.onFatal(UTF8ToString(message));
 });
 
 /* Time the front end spent producing frames (rendering, converting). */
@@ -508,6 +516,16 @@ void on_event_poll()
             }
             reply = "null";
         }
+        /* The page's side of Executor stopping (web/tests/tab_stopped.mjs):
+           a fatal error of its own, the wasm trapping (an access out of
+           bounds: far past any memory it has grown to) */
+        else if(op == "test-fatal")
+            gui_fatal("asked for by the page (%s)", arg.c_str());
+        else if(op == "test-trap")
+        {
+            volatile uint32_t *far = (volatile uint32_t *)(uintptr_t)0xFFFFFFF0u;
+            reply = std::to_string(*far);
+        }
         else
             reply = "{\"error\":" + json_string("unknown request " + op) + "}";
         js_reply(id, reply.c_str());
@@ -551,7 +569,7 @@ void on_yield()
  * the image whose System Folder to run on (Apple's System and Finder:
  * copied into Executor's volume, and the Finder started), fat
  * applications' PowerPC code run (as --executor-ppc), the memory (default:
- * 32 MB, 64 on Apple's System) and the depth the screen starts in (as
+ * 32 MB, 128 on Apple's System) and the depth the screen starts in (as
  * --depth; default: as the System's Macs), and an application to start
  * instead of Executor's Browser or the Finder (paths in the module's
  * filesystem). The page's settings (web/executor/settings.js) say which. */
@@ -597,6 +615,11 @@ int main(int argc, char **argv)
        to one colour of the standard palette, flat lavender). */
     c.bpp = bpp;
     c.ram_mb = 32;
+    /* On Apple's System: 128 MB, as a Quadra 650 or a G3 could have. EV
+       Nova asks for a 53 MB partition (M1.md): 64 left the Finder and it
+       no room. The browser commits it all (the wasm memory grows to
+       about twice it, up to the 4 GB a wasm32 module may have). */
+    const int apple_ram_mb = 128;
     c.data_dir = "/executor"; /* in memory; Executor makes its System Folder */
     /* Disk images are writable (CDs, --cdrom, are not): the page keeps
        their changes in an overlay (web/executor/overlay.js); the images
@@ -619,7 +642,7 @@ int main(int argc, char **argv)
             fprintf(stderr, "[web] the saved System Folder%s\n", finder ? ", starting the Finder" : "");
             if(finder && c.app.empty())
                 c.app = sys + "/Finder";
-            c.ram_mb = 64;
+            c.ram_mb = apple_ram_mb;
         }
         else if(executor_host::sideload_system(system_image, c.data_dir, &finder, &err))
         {
@@ -627,7 +650,7 @@ int main(int argc, char **argv)
                     finder ? ", starting the Finder" : "");
             if(finder && c.app.empty())
                 c.app = c.data_dir + "/System Folder/Finder";
-            c.ram_mb = 64;
+            c.ram_mb = apple_ram_mb;
         }
         else
             fprintf(stderr, "[web] no System Folder from %s: %s\n", system_image.c_str(), err.c_str());
@@ -650,6 +673,7 @@ int main(int argc, char **argv)
     };
     Executor::hostidle::set_yield_hook(on_yield);
     executor_host::set_event_poll_hook(on_event_poll);
+    executor_host::set_fatal_hook([](const char *message) { js_fatal(message); });
     fprintf(stderr, "[web] Executor %dx%d\n", c.width, c.height);
     return executor_host::run(c);
 }

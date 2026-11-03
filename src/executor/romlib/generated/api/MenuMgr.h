@@ -466,6 +466,12 @@ OSErr C_SetMenuItemHierarchicalID(MenuRef inMenu, SInt16 inItem, SInt16 inHierID
 OSErr C_GetMenuItemHierarchicalID(MenuRef inMenu, SInt16 inItem, GUEST<SInt16> *outHierID);LIBRARY_FUNCTION(AppearanceLib, GetMenuItemHierarchicalID, C_GetMenuItemHierarchicalID);
 
 
+OSErr C_SetMenuItemFontID(MenuRef inMenu, SInt16 inItem, SInt16 inFontID);LIBRARY_FUNCTION(AppearanceLib, SetMenuItemFontID, C_SetMenuItemFontID);
+
+
+OSErr C_GetMenuItemFontID(MenuRef inMenu, SInt16 inItem, GUEST<SInt16> *outFontID);LIBRARY_FUNCTION(AppearanceLib, GetMenuItemFontID, C_GetMenuItemFontID);
+
+
 OSErr C_SetMenuItemTextEncoding(MenuRef inMenu, SInt16 inItem, TextEncoding inScriptID);LIBRARY_FUNCTION(AppearanceLib, SetMenuItemTextEncoding, C_SetMenuItemTextEncoding);
 
 

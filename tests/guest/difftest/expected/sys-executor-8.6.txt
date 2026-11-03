@@ -68,3 +68,4 @@ script.roman.44	Script Manager variables: 8.6's (version 8.6, itl caches, ...) v
 gworld.1.new.state	pixPurge: 8.6 makes the pixels purgeable at NewGWorld (pixelsPurgeable); Executor not yet: LockPixels and the blitters would draw through purged pixels
 gworld.1.locked.state	pixPurge: 8.6 makes the pixels purgeable at NewGWorld (pixelsPurgeable); Executor not yet: LockPixels and the blitters would draw through purged pixels
 gworld.1.unlocked.state	pixPurge: 8.6 makes the pixels purgeable at NewGWorld (pixelsPurgeable); Executor not yet: LockPixels and the blitters would draw through purged pixels
+cfm.find.after.AppearanceLib.ToolboxUtils	Executor connects the libraries a library of its own imports only if they are its own too: ToolboxUtils is the System's fragment (cfm.cpp connect_builtin)

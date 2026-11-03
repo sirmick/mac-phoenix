@@ -7,7 +7,9 @@
 // tests use tests-7.5.5.img; it is only read: mounted read-only, its System
 // Folder copied into the module's memory). Uploads it, chooses it as the
 // System, waits for the Finder, then opens the image's disk icon with a
-// double-click and checks its window came up. Skips (77) without IMAGE.
+// double-click and checks its window came up; Executor ran it in 128 MB
+// (the default on Apple's System: EV Nova's 53 MB partition, M1.md). Skips
+// (77) without IMAGE.
 import fs from 'node:fs';
 import path from 'node:path';
 import { open, firstFrame, request, until, pickSystem } from './harness.mjs';
@@ -18,6 +20,8 @@ if (!image || !fs.existsSync(image)) {
     process.exit(77);
 }
 const { page, close } = await open(dir, { log: false });
+const lines = [];
+page.on('worker', (w) => w.on('console', (m) => lines.push(m.text())));
 let failed = 0;
 const check = (ok, what) => {
     console.log(`${ok ? 'PASS' : 'FAIL'} ${what}`);
@@ -34,6 +38,8 @@ check(await until(() => request(page, 'app').then((a) => a === 'Finder'), 60000)
 console.log(`Finder after ${((Date.now() - start) / 1000).toFixed(1)} s`);
 check(await until(() => request(page, 'windows').then((ws) => ws.some((w) => w.title === 'Desktop')), 15000),
       'its desktop window');
+const command = lines.findLast((l) => / --applzone /.test(l)) || '';     // (the restart on it)
+check(/ --applzone 124M /.test(command), `128 MB on Apple's System (${command.trim()})`);
 
 // The image's volume: the Finder's disk icons are down the right edge,
 // the startup disk ("executor", Executor's own volume) first; the image is

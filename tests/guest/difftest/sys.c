@@ -621,6 +621,20 @@ int main(void)
         static const char *const libs[] = {
             "InterfaceLib", "AppearanceLib", "WindowsLib", "MenusLib", "ControlsLib",
             "FontManager", "DialogsLib", "NoSuchLibrary" };
+        /* AppearanceLib's own imports, before and after it is loaded: is a
+           library connected through another's imports found? (BBEdit Lite
+           6.1 binds its Appearance calls at startup with kFindLib) */
+        static const char *const deps[] = { "ToolboxUtils", "CollectionsLib", "IconServicesLib" };
+        for(i = 0; i < (int)(sizeof deps / sizeof deps[0]); i++)
+        {
+            Str255 name, err;
+            ConnectionID conn;
+            Ptr main;
+            name[0] = strlen(deps[i]);
+            memcpy(name + 1, deps[i], name[0]);
+            sprintf(k, "find.%s", deps[i]);
+            out(k, "%d", GetSharedLibrary(name, kPowerPCArch, kFindLib, &conn, &main, err));
+        }
         for(i = 0; i < (int)(sizeof libs / sizeof libs[0]); i++)
         {
             Str255 name, err;
@@ -636,6 +650,16 @@ int main(void)
             e = GetSharedLibrary(name, kPowerPCArch, kReferenceCFrag, &conn, &main, err);
             out("load.AppearanceLib", "%d", e);
             sprintf(k, "find.after.%s", libs[i]);
+            out(k, "%d", GetSharedLibrary(name, kPowerPCArch, kFindLib, &conn, &main, err));
+        }
+        for(i = 0; i < (int)(sizeof deps / sizeof deps[0]); i++)
+        {
+            Str255 name, err;
+            ConnectionID conn;
+            Ptr main;
+            name[0] = strlen(deps[i]);
+            memcpy(name + 1, deps[i], name[0]);
+            sprintf(k, "find.after.AppearanceLib.%s", deps[i]);
             out(k, "%d", GetSharedLibrary(name, kPowerPCArch, kFindLib, &conn, &main, err));
         }
     }

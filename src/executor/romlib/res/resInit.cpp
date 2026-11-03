@@ -71,6 +71,52 @@ static void open_below_system(OSType folder, std::initializer_list<OSType> types
     ROMlib_resTypesChanged();
 }
 
+/* MacPhoenix: 8.5 and 8.6 keep a second resource file in the System
+   file's data fork, after its code fragments ('zsyr' 0 in the resource
+   fork: its offset and length): what 9.0 moved to "System Resources",
+   Navigation Services' strings, menus and dialogs among them (BBEdit Lite
+   6.1's Save). Its map goes directly below the System file's, read-only. */
+static void open_system_data_fork_resources()
+{
+    INTEGER saved = LM(CurMap);
+    LM(CurMap) = LM(SysMap);
+    Handle h = Get1Resource("zsyr"_4, 0);
+    LM(CurMap) = saved;
+    if(!h || GetHandleSize(h) < 8)
+        return;
+    uint32_t base = *(GUEST<uint32_t> *)*h;
+    uint32_t length = *(GUEST<uint32_t> *)(*h + 4);
+    ReleaseResource(h);
+
+    HParamBlockRec pb = {};
+    pb.ioParam.ioNamePtr = LM(SysResName);
+    pb.ioParam.ioVRefNum = LM(BootDrive);
+    pb.ioParam.ioPermssn = fsRdPerm;
+    if(PBHOpen(&pb, false) != noErr)
+        return;
+    INTEGER f = pb.ioParam.ioRefNum;
+    resmaphand map = ROMlib_read_res_map(f, base, length);
+    if(!map)
+    {
+        FSClose(f);
+        ROMlib_setreserr(noErr);
+        return;
+    }
+    (*map)->resfn = f;
+    (*map)->resfatr = (*map)->resfatr | mapReadOnly;
+    INTEGER i, j;
+    typref *tr;
+    resref *rr;
+    WALKTANDR(map, i, tr, j, rr)
+    rr->rhand = 0;
+    rr->ratr &= ~resChanged;
+    EWALKTANDR(tr, rr)
+    resmaphand sys = (resmaphand)LM(SysMapHndl);
+    (*map)->nextmap = (*sys)->nextmap;
+    (*sys)->nextmap = (Handle)map;
+    ROMlib_resTypesChanged();
+}
+
 INTEGER Executor::C_InitResources()
 {
     TheZoneGuard guard(LM(SysZone));
@@ -99,6 +145,7 @@ INTEGER Executor::C_InitResources()
        the icons Icon Services shows (the badges, 8.5's colour icons), the
        Navigation Services and Appearance dialogs, ... */
     open_below_system("macs"_4, { "zsyr"_4 });
+    open_system_data_fork_resources();
 
     /*
     TODO: decide whether to re-instate a system file version check

@@ -709,6 +709,25 @@ RAW_68K_IMPLEMENTATION(OSTrapA074)
     return POPADDR();
 }
 
+/* $A08E: the System's B*-tree file trap (on a Quadra under 7.5.5 a
+   dispatcher in the System heap: D0 a selector 0-15, A0 an HFS parameter
+   block, ioNamePtr/ioVRefNum/ioDirID name the file, errors notBTree
+   -410 to btKeyAttrErr -417; any other selector paramErr, in D0 and
+   ioResult). Executor has no B*-tree files: every selector is answered
+   paramErr, as the dispatcher answers one it lacks. 8.6's Navigation
+   Services calls selector 1 on its preferences without checking for the
+   trap (BBEdit Lite 6.1's Save, CodeWarrior IDE 3.2's New Project). */
+RAW_68K_IMPLEMENTATION(OSTrapA08E)
+{
+    char what[64];
+    snprintf(what, sizeof what, "OS trap $A08E (B*-tree) selector %d", (int)(int16_t)EM_D0);
+    traps::log_unimplemented(what);
+    if(EM_A0)
+        WRITEUW(EM_A0 + 0x10, (uint16_t)paramErr); /* ioResult */
+    EM_D0 = paramErr;
+    return POPADDR();
+}
+
 /* The HFS utility routines ---------------------------------------------- */
 
 namespace

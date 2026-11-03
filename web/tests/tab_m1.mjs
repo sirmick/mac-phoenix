@@ -501,6 +501,10 @@ try {
             ok = true;
         } catch (e) {
             why = crashed ? `the tab crashed (${e.message})` : e.message;
+            // what the page said of it (main.js: an Executor fatal, a trap)
+            const stopped = crashed ? null : await page.evaluate(() => window.executor.stopped).catch(() => null);
+            if (stopped)
+                why += ` (Executor stopped: ${stopped})`;
         }
         if (!crashed)
             await shot(ok ? 'done' : 'failed');

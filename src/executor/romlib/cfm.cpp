@@ -35,6 +35,7 @@
 #include <algorithm>
 #include <string>
 #include <vector>
+#include <map>
 #include <strings.h>
 #include <rsys/ppc_break.h>
 
@@ -1044,11 +1045,94 @@ check_system_file(ConstStr63Param library, OSType arch, LoadFlags loadflags,
                            cidp, mainaddrp, errName);
 }
 
+/* MacPhoenix: the libraries the System file's fragment of this name
+   imports (its PEF loader section), as read once; none if the System has
+   no such fragment. */
+static const std::vector<std::string>&
+system_fragment_imports(const std::string& name, OSType arch)
+{
+    static std::map<std::pair<std::string, OSType>, std::vector<std::string>> cache;
+    auto key = std::make_pair(name, arch);
+    auto it = cache.find(key);
+    if(it != cache.end())
+        return it->second;
+    std::vector<std::string>& out = cache[key];
+
+    FSSpec fs;
+    if(!system_file_spec(&fs))
+        return out;
+    Str63 library;
+    library[0] = std::min<size_t>(name.size(), 63);
+    memcpy(library + 1, name.data(), library[0]);
+    INTEGER save_map = LM(CurMap);
+    LM(CurMap) = LM(SysMap);
+    cfir_t *cfirp = nullptr;
+    for(INTEGER i = 1, n = Count1Resources("cfrg"_4); !cfirp && i <= n; i++)
+        if(Handle h = Get1IndResource("cfrg"_4, i))
+            cfirp = ROMlib_find_cfrg(h, arch, kImportLibraryCFrag, library);
+    LM(CurMap) = save_map;
+    if(!cfirp || CFIR_LOCATION(cfirp) != kOnDiskFlat)
+        return out;
+    uint32_t base = CFIR_OFFSET_TO_FRAGMENT(cfirp);
+
+    GUEST<INTEGER> rn;
+    if(FSpOpenDF(&fs, fsRdPerm, &rn) != noErr)
+        return out;
+    auto read = [&](uint32_t at, void *buf, LONGINT len) {
+        GUEST<LONGINT> n = len;
+        return SetFPos(rn, fsFromStart, base + at) == noErr
+            && FSReadAll(rn, &n, (Ptr)buf) == noErr && n == len;
+    };
+    PEFContainerHeader ch;
+    if(read(0, &ch, sizeof ch) && ch.tag1 == kPEFTag1 && ch.tag2 == kPEFTag2)
+    {
+        for(int i = 0; i < ch.sectionCount; i++)
+        {
+            PEFSectionHeader sh;
+            if(!read(sizeof ch + i * sizeof sh, &sh, sizeof sh))
+                break;
+            if(sh.sectionKind != kPEFLoaderSection)
+                continue;
+            /* read into guest memory: the File Manager's buffers are */
+            uint32_t size = sh.containerLength;
+            Ptr loader = size >= sizeof(PEFLoaderInfoHeader) ? NewPtrSys(size) : nullptr;
+            if(loader && read(sh.containerOffset, loader, size))
+            {
+                auto *lih = (PEFLoaderInfoHeader *)loader;
+                auto *libs = (PEFImportedLibrary *)(lih + 1);
+                uint32_t strings = lih->loaderStringsOffset;
+                for(uint32_t l = 0; l < lih->importedLibraryCount
+                    && (char *)&libs[l + 1] <= (char *)loader + size; l++)
+                {
+                    uint32_t at = strings + libs[l].nameOffset;
+                    if(at < size)
+                        out.push_back(std::string((char *)loader + at,
+                                                  strnlen((char *)loader + at, size - at)));
+                }
+            }
+            if(loader)
+                DisposePtr(loader);
+            break;
+        }
+    }
+    FSClose(rn);
+    return out;
+}
+
 /* MacPhoenix: one of Executor's own libraries, connected to the current
-   application. */
+   application. On 8.5 and later the libraries the System's fragment of
+   that name imports are connected with it, as preparing that fragment
+   would: kFindLib finds them (the G3 with 8.6, tests/guest/difftest sys:
+   AppearanceLib's ToolboxUtils, CollectionsLib, IconServicesLib once it is
+   loaded). BBEdit Lite 6.1 imports ControlsLib and MacDialogsLib, and
+   binds its Appearance calls (MoveDialogItem, in its Save dialog's
+   Navigation Services hook) with kFindLib on AppearanceLib. Not for the
+   stand-in for InitWindows & co. (ROMlib_cfm_toolbox_library): there the
+   G3 finds WindowsLib but not AppearanceLib. Only Executor's own libraries
+   are connected so: a System fragment imported (ToolboxUtils) isn't. */
 static OSErr
 connect_builtin(ConstStr63Param library, OSType arch, GUEST<ConnectionID> *cidp,
-                GUEST<Ptr> *mainaddrp)
+                GUEST<Ptr> *mainaddrp, bool with_imports = true)
 {
     ConnectionID cid = builtinlibs::getBuiltinLib(library, arch);
     if(!cid)
@@ -1058,7 +1142,19 @@ connect_builtin(ConstStr63Param library, OSType arch, GUEST<ConnectionID> *cidp,
                     [&](const builtin_connection& b) {
                         return b.arch == arch && b.zone == LM(ApplZone) && same_name(b.name, name);
                     }))
+    {
         builtin_connections.push_back({ name, arch, cid, LM(ApplZone) });
+        if(with_imports && (uint16_t)LM(SysVersion) >= 0x0850 && arch == "pwpc"_4)
+            for(const std::string& dep : std::vector<std::string>(system_fragment_imports(name, arch)))
+            {
+                Str63 depname;
+                depname[0] = std::min<size_t>(dep.size(), 63);
+                memcpy(depname + 1, dep.data(), depname[0]);
+                GUEST<ConnectionID> dep_cid;
+                GUEST<Ptr> dep_main;
+                connect_builtin(depname, arch, &dep_cid, &dep_main);
+            }
+    }
     *cidp = cid;
     *mainaddrp = nullptr;
     return noErr;
@@ -1125,7 +1221,7 @@ void Executor::ROMlib_cfm_toolbox_library(const char *library)
     memcpy(name + 1, library, name[0]);
     GUEST<ConnectionID> cid;
     GUEST<Ptr> mainaddr;
-    connect_builtin(name, "pwpc"_4, &cid, &mainaddr);
+    connect_builtin(name, "pwpc"_4, &cid, &mainaddr, false);
 }
 
 /*

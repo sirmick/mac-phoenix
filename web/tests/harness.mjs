@@ -2,6 +2,8 @@
 // (server.mjs: built here with go; none: exit 77), headless Chromium on
 // it. Needs the playwright package (NODE_PATH; none: exit 77) and
 // CHROMIUM=PATH for a browser other than the one it expects.
+import fs from 'node:fs';
+import os from 'node:os';
 import { createRequire } from 'node:module';
 import { startServer } from './server.mjs';
 
@@ -16,9 +18,27 @@ try {
 // Headless Chromium (CHROMIUM=PATH, or playwright's own).
 // CHROMIUM_ARGS: extra switches, space-separated (--enable-logging=stderr, say);
 // args: the test's own.
+// Not chrome-headless-shell: it turns the wasm trapping (an access out of
+// bounds) into the renderer's SIGSEGV, "Target crashed", where Chromium
+// throws a RuntimeError the tab reports (M1.md #4). A CHROMIUM that is
+// playwright's shell runs the full Chromium of its revision when that is
+// installed; TAB_HEADLESS_SHELL=1 keeps the shell.
+function browser() {
+    const shell = process.env.CHROMIUM;
+    if (process.env.TAB_HEADLESS_SHELL)
+        return shell ? { executablePath: shell } : {};
+    if (!shell)
+        return { channel: 'chromium' };
+    const full = shell.replace(/chromium_headless_shell-(\d+)\/chrome-headless-shell-linux64\/chrome-headless-shell$/,
+                               'chromium-$1/chrome-linux64/chrome');
+    return { executablePath: full !== shell && fs.existsSync(full) ? full : shell };
+}
+// (Chromium's singleton socket goes in its TMPDIR, at most 107 bytes of
+// path: a build tree's is too long; the profile stays in ours.)
 export function launch({ args: own = [] } = {}) {
     const args = [...own, ...(process.env.CHROMIUM_ARGS ? process.env.CHROMIUM_ARGS.split(' ') : [])];
-    return chromium.launch(process.env.CHROMIUM ? { executablePath: process.env.CHROMIUM, args } : { args });
+    const tmp = os.tmpdir().length < 60 ? os.tmpdir() : '/tmp';
+    return chromium.launch({ ...browser(), args, env: { ...process.env, TMPDIR: tmp } });
 }
 
 // A page of browser (a context of its own: another browser, to the

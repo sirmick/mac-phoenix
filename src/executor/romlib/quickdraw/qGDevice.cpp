@@ -374,6 +374,10 @@ Boolean Executor::C_TestDeviceAttribute(GDHandle gdh, INTEGER attribute)
 {
     Boolean retval;
 
+    /* MacPhoenix: no device, no attributes (on a Mac a nil handle reads
+       low memory; 8.6's Navigation Services asks for one it never set) */
+    if(!gdh || !*gdh)
+        return false;
     retval = (GD_FLAGS(gdh) & (1 << attribute)) != 0;
     return retval;
 }

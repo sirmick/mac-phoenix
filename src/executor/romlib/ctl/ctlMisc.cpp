@@ -7,6 +7,8 @@
 #include <base/common.h>
 #include <WindowMgr.h>
 #include <ControlMgr.h>
+#include <ControlMgr8.h>
+#include <OSUtil.h>
 #include <MemoryMgr.h>
 
 #include <quickdraw/cquick.h>
@@ -227,9 +229,15 @@ int32_t Executor::ROMlib_ctlcall(ControlHandle c, int16_t i, int32_t l)
        Speech panel's sliders) leaves the region empty for calcCntlRgn and
        calcThumbRgn, and a Mac still erases such a control when it is
        hidden or disposed of. Ask again with calcCRgns, the high bit of
-       the handle asking for the indicator. */
+       the handle asking for the indicator. Not a definition that takes
+       the 8.0 messages: its empty region is the answer (8.6's bevel
+       button, for an empty rectangle, in Navigation Services' Save
+       dialog), and its calcCRgns keeps the handle's low 24 bits. */
     if((i == calcCntlRgn || i == calcThumbRgn) && l
-       && EmptyRgn(ptr_from_longint<RgnHandle>(l)))
+       && EmptyRgn(ptr_from_longint<RgnHandle>(l))
+       && !((uint16_t)LM(SysVersion) >= 0x0800
+            && (uint32_t)cp(VAR(c), c, kControlMsgTestNewMsgSupport, 0)
+                   == kControlSupportsNewMessages))
         retval = cp(VAR(c), c, calcCRgns,
                     i == calcThumbRgn ? (l | 0x80000000) : l);
 

@@ -7,6 +7,7 @@
 #include <FontMgr.h>
 #include <MemoryMgr.h>
 #include <base/common.h>
+#include <quickdraw/font.h>
 #else
 #include <Quickdraw.h>
 #include <QDOffscreen.h>
@@ -802,5 +803,35 @@ TEST(QuickDraw, TextWithNoFont)
     LM(ApFontID) = apfont;
     TextFont(0);
     EXPECT_LT(0, StringWidth((ConstStringPtr) "\003abc"));
+}
+
+/* A width table in the list whose master pointer is outside memory (THINK
+   Pascal 4.5's Run leaves one): skipped and taken out of the list, not read
+   (in the tab reading it is a wasm out-of-bounds access, the renderer gone). */
+TEST(QuickDraw, WidthListBadEntry)
+{
+    OffscreenPort port(32, 16);
+    TextFont(0);
+    TextSize(12);
+    StringWidth((ConstStringPtr) "\003abc");     /* a table listed */
+    ASSERT_TRUE(LM(WidthListHand));
+    GUEST<WHandle> *list = *WIDTHLISTHAND;
+    int slot = 0;
+    while(slot < 12 && list[slot])
+        slot++;
+    ASSERT_LT(slot, 12);
+    Handle bad = NewHandle(4);
+    GUEST<Ptr> saved = *bad;
+    GUEST<Ptr> outside;
+    outside.raw_host_order(0x0FF81004);
+    *bad = outside;
+    list[slot] = guest_cast<WHandle>(bad);
+    TextSize(13);                                 /* not the table it has */
+    EXPECT_LT(0, StringWidth((ConstStringPtr) "\003abc"));
+    for(int i = 0; i < 12; i++)
+        EXPECT_NE((WHandle)bad, (WHandle)list[i]);
+    *bad = saved;
+    DisposeHandle(bad);
+    TextSize(12);
 }
 #endif
