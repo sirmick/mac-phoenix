@@ -18,7 +18,7 @@ e86 (Executor, 8.6, --executor-ppc), g86 (G3 ROM, 8.6). Tab columns: w761
 and w86, Executor in the browser tab (WebAssembly) on the site's library
 disks (tools/web/make_library.py), each application's row found by its
 source disk and path. Sets: the application disks, with the target
-applications (all programs on the games disks). Each grid run uses --jobs 2.
+applications (all programs on the games disks). Each grid run uses --jobs 2 (run --jobs N).
 
   MACPHOENIX_EMULATOR=$PWD/build/mac-phoenix.score tools/executor/scoreboard.py run
   tools/executor/scoreboard.py tab --build build-wasm
@@ -47,7 +47,7 @@ COLUMNS = {
 # The tab's columns: the system and the site's library disks it is tried on.
 TAB_COLUMNS = {
     "w761": ("7.6.1", ["productivity", "creative", "development", "games-68k"]),
-    "w86": ("8.6", ["productivity", "creative", "development", "games-ppc"]),
+    "w86": ("8.6", ["productivity", "creative", "creative-8", "development", "games-ppc"]),
 }
 # not programs: DOCMaker documents, registration, installers, patchers, help
 NOT_PROGRAMS = ["Dk@P", "Areg", "ercR", "kajr", "ZAPS", "EDOC", "eSRD", "MSH1", "MSH2",
@@ -78,6 +78,10 @@ SETS = {
         "Creative:Adobe Illustrator 6.0 ƒ:Adobe Illustrator® 6.0",
         "Creative:Macromedia FreeHand 5.5 ƒ:FreeHand 5.5",
         "Creative:Deneba Canvas 5.0.2 ƒ:Canvas™ 5"], "fix-prod"),
+    "creative8": ("creative-macos-8.img", [
+        "Creative:Adobe Photoshop 5.5 ƒ:Adobe® Photoshop® 5.5",
+        "Creative:Adobe Illustrator 8.0 ƒ:Adobe Illustrator® 8.0",
+        "Creative:Adobe PageMaker 6.5 ƒ:Adobe® PageMaker® 6.5"], "fix-prod"),
     "games": ("games.img", None, "fix-games"),
     "classic": ("games-classic.img", None, "fix-games"),
     "gppc": ("games-ppc.img", None, "fix-games"),
@@ -85,7 +89,8 @@ SETS = {
 # Afterlife's optional installs are copies of the game
 EXCLUDE = ["Optional Afterlife Installs"]
 SYSTEM_SETS = {"7.6.1": ["prod", "prod2", "creative", "dev", "games", "classic", "gppc"],
-               "8.6": ["prod", "prod2", "creative", "dev", "dev89", "games", "classic", "gppc"]}
+               "8.6": ["prod", "prod2", "creative", "creative8", "dev", "dev89", "games", "classic",
+                       "gppc"]}
 
 
 def runs():
@@ -105,7 +110,7 @@ def cmd_run(opts):
         system, args = COLUMNS[col]
         disk, paths, _ = SETS[st]
         cmd = [sys.executable, os.path.join(HERE, "grid.py"), system + ".img", "--disk", disk,
-               "--jobs", "2", "--wait", str(opts.wait), "--out", out, *args]
+               "--jobs", str(opts.jobs), "--wait", str(opts.wait), "--out", out, *args]
         for p in paths or []:
             cmd += ["--path", p]
         if paths is None:
@@ -433,6 +438,7 @@ def main():
     r.add_argument("--only", nargs="*")
     r.add_argument("--force", action="store_true")
     r.add_argument("--wait", type=int, default=20)
+    r.add_argument("--jobs", type=int, default=2, help="grid.py's sessions at once")
     w = sub.add_parser("tab")
     w.add_argument("--only", nargs="*")
     w.add_argument("--force", action="store_true")

@@ -289,7 +289,8 @@ Machine:
                              (copied out on first use, image mounted too)
   --executor-start WHAT      finder | browser | path in the System (default: finder)
   --executor-app PATH        Application Executor starts instead (host path)
-  --executor-writable-images Executor mounts disk images read-write (default: read-only)
+  --executor-writable-images Executor mounts disk images read-write (default: read-only;
+                             never the --executor-system image)
   --[no-]executor-fresh      Restore the System from its clean copy each run (default: on)
   --[no-]executor-ot         Executor answers Open Transport (default: on)
   --executor-ppc             Executor runs fat apps' PowerPC code on mame-ppc (PowerPC-only

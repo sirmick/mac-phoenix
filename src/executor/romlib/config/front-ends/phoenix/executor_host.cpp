@@ -67,7 +67,10 @@ int run(const Config& c)
     ROMlib_locked_images.clear();
     for(const auto& cd : c.cdroms)
         ROMlib_locked_images.insert(cd);
+    for(const auto& d : c.locked_disks)
+        ROMlib_locked_images.insert(d);
     std::vector<std::string> images = c.disks;
+    images.insert(images.end(), c.locked_disks.begin(), c.locked_disks.end());
     images.insert(images.end(), c.cdroms.begin(), c.cdroms.end());
     for(const auto& disk : images)
     {

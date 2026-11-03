@@ -151,6 +151,10 @@ struct EmulatorConfig {
     std::string watch;                 // --watch ADDR[:LEN]: write watchpoint on guest memory (Executor; guest_watch.h)
     std::vector<std::string> executor_ppc_break; // --executor-ppc-break SPEC (repeatable; "on": none yet): PowerPC breakpoints (rsys/ppc_break.h)
     bool executor_writable_images = false; // Executor mounts disk images read-write (test copies)
+    // Parent -> child only (--executor-locked-disk): images Executor mounts
+    // locked whatever executor_writable_images says (the --executor-system
+    // image: its System Folder is a copy, the image is the shared original).
+    std::vector<std::string> executor_locked_disks;
     bool executor_ot = true;               // Executor answers Open Transport (romlib/opentransport)
     bool executor_ppc = false;             // Executor runs the PowerPC code of fat applications (mame-ppc)
     double executor_scale = 1.0;           // Executor's display scale (docs/executor/HiDPI.md; needs EXECUTOR_SKIA)
