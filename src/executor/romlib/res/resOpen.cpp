@@ -263,6 +263,24 @@ decompress_setup(INTEGER rn, int32_t *dlenp, int32_t *final_sizep, int32_t *offs
  *       mgetres when the handle's already there.
  */
 
+/* MacPhoenix: the zone a resource is read into. The current zone, as the
+   Resource Manager does on a Mac, or the System heap for a resource whose
+   resSysHeap attribute is set: an INIT keeps code for after startup by
+   calling SetZone(SystemZone()) before Get1Resource (the Shared Library
+   Manager's 'root' 2: read into its file's map's zone, the startup
+   application heap, it was overwritten once that heap was reused, and
+   the .SLM driver's accRun jumped into what was put there). Not the
+   current zone for a file whose map is in the System heap (the System
+   file, the font files chained to it, system-mode files: one map for
+   every process): there the System heap, where the shared map never
+   names a block of a heap that goes away with a process. */
+static GUEST<THz> load_zone(resmaphand map, resref *rr)
+{
+    if((rr->ratr & resSysHeap) || HandleZone((Handle)map) == LM(SysZone))
+        return LM(SysZone);
+    return LM(TheZone);
+}
+
 static Handle mgetres_helper(resmaphand map, resref *rr, int32_t dlen,
                              Handle retval)
 {
@@ -307,9 +325,7 @@ static Handle mgetres_helper(resmaphand map, resref *rr, int32_t dlen,
 
         if(!rr->rhand)
         {
-            LM(TheZone) = ((rr->ratr & resSysHeap)
-                           ? LM(SysZone)
-                           : (GUEST<THz>)HandleZone((Handle)map));
+            LM(TheZone) = load_zone(map, rr);
             retval = NewHandle(uncompressed_size + dcmp_offset);
             rr->rhand = retval;
         }
@@ -427,9 +443,7 @@ Executor::ROMlib_mgetres2(resmaphand map, resref *rr)
                     retval = mgetres_helper(map, rr, dlen, retval);
                 else if(!rr->rhand)
                 {
-                    LM(TheZone) = ((rr->ratr & resSysHeap)
-                                   ? LM(SysZone)
-                                   : (GUEST<THz>)HandleZone((Handle)map));
+                    LM(TheZone) = load_zone(map, rr);
                     retval = NewEmptyHandle();
                     rr->rhand = retval;
                 }

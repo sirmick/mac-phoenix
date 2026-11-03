@@ -177,6 +177,33 @@ TEST_F(ResourceTest, AddResource)
     DisposeHandle(h);
 }
 
+/* A resource is read into the current zone (the system heap if its
+   resSysHeap attribute is set), not the zone of its file's map: INITs
+   keep code for after startup this way, SetZone(SystemZone()) and then
+   Get1Resource (the Shared Library Manager's 'root' 2, whose file the
+   startup application heap holds the map of). */
+TEST_F(ResourceTest, LoadsIntoCurrentZone)
+{
+    Handle h = NewHandleClear(16);
+    ASSERT_NE(nullptr, h);
+    AddResource(h, 'QUUX', 129, PSTR(""));
+    ASSERT_EQ(noErr, ResError());
+    reopen();
+    THz app = GetZone();
+    ASSERT_NE(SystemZone(), app);
+
+    SetZone(SystemZone());
+    Handle sys = Get1Resource('QUUX', 129);
+    SetZone(app);
+    ASSERT_NE(nullptr, sys);
+    EXPECT_EQ(SystemZone(), HandleZone(sys));
+    ReleaseResource(sys);
+
+    Handle here = Get1Resource('QUUX', 129);
+    ASSERT_NE(nullptr, here);
+    EXPECT_EQ(app, HandleZone(here));
+}
+
 TEST_F(ResourceTest, Modify1)
 {
     Handle h1;
