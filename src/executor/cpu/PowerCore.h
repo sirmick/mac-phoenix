@@ -103,8 +103,8 @@ public:
     void restoreExecContext(const void *src);
     /* Guest address of the exit cell. */
     uint32_t exitAddress();
-    /* The recompiler checks each block's code before running it, so
-     * changed code is recompiled without being told. */
-    void flushCache() {}
-    void flushCache(uint32_t, uint32_t) {}
+    /* Code changed (MakeDataExecutable: CFM loading a fragment over freed
+       code): the recompiler drops what it translated there. */
+    void flushCache() { flushCache(0, 0); }
+    void flushCache(uint32_t addr, uint32_t len);
 };
