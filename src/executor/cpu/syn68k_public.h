@@ -317,6 +317,9 @@ int syn68k_is_guest_mapped(uintptr_t addr, size_t len);
  * from a junk guest address can land in another window's host memory:
  * the windows' host ranges may be adjacent.) */
 int syn68k_is_guest_addr_mapped(uint32_t addr, size_t len);
+/* [addr, addr+len) inside its window's whole reservation, handed out or
+ * not: a value that can go to host memory and back unchanged. */
+int syn68k_is_guest_addr_in_window(uint32_t addr, size_t len);
 /* Turn a JIT on before initialize_68k_emulator() (none yet). */
 void syn68k_set_jit(int enabled);
 /* Pick the 68k core, "mame-68k" (the default and only one), before

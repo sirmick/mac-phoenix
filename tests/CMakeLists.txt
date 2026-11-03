@@ -876,7 +876,7 @@ set_tests_properties(desktop_labels_executor PROPERTIES
   ENVIRONMENT "MACEMU_BINARY=$<TARGET_FILE:mac-phoenix>")
 
 # 8.6's platinum chrome where the G3 was measured: the menu bar's apple,
-# a Finder window's scroll bar thumb.
+# a Finder window's scroll bar thumb, the disks' icons, a short click paging once.
 add_test(NAME platinum_86_executor
   COMMAND bash ${TEST_DIR}/test_platinum_86_executor.sh --port 18518)
 set_tests_properties(platinum_86_executor PROPERTIES
@@ -1565,3 +1565,10 @@ get_property(_all_tests DIRECTORY PROPERTY TESTS)
 foreach(_t IN LISTS _all_tests)
   set_property(TEST ${_t} APPEND PROPERTY ENVIRONMENT "TMPDIR=${TEST_TMPDIR}")
 endforeach()
+
+# tools/diskaudit/disk_audit.py (host-side audit of disk images: aliases, Finder
+# icon positions, window frames and scroll, stray invisible files) on fixture
+# images the test makes: an HFS volume through hfsutils, a small HFS+ one.
+add_test(NAME disk_audit
+  COMMAND ${Python3_EXECUTABLE} ${TEST_DIR}/test_disk_audit.py)
+set_tests_properties(disk_audit PROPERTIES TIMEOUT 120 LABELS "tools" SKIP_RETURN_CODE 77)
