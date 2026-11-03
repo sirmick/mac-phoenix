@@ -28,7 +28,9 @@ the bake. Kinds:
 
 Bake fields: "kind", "os" (the base System, default 7.6.1), "machines"
 (default ["68k"]), "target"
-(install volume name, default Install), "archive"/"take" (expand),
+(install volume name, default Install), "archive"/"take" (expand;
+"expand_wait": seconds StuffIt Expander is given, default 5 + one per
+200 KB: an archive of thousands of small files takes longer),
 "cdroms" (media names), "media" (items put on a volume "Media":
 {"file", "take", "as", "dc42"}; "as_is": the MacBinary file itself, not opened:
 a self-mounting HFS+ image the guest mounts), "disks" (disk images out of media,
@@ -136,6 +138,8 @@ ARCHIVE_TYPES = {".sit": b"SIT!", ".hqx": b"TEXT", ".bin": b"BINA", ".zip": b"ZI
 # Top-level items a guest makes on any volume it uses.
 TOP_NOISE = {b"Desktop Folder", b"Trash", b"Temporary Items", b"Desktop DB", b"Desktop DF",
              b"Desktop", b"Installer Logs", b"TheVolumeSettingsFolder", b"Network Trash Folder"}
+# What Mac OS X left in folders an archive was made from: no Classic Mac's.
+MAC_OS_X_NOISE = {b".DS_Store"}
 # System Folder files never taken, and what changes there just from a guest
 # running: the bridge's agent, recent items, files the System touches at boot.
 NEVER = {b"System", b"Finder", b"Desktop DB", b"Desktop DF", b"Desktop"}
@@ -579,7 +583,8 @@ class Session:
         put(hfs, self.target, [(mr(name), local)])
         self.exclude.add(mr(name))
         self.pre_steps = [{"open": "{target}:" + name}, {"wait_app": "StuffIt Expander", "timeout": 30, "optional": True},
-                          {"wait": 5 + size // 200_000}, {"shot": "expanded"}, {"quit": True}]
+                          {"wait": self.bake.get("expand_wait", 5 + size // 200_000)},
+                          {"shot": "expanded"}, {"quit": True}]
 
     def boot_guest(self):
         self.log(f"  watch: {watch_url(self.port)}")
@@ -738,7 +743,8 @@ class Session:
             dropped |= {r.split(b":")[0] for r, l in items if b":" not in r and l
                         and os.path.splitext(r.decode("mac_roman"))[1].lower() in ARCHIVE_TYPES}
         def left_out(r):
-            return r.split(b":")[0] in dropped or excluded_path(r, dropped)
+            return (r.split(b":")[0] in dropped or excluded_path(r, dropped)
+                    or r.rsplit(b":", 1)[-1] in MAC_OS_X_NOISE)
         excluded = sorted({e for e in dropped if b":" in e and any(excluded_path(r, [e]) for r, _ in items)}
                           | {r.split(b":")[0] for r, _ in items if r.split(b":")[0] in dropped})
         items = [(r, l) for r, l in items if not left_out(r)]

@@ -1,0 +1,10 @@
+{
+ "note": "The Iconfactory's classic icon collection (1997-2001 sets: Apple Desktop Collection, Looney Tunes, MacQuarium, Matrix, ...): folders whose custom icons are the icons, with the sets' Read Mes. Expanded by StuffIt Expander in the guest (the folders' custom icon flags as the archive has them)",
+ "kind": "expand",
+ "archive": "IconfactoryIcons.sit",
+ "expect": [
+  "IconfactoryIcons"
+ ],
+ "os": "tools-7.6.1",
+ "expand_wait": 400
+}

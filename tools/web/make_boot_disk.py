@@ -42,7 +42,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools/macdecode"))
 sys.path.insert(0, str(ROOT / "tools/diskaudit"))
-from rsrc import Disk  # noqa: E402
+from rsrc import Disk, glob_quote  # noqa: E402
 import tidy  # noqa: E402
 
 POLICY = ROOT / "src/executor/res/extension-policy.txt"
@@ -159,7 +159,7 @@ class Writer:
         self.run("hformat", "-l", label, str(self.image))
 
     def mkdir(self, path):
-        self.run("hmkdir", b":" + path)
+        self.run("hmkdir", glob_quote(b":" + path))     # (hcopy's destination is literal)
 
     def put(self, path, macbinary, scratch):
         tmp = Path(scratch) / "file.bin"
@@ -167,10 +167,10 @@ class Writer:
         self.run("hcopy", "-m", str(tmp), b":" + path)
 
     def hide(self, path):
-        self.run("hattrib", "+i", b":" + path)
+        self.run("hattrib", "+i", glob_quote(b":" + path))
 
     def bless(self, path):
-        self.run("hattrib", "-b", b":" + path)
+        self.run("hattrib", "-b", glob_quote(b":" + path))
 
     def close(self):
         subprocess.run(["humount"], env=self.env, capture_output=True)
