@@ -23,6 +23,7 @@ Launcher
 Control Strip
 CloseView
 Mac OS Easy Open
+Macintosh Easy Open
 PC Exchange @ 7.6
 Clipping Extension
 AppleScript™

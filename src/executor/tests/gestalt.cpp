@@ -126,3 +126,12 @@ TEST(Gestalt, ScriptCount)
     ASSERT_EQ(noErr, C_Gestalt(gestaltScriptCount, &v));
     EXPECT_EQ(1, (LONGINT)v);
 }
+
+/* Virtual memory: recognized and off, as on the Quadra with VM off (7.6.1:
+   noErr, 0). Upstream left the selector unknown for ClarisWorks 3. */
+TEST(Gestalt, VMAttrRecognizedNoVM)
+{
+    GUEST<LONGINT> v = 0x5A5A5A5A;
+    ASSERT_EQ(noErr, C_Gestalt(gestaltVMAttr, &v));
+    EXPECT_EQ(0, (LONGINT)v);
+}

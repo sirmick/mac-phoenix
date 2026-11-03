@@ -57,8 +57,6 @@ extern Ptr _NewPtr_copy_handle_flags(Size size, Handle data_to_copy,
 #define NewPtr_copy_handle(s, h) _NewPtr_copy_handle_flags(s, h, false)
 #define NewPtrSys_copy_handle(s, h) _NewPtr_copy_handle_flags(s, h, true)
 
-/* spewy flags */
-extern bool ROMlib_memnomove_p;
 
 #define LOCKBIT (1 << 7)
 #define PURGEBIT (1 << 6)

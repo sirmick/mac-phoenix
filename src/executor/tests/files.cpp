@@ -1819,3 +1819,42 @@ TEST(Files, GetAliasInfo)
     }
     DisposeHandle((Handle)alias);
 }
+
+/* A directory ID the volume hasn't is fnfErr, the default left where it
+   was: the Quadra's HFS answers so for negative IDs, 1, 999999. */
+#ifdef EXECUTOR
+#define WDPB(p) ((HParmBlkPtr)(p))
+#else
+#define WDPB(p) (p)
+#endif
+
+TEST_F(FileTest, HSetVolMissingDirectory)
+{
+    WDPBRec wpb;
+    memset(&wpb, 0, sizeof(wpb));
+    PBHGetVolSync(WDPB(&wpb));
+    short savedVRefNum = wpb.ioVRefNum;
+    long savedDirID = wpb.ioWDDirID;
+
+    memset(&wpb, 0, sizeof(wpb));
+    wpb.ioVRefNum = vRefNum;
+    wpb.ioWDDirID = dirID;
+    EXPECT_EQ(noErr, PBHSetVolSync(WDPB(&wpb)));
+
+    for(long id : { -5L, -65534L, 1L, 999999L })
+    {
+        memset(&wpb, 0, sizeof(wpb));
+        wpb.ioVRefNum = vRefNum;
+        wpb.ioWDDirID = id;
+        EXPECT_EQ(fnfErr, PBHSetVolSync(WDPB(&wpb))) << id;
+
+        memset(&wpb, 0, sizeof(wpb));
+        PBHGetVolSync(WDPB(&wpb));
+        EXPECT_EQ(dirID, wpb.ioWDDirID) << id;
+    }
+
+    memset(&wpb, 0, sizeof(wpb));
+    wpb.ioVRefNum = savedVRefNum;
+    wpb.ioWDDirID = savedDirID;
+    PBHSetVolSync(WDPB(&wpb));
+}

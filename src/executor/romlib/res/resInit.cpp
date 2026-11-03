@@ -16,6 +16,7 @@
 #include <commandline/flags.h>
 #include <rsys/version.h>
 #include <rsys/appearance.h>
+#include <rsys/extensions.h>
 #include <FileMgr.h>
 #include <AliasMgr.h>
 
@@ -146,6 +147,7 @@ INTEGER Executor::C_InitResources()
        Navigation Services and Appearance dialogs, ... */
     open_below_system("macs"_4, { "zsyr"_4 });
     open_system_data_fork_resources();
+    ROMlib_install_system_packs(); /* MacPhoenix: on Executor's own System */
 
     /*
     TODO: decide whether to re-instate a system file version check

@@ -71,7 +71,8 @@ extensions:
   - {file: Mac OS Easy Open, phase: 2, lacks: [CallComponent, CloseComponent], note: "7.6.1 name;
        its 'proc' -16549..-16555 need the System's Translation Manager dispatcher ($ABFC),
        Executor answers selector 3 with a stop (2026-10-25)"}
-  - {file: Macintosh Easy Open, phase: 2, lacks: [CallComponent, CloseComponent], note: "7.5.5 name"}
+  - {file: Macintosh Easy Open, phase: 2, lacks: [CallComponent, CloseComponent], note: "7.5.5 name;
+       allowed 2026-11-03: Gestalt xlat $1B and TranslationDispatch $24/$20 as on the Quadra"}
 
   # ── phase 3: shared libraries, code fragments, threads ─────────────────
   - {file: Shared Library Manager, phase: 3, lacks: [], loaded: true,

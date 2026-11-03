@@ -12,6 +12,8 @@
 #include <TextUtils.h>
 #endif
 
+#include <string.h>
+
 class ResourceTest : public testing::Test
 {
 public:
@@ -74,6 +76,35 @@ TEST_F(ResourceTest, GetResourceNotFound)
     h = GetResource('QUUX', 128);
     EXPECT_EQ(nullptr, h);
     EXPECT_EQ(noErr, ResError());
+}
+
+/* What GetResource finds is the resource's data as stored, whatever its
+   type and ID (Executor once special-cased some for single programs). */
+static void expectStoredAsIs(ResourceTest &t, ResType type, short id)
+{
+    const unsigned char bytes[4] = { 0x01, 0x01, 0x02, 0x04 };
+    Handle h = NewHandle(sizeof bytes);
+    ASSERT_NE(nullptr, h);
+    memcpy(*h, bytes, sizeof bytes);
+    AddResource(h, type, id, PSTR(""));
+    ASSERT_EQ(noErr, ResError());
+    t.reopen();
+    Handle h2 = GetResource(type, id);
+    ASSERT_NE(nullptr, h2);
+    ASSERT_EQ((long)sizeof bytes, GetHandleSize(h2));
+    EXPECT_EQ(0, memcmp(*h2, bytes, sizeof bytes));
+}
+
+// Ultima III's preferences (upstream cleared their music byte)
+TEST_F(ResourceTest, PrefAsStored)
+{
+    expectStoredAsIs(*this, 'PREF', 400);
+}
+
+// Bob's Eyes Pro's (upstream answered nil for it)
+TEST_F(ResourceTest, RAnd128AsStored)
+{
+    expectStoredAsIs(*this, 'rAnd', 128);
 }
 
 TEST_F(ResourceTest, AddResource)
@@ -308,5 +339,22 @@ TEST(Resources, RGetResourceROMClut)
         ASSERT_NE(nullptr, h) << id;
         CTabHandle ct = (CTabHandle)h;
         EXPECT_EQ((1 << id) - 1, (*ct)->ctSize) << id;
+    }
+}
+
+/* The packages' 'PACK' resources GetResource finds, as on a 7.6.1 Quadra
+   (2026-11-03): its System file's 0, 2, 3, 6, 8, 9 and 11-15; 4, 5 and 7
+   live in ROM and 1 and 10 nowhere. Executor's own System has stand-ins
+   for those; a missing one is nil (Executor once answered an ALRT). */
+TEST(Resources, SystemPacks)
+{
+    for(short id = 0; id < 16; id++)
+    {
+        bool there = !(id == 1 || id == 4 || id == 5 || id == 7 || id == 10);
+        Handle h = GetResource('PACK', id);
+        EXPECT_EQ(there, h != nullptr) << id;
+        EXPECT_EQ(noErr, ResError()) << id;
+        if(h)
+            EXPECT_GE(GetHandleSize(h), 12) << id;
     }
 }

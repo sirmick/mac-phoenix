@@ -214,7 +214,8 @@ then `diff-world`.
 * **Whitelist order** (small and self-contained first): Color Picker →
   Speech Manager + MacinTalk 3 → AppleScript (+ Finder Scripting
   Extension) → QuickTime. Macintosh Easy Open ships its own `lpch` 31
-  (linked patch code), so it likely won't load as a plain INIT; skip it.
+  (linked patch code); it loads all the same (allowed 2026-11-03, the
+  Translation Manager answering as on the Quadra).
 
 ### Apple's code or ours: the rule
 

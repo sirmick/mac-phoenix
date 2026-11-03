@@ -104,7 +104,6 @@ static void beginexecutingat(LONGINT startpc)
 }
 
 size_info_t Executor::size_info;
-LONGINT Executor::ROMlib_creator;
 
 
 uint32_t Executor::ROMlib_version_long;
@@ -335,20 +334,6 @@ static void launchchain(ConstStringPtr fName, INTEGER vRefNum, Boolean resetmemo
 
     process_create(false, finfo.fdType, finfo.fdCreator);
 
-    ROMlib_creator = finfo.fdCreator;
-
-#define LEMMINGSHACK
-#if defined(LEMMINGSHACK)
-    {
-        if(finfo.fdCreator == "Psyg"_4
-           || finfo.fdCreator == "Psod"_4)
-            ROMlib_flushoften = true;
-    }
-#endif /* defined(LEMMINGSHACK) */
-
-#if defined(ULTIMA_III_HACK)
-    ROMlib_ultima_iii_hack = (finfo.fdCreator == "Ult3"_4);
-#endif
 
     h = GetResource("vers"_4, 2);
     if(!h)
@@ -401,8 +386,6 @@ static void launchchain(ConstStringPtr fName, INTEGER vRefNum, Boolean resetmemo
         }
         size_info.application_p = true;
 
-        /* we don't accept open app events until a handler is installed */
-        application_accepts_open_app_aevt_p = false;
         send_application_open_aevt_p
             = !ROMlib_process_open_event_posted() && system_version >= 0x700
             && ((size_info.size_flags & SZisHighLevelEventAware)
@@ -441,11 +424,6 @@ static void launchchain(ConstStringPtr fName, INTEGER vRefNum, Boolean resetmemo
        PrRefNum is -1 at every launch) */
     LM(PrRefNum) = -1;
     ROMlib_printresfile = -1;
-
-    // disallow moving relocatable blocks until this flag is reset
-    // in OSEventCommon(). Allegedly (according to some old comment found
-    // in that function), this is needed for some unspecified version of Excel.
-    ROMlib_memnomove_p = true;
 
     SetCursor(*GetCursor(watchCursor));
 

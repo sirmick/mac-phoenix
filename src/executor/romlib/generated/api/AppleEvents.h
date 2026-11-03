@@ -250,7 +250,6 @@ BEGIN_EXECUTOR_ONLY
 /* private */
 
 extern bool send_application_open_aevt_p;
-extern bool application_accepts_open_app_aevt_p;
 
 /*  error codes */
 

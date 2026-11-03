@@ -8,10 +8,15 @@
 #include <MemoryMgr.h>
 #include <base/common.h>
 #include <quickdraw/font.h>
+#include <DeviceMgr.h>
+#include <WindowMgr.h>
+#include <quickdraw/cquick.h>
 #else
 #include <Quickdraw.h>
 #include <QDOffscreen.h>
 #include <Windows.h>
+#include <Devices.h>
+#include <Palettes.h>
 #endif
 
 #include <bitset>
@@ -865,3 +870,87 @@ TEST(QuickDraw, RandomAsTheROM)
     }
     qd.randSeed = saved;
 }
+
+/* The main screen has a driver, as on a 7.6.1 Quadra (2026-11-03: gdFlags
+   $B820, a DCE at its gdRefNum): noDriver clear, for every program
+   (Executor once set it for Realmz). */
+TEST(QuickDraw, MainDeviceHasDriver)
+{
+    GDHandle gd = GetMainDevice();
+    ASSERT_NE(nullptr, gd);
+    short flags = (*gd)->gdFlags;
+    EXPECT_EQ(0, flags & (1 << 14));      // noDriver
+    EXPECT_NE(0, flags & (1 << 13));      // screenDevice
+    EXPECT_NE(0, flags & (1 << 11));      // mainScreen
+    EXPECT_NE(nullptr, GetDCtlEntry((*gd)->gdRefNum));
+}
+
+#ifndef EXECUTOR
+/* The 68k application's only (natively there is no screen device): the
+   main device at 8 bits (set for the test where it isn't), restored
+   after. */
+struct MainDevice8
+{
+    GDHandle gd = GetMainDevice();
+    short depth = (*(*gd)->gdPMap)->pixelSize;
+    bool ok;
+    MainDevice8()
+    {
+        if((*gd)->gdType != clutType)
+            SetDepth(gd, 8, 0, 0);
+        ok = (*gd)->gdType == clutType;
+    }
+    ~MainDevice8()
+    {
+        if((*(*gd)->gdPMap)->pixelSize != depth)
+            SetDepth(gd, depth, 0, 0);
+    }
+    CTabHandle table() { return (*(*gd)->gdPMap)->pmTable; }
+};
+
+/* SetEntries gives the device's table a new seed even for an entry set to
+   the colour it has (the Quadra: 40 -> 1096). */
+TEST(QuickDraw, SetEntriesSameColourNewSeed)
+{
+    MainDevice8 dev;
+    if(!dev.ok)
+        GTEST_SKIP() << "no 8-bit main device";
+    int32_t seed = (*dev.table())->ctSeed;
+    ColorSpec cs[1];
+    cs[0] = (*dev.table())->ctTable[5];
+    cs[0].value = 0;
+    GDHandle save = GetGDevice();
+    SetGDevice(dev.gd);
+    SetEntries(5, 0, cs);
+    SetGDevice(save);
+    EXPECT_NE(seed, (int32_t)(*dev.table())->ctSeed);
+}
+
+/* SetPalette on the front window puts its colours in the device's table
+   at once, no ActivatePalette needed. */
+TEST(QuickDraw, SetPaletteFrontWindowActivates)
+{
+    MainDevice8 dev;
+    if(!dev.ok)
+        GTEST_SKIP() << "no 8-bit main device";
+    Rect r = { 60, 60, 160, 260 };
+    WindowPtr w = NewCWindow(nullptr, &r, PSTR("P"), true, 0, (WindowPtr)-1, false, 0);
+    ASSERT_NE(nullptr, w);
+    SelectWindow(w);
+    ASSERT_EQ(w, FrontWindow());
+    PaletteHandle pal = NewPalette(1, nullptr, pmTolerant, 0);
+    RGBColor odd = { 0x1234, 0x5678, 0x9ABC };
+    SetEntryColor(pal, 0, &odd);
+    SetPalette(w, pal, true);
+    CTabHandle ct = dev.table();
+    bool found = false;
+    for(int i = 0; i <= (*ct)->ctSize; i++)
+    {
+        RGBColor c = (*ct)->ctTable[i].rgb;
+        found |= c.red == odd.red && c.green == odd.green && c.blue == odd.blue;
+    }
+    EXPECT_TRUE(found);
+    DisposeWindow(w);
+    DisposePalette(pal);
+}
+#endif
