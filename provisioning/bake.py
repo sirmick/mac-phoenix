@@ -43,7 +43,8 @@ deletes them where the snapshot's System Folder part goes), "system_take"
 settings), "system_exclude" (System Folder files left out though new: a
 registration app's preferences holding what was typed into it), "network" (the guest's --network: "socket" for net-bridge),
 "exclude" (names at the top of the target left out of the capture: a self-extracting
-archive copied there to expand in place), "volatile" (snapshot paths a run writes differently every time, compared by
+archive copied there to expand in place; "Folder:Name", that path only, on the Installers disk too: a
+serial number file that came with the archive), "volatile" (snapshot paths a run writes differently every time, compared by
 name only: a first launch's database or preferences). "wip": a bake still being
 worked out, left out of --all. "args": emulator arguments for every guest
 the bake starts ("--model-id", "5": Systems before 7.5). "first_boot_agent":
@@ -727,8 +728,11 @@ class Session:
         if self.bake.get("archive"):            # an .hqx expands to a .sit and then a folder
             dropped |= {r.split(b":")[0] for r, l in items if b":" not in r and l
                         and os.path.splitext(r.decode("mac_roman"))[1].lower() in ARCHIVE_TYPES}
-        excluded = sorted({r.split(b":")[0] for r, _ in items if r.split(b":")[0] in dropped})
-        items = [(r, l) for r, l in items if r.split(b":")[0] not in dropped]
+        def left_out(r):                        # "A:B" in "exclude": that path (and under it) only
+            return r.split(b":")[0] in dropped or any(r == e or r.startswith(e + b":") for e in dropped if b":" in e)
+        excluded = sorted({e for e in dropped if b":" in e and any(left_out(r) for r, _ in items if r.startswith(e))}
+                          | {r.split(b":")[0] for r, _ in items if r.split(b":")[0] in dropped})
+        items = [(r, l) for r, l in items if not left_out(r)]
         if self.bake.get("from_boot"):
             hfs.mount(self.base_path)
             had = {n for n, _ in hfs.ls(b":")}
