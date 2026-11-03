@@ -8,7 +8,7 @@
 //   node web/tests/tab_m1.mjs DIR LIBRARY SYSTEM DISK
 //
 // DIR the wasm build's page, LIBRARY tools/web/make_library.py's output,
-// SYSTEM 7.6.1 or 8.6, DISK a library disk there (productivity.img,
+// SYSTEM 7.6.1 or 8.6, DISK a library disk there (productivity.img, creative.img,
 // development.img, tools-8.img, games-68k.img, games-ppc.img). The targets are TARGETS
 // below, not the disk record's launch list (which tab_site.mjs opens). Every
 // target is expected to work: one that doesn't fails the cell, with what it
@@ -68,6 +68,31 @@ const TARGETS = {
             await t.type(DOCUMENT);
             await t.key('Enter');
             await t.saveAs('M1 XL');
+        } },
+    ],
+    'creative.img': [
+        { name: 'Kid Pix', app: 'Creative:Kid Pix 2.5 ƒ:Kid Pix', use: async (t) => {
+            // its full-screen page (no title): the pencil (the palette's
+            // first) drawn across it, the page then different; Save As
+            // (Standard File), the dialog gone and no alert
+            await t.pause(5000);
+            const blank = await sample();
+            await t.click(20, 40);
+            await t.pause(500);
+            await t.drag([[150, 150], [450, 160], [460, 350], [160, 340], [150, 150]]);
+            await t.pause(1000);
+            if (changed(blank, await sample()) < 0.002)
+                throw new Error('nothing drawn');
+            await t.key('Meta+KeyS');
+            await t.until(async () => (await t.windows()).some((w) => w.kind === DIALOG_KIND), 20000, 'no Save dialog');
+            await t.pause(1000);
+            await t.type('M1 KP');
+            await t.key('Enter');
+            await t.until(async () => !(await t.windows()).some((w) => w.kind === DIALOG_KIND), 30000, 'the Save dialog stayed');
+            await t.pause(2000);
+            const d = (await t.windows()).find((w) => w.kind === DIALOG_KIND);
+            if (d)
+                throw new Error(`alert "${said(d).replace(/\s+/g, ' ')}"`);
         } },
     ],
     'development.img': [
@@ -354,6 +379,15 @@ const t = {
         await page.mouse.move(...await at(x, y));
         await page.mouse.down();
         await page.waitForTimeout(200);
+        await page.mouse.up();
+    },
+    // the button held along points (a pencil stroke)
+    async drag(points) {
+        trace('drag', JSON.stringify(points));
+        await page.mouse.move(...await at(...points[0]));
+        await page.mouse.down();
+        for (const p of points.slice(1))
+            await page.mouse.move(...await at(...p), { steps: 10 });
         await page.mouse.up();
     },
     async until(fn, ms, why) {
