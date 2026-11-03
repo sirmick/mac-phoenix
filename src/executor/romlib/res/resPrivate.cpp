@@ -76,6 +76,14 @@ Handle Executor::C_GetOverrideMap(Handle map)
     return nullptr;
 }
 
+/* Selector 7: whether searches go through the override maps (by its
+   name). Not acted on: ResEdit turns it off and on again around reading
+   a file's own map (Count1Types). */
+void Executor::C_SetScanOverride(Boolean scan)
+{
+    (void)scan;
+}
+
 /* Selector -1: whether a map is the System file's or a file's opened in
    system mode. */
 Boolean Executor::C_IsThisASystemResourceMap(Handle map)

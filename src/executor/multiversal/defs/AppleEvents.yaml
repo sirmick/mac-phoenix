@@ -122,6 +122,17 @@
 
 - enum:
     values:
+      - name: kAEWantReceipt
+        value: 0x200
+      - name: kAEDontRecord
+        value: 0x1000
+      - name: kAEDontExecute
+        value: 0x2000
+
+# ####
+
+- enum:
+    values:
       - name: _kAEInteractMask
         value: 0x30
 
@@ -939,6 +950,16 @@
         value: "'unbk'"
       - name: keyAENavigate
         value: "'navt'"
+      - name: keyAEDesiredClass
+        value: "'want'"
+      - name: keyAEContainer
+        value: "'from'"
+      - name: keyAEKeyForm
+        value: "'form'"
+      - name: keyAEKeyData
+        value: "'seld'"
+      - name: typeObjectSpecifier
+        value: "'obj '"
       - name: formAbsolutePosition
         value: "'indx'"
       - name: formRelativePosition

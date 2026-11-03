@@ -68,6 +68,15 @@ the file a balloon's resource came from.
   (Executor tracks those: `ROMlib_system_resource_file_p(refnum)`,
   `rsys/process.h`); false otherwise.
 
+## Selector 7: `void SetScanOverride(Boolean scan)`
+
+Called `move.b scan,-(sp); moveq #7,d0; _ResourceDispatch` (ResEdit 2.1.3,
+around its Count1Types of a file it opens): D0's high byte is 0, yet the
+call takes its Boolean off the stack. The name is among the 8.6 System
+file's Resource Manager names; by it, whether searches go through the
+override maps. Executor pops the Boolean and changes nothing, ResErr
+included.
+
 ## Tests to write
 
 gtests in `src/executor/tests` (resources.cpp has fixtures for opening
