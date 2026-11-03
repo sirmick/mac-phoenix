@@ -157,18 +157,20 @@ Executor native = `tests/test_utilities_executor.sh`, the tab = the
 | | Quadra 650, 7.6.1 | G3, 8.6 | Executor 7.6.1 (68k) | Executor 8.6 (PowerPC) | tab 7.6.1 / 8.6 |
 |---|---|---|---|---|---|
 | Gestalt.Appl: selectors | | 158 | 59; `cput` 68040 | | 59 / 65 |
-| TattleTech: machine | runs | Power Mac 9500/9600 (67), 32-bit capable | exits at once (below) | exits at once (below) | — / not in front |
+| TattleTech: machine | runs | Power Mac 9500/9600 (67), 32-bit capable | exits at once (below); `--executor-ppc`: as the G3 | as the G3 | — / not in front |
 | Clockometer | 68040, ??.?? MHz, hangs | | 68040, hangs (`--executor-ppc`: 68030) | "Unknown processor type" | |
 | Cache-22 | quits | quits | "Unknown processor type" | "Unknown processor type" | |
 | Speedometer 4.0 | splash until a click, then its registration screen | registration form | as the Quadra; Hardware Information: Macintosh, 68040 | as the Quadra; Power Macintosh | |
 | MacBench 5.0 | needs a PowerPC | licence | needs a PowerPC 601 | licence | — / quits at Cmd-. (its licence's Quit) |
 
 TattleTech switches to its own resource file with `UseResFile` on a local
-it sets only on its Name Registry path (Gestalt `'nreg'`, a PowerPC Mac,
-`NameRegistryLib`): the G3 takes that path; on the Quadra the local is
-stack junk, not a file, and the call does nothing; on Executor, which has
-no Name Registry, the stack there is still zero, so it makes the System
-file current, doesn't find its own `'tCFG'`, and quits (2026-11-03).
+it sets only on its Name Registry path (Gestalt `'nreg'`, a PowerPC
+architecture, `NameRegistryLib`): the G3 takes that path, and so does
+Executor with PowerPC code (its Name Registry: the root and `Devices`);
+on the Quadra the local is stack junk, not a file, and the call does
+nothing; on Executor's 68k Mac the stack there is still zero, so it makes
+the System file current, doesn't find its own `'tCFG'`, and quits
+(2026-11-03).
 
 ## CDs
 
