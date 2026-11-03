@@ -1140,17 +1140,21 @@ static INTEGER npairs;
 
 #include "hintemplate.h"
 
-#define DECL void hinset(INTEGER *p, INTEGER dh)
+/* The output goes to its own buffer, up to out_end: in place, an inset
+   that makes more pairs than it has read overwrote the input it hadn't
+   read yet, sentinel and all, and read on past the buffer (Speedometer
+   4.0 on 8.6). */
+#define DECL void hinset(INTEGER *p, INTEGER *out, INTEGER *out_end, INTEGER dh)
 
 #define STATEDECL
 #define ITYPE INTEGER
 #define SETIO      \
     ip = p;        \
-    op = p;        \
+    op = out;      \
     y = *(ip + 1); \
     npairs = 0
 #define NEXTPAIR y == *(ip + 1) ? (x = *ip++, ip++, 1) : (y = *(ip + 1), 0)
-#define INCLXY(x, y) *op++ = x, *op++ = y, npairs++
+#define INCLXY(x, y) (op + 2 <= out_end ? (*op++ = x, *op++ = y, npairs++) : 0)
 #define UNSETIO
 
 #include "hintemplate.h"
@@ -1261,16 +1265,18 @@ void Executor::C_InsetRgn(RgnHandle rh, INTEGER dh, INTEGER dv)
            the region stays as it was and QDError says why. */
         newsize = 4 * RGN_SIZE(rh);
         std::vector<INTEGER> points(newsize / sizeof(INTEGER));
-        std::vector<INTEGER> data(newsize / sizeof(INTEGER));
+        std::vector<INTEGER> inset(2 * points.size());
         p = points.data();
         rhtopandinseth(rh, p, dh); /* must be combined for efficiency */
         gui_assert(npairs * (int)sizeof(INTEGER) * 2 <= newsize);
         qsort(p, npairs, sizeof(INTEGER) * 2, comparex);
-        hinset(p, dv);
+        p = inset.data();
+        hinset(points.data(), p, p + inset.size(), dv);
         qsort(p, npairs, sizeof(INTEGER) * 2, comparey);
+        /* ptorh: the pairs' x's plus a y per row, and two stops */
+        std::vector<INTEGER> data(2 * (size_t)npairs + 4);
         INTEGER *end = ptorh(p, data.data());
         Size size = RGN_SMALL_SIZE + sizeof(INTEGER) * (end - data.data());
-        gui_assert(size <= newsize);
         if(!rgn_set_size(rh, size))
             return;
         memcpy(RGN_DATA(rh), data.data(), size - RGN_SMALL_SIZE);
