@@ -199,6 +199,11 @@ void Executor::ROMlib_wheel_mouse(EventRecord *evt)
     }
 }
 
+bool Executor::ROMlib_wheel_active()
+{
+    return press.on;
+}
+
 bool Executor::ROMlib_wheel_button(bool *down)
 {
     if(!press.on)

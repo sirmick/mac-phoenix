@@ -640,7 +640,10 @@ on 9.0.4:
 
 Observed with IconTest on 9.0.4 and 8.6 (G3): a volume's root shows its
 driver's media icon (Control 22; the ROM machine's ExtFS answers 22
-only), else its drive icon (21); a file with `kHasCustomIcon` shows
+only), else its drive icon (21), else (8.x) the System's hard disk icon:
+Executor's own drives answer 21/22 only on 7.x, whose Finder shows a
+document's icon for a volume without one; on 8.x they leave it to 8.6's
+platinum `hdsk` (`hostdisk.cpp`); a file with `kHasCustomIcon` shows
 -16455, else -16496 (where the Finder keeps an alias file's copy of its
 target's icon), alias or not; without the flag, neither.
 
