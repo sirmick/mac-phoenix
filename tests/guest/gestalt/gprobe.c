@@ -223,7 +223,7 @@ int main(void)
         unsigned long s = sels[i];
         fprintf(f, "%c%c%c%c %d %08lx\n", (int)(s >> 24), (int)(s >> 16) & 255, (int)(s >> 8) & 255, (int)s & 255, e, e ? 0 : v);
     }
-    fprintf(f, "done\n");
+    fprintf(f, "done\n---\n"); /* the end, as tests/test_guest_suite.sh waits for */
     fclose(f);
     return 0;
 }

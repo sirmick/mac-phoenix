@@ -8,6 +8,12 @@ or the retroppc one) and run with `tests/test_guest_suite.sh --app
 GProbe.bin --results gestalt.txt` on the ROM machines; on Executor launch
 it from the Host volume.
 
+`GProbe68k.bin`, `GProbePPC.bin`: those builds (Retro68), which
+`tests/test_gestalt_executor.sh` runs on Executor (ctest
+`gestalt_executor_{7.6.1,7.6.1-ppc,8.6}`), comparing the identity and the
+managers Executor answers as the Mac does with `ref/`. Rebuild them after
+changing `gprobe.c`; the output ends with `---`, the guest suite's end.
+
 `ref/`: the answers measured 2026-11-03 on the Quadra 650 ROM machine
 (7.6.1, 68k build) and mame-ppc's G3 (7.6.1 and 8.6, PowerPC build).
 Machine-specific values (RAM, ROM, table addresses, bug-fix bits) differ

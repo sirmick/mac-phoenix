@@ -5,6 +5,8 @@
 
 #include <Gestalt.h>
 #include <OSUtil.h>
+#include <rsys/gestalt.h>
+#include <prefs/prefs.h>
 
 using namespace Executor;
 
@@ -48,4 +50,70 @@ TEST(Gestalt, AddressingModeAndPageSize)
     EXPECT_EQ(7, (LONGINT)v);
     ASSERT_EQ(noErr, C_Gestalt(gestaltLogicalPageSize, &v));
     EXPECT_EQ(4096, (LONGINT)v);
+}
+
+/* Managers Executor has, answered as the Quadra answers them on 7.6.1
+   (tests/guest/gestalt): the pop-up CDEF, the Icon Utilities, the
+   Notification and Resource Managers, the machine icon, Gestalt 6; and the
+   keyboard KbdType says, an ISO Apple Extended (9), in SysEnvirons too. */
+TEST(Gestalt, QuadraManagersAndKeyboard)
+{
+    GUEST<LONGINT> sysv, v;
+    ASSERT_EQ(noErr, C_Gestalt(gestaltSystemVersion, &sysv));
+    ASSERT_EQ(noErr, C_Gestalt(gestaltPopupAttr, &v));
+    EXPECT_EQ(1, (LONGINT)v);
+    ASSERT_EQ(noErr, C_Gestalt(gestaltMachineIcon, &v));
+    EXPECT_EQ(-16396, (LONGINT)v);
+    ASSERT_EQ(noErr, C_Gestalt(gestaltKeyboardType, &v));
+    EXPECT_EQ(9, (LONGINT)v);
+    SysEnvRec env;
+    ASSERT_EQ(noErr, SysEnvirons(2, &env));
+    EXPECT_EQ(9, env.keyBoardType);
+    if(sysv >= 0x700)
+    {
+        ASSERT_EQ(noErr, C_Gestalt("nmgr"_4, &v));
+        EXPECT_EQ(1, (LONGINT)v);
+        ASSERT_EQ(noErr, C_Gestalt("rsrc"_4, &v));
+        EXPECT_EQ(3, (LONGINT)v);
+        ASSERT_EQ(noErr, C_Gestalt("icon"_4, &v));
+        EXPECT_EQ(sysv >= 0x850 ? 0x1F : 1, (LONGINT)v);
+        ASSERT_EQ(noErr, C_Gestalt(gestaltVersion, &v));
+        EXPECT_EQ(sysv >= 0x800 ? 7 : 6, (LONGINT)v);
+    }
+}
+
+/* The System's version sets the machine both ways: an 8.x System makes it
+   the G3, a 7.x one (no --executor-ppc) the Quadra again, nothing of the
+   G3 left behind. */
+TEST(Gestalt, SystemVersionSetsTheMachineBothWays)
+{
+    GUEST<LONGINT> sysv, v;
+    ASSERT_EQ(noErr, C_Gestalt(gestaltSystemVersion, &sysv));
+    bool prefer_ppc = ROMlib_prefer_ppc;
+    ROMlib_prefer_ppc = false;
+    auto get = [&](OSType sel) {
+        GUEST<LONGINT> r;
+        OSErr err = C_Gestalt(sel, &r);
+        return err ? (LONGINT)err : (LONGINT)r;
+    };
+    gestalt_set_system_version(0x0860);
+    EXPECT_EQ(67, get(gestaltMachineType));
+    EXPECT_EQ(2, get(gestaltSysArchitecture));
+    EXPECT_EQ(0, get(gestaltFPUType));
+    EXPECT_EQ(100000000, get("pclk"_4));
+    EXPECT_EQ(7, get(gestaltVersion));
+    gestalt_set_system_version(0x0761);
+    EXPECT_EQ(20, get(gestaltMachineType));
+    EXPECT_EQ(1, get(gestaltSysArchitecture));
+    EXPECT_EQ(5, get(gestaltProcessorType));
+    EXPECT_EQ(3, get(gestaltFPUType));
+    EXPECT_EQ(0, get(gestaltMMUType));
+    EXPECT_EQ(3, get("thds"_4));
+    EXPECT_EQ(gestaltUndefSelectorErr, get("pclk"_4));
+    EXPECT_EQ(6, get(gestaltVersion));
+    EXPECT_EQ(1, get(gestaltAppleEventsAttr));
+    EXPECT_EQ(0x0750, get(gestaltScriptMgrVersion));
+    EXPECT_EQ(0, get(gestaltFSAttr) & (1 << 8));
+    ROMlib_prefer_ppc = prefer_ppc;
+    gestalt_set_system_version((LONGINT)sysv);
 }

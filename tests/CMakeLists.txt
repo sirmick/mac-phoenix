@@ -1269,7 +1269,7 @@ set_tests_properties(thinkc_run_executor PROPERTIES
 )
 
 # The Utilities disk (system information and benchmarks) on Executor:
-# Gestalt.Appl on 7.6.1; Gestalt.Appl, TattleTech and MacBench 5.0 on 8.6.
+# Gestalt.Appl on 7.6.1; Gestalt.Appl and MacBench 5.0 on 8.6.
 foreach(_us IN ITEMS 7.6.1 8.6)
   add_test(
     NAME utilities_executor_${_us}
@@ -1280,6 +1280,21 @@ foreach(_us IN ITEMS 7.6.1 8.6)
     LABELS "guest;executor"
     SKIP_RETURN_CODE 77
     RESOURCE_LOCK utilities_executor
+  )
+endforeach()
+
+# Executor's Gestalt against the Macs' (tests/guest/gestalt: the probe and
+# the answers measured on the Quadra 650 and the G3): identity and managers.
+foreach(_gc IN ITEMS 7.6.1 7.6.1-ppc 8.6)
+  add_test(
+    NAME gestalt_executor_${_gc}
+    COMMAND bash ${TEST_DIR}/test_gestalt_executor.sh ${_gc} --port 18874
+  )
+  set_tests_properties(gestalt_executor_${_gc} PROPERTIES
+    TIMEOUT 300
+    LABELS "guest;executor"
+    SKIP_RETURN_CODE 77
+    RESOURCE_LOCK gestalt_executor
   )
 endforeach()
 

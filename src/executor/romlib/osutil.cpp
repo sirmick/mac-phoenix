@@ -905,7 +905,9 @@ OSErr Executor::SysEnvirons(INTEGER vers, SysEnvRecPtr p)
        emulator has none (an 8.x System, or PowerPC code on 7.x) */
     p->hasFPU = !(system_version >= 0x800 || ROMlib_prefer_ppc);
     p->hasColorQD = true;
-    p->keyBoardType = envAExtendKbd;
+    /* MacPhoenix: envExtISOADBKbd, as KbdType (init.cpp) and Gestalt
+       'kbd ' say */
+    p->keyBoardType = 9;
     p->atDrvrVersNum = 0;
     p->sysVRefNum = LM(BootDrive);
 
