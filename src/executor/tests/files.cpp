@@ -422,6 +422,43 @@ TEST_F(FileTest, OpenTwiceForWrite)
     }
 }
 
+/* Paths opened for shared read/write (fsRdWrShPerm) coexist; one for
+   exclusive writing doesn't, while any of them is open. Microsoft OLE
+   opens its compound files this way (Works 4.0b: two made in one tick
+   have one name). */
+TEST_F(FileTest, OpenTwiceShared)
+{
+    open(fsRdWrShPerm);
+    short first = refNum;
+
+    auto openAgain = [&](int8_t perm, short& ref) {
+        HParamBlockRec hpb;
+        memset(&hpb, 42, sizeof(hpb));
+        hpb.ioParam.ioCompletion = nullptr;
+        hpb.ioParam.ioVRefNum = vRefNum;
+        hpb.fileParam.ioDirID = dirID;
+        hpb.ioParam.ioNamePtr = file1;
+        hpb.ioParam.ioPermssn = perm;
+        PBHOpenSync(&hpb);
+        ref = hpb.ioParam.ioRefNum;
+        return (OSErr)hpb.fileParam.ioResult;
+    };
+
+    short second = 0, other = 0;
+    EXPECT_EQ(noErr, openAgain(fsRdWrShPerm, second));
+    EXPECT_NE(first, second);
+    EXPECT_EQ(opWrErr, openAgain(fsRdWrPerm, other));
+
+    close(first);
+    refNum = second;
+    EXPECT_EQ(opWrErr, openAgain(fsRdWrPerm, other));  /* the second still writes */
+
+    close(second);
+    refNum = -1;
+    EXPECT_EQ(noErr, openAgain(fsRdWrPerm, other));
+    refNum = other;
+}
+
 TEST_F(FileTest, WriteRead)
 {
     open();
