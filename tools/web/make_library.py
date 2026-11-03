@@ -75,13 +75,13 @@ DISKS = [
      "tags": ["productivity", "68k", "ppc"],
      "note": "AppleWorks 5.0.3 (word processing, drawing, painting, spreadsheet, database), "
              "ClarisWorks 4.0v4, ClarisDraw 1.0v4, Corel WordPerfect 3.5e, Microsoft Excel 4.0, "
-             "FileMaker Pro 4.0, Aldus Persuasion 3.0: "
+             "FileMaker Pro 4.0, Aldus Persuasion 3.0, Microsoft Works 4.0b: "
              "for Mac OS 7.6.1 and 8.6. Microsoft Office 98 (Word, Excel, PowerPoint; PowerPC: "
              "Mac OS 8.6 with PowerPC ticked) asks for its CD key at first launch.",
      "take": [("productivity-system-7.img", ["AppleWorks 5.0.3 ƒ", "ClarisWorks 4.0v4 ƒ", "ClarisDraw 1.0v4 ƒ",
                                               "Corel WordPerfect 3.5e ƒ", "Microsoft Excel 4.0 ƒ",
                                               "Microsoft Office 98 ƒ", "FileMaker Pro 4.0 ƒ",
-                                              "Aldus Persuasion 3.0 ƒ"])],
+                                              "Aldus Persuasion 3.0 ƒ", "Microsoft Works 4.0b ƒ"])],
      "launch": [
          {"app": "AppleWorks 5.0.3 ƒ:AppleWorks", "name": "AppleWorks"},
          {"app": "ClarisWorks 4.0v4 ƒ:ClarisWorks", "name": "ClarisWorks"},
@@ -91,6 +91,7 @@ DISKS = [
          {"app": "Microsoft Office 98 ƒ:Microsoft Word", "name": "Microsoft Word", "systems": ["8.6"]},
          {"app": "FileMaker Pro 4.0 ƒ:FileMaker Pro", "name": "FileMaker Pro"},
          {"app": "Aldus Persuasion 3.0 ƒ:Aldus Persuasion 3.0", "name": "Aldus Persuasion 3.0"},
+         {"app": "Microsoft Works 4.0b ƒ:Microsoft Works 4.0", "name": "Microsoft Works 4.0"},
      ]},
     {"name": "creative.img", "label": "Creative",
      "title": "Creative",
@@ -193,6 +194,16 @@ DISKS = [
          {"app": "Slithereens 1.0.1 ƒ:Slithereens", "name": "Slithereens", "source": "games-ppc.img"},
          {"app": "GameBox Classic 1.2.0 ƒ:GameBox", "name": "GameBox", "source": "games-ppc.img"},
      ]},
+    {"name": "icons.img", "label": "Icons",
+     "title": "Icons",
+     "tags": ["icons", "68k", "ppc"],
+     "note": "Custom icons to paste onto folders and files (Get Info, then Paste): The Iconfactory's "
+             "classic collection, MacUser's Custom Icon Pack IV (Mac models) and Nitrozac's icons from "
+             "MacAddict #63's CD, with their Read Mes. Mac OS 7.6.1 and 8.6 (the Iconfactory's are "
+             "Mac OS 8.5's 'icns' icons: they show on 8.6, not on 7.6.1).",
+     "take": [("icons.img", ["Iconfactory Classic Icons ƒ", "MacUser Custom Icon Pack IV ƒ",
+                             "Nitrozac Icons (MacAddict 63) ƒ"])],
+     "launch": []},
     {"name": "internet.img", "label": "Internet",
      "title": "Internet",
      "tags": ["internet", "ppc"],

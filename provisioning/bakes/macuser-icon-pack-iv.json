@@ -1,0 +1,9 @@
+{
+ "note": "MacUser's Custom Icon Pack IV: icons of Mac models (compact Macs, PowerBooks, desktops) as folders' and files' custom icons, its Read Me and MacUser Utilities. Expanded by StuffIt Expander in the guest",
+ "kind": "expand",
+ "archive": "MacUser_Custom_Icon_Pack_IV.sit",
+ "expect": [
+  "MacUser's Custom Icon Pack IV"
+ ],
+ "os": "tools-7.6.1"
+}

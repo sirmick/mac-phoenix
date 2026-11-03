@@ -166,4 +166,42 @@ TEST_F(HFSVolumeTest, FInfoOfAFolderIsFnfErr)
     EXPECT_EQ(noErr, HGetFInfo(vref, dirID, name("File"), &fi));
     EXPECT_EQ("TEXT"_4, fi.fdType);
 }
+/* PBOpenWD with no name and dirID 0 names the default directory (for
+   vRefNum 0) or a working directory's: the new WD is that directory, not
+   the volume's root. PageMaker 6.5 opens one on (0, 0), its folder the
+   default, and looks up its RSRC folder in it ("Please find the RSRC
+   Folder" on Executor). */
+TEST_F(HFSVolumeTest, OpenWDOnTheDefaultDirectory)
+{
+    FSSpec spec;
+    FSMakeFSSpec(vref, 2, name("Folder"), &spec);
+    GUEST<LONGINT> dirID;
+    ASSERT_EQ(noErr, FSpDirCreate(&spec, -1 /* smSystemScript */, &dirID));
+    ASSERT_EQ(noErr, HCreate(vref, dirID, name("File"), "ttxt"_4, "TEXT"_4));
+
+    GUEST<INTEGER> savedVRef;
+    GUEST<LONGINT> savedDir;
+    ASSERT_EQ(noErr, HGetVol(nullptr, &savedVRef, &savedDir));
+    ASSERT_EQ(noErr, HSetVol(nullptr, vref, dirID));
+
+    WDPBRec wd;
+    memset(&wd, 0, sizeof wd);
+    wd.ioWDProcID = "Test"_4;
+    ASSERT_EQ(noErr, PBOpenWD(&wd, false));
+    INTEGER wdRef = wd.ioVRefNum;
+    FInfo fi;
+    EXPECT_EQ(noErr, HGetFInfo(wdRef, 0, name("File"), &fi));
+
+    /* and one on that WD, dirID 0, is the same directory */
+    WDPBRec wd2;
+    memset(&wd2, 0, sizeof wd2);
+    wd2.ioVRefNum = wdRef;
+    wd2.ioWDProcID = "Test"_4;
+    ASSERT_EQ(noErr, PBOpenWD(&wd2, false));
+    EXPECT_EQ(noErr, HGetFInfo(wd2.ioVRefNum, 0, name("File"), &fi));
+
+    HSetVol(nullptr, savedVRef, savedDir);
+    PBCloseWD(&wd2, false);
+    PBCloseWD(&wd, false);
+}
 #endif

@@ -1,0 +1,7 @@
+# wide on Executor (8.6 System) against the G3 (8.6): known differences.
+# key-glob<TAB>reason. Remove a line when Executor matches (run.py lists those).
+
+# WideWideDivide by -2^31 (a divisor 8.6 cannot negate in 32 bits): 8.6
+# answers 0 with a remainder of 0x80000000 for most dividends; Executor
+# divides exactly.
+divide.wdiv.*.-2147483648	8.6 mishandles the divisor -2^31; Executor answers the exact quotient

@@ -219,6 +219,11 @@
         type: LONGINT
       - name: qelp
         type: EvQElPtr*
+    library: InterfaceLib
+    executor: PPostEvent
+    comment: |
+      MacPhoenix: exported, as PostEvent (Illustrator 8.0 imports it); the
+      68k trap is emustubs.cpp's (register-based, $A12F).
 
 # ####
 
@@ -230,6 +235,12 @@
         type: INTEGER
       - name: evmsg
         type: LONGINT
+    library: InterfaceLib
+    executor: PostEvent
+    comment: |
+      MacPhoenix: exported (osevent.cpp has it): PageMaker 6.5's import
+      filters import it, and unresolved one of them jumped to 0. The 68k
+      trap is emustubs.cpp's (register-based, $A02F).
 
 # ####
 

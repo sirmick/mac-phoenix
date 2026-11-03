@@ -24,7 +24,9 @@ import subprocess
 import tempfile
 import time
 
-LS = re.compile(rb"^([dfF])\s+(?:\S{4}/\S{4}\s+)?.*?\s\w{3}\s+\d+\s+(?:\d{4}|\d\d:\d\d)\s(.*)$")
+# hls -l: the kind (d, f, F), then "i" for an invisible item (a folder's
+# custom icon, "Icon\r"; the Finder's own files), its type/creator, sizes, date, name
+LS = re.compile(rb"^([dfF])i?\s+(?:\S{4}/\S{4}\s+)?.*?\s\w{3}\s+\d+\s+(?:\d{4}|\d\d:\d\d)\s(.*)$")
 INFO = b"Snapshot Info"
 FORMAT = 1
 ALIAS_FLAG = 0x8000

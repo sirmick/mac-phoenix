@@ -69,10 +69,13 @@ async function photoshop(t, doc) {
     await t.key('Enter');
     await t.until(async () => (await t.windows()).some((w) => /^Untitled/.test(w.title)), 20000, 'no Untitled window');
     const w = (await t.windows()).find((x) => /^Untitled/.test(x.title));
+    // (the rectangle is the frame's: 8.x's title bar is 22 pixels, the
+    // scroll bars and the status line 16; a stroke from the title bar
+    // drags the window, and Save does nothing for an untouched document)
     const [top, left, bottom, right] = w.rect;
     const before = await sample();
     await t.key('KeyB');
-    await t.drag([[left + 20, top + 20], [right - 20, (top + bottom) / 2], [left + 20, bottom - 20]]);
+    await t.drag([[left + 20, top + 40], [right - 40, (top + bottom) / 2], [left + 20, bottom - 40]]);
     await t.pause(1000);
     if (changed(before, await sample()) < 0.002)
         throw new Error('nothing drawn');
@@ -167,6 +170,19 @@ const TARGETS = {
             // (a line of text is a few samples of sample()'s grid)
             await t.until(async () => changed(before, await sample()) > 0, 10000, 'the text never drawn');
             await t.saveAs('M1 PE');
+        } },
+        { name: 'Microsoft Works 4.0', app: 'Productivity:Microsoft Works 4.0b ƒ:Microsoft Works 4.0', use: async (t) => {
+            // Microsoft Works Startup at launch, Word Processor picked: New
+            // (Return) -> an untitled word processor document -> typed, saved
+            await t.until(async () => (await t.windows()).some((w) => w.title === 'Microsoft Works Startup'), 60000,
+                          'no Microsoft Works Startup');
+            await t.pause(1000);
+            await t.key('Enter');
+            await t.until(async () => (await t.windows()).some((w) => /^Untitled/.test(w.title)), 30000, 'no Untitled document');
+            await t.pause(1000);
+            await t.type(DOCUMENT);
+            await t.until(async () => (await t.drawn()).some((s) => s.includes('Hello')), 10000, 'the text never drawn');
+            await t.saveAs('M1 MW');
         } },
     ],
     'creative.img': [

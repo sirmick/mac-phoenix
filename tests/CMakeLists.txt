@@ -626,6 +626,15 @@ add_test(
 )
 set_tests_properties(bake_exclude PROPERTIES TIMEOUT 60 LABELS "provisioning")
 
+# Folders' custom icons through the pipeline: snapshot.py lists the invisible
+# "Icon\r" files, a capture keeps them (top-level noise and .DS_Store out,
+# reported), tidy.py sets their folders' kHasCustomIcon (no emulator).
+add_test(
+  NAME custom_icons
+  COMMAND ${Python3_EXECUTABLE} ${TEST_DIR}/test_custom_icons.py
+)
+set_tests_properties(custom_icons PROPERTIES TIMEOUT 60 LABELS "provisioning" SKIP_RETURN_CODE 77)
+
 # A library disk's System Folder additions (tools/web/make_disk.py
 # --system-from, make_library.py's place mapping): hfsutils, no emulator.
 add_test(
@@ -1457,7 +1466,7 @@ endforeach()
 # Differential probes (docs/executor/DiffTest.md): each probe's answers on
 # Executor (8.6 System) against the committed G3 8.6 reference, known
 # differences in tests/guest/difftest/expected/. Fails on a new difference.
-foreach(probe aevt appr ctl menu sys text textutil wind)
+foreach(probe aevt appr ctl menu sys text textutil wide wind)
   add_test(
     NAME difftest_${probe}_executor_86
     COMMAND python3 ${CMAKE_SOURCE_DIR}/tools/difftest/run.py ${probe} --no-refresh
