@@ -291,10 +291,13 @@ let cds = new Set();
 const ejecting = new Map();         // request id -> image name
 async function openImage(f) {
     const o = Overlay.open(f.name, f, imageKey(f));
+    // (with this browser's cached chunks of it, the ones the last starts read)
+    const preload = o.image instanceof RemoteImage ? o.image.preload() : null;
     if (Store.enabled && o.file.remote)
         await Store.overlayDown(o);
     else
         o.syncOff = true;               // an upload: this visit's
+    await preload;
     return o;
 }
 
@@ -587,6 +590,7 @@ self.onmessage = (e) => {
             postMessage({ type: 'reply', id: m.id, result: { ...Module.stats,
                 remoteBytes: remote.reduce((n, o) => n + o.image.fetched, 0),
                 remoteRequests: remote.reduce((n, o) => n + o.image.requests, 0),
+                cachedChunks: remote.reduce((n, o) => n + o.image.preloaded, 0),    // (this browser's: ChunkCache)
                 // blocks not on the server yet (or on their way there)
                 unsynced: Store.enabled ? overlays.reduce((n, o) => n + o.pending.size, 0) + (Store.round ? 1 : 0) : 0 } });
         } else if (m.op === 'pixels') {

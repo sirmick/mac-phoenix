@@ -263,9 +263,10 @@ func bundleRecord(w io.Writer, sha []byte, data []byte) error {
 }
 
 // writeBundle writes KEY's volume and every object its manifest names
-// (each once) to w. An object gone meanwhile (a newer manifest's
-// collection) ends the bundle short: the tab asks again.
-func (v *VolumeStore) writeBundle(w io.Writer, key string) error {
+// (each once) but those in have (the browser's cache has them) to w. An
+// object gone meanwhile (a newer manifest's collection) ends the bundle
+// short: the tab asks again.
+func (v *VolumeStore) writeBundle(w io.Writer, key string, have map[string]bool) error {
 	version, manifest, err := v.get(key)
 	if err != nil {
 		return err
@@ -293,7 +294,7 @@ func (v *VolumeStore) writeBundle(w io.Writer, key string) error {
 	seen := map[string]bool{}
 	for _, p := range paths {
 		sha := m.Files[p].Sha
-		if seen[sha] || !shaRe.MatchString(sha) {
+		if seen[sha] || have[sha] || !shaRe.MatchString(sha) {
 			continue
 		}
 		seen[sha] = true

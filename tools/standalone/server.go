@@ -18,7 +18,8 @@ package main
 //	    DELETE overlays/KEY           Revert -> { version }
 //	    POST   overlays/KEY/merge     into the library image -> { blocks, id, key }
 //	    GET/PUT/DELETE volumes/KEY    { version, manifest }
-//	    GET    volumes/KEY/bundle     the volume and its objects (volumes.go)
+//	    GET    volumes/KEY/bundle     the volume and its objects (volumes.go);
+//	    POST   volumes/KEY/bundle     { have } ... but those
 //	    POST   objects/missing; objects/bundle; PUT/GET objects/SHA
 //	    GET    (nothing after sync/)  { overlays, volumes }
 //	/api/uploads/NAME POST the image as the body: into the library as uploads/NAME
@@ -555,10 +556,27 @@ func init() {
 		return c.sendJSON(200, map[string]any{"version": v, "manifest": manifest})
 	})
 	// The volume and its objects in one response (volumes.go: writeBundle),
-	// gzip-compressed for a browser that takes it.
-	handle("GET", "/api/sync/volumes/([^/]+)/bundle", true, func(c *ctx, m []string) error {
+	// gzip-compressed for a browser that takes it; POSTed { have: [sha] },
+	// without the objects the browser has.
+	sendBundle := func(c *ctx, m []string) error {
 		if err := checkKey(m[1]); err != nil {
 			return err
+		}
+		have := map[string]bool{}
+		if c.r.Method == "POST" {
+			b, err := c.jsonBody()
+			if err != nil {
+				return err
+			}
+			list, ok := b["have"].([]any)
+			if b["have"] != nil && !ok {
+				return httpErr(400, "have is a list")
+			}
+			for _, x := range list {
+				if sha, _ := x.(string); shaRe.MatchString(sha) {
+					have[sha] = true
+				}
+			}
 		}
 		h := c.w.Header()
 		h.Set("Content-Type", "application/octet-stream")
@@ -573,11 +591,13 @@ func init() {
 		}
 		c.w.WriteHeader(200)
 		// (headers sent: an error now cuts the bundle short, which the tab sees)
-		if err := c.s.volumes.writeBundle(w, m[1]); err != nil && !c.s.quiet {
-			fmt.Fprintf(os.Stderr, "GET %s: %v\n", c.r.URL.Path, err)
+		if err := c.s.volumes.writeBundle(w, m[1], have); err != nil && !c.s.quiet {
+			fmt.Fprintf(os.Stderr, "%s %s: %v\n", c.r.Method, c.r.URL.Path, err)
 		}
 		return nil
-	})
+	}
+	handle("GET", "/api/sync/volumes/([^/]+)/bundle", true, sendBundle)
+	handle("POST", "/api/sync/volumes/([^/]+)/bundle", true, sendBundle)
 	handle("PUT", "/api/sync/volumes/([^/]+)", true, func(c *ctx, m []string) error {
 		b, err := c.jsonBody()
 		if err != nil {
