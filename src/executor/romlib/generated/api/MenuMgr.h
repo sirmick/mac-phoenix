@@ -460,6 +460,18 @@ OSErr C_SetMenuItemCommandID(MenuRef inMenu, SInt16 inItem, UInt32 inCommandID);
 OSErr C_GetMenuItemCommandID(MenuRef inMenu, SInt16 inItem, GUEST<UInt32> *outCommandID);LIBRARY_FUNCTION(AppearanceLib, GetMenuItemCommandID, C_GetMenuItemCommandID);
 
 
+OSErr C_SetMenuItemRefCon(MenuRef inMenu, SInt16 inItem, UInt32 inRefCon);LIBRARY_FUNCTION(AppearanceLib, SetMenuItemRefCon, C_SetMenuItemRefCon);
+
+
+OSErr C_GetMenuItemRefCon(MenuRef inMenu, SInt16 inItem, GUEST<UInt32> *outRefCon);LIBRARY_FUNCTION(AppearanceLib, GetMenuItemRefCon, C_GetMenuItemRefCon);
+
+
+OSErr C_SetMenuItemRefCon2(MenuRef inMenu, SInt16 inItem, UInt32 inRefCon2);LIBRARY_FUNCTION(AppearanceLib, SetMenuItemRefCon2, C_SetMenuItemRefCon2);
+
+
+OSErr C_GetMenuItemRefCon2(MenuRef inMenu, SInt16 inItem, GUEST<UInt32> *outRefCon2);LIBRARY_FUNCTION(AppearanceLib, GetMenuItemRefCon2, C_GetMenuItemRefCon2);
+
+
 UInt32 C_MenuEvent(const EventRecord *inEvent);LIBRARY_FUNCTION(AppearanceLib, MenuEvent, C_MenuEvent);
 
 

@@ -637,3 +637,138 @@
     name: setstring
     cglue: SetString
     library: InterfaceLib
+
+# ####
+
+# InterfaceLib's 64-bit arithmetic (FixMath.h), PowerPC only: the answers
+# 8.6's (tools/difftest/run.py wide), overflow and rounding included.
+# Photoshop 4.0 sizes its images with them.
+- function:
+    name: WideAdd
+    return: "wide*"
+    args:
+      - name: target
+        type: "wide*"
+      - name: source
+        type: "const wide*"
+    library: InterfaceLib
+    executor: C_
+
+# ####
+
+- function:
+    name: WideCompare
+    return: "short"
+    args:
+      - name: target
+        type: "const wide*"
+      - name: source
+        type: "const wide*"
+    library: InterfaceLib
+    executor: C_
+
+# ####
+
+- function:
+    name: WideNegate
+    return: "wide*"
+    args:
+      - name: target
+        type: "wide*"
+    library: InterfaceLib
+    executor: C_
+
+# ####
+
+- function:
+    name: WideShift
+    return: "wide*"
+    args:
+      - name: target
+        type: "wide*"
+      - name: shift
+        type: "LONGINT"
+    library: InterfaceLib
+    executor: C_
+
+# ####
+
+- function:
+    name: WideSquareRoot
+    return: "ULONGINT"
+    args:
+      - name: source
+        type: "const wide*"
+    library: InterfaceLib
+    executor: C_
+
+# ####
+
+- function:
+    name: WideMultiply
+    return: "wide*"
+    args:
+      - name: multiplicand
+        type: "LONGINT"
+      - name: multiplier
+        type: "LONGINT"
+      - name: target
+        type: "wide*"
+    library: InterfaceLib
+    executor: C_
+
+# ####
+
+- function:
+    name: WideDivide
+    return: "LONGINT"
+    args:
+      - name: dividend
+        type: "const wide*"
+      - name: divisor
+        type: "LONGINT"
+      - name: remainder
+        type: "LONGINT*"
+    library: InterfaceLib
+    executor: C_
+
+# ####
+
+- function:
+    name: WideWideDivide
+    return: "wide*"
+    args:
+      - name: dividend
+        type: "wide*"
+      - name: divisor
+        type: "LONGINT"
+      - name: remainder
+        type: "LONGINT*"
+    library: InterfaceLib
+    executor: C_
+
+# ####
+
+- function:
+    name: WideSubtract
+    return: "wide*"
+    args:
+      - name: target
+        type: "wide*"
+      - name: source
+        type: "const wide*"
+    library: InterfaceLib
+    executor: C_
+
+# ####
+
+- function:
+    name: WideBitShift
+    return: "wide*"
+    args:
+      - name: src
+        type: "wide*"
+      - name: shift
+        type: "LONGINT"
+    library: InterfaceLib
+    executor: C_

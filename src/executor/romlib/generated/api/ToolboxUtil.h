@@ -6,9 +6,10 @@
  * Needs:                                                                    *
  *     MacTypes.h     LONGINT, Fract, Fixed, INTEGER, StringHandle,          *
  *                    ConstStringPtr, StringPtr, Handle, Ptr, Boolean,       *
- *                    Byte                                                   *
+ *                    Byte, ULONGINT                                         *
  *     QuickDraw.h    Pattern, CursHandle, PicHandle                         *
  *     SANE.h         extended80                                             *
+ *     FileMgr.h      wide                                                   *
  *                                                                           *
  *                                                                           *
  *****************************************************************************/
@@ -22,6 +23,7 @@
 #include "ExMacTypes.h"
 #include "QuickDraw.h"
 #include "SANE.h"
+#include "FileMgr.h"
 
 #define MODULE_NAME ToolboxUtil
 #include <base/api-module.h>
@@ -205,6 +207,36 @@ LIBRARY_FUNCTION(InterfaceLib, newstring, cglue_newstring);
 
 inline void cglue_setstring(StringHandle h, const char *s) {C_SetString(h, cglue::CString(s));}
 LIBRARY_FUNCTION(InterfaceLib, setstring, cglue_setstring);
+
+
+wide* C_WideAdd(wide *target, const wide *source);LIBRARY_FUNCTION(InterfaceLib, WideAdd, C_WideAdd);
+
+
+short C_WideCompare(const wide *target, const wide *source);LIBRARY_FUNCTION(InterfaceLib, WideCompare, C_WideCompare);
+
+
+wide* C_WideNegate(wide *target);LIBRARY_FUNCTION(InterfaceLib, WideNegate, C_WideNegate);
+
+
+wide* C_WideShift(wide *target, LONGINT shift);LIBRARY_FUNCTION(InterfaceLib, WideShift, C_WideShift);
+
+
+ULONGINT C_WideSquareRoot(const wide *source);LIBRARY_FUNCTION(InterfaceLib, WideSquareRoot, C_WideSquareRoot);
+
+
+wide* C_WideMultiply(LONGINT multiplicand, LONGINT multiplier, wide *target);LIBRARY_FUNCTION(InterfaceLib, WideMultiply, C_WideMultiply);
+
+
+LONGINT C_WideDivide(const wide *dividend, LONGINT divisor, GUEST<LONGINT> *remainder);LIBRARY_FUNCTION(InterfaceLib, WideDivide, C_WideDivide);
+
+
+wide* C_WideWideDivide(wide *dividend, LONGINT divisor, GUEST<LONGINT> *remainder);LIBRARY_FUNCTION(InterfaceLib, WideWideDivide, C_WideWideDivide);
+
+
+wide* C_WideSubtract(wide *target, const wide *source);LIBRARY_FUNCTION(InterfaceLib, WideSubtract, C_WideSubtract);
+
+
+wide* C_WideBitShift(wide *src, LONGINT shift);LIBRARY_FUNCTION(InterfaceLib, WideBitShift, C_WideBitShift);
 
 
 } /* namespace Executor */

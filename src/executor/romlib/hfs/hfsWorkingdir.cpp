@@ -107,7 +107,14 @@ OSErr Executor::hfsPBOpenWD(WDPBPtr pb, Boolean async)
     if(kind == directory && namep && namep[0])
         dirid = ((directoryrec *)DATAPFROMKEY(btparamrec.foundp))->dirDirID;
     else
+    {
+        /* MacPhoenix: no name: the directory the call names, as lookups
+           take it (dirID 0: a WD's directory, or the default directory
+           for vRefNum 0); a WD made on dirID 0 was the volume's root.
+           PageMaker 6.5 opens one on (0, 0) to find its RSRC folder. */
         dirid = pb->ioWDDirID;
+        ROMlib_adjustdirid(&dirid, vcbp, pb->ioVRefNum);
+    }
     retval = ROMlib_mkwd(pb, vcbp, dirid, pb->ioWDProcID);
 
     PBRETURN(pb, retval);
