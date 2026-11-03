@@ -69,10 +69,13 @@ async function photoshop(t, doc) {
     await t.key('Enter');
     await t.until(async () => (await t.windows()).some((w) => /^Untitled/.test(w.title)), 20000, 'no Untitled window');
     const w = (await t.windows()).find((x) => /^Untitled/.test(x.title));
+    // (the rectangle is the frame's: 8.x's title bar is 22 pixels, the
+    // scroll bars and the status line 16; a stroke from the title bar
+    // drags the window, and Save does nothing for an untouched document)
     const [top, left, bottom, right] = w.rect;
     const before = await sample();
     await t.key('KeyB');
-    await t.drag([[left + 20, top + 20], [right - 20, (top + bottom) / 2], [left + 20, bottom - 20]]);
+    await t.drag([[left + 20, top + 40], [right - 40, (top + bottom) / 2], [left + 20, bottom - 40]]);
     await t.pause(1000);
     if (changed(before, await sample()) < 0.002)
         throw new Error('nothing drawn');
