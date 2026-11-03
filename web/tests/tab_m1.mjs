@@ -168,6 +168,19 @@ const TARGETS = {
             await t.until(async () => changed(before, await sample()) > 0, 10000, 'the text never drawn');
             await t.saveAs('M1 PE');
         } },
+        { name: 'Microsoft Works 4.0', app: 'Productivity:Microsoft Works 4.0b ƒ:Microsoft Works 4.0', use: async (t) => {
+            // Microsoft Works Startup at launch, Word Processor picked: New
+            // (Return) -> an untitled word processor document -> typed, saved
+            await t.until(async () => (await t.windows()).some((w) => w.title === 'Microsoft Works Startup'), 60000,
+                          'no Microsoft Works Startup');
+            await t.pause(1000);
+            await t.key('Enter');
+            await t.until(async () => (await t.windows()).some((w) => /^Untitled/.test(w.title)), 30000, 'no Untitled document');
+            await t.pause(1000);
+            await t.type(DOCUMENT);
+            await t.until(async () => (await t.drawn()).some((s) => s.includes('Hello')), 10000, 'the text never drawn');
+            await t.saveAs('M1 MW');
+        } },
     ],
     'creative.img': [
         { name: 'Kid Pix', app: 'Creative:Kid Pix 2.5 ƒ:Kid Pix', use: async (t) => {
