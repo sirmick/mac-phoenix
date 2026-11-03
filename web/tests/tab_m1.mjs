@@ -109,19 +109,32 @@ const TARGETS = {
             await t.until(async () => (await t.drawn()).some((s) => s.includes('Hello')), 10000, 'the text never drawn');
         } },
         { name: 'Aldus Persuasion 3.0', app: 'Productivity:Aldus Persuasion 3.0 ƒ:Aldus Persuasion 3.0', use: async (t) => {
-            // a new presentation at launch (its Tools palette up), the text
-            // tool (T) on the slide, typed, saved; an alert instead fails
+            // its start window at launch (500x300, untitled, as on the
+            // Quadra; 504x304 with its frame): Create presentation (its
+            // first button, 398,18 in the content) makes one, the Tools
+            // palette up; its text tool (top right) on the slide, typed,
+            // saved; an alert instead fails
+            let start;
             await t.until(async () => {
                 const d = (await t.windows(true)).find((w) => w.kind === DIALOG_KIND);
                 if (d)
                     throw new Error(`alert "${said(d).replace(/\s+/g, ' ')}"`);
-                return (await t.windows()).some((w) => w.title === 'Tools');
-            }, 60000, 'no Tools palette');
+                start = (await t.windows()).find((w) => w.title === '' && w.rect[3] - w.rect[1] === 504 && w.rect[2] - w.rect[0] === 304);
+                return start;
+            }, 60000, 'no start window');
+            await t.pause(2000);
+            await t.click(start.rect[1] + 1 + 398, start.rect[0] + 1 + 18);
+            await t.until(async () => (await t.windows()).some((w) => w.title === 'Tools'), 60000, 'no Tools palette');
             await t.document();
-            await t.key('KeyT');
+            const tools = (await t.windows()).find((w) => w.title === 'Tools');
+            await t.click(tools.rect[3] - 14, tools.rect[0] + 26);   // the text tool, "A"
             await t.click(320, 240);
+            await t.pause(1000);
+            const before = await sample();   // the text box up
             await t.type(DOCUMENT);
-            await t.until(async () => (await t.drawn()).some((s) => s.includes('Hello')), 10000, 'the text never drawn');
+            // its text isn't in the drawn-text feed: the screen changed
+            // (a line of text is a few samples of sample()'s grid)
+            await t.until(async () => changed(before, await sample()) > 0, 10000, 'the text never drawn');
             await t.saveAs('M1 PE');
         } },
     ],

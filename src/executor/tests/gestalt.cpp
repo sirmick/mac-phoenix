@@ -116,4 +116,12 @@ TEST(Gestalt, SystemVersionSetsTheMachineBothWays)
     EXPECT_EQ(0, get(gestaltFSAttr) & (1 << 8));
     ROMlib_prefer_ppc = prefer_ppc;
     gestalt_set_system_version((LONGINT)sysv);
+
+/* One script system (Roman), as 7.6.1's Quadra and 8.6's G3 answer
+   'scr#': Canvas 5 can't initialize without it (-5551) */
+TEST(Gestalt, ScriptCount)
+{
+    GUEST<LONGINT> v;
+    ASSERT_EQ(noErr, C_Gestalt(gestaltScriptCount, &v));
+    EXPECT_EQ(1, (LONGINT)v);
 }

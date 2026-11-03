@@ -175,11 +175,18 @@ OSErr Executor::hfsPBGetWDInfo(WDPBPtr pb, Boolean async)
                               true);
         if(vcbp)
         {
+            /* MacPhoenix: a volume's own reference number is its root
+               directory, even on the default volume with a folder the
+               default directory (a 7.6.1 Quadra; this answered the default
+               directory, and Persuasion 3.0 then opened its saved file's
+               resource fork in the root: "Unable to save"); 0, the
+               default directory */
+            bool dflt = pb->ioVRefNum == 0;
             if(pb->ioNamePtr)
                 str255assign(pb->ioNamePtr, (StringPtr)vcbp->vcbVN);
             pb->ioWDProcID = 0;
             pb->ioVRefNum = pb->ioWDVRefNum = vcbp->vcbVRefNum;
-            pb->ioWDDirID = (vcbp == LM(DefVCBPtr)) ? DefDirID : toGuest(2);
+            pb->ioWDDirID = dflt ? DefDirID : toGuest(2);
             foundelsewhere = true;
         }
     }
@@ -191,8 +198,12 @@ OSErr Executor::hfsPBGetWDInfo(WDPBPtr pb, Boolean async)
             if(pb->ioNamePtr)
                 str255assign(pb->ioNamePtr,
                              (StringPtr)wdp->vcbp->vcbVN);
+            /* MacPhoenix: indexed, the working directory's own number (a
+               7.6.1 Quadra; this gave the volume's, and Persuasion 3.0,
+               finding its folder's working directory this way, opened the
+               saved file's resource fork in the volume's root) */
             if(pb->ioWDIndex > 0)
-                pb->ioVRefNum = wdp->vcbp->vcbVRefNum;
+                pb->ioVRefNum = WDPTOWDNUM(wdp);
             pb->ioWDProcID = wdp->procid;
             pb->ioWDVRefNum = wdp->vcbp->vcbVRefNum;
             pb->ioWDDirID = wdp->dirid;

@@ -291,6 +291,9 @@ static gestaltentry_t gtable[] = {
     { gestaltScriptMgrVersion, 0x0750 },
     /* MacPhoenix: present, translation-aware: a 7.6.1 Quadra's 3 */
     { gestaltEditionMgrAttr, 3 },
+    /* MacPhoenix: one script system, Roman: 7.6.1's Quadra and 8.6's G3
+       answer 1 (Canvas 5 can't initialize without it) */
+    { gestaltScriptCount, 1 },
     /* gestaltAliasMgrAttr: 7, above (MacPhoenix) */
 
 #define SYSTEM_7_EXTRAS 2

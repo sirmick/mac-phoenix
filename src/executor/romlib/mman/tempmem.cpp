@@ -121,6 +121,12 @@ THz Executor::C_HeapDispatchSharedZone()
     return ROMlib_pm_zone ? ROMlib_pm_zone : (THz)LM(SysZone);
 }
 
+/* MacPhoenix: _HeapDispatch selector $A (MemoryMgr.yaml): a zone about to
+   go; Executor keeps no list of zones. */
+void Executor::C_HeapDispatchForgetZone()
+{
+}
+
 /* MacPhoenix: BlockZero, BlockZeroUncached (MemoryMgr.yaml). */
 void Executor::C_BlockZero(void *destPtr, Size byteCount)
 {
