@@ -68,6 +68,7 @@ window.executor = {
     audioFrames: 0,     // 20 ms frames of sound received
     cursor: null,       // the guest's last cursor message
     stopped: null,      // why Executor stopped, when an error stopped it
+    additions: {},      // disk -> its System Folder additions copied in (copied, kept, restart, live)
     request(op, arg = '') {
         if (!worker)
             return Promise.resolve({ error: 'not running' });   // between Workers
@@ -889,6 +890,14 @@ async function start() {
         } else if (m.type === 'notice') {
             if (!claimLost && !window.executor.stopped)
                 status.textContent = m.text;
+        } else if (m.type === 'additions') {
+            // What a disk's applications put in the System Folder, copied
+            // in (web_main.cpp); put in while running, some of it (fonts,
+            // startup code) is in use only after a restart.
+            window.executor.additions[m.name] = m;
+            if (m.live && m.restart.length && !claimLost && !window.executor.stopped)
+                status.textContent = `${m.name}: ${m.copied} files added to the System Folder; `
+                    + `restart to use ${m.restart.join(', ')}`;
         } else if (m.type === 'ejected') {
             ejected(m.name);
         } else if (m.type === 'restart') {

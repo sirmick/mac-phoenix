@@ -3,6 +3,7 @@
 
     tools/web/make_disk.py OUT.img --label NAME --take IMAGE FOLDER [FOLDER...]
                            [--take IMAGE FOLDER...] [--skip PATH...]
+                           [--system-from SNAPSHOT...] [--additions-record JSON]
 
 Copies the named top-level folders (recursively) of each IMAGE into a new
 volume sized to what it holds, as MacBinary through hfsutils, so forks,
@@ -15,14 +16,88 @@ them (":Folder:Sub"). A games disk for Executor's tab, say:
 
 Top-level folder names are matched as given, or by their start (so
 "Maelstrom" finds "Maelstrom 1.4.2 ƒ").
+
+--system-from names provisioning snapshots (~/storage/baked/NAME.img)
+whose System Folder part (what the product's installer put in the System
+Folder: preferences, registration, shared libraries, fonts) goes in an
+invisible top-level folder, "System Folder Additions", laid out as the
+System Folder is; later snapshots' files win over earlier ones', as
+provisioning/build.py's "system_from". Executor's tab copies it into its
+System when the disk goes in (docs/executor/Disks.md, "System Folder
+additions"). Left out: the System's own files and what the tab's boot
+disks leave out (make_boot_disk.py's DROP). --additions-record writes what
+went in (the disk's record's "system_additions") as JSON.
 """
 import argparse
+import json
 import sys
 import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from make_boot_disk import Disk, Writer  # noqa: E402
+from make_boot_disk import DROP, DROP_CREATORS, SYSTEM_SUBFOLDER_DROP, Disk, Writer  # noqa: E402
+
+ADDITIONS = b"System Folder Additions"
+# The System's own files, and what a session leaves at the System Folder's
+# top: never an addition.
+NOT_ADDED = {b"System", b"Finder", b"System Resources", b"Clipboard", b"Scrapbook File",
+             b"Note Pad File", b"Shutdown Check"}
+# Code that runs at startup, and fonts (the Font Manager lists the Fonts
+# folder at startup): in use only after a restart.
+STARTUP_TYPES = {b"INIT", b"appe", b"cdev"}
+STARTUP_FOLDERS = {b"Fonts", b"Startup Items"}
+
+
+def additions(snapshots, scratch):
+    """{System Folder path: MacBinary} of the snapshots' System Folder parts,
+    later ones winning, and the folders under it, parents first."""
+    files, folders = {}, []
+    for n, snap in enumerate(snapshots):
+        disk = Disk(snap, Path(scratch) / f"snap{n}")
+        try:
+            def tree(path, rel):
+                for name in disk.files(path):
+                    if (not rel and name in NOT_ADDED) or name.decode("mac_roman") in DROP:
+                        continue
+                    blob = disk.macbinary(path + b":" + name)
+                    if blob is None:
+                        print(f"skipped (unreadable): {snap}: {(path + b':' + name).decode('mac_roman')}",
+                              file=sys.stderr)
+                    elif blob[69:73] not in DROP_CREATORS:
+                        files[rel + (b":" if rel else b"") + name] = blob
+                for name in disk.folders(path):
+                    if (not rel and name in SYSTEM_SUBFOLDER_DROP) or name.decode("mac_roman") in DROP:
+                        continue
+                    sub = rel + (b":" if rel else b"") + name
+                    if sub not in folders:
+                        folders.append(sub)
+                    tree(path + b":" + name, sub)
+            if b"System Folder" in disk.folders(b""):
+                tree(b"System Folder", b"")
+        finally:
+            disk.close()
+    used = {f for p in files for f in folders if p.startswith(f + b":")}
+    return files, [f for f in folders if f in used]
+
+
+def additions_record(files):
+    """What the disk adds to the System Folder, for its record: the items
+    one level into the System Folder's folders (a folder of fonts is one
+    item), and those that take a restart."""
+    items, restart = [], []
+    for p, blob in files.items():
+        parts = p.split(b":")
+        item = b":".join(parts[:2]).decode("mac_roman")
+        if item not in items:
+            items.append(item)
+        # (the fonts as one: "Fonts")
+        later = parts[0].decode("mac_roman") if parts[0] in STARTUP_FOLDERS else \
+            item if len(parts) == 2 and blob[65:69] in STARTUP_TYPES else None
+        if later and later not in restart:
+            restart.append(later)
+    size = sum(int.from_bytes(b[83:87], "big") + int.from_bytes(b[87:91], "big") for b in files.values())
+    return {"folder": ADDITIONS.decode("mac_roman"), "files": len(files), "bytes": size,
+            "items": items, "restart": restart}
 
 
 def volume_size(blobs, folders):
@@ -51,6 +126,9 @@ def main():
     ap.add_argument("--take", nargs="+", action="append", metavar=("IMAGE", "FOLDER"),
                     required=True, help="an image and folders at its top level")
     ap.add_argument("--skip", nargs="+", default=[], help="paths to leave out")
+    ap.add_argument("--system-from", nargs="+", default=[], metavar="SNAPSHOT",
+                    help="snapshot images whose System Folder part the disk carries")
+    ap.add_argument("--additions-record", help="write what the disk adds to the System Folder here (JSON)")
     args = ap.parse_args()
     skip = [s.encode("mac_roman").lstrip(b":") for s in args.skip]
 
@@ -86,6 +164,13 @@ def main():
             finally:
                 disk.close()
 
+        extra, extra_folders = additions(args.system_from, scratch)
+        if extra:
+            folders += [ADDITIONS] + [ADDITIONS + b":" + f for f in extra_folders]
+            blobs.update({ADDITIONS + b":" + p: b for p, b in extra.items()})
+        if args.additions_record:
+            with open(args.additions_record, "w") as f:
+                json.dump(additions_record(extra) if extra else None, f, ensure_ascii=False)
         size = volume_size(blobs.values(), len(folders))
         w = Writer(Path(args.out))
         try:
@@ -94,6 +179,8 @@ def main():
                 w.mkdir(path)
             for path, blob in blobs.items():
                 w.put(path, blob, scratch)
+            if extra:
+                w.hide(ADDITIONS)       # the tab's, not the user's: out of the Finder's windows
         finally:
             w.close()
     print(f"{args.out}: {size / 1e6:.1f} MB, {len(blobs)} files in {len(folders)} folders, \"{args.label}\"")

@@ -72,8 +72,10 @@ TMPDIR=~/storage/tmp tools/web/make_library.py /srv/executor-web/library
 
 Whole application folders are copied as installed (`make_disk.py`, both
 forks and Finder info as MacBinary through hfsutils), so an application
-finds its files beside it. A disk is made again when an image it comes
-from is newer (`--force`: always). Which applications run yet:
+finds its files beside it, and what their installers put in the System
+Folder goes on the disk too, for the tab to copy into its System
+(Disks.md, "System Folder additions"). A disk is made again when an image
+or snapshot it comes from is newer (`--force`: always). Which applications run yet:
 SCOREBOARD.md; the site's cells (below) check them in the tab.
 
 The CDs are `provisioning/cds.json`'s (docs/Provisioning.md, "CDs"):
