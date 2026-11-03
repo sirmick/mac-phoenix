@@ -83,6 +83,16 @@ TEST(Exports, ComponentInstanceCallsAndMenuItemRefCons)
         EXPECT_TRUE(exported("pwpc"_4, "AppearanceLib", name)) << name;
 }
 
+/* PostEvent and PPostEvent had routines but weren't exported: PageMaker
+   6.5's import filters (PostEvent) jumped to 0, Illustrator 8.0 imports
+   PPostEvent. */
+TEST(Exports, PostEvent)
+{
+    for(OSType arch : { "pwpc"_4, "m68k"_4 })
+        for(const char *name : { "PostEvent", "PPostEvent" })
+            EXPECT_TRUE(exported(arch, "InterfaceLib", name)) << name;
+}
+
 TEST(Exports, WriteTable)
 {
 #ifdef EXECUTOR_EXPORTS_OUT

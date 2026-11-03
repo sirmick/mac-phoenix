@@ -162,9 +162,16 @@ struct D0Minus1Boolean
 END_EXECUTOR_ONLY
 
 
-OSErr PPostEvent(INTEGER evcode, LONGINT evmsg, GUEST<EvQElPtr> *qelp);
+// MacPhoenix: exported, as PostEvent (Illustrator 8.0 imports it); the
+// 68k trap is emustubs.cpp's (register-based, $A12F).
+OSErr PPostEvent(INTEGER evcode, LONGINT evmsg, GUEST<EvQElPtr> *qelp);LIBRARY_FUNCTION(InterfaceLib, PPostEvent, PPostEvent);
 
-OSErr PostEvent(INTEGER evcode, LONGINT evmsg);
+
+// MacPhoenix: exported (osevent.cpp has it): PageMaker 6.5's import
+// filters import it, and unresolved one of them jumped to 0. The 68k
+// trap is emustubs.cpp's (register-based, $A02F).
+OSErr PostEvent(INTEGER evcode, LONGINT evmsg);LIBRARY_FUNCTION(InterfaceLib, PostEvent, PostEvent);
+
 
 void FlushEvents(INTEGER evmask, INTEGER stopmask);REGISTER_TRAP2(FlushEvents, 0xA032, void(D0LowWord, D0HighWord), ClearD0);
 
