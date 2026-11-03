@@ -801,9 +801,10 @@ void initialize_68k_emulator(void (*)(int), int, uint32 trap_vector_storage[64],
     cpu::platform_set_memory(&guest_memory);
     cpu::Config config;
     config.model = 68040;
-    /* A 68040 with its FPU. Executor provides SANE natively and tells
-     * Gestalt there is no FPU, but applications built for one (MacPerl)
-     * execute FPU instructions regardless. Without this the mame-68k core
+    /* A 68040 with its FPU. Executor provides SANE natively; Gestalt
+     * 'fpu ' and SysEnvirons report the FPU as a Quadra does (Photoshop
+     * 4.0 asks), and applications built for one (MacPerl) execute FPU
+     * instructions regardless. Without this the mame-68k core
      * is an LC040 and every line-F word is a fatal trap 11 (STRAGGLERS.md
      * 22). */
     config.fpu = true;

@@ -96,8 +96,14 @@ END_EXECUTOR_ONLY
 OSErr C_NewDesktopLayerOwner(GUEST<WindowPtr> *layer);LIBRARY_FUNCTION(PrivateInterfaceLib, NewDesktopLayerOwner, C_NewDesktopLayerOwner);
 
 
-// The first caller (Finder) takes the Process Manager's desk layer: a window-shaped port whose visRgn is the desktop (GrayRgn), and gets protocolErr after that. Finder adopts its regions for its desktop window and SysErrors(41) unless this returns noErr.
+// MacPhoenix (name is a guess): OSDispatch $2, as Apple's 7.6.1 answers
+// it (a probe on the Quadra): the 8 bytes 'TWIT' '1889' at id, 0
+// returned, the selector and id popped. Excel 4.0's start-up asks.
 EXTERN_DISPATCHER_TRAP(OSDispatch, 0xA88F, StackW);
+int32_t C_GetProcessManagerID(Ptr id);PASCAL_SUBTRAP(GetProcessManagerID, 0xA88F, 0x0002, OSDispatch);
+
+
+// The first caller (Finder) takes the Process Manager's desk layer: a window-shaped port whose visRgn is the desktop (GrayRgn), and gets protocolErr after that. Finder adopts its regions for its desktop window and SysErrors(41) unless this returns noErr.
 OSErr C_TakeDesktopLayer(GUEST<WindowPtr> *layer);PASCAL_SUBTRAP(TakeDesktopLayer, 0xA88F, 0x0014, OSDispatch);
 
 

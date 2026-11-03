@@ -3050,6 +3050,15 @@ OSErr Executor::C_CallProcessRoutine(ProcessSerialNumber *psn, ProcPtr routine,
     return result;
 }
 
+/* OSDispatch $2: the 8 bytes Apple's 7.6.1 gives (measured: a probe
+   calling it on the Quadra), and 0. Excel 4.0 asks at start-up. */
+int32_t Executor::C_GetProcessManagerID(Ptr id)
+{
+    if(id)
+        memcpy(id, "TWIT1889", 8);
+    return 0;
+}
+
 /* General Controls' "Show Desktop when in background", stored inverted as
    Apple's does (scod -16463 +28d2c).  Hiding the desk owner's layer when
    another process comes to the front is not done yet. */
