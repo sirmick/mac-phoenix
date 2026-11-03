@@ -69,8 +69,9 @@ STARTUP_TYPES = {b"INIT", b"cdev", b"appe", b"thng", b"libr", b"RDEV", b"fext", 
                  b"scri", b"ADBS"}
 # Startup code applications can't do without and that runs clean on Executor
 # (allowed in src/executor/res/extension-policy.txt): kept by name.
-# Microsoft OLE Extension: Works 4.0b won't start without it.
-STARTUP_KEPT = {b"Microsoft OLE Extension"}
+# Microsoft OLE Extension: Works 4.0b won't start without it. Matched without
+# case, as HFS names are (and hfs_sideload.cpp's startupCode).
+STARTUP_KEPT = {b"microsoft ole extension"}
 # Libraries Executor doesn't run: CarbonLib (no Carbon; an application that
 # finds it takes the Carbon path).
 NOT_FOR_EXECUTOR = {b"CarbonLib"}
@@ -93,7 +94,7 @@ def additions(snapshots, scratch):
                         print(f"skipped (unreadable): {snap}: {(path + b':' + name).decode('mac_roman')}",
                               file=sys.stderr)
                     elif blob[69:73] not in DROP_CREATORS and (blob[65:69] not in STARTUP_TYPES
-                                                               or name in STARTUP_KEPT):
+                                                               or name.lower() in STARTUP_KEPT):
                         files[rel + (b":" if rel else b"") + name] = blob
                 for name in disk.folders(path):
                     if (not rel and (name in SYSTEM_SUBFOLDER_DROP or name in STARTUP_FOLDERS)) \
