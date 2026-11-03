@@ -624,6 +624,9 @@ void C_SetPixelsState(PixMapHandle , GWorldFlags );PASCAL_SUBTRAP(SetPixelsState
 Ptr C_GetPixBaseAddr(PixMapHandle );PASCAL_SUBTRAP(GetPixBaseAddr, 0xAB1D, 0x4000F, QDExtensions);
 
 
+LONGINT C_GetPixRowBytes(PixMapHandle pm);LIBRARY_FUNCTION(InterfaceLib, GetPixRowBytes, C_GetPixRowBytes);
+
+
 QDErr C_NewScreenBuffer(const Rect *, Boolean , GUEST<GDHandle> *, GUEST<PixMapHandle> *);PASCAL_SUBTRAP(NewScreenBuffer, 0xAB1D, 0xE0010, QDExtensions);
 
 
