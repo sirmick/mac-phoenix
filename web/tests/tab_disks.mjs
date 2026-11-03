@@ -69,7 +69,7 @@ const record = (name, r) => fs.writeFileSync(path.join(images, `${name}.json`), 
 record('sys.img', { title: 'The System', tags: ['system'], systems: ['7.6.1'] });
 record('blank.img', { title: 'Blank', tags: [], systems: ['7.6.1', '8.6'] });
 record('disc.iso', { title: 'Disc', tags: ['cd'] });
-record('apps.img', { title: 'Apps', tags: [] });
+record('apps.img', { title: 'Apps', tags: [], systems: ['7.6.1'] });   // (its additions: for 7.6.1)
 
 const server = await startServer(dir, { images, include: ['*.img', '*.iso'] });
 if (!server) {

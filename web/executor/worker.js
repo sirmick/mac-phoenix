@@ -298,7 +298,7 @@ async function openImage(f) {
     return o;
 }
 
-async function insert(id, { file, cd, ids: more }) {
+async function insert(id, { file, cd, ids: more, additions }) {
     if (!IMAGE.test(file.name)) {
         // (an application restarts Executor: main.js)
         postMessage({ type: 'reply', id, result: { error: 'not a disk image' } });
@@ -322,7 +322,10 @@ async function insert(id, { file, cd, ids: more }) {
     OVERLAYFS.add(o);
     reportImages();
     // A CD locked as --cdrom's are (ROMlib_locked_images).
-    Module.requests.push([id, cds.has(file.name) ? 'mount-cd' : 'mount', `/uploads/${file.name}`]);
+    // (its System Folder additions copied in first when the page says they
+    // are for this System: main.js additionsFor)
+    Module.requests.push([id, cds.has(file.name) ? 'mount-cd' : additions ? 'mount-additions' : 'mount',
+                          `/uploads/${file.name}`]);
 }
 
 // Gone from the Mac: its changes to the server at once, out of /uploads;
@@ -464,6 +467,9 @@ async function start(m) {
         args.push('--system', `/uploads/${m.system}`);
     if (m.ppc)
         args.push('--ppc');
+    for (const name of m.additions || [])
+        if (images.some((f) => f.name === name))
+            args.push('--additions', `/uploads/${name}`);
     if (m.ram)
         args.push('--ram', `${m.ram}`);
     if (m.depth)

@@ -27,7 +27,7 @@ bool sideload_system(const std::string& image, const std::string& data_dir,
 
 // What system_additions() did: files copied, files left as they were (the
 // System's newer or the same), and what it copied that is in use only after
-// a restart ("Fonts", "Extensions:NAME": code that runs at startup).
+// a restart ("Fonts").
 struct Additions
 {
     int copied = 0, kept = 0;
@@ -37,8 +37,8 @@ struct Additions
 // Copies the image's "System Folder Additions" (what its applications'
 // installers put in the System Folder: tools/web/make_disk.py
 // --system-from) into data_dir/System Folder: each file it hasn't, or has
-// older than the image's; the folders' names matched as HFS does, without
-// case. False, with why in *error, if the image can't be read; true with
+// older than the image's, but startup code (extensions, control panels,
+// components); the folders' names matched as HFS does, without case. False, with why in *error, if the image can't be read; true with
 // nothing done if it has none.
 bool system_additions(const std::string& image, const std::string& data_dir,
                       Additions *done, std::string *error);

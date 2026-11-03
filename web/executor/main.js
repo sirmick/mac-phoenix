@@ -313,12 +313,24 @@ const FBSY = -47, NSV = -35;
 const isCD = (name) => /\.(iso|toast|cdr)$/i.test(name)
     || library.some((d) => fileName(d.url) === name && (d.tags || []).includes('cd'));
 
+// A disk's System Folder additions (web_main.cpp) go in only on a System
+// its record lists: the library System's own ("systems" of a boot disk is
+// its version). An 8.6 disk's libraries in 7.6.1's System Folder, or a
+// disk or System not from the library: none.
+function additionsFor(name) {
+    const rec = (n) => library.find((d) => fileName(d.url) === n);
+    const sys = rec(systemSelect.value), disk = rec(name);
+    const version = sys && (sys.systems || []).length === 1 && sys.systems[0];
+    return !!(version && disk && (disk.systems || []).includes(version));
+}
+
 async function putIn(file) {
     if (!live())
         return start();
     inserting.add(file.name);
     showDisks();
-    const r = await window.executor.request('insert', { file, cd: isCD(file.name), ids: { ...imageIds } });
+    const r = await window.executor.request('insert', { file, cd: isCD(file.name), ids: { ...imageIds },
+                                                         additions: additionsFor(file.name) });
     inserting.delete(file.name);
     if (r !== 0)
         status.textContent = `${file.name}: not mounted (${r === NSV ? 'no Mac volume on it' : r === -1 ? 'cannot open it'
@@ -975,6 +987,7 @@ async function start() {
                          volumeKey: volumeKey(files), relay: standalone,
                          standalone,
                          ids: imageIds, cds: files.map((f) => f.name).filter(isCD), log: Log.session,
+                         additions: files.map((f) => f.name).filter(additionsFor),
                          ram: Settings.get('machine.ram_mb'), depth: Settings.get('machine.depth'),
                          logtraps: Settings.get('advanced.logtraps'),
                          nesting: String(Settings.get('advanced.logtraps_nesting')),

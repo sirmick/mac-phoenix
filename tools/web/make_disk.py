@@ -26,7 +26,9 @@ provisioning/build.py's "system_from". Executor's tab copies it into its
 System when the disk goes in (docs/executor/Disks.md, "System Folder
 additions"). Left out: the System's own files and what the tab's boot
 disks leave out (make_boot_disk.py's DROP). --additions-record writes what
-went in (the disk's record's "system_additions") as JSON.
+went in (the disk's record's "system_additions") as JSON. Startup code
+(extensions, control panels, components: STARTUP_TYPES) is left out too:
+the additions are what applications need to start.
 """
 import argparse
 import json
@@ -42,10 +44,24 @@ ADDITIONS = b"System Folder Additions"
 # top: never an addition.
 NOT_ADDED = {b"System", b"Finder", b"System Resources", b"Clipboard", b"Scrapbook File",
              b"Note Pad File", b"Shutdown Check"}
-# Code that runs at startup, and fonts (the Font Manager lists the Fonts
-# folder at startup): in use only after a restart.
-STARTUP_TYPES = {b"INIT", b"appe", b"cdev"}
-STARTUP_FOLDERS = {b"Fonts", b"Startup Items"}
+# Startup code is not added: what applications need to start is their
+# preferences, support files, fonts and shared libraries, and an
+# installer's extensions, control panels and components, run at every
+# boot on whatever System the tab runs, brought it down (Kodak's CMS
+# components, translators registered through the Shared Library Manager,
+# Type Reunion, ATM, OLE, ...). The System Folder's folders of startup
+# items, and anywhere files of the types that run at startup or register
+# themselves: INITs, control panels, background applications, components,
+# Shared Library Manager libraries, network drivers, Finder extensions,
+# debuggers.
+STARTUP_FOLDERS = {b"Control Panels", b"Startup Items", b"Shutdown Items", b"Control Strip Modules",
+                   b"Launcher Items", b"Apple Menu Items", b"Extensions (Disabled)",
+                   b"Control Panels (Disabled)", b"System Extensions (Disabled)"}
+STARTUP_TYPES = {b"INIT", b"cdev", b"appe", b"thng", b"libr", b"RDEV", b"fext", b"AINI", b"dbgr",
+                 b"scri", b"ADBS"}
+# Libraries Executor doesn't run: CarbonLib (no Carbon; an application that
+# finds it takes the Carbon path).
+NOT_FOR_EXECUTOR = {b"CarbonLib"}
 
 
 def additions(snapshots, scratch):
@@ -57,16 +73,18 @@ def additions(snapshots, scratch):
         try:
             def tree(path, rel):
                 for name in disk.files(path):
-                    if (not rel and name in NOT_ADDED) or name.decode("mac_roman") in DROP:
+                    if (not rel and name in NOT_ADDED) or name.decode("mac_roman") in DROP \
+                            or name in NOT_FOR_EXECUTOR:
                         continue
                     blob = disk.macbinary(path + b":" + name)
                     if blob is None:
                         print(f"skipped (unreadable): {snap}: {(path + b':' + name).decode('mac_roman')}",
                               file=sys.stderr)
-                    elif blob[69:73] not in DROP_CREATORS:
+                    elif blob[69:73] not in DROP_CREATORS and blob[65:69] not in STARTUP_TYPES:
                         files[rel + (b":" if rel else b"") + name] = blob
                 for name in disk.folders(path):
-                    if (not rel and name in SYSTEM_SUBFOLDER_DROP) or name.decode("mac_roman") in DROP:
+                    if (not rel and (name in SYSTEM_SUBFOLDER_DROP or name in STARTUP_FOLDERS)) \
+                            or name.decode("mac_roman") in DROP:
                         continue
                     sub = rel + (b":" if rel else b"") + name
                     if sub not in folders:
@@ -90,9 +108,8 @@ def additions_record(files):
         item = b":".join(parts[:2]).decode("mac_roman")
         if item not in items:
             items.append(item)
-        # (the fonts as one: "Fonts")
-        later = parts[0].decode("mac_roman") if parts[0] in STARTUP_FOLDERS else \
-            item if len(parts) == 2 and blob[65:69] in STARTUP_TYPES else None
+        # (the fonts as one: "Fonts"; the Font Manager lists the folder at startup)
+        later = "Fonts" if parts[0] == b"Fonts" else None
         if later and later not in restart:
             restart.append(later)
     size = sum(int.from_bytes(b[83:87], "big") + int.from_bytes(b[87:91], "big") for b in files.values())
