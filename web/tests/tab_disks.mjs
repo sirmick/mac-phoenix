@@ -9,7 +9,10 @@
 // into the server's library (uploaded) and into the running Mac. A disk
 // an application runs from (SimpleText, copied from SYSTEM by hcopy) is in
 // use: the panel's eject says so and it stays in, until the application
-// quits.
+// quits. Its System Folder additions (a preferences file, a font: as
+// tools/web/make_disk.py --system-from lays them out) go into Executor's
+// System as it goes in, the page told the font takes a restart; they stay
+// after it is out, and in again nothing is copied twice.
 //
 //   node web/tests/tab_disks.mjs DIR SYSTEM [SHOTS]
 //
@@ -46,7 +49,14 @@ try {
     hfs('humount');
     hfs('hmount', path.join(images, 'apps.img'));
     hfs('hcopy', '-m', path.join(images, 'SimpleText.bin'), ':SimpleText');
+    fs.writeFileSync(path.join(images, 'note.txt'), 'from the Apps disk\n');
+    for (const f of [':System Folder Additions', ':System Folder Additions:Preferences', ':System Folder Additions:Fonts'])
+        hfs('hmkdir', f);
+    hfs('hcopy', '-t', path.join(images, 'note.txt'), ':System Folder Additions:Preferences:Apps Prefs');
+    hfs('hcopy', '-t', path.join(images, 'note.txt'), ':System Folder Additions:Fonts:Apps Font');
+    hfs('hattrib', '+i', ':System Folder Additions');
     hfs('humount');
+    fs.rmSync(path.join(images, 'note.txt'));
     fs.rmSync(path.join(images, 'SimpleText.bin'));
     fs.writeFileSync(path.join(own, 'mine.img'), Buffer.alloc(1440 * 1024));
     execFileSync('hformat', ['-l', 'Mine', path.join(own, 'mine.img')], { stdio: 'ignore', env: { ...process.env, HOME: own } });
@@ -201,6 +211,14 @@ try {
     // refuses (fBsyErr) and the disk stays; quit, and it comes out.
     await page.click('#disks-library .lib-row[data-url="disks/apps.img"]');
     check(await until(() => hasVolume('Apps'), 60000), 'the Apps disk is mounted');
+    const added = () => page.evaluate(() => executor.additions['apps.img']);
+    const inPrefs = () => request(page, 'list', '/executor/System Folder/Preferences')
+        .then((names) => (names || []).includes('Apps Prefs'));
+    check(await until(async () => (await added() || {}).copied === 2, 10000), "its System Folder additions copied in");
+    check(JSON.stringify((await added()).restart) === '["Fonts"]' && (await added()).live, 'the font said to take a restart');
+    check(await page.evaluate(() => /apps\.img: 2 files added to the System Folder; restart to use Fonts/
+                                     .test(document.getElementById('status').textContent)), 'and the page says so');
+    check(await inPrefs(), "the preferences file in Executor's Preferences");
     check(await request(page, 'launch', 'Apps:SimpleText') === 0, 'SimpleText launched from it');
     check(await until(() => request(page, 'app').then((a) => a === 'SimpleText'), 30000), 'SimpleText runs');
     await until(() => row('apps.img').count(), 5000);
@@ -217,6 +235,15 @@ try {
     await row('apps.img').locator('button.eject').click();
     check(await until(async () => !(await hasVolume('Apps')), 20000), 'now the eject unmounts it');
     check(await until(async () => !(await row('apps.img').count()), 10000), 'and it is out of the panel');
+    check(await inPrefs(), 'its additions stay in the System');
+    await page.evaluate(() => { delete executor.additions['apps.img']; });
+    await page.click('#disks-library .lib-row[data-url="disks/apps.img"]');
+    check(await until(() => hasVolume('Apps'), 60000), 'the Apps disk in again');
+    check(await until(async () => { const a = await added(); return a && a.copied === 0 && a.kept === 2; }, 10000),
+          'nothing copied twice');
+    await until(() => row('apps.img').count(), 5000);
+    await row('apps.img').locator('button.eject').click();
+    check(await until(async () => !(await hasVolume('Apps')), 20000), 'and out');
 
     // One's own image, by the Add button: uploaded into the library, put in.
     await page.setInputFiles('#add', path.join(own, 'mine.img'));

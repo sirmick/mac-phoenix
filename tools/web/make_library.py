@@ -15,6 +15,15 @@ application disks make_disk.py's copies of whole folders of the provisioned
 disks, so an application has its folder as it was installed. Point the
 server's [library] images at OUT_DIR (docs/executor/WebSite.md).
 
+What the applications' installers put in the System Folder (preferences,
+registration, shared libraries, fonts) goes on their disk too, in its
+"System Folder Additions" (make_disk.py --system-from): the System Folder
+parts of the snapshots placed in the folders a disk takes (the source
+image's definition, provisioning/images/NAME.json, says which went where),
+in the definition's order. The tab copies them into its System when the
+disk goes in; the record's "system_additions" lists them
+(docs/executor/Disks.md). "additions": false on a disk leaves them out.
+
 The CDs (provisioning/cds.json: magazine cover discs, pinned in media.json,
 checked and given their records by provisioning/cds.py) go in as they are,
 hard-linked, each with its cover scan cut down to COVER_PX for the site:
@@ -25,11 +34,15 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+DEFINITIONS = HERE.parent.parent / "provisioning" / "images"
 sys.path.insert(0, str(HERE.parent / "diskaudit"))
 import tidy  # noqa: E402  (disk_audit.py's checks put right)
+sys.path.insert(0, str(HERE.parent / "macdecode"))
+from rsrc import Disk  # noqa: E402
 CDS = HERE.parent.parent / "provisioning" / "cds.json"
 COVER_PX = 480
 
@@ -200,13 +213,46 @@ DISKS = [
 ]
 
 
-def sources(d, images):
+def placed_at(p, baked):
+    """The top-level folders a definition's "place" entry puts on its image."""
+    if p.get("to"):
+        return [p["to"].strip(":").split(":")[0]]
+    if p.get("as"):
+        return [p["as"]]
+    if p.get("take"):
+        return [p["take"].split(":")[-1]]
+    disk = Disk(baked / (p["snapshot"] + ".img"), tempfile.mkdtemp(prefix="make-library-"))
+    try:
+        return [n.decode("mac_roman") for n in disk.folders(b"Items") + disk.files(b"Items")]
+    finally:
+        disk.close()
+
+
+def snapshots(d, baked):
+    """The snapshots whose System Folder parts disk d carries: those placed
+    in the folders it takes, in their definitions' order."""
+    if "boot" in d or d.get("additions") is False:
+        return []
+    out = []
+    for img, folders in d["take"]:
+        definition = DEFINITIONS / (Path(img).stem + ".json")
+        if not definition.exists():
+            continue
+        with open(definition) as f:
+            for p in json.load(f).get("place", []):
+                tops = placed_at(p, baked)
+                if any(t == w or t.startswith(w) for t in tops for w in folders) and p["snapshot"] not in out:
+                    out.append(p["snapshot"])
+    return [baked / (s + ".img") for s in out]
+
+
+def sources(d, images, baked):
     if "boot" in d:
         return [images / d["boot"]]
-    return [images / img for img, _ in d["take"]]
+    return [images / img for img, _ in d["take"]] + snapshots(d, baked)
 
 
-def make(d, images, out):
+def make(d, images, out, baked):
     img = out / d["name"]
     tmp = out / (d["name"] + ".part")
     if "boot" in d:
@@ -218,6 +264,10 @@ def make(d, images, out):
         cmd = [sys.executable, str(HERE / "make_disk.py"), str(tmp), "--label", d["label"]]
         for src, folders in d["take"]:
             cmd += ["--take", str(images / src), *folders]
+        snaps = snapshots(d, baked)
+        if snaps:
+            cmd += ["--system-from", *map(str, snaps)]
+        cmd += ["--additions-record", str(additions_path(out, d))]
     subprocess.run(cmd, check=True)
     if "boot" not in d:                 # make_boot_disk.py tidies its own
         done = tidy.tidy(str(tmp))
@@ -225,7 +275,15 @@ def make(d, images, out):
     os.replace(tmp, img)
 
 
-def record(d):
+def additions_path(out, d):
+    """make_disk.py's account of the disk's System Folder additions, kept
+    in OUT_DIR/.additions (the record is written whether or not the disk is
+    made; not beside it, where the library would take it for a record)."""
+    (out / ".additions").mkdir(exist_ok=True)
+    return out / ".additions" / (d["name"] + ".json")
+
+
+def record(d, out):
     r = {"title": d["title"], "tags": d["tags"], "note": d["note"],
          "label": d["label"], "made_by": "tools/web/make_library.py"}
     if "boot" in d:
@@ -238,6 +296,11 @@ def record(d):
         r["launch"] = [{"app": f"{d['label']}:{a['app']}", "name": a["name"],
                         "source": a.get("source", d["take"][0][0]), "source_app": a["app"],
                         "systems": a.get("systems", systems)} for a in d["launch"]]
+        if additions_path(out, d).exists():
+            with open(additions_path(out, d)) as f:
+                adds = json.load(f)
+            if adds:
+                r["system_additions"] = adds
     return r
 
 
@@ -277,29 +340,31 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("out", nargs="?", default="~/storage/web-library")
     ap.add_argument("--images", default="~/storage/images")
+    ap.add_argument("--baked", default="~/storage/baked", help="the snapshots (provisioning/bake.py's)")
     ap.add_argument("--only", nargs="+", default=[])
     ap.add_argument("--force", action="store_true")
     args = ap.parse_args()
     out = Path(os.path.expanduser(args.out))
     images = Path(os.path.expanduser(args.images))
+    baked = Path(os.path.expanduser(args.baked))
     out.mkdir(parents=True, exist_ok=True)
 
     for d in DISKS:
         if args.only and d["name"] not in args.only:
             continue
         img = out / d["name"]
-        srcs = sources(d, images)
+        srcs = sources(d, images, baked)
         missing = [s for s in srcs if not s.exists()]
         if missing:
             sys.exit(f"{d['name']}: no {', '.join(map(str, missing))} (provisioning/build.py makes it)")
         rec = out / (d["name"] + ".json")
-        new = json.dumps(record(d), indent=1, ensure_ascii=False) + "\n"
-        stale = (args.force or not img.exists()
+        stale = (args.force or not img.exists() or ("boot" not in d and not additions_path(out, d).exists())
                  or any(s.stat().st_mtime > img.stat().st_mtime for s in srcs))
         if stale:
-            make(d, images, out)
+            make(d, images, out, baked)
         else:
             print(f"{img}: up to date")
+        new = json.dumps(record(d, out), indent=1, ensure_ascii=False) + "\n"
         if not rec.exists() or rec.read_text() != new:
             rec.write_text(new)
 

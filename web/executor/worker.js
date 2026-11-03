@@ -83,6 +83,11 @@ self.Module = {
     onEjected(path) {
         ejected(path.replace(/^\/uploads\//, ''));
     },
+    // A disk's System Folder additions copied into Executor's System
+    // (web_main.cpp): the page says what takes a restart.
+    onAdditions(path, what) {
+        postMessage({ type: 'additions', name: path.replace(/^\/uploads\//, ''), ...what });
+    },
     onExit(code) {
         console.log(`[web] Executor exited (${code})`);
         Log.flush();

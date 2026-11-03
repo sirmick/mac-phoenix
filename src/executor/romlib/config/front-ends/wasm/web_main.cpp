@@ -22,7 +22,8 @@
  *   menus            its menu bar: each menu's title and left edge
  *   launch PATH      LaunchApplication of "Volume:Folder:App"; its OSErr
  *   mount PATH       a disk image put in now (the Disks panel's insert, the
- *                    image in the module's filesystem already): mounted
+ *                    image in the module's filesystem already): its System
+ *                    Folder additions copied in (below), then mounted
  *                    through _MountVol (the System's patches tell the Finder),
  *                    a diskEvt posted, as for a floppy; the OSErr (-1: the
  *                    image can't be opened; nsvErr: no Mac volume on it)
@@ -34,6 +35,15 @@
  * Disk images going away, ejected here or by the Finder (Put Away, or
  * anything else that unmounts them), are told to the page at the next event
  * call (Module.onEjected(path)): it takes them out of its Disks panel.
+ *
+ * A disk's System Folder additions (what its applications' installers put
+ * in the System Folder: tools/web/make_disk.py --system-from) are copied
+ * into Executor's System (hfs_sideload.h: system_additions; files it has
+ * newer stay): for the disks there at the start before Executor starts, so
+ * fonts and startup code are in use at once; for one put in later, before
+ * it is mounted. Module.onAdditions(path, {copied, kept, restart, live})
+ * tells the page; restart: what is in use only after a restart. They stay
+ * when the disk goes, as an installer's would (docs/executor/Disks.md).
  *
  * The Worker answers 'read' and 'write' itself: files in the module's
  * filesystem, such as the Host volume (/host).
@@ -143,6 +153,11 @@ EM_JS(void, js_ejected, (const char *path), {
 
 /* A fatal error of Executor's: the page says Executor stopped (its own
    alert is up in the guest meanwhile, waiting for Restart). */
+EM_JS(void, js_additions, (const char *path, const char *json), {
+    if (Module.onAdditions)
+        Module.onAdditions(UTF8ToString(path), JSON.parse(UTF8ToString(json)));
+});
+
 EM_JS(void, js_fatal, (const char *message), {
     if (Module.onFatal)
         Module.onFatal(UTF8ToString(message));
@@ -403,6 +418,30 @@ OSErr fs_trap(uint16_t trap, INTEGER vref)
     return err;
 }
 
+/* Executor's volume: its System Folder is the one it runs on. */
+const char DATA_DIR[] = "/executor";
+
+/* The image's System Folder additions into Executor's System; the page
+   told what went in (LIVE: put in while Executor runs). */
+void add_to_system(const std::string &path, bool live)
+{
+    executor_host::Additions done;
+    std::string err;
+    if(!executor_host::system_additions(path, DATA_DIR, &done, &err) || (!done.copied && !done.kept))
+        return;
+    fprintf(stderr, "[web] %s: %d files added to the System Folder, %d there already\n",
+            path.c_str(), done.copied, done.kept);
+    std::string json = "{\"copied\":" + std::to_string(done.copied) + ",\"kept\":" + std::to_string(done.kept)
+        + ",\"live\":" + (live ? "true" : "false") + ",\"restart\":[";
+    for(size_t i = 0; i < done.restart.size(); i++)
+        json += (i ? "," : "") + json_string(done.restart[i]);
+    js_additions(path.c_str(), (json + "]}").c_str());
+}
+
+/* The disks there at the start whose additions wait for Executor's own
+   System Folder (made as it starts): at the first event call. */
+std::vector<std::string> additions_pending;
+
 /* The image's drive (ROMlib_image_drive: its flags worked out, locked for
    a CD), then _MountVol on it, as GetNextEvent would for a disk put in; a
    diskEvt for the program in front. */
@@ -487,6 +526,9 @@ void on_event_poll()
 {
     char buf[1024];
     ROMlib_text_drawn = text_drawn;
+    for(const std::string &path : additions_pending)
+        add_to_system(path, true);
+    additions_pending.clear();
     while(int id = js_take_request(buf, sizeof buf))
     {
         std::string op = buf, arg = buf + op.size() + 1;
@@ -521,7 +563,10 @@ void on_event_poll()
             reply += "]";
         }
         else if(op == "mount")
+        {
+            add_to_system(arg, true);
             reply = std::to_string(mount_image(arg));
+        }
         else if(op == "mount-cd")
         {
             ROMlib_locked_images.insert(arg);
@@ -649,7 +694,7 @@ int main(int argc, char **argv)
        no room. The browser commits it all (the wasm memory grows to
        about twice it, up to the 4 GB a wasm32 module may have). */
     const int apple_ram_mb = 128;
-    c.data_dir = "/executor"; /* in memory; Executor makes its System Folder */
+    c.data_dir = DATA_DIR; /* in memory; Executor makes its System Folder */
     /* Disk images are writable (CDs, --cdrom, are not): the page keeps
        their changes in an overlay (web/executor/overlay.js); the images
        themselves are never written. */
@@ -686,6 +731,12 @@ int main(int argc, char **argv)
     }
     if(ram_mb > 0)
         c.ram_mb = ram_mb;
+    /* The disks' System Folder additions (not the CDs': as they are) */
+    for(const std::string &disk : c.disks)
+        if(std::filesystem::exists(c.data_dir + "/System Folder/System"))
+            add_to_system(disk, false);
+        else
+            additions_pending.push_back(disk);
     /* "Host", as mac-phoenix names its first shared folder: files the page
        reads and writes (worker.js 'read', 'write'). */
     c.shared_folders.push_back("/host");
