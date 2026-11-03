@@ -4,7 +4,9 @@
     tidy.py IMAGE [--screen 640x480] [--dry-run]
 
   icons     every visible item of every folder is placed on a grid inside
-            its folder's window, by name, as the Finder's Clean Up does
+            its folder's window, by name, as the Finder's Clean Up does; the
+            folder's cells as wide as its longest label (disk_audit.label_width),
+            the first column far enough in for that label
   windows   every folder's window gets a frame on the screen sized to its
             icons (up to the screen), opened a little lower and to the right
             the deeper the folder, and scroll origin 0,0
@@ -25,8 +27,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import disk_audit  # noqa: E402
 
-GRID_H, GRID_V = 128, 64         # a cell: an icon and its label (8.6's Finder's grid)
-ORIGIN_H, ORIGIN_V = 48, 8       # the first cell: room for a long label left of its icon
+GRID_H, GRID_V = 128, 64         # a cell: an icon and its label (8.6's Finder's grid), at least
+ORIGIN_H, ORIGIN_V = 48, 8       # the first cell: room for a long label left of its icon, at least
 MAX_COLUMNS = 4
 INITED = 0x0100                  # kHasBeenInited: without it the Finder places the item itself
 ICON_VIEW = 256                  # DInfo frView of a folder viewed by icon (8.6's Finder writes it)
@@ -106,12 +108,18 @@ def arrange(vol, w, screen):
         level = depth(vol, folder)
         left = min(WINDOW_LEFT + STEP * level, W // 6)
         top = min(WINDOW_TOP + STEP * level, H // 4)
-        cols = max(1, min(len(kids), MAX_COLUMNS, (W - left - ORIGIN_H - MARGIN - 8) // GRID_H))
+        # cells as wide as the longest label; labels are centred under their
+        # icons, so the first column is in by half of it
+        label = max([disk_audit.label_width(k.name) for k in kids], default=0)
+        grid_h = max(GRID_H, label + disk_audit.LABEL_GAP)
+        origin_h = max(ORIGIN_H, label // 2 - disk_audit.ICON // 2 + disk_audit.LABEL_GAP)
+        tail = disk_audit.ICON // 2 + (label + 1) // 2 + MARGIN   # past the last column's icon
+        cols = max(1, min(len(kids), MAX_COLUMNS, (W - left - 8 - origin_h - tail) // grid_h + 1))
         rows = max(1, -(-len(kids) // cols))
-        width = max(cols * GRID_H + ORIGIN_H + MARGIN, 260)
+        width = max(min(origin_h + (cols - 1) * grid_h + tail, W - left - 8), 260)
         height = max(min(rows * GRID_V + ORIGIN_V + MARGIN, H - top - 24), 120)   # its frame on the screen too
         for i, k in enumerate(kids):
-            v, h = ORIGIN_V + (i // cols) * GRID_V, ORIGIN_H + (i % cols) * GRID_H
+            v, h = ORIGIN_V + (i // cols) * GRID_V, origin_h + (i % cols) * grid_h
             w.write(k, DIR_LOCATION if k.is_dir else FILE_LOCATION, struct.pack(">hh", v, h))
             w.write(k, DIR_FLAGS if k.is_dir else FILE_FLAGS, struct.pack(">H", k.flags | INITED))
             icons += 1
