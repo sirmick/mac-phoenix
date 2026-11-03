@@ -1,0 +1,1772 @@
+# probe 3d9b5636507aa9fb90006ce3d8882b50267a9d51e26b9870e58432c01217441a
+== add
+add.add.0.0: 00000000 00000000
+add.sub.0.0: 00000000 00000000
+add.cmp.0.0: 0
+add.add.0.1: 00000000 00000001
+add.sub.0.1: ffffffff ffffffff
+add.cmp.0.1: -1
+add.add.0.2: ffffffff ffffffff
+add.sub.0.2: 00000000 00000001
+add.cmp.0.2: 1
+add.add.0.3: 00000000 ffffffff
+add.sub.0.3: ffffffff 00000001
+add.cmp.0.3: -1
+add.add.0.4: 00000001 00000000
+add.sub.0.4: ffffffff 00000000
+add.cmp.0.4: -1
+add.add.0.5: 7fffffff ffffffff
+add.sub.0.5: 80000000 00000001
+add.cmp.0.5: -1
+add.add.0.6: 80000000 00000000
+add.sub.0.6: 80000000 00000000
+add.cmp.0.6: 1
+add.add.0.7: 12345678 9abcdef0
+add.sub.0.7: edcba987 65432110
+add.cmp.0.7: -1
+add.add.0.8: fffffffe 80000000
+add.sub.0.8: 00000001 80000000
+add.cmp.0.8: 1
+add.add.0.9: 00000000 7fffffff
+add.sub.0.9: ffffffff 80000001
+add.cmp.0.9: -1
+add.add.0.10: ffffffff 80000000
+add.sub.0.10: 00000000 80000000
+add.cmp.0.10: 1
+add.add.0.11: 3fffffff 00000000
+add.sub.0.11: c0000001 00000000
+add.cmp.0.11: -1
+add.add.0.12: edcba987 65432110
+add.sub.0.12: 12345678 9abcdef0
+add.cmp.0.12: 1
+add.add.0.13: 00000000 00000064
+add.sub.0.13: ffffffff ffffff9c
+add.cmp.0.13: -1
+add.add.0.14: ffffffff ffffff9c
+add.sub.0.14: 00000000 00000064
+add.cmp.0.14: 1
+add.add.1.0: 00000000 00000001
+add.sub.1.0: 00000000 00000001
+add.cmp.1.0: 1
+add.add.1.1: 00000000 00000002
+add.sub.1.1: 00000000 00000000
+add.cmp.1.1: 0
+add.add.1.2: 00000000 00000000
+add.sub.1.2: 00000000 00000002
+add.cmp.1.2: 1
+add.add.1.3: 00000001 00000000
+add.sub.1.3: ffffffff 00000002
+add.cmp.1.3: -1
+add.add.1.4: 00000001 00000001
+add.sub.1.4: ffffffff 00000001
+add.cmp.1.4: -1
+add.add.1.5: 80000000 00000000
+add.sub.1.5: 80000000 00000002
+add.cmp.1.5: -1
+add.add.1.6: 80000000 00000001
+add.sub.1.6: 80000000 00000001
+add.cmp.1.6: 1
+add.add.1.7: 12345678 9abcdef1
+add.sub.1.7: edcba987 65432111
+add.cmp.1.7: -1
+add.add.1.8: fffffffe 80000001
+add.sub.1.8: 00000001 80000001
+add.cmp.1.8: 1
+add.add.1.9: 00000000 80000000
+add.sub.1.9: ffffffff 80000002
+add.cmp.1.9: -1
+add.add.1.10: ffffffff 80000001
+add.sub.1.10: 00000000 80000001
+add.cmp.1.10: 1
+add.add.1.11: 3fffffff 00000001
+add.sub.1.11: c0000001 00000001
+add.cmp.1.11: -1
+add.add.1.12: edcba987 65432111
+add.sub.1.12: 12345678 9abcdef1
+add.cmp.1.12: 1
+add.add.1.13: 00000000 00000065
+add.sub.1.13: ffffffff ffffff9d
+add.cmp.1.13: -1
+add.add.1.14: ffffffff ffffff9d
+add.sub.1.14: 00000000 00000065
+add.cmp.1.14: 1
+add.add.2.0: ffffffff ffffffff
+add.sub.2.0: ffffffff ffffffff
+add.cmp.2.0: -1
+add.add.2.1: 00000000 00000000
+add.sub.2.1: ffffffff fffffffe
+add.cmp.2.1: -1
+add.add.2.2: ffffffff fffffffe
+add.sub.2.2: 00000000 00000000
+add.cmp.2.2: 0
+add.add.2.3: 00000000 fffffffe
+add.sub.2.3: ffffffff 00000000
+add.cmp.2.3: -1
+add.add.2.4: 00000000 ffffffff
+add.sub.2.4: fffffffe ffffffff
+add.cmp.2.4: -1
+add.add.2.5: 7fffffff fffffffe
+add.sub.2.5: 80000000 00000000
+add.cmp.2.5: -1
+add.add.2.6: 7fffffff ffffffff
+add.sub.2.6: 7fffffff ffffffff
+add.cmp.2.6: 1
+add.add.2.7: 12345678 9abcdeef
+add.sub.2.7: edcba987 6543210f
+add.cmp.2.7: -1
+add.add.2.8: fffffffe 7fffffff
+add.sub.2.8: 00000001 7fffffff
+add.cmp.2.8: 1
+add.add.2.9: 00000000 7ffffffe
+add.sub.2.9: ffffffff 80000000
+add.cmp.2.9: -1
+add.add.2.10: ffffffff 7fffffff
+add.sub.2.10: 00000000 7fffffff
+add.cmp.2.10: 1
+add.add.2.11: 3ffffffe ffffffff
+add.sub.2.11: c0000000 ffffffff
+add.cmp.2.11: -1
+add.add.2.12: edcba987 6543210f
+add.sub.2.12: 12345678 9abcdeef
+add.cmp.2.12: 1
+add.add.2.13: 00000000 00000063
+add.sub.2.13: ffffffff ffffff9b
+add.cmp.2.13: -1
+add.add.2.14: ffffffff ffffff9b
+add.sub.2.14: 00000000 00000063
+add.cmp.2.14: 1
+add.add.3.0: 00000000 ffffffff
+add.sub.3.0: 00000000 ffffffff
+add.cmp.3.0: 1
+add.add.3.1: 00000001 00000000
+add.sub.3.1: 00000000 fffffffe
+add.cmp.3.1: 1
+add.add.3.2: 00000000 fffffffe
+add.sub.3.2: 00000001 00000000
+add.cmp.3.2: 1
+add.add.3.3: 00000001 fffffffe
+add.sub.3.3: 00000000 00000000
+add.cmp.3.3: 0
+add.add.3.4: 00000001 ffffffff
+add.sub.3.4: ffffffff ffffffff
+add.cmp.3.4: -1
+add.add.3.5: 80000000 fffffffe
+add.sub.3.5: 80000001 00000000
+add.cmp.3.5: -1
+add.add.3.6: 80000000 ffffffff
+add.sub.3.6: 80000000 ffffffff
+add.cmp.3.6: 1
+add.add.3.7: 12345679 9abcdeef
+add.sub.3.7: edcba988 6543210f
+add.cmp.3.7: -1
+add.add.3.8: ffffffff 7fffffff
+add.sub.3.8: 00000002 7fffffff
+add.cmp.3.8: 1
+add.add.3.9: 00000001 7ffffffe
+add.sub.3.9: 00000000 80000000
+add.cmp.3.9: 1
+add.add.3.10: 00000000 7fffffff
+add.sub.3.10: 00000001 7fffffff
+add.cmp.3.10: 1
+add.add.3.11: 3fffffff ffffffff
+add.sub.3.11: c0000001 ffffffff
+add.cmp.3.11: -1
+add.add.3.12: edcba988 6543210f
+add.sub.3.12: 12345679 9abcdeef
+add.cmp.3.12: 1
+add.add.3.13: 00000001 00000063
+add.sub.3.13: 00000000 ffffff9b
+add.cmp.3.13: 1
+add.add.3.14: 00000000 ffffff9b
+add.sub.3.14: 00000001 00000063
+add.cmp.3.14: 1
+add.add.4.0: 00000001 00000000
+add.sub.4.0: 00000001 00000000
+add.cmp.4.0: 1
+add.add.4.1: 00000001 00000001
+add.sub.4.1: 00000000 ffffffff
+add.cmp.4.1: 1
+add.add.4.2: 00000000 ffffffff
+add.sub.4.2: 00000001 00000001
+add.cmp.4.2: 1
+add.add.4.3: 00000001 ffffffff
+add.sub.4.3: 00000000 00000001
+add.cmp.4.3: 1
+add.add.4.4: 00000002 00000000
+add.sub.4.4: 00000000 00000000
+add.cmp.4.4: 0
+add.add.4.5: 80000000 ffffffff
+add.sub.4.5: 80000001 00000001
+add.cmp.4.5: -1
+add.add.4.6: 80000001 00000000
+add.sub.4.6: 80000001 00000000
+add.cmp.4.6: 1
+add.add.4.7: 12345679 9abcdef0
+add.sub.4.7: edcba988 65432110
+add.cmp.4.7: -1
+add.add.4.8: ffffffff 80000000
+add.sub.4.8: 00000002 80000000
+add.cmp.4.8: 1
+add.add.4.9: 00000001 7fffffff
+add.sub.4.9: 00000000 80000001
+add.cmp.4.9: 1
+add.add.4.10: 00000000 80000000
+add.sub.4.10: 00000001 80000000
+add.cmp.4.10: 1
+add.add.4.11: 40000000 00000000
+add.sub.4.11: c0000002 00000000
+add.cmp.4.11: -1
+add.add.4.12: edcba988 65432110
+add.sub.4.12: 12345679 9abcdef0
+add.cmp.4.12: 1
+add.add.4.13: 00000001 00000064
+add.sub.4.13: 00000000 ffffff9c
+add.cmp.4.13: 1
+add.add.4.14: 00000000 ffffff9c
+add.sub.4.14: 00000001 00000064
+add.cmp.4.14: 1
+add.add.5.0: 7fffffff ffffffff
+add.sub.5.0: 7fffffff ffffffff
+add.cmp.5.0: 1
+add.add.5.1: 80000000 00000000
+add.sub.5.1: 7fffffff fffffffe
+add.cmp.5.1: 1
+add.add.5.2: 7fffffff fffffffe
+add.sub.5.2: 80000000 00000000
+add.cmp.5.2: 1
+add.add.5.3: 80000000 fffffffe
+add.sub.5.3: 7fffffff 00000000
+add.cmp.5.3: 1
+add.add.5.4: 80000000 ffffffff
+add.sub.5.4: 7ffffffe ffffffff
+add.cmp.5.4: 1
+add.add.5.5: ffffffff fffffffe
+add.sub.5.5: 00000000 00000000
+add.cmp.5.5: 0
+add.add.5.6: ffffffff ffffffff
+add.sub.5.6: ffffffff ffffffff
+add.cmp.5.6: 1
+add.add.5.7: 92345678 9abcdeef
+add.sub.5.7: 6dcba987 6543210f
+add.cmp.5.7: 1
+add.add.5.8: 7ffffffe 7fffffff
+add.sub.5.8: 80000001 7fffffff
+add.cmp.5.8: 1
+add.add.5.9: 80000000 7ffffffe
+add.sub.5.9: 7fffffff 80000000
+add.cmp.5.9: 1
+add.add.5.10: 7fffffff 7fffffff
+add.sub.5.10: 80000000 7fffffff
+add.cmp.5.10: 1
+add.add.5.11: bffffffe ffffffff
+add.sub.5.11: 40000000 ffffffff
+add.cmp.5.11: 1
+add.add.5.12: 6dcba987 6543210f
+add.sub.5.12: 92345678 9abcdeef
+add.cmp.5.12: 1
+add.add.5.13: 80000000 00000063
+add.sub.5.13: 7fffffff ffffff9b
+add.cmp.5.13: 1
+add.add.5.14: 7fffffff ffffff9b
+add.sub.5.14: 80000000 00000063
+add.cmp.5.14: 1
+add.add.6.0: 80000000 00000000
+add.sub.6.0: 80000000 00000000
+add.cmp.6.0: -1
+add.add.6.1: 80000000 00000001
+add.sub.6.1: 7fffffff ffffffff
+add.cmp.6.1: -1
+add.add.6.2: 7fffffff ffffffff
+add.sub.6.2: 80000000 00000001
+add.cmp.6.2: -1
+add.add.6.3: 80000000 ffffffff
+add.sub.6.3: 7fffffff 00000001
+add.cmp.6.3: -1
+add.add.6.4: 80000001 00000000
+add.sub.6.4: 7fffffff 00000000
+add.cmp.6.4: -1
+add.add.6.5: ffffffff ffffffff
+add.sub.6.5: 00000000 00000001
+add.cmp.6.5: -1
+add.add.6.6: 00000000 00000000
+add.sub.6.6: 00000000 00000000
+add.cmp.6.6: 0
+add.add.6.7: 92345678 9abcdef0
+add.sub.6.7: 6dcba987 65432110
+add.cmp.6.7: -1
+add.add.6.8: 7ffffffe 80000000
+add.sub.6.8: 80000001 80000000
+add.cmp.6.8: -1
+add.add.6.9: 80000000 7fffffff
+add.sub.6.9: 7fffffff 80000001
+add.cmp.6.9: -1
+add.add.6.10: 7fffffff 80000000
+add.sub.6.10: 80000000 80000000
+add.cmp.6.10: -1
+add.add.6.11: bfffffff 00000000
+add.sub.6.11: 40000001 00000000
+add.cmp.6.11: -1
+add.add.6.12: 6dcba987 65432110
+add.sub.6.12: 92345678 9abcdef0
+add.cmp.6.12: -1
+add.add.6.13: 80000000 00000064
+add.sub.6.13: 7fffffff ffffff9c
+add.cmp.6.13: -1
+add.add.6.14: 7fffffff ffffff9c
+add.sub.6.14: 80000000 00000064
+add.cmp.6.14: -1
+add.add.7.0: 12345678 9abcdef0
+add.sub.7.0: 12345678 9abcdef0
+add.cmp.7.0: 1
+add.add.7.1: 12345678 9abcdef1
+add.sub.7.1: 12345678 9abcdeef
+add.cmp.7.1: 1
+add.add.7.2: 12345678 9abcdeef
+add.sub.7.2: 12345678 9abcdef1
+add.cmp.7.2: 1
+add.add.7.3: 12345679 9abcdeef
+add.sub.7.3: 12345677 9abcdef1
+add.cmp.7.3: 1
+add.add.7.4: 12345679 9abcdef0
+add.sub.7.4: 12345677 9abcdef0
+add.cmp.7.4: 1
+add.add.7.5: 92345678 9abcdeef
+add.sub.7.5: 92345678 9abcdef1
+add.cmp.7.5: -1
+add.add.7.6: 92345678 9abcdef0
+add.sub.7.6: 92345678 9abcdef0
+add.cmp.7.6: 1
+add.add.7.7: 2468acf1 3579bde0
+add.sub.7.7: 00000000 00000000
+add.cmp.7.7: 0
+add.add.7.8: 12345677 1abcdef0
+add.sub.7.8: 1234567a 1abcdef0
+add.cmp.7.8: 1
+add.add.7.9: 12345679 1abcdeef
+add.sub.7.9: 12345678 1abcdef1
+add.cmp.7.9: 1
+add.add.7.10: 12345678 1abcdef0
+add.sub.7.10: 12345679 1abcdef0
+add.cmp.7.10: 1
+add.add.7.11: 52345677 9abcdef0
+add.sub.7.11: d2345679 9abcdef0
+add.cmp.7.11: -1
+add.add.7.12: 00000000 00000000
+add.sub.7.12: 2468acf1 3579bde0
+add.cmp.7.12: 1
+add.add.7.13: 12345678 9abcdf54
+add.sub.7.13: 12345678 9abcde8c
+add.cmp.7.13: 1
+add.add.7.14: 12345678 9abcde8c
+add.sub.7.14: 12345678 9abcdf54
+add.cmp.7.14: 1
+add.add.8.0: fffffffe 80000000
+add.sub.8.0: fffffffe 80000000
+add.cmp.8.0: -1
+add.add.8.1: fffffffe 80000001
+add.sub.8.1: fffffffe 7fffffff
+add.cmp.8.1: -1
+add.add.8.2: fffffffe 7fffffff
+add.sub.8.2: fffffffe 80000001
+add.cmp.8.2: -1
+add.add.8.3: ffffffff 7fffffff
+add.sub.8.3: fffffffd 80000001
+add.cmp.8.3: -1
+add.add.8.4: ffffffff 80000000
+add.sub.8.4: fffffffd 80000000
+add.cmp.8.4: -1
+add.add.8.5: 7ffffffe 7fffffff
+add.sub.8.5: 7ffffffe 80000001
+add.cmp.8.5: -1
+add.add.8.6: 7ffffffe 80000000
+add.sub.8.6: 7ffffffe 80000000
+add.cmp.8.6: 1
+add.add.8.7: 12345677 1abcdef0
+add.sub.8.7: edcba985 e5432110
+add.cmp.8.7: -1
+add.add.8.8: fffffffd 00000000
+add.sub.8.8: 00000000 00000000
+add.cmp.8.8: 0
+add.add.8.9: fffffffe ffffffff
+add.sub.8.9: fffffffe 00000001
+add.cmp.8.9: -1
+add.add.8.10: fffffffe 00000000
+add.sub.8.10: ffffffff 00000000
+add.cmp.8.10: -1
+add.add.8.11: 3ffffffd 80000000
+add.sub.8.11: bfffffff 80000000
+add.cmp.8.11: -1
+add.add.8.12: edcba985 e5432110
+add.sub.8.12: 12345677 1abcdef0
+add.cmp.8.12: 1
+add.add.8.13: fffffffe 80000064
+add.sub.8.13: fffffffe 7fffff9c
+add.cmp.8.13: -1
+add.add.8.14: fffffffe 7fffff9c
+add.sub.8.14: fffffffe 80000064
+add.cmp.8.14: -1
+add.add.9.0: 00000000 7fffffff
+add.sub.9.0: 00000000 7fffffff
+add.cmp.9.0: 1
+add.add.9.1: 00000000 80000000
+add.sub.9.1: 00000000 7ffffffe
+add.cmp.9.1: 1
+add.add.9.2: 00000000 7ffffffe
+add.sub.9.2: 00000000 80000000
+add.cmp.9.2: 1
+add.add.9.3: 00000001 7ffffffe
+add.sub.9.3: ffffffff 80000000
+add.cmp.9.3: -1
+add.add.9.4: 00000001 7fffffff
+add.sub.9.4: ffffffff 7fffffff
+add.cmp.9.4: -1
+add.add.9.5: 80000000 7ffffffe
+add.sub.9.5: 80000000 80000000
+add.cmp.9.5: -1
+add.add.9.6: 80000000 7fffffff
+add.sub.9.6: 80000000 7fffffff
+add.cmp.9.6: 1
+add.add.9.7: 12345679 1abcdeef
+add.sub.9.7: edcba987 e543210f
+add.cmp.9.7: -1
+add.add.9.8: fffffffe ffffffff
+add.sub.9.8: 00000001 ffffffff
+add.cmp.9.8: 1
+add.add.9.9: 00000000 fffffffe
+add.sub.9.9: 00000000 00000000
+add.cmp.9.9: 0
+add.add.9.10: ffffffff ffffffff
+add.sub.9.10: 00000000 ffffffff
+add.cmp.9.10: 1
+add.add.9.11: 3fffffff 7fffffff
+add.sub.9.11: c0000001 7fffffff
+add.cmp.9.11: -1
+add.add.9.12: edcba987 e543210f
+add.sub.9.12: 12345679 1abcdeef
+add.cmp.9.12: 1
+add.add.9.13: 00000000 80000063
+add.sub.9.13: 00000000 7fffff9b
+add.cmp.9.13: 1
+add.add.9.14: 00000000 7fffff9b
+add.sub.9.14: 00000000 80000063
+add.cmp.9.14: 1
+add.add.10.0: ffffffff 80000000
+add.sub.10.0: ffffffff 80000000
+add.cmp.10.0: -1
+add.add.10.1: ffffffff 80000001
+add.sub.10.1: ffffffff 7fffffff
+add.cmp.10.1: -1
+add.add.10.2: ffffffff 7fffffff
+add.sub.10.2: ffffffff 80000001
+add.cmp.10.2: -1
+add.add.10.3: 00000000 7fffffff
+add.sub.10.3: fffffffe 80000001
+add.cmp.10.3: -1
+add.add.10.4: 00000000 80000000
+add.sub.10.4: fffffffe 80000000
+add.cmp.10.4: -1
+add.add.10.5: 7fffffff 7fffffff
+add.sub.10.5: 7fffffff 80000001
+add.cmp.10.5: -1
+add.add.10.6: 7fffffff 80000000
+add.sub.10.6: 7fffffff 80000000
+add.cmp.10.6: 1
+add.add.10.7: 12345678 1abcdef0
+add.sub.10.7: edcba986 e5432110
+add.cmp.10.7: -1
+add.add.10.8: fffffffe 00000000
+add.sub.10.8: 00000001 00000000
+add.cmp.10.8: 1
+add.add.10.9: ffffffff ffffffff
+add.sub.10.9: ffffffff 00000001
+add.cmp.10.9: -1
+add.add.10.10: ffffffff 00000000
+add.sub.10.10: 00000000 00000000
+add.cmp.10.10: 0
+add.add.10.11: 3ffffffe 80000000
+add.sub.10.11: c0000000 80000000
+add.cmp.10.11: -1
+add.add.10.12: edcba986 e5432110
+add.sub.10.12: 12345678 1abcdef0
+add.cmp.10.12: 1
+add.add.10.13: ffffffff 80000064
+add.sub.10.13: ffffffff 7fffff9c
+add.cmp.10.13: -1
+add.add.10.14: ffffffff 7fffff9c
+add.sub.10.14: ffffffff 80000064
+add.cmp.10.14: -1
+add.add.11.0: 3fffffff 00000000
+add.sub.11.0: 3fffffff 00000000
+add.cmp.11.0: 1
+add.add.11.1: 3fffffff 00000001
+add.sub.11.1: 3ffffffe ffffffff
+add.cmp.11.1: 1
+add.add.11.2: 3ffffffe ffffffff
+add.sub.11.2: 3fffffff 00000001
+add.cmp.11.2: 1
+add.add.11.3: 3fffffff ffffffff
+add.sub.11.3: 3ffffffe 00000001
+add.cmp.11.3: 1
+add.add.11.4: 40000000 00000000
+add.sub.11.4: 3ffffffe 00000000
+add.cmp.11.4: 1
+add.add.11.5: bffffffe ffffffff
+add.sub.11.5: bfffffff 00000001
+add.cmp.11.5: -1
+add.add.11.6: bfffffff 00000000
+add.sub.11.6: bfffffff 00000000
+add.cmp.11.6: 1
+add.add.11.7: 52345677 9abcdef0
+add.sub.11.7: 2dcba986 65432110
+add.cmp.11.7: 1
+add.add.11.8: 3ffffffd 80000000
+add.sub.11.8: 40000000 80000000
+add.cmp.11.8: 1
+add.add.11.9: 3fffffff 7fffffff
+add.sub.11.9: 3ffffffe 80000001
+add.cmp.11.9: 1
+add.add.11.10: 3ffffffe 80000000
+add.sub.11.10: 3fffffff 80000000
+add.cmp.11.10: 1
+add.add.11.11: 7ffffffe 00000000
+add.sub.11.11: 00000000 00000000
+add.cmp.11.11: 0
+add.add.11.12: 2dcba986 65432110
+add.sub.11.12: 52345677 9abcdef0
+add.cmp.11.12: 1
+add.add.11.13: 3fffffff 00000064
+add.sub.11.13: 3ffffffe ffffff9c
+add.cmp.11.13: 1
+add.add.11.14: 3ffffffe ffffff9c
+add.sub.11.14: 3fffffff 00000064
+add.cmp.11.14: 1
+add.add.12.0: edcba987 65432110
+add.sub.12.0: edcba987 65432110
+add.cmp.12.0: -1
+add.add.12.1: edcba987 65432111
+add.sub.12.1: edcba987 6543210f
+add.cmp.12.1: -1
+add.add.12.2: edcba987 6543210f
+add.sub.12.2: edcba987 65432111
+add.cmp.12.2: -1
+add.add.12.3: edcba988 6543210f
+add.sub.12.3: edcba986 65432111
+add.cmp.12.3: -1
+add.add.12.4: edcba988 65432110
+add.sub.12.4: edcba986 65432110
+add.cmp.12.4: -1
+add.add.12.5: 6dcba987 6543210f
+add.sub.12.5: 6dcba987 65432111
+add.cmp.12.5: -1
+add.add.12.6: 6dcba987 65432110
+add.sub.12.6: 6dcba987 65432110
+add.cmp.12.6: 1
+add.add.12.7: 00000000 00000000
+add.sub.12.7: db97530e ca864220
+add.cmp.12.7: -1
+add.add.12.8: edcba985 e5432110
+add.sub.12.8: edcba988 e5432110
+add.cmp.12.8: -1
+add.add.12.9: edcba987 e543210f
+add.sub.12.9: edcba986 e5432111
+add.cmp.12.9: -1
+add.add.12.10: edcba986 e5432110
+add.sub.12.10: edcba987 e5432110
+add.cmp.12.10: -1
+add.add.12.11: 2dcba986 65432110
+add.sub.12.11: adcba988 65432110
+add.cmp.12.11: -1
+add.add.12.12: db97530e ca864220
+add.sub.12.12: 00000000 00000000
+add.cmp.12.12: 0
+add.add.12.13: edcba987 65432174
+add.sub.12.13: edcba987 654320ac
+add.cmp.12.13: -1
+add.add.12.14: edcba987 654320ac
+add.sub.12.14: edcba987 65432174
+add.cmp.12.14: -1
+add.add.13.0: 00000000 00000064
+add.sub.13.0: 00000000 00000064
+add.cmp.13.0: 1
+add.add.13.1: 00000000 00000065
+add.sub.13.1: 00000000 00000063
+add.cmp.13.1: 1
+add.add.13.2: 00000000 00000063
+add.sub.13.2: 00000000 00000065
+add.cmp.13.2: 1
+add.add.13.3: 00000001 00000063
+add.sub.13.3: ffffffff 00000065
+add.cmp.13.3: -1
+add.add.13.4: 00000001 00000064
+add.sub.13.4: ffffffff 00000064
+add.cmp.13.4: -1
+add.add.13.5: 80000000 00000063
+add.sub.13.5: 80000000 00000065
+add.cmp.13.5: -1
+add.add.13.6: 80000000 00000064
+add.sub.13.6: 80000000 00000064
+add.cmp.13.6: 1
+add.add.13.7: 12345678 9abcdf54
+add.sub.13.7: edcba987 65432174
+add.cmp.13.7: -1
+add.add.13.8: fffffffe 80000064
+add.sub.13.8: 00000001 80000064
+add.cmp.13.8: 1
+add.add.13.9: 00000000 80000063
+add.sub.13.9: ffffffff 80000065
+add.cmp.13.9: -1
+add.add.13.10: ffffffff 80000064
+add.sub.13.10: 00000000 80000064
+add.cmp.13.10: 1
+add.add.13.11: 3fffffff 00000064
+add.sub.13.11: c0000001 00000064
+add.cmp.13.11: -1
+add.add.13.12: edcba987 65432174
+add.sub.13.12: 12345678 9abcdf54
+add.cmp.13.12: 1
+add.add.13.13: 00000000 000000c8
+add.sub.13.13: 00000000 00000000
+add.cmp.13.13: 0
+add.add.13.14: 00000000 00000000
+add.sub.13.14: 00000000 000000c8
+add.cmp.13.14: 1
+add.add.14.0: ffffffff ffffff9c
+add.sub.14.0: ffffffff ffffff9c
+add.cmp.14.0: -1
+add.add.14.1: ffffffff ffffff9d
+add.sub.14.1: ffffffff ffffff9b
+add.cmp.14.1: -1
+add.add.14.2: ffffffff ffffff9b
+add.sub.14.2: ffffffff ffffff9d
+add.cmp.14.2: -1
+add.add.14.3: 00000000 ffffff9b
+add.sub.14.3: fffffffe ffffff9d
+add.cmp.14.3: -1
+add.add.14.4: 00000000 ffffff9c
+add.sub.14.4: fffffffe ffffff9c
+add.cmp.14.4: -1
+add.add.14.5: 7fffffff ffffff9b
+add.sub.14.5: 7fffffff ffffff9d
+add.cmp.14.5: -1
+add.add.14.6: 7fffffff ffffff9c
+add.sub.14.6: 7fffffff ffffff9c
+add.cmp.14.6: 1
+add.add.14.7: 12345678 9abcde8c
+add.sub.14.7: edcba987 654320ac
+add.cmp.14.7: -1
+add.add.14.8: fffffffe 7fffff9c
+add.sub.14.8: 00000001 7fffff9c
+add.cmp.14.8: 1
+add.add.14.9: 00000000 7fffff9b
+add.sub.14.9: ffffffff 7fffff9d
+add.cmp.14.9: -1
+add.add.14.10: ffffffff 7fffff9c
+add.sub.14.10: 00000000 7fffff9c
+add.cmp.14.10: 1
+add.add.14.11: 3ffffffe ffffff9c
+add.sub.14.11: c0000000 ffffff9c
+add.cmp.14.11: -1
+add.add.14.12: edcba987 654320ac
+add.sub.14.12: 12345678 9abcde8c
+add.cmp.14.12: 1
+add.add.14.13: 00000000 00000000
+add.sub.14.13: ffffffff ffffff38
+add.cmp.14.13: -1
+add.add.14.14: ffffffff ffffff38
+add.sub.14.14: 00000000 00000000
+add.cmp.14.14: 0
+== negate
+negate.neg.0: 00000000 00000000
+negate.sqrt.0: 00000000
+negate.neg.1: ffffffff ffffffff
+negate.sqrt.1: 00000001
+negate.neg.2: 00000000 00000001
+negate.sqrt.2: ffffffff
+negate.neg.3: ffffffff 00000001
+negate.sqrt.3: 00010000
+negate.neg.4: ffffffff 00000000
+negate.sqrt.4: 00010000
+negate.neg.5: 80000000 00000001
+negate.sqrt.5: b504f334
+negate.neg.6: 80000000 00000000
+negate.sqrt.6: b504f334
+negate.neg.7: edcba987 65432110
+negate.sqrt.7: 44444444
+negate.neg.8: 00000001 80000000
+negate.sqrt.8: ffffffff
+negate.neg.9: ffffffff 80000001
+negate.sqrt.9: 0000b505
+negate.neg.10: 00000000 80000000
+negate.sqrt.10: ffffffff
+negate.neg.11: c0000001 00000000
+negate.sqrt.11: 7fffffff
+negate.neg.12: 12345678 9abcdef0
+negate.sqrt.12: f6badd35
+negate.neg.13: ffffffff ffffff9c
+negate.sqrt.13: 0000000a
+negate.neg.14: 00000000 00000064
+negate.sqrt.14: ffffffff
+== shift
+shift.shift.0.-65: 00000000 00000000
+shift.bitshift.0.-65: 00000000 00000000
+shift.shift.0.-64: 00000000 00000000
+shift.bitshift.0.-64: 00000000 00000000
+shift.shift.0.-63: 00000000 00000000
+shift.bitshift.0.-63: 00000000 00000000
+shift.shift.0.-33: 00000000 00000000
+shift.bitshift.0.-33: 00000000 00000000
+shift.shift.0.-32: 00000000 00000000
+shift.bitshift.0.-32: 00000000 00000000
+shift.shift.0.-31: 00000000 00000000
+shift.bitshift.0.-31: 00000000 00000000
+shift.shift.0.-1: 00000000 00000000
+shift.bitshift.0.-1: 00000000 00000000
+shift.shift.0.0: 00000000 00000000
+shift.bitshift.0.0: 00000000 00000000
+shift.shift.0.1: 00000000 00000000
+shift.bitshift.0.1: 00000000 00000000
+shift.shift.0.2: 00000000 00000000
+shift.bitshift.0.2: 00000000 00000000
+shift.shift.0.31: 00000000 00000000
+shift.bitshift.0.31: 00000000 00000000
+shift.shift.0.32: 00000000 00000000
+shift.bitshift.0.32: 00000000 00000000
+shift.shift.0.33: 00000000 00000000
+shift.bitshift.0.33: 00000000 00000000
+shift.shift.0.62: 00000000 00000000
+shift.bitshift.0.62: 00000000 00000000
+shift.shift.0.63: 00000000 00000000
+shift.bitshift.0.63: 00000000 00000000
+shift.shift.0.64: 00000000 00000000
+shift.bitshift.0.64: 00000000 00000000
+shift.shift.0.65: 00000000 00000000
+shift.bitshift.0.65: 00000000 00000000
+shift.shift.1.-65: 00000000 00000000
+shift.bitshift.1.-65: 00000000 00000000
+shift.shift.1.-64: 00000000 00000000
+shift.bitshift.1.-64: 00000000 00000000
+shift.shift.1.-63: 80000000 00000000
+shift.bitshift.1.-63: 80000000 00000000
+shift.shift.1.-33: 00000002 00000000
+shift.bitshift.1.-33: 00000002 00000000
+shift.shift.1.-32: 00000001 00000000
+shift.bitshift.1.-32: 00000001 00000000
+shift.shift.1.-31: 00000000 80000000
+shift.bitshift.1.-31: 00000000 80000000
+shift.shift.1.-1: 00000000 00000002
+shift.bitshift.1.-1: 00000000 00000002
+shift.shift.1.0: 00000000 00000001
+shift.bitshift.1.0: 00000000 00000001
+shift.shift.1.1: 00000000 00000001
+shift.bitshift.1.1: 00000000 00000000
+shift.shift.1.2: 00000000 00000000
+shift.bitshift.1.2: 00000000 00000000
+shift.shift.1.31: 00000000 00000000
+shift.bitshift.1.31: 00000000 00000000
+shift.shift.1.32: 00000000 00000000
+shift.bitshift.1.32: 00000000 00000000
+shift.shift.1.33: 00000000 00000000
+shift.bitshift.1.33: 00000000 00000000
+shift.shift.1.62: 00000000 00000000
+shift.bitshift.1.62: 00000000 00000000
+shift.shift.1.63: 00000000 00000000
+shift.bitshift.1.63: 00000000 00000000
+shift.shift.1.64: 00000000 00000000
+shift.bitshift.1.64: 00000000 00000000
+shift.shift.1.65: 00000000 00000000
+shift.bitshift.1.65: 00000000 00000000
+shift.shift.2.-65: 00000000 00000000
+shift.bitshift.2.-65: 00000000 00000000
+shift.shift.2.-64: 00000000 00000000
+shift.bitshift.2.-64: 00000000 00000000
+shift.shift.2.-63: 80000000 00000000
+shift.bitshift.2.-63: 80000000 00000000
+shift.shift.2.-33: fffffffe 00000000
+shift.bitshift.2.-33: fffffffe 00000000
+shift.shift.2.-32: ffffffff 00000000
+shift.bitshift.2.-32: ffffffff 00000000
+shift.shift.2.-31: ffffffff 80000000
+shift.bitshift.2.-31: ffffffff 80000000
+shift.shift.2.-1: ffffffff fffffffe
+shift.bitshift.2.-1: ffffffff fffffffe
+shift.shift.2.0: ffffffff ffffffff
+shift.bitshift.2.0: ffffffff ffffffff
+shift.shift.2.1: 00000000 00000000
+shift.bitshift.2.1: ffffffff ffffffff
+shift.shift.2.2: 00000000 00000000
+shift.bitshift.2.2: ffffffff ffffffff
+shift.shift.2.31: 00000000 00000000
+shift.bitshift.2.31: ffffffff ffffffff
+shift.shift.2.32: 00000000 00000000
+shift.bitshift.2.32: ffffffff ffffffff
+shift.shift.2.33: 00000000 00000000
+shift.bitshift.2.33: ffffffff ffffffff
+shift.shift.2.62: 00000000 00000000
+shift.bitshift.2.62: ffffffff ffffffff
+shift.shift.2.63: 00000000 00000000
+shift.bitshift.2.63: ffffffff ffffffff
+shift.shift.2.64: 00000000 00000000
+shift.bitshift.2.64: ffffffff ffffffff
+shift.shift.2.65: ffffffff ffffffff
+shift.bitshift.2.65: ffffffff ffffffff
+shift.shift.3.-65: 00000000 00000000
+shift.bitshift.3.-65: 00000000 00000000
+shift.shift.3.-64: 00000000 00000000
+shift.bitshift.3.-64: 00000000 00000000
+shift.shift.3.-63: 80000000 00000000
+shift.bitshift.3.-63: 80000000 00000000
+shift.shift.3.-33: fffffffe 00000000
+shift.bitshift.3.-33: fffffffe 00000000
+shift.shift.3.-32: ffffffff 00000000
+shift.bitshift.3.-32: ffffffff 00000000
+shift.shift.3.-31: 7fffffff 80000000
+shift.bitshift.3.-31: 7fffffff 80000000
+shift.shift.3.-1: 00000001 fffffffe
+shift.bitshift.3.-1: 00000001 fffffffe
+shift.shift.3.0: 00000000 ffffffff
+shift.bitshift.3.0: 00000000 ffffffff
+shift.shift.3.1: 00000000 80000000
+shift.bitshift.3.1: 00000000 7fffffff
+shift.shift.3.2: 00000000 40000000
+shift.bitshift.3.2: 00000000 3fffffff
+shift.shift.3.31: 00000000 00000002
+shift.bitshift.3.31: 00000000 00000001
+shift.shift.3.32: 00000000 00000001
+shift.bitshift.3.32: 00000000 00000000
+shift.shift.3.33: 00000000 00000000
+shift.bitshift.3.33: 00000000 00000000
+shift.shift.3.62: 00000000 00000000
+shift.bitshift.3.62: 00000000 00000000
+shift.shift.3.63: 00000000 00000000
+shift.bitshift.3.63: 00000000 00000000
+shift.shift.3.64: 00000000 00000000
+shift.bitshift.3.64: 00000000 00000000
+shift.shift.3.65: 00000000 00000000
+shift.bitshift.3.65: 00000000 00000000
+shift.shift.4.-65: 00000000 00000000
+shift.bitshift.4.-65: 00000000 00000000
+shift.shift.4.-64: 00000000 00000000
+shift.bitshift.4.-64: 00000000 00000000
+shift.shift.4.-63: 00000000 00000000
+shift.bitshift.4.-63: 00000000 00000000
+shift.shift.4.-33: 00000000 00000000
+shift.bitshift.4.-33: 00000000 00000000
+shift.shift.4.-32: 00000000 00000000
+shift.bitshift.4.-32: 00000000 00000000
+shift.shift.4.-31: 80000000 00000000
+shift.bitshift.4.-31: 80000000 00000000
+shift.shift.4.-1: 00000002 00000000
+shift.bitshift.4.-1: 00000002 00000000
+shift.shift.4.0: 00000001 00000000
+shift.bitshift.4.0: 00000001 00000000
+shift.shift.4.1: 00000000 80000000
+shift.bitshift.4.1: 00000000 80000000
+shift.shift.4.2: 00000000 40000000
+shift.bitshift.4.2: 00000000 40000000
+shift.shift.4.31: 00000000 00000002
+shift.bitshift.4.31: 00000000 00000002
+shift.shift.4.32: 00000000 00000001
+shift.bitshift.4.32: 00000000 00000001
+shift.shift.4.33: 00000000 00000001
+shift.bitshift.4.33: 00000000 00000000
+shift.shift.4.62: 00000000 00000000
+shift.bitshift.4.62: 00000000 00000000
+shift.shift.4.63: 00000000 00000000
+shift.bitshift.4.63: 00000000 00000000
+shift.shift.4.64: 00000000 00000000
+shift.bitshift.4.64: 00000000 00000000
+shift.shift.4.65: 00000000 00000000
+shift.bitshift.4.65: 00000000 00000000
+shift.shift.5.-65: 00000000 00000000
+shift.bitshift.5.-65: 00000000 00000000
+shift.shift.5.-64: 00000000 00000000
+shift.bitshift.5.-64: 00000000 00000000
+shift.shift.5.-63: 80000000 00000000
+shift.bitshift.5.-63: 80000000 00000000
+shift.shift.5.-33: fffffffe 00000000
+shift.bitshift.5.-33: fffffffe 00000000
+shift.shift.5.-32: ffffffff 00000000
+shift.bitshift.5.-32: ffffffff 00000000
+shift.shift.5.-31: ffffffff 80000000
+shift.bitshift.5.-31: ffffffff 80000000
+shift.shift.5.-1: ffffffff fffffffe
+shift.bitshift.5.-1: ffffffff fffffffe
+shift.shift.5.0: 7fffffff ffffffff
+shift.bitshift.5.0: 7fffffff ffffffff
+shift.shift.5.1: 40000000 00000000
+shift.bitshift.5.1: 3fffffff ffffffff
+shift.shift.5.2: 20000000 00000000
+shift.bitshift.5.2: 1fffffff ffffffff
+shift.shift.5.31: 00000001 00000000
+shift.bitshift.5.31: 00000000 ffffffff
+shift.shift.5.32: 00000000 80000000
+shift.bitshift.5.32: 00000000 7fffffff
+shift.shift.5.33: 00000000 40000000
+shift.bitshift.5.33: 00000000 3fffffff
+shift.shift.5.62: 00000000 00000002
+shift.bitshift.5.62: 00000000 00000001
+shift.shift.5.63: 00000000 00000001
+shift.bitshift.5.63: 00000000 00000000
+shift.shift.5.64: 00000000 00000000
+shift.bitshift.5.64: 00000000 00000000
+shift.shift.5.65: 00000000 00000000
+shift.bitshift.5.65: 00000000 00000000
+shift.shift.6.-65: 00000000 00000000
+shift.bitshift.6.-65: 00000000 00000000
+shift.shift.6.-64: 00000000 00000000
+shift.bitshift.6.-64: 00000000 00000000
+shift.shift.6.-63: 00000000 00000000
+shift.bitshift.6.-63: 00000000 00000000
+shift.shift.6.-33: 00000000 00000000
+shift.bitshift.6.-33: 00000000 00000000
+shift.shift.6.-32: 00000000 00000000
+shift.bitshift.6.-32: 00000000 00000000
+shift.shift.6.-31: 00000000 00000000
+shift.bitshift.6.-31: 00000000 00000000
+shift.shift.6.-1: 00000000 00000000
+shift.bitshift.6.-1: 00000000 00000000
+shift.shift.6.0: 80000000 00000000
+shift.bitshift.6.0: 80000000 00000000
+shift.shift.6.1: c0000000 00000000
+shift.bitshift.6.1: c0000000 00000000
+shift.shift.6.2: e0000000 00000000
+shift.bitshift.6.2: e0000000 00000000
+shift.shift.6.31: ffffffff 00000000
+shift.bitshift.6.31: ffffffff 00000000
+shift.shift.6.32: ffffffff 80000000
+shift.bitshift.6.32: ffffffff 80000000
+shift.shift.6.33: ffffffff c0000000
+shift.bitshift.6.33: ffffffff c0000000
+shift.shift.6.62: ffffffff fffffffe
+shift.bitshift.6.62: ffffffff fffffffe
+shift.shift.6.63: ffffffff ffffffff
+shift.bitshift.6.63: ffffffff ffffffff
+shift.shift.6.64: 00000000 00000000
+shift.bitshift.6.64: ffffffff ffffffff
+shift.shift.6.65: ffffffff ffffffff
+shift.bitshift.6.65: ffffffff ffffffff
+shift.shift.7.-65: 00000000 00000000
+shift.bitshift.7.-65: 00000000 00000000
+shift.shift.7.-64: 00000000 00000000
+shift.bitshift.7.-64: 00000000 00000000
+shift.shift.7.-63: 00000000 00000000
+shift.bitshift.7.-63: 00000000 00000000
+shift.shift.7.-33: 3579bde0 00000000
+shift.bitshift.7.-33: 3579bde0 00000000
+shift.shift.7.-32: 9abcdef0 00000000
+shift.bitshift.7.-32: 9abcdef0 00000000
+shift.shift.7.-31: 4d5e6f78 00000000
+shift.bitshift.7.-31: 4d5e6f78 00000000
+shift.shift.7.-1: 2468acf1 3579bde0
+shift.bitshift.7.-1: 2468acf1 3579bde0
+shift.shift.7.0: 12345678 9abcdef0
+shift.bitshift.7.0: 12345678 9abcdef0
+shift.shift.7.1: 091a2b3c 4d5e6f78
+shift.bitshift.7.1: 091a2b3c 4d5e6f78
+shift.shift.7.2: 048d159e 26af37bc
+shift.bitshift.7.2: 048d159e 26af37bc
+shift.shift.7.31: 00000000 2468acf1
+shift.bitshift.7.31: 00000000 2468acf1
+shift.shift.7.32: 00000000 12345679
+shift.bitshift.7.32: 00000000 12345678
+shift.shift.7.33: 00000000 091a2b3c
+shift.bitshift.7.33: 00000000 091a2b3c
+shift.shift.7.62: 00000000 00000000
+shift.bitshift.7.62: 00000000 00000000
+shift.shift.7.63: 00000000 00000000
+shift.bitshift.7.63: 00000000 00000000
+shift.shift.7.64: 00000000 00000000
+shift.bitshift.7.64: 00000000 00000000
+shift.shift.7.65: 00000000 00000000
+shift.bitshift.7.65: 00000000 00000000
+shift.shift.8.-65: 00000000 00000000
+shift.bitshift.8.-65: 00000000 00000000
+shift.shift.8.-64: 00000000 00000000
+shift.bitshift.8.-64: 00000000 00000000
+shift.shift.8.-63: 00000000 00000000
+shift.bitshift.8.-63: 00000000 00000000
+shift.shift.8.-33: 00000000 00000000
+shift.bitshift.8.-33: 00000000 00000000
+shift.shift.8.-32: 80000000 00000000
+shift.bitshift.8.-32: 80000000 00000000
+shift.shift.8.-31: 40000000 00000000
+shift.bitshift.8.-31: 40000000 00000000
+shift.shift.8.-1: fffffffd 00000000
+shift.bitshift.8.-1: fffffffd 00000000
+shift.shift.8.0: fffffffe 80000000
+shift.bitshift.8.0: fffffffe 80000000
+shift.shift.8.1: ffffffff 40000000
+shift.bitshift.8.1: ffffffff 40000000
+shift.shift.8.2: ffffffff a0000000
+shift.bitshift.8.2: ffffffff a0000000
+shift.shift.8.31: ffffffff fffffffd
+shift.bitshift.8.31: ffffffff fffffffd
+shift.shift.8.32: ffffffff ffffffff
+shift.bitshift.8.32: ffffffff fffffffe
+shift.shift.8.33: ffffffff ffffffff
+shift.bitshift.8.33: ffffffff ffffffff
+shift.shift.8.62: 00000000 00000000
+shift.bitshift.8.62: ffffffff ffffffff
+shift.shift.8.63: 00000000 00000000
+shift.bitshift.8.63: ffffffff ffffffff
+shift.shift.8.64: 00000000 00000000
+shift.bitshift.8.64: ffffffff ffffffff
+shift.shift.8.65: ffffffff ffffffff
+shift.bitshift.8.65: ffffffff ffffffff
+shift.shift.9.-65: 00000000 00000000
+shift.bitshift.9.-65: 00000000 00000000
+shift.shift.9.-64: 00000000 00000000
+shift.bitshift.9.-64: 00000000 00000000
+shift.shift.9.-63: 80000000 00000000
+shift.bitshift.9.-63: 80000000 00000000
+shift.shift.9.-33: fffffffe 00000000
+shift.bitshift.9.-33: fffffffe 00000000
+shift.shift.9.-32: 7fffffff 00000000
+shift.bitshift.9.-32: 7fffffff 00000000
+shift.shift.9.-31: 3fffffff 80000000
+shift.bitshift.9.-31: 3fffffff 80000000
+shift.shift.9.-1: 00000000 fffffffe
+shift.bitshift.9.-1: 00000000 fffffffe
+shift.shift.9.0: 00000000 7fffffff
+shift.bitshift.9.0: 00000000 7fffffff
+shift.shift.9.1: 00000000 40000000
+shift.bitshift.9.1: 00000000 3fffffff
+shift.shift.9.2: 00000000 20000000
+shift.bitshift.9.2: 00000000 1fffffff
+shift.shift.9.31: 00000000 00000001
+shift.bitshift.9.31: 00000000 00000000
+shift.shift.9.32: 00000000 00000000
+shift.bitshift.9.32: 00000000 00000000
+shift.shift.9.33: 00000000 00000000
+shift.bitshift.9.33: 00000000 00000000
+shift.shift.9.62: 00000000 00000000
+shift.bitshift.9.62: 00000000 00000000
+shift.shift.9.63: 00000000 00000000
+shift.bitshift.9.63: 00000000 00000000
+shift.shift.9.64: 00000000 00000000
+shift.bitshift.9.64: 00000000 00000000
+shift.shift.9.65: 00000000 00000000
+shift.bitshift.9.65: 00000000 00000000
+shift.shift.10.-65: 00000000 00000000
+shift.bitshift.10.-65: 00000000 00000000
+shift.shift.10.-64: 00000000 00000000
+shift.bitshift.10.-64: 00000000 00000000
+shift.shift.10.-63: 00000000 00000000
+shift.bitshift.10.-63: 00000000 00000000
+shift.shift.10.-33: 00000000 00000000
+shift.bitshift.10.-33: 00000000 00000000
+shift.shift.10.-32: 80000000 00000000
+shift.bitshift.10.-32: 80000000 00000000
+shift.shift.10.-31: c0000000 00000000
+shift.bitshift.10.-31: c0000000 00000000
+shift.shift.10.-1: ffffffff 00000000
+shift.bitshift.10.-1: ffffffff 00000000
+shift.shift.10.0: ffffffff 80000000
+shift.bitshift.10.0: ffffffff 80000000
+shift.shift.10.1: ffffffff c0000000
+shift.bitshift.10.1: ffffffff c0000000
+shift.shift.10.2: ffffffff e0000000
+shift.bitshift.10.2: ffffffff e0000000
+shift.shift.10.31: ffffffff ffffffff
+shift.bitshift.10.31: ffffffff ffffffff
+shift.shift.10.32: 00000000 00000000
+shift.bitshift.10.32: ffffffff ffffffff
+shift.shift.10.33: 00000000 00000000
+shift.bitshift.10.33: ffffffff ffffffff
+shift.shift.10.62: 00000000 00000000
+shift.bitshift.10.62: ffffffff ffffffff
+shift.shift.10.63: 00000000 00000000
+shift.bitshift.10.63: ffffffff ffffffff
+shift.shift.10.64: 00000000 00000000
+shift.bitshift.10.64: ffffffff ffffffff
+shift.shift.10.65: ffffffff ffffffff
+shift.bitshift.10.65: ffffffff ffffffff
+shift.shift.11.-65: 00000000 00000000
+shift.bitshift.11.-65: 00000000 00000000
+shift.shift.11.-64: 00000000 00000000
+shift.bitshift.11.-64: 00000000 00000000
+shift.shift.11.-63: 00000000 00000000
+shift.bitshift.11.-63: 00000000 00000000
+shift.shift.11.-33: 00000000 00000000
+shift.bitshift.11.-33: 00000000 00000000
+shift.shift.11.-32: 00000000 00000000
+shift.bitshift.11.-32: 00000000 00000000
+shift.shift.11.-31: 80000000 00000000
+shift.bitshift.11.-31: 80000000 00000000
+shift.shift.11.-1: 7ffffffe 00000000
+shift.bitshift.11.-1: 7ffffffe 00000000
+shift.shift.11.0: 3fffffff 00000000
+shift.bitshift.11.0: 3fffffff 00000000
+shift.shift.11.1: 1fffffff 80000000
+shift.bitshift.11.1: 1fffffff 80000000
+shift.shift.11.2: 0fffffff c0000000
+shift.bitshift.11.2: 0fffffff c0000000
+shift.shift.11.31: 00000000 7ffffffe
+shift.bitshift.11.31: 00000000 7ffffffe
+shift.shift.11.32: 00000000 3fffffff
+shift.bitshift.11.32: 00000000 3fffffff
+shift.shift.11.33: 00000000 20000000
+shift.bitshift.11.33: 00000000 1fffffff
+shift.shift.11.62: 00000000 00000001
+shift.bitshift.11.62: 00000000 00000000
+shift.shift.11.63: 00000000 00000000
+shift.bitshift.11.63: 00000000 00000000
+shift.shift.11.64: 00000000 00000000
+shift.bitshift.11.64: 00000000 00000000
+shift.shift.11.65: 00000000 00000000
+shift.bitshift.11.65: 00000000 00000000
+shift.shift.12.-65: 00000000 00000000
+shift.bitshift.12.-65: 00000000 00000000
+shift.shift.12.-64: 00000000 00000000
+shift.bitshift.12.-64: 00000000 00000000
+shift.shift.12.-63: 00000000 00000000
+shift.bitshift.12.-63: 00000000 00000000
+shift.shift.12.-33: ca864220 00000000
+shift.bitshift.12.-33: ca864220 00000000
+shift.shift.12.-32: 65432110 00000000
+shift.bitshift.12.-32: 65432110 00000000
+shift.shift.12.-31: b2a19088 00000000
+shift.bitshift.12.-31: b2a19088 00000000
+shift.shift.12.-1: db97530e ca864220
+shift.bitshift.12.-1: db97530e ca864220
+shift.shift.12.0: edcba987 65432110
+shift.bitshift.12.0: edcba987 65432110
+shift.shift.12.1: f6e5d4c3 b2a19088
+shift.bitshift.12.1: f6e5d4c3 b2a19088
+shift.shift.12.2: fb72ea61 d950c844
+shift.bitshift.12.2: fb72ea61 d950c844
+shift.shift.12.31: ffffffff db97530f
+shift.bitshift.12.31: ffffffff db97530e
+shift.shift.12.32: ffffffff edcba987
+shift.bitshift.12.32: ffffffff edcba987
+shift.shift.12.33: ffffffff f6e5d4c4
+shift.bitshift.12.33: ffffffff f6e5d4c3
+shift.shift.12.62: 00000000 00000000
+shift.bitshift.12.62: ffffffff ffffffff
+shift.shift.12.63: 00000000 00000000
+shift.bitshift.12.63: ffffffff ffffffff
+shift.shift.12.64: 00000000 00000000
+shift.bitshift.12.64: ffffffff ffffffff
+shift.shift.12.65: ffffffff ffffffff
+shift.bitshift.12.65: ffffffff ffffffff
+shift.shift.13.-65: 00000000 00000000
+shift.bitshift.13.-65: 00000000 00000000
+shift.shift.13.-64: 00000000 00000000
+shift.bitshift.13.-64: 00000000 00000000
+shift.shift.13.-63: 00000000 00000000
+shift.bitshift.13.-63: 00000000 00000000
+shift.shift.13.-33: 000000c8 00000000
+shift.bitshift.13.-33: 000000c8 00000000
+shift.shift.13.-32: 00000064 00000000
+shift.bitshift.13.-32: 00000064 00000000
+shift.shift.13.-31: 00000032 00000000
+shift.bitshift.13.-31: 00000032 00000000
+shift.shift.13.-1: 00000000 000000c8
+shift.bitshift.13.-1: 00000000 000000c8
+shift.shift.13.0: 00000000 00000064
+shift.bitshift.13.0: 00000000 00000064
+shift.shift.13.1: 00000000 00000032
+shift.bitshift.13.1: 00000000 00000032
+shift.shift.13.2: 00000000 00000019
+shift.bitshift.13.2: 00000000 00000019
+shift.shift.13.31: 00000000 00000000
+shift.bitshift.13.31: 00000000 00000000
+shift.shift.13.32: 00000000 00000000
+shift.bitshift.13.32: 00000000 00000000
+shift.shift.13.33: 00000000 00000000
+shift.bitshift.13.33: 00000000 00000000
+shift.shift.13.62: 00000000 00000000
+shift.bitshift.13.62: 00000000 00000000
+shift.shift.13.63: 00000000 00000000
+shift.bitshift.13.63: 00000000 00000000
+shift.shift.13.64: 00000000 00000000
+shift.bitshift.13.64: 00000000 00000000
+shift.shift.13.65: 00000000 00000000
+shift.bitshift.13.65: 00000000 00000000
+shift.shift.14.-65: 00000000 00000000
+shift.bitshift.14.-65: 00000000 00000000
+shift.shift.14.-64: 00000000 00000000
+shift.bitshift.14.-64: 00000000 00000000
+shift.shift.14.-63: 00000000 00000000
+shift.bitshift.14.-63: 00000000 00000000
+shift.shift.14.-33: ffffff38 00000000
+shift.bitshift.14.-33: ffffff38 00000000
+shift.shift.14.-32: ffffff9c 00000000
+shift.bitshift.14.-32: ffffff9c 00000000
+shift.shift.14.-31: ffffffce 00000000
+shift.bitshift.14.-31: ffffffce 00000000
+shift.shift.14.-1: ffffffff ffffff38
+shift.bitshift.14.-1: ffffffff ffffff38
+shift.shift.14.0: ffffffff ffffff9c
+shift.bitshift.14.0: ffffffff ffffff9c
+shift.shift.14.1: ffffffff ffffffce
+shift.bitshift.14.1: ffffffff ffffffce
+shift.shift.14.2: ffffffff ffffffe7
+shift.bitshift.14.2: ffffffff ffffffe7
+shift.shift.14.31: 00000000 00000000
+shift.bitshift.14.31: ffffffff ffffffff
+shift.shift.14.32: 00000000 00000000
+shift.bitshift.14.32: ffffffff ffffffff
+shift.shift.14.33: 00000000 00000000
+shift.bitshift.14.33: ffffffff ffffffff
+shift.shift.14.62: 00000000 00000000
+shift.bitshift.14.62: ffffffff ffffffff
+shift.shift.14.63: 00000000 00000000
+shift.bitshift.14.63: ffffffff ffffffff
+shift.shift.14.64: 00000000 00000000
+shift.bitshift.14.64: ffffffff ffffffff
+shift.shift.14.65: ffffffff ffffffff
+shift.bitshift.14.65: ffffffff ffffffff
+== multiply
+multiply.mul.0.0: 00000000 00000000
+multiply.mul.0.1: 00000000 00000000
+multiply.mul.0.-1: 00000000 00000000
+multiply.mul.0.2: 00000000 00000000
+multiply.mul.0.3: 00000000 00000000
+multiply.mul.0.7: 00000000 00000000
+multiply.mul.0.-7: 00000000 00000000
+multiply.mul.0.1000: 00000000 00000000
+multiply.mul.0.65536: 00000000 00000000
+multiply.mul.0.2147483647: 00000000 00000000
+multiply.mul.0.-2147483648: 00000000 00000000
+multiply.mul.0.-65536: 00000000 00000000
+multiply.mul.1.0: 00000000 00000000
+multiply.mul.1.1: 00000000 00000001
+multiply.mul.1.-1: ffffffff ffffffff
+multiply.mul.1.2: 00000000 00000002
+multiply.mul.1.3: 00000000 00000003
+multiply.mul.1.7: 00000000 00000007
+multiply.mul.1.-7: ffffffff fffffff9
+multiply.mul.1.1000: 00000000 000003e8
+multiply.mul.1.65536: 00000000 00010000
+multiply.mul.1.2147483647: 00000000 7fffffff
+multiply.mul.1.-2147483648: ffffffff 80000000
+multiply.mul.1.-65536: ffffffff ffff0000
+multiply.mul.-1.0: 00000000 00000000
+multiply.mul.-1.1: ffffffff ffffffff
+multiply.mul.-1.-1: 00000000 00000001
+multiply.mul.-1.2: ffffffff fffffffe
+multiply.mul.-1.3: ffffffff fffffffd
+multiply.mul.-1.7: ffffffff fffffff9
+multiply.mul.-1.-7: 00000000 00000007
+multiply.mul.-1.1000: ffffffff fffffc18
+multiply.mul.-1.65536: ffffffff ffff0000
+multiply.mul.-1.2147483647: ffffffff 80000001
+multiply.mul.-1.-2147483648: 00000000 80000000
+multiply.mul.-1.-65536: 00000000 00010000
+multiply.mul.2.0: 00000000 00000000
+multiply.mul.2.1: 00000000 00000002
+multiply.mul.2.-1: ffffffff fffffffe
+multiply.mul.2.2: 00000000 00000004
+multiply.mul.2.3: 00000000 00000006
+multiply.mul.2.7: 00000000 0000000e
+multiply.mul.2.-7: ffffffff fffffff2
+multiply.mul.2.1000: 00000000 000007d0
+multiply.mul.2.65536: 00000000 00020000
+multiply.mul.2.2147483647: 00000000 fffffffe
+multiply.mul.2.-2147483648: ffffffff 00000000
+multiply.mul.2.-65536: ffffffff fffe0000
+multiply.mul.3.0: 00000000 00000000
+multiply.mul.3.1: 00000000 00000003
+multiply.mul.3.-1: ffffffff fffffffd
+multiply.mul.3.2: 00000000 00000006
+multiply.mul.3.3: 00000000 00000009
+multiply.mul.3.7: 00000000 00000015
+multiply.mul.3.-7: ffffffff ffffffeb
+multiply.mul.3.1000: 00000000 00000bb8
+multiply.mul.3.65536: 00000000 00030000
+multiply.mul.3.2147483647: 00000001 7ffffffd
+multiply.mul.3.-2147483648: fffffffe 80000000
+multiply.mul.3.-65536: ffffffff fffd0000
+multiply.mul.7.0: 00000000 00000000
+multiply.mul.7.1: 00000000 00000007
+multiply.mul.7.-1: ffffffff fffffff9
+multiply.mul.7.2: 00000000 0000000e
+multiply.mul.7.3: 00000000 00000015
+multiply.mul.7.7: 00000000 00000031
+multiply.mul.7.-7: ffffffff ffffffcf
+multiply.mul.7.1000: 00000000 00001b58
+multiply.mul.7.65536: 00000000 00070000
+multiply.mul.7.2147483647: 00000003 7ffffff9
+multiply.mul.7.-2147483648: fffffffc 80000000
+multiply.mul.7.-65536: ffffffff fff90000
+multiply.mul.-7.0: 00000000 00000000
+multiply.mul.-7.1: ffffffff fffffff9
+multiply.mul.-7.-1: 00000000 00000007
+multiply.mul.-7.2: ffffffff fffffff2
+multiply.mul.-7.3: ffffffff ffffffeb
+multiply.mul.-7.7: ffffffff ffffffcf
+multiply.mul.-7.-7: 00000000 00000031
+multiply.mul.-7.1000: ffffffff ffffe4a8
+multiply.mul.-7.65536: ffffffff fff90000
+multiply.mul.-7.2147483647: fffffffc 80000007
+multiply.mul.-7.-2147483648: 00000003 80000000
+multiply.mul.-7.-65536: 00000000 00070000
+multiply.mul.1000.0: 00000000 00000000
+multiply.mul.1000.1: 00000000 000003e8
+multiply.mul.1000.-1: ffffffff fffffc18
+multiply.mul.1000.2: 00000000 000007d0
+multiply.mul.1000.3: 00000000 00000bb8
+multiply.mul.1000.7: 00000000 00001b58
+multiply.mul.1000.-7: ffffffff ffffe4a8
+multiply.mul.1000.1000: 00000000 000f4240
+multiply.mul.1000.65536: 00000000 03e80000
+multiply.mul.1000.2147483647: 000001f3 fffffc18
+multiply.mul.1000.-2147483648: fffffe0c 00000000
+multiply.mul.1000.-65536: ffffffff fc180000
+multiply.mul.65536.0: 00000000 00000000
+multiply.mul.65536.1: 00000000 00010000
+multiply.mul.65536.-1: ffffffff ffff0000
+multiply.mul.65536.2: 00000000 00020000
+multiply.mul.65536.3: 00000000 00030000
+multiply.mul.65536.7: 00000000 00070000
+multiply.mul.65536.-7: ffffffff fff90000
+multiply.mul.65536.1000: 00000000 03e80000
+multiply.mul.65536.65536: 00000001 00000000
+multiply.mul.65536.2147483647: 00007fff ffff0000
+multiply.mul.65536.-2147483648: ffff8000 00000000
+multiply.mul.65536.-65536: ffffffff 00000000
+multiply.mul.2147483647.0: 00000000 00000000
+multiply.mul.2147483647.1: 00000000 7fffffff
+multiply.mul.2147483647.-1: ffffffff 80000001
+multiply.mul.2147483647.2: 00000000 fffffffe
+multiply.mul.2147483647.3: 00000001 7ffffffd
+multiply.mul.2147483647.7: 00000003 7ffffff9
+multiply.mul.2147483647.-7: fffffffc 80000007
+multiply.mul.2147483647.1000: 000001f3 fffffc18
+multiply.mul.2147483647.65536: 00007fff ffff0000
+multiply.mul.2147483647.2147483647: 3fffffff 00000001
+multiply.mul.2147483647.-2147483648: c0000000 80000000
+multiply.mul.2147483647.-65536: ffff8000 00010000
+multiply.mul.-2147483648.0: 00000000 00000000
+multiply.mul.-2147483648.1: ffffffff 80000000
+multiply.mul.-2147483648.-1: 00000000 80000000
+multiply.mul.-2147483648.2: ffffffff 00000000
+multiply.mul.-2147483648.3: fffffffe 80000000
+multiply.mul.-2147483648.7: fffffffc 80000000
+multiply.mul.-2147483648.-7: 00000003 80000000
+multiply.mul.-2147483648.1000: fffffe0c 00000000
+multiply.mul.-2147483648.65536: ffff8000 00000000
+multiply.mul.-2147483648.2147483647: c0000000 80000000
+multiply.mul.-2147483648.-2147483648: 40000000 00000000
+multiply.mul.-2147483648.-65536: 00008000 00000000
+multiply.mul.-65536.0: 00000000 00000000
+multiply.mul.-65536.1: ffffffff ffff0000
+multiply.mul.-65536.-1: 00000000 00010000
+multiply.mul.-65536.2: ffffffff fffe0000
+multiply.mul.-65536.3: ffffffff fffd0000
+multiply.mul.-65536.7: ffffffff fff90000
+multiply.mul.-65536.-7: 00000000 00070000
+multiply.mul.-65536.1000: ffffffff fc180000
+multiply.mul.-65536.65536: ffffffff 00000000
+multiply.mul.-65536.2147483647: ffff8000 00010000
+multiply.mul.-65536.-2147483648: 00008000 00000000
+multiply.mul.-65536.-65536: 00000001 00000000
+== divide
+divide.div.0.1: 00000000 rem 00000000
+divide.wdiv.0.1: 00000000 00000000 rem 00000000
+divide.div.0.-1: 00000000 rem 00000000
+divide.wdiv.0.-1: 00000000 00000000 rem 00000000
+divide.div.0.2: 00000000 rem 00000000
+divide.wdiv.0.2: 00000000 00000000 rem 00000000
+divide.div.0.3: 00000000 rem 00000000
+divide.wdiv.0.3: 00000000 00000000 rem 00000000
+divide.div.0.7: 00000000 rem 00000000
+divide.wdiv.0.7: 00000000 00000000 rem 00000000
+divide.div.0.-7: 00000000 rem 00000000
+divide.wdiv.0.-7: 00000000 00000000 rem 00000000
+divide.div.0.1000: 00000000 rem 00000000
+divide.wdiv.0.1000: 00000000 00000000 rem 00000000
+divide.div.0.65536: 00000000 rem 00000000
+divide.wdiv.0.65536: 00000000 00000000 rem 00000000
+divide.div.0.2147483647: 00000000 rem 00000000
+divide.wdiv.0.2147483647: 00000000 00000000 rem 00000000
+divide.div.0.-2147483648: 00000000 rem 00000000
+divide.wdiv.0.-2147483648: 00000000 00000000 rem 80000000
+divide.div.0.-65536: 00000000 rem 00000000
+divide.wdiv.0.-65536: 00000000 00000000 rem 00000000
+divide.div.1.1: 00000001 rem 00000000
+divide.wdiv.1.1: 00000000 00000001 rem 00000000
+divide.div.1.-1: ffffffff rem 00000000
+divide.wdiv.1.-1: ffffffff ffffffff rem 00000000
+divide.div.1.2: 00000000 rem 00000001
+divide.wdiv.1.2: 00000000 00000000 rem 00000001
+divide.div.1.3: 00000000 rem 00000001
+divide.wdiv.1.3: 00000000 00000000 rem 00000001
+divide.div.1.7: 00000000 rem 00000001
+divide.wdiv.1.7: 00000000 00000000 rem 00000001
+divide.div.1.-7: 00000000 rem 00000001
+divide.wdiv.1.-7: 00000000 00000000 rem 00000001
+divide.div.1.1000: 00000000 rem 00000001
+divide.wdiv.1.1000: 00000000 00000000 rem 00000001
+divide.div.1.65536: 00000000 rem 00000001
+divide.wdiv.1.65536: 00000000 00000000 rem 00000001
+divide.div.1.2147483647: 00000000 rem 00000001
+divide.wdiv.1.2147483647: 00000000 00000000 rem 00000001
+divide.div.1.-2147483648: 00000000 rem 00000001
+divide.wdiv.1.-2147483648: 00000000 00000000 rem 80000000
+divide.div.1.-65536: 00000000 rem 00000001
+divide.wdiv.1.-65536: 00000000 00000000 rem 00000001
+divide.div.2.1: ffffffff rem 00000000
+divide.wdiv.2.1: ffffffff ffffffff rem 00000000
+divide.div.2.-1: 00000001 rem 00000000
+divide.wdiv.2.-1: 00000000 00000001 rem 00000000
+divide.div.2.2: 00000000 rem ffffffff
+divide.wdiv.2.2: 00000000 00000000 rem ffffffff
+divide.div.2.3: 00000000 rem ffffffff
+divide.wdiv.2.3: 00000000 00000000 rem ffffffff
+divide.div.2.7: 00000000 rem ffffffff
+divide.wdiv.2.7: 00000000 00000000 rem ffffffff
+divide.div.2.-7: 00000000 rem ffffffff
+divide.wdiv.2.-7: 00000000 00000000 rem ffffffff
+divide.div.2.1000: 00000000 rem ffffffff
+divide.wdiv.2.1000: 00000000 00000000 rem ffffffff
+divide.div.2.65536: 00000000 rem ffffffff
+divide.wdiv.2.65536: 00000000 00000000 rem ffffffff
+divide.div.2.2147483647: 00000000 rem ffffffff
+divide.wdiv.2.2147483647: 00000000 00000000 rem ffffffff
+divide.div.2.-2147483648: 00000000 rem ffffffff
+divide.wdiv.2.-2147483648: 00000000 00000000 rem 80000000
+divide.div.2.-65536: 00000000 rem ffffffff
+divide.wdiv.2.-65536: 00000000 00000000 rem ffffffff
+divide.div.3.1: 7fffffff rem 80000000
+divide.wdiv.3.1: 00000000 ffffffff rem 00000000
+divide.div.3.-1: 80000000 rem 80000000
+divide.wdiv.3.-1: ffffffff 00000001 rem 00000000
+divide.div.3.2: 7fffffff rem 00000001
+divide.wdiv.3.2: 00000000 7fffffff rem 00000001
+divide.div.3.3: 55555555 rem 00000000
+divide.wdiv.3.3: 00000000 55555555 rem 00000000
+divide.div.3.7: 24924924 rem 00000003
+divide.wdiv.3.7: 00000000 24924924 rem 00000003
+divide.div.3.-7: db6db6dc rem 00000003
+divide.wdiv.3.-7: ffffffff db6db6dc rem 00000003
+divide.div.3.1000: 00418937 rem 00000127
+divide.wdiv.3.1000: 00000000 00418937 rem 00000127
+divide.div.3.65536: 0000ffff rem 0000ffff
+divide.wdiv.3.65536: 00000000 0000ffff rem 0000ffff
+divide.div.3.2147483647: 00000002 rem 00000001
+divide.wdiv.3.2147483647: 00000000 00000002 rem 00000001
+divide.div.3.-2147483648: ffffffff rem 7fffffff
+divide.wdiv.3.-2147483648: 00000000 00000000 rem 80000000
+divide.div.3.-65536: ffff0001 rem 0000ffff
+divide.wdiv.3.-65536: ffffffff ffff0001 rem 0000ffff
+divide.div.4.1: 7fffffff rem 80000000
+divide.wdiv.4.1: 00000001 00000000 rem 00000000
+divide.div.4.-1: 80000000 rem 80000000
+divide.wdiv.4.-1: ffffffff 00000000 rem 00000000
+divide.div.4.2: 7fffffff rem 80000000
+divide.wdiv.4.2: 00000000 80000000 rem 00000000
+divide.div.4.3: 55555555 rem 00000001
+divide.wdiv.4.3: 00000000 55555555 rem 00000001
+divide.div.4.7: 24924924 rem 00000004
+divide.wdiv.4.7: 00000000 24924924 rem 00000004
+divide.div.4.-7: db6db6dc rem 00000004
+divide.wdiv.4.-7: ffffffff db6db6dc rem 00000004
+divide.div.4.1000: 00418937 rem 00000128
+divide.wdiv.4.1000: 00000000 00418937 rem 00000128
+divide.div.4.65536: 00010000 rem 00000000
+divide.wdiv.4.65536: 00000000 00010000 rem 00000000
+divide.div.4.2147483647: 00000002 rem 00000002
+divide.wdiv.4.2147483647: 00000000 00000002 rem 00000002
+divide.div.4.-2147483648: fffffffe rem 00000000
+divide.wdiv.4.-2147483648: 00000000 00000000 rem 80000000
+divide.div.4.-65536: ffff0000 rem 00000000
+divide.wdiv.4.-65536: ffffffff ffff0000 rem 00000000
+divide.div.5.1: 7fffffff rem 80000000
+divide.wdiv.5.1: 7fffffff ffffffff rem 00000000
+divide.div.5.-1: 80000000 rem 80000000
+divide.wdiv.5.-1: 80000000 00000001 rem 00000000
+divide.div.5.2: 7fffffff rem 80000000
+divide.wdiv.5.2: 3fffffff ffffffff rem 00000001
+divide.div.5.3: 7fffffff rem 80000000
+divide.wdiv.5.3: 2aaaaaaa aaaaaaaa rem 00000001
+divide.div.5.7: 7fffffff rem 80000000
+divide.wdiv.5.7: 12492492 49249249 rem 00000000
+divide.div.5.-7: 80000000 rem 80000000
+divide.wdiv.5.-7: edb6db6d b6db6db7 rem 00000000
+divide.div.5.1000: 7fffffff rem 80000000
+divide.wdiv.5.1000: 0020c49b a5e353f7 rem 00000327
+divide.div.5.65536: 7fffffff rem 80000000
+divide.wdiv.5.65536: 00007fff ffffffff rem 0000ffff
+divide.div.5.2147483647: 7fffffff rem 80000000
+divide.wdiv.5.2147483647: 00000001 00000002 rem 00000001
+divide.div.5.-2147483648: 80000000 rem 80000000
+divide.wdiv.5.-2147483648: ffffffff 00000001 rem 80000000
+divide.div.5.-65536: 80000000 rem 80000000
+divide.wdiv.5.-65536: ffff8000 00000001 rem 0000ffff
+divide.div.6.1: 80000000 rem 80000000
+divide.wdiv.6.1: ffffffff 80000000 rem 80000000
+divide.div.6.-1: 7fffffff rem 80000000
+divide.wdiv.6.-1: 00000000 80000000 rem 80000000
+divide.div.6.2: 80000000 rem 80000000
+divide.wdiv.6.2: ffffffff 80000000 rem 80000000
+divide.div.6.3: 80000000 rem 80000000
+divide.wdiv.6.3: ffffffff 80000000 rem 80000000
+divide.div.6.7: 80000000 rem 80000000
+divide.wdiv.6.7: ffffffff 80000000 rem 80000000
+divide.div.6.-7: 7fffffff rem 80000000
+divide.wdiv.6.-7: 00000000 80000000 rem 80000000
+divide.div.6.1000: 80000000 rem 80000000
+divide.wdiv.6.1000: ffffffff 80000000 rem 80000000
+divide.div.6.65536: 80000000 rem 80000000
+divide.wdiv.6.65536: ffffffff 80000000 rem 80000000
+divide.div.6.2147483647: 80000000 rem 80000000
+divide.wdiv.6.2147483647: ffffffff 80000000 rem 80000000
+divide.div.6.-2147483648: 7fffffff rem 80000000
+divide.wdiv.6.-2147483648: ffffffff 00000000 rem 80000000
+divide.div.6.-65536: 7fffffff rem 80000000
+divide.wdiv.6.-65536: 00000000 80000000 rem 80000000
+divide.div.7.1: 7fffffff rem 80000000
+divide.wdiv.7.1: 12345678 9abcdef0 rem 00000000
+divide.div.7.-1: 80000000 rem 80000000
+divide.wdiv.7.-1: edcba987 65432110 rem 00000000
+divide.div.7.2: 7fffffff rem 80000000
+divide.wdiv.7.2: 091a2b3c 4d5e6f78 rem 00000000
+divide.div.7.3: 7fffffff rem 80000000
+divide.wdiv.7.3: 06117228 33944a50 rem 00000000
+divide.div.7.7: 7fffffff rem 80000000
+divide.wdiv.7.7: 0299c335 ccf668fd rem 00000005
+divide.div.7.-7: 80000000 rem 80000000
+divide.wdiv.7.-7: fd663cca 33099703 rem 00000005
+divide.div.7.1000: 7fffffff rem 80000000
+divide.wdiv.7.1000: 0004a90b e587de6e rem 00000140
+divide.div.7.65536: 7fffffff rem 80000000
+divide.wdiv.7.65536: 00001234 56789abc rem 0000def0
+divide.div.7.2147483647: 2468acf1 rem 3f258be1
+divide.wdiv.7.2147483647: 00000000 2468acf1 rem 3f258be1
+divide.div.7.-2147483648: db97530f rem 1abcdef0
+divide.wdiv.7.-2147483648: 00000000 00000000 rem 80000000
+divide.div.7.-65536: 80000000 rem 80000000
+divide.wdiv.7.-65536: ffffedcb a9876544 rem 0000def0
+divide.div.8.1: 80000000 rem 80000000
+divide.wdiv.8.1: fffffffe 80000000 rem 00000000
+divide.div.8.-1: 7fffffff rem 80000000
+divide.wdiv.8.-1: 00000001 80000000 rem 00000000
+divide.div.8.2: 80000000 rem 80000000
+divide.wdiv.8.2: ffffffff 40000000 rem 00000000
+divide.div.8.3: 80000000 rem 80000000
+divide.wdiv.8.3: ffffffff 80000000 rem 00000000
+divide.div.8.7: c924924a rem fffffffa
+divide.wdiv.8.7: ffffffff c924924a rem fffffffa
+divide.div.8.-7: 36db6db6 rem fffffffa
+divide.wdiv.8.-7: 00000000 36db6db6 rem fffffffa
+divide.div.8.1000: ff9db22e rem fffffc50
+divide.wdiv.8.1000: ffffffff ff9db22e rem fffffc50
+divide.div.8.65536: fffe8000 rem 00000000
+divide.wdiv.8.65536: ffffffff fffe8000 rem 00000000
+divide.div.8.2147483647: fffffffd rem fffffffd
+divide.wdiv.8.2147483647: ffffffff fffffffd rem fffffffd
+divide.div.8.-2147483648: 00000003 rem 00000000
+divide.wdiv.8.-2147483648: 00000000 00000000 rem 80000000
+divide.div.8.-65536: 00018000 rem 00000000
+divide.wdiv.8.-65536: 00000000 00018000 rem 00000000
+divide.div.9.1: 7fffffff rem 00000000
+divide.wdiv.9.1: 00000000 7fffffff rem 00000000
+divide.div.9.-1: 80000001 rem 00000000
+divide.wdiv.9.-1: ffffffff 80000001 rem 00000000
+divide.div.9.2: 3fffffff rem 00000001
+divide.wdiv.9.2: 00000000 3fffffff rem 00000001
+divide.div.9.3: 2aaaaaaa rem 00000001
+divide.wdiv.9.3: 00000000 2aaaaaaa rem 00000001
+divide.div.9.7: 12492492 rem 00000001
+divide.wdiv.9.7: 00000000 12492492 rem 00000001
+divide.div.9.-7: edb6db6e rem 00000001
+divide.wdiv.9.-7: ffffffff edb6db6e rem 00000001
+divide.div.9.1000: 0020c49b rem 00000287
+divide.wdiv.9.1000: 00000000 0020c49b rem 00000287
+divide.div.9.65536: 00007fff rem 0000ffff
+divide.wdiv.9.65536: 00000000 00007fff rem 0000ffff
+divide.div.9.2147483647: 00000001 rem 00000000
+divide.wdiv.9.2147483647: 00000000 00000001 rem 00000000
+divide.div.9.-2147483648: 00000000 rem 7fffffff
+divide.wdiv.9.-2147483648: 00000000 00000000 rem 80000000
+divide.div.9.-65536: ffff8001 rem 0000ffff
+divide.wdiv.9.-65536: ffffffff ffff8001 rem 0000ffff
+divide.div.10.1: 80000000 rem 80000000
+divide.wdiv.10.1: ffffffff 80000000 rem 00000000
+divide.div.10.-1: 7fffffff rem 80000000
+divide.wdiv.10.-1: 00000000 80000000 rem 00000000
+divide.div.10.2: c0000000 rem 00000000
+divide.wdiv.10.2: ffffffff c0000000 rem 00000000
+divide.div.10.3: d5555556 rem fffffffe
+divide.wdiv.10.3: ffffffff d5555556 rem fffffffe
+divide.div.10.7: edb6db6e rem fffffffe
+divide.wdiv.10.7: ffffffff edb6db6e rem fffffffe
+divide.div.10.-7: 12492492 rem fffffffe
+divide.wdiv.10.-7: 00000000 12492492 rem fffffffe
+divide.div.10.1000: ffdf3b65 rem fffffd78
+divide.wdiv.10.1000: ffffffff ffdf3b65 rem fffffd78
+divide.div.10.65536: ffff8000 rem 00000000
+divide.wdiv.10.65536: ffffffff ffff8000 rem 00000000
+divide.div.10.2147483647: ffffffff rem ffffffff
+divide.wdiv.10.2147483647: ffffffff ffffffff rem ffffffff
+divide.div.10.-2147483648: 00000001 rem 00000000
+divide.wdiv.10.-2147483648: 00000000 00000000 rem 80000000
+divide.div.10.-65536: 00008000 rem 00000000
+divide.wdiv.10.-65536: 00000000 00008000 rem 00000000
+divide.div.11.1: 7fffffff rem 80000000
+divide.wdiv.11.1: 3fffffff 00000000 rem 00000000
+divide.div.11.-1: 80000000 rem 80000000
+divide.wdiv.11.-1: c0000001 00000000 rem 00000000
+divide.div.11.2: 7fffffff rem 80000000
+divide.wdiv.11.2: 1fffffff 80000000 rem 00000000
+divide.div.11.3: 7fffffff rem 80000000
+divide.wdiv.11.3: 15555555 00000000 rem 00000000
+divide.div.11.7: 7fffffff rem 80000000
+divide.wdiv.11.7: 09249249 00000000 rem 00000000
+divide.div.11.-7: 80000000 rem 80000000
+divide.wdiv.11.-7: f6db6db7 00000000 rem 00000000
+divide.div.11.1000: 7fffffff rem 80000000
+divide.wdiv.11.1000: 0010624d d2b020c4 rem 00000260
+divide.div.11.65536: 7fffffff rem 80000000
+divide.wdiv.11.65536: 00003fff ffff0000 rem 00000000
+divide.div.11.2147483647: 7ffffffe rem 7ffffffe
+divide.wdiv.11.2147483647: 00000000 7ffffffe rem 7ffffffe
+divide.div.11.-2147483648: 80000002 rem 00000000
+divide.wdiv.11.-2147483648: 00000000 00000000 rem 80000000
+divide.div.11.-65536: 80000000 rem 80000000
+divide.wdiv.11.-65536: ffffc000 00010000 rem 00000000
+divide.div.12.1: 80000000 rem 80000000
+divide.wdiv.12.1: edcba987 65432110 rem 00000000
+divide.div.12.-1: 7fffffff rem 80000000
+divide.wdiv.12.-1: 12345678 9abcdef0 rem 00000000
+divide.div.12.2: 80000000 rem 80000000
+divide.wdiv.12.2: f6e5d4c3 b2a19088 rem 00000000
+divide.div.12.3: 80000000 rem 80000000
+divide.wdiv.12.3: f9ee8dd7 cc6bb5b0 rem 00000000
+divide.div.12.7: 80000000 rem 80000000
+divide.wdiv.12.7: fd663cca 33099703 rem fffffffb
+divide.div.12.-7: 7fffffff rem 80000000
+divide.wdiv.12.-7: 0299c335 ccf668fd rem fffffffb
+divide.div.12.1000: 80000000 rem 80000000
+divide.wdiv.12.1000: fffb56f4 1a782192 rem fffffec0
+divide.div.12.65536: 80000000 rem 80000000
+divide.wdiv.12.65536: ffffedcb a9876544 rem ffff2110
+divide.div.12.2147483647: db97530f rem c0da741f
+divide.wdiv.12.2147483647: ffffffff db97530f rem c0da741f
+divide.div.12.-2147483648: 2468acf1 rem e5432110
+divide.wdiv.12.-2147483648: 00000000 00000000 rem 80000000
+divide.div.12.-65536: 7fffffff rem 80000000
+divide.wdiv.12.-65536: 00001234 56789abc rem ffff2110
+divide.div.13.1: 00000064 rem 00000000
+divide.wdiv.13.1: 00000000 00000064 rem 00000000
+divide.div.13.-1: ffffff9c rem 00000000
+divide.wdiv.13.-1: ffffffff ffffff9c rem 00000000
+divide.div.13.2: 00000032 rem 00000000
+divide.wdiv.13.2: 00000000 00000032 rem 00000000
+divide.div.13.3: 00000021 rem 00000001
+divide.wdiv.13.3: 00000000 00000021 rem 00000001
+divide.div.13.7: 0000000e rem 00000002
+divide.wdiv.13.7: 00000000 0000000e rem 00000002
+divide.div.13.-7: fffffff2 rem 00000002
+divide.wdiv.13.-7: ffffffff fffffff2 rem 00000002
+divide.div.13.1000: 00000000 rem 00000064
+divide.wdiv.13.1000: 00000000 00000000 rem 00000064
+divide.div.13.65536: 00000000 rem 00000064
+divide.wdiv.13.65536: 00000000 00000000 rem 00000064
+divide.div.13.2147483647: 00000000 rem 00000064
+divide.wdiv.13.2147483647: 00000000 00000000 rem 00000064
+divide.div.13.-2147483648: 00000000 rem 00000064
+divide.wdiv.13.-2147483648: 00000000 00000000 rem 80000000
+divide.div.13.-65536: 00000000 rem 00000064
+divide.wdiv.13.-65536: 00000000 00000000 rem 00000064
+divide.div.14.1: ffffff9c rem 00000000
+divide.wdiv.14.1: ffffffff ffffff9c rem 00000000
+divide.div.14.-1: 00000064 rem 00000000
+divide.wdiv.14.-1: 00000000 00000064 rem 00000000
+divide.div.14.2: ffffffce rem 00000000
+divide.wdiv.14.2: ffffffff ffffffce rem 00000000
+divide.div.14.3: ffffffdf rem ffffffff
+divide.wdiv.14.3: ffffffff ffffffdf rem ffffffff
+divide.div.14.7: fffffff2 rem fffffffe
+divide.wdiv.14.7: ffffffff fffffff2 rem fffffffe
+divide.div.14.-7: 0000000e rem fffffffe
+divide.wdiv.14.-7: 00000000 0000000e rem fffffffe
+divide.div.14.1000: 00000000 rem ffffff9c
+divide.wdiv.14.1000: 00000000 00000000 rem ffffff9c
+divide.div.14.65536: 00000000 rem ffffff9c
+divide.wdiv.14.65536: 00000000 00000000 rem ffffff9c
+divide.div.14.2147483647: 00000000 rem ffffff9c
+divide.wdiv.14.2147483647: 00000000 00000000 rem ffffff9c
+divide.div.14.-2147483648: 00000000 rem ffffff9c
+divide.wdiv.14.-2147483648: 00000000 00000000 rem 80000000
+divide.div.14.-65536: 00000000 rem ffffff9c
+divide.wdiv.14.-65536: 00000000 00000000 rem ffffff9c
+== noremainder
+noremainder.div.nil.0: 00000000
+noremainder.div.minus1.0: 00000000
+noremainder.wdiv.nil.0: 00000000 00000000
+noremainder.div.nil.1: 00000000
+noremainder.div.minus1.1: 00000000
+noremainder.wdiv.nil.1: 00000000 00000000
+noremainder.div.nil.2: 00000000
+noremainder.div.minus1.2: 00000000
+noremainder.wdiv.nil.2: 00000000 00000000
+noremainder.div.nil.3: 24924924
+noremainder.div.minus1.3: 24924924
+noremainder.wdiv.nil.3: 00000000 24924924
+noremainder.div.nil.4: 24924925
+noremainder.div.minus1.4: 24924925
+noremainder.wdiv.nil.4: 00000000 24924925
+noremainder.div.nil.5: 7fffffff
+noremainder.div.minus1.5: 80000000
+noremainder.wdiv.nil.5: 00000000 80000000
+noremainder.div.nil.6: 80000000
+noremainder.div.minus1.6: 80000000
+noremainder.wdiv.nil.6: ffffffff 80000000
+noremainder.div.nil.7: 7fffffff
+noremainder.div.minus1.7: 80000000
+noremainder.wdiv.nil.7: 0299c335 ccf668fe
+noremainder.div.nil.8: c9249249
+noremainder.div.minus1.8: c9249249
+noremainder.wdiv.nil.8: ffffffff c9249249
+noremainder.div.nil.9: 12492492
+noremainder.div.minus1.9: 12492492
+noremainder.wdiv.nil.9: 00000000 12492492
+noremainder.div.nil.10: edb6db6e
+noremainder.div.minus1.10: edb6db6e
+noremainder.wdiv.nil.10: ffffffff edb6db6e
+noremainder.div.nil.11: 7fffffff
+noremainder.div.minus1.11: 80000000
+noremainder.wdiv.nil.11: 09249249 00000000
+noremainder.div.nil.12: 80000000
+noremainder.div.minus1.12: 80000000
+noremainder.wdiv.nil.12: fd663cca 33099702
+noremainder.div.nil.13: 0000000e
+noremainder.div.minus1.13: 0000000e
+noremainder.wdiv.nil.13: 00000000 0000000e
+noremainder.div.nil.14: fffffff2
+noremainder.div.minus1.14: fffffff2
+noremainder.wdiv.nil.14: ffffffff fffffff2
+== byzero
+byzero.div.0.0: 7fffffff rem 80000000
+byzero.wdiv.0.0: 7fffffff 80000000 rem 80000000
+byzero.div.0.1: 7fffffff rem 80000000
+byzero.wdiv.0.1: 7fffffff 80000000 rem 80000000
+byzero.div.0.2: 80000000 rem 80000000
+byzero.wdiv.0.2: 80000000 80000000 rem 80000000
+byzero.div.0.3: 7fffffff rem 80000000
+byzero.wdiv.0.3: 7fffffff 80000000 rem 80000000
+byzero.div.0.4: 7fffffff rem 80000000
+byzero.wdiv.0.4: 7fffffff 80000000 rem 80000000
+byzero.div.0.5: 7fffffff rem 80000000
+byzero.wdiv.0.5: 7fffffff 80000000 rem 80000000
+byzero.div.0.6: 80000000 rem 80000000
+byzero.wdiv.0.6: ffffffff 80000000 rem 80000000
+byzero.div.0.7: 7fffffff rem 80000000
+byzero.wdiv.0.7: 7fffffff 80000000 rem 80000000
+byzero.div.0.8: 80000000 rem 80000000
+byzero.wdiv.0.8: 80000000 80000000 rem 80000000
+byzero.div.0.9: 7fffffff rem 80000000
+byzero.wdiv.0.9: 7fffffff 80000000 rem 80000000
+byzero.div.0.10: 80000000 rem 80000000
+byzero.wdiv.0.10: 80000000 80000000 rem 80000000
+byzero.div.0.11: 7fffffff rem 80000000
+byzero.wdiv.0.11: 7fffffff 80000000 rem 80000000
+byzero.div.0.12: 80000000 rem 80000000
+byzero.wdiv.0.12: 80000000 80000000 rem 80000000
+byzero.div.0.13: 7fffffff rem 80000000
+byzero.wdiv.0.13: 7fffffff 80000000 rem 80000000
+byzero.div.0.14: 80000000 rem 80000000
+byzero.wdiv.0.14: 80000000 80000000 rem 80000000
