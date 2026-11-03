@@ -46,3 +46,28 @@ TEST(SegmentLoader, GetAppParmsNilParamHandle)
 #endif
     EXPECT_NE(0, name[0]);
 }
+
+#ifdef EXECUTOR
+#include <ProcessMgr.h>
+#else
+#include <Processes.h>
+#endif
+
+/* The partition an application gets is its SIZE -1's (the user's, as Get
+   Info sets it) when it has one, not its SIZE 0's: this app's SIZE -1 asks
+   for 4 MB, its SIZE 0 for 3 MB (size.r). A 7.6.1 Quadra: 3 MB, SIZE 0's,
+   when launched by LaunchApplication (Speedometer 4.0 gets its SIZE 0's
+   1.5 MB, not its SIZE -1's 2 MB). */
+TEST(Process, PartitionFromSizeZero)
+{
+#ifdef EXECUTOR
+    GTEST_SKIP() << "the native gtest process is not a launched application";
+#endif
+    ProcessSerialNumber psn = { 0, kCurrentProcess };
+    ProcessInfoRec info;
+    memset(&info, 0, sizeof info);
+    info.processInfoLength = sizeof info;
+    ASSERT_EQ(noErr, GetProcessInformation(&psn, &info));
+    EXPECT_GE((long)info.processSize, 3072L * 1024) << (long)info.processSize;
+    EXPECT_LT((long)info.processSize, 3072L * 1024 + 256 * 1024) << (long)info.processSize;
+}

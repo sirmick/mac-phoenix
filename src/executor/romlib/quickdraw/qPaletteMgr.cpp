@@ -862,10 +862,18 @@ PaletteHandle Executor::C_NewPalette(INTEGER entries, CTabHandle src_colors,
 
     new_palette
         = (PaletteHandle)NewHandle(PALETTE_STORAGE_FOR_ENTRIES(entries));
+    if(!new_palette) /* the heap full: nil, as on a Mac */
+        return nullptr;
     memset(*new_palette, 0, PALETTE_STORAGE_FOR_ENTRIES(entries));
 
     /* initial contents don't matter */
-    PALETTE_SEEDS(new_palette) = NewHandle(sizeof(int));
+    Handle seeds = NewHandle(sizeof(int));
+    if(!seeds)
+    {
+        DisposeHandle((Handle)new_palette);
+        return nullptr;
+    }
+    PALETTE_SEEDS(new_palette) = seeds;
     PALETTE_SET_MODIFIED(new_palette);
 
     PALETTE_ENTRIES(new_palette) = entries;
@@ -911,11 +919,20 @@ PaletteHandle Executor::C_GetNewPalette(INTEGER id)
     palette_size
         = PALETTE_STORAGE_FOR_ENTRIES(PALETTE_ENTRIES(palette_res_h));
     retval = (PaletteHandle)(NewHandle(palette_size));
+    if(!retval) /* the heap full (Speedometer 4.0's Color QuickDraw tests
+                   leave a palette per window): nil, as on a Mac */
+        return nullptr;
     BlockMoveData((Ptr)*palette_res_h, (Ptr)*retval,
                   palette_size);
 
     /* initial contents don't matter */
-    PALETTE_SEEDS(retval) = NewHandle(sizeof(int));
+    Handle seeds = NewHandle(sizeof(int));
+    if(!seeds)
+    {
+        DisposeHandle((Handle)retval);
+        return nullptr;
+    }
+    PALETTE_SEEDS(retval) = seeds;
     PALETTE_SET_MODIFIED(retval);
 
     return retval;

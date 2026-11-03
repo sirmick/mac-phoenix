@@ -11,15 +11,18 @@
 #include <DeviceMgr.h>
 #include <WindowMgr.h>
 #include <quickdraw/cquick.h>
+#include <OSUtil.h>
 #else
 #include <Quickdraw.h>
 #include <QDOffscreen.h>
 #include <Windows.h>
 #include <Devices.h>
 #include <Palettes.h>
+#include <OSUtils.h>
 #endif
 
 #include <bitset>
+#include <vector>
 
 struct OffscreenPort
 {
@@ -954,3 +957,184 @@ TEST(QuickDraw, SetPaletteFrontWindowActivates)
     DisposePalette(pal);
 }
 #endif
+
+/* Speedometer 4.0's Color QuickDraw test: a polygon recorded as a region
+   (OpenRgn, LineTo, CloseRgn), inset by 1 and framed, over and over. The
+   heap's free space stays as it was. */
+TEST(QuickDraw, InsetFrameRgnNoLeak)
+{
+    OffscreenPort port(300, 300);
+    auto once = [] {
+        RgnHandle r = NewRgn();
+        OpenRgn();
+        MoveTo(150, 10);
+        LineTo(290, 120);
+        LineTo(240, 290);
+        LineTo(60, 290);
+        LineTo(10, 120);
+        LineTo(150, 10);
+        LineTo(150, 150);
+        LineTo(20, 280);
+        LineTo(150, 10);
+        CloseRgn(r);
+        InsetRgn(r, 1, 1);
+        FrameRgn(r);
+        DisposeRgn(r);
+    };
+    once();
+    long before = FreeMem();
+    for(int i = 0; i < 200; i++)
+        once();
+    EXPECT_GE(FreeMem(), before - 1024) << "before " << before;
+}
+
+
+#ifdef EXECUTOR
+/* Region calls in a heap with plenty free but no large block (Speedometer
+   4.0's Color QuickDraw tests: MaxBlock 6K of 225K free, behind locked
+   blocks). InsetRgn needs no more than its result; a call whose result
+   doesn't fit fails with QDError and leaves the region as it was; the
+   palette GetNewCWindow gives each window isn't made (nil). Not on
+   the Mac side: on a 7.6.1 Quadra InsetRgn hangs the machine here. */
+TEST(QuickDraw, RgnOpsInFragmentedHeap)
+{
+    OffscreenPort port(300, 300);
+    auto poly = [](RgnHandle rg, int k) {
+        OpenRgn();
+        MoveTo(150, 10);
+        for(int i = 0; i < 40; i++)
+            LineTo(10 + (i * 37 + k) % 280, 10 + (i * 53) % 280);
+        LineTo(150, 10);
+        CloseRgn(rg);
+    };
+    RgnHandle r = NewRgn(), a = NewRgn(), b = NewRgn(), c = NewRgn();
+    RgnHandle a0 = NewRgn(), ri = NewRgn(), rx = NewRgn();
+    poly(r, 0);
+    poly(a, 5);
+    poly(b, 11);
+    CopyRgn(a, a0);
+    CopyRgn(r, ri);
+    InsetRgn(ri, 1, 1);
+    XorRgn(a, b, rx);
+    ASSERT_GT(GetHandleSize((Handle)rx), 8192);
+
+    MaxApplZone();
+    std::vector<Ptr> ps;
+    while(MaxBlock() > 256 * 1024)
+    {
+        Ptr p = NewPtr(64 * 1024);
+        if(!p)
+            break;
+        ps.push_back(p);
+    }
+    std::vector<Ptr> chunks;
+    for(int n = 0; n < 2000 && MaxBlock() > 1024 + 64; n++)
+    {
+        Ptr p = NewPtr(1024);
+        if(!p)
+            break;
+        chunks.push_back(p);
+    }
+    for(size_t i = 0; i < chunks.size(); i++)
+        if(i % 2 == 0)
+            DisposePtr(chunks[i]);
+        else
+            ps.push_back(chunks[i]);
+    EXPECT_LT(MaxBlock(), 4096);
+    EXPECT_GT(FreeMem(), 64 * 1024);
+
+    InsetRgn(r, 1, 1);
+    EXPECT_EQ(QDError(), noErr);
+    EXPECT_TRUE(EqualRgn(r, ri));
+
+    XorRgn(a, b, c);
+    EXPECT_EQ(QDError(), memFullErr);
+    EXPECT_TRUE(EmptyRgn(c));
+
+    XorRgn(a, b, a);
+    EXPECT_EQ(QDError(), memFullErr);
+    EXPECT_TRUE(EqualRgn(a, a0));
+
+    UnionRgn(a, b, c);
+    EXPECT_EQ(QDError(), memFullErr);
+    EXPECT_TRUE(EmptyRgn(c));
+
+    CopyRgn(b, c);
+    EXPECT_EQ(QDError(), memFullErr);
+    EXPECT_TRUE(EmptyRgn(c));
+
+    FrameRgn(b);
+    Rect oval = { 20, 20, 280, 280 };
+    FrameOval(&oval);
+    PaintOval(&oval);
+    /* a 256-colour palette (4112 bytes) doesn't fit: nil */
+    EXPECT_EQ(NewPalette(256, nullptr, pmTolerant, 0), nullptr);
+
+    for(Ptr p : ps)
+        DisposePtr(p);
+
+    XorRgn(a, b, a);
+    EXPECT_EQ(QDError(), noErr);
+    EXPECT_TRUE(EqualRgn(a, rx));
+
+    DisposeRgn(r);
+    DisposeRgn(a);
+    DisposeRgn(b);
+    DisposeRgn(c);
+    DisposeRgn(a0);
+    DisposeRgn(ri);
+    DisposeRgn(rx);
+}
+#endif
+
+/* A picture that changes the pen, fill and background pixel patterns:
+   drawing it leaves the heap as it was (Executor kept every pattern the
+   picture replaced; Speedometer 4.0's heap filled up with them). A
+   version 2 PICT made by hand: OpenPicture doesn't record these opcodes
+   in Executor. */
+TEST(QuickDraw, DrawPictureWithPixPatsNoLeak)
+{
+    if(!hasDeepGWorlds())
+        return;
+    OffscreenWorld world(8);
+    std::vector<unsigned char> b;
+    auto w = [&b](unsigned v) { b.push_back(v >> 8); b.push_back(v & 0xFF); };
+    auto rect = [&w](int t, int l, int bo, int r) { w(t); w(l); w(bo); w(r); };
+    w(0);                       /* picSize, set below */
+    rect(0, 0, 40, 40);         /* picFrame */
+    w(0x0011); w(0x02FF);       /* version 2 */
+    w(0x0C00);                  /* header: -2, 72 dpi, the frame */
+    w(0xFFFE); w(0);
+    w(0x0048); w(0); w(0x0048); w(0);
+    rect(0, 0, 40, 40);
+    w(0); w(0);
+    for(int i = 0; i < 6; i++)
+    {
+        for(unsigned op : { 0x0012u, 0x0013u, 0x0014u }) /* Bk, Pn, Fill */
+        {
+            w(op);
+            w(2);               /* RGB pattern */
+            for(int j = 0; j < 4; j++)
+                w(0xAA55);      /* its 1-bit pattern */
+            w(i * 10000); w(20000); w(60000 - i * 9000);
+        }
+        w(0x0031);              /* paintRect */
+        rect(i * 6, 0, i * 6 + 5, 40);
+    }
+    w(0x00FF);
+    b[0] = b.size() >> 8;
+    b[1] = b.size() & 0xFF;
+    Handle h = nullptr;
+    GUEST<Handle> gh;
+    ASSERT_EQ(noErr, PtrToHand((Ptr)b.data(), &gh, b.size()));
+    h = gh;
+    PicHandle pic = (PicHandle)h;
+    Rect frame = { 0, 0, 40, 40 };
+
+    DrawPicture(pic, &frame);
+    long before = FreeMem();
+    for(int i = 0; i < 50; i++)
+        DrawPicture(pic, &frame);
+    EXPECT_GE(FreeMem(), before - 512) << "before " << before;
+    DisposeHandle(h);
+}

@@ -198,3 +198,34 @@ TEST_F(HeapZone, SoundLoadingKeepsPointersLow)
             if(*h[j])
                 EXPECT_LT(p[i], *h[j]);
 }
+
+/* zcbFree (FreeMem) is what the free blocks hold. Shrinking a handle by
+   less than a block's worth leaves the rest in the block: nothing is
+   freed. (It used to count those bytes free each time: Speedometer 4.0's
+   heap said 443K free with 7K of free blocks.) */
+TEST_F(HeapZone, ZcbFreeMatchesFreeBlocksAfterSmallResizes)
+{
+    auto free_blocks = [this] {
+        int32_t total = 0;
+        for(block_header_t *b = ZONE_HEAP_DATA(zone); b != ZONE_BK_LIM(zone); b = BLOCK_NEXT(b))
+            if(USE(b) == FREE)
+                total += PSIZE(b);
+        return total;
+    };
+    Handle h = NewHandle(100);
+    ASSERT_NE(nullptr, h);
+    Handle above = NewHandle(100); /* so h can't grow into free space */
+    ASSERT_NE(nullptr, above);
+    int32_t before = zfree();
+    EXPECT_EQ(before, free_blocks());
+    for(int i = 0; i < 1000; i++)
+    {
+        SetHandleSize(h, 96);
+        SetHandleSize(h, 100);
+    }
+    EXPECT_EQ(before, zfree());
+    EXPECT_EQ(zfree(), free_blocks());
+    DisposeHandle(h);
+    DisposeHandle(above);
+    EXPECT_EQ(zfree(), free_blocks());
+}
