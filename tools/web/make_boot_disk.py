@@ -208,6 +208,40 @@ def plan(disk, allowed, keep=()):
     return folders, files
 
 
+def alias_target(blob):
+    """An alias file's target as a path on its volume (b"Applications:Apple
+    FM Radio") and the volume's name, from its 'alis' 0 (the alias record's
+    full path, tag 2); None if the blob isn't an alias or has no path."""
+    if not blob[73] & 0x80:                              # kIsAlias
+        return None
+    import struct
+    from rsrc import macbinary_forks, parse_resource_fork
+    rec = parse_resource_fork(macbinary_forks(blob)[1]).get(("alis", 0), (None, b""))[1]
+    p = 150                                              # the fixed part
+    while p + 4 <= len(rec):
+        tag, ln = struct.unpack_from(">hH", rec, p)
+        if tag == -1:
+            break
+        if tag == 2:
+            vol, _, path = rec[p + 4:p + 4 + ln].partition(b":")
+            return vol, path.rstrip(b":")
+        p += 4 + ln + (ln & 1)
+    return None
+
+
+def dangling_aliases(blobs, folders, label):
+    """The aliases whose target is on this volume but not in the cut (8.6's
+    Apple Menu Items: Apple FM Radio and AppleCD Audio Player point into
+    Applications): the Finder would only say the original can't be found."""
+    have = {p.lower() for p in folders} | {p.lower() for p in blobs}
+    out = []
+    for path, blob in blobs.items():
+        target = alias_target(blob)
+        if target and target[0] == label.encode("mac_roman") and target[1].lower() not in have:
+            out.append(path)
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("source")
@@ -233,13 +267,15 @@ def main():
                 if blob[69:73] in DROP_CREATORS:
                     continue
                 blobs[path] = blob
-            label = args.label
-            if label is None:
-                r = disk._run("hvol")
-                line = next((l for l in r.stdout.split(b"\n") if l.startswith(b"Volume name is")), b"")
-                label = line.split(b'"')[1].decode("mac_roman") if b'"' in line else "Macintosh HD"
+            r = disk._run("hvol")
+            line = next((l for l in r.stdout.split(b"\n") if l.startswith(b"Volume name is")), b"")
+            source_label = line.split(b'"')[1].decode("mac_roman") if b'"' in line else "Macintosh HD"
+            label = args.label or source_label
         finally:
             disk.close()
+        for path in dangling_aliases(blobs, folders, source_label):
+            print(f"left out (alias to what isn't copied): {path.decode('mac_roman')}", file=sys.stderr)
+            del blobs[path]
 
         # Room for the files at the allocation-block size, the catalog and
         # some slack (the Finder reads it read-only in the browser).

@@ -217,6 +217,7 @@ reads and writes them and no HFS+ path is needed.
 | AppleTalk, AppleTalk Switch, File Sharing Monitor, Sharing Setup, Users & Groups | AppleTalk only: Executor's Open Transport has TCP only (item 12), so the panel only alerts and file sharing has nothing to run on |
 | QuickTime™ Settings | QuickTime is not until M2 |
 | Apple Extras, Utilities, MacsBug | not System; MacsBug doesn't run on Executor |
+| Aliases to what isn't copied (Apple Menu Items: AppleCD Audio Player, Automated Tasks; Launcher Items: Script Editor) | the Finder could only say the original can't be found |
 
 Kept and in use: PC Exchange (its INIT runs: the policy's `@ 7.6` is read
 now), the policy's control panels and extensions, ObjectSupportLib,
@@ -236,6 +237,7 @@ file alone is 10.7 MB).
 | QuickTime™ Settings | not until M2 |
 | System Folder: Help (12.5 MB), ColorSync Profiles, Internet Search Sites, MS Preference Panels | Mac OS Help is Apple Guide and HTML help; ColorSync's extension is off; Sherlock's sites; Office's panels, not the System's |
 | Applications (but SimpleText), Apple Extras, Internet, Utilities, Assistants, read-me files | not System |
+| Aliases to what isn't copied (Apple Menu Items: Apple FM Radio, AppleCD Audio Player, Automated Tasks, Recent Applications' Mac OS Setup Assistant; Launcher Items: Script Editor) | their originals are in Applications or Apple Extras: the Finder could only say the original can't be found |
 
 Kept for the M1 targets: AppleScript (the 8.x file; the policy names 7.x's
 "AppleScript™", so it stays off until the policy lists it), Scripting
