@@ -7,7 +7,9 @@
 // Executor-restart notice shows; ?size= is the visit's only. The loading
 // panel (loading.js): the module's download in bytes, every step done, gone
 // at the first frame. In the page, the schema's cases (settings_cases.json)
-// as the server checks them. Screenshots of every tab (all categories).
+// as the server checks them. The System: the Disks panel's choice and
+// Settings > Machine's one setting, each following the other, the dialog's
+// list from the disks and the library. Screenshots of every tab.
 //
 //   node web/tests/tab_settings.mjs DIR [SHOTS]
 //
@@ -250,6 +252,51 @@ try {
             await save(p);
             await p.waitForFunction(() => Settings.get('disks.mounted').length === 1);
             check(true, 'tools/standalone: ... mounted, saved');
+
+            // The System: one setting (machine.system) behind the Disks
+            // panel's choice and Settings > Machine's, each following the
+            // other; the dialog's list made from the disks and the library
+            // each time it opens, and while it is open.
+            for (const n of ['sys-a', 'sys-b']) {
+                fs.copyFileSync(blank, path.join(scratch, 'images', `${n}.img`));
+                fs.writeFileSync(path.join(scratch, 'images', `${n}.img.json`),
+                                 JSON.stringify({ title: `System ${n.at(-1).toUpperCase()}`, note: '', tags: ['system'] }));
+            }
+            await p.reload();
+            await ready(p);
+            await p.waitForFunction(() => Disks.state.library.length >= 3);
+            const machine = async () => {
+                await openDialog(p);
+                await p.click('nav button[data-category=machine]');
+                return p.$eval('#setting-machine-system', (s) => ({ value: s.value, options: [...s.options].map((o) => [o.value, o.textContent]) }));
+            };
+            let m = await machine();
+            check(m.options.some(([v, t]) => v === 'sys-a.img' && t === 'System A (from the library)')
+                  && m.options.some(([v]) => v === 'sys-b.img'), `tools/standalone: Settings offers the library's Systems (${JSON.stringify(m.options)})`);
+            await p.keyboard.press('Escape');
+            // The panel's choice, then the dialog opened again
+            await p.evaluate(() => {
+                const s = systemSelect;     // (main.js; in the Disks panel when it is open)
+                s.value = [...s.options].find((o) => o.value.endsWith('sys-a.img')).value;
+                s.dispatchEvent(new Event('change'));
+            });
+            await p.waitForFunction(() => Settings.get('machine.system') === 'sys-a.img');
+            m = await machine();
+            const label = (m.options.find(([v]) => v === m.value) || [])[1] || '';
+            check(m.value === 'sys-a.img' && !/not here/.test(label),
+                  `tools/standalone: the panel's System shown in Settings when it opens (${m.value}: ${label})`);
+            // ... and while it is open: a change from the page reaches it
+            await p.evaluate(() => Settings.set({ machine: { system: 'sys-b.img' } }));
+            check(await p.$eval('#setting-machine-system', (s) => s.value) === 'sys-b.img',
+                  'tools/standalone: the open dialog follows a change of the System');
+            // The dialog's choice, saved: the panel follows, the disk put in
+            await p.selectOption('#setting-machine-system', 'sys-a.img');
+            await save(p);
+            await p.waitForFunction(() => Settings.get('machine.system') === 'sys-a.img');
+            const panel = await p.evaluate(() => systemSelect.value);
+            check(/sys-a\.img$/.test(panel), `tools/standalone: Settings' System shown in the Disks panel (${panel})`);
+            check(await p.evaluate(() => Settings.get('disks.mounted').some((u) => u.endsWith('sys-a.img'))),
+                  "tools/standalone: ... the library's System disk put in (disks.mounted)");
         }
         if (shots) {
             // Every tab, over Executor running.

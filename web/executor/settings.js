@@ -17,7 +17,10 @@
 //   Settings.open('input')                 the dialog, at a category: its
 //                                          changes are a draft until Save
 //                                          (Cancel, Escape: forgotten)
-//   Settings.provide('systems', () => […]) choices the page knows
+//   Settings.provide('systems', (draft) => […]) choices the page knows
+//                                          (strings, or { value, label })
+//   Settings.choicesChanged()              they changed: the open dialog's
+//                                          lists made again
 //   Settings.restart = async () => …       what "Restart Executor" does
 //   Settings.started()                     Executor (re)started: what the
 //                                          "restart to apply" notice compares
@@ -225,10 +228,26 @@ const Settings = (() => {
             for (const k of Object.keys(n.properties || {}))
                 if (JSON.stringify(at(before, `${cat}.${k}`)) !== JSON.stringify(at(doc, `${cat}.${k}`)))
                     changed.push(`${cat}.${k}`);
+        // The open dialog follows: a setting the draft hadn't changed
+        // takes the new value (the Disks panel's System choice, say).
+        if (draft)
+            for (const p of changed) {
+                const [cat, k] = p.split('.');
+                if (JSON.stringify(at(draft, p)) === JSON.stringify(at(before, p)))
+                    draft = patched(draft, { [cat]: { [k]: at(doc, p) } });
+            }
         for (const p of changed)
             apply(p);
         notice();
+        choicesChanged();
         return changed;
+    }
+
+    // The page's choices changed (disks in or out, the System's list):
+    // the open dialog's lists made again.
+    function choicesChanged() {
+        if (dialog && dialog.open && draft)
+            render();
     }
 
     function get(path) {
@@ -667,13 +686,25 @@ const Settings = (() => {
         if (p['x-auto'])
             return automatic(path, id, p, value, commit, locked);
         if (p['x-choices']) {
+            // The choices the page has now, given the draft (the disks it
+            // would put in): made again after each change in the dialog
+            // and when the page's change (choicesChanged).
             el = document.createElement('select');
-            const names = providers[p['x-choices']] ? providers[p['x-choices']]() : [];
-            const opts = [new Option("Executor's own", '')];
-            for (const v of new Set([...names, value].filter(Boolean)))
-                opts.push(new Option(names.includes(v) ? v : `${v} (not here)`, v));
-            el.replaceChildren(...opts);
-            el.value = value;
+            const fill = () => {
+                const v = at(draft, path);
+                const got = (providers[p['x-choices']] ? providers[p['x-choices']](draft) : [])
+                    .map((c) => (typeof c === 'string' ? { value: c, label: c } : c));
+                const opts = [new Option("Executor's own", '')];
+                for (const c of got)
+                    if (c.value)
+                        opts.push(new Option(c.label || c.value, c.value));
+                if (v && !got.some((c) => c.value === v))
+                    opts.push(new Option(`${v} (not here)`, v));
+                el.replaceChildren(...opts);
+                el.value = v;
+            };
+            fill();
+            autoRefresh.push(fill);
             el.addEventListener('change', () => commit(el.value));
         } else if (p.enum) {
             el = document.createElement('select');
@@ -981,6 +1012,7 @@ const Settings = (() => {
     const api = {
         ready, get, set, on, open, started, restart: null, FieldError,
         provide(name, fn) { providers[name] = fn; },
+        choicesChanged,
         get where() { return where; },
         get schema() { return schema; },
         get doc() { return clone(doc); },

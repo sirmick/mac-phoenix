@@ -610,7 +610,24 @@ systemSelect.addEventListener('change', async () => {
     }
     start();
 });
-Settings.provide('systems', () => [...systemSelect.options].map((o) => o.value).filter((v) => v && !v.includes('/')));
+// The Settings dialog's System choices: the same as the panel's, by name
+// (a library System disk's file name: chosen there, it is put in).
+const systemDisks = () => library.filter((d) => (d.tags || []).includes('system'));
+Settings.provide('systems', () => [
+    ...shownFiles.filter((f) => IMAGE.test(f.name) && !isCD(f.name))
+        .map((f) => ({ value: f.name, label: (library.find((d) => fileName(d.url) === f.name) || {}).title || f.name })),
+    ...systemDisks().filter((d) => !shownFiles.some((f) => f.name === fileName(d.url)))
+        .map((d) => ({ value: fileName(d.url), label: `${d.title} (from the library)` })),
+]);
+// One source of truth: the machine.system setting. The panel's choice
+// writes it (above); a change from elsewhere (the Settings dialog) shows
+// in the panel, a library System disk picked there going in too.
+Settings.on('machine.system', (v) => {
+    const d = systemDisks().find((x) => fileName(x.url) === v);
+    if (d && !picked().some((u) => href(u) === href(d.url)))
+        Settings.set({ disks: { mounted: [...picked(), d.url] } }).catch(() => {});
+    showSystems(shownFiles);
+});
 
 // Fat applications' PowerPC code (mac-phoenix's --executor-ppc), remembered.
 const ppcBox = document.getElementById('ppc');
@@ -626,8 +643,10 @@ function showSystems(files) {
     systemSelect.replaceChildren(new Option("Executor's own", ''),
         ...files.filter((f) => IMAGE.test(f.name) && !isCD(f.name)).map((f) => new Option(title(f.name) || f.name, f.name)),
         ...offered.map((d) => new Option(`${d.title} (from the library)`, d.url)));
-    systemSelect.value = [...systemSelect.options].some((o) => o.value === want) ? want : '';
+    const opt = [...systemSelect.options].find((o) => o.value === want || (o.value.includes('/') && fileName(o.value) === want));
+    systemSelect.value = opt ? opt.value : '';
     showDisks();
+    Settings.choicesChanged();      // (the Settings dialog's list, if open)
 }
 
 // ---- the server: tools/standalone (api/me's mode), the tab's store ----

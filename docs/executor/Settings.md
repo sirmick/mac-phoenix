@@ -92,7 +92,15 @@ applies: the saved value, unless the page's address overrides it for the
 visit (`?size=`, `?scale=`, `?ppc`, `?system=`, `?logtraps=`,
 `?nesting=`, `?debug=`, `?ppcbreak=`; the dialog says so). main.js reads
 the machine's at each start of Executor; the bar's PowerPC box and the
-Disks panel's System choice write them. The library disks picked:
+Disks panel's System choice write them. The System is one setting,
+`machine.system` (a disk image's name): the Disks panel's choice and
+Settings > Machine's follow it both ways (a library System disk chosen in
+the dialog goes into `disks.mounted` too). The dialog's list is the page's
+(`Settings.provide('systems', draft => …)`: the disks in, and the library's
+System disks): made again when the dialog opens, after each change in it,
+and when the page's disks change while it is open
+(`Settings.choicesChanged()`); a setting changed by the page while the
+dialog is open reaches the draft unless the draft had changed it. The library disks picked:
 `disks.mounted`, in order (live: the page puts them in and takes them out
 of the running Mac, Disks.md).
 
