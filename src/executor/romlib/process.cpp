@@ -1479,6 +1479,18 @@ static void switch_to(process_info_t *to)
     resumed();
 }
 
+bool Executor::process_in_other_partition(uint32_t addr)
+{
+    for(process_info_t *q = process_info_list; q; q = q->next)
+        if(q != current_process_info && q->partition && *q->partition)
+        {
+            uint32_t lo = US_TO_SYN68K((Ptr)*q->partition);
+            if(addr >= lo && addr - lo < q->partition_size)
+                return true;
+        }
+    return false;
+}
+
 /* Remove what a process leaves in system-wide queues: VBL and Time Manager
    tasks living in its partition. */
 static void remove_tasks_in(Ptr lo, Ptr hi)

@@ -237,6 +237,21 @@ uint32_t Executor::traps::unknown_selector_68k(const char *trap_name, uint32_t s
             EM_D0 = (uint32_t)-50;
             return ret;
         }
+    if(strcmp(trap_name, "FSDispatch") == 0)
+    {
+        /* The File Manager's: a register call, the parameter block in A0;
+           a selector with no routine (the table's holes, $3, $4, $C-$F)
+           answers paramErr in D0 and the block's ioResult. MPW Shell's
+           File > New calls $C, and carries on. */
+        uint32_t pb = EM_A0;
+        snprintf(what, sizeof what, "FSDispatch selector $%x (pb $%x): answered paramErr",
+                 (unsigned)sel, (unsigned)pb);
+        log_unimplemented(what);
+        if(pb)
+            WRITEUW(pb + 16, (uint16_t)-50); /* ioResult */
+        EM_D0 = (uint32_t)-50;
+        return POPADDR();
+    }
     if(strcmp(trap_name, "ScriptUtil") == 0)
     {
         /* The selector long: argument bytes in its second byte, the

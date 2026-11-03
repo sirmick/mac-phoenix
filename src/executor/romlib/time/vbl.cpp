@@ -21,6 +21,7 @@
 #include <prefs/prefs.h>
 #include <base/cpu.h>
 #include <base/traps.impl.h>
+#include <rsys/process.h>
 
 using namespace Executor;
 
@@ -103,6 +104,14 @@ static void C_ROMlib_vcatch()
 
         /* Blow off the Prince of Persia shim. */
         if(vp == &vblshim)
+            /*-->*/ continue;
+        /* MacPhoenix: a task in another process's partition (its record or
+           its code) waits until that process runs again, as on System 7: it
+           reaches its globals and jump table through A5, which is the
+           current process's. SimEarth's ran while the Finder was current
+           and jumped into the Finder's globals (M1.md #13). */
+        if(process_in_other_partition(US_TO_SYN68K(vp))
+           || process_in_other_partition(guest_cast<uint32_t>(vp->vblAddr)))
             /*-->*/ continue;
 
         /* Account for possible missed ticks by possibly subtracting

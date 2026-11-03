@@ -13,6 +13,9 @@
 #include <mman/mman.h>
 #include <file/file.h>
 
+#include <map>
+#include <vector>
+
 using namespace Executor;
 
 typedef res_sorttype_t *sorttypeptr;
@@ -23,8 +26,6 @@ static LONGINT addtype(resmaphand, ResType);
 static LONGINT addname(resmaphand, ConstStringPtr);
 static OSErr writemap(resmaphand);
 static void fillst(sorttypehand, resref *, resref *);
-static void getdat(INTEGER, LONGINT, LONGINT, Handle *);
-static void putdat(INTEGER, LONGINT, LONGINT *, Handle);
 static LONGINT walkst(res_sorttype_t *, res_sorttype_t *, INTEGER, LONGINT);
 static void compactdata(resmaphand);
 
@@ -330,6 +331,21 @@ static void writeResourceInternal(resmaphand map, resref *rr)
     if((rr->ratr & resChanged) && res)
     {
         rsize = GetHandleSize(res);
+        /* MacPhoenix: grown since ChangedResource looked (marked changed,
+           then resized), it goes at the end, as a resource ChangedResource
+           saw grown does: in its old place it overwrote the next ones. */
+        if(!(rr->doff[0] == 0xFF && rr->doff[1] == 0xFF && rr->doff[2] == 0xFF))
+        {
+            GUEST<LONGINT> disksize;
+            lc = sizeof disksize;
+            if(SetFPos((*map)->resfn, fsFromStart, (*map)->rh.rdatoff + B3TOLONG(rr->doff)) != noErr
+               || FSReadAll((*map)->resfn, inout(lc), (Ptr)&disksize) != noErr
+               || rsize > disksize)
+            {
+                rr->doff[0] = rr->doff[1] = rr->doff[2] = 0xFF;
+                (*map)->resfatr |= mapChanged;
+            }
+        }
         if(rr->doff[0] == 0xFF && rr->doff[1] == 0xFF && rr->doff[2] == 0xFF)
         {
             newloc = (*map)->rh.rmapoff - (*map)->rh.rdatoff;
@@ -377,100 +393,70 @@ static void fillst(sorttypehand st, resref *rp, resref *rep)
     }
 }
 
-static void getdat(INTEGER fn, LONGINT datoff, LONGINT doff, Handle *h)
-{
-    LONGINT size, lc;
-    GUEST<LONGINT> size_s;
-
-    gui_assert(datoff >= 0);
-    gui_assert(doff >= 0);
-    SetFPos(fn, fsFromStart, datoff + doff);
-    lc = sizeof(LONGINT);
-    FSReadAll(fn, inout(lc), (Ptr)&size_s);
-    size = size_s;
-    gui_assert(size >= 0);
-    *h = NewHandle(size);
-    gui_assert(*h);
-    HSetState(*h, RSRCBIT);
-    lc = size;
-    HLock(*h);
-    FSReadAll(fn, inout(lc), **h);
-    gui_assert(lc == size);
-    HUnlock(*h);
-}
-
-static void putdat(INTEGER fn, LONGINT datoff, LONGINT *doffp, Handle h)
-{
-    LONGINT size = GetHandleSize(h), lc;
-    GUEST<LONGINT> swappedsize;
-
-    gui_assert(size >= 0);
-    gui_assert(datoff >= 0);
-    gui_assert(*doffp >= 0);
-    SetFPos(fn, fsFromStart, datoff + *doffp);
-    lc = sizeof(LONGINT);
-    swappedsize = size;
-    FSWriteAll(fn, inout(lc), (Ptr)&swappedsize);
-    lc = size;
-    HLock(h);
-    FSWriteAll(fn, inout(lc), *h);
-    HUnlock(h);
-    *doffp += sizeof(LONGINT) + size;
-}
-
+/* MacPhoenix: the data compacted in memory, then written: each resource's,
+   in disk order, from its handle if it changed, else from the file. Moved
+   in place, a changed resource bigger than its old place overwrote the
+   next ones before they were read (THINK C 6's project conversion: a
+   resource grown after ChangedResource, others removed), and two entries
+   sharing their data lost it. */
 static LONGINT walkst(res_sorttype_t *sp, res_sorttype_t *sep, INTEGER fn,
                       LONGINT datoff)
 {
-    LONGINT size;
-    LONGINT doff;
-    Handle h;
-    LONGINT lc;
+    std::vector<uint8_t> data;
+    std::map<LONGINT, LONGINT> moved; /* disk offset -> new offset */
+    const LONGINT chunk = 16384; /* the File Manager reads and writes guest memory */
+    Ptr buf = NewPtrSys(chunk);
+    gui_assert(buf);
 
-    doff = 0;
-    while(sp != sep)
+    for(; sp != sep; sp++)
     {
-        B3ASSIGN(sp->rrptr->doff, doff);
-#if 0
-        if (sp->rrptr->ratr & resChanged) {
-            putdat(fn, datoff, &doff, (Handle) sp->rrptr->rhand);
-        } else if (!sp->rrptr->rhand || !*(Handle)sp->rrptr->rhand) {
-	    getdat(fn, datoff, sp->diskoff, &h);
-	    putdat(fn, datoff, &doff,  h);
-	    DisposeHandle(h);
-	} else if (doff != sp->diskoff)
-	    putdat(fn, datoff, &doff, (Handle) sp->rrptr->rhand);
-        else
-	    doff += GetHandleSize((Handle) sp->rrptr->rhand) +
-							       sizeof(LONGINT);
-#else
-        if(sp->rrptr->ratr & resChanged)
+        resref *rr = sp->rrptr;
+        Handle h = (Handle)rr->rhand;
+        LONGINT doff = data.size();
+        if((rr->ratr & resChanged) && h && (*h || sp->diskoff == 0xFFFFFF))
         {
-            putdat(fn, datoff, &doff, (Handle)sp->rrptr->rhand);
-            sp->rrptr->ratr &= ~resChanged;
+            LONGINT size = *h ? GetHandleSize(h) : 0;
+            GUEST<LONGINT> size_s = size;
+            data.insert(data.end(), (uint8_t *)&size_s, (uint8_t *)&size_s + 4);
+            data.insert(data.end(), (uint8_t *)*h, (uint8_t *)*h + size);
+            rr->ratr &= ~resChanged;
         }
-        else if(doff == sp->diskoff)
+        else if(sp->diskoff == 0xFFFFFF)
+            continue; /* never written and nothing to write */
+        else if(auto it = moved.find(sp->diskoff); it != moved.end())
+            doff = it->second;
+        else
         {
-            /* read and advance */
-            SetFPos(fn, fsFromStart, datoff + doff);
-            lc = sizeof(LONGINT);
             GUEST<LONGINT> size_s;
+            LONGINT lc = sizeof size_s;
+            SetFPos(fn, fsFromStart, datoff + sp->diskoff);
             FSReadAll(fn, inout(lc), (Ptr)&size_s);
-            gui_assert(lc == sizeof(LONGINT));
-            size = size_s;
-            gui_assert(size >= 0);
-            doff += size + sizeof(LONGINT);
+            LONGINT size = size_s;
+            gui_assert(lc == sizeof size_s && size >= 0);
+            data.resize(doff + 4 + size);
+            memcpy(&data[doff], &size_s, 4);
+            for(LONGINT done = 0; done < size; done += lc)
+            {
+                lc = std::min<LONGINT>(size - done, chunk);
+                FSReadAll(fn, inout(lc), buf);
+                gui_assert(lc > 0);
+                memcpy(&data[doff + 4 + done], buf, lc);
+            }
+            moved[sp->diskoff] = doff;
         }
-        else
-        {
-            getdat(fn, datoff, sp->diskoff, &h);
-            putdat(fn, datoff, &doff, h);
-            HSetState(h, HGetState(h) & ~RSRCBIT);
-            DisposeHandle(h);
-        }
-#endif
-        sp++;
+        B3ASSIGN(rr->doff, doff);
     }
-    return doff;
+    SetFPos(fn, fsFromStart, datoff);
+    for(size_t done = 0; done < data.size();)
+    {
+        LONGINT lc = std::min<size_t>(data.size() - done, chunk);
+        memcpy(buf, &data[done], lc);
+        FSWriteAll(fn, inout(lc), buf);
+        gui_assert(lc > 0);
+        done += lc;
+    }
+    DisposePtr(buf);
+    return data.size();
 }
 
 static void compactdata(resmaphand map)

@@ -1,0 +1,496 @@
+# MacPhoenix: InputSprocket (Game Sprockets, InputSprocket.h 1.7): game
+# input through "needs" the application lists and virtual elements the
+# devices' drivers feed. PowerPC only, InputSprocketLib from the
+# InputSprocket extension; no 68k interface. Executor answers it in C++
+# (romlib/inputsprocket.cpp) as a Mac with InputSprocket and no devices
+# to configure: the elements stay idle, so a game falls back to the
+# keyboard it reads itself (Slithereens, Mars Rising: M1.md #15).
+
+- struct:
+    name: OpaqueISpElementReference
+
+- typedef:
+    name: ISpElementReference
+    type: OpaqueISpElementReference*
+
+- struct:
+    name: OpaqueISpElementListReference
+
+- typedef:
+    name: ISpElementListReference
+    type: OpaqueISpElementListReference*
+
+- struct:
+    name: OpaqueISpDeviceReference
+
+- typedef:
+    name: ISpDeviceReference
+    type: OpaqueISpDeviceReference*
+
+- typedef:
+    name: ISpDeviceClass
+    type: OSType
+
+- typedef:
+    name: ISpElementKind
+    type: OSType
+
+- typedef:
+    name: ISpElementLabel
+    type: OSType
+
+- typedef:
+    name: ISpNeedFlagBits
+    type: UInt32
+
+# ####
+
+- enum:
+    values:
+      - name: kISpElementKind_Button
+        value: "'butn'"
+      - name: kISpElementKind_DPad
+        value: "'dpad'"
+      - name: kISpElementKind_Axis
+        value: "'axis'"
+      - name: kISpElementKind_Delta
+        value: "'dlta'"
+      - name: kISpElementKind_Movement
+        value: "'move'"
+      - name: kISpElementKind_Virtual
+        value: "'virt'"
+
+- enum:
+    values:
+      - name: kISpDeviceClass_SpeechRecognition
+        value: "'talk'"
+      - name: kISpDeviceClass_Mouse
+        value: "'mous'"
+      - name: kISpDeviceClass_Keyboard
+        value: "'keyd'"
+      - name: kISpDeviceClass_Joystick
+        value: "'joys'"
+      - name: kISpDeviceClass_Gamepad
+        value: "'gmpd'"
+      - name: kISpDeviceClass_Wheel
+        value: "'whel'"
+      - name: kISpDeviceClass_Pedals
+        value: "'pedl'"
+      - name: kISpDeviceClass_Levers
+        value: "'levr'"
+      - name: kISpDeviceClass_Tickle
+        value: "'tckl'"
+      - name: kISpDeviceClass_Unknown
+        value: "'????'"
+
+- enum:
+    values:
+      - name: kISpButtonUp
+        value: 0
+      - name: kISpButtonDown
+        value: 1
+      - name: kISpPadIdle
+        value: 0
+      - name: kISpAxisMinimum
+        value: 0
+      - name: kISpAxisMiddle
+        value: 0x7FFFFFFF
+
+- enum:
+    values:
+      - name: kISpInternalErr
+        value: -30420
+      - name: kISpSystemListErr
+        value: -30421
+      - name: kISpBufferToSmallErr
+        value: -30422
+      - name: kISpElementInListErr
+        value: -30423
+      - name: kISpElementNotInListErr
+        value: -30424
+      - name: kISpSystemInactiveErr
+        value: -30425
+      - name: kISpDeviceInactiveErr
+        value: -30426
+      - name: kISpSystemActiveErr
+        value: -30427
+      - name: kISpDeviceActiveErr
+        value: -30428
+      - name: kISpListBusyErr
+        value: -30429
+
+# ####
+
+- struct:
+    name: ISpNeed
+    members:
+      - name: name
+        type: Str63
+      - name: iconSuiteResourceId
+        type: INTEGER
+      - name: playerNum
+        type: UInt8
+      - name: group
+        type: UInt8
+      - name: theKind
+        type: ISpElementKind
+      - name: theLabel
+        type: ISpElementLabel
+      - name: flags
+        type: ISpNeedFlagBits
+      - name: reserved1
+        type: UInt32
+      - name: reserved2
+        type: UInt32
+      - name: reserved3
+        type: UInt32
+    size: 92
+
+- struct:
+    name: ISpElementEvent
+    members:
+      - name: when
+        type: AbsoluteTime
+      - name: element
+        type: ISpElementReference
+      - name: refCon
+        type: UInt32
+      - name: data
+        type: UInt32
+    size: 20
+
+- typedef:
+    name: ISpElementEventPtr
+    type: ISpElementEvent*
+
+- funptr:
+    name: ISpEventProcPtr
+    return: Boolean
+    args:
+      - name: inEvent
+        type: EventRecord*
+    callconv: C
+
+# ####
+
+- function:
+    name: ISpGetVersion
+    return: NumVersion
+    library: InputSprocketLib
+    executor: C_
+
+- function:
+    name: ISpStartup
+    return: OSStatus
+    library: InputSprocketLib
+    executor: C_
+
+- function:
+    name: ISpShutdown
+    return: OSStatus
+    library: InputSprocketLib
+    executor: C_
+
+- function:
+    name: ISpTickle
+    return: OSStatus
+    library: InputSprocketLib
+    executor: C_
+
+- function:
+    name: ISpInit
+    return: OSStatus
+    args:
+      - name: count
+        type: UInt32
+      - name: needs
+        type: ISpNeed*
+      - name: inReferences
+        type: ISpElementReference*
+      - name: appCreatorCode
+        type: OSType
+      - name: subCreatorCode
+        type: OSType
+      - name: flags
+        type: UInt32
+      - name: setListResourceId
+        type: INTEGER
+      - name: reserved
+        type: UInt32
+    library: InputSprocketLib
+    executor: C_
+
+- function:
+    name: ISpConfigure
+    return: OSStatus
+    args:
+      - name: inEventProcPtr
+        type: ISpEventProcPtr
+      - name: inReserved
+        type: void*
+    library: InputSprocketLib
+    executor: C_
+
+- function:
+    name: ISpStop
+    return: OSStatus
+    library: InputSprocketLib
+    executor: C_
+
+- function:
+    name: ISpSuspend
+    return: OSStatus
+    library: InputSprocketLib
+    executor: C_
+
+- function:
+    name: ISpResume
+    return: OSStatus
+    library: InputSprocketLib
+    executor: C_
+
+# ####
+
+- function:
+    name: ISpDevices_Extract
+    return: OSStatus
+    args:
+      - name: inBufferCount
+        type: UInt32
+      - name: outCount
+        type: UInt32*
+      - name: buffer
+        type: ISpDeviceReference*
+    library: InputSprocketLib
+    executor: C_
+
+- function:
+    name: ISpDevices_ExtractByClass
+    return: OSStatus
+    args:
+      - name: inClass
+        type: ISpDeviceClass
+      - name: inBufferCount
+        type: UInt32
+      - name: outCount
+        type: UInt32*
+      - name: buffer
+        type: ISpDeviceReference*
+    library: InputSprocketLib
+    executor: C_
+
+- function:
+    name: ISpDevices_ActivateClass
+    return: OSStatus
+    args:
+      - name: inClass
+        type: ISpDeviceClass
+    library: InputSprocketLib
+    executor: C_
+
+- function:
+    name: ISpDevices_DeactivateClass
+    return: OSStatus
+    args:
+      - name: inClass
+        type: ISpDeviceClass
+    library: InputSprocketLib
+    executor: C_
+
+- function:
+    name: ISpDevices_Activate
+    return: OSStatus
+    args:
+      - name: inDeviceCount
+        type: UInt32
+      - name: inDevicesToActivate
+        type: ISpDeviceReference*
+    library: InputSprocketLib
+    executor: C_
+
+- function:
+    name: ISpDevices_Deactivate
+    return: OSStatus
+    args:
+      - name: inDeviceCount
+        type: UInt32
+      - name: inDevicesToDeactivate
+        type: ISpDeviceReference*
+    library: InputSprocketLib
+    executor: C_
+
+# ####
+
+- function:
+    name: ISpElement_NewVirtual
+    return: OSStatus
+    args:
+      - name: dataSize
+        type: UInt32
+      - name: outElement
+        type: ISpElementReference*
+      - name: flags
+        type: UInt32
+    library: InputSprocketLib
+    executor: C_
+
+- function:
+    name: ISpElement_NewVirtualFromNeeds
+    return: OSStatus
+    args:
+      - name: count
+        type: UInt32
+      - name: needs
+        type: ISpNeed*
+      - name: outElements
+        type: ISpElementReference*
+      - name: flags
+        type: UInt32
+    library: InputSprocketLib
+    executor: C_
+
+- function:
+    name: ISpElement_DisposeVirtual
+    return: OSStatus
+    args:
+      - name: count
+        type: UInt32
+      - name: inElements
+        type: ISpElementReference*
+    library: InputSprocketLib
+    executor: C_
+
+- function:
+    name: ISpElement_GetSimpleState
+    return: OSStatus
+    args:
+      - name: inElement
+        type: ISpElementReference
+      - name: outState
+        type: UInt32*
+    library: InputSprocketLib
+    executor: C_
+
+- function:
+    name: ISpElement_GetComplexState
+    return: OSStatus
+    args:
+      - name: inElement
+        type: ISpElementReference
+      - name: bufferSize
+        type: UInt32
+      - name: outState
+        type: void*
+    library: InputSprocketLib
+    executor: C_
+
+- function:
+    name: ISpElement_GetNextEvent
+    return: OSStatus
+    args:
+      - name: inElement
+        type: ISpElementReference
+      - name: bufSize
+        type: UInt32
+      - name: event
+        type: ISpElementEventPtr
+      - name: wasEvent
+        type: Boolean*
+    library: InputSprocketLib
+    executor: C_
+
+- function:
+    name: ISpElement_Flush
+    return: OSStatus
+    args:
+      - name: inElement
+        type: ISpElementReference
+    library: InputSprocketLib
+    executor: C_
+
+# ####
+
+- function:
+    name: ISpElementList_New
+    return: OSStatus
+    args:
+      - name: inCount
+        type: UInt32
+      - name: inElements
+        type: ISpElementReference*
+      - name: outElementList
+        type: ISpElementListReference*
+      - name: flags
+        type: UInt32
+    library: InputSprocketLib
+    executor: C_
+
+- function:
+    name: ISpElementList_Dispose
+    return: OSStatus
+    args:
+      - name: inElementList
+        type: ISpElementListReference
+    library: InputSprocketLib
+    executor: C_
+
+- function:
+    name: ISpGetGlobalElementList
+    return: OSStatus
+    args:
+      - name: outElementList
+        type: ISpElementListReference*
+    library: InputSprocketLib
+    executor: C_
+
+- function:
+    name: ISpElementList_AddElements
+    return: OSStatus
+    args:
+      - name: inElementList
+        type: ISpElementListReference
+      - name: refCon
+        type: UInt32
+      - name: count
+        type: UInt32
+      - name: newElements
+        type: ISpElementReference*
+    library: InputSprocketLib
+    executor: C_
+
+- function:
+    name: ISpElementList_RemoveElements
+    return: OSStatus
+    args:
+      - name: inElementList
+        type: ISpElementListReference
+      - name: count
+        type: UInt32
+      - name: oldElement
+        type: ISpElementReference*
+    library: InputSprocketLib
+    executor: C_
+
+- function:
+    name: ISpElementList_GetNextEvent
+    return: OSStatus
+    args:
+      - name: inElementList
+        type: ISpElementListReference
+      - name: bufSize
+        type: UInt32
+      - name: event
+        type: ISpElementEventPtr
+      - name: wasEvent
+        type: Boolean*
+    library: InputSprocketLib
+    executor: C_
+
+- function:
+    name: ISpElementList_Flush
+    return: OSStatus
+    args:
+      - name: inElementList
+        type: ISpElementListReference
+    library: InputSprocketLib
+    executor: C_

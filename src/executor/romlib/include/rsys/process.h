@@ -33,6 +33,10 @@ extern void process_reset_heap(THz pm_zone);
    left as TheZone, so the application's resource map lands in it. */
 extern void process_layout_partition(ConstStringPtr app_name);
 
+/* Whether guest address addr lies in the partition of a process other
+   than the current one (a parked process's). */
+extern bool process_in_other_partition(uint32_t addr);
+
 /* MacPhoenix Process Manager (process.cpp). */
 
 /* Remember the low memory and CPU state a new process starts from (the
