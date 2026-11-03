@@ -170,6 +170,23 @@ const TARGETS = {
                 throw new Error('nothing drawn');
             await t.saveAs('M1 AI');
         } },
+        { name: 'FreeHand 5.5', app: 'Creative:Macromedia FreeHand 5.5 ƒ:FreeHand 5.5', use: async (t) => {
+            // File > New, the rectangle tool (the toolbox's second row,
+            // left) dragged across the page, Save As
+            await t.until(async () => (await t.windows()).some((w) => w.title === '_Tools'), 60000, 'no toolbox');
+            await t.key('Meta+KeyN');
+            await t.until(async () => (await t.windows()).some((w) => /^Untitled/.test(w.title)), 30000, 'no Untitled window');
+            await t.pause(2000);
+            const tools = (await t.windows()).find((w) => w.title === '_Tools');
+            const before = await sample();
+            await t.click(tools.rect[1] + 13, tools.rect[0] + 39);
+            await t.pause(500);
+            await t.drag([[220, 160], [420, 300]]);
+            await t.pause(1000);
+            if (changed(before, await sample()) < 0.002)
+                throw new Error('nothing drawn');
+            await t.saveAs('M1 FH');
+        } },
     ],
     'development.img': [
         { name: 'MPW Shell', app: 'Development:MPW:MPW Shell', use: async (t) => {
