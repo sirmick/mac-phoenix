@@ -56,12 +56,20 @@ DISKS = [
     {"name": "productivity.img", "label": "Productivity",
      "title": "Productivity",
      "tags": ["productivity", "68k", "ppc"],
-     "note": "AppleWorks 5.0.3 (word processing, drawing, painting, spreadsheet, database) and "
-             "ClarisWorks 4.0v4. For Mac OS 7.6.1 and 8.6.",
-     "take": [("productivity-system-7.img", ["AppleWorks 5.0.3 ƒ", "ClarisWorks 4.0v4 ƒ"])],
+     "note": "AppleWorks 5.0.3 (word processing, drawing, painting, spreadsheet, database), "
+             "ClarisWorks 4.0v4, ClarisDraw 1.0v4, Corel WordPerfect 3.5e, Microsoft Excel 4.0: "
+             "for Mac OS 7.6.1 and 8.6. Microsoft Office 98 (Word, Excel, PowerPoint; PowerPC: "
+             "Mac OS 8.6 with PowerPC ticked) asks for its CD key at first launch.",
+     "take": [("productivity-system-7.img", ["AppleWorks 5.0.3 ƒ", "ClarisWorks 4.0v4 ƒ", "ClarisDraw 1.0v4 ƒ",
+                                              "Corel WordPerfect 3.5e ƒ", "Microsoft Excel 4.0 ƒ",
+                                              "Microsoft Office 98 ƒ"])],
      "launch": [
          {"app": "AppleWorks 5.0.3 ƒ:AppleWorks", "name": "AppleWorks"},
          {"app": "ClarisWorks 4.0v4 ƒ:ClarisWorks", "name": "ClarisWorks"},
+         {"app": "ClarisDraw 1.0v4 ƒ:ClarisDraw 1.0v4", "name": "ClarisDraw 1.0v4"},
+         {"app": "Corel WordPerfect 3.5e ƒ:Corel WordPerfect", "name": "Corel WordPerfect"},
+         {"app": "Microsoft Excel 4.0 ƒ:Microsoft Excel", "name": "Microsoft Excel"},
+         {"app": "Microsoft Office 98 ƒ:Microsoft Word", "name": "Microsoft Word", "systems": ["8.6"]},
      ]},
     {"name": "development.img", "label": "Development",
      "title": "Development",

@@ -41,6 +41,34 @@ const TARGETS = {
             await t.type(DOCUMENT);
             await t.saveAs('M1 AW');
         } },
+        { name: 'ClarisDraw 1.0v4', app: 'Productivity:ClarisDraw 1.0v4 ƒ:ClarisDraw 1.0v4', use: async (t) => {
+            // no window at launch: File > New, the text tool (the palette's
+            // second), a click on the page, typed, saved
+            await t.pause(5000);
+            await t.key('Meta+KeyN');
+            await t.until(async () => (await t.windows()).some((w) => /^Untitled/.test(w.title)), 30000, 'no Untitled window');
+            await t.pause(2000);
+            await t.click(14, 68);
+            await t.pause(500);
+            await t.click(200, 160);
+            await t.pause(500);
+            await t.type(DOCUMENT);
+            await t.saveAs('M1 CD');
+        } },
+        { name: 'Corel WordPerfect', app: 'Productivity:Corel WordPerfect 3.5e ƒ:Corel WordPerfect', use: async (t) => {
+            await t.document();
+            await t.type(DOCUMENT);
+            await t.shot('typed');
+            await t.until(async () => (await t.drawn()).some((s) => s.includes('Hello')), 10000, 'the text never drawn');
+            await t.saveAs('M1 WP');
+        } },
+        { name: 'Microsoft Excel', app: 'Productivity:Microsoft Excel 4.0 ƒ:Microsoft Excel', use: async (t) => {
+            // Worksheet1, A1 typed
+            await t.until(async () => (await t.windows()).some((w) => w.title === 'Worksheet1'), 30000, 'no Worksheet1');
+            await t.type(DOCUMENT);
+            await t.key('Enter');
+            await t.saveAs('M1 XL');
+        } },
     ],
     'development.img': [
         { name: 'MPW Shell', app: 'Development:MPW:MPW Shell', use: async (t) => {
@@ -368,6 +396,15 @@ const t = {
             throw new Error(`no ${title} in the dialog (${d ? d.items.map((i) => i.title).filter(Boolean).join(', ') : 'none'})`);
         const [top, left, bottom, right] = item.rect;
         await t.click((left + right) / 2, (top + bottom) / 2);
+    },
+    // A document window: the one the application opened at launch, or
+    // File > New's.
+    async document() {
+        const doc = async () => (await t.windows()).some((w) => w.kind !== DIALOG_KIND);
+        if (!await until(doc, 20000, 1000))
+            await t.key('Meta+KeyN');
+        await t.until(doc, 30000, 'no document window');
+        await t.pause(1000);
     },
     // Standard File's Open: from the Desktop, each name typed (type-select)
     // and opened.
