@@ -219,7 +219,25 @@ Handle Executor::C_GetIntlResource(INTEGER id) /* IMI-505 */
 
     oldres = CurResFile();
     UseResFile(0);
-    retval = ROMlib_getrestid("INTL"_4, id);
+    /* MacPhoenix: the system script's 'itl0', 'itl1', 'itl2' or 'itl4', as
+       on 7.x and 8.x (difftest intl: 8.6 answers 'itl0' 0 ... 'itl4' 0, the
+       handles GetIntlResourceTable answers too): their IDs in the script's
+       'itlb' (itlbNumber, itlbDate, itlbSort, itlbToken). The old 'INTL'
+       resource when there is none (a System without them). */
+    retval = nullptr;
+    static const int id_at[] = { 0, 2, 4, -1, 8 };
+    if(id >= 0 && id <= 4 && id_at[id] >= 0)
+        if(Handle itlb = GetResource("itlb"_4, smRoman))
+        {
+            LoadResource(itlb);
+            if(*itlb && GetHandleSize(itlb) > id_at[id] + 1)
+            {
+                INTEGER itl_id = *(GUEST<INTEGER> *)(*itlb + id_at[id]);
+                retval = GetResource(ResType("itl0"_4 + id), itl_id);
+            }
+        }
+    if(!retval)
+        retval = ROMlib_getrestid("INTL"_4, id);
     UseResFile(oldres);
 
     if(!retval && id == 4)

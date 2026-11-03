@@ -429,6 +429,15 @@ TEST_F(ResourceTest, IntlWordBreakTables)
         EXPECT_EQ(length, (t[14] << 8) | t[15]) << code;
 #ifdef EXECUTOR
         EXPECT_EQ(code == smWordSelectTable ? 64 : 120, offset);
+#else
+        /* On a System (the Quadra's, or Apple's under Executor): its own
+           'itl2', the one GetIntlResource(2) answers (difftest intl). */
+        EXPECT_EQ(GetIntlResource(2), table) << code;
+        short id = -1;
+        ResType type = 0;
+        Str255 name;
+        GetResInfo(table, &id, &type, name);
+        EXPECT_EQ((ResType)'itl2', type) << code;
 #endif
     }
 }
