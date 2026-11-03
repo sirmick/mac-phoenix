@@ -60,6 +60,7 @@
 #include <ControlMgr.h>
 #include <quickdraw/cquick.h>
 #include <util/macstrings.h>
+#include <quickdraw/quick.h>
 
 #include <emscripten.h>
 
@@ -68,6 +69,7 @@
 #include <filesystem>
 #include <cstdio>
 #include <cstring>
+#include <deque>
 #include <map>
 #include <string>
 #include <vector>
@@ -464,10 +466,21 @@ void watch_images()
     }
 }
 
+/* The strings drawn lately (ROMlib_text_drawn), oldest first: the page's
+   "drawn" request (web/tests/tab_m1.mjs: a program's output in its window) */
+std::deque<std::string> drawn;
+void text_drawn(const char *text, int len)
+{
+    drawn.emplace_back(text, len);
+    if(drawn.size() > 512)
+        drawn.pop_front();
+}
+
 /* At an event call of the running application. */
 void on_event_poll()
 {
     char buf[1024];
+    ROMlib_text_drawn = text_drawn;
     while(int id = js_take_request(buf, sizeof buf))
     {
         std::string op = buf, arg = buf + op.size() + 1;
@@ -485,6 +498,13 @@ void on_event_poll()
             reply = windows_json(arg == "items");
         else if(op == "menus")
             reply = menus_json();
+        else if(op == "drawn")
+        {
+            reply = "[";
+            for(const std::string &d : drawn)
+                reply += (reply.size() > 1 ? "," : "") + json_string(d);
+            reply += "]";
+        }
         else if(op == "launch")
             reply = std::to_string(launch(arg));
         else if(op == "volumes")

@@ -719,6 +719,31 @@ OSErr Executor::LaunchApplication(LaunchParamBlockRec *lpbp)
 {
     StringPtr strp;
 
+    /* MacPhoenix: MultiFinder's short extended block ('LC' with a
+       launchEPBLength too small for launchAppSpec; THINK C 6's Run passes
+       6): the application is the old block's name, in the default
+       directory, and nothing past launchControlFlags is there to read or
+       write (THINK's stack). */
+    if(lpbp->launchBlockID == extendedBlock
+       && lpbp->launchEPBLength < (int32_t)(offsetof(LaunchParamBlockRec, launchProcessSN)
+                                            - offsetof(LaunchParamBlockRec, launchFileFlags)))
+    {
+        strp = *(GUEST<StringPtr> *)lpbp;
+        if(!(lpbp->launchControlFlags & launchContinue))
+            return NewLaunch(strp, 0, nullptr);
+        FSSpec spec;
+        OSErr err = FSMakeFSSpec(0, 0, strp, &spec);
+        if(err != noErr)
+            return err;
+        LaunchParamBlockRec full = {};
+        full.launchBlockID = extendedBlock;
+        full.launchEPBLength = extendedBlockLen;
+        full.launchFileFlags = lpbp->launchFileFlags;
+        full.launchControlFlags = lpbp->launchControlFlags;
+        full.launchAppSpec = &spec;
+        return process_launch(&full);
+    }
+
     /* MacPhoenix: launchContinue (the launcher keeps running) starts a
        new process; otherwise the launcher is replaced, as before. */
     if(lpbp->launchBlockID == extendedBlock

@@ -13,6 +13,7 @@
 // below, not the disk record's launch list (which tab_site.mjs opens). Every
 // target is expected to work: one that doesn't fails the cell, with what it
 // got to (M1.md keeps the table). M1_APPS=Name,Name: only those.
+// M1_QUERY: more of the page's query (debug=fslog, logtraps=NAME...).
 // M1_RESULTS=FILE: one JSON line per application appended. The canvas after
 // each step goes to M1_SHOTS (default ~/storage/tmp/m1/shots) as
 // SYSTEM-NAME-STEP.png. M1_LOG=1: the Worker's console.
@@ -56,15 +57,26 @@ const TARGETS = {
             await t.codewarrior();
         } },
         { name: 'THINK Project Manager', app: 'Development:THINK C 6.0 ƒ:THINK C:THINK Project Manager', use: async (t) => {
-            // The Bullseye demo opened from the Open dialog, run (built first).
-            await t.sfOpen(['Development', 'THINK C', 'Demos', 'Bullseye', 'bullseye']);
-            await t.until(async () => (await t.windows()).some((w) => /bullseye/.test(w.title)), 30000, 'no bullseye project window');
-            await t.key('Meta+KeyR');
-            // "Bring the project up to date?" and the like: yes
+            // The Object Bullseye demo opened from the Open dialog, converted
+            // to THINK C 6's format, run (brought up to date first). Not the
+            // plain Bullseye demo: its bullWindow.c doesn't compile against
+            // THINK C 6's headers, on the Quadra either (FillOval's pattern).
+            await t.sfOpen(['Development', 'THINK C', 'Demos', 'OOP Demos', 'Object Bullseye', 'Object B']);
             await t.until(async () => {
-                if ((await t.windows()).some((w) => w.kind === 2))
+                const d = (await t.windows(true)).find((w) => w.kind === DIALOG_KIND);
+                if (d && (d.items || []).some((i) => i.title === 'Convert'))
+                    await t.clickButton('Convert'); // its default is Cancel
+                return (await t.windows()).some((w) => /Object Bullseye/.test(w.title));
+            }, 30000, 'no Object Bullseye project window');
+            await t.key('Meta+KeyR');
+            // "Bring the project up to date?": Update; anything else: its default
+            await t.until(async () => {
+                const d = (await t.windows(true)).find((w) => w.kind === DIALOG_KIND);
+                if (d && (d.items || []).some((i) => i.title === 'Update'))
+                    await t.clickButton('Update');
+                else if (d)
                     await t.key('Enter');
-                return (await t.app()) !== 'THINK Project Manager' || (await t.windows()).some((w) => /Bullseye/.test(w.title));
+                return (await t.app()) !== 'THINK Project Manager';
             }, 180000, 'the demo never ran');
         } },
         { name: 'THINK Pascal 4.5', app: 'Development:Languages ƒ:THINK Pascal 4.5d4 ƒ:Think Pascal:THINK Pascal 4.5d4:THINK Pascal 4.5',
@@ -184,7 +196,7 @@ const TARGETS = {
         ['SimCity 2000® 1.2', 'SimCity 2000® Collection ƒ:SimCity 2000® 1.2', ['Enter']],
         ['Wolfenstein 3D™', 'Wolfenstein 3D 1.0.2 ƒ:Wolfenstein 3D™'],
         ['EV Nova', 'EV Nova 1.0.10 ƒ:EV Nova'], ["Ferazel's Wand", "Ferazel's Wand 1.0.3 ƒ:Ferazel's Wand"],
-        ['Slithereens', 'Slithereens 1.0.1 ƒ:Slithereens'], ['Mars Rising', 'Mars Rising 1.0.2 ƒ:Mars Rising'],
+        ['Slithereens', 'Slithereens 1.0.1 ƒ:Slithereens'], ['Mars Rising', 'Mars Rising 1.0.2 ƒ:Mars Rising', [[465, 86]]],
     ].map(([name, app, start]) => ({ name, app: `Games PPC:${app}`, systems: ['8.6'], use: (t) => t.play(start) })),
 };
 
@@ -289,6 +301,8 @@ const t = {
         trace('windows', JSON.stringify(ws.filter((w) => w.visible).map((w) => [w.title, w.kind, (w.items || []).length])));
         return ws.filter((w) => w.visible && w.title !== 'Desktop');
     },
+    // the strings drawn lately, oldest first (web_main.cpp's 'drawn')
+    drawn: async () => (await request('drawn')) || [],
     shot,
     async key(...combos) {
         trace('key', combos.join(' '));
@@ -383,10 +397,31 @@ const t = {
         await t.type('M1CW');
         await t.key('Enter');
         await t.until(async () => (await t.windows()).some((w) => /^M1CW/.test(w.title)), 60000, 'no M1CW project window');
+        // "Errors & Warnings" after a make: errors fail, with their lines
+        // (as drawn); warnings only: closed
+        const checkMade = async () => {
+            if (!(await t.windows()).some((w) => w.title === 'Errors & Warnings'))
+                return;
+            const errors = (await t.drawn()).filter((s) => /couldn.t|error|undefined|not found/i.test(s))
+                .filter((s) => !/^Errors (&|and) warnings/i.test(s));
+            if (errors.length)
+                throw new Error(`Make: ${[...new Set(errors)].slice(0, 4).join(' | ')}`);
+            await t.key('Meta+KeyW');
+            await t.pause(1500);
+        };
         await t.key('Meta+KeyM');                          // Make
-        await t.pause(5000);
-        await t.key('Meta+KeyR');                          // Run
-        await t.until(async () => (await t.app()) !== 'CodeWarrior IDE 3.2', 300000, 'the program never ran');
+        await t.pause(10000);
+        await checkMade();
+        await t.key('Meta+KeyR');                          // Run (makes first if it must)
+        await t.until(async () => {
+            await checkMade();
+            return (await t.app()) === 'Std C Console 68K';
+        }, 300000, 'the program never ran');
+        // its SIOUX console window, the program's output in it
+        await t.until(async () => (await t.windows()).some((w) => w.title === 'Std C Console 68K.out'), 60000,
+            'no console window');
+        await t.until(async () => (await t.drawn()).some((s) => /Hello World/.test(s)), 30000,
+            'no "Hello World" in the console');
     },
     // A game: its title screen, then taken on as a player would: a dialog
     // answered by its harmless button (a shareware notice's "Not Yet", never
@@ -446,7 +481,8 @@ if (!server) {
 const browser = await launch();
 async function openTab(target) {
     const query = `?disk=disks/${encodeURIComponent(boot)}&disk=disks/${encodeURIComponent(diskName)}`
-        + `&system=${encodeURIComponent(boot)}${system === '8.6' || target.ppc ? '&ppc=1' : ''}`;
+        + `&system=${encodeURIComponent(boot)}${system === '8.6' || target.ppc ? '&ppc=1' : ''}`
+        + (process.env.M1_QUERY ? `&${process.env.M1_QUERY}` : '');
     if (!page || crashed) {
         const context = page ? page.context() : null;
         if (page)
