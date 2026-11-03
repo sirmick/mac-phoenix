@@ -1,0 +1,201 @@
+{
+ "note": "ClarisDraw 1.0v4 (Claris, 1994-97): the 1.0v3 floppies' Installer run in the guest, a Custom Install of the 68k application, the minimal ClarisArt and the samples (Easy Install onto a volume without a System hangs the guest at its \"fonts were not installed\" alert, on uae and mame-68k alike; its fonts and Claris folder (help, XTND, spelling) belong in a System Folder), then the 1.0v4 updater (Updater VISE), then a first launch personalises it (a name; the serial field keeps its \"See registration card\")",
+ "kind": "install",
+ "os": "tools-7.6.1",
+ "disks": [
+  {
+   "file": "clarisdraw-eng-10v3.sit",
+   "take": "clarisdraw-eng-10v3.img!:Disk 1.image"
+  },
+  {
+   "file": "clarisdraw-eng-10v3.sit",
+   "take": "clarisdraw-eng-10v3.img!:Disk 2.image"
+  },
+  {
+   "file": "clarisdraw-eng-10v3.sit",
+   "take": "clarisdraw-eng-10v3.img!:Disk 3.image"
+  },
+  {
+   "file": "clarisdraw-eng-10v3.sit",
+   "take": "clarisdraw-eng-10v3.img!:Disk 4.image"
+  },
+  {
+   "file": "clarisdraw-eng-10v3.sit",
+   "take": "clarisdraw-eng-10v3.img!:Disk 5.image"
+  },
+  {
+   "file": "clarisdraw-eng-10v3.sit",
+   "take": "clarisdraw-eng-10v3.img!:Disk 6.image"
+  }
+ ],
+ "media": [
+  {
+   "file": "clarisdraw-eng-10v3.sit",
+   "take": "clarisdraw-eng-10v3.img!:Updater:ClarisDraw1.0v4 Update!:ClarisDraw1.0v4 Upd"
+  },
+  {
+   "file": "clarisdraw-eng-10v3.sit",
+   "take": "clarisdraw-eng-10v3.img!:Read Me 1st"
+  }
+ ],
+ "steps": [
+  {
+   "launch": "Disk 1:Installer"
+  },
+  {
+   "click": {
+    "button": "OK"
+   },
+   "until": {
+    "button": "Switch Disk"
+   },
+   "max": 30
+  },
+  {
+   "click": {
+    "button": "Switch Disk"
+   },
+   "until": {
+    "text": "{target}",
+    "exact": true,
+    "front": true
+   },
+   "max": 8
+  },
+  {
+   "click": {
+    "button": "Customize"
+   },
+   "note": "Easy Install onto a volume with no System hangs the guest at its \"fonts were not installed\" alert (low memory overwritten, on uae and mame-68k alike): the items it would install, less the fonts and the Claris folder's XTND and spelling, picked by hand"
+  },
+  {
+   "click": {
+    "text": "ClarisDraw Application Macintosh"
+   }
+  },
+  {
+   "click": {
+    "text": "Minimal ClarisDraw ClarisArt"
+   },
+   "shift": true
+  },
+  {
+   "click": {
+    "text": "Samples Folder"
+   },
+   "shift": true
+  },
+  {
+   "check": {
+    "text": "• Samples Folder"
+   }
+  },
+  {
+   "click": {
+    "button": "Install"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Quit"
+   },
+   "timeout": 600
+  },
+  {
+   "click": {
+    "button": "Quit"
+   }
+  },
+  {
+   "wait_app": "Finder",
+   "timeout": 60
+  },
+  {
+   "launch": "{media}:ClarisDraw1.0v4 Upd"
+  },
+  {
+   "wait_for": {
+    "button": "Continue"
+   },
+   "timeout": 60,
+   "note": "the updater shows ClarisDraw's Important Information first"
+  },
+  {
+   "click": {
+    "button": "Continue"
+   }
+  },
+  {
+   "wait_for": {
+    "button": "Update"
+   },
+   "timeout": 60
+  },
+  {
+   "check": {
+    "text": "ClarisDraw Folder"
+   }
+  },
+  {
+   "click": {
+    "button": "Update"
+   }
+  },
+  {
+   "wait_for": {
+    "text": "The file has been successfully updated."
+   },
+   "timeout": 300
+  },
+  {
+   "click": {
+    "button": "OK"
+   }
+  },
+  {
+   "click": {
+    "button": "Quit"
+   }
+  },
+  {
+   "wait_app": "Finder",
+   "timeout": 60
+  },
+  {
+   "launch": "{target}:ClarisDraw Folder:ClarisDraw 1.0v4"
+  },
+  {
+   "wait_for": {
+    "text": "Please personalize your copy of"
+   },
+   "timeout": 90
+  },
+  {
+   "type": "Mac Phoenix"
+  },
+  {
+   "click": {
+    "button": "OK"
+   }
+  },
+  {
+   "wait_for": {
+    "text": "This software is licensed to"
+   },
+   "timeout": 30
+  },
+  {
+   "wait": 10
+  },
+  {
+   "close": "ClarisDraw 1.0v4"
+  }
+ ],
+ "target": "Applications",
+ "expect": [
+  "ClarisDraw Folder"
+ ],
+ "launch": [
+  "ClarisDraw Folder:ClarisDraw 1.0v4"
+ ]
+}

@@ -101,7 +101,7 @@ check for the target's name can't match the Install button. An image's
 
 | Image | What | Boot with |
 |---|---|---|
-| `productivity-system-7.img` | AppleWorks 5.0.3, ClarisWorks 4.0v4, Corel WordPerfect 3.5e (with the 3.5e2 update), Microsoft Excel 4.0, Microsoft Office 98 (PowerPC), GraphicConverter 3.9.1, Acrobat Reader 3.01 | `productivity-7.6.1`, 68k or PowerPC |
+| `productivity-system-7.img` | AppleWorks 5.0.3, ClarisWorks 4.0v4, ClarisDraw 1.0v4 (68k), Corel WordPerfect 3.5e (with the 3.5e2 update), Microsoft Excel 4.0, Microsoft Office 98 (PowerPC), GraphicConverter 3.9.1, Acrobat Reader 3.01 | `productivity-7.6.1`, 68k or PowerPC |
 | `productivity-macos-9.img` | AppleWorks 5.0.4, Corel WordPerfect 3.5e, Microsoft Excel 4.0, Microsoft Office 98, GraphicConverter 3.9.1, Acrobat Reader 3.01 | `productivity-9.0.4` |
 
 The boot disks are the standard ones plus the apps' System Folder parts
