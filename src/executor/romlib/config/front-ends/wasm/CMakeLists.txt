@@ -40,6 +40,14 @@ if(NODE_COMMAND)
     set_tests_properties(executor.web.stopped PROPERTIES
         LABELS "executor;web" TIMEOUT 300 SKIP_RETURN_CODE 77
         ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM}")
+    # The page's watch: no request answered while Executor reports its
+    # load is busy (8.6's Finder starting), the Worker gone not answering.
+    add_test(NAME executor.web.watch
+        COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_watch.mjs
+                $<TARGET_FILE_DIR:executor-web>)
+    set_tests_properties(executor.web.watch PROPERTIES
+        LABELS "executor;web" TIMEOUT 200 SKIP_RETURN_CODE 77
+        ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM}")
     # W3: uploaded applications driven in the tab (PPCHello, the suite's
     # keyboard and audio sections).
     add_test(NAME executor.web.apps
@@ -215,6 +223,14 @@ if(NODE_COMMAND)
     set_tests_properties(executor.web.input_86_laptop PROPERTIES
         LABELS "executor;web" TIMEOUT 600 SKIP_RETURN_CODE 77
         ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM};TMPDIR=${CMAKE_CURRENT_BINARY_DIR};TAB_INPUT_CELLS=1280x1024@2/1440x900 1280x1024@1/1280x800")
+    # ... in Firefox (the owner's, on Windows): laptops at 1.5 (1920x1080 at
+    # 150%: scale 2) and 1.25, windows smaller than the screen.
+    add_test(NAME executor.web.input_86_firefox
+        COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_input.mjs
+                $<TARGET_FILE_DIR:executor-web> ${EXECUTOR_WEB_SYSTEM_PPC} ppc)
+    set_tests_properties(executor.web.input_86_firefox PROPERTIES
+        LABELS "executor;web" TIMEOUT 600 SKIP_RETURN_CODE 77
+        ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};TMPDIR=${CMAKE_CURRENT_BINARY_DIR};TAB_BROWSER=firefox;TAB_INPUT_CELLS=1280x1024@1.5/1280x720 1280x1024@1.25/1536x730")
     add_test(NAME executor.web.input_761
         COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_input.mjs
                 $<TARGET_FILE_DIR:executor-web> ${EXECUTOR_WEB_HIDPI_SYSTEM})

@@ -70,8 +70,20 @@ than it; the pointer is at least 16 CSS pixels (`client/cursor.js`). (A
 each, a quarter of the window, the pointer 8 CSS pixels: the owner saw
 "1280x1024 doesn't take effect, the pointer is small".)
 
+Firefox (the owner's, Windows, dpr 1.25 and 1.5; `executor.web.input_86_firefox`)
+fits, maps and draws the pointer the same: its pointer events have device
+pixels (its mouse events whole CSS pixels), the `image-set()` cursor is
+taken. Its dpr 1.5 rounds to display scale 2: 1280x1024 renders 2560x2048,
+and 8.6's Finder starting makes no event call for 8 s here, 15 on the
+owner's machine. The page's watch counts that as busy while Executor
+reports its load (`executor.web.watch`); it once logged "Executor not
+answering". (A later report of 640x480 at scale 2 came from a server
+still running a build before 7c77d4b5, the screen size kept through a
+depth change: its restart had failed, the port still held.)
+
 Tests: `executor_tests --gtest_filter='DisplayMode.*'`
-(`src/executor/tests/displaymode.cpp`); the tab cells `executor.web.dynres`, `executor.web.input_86_laptop`.
+(`src/executor/tests/displaymode.cpp`); the tab cells `executor.web.dynres`,
+`executor.web.input_86_laptop`, `executor.web.input_86_firefox`, `executor.web.watch`.
 
 ## Open
 

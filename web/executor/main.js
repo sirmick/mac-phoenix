@@ -638,23 +638,33 @@ function autoShot(why) {
 }
 
 // Watching from the server: which application is in front (when it
-// changes), and Executor no longer answering (3 requests in a row: hung,
-// or the module died).
-let lastApp = null, unanswered = 0;
+// changes), and Executor no longer answering (3 requests in a row: the
+// module died or hung). Requests are answered at an event call; Executor
+// still reporting its load (the 'cpu' message, each half second) is busy
+// between two, not hung: 8.6's Finder starting makes none for 4-8 s here,
+// 15 on a slower machine (1280x1024 at scale 2). Busy for a minute
+// counts as not answering.
+let lastApp = null, unanswered = 0, reported = false, lastCpu = 0;
 setInterval(async () => {
     if (!worker || document.hidden || !window.executor.frames)
         return;
     const app = await within(window.executor.request('app'), 2500);
     if (app === null) {
-        if (++unanswered === 3) {
-            console.log('[watch] Executor not answering');
-            autoShot('Executor not answering');
+        const busy = performance.now() - lastCpu < 2000;
+        if (++unanswered === 3 && busy)
+            console.log('[watch] Executor busy: no event call for 9 s');
+        if (!reported && unanswered >= 3 && (!busy || unanswered >= 20)) {
+            reported = true;
+            const why = busy ? 'Executor busy for a minute' : 'Executor not answering';
+            console.log(`[watch] ${why}`);
+            autoShot(why);
         }
         return;
     }
     if (unanswered >= 3)
         console.log('[watch] Executor answering again');
     unanswered = 0;
+    reported = false;
     if (app !== lastApp) {
         console.log(`[watch] front: ${app || '(none)'}`);
         lastApp = app;
@@ -1009,6 +1019,7 @@ async function start() {
                     status.textContent = 'Executor';
             }
         } else if (m.type === 'cpu') {
+            lastCpu = performance.now();
             if (window.executor.frames > 0 && !window.executor.stopped)
                 CpuMeter.add(m.busy, m.memory);
         } else if (m.type === 'images') {
