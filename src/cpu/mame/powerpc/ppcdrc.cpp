@@ -1964,7 +1964,10 @@ void ppc_device::generate_update_mode(drcuml_block &block)
 		UML_OR(block, I0, I0, I1);                                          // or      i0,i0,i1
 	}
 
-	// MacPhoenix: translation whatever DR says (ppc_set_translation_identity)
+	// MacPhoenix: translation whatever DR says (ppc_set_translation_identity):
+	// deliberately not ANDed with MSR[DR]; both machines here run with DR
+	// off (Executor's MSR $2000, the G3's 0), so that would measure nothing.
+	// Fills are identity either way (ppccom_translate_address_internal).
 	if (m_translation_identity)
 		UML_OR(block, I0, I0, MODE_DATA_TRANSLATION);                       // or      i0,i0,DR
 
