@@ -80,6 +80,8 @@ void Executor::executePPC(uint32_t addr)
         cpu.sliceHook = &pc_sample;
     if(ERROR_ENABLED_P(ERROR_PPC_INTERP))
         cpu.jit = false;    /* read when the core is made, at the first run */
+    if(ERROR_ENABLED_P(ERROR_PPC_MMU))
+        cpu.mmuIdentity = true;
     cpu.CIA = addr;
     cpu.lr = cpu.exitAddress();
     struct Depth

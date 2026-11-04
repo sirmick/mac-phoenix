@@ -45,6 +45,8 @@ static const struct
     { "pcsample", ERROR_BIT_MASK(ERROR_PC_SAMPLE) },
     { "hidpi", ERROR_BIT_MASK(ERROR_HIDPI_LOG) },
     { "ppcinterp", ERROR_BIT_MASK(ERROR_PPC_INTERP) },
+    { "mmu68k", ERROR_BIT_MASK(ERROR_M68K_MMU) },
+    { "mmuppc", ERROR_BIT_MASK(ERROR_PPC_MMU) },
     { "textcheck", ERROR_BIT_MASK(ERROR_TEXT_EDIT_SLAM) },
     { "trace", ERROR_BIT_MASK(ERROR_TRACE_INFO) },
     { "trapfailure", ERROR_BIT_MASK(ERROR_TRAP_FAILURE) },

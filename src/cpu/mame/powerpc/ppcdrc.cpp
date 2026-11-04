@@ -1964,6 +1964,10 @@ void ppc_device::generate_update_mode(drcuml_block &block)
 		UML_OR(block, I0, I0, I1);                                          // or      i0,i0,i1
 	}
 
+	// MacPhoenix: translation whatever DR says (ppc_set_translation_identity)
+	if (m_translation_identity)
+		UML_OR(block, I0, I0, MODE_DATA_TRANSLATION);                       // or      i0,i0,DR
+
 	// PR in bit 2 of mode
 	UML_ROLAND(block, I1, MSR32, 20, 0x04);                                 // roland  i1,[msr],20,0x04
 	UML_OR(block, mem(&m_core->mode), I0, I1);                               // or      [mode],i0,i1

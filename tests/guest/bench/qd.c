@@ -56,7 +56,7 @@ static long need_window(void)
 }
 
 /* ---- copybits_N_to (window -> GWorld), copybits_N_from (GWorld ->
- * window): 10 copies of the whole area ---- */
+ * window): 50 copies of the whole area ---- */
 
 static GWorldPtr gw;
 
@@ -93,7 +93,7 @@ static long copy_to(void)
 {
     int i;
 
-    for(i = 0; i < 10; i++)
+    for(i = 0; i < 50; i++)
         CopyBits(&((GrafPtr)win)->portBits, (BitMap *)*GetGWorldPixMap(gw), &area, &area, srcCopy, NULL);
     return 0;
 }
@@ -102,7 +102,7 @@ static long copy_from(void)
 {
     int i;
 
-    for(i = 0; i < 10; i++)
+    for(i = 0; i < 50; i++)
         CopyBits((BitMap *)*GetGWorldPixMap(gw), &((GrafPtr)win)->portBits, &area, &area, srcCopy, NULL);
     return 0;
 }
@@ -272,12 +272,12 @@ static long rgn_inset(void)
 
 void add_qd_tests(void)
 {
-    bench_add("copybits_1_to", "10x_window", copy_to, gw_setup1, gw_done);
-    bench_add("copybits_1_from", "10x_window", copy_from, gw_setup1, gw_done);
-    bench_add("copybits_8_to", "10x_window", copy_to, gw_setup8, gw_done);
-    bench_add("copybits_8_from", "10x_window", copy_from, gw_setup8, gw_done);
-    bench_add("copybits_32_to", "10x_window", copy_to, gw_setup32, gw_done);
-    bench_add("copybits_32_from", "10x_window", copy_from, gw_setup32, gw_done);
+    bench_add("copybits_1_to", "50x_window", copy_to, gw_setup1, gw_done);
+    bench_add("copybits_1_from", "50x_window", copy_from, gw_setup1, gw_done);
+    bench_add("copybits_8_to", "50x_window", copy_to, gw_setup8, gw_done);
+    bench_add("copybits_8_from", "50x_window", copy_from, gw_setup8, gw_done);
+    bench_add("copybits_32_to", "50x_window", copy_to, gw_setup32, gw_done);
+    bench_add("copybits_32_from", "50x_window", copy_from, gw_setup32, gw_done);
     bench_add("paintrect", "2000_64x48", paintrect, need_window, NULL);
     bench_add("frameoval", "1000_80x60", frameoval, need_window, NULL);
     bench_add("drawstring_bitmap", "1000x40ch", draw_text, text_setup_bitmap, text_done);

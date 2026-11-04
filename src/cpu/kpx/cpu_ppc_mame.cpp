@@ -1073,6 +1073,7 @@ bool mame_cpu_init(void)
     config.arch = cpu::Arch::PPC;
     config.model = 750;
     config.mmu = false;      /* translation off: SheepShaver's machine */
+    config.mmu_identity = g_platform.cpu_mmu;  /* --cpu-mmu: translating, identity */
     config.timers = false;   /* the tick thread paces the guest */
     config.exceptions = false; /* skip and log, as Kheperix */
     config.clock_hz = (uint32_t)CPUClockSpeed;
@@ -1090,8 +1091,9 @@ bool mame_cpu_init(void)
     }
     g_core->reset();
     g_core->set_reg(R::MSR, 0);   /* vectors at 0, as the nanokernel expects */
-    fprintf(stderr, "[MAME-PPC] %s core, PowerPC 750, %u MHz, %s\n", g_core->name(),
-            (unsigned)(CPUClockSpeed / 1000000), config.jit ? "native back-end" : "UML interpreter");
+    fprintf(stderr, "[MAME-PPC] %s core, PowerPC 750, %u MHz, %s%s\n", g_core->name(),
+            (unsigned)(CPUClockSpeed / 1000000), config.jit ? "native back-end" : "UML interpreter",
+            config.mmu_identity ? ", translation on (identity)" : "");
 
     /* Initial state for the nanokernel boot (init_emul_ppc) */
     set_gpr(3, ROMBase + 0x30d000);

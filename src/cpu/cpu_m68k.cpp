@@ -103,6 +103,7 @@ bool m68k_cpu_init(void)
     config.fpu = FPUType != 0;
     config.address_bits = TwentyFourBitAddressing ? 24 : 32;
     config.jit = use_jit;
+    config.mmu = g_platform.cpu_mmu;      /* --cpu-mmu (mame-68k only) */
     memory.set_address_bits(config.address_bits);
     if(RAMSize)
         vclock_ram_top = RAMBaseMac + RAMSize;
@@ -115,8 +116,8 @@ bool m68k_cpu_init(void)
         return false;
     }
     cpu::platform_set_core(core);
-    fprintf(stderr, "[CPU] %s core, %d%s, %d-bit\n", core->name(), config.model,
-            config.fpu ? " + FPU" : "", config.address_bits);
+    fprintf(stderr, "[CPU] %s core, %d%s%s, %d-bit\n", core->name(), config.model,
+            config.fpu ? " + FPU" : "", config.mmu ? " + PMMU" : "", config.address_bits);
     return true;
 }
 

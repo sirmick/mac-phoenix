@@ -68,6 +68,15 @@ CONFIGS = {
     "exec-761-ppc":     ("executor", "7.6.1", ["--depth", "8", "--executor-ppc"], "7"),
     "exec-86-jit":      ("executor", "8.6", ["--depth", "8", "--executor-ppc"], "8"),
     "exec-86":          ("executor", "8.6", ["--depth", "8", "--executor-ppc", "--executor-debug", "ppcinterp"], "8"),
+    # The MMU's cost (MacPhoenixBench): mame-68k with its PMMU (the Quadra:
+    # the ROM's tables; Executor: none), mame-ppc translating every access
+    # to itself (--cpu-mmu, --executor-debug mmu68k / mmuppc).
+    "quadra-mame68k-mmu": ("rom", "7.6.1", ["--backend", "uae", "--core", "mame-68k", "--rom", QUADRA_ROM, "--depth", "8", "--cpu-mmu"], "7"),
+    "g3-mameppc-jit-mmu": ("rom", "8.6", ["--backend", "kpx", "--core", "mame-ppc", "--jit", "--rom", G3_ROM, "--cpu-mmu"], "8"),
+    "g3-mameppc-mmu":   ("rom", "8.6", ["--backend", "kpx", "--core", "mame-ppc", "--no-jit", "--rom", G3_ROM, "--cpu-mmu"], "8"),
+    "exec-761-68k-mmu": ("executor", "7.6.1", ["--depth", "8", "--executor-debug", "mmu68k"], "7"),
+    "exec-761-ppc-mmu": ("executor", "7.6.1", ["--depth", "8", "--executor-ppc", "--executor-debug", "mmuppc"], "7"),
+    "exec-86-jit-mmu":  ("executor", "8.6", ["--depth", "8", "--executor-ppc", "--executor-debug", "mmuppc"], "8"),
     # Executor in the tab (build-wasm, headless Chromium): tools/bench/tab.mjs.
     "tab-761-68k":      ("tab", "7.6.1", {"depth": 8}, "7"),
     "tab-761-ppc":      ("tab", "7.6.1", {"depth": 8, "ppc": 1}, "7"),
@@ -75,6 +84,7 @@ CONFIGS = {
 }
 # Which benchmarks each configuration runs (MacBench needs a PowerPC).
 PPC = {"g3-kpx", "g3-kpx-jit", "g3-mameppc-jit", "g3-mameppc", "exec-761-ppc", "exec-86-jit", "exec-86",
+       "g3-mameppc-jit-mmu", "g3-mameppc-mmu", "exec-761-ppc-mmu", "exec-86-jit-mmu",
        "tab-761-ppc", "tab-86"}
 
 

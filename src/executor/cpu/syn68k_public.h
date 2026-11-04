@@ -322,6 +322,9 @@ int syn68k_is_guest_addr_mapped(uint32_t addr, size_t len);
 int syn68k_is_guest_addr_in_window(uint32_t addr, size_t len);
 /* Turn a JIT on before initialize_68k_emulator() (none yet). */
 void syn68k_set_jit(int enabled);
+/* MacPhoenix: the core with its PMMU (Config::mmu; Executor sets up no
+   tables, so nothing is translated): before initialize_68k_emulator */
+void syn68k_set_mmu(int enabled);
 /* Pick the 68k core, "mame-68k" (the default and only one), before
  * initialize_68k_emulator(). Returns 0 for an unknown name or once the
  * emulator has started. */

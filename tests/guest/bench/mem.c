@@ -1,5 +1,5 @@
-/* mem.c — memory: BlockMove of 1 KB, 64 KB and 1 MB (4 MB moved each),
- * memcpy of 64 KB, a strided walk over 1 MB. */
+/* mem.c — memory: BlockMove of 1 KB, 64 KB and 1 MB (32 MB moved each),
+ * memcpy of 64 KB (32 MB), a strided walk over 1 MB. */
 
 #include "bench.h"
 
@@ -8,7 +8,7 @@
 
 #pragma segment Mem
 
-enum { kMemSize = 1024L * 1024, kMoved = 4L * 1024 * 1024 };
+enum { kMemSize = 1024L * 1024, kMoved = 32L * 1024 * 1024 };
 static char *mem_a, *mem_b;
 
 static long mem_setup(void)
@@ -89,9 +89,9 @@ static long stride(void)
 
 void add_mem_tests(void)
 {
-    bench_add("blockmove_1k", "4MB", blockmove_1k, mem_setup, mem_done);
-    bench_add("blockmove_64k", "4MB", blockmove_64k, mem_setup, mem_done);
-    bench_add("blockmove_1m", "4MB", blockmove_1m, mem_setup, mem_done);
-    bench_add("memcpy_64k", "4MB", memcpy_64k, mem_setup, mem_done);
+    bench_add("blockmove_1k", "32MB", blockmove_1k, mem_setup, mem_done);
+    bench_add("blockmove_64k", "32MB", blockmove_64k, mem_setup, mem_done);
+    bench_add("blockmove_1m", "32MB", blockmove_1m, mem_setup, mem_done);
+    bench_add("memcpy_64k", "32MB", memcpy_64k, mem_setup, mem_done);
     bench_add("stride", "1MB/64x16", stride, mem_setup, mem_done);
 }

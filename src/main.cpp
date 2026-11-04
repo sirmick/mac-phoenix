@@ -797,6 +797,7 @@ int main(int argc, char **argv)
 				case config::Backend::UAE:
 				default:
 					cpu_m68k_install(platform, emu_config.cpu_core.c_str(), emu_config.jit);
+						platform->cpu_mmu = emu_config.cpu_mmu;	/* --cpu-mmu */
 					break;
 			}
 			g_platform = *platform;
@@ -1062,6 +1063,7 @@ int main(int argc, char **argv)
 					case config::Backend::UAE:
 					default:
 						cpu_m68k_install(platform, emu_config.cpu_core.c_str(), emu_config.jit);
+						platform->cpu_mmu = emu_config.cpu_mmu;	/* --cpu-mmu */
 						break;
 				}
 
