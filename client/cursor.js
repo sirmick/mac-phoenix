@@ -49,7 +49,9 @@ class MacCursor {
         const w = this.element.getBoundingClientRect().width || this.guestWidth();
         const scale = w / this.guestWidth();
         const dpr = window.devicePixelRatio || 1;
-        const px = Math.max(1, Math.round(scale * dpr));    // device pixels a guest pixel
+        // Device pixels a guest pixel: at least a CSS pixel's (a 16-pixel
+        // pointer, as a Mac's on a 1x screen), a screen shrunk to fit too.
+        const px = Math.max(1, Math.round(dpr), Math.round(scale * dpr));
         const key = `${px}:${c.hotX},${c.hotY}:${Array.from(c.data).join(',')}:${Array.from(c.mask).join(',')}`;
         let css = this.cache.get(key);
         if (!css) {

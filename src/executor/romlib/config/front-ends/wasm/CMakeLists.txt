@@ -207,6 +207,14 @@ if(NODE_COMMAND)
     set_tests_properties(executor.web.input_86 PROPERTIES
         LABELS "executor;web" TIMEOUT 900 SKIP_RETURN_CODE 77
         ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM};TMPDIR=${CMAKE_CURRENT_BINARY_DIR}")
+    # The owner's 8.6 at 1280x1024 in laptop windows: at dpr 2 it was drawn
+    # a device pixel a Mac pixel, a quarter of the window, the pointer tiny.
+    add_test(NAME executor.web.input_86_laptop
+        COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_input.mjs
+                $<TARGET_FILE_DIR:executor-web> ${EXECUTOR_WEB_SYSTEM_PPC} ppc)
+    set_tests_properties(executor.web.input_86_laptop PROPERTIES
+        LABELS "executor;web" TIMEOUT 600 SKIP_RETURN_CODE 77
+        ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM};TMPDIR=${CMAKE_CURRENT_BINARY_DIR};TAB_INPUT_CELLS=1280x1024@2/1440x900 1280x1024@1/1280x800")
     add_test(NAME executor.web.input_761
         COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_input.mjs
                 $<TARGET_FILE_DIR:executor-web> ${EXECUTOR_WEB_HIDPI_SYSTEM})
