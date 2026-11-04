@@ -57,8 +57,12 @@ function machine() {
         : Settings.get('machine.screen').split('x').map(Number);
     asked = [width, height];
     macReported = null;
-    // Executor scales by whole numbers (fractional scales: HiDPI.md phase 6).
-    scale = Math.max(1, Math.round(Settings.get('display.scale') || window.devicePixelRatio || 1));
+    scale = scaleFor(Settings.get('display.scale'));
+}
+// The scale for the setting V (0: Auto, from the display). Executor scales
+// by whole numbers (fractional scales: HiDPI.md phase 6).
+function scaleFor(v) {
+    return Math.max(1, Math.round(v || window.devicePixelRatio || 1));
 }
 
 let worker = null, canvas = null, cursor = null, nextId = 1;
@@ -946,6 +950,7 @@ async function start() {
     await Settings.ready;
     machine();
     ScreenBar.show();
+    HiDpiBar.show();
     await modeKnown;
     if (!standalone)
         return;                     // (modeKnown said why)
@@ -1233,6 +1238,52 @@ const ScreenBar = (() => {
     });
     Settings.on('machine.screen', show);
     Settings.on('display.fit_window', show);
+    return { show };
+})();
+
+// The bar's HiDPI box: display.scale 2 (ticked) or 1, the same setting as
+// Settings > Display > Sharpness, whose Auto (the default: from the
+// display) it shows the pick of. Live: Executor draws at the new scale from
+// the Mac's next event call ('scale'), the screen painted again; the canvas
+// follows the frames' size, and clicks and the pointer are in the Mac's 1x
+// pixels at any scale.
+const HiDpiBar = (() => {
+    const label = document.getElementById('hidpi-box');
+    const tick = document.getElementById('hidpi');
+    let refused = '';
+    function show() {
+        tick.checked = scale > 1;
+        const v = Settings.get('display.scale');
+        const pinned = v !== (Settings.doc.display || {}).scale;
+        tick.disabled = pinned;
+        label.classList.toggle('disabled', pinned);
+        label.title = 'draw the Mac at 2x: sharp on high-DPI screens; costs speed and memory'
+            + `\nNow ${scale}×${v ? '' : ` (Auto: from this display's ${window.devicePixelRatio || 1} device pixels a CSS pixel)`}`
+            + '; changes at once. The same setting as Settings > Display > Sharpness.'
+            + (refused ? `\n${refused}` : '')
+            + (pinned ? `\nSet for this visit by the page's address (?scale=${v}).` : '');
+    }
+    tick.addEventListener('change', () => {
+        Settings.set({ display: { scale: tick.checked ? 2 : 1 } })
+            .catch((e) => { console.log(`[web] HiDPI: ${e.message}`); show(); });
+    });
+    Settings.on('display.scale', async (v) => {
+        const want = scaleFor(v);
+        if (!worker)
+            scale = want;           // (and machine() at the start)
+        if (want === scale)
+            return show();
+        console.log(`[web] scale asked: ${want}`);
+        const r = await window.executor.request('scale', String(want));
+        if (r && r.ok) {
+            scale = want;
+            refused = '';
+        } else if (r && 'scale' in r) {
+            refused = `This Executor draws at ${r.scale}× only (built without Skia).`;
+        }
+        show();
+        displayChanged('scale');
+    });
     return { show };
 })();
 // The device-pixel ratio changes with the browser's zoom and between screens.

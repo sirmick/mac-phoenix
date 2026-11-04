@@ -117,7 +117,8 @@ of the running Mac, Disks.md).
 What applies live: the Command key (`keys.js`: Command on Meta, Ctrl or
 Alt, Option and Control the other two), the right button (a click, or
 Control-click), smoothing, the bar's Screenshot and Fullscreen buttons,
-the volume (a GainNode). Fullscreen with `keyboard_capture` takes the
+the volume (a GainNode), the screen size and Sharpness (the display
+scale: below). Fullscreen with `keyboard_capture` takes the
 keyboard through the Keyboard Lock API (Chromium-based browsers), so
 Ctrl+W and the like reach the Mac; holding Esc leaves.
 
@@ -142,6 +143,20 @@ tooltip says the size and that it is the same setting as Settings'; with
 `?size=` in the address it is disabled (the address sets it for the visit).
 The Monitors control panels, which can't change Executor's screen, are
 left out (DisplayModes.md).
+
+The bar's HiDPI box (main.js `HiDpiBar`, `#hidpi`, after the screen size):
+`display.scale` 2 ticked, 1 not, through `Settings.set` as the screen size
+is; its tooltip "draw the Mac at 2x: sharp on high-DPI screens; costs speed
+and memory", then the scale drawn now and that it is the same setting as
+Settings > Display > Sharpness. That one keeps Auto (0: `devicePixelRatio`
+rounded, 1 to 4) as its default and offers 1× to 4×; the box shows the
+scale in effect (ticked at Auto on a dpr 2 display, at 3× too). With
+`?scale=` in the address it is disabled. Live (HiDPI.md, "The scale
+changed live"): the page asks Executor (`'scale'`), the next frames come
+at the new size and the Worker's canvas follows them; clicks and the
+pointer are mapped in the Mac's 1x pixels at any scale (`guestPoint`,
+`cursor.js`), so nothing else on the page changes. A module built without
+Skia answers that it draws at 1× only, which the tooltip then says.
 
 The bar's CPU meter (main.js `CpuMeter`, `#cpu`): how much of each half
 second the Mac's emulator thread spent working rather than waiting for

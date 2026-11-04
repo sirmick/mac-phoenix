@@ -75,6 +75,7 @@
 #include <quickdraw/cquick.h>
 #include <util/macstrings.h>
 #include <quickdraw/quick.h>
+#include <hidpi/hidpi.h>
 
 #include <emscripten.h>
 
@@ -620,6 +621,24 @@ void on_event_poll()
             reply = "{\"ok\":" + std::string(ok ? "true" : "false")
                     + ",\"width\":" + std::to_string(vdriver->width())
                     + ",\"height\":" + std::to_string(vdriver->height()) + "}";
+        }
+        else if(op == "scale")
+        {
+            /* "N": draw the Mac at N times its size (the HiDPI box,
+               hidpi.h), live: taken at the front process's event call as a
+               size is (displays.cpp), the screen painted again; the page's
+               canvas follows the frames' size. Without Skia: 1 only. */
+            double s = atof(arg.c_str());
+#if EXECUTOR_HIDPI
+            bool ok = s >= 1.0 && s <= 4.0;
+#else
+            bool ok = s == 1.0;
+#endif
+            if(ok)
+                vdriver->requestScale(s);
+            char buf[64];
+            snprintf(buf, sizeof buf, "{\"ok\":%s,\"scale\":%g}", ok ? "true" : "false", hidpi::scale());
+            reply = buf;
         }
         else if(op == "screen1x")
         {

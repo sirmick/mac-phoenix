@@ -479,8 +479,9 @@ between them (`glyph_lefts`, hidpi_internal.h; a lone glyph is centred).
 ### The wasm tab
 
 Built with `tools/skia/build-wasm.sh` (above) and `--scale` on
-`executor-web`'s own argv (`web/executor/main.js`'s `?scale=`, default
-`devicePixelRatio`; `web/executor/worker.js` passes it through).
+`executor-web`'s own argv at start (`web/executor/main.js`: the
+`display.scale` setting or `?scale=`, default `devicePixelRatio`;
+`web/executor/worker.js` passes it through), then changed live (below).
 `PhoenixVideoDriver::render()`'s `rectsHook` branch (wasm's only path)
 now calls `hidpi::compose()` and publishes the whole `scaled_` surface
 through the same `rectsHook` every time (`compose()` doesn't report how
@@ -490,6 +491,32 @@ regression). `guestPoint()`'s mouse mapping needed no change: the
 canvas element's `width`/`height` IDL attributes freeze at the 1x size
 before `transferControlToOffscreen()` detaches the backing buffer that
 resizes to the scaled dimensions in the Worker.
+
+### The scale changed live
+
+In the tab the scale changes while the Mac runs (the bar's HiDPI box,
+Settings > Display > Sharpness; Settings.md). The page's `'scale'` request
+(`web_main.cpp`) calls `VideoDriver::requestScale`; the Display Manager
+takes it at the front process's next event call, as a screen size
+(`ROMlib_dm_poll`, `displays.cpp` `dm_set_scale`):
+`PhoenixVideoDriver::setScale` sets the scale under the frame lock
+(`hidpi::set_scale` drops every run, the screen's and the offscreen
+buffers'), makes `scaled_` again at the new size (none at 1) and marks the
+whole screen; then the whole screen is painted, as after a size change with
+nothing moved (`ROMlib_layers_screen_changed(now, now)`: frames, desktop,
+update events for the contents) and the menu bar drawn, so text and chrome
+are recorded again at the new scale (an application's contents when it
+answers its update event). Programs see nothing: the 1x screen, the
+GDevice and the Display Manager's mode are unchanged. Executor logs
+`[display] scale 1 -> 2`. The frames then go out at the new size and the
+Worker's canvas follows them (worker.js `onRects`); the page's fit,
+clicks and pointer are in 1x pixels already. Only where the frames go out
+through `rectsHook` (the tab): natively the parent sized its shared frames
+for the scale Executor started with, so `--executor-scale` stays fixed
+there (`setScale` answers false). Test: `ctest -R executor.web.hidpibar`
+(web/tests/tab_hidpibar.mjs: 7.6.1 at dpr 2, 2x, 1x and 2x again: the
+canvas's size, the menu bar from outlines, the pointer and a menu click
+exact, the setting kept over a reload).
 
 Gate: `ctest -R executor.web.hidpi` (needs a Playwright-capable
 `EXECUTOR_WEB_NODE_PATH`; `web/tests/tab_hidpi.mjs`). Boots the same

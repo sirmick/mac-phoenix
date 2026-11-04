@@ -75,6 +75,7 @@ public:
     static std::atomic<int> cursorX, cursorY;
 
     bool setMode(int width, int height, int bpp, bool grayscale_p) override;
+    bool setScale(double scale) override;
     void setCursor(char *cursor_data, uint16_t cursor_mask[16],
                    int hotspot_x, int hotspot_y) override;
     void setCursorVisible(bool show_p) override;
@@ -105,6 +106,7 @@ private:
     void publish();
     void publishRects(const Executor::DirtyRects::Rects& changed, bool full);
     void publishScaledRects();  // rectsHook, the whole scaled_ surface
+    void allocateScaled();      // scaled_ for the screen at hidpi::scale()
     Rect cursorBox(int x, int y) const;  // its 16x16 box at a pointer position
     void cursorChanged();                // cursorHook, if set (lock not held)
     void writePPM(const std::string& path);

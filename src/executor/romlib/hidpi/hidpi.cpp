@@ -497,7 +497,17 @@ bool Executor::hidpi::impl::run_valid(const Run &run, const Screen &s)
 
 void Executor::hidpi::set_scale(double scale)
 {
-    g_scale = std::clamp(scale, 1.0, 4.0);
+    scale = std::clamp(scale, 1.0, 4.0);
+    if(scale == g_scale)
+        return;
+    /* (a change while running: the runs go, the repaint that follows
+       records them again; at 1 nothing is recorded) */
+    {
+        std::lock_guard lk(g_mutex);
+        g_runs.clear();
+    }
+    g_offscreens.clear();
+    g_scale = scale;
 }
 
 double Executor::hidpi::scale()

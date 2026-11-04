@@ -59,6 +59,9 @@ Finder window dragged about and `/api/resolution` (BridgeAgent's
   The process that made the change does so before `DMSetDisplayMode`
   returns. Procs registered for `kSystemProcess` (extensions) run in the
   process that made the change.
+- The display scale (the tab's HiDPI box) is taken at the same event call
+  (`VideoDriver::requestScale`): no mode change for programs, the screen
+  painted again at the new scale (HiDPI.md, "The scale changed live").
 - Notify procs called at an event call from PowerPC code (8.6's Finder):
   PowerPC procs through `callPPC`, and 68k ones with A7 below the PowerPC
   frames, which sit just below the 68k stack there.

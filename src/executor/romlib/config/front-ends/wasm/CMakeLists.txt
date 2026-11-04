@@ -363,6 +363,16 @@ if(NODE_COMMAND AND GO_COMMAND)
     set_tests_properties(executor.web.resbar PROPERTIES
         LABELS "executor;web" TIMEOUT 300 SKIP_RETURN_CODE 77 ENVIRONMENT "${EXECUTOR_WEB_ENV}")
 endif()
+# The top bar's HiDPI box (main.js HiDpiBar): display.scale 2 or 1, live at
+# dpr 2: the canvas's size, text from outlines, the pointer and clicks
+# exact at both, the setting kept (web/tests/tab_hidpibar.mjs; 7.6.1).
+if(NODE_COMMAND AND GO_COMMAND)
+    add_test(NAME executor.web.hidpibar
+        COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_hidpibar.mjs
+                $<TARGET_FILE_DIR:executor-web> ${EXECUTOR_WEB_HIDPI_SYSTEM})
+    set_tests_properties(executor.web.hidpibar PROPERTIES
+        LABELS "executor;web" TIMEOUT 400 SKIP_RETURN_CODE 77 ENVIRONMENT "${EXECUTOR_WEB_ENV}")
+endif()
 # ... and the policy moving them out of a System that has them, on the
 # saved System Folder too (web/tests/tab_monitors.mjs; a full 7.6.1).
 if(NODE_COMMAND AND GO_COMMAND)

@@ -127,9 +127,9 @@
       "additionalProperties": false,
       "properties": {
         "scale": {
-          "type": "integer", "minimum": 0, "maximum": 4, "default": 0, "x-scope": "page", "x-apply": "executor",
+          "type": "integer", "minimum": 0, "maximum": 4, "default": 0, "x-scope": "page", "x-apply": "live",
           "title": "Sharpness",
-          "description": "Draw the screen this many times larger, with smooth text (Auto: as sharp as your display). Programs still see the same screen size.",
+          "description": "Draw the screen this many times larger, with smooth text (Auto: as sharp as your display); the bar's HiDPI box is 2× or 1×. Programs still see the same screen size. Costs speed and memory.",
           "x-auto": { "value": 0, "choices": [1, 2, 3, 4], "labels": ["1×", "2×", "3×", "4×"] }
         },
         "fit_window": {
