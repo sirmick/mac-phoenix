@@ -69,3 +69,30 @@ Tests: `executor_tests --gtest_filter='DisplayMode.*'`
 
 - After growing back, 7.6.1's Finder leaves its icons where they were on
   the smaller screen; on the Quadra they went back to the right edge.
+  What is known: the Finder's desktop window has an empty structure
+  region and a content region that follows the desktop; its portRect keeps
+  the size it had (1024x768 at the shrink's notification, 640x480 at the
+  grow's). After the change the Finder calls the private
+  `DMKeepWindowOnScreen` (a no-op here) on it. Setting the portRect to the
+  content's bounds there did not change the layout, so the Finder takes it
+  from elsewhere: next would be the Finder's notify proc on the Quadra
+  against Executor (the desktop icon region at ExpandMem+$1F4, which the
+  Finder edits before `DMDesktopIconRgnChanged`, is a candidate).
+
+## Not done: the Monitors control panels
+
+Not chased (disproportionate for now); what each would need:
+
+- **Monitors 7.5.6** (7.6.1) lists only the current resolution: it builds
+  its list from the video card's sResources through the Slot Manager, not
+  from the Display Manager. It would need a pseudo slot for the screen with
+  a declaration ROM (a board sResource and one video sResource per
+  resolution, IDs matching the mode list's) answered by Executor's Slot
+  Manager calls. The driver's `cscSwitchMode` already goes through the
+  Display Manager, so a choice there would work once listed.
+- **Monitors & Sound** (8.6) shows no Monitor panel without the Display
+  Enabler extension, which Executor's extension policy leaves off. Either
+  let the Enabler load over Executor's Display Manager (its patches would
+  replace ours; unknown cost) or answer what the panel asks of the Enabler
+  in its place (a trap trace of the panel with the Enabler on, on the G3,
+  would give the list).
