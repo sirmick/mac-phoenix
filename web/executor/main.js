@@ -1110,8 +1110,11 @@ function fitCanvas() {
     const fit = Math.min(across * dpr / width, down * dpr / height);
     // device pixels a guest pixel; in a window smaller than the screen, the
     // screen made smaller to fit (a cropped one left the menu bar and an
-    // edge out of reach: 1024x768 in an 800-pixel window at dpr 1)
-    const scale = fit >= 1 ? Math.floor(fit) : fit;
+    // edge out of reach: 1024x768 in an 800-pixel window at dpr 1). Never
+    // below a CSS pixel when that fits, nor smaller than the room when it
+    // doesn't: whole device pixels alone drew 1280x1024 at dpr 2 in a
+    // 1440x900 window a device pixel each, a quarter of the room.
+    const scale = Math.max(Math.floor(fit), Math.min(fit, dpr));
     canvas.style.width = `${width * scale / dpr}px`;
     canvas.style.height = `${height * scale / dpr}px`;
 }

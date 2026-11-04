@@ -62,8 +62,16 @@ Finder window dragged about and `/api/resolution` (BridgeAgent's
   PowerPC procs through `callPPC`, and 68k ones with A7 below the PowerPC
   frames, which sit just below the 68k stack there.
 
+The page (`web/executor/main.js` `fitCanvas`) shows a Mac pixel as a whole
+number of device pixels that fits the window, but never less than a CSS
+pixel when that fits, and as large as the room when the screen is bigger
+than it; the pointer is at least 16 CSS pixels (`client/cursor.js`). (A
+1280x1024 screen at dpr 2 in a 1440x900 window was drawn a device pixel
+each, a quarter of the window, the pointer 8 CSS pixels: the owner saw
+"1280x1024 doesn't take effect, the pointer is small".)
+
 Tests: `executor_tests --gtest_filter='DisplayMode.*'`
-(`src/executor/tests/displaymode.cpp`); the tab cell `executor.web.dynres`.
+(`src/executor/tests/displaymode.cpp`); the tab cells `executor.web.dynres`, `executor.web.input_86_laptop`.
 
 ## Open
 
