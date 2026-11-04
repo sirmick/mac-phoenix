@@ -53,7 +53,8 @@ Log.start(Log.newId(), 'page');
 // The screen and the scale Executor draws at, from the settings at each start.
 let width = 640, height = 480, scale = 1;
 function machine() {
-    [width, height] = Settings.get('machine.screen').split('x').map(Number);
+    [width, height] = Settings.get('display.fit_window') ? windowSize()
+        : Settings.get('machine.screen').split('x').map(Number);
     // Executor scales by whole numbers (fractional scales: HiDPI.md phase 6).
     scale = Math.max(1, Math.round(Settings.get('display.scale') || window.devicePixelRatio || 1));
 }
@@ -1091,15 +1092,21 @@ Settings.on('sound.enabled', () => gain && (gain.gain.value = loudness()));
 // pixel that fits the window, so every pixel is the same size (a
 // fractional scale makes some one device pixel and some two); below one,
 // what fits.
+// The room the screen has in the window, CSS pixels: below the bar and the
+// status line, beside the Disks panel when it is open.
+function room() {
+    const bar = document.fullscreenElement ? 0 : document.getElementById('bar').offsetHeight
+        + document.getElementById('status').offsetHeight + 32;
+    const across = window.innerWidth - (parseFloat(getComputedStyle(document.body).paddingRight) || 0);
+    return [across, window.innerHeight - bar];
+}
+
 function fitCanvas() {
     if (!canvas)
         return;
     const dpr = window.devicePixelRatio || 1;
-    const bar = document.fullscreenElement ? 0 : document.getElementById('bar').offsetHeight
-        + document.getElementById('status').offsetHeight + 32;
-    // (the Disks panel open: what it leaves)
-    const across = window.innerWidth - (parseFloat(getComputedStyle(document.body).paddingRight) || 0);
-    const fit = Math.min(across * dpr / width, (window.innerHeight - bar) * dpr / height);
+    const [across, down] = room();
+    const fit = Math.min(across * dpr / width, down * dpr / height);
     // device pixels a guest pixel; in a window smaller than the screen, the
     // screen made smaller to fit (a cropped one left the menu bar and an
     // edge out of reach: 1024x768 in an 800-pixel window at dpr 1)
@@ -1108,6 +1115,47 @@ function fitCanvas() {
     canvas.style.height = `${height * scale / dpr}px`;
 }
 window.addEventListener('resize', fitCanvas);
+
+// ---- the Mac's screen size, live (docs/executor/DisplayModes.md): Executor
+// changes it as the Display Manager does, and the page follows its
+// 'screen' message (canvas, clicks, pointer).
+// Fit the screen to the window: a Mac pixel for each CSS pixel of the room
+// there is, even sizes, from 512x342 to the largest Executor keeps a
+// framebuffer for (1920x1200 in the browser).
+function windowSize() {
+    const [across, down] = room();
+    const even = (v) => Math.floor(v / 2) * 2;
+    return [Math.min(1920, Math.max(512, even(across))), Math.min(1200, Math.max(342, even(down)))];
+}
+
+function resizeMac(w, h) {
+    if (!worker || (w === width && h === height))
+        return;
+    console.log(`[web] screen size asked: ${w}x${h}`);
+    window.executor.request('resize', `${w}x${h}`);
+}
+
+// The window's size settles before the Mac follows: one change for a drag.
+let followTimer = null;
+function followWindow() {
+    clearTimeout(followTimer);
+    followTimer = setTimeout(() => {
+        if (Settings.get('display.fit_window'))
+            resizeMac(...windowSize());
+    }, 400);
+}
+window.addEventListener('resize', followWindow);
+document.addEventListener('fullscreenchange', followWindow);
+Settings.on('display.fit_window', (on) => {
+    if (on)
+        followWindow();
+    else
+        resizeMac(...Settings.get('machine.screen').split('x').map(Number));
+});
+Settings.on('machine.screen', (v) => {
+    if (!Settings.get('display.fit_window'))
+        resizeMac(...v.split('x').map(Number));
+});
 // The device-pixel ratio changes with the browser's zoom and between screens.
 (function watchDpr() {
     matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`)

@@ -235,6 +235,11 @@ bool size_acceptable(int width, int height)
 }
 }
 
+uint32_t Executor::ROMlib_dm_current_resolution()
+{
+    return current_resolution();
+}
+
 bool Executor::ROMlib_dm_size_acceptable(int width, int height)
 {
     return size_acceptable(width, height);

@@ -41,6 +41,8 @@ struct DisplayResolution
     int width, height;
 };
 extern std::vector<DisplayResolution> ROMlib_dm_resolutions();
+/* The current one's ID. */
+extern uint32_t ROMlib_dm_current_resolution();
 
 /* Every window of every process (and floating layer) moved by
    ROMlib_dm_window_offset, the desktop layer's region the new GrayRgn,
