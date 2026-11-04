@@ -682,6 +682,9 @@ static void finish_change(const Rect &old_screen)
     }
     history.push_back(screen_now());
     catch_up(true);
+    /* all of it converted again, whatever the repaint reported (setMode's
+       mark can go out with a render before the repaint, on native) */
+    vdriver->updateScreen(now.top, now.left, now.bottom, now.right);
 }
 
 bool Executor::ROMlib_dm_set_screen_size(int width, int height)
