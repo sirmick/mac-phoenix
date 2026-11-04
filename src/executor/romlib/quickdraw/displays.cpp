@@ -25,8 +25,6 @@
 #include <iterator>
 #include <vector>
 
-enum { kDMNotFoundErr = -6229 };
-
 using namespace Executor;
 
 /* MacPhoenix: Display Manager 2.0 (Gestalt 'dplv' $00020202 on the Quadra's
@@ -51,15 +49,6 @@ using namespace Executor;
    its own next event call (ROMlib_dm_poll): its procs run in its own
    world, as they would on a Mac where the Process Manager switched to it.
    The one that changed the mode gets them before DMSetDisplayMode returns. */
-
-enum
-{
-    kDMNotifyInstalled = 1,
-    kDMNotifyEvent = 2,
-    kDMNotifyRemoved = 3,
-    kDMNotifyPrep = 4,
-    kDMNotifyDependents = 6,
-};
 
 namespace
 {
@@ -487,29 +476,29 @@ static OSErr config_record(const ScreenState &st, GUEST<AERecord> *rec)
     PixMapHandle pm = GD_PMAP(gd);
     int d = st.depth;
     bool eight = (uint16_t)LM(SysVersion) >= 0x0800;
-    put_long(rec, "dmcv"_4, "long"_4, 0);
-    put_long(rec, "dmcf"_4, "long"_4, 0);
-    put_long(rec, "dmcr"_4, "long"_4, 0);
-    put_long(rec, "dmid"_4, "long"_4, mainDisplayID);
-    put_long(rec, "dmdc"_4, "long"_4, 0);                     /* no display component */
-    put_long(rec, "dmdd"_4, "long"_4, US_TO_SYN68K((void *)gd));
-    put_long(rec, "dmdf"_4, "long"_4, eight ? 0x14 : 0x05);
-    put_long(rec, "dmdm"_4, "long"_4, st.resolution);
-    put_long(rec, "dmmr"_4, "long"_4, 0);
-    put_long(rec, "dmdr"_4, "long"_4, 0);
-    put_short(rec, "dddf"_4, GD_FLAGS(gd));
-    put_long(rec, "dddm"_4, "long"_4, current_depth_mode());
-    put_rect(rec, "dddr"_4, st.bounds);
-    put_rect(rec, "dpdr"_4, st.bounds);
-    put_long(rec, "dphr"_4, "fixd"_4, 72 << 16);
-    put_long(rec, "dpvr"_4, "fixd"_4, 72 << 16);
-    put_short(rec, "dppt"_4, d > 8 ? RGBDirect : 0);
-    put_short(rec, "dpps"_4, d);
-    put_short(rec, "dpcc"_4, d > 8 ? 3 : 1);
-    put_short(rec, "dpcs"_4, d == 16 ? 5 : d == 32 ? 8 : d);
-    put_long(rec, "dppr"_4, "long"_4, 0, 2);                    /* (2 bytes, as on the Mac) */
+    put_long(rec, keyDMConfigVersion, "long"_4, 0);
+    put_long(rec, keyDMConfigFlags, "long"_4, 0);
+    put_long(rec, keyDMConfigReserved, "long"_4, 0);
+    put_long(rec, keyDisplayID, "long"_4, mainDisplayID);
+    put_long(rec, keyDisplayComponent, "long"_4, 0);                     /* no display component */
+    put_long(rec, keyDisplayDevice, "long"_4, US_TO_SYN68K((void *)gd));
+    put_long(rec, keyDisplayFlags, "long"_4, eight ? 0x14 : 0x05);
+    put_long(rec, keyDisplayMode, "long"_4, st.resolution);
+    put_long(rec, keyDisplayModeReserved, "long"_4, 0);
+    put_long(rec, keyDisplayReserved, "long"_4, 0);
+    put_short(rec, keyDeviceFlags, GD_FLAGS(gd));
+    put_long(rec, keyDeviceDepthMode, "long"_4, current_depth_mode());
+    put_rect(rec, keyDeviceRect, st.bounds);
+    put_rect(rec, keyPixMapRect, st.bounds);
+    put_long(rec, keyPixMapHResolution, "fixd"_4, 72 << 16);
+    put_long(rec, keyPixMapVResolution, "fixd"_4, 72 << 16);
+    put_short(rec, keyPixMapPixelType, d > 8 ? RGBDirect : 0);
+    put_short(rec, keyPixMapPixelSize, d);
+    put_short(rec, keyPixMapCmpCount, d > 8 ? 3 : 1);
+    put_short(rec, keyPixMapCmpSize, d == 16 ? 5 : d == 32 ? 8 : d);
+    put_long(rec, keyPixMapReserved, "long"_4, 0, 2);                    /* (2 bytes, as on the Mac) */
     CTabHandle ct = PIXMAP_TABLE(pm);
-    put_long(rec, "dpct"_4, "long"_4, ct && *ct ? (int32_t)CTAB_SEED(ct) : 0);
+    put_long(rec, keyPixMapColorTableSeed, "long"_4, ct && *ct ? (int32_t)CTAB_SEED(ct) : 0);
     return noErr;
 }
 
@@ -521,7 +510,7 @@ static OSErr config_event(const ScreenState &from, const ScreenState &to, GUEST<
     OSErr err = AECreateDesc(typeProcessSerialNumber, &me, sizeof me, &target);
     if(err != noErr)
         return err;
-    err = AECreateAppleEvent(kCoreEventClass, "cnfg"_4, &target, kAutoGenerateReturnID,
+    err = AECreateAppleEvent(kCoreEventClass, kAESystemConfigNotice, &target, kAutoGenerateReturnID,
                              kAnyTransactionID, ae);
     AEDisposeDesc(&target);
     if(err != noErr)
@@ -530,11 +519,11 @@ static OSErr config_event(const ScreenState &from, const ScreenState &to, GUEST<
     config_record(from, &dold);
     config_record(to, &dnew);
     AECreateList(nullptr, 0, true, &display);
-    AEPutParamDesc(&display, "dold"_4, &dold);
-    AEPutParamDesc(&display, "dnew"_4, &dnew);
+    AEPutParamDesc(&display, keyDisplayOldConfig, &dold);
+    AEPutParamDesc(&display, keyDisplayNewConfig, &dnew);
     AECreateList(nullptr, 0, true, &dspl);
     AEPutParamDesc(&dspl, mainDisplayID, &display);
-    err = AEPutParamDesc(ae, "dspl"_4, &dspl);
+    err = AEPutParamDesc(ae, kAEDisplayNotice, &dspl);
     AEDisposeDesc(&dold);
     AEDisposeDesc(&dnew);
     AEDisposeDesc(&display);
@@ -847,7 +836,7 @@ OSErr Executor::C_DMNewAVIDByPortComponent(Component thePortComponent, OSType po
 {
     if(newID)
         *newID = 0;
-    return -6220; /* kDMGenErr: no display ports */
+    return kDMGenErr; /* no display ports */
 }
 
 /* No AV ports or devices: nothing has an AVID. */
@@ -856,24 +845,24 @@ OSErr Executor::C_DMNewAVIDByDeviceComponent(Component theDeviceComponent, OSTyp
 {
     if(newID)
         *newID = 0;
-    return -6220; /* kDMGenErr */
+    return kDMGenErr;
 }
 
 OSErr Executor::C_DMGetPortComponentByAVID(uint32_t displayID, GUEST<Component> *portComponent,
                                             Ptr portDesc, GUEST<OSType> *portKind)
 {
-    return -6220;
+    return kDMGenErr;
 }
 
 OSErr Executor::C_DMGetDeviceComponentByAVID(uint32_t displayID, GUEST<Component> *theDeviceComponent,
                                               Ptr theDesc, GUEST<OSType> *theKind)
 {
-    return -6220;
+    return kDMGenErr;
 }
 
 OSErr Executor::C_DMGetDeviceAVIDByPortAVID(uint32_t portAVID, GUEST<uint32_t> *deviceAVID)
 {
-    return -6220;
+    return kDMGenErr;
 }
 
 OSErr Executor::C_DMSendDependentNotification(OSType notifyType, OSType notifyClass,

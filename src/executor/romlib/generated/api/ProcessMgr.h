@@ -77,6 +77,7 @@ modeHighLevelEventAware = 64,
 modeLocalAndRemoteHLEvents = 32,
 modeStationeryAware = 16,
 modeUseTextEditServices = 8,
+modeDisplayManagerAware = 4,
 };
 
 enum {kNoProcess = 0,
