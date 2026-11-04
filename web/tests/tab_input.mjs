@@ -114,11 +114,14 @@ for (const cell of cells) {
         if (!special || !at(special.left + 12, 10))
             check(false, `${tag}: the Special menu (${JSON.stringify(menus.map((m) => [m.title, m.left]))})`);
         else {
+            // (Executor answers no request while it tracks the menu: the
+            // strings it drew are asked for after the button is up.)
             await page.mouse.move(...at(special.left + 12, 10));
             await page.mouse.down();
-            const open = await until(() => request(page, 'drawn').then((d) => d.some((s) => /Restart/.test(s))), 5000);
+            await page.waitForTimeout(1500);
             await page.mouse.move(...at(special.left + 12, H >> 1));  // off the menu: nothing chosen
             await page.mouse.up();
+            const open = await until(() => request(page, 'drawn').then((d) => d.some((s) => /Restart/.test(s))), 5000);
             check(open, `${tag}: a click on Special's title opens it`);
         }
 
