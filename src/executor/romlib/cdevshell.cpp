@@ -186,7 +186,7 @@ Mach mach_check()
     uint16_t soft = ((GUEST<uint16_t> *)*m)[0], hard = ((GUEST<uint16_t> *)*m)[1];
     if(soft == 0 && hard == 0xFFFF)
         return Mach::ask;
-    uint16_t rom85 = LM(ROM85), hw = LM(SCSIFlags); /* 0xB22: HWCfgFlags */
+    uint16_t rom85 = LM(ROM85), hw = LM(HWCfgFlags);
     return (rom85 & soft) == rom85 && (hw & hard) == hard ? Mach::run : Mach::refuse;
 }
 

@@ -178,11 +178,13 @@
 # ####
 
 - lowmem:
-    name: SCSIFlags
+    name: HWCfgFlags
     type: INTEGER
     address: 0xB22
     comment: |
-      uknown Private.a (true-b);
+      hardware configuration flags (IM V: SCSI, clock, xPRAM, FPU, MMU, ADB
+      in bits 15-10; LMGetHWCfgFlags); the G3's 9.0.4 has $EC00
+      (Private.a's SCSIFlags) (true-b);
 
 # ####
 

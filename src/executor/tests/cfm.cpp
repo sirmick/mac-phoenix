@@ -10,6 +10,7 @@
 
 #include <CodeFragments.h>
 #include <FileMgr.h>
+#include <LowMem.h>
 #include <MemoryMgr.h>
 #include <ResourceMgr.h>
 #include <rsys/cfm.h>
@@ -338,6 +339,21 @@ TEST(CFM, PrivateInterfaceLibExportsLowMemAccessors)
     EXPECT_EQ(guest_cast<uint32_t>(p), (uint32_t)*(GUEST<uint32_t> *)SYN68K_TO_US(0x316));
     LMSetHpChk(saved);
     DisposePtr(p);
+}
+
+/* InterfaceLib's LMGetHWCfgFlags ($B22; 9.0.4's Iomega Drive Options and
+   Tools ask): the G3's $EC00. */
+TEST(CFM, InterfaceLibExportsHWCfgFlags)
+{
+    GUEST<ConnectionID> cid;
+    GUEST<Ptr> main, addr;
+    uint8_t cls;
+    Str255 errname;
+    ASSERT_EQ(noErr, GetSharedLibrary((StringPtr) "\014InterfaceLib", "pwpc"_4,
+                                      kReferenceCFrag, &cid, &main, errname));
+    for(const char *name : { "LMGetHWCfgFlags", "LMSetHWCfgFlags" })
+        EXPECT_EQ(noErr, FindSymbol(cid, PSTR(name), &addr, &cls)) << name;
+    EXPECT_EQ(0xEC00, (uint16_t)LMGetHWCfgFlags());
 }
 
 /* Apple's MPLibrary needs the nanokernel: Executor declines it, file or

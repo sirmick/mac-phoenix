@@ -372,7 +372,7 @@ extern INTEGER LM(BufTgFBkNum);
 extern LONGINT LM(BufTgDate);
 extern LONGINT TFSTagData0;
 extern LONGINT TFSTagData1;
-extern INTEGER LM(SCSIFlags);
+extern INTEGER LM(HWCfgFlags);
 #endif
 
 #define LM(WDCBsPtr) (WDCBsPtr_H.p)
