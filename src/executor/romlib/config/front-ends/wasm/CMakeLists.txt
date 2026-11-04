@@ -353,6 +353,33 @@ endif()
 # the library.
 set(EXECUTOR_WEB_LIBRARY "$ENV{HOME}/storage/web-library" CACHE PATH
     "tools/web/make_library.py's output, for the executor.web.site cells")
+# The top bar's screen size (main.js ScreenBar): a size and Fit to window
+# from the bar, live, in step with the Settings dialog both ways, the Mac's
+# real size shown (web/tests/tab_resbar.mjs; Executor's own System).
+if(NODE_COMMAND AND GO_COMMAND)
+    add_test(NAME executor.web.resbar
+        COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_resbar.mjs
+                $<TARGET_FILE_DIR:executor-web>)
+    set_tests_properties(executor.web.resbar PROPERTIES
+        LABELS "executor;web" TIMEOUT 300 SKIP_RETURN_CODE 77 ENVIRONMENT "${EXECUTOR_WEB_ENV}")
+endif()
+# ... and the policy moving them out of a System that has them, on the
+# saved System Folder too (web/tests/tab_monitors.mjs; a full 7.6.1).
+if(NODE_COMMAND AND GO_COMMAND)
+    add_test(NAME executor.web.monitors_policy
+        COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_monitors.mjs
+                $<TARGET_FILE_DIR:executor-web> ${EXECUTOR_WEB_HIDPI_SYSTEM})
+    set_tests_properties(executor.web.monitors_policy PROPERTIES
+        LABELS "executor;web" TIMEOUT 600 SKIP_RETURN_CODE 77 ENVIRONMENT "${EXECUTOR_WEB_ENV}")
+endif()
+# The library's boot disks lack what Executor's policy denies (the Monitors
+# control panels and their Control Strip modules; tools/web/audit_boot_disks.py).
+if(PYTHON3_COMMAND)
+    add_test(NAME executor.web.boot_disks_audit
+        COMMAND ${PYTHON3_COMMAND} ${PROJECT_SOURCE_DIR}/tools/web/audit_boot_disks.py ${EXECUTOR_WEB_LIBRARY})
+    set_tests_properties(executor.web.boot_disks_audit PROPERTIES
+        LABELS "executor;web" TIMEOUT 600 SKIP_RETURN_CODE 77)
+endif()
 # The top bar's CPU meter: hidden while loading, low at the idle Finder,
 # high while a game runs (web/tests/tab_cpu.mjs; the library's boot-7.6.1
 # and games-68k disks).

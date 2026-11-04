@@ -112,6 +112,14 @@ bool listed(const std::set<std::string> &allow, const std::string &name)
     return allow.count(name.substr(start, end - start + 1)) != 0;
 }
 
+/* "-NAME": never used, whatever the file runs at startup (the Monitors
+   control panels, which can't change Executor's screen): kept in the set
+   with its '-'. */
+bool denied(const std::set<std::string> &allow, const std::string &name)
+{
+    return listed(allow, "-" + name.substr(std::min(name.find_first_not_of(' '), name.size())));
+}
+
 struct Item
 {
     Str63 name;
@@ -421,7 +429,9 @@ void move(INTEGER vref, LONGINT from, const Item &it, LONGINT to, const char *wh
 
 /* As Extensions Manager does: what isn't allowed waits in "<folder>
    (Disabled)", where neither the loader nor the Finder looks; what is
-   allowed comes back. */
+   allowed comes back. What the policy denies ("-NAME") goes there too, a
+   control panel that runs nothing at startup or a Control Strip module
+   (into "Control Strip (Disabled)") included, and stays there. */
 static void sort_out_disabled(const std::set<std::string> &allow)
 {
     GUEST<INTEGER> vref_g;
@@ -436,6 +446,8 @@ static void sort_out_disabled(const std::set<std::string> &allow)
     };
     for(Pair p : { Pair { "Extensions", "Extensions (Disabled)" },
                    Pair { "Control Panels", "Control Panels (Disabled)" },
+                   /* (HFS: 31 characters at most) */
+                   Pair { "Control Strip Modules", "Control Strip (Disabled)" },
                    Pair { nullptr, "System Extensions (Disabled)" } })
     {
         LONGINT active = p.active ? sub_folder(vref, sysdir, p.active, false) : sysdir;
@@ -443,7 +455,8 @@ static void sort_out_disabled(const std::set<std::string> &allow)
             continue;
         LONGINT disabled = sub_folder(vref, sysdir, p.disabled, false);
         for(const Item &it : folder_files(vref, active))
-            if(!listed(allow, to_string(it.name)) && runs_at_startup(vref, active, it))
+            if(denied(allow, to_string(it.name))
+               || (!listed(allow, to_string(it.name)) && runs_at_startup(vref, active, it)))
             {
                 if(!disabled)
                     disabled = sub_folder(vref, sysdir, p.disabled, true);
