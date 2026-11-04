@@ -195,6 +195,26 @@ if(NODE_COMMAND)
         ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM}")
 endif()
 
+# Clicks and the pointer at each screen size and devicePixelRatio, in a
+# window narrower than the screen (web/tests/tab_input.mjs): the pointer on
+# the Mac pixel the page shows, 16 Mac pixels big; a menu title and a disk
+# icon clicked. 8.6 with PowerPC (its depth change at startup once reset
+# the screen to 640x480 whatever the settings said) and 7.6.1.
+if(NODE_COMMAND)
+    add_test(NAME executor.web.input_86
+        COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_input.mjs
+                $<TARGET_FILE_DIR:executor-web> ${EXECUTOR_WEB_SYSTEM_PPC} ppc)
+    set_tests_properties(executor.web.input_86 PROPERTIES
+        LABELS "executor;web" TIMEOUT 900 SKIP_RETURN_CODE 77
+        ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM};TMPDIR=${CMAKE_CURRENT_BINARY_DIR}")
+    add_test(NAME executor.web.input_761
+        COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_input.mjs
+                $<TARGET_FILE_DIR:executor-web> ${EXECUTOR_WEB_HIDPI_SYSTEM})
+    set_tests_properties(executor.web.input_761 PROPERTIES
+        LABELS "executor;web" TIMEOUT 600 SKIP_RETURN_CODE 77
+        ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM};TMPDIR=${CMAKE_CURRENT_BINARY_DIR}")
+endif()
+
 # tools/standalone, the server (docs/executor/Standalone.md): go test (the
 # API over a real connection, the claim, the relay, the program itself),
 # then the tab on it (the cells below build it with go: GO).

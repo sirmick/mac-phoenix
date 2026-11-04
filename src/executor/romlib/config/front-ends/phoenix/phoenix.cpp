@@ -202,10 +202,13 @@ void PhoenixVideoDriver::publish()
 
 bool PhoenixVideoDriver::setMode(int width, int height, int bpp, bool)
 {
+    /* 0x0: the size it has (SetDepth changes only the depth: 8.6 sets
+       its depth at startup and went to 640x480 whatever --screen said),
+       640x480 the first time */
     if(width == 0 || height == 0)
     {
-        width = 640;
-        height = 480;
+        width = argbWidth_ ? argbWidth_ : 640;
+        height = argbHeight_ ? argbHeight_ : 480;
     }
     if(bpp == 0)
         bpp = 8;

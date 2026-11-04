@@ -971,6 +971,7 @@ async function start() {
     showFiles(files);
 
     // A canvas hands its control over once: a fresh one per start.
+    window.executor.screen = { width, height };
     canvas = document.createElement('canvas');
     canvas.id = 'screen';
     canvas.width = width;
@@ -1014,6 +1015,15 @@ async function start() {
                 imageState[i.name] = { modified: i.modified, changed: i.changed, writable: i.writable, onServer: i.onServer };
             if (JSON.stringify(imageState) !== before)
                 storedFiles().then(showFiles);
+        } else if (m.type === 'screen') {
+            // The Mac's screen isn't what the settings asked for (an
+            // application changed it): fit and map clicks with the real one.
+            console.log(`[web] the Mac's screen: ${m.width}x${m.height}`);
+            width = m.width;
+            height = m.height;
+            window.executor.screen = { width, height };
+            fitCanvas();
+            cursor.apply();
         } else if (m.type === 'cursor') {
             window.executor.cursor = m;
             cursor.set(m);
@@ -1079,7 +1089,8 @@ Settings.on('sound.enabled', () => gain && (gain.gain.value = loudness()));
 
 // ---- the canvas's size: the largest whole number of device pixels a guest
 // pixel that fits the window, so every pixel is the same size (a
-// fractional scale makes some one device pixel and some two).
+// fractional scale makes some one device pixel and some two); below one,
+// what fits.
 function fitCanvas() {
     if (!canvas)
         return;
@@ -1089,7 +1100,10 @@ function fitCanvas() {
     // (the Disks panel open: what it leaves)
     const across = window.innerWidth - (parseFloat(getComputedStyle(document.body).paddingRight) || 0);
     const fit = Math.min(across * dpr / width, (window.innerHeight - bar) * dpr / height);
-    const scale = Math.max(1, Math.floor(fit));     // device pixels a guest pixel
+    // device pixels a guest pixel; in a window smaller than the screen, the
+    // screen made smaller to fit (a cropped one left the menu bar and an
+    // edge out of reach: 1024x768 in an 800-pixel window at dpr 1)
+    const scale = fit >= 1 ? Math.floor(fit) : fit;
     canvas.style.width = `${width * scale / dpr}px`;
     canvas.style.height = `${height * scale / dpr}px`;
 }
