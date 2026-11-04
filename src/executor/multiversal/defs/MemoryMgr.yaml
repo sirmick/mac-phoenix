@@ -606,6 +606,44 @@
 
 # ####
 
+# Virtual memory on a volume (MacMemory.h, 8.6): every 9.0.4 session's
+# startup asks. Executor has no virtual memory; with VM off the G3's 9.0.4
+# answers hwParamErr for any volume and record version and leaves the record
+# as it was (tests/guest/difftest/vminfo.c).
+- struct:
+    name: VolumeVirtualMemoryInfo
+    members:
+      - name: version
+        type: uint32_t
+      - name: volumeRefNum
+        type: INTEGER
+      - name: inUse
+        type: Boolean
+      - name: _fill
+        type: uint8_t
+      - name: vmOptions
+        type: uint32_t
+    size: 12
+
+# ####
+
+- typedef:
+    name: VolumeVirtualMemoryInfoPtr
+    type: VolumeVirtualMemoryInfo*
+
+# ####
+
+- function:
+    name: GetVolumeVirtualMemoryInfo
+    return: OSErr
+    args:
+      - name: volVMInfo
+        type: VolumeVirtualMemoryInfoPtr
+    library: InterfaceLib
+    executor: C_
+
+# ####
+
 - function:
     name: MemError
     return: OSErr

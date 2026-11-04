@@ -1,0 +1,13 @@
+# probe 2108afc138a84c2b07ac7b39637b698b0c7ea544148912107a8455a9bd2740ed
+.bind.GetVolumeVirtualMemoryInfo: found
+== ask
+ask.boot.v1.err: -502
+ask.boot.v1.record: 00000001ffffa5a5a5a5a5a5
+ask.boot.v0.err: -502
+ask.boot.v0.record: 00000000ffffa5a5a5a5a5a5
+ask.boot.v2.err: -502
+ask.boot.v2.record: 00000002ffffa5a5a5a5a5a5
+ask.none.v1.err: -502
+ask.none.v1.record: 00000001ff9da5a5a5a5a5a5
+ask.zero.v1.err: -502
+ask.zero.v1.record: 000000010000a5a5a5a5a5a5

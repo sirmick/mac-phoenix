@@ -29,6 +29,17 @@ void describeStruct(const Zone& x, std::ostream& os)
     os << "}";
 }
 
+void describeStruct(const VolumeVirtualMemoryInfo& x, std::ostream& os)
+{
+    os << "VolumeVirtualMemoryInfo{";
+    logging::logField(os, "version", x.version);
+    logging::logField(os, "volumeRefNum", x.volumeRefNum);
+    logging::logField(os, "inUse", x.inUse);
+    logging::logField(os, "_fill", x._fill);
+    logging::logField(os, "vmOptions", x.vmOptions);
+    os << "}";
+}
+
 } // namespace Executor
 
 namespace Executor { namespace structdump {
@@ -38,12 +49,17 @@ void dump_Zone(std::ostream& os, const void* p)
 {
     describeStruct(*(const Zone*)p, os);
 }
+void dump_VolumeVirtualMemoryInfo(std::ostream& os, const void* p)
+{
+    describeStruct(*(const VolumeVirtualMemoryInfo*)p, os);
+}
 }
 
 void registerStructDumps_MemoryMgr()
 {
     static const TypeDesc types[] = {
         { "Zone", sizeof(Zone), &dump_Zone },
+        { "VolumeVirtualMemoryInfo", sizeof(VolumeVirtualMemoryInfo), &dump_VolumeVirtualMemoryInfo },
     };
     registerTypes(types, sizeof(types) / sizeof(types[0]));
 }
