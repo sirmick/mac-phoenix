@@ -1,77 +1,77 @@
-CdevMac msg=8 item=0 value=unset
-CdevMac msg=0 item=0 value=unset rom85=16383 hwcfg=60416
-CdevMac msg=3 item=0 value=h
-CdevMac msg=5 item=0 value=h
-CdevMac msg=4 item=0 value=h
-CdevMac msg=14 item=0 value=h
-CdevMac msg=3 item=0 value=h
-CdevMac msg=1 item=1 value=h
-CdevMac msg=14 item=0 value=h
-CdevMac msg=3 item=0 value=h
-CdevMac msg=2 item=0 value=h nul=N cursor=N
+CdevMac msg=8 item=0 value=unset res=panel
+CdevMac msg=0 item=0 value=unset res=panel port=panel rom85=16383 hwcfg=60416
+CdevMac msg=3 item=0 value=h res=panel port=panel
+CdevMac msg=5 item=0 value=h res=panel port=panel
+CdevMac msg=4 item=0 value=h res=panel port=panel
+CdevMac msg=14 item=0 value=h res=panel port=panel
+CdevMac msg=3 item=0 value=h res=panel port=panel
+CdevMac msg=1 item=1 value=h res=panel port=panel
+CdevMac msg=14 item=0 value=h res=panel port=panel
+CdevMac msg=3 item=0 value=h res=panel port=panel
+CdevMac msg=2 item=0 value=h res=panel port=panel nul=N cursor=N
 CdevMac window=100,100 331,197
 CdevMac front=other
 CdevMac wloc=100,100
-CdevAll msg=0 item=0 value=unset rom85=16383 hwcfg=60416
-CdevAll msg=3 item=0 value=h
-CdevAll msg=5 item=0 value=h
-CdevAll msg=4 item=0 value=h
-CdevAll msg=1 item=1 value=h
-CdevAll msg=2 item=0 value=h nul=N cursor=0
+CdevAll msg=0 item=0 value=unset res=panel port=panel rom85=16383 hwcfg=60416
+CdevAll msg=3 item=0 value=h res=panel port=panel
+CdevAll msg=5 item=0 value=h res=panel port=panel
+CdevAll msg=4 item=0 value=h res=panel port=panel
+CdevAll msg=1 item=1 value=h res=panel port=panel
+CdevAll msg=2 item=0 value=h res=panel port=panel nul=N cursor=0
 CdevAll window=100,100 331,197
 CdevAll front=other
 CdevAll wloc=100,100
-CdevNoRun msg=8 item=0 value=unset
+CdevNoRun msg=8 item=0 value=unset res=panel
 CdevNoRun window=no
 CdevNoRun alert
 CdevNoRun front=other
-CdevInitRes msg=0 item=0 value=unset rom85=16383 hwcfg=60416
-CdevInitRes msg=3 item=0 value=1
-CdevInitRes msg=5 item=0 value=1
-CdevInitRes msg=4 item=0 value=1
-CdevInitRes msg=3 item=0 value=1
-CdevInitRes msg=1 item=1 value=1
-CdevInitRes msg=3 item=0 value=1
-CdevInitRes msg=2 item=0 value=1
+CdevInitRes msg=0 item=0 value=unset res=panel port=panel rom85=16383 hwcfg=60416
+CdevInitRes msg=3 item=0 value=1 res=panel port=panel
+CdevInitRes msg=5 item=0 value=1 res=panel port=panel
+CdevInitRes msg=4 item=0 value=1 res=panel port=panel
+CdevInitRes msg=3 item=0 value=1 res=panel port=panel
+CdevInitRes msg=1 item=1 value=1 res=panel port=panel
+CdevInitRes msg=3 item=0 value=1 res=panel port=panel
+CdevInitRes msg=2 item=0 value=1 res=panel port=panel
 CdevInitRes window=100,100 331,197
 CdevInitRes front=other
 CdevInitRes wloc=100,100
-CdevNulMem msg=0 item=0 value=unset rom85=16383 hwcfg=60416
-CdevNulMem msg=3 item=0 value=h
-CdevNulMem msg=5 item=0 value=0
-CdevNulMem msg=4 item=0 value=0
-CdevNulMem msg=3 item=0 value=0
-CdevNulMem msg=1 item=1 value=0
-CdevNulMem msg=3 item=0 value=0
-CdevNulMem msg=2 item=0 value=0
+CdevNulMem msg=0 item=0 value=unset res=panel port=panel rom85=16383 hwcfg=60416
+CdevNulMem msg=3 item=0 value=h res=panel port=panel
+CdevNulMem msg=5 item=0 value=0 res=panel port=panel
+CdevNulMem msg=4 item=0 value=0 res=panel port=panel
+CdevNulMem msg=3 item=0 value=0 res=panel port=panel
+CdevNulMem msg=1 item=1 value=0 res=panel port=panel
+CdevNulMem msg=3 item=0 value=0 res=panel port=panel
+CdevNulMem msg=2 item=0 value=0 res=panel port=panel
 CdevNulMem window=100,100 331,197
 CdevNulMem front=other
 CdevNulMem wloc=100,100
-CdevHitGen msg=0 item=0 value=unset rom85=16383 hwcfg=60416
-CdevHitGen msg=3 item=0 value=h
-CdevHitGen msg=5 item=0 value=h
-CdevHitGen msg=4 item=0 value=h
-CdevHitGen msg=1 item=1 value=h
-CdevHitGen msg=3 item=0 value=-1
-CdevHitGen msg=2 item=0 value=-1
+CdevHitGen msg=0 item=0 value=unset res=panel port=panel rom85=16383 hwcfg=60416
+CdevHitGen msg=3 item=0 value=h res=panel port=panel
+CdevHitGen msg=5 item=0 value=h res=panel port=panel
+CdevHitGen msg=4 item=0 value=h res=panel port=panel
+CdevHitGen msg=1 item=1 value=h res=panel port=panel
+CdevHitGen msg=3 item=0 value=-1 res=panel port=panel
+CdevHitGen msg=2 item=0 value=-1 res=panel port=panel
 CdevHitGen window=100,100 331,197
 CdevHitGen front=other
 CdevHitGen wloc=100,100
-CdevMachII msg=0 item=0 value=unset rom85=16383 hwcfg=60416
-CdevMachII msg=3 item=0 value=h
-CdevMachII msg=5 item=0 value=h
-CdevMachII msg=4 item=0 value=h
-CdevMachII msg=1 item=1 value=h
-CdevMachII msg=2 item=0 value=h nul=N cursor=0
+CdevMachII msg=0 item=0 value=unset res=panel port=panel rom85=16383 hwcfg=60416
+CdevMachII msg=3 item=0 value=h res=panel port=panel
+CdevMachII msg=5 item=0 value=h res=panel port=panel
+CdevMachII msg=4 item=0 value=h res=panel port=panel
+CdevMachII msg=1 item=1 value=h res=panel port=panel
+CdevMachII msg=2 item=0 value=h res=panel port=panel nul=N cursor=0
 CdevMachII window=100,100 331,197
 CdevMachII front=other
 CdevMachII wloc=100,100
-CdevMachADB msg=0 item=0 value=unset rom85=16383 hwcfg=60416
-CdevMachADB msg=3 item=0 value=h
-CdevMachADB msg=5 item=0 value=h
-CdevMachADB msg=4 item=0 value=h
-CdevMachADB msg=1 item=1 value=h
-CdevMachADB msg=2 item=0 value=h nul=N cursor=0
+CdevMachADB msg=0 item=0 value=unset res=panel port=panel rom85=16383 hwcfg=60416
+CdevMachADB msg=3 item=0 value=h res=panel port=panel
+CdevMachADB msg=5 item=0 value=h res=panel port=panel
+CdevMachADB msg=4 item=0 value=h res=panel port=panel
+CdevMachADB msg=1 item=1 value=h res=panel port=panel
+CdevMachADB msg=2 item=0 value=h res=panel port=panel nul=N cursor=0
 CdevMachADB window=100,100 331,197
 CdevMachADB front=other
 CdevMachADB wloc=100,100

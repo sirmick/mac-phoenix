@@ -145,6 +145,11 @@ struct Panel
         HLockGuard guard(code);
         cdevfuncp fn = (cdevfuncp)*code;
         EventRecord null_event = {};
+        /* the panel's file the current resource file at every message (IM:
+           More Macintosh Toolbox 8-26), whatever the last one left (Text
+           calls UseResFile(0) and then GetPixPat(-4048) in the next); the
+           port is left as it is, as the G3's shell does */
+        UseResFile(LM(CurApRefNum));
         LONGINT r = fn(message, item, 0, kCPanelID, evt ? evt : &null_event, value, dialog);
         if(message != macDev)
             value = r;

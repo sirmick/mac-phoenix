@@ -3,7 +3,11 @@
  * "NAME msg=M item=I value=V" (V: unset, 0, h for a handle). nulDev and
  * cursorDev are written when the one sent changes; closeDev's line counts them
  * ("nul=N cursor=N"), initDev's ROM85 and HWCfgFlags ("rom85=N hwcfg=N") and where the panel
- * is ("win=L,T R,B hit=X,Y").
+ * is ("win=L,T R,B hit=X,Y"); each line whether the panel's file is the
+ * current resource file and its dialog the port ("res=panel port=panel");
+ * hitDev leaves the System file current, as Text does: the shell makes
+ * the panel's file current again for the next message. (Left with another
+ * port, the G3's shell doesn't set the port again.)
  *
  * Its 'STR ' -4064 says when to answer an error: pairs of a message (hex
  * digit) and what to answer the first time it comes, M cdevMemErr, R
@@ -80,6 +84,14 @@ pascal long main(short message, short item, short numItems, short CPanelID,
         append_num(line, cdevValue);
     else
         append_c(line, "h");
+    /* the panel's file the current resource file (Get1Resource looks there
+       only) and its dialog the port, as IM 8-26 says the Finder has them */
+    {
+        GrafPtr port;
+        GetPort(&port);
+        append_c(line, Get1Resource('nrct', -4064) ? " res=panel" : " res=other");
+        append_c(line, !CPDialog ? "" : port == CPDialog ? " port=panel" : " port=other");
+    }
     if(message == initDev)
     {
         /* what 'mach' is checked against (low memory: ROM85, HWCfgFlags) */
@@ -100,6 +112,12 @@ pascal long main(short message, short item, short numItems, short CPanelID,
 
 act:
     act = planned(message);
+    if(message == hitDev)
+    {
+        /* as Text does (UseResFile(0) in a message, not undone): the System
+           file current when it returns */
+        UseResFile(0);
+    }
     if(message == macDev)
         return act == 'Z' ? 0 : 1;
     if(message == initDev && !act)
