@@ -897,32 +897,40 @@ def geomean(xs):
 
 def own_table(rows):
     """MacPhoenixBench: a summary (speed against quadra-uae by group, the
-    geometric mean of the tests' ratios; by the guest's clock and, in
-    brackets where they differ by more than 10%, the host's) and every
-    test's median µs."""
+    geometric mean of the tests' ratios; by the host's clock and, in
+    brackets where it says more than 10% otherwise, the guest's
+    Microseconds) and every test's median ms by the host's clock."""
     names = [n for n in CONFIGS if any(r["config"] == n and r["bench"] == "own" for r in rows)]
     if not names:
         return []
-    base = own_times(rows, OWN_BASE)
+    for n in [n for n in names if n.endswith("-mmu") and n[:-4] in names]:   # beside its base
+        names.remove(n)
+        names.insert(names.index(n[:-4]) + 1, n)
+    base, hbase = own_times(rows, OWN_BASE), own_times(rows, OWN_BASE, "hmed")
+    for b in (base, hbase):     # the PowerPC build's FP tests against the 68881 code's
+        for t in [t for t in b if t.endswith("_881")]:
+            b.setdefault(t[:-4], b[t])
     lines = ["## MacPhoenixBench", "",
              f"Speed against {OWN_BASE} (= 1; higher is faster): per group, the geometric mean of "
-             "the tests' ratios of median times, by Microseconds; [the host's clock] where it says "
-             "more than 10% otherwise. clock: Microseconds over 2 s of the host's.", "",
+             "the tests' ratios of median times by the host's clock; [by the guest's Microseconds] "
+             "where that says more than 10% otherwise. FP: the 68881 code's tests (PowerPC's against "
+             "them; SANE's in the times below). clock: Microseconds over 2 s of the host's.", "",
              "| Configuration | code | " + " | ".join(g for g, _ in OWN_GROUPS) + " | clock | notes |",
              "|---|---|" + "---|" * (len(OWN_GROUPS) + 2)]
     for name in names:
-        guest, host = own_times(rows, name), own_times(rows, name, "hmed")
+        host, guest = own_times(rows, name), own_times(rows, name, "hmed")
+        host, guest = guest, host                 # (host first: the true speed)
         rs = [r for r in rows if r["config"] == name and r["bench"] == "own"]
         code = "/".join(sorted({(r.get("own") or {}).get("code", "?") for r in rs}))
         cells = []
         for _, prefixes in OWN_GROUPS:
-            ts = [t for t in guest if t.startswith(prefixes) and base.get(t) and guest[t]]
-            g = geomean([base[t] / guest[t] for t in ts])
-            hb = own_times(rows, OWN_BASE, "hmed")
-            h = geomean([hb[t] / host[t] for t in ts if hb.get(t) and host.get(t)])
-            cell = fmt(g, 2 if g is not None and g < 10 else 1)
-            if g and h and abs(h / g - 1) > 0.1:
-                cell += f" [{fmt(h, 2 if h < 10 else 1)}]"
+            ts = [t for t in host if t.startswith(prefixes) and not t.endswith("_sane")
+                  and hbase.get(t) and host[t]]
+            h = geomean([hbase[t] / host[t] for t in ts])
+            g = geomean([base[t] / guest[t] for t in ts if base.get(t) and guest.get(t)])
+            cell = fmt(h, 2 if h is not None and h < 10 else 1)
+            if g and h and abs(g / h - 1) > 0.1:
+                cell += f" [{fmt(g, 2 if g < 10 else 1)}]"
             cells.append(cell)
         clocks = [(r.get("own") or {}).get("clock") for r in rs]
         ratio = median([c["micro"] / c["host"] for c in clocks if c and c.get("host")])
@@ -933,10 +941,10 @@ def own_table(rows):
         for t in (r.get("own") or {}).get("tests", {}):
             if t not in tests:
                 tests.append(t)
-    lines += ["", "Median times, ms (Microseconds; the median over the sessions of each test's median of "
-              "its runs). —: skipped or not in that build.", "",
+    lines += ["", "Median times, ms by the host's clock (the median over the sessions of each test's "
+              "median of its runs). —: skipped or not in that build.", "",
               "| Test | work | " + " | ".join(names) + " |", "|---|---|" + "---|" * len(names)]
-    times = {n: own_times(rows, n) for n in names}
+    times = {n: own_times(rows, n, "hmed") for n in names}
     work = {t: w for r in rows for t, v in (r.get("own") or {}).get("tests", {}).items() for w in [v["work"]]}
     for t in tests:
         lines.append(f"| {t} | {work.get(t, '')} | " + " | ".join(
