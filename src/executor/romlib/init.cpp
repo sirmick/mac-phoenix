@@ -524,7 +524,7 @@ void Executor::InitPerProcessLowMem()
         TheZoneGuard guard(LM(SysZone));
         LM(PortList) = NewHandleClear(2);
     }
-    LM(SCSIFlags) = 0xEC00; /* scsi+clock+xparam+mmu+adb
+    LM(HWCfgFlags) = 0xEC00; /* scsi+clock+xparam+mmu+adb
 				 (no fpu,aux or pwrmgr) */
 
     LM(MMUType) = 5;

@@ -932,6 +932,24 @@ set_tests_properties(platinum_86_executor PROPERTIES
   TIMEOUT 200 LABELS "executor" SKIP_RETURN_CODE 77
   ENVIRONMENT "MACEMU_BINARY=$<TARGET_FILE:mac-phoenix>")
 
+# Mac OS 9.0.4's own System starts to the Finder on Executor (its
+# extensions to the end, BridgeAgent, a folder window).
+add_test(NAME finder_executor_904
+  COMMAND bash ${TEST_DIR}/test_finder_904_executor.sh --port 18624)
+set_tests_properties(finder_executor_904 PROPERTIES
+  TIMEOUT 200 LABELS "executor" SKIP_RETURN_CODE 77
+  ENVIRONMENT "MACEMU_BINARY=$<TARGET_FILE:mac-phoenix>")
+
+# The control panel shell (cdevshell.cpp) against the G3's 9.0.4: CdevTest's
+# nine variants (tests/guest/cdev) say what they are sent: macDev and the
+# 'mach' masks, error codes passed on, cursorDev, the window and its 'wloc'.
+# The reference: tests/guest/cdev/expected.txt (--backend kpx --record).
+add_test(NAME cdev_shell_executor
+  COMMAND ${Python3_EXECUTABLE} ${TEST_DIR}/test_cdev_shell.py --backend executor)
+set_tests_properties(cdev_shell_executor PROPERTIES
+  TIMEOUT 420 LABELS "executor" SKIP_RETURN_CODE 77
+  ENVIRONMENT "MACPHOENIX_EMULATOR=$<TARGET_FILE:mac-phoenix>")
+
 # Two sessions on one --executor-system at once: the second runs on a copy
 # of its own (executor-systems/run/<pid>), both keep their BridgeAgent.
 add_test(NAME system_sessions_executor
