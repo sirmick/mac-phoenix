@@ -20,6 +20,9 @@
 /* cheat, and make this a plain ctab, so we can use our old accessor
    macros */
 
+#include <algorithm>
+#include <vector>
+
 using namespace Executor;
 
 AuxCtlHandle Executor::default_aux_ctl;
@@ -202,6 +205,19 @@ Boolean Executor::C_GetAuxiliaryControlRecord(ControlHandle ctl,
     }
 }
 
+/* The controls whose definitions are running, innermost last. */
+static std::vector<ControlHandle> &running_defs()
+{
+    static std::vector<ControlHandle> v;
+    return v;
+}
+
+bool Executor::ROMlib_control_def_running(ControlHandle c)
+{
+    auto &v = running_defs();
+    return std::find(v.begin(), v.end(), c) != v.end();
+}
+
 int32_t Executor::ROMlib_ctlcall(ControlHandle c, int16_t i, int32_t l)
 {
     Handle defproc;
@@ -223,7 +239,14 @@ int32_t Executor::ROMlib_ctlcall(ControlHandle c, int16_t i, int32_t l)
 
     ROMlib_hook(ctl_cdefnumber);
     HLockGuard guard(defproc);
-    retval = cp(VAR(c), c, i, l);
+    {
+        struct Running
+        {
+            Running(ControlHandle c) { running_defs().push_back(c); }
+            ~Running() { running_defs().pop_back(); }
+        } running(c);
+        retval = cp(VAR(c), c, i, l);
+    }
 
     /* MacPhoenix: a CDEF that knows only the 24-bit calcCRgns (the
        Speech panel's sliders) leaves the region empty for calcCntlRgn and

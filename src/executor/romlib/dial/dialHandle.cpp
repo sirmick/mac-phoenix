@@ -712,10 +712,33 @@ Boolean Executor::C_DialogSelect(EventRecord *evt, GUEST<DialogPtr> *dpp,
             intp = (GUEST<INTEGER> *)(*dp->items);
             iend = *intp + 2;
             ip = (itmp)(intp + 1);
-            for(i = 0;
-                ++i != iend && !PtInRect(localp, &(ip->itmr));
-                BUMPIP(ip))
-                ;
+            if(GUEST<ControlHandle> root; GetRootControl((WindowPtr)dp, &root) == noErr)
+            {
+                /* MacPhoenix: the control hierarchy (8.x): the item of the
+                   topmost visible control under the mouse, the last
+                   visible item holding the point (an embedder's items
+                   follow it); items in a hidden pane take no clicks (the
+                   8.6 Appearance control panel's tabs, all in one place) */
+                itmp p = ip;
+                i = iend;
+                for(INTEGER k = 1; k != iend; k++, BUMPIP(p))
+                {
+                    if(!PtInRect(localp, &p->itmr))
+                        continue;
+                    ControlHandle ic = (p->itmtype & ctrlItem)
+                        ? (ControlHandle)p->itmhand
+                        : ROMlib_dialog_item_control((DialogPtr)dp, k);
+                    if(ic && !CTL_VIS(ic))
+                        continue;
+                    ip = p;
+                    i = k;
+                }
+            }
+            else
+                for(i = 0;
+                    ++i != iend && !PtInRect(localp, &(ip->itmr));
+                    BUMPIP(ip))
+                    ;
             itemenabled = !(ip->itmtype & itemDisable);
             if(i == iend)
                 break;

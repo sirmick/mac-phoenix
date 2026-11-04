@@ -547,7 +547,10 @@ void Executor::C_ShowDialogItem(DialogPtr dp, INTEGER item) /* IMIV-59 */
             ControlHandle ctl;
 
             ctl = (ControlHandle)ip->itmhand;
-            CTL_VIS(ctl) = 255;
+            /* in a hidden embedder: shown with it (8.6, the Appearance
+               panel's panes: tests/guest/difftest desk) */
+            if(!ROMlib_control8_latent_show(ctl, true))
+                CTL_VIS(ctl) = 255;
 
             if(item == DIALOG_ADEF_ITEM(dp))
                 InsetRect(&r, -4, -4);

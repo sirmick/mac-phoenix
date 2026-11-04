@@ -42,6 +42,8 @@ void Executor::C_HideControl(ControlHandle c) /* IMI-322 */
         CtlCallGuard guard(c);
         RgnHandle rh;
 
+        if(c && !CTL_VIS(c))
+            ROMlib_control8_latent_show(c, false);
         if(c && CTL_VIS(c))
         {
             rh = NewRgn();
@@ -90,7 +92,7 @@ void Executor::C_ShowControl(ControlHandle c) /* IMI-322 */
         /* #if SHOWCONTROL_ERASES
 	      RgnHandle rh; */
 
-        if(c && !CTL_VIS(c))
+        if(c && !CTL_VIS(c) && !ROMlib_control8_latent_show(c, true))
         {
             /* #if SHOWCONTROL_ERASES
 		  rh = NewRgn(); */

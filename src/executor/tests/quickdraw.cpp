@@ -1138,3 +1138,142 @@ TEST(QuickDraw, DrawPictureWithPixPatsNoLeak)
     EXPECT_GE(FreeMem(), before - 512) << "before " << before;
     DisposeHandle(h);
 }
+
+/* MapPt, MapRect, MapRgn and MapPoly as 8.6 answers on the G3
+   (tests/guest/difftest desk): an empty source divides by nothing (the
+   Appearance control panel's preview mapped through an empty rectangle
+   and Executor stopped on a division by zero), the same sizes only
+   offset, the Fixed ratio rounded, an inverted source towards zero. */
+TEST(QuickDraw, MapEmptyRects)
+{
+    auto map = [](Point p, Rect src, Rect dst) {
+        GUEST<Point> g = p;
+        MapPt(&g, &src, &dst);
+        Point r = g;
+        return std::make_pair((int)r.v, (int)r.h);
+    };
+    using P = std::pair<int, int>;
+    Rect dst = { 10, 10, 58, 74 }, none = { 5, 5, 5, 5 };
+    EXPECT_EQ(P(10, 10), map({ 7, 5 }, { 0, 0, 0, 0 }, dst));
+    EXPECT_EQ(P(13, 10), map({ 7, 5 }, { 0, 0, 100, 0 }, dst));
+    EXPECT_EQ(P(-9, 10), map({ -40, 1000 }, { 0, 0, 100, 0 }, dst));
+    EXPECT_EQ(P(10, 650), map({ -40, 1000 }, { 0, 0, 0, 100 }, dst));
+    EXPECT_EQ(P(-35, 5), map({ -40, 1000 }, { 0, 0, 0, 100 }, none));
+    EXPECT_EQ(P(0, -10), map({ -5, -15 }, { 0, 0, 0, 0 }, none));
+    EXPECT_EQ(P(57, 73), map({ 0, 0 }, { 100, 100, 0, 0 }, dst));
+    EXPECT_EQ(P(76, -565), map({ -40, 1000 }, { 100, 100, 0, 0 }, dst));
+    EXPECT_EQ(P(59, 83), map({ -5, -15 }, { 100, 100, 0, 0 }, dst));
+    EXPECT_EQ(P(11, 11), map({ 7, 5 }, { 0, 0, 480, 640 }, dst));
+    EXPECT_EQ(P(6, 110), map({ -40, 1000 }, { 0, 0, 480, 640 }, dst));
+    EXPECT_EQ(P(9, 8), map({ -5, -15 }, { 0, 0, 480, 640 }, dst));
+    EXPECT_EQ(P(12, 11), map({ 15, 5 }, { 0, 0, 480, 640 }, dst));
+
+    Rect r = { 3, 4, 30, 40 }, src = { 0, 0, 100, 0 };
+    MapRect(&r, &src, &dst);
+    EXPECT_EQ(11, r.top);
+    EXPECT_EQ(10, r.left);
+    EXPECT_EQ(24, r.bottom);
+    EXPECT_EQ(10, r.right);
+
+    /* a region of two rectangles: empty from an empty source or onto an
+       empty destination; a rectangle's region maps as MapRect */
+    RgnHandle rgn = NewRgn(), rgn2 = NewRgn();
+    Rect r1 = { 3, 4, 30, 40 }, r2 = { 20, 30, 60, 90 }, screen = { 0, 0, 480, 640 };
+    for(Rect s : { Rect{ 0, 0, 0, 0 }, Rect{ 0, 0, 100, 0 }, Rect{ 0, 0, 0, 100 } })
+    {
+        RectRgn(rgn, &r1);
+        RectRgn(rgn2, &r2);
+        UnionRgn(rgn, rgn2, rgn);
+        MapRgn(rgn, &s, &dst);
+        EXPECT_TRUE(EmptyRgn(rgn));
+    }
+    RectRgn(rgn, &r1);
+    RectRgn(rgn2, &r2);
+    UnionRgn(rgn, rgn2, rgn);
+    MapRgn(rgn, &screen, &none);
+    EXPECT_TRUE(EmptyRgn(rgn));
+    RectRgn(rgn, &r1);
+    MapRgn(rgn, &src, &dst);
+    EXPECT_EQ(11, (*rgn)->rgnBBox.top);
+    EXPECT_EQ(24, (*rgn)->rgnBBox.bottom);
+    DisposeRgn(rgn);
+    DisposeRgn(rgn2);
+
+    /* a polygon stays as it is unless both rectangles have room */
+    OffscreenPort port(64, 64);
+    PolyHandle poly = OpenPoly();
+    MoveTo(3, 4);
+    LineTo(30, 4);
+    LineTo(17, 40);
+    LineTo(3, 4);
+    ClosePoly();
+    for(Rect s : { Rect{ 0, 0, 0, 0 }, Rect{ 100, 100, 0, 0 } })
+    {
+        MapPoly(poly, &s, &dst);
+        EXPECT_EQ(4, (*poly)->polyBBox.top);
+        EXPECT_EQ(3, (*poly)->polyBBox.left);
+    }
+    MapPoly(poly, &screen, &none);
+    EXPECT_EQ(40, (*poly)->polyBBox.bottom);
+    MapPoly(poly, &screen, &dst);
+    EXPECT_EQ(10, (*poly)->polyBBox.top);
+    EXPECT_EQ(14, (*poly)->polyBBox.bottom);
+    KillPoly(poly);
+}
+
+#ifdef EXECUTOR
+#include <Iconutil.h>
+#include <OSUtil.h>
+#endif
+
+/* An open item's icon (ttOpen), a full square mask: 8.x (the G3's 8.6
+   Finder, an open control panel) draws the outline black and inside every
+   fourth pixel black (rows 0x88/0x22) over the highlight colour; 7.x a 50%
+   grey on white. */
+TEST(QuickDraw, OpenIconLook)
+{
+    if(!hasDeepGWorlds())
+        return;
+    GUEST<CGrafPtr> savedPort;
+    GUEST<GDHandle> savedDevice;
+    GetGWorld(&savedPort, &savedDevice);
+    Rect r = { 0, 0, 32, 32 };
+    GWorldPtr world = nullptr;
+    ASSERT_EQ(noErr, NewGWorld(PTR(world), 32, &r, nullptr, nullptr, 0));
+    LockPixels(world->portPixMap);
+    SetGWorld(world, nullptr);
+    auto px = [&](int y, int x) {
+        uint8_t *p = (uint8_t *)(Ptr)(*world->portPixMap)->baseAddr
+            + y * ((*world->portPixMap)->rowBytes & 0x3FFF) + 4 * x;
+        return (uint32_t)((p[1] << 16) | (p[2] << 8) | p[3]);
+    };
+    Handle icn = NewHandleClear(256);
+    memset(*icn + 128, 0xFF, 128); /* the mask: all of it */
+    GUEST<Handle> suite;
+    ASSERT_EQ(noErr, NewIconSuite(&suite));
+    ASSERT_EQ(noErr, AddIconToSuite(icn, suite, "ICN#"_4));
+    RGBColor saved_hilite = LM(HiliteRGB);
+    INTEGER saved_version = LM(SysVersion);
+    LM(HiliteRGB) = RGBColor{ 0xCCCC, 0xCCCC, 0xFFFF };
+
+    LM(SysVersion) = 0x0860;
+    EraseRect(&r);
+    EXPECT_EQ(noErr, PlotIconSuite(&r, kAlignNone, ttOpen, suite));
+    EXPECT_EQ(0x000000u, px(0, 0));    /* outline */
+    EXPECT_EQ(0xCCCCFFu, px(1, 1));
+    EXPECT_EQ(0x000000u, px(1, 2));    /* row 1: 0x22 */
+    EXPECT_EQ(0x000000u, px(2, 4));    /* row 2: 0x88 */
+    EXPECT_EQ(0xCCCCFFu, px(2, 2));
+
+    LM(SysVersion) = 0x0755;
+    EraseRect(&r);
+    EXPECT_EQ(noErr, PlotIconSuite(&r, kAlignNone, ttOpen, suite));
+    EXPECT_EQ(0xFFFFFFu, px(1, 2));    /* 50%: 0x55 on odd rows */
+    EXPECT_EQ(0x000000u, px(1, 1));
+
+    LM(SysVersion) = saved_version;
+    LM(HiliteRGB) = saved_hilite;
+    DisposeIconSuite(suite, true);
+    SetGWorld(savedPort, savedDevice);
+    DisposeGWorld(world);
+}

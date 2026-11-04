@@ -461,11 +461,13 @@ bool sideload_system(const std::string& image, const std::string& data_dir,
     static const std::vector<const char *> files = { "System", "Finder", "System Resources" };
     /* MacPhoenix: Launcher Items too (the Launcher control panel's buttons,
        aliases to applications; it opened empty), Shutdown Items, and
-       Control Strip Modules (Control Strip's modules) */
+       Control Strip Modules (Control Strip's modules), and 8.x's Appearance
+       (theme files, sound sets, desktop pictures: the Appearance control
+       panel's lists, IterateThemes) */
     static const std::vector<const char *> folders = { "Preferences", "Fonts", "Apple Menu Items",
                                                        "Extensions", "Control Panels", "Startup Items",
                                                        "Launcher Items", "Shutdown Items",
-                                                       "Control Strip Modules" };
+                                                       "Control Strip Modules", "Appearance" };
     for(const Entry& e : v.children(v.blessed()))
     {
         bool want = false;

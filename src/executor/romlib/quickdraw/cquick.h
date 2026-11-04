@@ -625,6 +625,7 @@ extern CTabHandle ROMlib_empty_ctab(int size);
 extern void ROMlib_copy_ctab(CTabHandle src, CTabHandle dst);
 
 extern PixPatHandle ROMlib_pattern_to_pixpat(const Pattern& p);
+extern PixPatHandle ROMlib_pixpat_from_ppat(Handle ppat);
 
 extern void ROMlib_blt_pn(RgnHandle, INTEGER);
 extern void ROMlib_blt_fill(RgnHandle, INTEGER);

@@ -5,7 +5,7 @@
  *                                                                           *
  * Needs:                                                                    *
  *     MacTypes.h          OSType, UInt32, SInt16, Rect, Boolean, SInt32,    *
- *                         Handle, StringPtr, Ptr                            *
+ *                         Handle, StringPtr, Ptr, ConstStringPtr            *
  *     QuickDraw.h         RgnHandle, GrafPtr, RGBColor, PixPatHandle        *
  *     WindowMgr.h         WindowRegionCode, WStateData, WindowRef,          *
  *                         WindowDefUPP                                      *
@@ -633,6 +633,60 @@ OSStatus C_GetPictureFromFile(FSSpec *file, Ptr outPicture);LIBRARY_FUNCTION(Win
 
 
 UInt32 C_GetWindowDoubleClickAction();LIBRARY_FUNCTION(WindowsLib, GetWindowDoubleClickAction, C_GetWindowDoubleClickAction);
+
+
+OSStatus C_SetWindowDoubleClickAction(UInt32 action);LIBRARY_FUNCTION(WindowsLib, SetWindowDoubleClickAction, C_SetWindowDoubleClickAction);
+
+
+OSStatus C_GetCurrentMonitorDesktopList(GUEST<Ptr> *outList);LIBRARY_FUNCTION(WindowsLib, GetCurrentMonitorDesktopList, C_GetCurrentMonitorDesktopList);
+
+
+OSStatus C_RefreshMonitorDesktopList(Ptr list, GUEST<Ptr> *outList);LIBRARY_FUNCTION(WindowsLib, RefreshMonitorDesktopList, C_RefreshMonitorDesktopList);
+
+
+OSStatus C_DisposeMonitorDesktopList(Ptr list);LIBRARY_FUNCTION(WindowsLib, DisposeMonitorDesktopList, C_DisposeMonitorDesktopList);
+
+
+OSStatus C_SetCurrentMonitorDesktopList(Ptr list);LIBRARY_FUNCTION(WindowsLib, SetCurrentMonitorDesktopList, C_SetCurrentMonitorDesktopList);
+
+
+OSStatus C_CountMonitorDesktopRecordsInList(Ptr list, GUEST<UInt32> *outCount);LIBRARY_FUNCTION(WindowsLib, CountMonitorDesktopRecordsInList, C_CountMonitorDesktopRecordsInList);
+
+
+OSStatus C_GetMonitorDesktopRecordFromList(Ptr list, UInt32 index, Ptr outRecord);LIBRARY_FUNCTION(WindowsLib, GetMonitorDesktopRecordFromList, C_GetMonitorDesktopRecordFromList);
+
+
+OSStatus C_GetMonitorDesktopAlignment(Ptr list, UInt32 index, GUEST<UInt32> *outAlignment);LIBRARY_FUNCTION(WindowsLib, GetMonitorDesktopAlignment, C_GetMonitorDesktopAlignment);
+
+
+OSStatus C_SetMonitorDesktopAlignment(Ptr list, UInt32 index, UInt32 alignment);LIBRARY_FUNCTION(WindowsLib, SetMonitorDesktopAlignment, C_SetMonitorDesktopAlignment);
+
+
+OSStatus C_MonitorDesktopHasPicture(Ptr list, UInt32 index, Boolean *outHasPicture);LIBRARY_FUNCTION(WindowsLib, MonitorDesktopHasPicture, C_MonitorDesktopHasPicture);
+
+
+OSStatus C_SetMonitorDesktopToFile(Ptr list, UInt32 index, FSSpec *file, UInt32 alignment);LIBRARY_FUNCTION(WindowsLib, SetMonitorDesktopToFile, C_SetMonitorDesktopToFile);
+
+
+OSStatus C_CopyMonitorDesktopFile(Ptr fromList, UInt32 fromIndex, Ptr toList, UInt32 toIndex);LIBRARY_FUNCTION(WindowsLib, CopyMonitorDesktopFile, C_CopyMonitorDesktopFile);
+
+
+OSStatus C_DrawMonitorDesktopFromListWillTakeTime(Ptr list, UInt32 index, GrafPtr port, const Rect *bounds, Boolean *outWillTakeTime);LIBRARY_FUNCTION(WindowsLib, DrawMonitorDesktopFromListWillTakeTime, C_DrawMonitorDesktopFromListWillTakeTime);
+
+
+OSStatus C_DrawMonitorDesktopFromList(Ptr list, UInt32 index, GrafPtr port, const Rect *bounds, RgnHandle region, PixPatHandle pattern, Point origin, Boolean flag);LIBRARY_FUNCTION(WindowsLib, DrawMonitorDesktopFromList, C_DrawMonitorDesktopFromList);
+
+
+OSStatus C_FileContainsPossibleDesktopPicture(FSSpec *file, Boolean *outIsPicture);LIBRARY_FUNCTION(WindowsLib, FileContainsPossibleDesktopPicture, C_FileContainsPossibleDesktopPicture);
+
+
+OSStatus C_SetDesktopPattern(Handle ppat, ConstStringPtr name);LIBRARY_FUNCTION(WindowsLib, SetDesktopPattern, C_SetDesktopPattern);
+
+
+OSStatus C_SetDesktopPictureForDevice(GDHandle device, FSSpec *file, UInt32 placement);LIBRARY_FUNCTION(WindowsLib, SetDesktopPictureForDevice, C_SetDesktopPictureForDevice);
+
+
+void C_DrawDesktop();LIBRARY_FUNCTION(WindowsLib, DrawDesktop, C_DrawDesktop);
 
 
 void C_RecalculateAllWindowTitleWidths();LIBRARY_FUNCTION(WindowsLib, RecalculateAllWindowTitleWidths, C_RecalculateAllWindowTitleWidths);

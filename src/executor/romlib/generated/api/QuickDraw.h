@@ -1037,4 +1037,10 @@ inline void cglue_subpt(GUEST<Point> *src, GUEST<Point> *dst) {C_SubPt(*src, dst
 LIBRARY_FUNCTION(InterfaceLib, subpt, cglue_subpt);
 
 
+void C_QDSetPatternOrigin(Point origin);LIBRARY_FUNCTION(NQD, QDSetPatternOrigin, C_QDSetPatternOrigin);
+
+
+void C_QDGetPatternOrigin(GUEST<Point> *origin);LIBRARY_FUNCTION(NQD, QDGetPatternOrigin, C_QDGetPatternOrigin);
+
+
 } /* namespace Executor */

@@ -4,8 +4,9 @@
  *                                 ==========                                *
  *                                                                           *
  * Needs:                                                                    *
- *     MacTypes.h     OSErr, ResType, Handle, Rect, Str255, Boolean          *
- *     QuickDraw.h    PixMap, BitMap, RGBColor, RgnHandle                    *
+ *     MacTypes.h      OSErr, ResType, Handle, Rect, Str255, Boolean         *
+ *     QuickDraw.h     PixMap, BitMap, RGBColor, RgnHandle                   *
+ *     CQuickDraw.h    GDHandle                                              *
  *                                                                           *
  *                                                                           *
  *****************************************************************************/
@@ -18,6 +19,7 @@
 #include <base/lowglobals.h>
 #include "ExMacTypes.h"
 #include "QuickDraw.h"
+#include "CQuickDraw.h"
 
 #define MODULE_NAME Iconutil
 #include <base/api-module.h>
@@ -239,6 +241,12 @@ OSErr C_GetIconCacheProc(Handle cache, GUEST<IconGetterUPP> *proc);PASCAL_SUBTRA
 
 
 OSErr C_SetIconCacheProc(Handle cache, IconGetterUPP proc);PASCAL_SUBTRAP(SetIconCacheProc, 0xABC9, 0x041C, IconDispatch);
+
+
+void C_SetIconDevice(GDHandle theScreen);LIBRARY_FUNCTION(PrivateInterfaceLib, SetIconDevice, C_SetIconDevice);
+
+
+void C_GetIconDevice(GUEST<GDHandle> *theScreen);LIBRARY_FUNCTION(PrivateInterfaceLib, GetIconDevice, C_GetIconDevice);
 
 
 } /* namespace Executor */

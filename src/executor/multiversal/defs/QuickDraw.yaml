@@ -3443,3 +3443,26 @@
     name: subpt
     cglue: SubPt
     library: InterfaceLib
+
+# ####
+
+# MacPhoenix: QuickDraw 8.5's pattern origin, exported by the System's NQD
+# fragment (the 8.6 Finder aligns its window backgrounds with it): (0,0)
+# until set (the G3's 8.6: tests/guest/difftest desk).
+- function:
+    name: QDSetPatternOrigin
+    args:
+      - name: origin
+        type: Point
+    library: NQD
+    executor: C_
+
+# ####
+
+- function:
+    name: QDGetPatternOrigin
+    args:
+      - name: origin
+        type: Point*
+    library: NQD
+    executor: C_

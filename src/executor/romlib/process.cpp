@@ -1054,6 +1054,11 @@ WindowPtr Executor::C_GetCurLayer()
     return current_layer_record();
 }
 
+WindowPtr Executor::C_LMGetCurLayer()
+{
+    return current_layer_record();
+}
+
 void Executor::C_SetCurLayer(WindowPtr layer)
 {
     set_current_layer((Ptr)layer);

@@ -1874,6 +1874,275 @@
 
 # ####
 
+- function:
+    name: SetWindowDoubleClickAction
+    return: OSStatus
+    args:
+      - name: action
+        type: UInt32
+    library: WindowsLib
+    executor: C_
+
+# ####
+
+# Monitor desktop lists: each screen's desktop settings (picture file,
+# alignment), a record each (372 bytes), indexes from 1. Arguments from the
+# 8.6 Appearance control panel's call sites, answers from the G3's 8.6
+# (tests/guest/difftest desk). A new list of the current settings.
+- function:
+    name: GetCurrentMonitorDesktopList
+    return: OSStatus
+    args:
+      - name: outList
+        type: Ptr*
+    library: WindowsLib
+    executor: C_
+
+# ####
+
+# The current settings as a new list.
+- function:
+    name: RefreshMonitorDesktopList
+    return: OSStatus
+    args:
+      - name: list
+        type: Ptr
+      - name: outList
+        type: Ptr*
+    library: WindowsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: DisposeMonitorDesktopList
+    return: OSStatus
+    args:
+      - name: list
+        type: Ptr
+    library: WindowsLib
+    executor: C_
+
+# ####
+
+# The list's settings become the screens'.
+- function:
+    name: SetCurrentMonitorDesktopList
+    return: OSStatus
+    args:
+      - name: list
+        type: Ptr
+    library: WindowsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: CountMonitorDesktopRecordsInList
+    return: OSStatus
+    args:
+      - name: list
+        type: Ptr
+      - name: outCount
+        type: UInt32*
+    library: WindowsLib
+    executor: C_
+
+# ####
+
+# A copy of a record: +0 the file's alias, +4 its type, +8 the picture,
+# +12 the alignment, +16 automatic, +20 the display ID, +24 the GDevice.
+- function:
+    name: GetMonitorDesktopRecordFromList
+    return: OSStatus
+    args:
+      - name: list
+        type: Ptr
+      - name: index
+        type: UInt32
+      - name: outRecord
+        type: Ptr
+    library: WindowsLib
+    executor: C_
+
+# ####
+
+# 1 to 4, or 5: position automatically.
+- function:
+    name: GetMonitorDesktopAlignment
+    return: OSStatus
+    args:
+      - name: list
+        type: Ptr
+      - name: index
+        type: UInt32
+      - name: outAlignment
+        type: UInt32*
+    library: WindowsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: SetMonitorDesktopAlignment
+    return: OSStatus
+    args:
+      - name: list
+        type: Ptr
+      - name: index
+        type: UInt32
+      - name: alignment
+        type: UInt32
+    library: WindowsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: MonitorDesktopHasPicture
+    return: OSStatus
+    args:
+      - name: list
+        type: Ptr
+      - name: index
+        type: UInt32
+      - name: outHasPicture
+        type: Boolean*
+    library: WindowsLib
+    executor: C_
+
+# ####
+
+# A picture file (nil: none) and its alignment.
+- function:
+    name: SetMonitorDesktopToFile
+    return: OSStatus
+    args:
+      - name: list
+        type: Ptr
+      - name: index
+        type: UInt32
+      - name: file
+        type: FSSpec*
+      - name: alignment
+        type: UInt32
+    library: WindowsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: CopyMonitorDesktopFile
+    return: OSStatus
+    args:
+      - name: fromList
+        type: Ptr
+      - name: fromIndex
+        type: UInt32
+      - name: toList
+        type: Ptr
+      - name: toIndex
+        type: UInt32
+    library: WindowsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: DrawMonitorDesktopFromListWillTakeTime
+    return: OSStatus
+    args:
+      - name: list
+        type: Ptr
+      - name: index
+        type: UInt32
+      - name: port
+        type: GrafPtr
+      - name: bounds
+        type: const Rect*
+      - name: outWillTakeTime
+        type: Boolean*
+    library: WindowsLib
+    executor: C_
+
+# ####
+
+# The preview of a screen's desktop: the region filled with the pattern.
+- function:
+    name: DrawMonitorDesktopFromList
+    return: OSStatus
+    args:
+      - name: list
+        type: Ptr
+      - name: index
+        type: UInt32
+      - name: port
+        type: GrafPtr
+      - name: bounds
+        type: const Rect*
+      - name: region
+        type: RgnHandle
+      - name: pattern
+        type: PixPatHandle
+      - name: origin
+        type: Point
+      - name: flag
+        type: Boolean
+    library: WindowsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: FileContainsPossibleDesktopPicture
+    return: OSStatus
+    args:
+      - name: file
+        type: FSSpec*
+      - name: outIsPicture
+        type: Boolean*
+    library: WindowsLib
+    executor: C_
+
+# ####
+
+# The desktop pattern from a 'ppat' resource's data, and its name.
+- function:
+    name: SetDesktopPattern
+    return: OSStatus
+    args:
+      - name: ppat
+        type: Handle
+      - name: name
+        type: ConstStringPtr
+    library: WindowsLib
+    executor: C_
+
+# ####
+
+- function:
+    name: SetDesktopPictureForDevice
+    return: OSStatus
+    args:
+      - name: device
+        type: GDHandle
+      - name: file
+        type: FSSpec*
+      - name: placement
+        type: UInt32
+    library: WindowsLib
+    executor: C_
+
+# ####
+
+# The desktop drawn again.
+- function:
+    name: DrawDesktop
+    library: WindowsLib
+    executor: C_
+
+# ####
+
 # After a font change, every window's title width again (the 8.6 Appearance
 # control panel; no arguments at its call sites).
 - function:

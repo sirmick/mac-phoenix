@@ -2295,6 +2295,7 @@
       - name: inUserData
         type: void*
     library: AppearanceLib
+    executor: C_
 
 # ####
 
@@ -3315,6 +3316,20 @@
 # The small system font's name for a script (-1: the system's).
 - function:
     name: GetSmallSystemFont
+    return: OSStatus
+    args:
+      - name: script
+        type: ScriptCode
+      - name: outFontName
+        type: StringPtr
+    library: AppearanceLib
+    executor: C_
+
+# ####
+
+# The system font's name for a script (-1: the system's).
+- function:
+    name: GetSystemFont
     return: OSStatus
     args:
       - name: script
