@@ -10,7 +10,9 @@
 // (TAB_INPUT_CELLS, default "640x480@1 1024x768@1 640x480@2 1024x768@2":
 // screen @ devicePixelRatio [/ window], the window 800x640 if not given,
 // narrower than 1024; executor.web.input_86_laptop: the owner's 1280x1024
-// in laptop windows, "1280x1024@2/1440x900 1280x1024@1/1280x800"):
+// in laptop windows, "1280x1024@2/1440x900 1280x1024@1/1280x800";
+// executor.web.input_86_firefox: the same in Firefox (TAB_BROWSER, harness.mjs)
+// at Windows laptops' 1.5 and 1.25):
 //   - the Mac's screen is the size asked for, and the page's is the Mac's;
 //   - the screen fits the window (shrunk when it is bigger) and fills what
 //     it can: a Mac pixel a CSS pixel or more, or as large as the room
@@ -22,11 +24,13 @@
 //   - the pointer is 16 Mac pixels at the canvas's scale, never under 16
 //     CSS pixels (cursor.js);
 //   - a click on the Special menu's title opens it (Restart drawn), a
-//     double-click on the startup disk's icon (the right edge) its window.
+//     double-click on the startup disk's icon (the right edge) its window;
+//   - the page's watch never said "not answering" (the Finder starting
+//     makes no event call for seconds: busy, main.js).
 // Skips (77) without SYSTEM.
 import fs from 'node:fs';
 import path from 'node:path';
-import { open, firstFrame, request, until, pickSystem } from './harness.mjs';
+import { open, firstFrame, request, until, pickSystem, firefox } from './harness.mjs';
 
 const [dir, system, arch] = process.argv.slice(2);
 if (!system || !fs.existsSync(system)) {
@@ -50,10 +54,13 @@ const check = (ok, what) => {
 
 for (const cell of cells) {
     const { viewport } = cell;
-    const tag = `${path.basename(system)} ${cell.size} dpr ${cell.dpr} in ${viewport.width}x${viewport.height}`;
+    const tag = `${path.basename(system)} ${cell.size} dpr ${cell.dpr} in ${viewport.width}x${viewport.height}${firefox ? ' (Firefox)' : ''}`;
     const { page, close } = await open(dir, { log: !!process.env.TAB_LOG, viewport, dpr: cell.dpr,
                                               query: `size=${cell.size}${ppc ? '&ppc' : ''}` });
+    const watch = [];
+    page.on('console', (m) => /^\[watch\] Executor/.test(m.text()) && watch.push(m.text()));
     try {
+        check(await page.evaluate(() => devicePixelRatio) === cell.dpr, `${tag}: devicePixelRatio`);
         await firstFrame(page);
         await page.setInputFiles('#add', system);
         await firstFrame(page, 120000);
@@ -84,8 +91,13 @@ for (const cell of cells) {
         // (within 5%: the status line's height changes after a fit)
         check(box.width / W >= most * 0.95,
               `${tag}: the screen fills the room it can (${(box.width / W).toFixed(2)} CSS pixels a Mac pixel, ${most.toFixed(2)} at least)`);
+        // (Playwright's Firefox truncates where it moves to a whole CSS
+        // pixel, 0.999 of one off at worst, over a Mac pixel and a half at
+        // dpr 1.5 shrunk: the nearest whole one. A real one's pointer
+        // events have device pixels.)
+        const near = firefox ? Math.round : (v) => v;
         const at = (x, y) => {
-            const px = box.x + (x + 0.5) * box.width / W, py = box.y + (y + 0.5) * box.height / H;
+            const px = near(box.x + (x + 0.5) * box.width / W), py = near(box.y + (y + 0.5) * box.height / H);
             return px >= 0 && py >= 0 && px < viewport.width && py < viewport.height ? [px, py] : null;
         };
         const points = [[3, 3], [W >> 1, H >> 1], [W - 4, H - 4], [W - 4, 3], [3, H - 4],
@@ -158,7 +170,8 @@ for (const cell of cells) {
             check(!!opened, `${tag}: a double-click on the disk icon opens its window${opened ? ` (${opened.title})` : ''}`);
         else
             console.log(`(${tag}: the icons are outside the window)`);
-        await page.locator('#screen').screenshot({ path: path.join(dir, `tab_input_${ppc ? 'ppc' : '68k'}_${cell.size}_${cell.dpr}_${viewport.width}x${viewport.height}.png`) });
+        check(!watch.some((w) => /not answering|busy for a minute/.test(w)), `${tag}: the watch ${JSON.stringify(watch)}`);
+        await page.locator('#screen').screenshot({ path: path.join(dir, `tab_input_${ppc ? 'ppc' : '68k'}_${cell.size}_${cell.dpr}_${viewport.width}x${viewport.height}${firefox ? '_ff' : ''}.png`) });
     } finally {
         await close();
     }

@@ -1,15 +1,16 @@
 // Shared by the tab tests: the wasm build's page on tools/standalone
 // (server.mjs: built here with go; none: exit 77), headless Chromium on
-// it. Needs the playwright package (NODE_PATH; none: exit 77) and
+// it (TAB_BROWSER=firefox: playwright's Firefox; none installed: exit 77).
+// Needs the playwright package (NODE_PATH; none: exit 77) and
 // CHROMIUM=PATH for a browser other than the one it expects.
 import fs from 'node:fs';
 import os from 'node:os';
 import { createRequire } from 'node:module';
 import { startServer } from './server.mjs';
 
-let chromium;
+let chromium, firefoxType;
 try {
-    ({ chromium } = createRequire(import.meta.url)('playwright'));
+    ({ chromium, firefox: firefoxType } = createRequire(import.meta.url)('playwright'));
 } catch {
     console.log('SKIP: no playwright package (set NODE_PATH)');
     process.exit(77);
@@ -33,9 +34,21 @@ function browser() {
                                'chromium-$1/chrome-linux64/chrome');
     return { executablePath: full !== shell && fs.existsSync(full) ? full : shell };
 }
+// Firefox (the owner's, on Windows at 1.25 and 1.5): headless, it ignores
+// deviceScaleFactor; its devicePixelRatio is layout.css.devPixelsPerPx,
+// a browser's own (dpr).
+export const firefox = process.env.TAB_BROWSER === 'firefox';
 // (Chromium's singleton socket goes in its TMPDIR, at most 107 bytes of
 // path: a build tree's is too long; the profile stays in ours.)
-export function launch({ args: own = [] } = {}) {
+export async function launch({ args: own = [], dpr = 1 } = {}) {
+    if (firefox) {
+        try {
+            return await firefoxType.launch({ firefoxUserPrefs: { 'layout.css.devPixelsPerPx': String(dpr) } });
+        } catch (e) {
+            console.log(`SKIP: no Firefox (${e.message.split('\n')[0]})`);
+            process.exit(77);
+        }
+    }
     const args = [...own, ...(process.env.CHROMIUM_ARGS ? process.env.CHROMIUM_ARGS.split(' ') : [])];
     const tmp = os.tmpdir().length < 60 ? os.tmpdir() : '/tmp';
     return chromium.launch({ ...browser(), args, env: { ...process.env, TMPDIR: tmp } });
@@ -64,8 +77,8 @@ export async function open(dir, { log = true, query = '', images, include,
         console.log('SKIP: no go');
         process.exit(77);
     }
-    const browser = await launch();
-    const page = await browser.newPage({ viewport, deviceScaleFactor: dpr });
+    const browser = await launch({ dpr });
+    const page = await browser.newPage({ viewport, ...(firefox ? {} : { deviceScaleFactor: dpr }) });
     page.on('pageerror', (e) => console.log('[page error]', e.stack || e.message));
     page.on('crash', () => console.log('[page crashed]'));
     if (log)

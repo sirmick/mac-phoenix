@@ -533,12 +533,25 @@ void Executor::gd_vdriver_mode_changed()
     }
 }
 
+/* MacPhoenix: every video mode change in the log, with what asked
+   (the tab's session log answers display questions: DisplayModes.md). */
+static bool set_mode(int width, int height, int bpp, bool grayscale, const char *cause)
+{
+    int ow = vdriver->framebuffer() ? vdriver->width() : 0;
+    int oh = vdriver->framebuffer() ? vdriver->height() : 0;
+    int obpp = vdriver->framebuffer() ? vdriver->bpp() : 0;
+    bool ok = vdriver->setMode(width, height, bpp, grayscale);
+    fprintf(stderr, "[display] mode %dx%dx%d -> %dx%dx%d (%s%s)\n", ow, oh, obpp,
+            vdriver->width(), vdriver->height(), vdriver->bpp(), cause, ok ? "" : ", refused");
+    return ok;
+}
+
 /* MacPhoenix: the screen at a new size, its depth kept (the Display
    Manager's resolution change, quickdraw/displays.cpp): the framebuffer,
    the main GDevice, the screen's ports, ScrnBase and ScreenRow. The
    desktop, the windows and the processes' QuickDraw globals are the
    Display Manager's. */
-bool Executor::gd_set_screen_size(int width, int height)
+bool Executor::gd_set_screen_size(int width, int height, const char *cause)
 {
     GDHandle gdh = LM(MainDevice);
     PixMapHandle gd_pixmap = GD_PMAP(gdh);
@@ -546,7 +559,7 @@ bool Executor::gd_set_screen_size(int width, int height)
     Rect oldRect = PIXMAP_BOUNDS(gd_pixmap);
 
     HideCursor();
-    if(!vdriver->setMode(width, height, PIXMAP_PIXEL_SIZE(gd_pixmap), vdriver->isGrayscale())
+    if(!set_mode(width, height, PIXMAP_PIXEL_SIZE(gd_pixmap), vdriver->isGrayscale(), cause)
        || !vdriver->framebuffer())
     {
         ShowCursor();
@@ -583,7 +596,7 @@ OSErr Executor::C_SetDepth(GDHandle gdh, INTEGER bpp, INTEGER which_flags,
 
     HideCursor();
 
-    if(bpp == 0 || !vdriver->setMode(0, 0, bpp, grayscale_p))
+    if(bpp == 0 || !set_mode(0, 0, bpp, grayscale_p, "SetDepth"))
     {
         /* IMV says this returns non-zero in error case; not positive
 	 cDepthErr is correct; need to verify */
@@ -612,7 +625,7 @@ OSErr Executor::C_SetDepth(GDHandle gdh, INTEGER bpp, INTEGER which_flags,
 void Executor::ROMlib_InitGDevices(int width, int height, int bpp, bool grayscale)
 {
     /* Set up the current graphics mode appropriately. */
-    if(!vdriver->setMode(width, height, bpp, grayscale))
+    if(!set_mode(width, height, bpp, grayscale, "boot"))
     {
         fprintf(stderr, "Could not set graphics mode.\n");
         exit(-12);

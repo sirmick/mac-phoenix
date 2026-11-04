@@ -286,7 +286,7 @@ static OSErr C_ROMlib_videoctl(ParmBlkPtr pb, DCtlPtr dce)
             DisplayResolution r;
             if(!resolution(sw->csData, &r))
                 return controlErr;
-            if(r.id != ROMlib_dm_current_resolution() && !ROMlib_dm_set_screen_size(r.width, r.height))
+            if(r.id != ROMlib_dm_current_resolution() && !ROMlib_dm_set_screen_size(r.width, r.height, "driver"))
                 return controlErr;
             if(sw->csMode != current_mode()
                && (!mode_depth(sw->csMode) || SetDepth(LM(MainDevice), sw->csMode, 0, 0) != noErr))

@@ -52,6 +52,7 @@ class MacCursor {
         // Device pixels a guest pixel: at least a CSS pixel's (a 16-pixel
         // pointer, as a Mac's on a 1x screen), a screen shrunk to fit too.
         const px = Math.max(1, Math.round(dpr), Math.round(scale * dpr));
+        this.px = 16 * px;      // the image's device pixels (the tab's diagnostics)
         const key = `${px}:${c.hotX},${c.hotY}:${Array.from(c.data).join(',')}:${Array.from(c.mask).join(',')}`;
         let css = this.cache.get(key);
         if (!css) {

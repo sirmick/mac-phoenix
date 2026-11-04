@@ -14,8 +14,8 @@ namespace Executor
    call): framebuffer, GDevice, ports, GrayRgn, windows moved back on
    screen, everything repainted; each process's QuickDraw globals, menu bar
    and notify procs follow at its next event call. False if the size is
-   refused. */
-extern bool ROMlib_dm_set_screen_size(int width, int height);
+   refused. cause: what asked, for the log ("DM", "request", "driver"). */
+extern bool ROMlib_dm_set_screen_size(int width, int height, const char *cause = "DM");
 
 /* A size the screen can have (512x342 up to the host's largest). */
 extern bool ROMlib_dm_size_acceptable(int width, int height);

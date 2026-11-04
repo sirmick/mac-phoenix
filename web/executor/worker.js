@@ -65,6 +65,9 @@ self.Module = {
         Module.stats.drawMs += performance.now() - t0;
         postMessage({ type: 'frame' });
     },
+    onBuild(id) {
+        postMessage({ type: 'build', id });
+    },
     onCursor(data, mask, hotX, hotY, visible) {
         postMessage({ type: 'cursor', data, mask, hotX, hotY, visible });
     },

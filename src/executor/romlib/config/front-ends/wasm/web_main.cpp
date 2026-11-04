@@ -50,6 +50,7 @@
  * The Worker answers 'read' and 'write' itself: files in the module's
  * filesystem, such as the Host volume (/host).
  */
+#include "build_id.h"
 #include <rsys/displaymode.h>
 #include "executor_host.h"
 #include "phoenix.h"
@@ -136,6 +137,13 @@ EM_JS(void, js_rects, (int width, int height, int mac_width, int mac_height,
     if (Module.onRects)
         Module.onRects(width, height, HEAP32.subarray(rects >> 2, (rects >> 2) + 4 * n),
                        HEAPU8.subarray(pixels, pixels + bytes), mac_width, mac_height);
+});
+
+/* The module's build (build_id.h: git describe), for the page's log and
+   status line. */
+EM_JS(void, js_build, (const char *id), {
+    if (Module.onBuild)
+        Module.onBuild(UTF8ToString(id));
 });
 
 /* The cursor, for the page to draw (a CSS cursor; web/executor/cursor.js). */
@@ -805,6 +813,7 @@ int main(int argc, char **argv)
     Executor::hostidle::set_yield_hook(on_yield);
     executor_host::set_event_poll_hook(on_event_poll);
     executor_host::set_fatal_hook([](const char *message) { js_fatal(message); });
-    fprintf(stderr, "[web] Executor %dx%d\n", c.width, c.height);
+    fprintf(stderr, "[web] Executor %dx%d, build %s\n", c.width, c.height, EXECUTOR_WEB_BUILD);
+    js_build(EXECUTOR_WEB_BUILD);
     return executor_host::run(c);
 }
