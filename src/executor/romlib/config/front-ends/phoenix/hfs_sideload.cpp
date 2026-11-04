@@ -533,7 +533,7 @@ bool startupCode(const std::vector<std::string>& path, const Entry& e)
     static const char *folders[] = { "Control Panels", "Startup Items", "Shutdown Items",
                                      "Control Strip Modules", "Launcher Items", "Apple Menu Items",
                                      "Extensions (Disabled)", "Control Panels (Disabled)",
-                                     "System Extensions (Disabled)" };
+                                     "System Extensions (Disabled)", "Control Strip (Disabled)" };
     static const char *types[] = { "INIT", "cdev", "appe", "thng", "libr", "RDEV", "fext", "AINI",
                                    "dbgr", "scri", "ADBS" };
     if(path.size() == 1 && e.folder)

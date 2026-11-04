@@ -19,7 +19,8 @@ user sees, and leaves out the rest:
   left out the rest of Extensions (Apple Guide help, other printer drivers,
            QuickTime, Apple's Open Transport, ...), what doesn't work on
            Executor (DROP: Energy Saver, AppleTalk's and QuickTime's
-           items), MacsBug, the top-level folders (Apple Extras,
+           items; the policy's "-NAME" ones: the Monitors control panels
+           and their Control Strip modules), MacsBug, the top-level folders (Apple Extras,
            Utilities), and the desktop database (keyed by the source
            volume's file IDs)
 
@@ -116,14 +117,19 @@ def chosen_printer(disk):
     return data[1:1 + data[0]] if data and data[0] else None
 
 
-def policy_names(path, version):
+def policy_names(path, version, denied=False):
     """The policy's names, read as Executor reads them (extensions.cpp):
-    '#' comments and spaces cut, "NAME @ 7.6" only from that version."""
+    '#' comments and spaces cut, "NAME @ 7.6" only from that version. With
+    denied, its "-NAME" ones instead (the Monitors control panels: never
+    used, so never copied)."""
     names = set()
     for line in Path(path).read_text().splitlines():
         line = line.split("#", 1)[0].strip()
         if not line or line.startswith("System AINI"):
             continue
+        if line.startswith("-") != denied:
+            continue
+        line = line[1:] if denied else line
         name, at, since = line.partition(" @ ")
         if at:
             major, _, minor = since.strip().partition(".")
@@ -176,10 +182,10 @@ class Writer:
         subprocess.run(["humount"], env=self.env, capture_output=True)
 
 
-def plan(disk, allowed, keep=()):
+def plan(disk, allowed, keep=(), denied=()):
     """(folders, files) to copy: raw Mac paths, parents first."""
     folders, files = [], []
-    drop = {mac(n) for n in DROP}
+    drop = {mac(n) for n in DROP} | set(denied)
     libraries = {mac(n) for n in LIBRARIES}
     printer = chosen_printer(disk)
 
@@ -274,7 +280,8 @@ def main():
         try:
             version = system_version(disk)
             folders, files = plan(disk, policy_names(POLICY, version),
-                                  [mac(k) for k in args.keep])
+                                  [mac(k) for k in args.keep],
+                                  policy_names(POLICY, version, denied=True))
             blobs = {}
             for path in files:
                 blob = disk.macbinary(path)

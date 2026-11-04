@@ -1,10 +1,11 @@
 # Display modes: the screen's resolution changed live
 
 Executor's screen changes size while the Mac runs, as a Mac's Display
-Manager changes it: from Settings (the tab), the browser window
-(fit-to-window), `/api/resolution` (native), or inside the Mac with the
-Monitors control panel or any program's `DMSetDisplayMode`. One path does
-it: `ROMlib_dm_set_screen_size` (`romlib/quickdraw/displays.cpp`).
+Manager changes it: from the bar's size control or Settings (the tab), the
+browser window (fit-to-window), `/api/resolution` (native), or inside the
+Mac with any program's `DMSetDisplayMode` (the Monitors control panels are
+left out: below). One path does it: `ROMlib_dm_set_screen_size`
+(`romlib/quickdraw/displays.cpp`).
 
 ## What a Mac does (measured)
 
@@ -102,7 +103,8 @@ after it. `?diag` or Ctrl+Alt+D shows the same over the screen.
 Tests: `executor_tests --gtest_filter='DisplayMode.*'`
 (`src/executor/tests/displaymode.cpp`); the tab cells `executor.web.dynres`,
 `executor.web.input_86_laptop`, `executor.web.input_86_firefox`, `executor.web.watch`,
-`executor.web.display_diag`.
+`executor.web.display_diag`, `executor.web.resbar` (the bar's control),
+`executor.web.boot_disks_audit`, `executor.web.monitors_policy`.
 
 ## Open
 
@@ -118,9 +120,37 @@ Tests: `executor_tests --gtest_filter='DisplayMode.*'`
   against Executor (the desktop icon region at ExpandMem+$1F4, which the
   Finder edits before `DMDesktopIconRgnChanged`, is a candidate).
 
-## Not done: the Monitors control panels
+## Left out: the Monitors control panels
 
-Not chased (disproportionate for now); what each would need:
+Executor's screen size is the tab's (the bar's size control and Settings,
+Settings.md) or `/api/resolution` natively. The panels that can't change it
+are out (2026-11-04, the owner's call): Monitors (7.x), Monitors & Sound
+(8.x, and the AV one on 7.6.1's image) and the Control Strip modules Monitor
+Resolution and Monitor BitDepth (8.6's both offer "Open Monitors & Sound").
+They are `-NAME` entries in `res/extension-policy.txt`: at every start
+Executor moves them into their folder's "(Disabled)" one (Control Panels
+(Disabled), Control Strip (Disabled)), whatever they run at
+startup, and leaves them there; `make_boot_disk.py` doesn't copy them, so
+the library's boot disks lack them (`audit_boot_disks.py`,
+`executor.web.boot_disks_audit`). A saved System Folder (the tab's Executor
+volume kept on the server, or a native `executor-systems/<image>`) that
+has them from an older cut gets them moved at its next start, a change
+saved with the volume; nothing else in it changes. They can still be
+opened from the "(Disabled)" folder, as before, to the same effect. Taking
+a name off the policy doesn't move a file back (a plain control panel isn't
+listed): drag it back.
+
+Sound without Monitors & Sound: on 7.6.1 the Sound control panel (its four
+pages work: APPLE-DISKS.md item 6; volume and mute apply to what Executor
+sends out), the Control Strip's Sound Volume and SimpleSound (alert
+sounds); on 8.6, whose sound settings were in Monitors & Sound only, the
+Control Strip's Sound Volume (it sets the volume through the sound output
+component, which Executor answers; not tried in this change) and SimpleSound in the Apple menu (lists and plays the alert
+sounds and sets the alert, `SetAlertBeepResID`); SoundSource Strip is
+there too (an input source: Executor has none). The tab's own volume
+(Settings > Sound) is the browser's, over all of it.
+
+What each panel would have needed (not chased: disproportionate):
 
 - **Monitors 7.5.6** (7.6.1) lists only the current resolution: it builds
   its list from the video card's sResources through the Slot Manager, not

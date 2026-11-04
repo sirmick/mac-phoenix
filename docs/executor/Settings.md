@@ -118,6 +118,23 @@ Ctrl+W and the like reach the Mac; holding Esc leaves.
 
 "Restart Executor" in the dialog saves what changed and reloads the page.
 
+The bar's screen size (main.js `ScreenBar`, `#res`, before the CPU meter):
+the dialog's sizes (the schema's `examples`, shown "640 × 480", the Mac
+named in each option's tooltip) and **Fit to window**. It writes the same
+settings, `machine.screen` (and `display.fit_window` off) or
+`display.fit_window` on, through `Settings.set`, so the change is live as
+the dialog's is (DisplayModes.md), saved, and reaches an open dialog's
+draft; a saved dialog, or any other change, comes back to it through
+`Settings.on`. It shows the Mac's real size, from Executor's `'screen'`
+message: in the Fit option ("Fit to window: 1180 × 840") while fitting,
+else as the size chosen, or as an option of its own, first, when the list
+hasn't it (a Custom… size, or one an application set with
+`DMSetDisplayMode`; the tooltip then says what the setting asked for). Its
+tooltip says the size and that it is the same setting as Settings'; with
+`?size=` in the address it is disabled (the address sets it for the visit).
+The Monitors control panels, which can't change Executor's screen, are
+left out (DisplayModes.md).
+
 The bar's CPU meter (main.js `CpuMeter`, `#cpu`): how much of each half
 second the Mac's emulator thread spent working rather than waiting for
 events (`hostidle::busy()`: time inside its waits, which yield to the

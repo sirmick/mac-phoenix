@@ -945,6 +945,7 @@ Settings.restart = async () => {
 async function start() {
     await Settings.ready;
     machine();
+    ScreenBar.show();
     await modeKnown;
     if (!standalone)
         return;                     // (modeKnown said why)
@@ -1042,6 +1043,7 @@ async function start() {
             fitCanvas();
             cursor.apply();
             displayChanged('mac size');
+            ScreenBar.show();
         } else if (m.type === 'build') {
             build.executor = m.id;
             showBuild();
@@ -1181,6 +1183,57 @@ Settings.on('machine.screen', (v) => {
     if (!Settings.get('display.fit_window'))
         resizeMac(...v.split('x').map(Number));
 });
+
+// The bar's screen size: the Settings dialog's sizes (the schema's examples)
+// and Fit to window, the same settings (machine.screen, display.fit_window),
+// so each follows the other. It shows the Mac's real size: with the fit, in
+// the Fit option; a size the list doesn't have (Custom…, or an application
+// changed it) as an option of its own, first.
+const ScreenBar = (() => {
+    const sel = document.getElementById('res');
+    const now = new Option('', 'now');
+    const fit = new Option('Fit to window', 'fit');
+    const times = (s) => s.replace('x', ' × ');
+    let sizes = [];
+    Settings.ready.then(() => {
+        const p = Settings.schema.properties.machine.properties.screen;
+        sizes = p.examples || [];
+        sel.replaceChildren(now, ...sizes.map((s, i) => {
+            const o = new Option(times(s), s);
+            o.title = (p['x-labels'] || [])[i] || '';
+            return o;
+        }), fit);
+        show();
+    });
+    function show() {
+        if (!sizes.length)
+            return;
+        const real = `${width}x${height}`, setting = Settings.get('machine.screen');
+        const fitting = !!Settings.get('display.fit_window');
+        fit.text = fitting ? `Fit to window: ${times(real)}` : 'Fit to window';
+        now.hidden = fitting || sizes.includes(real);
+        now.text = times(real);
+        sel.value = fitting ? 'fit' : sizes.includes(real) ? real : 'now';
+        const pinned = Settings.get('machine.screen') !== (Settings.doc.machine || {}).screen;
+        sel.disabled = pinned;
+        sel.title = `The Mac's screen: ${times(real)}`
+            + (fitting ? ', fitted to the window (it follows the window as it changes)'
+               : real !== setting ? ` (asked for ${times(setting)}: ${worker ? 'an application changed it, or the change is on its way' : 'at the next start'})` : '')
+            + '.\nChanges at once, as a Mac\'s Display Manager does; the same setting as Settings > Machine > Screen size'
+            + ' and Settings > Display > Fit the screen to the window.'
+            + (pinned ? `\nSet for this visit by the page's address (?size=${setting}).` : '');
+    }
+    sel.addEventListener('change', () => {
+        const v = sel.value;
+        const patch = v === 'fit' ? { display: { fit_window: true } }
+            : v === 'now' ? null : { machine: { screen: v }, display: { fit_window: false } };
+        if (patch)
+            Settings.set(patch).catch((e) => { console.log(`[web] screen size: ${e.message}`); show(); });
+    });
+    Settings.on('machine.screen', show);
+    Settings.on('display.fit_window', show);
+    return { show };
+})();
 // The device-pixel ratio changes with the browser's zoom and between screens.
 (function watchDpr() {
     matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`)
