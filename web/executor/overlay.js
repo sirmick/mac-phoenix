@@ -245,6 +245,7 @@ class RemoteImage {
         this.size = desc.size;
         this.url = desc.remote.url;
         this.etag = desc.remote.etag;
+        this.gzip = !!desc.remote.gzip;  // ranges gzip-compressed (tools/standalone offers it: fetchChunks)
         this.chunks = Math.ceil(this.size / REMOTE_CHUNK);
         this.have = new Uint8Array(this.chunks);
         this.memory = new Map();         // chunk -> bytes; oldest read first
@@ -308,20 +309,32 @@ class RemoteImage {
         const x = new XMLHttpRequest();
         // A stall or a blip: tried again, a few times; the Worker waits
         // meanwhile (Executor's read is synchronous).
+        // Compressed (this.gzip): ?bytes=, a 200 the browser decodes
+        // (tools/standalone static.go); anything wrong with it: plain Range
+        // requests from then on.
+        const plain = () => {
+            console.log(`[web] ${this.name}: compressed ranges failed: plain ones`);
+            this.gzip = false;
+            return this.fetchChunks(first, count);
+        };
+        const want = this.gzip ? 200 : 206;
         for (let attempt = 1; ; attempt++) {
-            x.open('GET', this.url, false);
+            x.open('GET', this.gzip ? `${this.url}${this.url.includes('?') ? '&' : '?'}bytes=${start}-${end - 1}` : this.url, false);
             x.responseType = 'arraybuffer';
             x.timeout = REMOTE_TIMEOUT;
-            x.setRequestHeader('Range', `bytes=${start}-${end - 1}`);
+            if (!this.gzip)
+                x.setRequestHeader('Range', `bytes=${start}-${end - 1}`);
             try {
                 x.send();
             } catch (e) {
                 if (attempt < REMOTE_TRIES)
                     continue;
+                if (this.gzip)
+                    return plain();
                 notice(`${this.name}: the server can't be reached (${e.name})`);
                 throw e;
             }
-            if (x.status === 206 || attempt >= REMOTE_TRIES || (x.status >= 400 && x.status < 500))
+            if (x.status === want || attempt >= REMOTE_TRIES || (x.status >= 400 && x.status < 500))
                 break;
         }
         if (x.status === 401 || x.status === 403)
@@ -329,7 +342,10 @@ class RemoteImage {
         const etag = x.getResponseHeader('ETag');
         // (main.js checked that Range requests get 206: a proxy dropping
         // Range shows at once, not after the whole image.)
-        if (x.status !== 206 || x.response.byteLength !== end - start)
+        if (this.gzip && (x.status !== 200 || x.response.byteLength !== end - start)
+            && x.status !== 401 && x.status !== 403)
+            return plain();
+        if (x.status !== want || x.response.byteLength !== end - start)
             throw new Error(`bytes ${start}-${end - 1}: HTTP ${x.status}`);
         if (this.etag && etag && etag !== this.etag)
             throw new Error('the image changed on the server');

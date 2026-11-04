@@ -164,6 +164,16 @@ func sendFile(c *ctx, src source, tag string, extra map[string]string) error {
 	if h := r.Header.Get("Range"); h != "" {
 		start, end, ranged, unsat = parseRange(h, size)
 	}
+	// ?bytes=A-B where the route offers it (X-Range-Encodings: gzip): a
+	// range as a plain 200, gzip-compressed (overlay.js RemoteImage; disk
+	// images are mostly zeros and code, a third to a half of their size).
+	// Not Range: Chromium sends Accept-Encoding: identity with one and
+	// fails a compressed 206.
+	zipRange := false
+	if q := r.URL.Query().Get("bytes"); q != "" && r.Header.Get("Range") == "" && extra["X-Range-Encodings"] == "gzip" {
+		start, end, ranged, unsat = parseRange("bytes="+q, size)
+		zipRange = ranged && strings.Contains(r.Header.Get("Accept-Encoding"), "gzip")
+	}
 	gzipped := !ranged && !unsat && hasGz && strings.Contains(r.Header.Get("Accept-Encoding"), "gzip")
 	if tag == "" && gzOnly {
 		tag = etagOf(src, src.name+".gz", st)
@@ -218,12 +228,19 @@ func sendFile(c *ctx, src source, tag string, extra map[string]string) error {
 	if gzipped {
 		h.Set("Content-Encoding", "gzip")
 	}
-	if ranged {
+	if ranged && zipRange {
+		h.Set("X-Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end-1, size)) // (a 200)
+	} else if ranged {
 		h.Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end-1, size))
 	}
-	h.Set("Content-Length", strconv.FormatInt(end-start, 10))
+	if zipRange {
+		h.Set("Content-Encoding", "gzip")
+		h.Set("Cache-Control", "no-store")
+	} else {
+		h.Set("Content-Length", strconv.FormatInt(end-start, 10))
+	}
 	h.Set("X-Decoded-Length", strconv.FormatInt(size, 10))
-	if ranged {
+	if ranged && !zipRange {
 		c.w.WriteHeader(206)
 	} else {
 		c.w.WriteHeader(200)
@@ -239,6 +256,12 @@ func sendFile(c *ctx, src source, tag string, extra map[string]string) error {
 		} else if _, err := io.CopyN(io.Discard, body, start); err != nil {
 			return nil
 		}
+	}
+	if zipRange {
+		zw, _ := gzip.NewWriterLevel(c.w, gzip.BestSpeed)
+		io.CopyN(zw, body, end-start)
+		zw.Close()
+		return nil
 	}
 	io.CopyN(c.w, body, end-start)
 	return nil

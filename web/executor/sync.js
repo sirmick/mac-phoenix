@@ -414,6 +414,13 @@ const Store = {
             } catch (e) {
                 if (!(e instanceof SyncConflict))
                     throw e;
+                if (e.reason === 'shrink') {
+                    // (the server refuses a save without most of the volume:
+                    // volumes.go; the volume kept there as it was)
+                    this.volumeOff = true;
+                    notice(`Executor's disk: the server refused this save (${e.error}): changes to it are not kept`);
+                    return;
+                }
                 if (!e.missing)
                     this.volume.version = e.version;
             }

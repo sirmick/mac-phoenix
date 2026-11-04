@@ -208,7 +208,8 @@ async function fetchDisk(url, { starting = false } = {}) {
             if (probe.headers.get('X-Image-Id'))
                 imageIds[name] = probe.headers.get('X-Image-Id');
             return { name, size, lastModified: Date.parse(probe.headers.get('Last-Modified')) || 0,
-                     remote: { url: absolute, etag: probe.headers.get('ETag') } };
+                     remote: { url: absolute, etag: probe.headers.get('ETag'),
+                               gzip: /\bgzip\b/.test(probe.headers.get('X-Range-Encodings') || '') } };
         }
     }
 

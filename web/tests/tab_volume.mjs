@@ -3,7 +3,7 @@
 // restored from one request (POST volumes/KEY/bundle, gzip), every file
 // as it was; again with every object from this browser's cache
 // (ObjectCache) and none from the server, and a library disk's chunks
-// from it (ChunkCache); a cached object gone bad and
+// from it (ChunkCache), read in compressed ranges; a cached object gone bad and
 // the cache deleted: from the server, no error; a server without bundles,
 // and a bundle cut short, restore it all the same through objects/SHA.
 // Executor's own System.
@@ -95,8 +95,15 @@ const sameAll = async (page, tag) => {
 try {
     const a = await newPage(browser, { log: false, tag: ' A' });
     let seen = watch(a);
+    const reads = [];
+    a.on('response', async (r) => {
+        if (/\/disks\/blank\.img/.test(r.url()) && !/bytes=0-0/.test(await r.request().headerValue('range') || ''))
+            reads.push(`${/[?&]bytes=/.test(r.url()) ? 'bytes' : 'range'} ${(await r.headerValue('content-encoding')) || '-'}`);
+    });
     await a.goto(`${server.url}/?disk=disks/blank.img`);
     check(await ready(a), 'Executor runs');
+    check(reads.length > 0 && reads.every((x) => x === 'bytes gzip'),
+          `the disk read in compressed ranges (?bytes=, gzip: ${reads.join(', ')})`);
     const before = await until(async () => (await kept(a)) || 0, 20000, 300);
     seen.length = 0;
     await writeAll(a, 'a');
