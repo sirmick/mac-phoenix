@@ -243,17 +243,26 @@ int executor_child_main(const config::EmulatorConfig& cfg, IPCBuffer *buf)
     control_ipc_start();
     buf->state = IPC_STATE_RUNNING;
 
-    // /api/executor/ppc-break: answered here, off the guest's threads (the
-    // breakpoints take their own lock), while the guest may be busy.
-    if (!cfg.executor_ppc_break.empty())
-        std::thread([buf] {
+    // /api/executor/ppc-break and /api/resolution ("resize W H"): answered
+    // here, off the guest's threads (the breakpoints take their own lock;
+    // a size waits for the front process's event call), while the guest
+    // may be busy.
+    std::thread([buf, ppc_break = !cfg.executor_ppc_break.empty()] {
             for (;;) {
                 uint32_t want = IPC_ATOMIC_LOAD(buf->debug_request);
                 if (want != IPC_ATOMIC_LOAD(buf->debug_done)) {
                     char command[sizeof buf->debug_command];
                     memcpy(command, buf->debug_command, sizeof command);
                     command[sizeof command - 1] = '\0';
-                    std::string j = executor_host::ppc_break_command(command);
+                    int w, h;
+                    std::string j;
+                    if (sscanf(command, "resize %d %d", &w, &h) == 2)
+                        j = executor_host::request_screen_size(w, h)
+                            ? "{\"ok\":true}" : "{\"ok\":false,\"error\":\"size out of range\"}";
+                    else if (ppc_break)
+                        j = executor_host::ppc_break_command(command);
+                    else
+                        j = "{\"error\":\"start the session with --executor-ppc-break (a SPEC, or on)\"}";
                     size_t n = std::min(j.size(), sizeof buf->debug_json - 1);
                     memcpy(buf->debug_json, j.data(), n);
                     buf->debug_json[n] = '\0';

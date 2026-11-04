@@ -1,3 +1,4 @@
+#include <rsys/displaymode.h>
 #include "executor_host.h"
 #include "phoenix.h"
 #include "phoenix_sound.h"
@@ -188,8 +189,16 @@ int run(const Config& c)
 
 void mouse_moved(int x, int y)
 {
-    x = std::clamp(x, 0, screenW.load() - 1);
-    y = std::clamp(y, 0, screenH.load() - 1);
+    /* the screen's size now (the Display Manager changes it live), the
+       configured one until there is a screen */
+    int w = screenW.load(), h = screenH.load();
+    if(Executor::vdriver && Executor::vdriver->width() > 0)
+    {
+        w = Executor::vdriver->width();
+        h = Executor::vdriver->height();
+    }
+    x = std::clamp(x, 0, w - 1);
+    y = std::clamp(y, 0, h - 1);
     PhoenixVideoDriver::cursorX = x;
     PhoenixVideoDriver::cursorY = y;
     if(auto *s = sink())
@@ -310,6 +319,14 @@ uint32_t guest_ram_size()
 double cpu_busy()
 {
     return Executor::hostidle::busy();
+}
+
+bool request_screen_size(int width, int height)
+{
+    if(!Executor::vdriver || !Executor::ROMlib_dm_size_acceptable(width, height))
+        return false;
+    Executor::vdriver->requestSize(width, height);
+    return true;
 }
 
 }  // namespace executor_host

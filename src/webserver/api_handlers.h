@@ -72,6 +72,8 @@ private:
     Response handle_codec_post(const Request& req);
     Response handle_codecs_get(const Request& req);
     Response handle_resolution_post(const Request& req);
+    // A command to the Executor child (IPC debug slot): its JSON answer.
+    bool executor_command(const std::string& command, std::string& answer);
     Response handle_resolutions_get(const Request& req);
     Response handle_emulator_start(const Request& req);
     Response handle_emulator_stop(const Request& req);

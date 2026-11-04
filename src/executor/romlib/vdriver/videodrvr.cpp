@@ -27,6 +27,7 @@
 #include <vdriver/videodrvr.h>
 #include <rsys/device.h>
 #include <mman/mman.h>
+#include <rsys/displaymode.h>
 #include <base/functions.impl.h>
 #include <base/traps.impl.h>
 
@@ -36,7 +37,7 @@ using namespace Executor;
 
 namespace
 {
-enum { kFixedModeCRTConnect = 3, kAllModesValid = 0, kAllModesSafe = 1 };
+enum { kModelessConnect = 8, kAllModesValid = 0, kAllModesSafe = 1 };
 
 enum { firstVidMode = 0x80 };
 
@@ -140,6 +141,57 @@ Ptr screen_base()
     return PIXMAP_BASEADDR(GD_PMAP(LM(MainDevice)));
 }
 
+/* MacPhoenix: the resolutions are the Display Manager's mode list
+   (quickdraw/displays.cpp, docs/executor/DisplayModes.md). */
+enum : uint32_t
+{
+    kDisplayModeIDCurrent = 0,
+    kDisplayModeIDFindFirstResolution = 0xFFFFFFFE,
+    kDisplayModeIDNoMoreResolutions = 0xFFFFFFFD,
+};
+
+bool resolution(uint32_t id, DisplayResolution *out)
+{
+    if(id == kDisplayModeIDCurrent)
+        id = ROMlib_dm_current_resolution();
+    for(const DisplayResolution &r : ROMlib_dm_resolutions())
+        if(r.id == id)
+        {
+            *out = r;
+            return true;
+        }
+    return false;
+}
+
+/* The depth of a depth mode (from 0x80 over the depths the screen has). */
+int mode_depth(int mode)
+{
+    int m = firstVidMode;
+    for(int d : { 1, 2, 4, 8, 16, 32 })
+        if(vdriver->isAcceptableMode(0, 0, d, false) && m++ == mode)
+            return d;
+    return 0;
+}
+
+int max_mode()
+{
+    int m = firstVidMode - 1;
+    for(int d : { 1, 2, 4, 8, 16, 32 })
+        if(vdriver->isAcceptableMode(0, 0, d, false))
+            m++;
+    return m;
+}
+
+struct VDVideoParametersInfoRec { GUEST_STRUCT;
+    GUEST<uint32_t> csDisplayModeID; GUEST<uint16_t> csDepthMode; GUEST<Ptr> csVPBlockPtr;
+    GUEST<uint32_t> csPageCount, csDeviceType, csDepthFlags; };
+
+struct VPBlock { GUEST_STRUCT;
+    GUEST<int32_t> vpBaseOffset; GUEST<int16_t> vpRowBytes; Rect vpBounds;
+    GUEST<int16_t> vpVersion, vpPackType; GUEST<int32_t> vpPackSize, vpHRes, vpVRes;
+    GUEST<int16_t> vpPixelType, vpPixelSize, vpCmpCount, vpCmpSize; GUEST<int32_t> vpPlaneBytes; };
+static_assert(sizeof(VPBlock) == 42);
+
 /* The record a video call's csParam points at. */
 template<class T>
 T *param(ParmBlkPtr pb)
@@ -227,10 +279,21 @@ static OSErr C_ROMlib_videoctl(ParmBlkPtr pb, DCtlPtr dce)
             param<VDPageInfo>(pb)->csBaseAddr = screen_base();
             return noErr;
         case cscSwitchMode:
-            if(param<VDSwitchInfoRec>(pb)->csMode != current_mode())
+        {
+            /* MacPhoenix: another resolution through the Display
+               Manager's change (the driver and the GDevice are one here) */
+            VDSwitchInfoRec *sw = param<VDSwitchInfoRec>(pb);
+            DisplayResolution r;
+            if(!resolution(sw->csData, &r))
                 return controlErr;
-            param<VDSwitchInfoRec>(pb)->csBaseAddr = screen_base();
+            if(r.id != ROMlib_dm_current_resolution() && !ROMlib_dm_set_screen_size(r.width, r.height))
+                return controlErr;
+            if(sw->csMode != current_mode()
+               && (!mode_depth(sw->csMode) || SetDepth(LM(MainDevice), sw->csMode, 0, 0) != noErr))
+                return controlErr;
+            sw->csBaseAddr = screen_base();
             return noErr;
+        }
         default:
             return controlErr;
     }
@@ -283,15 +346,83 @@ static OSErr C_ROMlib_videostatus(ParmBlkPtr pb, DCtlPtr dce)
         {
             VDSwitchInfoRec *s = param<VDSwitchInfoRec>(pb);
             s->csMode = current_mode();
-            s->csData = 0x80;                       /* the one resolution (displays.cpp) */
+            s->csData = ROMlib_dm_current_resolution();
             s->csPage = 0;
             s->csBaseAddr = screen_base();
             return noErr;
         }
-        case cscGetConnection:              /* a screen with one mode */
+        /* MacPhoenix: the resolutions, one after another (the Monitors
+           control panel's list), each one's parameters and timing */
+        case cscGetNextResolution:
+        {
+            VDResolutionInfoRec *r = param<VDResolutionInfoRec>(pb);
+            std::vector<DisplayResolution> all = ROMlib_dm_resolutions();
+            uint32_t prev = r->csPreviousDisplayModeID;
+            size_t next = 0;
+            if(prev != kDisplayModeIDFindFirstResolution)
+            {
+                /* kDisplayModeIDCurrent: the current one itself; else
+                   the one after prev */
+                uint32_t id = prev == kDisplayModeIDCurrent ? ROMlib_dm_current_resolution() : prev;
+                while(next < all.size() && all[next].id != id)
+                    next++;
+                if(next == all.size())
+                    return paramErr;
+                if(prev != kDisplayModeIDCurrent)
+                    next++;
+            }
+            if(next >= all.size())
+            {
+                r->csDisplayModeID = kDisplayModeIDNoMoreResolutions;
+                return noErr;
+            }
+            r->csDisplayModeID = all[next].id;
+            r->csHorizontalPixels = all[next].width;
+            r->csVerticalLines = all[next].height;
+            r->csRefreshRate = 67 << 16;
+            r->csMaxDepthMode = max_mode();
+            r->csResolutionFlags = 0;
+            r->csReserved = 0;
+            return noErr;
+        }
+        case cscGetVideoParameters:
+        {
+            VDVideoParametersInfoRec *v = param<VDVideoParametersInfoRec>(pb);
+            DisplayResolution r;
+            int d = mode_depth(v->csDepthMode);
+            VPBlock *vp = (VPBlock *)(Ptr)v->csVPBlockPtr;
+            if(!resolution(v->csDisplayModeID, &r) || !d || !vp)
+                return paramErr;
+            memset((void *)vp, 0, sizeof *vp);
+            vp->vpRowBytes = (r.width * d + 31) / 32 * 4;
+            vp->vpBounds = Rect{ 0, 0, (INTEGER)r.height, (INTEGER)r.width };
+            vp->vpHRes = vp->vpVRes = 72 << 16;
+            vp->vpPixelType = d > 8 ? RGBDirect : 0;
+            vp->vpPixelSize = d;
+            vp->vpCmpCount = d > 8 ? 3 : 1;
+            vp->vpCmpSize = d == 16 ? 5 : d == 32 ? 8 : d;
+            v->csPageCount = 1;
+            v->csDeviceType = d > 8 ? directType : clutType;
+            return noErr;
+        }
+        case cscGetModeTiming:
+        {
+            VDTimingInfoRec *t = param<VDTimingInfoRec>(pb);
+            DisplayResolution r;
+            if(!resolution(t->csTimingMode, &r))
+                return paramErr;
+            t->csTimingFormat = "decl"_4;
+            t->csTimingData = 130;              /* timingApple_640x480_67hz, as the list says */
+            /* valid, safe, (default, shown now: the current one) */
+            t->csTimingFlags = r.id == ROMlib_dm_current_resolution() ? 0xF : 0x3;
+            return noErr;
+        }
+        /* a screen that takes any of the list's modes (the ROM machine's
+           answer: the Monitors control panel lists them all for it) */
+        case cscGetConnection:
         {
             VDDisplayConnectInfoRec *c = param<VDDisplayConnectInfoRec>(pb);
-            c->csDisplayType = kFixedModeCRTConnect;
+            c->csDisplayType = kModelessConnect;
             c->csConnectTaggedType = 0;
             c->csConnectTaggedData = 0;
             c->csConnectFlags = (1 << kAllModesValid) | (1 << kAllModesSafe);
@@ -302,7 +433,7 @@ static OSErr C_ROMlib_videostatus(ParmBlkPtr pb, DCtlPtr dce)
         case cscGetModeBaseAddress:
         {
             VDBaseAddressInfoRec *b = param<VDBaseAddressInfoRec>(pb);
-            if(b->csDevData != 0x80)
+            if((uint32_t)b->csDevData != ROMlib_dm_current_resolution())
                 return statusErr;
             b->csDevBase = US_TO_SYN68K(screen_base());
             return noErr;

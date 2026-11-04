@@ -41,6 +41,53 @@ typedef UInt32 DisplayIDType;
 using DMNotificationUPP = UPP<void(GUEST<AppleEvent> *theEvent)>;
 
 
+enum {kDMGenErr = -6220,
+kDMNotFoundErr = -6229,
+};
+
+// An extended notify proc's message: Installed at registration,
+// Removed at removal; for a change Prep, Dependents and Event, the
+// last two with the 'cnfg' event (docs/executor/DisplayModes.md).
+enum {kDMNotifyRequestConnectionProbe = 0,
+kDMNotifyInstalled = 1,
+kDMNotifyEvent = 2,
+kDMNotifyRemoved = 3,
+kDMNotifyPrep = 4,
+kDMNotifyExtendEvent = 5,
+kDMNotifyDependents = 6,
+};
+
+// The Display Manager's 'aevt'/'cnfg' event: kAEDisplayNotice holds a
+// record per display, keyed by its ID, of the old and new configuration.
+enum {kAESystemConfigNotice = "cnfg"_4,
+kAEDisplayNotice = "dspl"_4,
+kAEDisplaySummary = "dsum"_4,
+keyDMConfigVersion = "dmcv"_4,
+keyDMConfigFlags = "dmcf"_4,
+keyDMConfigReserved = "dmcr"_4,
+keyDisplayID = "dmid"_4,
+keyDisplayComponent = "dmdc"_4,
+keyDisplayDevice = "dmdd"_4,
+keyDisplayFlags = "dmdf"_4,
+keyDisplayMode = "dmdm"_4,
+keyDisplayModeReserved = "dmmr"_4,
+keyDisplayReserved = "dmdr"_4,
+keyDeviceFlags = "dddf"_4,
+keyDeviceDepthMode = "dddm"_4,
+keyDeviceRect = "dddr"_4,
+keyPixMapRect = "dpdr"_4,
+keyPixMapHResolution = "dphr"_4,
+keyPixMapVResolution = "dpvr"_4,
+keyPixMapPixelType = "dppt"_4,
+keyPixMapPixelSize = "dpps"_4,
+keyPixMapCmpCount = "dpcc"_4,
+keyPixMapCmpSize = "dpcs"_4,
+keyPixMapReserved = "dppr"_4,
+keyPixMapColorTableSeed = "dpct"_4,
+keyDisplayOldConfig = "dold"_4,
+keyDisplayNewConfig = "dnew"_4,
+};
+
 // Like the real 7.5.5 dispatcher (through lowmem $7B0), only D0's low
 // byte selects; the high byte is the parameter size in words.
 DISPATCHER_TRAP(DisplayDispatch, 0xABEB, D0<0xFF>);

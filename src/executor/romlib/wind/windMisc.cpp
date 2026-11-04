@@ -413,6 +413,18 @@ void Executor::C_CalcVis(WindowPeek w)
 {
     WindowPeek wp;
 
+    /* MacPhoenix: a window of another layer (Control Strip's, in a floating
+       layer, shown by its Display Manager notify proc while the process
+       that changed the screen's mode is current): in its own, as
+       ClipAbove; walking this list for it ran off its end. */
+    if(w && WINDOW_VISIBLE(w))
+    {
+        for(wp = LM(WindowList); wp && wp != w; wp = WINDOW_NEXT_WINDOW(wp))
+            ;
+        if(!wp && ROMlib_layers_with_window(w, [w] { C_CalcVis(w); }))
+            return;
+    }
+
     if(w && WINDOW_VISIBLE(w))
     {
         /* MacPhoenix: Finder's desktop window shares the desktop layer's
@@ -425,7 +437,7 @@ void Executor::C_CalcVis(WindowPeek w)
         else
             SectRgn(LM(GrayRgn), WINDOW_CONT_REGION(w), PORT_VIS_REGION(w));
         ROMlib_layers_clip_above(PORT_VIS_REGION(w));
-        for(wp = LM(WindowList); wp != w; wp = WINDOW_NEXT_WINDOW(wp))
+        for(wp = LM(WindowList); wp && wp != w; wp = WINDOW_NEXT_WINDOW(wp))
             if(WINDOW_VISIBLE(wp))
                 DiffRgn(PORT_VIS_REGION(w), WINDOW_STRUCT_REGION(wp),
                         PORT_VIS_REGION(w));

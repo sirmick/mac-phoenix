@@ -11,6 +11,6 @@ bool HeadlessVideoDriver::setMode(int width, int height, int bpp,
     if(bpp == 0)
         bpp = 1;
 
-    framebuffer_ = Executor::Framebuffer(width, height, bpp);
+    framebuffer_ = Executor::Framebuffer(width, height, bpp, framebuffer_);
     return true;
 }

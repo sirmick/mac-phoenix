@@ -214,10 +214,17 @@ bool PhoenixVideoDriver::setMode(int width, int height, int bpp, bool)
         bpp = 8;
 
     std::lock_guard lk(frameMutex_);
-    framebuffer_ = Framebuffer(width, height, bpp);
+    framebuffer_ = Framebuffer(width, height, bpp, framebuffer_);
     argb_.assign((size_t)width * height, 0xFF000000);
     argbWidth_ = width;
     argbHeight_ = height;
+    {
+        /* rects of the old size (past the new one when it shrank) go:
+           the whole screen is converted at the next render */
+        std::lock_guard dlk(mutex_);
+        dirtyRects_.clear();
+        dirtyRects_.add(0, 0, height, width);
+    }
     scaled_.clear();
     scaledWidth_ = scaledHeight_ = 0;
     if(hidpi::active())

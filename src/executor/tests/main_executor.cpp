@@ -36,7 +36,14 @@ class MockVDriver : public VideoDriver
     virtual bool setMode(int width, int height, int bpp,
                                 bool grayscale_p) override
     {
-        framebuffer_ = Framebuffer(512, 342, 1);
+        /* 1 bit; the size asked for (the Display Manager's tests), 0x0 the
+           size it has */
+        if(width == 0 || height == 0)
+        {
+            width = framebuffer_.width ? framebuffer_.width : 512;
+            height = framebuffer_.height ? framebuffer_.height : 342;
+        }
+        framebuffer_ = Framebuffer(width, height, 1, framebuffer_);
         return true;
     }
 
