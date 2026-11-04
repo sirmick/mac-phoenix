@@ -225,14 +225,34 @@ bool PhoenixVideoDriver::setMode(int width, int height, int bpp, bool)
         dirtyRects_.clear();
         dirtyRects_.add(0, 0, height, width);
     }
+    allocateScaled();
+    return true;
+}
+
+void PhoenixVideoDriver::allocateScaled()
+{
     scaled_.clear();
     scaledWidth_ = scaledHeight_ = 0;
     if(hidpi::active())
     {
-        hidpi::scaled_size(width, height, &scaledWidth_, &scaledHeight_);
+        hidpi::scaled_size(argbWidth_, argbHeight_, &scaledWidth_, &scaledHeight_);
         scaled_.assign((size_t)scaledWidth_ * scaledHeight_, 0xFF000000);
     }
-    return true;
+}
+
+/* Live only where every frame goes out at whatever size it has (rectsHook:
+   the tab, whose canvas follows it); natively the parent sized its frames
+   for the scale Executor started with. */
+bool PhoenixVideoDriver::setScale(double scale)
+{
+    if(!rectsHook)
+        return false;
+    std::lock_guard lk(frameMutex_);
+    hidpi::set_scale(scale);
+    allocateScaled();
+    std::lock_guard dlk(mutex_);
+    dirtyRects_.add(0, 0, argbHeight_, argbWidth_);
+    return hidpi::scale() == scale;
 }
 
 void PhoenixVideoDriver::requestUpdate()

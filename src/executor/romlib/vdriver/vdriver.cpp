@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <cmath>
 #include <vdriver/vdriver.h>
 #include <syn68k_public.h>
 #include <error/error.h>
@@ -57,6 +58,24 @@ bool VideoDriver::takeSizeRequest(int *width, int *height)
         return false;
     *width = r >> 16;
     *height = r & 0xFFFF;
+    return true;
+}
+
+void VideoDriver::requestScale(double scale)
+{
+    if(!(scale >= 1.0 && scale <= 4.0))
+        return;
+    scaleRequest_.store((uint32_t)std::lround(scale * 1000));
+    if(callbacks_)
+        callbacks_->wake();
+}
+
+bool VideoDriver::takeScaleRequest(double *scale)
+{
+    uint32_t r = scaleRequest_.exchange(0);
+    if(!r)
+        return false;
+    *scale = r / 1000.0;
     return true;
 }
 

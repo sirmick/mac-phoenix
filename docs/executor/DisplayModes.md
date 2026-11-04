@@ -59,6 +59,9 @@ Finder window dragged about and `/api/resolution` (BridgeAgent's
   The process that made the change does so before `DMSetDisplayMode`
   returns. Procs registered for `kSystemProcess` (extensions) run in the
   process that made the change.
+- The display scale (the tab's HiDPI box) is taken at the same event call
+  (`VideoDriver::requestScale`): no mode change for programs, the screen
+  painted again at the new scale (HiDPI.md, "The scale changed live").
 - Notify procs called at an event call from PowerPC code (8.6's Finder):
   PowerPC procs through `callPPC`, and 68k ones with A7 below the PowerPC
   frames, which sit just below the 68k stack there.
@@ -98,7 +101,9 @@ WxHxBPP -> WxHxBPP (cause)`, the cause `boot`, `SetDepth`, `DM`
 (DMSetDisplayMode), `driver` (the video driver's SwitchMode) or `request`
 (the page's resize). The first three clicks after a change: `[display]
 click`, where on the page, the Mac point it maps to and the Mac's mouse
-after it. `?diag` or Ctrl+Alt+D shows the same over the screen.
+after it. `?diag` or Ctrl+Alt+D shows the same over the screen, and the
+keys (Ctrl+Alt+S: a screenshot, also with the mouse button down;
+Settings.md).
 
 Tests: `executor_tests --gtest_filter='DisplayMode.*'`
 (`src/executor/tests/displaymode.cpp`); the tab cells `executor.web.dynres`,

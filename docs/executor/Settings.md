@@ -117,11 +117,28 @@ of the running Mac, Disks.md).
 What applies live: the Command key (`keys.js`: Command on Meta, Ctrl or
 Alt, Option and Control the other two), the right button (a click, or
 Control-click), smoothing, the bar's Screenshot and Fullscreen buttons,
-the volume (a GainNode). Fullscreen with `keyboard_capture` takes the
+the volume (a GainNode), the screen size and Sharpness (the display
+scale: below). Fullscreen with `keyboard_capture` takes the
 keyboard through the Keyboard Lock API (Chromium-based browsers), so
 Ctrl+W and the like reach the Mac; holding Esc leaves.
 
 "Restart Executor" in the dialog saves what changed and reloads the page.
+
+The bar's Screenshot button sends the canvas's pixels (and Executor's 1x
+frame at a scale above 1) to the server beside the session's log
+(`/api/shot`: `logs/DAY/SESSION-HHMMSS.png` and a `# screenshot` line),
+with a note asked for first. **Ctrl+Alt+S** does the same and works with
+the mouse button down: a menu tracked, a drag, a button held, to catch
+drawing mid-action. The page catches it in the capture phase (as
+Ctrl+Alt+D) and the Mac gets neither the S's down nor its up. With the
+button up it asks for the note first; down, a dialog would end the press,
+so the shot goes at once (note "Ctrl+Alt+S, the mouse button down") and
+the note is asked for when the button comes up, a `[web] screenshot NAME
+note: ...` line in the log. Executor answers the 1x frame (`'screen1x'`)
+at its yields too, not only at event calls, which a menu track makes none
+of (`web_main.cpp` `on_yield`). The Screenshot button's tooltip and the
+`?diag` overlay say so. Test: `executor.web.shotkey` (tab_shotkey.mjs: the
+Special menu held open on 7.6.1 at dpr 2, both PNGs with the menu in them).
 
 The bar's screen size (main.js `ScreenBar`, `#res`, before the CPU meter):
 **Auto** first (`display.fit_window`: the Mac's screen follows the window
@@ -142,6 +159,20 @@ tooltip says the size and that it is the same setting as Settings'; with
 `?size=` in the address it is disabled (the address sets it for the visit).
 The Monitors control panels, which can't change Executor's screen, are
 left out (DisplayModes.md).
+
+The bar's HiDPI box (main.js `HiDpiBar`, `#hidpi`, after the screen size):
+`display.scale` 2 ticked, 1 not, through `Settings.set` as the screen size
+is; its tooltip "draw the Mac at 2x: sharp on high-DPI screens; costs speed
+and memory", then the scale drawn now and that it is the same setting as
+Settings > Display > Sharpness. That one keeps Auto (0: `devicePixelRatio`
+rounded, 1 to 4) as its default and offers 1× to 4×; the box shows the
+scale in effect (ticked at Auto on a dpr 2 display, at 3× too). With
+`?scale=` in the address it is disabled. Live (HiDPI.md, "The scale
+changed live"): the page asks Executor (`'scale'`), the next frames come
+at the new size and the Worker's canvas follows them; clicks and the
+pointer are mapped in the Mac's 1x pixels at any scale (`guestPoint`,
+`cursor.js`), so nothing else on the page changes. A module built without
+Skia answers that it draws at 1× only, which the tooltip then says.
 
 The bar's CPU meter (main.js `CpuMeter`, `#cpu`): how much of each half
 second the Mac's emulator thread spent working rather than waiting for

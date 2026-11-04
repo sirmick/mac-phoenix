@@ -75,6 +75,7 @@
 #include <quickdraw/cquick.h>
 #include <util/macstrings.h>
 #include <quickdraw/quick.h>
+#include <hidpi/hidpi.h>
 
 #include <emscripten.h>
 
@@ -116,6 +117,13 @@ EM_JS(int, js_take_request, (char *buf, int max), {
     stringToUTF8(op, buf, max);                          /* NUL-terminated */
     stringToUTF8(arg || '', buf + n + 1, max - n - 1);
     return id;
+});
+
+/* The oldest 'screen1x' request, taken out of the queue: its id, 0: none. */
+EM_JS(int, js_take_screen1x, (), {
+    const q = Module.requests || [];
+    const i = q.findIndex((r) => r[1] === 'screen1x');
+    return i < 0 ? 0 : q.splice(i, 1)[0][0];
 });
 
 EM_JS(void, js_reply, (int id, const char *json), {
@@ -542,6 +550,21 @@ void text_drawn(const char *text, int len)
         drawn.pop_front();
 }
 
+/* The answer to request id 'screen1x': the 1x frame as last rendered. */
+void reply_screen1x(int id)
+{
+    std::vector<uint32_t> px;
+    int w, h;
+    if(driver() && driver()->copyFrame(px, w, h))
+    {
+        for(uint32_t &p : px)
+            p = (p & 0xFF00FF00) | (p >> 16 & 0xFF) | (p & 0xFF) << 16;
+        js_reply_pixels(id, w, h, (const uint8_t *)px.data());
+    }
+    else
+        js_reply(id, "null");
+}
+
 /* At an event call of the running application. */
 void on_event_poll()
 {
@@ -621,18 +644,28 @@ void on_event_poll()
                     + ",\"width\":" + std::to_string(vdriver->width())
                     + ",\"height\":" + std::to_string(vdriver->height()) + "}";
         }
+        else if(op == "scale")
+        {
+            /* "N": draw the Mac at N times its size (the HiDPI box,
+               hidpi.h), live: taken at the front process's event call as a
+               size is (displays.cpp), the screen painted again; the page's
+               canvas follows the frames' size. Without Skia: 1 only. */
+            double s = atof(arg.c_str());
+#if EXECUTOR_HIDPI
+            bool ok = s >= 1.0 && s <= 4.0;
+#else
+            bool ok = s == 1.0;
+#endif
+            if(ok)
+                vdriver->requestScale(s);
+            char buf[64];
+            snprintf(buf, sizeof buf, "{\"ok\":%s,\"scale\":%g}", ok ? "true" : "false", hidpi::scale());
+            reply = buf;
+        }
         else if(op == "screen1x")
         {
-            std::vector<uint32_t> px;
-            int w, h;
-            if(driver() && driver()->copyFrame(px, w, h))
-            {
-                for(uint32_t &p : px)
-                    p = (p & 0xFF00FF00) | (p >> 16 & 0xFF) | (p & 0xFF) << 16;
-                js_reply_pixels(id, w, h, (const uint8_t *)px.data());
-                continue;
-            }
-            reply = "null";
+            reply_screen1x(id);
+            continue;
         }
         /* The page's side of Executor stopping (web/tests/tab_stopped.mjs):
            a fatal error of its own, the wasm trapping (an access out of
@@ -653,6 +686,10 @@ void on_event_poll()
 
 void on_yield()
 {
+    /* the 1x frame at once, not at an event call: the page's Ctrl+Alt+S
+       takes it while a menu is tracked or a button held (no event call) */
+    while(int id = js_take_screen1x())
+        reply_screen1x(id);
     int32_t ev[3 * 64];
     int n;
     while((n = js_take_input(ev, 64)) > 0)

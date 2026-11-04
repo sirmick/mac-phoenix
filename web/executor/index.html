@@ -30,6 +30,8 @@
              padding: 3px 4px 3px 8px; font-variant-numeric: tabular-nums; }
   #res { padding: 0 2px; cursor: pointer; }
   #res:disabled { cursor: default; color: #999; }
+  /* The HiDPI box (main.js HiDpiBar): display.scale 2 or 1. */
+  #bar #hidpi-box.disabled { cursor: default; color: #999; }
   #status.lost { background: #543; color: #fda; border-radius: 4px; padding: 4px 10px; }
   /* Sized by main.js: a whole number of device pixels a guest pixel. */
   canvas { background: #000; image-rendering: pixelated; outline: none; }
@@ -63,8 +65,9 @@
   <input id="add" type="file" multiple hidden>
   <label title="Run fat applications' PowerPC code (PowerPC-only ones always do)"><input id="ppc" type="checkbox">PowerPC</label>
   <button id="restart">Restart</button>
-  <button id="shot" title="Send a picture of the screen to the server, for a look later (with what this page printed)">Screenshot</button>
+  <button id="shot" title="Send a picture of the screen to the server, for a look later (with what this page printed). Ctrl+Alt+S takes one too, also with the mouse button down (a menu open, a drag): the note is asked for after">Screenshot</button>
   <span id="res-box"><select id="res" aria-label="The Mac's screen size"></select></span>
+  <label id="hidpi-box"><input id="hidpi" type="checkbox">HiDPI</label>
   <span id="cpu" hidden title="Mac CPU busy: how much of the last half second the emulated Mac spent working rather than waiting for events (the last 15 seconds drawn)"><canvas width="60" height="14"></canvas><span id="cpu-pct"></span><span id="mem"></span></span>
 </div>
 <div id="viewer" hidden>Executor is open in another tab, which has control: its screen, here.

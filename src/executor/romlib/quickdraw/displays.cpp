@@ -21,6 +21,7 @@
 #include <MixedMode.h>
 #include <base/cpu.h>
 #include <base/traps.impl.h>
+#include <hidpi/hidpi.h>
 
 #include <iterator>
 #include <vector>
@@ -710,9 +711,41 @@ bool Executor::ROMlib_dm_set_screen_size(int width, int height, const char *caus
     return true;
 }
 
+/* The display scale changed (the tab's HiDPI box, hidpi.h): programs see
+   nothing change; the presentation surface is made again at the new scale
+   and the whole screen painted, windows, desktop and menu bar, so their
+   text and chrome are recorded again (their contents through the update
+   events that posts). */
+static void dm_set_scale(double scale)
+{
+    double was = hidpi::scale();
+    if(scale == was)
+        return;
+    bool ok = vdriver->setScale(scale);
+    fprintf(stderr, "[display] scale %g -> %g%s\n", was, hidpi::scale(), ok ? "" : " (not changed here)");
+    if(hidpi::scale() == was)
+        return;
+    Rect now = GD_RECT(LM(MainDevice));
+    if(LM(WWExist) == EXIST_YES)
+    {
+        ROMlib_layers_screen_changed(now, now);
+        if(LM(MenuList))
+            DrawMenuBar();
+    }
+    vdriver->updateScreen(now.top, now.left, now.bottom, now.right);
+}
+
 void Executor::ROMlib_dm_poll()
 {
     int w, h;
+    double s;
+    if(!configuring && vdriver->takeScaleRequest(&s))
+    {
+        if(ROMlib_process_is_front())
+            dm_set_scale(s);
+        else
+            vdriver->requestScale(s);
+    }
     if(!configuring && vdriver->takeSizeRequest(&w, &h))
     {
         /* the front process's menu bar and windows: the request waits for

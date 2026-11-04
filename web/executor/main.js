@@ -57,8 +57,12 @@ function machine() {
         : Settings.get('machine.screen').split('x').map(Number);
     asked = [width, height];
     macReported = null;
-    // Executor scales by whole numbers (fractional scales: HiDPI.md phase 6).
-    scale = Math.max(1, Math.round(Settings.get('display.scale') || window.devicePixelRatio || 1));
+    scale = scaleFor(Settings.get('display.scale'));
+}
+// The scale for the setting V (0: Auto, from the display). Executor scales
+// by whole numbers (fractional scales: HiDPI.md phase 6).
+function scaleFor(v) {
+    return Math.max(1, Math.round(v || window.devicePixelRatio || 1));
 }
 
 let worker = null, canvas = null, cursor = null, nextId = 1;
@@ -622,13 +626,61 @@ async function sendShots(note) {
     return name;
 }
 
-document.getElementById('shot').addEventListener('click', async () => {
-    const note = prompt('A note to go with the screenshot (optional):', '');
-    if (note === null)
-        return;
-    const name = await sendShots(note);
+const shotSent = (name) => {
     status.textContent = /^\d/.test(name) ? `Screenshot sent (${name})` : `Screenshot ${name}`;
-});
+};
+async function askedShot() {
+    const note = prompt('A note to go with the screenshot (optional):', '');
+    if (note !== null)
+        shotSent(await sendShots(note));
+}
+document.getElementById('shot').addEventListener('click', askedShot);
+
+// Ctrl+Alt+S: a screenshot that works with the mouse button down too (a
+// menu tracked, a drag, a button held), to catch drawing mid-action. The
+// page keeps the keys from the Mac. With the button up it asks for the
+// note first, as the button does; down, a dialog would end the press, so
+// the shot goes at once and the note is asked for when the button comes
+// up (a line in the log beside the screenshot's). Executor answers
+// 'screen1x' while it tracks too (web_main.cpp on_yield).
+let buttonDown = false, onRelease = [], shotKey = false;
+async function heldShot() {
+    const name = await sendShots('Ctrl+Alt+S, the mouse button down');
+    shotSent(name);
+    if (!/^\d/.test(name))
+        return;
+    const ask = () => {
+        const note = prompt(`A note for the screenshot ${name} (taken with the button down; optional):`, '');
+        if (note)
+            console.log(`[web] screenshot ${name} note: ${note}`);
+    };
+    if (buttonDown)
+        onRelease.push(() => setTimeout(ask, 0));
+    else
+        ask();
+}
+function released() {
+    buttonDown = false;
+    const fns = onRelease;
+    onRelease = [];
+    fns.forEach((f) => f());
+}
+addEventListener('keydown', (e) => {
+    if (!(e.ctrlKey && e.altKey && e.code === 'KeyS'))
+        return;
+    e.preventDefault();
+    e.stopPropagation();
+    shotKey = true;
+    if (!e.repeat)
+        (buttonDown ? heldShot : askedShot)();
+}, true);
+addEventListener('keyup', (e) => {
+    if (e.code === 'KeyS' && shotKey) {     // (its key down never went)
+        shotKey = false;
+        e.preventDefault();
+        e.stopPropagation();
+    }
+}, true);
 
 let autoShots = 0, lastAutoShot = 0;
 function autoShot(why) {
@@ -946,6 +998,7 @@ async function start() {
     await Settings.ready;
     machine();
     ScreenBar.show();
+    HiDpiBar.show();
     await modeKnown;
     if (!standalone)
         return;                     // (modeKnown said why)
@@ -1235,6 +1288,52 @@ const ScreenBar = (() => {
     Settings.on('display.fit_window', show);
     return { show };
 })();
+
+// The bar's HiDPI box: display.scale 2 (ticked) or 1, the same setting as
+// Settings > Display > Sharpness, whose Auto (the default: from the
+// display) it shows the pick of. Live: Executor draws at the new scale from
+// the Mac's next event call ('scale'), the screen painted again; the canvas
+// follows the frames' size, and clicks and the pointer are in the Mac's 1x
+// pixels at any scale.
+const HiDpiBar = (() => {
+    const label = document.getElementById('hidpi-box');
+    const tick = document.getElementById('hidpi');
+    let refused = '';
+    function show() {
+        tick.checked = scale > 1;
+        const v = Settings.get('display.scale');
+        const pinned = v !== (Settings.doc.display || {}).scale;
+        tick.disabled = pinned;
+        label.classList.toggle('disabled', pinned);
+        label.title = 'draw the Mac at 2x: sharp on high-DPI screens; costs speed and memory'
+            + `\nNow ${scale}×${v ? '' : ` (Auto: from this display's ${window.devicePixelRatio || 1} device pixels a CSS pixel)`}`
+            + '; changes at once. The same setting as Settings > Display > Sharpness.'
+            + (refused ? `\n${refused}` : '')
+            + (pinned ? `\nSet for this visit by the page's address (?scale=${v}).` : '');
+    }
+    tick.addEventListener('change', () => {
+        Settings.set({ display: { scale: tick.checked ? 2 : 1 } })
+            .catch((e) => { console.log(`[web] HiDPI: ${e.message}`); show(); });
+    });
+    Settings.on('display.scale', async (v) => {
+        const want = scaleFor(v);
+        if (!worker)
+            scale = want;           // (and machine() at the start)
+        if (want === scale)
+            return show();
+        console.log(`[web] scale asked: ${want}`);
+        const r = await window.executor.request('scale', String(want));
+        if (r && r.ok) {
+            scale = want;
+            refused = '';
+        } else if (r && 'scale' in r) {
+            refused = `This Executor draws at ${r.scale}× only (built without Skia).`;
+        }
+        show();
+        displayChanged('scale');
+    });
+    return { show };
+})();
 // The device-pixel ratio changes with the browser's zoom and between screens.
 (function watchDpr() {
     matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`)
@@ -1346,7 +1445,9 @@ const Diag = (() => {
         delete s.ua;
         el.textContent = Object.entries(s).map(([k, v]) => `${k}: ${v}`).join('\n')
             + `\nserver: ${build.server || '?'}\nexecutor: ${build.executor || '?'}`
-            + (lastClick ? `\nclick: ${lastClick}` : '');
+            + (lastClick ? `\nclick: ${lastClick}` : '')
+            + '\nkeys: Ctrl+Alt+D this overlay; Ctrl+Alt+S a screenshot to the server\'s log,'
+            + '\n  also with the mouse button down (a menu open, a drag): the note after';
     }
     function toggle(on = !el) {
         if (on && !el) {
@@ -1397,6 +1498,7 @@ function attachInput(canvas) {
         startAudio();
         canvas.focus();
         canvas.setPointerCapture(e.pointerId);
+        buttonDown = true;
         const at = guestPoint(e);
         sampleClick(e, at);
         controlClick = e.button === 2 && Settings.get('input.right_click') === 'control';
@@ -1410,7 +1512,9 @@ function attachInput(canvas) {
         send([1, ...at], [2, 0, 0], ...(controlClick ? [[3, 0, 0x36]] : []));
         controlClick = false;
         e.preventDefault();
+        released();
     });
+    canvas.addEventListener('lostpointercapture', () => released());
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
     // The wheel and trackpad: lines (a notch's 100 pixels about 3, a page
     // 15: Executor clicks a page part from 15 on) to Executor, which
