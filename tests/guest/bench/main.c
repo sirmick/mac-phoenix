@@ -5,6 +5,7 @@
 
 #include <Dialogs.h>
 #include <Events.h>
+#include <Files.h>
 #include <Fonts.h>
 #include <Gestalt.h>
 #include <Menus.h>
@@ -81,10 +82,18 @@ static unsigned long micro_us(void)
 
 static FILE *results;
 
+/* Each line on the disk at once (FlushVol; outside the timing): a test
+ * that crashes the application keeps the lines before it. */
+static void flush_results(void)
+{
+    fflush(results);
+    FlushVol(NULL, bench_vref);
+}
+
 void bench_note(const char *text)
 {
     fprintf(results, "# %s\n", text);
-    fflush(results);
+    flush_results();
 }
 
 static char skip_why[80];
@@ -165,7 +174,7 @@ static void run_test(int t, int runs)
     if(tests[t].setup && tests[t].setup())
     {
         fprintf(results, "SKIP %s %s\n", tests[t].name, skip_why[0] ? skip_why : "-");
-        fflush(results);
+        flush_results();
         return;
     }
     for(r = 0; r < runs; r++)
@@ -191,30 +200,41 @@ static void run_test(int t, int runs)
     else
         fprintf(results, " - -");
     fprintf(results, " %s\n", tests[t].work);
-    fflush(results);
+    flush_results();
 }
 
 /* The clocks against each other over two seconds of TickCount: CLOCK
  * ticks-µs Microseconds-µs host-µs, and Microseconds' resolution (the
  * smallest step seen). */
-static void clock_check(void)
+static void clock_check(int ticks, int steps)
 {
     unsigned long t, m0, m1, h0, h1, step = 0, a, b;
     int i;
 
+    if(!ticks)
+        goto resolution;
+
+    /* Busy, no event calls: two seconds of WaitNextEvent lose the session
+     * in the tab on 8.6 (docs/executor/Speed.md); 4 s of Microseconds at
+     * most, in case ticks don't come without one. */
     t = TickCount();
-    while(TickCount() == t)
+    m0 = micro_us();
+    while(TickCount() == t && micro_us() - m0 < 4000000ul)
         ;
     t = TickCount();
     m0 = micro_us();
     h0 = host_us();
-    while(TickCount() < t + 120)
-        idle();
+    while(TickCount() < t + 120 && micro_us() - m0 < 4000000ul)
+        ;
     m1 = micro_us();
     h1 = host_us();
     fprintf(results, "CLOCK %lu %lu %s", 2000000ul, m1 - m0, have_host ? "" : "-\n");
     if(have_host)
         fprintf(results, "%lu\n", h1 - h0);
+    flush_results();
+resolution:
+    if(!steps)
+        return;
     for(i = 0; i < 2000; i++)
     {
         a = micro_us();
@@ -226,7 +246,7 @@ static void clock_check(void)
             break;
     }
     fprintf(results, "# Microseconds steps by %lu us at the least\n", step);
-    fflush(results);
+    flush_results();
 }
 
 /* A test's name starts with a word of the filter ("copybits" matches
@@ -262,7 +282,7 @@ static void header(int runs)
             (*(*GetMainDevice())->gdPMap)->pixelSize);
     bench_note(line);
     fprintf(results, "RUNS %d\nHOST %s\n", runs, have_host ? "yes" : "no");
-    fflush(results);
+    flush_results();
 }
 
 int main(void)
@@ -307,8 +327,8 @@ int main(void)
         return 1;
     host_clock_init();
     header(runs);
-    if(wanted("clock", filter))
-        clock_check();
+    if(wanted("clock", filter) || wanted("clock_ticks", filter) || wanted("clock_steps", filter))
+        clock_check(wanted("clock_ticks", filter), wanted("clock_steps", filter));
 
     add_cpu_tests();
     add_fp_tests();
@@ -330,5 +350,6 @@ int main(void)
 
     fprintf(results, "---\nDONE\n");
     fclose(results);
+    FlushVol(NULL, bench_vref);         /* on the disk now: run.py reads the image */
     return 0;
 }

@@ -21,6 +21,7 @@ import path from 'node:path';
 import readline from 'node:readline';
 import { fileURLToPath } from 'node:url';
 
+console.log = (...a) => console.error(...a);   // stdout is the protocol: the page's log to stderr
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const { launch, newPage, firstFrame, request, until } = await import(path.join(ROOT, 'web/tests/harness.mjs'));
 const { startServer } = await import(path.join(ROOT, 'web/tests/server.mjs'));

@@ -714,12 +714,16 @@ def own(s, shots, tag, limit):
         return out
     t0 = time.time()
     shot = t0
+    others = 0
     while time.time() - t0 < limit:
         if not s.alive():
             out["notes"].append("crashed")
             break
-        if s.app() not in ("MacPhoenixBench", None):
+        front_app = s.app()
+        others = others + 1 if front_app not in ("MacPhoenixBench", None) else 0
+        if others >= 3:                       # (three looks: not a moment's other front)
             out["wall"]["all"] = round(time.time() - t0, 1)
+            out["front_after"] = front_app
             return out
         if time.time() - shot > 60:           # what it is doing, now and then
             save(s, shots, f"{tag}-running")
