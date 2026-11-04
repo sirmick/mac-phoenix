@@ -687,7 +687,7 @@ static void finish_change(const Rect &old_screen)
     vdriver->updateScreen(now.top, now.left, now.bottom, now.right);
 }
 
-bool Executor::ROMlib_dm_set_screen_size(int width, int height)
+bool Executor::ROMlib_dm_set_screen_size(int width, int height, const char *cause)
 {
     if(!size_acceptable(width, height))
         return false;
@@ -697,7 +697,7 @@ bool Executor::ROMlib_dm_set_screen_size(int width, int height)
         return true;
     if(!Framebuffer::reserve)
         Framebuffer::reserve = (size_t)maxWidth * maxHeight * 4;
-    if(!gd_set_screen_size(width, height))
+    if(!gd_set_screen_size(width, height, cause))
         return false;
     if(configuring)
     {
@@ -718,7 +718,7 @@ void Executor::ROMlib_dm_poll()
         /* the front process's menu bar and windows: the request waits for
            it (a background process's event call comes first, often) */
         if(ROMlib_process_is_front())
-            ROMlib_dm_set_screen_size(w, h);
+            ROMlib_dm_set_screen_size(w, h, "request");
         else
             vdriver->requestSize(w, h);
     }

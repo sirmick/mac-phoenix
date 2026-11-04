@@ -81,9 +81,28 @@ answering". (A later report of 640x480 at scale 2 came from a server
 still running a build before 7c77d4b5, the screen size kept through a
 depth change: its restart had failed, the port still held.)
 
+Diagnostics (the session log, `tools/standalone` keeps it per session):
+the page writes a `[display]` line at start and whenever the display
+changes (window resize, dpr: zoom or another monitor, fullscreen, the
+Mac's size, the fit): the browser and OS parsed from the UA (and the UA),
+`devicePixelRatio`, `visualViewport.scale`, the window's inner and outer
+size, `screen`, the canvas in CSS and device pixels, the fit (device
+pixels a Mac pixel), the Mac's size asked and reported, the HiDPI scale,
+the pointer image's device pixels, fit-to-window, fullscreen. `[build]`:
+the server's version and commit (`/api/server` `revision`, from go's
+build info) and the module's build id (git describe at build time,
+`build_id.cmake`), also the status line's tooltip: a server left on an
+old build shows at once. Executor logs every mode change, `[display] mode
+WxHxBPP -> WxHxBPP (cause)`, the cause `boot`, `SetDepth`, `DM`
+(DMSetDisplayMode), `driver` (the video driver's SwitchMode) or `request`
+(the page's resize). The first three clicks after a change: `[display]
+click`, where on the page, the Mac point it maps to and the Mac's mouse
+after it. `?diag` or Ctrl+Alt+D shows the same over the screen.
+
 Tests: `executor_tests --gtest_filter='DisplayMode.*'`
 (`src/executor/tests/displaymode.cpp`); the tab cells `executor.web.dynres`,
-`executor.web.input_86_laptop`, `executor.web.input_86_firefox`, `executor.web.watch`.
+`executor.web.input_86_laptop`, `executor.web.input_86_firefox`, `executor.web.watch`,
+`executor.web.display_diag`.
 
 ## Open
 

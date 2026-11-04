@@ -55,6 +55,8 @@ let width = 640, height = 480, scale = 1;
 function machine() {
     [width, height] = Settings.get('display.fit_window') ? windowSize()
         : Settings.get('machine.screen').split('x').map(Number);
+    asked = [width, height];
+    macReported = null;
     // Executor scales by whole numbers (fractional scales: HiDPI.md phase 6).
     scale = Math.max(1, Math.round(Settings.get('display.scale') || window.devicePixelRatio || 1));
 }
@@ -991,6 +993,7 @@ async function start() {
     canvas.tabIndex = 0;
     box.replaceChildren(canvas, Loading.el);       // (over the screen until its first frame)
     fitCanvas();
+    displayChanged('start');
     attachInput(canvas);
     cursor = new MacCursor(canvas, () => width);
 
@@ -1035,8 +1038,13 @@ async function start() {
             width = m.width;
             height = m.height;
             window.executor.screen = { width, height };
+            macReported = [m.width, m.height];
             fitCanvas();
             cursor.apply();
+            displayChanged('mac size');
+        } else if (m.type === 'build') {
+            build.executor = m.id;
+            showBuild();
         } else if (m.type === 'cursor') {
             window.executor.cursor = m;
             cursor.set(m);
@@ -1126,6 +1134,7 @@ function fitCanvas() {
     // doesn't: whole device pixels alone drew 1280x1024 at dpr 2 in a
     // 1440x900 window a device pixel each, a quarter of the room.
     const scale = Math.max(Math.floor(fit), Math.min(fit, dpr));
+    fitScale = scale;
     canvas.style.width = `${width * scale / dpr}px`;
     canvas.style.height = `${height * scale / dpr}px`;
 }
@@ -1147,6 +1156,7 @@ function resizeMac(w, h) {
     if (!worker || (w === width && h === height))
         return;
     console.log(`[web] screen size asked: ${w}x${h}`);
+    asked = [w, h];
     window.executor.request('resize', `${w}x${h}`);
 }
 
@@ -1174,7 +1184,141 @@ Settings.on('machine.screen', (v) => {
 // The device-pixel ratio changes with the browser's zoom and between screens.
 (function watchDpr() {
     matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`)
-        .addEventListener('change', () => { fitCanvas(); watchDpr(); }, { once: true });
+        .addEventListener('change', () => { fitCanvas(); watchDpr(); displayChanged('dpr'); }, { once: true });
+})();
+
+// ---- diagnostics (docs/executor/DisplayModes.md): display questions
+// answered from the session log. A '[display]' line at start and when the
+// display changes (the window, the dpr: zoom or another monitor,
+// fullscreen, the Mac's size, the fit), the builds ('[build]': the server's
+// and the module's, also the status line's tooltip), the first clicks
+// after a change ('[display] click': where on the page, the Mac point it
+// maps to, the Mac's own mouse after it). Executor logs its mode changes
+// ('[display] mode', qGDevice.cpp). ?diag or Ctrl+Alt+D: the same over the
+// screen, live. On change only: nothing per frame.
+let asked = [width, height], macReported = null, fitScale = 1, sampleClicks = 0, lastClick = '';
+const build = { server: '', executor: '' };
+const agent = (() => {
+    const ua = navigator.userAgent;
+    const b = /Firefox\/([\d.]+)/.exec(ua) ? `Firefox ${RegExp.$1}`
+        : /Edg\/([\d.]+)/.exec(ua) ? `Edge ${RegExp.$1}`
+        : /Chrome\/([\d.]+)/.exec(ua) ? `Chrome ${RegExp.$1}`
+        : /Version\/([\d.]+).*Safari/.exec(ua) ? `Safari ${RegExp.$1}` : 'other';
+    const os = /Windows NT ([\d.]+)/.exec(ua) ? `Windows ${RegExp.$1}`
+        : /Android ([\d.]+)/.exec(ua) ? `Android ${RegExp.$1}`
+        : /(iPhone|iPad)/.test(ua) ? 'iOS'
+        : /Mac OS X ([\d_.]+)/.exec(ua) ? `macOS ${RegExp.$1.replace(/_/g, '.')}`
+        : /CrOS/.test(ua) ? 'ChromeOS' : /Linux/.test(ua) ? 'Linux' : 'other';
+    return { ua, browser: b, os };
+})();
+const r2 = (v) => Math.round(v * 100) / 100;
+
+function displayState() {
+    const dpr = window.devicePixelRatio || 1;
+    const r = canvas && canvas.getBoundingClientRect();
+    return {
+        browser: agent.browser, os: agent.os, dpr, zoom: window.visualViewport ? r2(visualViewport.scale) : null,
+        inner: `${innerWidth}x${innerHeight}`, outer: `${outerWidth}x${outerHeight}`,
+        screen: `${screen.width}x${screen.height}`,
+        canvas_css: r ? `${r2(r.width)}x${r2(r.height)} at ${r2(r.left)},${r2(r.top)}` : null,
+        canvas_device: r ? `${Math.round(r.width * dpr)}x${Math.round(r.height * dpr)}` : null,
+        fit: r2(fitScale),                      // device pixels a Mac pixel
+        mac_asked: asked.join('x'), mac: macReported ? macReported.join('x') : null, hidpi: scale,
+        cursor_px: cursor ? cursor.px || null : null,
+        fit_window: !!Settings.get('display.fit_window'), fullscreen: !!document.fullscreenElement,
+        ua: agent.ua,
+    };
+}
+
+// Changes settle (a window drag, the cursor following a fit) before the
+// line: one for a burst, with every cause in it.
+let displayWhy = new Set(), displayTimer = 0, lastDisplay = '';
+function displayChanged(why) {
+    if (!canvas)
+        return;             // (before the first start: the settings applied at load)
+    displayWhy.add(why);
+    clearTimeout(displayTimer);
+    displayTimer = setTimeout(() => {
+        const why = [...displayWhy].join(',');
+        displayWhy = new Set();
+        const state = JSON.stringify(displayState());
+        if (state !== lastDisplay || why === 'start') {
+            lastDisplay = state;
+            console.log(`[display] ${why} ${state}`);
+            sampleClicks = 3;
+        }
+        Diag.update();
+    }, 400);
+}
+window.addEventListener('resize', () => displayChanged('resize'));
+document.addEventListener('fullscreenchange', () => displayChanged('fullscreen'));
+Settings.on('display.fit_window', () => displayChanged('fit'));
+Settings.on('machine.screen', () => displayChanged('settings'));
+window.visualViewport && visualViewport.addEventListener('resize', () => displayChanged('zoom'));
+
+function showBuild() {
+    const text = `server ${build.server || '?'}; Executor ${build.executor || '?'}`;
+    console.log(`[build] ${text}`);
+    status.title = text;
+    Diag.update();
+}
+fetch('api/server', { cache: 'no-store' }).then((r) => r.ok ? r.json() : null).then((s) => {
+    if (!s)
+        return;
+    build.server = s.version + (s.revision ? ` (${s.revision})` : '');
+    showBuild();
+}).catch(() => {});
+
+// A click's mapping (pointerdown): logged for the first few after a change.
+async function sampleClick(e, at) {
+    if (sampleClicks <= 0)
+        return;
+    sampleClicks--;
+    const r = canvas.getBoundingClientRect();
+    const mac = await within(window.executor.request('mouse'), 2000);
+    lastClick = `page ${r2(e.clientX)},${r2(e.clientY)} (canvas ${r2(r.left)},${r2(r.top)} ${r2(r.width)}x${r2(r.height)})`
+        + ` -> mac ${at.join(',')}; the Mac's mouse ${mac && 'x' in mac ? `${mac.x},${mac.y}` : '?'}`;
+    console.log(`[display] click ${lastClick}`);
+    Diag.update();
+}
+
+// The overlay: ?diag, Ctrl+Alt+D.
+const Diag = (() => {
+    let el = null, timer = 0;
+    function update() {
+        if (!el)
+            return;
+        const s = displayState();
+        delete s.ua;
+        el.textContent = Object.entries(s).map(([k, v]) => `${k}: ${v}`).join('\n')
+            + `\nserver: ${build.server || '?'}\nexecutor: ${build.executor || '?'}`
+            + (lastClick ? `\nclick: ${lastClick}` : '');
+    }
+    function toggle(on = !el) {
+        if (on && !el) {
+            el = document.createElement('pre');
+            el.id = 'diag';
+            el.style.cssText = 'position:fixed;right:8px;bottom:8px;z-index:1000;margin:0;padding:6px 8px;'
+                + 'background:rgba(0,0,0,.75);color:#cfc;font:11px/1.35 monospace;pointer-events:none;white-space:pre-wrap;max-width:40em';
+            document.body.append(el);
+            timer = setInterval(update, 1000);      // (the canvas moves without an event, at times)
+            update();
+        } else if (!on && el) {
+            el.remove();
+            el = null;
+            clearInterval(timer);
+        }
+    }
+    addEventListener('keydown', (e) => {
+        if (e.ctrlKey && e.altKey && e.code === 'KeyD') {
+            toggle();
+            e.preventDefault();
+            e.stopPropagation();
+        }
+    }, true);
+    if (params.has('diag'))
+        toggle(true);
+    return { update, toggle };
 })();
 
 // ---- input: [kind, a, b] events (web_main.cpp) ----
@@ -1200,6 +1344,7 @@ function attachInput(canvas) {
         canvas.focus();
         canvas.setPointerCapture(e.pointerId);
         const at = guestPoint(e);
+        sampleClick(e, at);
         controlClick = e.button === 2 && Settings.get('input.right_click') === 'control';
         console.log(`[in] down ${at}${controlClick ? ' control' : ''}`);
         send(...(controlClick ? [[3, 1, 0x36]] : []), [1, ...at], [2, 1, 0]);

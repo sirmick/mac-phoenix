@@ -8,6 +8,13 @@ target_link_options(executor-web PRIVATE
     -sINITIAL_MEMORY=256MB
     -lworkerfs.js                         # uploaded disk images, not copied
     -sEXPORTED_RUNTIME_METHODS=FS,callMain)
+# Its build id (build_id.cmake: git describe), every build.
+add_custom_target(executor-web-build-id
+    COMMAND ${CMAKE_COMMAND} -DSRC=${PROJECT_SOURCE_DIR} -DOUT=${CMAKE_CURRENT_BINARY_DIR}/build_id.h
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/build_id.cmake
+    BYPRODUCTS ${CMAKE_CURRENT_BINARY_DIR}/build_id.h)
+add_dependencies(executor-web executor-web-build-id)
+target_include_directories(executor-web PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 # The page: web/executor next to the module, copied on every build (it
 # changes without the module relinking).
 add_custom_target(executor-web-page ALL
@@ -46,6 +53,14 @@ if(NODE_COMMAND)
         COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_watch.mjs
                 $<TARGET_FILE_DIR:executor-web>)
     set_tests_properties(executor.web.watch PROPERTIES
+        LABELS "executor;web" TIMEOUT 200 SKIP_RETURN_CODE 77
+        ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM}")
+    # The display diagnostics in the session log ('[display]', '[build]';
+    # docs/executor/DisplayModes.md) and the ?diag overlay.
+    add_test(NAME executor.web.display_diag
+        COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_display.mjs
+                $<TARGET_FILE_DIR:executor-web>)
+    set_tests_properties(executor.web.display_diag PROPERTIES
         LABELS "executor;web" TIMEOUT 200 SKIP_RETURN_CODE 77
         ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM}")
     # W3: uploaded applications driven in the tab (PPCHello, the suite's

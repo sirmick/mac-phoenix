@@ -5,7 +5,7 @@ package main
 //	/                 the tab (embedded, or --site DIR)
 //	/library.json     the library (library.go); /disks/NAME its images, with Range;
 //	                  /covers/NAME their covers
-//	/api/server       { standalone, version, tls }
+//	/api/server       { standalone, version, revision (the build's commit), tls }
 //	/api/me           { name, owner, mode: "standalone" }
 //	/api/session      POST ?id=ID[&take=1] the controlling tab (session.go);
 //	                  /api/session/release, PUT/GET /api/session/screen
@@ -52,6 +52,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
@@ -65,6 +66,36 @@ const (
 )
 
 var version = "dev" // -ldflags "-X main.version=..."
+
+// The commit the binary was built from, as go build records it (a
+// version "dev" too): "abcdef12[-dirty] 2026-11-04T21:03:06Z", or "".
+// The tab logs and shows it: a server left on an old build shows at once.
+var revision = func() string {
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return ""
+	}
+	var rev, at, dirty string
+	for _, s := range info.Settings {
+		switch s.Key {
+		case "vcs.revision":
+			rev = s.Value
+		case "vcs.time":
+			at = s.Value
+		case "vcs.modified":
+			if s.Value == "true" {
+				dirty = "-dirty"
+			}
+		}
+	}
+	if len(rev) > 8 {
+		rev = rev[:8]
+	}
+	if rev == "" {
+		return ""
+	}
+	return strings.TrimSpace(rev + dirty + " " + at)
+}()
 
 type HTTPError struct {
 	status int
@@ -412,7 +443,7 @@ func (s *Server) static(c *ctx, p string) error {
 
 func init() {
 	handle("GET", "/api/server", true, func(c *ctx, m []string) error {
-		return c.sendJSON(200, map[string]any{"standalone": true, "version": version, "tls": c.s.tls})
+		return c.sendJSON(200, map[string]any{"standalone": true, "version": version, "revision": revision, "tls": c.s.tls})
 	})
 	handle("GET", "/api/me", true, func(c *ctx, m []string) error {
 		return c.sendJSON(200, map[string]any{"name": "local", "owner": true, "mode": "standalone"})
