@@ -12,6 +12,7 @@
 #include <unordered_map>
 #include <string>
 #include <array>
+#include <atomic>
 #include <vector>
 
 
@@ -55,8 +56,19 @@ struct Framebuffer
     bool rootless = false;
     rgb_spec_t *rgbSpec = nullptr;
 
+    /* MacPhoenix: the bytes data holds, which may be more than this size
+       needs: the low allocator (window 1) only reuses blocks of the same
+       size, so a screen whose size keeps changing (the browser window's)
+       keeps one block as large as the largest it had. */
+    size_t capacity = 0;
+
     Framebuffer() = default;
     Framebuffer(int w, int h, int d);
+    /* The same, in previous's block if it is large enough; a new block is
+       at least reserve bytes (the Display Manager sets it to its largest
+       screen's before the first live change: one block, not one per size). */
+    Framebuffer(int w, int h, int d, const Framebuffer &previous);
+    static size_t reserve;
 };
 
 class IEventListener
@@ -138,6 +150,13 @@ public:
     virtual void noteUpdatesDone() {}
     virtual bool updateMode() { return false; }
 
+    /* MacPhoenix: a new screen size the host asks for (Settings, the
+       browser window, /api/resolution), from any thread. The Display
+       Manager takes it at the front process's next event call and changes
+       the mode as DMSetDisplayMode does (quickdraw/displays.cpp). */
+    void requestSize(int width, int height);
+    bool takeSizeRequest(int *width, int *height);
+
     virtual bool handleMenuBarDrag() { return false; }
 
     uint8_t *framebuffer() { return framebuffer_.data.get(); }
@@ -161,6 +180,8 @@ protected:
 
     std::mutex mutex_;
     std::array<uint32_t, 256> colors_;
+
+    std::atomic<uint32_t> sizeRequest_ { 0 };   /* width << 16 | height, 0: none */
 
     std::vector<int16_t> rootlessRegion_;
     std::vector<int16_t> pendingRootlessRegion_;

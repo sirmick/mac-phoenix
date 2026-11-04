@@ -1,3 +1,4 @@
+#include <rsys/displaymode.h>
 #include "executor_host.h"
 #include "phoenix.h"
 #include "phoenix_sound.h"
@@ -310,6 +311,14 @@ uint32_t guest_ram_size()
 double cpu_busy()
 {
     return Executor::hostidle::busy();
+}
+
+bool request_screen_size(int width, int height)
+{
+    if(!Executor::vdriver || !Executor::ROMlib_dm_size_acceptable(width, height))
+        return false;
+    Executor::vdriver->requestSize(width, height);
+    return true;
 }
 
 }  // namespace executor_host

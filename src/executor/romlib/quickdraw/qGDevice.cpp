@@ -464,6 +464,14 @@ static void gd_update_all_ports(GDHandle gdh, GUEST<Ptr> oldBaseAddr, Rect oldGD
 
         for(GrafPtr gp : portList)
         {
+            /* MacPhoenix: a port on the screen takes its new size; one
+               elsewhere (a GWorld's) keeps its own (was given the screen's
+               before the check below) */
+            bool on_screen = CGrafPort_p(gp)
+                ? PIXMAP_BASEADDR(CPORT_PIXMAP(gp)) == oldBaseAddr
+                : PORT_BITS(gp).baseAddr == oldBaseAddr;
+            if(!on_screen)
+                continue;
             Rect newBounds = PORT_BOUNDS(gp);
             newBounds.right = newBounds.left - screen.left + screen.right;
             newBounds.bottom = newBounds.top - screen.top + screen.bottom;
@@ -472,8 +480,6 @@ static void gd_update_all_ports(GDHandle gdh, GUEST<Ptr> oldBaseAddr, Rect oldGD
             if(CGrafPort_p(gp))
             {
                 PixMapHandle port_pixmap = CPORT_PIXMAP(gp);
-                if(PIXMAP_BASEADDR(port_pixmap) != oldBaseAddr)
-                    continue;
 
                 PIXMAP_BASEADDR(port_pixmap) = PIXMAP_BASEADDR(gd_pixmap);
                 pixmap_set_pixel_fields(*port_pixmap, PIXMAP_PIXEL_SIZE(gd_pixmap));
@@ -489,8 +495,6 @@ static void gd_update_all_ports(GDHandle gdh, GUEST<Ptr> oldBaseAddr, Rect oldGD
             }
             else
             {
-                if(PORT_BITS(gp).baseAddr != oldBaseAddr)
-                    continue;
                 PORT_BITS(gp).baseAddr = PIXMAP_BASEADDR(gd_pixmap);
                 BITMAP_SET_ROWBYTES(&PORT_BITS(gp),
                                       PIXMAP_ROWBYTES(gd_pixmap));
@@ -527,6 +531,34 @@ void Executor::gd_vdriver_mode_changed()
         redraw_screen();
         ROMlib_rootless_update();
     }
+}
+
+/* MacPhoenix: the screen at a new size, its depth kept (the Display
+   Manager's resolution change, quickdraw/displays.cpp): the framebuffer,
+   the main GDevice, the screen's ports, ScrnBase and ScreenRow. The
+   desktop, the windows and the processes' QuickDraw globals are the
+   Display Manager's. */
+bool Executor::gd_set_screen_size(int width, int height)
+{
+    GDHandle gdh = LM(MainDevice);
+    PixMapHandle gd_pixmap = GD_PMAP(gdh);
+    GUEST<Ptr> oldBase = PIXMAP_BASEADDR(gd_pixmap);
+    Rect oldRect = PIXMAP_BOUNDS(gd_pixmap);
+
+    HideCursor();
+    if(!vdriver->setMode(width, height, PIXMAP_PIXEL_SIZE(gd_pixmap), vdriver->isGrayscale())
+       || !vdriver->framebuffer())
+    {
+        ShowCursor();
+        return false;
+    }
+    gd_setup_main_device();
+    cursor_reset_current_cursor();
+    ShowCursor();
+    gd_update_all_ports(gdh, oldBase, oldRect);
+    LM(ScrnBase) = PIXMAP_BASEADDR(gd_pixmap);
+    LM(ScreenRow) = PIXMAP_ROWBYTES(gd_pixmap) / PIXMAP_PIXEL_SIZE(gd_pixmap); /* as InitGraf */
+    return true;
 }
 
 OSErr Executor::C_SetDepth(GDHandle gdh, INTEGER bpp, INTEGER which_flags,

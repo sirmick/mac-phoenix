@@ -136,6 +136,11 @@ void Executor::cpu_restore_thread_state(const void *from)
     getPowerCore().restoreExecContext((const uint8_t *)from + sizeof s);
 }
 
+bool Executor::ppcInCall()
+{
+    return ppcDepth > 0;
+}
+
 uint32_t Executor::callPPCOnStack(uint32_t tv, uint32_t stack_top, std::initializer_list<uint32_t> args)
 {
     /* callPPC puts its frame below the stacks in use: here, this one. */

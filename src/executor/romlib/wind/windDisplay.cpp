@@ -177,8 +177,11 @@ void Executor::C_ShowHide(WindowPtr w, Boolean flag)
         WINDCALL(w, wDraw, 0);
         CopyRgn(WINDOW_CONT_REGION(w), WINDOW_UPDATE_REGION(w));
 
+        /* MacPhoenix: none here for a window of another process's
+           (Control Strip's, shown by its Display Manager notify proc in
+           the process that changed the mode): no colour table */
         aux_w = *lookup_aux_win(w);
-        w_ctab = (*aux_w)->awCTable;
+        w_ctab = aux_w ? (*aux_w)->awCTable : nullptr;
         if(w_ctab)
         {
             int i;

@@ -214,7 +214,7 @@ bool PhoenixVideoDriver::setMode(int width, int height, int bpp, bool)
         bpp = 8;
 
     std::lock_guard lk(frameMutex_);
-    framebuffer_ = Framebuffer(width, height, bpp);
+    framebuffer_ = Framebuffer(width, height, bpp, framebuffer_);
     argb_.assign((size_t)width * height, 0xFF000000);
     argbWidth_ = width;
     argbHeight_ = height;
