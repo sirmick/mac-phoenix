@@ -636,6 +636,7 @@ extern void ROMlib_fill_pixpat(PixPatHandle);
 extern RGBColor *ROMlib_qd_color_to_rgb(LONGINT);
 
 extern void gd_vdriver_mode_changed();
+extern bool gd_set_screen_size(int width, int height);
 extern void gd_update_colors();
 extern void ROMlib_InitGWorlds(void);
 extern void ROMlib_InitGDevices(int width, int height, int bpp, bool grayscale);

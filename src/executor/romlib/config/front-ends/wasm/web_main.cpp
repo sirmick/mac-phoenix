@@ -50,6 +50,7 @@
  * The Worker answers 'read' and 'write' itself: files in the module's
  * filesystem, such as the Host volume (/host).
  */
+#include <rsys/displaymode.h>
 #include "executor_host.h"
 #include "phoenix.h"
 #include "hfs_sideload.h"
@@ -597,6 +598,21 @@ void on_event_poll()
         }
         else if(op == "eject")
             reply = std::to_string(eject_image(arg));
+        else if(op == "resize")
+        {
+            /* "WxH": the Mac's screen at that size, live (Settings, the
+               browser window): the Display Manager takes it at the front
+               process's event call (quickdraw/displays.cpp); the page
+               hears the new size with the next rects. Answers the size it
+               has now and whether the one asked for is in range. */
+            int w = 0, h = 0;
+            bool ok = sscanf(arg.c_str(), "%dx%d", &w, &h) == 2 && ROMlib_dm_size_acceptable(w, h);
+            if(ok)
+                vdriver->requestSize(w, h);
+            reply = "{\"ok\":" + std::string(ok ? "true" : "false")
+                    + ",\"width\":" + std::to_string(vdriver->width())
+                    + ",\"height\":" + std::to_string(vdriver->height()) + "}";
+        }
         else if(op == "screen1x")
         {
             std::vector<uint32_t> px;

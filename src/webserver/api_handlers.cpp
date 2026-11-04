@@ -874,6 +874,20 @@ Response APIRouter::handle_resolution_post(const Request& req) {
         return Response::json("{\"success\": false, \"error\": \"missing w/h\"}");
     }
 
+    // Executor: any size in its range, through its Display Manager
+    // (docs/executor/DisplayModes.md); no bridge, no snapping.
+    if (ctx_->subprocess && ctx_->config && ctx_->config->backend_string() == "executor") {
+        std::string answer;
+        if (!executor_command("resize " + std::to_string(want_w) + " " + std::to_string(want_h), answer))
+            return Response::json("{\"success\": false, \"error\": \"" + answer + "\"}");
+        bool ok = answer.find("\"ok\":true") != std::string::npos;
+        std::ostringstream out;
+        out << "{\"success\":" << (ok ? "true" : "false")
+            << ",\"requested\":{\"w\":" << want_w << ",\"h\":" << want_h << "}"
+            << ",\"executor\":" << answer << "}";
+        return Response::json(out.str());
+    }
+
     auto& cfg = config::EmulatorConfig::instance();
     const std::uint8_t want_flag = cfg.is_ppc()
         ? mp::video::kFlagPpc : mp::video::kFlagM68k;
@@ -1690,24 +1704,38 @@ Response APIRouter::handle_ppc_break(const Request& req) {
     }
     if (!ctx_->subprocess || !ctx_->config || ctx_->config->backend_string() != "executor")
         return fail(409, "an Executor session only");
-    auto* buf = const_cast<IPCBuffer*>(ctx_->subprocess->ipc_client()->shm());
-    if (!buf || !ctx_->subprocess->is_running())
-        return fail(503, "emulator not running");
     if (ctx_->config->executor_ppc_break.empty())
         return fail(409, "start the session with --executor-ppc-break (a SPEC, or on)");
+    if (command.size() >= sizeof(IPCBuffer::debug_command))
+        return fail(400, "spec too long");
+    std::string answer;
+    if (!executor_command(command, answer))
+        return fail(answer == "emulator not running" ? 503 : 504, answer);
+    return Response::json(answer);
+}
+
+// A command to the Executor child over the IPC buffer's debug slot
+// (executor_child.cpp): its JSON answer, or false and why.
+bool APIRouter::executor_command(const std::string& command, std::string& answer) {
+    auto* buf = const_cast<IPCBuffer*>(ctx_->subprocess->ipc_client()->shm());
+    if (!buf || !ctx_->subprocess->is_running()) {
+        answer = "emulator not running";
+        return false;
+    }
     static std::mutex mutex;
     std::lock_guard<std::mutex> lock(mutex);
-    if (command.size() >= sizeof(buf->debug_command))
-        return fail(400, "spec too long");
     snprintf(buf->debug_command, sizeof(buf->debug_command), "%s", command.c_str());
     uint32_t want = IPC_ATOMIC_LOAD(buf->debug_request) + 1;
     IPC_ATOMIC_STORE(buf->debug_request, want);
     for (int i = 0; i < 200; i++) {
-        if (IPC_ATOMIC_LOAD(buf->debug_done) == want)
-            return Response::json(std::string(buf->debug_json));
+        if (IPC_ATOMIC_LOAD(buf->debug_done) == want) {
+            answer = buf->debug_json;
+            return true;
+        }
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
-    return fail(504, "no answer from the emulator");
+    answer = "no answer from the emulator";
+    return false;
 }
 
 Response APIRouter::handle_windows(const Request& req) {

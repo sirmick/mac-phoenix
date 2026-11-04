@@ -56,6 +56,11 @@ namespace Executor
        (a PowerPC thread's entry), top `stack_top`. */
     uint32_t callPPCOnStack(uint32_t tv, uint32_t stack_top, std::initializer_list<uint32_t> args);
 
+    /* MacPhoenix: is PowerPC code in a call (the current process's)? Its
+       frames may then be just below the 68k stack (an event call from
+       PowerPC code): 68k code run from here needs A7 below them. */
+    bool ppcInCall();
+
     unsigned long ROMlib_destroy_blocks(syn68k_addr_t start, uint32_t count,
                                         bool flush_only_faulty_checksums);
 }

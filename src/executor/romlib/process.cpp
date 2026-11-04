@@ -51,6 +51,7 @@ using namespace Executor;
 #include <base/trapglue.h>
 
 #include <minicoro.h>
+#include <rsys/displaymode.h>
 #include <functional>
 
 
@@ -802,6 +803,54 @@ static void recalc_all_layers()
             if(WINDOW_VISIBLE(w))
                 CalcVis(w);
     }
+}
+
+/* MacPhoenix: the screen changed size (displays.cpp). Every layer's
+   windows whose title bar the new screen doesn't show move back onto it,
+   as the Display Manager moves every application's (Display Manager aware
+   or not: tests/guest/dmprobe); the desktop layer is the new GrayRgn; then
+   every visible region and the whole screen again (update events for every
+   window, the desktop repainted). */
+void Executor::ROMlib_layers_screen_changed(const Rect &old_screen, const Rect &new_screen)
+{
+    auto move_windows = [&] {
+        for(WindowPeek w = LM(WindowList); w; w = WINDOW_NEXT_WINDOW(w))
+        {
+            Rect s = (*WINDOW_STRUCT_REGION(w))->rgnBBox;
+            if(EmptyRect(&s))
+                continue;
+            Point d = ROMlib_dm_window_offset(s, (*WINDOW_CONT_REGION(w))->rgnBBox.top,
+                                              old_screen, new_screen);
+            if(!d.h && !d.v)
+                continue;
+            /* MoveWindow's bookkeeping, without its painting: all of the
+               screen is painted below */
+            OffsetRgn(WINDOW_STRUCT_REGION(w), d.h, d.v);
+            OffsetRgn(WINDOW_CONT_REGION(w), d.h, d.v);
+            OffsetRgn(WINDOW_UPDATE_REGION(w), d.h, d.v);
+            OffsetRect(&PORT_BOUNDS(w), -d.h, -d.v);
+        }
+    };
+    std::vector<Layer> layers = layer_sequence();
+    if(layers.empty())
+        move_windows();     /* no Process Manager yet: the one list */
+    for(Layer l : layers)
+    {
+        LayerView view(l);
+        move_windows();
+    }
+    if(desktop_layer)   /* (its portRect: gd_update_all_ports, a screen-sized port) */
+        CopyRgn(LM(GrayRgn), PORT_VIS_REGION(desktop_layer));
+    if(layers.empty())
+        CalcVisBehind(LM(WindowList), LM(GrayRgn));
+    else
+        recalc_all_layers();
+    RgnHandle all = NewRgn();
+    RectRgn(all, &new_screen);
+    ROMlib_layers_paint_from(nullptr, all);
+    if(!EmptyRgn(all))
+        PaintOne(nullptr, all);
+    DisposeRgn(all);
 }
 
 /* The process whose layer has a window at pt (front first), else null; a

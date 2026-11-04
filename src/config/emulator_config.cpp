@@ -506,7 +506,7 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             printf("                             wildcards (\"Gestalt,HideWindow,PB*\"): less slowdown;\n");
             printf("                             -NAME leaves calls out (\"-WaitNextEvent,-Get*\")\n");
             printf("  --executor-writable-images Executor mounts disk images read-write (default: read-only;\n");
-            printf("                             never the --executor-system image)\n");
+            printf("                             not the --executor-system image unless --disk names it too)\n");
             printf("  --[no-]executor-ot         Executor answers Open Transport (default: on)\n");
             printf("  --executor-ppc             Executor runs fat applications' PowerPC code (PowerPC-only\n");
             printf("                             applications always run it; default: off)\n");

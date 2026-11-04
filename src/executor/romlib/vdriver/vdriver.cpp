@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <vdriver/vdriver.h>
 #include <syn68k_public.h>
 #include <error/error.h>
@@ -16,8 +17,47 @@ Framebuffer::Framebuffer(int w, int h, int d)
     rowBytes = ((width * bpp + 31) & ~31) / 8;
     // Guest-visible: in window 1.
     size_t size = (size_t)rowBytes * height;
+    capacity = size;
     data = std::shared_ptr<uint8_t>((uint8_t *)syn68k_alloc_low(size),
                                     [size](uint8_t* p) { syn68k_free_low(p, size); });
+}
+
+size_t Framebuffer::reserve = 0;
+
+Framebuffer::Framebuffer(int w, int h, int d, const Framebuffer &previous)
+    : width(w), height(h), bpp(d)
+{
+    rowBytes = ((width * bpp + 31) & ~31) / 8;
+    size_t size = (size_t)rowBytes * height;
+    if(previous.data && previous.capacity >= size)
+    {
+        data = previous.data;
+        capacity = previous.capacity;
+        return;
+    }
+    capacity = std::max(size, reserve);
+    size_t n = capacity;
+    data = std::shared_ptr<uint8_t>((uint8_t *)syn68k_alloc_low(n),
+                                    [n](uint8_t* p) { syn68k_free_low(p, n); });
+}
+
+void VideoDriver::requestSize(int width, int height)
+{
+    if(width <= 0 || height <= 0 || width > 0xFFFF || height > 0xFFFF)
+        return;
+    sizeRequest_.store((uint32_t)width << 16 | (uint32_t)height);
+    if(callbacks_)
+        callbacks_->wake();     /* the Mac may be asleep in WaitNextEvent */
+}
+
+bool VideoDriver::takeSizeRequest(int *width, int *height)
+{
+    uint32_t r = sizeRequest_.exchange(0);
+    if(!r)
+        return false;
+    *width = r >> 16;
+    *height = r & 0xFFFF;
+    return true;
 }
 
 
@@ -309,6 +349,12 @@ void VideoDriver::updateBuffer(const Framebuffer& fb, uint32_t* buffer, int buff
     int width = std::min(fb.width, bufferWidth);
     int height = std::min(fb.height, bufferHeight);
 
+    /* MacPhoenix: not rootless, the region is the whole screen, at its
+       size now (the Display Manager changes it: made at the first size,
+       white past it went out as transparent, black in the tab) */
+    if(!isRootless() && rootlessRegion_.size()
+       && (rootlessRegion_[2] != width || rootlessRegion_[4] != height))
+        rootlessRegion_.clear();
     if(!rootlessRegion_.size())
         rootlessRegion_.insert(rootlessRegion_.end(),
             { 0, 0, (int16_t)width, RGN_STOP,

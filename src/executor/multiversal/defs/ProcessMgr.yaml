@@ -171,6 +171,8 @@
         value: 0x00000010
       - name: modeUseTextEditServices
         value: 0x00000008
+      - name: modeDisplayManagerAware
+        value: 0x00000004
     comment: |
       flags for the `processMode' field of the `ProcessInformationRec'
          record

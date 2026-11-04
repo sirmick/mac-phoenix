@@ -124,4 +124,10 @@ double cpu_busy();
 // "add SPEC", "remove SPEC" ("all"), "list [SINCE]"; JSON. Any thread.
 std::string ppc_break_command(const std::string& command);
 
+// The Mac's screen at width x height, live (/api/resolution): the Display
+// Manager changes the mode at the front process's next event call
+// (docs/executor/DisplayModes.md). False if the size is out of range. Any
+// thread.
+bool request_screen_size(int width, int height);
+
 }  // namespace executor_host

@@ -215,6 +215,18 @@ if(NODE_COMMAND)
         ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM};TMPDIR=${CMAKE_CURRENT_BINARY_DIR}")
 endif()
 
+# The Mac's screen size changed live (docs/executor/DisplayModes.md): from
+# Settings and with "Fit the screen to the window", the Finder and
+# SimpleText running; pointer, menu clicks and windows after each change.
+if(NODE_COMMAND)
+    add_test(NAME executor.web.dynres
+        COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_dynres.mjs
+                $<TARGET_FILE_DIR:executor-web> ${EXECUTOR_WEB_HIDPI_SYSTEM})
+    set_tests_properties(executor.web.dynres PROPERTIES
+        LABELS "executor;web" TIMEOUT 600 SKIP_RETURN_CODE 77
+        ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM};TMPDIR=${CMAKE_CURRENT_BINARY_DIR}")
+endif()
+
 # tools/standalone, the server (docs/executor/Standalone.md): go test (the
 # API over a real connection, the claim, the relay, the program itself),
 # then the tab on it (the cells below build it with go: GO).

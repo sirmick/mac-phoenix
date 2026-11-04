@@ -12,6 +12,100 @@
 
 # ####
 
+- enum:
+    values:
+      - name: kDMGenErr
+        value: -6220
+      - name: kDMNotFoundErr
+        value: -6229
+
+# ####
+
+- enum:
+    values:
+      - name: kDMNotifyRequestConnectionProbe
+        value: 0
+      - name: kDMNotifyInstalled
+        value: 1
+      - name: kDMNotifyEvent
+        value: 2
+      - name: kDMNotifyRemoved
+        value: 3
+      - name: kDMNotifyPrep
+        value: 4
+      - name: kDMNotifyExtendEvent
+        value: 5
+      - name: kDMNotifyDependents
+        value: 6
+    comment: |
+      An extended notify proc's message: Installed at registration,
+      Removed at removal; for a change Prep, Dependents and Event, the
+      last two with the 'cnfg' event (docs/executor/DisplayModes.md).
+
+# ####
+
+- enum:
+    values:
+      - name: kAESystemConfigNotice
+        value: "'cnfg'"
+      - name: kAEDisplayNotice
+        value: "'dspl'"
+      - name: kAEDisplaySummary
+        value: "'dsum'"
+      - name: keyDMConfigVersion
+        value: "'dmcv'"
+      - name: keyDMConfigFlags
+        value: "'dmcf'"
+      - name: keyDMConfigReserved
+        value: "'dmcr'"
+      - name: keyDisplayID
+        value: "'dmid'"
+      - name: keyDisplayComponent
+        value: "'dmdc'"
+      - name: keyDisplayDevice
+        value: "'dmdd'"
+      - name: keyDisplayFlags
+        value: "'dmdf'"
+      - name: keyDisplayMode
+        value: "'dmdm'"
+      - name: keyDisplayModeReserved
+        value: "'dmmr'"
+      - name: keyDisplayReserved
+        value: "'dmdr'"
+      - name: keyDeviceFlags
+        value: "'dddf'"
+      - name: keyDeviceDepthMode
+        value: "'dddm'"
+      - name: keyDeviceRect
+        value: "'dddr'"
+      - name: keyPixMapRect
+        value: "'dpdr'"
+      - name: keyPixMapHResolution
+        value: "'dphr'"
+      - name: keyPixMapVResolution
+        value: "'dpvr'"
+      - name: keyPixMapPixelType
+        value: "'dppt'"
+      - name: keyPixMapPixelSize
+        value: "'dpps'"
+      - name: keyPixMapCmpCount
+        value: "'dpcc'"
+      - name: keyPixMapCmpSize
+        value: "'dpcs'"
+      - name: keyPixMapReserved
+        value: "'dppr'"
+      - name: keyPixMapColorTableSeed
+        value: "'dpct'"
+      - name: keyDisplayOldConfig
+        value: "'dold'"
+      - name: keyDisplayNewConfig
+        value: "'dnew'"
+    comment: |
+      The Display Manager's 'aevt'/'cnfg' event: kAEDisplayNotice holds a
+      record per display, keyed by its ID, of the old and new configuration.
+
+# ####
+
 - dispatcher:
     name: DisplayDispatch
     trap: 0xABEB

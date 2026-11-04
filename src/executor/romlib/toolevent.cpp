@@ -1,3 +1,4 @@
+#include <rsys/displaymode.h>
 #include <atomic>
 /* Copyright 1987 - 1996 by Abacus Research and
  * Development, Inc.  All rights reserved.
@@ -246,6 +247,9 @@ static Boolean doevent(INTEGER em, EventRecord *evt,
 
     if(vdriver->updateMode())
         Executor::gd_vdriver_mode_changed();
+    /* MacPhoenix: the host's new screen size, and this process's part of
+       a resolution change (quickdraw/displays.cpp) */
+    ROMlib_dm_poll();
 
     hle_reset();
 

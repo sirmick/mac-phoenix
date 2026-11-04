@@ -48,7 +48,7 @@ set(NATIVE_TEST_SOURCES
         sane.cpp
         localvolume_macbinary.cpp
         typeselect.cpp datetime.cpp numformat.cpp textedit.cpp sysheap.cpp memorymgr.cpp
-        sysroutines.cpp resprivate.cpp unknownselectors.cpp folders.cpp cursordev.cpp dialogs.cpp printing.cpp
+        sysroutines.cpp resprivate.cpp unknownselectors.cpp folders.cpp cursordev.cpp dialogs.cpp printing.cpp displaymode.cpp
         aehdlr.cpp
         aedesc.cpp aeresolve.cpp
         hfsplus_unicode.cpp hfsplus_volume.cpp hfs_volume.cpp
