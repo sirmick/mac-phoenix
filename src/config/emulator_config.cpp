@@ -492,7 +492,9 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             printf("                             (allocations >= 4K and the code that asked), pcsample (where\n");
             printf("                             PowerPC code spends its time, every 5 s), hidpi (the text\n");
             printf("                             --executor-scale redraws, and what became of it), ppcinterp\n");
-            printf("                             (mame-ppc's UML interpreter, not its native back-end), fslog,\n");
+            printf("                             (mame-ppc's UML interpreter, not its native back-end), mmu68k\n");
+            printf("                             (mame-68k with its PMMU, no tables set up), mmuppc (mame-ppc\n");
+            printf("                             translating every access, identity), fslog,\n");
             printf("                             trace, trapfailure, unimplemented, unexpected, errno, sound, all\n");
             printf("  --watch ADDR[:LEN]         Report every write to guest memory ADDR (hex; LEN 1-16, default 4):\n");
             printf("                             old/new value, 68k PC and registers, last traps, host stack (Executor)\n");
@@ -554,6 +556,8 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             printf("  --debug-perf\n");
             printf("  --debug-network\n");
             printf("  --debug-mame-ppc           mame-ppc: log host ops, exceptions, a per-second CPU sample\n");
+            printf("  --cpu-mmu                  The MMU's cost (docs/executor/Speed.md): mame-68k with its PMMU\n");
+            printf("                             (the ROM's tables), mame-ppc translating every access (identity)\n");
             printf("  --trace-atraps             Record every (A-trap, caller PC); snapshots write atraps.tsv\n");
             printf("  --no-text-feed             Don't patch _StdText (the strings on screen for /api/text)\n");
             printf("  --deterministic            Virtual clock (instruction-counted ticks, fixed date); implies --no-idlewait\n");
@@ -873,6 +877,9 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
         }
         if (strcmp(argv[i], "--debug-mame-ppc") == 0) {
             config.debug_mame_ppc = true; argv[i] = nullptr; continue;
+        }
+        if (strcmp(argv[i], "--cpu-mmu") == 0) {
+            config.cpu_mmu = true; argv[i] = nullptr; continue;
         }
         if (strcmp(argv[i], "--m68k-host") == 0 && i+1 < argc) {
             config.m68k_host = atoi(argv[i+1]);

@@ -325,6 +325,7 @@ bool CPUContext::init_m68k(const config::EmulatorConfig& config) {
         fprintf(stderr, "[CPUContext] No CPU backend set, installing the 68k machine\n");
         cpu_m68k_install(&platform_, config.cpu_core.c_str(), config.jit);
     }
+    platform_.cpu_mmu = config.cpu_mmu;    /* read when the core is made (cpu_init) */
 
     fprintf(stderr, "[CPUContext] CPU Backend: %s (JIT: %s)\n",
             platform_.cpu_name ? platform_.cpu_name : "Unknown",
@@ -648,6 +649,7 @@ bool CPUContext::init_ppc(const config::EmulatorConfig& config) {
     platform_.ppc_jit = config.jit;
     platform_.ppc_m68k_host = config.m68k_host;
     platform_.ppc_debug_trace = config.debug_mame_ppc;
+    platform_.cpu_mmu = config.cpu_mmu;
     fprintf(stderr, "[CPUContext] CPU Backend: %s (JIT: %s)\n", platform_.cpu_name, config.jit ? "on" : "off");
 
     // 6b. Sync g_platform NOW so core code (disk.cpp, cdrom.cpp, extfs.cpp etc.)

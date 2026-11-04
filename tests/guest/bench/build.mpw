@@ -1,0 +1,23 @@
+# build.mpw — MacPhoenixBench, a fat application: 68k (SC, Link) and
+# PowerPC (MrC, PPCLink) code in one file; tools/mpw/mpw build tests/guest/bench
+# products: MacPhoenixBench
+Set Sources "main cpu fp mem qd traps files heap"
+Delete -i MacPhoenixBench MacPhoenixBench.68k    # Rez -a would add to the last build
+For f in {Sources}
+	SC -b -opt speed {f}.c -o {f}.68k.o
+	MrC -opt speed {f}.c -o {f}.ppc.o
+End
+# fp.c again with 68881 code, its transcendentals the FPU's (no MathLib881)
+SC -b -opt speed -mc68881 -elems881 -d FP881 fp.c -o fp881.68k.o
+Link -t APPL -c 'MPbn' -model near ∂
+	main.68k.o cpu.68k.o fp.68k.o fp881.68k.o mem.68k.o qd.68k.o traps.68k.o files.68k.o heap.68k.o ∂
+	"{Libraries}MathLib.o" "{Libraries}MacRuntime.o" "{Libraries}IntEnv.o" "{CLibraries}StdCLib.o" ∂
+	"{Libraries}Interface.o" ∂
+	-o MacPhoenixBench.68k
+PPCLink -main __start ∂
+	main.ppc.o cpu.ppc.o fp.ppc.o mem.ppc.o qd.ppc.o traps.ppc.o files.ppc.o heap.ppc.o ∂
+	"{SharedLibraries}InterfaceLib" "{SharedLibraries}StdCLib" "{SharedLibraries}MathLib" ∂
+	"{PPCLibraries}StdCRuntime.o" "{PPCLibraries}PPCCRuntime.o" ∂
+	-t APPL -c 'MPbn' -o MacPhoenixBench
+Rez -a bench.r -o MacPhoenixBench
+SetFile -t APPL -c 'MPbn' -a B MacPhoenixBench

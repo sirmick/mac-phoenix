@@ -1289,7 +1289,7 @@ void ppc_device::device_reset()
 	}
 
 	/* Mark the cache dirty */
-	m_core->mode = 0;
+	m_core->mode = m_translation_identity ? 0x02 : 0;	/* MacPhoenix: MODE_DATA_TRANSLATION (ppcdrc.cpp) */
 	m_cache_dirty = true;
 }
 
@@ -1364,10 +1364,15 @@ uint32_t ppc_device::ppccom_translate_address_internal(int intention, bool debug
 	if (!(m_cap & PPCCAP_OEA))
 		return 0x001;
 
+	/* MacPhoenix: every address physical (translation off), or mapped to
+	   itself whatever MSR[IR/DR] say (ppc_set_translation_identity: the
+	   recompiler takes the TLB path for every data access, ppcdrc.cpp
+	   generate_update_mode; filled here, identity, never a fault) */
+	if (m_translation_off || m_translation_identity)
+		return 0x001;
+
 	/* also no translation necessary if translation is disabled */
 	if ((transtype == TR_FETCH && (m_core->msr & MSROEA_IR) == 0) || (transtype != TR_FETCH && (m_core->msr & MSROEA_DR) == 0))
-		return 0x001;
-	if (m_translation_off)	/* MacPhoenix */
 		return 0x001;
 
 	/* first scan the appropriate BAT */
