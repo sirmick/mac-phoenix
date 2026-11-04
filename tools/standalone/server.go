@@ -17,7 +17,10 @@ package main
 //	    POST   overlays/KEY?base=V[&stage=T][&replace=1][&name=&size=] -> { version }
 //	    DELETE overlays/KEY           Revert -> { version }
 //	    POST   overlays/KEY/merge     into the library image -> { blocks, id, key }
-//	    GET/PUT/DELETE volumes/KEY    { version, manifest }
+//	    GET/PUT/DELETE volumes/KEY    { version, manifest } (PUT { manifest, base[, reset] };
+//	                                  409 reason "shrink": it drops most files)
+//	    GET    volumes/KEY/history    { history: [{ version, saved, files }] } kept
+//	    POST   volumes/KEY/restore    { version }: a kept one current again -> { version }
 //	    GET    volumes/KEY/bundle     the volume and its objects (volumes.go);
 //	    POST   volumes/KEY/bundle     { have } ... but those
 //	    POST   objects/missing; objects/bundle; PUT/GET objects/SHA
@@ -608,7 +611,31 @@ func init() {
 		if !ok || base != float64(int64(base)) {
 			return httpErr(400, "base: the version this is on")
 		}
-		v, err := c.s.volumes.put(m[1], b["manifest"], int64(base))
+		reset, _ := b["reset"].(bool)
+		v, err := c.s.volumes.put(m[1], b["manifest"], int64(base), reset)
+		if err != nil {
+			return err
+		}
+		return c.sendJSON(200, map[string]any{"version": v})
+	})
+	// The manifests kept (volumes.go: history), and one of them back.
+	handle("GET", "/api/sync/volumes/([^/]+)/history", true, func(c *ctx, m []string) error {
+		h, err := c.s.volumes.history(m[1])
+		if err != nil {
+			return err
+		}
+		return c.sendJSON(200, map[string]any{"history": h})
+	})
+	handle("POST", "/api/sync/volumes/([^/]+)/restore", true, func(c *ctx, m []string) error {
+		b, err := c.jsonBody()
+		if err != nil {
+			return err
+		}
+		version, ok := b["version"].(float64)
+		if !ok || version != float64(int64(version)) {
+			return httpErr(400, "version: one the history has")
+		}
+		v, err := c.s.volumes.restore(m[1], int64(version))
 		if err != nil {
 			return err
 		}

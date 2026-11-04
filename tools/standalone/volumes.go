@@ -9,6 +9,17 @@ package main
 // DATA/volumes/KEY.json is { version, manifest }; DATA/objects/AB/SHA the
 // objects. Objects no manifest names are deleted an hour after they
 // were written (an upload in progress names them only when it ends).
+//
+// Defence in depth (a tab that saved a volume it had only partly restored
+// took the rest off the server: sync.js Store.restored):
+//   - the last historyKeep manifests replaced (by a PUT, a DELETE, a
+//     restore), and historyKeep more historySpacing apart, are kept in
+//     DATA/volumes/KEY.history/V.json, their objects
+//     named for the collector; GET volumes/KEY/history lists them and POST
+//     volumes/KEY/restore { version } makes one the current again;
+//   - a PUT that keeps fewer than half the paths of a manifest of
+//     shrinkMin files or more is refused (409, reason "shrink") unless it
+//     says { reset: true } (a DELETE is the tab's Reset).
 
 import (
 	"crypto/sha256"
@@ -16,11 +27,13 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -28,7 +41,12 @@ import (
 
 var shaRe = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
-const orphanAge = time.Hour
+const (
+	orphanAge      = time.Hour
+	historyKeep    = 5
+	historySpacing = 10 * time.Minute
+	shrinkMin      = 16
+)
 
 type VolumeStore struct {
 	mu      sync.Mutex
@@ -81,7 +99,7 @@ func (v *VolumeStore) get(key string) (int64, json.RawMessage, error) {
 	return f.Version, f.Manifest, err
 }
 
-func (v *VolumeStore) put(key string, manifest any, base int64) (int64, error) {
+func (v *VolumeStore) put(key string, manifest any, base int64, reset bool) (int64, error) {
 	if err := checkKey(key); err != nil {
 		return 0, err
 	}
@@ -116,12 +134,177 @@ func (v *VolumeStore) put(key string, manifest any, base int64) (int64, error) {
 	if missing := v.missingLocked(shas); len(missing) > 0 {
 		return 0, httpErr(409, "objects missing", "missing", missing, "version", cur.Version)
 	}
+	if prev := manifestPaths(cur.Manifest); !reset && len(prev) >= shrinkMin {
+		kept := 0
+		for p := range prev {
+			if _, ok := files[p]; ok {
+				kept++
+			}
+		}
+		if kept*2 < len(prev) {
+			return 0, httpErr(409, fmt.Sprintf("this save keeps %d of the volume's %d files: refused (reset: true if meant)", kept, len(prev)),
+				"reason", "shrink", "kept", kept, "files", len(prev), "version", cur.Version)
+		}
+	}
 	b, _ := json.Marshal(manifest)
-	if err := v.write(key, volumeFile{cur.Version + 1, b}); err != nil {
+	return v.replaceLocked(key, cur, b)
+}
+
+// manifestPaths: a manifest's file paths (none for null or a bad one).
+func manifestPaths(m json.RawMessage) map[string]bool {
+	var x struct {
+		Files map[string]json.RawMessage `json:"files"`
+	}
+	json.Unmarshal(m, &x)
+	out := map[string]bool{}
+	for p := range x.Files {
+		out[p] = true
+	}
+	return out
+}
+
+// replaceLocked makes manifest KEY's version cur+1, cur into the history
+// first (when it is one). Under v.mu.
+func (v *VolumeStore) replaceLocked(key string, cur volumeFile, manifest json.RawMessage) (int64, error) {
+	if string(cur.Manifest) != "null" && cur.Version > 0 {
+		if err := v.keepHistory(key, cur); err != nil {
+			return 0, err
+		}
+	}
+	if err := v.write(key, volumeFile{cur.Version + 1, manifest}); err != nil {
 		return 0, err
 	}
 	v.collect()
 	return cur.Version + 1, nil
+}
+
+func (v *VolumeStore) historyDir(key string) string {
+	return filepath.Join(v.dir, key+".history")
+}
+
+type historyFile struct {
+	Version  int64           `json:"version"`
+	Saved    time.Time       `json:"saved"` // when it was replaced
+	Manifest json.RawMessage `json:"manifest"`
+}
+
+// keepHistory writes f into KEY's history, the oldest past historyKeep out.
+func (v *VolumeStore) keepHistory(key string, f volumeFile) error {
+	dir := v.historyDir(key)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	b, _ := json.Marshal(historyFile{f.Version, time.Now().UTC(), f.Manifest})
+	if err := writeAtomic(filepath.Join(dir, fmt.Sprintf("%d.json", f.Version)), b, 0o644); err != nil {
+		return err
+	}
+	// The last historyKeep, and historyKeep more at least historySpacing
+	// apart (a tab saves about every second: a bad save's next ones would
+	// push the good versions out of the last few alone).
+	versions := v.historyVersions(key)
+	keep := map[int64]bool{}
+	var last time.Time
+	checkpoints := 0
+	for i := len(versions) - 1; i >= 0; i-- {
+		if len(versions)-i <= historyKeep {
+			keep[versions[i]] = true
+		}
+		h, err := v.readHistory(key, versions[i])
+		if err != nil || checkpoints >= historyKeep {
+			continue
+		}
+		if last.IsZero() || last.Sub(h.Saved) >= historySpacing {
+			keep[versions[i]] = true
+			last = h.Saved
+			checkpoints++
+		}
+	}
+	for _, version := range versions {
+		if !keep[version] {
+			os.Remove(filepath.Join(dir, fmt.Sprintf("%d.json", version)))
+		}
+	}
+	return nil
+}
+
+// historyVersions: KEY's kept versions, oldest first.
+func (v *VolumeStore) historyVersions(key string) []int64 {
+	ents, _ := os.ReadDir(v.historyDir(key))
+	out := []int64{}
+	for _, e := range ents {
+		name, ok := strings.CutSuffix(e.Name(), ".json")
+		if n, err := strconv.ParseInt(name, 10, 64); ok && err == nil {
+			out = append(out, n)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+	return out
+}
+
+func (v *VolumeStore) readHistory(key string, version int64) (historyFile, error) {
+	var h historyFile
+	b, err := os.ReadFile(filepath.Join(v.historyDir(key), fmt.Sprintf("%d.json", version)))
+	if err != nil {
+		return h, err
+	}
+	return h, json.Unmarshal(b, &h)
+}
+
+type historyEntry struct {
+	Version int64     `json:"version"`
+	Saved   time.Time `json:"saved"` // when it was replaced
+	Files   int       `json:"files"`
+}
+
+// history: KEY's kept versions, newest first.
+func (v *VolumeStore) history(key string) ([]historyEntry, error) {
+	if err := checkKey(key); err != nil {
+		return nil, err
+	}
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	versions := v.historyVersions(key)
+	out := []historyEntry{}
+	for i := len(versions) - 1; i >= 0; i-- {
+		h, err := v.readHistory(key, versions[i])
+		if err != nil {
+			continue
+		}
+		out = append(out, historyEntry{h.Version, h.Saved, len(manifestPaths(h.Manifest))})
+	}
+	return out, nil
+}
+
+// restore makes KEY's kept version the current one again (as a new
+// version; the current one into the history).
+func (v *VolumeStore) restore(key string, version int64) (int64, error) {
+	if err := checkKey(key); err != nil {
+		return 0, err
+	}
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	h, err := v.readHistory(key, version)
+	if err != nil {
+		return 0, httpErr(404, "no such version kept")
+	}
+	cur, err := v.read(key)
+	if err != nil {
+		return 0, err
+	}
+	var m struct {
+		Files map[string]struct {
+			Sha string `json:"sha"`
+		} `json:"files"`
+	}
+	json.Unmarshal(h.Manifest, &m)
+	shas := []string{}
+	for _, f := range m.Files {
+		shas = append(shas, f.Sha)
+	}
+	if missing := v.missingLocked(shas); len(missing) > 0 {
+		return 0, httpErr(409, "its objects are gone", "missing", missing)
+	}
+	return v.replaceLocked(key, cur, h.Manifest)
 }
 
 func (v *VolumeStore) remove(key string) (int64, error) {
@@ -134,11 +317,7 @@ func (v *VolumeStore) remove(key string) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	if err := v.write(key, volumeFile{cur.Version + 1, json.RawMessage("null")}); err != nil {
-		return 0, err
-	}
-	v.collect()
-	return cur.Version + 1, nil
+	return v.replaceLocked(key, cur, json.RawMessage("null"))
 }
 
 func (v *VolumeStore) objectDir(sha string) (string, string) {
@@ -208,6 +387,18 @@ func (v *VolumeStore) collect() {
 	named := map[string]bool{}
 	ents, _ := os.ReadDir(v.dir)
 	for _, e := range ents {
+		if key, ok := strings.CutSuffix(e.Name(), ".history"); ok && e.IsDir() {
+			for _, version := range v.historyVersions(key) {
+				h, err := v.readHistory(key, version)
+				if err != nil {
+					return // a kept manifest we can't read: delete nothing
+				}
+				for _, sha := range manifestShas(h.Manifest) {
+					named[sha] = true
+				}
+			}
+			continue
+		}
 		key, ok := strings.CutSuffix(e.Name(), ".json")
 		if !ok {
 			continue
@@ -367,6 +558,21 @@ func (v *VolumeStore) summary() []volumeSummary {
 		}
 		json.Unmarshal(f.Manifest, &m)
 		out = append(out, volumeSummary{key, f.Version, len(m.Files)})
+	}
+	return out
+}
+
+// manifestShas: the objects a manifest names.
+func manifestShas(m json.RawMessage) []string {
+	var x struct {
+		Files map[string]struct {
+			Sha string `json:"sha"`
+		} `json:"files"`
+	}
+	json.Unmarshal(m, &x)
+	out := make([]string, 0, len(x.Files))
+	for _, f := range x.Files {
+		out = append(out, f.Sha)
 	}
 	return out
 }

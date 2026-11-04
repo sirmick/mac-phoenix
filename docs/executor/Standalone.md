@@ -169,7 +169,10 @@ the reload claims it again. Loopback is nothing special.
                                   (409 { version } when V isn't the server's)
     DELETE overlays/KEY           Revert -> { version }
     POST   overlays/KEY/merge     into the library image -> { blocks, id, key }
-    GET/PUT/DELETE volumes/KEY    { version, manifest }
+    GET/PUT/DELETE volumes/KEY    { version, manifest } (PUT { manifest, base[, reset] }:
+                                  409 reason "shrink" when it drops most files)
+    GET    volumes/KEY/history    { history: [{ version, saved, files }] }: the kept ones
+    POST   volumes/KEY/restore    { version }: a kept one current again -> { version }
     GET    volumes/KEY/bundle     the volume and every object it names, one stream
                                   (gzip for a browser that takes it; below)
     POST   volumes/KEY/bundle     { have: [sha] }: the same, less the objects the
@@ -214,6 +217,16 @@ Sec-Fetch-Site). In more detail:
 - **Volumes and objects** are files: `DATA/volumes/KEY.json` (`{ version,
   manifest }`) and `DATA/objects/AB/SHA`; an object no manifest names
   is removed an hour after it was written.
+- **A volume's history, and saves that drop most of it** (`volumes.go`,
+  defence in depth after the partial saves below): every manifest a PUT,
+  a DELETE (the tab's Reset) or a restore replaces goes to
+  `DATA/volumes/KEY.history/V.json`; the last 5 are kept, and 5 more at
+  least 10 minutes apart (the tab saves about every second), their objects
+  kept from the collector. `POST volumes/KEY/restore { version }` makes one
+  current again (a new version). A PUT keeping fewer than half the paths
+  of a volume of 16 files or more is refused, 409 `{ reason: "shrink",
+  kept, files }`, unless it says `reset: true`; the tab then stops saving
+  the volume and says so.
 - **Bundles** (`volumes.go`): records of a sha (32 bytes), a length
   (uint32 LE) and that many bytes, ended by a record of a zero sha and
   length (without it, the bundle was cut short). `GET volumes/KEY/bundle`
