@@ -142,6 +142,35 @@ try {
     const box = await page.locator('#screen').boundingBox();
     check(Math.abs(box.width - want[0]) <= 1 && Math.abs(box.height - want[1]) <= 1,
           `fit: a Mac pixel per CSS pixel (${box.width}x${box.height})`);
+    // Drawn past the old 640x480: the menu bar's row and SimpleText's empty
+    // page are white, not black (the vdriver kept the first size's region:
+    // white outside it went out transparent).
+    const png = (await page.locator('#screen').screenshot()).toString('base64');
+    const blackShare = (y, x0, x1) => page.evaluate(async ({ png, y, x0, x1 }) => {
+        const img = new Image();
+        img.src = `data:image/png;base64,${png}`;
+        await img.decode();
+        const c = document.createElement('canvas');
+        c.width = img.width;
+        c.height = img.height;
+        const g = c.getContext('2d');
+        g.drawImage(img, 0, 0);
+        const d = g.getImageData(x0, y, x1 - x0, 1).data;
+        let black = 0;
+        for (let i = 0; i < d.length; i += 4)
+            black += d[i] < 32 && d[i + 1] < 32 && d[i + 2] < 32;
+        return black / (d.length / 4);
+    }, { png, y, x0, x1 });
+    const bar = await blackShare(2, 640, want[0] - 80);
+    check(bar < 0.1, `fit: the menu bar past x=640 is drawn (black ${bar.toFixed(2)})`);
+    w = await doc();
+    if (w) {
+        const [top, left, bottom, right] = w.rect;
+        const y = Math.min(want[1] - 2, top + 40);
+        const share = await blackShare(y, Math.max(0, left + 4), Math.min(want[0], right - 20));
+        check(share < 0.2, `fit: SimpleText's page is drawn at y=${y} (black ${share.toFixed(2)})`);
+    } else
+        check(false, 'fit: SimpleText\'s window');
     check(await request(page, 'app') === 'SimpleText' && (await request(page, 'volumes')).length > 0,
           'fit: SimpleText and the Finder still answer');
 } catch (e) {

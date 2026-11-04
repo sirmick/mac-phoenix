@@ -349,6 +349,12 @@ void VideoDriver::updateBuffer(const Framebuffer& fb, uint32_t* buffer, int buff
     int width = std::min(fb.width, bufferWidth);
     int height = std::min(fb.height, bufferHeight);
 
+    /* MacPhoenix: not rootless, the region is the whole screen, at its
+       size now (the Display Manager changes it: made at the first size,
+       white past it went out as transparent, black in the tab) */
+    if(!isRootless() && rootlessRegion_.size()
+       && (rootlessRegion_[2] != width || rootlessRegion_[4] != height))
+        rootlessRegion_.clear();
     if(!rootlessRegion_.size())
         rootlessRegion_.insert(rootlessRegion_.end(),
             { 0, 0, (int16_t)width, RGN_STOP,
