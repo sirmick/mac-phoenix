@@ -60,6 +60,8 @@ using namespace Executor;
 
 declare_handle_type(size_resource);
 
+static const int default_process_mode_flags = 0;
+
 #define SIZE_FLAGS(size) ((*size)->flags)
 
 static size_resource_handle
@@ -71,6 +73,24 @@ get_size_resource()
     if(size == nullptr)
         size = Get1Resource("SIZE"_4, -1);
     return (size_resource_handle)size;
+}
+
+/* An application's SIZE flags, read at launch as the Process Manager does
+   (process_create records them again once it runs). fsRdPerm opens a map
+   of our own, so closing it closes nothing anyone else has open. */
+static uint32_t launch_size_flags(FSSpec *spec)
+{
+    INTEGER save = CurResFile();
+    INTEGER rn = FSpOpenResFile(spec, fsRdPerm);
+    uint32_t flags = default_process_mode_flags;
+    if(rn != -1)
+    {
+        if(size_resource_handle size = get_size_resource())
+            flags = toHost(SIZE_FLAGS(size));
+        CloseResFile(rn);
+    }
+    UseResFile(save);
+    return flags;
 }
 
 /* ── Processes ──────────────────────────────────────────────────────────
@@ -215,8 +235,6 @@ static void publish_front_name()
 }
 /* 7.5.5 numbers processes from $2000 (Jigsaw launched by Finder: $2001). */
 static uint32_t next_free_psn = 0x2000;
-
-static const int default_process_mode_flags = 0;
 
 static ProcessSerialNumber system_process = { 0, kSystemProcess };
 static ProcessSerialNumber no_process = { 0, kNoProcess };
@@ -1750,6 +1768,14 @@ void Executor::ROMlib_process_event_hook(INTEGER mask)
         /* A process just launched comes to the front. */
         process_info_t *p = pending_launch;
         pending_launch = nullptr;
+        if(p->mode & 0x0400) /* SIZE onlyBackground */
+        {
+            /* A background-only application (the Microsoft OLE
+               Extension) never comes to the front: it starts behind. */
+            layer_order.push_back(p);
+            switch_to(p);
+            return;
+        }
         if(modal)
         {
             auto it = std::find(layer_order.begin(), layer_order.end(), me);
@@ -2181,7 +2207,8 @@ OSErr Executor::process_launch(LaunchParamBlockRec *lpbp)
     if(process_info_t *q = running_process_of(*lpbp->launchAppSpec))
     {
         lpbp->launchProcessSN = q->serial_number;
-        if(!(lpbp->launchControlFlags & launchDontSwitch) && q != front_process)
+        if(!(lpbp->launchControlFlags & launchDontSwitch) && q != front_process
+           && !(q->mode & 0x0400)) /* SIZE onlyBackground */
             pending_front = q;
         if(Ptr ap = (Ptr)lpbp->launchAppParameters)
             post_app_parameters(ap, q->serial_number);
@@ -2192,6 +2219,7 @@ OSErr Executor::process_launch(LaunchParamBlockRec *lpbp)
     p->own_thread = true;
     p->app = *lpbp->launchAppSpec;
     p->launcher = current_process_info->serial_number;
+    p->mode = launch_size_flags(lpbp->launchAppSpec);
     memcpy(p->appl_scratch, LMGetApplScratch(), sizeof p->appl_scratch);
     p->appl_scratch_set = true;
     /* Known as soon as LaunchApplication returns, as on 7.5.5, though the

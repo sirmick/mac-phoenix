@@ -204,4 +204,26 @@ TEST_F(HFSVolumeTest, OpenWDOnTheDefaultDirectory)
     PBCloseWD(&wd2, false);
     PBCloseWD(&wd, false);
 }
+
+/* OpenWD answers the working directory PBOpenWD made (its ioVRefNum), one
+   the File Manager takes for that directory (Illustrator 8's Startup file). */
+TEST_F(HFSVolumeTest, OpenWDAnswersTheWorkingDirectory)
+{
+    FSSpec spec;
+    FSMakeFSSpec(vref, 2, name("Folder"), &spec);
+    GUEST<LONGINT> dirID;
+    ASSERT_EQ(noErr, FSpDirCreate(&spec, -1 /* smSystemScript */, &dirID));
+    ASSERT_EQ(noErr, HCreate(vref, dirID, name("File"), "ttxt"_4, "TEXT"_4));
+
+    GUEST<INTEGER> wdRef = 0;
+    ASSERT_EQ(noErr, OpenWD(vref, dirID, 0, &wdRef));
+    EXPECT_NE(0, wdRef);
+    FInfo fi;
+    EXPECT_EQ(noErr, GetFInfo(name("File"), wdRef, &fi));
+
+    WDPBRec wd;
+    memset(&wd, 0, sizeof wd);
+    wd.ioVRefNum = wdRef;
+    PBCloseWD(&wd, false);
+}
 #endif

@@ -491,7 +491,8 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             printf("                             consistency checks at every Memory Manager call, slow), allocs\n");
             printf("                             (allocations >= 4K and the code that asked), pcsample (where\n");
             printf("                             PowerPC code spends its time, every 5 s), hidpi (the text\n");
-            printf("                             --executor-scale redraws, and what became of it), fslog,\n");
+            printf("                             --executor-scale redraws, and what became of it), ppcinterp\n");
+            printf("                             (mame-ppc's UML interpreter, not its native back-end), fslog,\n");
             printf("                             trace, trapfailure, unimplemented, unexpected, errno, sound, all\n");
             printf("  --watch ADDR[:LEN]         Report every write to guest memory ADDR (hex; LEN 1-16, default 4):\n");
             printf("                             old/new value, 68k PC and registers, last traps, host stack (Executor)\n");
@@ -504,7 +505,8 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             printf("  --executor-logtraps-filter LIST  ... only calls whose names match these comma-separated\n");
             printf("                             wildcards (\"Gestalt,HideWindow,PB*\"): less slowdown;\n");
             printf("                             -NAME leaves calls out (\"-WaitNextEvent,-Get*\")\n");
-            printf("  --executor-writable-images Executor mounts disk images read-write (default: read-only)\n");
+            printf("  --executor-writable-images Executor mounts disk images read-write (default: read-only;\n");
+            printf("                             never the --executor-system image)\n");
             printf("  --[no-]executor-ot         Executor answers Open Transport (default: on)\n");
             printf("  --executor-ppc             Executor runs fat applications' PowerPC code (PowerPC-only\n");
             printf("                             applications always run it; default: off)\n");
@@ -702,6 +704,10 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
         }
         if (strcmp(argv[i], "--executor-writable-images") == 0) {
             config.executor_writable_images = true; argv[i] = nullptr; continue;
+        }
+        if (strcmp(argv[i], "--executor-locked-disk") == 0 && i+1 < argc) {
+            config.executor_locked_disks.push_back(argv[i+1]);
+            argv[i] = nullptr; argv[++i] = nullptr; continue;
         }
         // --core <name> (--executor-cpu: older spelling)
         if ((strcmp(argv[i], "--core") == 0 || strcmp(argv[i], "--executor-cpu") == 0) && i+1 < argc) {

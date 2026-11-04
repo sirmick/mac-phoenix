@@ -11,6 +11,7 @@
 
 #include <mman/mman.h>
 #include <quickdraw/cquick.h>
+#include <quickdraw/quick.h>
 #include <quickdraw/rgbutil.h>
 #include <syn68k_public.h>
 #include <vdriver/vdriver.h>
@@ -20,7 +21,7 @@
 
 using namespace Executor;
 
-INTEGER ROMlib_qd_error;
+INTEGER Executor::ROMlib_qd_error;
 
 struct NativeRGBColor
 {

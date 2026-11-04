@@ -17,6 +17,7 @@
 #include <LowMem.h>
 
 #include <mman/mman_private.h>
+#include <base/functions.impl.h>
 #include <base/trap_history.h>
 #include <base/cpu.h>
 #include <rsys/hook.h>
@@ -2227,3 +2228,11 @@ Executor::OSErr Executor::C_UnholdMemory(void *address, uint32_t count) { return
 Executor::OSErr Executor::C_LockMemory(void *address, uint32_t count) { return Executor::noErr; }
 Executor::OSErr Executor::C_UnlockMemory(void *address, uint32_t count) { return Executor::noErr; }
 Executor::OSErr Executor::C_LockMemoryContiguous(void *address, uint32_t count) { return Executor::noErr; }
+
+/* Without virtual memory nothing waits on paging: the function runs now. */
+Executor::OSErr Executor::C_DeferUserFn(Ptr userFunction, void *argument)
+{
+    if(userFunction)
+        ((UserFnUPP)userFunction)(argument);
+    return Executor::noErr;
+}

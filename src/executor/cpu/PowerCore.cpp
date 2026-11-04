@@ -140,7 +140,7 @@ cpu::Core &core()
     config.mmu = false;
     config.timers = false;      /* Executor's own timer thread */
     config.exceptions = false;  /* skip and log */
-    config.jit = true;          /* the native back-end where there is one */
+    config.jit = PowerCore::instance().jit;  /* the native back-end where there is one */
     config.instruction_hook = PowerCore::instance().instructionHooks;
     cpu::Core *c = cpu::create("mame-ppc", config, syn68k_guest_memory(), ppc_host).release();
     if(!c)
@@ -238,6 +238,12 @@ bool PowerCore::peek32(uint32_t addr, uint32_t &value) const
         return false;
     value = m.read32(addr);
     return true;
+}
+
+void PowerCore::flushCache(uint32_t addr, uint32_t len)
+{
+    if(cpu::Core *c = the_core.load())
+        c->invalidate(addr, len);
 }
 
 void PowerCore::requestInterrupt()

@@ -46,6 +46,8 @@ extern void ROMlib_bltrgn(RgnHandle rh, unsigned char *patp,
                           INTEGER mode, Rect *srcr, Rect *dstr);
 extern void ROMlib_sizergn(RgnHandle rh, bool special_p);
 extern void ROMlib_installhandle(Handle sh, Handle dh);
+/* what QDError answers */
+extern INTEGER ROMlib_qd_error;
 
 
 /* Declare functions in qHooks.c. */

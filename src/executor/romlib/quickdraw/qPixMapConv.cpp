@@ -414,6 +414,9 @@ void Executor::convert_pixmap(const PixMap *src, PixMap *dst,
                     src_table = src->pmTable;
                     max_src_elt = CTAB_SIZE(src_table);
                     max_mapping_elt = (1 << src_bpp) - 1;
+                    /* a temporary: the system heap, as target_itab below
+                       (with the application's heap full: Speedometer 4.0) */
+                    TheZoneGuard guard(LM(SysZone));
                     mapping
                         = (CTabHandle)(NewHandle(CTAB_STORAGE_FOR_SIZE(max_mapping_elt)));
                     CTAB_SIZE(mapping) = max_mapping_elt;
@@ -469,6 +472,7 @@ void Executor::convert_pixmap(const PixMap *src, PixMap *dst,
                    value: a 'cicn' table may list only the values it uses
                    (8.6's note icon: 0-8, then black as 15) */
                 int max_mapping_elt = (1 << src_bpp) - 1;
+                TheZoneGuard guard(LM(SysZone)); /* a temporary, as above */
                 CTabHandle mapping = (CTabHandle)NewHandleClear(CTAB_STORAGE_FOR_SIZE(max_mapping_elt));
                 CTAB_SIZE(mapping) = max_mapping_elt;
                 sort_color_table(mapping, src_table);

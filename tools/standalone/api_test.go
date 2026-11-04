@@ -9,6 +9,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"compress/gzip"
 	"crypto/rand"
 	"crypto/sha1"
 	"crypto/sha256"
@@ -220,6 +221,29 @@ func TestAPIDiskRanges(t *testing.T) {
 		!bytes.Equal(data, disk[4096:8192]) {
 		t.Errorf("a range: %d %v", res.StatusCode, res.Header)
 	}
+	// gzip-compressed when the tab asks for it (overlay.js), plain otherwise
+	if res.Header.Get("X-Range-Encodings") != "gzip" || res.Header.Get("Content-Encoding") != "" {
+		t.Errorf("a range, not asked to compress: %v", res.Header)
+	}
+	res, data = l.req("GET", "/disks/a.img?bytes=4096-528383", nil, "Accept-Encoding: gzip")
+	zr, err := gzip.NewReader(bytes.NewReader(data))
+	var plain []byte
+	if err == nil {
+		plain, _ = io.ReadAll(zr)
+	}
+	if res.StatusCode != 200 || res.Header.Get("Content-Encoding") != "gzip" || len(data) > 100000 ||
+		res.Header.Get("X-Content-Range") != fmt.Sprintf("bytes 4096-528383/%d", len(disk)) || !bytes.Equal(plain, disk[4096:528384]) {
+		t.Errorf("a gzip range: %d %v, %d bytes, %d decoded", res.StatusCode, res.Header, len(data), len(plain))
+	}
+	// (Range wins over it; a browser without gzip gets the range plain)
+	if res, _ := l.req("GET", "/disks/a.img?bytes=0-9", nil, "Range: bytes=0-4", "Accept-Encoding: gzip"); res.StatusCode != 206 ||
+		res.Header.Get("Content-Encoding") != "" {
+		t.Errorf("?bytes with a Range: %d %v", res.StatusCode, res.Header)
+	}
+	if res, data := l.req("GET", "/disks/a.img?bytes=0-9", nil, "Accept-Encoding: identity"); res.StatusCode != 206 ||
+		res.Header.Get("Content-Encoding") != "" || !bytes.Equal(data, disk[:10]) {
+		t.Errorf("?bytes without gzip: %d %v %d", res.StatusCode, res.Header, len(data))
+	}
 	sum := sha256.Sum256(disk)
 	ident := hex.EncodeToString(sum[:])[:24]
 	etag := res.Header.Get("ETag")
@@ -363,6 +387,127 @@ func TestAPIVolumeSync(t *testing.T) {
 	l.req("DELETE", "/api/sync/volumes/own", nil)
 	if got := l.json("GET", "/api/sync/volumes/own", nil); got["version"] != version+1 || got["manifest"] != nil {
 		t.Errorf("deleted: %v", got)
+	}
+}
+
+// A bundle's records (volumes.go): sha -> bytes, the head's JSON first
+// when head; ended: the end record was there.
+func readBundle(data []byte, head bool) (map[string]any, map[string][]byte, bool) {
+	var vol map[string]any
+	if head {
+		n := binary.LittleEndian.Uint32(data)
+		json.Unmarshal(data[4:4+n], &vol)
+		data = data[4+n:]
+	}
+	objs := map[string][]byte{}
+	for len(data) >= 36 {
+		n := binary.LittleEndian.Uint32(data[32:])
+		if n == 0 && bytes.Equal(data[:36], bundleEnd[:]) {
+			return vol, objs, len(data) == 36
+		}
+		if int(n) > len(data)-36 {
+			break
+		}
+		objs[hex.EncodeToString(data[:32])] = data[36 : 36+n]
+		data = data[36+n:]
+	}
+	return vol, objs, false
+}
+
+func bundleOf(objs ...[]byte) []byte {
+	var b bytes.Buffer
+	for _, o := range objs {
+		sum := sha256.Sum256(o)
+		bundleRecord(&b, sum[:], o)
+	}
+	b.Write(bundleEnd[:])
+	return b.Bytes()
+}
+
+// The volume in one response, objects up in one request (sync.js).
+func TestAPIVolumeBundle(t *testing.T) {
+	l := liveServer(t)
+	blobs := [][]byte{[]byte("the System"), bytes.Repeat([]byte("Finder "), 50000), {}}
+	files := map[string]any{}
+	shas := []string{}
+	for i, b := range blobs {
+		sum := sha256.Sum256(b)
+		sha := hex.EncodeToString(sum[:])
+		shas = append(shas, sha)
+		files[fmt.Sprintf("/executor/f%d", i)] = map[string]any{"size": float64(len(b)), "mtime": 5.0, "sha": sha}
+	}
+	files["/executor/copy"] = files["/executor/f0"] // the same object twice: sent once
+	manifest := map[string]any{"dirs": []any{"/executor"}, "files": files}
+
+	// Up: one request, gzip-compressed; a record whose bytes aren't its sha refused.
+	var z bytes.Buffer
+	zw := gzip.NewWriter(&z)
+	zw.Write(bundleOf(blobs...))
+	zw.Close()
+	res, data := l.req("POST", "/api/sync/objects/bundle", z.Bytes(), "Content-Encoding: gzip")
+	if res.StatusCode != 200 || !strings.Contains(string(data), `"stored":3`) {
+		t.Fatalf("bundle up: %d %s", res.StatusCode, data)
+	}
+	if v := l.json("POST", "/api/sync/objects/missing", map[string]any{"shas": shas}); fmt.Sprint(v["missing"]) != "[]" {
+		t.Errorf("missing after the bundle: %v", v)
+	}
+	bad := bundleOf([]byte("x"))
+	bad[0] ^= 1
+	if code := l.status("POST", "/api/sync/objects/bundle", bad); code != 400 {
+		t.Errorf("a wrong sha: %d", code)
+	}
+	if code := l.status("POST", "/api/sync/objects/bundle", bundleOf([]byte("x"))[:20]); code != 400 {
+		t.Errorf("cut short: %d", code)
+	}
+	if code := l.status("POST", "/api/sync/objects/bundle", []byte("x"), "Content-Encoding: br"); code != 415 {
+		t.Errorf("brotli: %d", code)
+	}
+	version := l.json("PUT", "/api/sync/volumes/own", map[string]any{"manifest": manifest, "base": 0})["version"]
+
+	// Down: the volume, then each object once, then the end.
+	res, data = l.req("GET", "/api/sync/volumes/own/bundle", nil, "Accept-Encoding: identity")
+	vol, objs, ended := readBundle(data, true)
+	if res.StatusCode != 200 || res.Header.Get("Content-Encoding") != "" || !ended ||
+		vol["version"] != version || !jsonEqual(vol["manifest"], manifest) || len(objs) != 3 {
+		t.Fatalf("bundle down: %d %v %v %d", res.StatusCode, vol, ended, len(objs))
+	}
+	for i, sha := range shas {
+		if !bytes.Equal(objs[sha], blobs[i]) {
+			t.Errorf("object %d: %d bytes", i, len(objs[sha]))
+		}
+	}
+	// gzip-compressed when the browser takes it
+	res, data = l.req("GET", "/api/sync/volumes/own/bundle", nil, "Accept-Encoding: gzip")
+	if res.Header.Get("Content-Encoding") != "gzip" || len(data) > 20000 {
+		t.Fatalf("gzip: %v, %d bytes", res.Header, len(data))
+	}
+	zr, _ := gzip.NewReader(bytes.NewReader(data))
+	plain, _ := io.ReadAll(zr)
+	if _, objs, ended := readBundle(plain, true); !ended || !bytes.Equal(objs[shas[1]], blobs[1]) {
+		t.Errorf("gzip: decoded %d bytes", len(plain))
+	}
+	// POSTed with what the browser has: only the rest (bad shas ignored).
+	res, data = l.req("POST", "/api/sync/volumes/own/bundle", map[string]any{"have": []any{shas[1], "nonsense", 5}},
+		"Accept-Encoding: identity")
+	if vol, objs, ended := readBundle(data, true); res.StatusCode != 200 || !ended || vol["version"] != version ||
+		len(objs) != 2 || objs[shas[1]] != nil {
+		t.Errorf("have: %d %v %d", res.StatusCode, ended, len(objs))
+	}
+	if code := l.status("POST", "/api/sync/volumes/own/bundle", map[string]any{"have": "x"}); code != 400 {
+		t.Errorf("have not a list: %d", code)
+	}
+	// None kept: the volume's null, then the end.
+	_, data = l.req("GET", "/api/sync/volumes/other/bundle", nil, "Accept-Encoding: identity")
+	if vol, objs, ended := readBundle(data, true); vol["manifest"] != nil || vol["version"] != 0.0 || len(objs) != 0 || !ended {
+		t.Errorf("none: %v %v", vol, ended)
+	}
+	// An object gone (collected under a newer manifest): the bundle ends short.
+	dir, name := l.s.volumes.objectDir(shas[1])
+	os.Remove(filepath.Join(dir, name))
+	if res, data := l.req("GET", "/api/sync/volumes/own/bundle", nil, "Accept-Encoding: identity"); res.StatusCode != 200 {
+		t.Errorf("an object gone: %d", res.StatusCode)
+	} else if _, _, ended := readBundle(data, true); ended {
+		t.Errorf("an object gone: the bundle still ended")
 	}
 }
 
@@ -928,5 +1073,152 @@ func TestProgram(t *testing.T) {
 	}
 	if res, _ := get("/api/me", again); res.StatusCode != 200 {
 		t.Errorf("the new cookie: %d", res.StatusCode)
+	}
+}
+
+// A volume of n files (the same small object each, already up), paths p0..
+func volumeOf(t *testing.T, l *live, n int, prefix string) (map[string]any, string) {
+	t.Helper()
+	blob := []byte("a file of " + prefix)
+	sum := sha256.Sum256(blob)
+	sha := hex.EncodeToString(sum[:])
+	if code := l.status("PUT", "/api/sync/objects/"+sha, blob); code != 204 {
+		t.Fatalf("object: %d", code)
+	}
+	files := map[string]any{}
+	for i := 0; i < n; i++ {
+		files[fmt.Sprintf("/executor/%s%d", prefix, i)] = map[string]any{"size": float64(len(blob)), "mtime": 1.0, "sha": sha}
+	}
+	return map[string]any{"dirs": []any{"/executor"}, "files": files}, sha
+}
+
+// Defence in depth (volumes.go): a save dropping most of the volume is
+// refused unless it says reset; replaced manifests kept, one restorable,
+// their objects not collected.
+func TestAPIVolumeHistoryAndShrink(t *testing.T) {
+	l := liveServer(t)
+	put := func(m map[string]any, base any, reset bool) (int, map[string]any) {
+		body := map[string]any{"manifest": m, "base": base}
+		if reset {
+			body["reset"] = true
+		}
+		res, data := l.req("PUT", "/api/sync/volumes/own", body)
+		var v map[string]any
+		json.Unmarshal(data, &v)
+		return res.StatusCode, v
+	}
+	full, fullSha := volumeOf(t, l, 40, "p")
+	code, v := put(full, 0, false)
+	if code != 200 {
+		t.Fatalf("the first: %d %v", code, v)
+	}
+	v1 := v["version"]
+	// 15 of 40 kept: refused, the reason said; the volume as it was
+	part, _ := volumeOf(t, l, 15, "p")
+	if code, v := put(part, v1, false); code != 409 || v["reason"] != "shrink" || v["kept"] != 15.0 || v["files"] != 40.0 {
+		t.Errorf("a shrink: %d %v", code, v)
+	}
+	if got := l.json("GET", "/api/sync/volumes/own", nil); got["version"] != v1 || len(got["manifest"].(map[string]any)["files"].(map[string]any)) != 40 {
+		t.Errorf("after the refusal: %v", got["version"])
+	}
+	// half kept, or a few more files: fine
+	half, _ := volumeOf(t, l, 20, "p")
+	code, v = put(half, v1, false)
+	if code != 200 {
+		t.Fatalf("half kept: %d %v", code, v)
+	}
+	v2 := v["version"]
+	// a reset may drop it all (other files, another object)
+	other, otherSha := volumeOf(t, l, 3, "q")
+	code, v = put(other, v2, true)
+	if code != 200 {
+		t.Fatalf("a reset: %d %v", code, v)
+	}
+	v3 := v["version"]
+	// small volumes aren't guarded (fewer than shrinkMin files)
+	if code, v := put(map[string]any{"dirs": []any{"/executor"}, "files": map[string]any{}}, v3, false); code != 200 {
+		t.Errorf("a small one emptied: %d %v", code, v)
+	}
+
+	// The history: newest first, the replaced versions with their sizes.
+	var h struct {
+		History []struct {
+			Version float64 `json:"version"`
+			Files   int     `json:"files"`
+		} `json:"history"`
+	}
+	_, data := l.req("GET", "/api/sync/volumes/own/history", nil)
+	json.Unmarshal(data, &h)
+	if len(h.History) != 3 || h.History[0].Version != v3 || h.History[0].Files != 3 || h.History[2].Version != v1 || h.History[2].Files != 40 {
+		t.Fatalf("history: %s", data)
+	}
+	// The collector keeps a kept manifest's objects (an old one's, past orphanAge).
+	old := time.Now().Add(-2 * orphanAge)
+	for _, sha := range []string{fullSha, otherSha} {
+		dir, name := l.s.volumes.objectDir(sha)
+		os.Chtimes(filepath.Join(dir, name), old, old)
+	}
+	l.s.volumes.mu.Lock()
+	l.s.volumes.collect()
+	l.s.volumes.mu.Unlock()
+	if m := l.s.volumes.missing([]string{fullSha, otherSha}); len(m) != 0 {
+		t.Errorf("collected while kept: %v", m)
+	}
+	// Restore the first: the current again as a new version, all 40 files.
+	res, data := l.req("POST", "/api/sync/volumes/own/restore", map[string]any{"version": v1})
+	var r map[string]any
+	json.Unmarshal(data, &r)
+	if res.StatusCode != 200 {
+		t.Fatalf("restore: %d %s", res.StatusCode, data)
+	}
+	if got := l.json("GET", "/api/sync/volumes/own", nil); got["version"] != r["version"] ||
+		len(got["manifest"].(map[string]any)["files"].(map[string]any)) != 40 {
+		t.Errorf("restored: %v", got["version"])
+	}
+	if code := l.status("POST", "/api/sync/volumes/own/restore", map[string]any{"version": 999}); code != 404 {
+		t.Errorf("a version not kept: %d", code)
+	}
+	if code := l.status("POST", "/api/sync/volumes/own/restore", map[string]any{"version": "x"}); code != 400 {
+		t.Errorf("a bad version: %d", code)
+	}
+	// A Reset (DELETE) is kept too: restorable.
+	cur := l.json("GET", "/api/sync/volumes/own", nil)["version"]
+	l.req("DELETE", "/api/sync/volumes/own", nil)
+	if code := l.status("POST", "/api/sync/volumes/own/restore", map[string]any{"version": cur}); code != 200 {
+		t.Errorf("restore after a Reset: %d", code)
+	}
+	if got := l.json("GET", "/api/sync/volumes/own", nil); got["manifest"] == nil {
+		t.Errorf("after the Reset's restore: no volume")
+	}
+}
+
+// The history keeps the last historyKeep, and as many more historySpacing
+// apart: a run of quick saves doesn't push out an older version.
+func TestVolumeHistoryCheckpoints(t *testing.T) {
+	v := newVolumeStore(t.TempDir())
+	m := json.RawMessage(`{"dirs":[],"files":{}}`)
+	base := time.Now().Add(-24 * time.Hour)
+	// 3 versions an hour apart, then 20 a second apart
+	var saved []time.Time
+	for i := 0; i < 3; i++ {
+		saved = append(saved, base.Add(time.Duration(i)*time.Hour))
+	}
+	for i := 0; i < 20; i++ {
+		saved = append(saved, base.Add(5*time.Hour+time.Duration(i)*time.Second))
+	}
+	dir := v.historyDir("own")
+	os.MkdirAll(dir, 0o755)
+	for i, at := range saved {
+		b, _ := json.Marshal(historyFile{int64(i + 1), at, m})
+		os.WriteFile(filepath.Join(dir, fmt.Sprintf("%d.json", i+1)), b, 0o644)
+	}
+	// one more through keepHistory: the pruning
+	if err := v.keepHistory("own", volumeFile{24, m}); err != nil {
+		t.Fatal(err)
+	}
+	got := v.historyVersions("own")
+	want := []int64{1, 2, 3, 20, 21, 22, 23, 24} // the hourly ones; the last 5 (and 24 is now)
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Errorf("kept %v, want %v", got, want)
 	}
 }

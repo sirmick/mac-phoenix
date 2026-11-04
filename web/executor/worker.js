@@ -28,6 +28,7 @@ self.Module = {
     // Drawing: frames, pixels drawn, ms in the front end (web_main.cpp)
     // and here; the page's 'stats' request.
     stats: { frames: 0, pixels: 0, hostMs: 0, drawMs: 0 },
+    screen: { width: 0, height: 0 },    // the Mac's, as the page last heard it
     arguments: [],
     input: [],          // [kind, a, b] events; web_main.cpp takes them
     requests: [],       // [id, op, arg]; answered at the next event call
@@ -38,11 +39,17 @@ self.Module = {
     },
     // What changed: rects [top, left, bottom, right]..., their RGBA pixels
     // one after another (web_main.cpp).
-    onRects(width, height, rects, rgba) {
+    onRects(width, height, rects, rgba, macWidth, macHeight) {
         const t0 = performance.now();
         if (canvas.width !== width || canvas.height !== height) {
             canvas.width = width;
             canvas.height = height;
+        }
+        // The Mac's screen, when it isn't what the page was told (the page
+        // fits the canvas and maps clicks with it).
+        if (macWidth !== Module.screen.width || macHeight !== Module.screen.height) {
+            Module.screen = { width: macWidth, height: macHeight };
+            postMessage({ type: 'screen', width: macWidth, height: macHeight });
         }
         let at = 0, pixels = 0;
         for (let i = 0; i < rects.length; i += 4) {
@@ -283,6 +290,38 @@ function scanVolume() {
     return { dirs, files };
 }
 
+// A file's resource fork and Finder info are "%NAME" beside its data fork,
+// NAME, which Executor needs to see the file at all (localvolume
+// appledouble.cpp). A volume saved without some data forks (a save of a
+// volume only partly restored, before Store.restored: System's empty one
+// among them, so web_main.cpp sideloaded the System again over the
+// preferences) gets them back, empty, as most of a System Folder's are.
+function recoverDataForks() {
+    let n = 0;
+    const walk = (dir) => {
+        let names;
+        try { names = FS.readdir(dir); } catch { return; }
+        const here = new Set(names);
+        for (const name of names) {
+            if (name === '.' || name === '..')
+                continue;
+            const path = `${dir}/${name}`;
+            const st = FS.stat(path);
+            if (FS.isDir(st.mode))
+                walk(path);
+            else if (name.startsWith('%') && name.length > 1 && !here.has(name.slice(1))
+                     && !here.has(`%${name}`)) {                // (a file named "%..." itself)
+                FS.writeFile(`${dir}/${name.slice(1)}`, new Uint8Array(0));
+                FS.utime(`${dir}/${name.slice(1)}`, st.mtime.getTime(), st.mtime.getTime());
+                n++;
+            }
+        }
+    };
+    walk(VOLUME);
+    if (n)
+        console.log(`[web] Executor's disk: ${n} files without their data fork recovered (empty)`);
+}
+
 // ---- disks in and out while Executor runs (main.js: the Disks panel) ----
 // The image's overlay opened, its changes fetched, then in /uploads;
 // Executor mounts it at the running application's next event call
@@ -291,10 +330,13 @@ let cds = new Set();
 const ejecting = new Map();         // request id -> image name
 async function openImage(f) {
     const o = Overlay.open(f.name, f, imageKey(f));
+    // (with this browser's cached chunks of it, the ones the last starts read)
+    const preload = o.image instanceof RemoteImage ? o.image.preload() : null;
     if (Store.enabled && o.file.remote)
         await Store.overlayDown(o);
     else
         o.syncOff = true;               // an upload: this visit's
+    await preload;
     return o;
 }
 
@@ -446,6 +488,7 @@ function previousGone() {
 }
 
 async function start(m) {
+    Module.screen = { width: m.width, height: m.height };
     if (m.log) {
         Log.start(m.log, 'worker');
         Log.onError = (text) => postMessage({ type: 'error', text });
@@ -486,8 +529,26 @@ async function start(m) {
     if (m.ppcbreak)
         for (const spec of m.ppcbreak.split(';').filter(Boolean))
             args.push('--ppc-break', spec);
-    await runtimeReady;
     Store.enabled = !!m.standalone;
+    // Executor's disk on its way while the module may still be loading
+    // (its files written once it is: volumeDown's ready). A connection that
+    // drops (the server restarted under the download: "Content-Length ...
+    // exceeds response Body") is tried again a few times; an HTTP error
+    // is not.
+    const volumeDown = m.volumeKey && Store.enabled ? (async () => {
+        for (let attempt = 1; ; attempt++) {
+            try {
+                return await Store.volumeDown(m.volumeKey, runtimeReady);
+            } catch (e) {
+                if (!(e instanceof TypeError) || attempt === 4)
+                    throw e;
+                console.log(`[web] Executor's disk: ${e.message || e}; trying again`);
+                await new Promise((r) => setTimeout(r, 1500 * attempt));
+            }
+        }
+    })() : null;
+    volumeDown?.catch(() => {});           // (awaited below)
+    await runtimeReady;
     let savedNote = Store.enabled ? '' : 'not kept: no server';
     if (Store.enabled)
         progress('saved', { detail: "Executor's disk, from the server…" });
@@ -496,26 +557,13 @@ async function start(m) {
         setInterval(sessionBeat, 2000);
     Module.net.enable(!!m.relay);
     ids = m.ids || {};
-    if (m.volumeKey && Store.enabled) {
+    if (volumeDown) {
         try {
-            // A connection that drops (the server restarted under the
-            // download: "Content-Length ... exceeds response Body") is tried
-            // again a few times; an HTTP error is not.
-            let kept;
-            for (let attempt = 1; ; attempt++) {
-                try {
-                    kept = await Store.volumeDown(m.volumeKey);
-                    break;
-                } catch (e) {
-                    if (!(e instanceof TypeError) || attempt === 4)
-                        throw e;
-                    console.log(`[web] Executor's disk: ${e.message || e}; trying again`);
-                    await new Promise((r) => setTimeout(r, 1500 * attempt));
-                }
-            }
+            const kept = await volumeDown;
             if (kept) {
                 saved = kept;
                 console.log(`[web] restored ${Object.keys(kept.files).length} files of the volume from the server`);
+                recoverDataForks();
             }
             savedNote = kept ? `${Object.keys(kept.files).length} files on Executor's disk` : 'none yet';
         } catch (e) {
@@ -524,14 +572,12 @@ async function start(m) {
             Store.volumeOff = true;
         }
     }
+    Store.restored = true;          // (saved from now on: Store.restored)
     FS.mkdir('/host');              // Executor's "Host" volume
     cds = new Set([...(m.cds || []), ...images.map((f) => f.name).filter((n) => CD.test(n))]);
-    overlays = [];
-    for (const f of images) {
-        if (Store.enabled && f.remote)
-            progress('saved', { detail: `your changes to ${f.name}…` });
-        overlays.push(await openImage(f));
-    }
+    if (Store.enabled && images.some((f) => f.remote))
+        progress('saved', { detail: 'your changes to the disks…' });
+    overlays = await Promise.all(images.map(openImage));        // (their requests at once)
     progress('saved', { state: Store.volumeOff ? 'error' : 'done', detail: savedNote });
     // Mounted with none too: the Disks panel puts images in later.
     FS.mkdir('/uploads');
@@ -586,6 +632,7 @@ self.onmessage = (e) => {
             postMessage({ type: 'reply', id: m.id, result: { ...Module.stats,
                 remoteBytes: remote.reduce((n, o) => n + o.image.fetched, 0),
                 remoteRequests: remote.reduce((n, o) => n + o.image.requests, 0),
+                cachedChunks: remote.reduce((n, o) => n + o.image.preloaded, 0),    // (this browser's: ChunkCache)
                 // blocks not on the server yet (or on their way there)
                 unsynced: Store.enabled ? overlays.reduce((n, o) => n + o.pending.size, 0) + (Store.round ? 1 : 0) : 0 } });
         } else if (m.op === 'pixels') {

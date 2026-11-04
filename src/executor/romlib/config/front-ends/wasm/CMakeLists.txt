@@ -195,6 +195,26 @@ if(NODE_COMMAND)
         ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM}")
 endif()
 
+# Clicks and the pointer at each screen size and devicePixelRatio, in a
+# window narrower than the screen (web/tests/tab_input.mjs): the pointer on
+# the Mac pixel the page shows, 16 Mac pixels big; a menu title and a disk
+# icon clicked. 8.6 with PowerPC (its depth change at startup once reset
+# the screen to 640x480 whatever the settings said) and 7.6.1.
+if(NODE_COMMAND)
+    add_test(NAME executor.web.input_86
+        COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_input.mjs
+                $<TARGET_FILE_DIR:executor-web> ${EXECUTOR_WEB_SYSTEM_PPC} ppc)
+    set_tests_properties(executor.web.input_86 PROPERTIES
+        LABELS "executor;web" TIMEOUT 900 SKIP_RETURN_CODE 77
+        ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM};TMPDIR=${CMAKE_CURRENT_BINARY_DIR}")
+    add_test(NAME executor.web.input_761
+        COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_input.mjs
+                $<TARGET_FILE_DIR:executor-web> ${EXECUTOR_WEB_HIDPI_SYSTEM})
+    set_tests_properties(executor.web.input_761 PROPERTIES
+        LABELS "executor;web" TIMEOUT 600 SKIP_RETURN_CODE 77
+        ENVIRONMENT "NODE_PATH=${EXECUTOR_WEB_NODE_PATH};CHROMIUM=${EXECUTOR_WEB_CHROMIUM};TMPDIR=${CMAKE_CURRENT_BINARY_DIR}")
+endif()
+
 # tools/standalone, the server (docs/executor/Standalone.md): go test (the
 # API over a real connection, the claim, the relay, the program itself),
 # then the tab on it (the cells below build it with go: GO).
@@ -219,6 +239,19 @@ if(NODE_COMMAND AND GO_COMMAND)
     add_test(NAME executor.web.standalone
         COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_standalone.mjs
                 $<TARGET_FILE_DIR:executor-web>)
+    # Executor's volume saved in bundles and restored from one request
+    # (sync.js, volumes.go); without bundles, and from one cut short.
+    add_test(NAME executor.web.volume
+        COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_volume.mjs
+                $<TARGET_FILE_DIR:executor-web>)
+    # Apple's System sideloaded once, then the saved System Folder: a
+    # preference kept; the page hidden while the volume comes down saves
+    # none of it; a volume without System's data fork recovers.
+    add_test(NAME executor.web.system_kept
+        COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_system_kept.mjs
+                $<TARGET_FILE_DIR:executor-web> ${EXECUTOR_WEB_SYSTEM})
+    set_tests_properties(executor.web.system_kept PROPERTIES
+        LABELS "executor;web" TIMEOUT 400 SKIP_RETURN_CODE 77 ENVIRONMENT "${EXECUTOR_WEB_ENV}")
     # The Disks panel (disks.js): a disk put in while the Finder runs, a
     # change to it reverted, put away in the Finder; a CD read-only, out by
     # the panel's eject (standalone; EXECUTOR_WEB_SYSTEM the System, picked
@@ -244,7 +277,7 @@ if(NODE_COMMAND AND GO_COMMAND)
     add_test(NAME executor.web.insecure
         COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_insecure.mjs
                 ${CMAKE_BINARY_DIR} ${EXECUTOR_WEB_SYSTEM})
-    set_tests_properties(executor.web.server_lazy executor.web.standalone executor.web.settings
+    set_tests_properties(executor.web.server_lazy executor.web.standalone executor.web.volume executor.web.settings
                          executor.web.claim executor.web.insecure PROPERTIES
         LABELS "executor;web" TIMEOUT 300 SKIP_RETURN_CODE 77 ENVIRONMENT "${EXECUTOR_WEB_ENV}")
 endif()

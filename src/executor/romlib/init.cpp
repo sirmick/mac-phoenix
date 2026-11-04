@@ -178,6 +178,21 @@ unhandled_trap(syn68k_addr_t callback_address, void *arg)
             break;
     }
 
+    /* MacPhoenix: the state the fault left (an illegal instruction's was
+       described already, by the core): the faulting code and the
+       registers, the last traps; the PC printed is the handler's. */
+    if(trap_num != 4 && strcmp(pc_str, "<unknown>"))
+    {
+        syn68k_addr_t pc = READUL(EM_A7 + 2);
+        fprintf(stderr, "unhandled trap %d at $%08X (SR $%04X):", trap_num, (unsigned)pc,
+                (unsigned)READUW(EM_A7));
+        if(syn68k_is_guest_mapped((uintptr_t)SYN68K_TO_US(pc - 16), 40))
+            for(syn68k_addr_t a = pc - 16; a < pc + 24; a += 2)
+                fprintf(stderr, a == pc ? " | %04X" : " %04X", (unsigned)READUW(a));
+        fprintf(stderr, "\n");
+        syn68k_describe_cpu(stderr);
+    }
+
     if(trap_num < (int)std::size(trap_description)
        && trap_description[trap_num] != nullptr)
         gui_fatal("Fatal error:  unhandled trap %d at pc %s (%s)",

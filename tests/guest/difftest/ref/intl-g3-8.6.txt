@@ -1,0 +1,69 @@
+# probe 76ffc75fa673c03b9994fc4cb8eee117a600e8acc3b1caf1c05a70921adddc61
+== getintl
+getintl.GetIntlResource.0: 'itl0' 0
+getintl.GetIntlResource.1: 'itl1' 0
+getintl.GetIntlResource.2: 'itl2' 0
+getintl.GetIntlResource.3: (nil)
+getintl.GetIntlResource.4: 'itl4' 0
+== system
+system.system.wordSelect.err: 0
+system.system.wordSelect.handle: itl2
+system.system.wordSelect.resource: 'itl2' 0
+system.system.wordSelect.offset: 684
+system.system.wordSelect.length: 576
+system.system.wordSelect.data: 8000000000100110011201a4000602400a00000000000000000a0000000b0000000000000000000000000000000000000a000000060700050000000008040900... (576 bytes, crc 2d4a35c5)
+system.system.wordWrap.err: 0
+system.system.wordWrap.handle: itl2
+system.system.wordWrap.resource: 'itl2' 0
+system.system.wordWrap.offset: 1260
+system.system.wordWrap.length: 382
+system.system.wordWrap.data: 8000000000100110011201440006017e020404040404040404020404040304040404040404040404040404040404040402040404040405040404050504050405... (382 bytes, crc 3acb8350)
+system.system.numberParts.err: 0
+system.system.numberParts.handle: itl4
+system.system.numberParts.resource: 'itl4' 0
+system.system.numberParts.offset: 828
+system.system.numberParts.length: 172
+system.system.numberParts.data: 000100270027005e00ca002300300025002b002d002c0000003b005c002e00280029000000000000000000000000000000000000000000000000000000000000... (172 bytes, crc 3e73866f)
+system.system.unToken.err: 0
+system.system.unToken.handle: itl4
+system.system.unToken.resource: 'itl4' 0
+system.system.unToken.offset: 474
+system.system.unToken.length: 354
+system.system.unToken.data: 0162004e00c200c600c800ca00ba00be00cc00ce00d200b600d600ae00b200aa00a200a600d800da00dc00de00e000e200e400e600e800ea00ec00ee00f000f2... (354 bytes, crc e1049e18)
+system.system.whiteSpace.err: 0
+system.system.whiteSpace.handle: itl4
+system.system.whiteSpace.resource: 'itl4' 0
+system.system.whiteSpace.offset: 1000
+system.system.whiteSpace.length: 12
+system.system.whiteSpace.data: 000c00020008000a01200109
+== roman
+roman.roman.wordSelect.err: 0
+roman.roman.wordSelect.handle: itl2
+roman.roman.wordSelect.resource: 'itl2' 0
+roman.roman.wordSelect.offset: 684
+roman.roman.wordSelect.length: 576
+roman.roman.wordSelect.data: 8000000000100110011201a4000602400a00000000000000000a0000000b0000000000000000000000000000000000000a000000060700050000000008040900... (576 bytes, crc 2d4a35c5)
+roman.roman.wordWrap.err: 0
+roman.roman.wordWrap.handle: itl2
+roman.roman.wordWrap.resource: 'itl2' 0
+roman.roman.wordWrap.offset: 1260
+roman.roman.wordWrap.length: 382
+roman.roman.wordWrap.data: 8000000000100110011201440006017e020404040404040404020404040304040404040404040404040404040404040402040404040405040404050504050405... (382 bytes, crc 3acb8350)
+roman.roman.numberParts.err: 0
+roman.roman.numberParts.handle: itl4
+roman.roman.numberParts.resource: 'itl4' 0
+roman.roman.numberParts.offset: 828
+roman.roman.numberParts.length: 172
+roman.roman.numberParts.data: 000100270027005e00ca002300300025002b002d002c0000003b005c002e00280029000000000000000000000000000000000000000000000000000000000000... (172 bytes, crc 3e73866f)
+roman.roman.unToken.err: 0
+roman.roman.unToken.handle: itl4
+roman.roman.unToken.resource: 'itl4' 0
+roman.roman.unToken.offset: 474
+roman.roman.unToken.length: 354
+roman.roman.unToken.data: 0162004e00c200c600c800ca00ba00be00cc00ce00d200b600d600ae00b200aa00a200a600d800da00dc00de00e000e200e400e600e800ea00ec00ee00f000f2... (354 bytes, crc e1049e18)
+roman.roman.whiteSpace.err: 0
+roman.roman.whiteSpace.handle: itl4
+roman.roman.whiteSpace.resource: 'itl4' 0
+roman.roman.whiteSpace.offset: 1000
+roman.roman.whiteSpace.length: 12
+roman.roman.whiteSpace.data: 000c00020008000a01200109

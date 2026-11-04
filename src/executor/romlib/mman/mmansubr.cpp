@@ -554,6 +554,21 @@ static void sledgehammer_zone(THz zone, bool print_p,
        && !found_alloc_ptr_p)
         mm_fatal("alloc pointer `%p' does not point to heap block",
                  alloc_ptr);
+    {   /* zcbFree (FreeMem) against the free blocks: where it drifts,
+           each change of the difference, the first 40 */
+        static int n_said;
+        static int32_t last_gap[2];
+        int32_t gap = (int32_t)ZONE_ZCB_FREE(zone) - total_size;
+        int k = zone == LM(SysZone) ? 1 : 0;
+        if(gap != last_gap[k] && n_said < 40)
+        {
+            n_said++;
+            fprintf(stderr, "[zcbfree] zone %p%s: zcbFree %d, free blocks %d, gap %d (was %d) in A-trap $%04X (%s)\n",
+                    zone, k ? " (SysZone)" : "", (int)ZONE_ZCB_FREE(zone), total_size, gap, last_gap[k],
+                    mostrecenttrap, fn ? fn : "?");
+            last_gap[k] = gap;
+        }
+    }
 }
 
 void Executor::ROMlib_sledgehammer_zones(const char *fn, const char *file, int lineno,
@@ -712,8 +727,13 @@ void Executor::ROMlib_setupblock(block_header_t *block,
         ZONE_ZCB_FREE(current_zone) = ZONE_ZCB_FREE(current_zone)
                                            - PSIZE(block);
     else
+        /* what the block gave up: nothing when the rest was too small to
+           split off (it stays in the block). oldsize - asize here made
+           zcbFree, so FreeMem, grow by up to 11 bytes per SetHandleSize:
+           436K too much in Speedometer 4.0's 1.5M heap by its Color
+           QuickDraw tests, which saw room where there was none. */
         ZONE_ZCB_FREE(current_zone) = ZONE_ZCB_FREE(current_zone)
-                                           + oldsize - asize;
+                                           + oldsize - (int32_t)PSIZE(block);
 }
 
 void Executor::ROMlib_coalesce(block_header_t *block)

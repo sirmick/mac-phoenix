@@ -18,7 +18,8 @@
 // M1_RESULTS=FILE: one JSON line per application appended. The canvas after
 // each step goes to M1_SHOTS (default ~/storage/tmp/m1/shots) as
 // SYSTEM-NAME-STEP.png. M1_LOG=1: the Worker's console. M1_WINDOWS=1: the
-// window list (dialogs' text too) when a target fails.
+// window list (dialogs' text too) when a target fails. M1_DISKS=a.img,b.img:
+// more library disks put in with DISK (their System Folder additions too).
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -172,9 +173,10 @@ const TARGETS = {
             await t.saveAs('M1 PE');
         } },
         { name: 'Microsoft Works 4.0', app: 'Productivity:Microsoft Works 4.0b ƒ:Microsoft Works 4.0', use: async (t) => {
-            // Microsoft Works Startup at launch, Word Processor picked: New
+            // Microsoft Works Startup at launch (a dialog without a title:
+            // Works draws it, a static text), Word Processor picked: New
             // (Return) -> an untitled word processor document -> typed, saved
-            await t.until(async () => (await t.windows()).some((w) => w.title === 'Microsoft Works Startup'), 60000,
+            await t.until(async () => (await t.windows(true)).some((w) => /Microsoft Works Startup/.test(said(w))), 60000,
                           'no Microsoft Works Startup');
             await t.pause(1000);
             await t.key('Enter');
@@ -499,6 +501,7 @@ if (!['7.6.1', '8.6'].includes(system) || !boot || !TARGETS[diskName] || !fs.exi
     console.log(`SKIP: no ${system} boot disk or ${diskName} in ${library} (tools/web/make_library.py)`);
     process.exit(77);
 }
+const more = process.env.M1_DISKS ? process.env.M1_DISKS.split(',').filter((d) => d !== diskName) : [];
 const only = process.env.M1_APPS ? process.env.M1_APPS.split(',') : null;
 const targets = TARGETS[diskName].filter((a) => (a.systems || ['7.6.1', '8.6']).includes(system)
                                                 && (!only || only.includes(a.name)));
@@ -799,7 +802,7 @@ const t = {
 };
 
 // ---- the run ----
-const server = await startServer(dir, { images: library, include: [boot, diskName] });
+const server = await startServer(dir, { images: library, include: [boot, diskName, ...more] });
 if (!server) {
     console.log('SKIP: no go');
     process.exit(77);
@@ -807,6 +810,7 @@ if (!server) {
 const browser = await launch();
 async function openTab(target) {
     const query = `?disk=disks/${encodeURIComponent(boot)}&disk=disks/${encodeURIComponent(diskName)}`
+        + more.map((d) => `&disk=disks/${encodeURIComponent(d)}`).join('')
         + `&system=${encodeURIComponent(boot)}${system === '8.6' || target.ppc ? '&ppc=1' : ''}`
         + (process.env.M1_QUERY ? `&${process.env.M1_QUERY}` : '');
     if (!page || crashed) {

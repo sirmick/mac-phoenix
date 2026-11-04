@@ -127,12 +127,14 @@ EM_JS(void, js_audio, (const uint8_t *s16be, int frames), {
         Module.onAudio(HEAPU8.subarray(s16be, s16be + frames * 4));
 });
 
-/* The screen's size, and n rectangles (top, left, bottom, right in rects)
- * whose RGBA pixels follow one another in pixels, row by row. */
-EM_JS(void, js_rects, (int width, int height, const int32_t *rects, int n, const uint8_t *pixels, int bytes), {
+/* The image's size (the screen's at the display scale), the Mac's screen
+ * (1x: what clicks are in), and n rectangles (top, left, bottom, right in
+ * rects) whose RGBA pixels follow one another in pixels, row by row. */
+EM_JS(void, js_rects, (int width, int height, int mac_width, int mac_height,
+                       const int32_t *rects, int n, const uint8_t *pixels, int bytes), {
     if (Module.onRects)
         Module.onRects(width, height, HEAP32.subarray(rects >> 2, (rects >> 2) + 4 * n),
-                       HEAPU8.subarray(pixels, pixels + bytes));
+                       HEAPU8.subarray(pixels, pixels + bytes), mac_width, mac_height);
 });
 
 /* The cursor, for the page to draw (a CSS cursor; web/executor/cursor.js). */
@@ -215,7 +217,8 @@ void on_rects(const uint32_t *argb, int width, int height,
         if(auto *v = driver())
             v->drawCursor(start, r);
     }
-    js_rects(width, height, rect_list.data(), (int)rects.size(),
+    js_rects(width, height, Executor::vdriver->width(), Executor::vdriver->height(),
+             rect_list.data(), (int)rects.size(),
              (const uint8_t *)rgba.data(), (int)(total * 4));
 }
 
@@ -555,6 +558,15 @@ void on_event_poll()
             reply = windows_json(arg == "items");
         else if(op == "menus")
             reply = menus_json();
+        else if(op == "mouse")
+        {
+            /* Where the Mac has the mouse, and its screen: what a click
+               from the page lands on (web/tests/tab_input.mjs). */
+            Point m = LM(MouseLocation);
+            reply = "{\"x\":" + std::to_string(m.h) + ",\"y\":" + std::to_string(m.v)
+                    + ",\"width\":" + std::to_string(vdriver->width())
+                    + ",\"height\":" + std::to_string(vdriver->height()) + "}";
+        }
         else if(op == "drawn")
         {
             reply = "[";

@@ -33,3 +33,4 @@ Speech Manager
 Speech
 Shared Library Manager
 System AINI -32700
+Microsoft OLE Extension

@@ -19,7 +19,9 @@
 #include <base/cpu.h>
 #include <PowerCore.h>
 #include <base/debugger.h>
+#include <algorithm>
 #include <chrono>
+#include <unordered_map>
 #include "vclock.h"
 
 using namespace Executor;
@@ -35,14 +37,36 @@ static unsigned long next_interrupt_msecs;
 
 static int timewarpNumerator = 1, timewarpDenominator = 1;
 
+uint64_t
+Executor::usecs_elapsed()
+{
+    if(vclock_enabled)     /* MacPhoenix --deterministic */
+        return vclock_usec();
+    static auto startTime = std::chrono::steady_clock::now();
+    return std::chrono::duration_cast<std::chrono::microseconds>(
+        (std::chrono::steady_clock::now() - startTime) * timewarpNumerator / timewarpDenominator).count();
+}
+
 unsigned long
 Executor::msecs_elapsed()
 {
-    if(vclock_enabled)     /* MacPhoenix --deterministic */
-        return (unsigned long)(vclock_usec() / 1000);
-    static auto startTime = std::chrono::steady_clock::now();
-    return std::chrono::duration_cast<std::chrono::milliseconds>(
-        (std::chrono::steady_clock::now() - startTime) * timewarpNumerator / timewarpDenominator).count();
+    return (unsigned long)(usecs_elapsed() / 1000);
+}
+
+/* MacPhoenix: when each primed task is due, in microseconds, and whether
+   PrimeTime had its count in microseconds (negative), so that RmvTime can
+   leave the time remaining in tmCount, in the units it was primed with
+   (Inside Macintosh: Processes, 3-21). Programs time code that way:
+   Speedometer primes a task for -1,800,000,000 µs, runs a test, removes
+   it and takes the elapsed time from tmCount. */
+namespace
+{
+struct Primed
+{
+    uint64_t due_us;
+    bool micro;
+};
+std::unordered_map<TMTask *, Primed> primed;
 }
 
 void Executor::ROMlib_SetTimewarp(int speedup, int slowdown)
@@ -167,6 +191,10 @@ static void ROMlib_PrimeTime(QElemPtr taskp, LONGINT count)
 
 #define FUDGE_FACTOR (-30)
 
+    primed[(TMTask *)taskp] = count < 0
+        ? Primed{ usecs_elapsed() + (uint64_t)-(int64_t)count, true }
+        : Primed{ usecs_elapsed() + (uint64_t)count * 1000, false };
+
     if(count < FUDGE_FACTOR)
         count = -count / 1000; /* IM-Processes 3-20 */
 
@@ -205,6 +233,10 @@ static void ROMlib_PrimeTime(QElemPtr taskp, LONGINT count)
 
 void Executor::InsTime(QElemPtr taskp)
 {
+    /* A task installed afresh has no PrimeTime yet: forget one primed at
+       this address before (a task freed without RmvTime, its memory
+       reused), so the map doesn't keep it. */
+    primed.erase((TMTask *)taskp);
     ((TMTask *)taskp)->tmCount = -1;
     Enqueue(taskp, &ROMlib_timehead);
 }
@@ -221,6 +253,24 @@ void Executor::InsXTime(QElemPtr taskp)
 void Executor::RmvTime(QElemPtr taskp)
 {
     Dequeue(taskp, &ROMlib_timehead);
+
+    /* What remains: 0 once the task has run (or was never primed),
+       negative microseconds or positive milliseconds as primed. */
+    TMTask *tp = (TMTask *)taskp;
+    auto it = primed.find(tp);
+    LONGINT left = 0;
+    if(it != primed.end())
+    {
+        uint64_t now = usecs_elapsed();
+        if(tp->tmCount > 0 && it->second.due_us > now)
+        {
+            uint64_t us = it->second.due_us - now;
+            left = it->second.micro ? -(LONGINT)std::min<uint64_t>(us, 0x7FFFFFFF)
+                                    : (LONGINT)std::min<uint64_t>((us + 999) / 1000, 0x7FFFFFFF);
+        }
+        primed.erase(it);
+    }
+    tp->tmCount = left;
 }
 
 void Executor::PrimeTime(QElemPtr taskp, LONGINT count)
@@ -231,7 +281,7 @@ void Executor::PrimeTime(QElemPtr taskp, LONGINT count)
 /* MacPhoenix: Microseconds for PowerPC code (68k: the trap's stub). */
 void Executor::C_Microseconds(UnsignedWide *microTickCount)
 {
-    uint64_t us = (uint64_t)msecs_elapsed() * 1000;
+    uint64_t us = usecs_elapsed();
     microTickCount->hi = us >> 32;
     microTickCount->lo = (uint32_t)us;
 }

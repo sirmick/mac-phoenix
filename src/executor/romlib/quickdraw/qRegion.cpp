@@ -15,6 +15,8 @@
 #include <mman/mman.h>
 #include <rsys/safe_alloca.h>
 
+#include <vector>
+
 using namespace Executor;
 
 #undef ALLOCABEGIN
@@ -121,6 +123,23 @@ rgn_is_rect_p(const RgnHandle rgnh)
             && ip[2] == ip[6]);
 }
 
+/* Resize a region handle for a result computed elsewhere. SetHandleSize,
+   not ReallocateHandle: when the heap has no room, the region keeps what
+   it had (ReallocateHandle would leave it with no master pointer, and the
+   next write go to nil), and QDError says why. */
+static bool
+rgn_set_size(RgnHandle rh, Size size)
+{
+    SetHandleSize((Handle)rh, size);
+    OSErr err = MemError();
+    if(err != noErr)
+    {
+        ROMlib_qd_error = err;
+        return false;
+    }
+    return true;
+}
+
 /* ROMlib_sizergn: crawl through a region and set bbox and size fields */
 
 void Executor::ROMlib_sizergn(RgnHandle rh, bool special_p) /* INTERNAL */
@@ -199,8 +218,10 @@ void Executor::C_CopyRgn(RgnHandle s, RgnHandle d)
     if(s == d)
         return;
     size = RGN_SIZE(s);
-    ReallocateHandle((Handle)d, size);
+    if(!rgn_set_size(d, size))
+        return;
     memcpy((Ptr)*d, (Ptr)*s, size);
+    ROMlib_qd_error = noErr;
 }
 
 void Executor::C_CloseRgn(RgnHandle rh)
@@ -650,7 +671,7 @@ typedef enum {
 
 static void binop(optype op, RgnHandle srcrgn1, RgnHandle srcrgn2,
                   RgnHandle dstrgn);
-static void ptorh(INTEGER *p, RgnHandle rh);
+static INTEGER *ptorh(INTEGER *p, INTEGER *op);
 
 static void sectbinop(RgnHandle srcrgn1, RgnHandle srcrgn2, RgnHandle dstrgn)
 {
@@ -843,9 +864,13 @@ static void sectbinop(RgnHandle srcrgn1, RgnHandle srcrgn2, RgnHandle dstrgn)
     {
         int dst_rgn_size = (RGN_SMALL_SIZE
                             + sizeof(INTEGER) * (tptr - temppoints));
+        if(!rgn_set_size(dstrgn, dst_rgn_size))
+        {
+            ALLOCAEND
+            return;
+        }
         RGN_SET_SIZE_AND_SPECIAL(dstrgn, dst_rgn_size, false);
         /* TODO fix rgnBBox here */
-        ReallocateHandle((Handle)dstrgn, dst_rgn_size);
     }
 
     memmove(RGN_DATA(dstrgn), temppoints,
@@ -853,6 +878,7 @@ static void sectbinop(RgnHandle srcrgn1, RgnHandle srcrgn2, RgnHandle dstrgn)
     ROMlib_sizergn(dstrgn, nspecial > 0); /* could do this while copying... */
     if(nspecial > 0)
         RGN_SET_SPECIAL(dstrgn, true);
+    ROMlib_qd_error = noErr;
     ASSERT_SAFE(temppoints);
     ALLOCAEND
 }
@@ -956,10 +982,14 @@ static void binop(optype op, RgnHandle srcrgn1, RgnHandle srcrgn2,
     }
     *tptr++ = RGN_STOP_X;
     gui_assert(sizeof(INTEGER) * (tptr - temppoints) <= 2 * ((*srcrgn1)->rgnSize + (*srcrgn2)->rgnSize + 18 * sizeof(INTEGER)));
+    if(!rgn_set_size(dstrgn,
+                     RGN_SMALL_SIZE + sizeof(INTEGER) * (tptr - temppoints)))
+    {
+        ALLOCAEND
+        return;
+    }
     (*dstrgn)->rgnSize = RGN_SMALL_SIZE + sizeof(INTEGER) * (tptr - temppoints);
     /* TODO fix rgnBBox here */
-    ReallocateHandle((Handle)dstrgn,
-                  RGN_SMALL_SIZE + sizeof(INTEGER) * (tptr - temppoints));
     {
         INTEGER *ip, *op;
         ip = temppoints;
@@ -968,6 +998,7 @@ static void binop(optype op, RgnHandle srcrgn1, RgnHandle srcrgn2,
             *op++ = *ip++;
         ROMlib_sizergn(dstrgn, false); /* could do this while copying... */
     }
+    ROMlib_qd_error = noErr;
     ASSERT_SAFE(temppoints);
     ALLOCAEND
 }
@@ -1109,17 +1140,21 @@ static INTEGER npairs;
 
 #include "hintemplate.h"
 
-#define DECL void hinset(INTEGER *p, INTEGER dh)
+/* The output goes to its own buffer, up to out_end: in place, an inset
+   that makes more pairs than it has read overwrote the input it hadn't
+   read yet, sentinel and all, and read on past the buffer (Speedometer
+   4.0 on 8.6). */
+#define DECL void hinset(INTEGER *p, INTEGER *out, INTEGER *out_end, INTEGER dh)
 
 #define STATEDECL
 #define ITYPE INTEGER
 #define SETIO      \
     ip = p;        \
-    op = p;        \
+    op = out;      \
     y = *(ip + 1); \
     npairs = 0
 #define NEXTPAIR y == *(ip + 1) ? (x = *ip++, ip++, 1) : (y = *(ip + 1), 0)
-#define INCLXY(x, y) *op++ = x, *op++ = y, npairs++
+#define INCLXY(x, y) (op + 2 <= out_end ? (*op++ = x, *op++ = y, npairs++) : 0)
 #define UNSETIO
 
 #include "hintemplate.h"
@@ -1178,11 +1213,11 @@ static LONGINT comparey(const void *cp1, const void *cp2)
  * BEWARE:  ptorh can trash memory... regions can grow by being inset (honest)
  */
 
-static void ptorh(INTEGER *p, RgnHandle rh)
+/* the sorted points as region data at op; returns its end */
+static INTEGER *ptorh(INTEGER *p, INTEGER *op)
 {
-    INTEGER y, oy, *op;
+    INTEGER y, oy;
 
-    op = RGN_DATA(rh);
     if(npairs)
     { /* decrement one 'cause of the 32767 sentinel */
         *op++ = CW_RAW(oy = *p);
@@ -1201,11 +1236,11 @@ static void ptorh(INTEGER *p, RgnHandle rh)
     }
     *op++ = RGN_STOP_X; /* need one or two? */
     *op++ = RGN_STOP_X; /* need one or two? */
+    return op;
 }
 
 void Executor::C_InsetRgn(RgnHandle rh, INTEGER dh, INTEGER dv)
 {
-    Handle h;
     INTEGER *p;
     Rect *rp;
     Size newsize;
@@ -1223,22 +1258,31 @@ void Executor::C_InsetRgn(RgnHandle rh, INTEGER dh, INTEGER dv)
     }
     else
     {
+        /* The point lists are host memory, and the region is resized
+           once, to what it comes to: a nearly full heap (Speedometer's
+           Color QuickDraw tests, MaxBlock a few K) had no room for a
+           guest buffer four times the region. If even the resize fails,
+           the region stays as it was and QDError says why. */
         newsize = 4 * RGN_SIZE(rh);
-        h = NewHandle(newsize);
-        HLock(h);
-        p = (INTEGER *)*h;
+        std::vector<INTEGER> points(newsize / sizeof(INTEGER));
+        std::vector<INTEGER> inset(2 * points.size());
+        p = points.data();
         rhtopandinseth(rh, p, dh); /* must be combined for efficiency */
         gui_assert(npairs * (int)sizeof(INTEGER) * 2 <= newsize);
         qsort(p, npairs, sizeof(INTEGER) * 2, comparex);
-        hinset(p, dv);
+        p = inset.data();
+        hinset(points.data(), p, p + inset.size(), dv);
         qsort(p, npairs, sizeof(INTEGER) * 2, comparey);
-        ReallocateHandle((Handle)rh, newsize);
-        ptorh(p, rh);
+        /* ptorh: the pairs' x's plus a y per row, and two stops */
+        std::vector<INTEGER> data(2 * (size_t)npairs + 4);
+        INTEGER *end = ptorh(p, data.data());
+        Size size = RGN_SMALL_SIZE + sizeof(INTEGER) * (end - data.data());
+        if(!rgn_set_size(rh, size))
+            return;
+        memcpy(RGN_DATA(rh), data.data(), size - RGN_SMALL_SIZE);
         ROMlib_sizergn(rh, false);
-        gui_assert((*rh)->rgnSize <= newsize);
-        HUnlock(h);
-        DisposeHandle(h);
     }
+    ROMlib_qd_error = noErr;
 }
 
 static bool
@@ -1314,7 +1358,6 @@ void Executor::C_XorRgn(RgnHandle s1, RgnHandle s2, RgnHandle dest)
     INTEGER *ip1, *ip2, *op;
     INTEGER left, right, bottom;
     INTEGER cnt;
-    RgnHandle finalrestingplace;
     GUEST<RgnPtr> temp2, temp3;
     RgnPtr temp;
     ALLOCABEGIN
@@ -1323,16 +1366,11 @@ void Executor::C_XorRgn(RgnHandle s1, RgnHandle s2, RgnHandle dest)
        yet they actually have an additional implied 18 bytes associated
        with them */
 
-    if(s1 == dest || s2 == dest)
-    {
-        finalrestingplace = dest;
-        dest = (RgnHandle)NewHandle((Size)(*s1)->rgnSize + (*s2)->rgnSize + 36);
-    }
-    else
-    {
-        finalrestingplace = 0;
-        ReallocateHandle((Handle)dest, (*s1)->rgnSize + (*s2)->rgnSize + 36);
-    }
+    /* The result is built in host memory (dest may be s1 or s2) and dest
+       resized once to it, as InsetRgn does: no guest buffer the size of
+       both regions with the heap nearly full. */
+    std::vector<uint8_t> out((Size)(*s1)->rgnSize + (*s2)->rgnSize + 36);
+    RgnPtr outp = (RgnPtr)out.data();
 
     if(RGN_SMALL_P(s1))
     {
@@ -1382,7 +1420,7 @@ void Executor::C_XorRgn(RgnHandle s1, RgnHandle s2, RgnHandle dest)
 
     ip1 = RGN_DATA(s1);
     ip2 = RGN_DATA(s2);
-    op = RGN_DATA(dest);
+    op = RGNP_DATA(outp);
     left = RGN_STOP;
     right = -32768;
     bottom = -32768;
@@ -1465,22 +1503,25 @@ void Executor::C_XorRgn(RgnHandle s1, RgnHandle s2, RgnHandle dest)
         }
     }
     *op++ = RGN_STOP_X;
+    Size size = (char *)op - (char *)outp;
+    if(!rgn_set_size(dest, size))
+    {
+        ALLOCAEND
+        return;
+    }
+    memcpy((Ptr)*dest, outp, size);
     HASSIGN_5(dest,
               rgnBBox.top, *(GUEST<INTEGER> *)RGN_DATA(dest),
               rgnBBox.left, left,
               rgnBBox.bottom, bottom,
               rgnBBox.right, right,
-              rgnSize, (char *)op - (char *)*dest);
+              rgnSize, size);
     if(rgn_is_rect_p(dest))
-        RGN_SET_SMALL(dest);
-    if(finalrestingplace)
     {
-        ROMlib_installhandle((Handle)dest, (Handle)finalrestingplace);
-        SetHandleSize((Handle)finalrestingplace,
-                      RGN_SIZE(finalrestingplace));
-    }
-    else
+        RGN_SET_SMALL(dest);
         SetHandleSize((Handle)dest, RGN_SIZE(dest));
+    }
+    ROMlib_qd_error = noErr;
     ALLOCAEND
 }
 

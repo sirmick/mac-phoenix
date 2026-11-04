@@ -169,8 +169,18 @@ the reload claims it again. Loopback is nothing special.
                                   (409 { version } when V isn't the server's)
     DELETE overlays/KEY           Revert -> { version }
     POST   overlays/KEY/merge     into the library image -> { blocks, id, key }
-    GET/PUT/DELETE volumes/KEY    { version, manifest }
-    POST   objects/missing; PUT/GET objects/SHA
+    GET/PUT/DELETE volumes/KEY    { version, manifest } (PUT { manifest, base[, reset] }:
+                                  409 reason "shrink" when it drops most files)
+    GET    volumes/KEY/history    { history: [{ version, saved, files }] }: the kept ones
+    POST   volumes/KEY/restore    { version }: a kept one current again -> { version }
+    GET    volumes/KEY/bundle     the volume and every object it names, one stream
+                                  (gzip for a browser that takes it; below)
+    POST   volumes/KEY/bundle     { have: [sha] }: the same, less the objects the
+                                  browser's cache has
+    POST   objects/missing        { shas } -> { missing }
+    POST   objects/bundle         objects up, a bundle (Content-Encoding: gzip or none)
+                                  -> { stored }
+    PUT/GET objects/SHA           one object
     GET    (nothing after sync/)  { overlays, volumes }
 /api/uploads/NAME POST the image as the body[?replace=1] -> its library entry
                   (uploads/NAME); DELETE: it, its record and its overlay (uploads.go)
@@ -207,6 +217,46 @@ Sec-Fetch-Site). In more detail:
 - **Volumes and objects** are files: `DATA/volumes/KEY.json` (`{ version,
   manifest }`) and `DATA/objects/AB/SHA`; an object no manifest names
   is removed an hour after it was written.
+- **A volume's history, and saves that drop most of it** (`volumes.go`,
+  defence in depth after the partial saves below): every manifest a PUT,
+  a DELETE (the tab's Reset) or a restore replaces goes to
+  `DATA/volumes/KEY.history/V.json`; the last 5 are kept, and 5 more at
+  least 10 minutes apart (the tab saves about every second), their objects
+  kept from the collector. `POST volumes/KEY/restore { version }` makes one
+  current again (a new version). A PUT keeping fewer than half the paths
+  of a volume of 16 files or more is refused, 409 `{ reason: "shrink",
+  kept, files }`, unless it says `reset: true`; the tab then stops saving
+  the volume and says so.
+- **Bundles** (`volumes.go`): records of a sha (32 bytes), a length
+  (uint32 LE) and that many bytes, ended by a record of a zero sha and
+  length (without it, the bundle was cut short). `GET volumes/KEY/bundle`
+  starts with the volume itself (a uint32 LE length, then the JSON `{
+  version, manifest }`) and has each object once, the manifest's paths
+  in order; gzip (`BestSpeed`) as `Content-Encoding`, so the browser
+  decompresses it as it streams. An object gone meanwhile (collected
+  under a newer manifest) ends it short. `POST objects/bundle` checks
+  each object against its sha; `network.max_upload_mb` limits the body
+  and, decompressed, the objects. The tab (`sync.js`) restores the volume
+  from the bundle, writing each file into Executor's MEMFS as it arrives
+  (the request goes out while the module may still be compiling; the
+  files wait for it); a server without bundles (404) or a bundle cut
+  short: the files still missing by `GET objects/SHA`, six at once. It
+  saves with `objects/missing`, then bundles of about 8 MB
+  (CompressionStream gzip), `PUT objects/SHA` six at once on a server
+  without them, then the manifest.
+- **The browser caches, never the store** (`overlay.js` `IdbCache`:
+  IndexedDB, bytes by key and `{ size, used }` for the eviction, the least
+  recently used out past a cap). `executor-objects` (512 MB): the volume's
+  objects by sha, from the bundles and the saves; a start POSTs the
+  shas it has, the server's manifest decides what the volume is, each
+  cached object read back is checked against its sha (a bad one is
+  dropped and fetched). `executor-chunks` (256 MB): disk image chunks
+  (256 KB) by the image's ETag (its content id here) and number; Executor
+  reads them synchronously, so an image's most recently read ones (8 MB
+  at most: what the last start read) go into its memory before Executor
+  starts, the ones fetched and read written back every 2 s. Nothing goes
+  to the server from either; no IndexedDB, an error, or a deleted
+  database: the network, said only in the log.
 - **Uploads** (`uploads.go`): a disk image the tab adds (main.js
   `uploadImage`) is `POST /api/uploads/NAME` with the image as the body
   (an image's extension, no path; at most `disks.max_image_mb`, written
@@ -226,6 +276,80 @@ Sec-Fetch-Site). In more detail:
   any tool is a backup.
 - Every answer is cross-origin isolated (COOP `same-origin`, COEP
   `require-corp`, CORP `same-origin`).
+
+## Start-up costs
+
+Measured 2026-11-03 with `web/tests/bench_start.mjs SITE DATA IMAGES
+[RUNS] [--slow]` (a copy of a server's data directory each run: its
+settings, the disks mounted, the saved volumes; times from the
+navigation; `--slow` is Chromium's network emulation, 50 Mbit/s down,
+20 down/up, 20 ms latency; `BENCH_TRACE=FILE` writes every request and
+Worker line with its time). The owner's settings: Mac OS 8.6, nine
+library disks mounted; the volume a saved 7.6.1 one of 1010 files, 45 MB
+(732 objects).
+
+| | before | after |
+|---|---|---|
+| the volume restored, loopback | 0.70 s (1010 sequential GETs) | 0.28 s (one bundle) |
+| the volume restored, 50 Mbit/s | 31.4 s | 4.5 s |
+| the Finder, loopback | 4.0–5.6 s | 3.8–4.2 s |
+| the Finder, 50 Mbit/s | 47.1 s | 21.1 s |
+| the same with the owner's saved 8.6 volume (108 files, 16 MB) | 24.9 s | 21.3 s |
+| first save of a fresh 8.6 System (363 files, 31 MB), loopback | 1.8 s (251 PUTs) | 1.5 s (4 bundles) |
+| the same at 20 Mbit/s up | 19.3 s | 7.5 s |
+
+Cold and warm (`--warm`: the tab loaded once to settle the volume, then
+with the browser's caches deleted, then twice with them; the same
+server state, 1378 files / 78 MB, nine disks):
+
+| | cold | warm |
+|---|---|---|
+| the volume restored, loopback | 0.66 s | 0.31 s (every object from the cache) |
+| the volume restored, 50 Mbit/s | 8.1 s | 0.36 s |
+| the Finder, loopback | 2.7 s | 2.3–2.5 s |
+| the Finder, 50 Mbit/s | 12.1 s | 2.9 s (0–3 Range requests, was 14) |
+
+The objects cache alone took the 50 Mbit/s warm start to 4.6–6.5 s;
+the chunk cache the rest (the disks' catalogs and the System Folder
+additions' reads).
+
+What else a start costs at 50 Mbit/s (the trace of the run above):
+the module 2.2 s (6.9 MB gzip; Cache Storage after the first visit);
+the nine disks' overlays 0.05 s (their requests at once now, one after
+another before); **the System sideloaded from boot-8.6.img when the
+volume has no `System Folder/System`: 5.9 s** (`sideload_system`, 23
+Range reads of ~1 MB one after another, RemoteImage's chunks; 0.25 s on
+loopback); **the disks' System Folder additions: 10 s** (creative.img 3.9
+s, games-ppc.img 1.7 s, productivity.img 4.1 s: their files read by
+Range, one chunk at a time, when they aren't in the System Folder yet;
+fewer reads but still a few seconds when most are); Executor from main
+to the Finder 2.6 s. Both are Range reads in sequence and
+bandwidth-bound (the chunks are the image's bytes, uncompressed).
+
+**Compressed disk reads.** The library's disks answer `?bytes=A-B` (they
+say so: `X-Range-Encodings: gzip`) with that range as a gzip-compressed
+200 (`static.go`; `X-Content-Range` names it); RemoteImage reads that way
+when offered, plain `Range` requests otherwise and after anything wrong
+with a compressed one. Not `Range` itself: Chromium sends
+`Accept-Encoding: identity` with a Range and fails a gzipped 206
+(Firefox takes it). The owner's 8.6 volume (1624 files, 84 MB), nine disks,
+at 50 Mbit/s: the Finder cold 17.6 -> 12.4 s (the disks' reads before the
+first frame 6.4 -> 1.5 s), warm 2.8-3.1 -> 2.6 s; loopback the same either
+way (2.5 s cold, 2.0-2.2 s warm). What is left cold is the volume itself
+(9.3 s for 84 MB).
+
+**Volumes saved without `System`** (fixed 2026-11-03): the page posts
+`save` when it is hidden (`visibilitychange`); arriving while the Worker
+was still restoring the volume, that saved what had come so far, and the
+server collected the rest. The owner's 8.6 volume went from 377 files to
+292 in one session, `System`'s empty data fork among the missing, so every
+start sideloaded the System again over the preferences and copied the
+additions again (16 s at 50 Mbit/s); another start's restore met an
+object already collected (404). Now nothing of the volume is saved
+before it is restored and Executor starts (`sync.js` `Store.restored`),
+and a restored volume's `%NAME` without `NAME` gets an empty data fork
+back (`worker.js` `recoverDataForks`: Executor sees no file without one),
+so a volume saved that way starts on its saved System Folder.
 
 ## Tests
 
@@ -248,6 +372,15 @@ browser's in-use page and refusals; a restart, the tab's reload notice
 and Reload; another browser first after a restart; screenshots in
 `claim-shots/`). The tab's other cells on it (each builds it with go):
 `executor.web.standalone` (a change survives a reload; a second tab
-watches, then takes control), `server_lazy` (a large disk read by Range),
+watches, then takes control), `volume` (`tab_volume.mjs`: 150 files saved
+in bundles, no PUT; restored from the one bundle request, every file the
+same; the disk read in compressed ranges; warm, every object from the
+browser's cache and a disk's chunks too; two cached objects spoiled, the cache deleted: from the server, no
+notice; through `objects/SHA` and PUTs when the bundle routes answer 404;
+from a bundle cut in half), `system_kept` (`tab_system_kept.mjs`, on
+`EXECUTOR_WEB_SYSTEM`: sideloaded once, then the saved System Folder with
+a preference in it; the page hidden while the volume comes down, held or
+cut short, saves none of it; a volume without `System` recovers),
+`server_lazy` (a large disk read by Range),
 `settings`, `insecure` (plain http to a LAN name), `relay` (MacTCP and
 Open Transport through `/relay`), and the `site` cells (WebSite.md).

@@ -703,6 +703,8 @@ void Executor::C_StdRgn(GrafVerb verb, RgnHandle rgn)
     /* intersect the region to be drawn with the
      port bounds and port rect */
     rh = NewRgn();
+    if(!rh) /* the heap full: nothing to draw with */
+        return;
     r = PORT_BOUNDS(qdGlobals().thePort);
 
     RectRgn(rh, &r);
@@ -723,7 +725,13 @@ void Executor::C_StdRgn(GrafVerb verb, RgnHandle rgn)
         /* construct the frame */
         /* #warning "We inset the region AFTER we've clipped it to the port bounds???" */
         InsetRgn(rh, pen_size.h, pen_size.v);
-        XorRgn(rgn, rh, rh);
+        if(ROMlib_qd_error == noErr)
+            XorRgn(rgn, rh, rh);
+        if(ROMlib_qd_error != noErr) /* no room for the frame */
+        {
+            DisposeRgn(rh);
+            return;
+        }
 
         /* now `paint' the frame */
         verb = paint;

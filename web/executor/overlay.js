@@ -102,17 +102,205 @@ function notice(text) {
         postMessage({ type: 'notice', text });
 }
 
+// A cache of immutable bytes in this browser (IndexedDB database NAME:
+// "bytes" by key, "meta" { size, used } by key, for the eviction): at
+// most cap bytes, the least recently used out first. Disposable: no
+// IndexedDB, an error, deleted meanwhile: it answers nothing (said once,
+// in the log) and the caller goes to the network. Volume objects
+// (sync.js: ObjectCache) and disk image chunks (ChunkCache, below).
+class IdbCache {
+    constructor(name, cap) {
+        this.name = name;
+        this.cap = cap;
+        this.db = null;
+        this.off = false;
+    }
+
+    open() {
+        if (!this.db)
+            this.db = new Promise((resolve) => {
+                try {
+                    const r = indexedDB.open(this.name, 1);
+                    r.onupgradeneeded = () => {
+                        r.result.createObjectStore('bytes');
+                        r.result.createObjectStore('meta');
+                    };
+                    r.onsuccess = () => {
+                        r.result.onversionchange = () => r.result.close();     // (deleted: let it go)
+                        resolve(r.result);
+                    };
+                    r.onerror = r.onblocked = () => resolve(null);
+                } catch {
+                    resolve(null);
+                }
+            });
+        return this.db;
+    }
+
+    // fn(bytes, meta) in a transaction of the two stores; what it returns,
+    // once the transaction is done; null for no cache.
+    async run(mode, fn) {
+        if (this.off)
+            return null;
+        try {
+            const db = await this.open();
+            if (!db)
+                return null;
+            const tx = db.transaction(['bytes', 'meta'], mode);
+            const out = fn(tx.objectStore('bytes'), tx.objectStore('meta'));
+            await new Promise((resolve, reject) => {
+                tx.oncomplete = resolve;
+                tx.onerror = tx.onabort = () => reject(tx.error);
+            });
+            return out;
+        } catch (e) {
+            console.log(`[web] this browser's cache ${this.name}: ${e.message || e}; not used`);
+            this.off = true;
+            return null;
+        }
+    }
+
+    // [key, { size, used }] of all, or of the keys in range.
+    async metas(range) {
+        let all = [];
+        await this.run('readonly', (bytes, meta) => {
+            const keys = meta.getAllKeys(range), vals = meta.getAll(range);
+            vals.onsuccess = () => { all = keys.result.map((k, i) => [k, vals.result[i]]); };
+        });
+        return all;
+    }
+
+    // key -> bytes of those it has.
+    async get(keys) {
+        const got = new Map();
+        if (keys.length)
+            await this.run('readonly', (bytes) => {
+                for (const k of keys)
+                    bytes.get(k).onsuccess = (e) => {
+                        if (e.target.result instanceof Uint8Array)
+                            got.set(k, e.target.result);
+                    };
+            });
+        return got;
+    }
+
+    touch(keys, sizes) {
+        const now = Date.now();
+        return this.run('readwrite', (bytes, meta) => {
+            for (const k of keys)
+                meta.put({ size: sizes.get(k), used: now }, k);
+        });
+    }
+
+    drop(keys) {
+        return this.run('readwrite', (bytes, meta) => {
+            for (const k of keys) {
+                bytes.delete(k);
+                meta.delete(k);
+            }
+        });
+    }
+
+    // [key, bytes] in (used: when, default now), then the least recently
+    // used out past cap.
+    async put(entries, now = Date.now()) {
+        if (!entries.length || this.off)
+            return;
+        await this.run('readwrite', (bytes, meta) => {
+            for (const [k, b] of entries) {
+                bytes.put(b.slice(), k);            // (a view's own bytes, not its buffer's)
+                meta.put({ size: b.length, used: now }, k);
+            }
+        });
+        const all = await this.metas();
+        let total = all.reduce((n, [, m]) => n + m.size, 0);
+        if (total <= this.cap)
+            return;
+        all.sort((a, b) => a[1].used - b[1].used);
+        const out = [];
+        for (const [k, m] of all) {
+            if (total <= this.cap)
+                break;
+            out.push(k);
+            total -= m.size;
+        }
+        await this.drop(out);
+    }
+}
+
+// Disk image chunks, by the image's ETag (its content id on
+// tools/standalone) and chunk number. Read synchronously, they can't come
+// from IndexedDB as Executor reads: an image's most recently read ones
+// (up to CHUNKS_PRELOAD bytes: what the last start read; fetched but not
+// read, a read-ahead, doesn't count) go into its memory before Executor
+// starts (RemoteImage.preload); the ones fetched, and the ones read, are
+// written back now and then (RemoteImage.keep).
+const ChunkCache = new IdbCache('executor-chunks', 256 << 20);
+const CHUNKS_PRELOAD = 8 << 20;
+const CHUNKS_KEEP_EVERY = 2000;          // ms
+
 class RemoteImage {
     constructor(desc) {
         this.name = desc.name;
         this.size = desc.size;
         this.url = desc.remote.url;
         this.etag = desc.remote.etag;
+        this.gzip = !!desc.remote.gzip;  // ranges gzip-compressed (tools/standalone offers it: fetchChunks)
         this.chunks = Math.ceil(this.size / REMOTE_CHUNK);
         this.have = new Uint8Array(this.chunks);
         this.memory = new Map();         // chunk -> bytes; oldest read first
         this.fetched = 0;                // bytes, and requests, for 'stats'
         this.requests = 0;
+        this.fresh = new Set();          // chunks fetched, not in ChunkCache yet
+        this.used = new Set();           // chunks read since the last keep
+        this.keeping = null;
+        this.preloaded = 0;              // chunks, for 'stats'
+    }
+
+    cacheKey(c) {
+        return `${this.etag}:${String(c).padStart(8, '0')}`;
+    }
+
+    // The cached chunks the last starts read, into memory (not waited for
+    // by anything but the start: worker.js openImage).
+    async preload() {
+        if (!this.etag)
+            return;
+        const range = IDBKeyRange.bound(`${this.etag}:`, `${this.etag}:~`);
+        const metas = (await ChunkCache.metas(range)).filter(([, m]) => m.used)
+            .sort((a, b) => b[1].used - a[1].used).slice(0, Math.floor(CHUNKS_PRELOAD / REMOTE_CHUNK));
+        const got = await ChunkCache.get(metas.map(([k]) => k));
+        for (const [k, bytes] of got) {
+            const c = Number(k.slice(k.lastIndexOf(':') + 1));
+            const want = Math.min(REMOTE_CHUNK, this.size - c * REMOTE_CHUNK);
+            if (c < this.chunks && bytes.length === want && !this.have[c]) {
+                this.memory.set(c, bytes);
+                this.have[c] = 1;
+                this.preloaded++;
+            }
+        }
+    }
+
+    // Chunks fetched into ChunkCache, the ones read marked used: soon after
+    // a read, at most every CHUNKS_KEEP_EVERY ms.
+    keep() {
+        if (this.keeping || !this.etag || ChunkCache.off)
+            return;
+        this.keeping = setTimeout(async () => {
+            const fresh = [...this.fresh].filter((c) => this.memory.has(c));
+            const used = [...this.used].filter((c) => this.memory.has(c));
+            this.fresh.clear();
+            this.used.clear();
+            try {
+                await ChunkCache.put(fresh.map((c) => [this.cacheKey(c), this.memory.get(c)]), 0);
+                await ChunkCache.touch(used.map((c) => this.cacheKey(c)),
+                                       new Map(used.map((c) => [this.cacheKey(c), this.memory.get(c).length])));
+            } finally {
+                this.keeping = null;
+                if (this.fresh.size || this.used.size)
+                    this.keep();
+            }
+        }, CHUNKS_KEEP_EVERY);
     }
 
     fetchChunks(first, count) {
@@ -121,20 +309,32 @@ class RemoteImage {
         const x = new XMLHttpRequest();
         // A stall or a blip: tried again, a few times; the Worker waits
         // meanwhile (Executor's read is synchronous).
+        // Compressed (this.gzip): ?bytes=, a 200 the browser decodes
+        // (tools/standalone static.go); anything wrong with it: plain Range
+        // requests from then on.
+        const plain = () => {
+            console.log(`[web] ${this.name}: compressed ranges failed: plain ones`);
+            this.gzip = false;
+            return this.fetchChunks(first, count);
+        };
+        const want = this.gzip ? 200 : 206;
         for (let attempt = 1; ; attempt++) {
-            x.open('GET', this.url, false);
+            x.open('GET', this.gzip ? `${this.url}${this.url.includes('?') ? '&' : '?'}bytes=${start}-${end - 1}` : this.url, false);
             x.responseType = 'arraybuffer';
             x.timeout = REMOTE_TIMEOUT;
-            x.setRequestHeader('Range', `bytes=${start}-${end - 1}`);
+            if (!this.gzip)
+                x.setRequestHeader('Range', `bytes=${start}-${end - 1}`);
             try {
                 x.send();
             } catch (e) {
                 if (attempt < REMOTE_TRIES)
                     continue;
+                if (this.gzip)
+                    return plain();
                 notice(`${this.name}: the server can't be reached (${e.name})`);
                 throw e;
             }
-            if (x.status === 206 || attempt >= REMOTE_TRIES || (x.status >= 400 && x.status < 500))
+            if (x.status === want || attempt >= REMOTE_TRIES || (x.status >= 400 && x.status < 500))
                 break;
         }
         if (x.status === 401 || x.status === 403)
@@ -142,16 +342,22 @@ class RemoteImage {
         const etag = x.getResponseHeader('ETag');
         // (main.js checked that Range requests get 206: a proxy dropping
         // Range shows at once, not after the whole image.)
-        if (x.status !== 206 || x.response.byteLength !== end - start)
+        if (this.gzip && (x.status !== 200 || x.response.byteLength !== end - start)
+            && x.status !== 401 && x.status !== 403)
+            return plain();
+        if (x.status !== want || x.response.byteLength !== end - start)
             throw new Error(`bytes ${start}-${end - 1}: HTTP ${x.status}`);
         if (this.etag && etag && etag !== this.etag)
             throw new Error('the image changed on the server');
         const bytes = new Uint8Array(x.response);
         this.fetched += bytes.length;
         this.requests++;
-        for (let c = 0; c < count; c++)
+        for (let c = 0; c < count; c++) {
             this.memory.set(first + c, bytes.slice(c * REMOTE_CHUNK, (c + 1) * REMOTE_CHUNK));
+            this.fresh.add(first + c);
+        }
         this.have.fill(1, first, first + count);
+        this.keep();
         for (const [c] of this.memory) {
             if (this.memory.size * REMOTE_CHUNK <= REMOTE_MEMORY)
                 break;
@@ -179,6 +385,10 @@ class RemoteImage {
             const chunk = this.memory.get(c);
             this.memory.delete(c);               // the newest read now
             this.memory.set(c, chunk);
+            if (!this.used.has(c)) {
+                this.used.add(c);
+                this.keep();
+            }
             const piece = chunk.subarray(off, off + length - at);
             out.set(piece, at);
             at += piece.length;

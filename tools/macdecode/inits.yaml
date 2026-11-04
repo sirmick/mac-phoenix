@@ -84,6 +84,14 @@ extensions:
   - {file: Open Transport 68K Library, phase: 3, lacks: [], note: "OT is networking: deny until net-bridge"}
   - {file: Open Tpt ATalk 68K Library, phase: 3, lacks: [WriteXPRam]}
   - {file: Open Tpt Inet 68K Library, phase: 3, lacks: []}
+  - {file: Microsoft OLE Extension, phase: 3, lacks: [], loaded: true,
+     note: "Microsoft's (Works 4.0b, Office 4.2), not Apple's: INIT 'Ole2' (Gestalt 'OLE2'),
+       and a background-only application (SIZE $5CC0) Works launches, with Microsoft's own
+       shared segment manager patching $A9F0-$A9F4 in its clients. Needed, on Executor,
+       a background-only process kept behind, _DeferUserFn ($A08F: the MPW far-model
+       runtime's Process Manager test), the 'itl2' word break tables from
+       GetIntlResourceTable, and shared read/write opens on host volumes. Allowed
+       2026-11-03 (Works 4.0b makes and saves documents on 7.6.1)"}
 
   # ── phase 4: Apple Guide ───────────────────────────────────────────────
   - {file: Apple Guide, phase: 4, lacks: [], note: "GetFrontProcess was a verbatim multiversal entry the status lookup could not see (fixed 2026-10-10)"}

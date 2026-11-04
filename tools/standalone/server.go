@@ -17,8 +17,13 @@ package main
 //	    POST   overlays/KEY?base=V[&stage=T][&replace=1][&name=&size=] -> { version }
 //	    DELETE overlays/KEY           Revert -> { version }
 //	    POST   overlays/KEY/merge     into the library image -> { blocks, id, key }
-//	    GET/PUT/DELETE volumes/KEY    { version, manifest }
-//	    POST   objects/missing; PUT/GET objects/SHA
+//	    GET/PUT/DELETE volumes/KEY    { version, manifest } (PUT { manifest, base[, reset] };
+//	                                  409 reason "shrink": it drops most files)
+//	    GET    volumes/KEY/history    { history: [{ version, saved, files }] } kept
+//	    POST   volumes/KEY/restore    { version }: a kept one current again -> { version }
+//	    GET    volumes/KEY/bundle     the volume and its objects (volumes.go);
+//	    POST   volumes/KEY/bundle     { have } ... but those
+//	    POST   objects/missing; objects/bundle; PUT/GET objects/SHA
 //	    GET    (nothing after sync/)  { overlays, volumes }
 //	/api/uploads/NAME POST the image as the body: into the library as uploads/NAME
 //	                  -> its entry; DELETE: it, its record and overlay (uploads.go)
@@ -33,6 +38,8 @@ package main
 // Every answer is cross-origin isolated (COOP/COEP).
 
 import (
+	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -459,7 +466,8 @@ func init() {
 			if err != nil {
 				return httpErr(404, "not in the library")
 			}
-			return sendFile(c, source{os.DirFS(st.Images), d.Name}, id, map[string]string{"X-Image-Id": id})
+			return sendFile(c, source{os.DirFS(st.Images), d.Name}, id, map[string]string{"X-Image-Id": id,
+				"X-Range-Encodings": "gzip"})
 		}
 		return httpErr(404, "not in the library")
 	})
@@ -551,6 +559,49 @@ func init() {
 		}
 		return c.sendJSON(200, map[string]any{"version": v, "manifest": manifest})
 	})
+	// The volume and its objects in one response (volumes.go: writeBundle),
+	// gzip-compressed for a browser that takes it; POSTed { have: [sha] },
+	// without the objects the browser has.
+	sendBundle := func(c *ctx, m []string) error {
+		if err := checkKey(m[1]); err != nil {
+			return err
+		}
+		have := map[string]bool{}
+		if c.r.Method == "POST" {
+			b, err := c.jsonBody()
+			if err != nil {
+				return err
+			}
+			list, ok := b["have"].([]any)
+			if b["have"] != nil && !ok {
+				return httpErr(400, "have is a list")
+			}
+			for _, x := range list {
+				if sha, _ := x.(string); shaRe.MatchString(sha) {
+					have[sha] = true
+				}
+			}
+		}
+		h := c.w.Header()
+		h.Set("Content-Type", "application/octet-stream")
+		h.Set("Cache-Control", "no-store")
+		h.Set("Vary", "Accept-Encoding")
+		var w io.Writer = c.w
+		if strings.Contains(c.r.Header.Get("Accept-Encoding"), "gzip") {
+			h.Set("Content-Encoding", "gzip")
+			zw, _ := gzip.NewWriterLevel(c.w, gzip.BestSpeed)
+			defer zw.Close()
+			w = zw
+		}
+		c.w.WriteHeader(200)
+		// (headers sent: an error now cuts the bundle short, which the tab sees)
+		if err := c.s.volumes.writeBundle(w, m[1], have); err != nil && !c.s.quiet {
+			fmt.Fprintf(os.Stderr, "%s %s: %v\n", c.r.Method, c.r.URL.Path, err)
+		}
+		return nil
+	}
+	handle("GET", "/api/sync/volumes/([^/]+)/bundle", true, sendBundle)
+	handle("POST", "/api/sync/volumes/([^/]+)/bundle", true, sendBundle)
 	handle("PUT", "/api/sync/volumes/([^/]+)", true, func(c *ctx, m []string) error {
 		b, err := c.jsonBody()
 		if err != nil {
@@ -560,7 +611,31 @@ func init() {
 		if !ok || base != float64(int64(base)) {
 			return httpErr(400, "base: the version this is on")
 		}
-		v, err := c.s.volumes.put(m[1], b["manifest"], int64(base))
+		reset, _ := b["reset"].(bool)
+		v, err := c.s.volumes.put(m[1], b["manifest"], int64(base), reset)
+		if err != nil {
+			return err
+		}
+		return c.sendJSON(200, map[string]any{"version": v})
+	})
+	// The manifests kept (volumes.go: history), and one of them back.
+	handle("GET", "/api/sync/volumes/([^/]+)/history", true, func(c *ctx, m []string) error {
+		h, err := c.s.volumes.history(m[1])
+		if err != nil {
+			return err
+		}
+		return c.sendJSON(200, map[string]any{"history": h})
+	})
+	handle("POST", "/api/sync/volumes/([^/]+)/restore", true, func(c *ctx, m []string) error {
+		b, err := c.jsonBody()
+		if err != nil {
+			return err
+		}
+		version, ok := b["version"].(float64)
+		if !ok || version != float64(int64(version)) {
+			return httpErr(400, "version: one the history has")
+		}
+		v, err := c.s.volumes.restore(m[1], int64(version))
 		if err != nil {
 			return err
 		}
@@ -591,6 +666,32 @@ func init() {
 			shas = append(shas, sha)
 		}
 		return c.sendJSON(200, map[string]any{"missing": c.s.volumes.missing(shas)})
+	})
+	// Objects up in one request: a bundle (volumes.go), gzip-compressed if
+	// Content-Encoding says so; max_upload_mb either way.
+	handle("POST", "/api/sync/objects/bundle", true, func(c *ctx, m []string) error {
+		body, err := c.bodyBytes()
+		if err != nil {
+			return err
+		}
+		limit := int64(c.s.settings().MaxUploadMB) << 20
+		var r io.Reader = bytes.NewReader(body)
+		switch c.r.Header.Get("Content-Encoding") {
+		case "", "identity":
+		case "gzip":
+			zr, err := gzip.NewReader(r)
+			if err != nil {
+				return httpErr(400, "not gzip")
+			}
+			r = zr
+		default:
+			return httpErr(415, "gzip or nothing")
+		}
+		n, err := c.s.volumes.putBundle(r, limit)
+		if err != nil {
+			return err
+		}
+		return c.sendJSON(200, map[string]any{"stored": n})
 	})
 	handle("PUT", "/api/sync/objects/([0-9a-f]{64})", true, func(c *ctx, m []string) error {
 		body, err := c.bodyBytes()
