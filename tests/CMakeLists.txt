@@ -1489,6 +1489,22 @@ foreach(cell "strprobe_rom_761;;StrProbe.bin;--os-version 7.6.1;${TEST_ROM};1856
   )
 endforeach()
 
+# ... and on Executor's 9.0.4 (its own System) against the G3's 9.0.4, for
+# calls 9.0 added.
+foreach(probe vminfo)
+  add_test(
+    NAME difftest_${probe}_executor_904
+    COMMAND python3 ${CMAKE_SOURCE_DIR}/tools/difftest/run.py ${probe} --target executor-9.0.4 --no-refresh
+  )
+  set_tests_properties(difftest_${probe}_executor_904 PROPERTIES
+    TIMEOUT 1200
+    LABELS "guest;executor"
+    SKIP_RETURN_CODE 77
+    RESOURCE_LOCK difftest_executor
+    ENVIRONMENT "DIFFTEST_LOCK_TIMEOUT=300"
+  )
+endforeach()
+
 # Differential probes (docs/executor/DiffTest.md): each probe's answers on
 # Executor (8.6 System) against the committed G3 8.6 reference, known
 # differences in tests/guest/difftest/expected/. Fails on a new difference.
