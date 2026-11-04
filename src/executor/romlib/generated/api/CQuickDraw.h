@@ -720,4 +720,10 @@ OSErr C_RestoreBits(Handle bits);PASCAL_SUBTRAP(RestoreBits, 0xA81E, 0x0202, Sav
 OSErr C_DiscardBits(Handle bits);PASCAL_SUBTRAP(DiscardBits, 0xA81E, 0x0203, SaveRestoreBits);
 
 
+void C_QDSetPatternOrigin(Point origin);LIBRARY_FUNCTION(NQD, QDSetPatternOrigin, C_QDSetPatternOrigin);
+
+
+void C_QDGetPatternOrigin(GUEST<Point> *origin);LIBRARY_FUNCTION(NQD, QDGetPatternOrigin, C_QDGetPatternOrigin);
+
+
 } /* namespace Executor */

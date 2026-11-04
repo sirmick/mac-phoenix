@@ -2222,3 +2222,28 @@
     dispatcher: SaveRestoreBits
     selector: 0x0203
     executor: C_
+
+# ####
+
+# The pattern origin (8.5): the G3 ROM's NQD library exports these, not
+# InterfaceLib (9.0.4's ToolboxUtils imports them from NQD). Measured on the
+# G3's 9.0.4 (tests/guest/difftest/qdorigin.c): (0,0) at first, the port's
+# own, a pattern fill in an 8-bit GWorld the same whatever it is.
+
+- function:
+    name: QDSetPatternOrigin
+    args:
+      - name: origin
+        type: Point
+    library: NQD
+    executor: C_
+
+# ####
+
+- function:
+    name: QDGetPatternOrigin
+    args:
+      - name: origin
+        type: Point*
+    library: NQD
+    executor: C_

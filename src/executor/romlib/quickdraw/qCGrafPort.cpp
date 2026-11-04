@@ -73,6 +73,7 @@ void Executor::C_InitCPort(CGrafPtr p)
 
     if(!p || !CGrafPort_p(p))
         return;
+    ROMlib_forget_pattern_origin((GrafPtr)p);
 
     /* set the port early so we can call convenience functions
      that operate on qdGlobals().thePort */

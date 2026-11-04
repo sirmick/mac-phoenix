@@ -1,0 +1,16 @@
+# probe 6f78a5d3c573dc2696be43f157f97debfd7e69bcfdd009e450b335dd8cc2efbe
+.bind.QDGetPatternOrigin: found
+.bind.QDSetPatternOrigin: found
+== value
+value.start: 0,0
+value.set.3.5: 3,5
+value.set.-2.40: -2,40
+value.set.0.0: 0,0
+== port
+port.gw.set.3.5: 3,5
+port.gw2.after: 0,0
+port.window.after: 0,0
+== fill
+fill.origin.0.0: 16x16 depth 8 crc f4d7167c
+fill.origin.0.3: 16x16 depth 8 crc f4d7167c
+fill.origin.2.0: 16x16 depth 8 crc f4d7167c
