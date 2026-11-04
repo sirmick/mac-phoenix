@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""run.py: the speed table (docs/executor/Speed.md). The Utilities disk's
+"""run.py: the speed table (docs/executor/Speed.md). MacPhoenixBench, our
+own (--bench own: tests/guest/bench, unattended, timed by the guest's and the
+host's clocks; its table by group and by test), and the Utilities disk's
 benchmarks on Executor (68k, PowerPC; natively and in the tab) and on the
 ROM machines (Quadra 650, G3), each configuration RUNS times; the scores
 of each run in OUT/results.jsonl, the screens of each result in OUT/shots,
