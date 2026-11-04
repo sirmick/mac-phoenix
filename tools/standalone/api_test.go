@@ -221,6 +221,29 @@ func TestAPIDiskRanges(t *testing.T) {
 		!bytes.Equal(data, disk[4096:8192]) {
 		t.Errorf("a range: %d %v", res.StatusCode, res.Header)
 	}
+	// gzip-compressed when the tab asks for it (overlay.js), plain otherwise
+	if res.Header.Get("X-Range-Encodings") != "gzip" || res.Header.Get("Content-Encoding") != "" {
+		t.Errorf("a range, not asked to compress: %v", res.Header)
+	}
+	res, data = l.req("GET", "/disks/a.img?bytes=4096-528383", nil, "Accept-Encoding: gzip")
+	zr, err := gzip.NewReader(bytes.NewReader(data))
+	var plain []byte
+	if err == nil {
+		plain, _ = io.ReadAll(zr)
+	}
+	if res.StatusCode != 200 || res.Header.Get("Content-Encoding") != "gzip" || len(data) > 100000 ||
+		res.Header.Get("X-Content-Range") != fmt.Sprintf("bytes 4096-528383/%d", len(disk)) || !bytes.Equal(plain, disk[4096:528384]) {
+		t.Errorf("a gzip range: %d %v, %d bytes, %d decoded", res.StatusCode, res.Header, len(data), len(plain))
+	}
+	// (Range wins over it; a browser without gzip gets the range plain)
+	if res, _ := l.req("GET", "/disks/a.img?bytes=0-9", nil, "Range: bytes=0-4", "Accept-Encoding: gzip"); res.StatusCode != 206 ||
+		res.Header.Get("Content-Encoding") != "" {
+		t.Errorf("?bytes with a Range: %d %v", res.StatusCode, res.Header)
+	}
+	if res, data := l.req("GET", "/disks/a.img?bytes=0-9", nil, "Accept-Encoding: identity"); res.StatusCode != 206 ||
+		res.Header.Get("Content-Encoding") != "" || !bytes.Equal(data, disk[:10]) {
+		t.Errorf("?bytes without gzip: %d %v %d", res.StatusCode, res.Header, len(data))
+	}
 	sum := sha256.Sum256(disk)
 	ident := hex.EncodeToString(sum[:])[:24]
 	etag := res.Header.Get("ETag")

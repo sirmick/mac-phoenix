@@ -313,12 +313,30 @@ fewer reads but still a few seconds when most are); Executor from main
 to the Finder 2.6 s. Both are Range reads in sequence and
 bandwidth-bound (the chunks are the image's bytes, uncompressed).
 
-Open: the saved volumes of the owner's server (8.6 and 7.6.1) have
-`%System` but no `System` (its empty data fork), so web_main.cpp doesn't
-take the System Folder as saved: every start sideloads it again over the
-restored one and copies the additions again (the 16 s above at 50 Mbit/s,
-both in the 21 s). A fresh volume keeps `System`; what removes it later
-is not known yet.
+**Compressed disk reads.** The library's disks answer `?bytes=A-B` (they
+say so: `X-Range-Encodings: gzip`) with that range as a gzip-compressed
+200 (`static.go`; `X-Content-Range` names it); RemoteImage reads that way
+when offered, plain `Range` requests otherwise and after anything wrong
+with a compressed one. Not `Range` itself: Chromium sends
+`Accept-Encoding: identity` with a Range and fails a gzipped 206
+(Firefox takes it). The owner's 8.6 volume (1624 files, 84 MB), nine disks,
+at 50 Mbit/s: the Finder cold 17.6 -> 12.4 s (the disks' reads before the
+first frame 6.4 -> 1.5 s), warm 2.8-3.1 -> 2.6 s; loopback the same either
+way (2.5 s cold, 2.0-2.2 s warm). What is left cold is the volume itself
+(9.3 s for 84 MB).
+
+**Volumes saved without `System`** (fixed 2026-11-03): the page posts
+`save` when it is hidden (`visibilitychange`); arriving while the Worker
+was still restoring the volume, that saved what had come so far, and the
+server collected the rest. The owner's 8.6 volume went from 377 files to
+292 in one session, `System`'s empty data fork among the missing, so every
+start sideloaded the System again over the preferences and copied the
+additions again (16 s at 50 Mbit/s); another start's restore met an
+object already collected (404). Now nothing of the volume is saved
+before it is restored and Executor starts (`sync.js` `Store.restored`),
+and a restored volume's `%NAME` without `NAME` gets an empty data fork
+back (`worker.js` `recoverDataForks`: Executor sees no file without one),
+so a volume saved that way starts on its saved System Folder.
 
 ## Tests
 
@@ -343,9 +361,13 @@ and Reload; another browser first after a restart; screenshots in
 `executor.web.standalone` (a change survives a reload; a second tab
 watches, then takes control), `volume` (`tab_volume.mjs`: 150 files saved
 in bundles, no PUT; restored from the one bundle request, every file the
-same; warm, every object from the browser's cache and a disk's chunks
-too; two cached objects spoiled, the cache deleted: from the server, no
+same; the disk read in compressed ranges; warm, every object from the
+browser's cache and a disk's chunks too; two cached objects spoiled, the cache deleted: from the server, no
 notice; through `objects/SHA` and PUTs when the bundle routes answer 404;
-from a bundle cut in half), `server_lazy` (a large disk read by Range),
+from a bundle cut in half), `system_kept` (`tab_system_kept.mjs`, on
+`EXECUTOR_WEB_SYSTEM`: sideloaded once, then the saved System Folder with
+a preference in it; the page hidden while the volume comes down, held or
+cut short, saves none of it; a volume without `System` recovers),
+`server_lazy` (a large disk read by Range),
 `settings`, `insecure` (plain http to a LAN name), `relay` (MacTCP and
 Open Transport through `/relay`), and the `site` cells (WebSite.md).

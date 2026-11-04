@@ -463,7 +463,8 @@ func init() {
 			if err != nil {
 				return httpErr(404, "not in the library")
 			}
-			return sendFile(c, source{os.DirFS(st.Images), d.Name}, id, map[string]string{"X-Image-Id": id})
+			return sendFile(c, source{os.DirFS(st.Images), d.Name}, id, map[string]string{"X-Image-Id": id,
+				"X-Range-Encodings": "gzip"})
 		}
 		return httpErr(404, "not in the library")
 	})
