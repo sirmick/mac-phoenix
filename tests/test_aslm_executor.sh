@@ -140,7 +140,9 @@ if curl -sf --max-time 2 "http://localhost:$PORT/api/status" >/dev/null 2>&1; th
     echo "FAIL: port $PORT is taken (another emulator answers there)"; exit 1
 fi
 
-EXTRA_FLAGS=(--executor-system "$IMAGE_NAME" --executor-writable-images)
+# --disk too: the per-run copy is written (the application saves on quit),
+# not mounted locked as an --executor-system image alone is.
+EXTRA_FLAGS=(--executor-system "$IMAGE_NAME" --disk "$IMAGE" --executor-writable-images)
 [[ -n "$CORE" ]] && EXTRA_FLAGS+=(--core "$CORE")
 "$BINARY" --backend executor --timeout "$((TIMEOUT + 10))" \
     --config /dev/null --dismiss-shutdown-dialog --headless-http \
