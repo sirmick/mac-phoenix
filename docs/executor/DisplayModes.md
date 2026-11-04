@@ -101,7 +101,9 @@ WxHxBPP -> WxHxBPP (cause)`, the cause `boot`, `SetDepth`, `DM`
 (DMSetDisplayMode), `driver` (the video driver's SwitchMode) or `request`
 (the page's resize). The first three clicks after a change: `[display]
 click`, where on the page, the Mac point it maps to and the Mac's mouse
-after it. `?diag` or Ctrl+Alt+D shows the same over the screen.
+after it. `?diag` or Ctrl+Alt+D shows the same over the screen, and the
+keys (Ctrl+Alt+S: a screenshot, also with the mouse button down;
+Settings.md).
 
 Tests: `executor_tests --gtest_filter='DisplayMode.*'`
 (`src/executor/tests/displaymode.cpp`); the tab cells `executor.web.dynres`,

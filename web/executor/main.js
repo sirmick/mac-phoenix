@@ -626,13 +626,61 @@ async function sendShots(note) {
     return name;
 }
 
-document.getElementById('shot').addEventListener('click', async () => {
-    const note = prompt('A note to go with the screenshot (optional):', '');
-    if (note === null)
-        return;
-    const name = await sendShots(note);
+const shotSent = (name) => {
     status.textContent = /^\d/.test(name) ? `Screenshot sent (${name})` : `Screenshot ${name}`;
-});
+};
+async function askedShot() {
+    const note = prompt('A note to go with the screenshot (optional):', '');
+    if (note !== null)
+        shotSent(await sendShots(note));
+}
+document.getElementById('shot').addEventListener('click', askedShot);
+
+// Ctrl+Alt+S: a screenshot that works with the mouse button down too (a
+// menu tracked, a drag, a button held), to catch drawing mid-action. The
+// page keeps the keys from the Mac. With the button up it asks for the
+// note first, as the button does; down, a dialog would end the press, so
+// the shot goes at once and the note is asked for when the button comes
+// up (a line in the log beside the screenshot's). Executor answers
+// 'screen1x' while it tracks too (web_main.cpp on_yield).
+let buttonDown = false, onRelease = [], shotKey = false;
+async function heldShot() {
+    const name = await sendShots('Ctrl+Alt+S, the mouse button down');
+    shotSent(name);
+    if (!/^\d/.test(name))
+        return;
+    const ask = () => {
+        const note = prompt(`A note for the screenshot ${name} (taken with the button down; optional):`, '');
+        if (note)
+            console.log(`[web] screenshot ${name} note: ${note}`);
+    };
+    if (buttonDown)
+        onRelease.push(() => setTimeout(ask, 0));
+    else
+        ask();
+}
+function released() {
+    buttonDown = false;
+    const fns = onRelease;
+    onRelease = [];
+    fns.forEach((f) => f());
+}
+addEventListener('keydown', (e) => {
+    if (!(e.ctrlKey && e.altKey && e.code === 'KeyS'))
+        return;
+    e.preventDefault();
+    e.stopPropagation();
+    shotKey = true;
+    if (!e.repeat)
+        (buttonDown ? heldShot : askedShot)();
+}, true);
+addEventListener('keyup', (e) => {
+    if (e.code === 'KeyS' && shotKey) {     // (its key down never went)
+        shotKey = false;
+        e.preventDefault();
+        e.stopPropagation();
+    }
+}, true);
 
 let autoShots = 0, lastAutoShot = 0;
 function autoShot(why) {
@@ -1397,7 +1445,9 @@ const Diag = (() => {
         delete s.ua;
         el.textContent = Object.entries(s).map(([k, v]) => `${k}: ${v}`).join('\n')
             + `\nserver: ${build.server || '?'}\nexecutor: ${build.executor || '?'}`
-            + (lastClick ? `\nclick: ${lastClick}` : '');
+            + (lastClick ? `\nclick: ${lastClick}` : '')
+            + '\nkeys: Ctrl+Alt+D this overlay; Ctrl+Alt+S a screenshot to the server\'s log,'
+            + '\n  also with the mouse button down (a menu open, a drag): the note after';
     }
     function toggle(on = !el) {
         if (on && !el) {
@@ -1448,6 +1498,7 @@ function attachInput(canvas) {
         startAudio();
         canvas.focus();
         canvas.setPointerCapture(e.pointerId);
+        buttonDown = true;
         const at = guestPoint(e);
         sampleClick(e, at);
         controlClick = e.button === 2 && Settings.get('input.right_click') === 'control';
@@ -1461,7 +1512,9 @@ function attachInput(canvas) {
         send([1, ...at], [2, 0, 0], ...(controlClick ? [[3, 0, 0x36]] : []));
         controlClick = false;
         e.preventDefault();
+        released();
     });
+    canvas.addEventListener('lostpointercapture', () => released());
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
     // The wheel and trackpad: lines (a notch's 100 pixels about 3, a page
     // 15: Executor clicks a page part from 15 on) to Executor, which

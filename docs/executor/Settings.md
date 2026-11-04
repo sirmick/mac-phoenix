@@ -124,6 +124,22 @@ Ctrl+W and the like reach the Mac; holding Esc leaves.
 
 "Restart Executor" in the dialog saves what changed and reloads the page.
 
+The bar's Screenshot button sends the canvas's pixels (and Executor's 1x
+frame at a scale above 1) to the server beside the session's log
+(`/api/shot`: `logs/DAY/SESSION-HHMMSS.png` and a `# screenshot` line),
+with a note asked for first. **Ctrl+Alt+S** does the same and works with
+the mouse button down: a menu tracked, a drag, a button held, to catch
+drawing mid-action. The page catches it in the capture phase (as
+Ctrl+Alt+D) and the Mac gets neither the S's down nor its up. With the
+button up it asks for the note first; down, a dialog would end the press,
+so the shot goes at once (note "Ctrl+Alt+S, the mouse button down") and
+the note is asked for when the button comes up, a `[web] screenshot NAME
+note: ...` line in the log. Executor answers the 1x frame (`'screen1x'`)
+at its yields too, not only at event calls, which a menu track makes none
+of (`web_main.cpp` `on_yield`). The Screenshot button's tooltip and the
+`?diag` overlay say so. Test: `executor.web.shotkey` (tab_shotkey.mjs: the
+Special menu held open on 7.6.1 at dpr 2, both PNGs with the menu in them).
+
 The bar's screen size (main.js `ScreenBar`, `#res`, before the CPU meter):
 **Auto** first (`display.fit_window`: the Mac's screen follows the window
 size, 400 ms after the window settles; tooltip "the Mac's screen follows

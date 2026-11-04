@@ -373,6 +373,16 @@ if(NODE_COMMAND AND GO_COMMAND)
     set_tests_properties(executor.web.hidpibar PROPERTIES
         LABELS "executor;web" TIMEOUT 400 SKIP_RETURN_CODE 77 ENVIRONMENT "${EXECUTOR_WEB_ENV}")
 endif()
+# Ctrl+Alt+S: a screenshot to the session log with the mouse button down
+# (a menu held open in it), the note after; the keys kept from the Mac
+# (web/tests/tab_shotkey.mjs; 7.6.1).
+if(NODE_COMMAND AND GO_COMMAND)
+    add_test(NAME executor.web.shotkey
+        COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/web/tests/tab_shotkey.mjs
+                $<TARGET_FILE_DIR:executor-web> ${EXECUTOR_WEB_HIDPI_SYSTEM})
+    set_tests_properties(executor.web.shotkey PROPERTIES
+        LABELS "executor;web" TIMEOUT 400 SKIP_RETURN_CODE 77 ENVIRONMENT "${EXECUTOR_WEB_ENV}")
+endif()
 # ... and the policy moving them out of a System that has them, on the
 # saved System Folder too (web/tests/tab_monitors.mjs; a full 7.6.1).
 if(NODE_COMMAND AND GO_COMMAND)
