@@ -10,11 +10,13 @@
 //     the dialog's list opened afterwards;
 //   - the dialog's 800 × 600 saved: the bar follows; the bar changed while
 //     the dialog is open: its unsaved draft follows;
-//   - Fit to window: the setting, the Mac's screen the room, the size in
-//     the option; a smaller window: followed; the dialog's box ticked;
+//   - Auto (first; display.fit_window): the Mac's screen the room, "Auto ·
+//     W × H"; the window resized: followed; the dialog's screen size Auto
+//     (no separate row); a fixed size there or in the bar: Auto off; Auto
+//     from the dialog: the bar follows;
 //   - a size the list hasn't (asked of Executor, not by the settings, as an
 //     application would): shown as its own option, the setting kept;
-//   - 640 × 480 from the bar: the fit off, the size back.
+//   - 640 × 480 from the bar: the size back.
 import { open, firstFrame, request, until } from './harness.mjs';
 
 const [dir] = process.argv.slice(2);
@@ -78,25 +80,44 @@ try {
     check(await sized(832, 624), 'bar 832 × 624: the Mac\'s screen');
     await page.click('dialog#settings .settings-cancel');
 
-    // Fit to window.
+    // Auto (display.fit_window): the first entry; the Mac's screen follows the window.
+    check(await page.$eval('#res', (s) => s.options[0].value === 'fit' && s.options[0].text === 'Auto'
+                           && /follows the window size/.test(s.options[0].title)), 'Auto is the first entry, with its tooltip');
     await page.selectOption('#res', 'fit');
-    check(await until(() => get('display.fit_window'), 10000), 'bar Fit to window: the setting');
+    check(await until(() => get('display.fit_window'), 10000), 'bar Auto: the setting');
     let want = await page.evaluate(() => windowSize());
-    check(await sized(...want), `fit: the Mac's screen is the room, ${want.join('x')}`);
-    check(!!await barIs('fit', `${want[0]} × ${want[1]}`), `fit: the option says ${want.join(' × ')}`);
+    check(await sized(...want), `Auto: the Mac's screen is the room, ${want.join('x')}`);
+    check(!!await barIs('fit', `Auto · ${want[0]} × ${want[1]}`), `Auto: the bar says Auto · ${want.join(' × ')}`);
     await page.setViewportSize({ width: 1000, height: 800 });
     want = await page.evaluate(() => windowSize());
-    check(await sized(...want), `fit, a smaller window: ${want.join('x')}`);
-    check(!!await barIs('fit', `${want[0]} × ${want[1]}`), `fit, a smaller window: the option says ${want.join(' × ')}`);
-    await page.evaluate(() => Settings.open('display'));
+    check(await sized(...want), `Auto, the window resized: the Mac follows, ${want.join('x')}`);
+    check(!!await barIs('fit', `Auto · ${want[0]} × ${want[1]}`), `Auto, the window resized: the bar says Auto · ${want.join(' × ')}`);
+    await page.evaluate(() => Settings.open('machine'));
     await page.waitForSelector('dialog#settings[open]');
-    check(await page.$eval('[data-path="display.fit_window"] input', (i) => i.checked), 'fit: the dialog\'s box is ticked');
-    // ... and unticked there, saved: the bar back to the size.
-    await page.click('[data-path="display.fit_window"] input');
+    check(await dialogSize() === 'auto', 'Auto: the dialog\'s screen size is Auto');
+    check(!await page.$('[data-path="display.fit_window"]') && !await page.evaluate(async () => {
+        await Settings.open('display');
+        return !!document.querySelector('[data-path="display.fit_window"]');
+    }), 'Auto: no separate fit row in the dialog');
+    // A fixed size in the dialog, saved: Auto off.
+    await page.evaluate(() => Settings.open('machine'));
+    await page.selectOption('[data-path="machine.screen"] select', '832x624');
     await page.click('dialog#settings .settings-save');
     await page.waitForSelector('dialog#settings:not([open])', { state: 'attached', timeout: 10000 });
-    check(await sized(832, 624), 'the dialog\'s fit off: the Mac back to 832x624');
-    check(!!await barIs('832x624', '832 × 624'), 'the dialog\'s fit off: the bar');
+    check(!await get('display.fit_window') && await sized(832, 624), 'the dialog\'s 832x624: Auto off, the Mac at 832x624');
+    check(!!await barIs('832x624', '832 × 624'), 'the dialog\'s 832x624: the bar');
+    // Auto from the dialog, saved: the bar follows.
+    await page.evaluate(() => Settings.open('machine'));
+    await page.selectOption('[data-path="machine.screen"] select', 'auto');
+    await page.click('dialog#settings .settings-save');
+    await page.waitForSelector('dialog#settings:not([open])', { state: 'attached', timeout: 10000 });
+    check(await get('display.fit_window') && await get('machine.screen') === '832x624', 'the dialog\'s Auto: the setting on, the size kept');
+    check(await sized(...want) && !!await barIs('fit', `Auto · ${want[0]} × ${want[1]}`), 'the dialog\'s Auto: the Mac and the bar');
+    // A fixed size from the bar: Auto off.
+    await page.selectOption('#res', '832x624');
+    check(await until(async () => !await get('display.fit_window'), 10000) && await sized(832, 624),
+          'bar 832 × 624 under Auto: Auto off, the Mac at 832x624');
+    check(!!await barIs('832x624', '832 × 624'), 'bar 832 × 624: shown');
 
     // A size not in the list, not from the settings (as an application's
     // DMSetDisplayMode): shown as it is, the setting kept.

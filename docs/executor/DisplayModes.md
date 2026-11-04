@@ -2,7 +2,7 @@
 
 Executor's screen changes size while the Mac runs, as a Mac's Display
 Manager changes it: from the bar's size control or Settings (the tab), the
-browser window (fit-to-window), `/api/resolution` (native), or inside the
+browser window (Auto, `display.fit_window`), `/api/resolution` (native), or inside the
 Mac with any program's `DMSetDisplayMode` (the Monitors control panels are
 left out: below). One path does it: `ROMlib_dm_set_screen_size`
 (`romlib/quickdraw/displays.cpp`).

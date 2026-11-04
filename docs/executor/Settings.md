@@ -41,7 +41,10 @@ The schema's own keywords, beside the standard ones:
   the server's next start: `restart_needed`).
 - `x-labels` (an `enum`'s, or its `examples`'), `x-group` (a heading
   before the setting), `x-widget` (`number`, `range`, `path`, `words`,
-  `disk-list`, `screen`: the `examples` and Custom…), `x-choices`
+  `disk-list`, `screen`: the `examples` and Custom…, and Auto when it
+  has `x-auto-setting`, the boolean setting Auto is: `display.fit_window`),
+  `x-shown-in` (a setting the dialog shows in another's row, not its own),
+  `x-choices`
   (options the page knows: `systems`), `x-auto` (a setting with an
   automatic value: `{ value, choices, labels }`, `value` the one stored
   for Auto, `0` or `"auto"`; the dialog shows an Auto box, then the
@@ -77,8 +80,10 @@ bar's "Restart Executor to apply"). The Reset buttons put defaults into
 the draft. A setting's `description` is its help: a tooltip
 (`role=tooltip`, the control's `aria-describedby`) shown when the mouse
 rests on the setting or the keyboard's focus is in it. The screen size is
-a list of the classic Macs' (`examples`, named by `x-labels`) with
-Custom… for a width and a height (100 to 9999). A setting with `x-auto`
+Auto (`display.fit_window`: the Mac's screen follows the window size; the
+size stays stored for when Auto is off), then a list of the classic Macs'
+(`examples`, named by `x-labels`) with Custom… for a width and a height
+(100 to 9999); a size turns Auto off. A setting with `x-auto`
 (Memory, Colours, Sharpness, Port, Secure cookies) has an Auto box; while
 it is ticked the choices beside it are disabled and show what Auto picks
 here (settings.js `AUTO_PICKS`: Memory and Colours from the System
@@ -119,16 +124,19 @@ Ctrl+W and the like reach the Mac; holding Esc leaves.
 "Restart Executor" in the dialog saves what changed and reloads the page.
 
 The bar's screen size (main.js `ScreenBar`, `#res`, before the CPU meter):
-the dialog's sizes (the schema's `examples`, shown "640 × 480", the Mac
-named in each option's tooltip) and **Fit to window**. It writes the same
-settings, `machine.screen` (and `display.fit_window` off) or
-`display.fit_window` on, through `Settings.set`, so the change is live as
-the dialog's is (DisplayModes.md), saved, and reaches an open dialog's
-draft; a saved dialog, or any other change, comes back to it through
-`Settings.on`. It shows the Mac's real size, from Executor's `'screen'`
-message: in the Fit option ("Fit to window: 1180 × 840") while fitting,
-else as the size chosen, or as an option of its own, first, when the list
-hasn't it (a Custom… size, or one an application set with
+**Auto** first (`display.fit_window`: the Mac's screen follows the window
+size, 400 ms after the window settles; tooltip "the Mac's screen follows
+the window size"), then the dialog's sizes (the schema's `examples`, shown
+"640 × 480", the Mac named in each option's tooltip). The dialog's Screen
+size has the same Auto first (`x-auto-setting`; there is no separate row
+for it). A size turns Auto off. The bar writes the same settings,
+`machine.screen` (and `display.fit_window` off) or `display.fit_window` on,
+through `Settings.set`, so the change is live as the dialog's is
+(DisplayModes.md), saved, and reaches an open dialog's draft; a saved
+dialog, or any other change, comes back to it through `Settings.on`. It
+shows the Mac's real size, from Executor's `'screen'` message: in the Auto
+option ("Auto · 1240 × 780") while Auto is on, else as the size chosen, or
+as an option of its own, after Auto, when the list hasn't it (a Custom… size, or one an application set with
 `DMSetDisplayMode`; the tooltip then says what the setting asked for). Its
 tooltip says the size and that it is the same setting as Settings'; with
 `?size=` in the address it is disabled (the address sets it for the visit).

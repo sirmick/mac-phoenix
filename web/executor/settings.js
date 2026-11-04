@@ -477,7 +477,7 @@ const Settings = (() => {
         desc.textContent = n.description || '';
         const rows = [];
         for (const [k, p] of Object.entries(n.properties)) {
-            if (!visible(p))
+            if (!visible(p) || p['x-shown-in'])
                 continue;
             if (p['x-group']) {
                 const g = document.createElement('h3');
@@ -530,7 +530,8 @@ const Settings = (() => {
         const bad = [...dialog.querySelectorAll('.settings-row.invalid')];
         dialog.querySelector('.settings-save').disabled = !changed.length;
         for (const row of dialog.querySelectorAll('.settings-row'))
-            row.classList.toggle('changed', changed.includes(row.dataset.path));
+            row.classList.toggle('changed', changed.includes(row.dataset.path)
+                                 || changed.includes((lookup(row.dataset.path) || {})['x-auto-setting']));
         const by = (how) => changed.filter((p) => lookup(p)['x-apply'] === how).map((p) => lookup(p).title);
         const lines = [];
         if (bad.length)
@@ -924,8 +925,9 @@ const Settings = (() => {
         return wrap;
     }
 
-    // The screen's size: the classic Macs' (the schema's examples), or
-    // Custom… with a width and a height.
+    // The screen's size: Auto (the setting x-auto-setting names: the
+    // screen follows the window), the classic Macs' (the schema's
+    // examples), or Custom… with a width and a height.
     function screenSize(id, p, value, commit, locked) {
         const wrap = document.createElement('span');
         wrap.className = 'settings-screen';
@@ -933,6 +935,16 @@ const Settings = (() => {
         sel.id = id;
         sel.disabled = locked;
         const sizes = p.examples || [];
+        const autoPath = p['x-auto-setting'];
+        const auto = (on) => {
+            const [cat, key] = autoPath.split('.');
+            draft = patched(draft, { [cat]: { [key]: on } });
+        };
+        if (autoPath) {
+            const a = new Option('Auto', 'auto');
+            a.title = lookup(autoPath).description || '';
+            sel.append(a);
+        }
         sel.append(...sizes.map((s, i) => new Option((p['x-labels'] || [])[i] || s, s)), new Option('Custom…', 'custom'));
         const custom = document.createElement('span');
         custom.className = 'settings-screen-custom';
@@ -952,7 +964,7 @@ const Settings = (() => {
         const w = number('w', w0, 'Width'), h = number('h', h0, 'Height');
         custom.append(w, ' × ', h);
         const show = () => { custom.hidden = sel.value !== 'custom'; };
-        sel.value = sizes.includes(value) ? value : 'custom';
+        sel.value = autoPath && at(draft, autoPath) ? 'auto' : sizes.includes(value) ? value : 'custom';
         show();
         const typed = () => {
             const [a, b] = [w.value, h.value].map(Number);
@@ -962,7 +974,11 @@ const Settings = (() => {
         };
         sel.addEventListener('change', () => {
             show();
-            if (sel.value === 'custom') {
+            if (autoPath)
+                auto(sel.value === 'auto');
+            if (sel.value === 'auto') {
+                commit(at(draft, 'machine.screen'));    // (the size kept for when Auto is off)
+            } else if (sel.value === 'custom') {
                 w.focus();
                 typed();
             } else {
