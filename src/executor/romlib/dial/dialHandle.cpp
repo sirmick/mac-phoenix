@@ -416,19 +416,14 @@ Boolean Executor::C_IsDialogEvent(EventRecord *evt) /* IMI-416 */
 bool Executor::get_item_style_info(DialogPtr dp, int item_no,
                                    uint16_t *flags_return, item_style_info_t *style_info)
 {
-    AuxWinHandle aux_win_h;
-
-    aux_win_h = *lookup_aux_win(dp);
-    if(aux_win_h && (*aux_win_h)->dialogCItem)
+    if(item_color_info_t *item_color_info = dialog_item_color_info(dp, item_no))
     {
-        Handle items_color_info_h;
-        item_color_info_t *items_color_info, *item_color_info;
+        AuxWinHandle aux_win_h = *lookup_aux_win(dp);
+        Handle ictb = (*aux_win_h)->dialogCItem;
+        item_color_info_t *items_color_info = (item_color_info_t *)*ictb;
 
-        items_color_info_h = (*aux_win_h)->dialogCItem;
-        items_color_info = (item_color_info_t *)*items_color_info_h;
-
-        item_color_info = &items_color_info[item_no - 1];
-        if(item_color_info->data || item_color_info->offset)
+        if((item_color_info->data || item_color_info->offset) && item_color_info->offset >= 0
+           && item_color_info->offset + (int)sizeof(item_style_info_t) <= GetHandleSize(ictb))
         {
             uint16_t flags;
             int style_info_offset;

@@ -11,6 +11,8 @@
 #  3. A folder opens: "Macintosh HD:System Folder", its window on the
 #     desktop (ControlDefinitions prepared: UTCUtils from the System file).
 #  4. General Controls opens in the control panel shell (LaunchControlPanel).
+#  5. Software Update opens: its DLOG 3114 has 18 items and an 'ictb' of 13
+#     (the item colour entries past its end were read: a host crash).
 #
 # Usage:
 #   tests/test_finder_904_executor.sh [--timeout N] [--port N]
@@ -142,6 +144,15 @@ EOF
 )
 echo "General Controls: $GREY dialog-grey pixels (the G3: most of 5200)"
 [[ "$GREY" -gt 3000 ]] || fail "the control panel's window is not there"
+
+api quit '{}' >/dev/null || true
+sleep 2
+api launch '{"path":"Macintosh HD:System Folder:Control Panels:Software Update"}' >/dev/null || true
+sleep 6
+APP=$(curl -sf "$URL/app" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("app",""))')
+echo "Front process: $APP"
+grep -aq 'host signal' "$WORK/emu.log" && fail "a host crash (Software Update's dialog)"
+[[ "$APP" == "Software Update" ]] || fail "Software Update is not in front"
 
 kill -0 "$EMU_PID" 2>/dev/null || fail "the emulator died"
 if [[ "$FAILED" -ne 0 ]]; then tail -30 "$WORK/emu.log"; exit 1; fi
