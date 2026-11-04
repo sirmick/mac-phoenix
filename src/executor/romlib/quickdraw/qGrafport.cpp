@@ -18,6 +18,7 @@
 #include <util/handle_vector.h>
 
 #include <algorithm>
+#include <map>
 
 using namespace Executor;
 
@@ -85,6 +86,7 @@ void Executor::C_InitGraf(GUEST<GrafPtr> *gp)
 
 void Executor::ROMlib_initport(GrafPtr p) /* INTERNAL */
 {
+    ROMlib_forget_pattern_origin(p);
     /* this is a grafport, not a cgrafport, so the flag bits must not be
      set.  when we get here, it is likely they they contain garbage,
      so initialize them before using any accesssor macros */
@@ -122,6 +124,35 @@ void Executor::C_SetPort(GrafPtr p)
     if(p == nullptr)
         warning_unexpected("SetPort("")");
     qdGlobals().thePort = p;
+}
+
+/* MacPhoenix: the pattern origin (QDSetPatternOrigin, NQD; 8.5), the port's
+   own and (0, 0) until set (the G3's 9.0.4: tests/guest/difftest/qdorigin.c).
+   Kept, not yet applied to drawing: a pattern fill came out the same on the
+   G3 whatever it was. */
+static std::map<uint32_t, Point> pattern_origins;
+
+void Executor::ROMlib_forget_pattern_origin(GrafPtr p)
+{
+    pattern_origins.erase(guest_cast<uint32_t>(p));
+}
+
+void Executor::C_QDSetPatternOrigin(Point origin)
+{
+    GrafPtr port = qdGlobals().thePort;
+    if(origin.h == 0 && origin.v == 0)
+        pattern_origins.erase(guest_cast<uint32_t>(port));
+    else
+        pattern_origins[guest_cast<uint32_t>(port)] = origin;
+}
+
+void Executor::C_QDGetPatternOrigin(GUEST<Point> *origin)
+{
+    auto it = pattern_origins.find(guest_cast<uint32_t>((GrafPtr)qdGlobals().thePort));
+    Point p = { 0, 0 };
+    if(it != pattern_origins.end())
+        p = it->second;
+    *origin = p;
 }
 
 void Executor::C_InitPort(GrafPtr p)

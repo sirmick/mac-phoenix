@@ -87,6 +87,8 @@ extern void ROMlib_PICWRITE(Ptr addr, INTEGER count);
 
 extern RgnHandle ROMlib_circrgn(const Rect& rp);
 extern void ROMlib_initport(GrafPtr p);
+/* MacPhoenix: a port made anew has the pattern origin (0, 0) */
+extern void ROMlib_forget_pattern_origin(GrafPtr p);
 extern void ROMlib_printrgn(RgnHandle h);
 
 static_assert(sizeof(ccrsr_res) == 148);
