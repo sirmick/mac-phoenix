@@ -1,7 +1,7 @@
 # wash-plan: written by Wash as the plan changes.
 # Edit it only between workspaces; plan_set {"from": "<this file>"} loads it.
 
-revision = 280
+revision = 286
 
 [[node]]
   id = "cuts"
@@ -793,3 +793,43 @@ revision = 280
   body = "Session ~/storage/tmp/standalone-try/data/logs/2026-11-04/mw2qmnnd-c23bb0bba0cf1e49.log + PNGs -232219 (THINK Project Manager: wasm 'index out of bounds' under C_AEProcessAppleEvent -> 68k handler, creating a project), -232233, -232502 (Word 98: 'possible did actually run out of mem'), -232518 (MPW Shell crashed on quit). Owner also sees render bugs in Microsoft Works (snapshots to come with a new shortcut)."
   state = "done"
   revision = 280
+
+[[node]]
+  id = "fix-761-11"
+  title = "Owner's screenshots 2026-11-05 (7.6.1 tab): Finder scroll/icon placement, scroll thumb over arrow, EV streaks, two 'Creative' disks, Ares missing"
+  emoji = "🪟"
+  template = "package"
+  parent = "p1"
+  body = "Session ~/storage/tmp/standalone-try/data/logs/2026-11-05/mw33xniy-62fc7c9917b83c86.log (7.6.1 68k, Auto 1492x740). PNGs -053939 (two volumes named Creative: creative.img + creative-8.img), -054033 (Finder scroll: a Mac needs one click with white space before icons snap; Executor differs), -054052 (every folder opens with icons far bottom-left/off view, window shows none), -054122 (horizontal scroll thumb dragged past the arrow and drew over it), -054202 (Ares missing from the games disks), -054309 (Escape Velocity: diagonal white streaks, 'asteroid effect?')."
+  state = "done"
+  revision = 285
+
+[[node]]
+  id = "desktop-app"
+  title = "Native Qt desktop Executor (frontends/desktop)"
+  emoji = "🪟"
+  template = "package"
+  parent = "p2"
+  needs = ["repo-move"]
+  body = "See p2."
+  state = "todo"
+  revision = 283
+
+[[node]]
+  id = "p2"
+  title = "P2 Executor as its own product: repo re-arrangement + native Qt desktop app"
+  emoji = "🖥️"
+  template = "milestone"
+  body = "Owner 2026-11-05: (1) top-level executor/ {core, tests, frontends/{wasm,desktop,headless,phoenix}, host/ (shared front-end logic extracted from web_main.cpp), server/ (from tools/standalone), web/ (from web/executor)}; ROM machines stay in src/; tools/ only dev tools. One git-mv commit at a quiet point + CMake/tests/docs paths; full ctest + tab cells green. (2) Native desktop app: Qt 6 Widgets minimal (Core+Gui+Widgets, sound via QtMultimedia or miniaudio), Executor in-process on a thread, frames via the frame/rects hooks into a QImage surface, HiDPI via devicePixelRatio + Executor's 2x path, settings dialog generated from settings.schema.json, local disk images with overlays, data in the OS app-data folder (authoritative), live resolution/HiDPI/screenshot/diag; Linux first then macOS .app / Windows .exe / AppImage. Start after the current members (finder761, evrender, libfix) finish."
+  state = "todo"
+  revision = 283
+
+[[node]]
+  id = "repo-move"
+  title = "Repo re-arrangement: executor/ top level, host/ extracted"
+  emoji = "📦"
+  template = "package"
+  parent = "p2"
+  body = "See p2. Do when no member branches are open."
+  state = "waiting-owner"
+  revision = 286
