@@ -356,6 +356,61 @@ TEST(CFM, LongRelocationInstructions)
     EXPECT_EQ(28u, (uint32_t)w[7]);
 }
 
+/* RelocSmSetSectC/D and RelocLgSetSectC/D choose the sections the
+   RelocBySectC/D runs after them add: the code section's place for the
+   data's words, the data's for the code's. */
+TEST(CFM, SetSectionRelocationInstructions)
+{
+    std::vector<uint32_t> words;
+    for(uint32_t i = 0; i < 6; i++)
+        words.push_back(4 * i);
+    std::vector<uint8_t> pef = make_pef(0, words,
+                                        { 0x6400, 0x4200,           /* SmSetSectD 0, BySectD */
+                                          0x6201, 0x4000,           /* SmSetSectC 1, BySectC */
+                                          0xB480, 0x0000, 0x4200,   /* LgSetSectD 0, BySectD */
+                                          0xB440, 0x0001, 0x4000 }); /* LgSetSectC 1, BySectC */
+    Ptr image = NewPtr(pef.size());
+    memcpy(image, pef.data(), pef.size());
+    GUEST<ConnectionID> cid;
+    GUEST<Ptr> main;
+    Str255 err;
+    ASSERT_EQ(noErr, GetMemFragment(image, pef.size(), (StringPtr) "\0", kLoadLib, &cid, &main,
+                                    err));
+    uint32_t data = guest_cast<uint32_t>(main);
+    GUEST<uint32_t> *w = (GUEST<uint32_t> *)(Ptr)main;
+    uint32_t code = (uint32_t)w[0] - 0;
+    EXPECT_NE(data, code);
+    EXPECT_EQ(data, (uint32_t)w[1] - 4);
+    EXPECT_EQ(code, (uint32_t)w[2] - 8);
+    EXPECT_EQ(data, (uint32_t)w[3] - 12);
+    EXPECT_EQ(16u, (uint32_t)w[4]);
+    EXPECT_EQ(20u, (uint32_t)w[5]);
+}
+
+/* A section index past the container's sections: paramErr, not a section
+   record read past the connection's. */
+TEST(CFM, RelocationSectionIndexOutOfRange)
+{
+    for(const std::vector<uint16_t>& program :
+        { std::vector<uint16_t>{ 0x6205 },             /* RelocSmSetSectC 5 */
+          std::vector<uint16_t>{ 0x6405 },             /* RelocSmSetSectD 5 */
+          std::vector<uint16_t>{ 0x6605 },             /* RelocSmBySection 5 */
+          std::vector<uint16_t>{ 0xB400, 0x0005 },     /* RelocLgBySection 5 */
+          std::vector<uint16_t>{ 0xB440, 0x0005 },     /* RelocLgSetSectC 5 */
+          std::vector<uint16_t>{ 0xB480, 0x0005 } })   /* RelocLgSetSectD 5 */
+    {
+        std::vector<uint8_t> pef = make_pef(0, { 0, 4 }, program);
+        Ptr image = NewPtr(pef.size());
+        memcpy(image, pef.data(), pef.size());
+        GUEST<ConnectionID> cid;
+        GUEST<Ptr> main;
+        Str255 err;
+        EXPECT_EQ(paramErr, GetMemFragment(image, pef.size(), (StringPtr) "\0", kLoadLib, &cid,
+                                           &main, err))
+            << "instruction " << std::hex << program[0];
+    }
+}
+
 /* PrivateInterfaceLib's low-memory accessors applications import from it
    (8.6's exports them): MPW Shell keeps its globals in HpChk ($316) through
    LMSetHpChk and LMGetHpChk. */

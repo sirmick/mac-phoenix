@@ -319,7 +319,9 @@ OSErr Executor::C_AESend(AppleEvent *evt, AppleEvent *reply,
     /* MacPhoenix: addressed by signature, to the process that has it, as
        by its serial number (Office 98's First Run installer sends 'MVis'
        'MVai' to the Microsoft Office First Run it just launched, 'VIS3');
-       none running is connectionInvalid, as before. */
+       none running is connectionInvalid, as before. Several with
+       the signature: the first in GetNextProcess order (not measured on the
+       G3). */
     if(target_type == typeApplSignature && target_size == sizeof(OSType))
     {
         OSType signature = *(GUEST<OSType> *)target_psn;

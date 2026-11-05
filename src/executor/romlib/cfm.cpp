@@ -1653,7 +1653,7 @@ relocate(const PEFLoaderRelocationHeader reloc_headers[],
     sectionD = section_base(1);
 
     retval = noErr;
-    while(reloc_count-- > 0)
+    while(retval == noErr && reloc_count-- > 0)
     {
         uint8_t msb;
 
@@ -1753,13 +1753,16 @@ relocate(const PEFLoaderRelocationHeader reloc_headers[],
                                                     guest_cast<uint32_t>(symbol_val));
                             break;
                         case 1: /* RelocSmSetSectC */
-                            sectionC = section_base(index);
-                            break;
                         case 2: /* RelocSmSetSectD */
-                            sectionD = section_base(index);
-                            break;
                         case 3: /* RelocSmBySection */
-                            repeatedly_relocate(1, &relocAddress, section_base(index));
+                            if((uint32_t)index >= connp->n_sects)
+                                retval = paramErr;
+                            else if(sub_op == 1)
+                                sectionC = section_base(index);
+                            else if(sub_op == 2)
+                                sectionD = section_base(index);
+                            else
+                                repeatedly_relocate(1, &relocAddress, section_base(index));
                             break;
                         default:
                             warning_unexpected("sub_op");
