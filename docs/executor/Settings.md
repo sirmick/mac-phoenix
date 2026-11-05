@@ -41,7 +41,10 @@ The schema's own keywords, beside the standard ones:
   the server's next start: `restart_needed`).
 - `x-labels` (an `enum`'s, or its `examples`'), `x-group` (a heading
   before the setting), `x-widget` (`number`, `range`, `path`, `words`,
-  `disk-list`, `screen`: the `examples` and Custom…), `x-choices`
+  `disk-list`, `screen`: the `examples` and Custom…, and Auto when it
+  has `x-auto-setting`, the boolean setting Auto is: `display.fit_window`),
+  `x-shown-in` (a setting the dialog shows in another's row, not its own),
+  `x-choices`
   (options the page knows: `systems`), `x-auto` (a setting with an
   automatic value: `{ value, choices, labels }`, `value` the one stored
   for Auto, `0` or `"auto"`; the dialog shows an Auto box, then the
@@ -77,8 +80,10 @@ bar's "Restart Executor to apply"). The Reset buttons put defaults into
 the draft. A setting's `description` is its help: a tooltip
 (`role=tooltip`, the control's `aria-describedby`) shown when the mouse
 rests on the setting or the keyboard's focus is in it. The screen size is
-a list of the classic Macs' (`examples`, named by `x-labels`) with
-Custom… for a width and a height (100 to 9999). A setting with `x-auto`
+Auto (`display.fit_window`: the Mac's screen follows the window size; the
+size stays stored for when Auto is off), then a list of the classic Macs'
+(`examples`, named by `x-labels`) with Custom… for a width and a height
+(100 to 9999); a size turns Auto off. A setting with `x-auto`
 (Memory, Colours, Sharpness, Port, Secure cookies) has an Auto box; while
 it is ticked the choices beside it are disabled and show what Auto picks
 here (settings.js `AUTO_PICKS`: Memory and Colours from the System
@@ -112,11 +117,62 @@ of the running Mac, Disks.md).
 What applies live: the Command key (`keys.js`: Command on Meta, Ctrl or
 Alt, Option and Control the other two), the right button (a click, or
 Control-click), smoothing, the bar's Screenshot and Fullscreen buttons,
-the volume (a GainNode). Fullscreen with `keyboard_capture` takes the
+the volume (a GainNode), the screen size and Sharpness (the display
+scale: below). Fullscreen with `keyboard_capture` takes the
 keyboard through the Keyboard Lock API (Chromium-based browsers), so
 Ctrl+W and the like reach the Mac; holding Esc leaves.
 
 "Restart Executor" in the dialog saves what changed and reloads the page.
+
+The bar's Screenshot button sends the canvas's pixels (and Executor's 1x
+frame at a scale above 1) to the server beside the session's log
+(`/api/shot`: `logs/DAY/SESSION-HHMMSS.png` and a `# screenshot` line),
+with a note asked for first. **Ctrl+Alt+S** does the same and works with
+the mouse button down: a menu tracked, a drag, a button held, to catch
+drawing mid-action. The page catches it in the capture phase (as
+Ctrl+Alt+D) and the Mac gets neither the S's down nor its up. With the
+button up it asks for the note first; down, a dialog would end the press,
+so the shot goes at once (note "Ctrl+Alt+S, the mouse button down") and
+the note is asked for when the button comes up, a `[web] screenshot NAME
+note: ...` line in the log. Executor answers the 1x frame (`'screen1x'`)
+at its yields too, not only at event calls, which a menu track makes none
+of (`web_main.cpp` `on_yield`). The Screenshot button's tooltip and the
+`?diag` overlay say so. Test: `executor.web.shotkey` (tab_shotkey.mjs: the
+Special menu held open on 7.6.1 at dpr 2, both PNGs with the menu in them).
+
+The bar's screen size (main.js `ScreenBar`, `#res`, before the CPU meter):
+**Auto** first (`display.fit_window`: the Mac's screen follows the window
+size, 400 ms after the window settles; tooltip "the Mac's screen follows
+the window size"), then the dialog's sizes (the schema's `examples`, shown
+"640 × 480", the Mac named in each option's tooltip). The dialog's Screen
+size has the same Auto first (`x-auto-setting`; there is no separate row
+for it). A size turns Auto off. The bar writes the same settings,
+`machine.screen` (and `display.fit_window` off) or `display.fit_window` on,
+through `Settings.set`, so the change is live as the dialog's is
+(DisplayModes.md), saved, and reaches an open dialog's draft; a saved
+dialog, or any other change, comes back to it through `Settings.on`. It
+shows the Mac's real size, from Executor's `'screen'` message: in the Auto
+option ("Auto · 1240 × 780") while Auto is on, else as the size chosen, or
+as an option of its own, after Auto, when the list hasn't it (a Custom… size, or one an application set with
+`DMSetDisplayMode`; the tooltip then says what the setting asked for). Its
+tooltip says the size and that it is the same setting as Settings'; with
+`?size=` in the address it is disabled (the address sets it for the visit).
+The Monitors control panels, which can't change Executor's screen, are
+left out (DisplayModes.md).
+
+The bar's HiDPI box (main.js `HiDpiBar`, `#hidpi`, after the screen size):
+`display.scale` 2 ticked, 1 not, through `Settings.set` as the screen size
+is; its tooltip "draw the Mac at 2x: sharp on high-DPI screens; costs speed
+and memory", then the scale drawn now and that it is the same setting as
+Settings > Display > Sharpness. That one keeps Auto (0: `devicePixelRatio`
+rounded, 1 to 4) as its default and offers 1× to 4×; the box shows the
+scale in effect (ticked at Auto on a dpr 2 display, at 3× too). With
+`?scale=` in the address it is disabled. Live (HiDPI.md, "The scale
+changed live"): the page asks Executor (`'scale'`), the next frames come
+at the new size and the Worker's canvas follows them; clicks and the
+pointer are mapped in the Mac's 1x pixels at any scale (`guestPoint`,
+`cursor.js`), so nothing else on the page changes. A module built without
+Skia answers that it draws at 1× only, which the tooltip then says.
 
 The bar's CPU meter (main.js `CpuMeter`, `#cpu`): how much of each half
 second the Mac's emulator thread spent working rather than waiting for

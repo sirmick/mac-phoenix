@@ -348,6 +348,8 @@ Logging:
   --debug-perf               Debug performance
   --debug-network            Debug net-bridge NAT/DNS/ICMP/TCP/UDP
   --debug-mame-ppc           mame-ppc: host ops, exceptions, per-second CPU sample
+  --cpu-mmu                  The MMU's cost: mame-68k with its PMMU (the ROM's tables),
+                             mame-ppc translating every access, identity (docs/executor/Speed.md)
   --trace-atraps             Record (A-trap, caller PC) pairs; snapshots write atraps.tsv
   --no-text-feed             Don't patch _StdText & co. (no /api/text)
   --deterministic            Virtual clock (instruction-counted ticks, fixed date); implies --no-idlewait
@@ -362,7 +364,9 @@ Logging:
                              hook calls), pcsample (the PowerPC PC every 5 ms; every 5 s the
                              top addresses as fragment+offset and nearest export), hidpi (the
                              text --executor-scale redraws from outlines), ppcinterp
-                             (mame-ppc without its native back-end), fslog,
+                             (mame-ppc without its native back-end), mmu68k (mame-68k
+                             with its PMMU, no tables), mmuppc (mame-ppc translating,
+                             identity), fslog,
                              trace, trapfailure, unimplemented, ...
   --executor-ppc-break SPEC  PowerPC breakpoint (Executor; repeatable; "on": none, for the API):
                              WHERE[@N][*HITS][#MEM], WHERE $ADDR | FRAGMENT[:SECT]+OFF | !Routine;

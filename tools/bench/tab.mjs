@@ -2,10 +2,11 @@
 // build's page on tools/standalone, web/tests/server.mjs), driven by one
 // JSON command a line on stdin, one {"result": ...} line on stdout each.
 //
-//   node tools/bench/tab.mjs PAGE-DIR LIBRARY SYSTEM QUERY-JSON
+//   node tools/bench/tab.mjs PAGE-DIR LIBRARY SYSTEM QUERY-JSON [DISKS]
 //
-// LIBRARY: boot-SYSTEM.img and utilities.img with their records; QUERY:
-// the page's extra settings ({"ppc": 1, "depth": 8}). Commands:
+// LIBRARY: boot-SYSTEM.img and the DISKS (comma-separated; default
+// utilities.img) with their records; QUERY: the page's extra settings
+// ({"ppc": 1, "depth": 8}). Commands:
 //   ["ready", ms]            the Finder in front (after the first frame)
 //   ["launch", path]         LaunchApplication's result
 //   ["app"]                  the front application's name
@@ -20,17 +21,19 @@ import path from 'node:path';
 import readline from 'node:readline';
 import { fileURLToPath } from 'node:url';
 
+console.log = (...a) => console.error(...a);   // stdout is the protocol: the page's log to stderr
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const { launch, newPage, firstFrame, request, until } = await import(path.join(ROOT, 'web/tests/harness.mjs'));
 const { startServer } = await import(path.join(ROOT, 'web/tests/server.mjs'));
 
-const [dir, library, system, queryJson] = process.argv.slice(2);
+const [dir, library, system, queryJson, disksArg] = process.argv.slice(2);
+const disks = (disksArg || 'utilities.img').split(',');
 const boot = `boot-${system}.img`;
 const extra = JSON.parse(queryJson || '{}');
 const say = (result) => process.stdout.write(JSON.stringify({ result }) + '\n');
 const within = (p, ms) => Promise.race([p, new Promise((r) => setTimeout(() => r(null), ms))]);
 
-const server = await startServer(dir, { images: library, include: [boot, 'utilities.img'] });
+const server = await startServer(dir, { images: library, include: [boot, ...disks] });
 if (!server) {
     console.error('no go');
     process.exit(77);
@@ -40,7 +43,7 @@ const page = await newPage(browser, { log: !!process.env.BENCH_LOG });
 let crashed = false;
 page.on('crash', () => { crashed = true; });
 page.on('dialog', (d) => d.accept());
-const query = new URLSearchParams([['disk', `disks/${boot}`], ['disk', 'disks/utilities.img'], ['system', boot],
+const query = new URLSearchParams([['disk', `disks/${boot}`], ...disks.map((d) => ['disk', `disks/${d}`]), ['system', boot],
                                    ...Object.entries(extra).map(([k, v]) => [k, String(v)])]);
 await page.goto(`${server.url}/?${query}`);
 

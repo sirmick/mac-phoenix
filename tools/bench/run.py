@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""run.py: the speed table (docs/executor/Speed.md). The Utilities disk's
+"""run.py: the speed table (docs/executor/Speed.md). MacPhoenixBench, our
+own (--bench own: tests/guest/bench, unattended, timed by the guest's and the
+host's clocks; its table by group and by test), and the Utilities disk's
 benchmarks on Executor (68k, PowerPC; natively and in the tab) and on the
 ROM machines (Quadra 650, G3), each configuration RUNS times; the scores
 of each run in OUT/results.jsonl, the screens of each result in OUT/shots,
@@ -68,6 +70,15 @@ CONFIGS = {
     "exec-761-ppc":     ("executor", "7.6.1", ["--depth", "8", "--executor-ppc"], "7"),
     "exec-86-jit":      ("executor", "8.6", ["--depth", "8", "--executor-ppc"], "8"),
     "exec-86":          ("executor", "8.6", ["--depth", "8", "--executor-ppc", "--executor-debug", "ppcinterp"], "8"),
+    # The MMU's cost (MacPhoenixBench): mame-68k with its PMMU (the Quadra:
+    # the ROM's tables; Executor: none), mame-ppc translating every access
+    # to itself (--cpu-mmu, --executor-debug mmu68k / mmuppc).
+    "quadra-mame68k-mmu": ("rom", "7.6.1", ["--backend", "uae", "--core", "mame-68k", "--rom", QUADRA_ROM, "--depth", "8", "--cpu-mmu"], "7"),
+    "g3-mameppc-jit-mmu": ("rom", "8.6", ["--backend", "kpx", "--core", "mame-ppc", "--jit", "--rom", G3_ROM, "--cpu-mmu"], "8"),
+    "g3-mameppc-mmu":   ("rom", "8.6", ["--backend", "kpx", "--core", "mame-ppc", "--no-jit", "--rom", G3_ROM, "--cpu-mmu"], "8"),
+    "exec-761-68k-mmu": ("executor", "7.6.1", ["--depth", "8", "--executor-debug", "mmu68k"], "7"),
+    "exec-761-ppc-mmu": ("executor", "7.6.1", ["--depth", "8", "--executor-ppc", "--executor-debug", "mmuppc"], "7"),
+    "exec-86-jit-mmu":  ("executor", "8.6", ["--depth", "8", "--executor-ppc", "--executor-debug", "mmuppc"], "8"),
     # Executor in the tab (build-wasm, headless Chromium): tools/bench/tab.mjs.
     "tab-761-68k":      ("tab", "7.6.1", {"depth": 8}, "7"),
     "tab-761-ppc":      ("tab", "7.6.1", {"depth": 8, "ppc": 1}, "7"),
@@ -75,6 +86,7 @@ CONFIGS = {
 }
 # Which benchmarks each configuration runs (MacBench needs a PowerPC).
 PPC = {"g3-kpx", "g3-kpx-jit", "g3-mameppc-jit", "g3-mameppc", "exec-761-ppc", "exec-86-jit", "exec-86",
+       "g3-mameppc-jit-mmu", "g3-mameppc-mmu", "exec-761-ppc-mmu", "exec-86-jit-mmu",
        "tab-761-ppc", "tab-86"}
 
 
@@ -87,12 +99,15 @@ def log(*a):
 class Native:
     """mac-phoenix with the web server on PORT (the ROM machines, Executor)."""
 
-    def __init__(self, binary, work, port, kind, system, args):
+    def __init__(self, binary, work, port, kind, system, args, disks):
+        """DISKS: (name, source image) mounted after the System's, copies."""
         self.port, self.work, self.kind = port, work, kind
         st = os.path.join(work, "st")
         os.makedirs(os.path.join(st, "images"), exist_ok=True)
-        self.util = os.path.join(st, "images", UTILITIES)
-        shutil.copyfile(os.path.join(IMAGES, UTILITIES), self.util)
+        extra = []
+        for name, src in disks:
+            extra.append(os.path.join(st, "images", name))
+            shutil.copyfile(src, extra[-1])
         sysimg = os.path.join(st, "images", f"{system}.img")
         shutil.copyfile(os.path.join(IMAGES, f"{system}.img"), sysimg)
         cmd = [binary, "--config", "/dev/null", "--storage-dir", st, "--port", str(port),
@@ -100,13 +115,15 @@ class Native:
                "--screen", "640x480"]
         if kind == "executor":
             cmd += ["--backend", "executor", "--executor-system", f"{system}.img",
-                    "--executor-writable-images", "--disk", self.util]
+                    "--executor-writable-images"]
         else:
-            cmd += ["--disk", sysimg, "--disk", self.util]
+            cmd += ["--disk", sysimg]
             if "kpx" in args:
                 cmd += ["--max-resolution", "640x480"]
+        for e in extra:
+            cmd += ["--disk", e]
         cmd += args
-        self.disks = [self.util] + ([sysimg] if kind != "executor" else [])
+        self.disks = extra + ([sysimg] if kind != "executor" else [])
         self.log = open(os.path.join(work, "emulator.log"), "w")
         self.proc = subprocess.Popen(cmd, stdout=self.log, stderr=subprocess.STDOUT, start_new_session=True)
         for _ in range(60):
@@ -202,7 +219,9 @@ class Tab:
     """Executor in headless Chromium (build-wasm's page on tools/standalone),
     through tools/bench/tab.mjs: one JSON command a line."""
 
-    def __init__(self, wasm, work, system, query):
+    def __init__(self, wasm, work, system, query, disks):
+        """DISKS: (name, source image) mounted after the System's; a
+        record beside the source (NAME.json), or a plain one."""
         self.work = work
         lib = os.path.join(work, "library")
         os.makedirs(lib, exist_ok=True)
@@ -210,16 +229,23 @@ class Tab:
         for f in (boot, boot + ".json"):
             if not os.path.exists(os.path.join(lib, f)):
                 os.symlink(os.path.join(WEB_LIBRARY, f), os.path.join(lib, f))
-        for f in (UTILITIES, UTILITIES + ".json"):        # read lazily, changed in an overlay
-            shutil.copyfile(os.path.join(TAB_UTILITIES, f), os.path.join(lib, f))
-        self.util = os.path.join(work, UTILITIES)
+        for name, src in disks:                         # read lazily, changed in an overlay
+            shutil.copyfile(src, os.path.join(lib, name))
+            if os.path.exists(src + ".json"):
+                shutil.copyfile(src + ".json", os.path.join(lib, name + ".json"))
+            else:
+                with open(os.path.join(lib, name + ".json"), "w") as f:
+                    json.dump({"title": name, "label": os.path.splitext(name)[0]}, f)
+        self.names = [name for name, _ in disks]
+        self.outs = [os.path.join(work, name) for name in self.names]
         self.log = open(os.path.join(work, "tab.log"), "w")
         env = dict(os.environ, TMPDIR=work)
         env.setdefault("NODE_PATH", os.path.join(HOME, "storage/tmp/wasm-spike/node_modules"))
         env.setdefault("CHROMIUM", os.path.join(
             HOME, ".cache/ms-playwright/chromium_headless_shell-1243/chrome-headless-shell-linux64/chrome-headless-shell"))
         self.proc = subprocess.Popen(
-            ["node", os.path.join(REPO, "tools/bench/tab.mjs"), wasm, lib, system, json.dumps(query)],
+            ["node", os.path.join(REPO, "tools/bench/tab.mjs"), wasm, lib, system, json.dumps(query),
+             ",".join(self.names)],
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=self.log, env=env, text=True,
             start_new_session=True)
         self.dead = False
@@ -268,7 +294,8 @@ class Tab:
         self.call("key", code)
 
     def disk_images(self):
-        return [self.util] if self.call("download", UTILITIES, self.util) else []
+        return [out for name, out in zip(self.names, self.outs)
+                if self.call("download", name, out, timeout=180)]
 
     def stop(self):
         if self.proc.poll() is None:
@@ -612,6 +639,104 @@ def text(s):
     return (t or {}).get("text", [])
 
 
+# ---- MacPhoenixBench (tests/guest/bench): our own, unattended ----
+
+BENCH_APP = os.path.join(REPO, "tests/guest/bench/MacPhoenixBench.bin")
+BENCH_IMG = "bench.img"
+BENCH_PATH = "Bench:MacPhoenixBench"
+
+
+def hfs(env, *cmd, **kw):
+    return subprocess.run(list(cmd), env=env, capture_output=True, **kw)
+
+
+def bench_image(path, work, runs, tests=""):
+    """A 16 MB HFS disk "Bench": the application and its bench.cfg."""
+    env = dict(os.environ, HOME=work)
+    with open(path, "wb") as f:
+        f.truncate(16 * 1024 * 1024)
+    hfs(env, "hformat", "-l", "Bench", path, check=True)
+    hfs(env, "hmount", path, check=True)
+    try:
+        hfs(env, "hcopy", "-m", BENCH_APP, ":MacPhoenixBench", check=True)
+        cfg = os.path.join(work, "bench.cfg")
+        with open(cfg, "w") as f:
+            f.write(f"{runs}\n{tests}\n")
+        hfs(env, "hcopy", "-t", cfg, ":bench.cfg", check=True)
+    finally:
+        hfs(env, "humount")
+
+
+def bench_results(images, work):
+    """bench-results.txt off the Bench disk (the first image that has it)."""
+    env = dict(os.environ, HOME=work)
+    for img in images:
+        if not os.path.exists(img) or hfs(env, "hmount", img).returncode:
+            continue
+        try:
+            dst = os.path.join(work, "bench-results.txt")
+            if hfs(env, "hcopy", "-t", ":bench-results.txt", dst).returncode == 0:
+                return open(dst, "rb").read().decode("mac_roman")
+        finally:
+            hfs(env, "humount")
+    return None
+
+
+def parse_bench(text):
+    """{"tests": {name: {min, med, hmin, hmed, work}}, "skipped": {name:
+    why}, "clock": {...}, "code", "done", "notes"} from the results."""
+    out = {"tests": {}, "skipped": {}, "notes": [], "done": False}
+    num = lambda v: None if v == "-" else int(v)
+    for line in (text or "").splitlines():
+        w = line.split()
+        if not w:
+            continue
+        if w[0] == "TEST" and len(w) >= 8:
+            out["tests"][w[1]] = {"runs": int(w[2]), "min": num(w[3]), "med": num(w[4]),
+                                  "hmin": num(w[5]), "hmed": num(w[6]), "work": w[7]}
+        elif w[0] == "SKIP":
+            out["skipped"][w[1]] = " ".join(w[2:])
+        elif w[0] == "CLOCK" and len(w) >= 4:
+            out["clock"] = {"ticks": num(w[1]), "micro": num(w[2]), "host": num(w[3])}
+        elif w[0] == "CODE":
+            out["code"] = w[1]
+        elif w[0] == "DONE":
+            out["done"] = True
+        elif w[0] == "#":
+            out["notes"].append(line[2:])
+    return out
+
+
+def own(s, shots, tag, limit):
+    """MacPhoenixBench launched, until it quits (or LIMIT s)."""
+    out = {"wall": {}, "notes": []}
+    if not s.launch(BENCH_PATH) or not front(s, "MacPhoenixBench"):
+        out["notes"].append("launch failed")
+        save(s, shots, f"{tag}-launch")
+        return out
+    t0 = time.time()
+    shot = t0
+    others = 0
+    while time.time() - t0 < limit:
+        if not s.alive():
+            out["notes"].append("crashed")
+            break
+        front_app = s.app()
+        others = others + 1 if front_app not in ("MacPhoenixBench", None) else 0
+        if others >= 3:                       # (three looks: not a moment's other front)
+            out["wall"]["all"] = round(time.time() - t0, 1)
+            out["front_after"] = front_app
+            return out
+        if time.time() - shot > 60:           # what it is doing, now and then
+            save(s, shots, f"{tag}-running")
+            shot = time.time()
+        time.sleep(1)
+    else:
+        out["notes"].append("no end")
+    save(s, shots, f"{tag}-stuck")
+    return out
+
+
 # ---- the runs and the table ----
 
 def run_one(args, name, bench, n, out):
@@ -626,6 +751,10 @@ def run_one(args, name, bench, n, out):
     row = {"config": name, "bench": bench, "run": n, "load": round(load, 1), "time": time.strftime("%Y-%m-%d %H:%M"),
            "wall": {}, "notes": [], "sessions": 0}
     reports = {}
+    disks = [(UTILITIES, os.path.join(TAB_UTILITIES if kind == "tab" else IMAGES, UTILITIES))]
+    if bench == "own":
+        disks = [(BENCH_IMG, os.path.join(work, BENCH_IMG))]
+        bench_image(disks[0][1], work, args.own_runs, args.tests or "")
     colors = range(5)
     tests = ("pr", "mix", "fpu")
     # a colour depth that crashes the session: the others in a new one
@@ -633,8 +762,8 @@ def run_one(args, name, bench, n, out):
         row["sessions"] += 1
         sub = os.path.join(work, str(row["sessions"]))
         os.makedirs(sub)
-        s = Tab(args.wasm, sub, system, cargs) if kind == "tab" else \
-            Native(args.binary, sub, args.port, kind, system, cargs)
+        s = Tab(args.wasm, sub, system, cargs, disks) if kind == "tab" else \
+            Native(args.binary, sub, args.port, kind, system, cargs, disks)
         r = {}
         try:
             if not s.ready():
@@ -644,6 +773,8 @@ def run_one(args, name, bench, n, out):
                 row.setdefault("boot", round(time.time() - t0, 1))
                 if bench == "speedometer":
                     r = speedometer(s, look, shots, tag, args.limit, tests, colors)
+                elif bench == "own":
+                    r = own(s, shots, tag, args.own_limit)
                 else:
                     r = macbench(s, look, shots, tag, args.limit)
                 row["wall"].update(r.pop("wall", {}))
@@ -651,7 +782,7 @@ def run_one(args, name, bench, n, out):
                 row.update(r)
         finally:
             if kind == "tab":
-                images = s.disk_images() if bench == "speedometer" else []
+                images = s.disk_images() if bench in ("speedometer", "own") else []
                 s.stop()
             else:
                 s.stop()
@@ -659,10 +790,18 @@ def run_one(args, name, bench, n, out):
         if bench == "speedometer":
             for k, v in hfs_reports(images, sub).items():
                 reports[f"{row['sessions']}-{k}"] = v
+        if bench == "own":
+            text = bench_results(images, sub)
+            if text:
+                with open(os.path.join(shots, f"{tag}-results.txt"), "w") as f:
+                    f.write(text)
+            row["own"] = parse_bench(text)
+            if not row["own"]["done"]:
+                row["notes"].append("unfinished" if text else "no results")
         if not args.keep:
             shutil.rmtree(os.path.join(sub, "st"), ignore_errors=True)
             shutil.rmtree(os.path.join(sub, "library"), ignore_errors=True)
-        crashed = r.get("crashed")
+        crashed = r.get("crashed") if bench == "speedometer" else None
         if crashed is None or crashed >= 4 or row["sessions"] >= 4:
             break
         colors, tests = range(crashed + 1, 5), ()
@@ -694,7 +833,13 @@ def fmt(v, digits=1):
 
 def table(out):
     rows = [json.loads(l) for l in open(os.path.join(out, "results.jsonl"))]
-    lines = ["## Speedometer 4.0", "",
+    lines = own_table(rows)
+    if not any(r["bench"] == "speedometer" for r in rows):
+        text = "\n".join(lines) + "\n"
+        with open(os.path.join(out, "table.md"), "w") as f:
+            f.write(text)
+        return text
+    lines += ["## Speedometer 4.0", "",
              "Medians of the runs. Scores: a Quadra 605 = 1 (FPU: a Quadra 650 = 1); Color: the mean of the "
              "depths that ran (how many of the five: depths).", "",
              "| Configuration | runs | " + " | ".join(h for _, h in SPEEDO_COLS) + " | depths | load | notes |",
@@ -729,10 +874,99 @@ def table(out):
     return text
 
 
+# MacPhoenixBench's groups of tests (the summary's columns): name prefixes
+OWN_GROUPS = [
+    ("Integer", ("dhry", "sieve", "sort", "crc32")),
+    ("FP", ("whet", "fft", "matmul")),
+    ("Memory", ("blockmove", "memcpy", "stride")),
+    ("QuickDraw", ("copybits", "paintrect", "frameoval", "drawstring", "rgn_")),
+    ("Traps", ("tickcount", "getsetport", "gestalt", "mixedmode")),
+    ("Files", ("file_",)),
+    ("Heap", ("newhandle", "lockmove", "compact")),
+]
+OWN_BASE = "quadra-uae"           # the summary's 1.0
+
+
+def own_times(rows, name, key="med"):
+    """{test: µs} for a configuration: the median over its sessions of each
+    test's KEY (med: the run median; hmed: the same by the host's clock)."""
+    rs = [r["own"] for r in rows if r["config"] == name and r["bench"] == "own" and r.get("own")]
+    tests = {t for r in rs for t in r["tests"]}
+    return {t: median([r["tests"][t].get(key) for r in rs if t in r["tests"]]) for t in tests}
+
+
+def geomean(xs):
+    import math
+    xs = [x for x in xs if x]
+    return math.exp(sum(math.log(x) for x in xs) / len(xs)) if xs else None
+
+
+def own_table(rows):
+    """MacPhoenixBench: a summary (speed against quadra-uae by group, the
+    geometric mean of the tests' ratios; by the host's clock and, in
+    brackets where it says more than 10% otherwise, the guest's
+    Microseconds) and every test's median ms by the host's clock."""
+    names = [n for n in CONFIGS if any(r["config"] == n and r["bench"] == "own" for r in rows)]
+    if not names:
+        return []
+    for n in [n for n in names if n.endswith("-mmu") and n[:-4] in names]:   # beside its base
+        names.remove(n)
+        names.insert(names.index(n[:-4]) + 1, n)
+    base, hbase = own_times(rows, OWN_BASE), own_times(rows, OWN_BASE, "hmed")
+    for b in (base, hbase):     # the PowerPC build's FP tests against the 68881 code's
+        for t in [t for t in b if t.endswith("_881")]:
+            b.setdefault(t[:-4], b[t])
+    lines = ["## MacPhoenixBench", "",
+             f"Speed against {OWN_BASE} (= 1; higher is faster): per group, the geometric mean of "
+             "the tests' ratios of median times by the host's clock; [by the guest's Microseconds] "
+             "where that says more than 10% otherwise. FP: the 68881 code's tests (PowerPC's against "
+             "them; SANE's in the times below). clock: Microseconds over 2 s of the host's.", "",
+             "| Configuration | code | " + " | ".join(g for g, _ in OWN_GROUPS) + " | clock | notes |",
+             "|---|---|" + "---|" * (len(OWN_GROUPS) + 2)]
+    for name in names:
+        host, guest = own_times(rows, name), own_times(rows, name, "hmed")
+        host, guest = guest, host                 # (host first: the true speed)
+        rs = [r for r in rows if r["config"] == name and r["bench"] == "own"]
+        code = "/".join(sorted({(r.get("own") or {}).get("code", "?") for r in rs}))
+        cells = []
+        for _, prefixes in OWN_GROUPS:
+            ts = [t for t in host if t.startswith(prefixes) and not t.endswith("_sane")
+                  and hbase.get(t) and host[t]]
+            h = geomean([hbase[t] / host[t] for t in ts])
+            g = geomean([base[t] / guest[t] for t in ts if base.get(t) and guest.get(t)])
+            cell = fmt(h, 2 if h is not None and h < 10 else 1)
+            if g and h and abs(g / h - 1) > 0.1:
+                cell += f" [{fmt(g, 2 if g < 10 else 1)}]"
+            cells.append(cell)
+        clocks = [(r.get("own") or {}).get("clock") for r in rs]
+        ratio = median([c["micro"] / c["host"] for c in clocks if c and c.get("host")])
+        notes = sorted({n for r in rs for n in r.get("notes", [])})
+        lines.append(f"| {name} | {code} | " + " | ".join(cells) + f" | {fmt(ratio, 2)} | " + "; ".join(notes) + " |")
+    tests = []
+    for r in rows:
+        for t in (r.get("own") or {}).get("tests", {}):
+            if t not in tests:
+                tests.append(t)
+    lines += ["", "Median times, ms by the host's clock (the median over the sessions of each test's "
+              "median of its runs). —: skipped or not in that build.", "",
+              "| Test | work | " + " | ".join(names) + " |", "|---|---|" + "---|" * len(names)]
+    times = {n: own_times(rows, n, "hmed") for n in names}
+    work = {t: w for r in rows for t, v in (r.get("own") or {}).get("tests", {}).items() for w in [v["work"]]}
+    for t in tests:
+        lines.append(f"| {t} | {work.get(t, '')} | " + " | ".join(
+            fmt(times[n].get(t) / 1000 if times[n].get(t) is not None else None,
+                2 if (times[n].get(t) or 0) < 10000 else 1) for n in names) + " |")
+    return lines + [""]
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--only", help="configurations, comma-separated (default: all)")
-    ap.add_argument("--bench", default="speedometer,macbench")
+    ap.add_argument("--bench", default="speedometer,macbench",
+                    help="speedometer, macbench, own (MacPhoenixBench)")
+    ap.add_argument("--own-runs", type=int, default=5, help="MacPhoenixBench: runs of each test in a session")
+    ap.add_argument("--own-limit", type=float, default=3600, help="MacPhoenixBench: seconds a session may take")
+    ap.add_argument("--tests", help="MacPhoenixBench: only these tests (names or their starts, spaces)")
     ap.add_argument("--runs", type=int, default=3)
     ap.add_argument("--first", type=int, default=1, help="number of the first run (resuming a run)")
     ap.add_argument("--out", default=os.path.join(HOME, "storage/tmp/bench/out"))

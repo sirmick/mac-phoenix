@@ -177,12 +177,14 @@ NOTRAP_FUNCTION2(LMGetDSErrCode);
 NOTRAP_FUNCTION2(LMSetDSErrCode);
 
 
-// uknown Private.a (true-b);
-const LowMemGlobal<INTEGER > SCSIFlags{ 0xB22 };
-inline INTEGER  LMGetSCSIFlags() { return LM(SCSIFlags); }
-inline void LMSetSCSIFlags(INTEGER val) { LM(SCSIFlags) = val; }
-NOTRAP_FUNCTION2(LMGetSCSIFlags);
-NOTRAP_FUNCTION2(LMSetSCSIFlags);
+// hardware configuration flags (IM V: SCSI, clock, xPRAM, FPU, MMU, ADB
+// in bits 15-10; LMGetHWCfgFlags); the G3's 9.0.4 has $EC00
+// (Private.a's SCSIFlags) (true-b);
+const LowMemGlobal<INTEGER > HWCfgFlags{ 0xB22 };
+inline INTEGER  LMGetHWCfgFlags() { return LM(HWCfgFlags); }
+inline void LMSetHWCfgFlags(INTEGER val) { LM(HWCfgFlags) = val; }
+NOTRAP_FUNCTION2(LMGetHWCfgFlags);
+NOTRAP_FUNCTION2(LMSetHWCfgFlags);
 
 
 // rsys/misc WHOKNOWS (true-b);

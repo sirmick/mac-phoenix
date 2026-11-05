@@ -103,6 +103,7 @@ extern void ROMlib_dpntoteh(DialogPeek dp, INTEGER no);
 extern void ROMlib_drawiptext(DialogPtr dp, itmp ip, int item_no);
 extern void dialog_create_item(DialogPeek dp, itmp dst, itmp src,
                                int item_no, Point base_pt);
+extern item_color_info_t *dialog_item_color_info(DialogPtr dp, int item_no);
 extern bool get_item_style_info(DialogPtr dp, int item_no,
                                 uint16_t *flags_return,
                                 item_style_info_t *style_info);

@@ -14,8 +14,9 @@ compared key by key.
   --out DIR         reports and kept files (default <storage>/difftest/PROBE;
                     a git worktree's <storage>/difftest/wt-NAME/PROBE)
 
-Targets: g3-8.6, g3-9.0.4 (the G3 ROM, mame-ppc), executor-8.6. Each test
-target is compared with its reference (executor-8.6 with g3-8.6).
+Targets: g3-8.6, g3-9.0.4 (the G3 ROM, mame-ppc), executor-8.6,
+executor-9.0.4. Each test target is compared with its reference
+(executor-8.6 with g3-8.6, executor-9.0.4 with g3-9.0.4).
 
 References: tests/guest/difftest/ref/PROBE-TARGET.txt, committed, the
 probe binary's SHA-256 on their first line: a reference made by another
@@ -58,13 +59,15 @@ TARGETS = {
     "g3-8.6": (["--backend", "kpx", "--core", "mame-ppc", "--jit", "--image", "8.6"], {"MACEMU_ROM": str(G3)}),
     "g3-9.0.4": (["--backend", "kpx", "--core", "mame-ppc", "--jit", "--os-version", "9.0.4"], {"MACEMU_ROM": str(G3)}),
     "executor-8.6": (["--backend", "executor", "--executor-ppc", "--image", "8.6"], {}),
+    "executor-9.0.4": (["--backend", "executor", "--executor-ppc", "--os-version", "9.0.4"], {}),
 }
-REFERENCE = {"executor-8.6": "g3-8.6"}
+REFERENCE = {"executor-8.6": "g3-8.6", "executor-9.0.4": "g3-9.0.4"}
 # nominal (tests/lib/ports.py maps them to this checkout's range);
 # $DIFFTEST_PORT_BASE moves them (another run, or someone else's emulator,
 # holding the defaults)
 PORT_BASE = int(os.environ.get("DIFFTEST_PORT_BASE", "18600"))
-PORTS = {t: ports.port(PORT_BASE + 10 * i) for i, t in enumerate(["g3-8.6", "g3-9.0.4", "executor-8.6"])}
+PORTS = {t: ports.port(PORT_BASE + 10 * i) for i, t in enumerate(["g3-8.6", "g3-9.0.4", "executor-8.6",
+                                                                       "executor-9.0.4"])}
 
 
 def parse(text):

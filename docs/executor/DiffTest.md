@@ -31,8 +31,9 @@ compares the answers line by line.
     the probe carries on without it.
 - **Runner**: `tools/difftest/run.py <probe> [--target T] [--dump]
   [--refresh | --no-refresh] [--accept]`. Targets: `g3-8.6`, `g3-9.0.4`
-  (Apple's code: the G3 ROM on mame-ppc) and `executor-8.6`, which is
-  compared with `g3-8.6`. Each run goes through `tests/test_guest_suite.sh`
+  (Apple's code: the G3 ROM on mame-ppc), `executor-8.6`, which is
+  compared with `g3-8.6`, and `executor-9.0.4` (Executor on 9.0.4's own
+  System), compared with `g3-9.0.4` (calls 9.0 added: `vminfo`). Each run goes through `tests/test_guest_suite.sh`
   (`--keep-dir` keeps what the probe wrote on Host:, `--host-file` puts
   the control files there). A run that crashed is resumed after the
   crashed section, as often as it takes.

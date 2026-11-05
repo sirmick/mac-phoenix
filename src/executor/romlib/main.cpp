@@ -454,6 +454,8 @@ int executor_main_entry(int argc, char **argv)
             char thingOnStack; /* used to determine an approximation of the stack base address */
             InitMemory(&thingOnStack);
 
+            if(ERROR_ENABLED_P(ERROR_M68K_MMU))
+                syn68k_set_mmu(true);
             initialize_68k_emulator(nullptr,
                                     use_native_code_p,
                                     (uint32_t *)SYN68K_TO_US(0),

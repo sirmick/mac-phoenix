@@ -258,6 +258,14 @@ public:
 	void ppc_set_translation_off(bool off) { m_translation_off = off; }
 	bool m_translation_off = false;
 
+	/* MacPhoenix: data translation on whatever MSR[DR] says, every page
+	 * mapped to itself (as identity BATs would, without their 1 GB): the
+	 * recompiler's translated accesses (a TLB lookup before each, then
+	 * fastram as before) with no tables to fault on; a baseline of the MMU's cost
+	 * (docs/executor/Speed.md). Before the first run. */
+	void ppc_set_translation_identity(bool on) { m_translation_identity = on; }
+	bool m_translation_identity = false;
+
 	/* MacPhoenix: fastram blocks hold guest bytes in guest (big-endian)
 	 * order, as cpu::GuestMemory does, not MAME's native-word layout; the
 	 * generated accessors byte-swap and leave masked accesses to the slow

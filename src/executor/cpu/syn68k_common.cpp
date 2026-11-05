@@ -781,6 +781,13 @@ void syn68k_set_jit(int)
     /* No engine runs a JIT yet. */
 }
 
+static bool use_mmu;
+
+void syn68k_set_mmu(int enabled)
+{
+    use_mmu = enabled != 0;
+}
+
 /* ---------------------------------------------------------------------- */
 /* Init                                                                   */
 /* ---------------------------------------------------------------------- */
@@ -808,7 +815,10 @@ void initialize_68k_emulator(void (*)(int), int, uint32 trap_vector_storage[64],
      * is an LC040 and every line-F word is a fatal trap 11 (STRAGGLERS.md
      * 22). */
     config.fpu = true;
+    config.mmu = use_mmu;       /* --executor-debug mmu68k: the PMMU's cost, tables or not */
     core = cpu::create(engine_name, config, guest_memory, syn_host).release();
+    if(core && use_mmu)
+        fprintf(stderr, "[syn68k] %s core with its PMMU (no tables)\n", engine_name.c_str());
     if(!core)
     {
         fprintf(stderr, "syn68k: cannot start the %s 68k core\n", engine_name.c_str());

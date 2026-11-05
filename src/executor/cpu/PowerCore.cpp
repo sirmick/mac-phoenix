@@ -138,6 +138,7 @@ cpu::Core &core()
     config.arch = cpu::Arch::PPC;
     config.model = 750;
     config.mmu = false;
+    config.mmu_identity = PowerCore::instance().mmuIdentity;
     config.timers = false;      /* Executor's own timer thread */
     config.exceptions = false;  /* skip and log */
     config.jit = PowerCore::instance().jit;  /* the native back-end where there is one */
@@ -150,6 +151,9 @@ cpu::Core &core()
     }
     c->reset();
     c->set_reg(R::MSR, 0x2000);  /* supervisor, FP available, big-endian */
+    if(config.mmu_identity || !config.jit)
+        fprintf(stderr, "[PowerCore] mame-ppc: %s%s\n", config.jit ? "native back-end" : "UML interpreter",
+                config.mmu_identity ? ", translation on (identity)" : "");
     if(instruction_hook)
         c->set_instruction_hook(&call_instruction_hook, nullptr);
     the_core = c;

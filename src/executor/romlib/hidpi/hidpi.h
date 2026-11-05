@@ -54,7 +54,9 @@ struct TextParams
 
 #if EXECUTOR_HIDPI
 
-/* The display scale (1: off). Set once, before the screen is. */
+/* The display scale (1: off). Set before the screen is; changed while
+   running only through ROMlib_dm_set_scale (the runs go, the screen is
+   painted again), the render thread's frame lock held. */
 void set_scale(double scale);
 double scale();
 inline bool active() { return scale() > 1.0; }

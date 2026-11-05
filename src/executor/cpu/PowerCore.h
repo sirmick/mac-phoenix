@@ -79,6 +79,8 @@ public:
     /* MacPhoenix: mame-ppc's native back-end (false: its UML interpreter,
        --executor-debug ppcinterp); set before the first execute() */
     bool jit = true;
+    /* MacPhoenix: data translation on, identity (--executor-debug mmuppc) */
+    bool mmuIdentity = false;
     uint32_t (*getNextBreakpoint)(uint32_t addr) = nullptr;
 
     /* MacPhoenix: before every instruction, with its address (the

@@ -13,6 +13,9 @@
 # ASLM Loader, which starts the Shared Library Manager); a file's own
 # 'AINI' resources run when the file is allowed. "NAME @ 7.6": allowed only
 # on System 7.6 or later (7.5.5's PC Exchange 2.0.5 stays off: STRAGGLERS 62).
+# "-NAME": never, whatever the file runs at startup: moved into its folder's
+# "(Disabled)" one (Control Strip Modules: "Control Strip (Disabled)") and
+# left there.
 WindowShade
 Mouse
 Find File Extension
@@ -34,3 +37,11 @@ Speech
 Shared Library Manager
 System AINI -32700
 Microsoft OLE Extension
+# The Monitors control panels and their Control Strip modules: the screen's
+# size is the tab's (the bar, Settings) or /api/resolution's; Monitors 7.5.6
+# lists only the current size, Monitors & Sound shows no monitor without the
+# Display Enabler (docs/executor/DisplayModes.md).
+-Monitors
+-Monitors & Sound
+-Monitor Resolution
+-Monitor BitDepth

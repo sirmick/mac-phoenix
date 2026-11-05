@@ -4,7 +4,7 @@
  *                                ===========                                *
  *                                                                           *
  * Needs:                                                                    *
- *     MacTypes.h    LONGINT, Size, Ptr, INTEGER, Handle, OSErr,             *
+ *     MacTypes.h    LONGINT, Size, Ptr, INTEGER, Handle, OSErr, Boolean,    *
  *                   SignedByte                                              *
  *                                                                           *
  *                                                                           *
@@ -317,6 +317,13 @@ OSErr C_SysZoneFloatSizes(GUEST<Size> *topFree, GUEST<Size> *growSpace);LIBRARY_
 
 
 int32_t C_VM_GetHoldableBytes();LIBRARY_FUNCTION(PrivateInterfaceLib, VM_GetHoldableBytes, C_VM_GetHoldableBytes);
+
+
+struct VolumeVirtualMemoryInfo{GUEST_STRUCT;GUEST<uint32_t> version;GUEST<INTEGER> volumeRefNum;Boolean inUse;uint8_t _fill;GUEST<uint32_t> vmOptions;};static_assert(sizeof(VolumeVirtualMemoryInfo) == 12);void describeStruct(const VolumeVirtualMemoryInfo&, std::ostream&);
+
+typedef VolumeVirtualMemoryInfo *VolumeVirtualMemoryInfoPtr;
+
+OSErr C_GetVolumeVirtualMemoryInfo(VolumeVirtualMemoryInfoPtr volVMInfo);LIBRARY_FUNCTION(InterfaceLib, GetVolumeVirtualMemoryInfo, C_GetVolumeVirtualMemoryInfo);
 
 
 OSErr C_MemError();NOTRAP_FUNCTION(MemError);

@@ -15,6 +15,7 @@
 #include <TextEdit.h>
 #include <OSEvent.h>
 #include <LowMem.h>
+#include <OSUtil.h>
 
 #include <mman/mman_private.h>
 #include <base/functions.impl.h>
@@ -2224,6 +2225,13 @@ Ptr _NewPtr_copy_handle_flags(Size size, Handle data_to_copy, bool sys_p)
 /* MacPhoenix: the virtual memory calls (_MemoryDispatch). No virtual
    memory: every page is resident, so these succeed and do nothing. */
 Executor::OSErr Executor::C_HoldMemory(void *address, uint32_t count) { return Executor::noErr; }
+
+/* MacPhoenix: no virtual memory: as the G3's 9.0.4 with VM off, for any
+   volume and record version, the record untouched. */
+Executor::OSErr Executor::C_GetVolumeVirtualMemoryInfo(VolumeVirtualMemoryInfoPtr volVMInfo)
+{
+    return hwParamErr;
+}
 Executor::OSErr Executor::C_UnholdMemory(void *address, uint32_t count) { return Executor::noErr; }
 Executor::OSErr Executor::C_LockMemory(void *address, uint32_t count) { return Executor::noErr; }
 Executor::OSErr Executor::C_UnlockMemory(void *address, uint32_t count) { return Executor::noErr; }

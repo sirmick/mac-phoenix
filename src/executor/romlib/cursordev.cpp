@@ -174,6 +174,8 @@ OSErr Executor::C_CursorDeviceNewDevice(GUEST<CursorDevicePtr> *ourDevice)
     if(!ourDevice)
         return paramErr;
     ensure_mouse();
+    if(!devices)
+        return memFullErr;
     CursorDevicePtr d = (CursorDevicePtr)NewPtrSysClear(sizeof(CursorDevice));
     if(!d)
         return memFullErr;

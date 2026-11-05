@@ -155,6 +155,8 @@ struct process_info
     /* A desk accessory's process (LaunchDeskAccessory): app is its file,
        da_name its DRVR (empty: the file's first). */
     bool desk_accessory = false;
+    /* MacPhoenix: a control panel in the shell (LaunchControlPanel) */
+    bool control_panel = false;
     /* Its launcher supplied the opening Apple event (see process_launch). */
     bool posted_open_event = false;
     /* Its launcher's ApplScratch: switched low memory that a new process
@@ -1702,6 +1704,8 @@ static void process_body(process_info_t *p)
     {
         if(p->desk_accessory)
             ROMlib_run_desk_accessory(&p->app, p->da_name[0] ? p->da_name : nullptr);
+        else if(p->control_panel)
+            ROMlib_run_control_panel(&p->app);
         else
             ROMlib_launch_process(&p->app);
     }
@@ -2470,6 +2474,44 @@ OSErr Executor::C_LaunchDeskAccessory(const FSSpec *spec, ConstStringPtr name)
     memcpy(p->appl_scratch, LMGetApplScratch(), sizeof p->appl_scratch);
     p->appl_scratch_set = true;
     pending_launch = p;
+    return noErr;
+}
+
+/* MacPhoenix: LaunchControlPanel (9.0): the control panel in a process of
+   its own, the shell (cdevshell.cpp). One already open comes to the front. */
+OSErr Executor::C_LaunchControlPanel(const FSSpec *spec)
+{
+    if(!spec)
+        return paramErr;
+    process_bootstrap();
+    for(process_info_t *q = process_info_list; q; q = q->next)
+        if(q->control_panel && q->state != process_info_t::dead
+           && q->app.vRefNum == spec->vRefNum && q->app.parID == spec->parID
+           && EqualString(q->app.name, spec->name, false, true))
+        {
+            if(q != front_process)
+                pending_front = q;
+            return noErr;
+        }
+    FInfo fi;
+    FSSpec spec_copy = *spec;
+    OSErr err = FSpGetFInfo(&spec_copy, &fi);
+    if(err != noErr)
+        return err;
+    process_info_t *p = new_process();
+    p->own_thread = true;
+    p->control_panel = true;
+    p->app = *spec;
+    p->type = fi.fdType;
+    p->signature = fi.fdCreator;
+    int len = std::min<int>(spec->name[0], 31);
+    p->name[0] = len;
+    memcpy(&p->name[1], &spec->name[1], len);
+    p->launcher = current_process_info->serial_number;
+    memcpy(p->appl_scratch, LMGetApplScratch(), sizeof p->appl_scratch);
+    p->appl_scratch_set = true;
+    pending_launch = p;
+    pending_front = nullptr;
     return noErr;
 }
 

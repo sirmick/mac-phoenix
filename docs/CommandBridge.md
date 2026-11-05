@@ -75,6 +75,7 @@ choice, is a real trap on these Systems.) `tests/guest/bridgedemo` (ctest
 | `STATE` (0x14) | agent | the front process's name |
 | `LAUNCH_POST` (0x18), `LAUNCH_CHECK` (0x15), `LAUNCHED` (0x16) | the launcher | see Launching the agent |
 | `BRIDGE_DIR` (0x17) | agent, MacBrowser | the bridge dir's guest path |
+| `HOST_CLOCK` (0x19) | tests/guest/bench | the host's steady clock, µs (low 32 bits): a test timed by the host too |
 
 * **The slot** (`IPCBridgeSlot`, `ipc_protocol.h`): one request at a time,
   with ids. In the IPC buffer when the CPU runs in a child process (the ROM

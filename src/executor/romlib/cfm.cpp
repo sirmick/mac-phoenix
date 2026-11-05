@@ -1010,6 +1010,56 @@ is_system_file(const FSSpec& fs)
     return system_file_spec(&sys) && same_file(fs, sys);
 }
 
+/* MacPhoenix: the System file's 'nlib' resources, named by the library
+   they hold (UTCUtils, PPCToolbox, DebugLib, ...; no 'cfrg' entry lists
+   them): found by that name, as on a Mac (9.0.4's ControlDefinitions
+   imports UTCUtils). Read once into the system heap; a fragment already
+   prepared from that copy in this application's zone is shared, as
+   GetDiskFragment shares one from a file. */
+static OSErr
+check_system_nlib(ConstStr63Param library, LoadFlags loadflags, GUEST<ConnectionID> *cidp,
+                  GUEST<Ptr> *mainaddrp, Str255 errName)
+{
+    static std::map<std::string, std::pair<Ptr, Size>> copies;
+    std::string name((const char *)library + 1, library[0]);
+    auto it = copies.find(name);
+    if(it == copies.end())
+    {
+        if(loadflags == kFindLib)
+            return fragConnectionIDNotFound;
+        INTEGER save_map = LM(CurMap);
+        LM(CurMap) = LM(SysMap);
+        Handle h = Get1NamedResource("nlib"_4, library);
+        LM(CurMap) = save_map;
+        if(!h || !*h)
+            return fragLibNotFound;
+        Size size = GetHandleSize(h);
+        Ptr copy;
+        {
+            TheZoneGuard guard(LM(SysZone));
+            copy = NewPtr(size);
+        }
+        if(!copy)
+            return fragNoMem;
+        BlockMoveData(*h, copy, size);
+        it = copies.emplace(name, std::make_pair(copy, size)).first;
+    }
+    Ptr copy = it->second.first;
+    THz zone = LM(ApplZone);
+    for(auto& f : loaded)
+        if(f.zone == zone && f.origin.where == kInMem && f.origin.mem == copy)
+        {
+            ++f.refs;
+            *cidp = f.cid;
+            *mainaddrp = main_address(f.cid);
+            return noErr;
+        }
+    if(loadflags == kFindLib)
+        return fragConnectionIDNotFound;
+    warning_trace_info("CFM: \"%s\" from the System file's 'nlib'", name.c_str());
+    return C_GetMemFragment(copy, it->second.second, library, loadflags, cidp, mainaddrp, errName);
+}
+
 static OSErr
 check_system_file(ConstStr63Param library, OSType arch, LoadFlags loadflags,
                   GUEST<ConnectionID> *cidp, GUEST<Ptr> *mainaddrp, Str255 errName)
@@ -1034,7 +1084,9 @@ check_system_file(ConstStr63Param library, OSType arch, LoadFlags loadflags,
         if(Handle h = Get1IndResource("cfrg"_4, i))
             cfirp = ROMlib_find_cfrg(h, arch, kImportLibraryCFrag, library);
     LM(CurMap) = save_map;
-    if(!cfirp || CFIR_LOCATION(cfirp) != kOnDiskFlat)
+    if(!cfirp)
+        return check_system_nlib(library, loadflags, cidp, mainaddrp, errName);
+    if(CFIR_LOCATION(cfirp) != kOnDiskFlat)
         return fragLibNotFound;
     Str63 fragname;
     memcpy(fragname, CFIR_NAME(cfirp), std::min<int>(CFIR_NAME(cfirp)[0], 63) + 1);

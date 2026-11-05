@@ -157,6 +157,14 @@ public:
     void requestSize(int width, int height);
     bool takeSizeRequest(int *width, int *height);
 
+    /* MacPhoenix: a new display scale (hidpi.h; the tab's HiDPI box), from
+       any thread, taken at the front process's next event call as a size
+       is (ROMlib_dm_poll); setScale, on the emulator thread, changes the
+       presentation surface (false: the driver has none, the scale stays). */
+    void requestScale(double scale);
+    bool takeScaleRequest(double *scale);
+    virtual bool setScale(double scale) { return false; }
+
     virtual bool handleMenuBarDrag() { return false; }
 
     uint8_t *framebuffer() { return framebuffer_.data.get(); }
@@ -182,6 +190,7 @@ protected:
     std::array<uint32_t, 256> colors_;
 
     std::atomic<uint32_t> sizeRequest_ { 0 };   /* width << 16 | height, 0: none */
+    std::atomic<uint32_t> scaleRequest_ { 0 };  /* the scale x 1000, 0: none */
 
     std::vector<int16_t> rootlessRegion_;
     std::vector<int16_t> pendingRootlessRegion_;

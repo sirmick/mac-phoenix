@@ -274,6 +274,10 @@ struct Config
      * are no-ops and addresses are never translated, as every machine
      * here has run so far. Only the MAME core honours it. */
     bool mmu = false;
+    /* ppc (mame-ppc): data translation always on, every page mapped to
+     * itself, whatever MSR says: what translating costs, with no tables
+     * (--cpu-mmu, --executor-debug mmuppc; docs/executor/Speed.md). */
+    bool mmu_identity = false;
     /* 24 for a 24-bit 68k Mac; the core masks addresses itself. */
     int address_bits = 32;
     bool jit = false;

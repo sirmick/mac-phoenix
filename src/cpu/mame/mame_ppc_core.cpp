@@ -54,6 +54,7 @@ public:
          * interpreter. Read by drcuml_state's constructor in device_start. */
         machine().mutable_options().set_drc_use_c(!config.jit);
         ppc_set_translation_off(!config.mmu);
+        ppc_set_translation_identity(config.mmu_identity);
         /* Verify every opcode of a block before running it (the Mac ROM's
          * 68k emulator recycles its translation buffer), flush the PC
          * before memory accesses, accurate single-precision results. */

@@ -932,6 +932,24 @@ set_tests_properties(platinum_86_executor PROPERTIES
   TIMEOUT 200 LABELS "executor" SKIP_RETURN_CODE 77
   ENVIRONMENT "MACEMU_BINARY=$<TARGET_FILE:mac-phoenix>")
 
+# Mac OS 9.0.4's own System starts to the Finder on Executor (its
+# extensions to the end, BridgeAgent, a folder window).
+add_test(NAME finder_executor_904
+  COMMAND bash ${TEST_DIR}/test_finder_904_executor.sh --port 18624)
+set_tests_properties(finder_executor_904 PROPERTIES
+  TIMEOUT 200 LABELS "executor" SKIP_RETURN_CODE 77
+  ENVIRONMENT "MACEMU_BINARY=$<TARGET_FILE:mac-phoenix>")
+
+# The control panel shell (cdevshell.cpp) against the G3's 9.0.4: CdevTest's
+# nine variants (tests/guest/cdev) say what they are sent: macDev and the
+# 'mach' masks, error codes passed on, cursorDev, the window and its 'wloc'.
+# The reference: tests/guest/cdev/expected.txt (--backend kpx --record).
+add_test(NAME cdev_shell_executor
+  COMMAND ${Python3_EXECUTABLE} ${TEST_DIR}/test_cdev_shell.py --backend executor)
+set_tests_properties(cdev_shell_executor PROPERTIES
+  TIMEOUT 420 LABELS "executor" SKIP_RETURN_CODE 77
+  ENVIRONMENT "MACPHOENIX_EMULATOR=$<TARGET_FILE:mac-phoenix>")
+
 # Two sessions on one --executor-system at once: the second runs on a copy
 # of its own (executor-systems/run/<pid>), both keep their BridgeAgent.
 add_test(NAME system_sessions_executor
@@ -1471,10 +1489,26 @@ foreach(cell "strprobe_rom_761;;StrProbe.bin;--os-version 7.6.1;${TEST_ROM};1856
   )
 endforeach()
 
+# ... and on Executor's 9.0.4 (its own System) against the G3's 9.0.4, for
+# calls 9.0 added.
+foreach(probe vminfo)
+  add_test(
+    NAME difftest_${probe}_executor_904
+    COMMAND python3 ${CMAKE_SOURCE_DIR}/tools/difftest/run.py ${probe} --target executor-9.0.4 --no-refresh
+  )
+  set_tests_properties(difftest_${probe}_executor_904 PROPERTIES
+    TIMEOUT 1200
+    LABELS "guest;executor"
+    SKIP_RETURN_CODE 77
+    RESOURCE_LOCK difftest_executor
+    ENVIRONMENT "DIFFTEST_LOCK_TIMEOUT=300"
+  )
+endforeach()
+
 # Differential probes (docs/executor/DiffTest.md): each probe's answers on
 # Executor (8.6 System) against the committed G3 8.6 reference, known
 # differences in tests/guest/difftest/expected/. Fails on a new difference.
-foreach(probe aevt appr ctl desk intl menu sys text textutil wide wind)
+foreach(probe aevt appr ctl desk intl menu qdorigin sys text textutil wide wind)
   add_test(
     NAME difftest_${probe}_executor_86
     COMMAND python3 ${CMAKE_SOURCE_DIR}/tools/difftest/run.py ${probe} --no-refresh

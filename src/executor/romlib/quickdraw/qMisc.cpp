@@ -259,22 +259,3 @@ void Executor::C_MapPoly(PolyHandle poly, const Rect *srcr, const Rect *dstr)
             MapPt(ip++, srcr, dstr);
     }
 }
-
-/* QuickDraw 8.5's pattern origin (NQD): kept and answered; Executor still
-   aligns patterns with the port's origin. (0,0) until set, as on the G3's
-   8.6. */
-namespace
-{
-Point pattern_origin = { 0, 0 };
-}
-
-void Executor::C_QDSetPatternOrigin(Point origin)
-{
-    pattern_origin = origin;
-}
-
-void Executor::C_QDGetPatternOrigin(GUEST<Point> *origin)
-{
-    if(origin)
-        *origin = pattern_origin;
-}

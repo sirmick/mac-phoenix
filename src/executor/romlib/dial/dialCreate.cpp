@@ -29,6 +29,20 @@
 
 using namespace Executor;
 
+/* The dialog's 'ictb' entry for an item, or nullptr: none, or past the
+   end of the 'ictb' (Software Update 9.0.4's DLOG 3114 has 18 items and an
+   'ictb' of 13). */
+item_color_info_t *Executor::dialog_item_color_info(DialogPtr dp, int item_no)
+{
+    AuxWinHandle aux_win_h = *lookup_aux_win(dp);
+    if(!aux_win_h || !(*aux_win_h)->dialogCItem)
+        return nullptr;
+    Handle h = (*aux_win_h)->dialogCItem;
+    if(!*h || item_no < 1 || item_no * (int)sizeof(item_color_info_t) > GetHandleSize(h))
+        return nullptr;
+    return &((item_color_info_t *)*h)[item_no - 1];
+}
+
 void Executor::dialog_create_item(DialogPeek dp, itmp dst, itmp src,
                                   int item_no, Point base_pt)
 {
@@ -81,41 +95,22 @@ void Executor::dialog_create_item(DialogPeek dp, itmp dst, itmp src,
 
         ValidRect(&dst->itmr);
 
+        if(item_color_info_t *ctl_color_info = dialog_item_color_info((DialogPtr)dp, item_no))
         {
-            AuxWinHandle aux_win_h;
-
-            aux_win_h = *lookup_aux_win((WindowPtr)dp);
-            if(aux_win_h && (*aux_win_h)->dialogCItem)
+            if(ctl_color_info->data || ctl_color_info->offset)
             {
-                Handle item_color_info_h;
-                item_color_info_t *item_color_info;
+                AuxWinHandle aux_win_h = *lookup_aux_win((WindowPtr)dp);
+                Handle ictb = (*aux_win_h)->dialogCItem;
+                int color_table_bytes = ctl_color_info->data;
+                int color_table_offset = ctl_color_info->offset;
 
-                item_color_info_h = (*aux_win_h)->dialogCItem;
-                item_color_info = (item_color_info_t *)*item_color_info_h;
-
-                if(item_color_info)
+                if(color_table_bytes > 0 && color_table_offset >= 0
+                   && color_table_offset + color_table_bytes <= GetHandleSize(ictb))
                 {
-                    item_color_info_t *ctl_color_info;
-
-                    ctl_color_info = &item_color_info[item_no - 1];
-                    if(ctl_color_info->data || ctl_color_info->offset)
+                    CCTabHandle color_table = (CCTabHandle)NewHandle(color_table_bytes);
+                    if(color_table)
                     {
-                        int color_table_bytes;
-                        int color_table_offset;
-                        char *color_table_base;
-
-                        CCTabHandle color_table;
-
-                        color_table_bytes = ctl_color_info->data;
-                        color_table_offset = ctl_color_info->offset;
-
-                        color_table_base = ((char *)item_color_info
-                                            + color_table_offset);
-
-                        color_table = (CCTabHandle)NewHandle(color_table_bytes);
-                        memcpy(*color_table, color_table_base,
-                               color_table_bytes);
-
+                        memcpy(*color_table, *ictb + color_table_offset, color_table_bytes);
                         SetControlColor(ctl, color_table);
                     }
                 }
