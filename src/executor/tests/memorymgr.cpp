@@ -229,3 +229,70 @@ TEST_F(HeapZone, ZcbFreeMatchesFreeBlocksAfterSmallResizes)
     DisposeHandle(above);
     EXPECT_EQ(zfree(), free_blocks());
 }
+
+/* Blocks' data is 16-byte aligned, as the PowerPC Mac's Memory Manager puts
+   it (difftest probe mman on 8.6: NewPtr, NewHandle, after SetHandleSize,
+   MoveHHi and CompactMem, the System heap, temporary memory). Escape
+   Velocity's PowerPC mask blitter needs a sprite's address & 7 to be 0:
+   at 4 its sprites drew white edges and left trails (BLOCK_ALIGN). */
+TEST_F(HeapZone, BlockDataIs16Aligned)
+{
+    static const Size sizes[] = { 1, 2, 3, 4, 5, 7, 8, 9, 12, 13, 16, 17, 20, 24, 31, 33,
+                                  50, 80, 100, 255, 640, 3072, 6400 };
+    const int n = sizeof sizes / sizeof sizes[0];
+    auto aligned = [](Ptr p) { return p && (US_TO_SYN68K(p) & 15) == 0; };
+    auto check_zone = [&](const char *where) {
+        THz z = LM(TheZone);
+        for(block_header_t *b = ZONE_HEAP_DATA(z); b != ZONE_BK_LIM(z); b = BLOCK_NEXT(b))
+            ASSERT_EQ(0u, PSIZE(b) % 16) << where;
+    };
+    Ptr p[n];
+    Handle h[n];
+    for(int i = 0; i < n; i++)
+    {
+        p[i] = NewPtr(sizes[i]);
+        EXPECT_TRUE(aligned(p[i])) << "NewPtr(" << sizes[i] << ")";
+        h[i] = NewHandle(sizes[i]);
+        EXPECT_TRUE(aligned(*h[i])) << "NewHandle(" << sizes[i] << ")";
+    }
+    check_zone("after NewPtr/NewHandle");
+    for(int i = 0; i < n; i += 2)
+        DisposePtr(p[i]);
+    for(int i = 0; i < n; i++)
+    {
+        SetHandleSize(h[i], sizes[n - 1 - i] + 3);
+        EXPECT_TRUE(aligned(*h[i])) << "SetHandleSize " << i;
+        MoveHHi(h[i]);
+        EXPECT_TRUE(aligned(*h[i])) << "MoveHHi " << i;
+    }
+    for(int i = 0; i < n; i += 2)
+    {
+        p[i] = NewPtrClear(sizes[i] + 5);
+        EXPECT_TRUE(aligned(p[i])) << "NewPtrClear in a hole " << i;
+    }
+    CompactMem(0x7FFFFFFF);
+    for(int i = 0; i < n; i++)
+        EXPECT_TRUE(aligned(*h[i])) << "CompactMem " << i;
+    check_zone("after CompactMem");
+    for(int i = 0; i < n; i++)
+    {
+        DisposeHandle(h[i]);
+        DisposePtr(p[i]);
+    }
+
+    /* the System heap and temporary memory */
+    for(int i = 0; i < n; i++)
+    {
+        Ptr s = NewPtrSys(sizes[i]);
+        EXPECT_TRUE(aligned(s)) << "NewPtrSys(" << sizes[i] << ")";
+        Handle hs = NewHandleSys(sizes[i]);
+        EXPECT_TRUE(aligned(*hs)) << "NewHandleSys(" << sizes[i] << ")";
+        GUEST<OSErr> err;
+        Handle t = TempNewHandle(sizes[i], &err);
+        EXPECT_TRUE(t && aligned(*t)) << "TempNewHandle(" << sizes[i] << ")";
+        DisposePtr(s);
+        DisposeHandle(hs);
+        if(t)
+            DisposeHandle(t);
+    }
+}

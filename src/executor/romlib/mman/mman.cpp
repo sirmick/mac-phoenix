@@ -354,7 +354,7 @@ int32_t ROMlib_grow_syszone(int32_t need)
        read from a fork that holds no resource file) wrapped round in 32 */
     int64_t want = ((int64_t)need + (int64_t)HEADER_SIZE + 0xFFFF) & ~int64_t(0xFFFF);
     if(want > avail)
-        want = avail & ~3;
+        want = avail & ~(BLOCK_ALIGN - 1);
     if(want < (int64_t)need + (int64_t)HEADER_SIZE || want < (int64_t)MIN_BLOCK_SIZE)
         return 0;
     int32_t delta = (int32_t)want;
@@ -378,7 +378,9 @@ bool ROMlib_shrink_pm_zone(Ptr top)
     if(!zone)
         return false;
     block_header_t *last = ZONE_BK_LIM(zone);
-    block_header_t *newlast = (block_header_t *)(((uintptr_t)top - 8 - MIN_BLOCK_SIZE) & ~(uintptr_t)3);
+    block_header_t *newlast = (block_header_t *)(
+        (Ptr)ZONE_HEAP_DATA(zone)
+        + (((Ptr)top - 8 - MIN_BLOCK_SIZE - (Ptr)ZONE_HEAP_DATA(zone)) & ~(BLOCK_ALIGN - 1)));
     if(newlast >= last)
         return true;
     /* The free run that ends at the trailer. */
@@ -660,13 +662,17 @@ void InitZone(GrowZoneUPP pGrowZone, int16_t cMoreMasters,
     limitPtr = limitPtr - 8;
     init_zones.insert(US_TO_SYN68K(zone));
 
-    last_block = (block_header_t *)((char *)limitPtr - MIN_BLOCK_SIZE);
     first_block = ZONE_HEAP_DATA(zone);
+    /* a span of 16s: every block then starts as aligned as the first
+       (BLOCK_ALIGN) */
+    last_block = (block_header_t *)(
+        (char *)first_block
+        + (((char *)limitPtr - MIN_BLOCK_SIZE - (char *)first_block) & ~(BLOCK_ALIGN - 1)));
 
     zone->bkLim = (Ptr)last_block;
     zone->purgePtr = nullptr;
     zone->hFstFree = nullptr;
-    zone->zcbFree = limitPtr - (Ptr)zone - 64;
+    zone->zcbFree = (Ptr)last_block - (Ptr)first_block;
     zone->gzProc = pGrowZone;
     zone->moreMast = cMoreMasters;
     zone->flags = 0;

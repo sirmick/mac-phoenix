@@ -431,7 +431,9 @@ static void sledgehammer_zone(THz zone, bool print_p,
             mm_fatal("bad physical block size `%d' in block `%p'",
                      (int)PSIZE(block), block);
 
-        if(SIZEC(block) > MIN_BLOCK_SIZE)
+        /* rounding (up to 15) and, where a zone's span isn't a multiple
+           of 16 (a program's own InitZone), a remainder too small to split */
+        if(SIZEC(block) >= BLOCK_ALIGN + MIN_BLOCK_SIZE)
             mm_fatal("bad size correction `%d' in block `%p' (guest $%08X)",
                      (int)SIZEC(block), block, (unsigned)US_TO_SYN68K(block));
 
@@ -650,12 +652,7 @@ void Executor::ROMlib_setupblock(block_header_t *block,
 
     current_zone = LM(TheZone);
 
-    asize = size;
-    if(asize < MIN_BLOCK_SIZE)
-        asize = MIN_BLOCK_SIZE;
-    else
-        /* align mod 4 */
-        asize = (asize + 3) & ~3;
+    asize = BLOCK_ROUND(std::max<int32_t>(size, MIN_BLOCK_SIZE));
 
     olduse = USE(block);
     oldsize = PSIZE(block);
@@ -1158,7 +1155,7 @@ retry:
         start = ZONE_HEAP_DATA(current_zone);
 
     /* We don't need to account for the rounding or the 12 minimum here.
-     Any free block which holds us is at least 12 and even. */
+     Any free block which holds us is at least 12 and a multiple of 16. */
 
     /* Search from start to the end. */
     for(b = start;
@@ -1218,12 +1215,8 @@ retry:
     {
         int32_t newsize;
 
-        newsize = size;
         /* Account for size restrictions */
-        if(newsize < MIN_BLOCK_SIZE)
-            newsize = MIN_BLOCK_SIZE;
-        else
-            newsize = (newsize + 3) & ~3;
+        newsize = BLOCK_ROUND(std::max<int32_t>(size, MIN_BLOCK_SIZE));
 
 /* Check that there is room */
 

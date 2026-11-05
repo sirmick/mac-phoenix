@@ -98,6 +98,18 @@ extern uintptr_t ROMlib_memtop;
 #define EMPTY_STATE (0)
 #define MIN_BLOCK_SIZE (12)
 
+/* MacPhoenix: blocks' physical sizes and zones' spans are multiples of 16,
+   so every block starts at the zone's first block's alignment; Executor's
+   zones start 16-aligned (the zone header is 52 bytes, the block header
+   12), so blocks' data does too, as the PowerPC Mac's Memory Manager puts
+   it (NewPtr, NewHandle, the System heap, temporary memory, resources:
+   difftest probe mman on 8.6). Escape Velocity's PowerPC mask blitter
+   (its 'PMBl' fragment) takes a sprite's address & 7 as the mask's bit
+   offset: with 4-aligned blocks half its sprites drew 4 pixels of their
+   white background beside them, trails as they moved. */
+#define BLOCK_ALIGN (16)
+#define BLOCK_ROUND(size) (((size) + BLOCK_ALIGN - 1) & ~(BLOCK_ALIGN - 1))
+
 #define BLOCK_STATE(block) \
     ((block)->master_ptr_flags)
 

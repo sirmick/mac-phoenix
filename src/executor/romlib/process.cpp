@@ -2767,7 +2767,8 @@ void Executor::process_layout_partition(ConstStringPtr app_name)
     LM(ApplLimit) = LM(CurStackBase) - (int32_t)LM(DefltStack) - (int32_t)stack_extra();
     LM(ApplZone) = (THz)p;
     /* Executor keeps HeapEnd 8 above bkLim; this puts bkLim at
-       ApplLimit - 24, as 7.5.5 does. */
+       ApplLimit - 24, as 7.5.5 does (up to 12 lower: InitZone makes the
+       zone a multiple of 16 long, BLOCK_ALIGN). */
     LM(HeapEnd) = LM(ApplLimit) - 16;
     InitZone(nullptr, 64, LM(HeapEnd) + 12, (THz)p);
     LM(MemTop) = (Ptr)LM(SysZone)->bkLim + want;
