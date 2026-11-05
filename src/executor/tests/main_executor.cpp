@@ -15,6 +15,8 @@ using namespace Executor;
 
 QDGlobals qd;
 #include <quickdraw/cquick.h>
+#include <quickdraw/image.h>
+#include <ctl/ctl.h>
 #include <vdriver/vdriver.h>
 #include <ResourceMgr.h>
 
@@ -106,6 +108,8 @@ public:
         ROMlib_eventinit();
 
         ROMlib_color_init();
+        image_inits();  /* the scroll bars' arrows and thumbs, as main.cpp */
+        sb_ctl_init();
         InitGraf(&qd.thePort);
         InitFonts();
         InitWindows();

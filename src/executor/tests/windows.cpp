@@ -10,6 +10,7 @@
 #include <ResourceMgr.h>
 #include <FileMgr.h>
 #include <CQuickDraw.h>
+#include <ctl/ctl.h>
 #else
 #include <Windows.h>
 #include <Controls.h>
@@ -56,6 +57,84 @@ TEST(Windows, TrackControlOutsideIsNoPart)
     EXPECT_EQ(0, TrackControl(c, far, nullptr));
     DisposeWindow(w);
 }
+
+#ifdef EXECUTOR
+/* The scroll bar's thumbCntl: the mouse, held where the thumb was taken,
+   goes as far as puts the thumb against either arrow and no further (a
+   Finder window's bar, 7.6.1 Quadra: thumb x 26..42 at the left, its
+   outline x 491..507 at the right, the right arrow's edge at 507, the
+   bar 11..523). The horizontal's right limit added the grab offset: the
+   outline went over the right arrow. */
+TEST(Windows, ScrollBarThumbLimitsStopAtTheArrows)
+{
+    using namespace Executor;
+    Rect r = { 40, 0, 300, 400 };
+    WindowPtr w = NewWindow(nullptr, &r, PSTR(""), true, plainDBox,
+                            (WindowPtr)-1, false, 0);
+    ASSERT_NE(nullptr, w);
+    SetPort(w);
+    Rect hr = { 200, 11, 216, 323 };
+    ControlHandle h = NewControl(w, &hr, PSTR(""), true, 0, 0, 1000, scrollBarProc, 0);
+    Rect vr = { 50, 322, 201, 338 };
+    ControlHandle v = NewControl(w, &vr, PSTR(""), true, 0, 0, 1000, scrollBarProc, 0);
+    ASSERT_NE(nullptr, h);
+    ASSERT_NE(nullptr, v);
+    Draw1Control(h);
+    Draw1Control(v);
+
+    /* the thumbs at the minimum: x 27..43, y 66..82 */
+    Point ph = { 208, 34 }; /* 7 right of the thumb's left, 9 left of its right */
+    EXPECT_EQ(inThumb, TestControl(h, ph));
+    thumbstr t;
+    t._tlimit.left = ph.h;
+    t._tlimit.top = ph.v;
+    C_cdef16(0, h, thumbCntl, ptr_to_longint(&t));
+    EXPECT_EQ(hAxisOnly, t._taxis);
+    EXPECT_EQ(34, t._tlimit.left);
+    EXPECT_EQ(299, t._tlimit.right); /* last 298: thumb 291..307, the arrow from 307 */
+
+    Point pv = { 73, 330 };
+    EXPECT_EQ(inThumb, TestControl(v, pv));
+    t._tlimit.left = pv.h;
+    t._tlimit.top = pv.v;
+    C_cdef16(0, v, thumbCntl, ptr_to_longint(&t));
+    EXPECT_EQ(vAxisOnly, t._taxis);
+    EXPECT_EQ(73, t._tlimit.top);
+    EXPECT_EQ(177, t._tlimit.bottom); /* last 176: thumb 169..185, the arrow from 185 */
+    DisposeWindow(w);
+}
+
+/* The scroll bar's posCntl: the value from where the thumb was dropped,
+   rounded, the maximum at the end of the track. The Quadra's Finder
+   window bar, 512 wide (a travel of 464), -21566..-20: 100 pixels from the
+   minimum is -16922; Executor answered -16933, and -66 at the end, so the
+   Finder kept a sliver of range where the Mac's bar goes inactive. */
+TEST(Windows, ScrollBarThumbPositionGivesTheValue)
+{
+    using namespace Executor;
+    Rect r = { 40, 0, 300, 512 };
+    WindowPtr w = NewWindow(nullptr, &r, PSTR(""), true, plainDBox,
+                            (WindowPtr)-1, false, 0);
+    ASSERT_NE(nullptr, w);
+    SetPort(w);
+    Rect hr = { 200, 0, 216, 512 };
+    ControlHandle h = NewControl(w, &hr, PSTR(""), true, -21566, -21566, -20, scrollBarProc, 0);
+    ASSERT_NE(nullptr, h);
+    Draw1Control(h);
+
+    C_cdef16(0, h, posCntl, 100);   /* (v << 16) | h */
+    EXPECT_EQ(-16922, GetControlValue(h));
+
+    SetControlValue(h, -21566);
+    C_cdef16(0, h, posCntl, 464);
+    EXPECT_EQ(-20, GetControlValue(h));
+
+    SetControlValue(h, -21566);
+    C_cdef16(0, h, posCntl, 0);
+    EXPECT_EQ(-21566, GetControlValue(h));
+    DisposeWindow(w);
+}
+#endif
 
 /* GetNewCWindow attaches the 'pltt' of the window's ID, and DisposeWindow
    leaves that palette in the heap: a 7.6.1 Quadra keeps 4144 bytes per

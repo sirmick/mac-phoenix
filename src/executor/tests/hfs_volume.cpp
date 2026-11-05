@@ -226,4 +226,53 @@ TEST_F(HFSVolumeTest, OpenWDAnswersTheWorkingDirectory)
     wd.ioVRefNum = wdRef;
     PBCloseWD(&wd, false);
 }
+
+/* PBSetCatInfo of a folder keeps its DXInfo (frScroll & co.) apart from
+   its dates. The Finder writes a window's scroll there when it closes;
+   it got the creation date, and the window opened scrolled thousands of
+   pixels away from its icons. */
+TEST_F(HFSVolumeTest, SetCatInfoKeepsAFoldersFinderInfo)
+{
+    FSSpec spec;
+    FSMakeFSSpec(vref, 2, name("Folder"), &spec);
+    GUEST<LONGINT> dirID;
+    ASSERT_EQ(noErr, FSpDirCreate(&spec, -1 /* smSystemScript */, &dirID));
+
+    CInfoPBRec pb;
+    memset(&pb, 0, sizeof pb);
+    pb.dirInfo.ioVRefNum = vref;
+    pb.dirInfo.ioDrDirID = dirID;
+    pb.dirInfo.ioFDirIndex = -1;
+    ASSERT_EQ(noErr, PBGetCatInfo(&pb, false));
+    pb.dirInfo.ioDrUsrWds.frRect = Rect{ 64, 12, 456, 537 };
+    pb.dirInfo.ioDrUsrWds.frLocation = Point{ 60, 1436 };
+    pb.dirInfo.ioDrUsrWds.frView = 256;
+    pb.dirInfo.ioDrCrDat = 0xE711ABC2;
+    pb.dirInfo.ioDrMdDat = 0xE711ABC3;
+    pb.dirInfo.ioDrBkDat = 0;
+    pb.dirInfo.ioDrFndrInfo.frScroll = Point{ 19, 7 };
+    pb.dirInfo.ioDrFndrInfo.frOpenChain = 0x12345678;
+    pb.dirInfo.ioDrFndrInfo.frComment = 42;
+    pb.dirInfo.ioDrFndrInfo.frPutAway = 0x0BADF00D;
+    pb.dirInfo.ioNamePtr = nullptr;
+    pb.dirInfo.ioDrDirID = dirID;
+    ASSERT_EQ(noErr, PBSetCatInfo(&pb, false));
+
+    CInfoPBRec got;
+    memset(&got, 0, sizeof got);
+    got.dirInfo.ioVRefNum = vref;
+    got.dirInfo.ioDrDirID = dirID;
+    got.dirInfo.ioFDirIndex = -1;
+    ASSERT_EQ(noErr, PBGetCatInfo(&got, false));
+    EXPECT_EQ(19, got.dirInfo.ioDrFndrInfo.frScroll.v);
+    EXPECT_EQ(7, got.dirInfo.ioDrFndrInfo.frScroll.h);
+    EXPECT_EQ(0x12345678, got.dirInfo.ioDrFndrInfo.frOpenChain);
+    EXPECT_EQ(42, got.dirInfo.ioDrFndrInfo.frComment);
+    EXPECT_EQ(0x0BADF00D, got.dirInfo.ioDrFndrInfo.frPutAway);
+    EXPECT_EQ(0xE711ABC2u, (uint32_t)got.dirInfo.ioDrCrDat);
+    EXPECT_EQ(0xE711ABC3u, (uint32_t)got.dirInfo.ioDrMdDat);
+    EXPECT_EQ(64, got.dirInfo.ioDrUsrWds.frRect.top);
+    EXPECT_EQ(537, got.dirInfo.ioDrUsrWds.frRect.right);
+    EXPECT_EQ(1436, got.dirInfo.ioDrUsrWds.frLocation.h);
+}
 #endif
