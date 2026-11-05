@@ -316,6 +316,33 @@ OSErr Executor::C_AESend(AppleEvent *evt, AppleEvent *reply,
     DescType target_type = target_type_s;
     Size target_size = target_size_s;
 
+    /* MacPhoenix: addressed by signature, to the process that has it, as
+       by its serial number (Office 98's First Run installer sends 'MVis'
+       'MVai' to the Microsoft Office First Run it just launched, 'VIS3');
+       none running is connectionInvalid, as before. Several with
+       the signature: the first in GetNextProcess order (not measured on the
+       G3). */
+    if(target_type == typeApplSignature && target_size == sizeof(OSType))
+    {
+        OSType signature = *(GUEST<OSType> *)target_psn;
+        ProcessSerialNumber psn = { 0, kNoProcess };
+        ProcessInfoRec info = {};
+        bool found = false;
+        while(!found && GetNextProcess(&psn) == noErr)
+        {
+            info.processInfoLength = sizeof info;
+            info.processName = nullptr;
+            info.processAppSpec = nullptr;
+            found = GetProcessInformation(&psn, &info) == noErr
+                && info.processSignature == signature;
+        }
+        if(!found)
+            AE_RETURN_ERROR(invalidConnection);
+        *target_psn = psn;
+        target_type = keyProcessSerialNumber;
+        target_size = sizeof *target_psn;
+    }
+
     /* MacPhoenix: no reply until one comes (8.6: null after a send
        without one) */
     if(reply)

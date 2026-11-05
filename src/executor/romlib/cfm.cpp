@@ -1267,6 +1267,69 @@ connect_builtin(ConstStr63Param library, OSType arch, GUEST<ConnectionID> *cidp,
     return noErr;
 }
 
+/* MacPhoenix: the application's library folder. Its 'cfrg' entry's
+   appSubdirID names an 'alis' resource of the application file, a folder
+   searched for import libraries after the file itself (Mac OS Runtime
+   Architectures, "Searching for Import Libraries"). Word 98's 'alis' 199
+   is its Office folder, Microsoft_Office_98's (weak: without it, "Word
+   cannot load the Microsoft Office 98 shared libraries"). Measured on the
+   G3 with 8.6: the folder renamed with the alias, Word still finds it and
+   starts Office First Run; the alias under another ID, it doesn't. */
+static bool
+app_library_folder(OSType arch, INTEGER *vrefp, LONGINT *diridp)
+{
+    FSSpec app;
+    if(FSMakeFSSpec(ROMlib_exevrefnum, 0, ROMlib_exefname, &app) != noErr)
+        return false;
+    INTEGER save_map = LM(CurMap);
+    std::vector<INTEGER> open_before;
+    resmaphand map;
+    WALKMAPTOP(map)
+        open_before.push_back((*map)->resfn);
+    EWALKMAP()
+    INTEGER rn = FSpOpenResFile(&app, fsRdPerm);
+    if(rn == -1)
+        return false;
+    bool found = false;
+    if(Handle cfrg0 = Get1Resource("cfrg"_4, 0))
+        if(cfir_t *cfirp = ROMlib_find_cfrg(cfrg0, arch, kApplicationCFrag, (ConstStr255Param) ""))
+            if(INTEGER id = cfirp->appl_library_dir)
+                if(Handle alias = Get1Resource("alis"_4, id))
+                {
+                    FSSpec folder;
+                    Boolean changed;
+                    CInfoPBRec pb = {};
+                    if(ResolveAlias(&app, (AliasHandle)alias, &folder, &changed) == noErr)
+                    {
+                        pb.hFileInfo.ioNamePtr = folder.name;
+                        pb.hFileInfo.ioVRefNum = folder.vRefNum;
+                        pb.hFileInfo.ioDirID = folder.parID;
+                        if(PBGetCatInfo(&pb, false) == noErr
+                           && (pb.hFileInfo.ioFlAttrib & ATTRIB_ISADIR))
+                        {
+                            *vrefp = folder.vRefNum;
+                            *diridp = pb.hFileInfo.ioDirID;
+                            found = true;
+                        }
+                    }
+                }
+    if(std::find(open_before.begin(), open_before.end(), rn) == open_before.end())
+        CloseResFile(rn);
+    LM(CurMap) = save_map;
+    return found;
+}
+
+static OSErr
+check_app_library_folder(ConstStr63Param library, OSType arch, LoadFlags loadflags,
+                         GUEST<ConnectionID> *cidp, GUEST<Ptr> *mainaddrp, Str255 errName)
+{
+    INTEGER vref;
+    LONGINT dirid;
+    if(!app_library_folder(arch, &vref, &dirid))
+        return fragLibNotFound;
+    return check_vanddir(vref, dirid, 0, library, arch, loadflags, cidp, mainaddrp, errName);
+}
+
 /* MacPhoenix: GetSharedLibrary's kFindLib, past the files prepared for this
    application: a library connected to it is found; one that is there but
    not connected answers cfragLibConnErr; only one that isn't there at all
@@ -1289,6 +1352,8 @@ find_library(ConstStr63Param library, OSType arch, GUEST<ConnectionID> *cidp,
        there but not prepared */
     OSErr err = check_file(ROMlib_exevrefnum, 0, ROMlib_exefname, false, library, arch,
                            kFindLib, cidp, mainaddrp, errName);
+    if(err != noErr && err != fragConnectionIDNotFound)
+        err = check_app_library_folder(library, arch, kFindLib, cidp, mainaddrp, errName);
     if(err != noErr && err != fragConnectionIDNotFound)
         err = check_vanddir(ROMlib_exevrefnum, 0, 0, library, arch, kFindLib, cidp,
                             mainaddrp, errName);
@@ -1354,7 +1419,8 @@ OSErr Executor::C_GetSharedLibrary(ConstStr63Param library, OSType arch,
                        library + 1);
 
     /* MacPhoenix: one copy per application (kLoadNewCopy aside); then the
-       application's own file, its folder, the Extensions folder, and last
+       application's own file, its library folder (app_library_folder), its
+       folder, the Extensions folder, and last
        Executor's own libraries. (The root and application folders were
        uninitialized TODOs.) */
     retval = fragLibNotFound;
@@ -1404,6 +1470,9 @@ OSErr Executor::C_GetSharedLibrary(ConstStr63Param library, OSType arch,
         retval = check_file(ROMlib_exevrefnum, 0, ROMlib_exefname, false,
                             library, arch, loadflags, cidp, mainaddrp,
                             errName);
+        if(retval != noErr)
+            retval = check_app_library_folder(library, arch, loadflags, cidp, mainaddrp,
+                                              errName);
         if(retval != noErr)
             retval = check_vanddir(ROMlib_exevrefnum, 0, 0, library, arch,
                                    loadflags, cidp, mainaddrp, errName);
@@ -1624,8 +1693,10 @@ relocate(const PEFLoaderRelocationHeader reloc_headers[],
     uint32_t sectionD;
     int32_t repeat_remaining;
 
-    repeat_remaining = -1; /* i.e. not currently processing RelocSmRepeat or
-			    RelocLgRepeat */
+    repeat_remaining = -1; /* i.e. not currently processing RelocSmRepeat */
+    /* MacPhoenix: RelocLgRepeat's own count, so a RelocSmRepeat inside its
+       block keeps its own */
+    int32_t lg_repeat_remaining = -1;
 
     relocAddress = (uint8_t *)connp->sects[section].start;
     importIndex = 0;
@@ -1639,7 +1710,7 @@ relocate(const PEFLoaderRelocationHeader reloc_headers[],
     sectionD = section_base(1);
 
     retval = noErr;
-    while(reloc_count-- > 0)
+    while(retval == noErr && reloc_count-- > 0)
     {
         uint8_t msb;
 
@@ -1738,18 +1809,17 @@ relocate(const PEFLoaderRelocationHeader reloc_headers[],
                                 repeatedly_relocate(1, &relocAddress,
                                                     guest_cast<uint32_t>(symbol_val));
                             break;
-                        case 1:
-                            sectionC = section_base(index);
-                            warning_unimplemented("RelocSmSetSectC not tested much");
-                            assert(0);
-                            break;
-                        case 2:
-                            sectionD = section_base(index);
-                            warning_unimplemented("RelocSmSetSectD not tested much");
-                            break;
-                        case 3:
-                            fprintf(stderr, "RelocSmBySection\n");
-                            assert(0);
+                        case 1: /* RelocSmSetSectC */
+                        case 2: /* RelocSmSetSectD */
+                        case 3: /* RelocSmBySection */
+                            if((uint32_t)index >= connp->n_sects)
+                                retval = paramErr;
+                            else if(sub_op == 1)
+                                sectionC = section_base(index);
+                            else if(sub_op == 2)
+                                sectionD = section_base(index);
+                            else
+                                repeatedly_relocate(1, &relocAddress, section_base(index));
                             break;
                         default:
                             warning_unexpected("sub_op");
@@ -1828,14 +1898,56 @@ relocate(const PEFLoaderRelocationHeader reloc_headers[],
                                     ++reloc_instrs;
                                     break;
                                 case 0x2c:
-                                    fprintf(stderr, "RelocLgRepeat\n");
-                                    assert(0);
-                                    --reloc_count;
-                                    ++reloc_instrs;
-                                    break;
+                                {
+                                    /* MacPhoenix: RelocLgRepeat, which was
+                                       skipped: the blockCount (4 bits, less
+                                       one) 16-bit chunks before it run
+                                       repeatCount (22 bits) more times (PEF:
+                                       PEFRelocComposeLgRepeat). Word 98's
+                                       relocations past its first were left
+                                       undone: the routine descriptor of its
+                                       SetCursor patch pointed at $F9E0. */
+                                    int blockCount = (((msb & 3) << 2) | (reloc_instrs[0][1] >> 6)) + 1;
+                                    uint32_t repeatCount = ((reloc_instrs[0][1] & 0x3f) << 16)
+                                        | (reloc_instrs[1][0] << 8) | reloc_instrs[1][1];
+                                    if(lg_repeat_remaining == -1)
+                                        lg_repeat_remaining = repeatCount;
+                                    else
+                                        --lg_repeat_remaining;
+                                    if(lg_repeat_remaining > 0)
+                                    {
+                                        /* back to the block's first chunk
+                                           (the loop's ++ makes it so), this
+                                           instruction's two counted again */
+                                        reloc_count += blockCount + 1;
+                                        reloc_instrs -= blockCount + 1;
+                                    }
+                                    else
+                                    {
+                                        lg_repeat_remaining = -1;
+                                        --reloc_count;
+                                        ++reloc_instrs;
+                                    }
+                                }
+                                break;
                                 case 0x2d:
-                                    fprintf(stderr, "RelocLgSetOrBySection\n");
-                                    assert(0);
+                                {
+                                    /* MacPhoenix: RelocLgBySection,
+                                       RelocLgSetSectC, RelocLgSetSectD */
+                                    int sub_op = ((msb & 3) << 2) | (reloc_instrs[0][1] >> 6);
+                                    uint32_t index = ((reloc_instrs[0][1] & 0x3f) << 16)
+                                        | (reloc_instrs[1][0] << 8) | reloc_instrs[1][1];
+                                    if(index >= connp->n_sects)
+                                        retval = paramErr;
+                                    else if(sub_op == 0)
+                                        repeatedly_relocate(1, &relocAddress, section_base(index));
+                                    else if(sub_op == 1)
+                                        sectionC = section_base(index);
+                                    else if(sub_op == 2)
+                                        sectionD = section_base(index);
+                                    else
+                                        retval = paramErr;
+                                }
                                     --reloc_count;
                                     ++reloc_instrs;
                                     break;

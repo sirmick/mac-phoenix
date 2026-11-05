@@ -238,8 +238,14 @@ struct PEFBuilder
 /* Data: two words, the second a pointer to itself as the linker saw it,
    at data_default + 4; RelocBySectDWithSkip (skip 1, relocate 1) adds the
    data section's place. */
-std::vector<uint8_t> make_pef(uint32_t data_default, uint8_t data_share = kPEFProcessShare)
+std::vector<uint8_t> make_pef(uint32_t data_default,
+                              const std::vector<uint32_t>& words = {},
+                              const std::vector<uint16_t>& relocs = {},
+                              uint8_t data_share = kPEFProcessShare)
 {
+    /* default: two words, the second relocated */
+    std::vector<uint32_t> values = words.empty() ? std::vector<uint32_t>{ 0, data_default + 4 } : words;
+    std::vector<uint16_t> program = relocs.empty() ? std::vector<uint16_t>{ 0x0041 } : relocs;
     PEFBuilder p;
     p.u32("Joy!"_4); p.u32("peff"_4); p.u32("pwpc"_4);
     p.u32(1); p.u32(0); p.u32(0); p.u32(0); p.u32(0);
@@ -267,8 +273,9 @@ std::vector<uint8_t> make_pef(uint32_t data_default, uint8_t data_share = kPEFPr
     section(0, 0, 4, kPEFCodeSection, kPEFProcessShare, 4, code);
 
     size_t data = p.b.size();
-    p.u32(0); p.u32(data_default + 4);
-    section(1, data_default, 8, kPEFUnpackedDataSection, data_share, 4, data);
+    for(uint32_t w : values)
+        p.u32(w);
+    section(1, data_default, 4 * values.size(), kPEFUnpackedDataSection, data_share, 4, data);
 
     size_t loader = p.b.size();
     p.u32(1); p.u32(0);                 /* main: the data section's start */
@@ -279,10 +286,12 @@ std::vector<uint8_t> make_pef(uint32_t data_default, uint8_t data_share = kPEFPr
     size_t fields = p.b.size();
     p.u32(0); p.u32(0); p.u32(0);       /* reloc, strings, hash offsets */
     p.u32(0); p.u32(0);                 /* hash power, no exports */
-    p.u16(1); p.u16(0); p.u32(1); p.u32(0); /* data: 1 instruction at 0 */
+    p.u16(1); p.u16(0); p.u32(program.size()); p.u32(0); /* data: its program at 0 */
     p.put32(fields, p.b.size() - loader);
-    p.u16(0x0041);                      /* RelocBySectDWithSkip 1, 1 */
-    p.u16(0);
+    for(uint16_t r : program)           /* default: RelocBySectDWithSkip 1, 1 */
+        p.u16(r);
+    if(program.size() & 1)
+        p.u16(0);
     p.put32(fields + 4, p.b.size() - loader);
     p.put32(fields + 8, p.b.size() - loader);
     p.u32(0);                           /* one empty hash chain */
@@ -326,7 +335,7 @@ TEST(CFM, RelocationIsRelativeToDefaultAddress)
    back with (..., 1), once. */
 TEST(CFM, FragRegisterMemLibNamesALibraryInMemory)
 {
-    std::vector<uint8_t> pef = make_pef(0, kPEFGlobalShare);
+    std::vector<uint8_t> pef = make_pef(0, {}, {}, kPEFGlobalShare);
     Ptr image = NewPtr(pef.size());
     memcpy(image, pef.data(), pef.size());
     StringPtr name = (StringPtr) "\012TestMemLib";
@@ -354,6 +363,90 @@ TEST(CFM, FragRegisterMemLibNamesALibraryInMemory)
     EXPECT_EQ(noErr, C_FragRegisterMemLib(loc, 0, name, true));
     EXPECT_EQ(fragConnectionIDNotFound, C_FragRegisterMemLib(loc, 0, name, true));
     DisposePtr(loc);
+}
+
+/* The relocation instructions with longer forms: RelocLgRepeat (the
+   chunks before it again, repeatCount more times), RelocLgBySection and
+   RelocSmBySection were skipped, the words after them left as the linker
+   wrote them (Word 98's data: the routine descriptor of its SetCursor
+   patch pointed at $F9E0). */
+TEST(CFM, LongRelocationInstructions)
+{
+    std::vector<uint32_t> words;
+    for(uint32_t i = 0; i < 8; i++)
+        words.push_back(4 * i);
+    std::vector<uint8_t> pef = make_pef(0, words,
+                                        { 0x4200,           /* RelocBySectD, 1 word */
+                                          0xB000, 0x0004,   /* RelocLgRepeat 1 chunk, 4 times */
+                                          0xB400, 0x0001,   /* RelocLgBySection 1 */
+                                          0x6601 });        /* RelocSmBySection 1 */
+    Ptr image = NewPtr(pef.size());
+    memcpy(image, pef.data(), pef.size());
+    GUEST<ConnectionID> cid;
+    GUEST<Ptr> main;
+    Str255 err;
+    ASSERT_EQ(noErr, GetMemFragment(image, pef.size(), (StringPtr) "\0", kLoadLib, &cid, &main,
+                                    err));
+    uint32_t start = guest_cast<uint32_t>(main);
+    GUEST<uint32_t> *w = (GUEST<uint32_t> *)(Ptr)main;
+    for(int i = 0; i < 7; i++)
+        EXPECT_EQ(start + 4 * i, (uint32_t)w[i]) << "word " << i;
+    EXPECT_EQ(28u, (uint32_t)w[7]);
+}
+
+/* RelocSmSetSectC/D and RelocLgSetSectC/D choose the sections the
+   RelocBySectC/D runs after them add: the code section's place for the
+   data's words, the data's for the code's. */
+TEST(CFM, SetSectionRelocationInstructions)
+{
+    std::vector<uint32_t> words;
+    for(uint32_t i = 0; i < 6; i++)
+        words.push_back(4 * i);
+    std::vector<uint8_t> pef = make_pef(0, words,
+                                        { 0x6400, 0x4200,           /* SmSetSectD 0, BySectD */
+                                          0x6201, 0x4000,           /* SmSetSectC 1, BySectC */
+                                          0xB480, 0x0000, 0x4200,   /* LgSetSectD 0, BySectD */
+                                          0xB440, 0x0001, 0x4000 }); /* LgSetSectC 1, BySectC */
+    Ptr image = NewPtr(pef.size());
+    memcpy(image, pef.data(), pef.size());
+    GUEST<ConnectionID> cid;
+    GUEST<Ptr> main;
+    Str255 err;
+    ASSERT_EQ(noErr, GetMemFragment(image, pef.size(), (StringPtr) "\0", kLoadLib, &cid, &main,
+                                    err));
+    uint32_t data = guest_cast<uint32_t>(main);
+    GUEST<uint32_t> *w = (GUEST<uint32_t> *)(Ptr)main;
+    uint32_t code = (uint32_t)w[0] - 0;
+    EXPECT_NE(data, code);
+    EXPECT_EQ(data, (uint32_t)w[1] - 4);
+    EXPECT_EQ(code, (uint32_t)w[2] - 8);
+    EXPECT_EQ(data, (uint32_t)w[3] - 12);
+    EXPECT_EQ(16u, (uint32_t)w[4]);
+    EXPECT_EQ(20u, (uint32_t)w[5]);
+}
+
+/* A section index past the container's sections: paramErr, not a section
+   record read past the connection's. */
+TEST(CFM, RelocationSectionIndexOutOfRange)
+{
+    for(const std::vector<uint16_t>& program :
+        { std::vector<uint16_t>{ 0x6205 },             /* RelocSmSetSectC 5 */
+          std::vector<uint16_t>{ 0x6405 },             /* RelocSmSetSectD 5 */
+          std::vector<uint16_t>{ 0x6605 },             /* RelocSmBySection 5 */
+          std::vector<uint16_t>{ 0xB400, 0x0005 },     /* RelocLgBySection 5 */
+          std::vector<uint16_t>{ 0xB440, 0x0005 },     /* RelocLgSetSectC 5 */
+          std::vector<uint16_t>{ 0xB480, 0x0005 } })   /* RelocLgSetSectD 5 */
+    {
+        std::vector<uint8_t> pef = make_pef(0, { 0, 4 }, program);
+        Ptr image = NewPtr(pef.size());
+        memcpy(image, pef.data(), pef.size());
+        GUEST<ConnectionID> cid;
+        GUEST<Ptr> main;
+        Str255 err;
+        EXPECT_EQ(paramErr, GetMemFragment(image, pef.size(), (StringPtr) "\0", kLoadLib, &cid,
+                                           &main, err))
+            << "instruction " << std::hex << program[0];
+    }
 }
 
 /* PrivateInterfaceLib's low-memory accessors applications import from it

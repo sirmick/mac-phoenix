@@ -1229,7 +1229,9 @@ TEST(QuickDraw, MapEmptyRects)
 /* An open item's icon (ttOpen), a full square mask: 8.x (the G3's 8.6
    Finder, an open control panel) draws the outline black and inside every
    fourth pixel black (rows 0x88/0x22) over the highlight colour; 7.x a 50%
-   grey on white. */
+   grey on white. Executor only: it sets the System's version and
+   HiliteRGB through Executor's low memory. */
+#ifdef EXECUTOR
 TEST(QuickDraw, OpenIconLook)
 {
     if(!hasDeepGWorlds())
@@ -1277,3 +1279,4 @@ TEST(QuickDraw, OpenIconLook)
     SetGWorld(savedPort, savedDevice);
     DisposeGWorld(world);
 }
+#endif

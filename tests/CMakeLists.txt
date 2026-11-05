@@ -940,6 +940,15 @@ set_tests_properties(finder_executor_904 PROPERTIES
   TIMEOUT 200 LABELS "executor" SKIP_RETURN_CODE 77
   ENVIRONMENT "MACEMU_BINARY=$<TARGET_FILE:mac-phoenix>")
 
+# Word 98 on 8.6 finds Microsoft_Office_98 in the folder its 'cfrg' names
+# (appSubdirID's 'alis'), its relocations past RelocLgRepeat done, and starts
+# Office First Run (its 'MVis' event sent by signature), as on the G3.
+add_test(NAME office98_executor
+  COMMAND bash ${TEST_DIR}/test_office98_executor.sh --port 18632)
+set_tests_properties(office98_executor PROPERTIES
+  TIMEOUT 240 LABELS "executor" SKIP_RETURN_CODE 77
+  ENVIRONMENT "MACEMU_BINARY=$<TARGET_FILE:mac-phoenix>")
+
 # The control panel shell (cdevshell.cpp) against the G3's 9.0.4: CdevTest's
 # nine variants (tests/guest/cdev) say what they are sent: macDev and the
 # 'mach' masks, error codes passed on, cursorDev, the window and its 'wloc'.

@@ -520,6 +520,11 @@ WindowPtr Executor::C_GetNewCWindow(INTEGER window_id, void* window_storage,
     if(!win_res)
         return nullptr;
 
+    /* MacPhoenix: the bounds, title and refCon are read from the resource
+       while NewCWindow allocates: locked, or the 'WIND' moves and the new
+       window record lands where they were (Works 4.0's tool palette, WIND
+       4001: portRect 0 wide, then a divide by zero sizing its buffer). */
+    HLockGuard guard((Handle)win_res);
     new_cwin = NewCWindow(window_storage, &(*win_res)->_wrect,
                           (StringPtr)((char *)&(*win_res)->_wrect + 18),
                           (*win_res)->_wvisible != 0,
@@ -554,6 +559,7 @@ WindowPtr Executor::C_GetNewWindow(INTEGER wid, void* wst, WindowPtr behind)
         return (0);
     if(!*wh)
         LoadResource((Handle)wh);
+    HLockGuard guard((Handle)wh);  /* as GetNewCWindow */
     tp = NewWindow(wst, &((*wh)->_wrect),
                    (StringPtr)((char *)&(*wh)->_wrect + 18),
                    (*wh)->_wvisible != 0, (*wh)->_wprocid, (WindowPtr)behind,
