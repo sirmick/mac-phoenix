@@ -49,7 +49,7 @@ set(NATIVE_TEST_SOURCES
         localvolume_macbinary.cpp
         typeselect.cpp datetime.cpp numformat.cpp textedit.cpp sysheap.cpp memorymgr.cpp
         sysroutines.cpp resprivate.cpp unknownselectors.cpp folders.cpp cursordev.cpp dialogs.cpp printing.cpp displaymode.cpp
-        aehdlr.cpp
+        aehdlr.cpp stdclib.cpp
         aedesc.cpp aeresolve.cpp
         hfsplus_unicode.cpp hfsplus_volume.cpp hfs_volume.cpp
         exports.cpp cfm.cpp gestalt.cpp timemgr.cpp menus85.cpp widemath.cpp ot_memory.cpp inputsprocket.cpp nameregistry.cpp hidpi_layout.cpp appearance.cpp

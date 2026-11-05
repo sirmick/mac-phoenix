@@ -792,6 +792,7 @@ void dropIn(uint32_t f)
     }
 }
 
+int filled(uint32_t f, int32_t n);
 int filbuf(uint32_t f)
 {
     int i = fileIndex(f);
@@ -810,7 +811,19 @@ int filbuf(uint32_t f)
     if(fileFd(f) == 0)
         flushOut(fileAddr(1));
     ensureBuffer(f);
-    int32_t n = fdRead(fileFd(f), base(f), size(f));
+    return filled(f, fdRead(fileFd(f), base(f), size(f)));
+}
+
+/* What a read of n bytes into the stream's buffer leaves. A device's read
+   may run the application (MPW Shell's console, ECON, reads its window and
+   takes events): one that closed the stream meanwhile -- MPW quitting while
+   stdin is read -- gets EOF, its record left as fclose left it. (Apple's
+   _filbuf reads the byte at the record's _base, by then 0: low memory on a
+   Mac; a null host pointer here.) */
+int filled(uint32_t f, int32_t n)
+{
+    if(!inUse(f) || !base(f))
+        return EOF_;
     if(n <= 0)
     {
         orFlag(f, n == 0 ? IOEOF : IOERR);
@@ -847,6 +860,9 @@ int flsbuf(int c, uint32_t f)
             return EOF_;
         used = 0;
     }
+    /* the device's write may have closed it (filled) */
+    if(!inUse(f) || !ptr(f))
+        return EOF_;
     host(ptr(f))[0] = (uint8_t)c;
     setPtr(f, ptr(f) + 1);
     used++;
