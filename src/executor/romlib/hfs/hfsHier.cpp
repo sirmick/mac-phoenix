@@ -168,7 +168,7 @@ static OSErr cathelper(CInfoPBPtr pb, Boolean async, catop op)
                 drp->dirCrDat = pbd->ioDrCrDat;
                 drp->dirMdDat = pbd->ioDrMdDat;
                 drp->dirBkDat = pbd->ioDrBkDat;
-                memmove(&drp->dirFndrInfo, &pbd->ioDrCrDat,
+                memmove(&drp->dirFndrInfo, &pbd->ioDrFndrInfo,
                         (LONGINT)sizeof(drp->dirFndrInfo));
                 ROMlib_dirtyleaf(drp, vcbp);
                 err = ROMlib_flushvcbp(vcbp);
