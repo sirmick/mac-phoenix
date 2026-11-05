@@ -147,7 +147,8 @@ void set_err_name(Str255 errname)
    (keep) goes back with the section, when the last connection using it
    closes. Freed with the first connection, 8.6's Translation (Easy Open)
    handed CodeWarrior IDE's Finder calls freed memory as its data.
-   Containers in files only: an in-memory one has no lasting identity. */
+   Containers in files, and in memory registered by FragRegisterMemLib
+   (mem: its address); another in-memory one has no lasting identity. */
 struct global_section
 {
     FSSpec file;
@@ -159,8 +160,27 @@ struct global_section
     int refs;                 /* connections using it */
     ConnectionID owner;       /* the preparation that relocated it, open */
     std::vector<Ptr> keep;    /* the owner's memory, once it closed */
+    Ptr mem = nullptr;        /* a registered in-memory container's address */
 };
 std::vector<global_section> global_sections;
+
+/* MacPhoenix: FragRegisterMemLib's registry, libraries in memory found by
+   name (8.6's Control Strip Extension: its INIT prepares 'nlib' 32000,
+   ControlStripLib, and registers it; the strip's background application
+   imports it). */
+struct mem_library
+{
+    std::string name;
+    Ptr addr;
+    uint32_t length;
+};
+std::vector<mem_library> mem_libraries;
+
+bool registered_mem(Ptr addr)
+{
+    return std::any_of(mem_libraries.begin(), mem_libraries.end(),
+                       [&](const mem_library& m) { return m.addr == addr; });
+}
 
 bool same_name(const std::string& a, const std::string& b)
 {
@@ -178,10 +198,19 @@ bool same_file(const FSSpec& a, const FSSpec& b)
 global_section *find_global_section(int index)
 {
     const load_origin *o = current_origin;
-    if(!o || o->where != kOnDiskFlat)
+    if(!o)
+        return nullptr;
+    if(o->where == kInMem)
+    {
+        for(global_section& g : global_sections)
+            if(g.mem && g.index == index && g.mem == o->mem)
+                return &g;
+        return nullptr;
+    }
+    if(o->where != kOnDiskFlat)
         return nullptr;
     for(global_section& g : global_sections)
-        if(g.index == index && g.offset == o->offset && same_file(g.file, o->file))
+        if(!g.mem && g.index == index && g.offset == o->offset && same_file(g.file, o->file))
             return &g;
     return nullptr;
 }
@@ -1171,6 +1200,32 @@ system_fragment_imports(const std::string& name, OSType arch)
     return out;
 }
 
+/* MacPhoenix: a library FragRegisterMemLib registered, prepared from its
+   memory; one already prepared from it in this application's zone is
+   shared. Its global data sections are the system's, one for all (the
+   preparation the registering code made included). */
+static OSErr
+check_mem_libraries(ConstStr63Param library, LoadFlags loadflags, GUEST<ConnectionID> *cidp,
+                    GUEST<Ptr> *mainaddrp, Str255 errName)
+{
+    std::string name = pstr(library);
+    auto m = std::find_if(mem_libraries.begin(), mem_libraries.end(),
+                          [&](const mem_library& m) { return same_name(m.name, name); });
+    if(m == mem_libraries.end())
+        return fragLibNotFound;
+    THz zone = LM(ApplZone);
+    for(auto& f : loaded)
+        if(f.zone == zone && f.origin.where == kInMem && f.origin.mem == m->addr)
+        {
+            ++f.refs;
+            *cidp = f.cid;
+            *mainaddrp = main_address(f.cid);
+            return noErr;
+        }
+    warning_trace_info("CFM: \"%s\" from memory registered by FragRegisterMemLib", name.c_str());
+    return C_GetMemFragment(m->addr, m->length, library, loadflags, cidp, mainaddrp, errName);
+}
+
 /* MacPhoenix: one of Executor's own libraries, connected to the current
    application. On 8.5 and later the libraries the System's fragment of
    that name imports are connected with it, as preparing that fragment
@@ -1328,6 +1383,8 @@ OSErr Executor::C_GetSharedLibrary(ConstStr63Param library, OSType arch,
         }
     if(retval == fragLibNotFound && loadflags == kFindLib)
         return find_library(library, arch, cidp, mainaddrp, errName);
+    if(retval == fragLibNotFound && arch == "pwpc"_4)
+        retval = check_mem_libraries(library, loadflags, cidp, mainaddrp, errName);
     /* MacPhoenix: libraries whose routines Executor answers itself, as it
        does Open Transport, before Apple's own: the 68k ObjectSupportLib
        runs its 'proc' resources against the AppleEvent Manager's private
@@ -1996,7 +2053,8 @@ do_pef_section(ConnectionID connp, const void *addr,
 
     int kind = PEFSH_SECTION_KIND(shp);
     bool global = share_kind == kPEFGlobalShare && current_origin
-        && current_origin->where == kOnDiskFlat
+        && (current_origin->where == kOnDiskFlat
+            || (current_origin->where == kInMem && registered_mem(current_origin->mem)))
         && (kind == kPEFUnpackedDataSection || kind == kPEFPatternDataSection
             || kind == kPEFExecutableDataSection);
     if(global)
@@ -2062,7 +2120,8 @@ do_pef_section(ConnectionID connp, const void *addr,
         if(retval == noErr)
             global_sections.push_back({ current_origin->file, current_origin->offset, i,
                                         connp->sects[i].start.get(), connp->sects[i].length,
-                                        false, 1, connp, {} });
+                                        false, 1, connp, {},
+                                        current_origin->where == kInMem ? current_origin->mem : nullptr });
     }
     return retval;
 }
@@ -2473,4 +2532,69 @@ OSErr Executor::C_CFragPrepareLocatorPrivate(int32_t options, Ptr locator, Const
     if(!fsp)
         return paramErr;
     return C_GetDiskFragment(fsp, offset, length, fragname, flags, connp, mainAddrp, errname);
+}
+
+/* MacPhoenix: CodeFragmentMgr's FragRegisterMemLib (private, PrivateInterfaceLib
+   re-exports it; CodeFragments.yaml),
+   as 8.6's Control Strip Extension calls it: (locator, 0, name, 0) after
+   GetMemFragment on the same memory, makes a library in memory known by
+   name to the imports and GetSharedLibrary calls that follow; (..., 1)
+   takes it back. The locator is CFM 2's memory kind {kind.l = 0, address,
+   length.l, inPlace.b}. The global data sections of the fragments already
+   prepared from that memory become the system's, so every importer shares
+   them with the registering code. */
+OSErr Executor::C_FragRegisterMemLib(Ptr locator, uint32_t options, ConstStr63Param name,
+                                     Boolean unregister)
+{
+    if(!locator || !name)
+        return paramErr;
+    int32_t kind = *(GUEST<int32_t> *)locator;
+    Ptr addr = *(GUEST<Ptr> *)(locator + 4);
+    uint32_t length = *(GUEST<uint32_t> *)(locator + 8);
+    std::string lib = pstr(name);
+    fprintf(stderr, "[CFM] FragRegisterMemLib '%s' kind %d %08x+%x options %u%s\n", lib.c_str(),
+            kind, guest_cast<uint32_t>(addr), length, options, unregister ? " (unregister)" : "");
+    if(kind != 0 /* kMemoryCFragLocator */ || !addr)
+        return paramErr;
+    auto m = std::find_if(mem_libraries.begin(), mem_libraries.end(),
+                          [&](const mem_library& m) { return same_name(m.name, lib); });
+    if(unregister)
+    {
+        if(m == mem_libraries.end())
+            return fragConnectionIDNotFound;
+        mem_libraries.erase(m);
+        return noErr;
+    }
+    if(m != mem_libraries.end())
+    {
+        m->addr = addr;
+        m->length = length;
+    }
+    else
+        mem_libraries.push_back({ lib, addr, length });
+
+    auto *head = (const PEFContainerHeader *)addr;
+    if(head->tag1 != kPEFTag1 || head->tag2 != kPEFTag2)
+        return noErr;
+    auto *sections = (const PEFSectionHeader *)(head + 1);
+    for(auto& f : loaded)
+    {
+        if(f.origin.where != kInMem || f.origin.mem != addr)
+            continue;
+        for(int i = 0; i < head->instSectionCount && i < (int)f.cid->n_sects; i++)
+        {
+            int kind = sections[i].sectionKind;
+            if(sections[i].shareKind != kPEFGlobalShare
+               || (kind != kPEFUnpackedDataSection && kind != kPEFPatternDataSection
+                   && kind != kPEFExecutableDataSection))
+                continue;
+            void *start = f.cid->sects[i].start.get();
+            if(std::any_of(global_sections.begin(), global_sections.end(),
+                           [&](const global_section& g) { return g.start == start; }))
+                continue;
+            global_sections.push_back({ {}, 0, i, start, f.cid->sects[i].length, true, 1,
+                                        f.cid, {}, addr });
+        }
+    }
+    return noErr;
 }

@@ -1283,6 +1283,21 @@
 # ####
 
 - function:
+    name: ActiveWindow
+    return: WindowPtr
+    dispatcher: LayerDispatch
+    selector: 0x00FE
+    library: PrivateInterfaceLib
+    executor: C_
+    comment: |
+      Selector -2 (PrivateInterfaceLib's glue on the G3's ROM). 8.6's
+      Control Strip imports it. The G3's 8.6 answers nil to an application
+      with no window, a visible one, and after its activate event
+      (difftest proc); what makes it answer a window isn't known.
+
+# ####
+
+- function:
     name: GetDesktopLayer
     return: OSErr
     args:

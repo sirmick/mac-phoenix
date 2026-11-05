@@ -607,9 +607,13 @@ void Executor::ROMlib_load_extensions()
                Finder's Apple event handlers (seen on a real 7.5.5 boot);
                Finder loads the rest of a Finder extension itself. And
                APPC, 8.x's control panels that are applications: Apple
-               Menu Options' INIT gives the G3's 8.6 its submenus. */
+               Menu Options' INIT gives the G3's 8.6 its submenus. And
+               appe, background applications, whose INITs run here too
+               (8.6's Control Strip Extension, ColorSync Extension); the
+               Process Manager launches them once the Finder is up
+               (process.cpp). */
             if(it.type != "INIT"_4 && it.type != "cdev"_4 && it.type != "RDEV"_4
-               && it.type != "fext"_4 && it.type != "APPC"_4)
+               && it.type != "fext"_4 && it.type != "APPC"_4 && it.type != "appe"_4)
                 continue;
             if(listed(allow, to_string(it.name)))
                 run_file(vref, dirid, it);

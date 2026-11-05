@@ -486,6 +486,14 @@ WindowPtr C_GetRootLayer();PASCAL_SUBTRAP(GetRootLayer, 0xA829, 0x00FF, LayerDis
 LIBRARY_ALSO(PrivateInterfaceLib, GetRootLayer, InterfaceLib);
 
 
+// Selector -2 (PrivateInterfaceLib's glue on the G3's ROM). 8.6's
+// Control Strip imports it. The G3's 8.6 answers nil to an application
+// with no window, a visible one, and after its activate event
+// (difftest proc); what makes it answer a window isn't known.
+WindowPtr C_ActiveWindow();PASCAL_SUBTRAP(ActiveWindow, 0xA829, 0x00FE, LayerDispatch);
+LIBRARY_ALSO(PrivateInterfaceLib, ActiveWindow, InterfaceLib);
+
+
 // Selector -5: the desktop layer, low memory $9E2 (the record
 // TakeDesktopLayer gave the Finder, whose desktop window shares its
 // visRgn and updateRgn), by reference. The Help Manager tells the

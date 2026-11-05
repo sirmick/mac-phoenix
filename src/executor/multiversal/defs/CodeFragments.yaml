@@ -272,6 +272,32 @@
 
 # ####
 
+# CodeFragmentMgr's private FragRegisterMemLib (PowerPC; no trap known;
+# PrivateInterfaceLib re-exports it, as on the G3's ROM):
+# 8.6's Control Strip Extension prepares its 'nlib' 32000 with
+# GetMemFragment and registers it as ControlStripLib with (locator, 0,
+# name, 0), (..., 1) to take it back; the strip's background application
+# imports ControlStripLib. Arguments from its call sites; the names are
+# ours. The locator is CFM 2's memory kind {kind.l = 0, address, length.l,
+# inPlace.b}.
+- only-for: Executor
+  function:
+    name: FragRegisterMemLib
+    return: OSErr
+    args:
+      - name: locator
+        type: Ptr
+      - name: options
+        type: uint32_t
+      - name: name
+        type: ConstStr63Param
+      - name: unregister
+        type: Boolean
+    library: [PrivateInterfaceLib, CodeFragmentMgr]
+    executor: C_
+
+# ####
+
 # A private selector (-2) that 8.6's AppleScript INIT (68k) calls to
 # prepare its PowerPC code: a CFM 2 locator (its kind, 1 for a data fork,
 # then the FSSpec, offset and length), the fragment's name, the load flags,

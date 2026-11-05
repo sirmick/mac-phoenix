@@ -103,6 +103,10 @@ DISPATCHER_TRAP(CodeFragmentDispatch, 0xAA5A, StackW);
 OSErr C_CFragRegisterFilePrivate(FSSpecPtr file, Boolean flag);PASCAL_SUBTRAP_UNEXPORTED(CFragRegisterFilePrivate, 0xAA5A, 0xFFEC, CodeFragmentDispatch);
 
 
+LIBRARY_ALSO(CodeFragmentMgr, FragRegisterMemLib, PrivateInterfaceLib);
+OSErr C_FragRegisterMemLib(Ptr locator, uint32_t options, ConstStr63Param name, Boolean unregister);LIBRARY_FUNCTION(PrivateInterfaceLib, FragRegisterMemLib, C_FragRegisterMemLib);
+
+
 OSErr C_CFragPrepareLocatorPrivate(int32_t options, Ptr locator, ConstStr63Param fragname, LoadFlags flags, OSType arch, GUEST<ConnectionID> *connp, GUEST<Ptr> *mainAddrp, Ptr flagp, Str255 errname);PASCAL_SUBTRAP_UNEXPORTED(CFragPrepareLocatorPrivate, 0xAA5A, 0xFFFE, CodeFragmentDispatch);
 
 

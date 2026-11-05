@@ -1046,6 +1046,19 @@ void Executor::ROMlib_dispose_layer(WindowPtr w)
     DisposePtr(rec);
 }
 
+/* OSDispatch $48: a layer floating over every process's (8.6's Control
+   Strip), behind the floating layers made before it. */
+OSErr Executor::C_NewFloatLayer(GUEST<WindowPtr> *layer)
+{
+    return C_NewLayer(layer, true, false, nullptr, 0);
+}
+
+/* LayerDispatch -2: nil, as the G3's 8.6 answers (difftest proc). */
+WindowPtr Executor::C_ActiveWindow()
+{
+    return nullptr;
+}
+
 Boolean Executor::C_IsLayer(WindowPtr w)
 {
     return ROMlib_layer_p(w);
@@ -1201,7 +1214,7 @@ OSErr Executor::C_GetDesktopProcess(ProcessSerialNumber *psn)
 }
 
 /* OSDispatch $19/$1A. */
-void Executor::C_HoldProcessSwitching()
+void Executor::C_DisableSwitching()
 {
     switch_hold++;
 }
@@ -1214,7 +1227,7 @@ void Executor::ROMlib_process_hold_front(bool hold)
         front_hold--;
 }
 
-void Executor::C_ReleaseProcessSwitching()
+void Executor::C_EnableSwitching()
 {
     if(switch_hold > 0)
         switch_hold--;
@@ -1991,6 +2004,79 @@ static void list_startup_items()
     }
 }
 
+/* MacPhoenix (status: stand-in for the order). The Process Manager starts
+   the Extensions folder's background-only applications ('appe') after the
+   INITs, before the Finder: on the G3's 8.6 GetNextProcess lists Control
+   Strip Extension and Folder Actions first, launched by the system
+   (tests/guest/difftest proc). The Finder is Executor's first process, so
+   they are launched at its first idle event calls, one per call, and put
+   ahead of it in the list with the system as their launcher. The
+   extension policy decides which: a disabled one is not in Extensions. */
+static bool background_apps_listed;
+static std::vector<FSSpec> background_apps;
+
+static void list_background_apps()
+{
+    background_apps_listed = true;
+    GUEST<INTEGER> vref;
+    GUEST<LONGINT> dirid;
+    if(FindFolder(-32768 /* kOnSystemDisk */, kExtensionFolderType, false, &vref, &dirid) != noErr)
+        return;
+    for(INTEGER i = 1;; i++)
+    {
+        Str255 name;
+        CInfoPBRec pb = {};
+        pb.hFileInfo.ioNamePtr = name;
+        pb.hFileInfo.ioVRefNum = vref;
+        pb.hFileInfo.ioDirID = dirid;
+        pb.hFileInfo.ioFDirIndex = i;
+        if(PBGetCatInfo(&pb, false) != noErr)
+            break;
+        if(pb.hFileInfo.ioFlAttrib & 0x10 /* a folder */
+           || pb.hFileInfo.ioFlFndrInfo.fdType != "appe"_4)
+            continue;
+        FSSpec spec;
+        if(FSMakeFSSpec(vref, dirid, name, &spec) == noErr)
+            background_apps.push_back(spec);
+    }
+}
+
+static bool launch_background_app()
+{
+    if(!background_apps_listed)
+        list_background_apps();
+    if(background_apps.empty())
+        return false;
+    FSSpec spec = background_apps.front();
+    background_apps.erase(background_apps.begin());
+    LaunchParamBlockRec lpb = {};
+    lpb.launchBlockID = extendedBlock;
+    lpb.launchEPBLength = extendedBlockLen;
+    lpb.launchControlFlags = launchContinue | launchNoFileFlags | launchDontSwitch;
+    lpb.launchAppSpec = &spec;
+    OSErr err = LaunchApplication(&lpb);
+    fprintf(stderr, "[Executor] background application %.*s: %s (%d)\n",
+            spec.name[0], (const char *)spec.name + 1, err == noErr ? "launched" : "not launched", err);
+    if(err != noErr)
+        return true;
+    ProcessSerialNumber psn = lpb.launchProcessSN;
+    for(process_info_t **pp = &process_info_list; *pp; pp = &(*pp)->next)
+        if(PSN_EQ_P((*pp)->serial_number, psn))
+        {
+            process_info_t *p = *pp;
+            p->launcher = system_process;
+            /* after the others launched so, ahead of the Finder */
+            *pp = p->next;
+            process_info_t **at = &process_info_list;
+            while(*at && PSN_EQ_P((*at)->launcher, system_process) && *at != p)
+                at = &(*at)->next;
+            p->next = *at;
+            *at = p;
+            break;
+        }
+    return true;
+}
+
 void Executor::ROMlib_process_idle_hook(int32_t sleep)
 {
     process_info_t *me = current_process_info;
@@ -1998,6 +2084,8 @@ void Executor::ROMlib_process_idle_hook(int32_t sleep)
         return;
     me->wake_tick = TickCount() + std::max<int32_t>(sleep, 0);
     if(sleep <= 0 || me != front_process || me->signature != "MACS"_4 || pending_launch)
+        return;
+    if(launch_background_app())
         return;
     if(!startup_items_listed)
         list_startup_items();
