@@ -2,7 +2,10 @@
 // on a library disk survives a reload (its changes kept by the server:
 // sync.js, Store), is in the image downloaded from the page (read back
 // with hfsutils), and Revert takes it away; the image itself is never
-// written.
+// written. The new folder's window scroll (frScroll, set with the rest of
+// its Finder info) is the Finder's (-8,-16), as on the Quadra (7.6.1):
+// Executor's PBSetCatInfo wrote a folder's dates there, and every library
+// disk's window opened scrolled far from its icons.
 //
 //   node web/tests/tab_write.mjs DIR IMAGE
 //
@@ -28,6 +31,12 @@ function hls(img) {
     execFileSync('humount', [], { env, stdio: 'ignore' });
     return names;
 }
+// A folder's frScroll, by tools/diskaudit's HFS reader.
+const audit = path.join(path.dirname(new URL(import.meta.url).pathname), '..', '..', 'tools', 'diskaudit');
+const folderScroll = (img, folder) => execFileSync('python3', ['-c',
+    'import sys; sys.path.insert(0, sys.argv[1]); from disk_audit import Volume\n'
+    + 'print([n.scroll for n in Volume(sys.argv[2]).nodes.values() if n.is_dir and n.name == sys.argv[3]])',
+    audit, img, folder]).toString().trim();
 try {
     execFileSync('hls', ['--version'], { stdio: 'ignore' });
 } catch (e) {
@@ -44,7 +53,7 @@ fs.symlinkSync(path.resolve(image), path.join(lib, name));
 fs.writeFileSync(path.join(lib, `${name}.json`), JSON.stringify({ title: name }));
 
 const { page, close } = await open(dir, { log: false, images: lib, include: [name],
-                                          query: `disk=disks/${encodeURIComponent(name)}&system=${encodeURIComponent(name)}` });
+                                          query: `disk=disks/${encodeURIComponent(name)}&system=${encodeURIComponent(name)}&size=640x480` });
 page.on('dialog', (d) => d.accept());
 let failed = 0;
 const check = (ok, what) => {
@@ -55,7 +64,7 @@ const finder = () => until(() => request(page, 'app').then((a) => a === 'Finder'
 async function openDisk() {
     const box = await page.locator('#screen').boundingBox();
     const at = (x, y) => [box.x + x * box.width / 640, box.y + y * box.height / 480];
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(6000);                   // the Finder's startup over: clicks land
     for (const y of [155, 103, 207]) {
         await page.mouse.dblclick(...at(600, y));
         const w = await until(() => request(page, 'windows')
@@ -86,6 +95,10 @@ check(await finder(), 'the Finder after a reload');
 await download(path.join(scratch, 'changed.img'));
 check(hls(path.join(scratch, 'changed.img')).includes('untitled folder'),
       'the downloaded image has the new folder');
+{
+    const scroll = folderScroll(path.join(scratch, 'changed.img'), 'untitled folder');
+    check(scroll === '[(-8, -16)]', `the new folder's window scroll is the Finder's (-8, -16) (${scroll})`);
+}
 
 await diskButton(page, path.basename(image), 'revert');
 await firstFrame(page, 60000);
