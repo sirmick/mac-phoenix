@@ -369,6 +369,15 @@ class RemoteImage {
     read(pos, length) {
         const out = new Uint8Array(length);
         const last = Math.floor((pos + length - 1) / REMOTE_CHUNK);
+        // This read's chunks here the newest first: a fetch for the others
+        // drops the oldest past REMOTE_MEMORY, and it dropped them (the
+        // System file unreadable, the session's 8.6 at 128 MB read).
+        for (let c = Math.floor(pos / REMOTE_CHUNK); c <= last; c++)
+            if (this.have[c]) {
+                const chunk = this.memory.get(c);
+                this.memory.delete(c);
+                this.memory.set(c, chunk);
+            }
         for (let c = Math.floor(pos / REMOTE_CHUNK); c <= last; c++) {
             if (!this.have[c]) {
                 // This chunk and the missing ones after it: the rest of this
