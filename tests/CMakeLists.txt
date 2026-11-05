@@ -1498,6 +1498,18 @@ foreach(cell "strprobe_rom_761;;StrProbe.bin;--os-version 7.6.1;${TEST_ROM};1856
   )
 endforeach()
 
+# The mman probe's 68k build (Memory Manager alignment, docs/executor/DiffTest.md)
+# on Executor's 7.6.1 against the Quadra's (16, as on the G3).
+add_test(
+  NAME mman68k_executor_761
+  COMMAND bash ${CMAKE_SOURCE_DIR}/tests/guest/difftest/mman68k.sh --backend executor --os-version 7.6.1 --port 18568
+)
+set_tests_properties(mman68k_executor_761 PROPERTIES
+  TIMEOUT 230
+  LABELS "guest;761;executor"
+  SKIP_RETURN_CODE 77
+)
+
 # ... and on Executor's 9.0.4 (its own System) against the G3's 9.0.4, for
 # calls 9.0 added.
 foreach(probe vminfo)

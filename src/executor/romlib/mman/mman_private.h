@@ -101,9 +101,10 @@ extern uintptr_t ROMlib_memtop;
 /* MacPhoenix: blocks' physical sizes and zones' spans are multiples of 16,
    so every block starts at the zone's first block's alignment; Executor's
    zones start 16-aligned (the zone header is 52 bytes, the block header
-   12), so blocks' data does too, as the PowerPC Mac's Memory Manager puts
-   it (NewPtr, NewHandle, the System heap, temporary memory, resources:
-   difftest probe mman on 8.6). Escape Velocity's PowerPC mask blitter
+   12), so blocks' data does too, as the Mac's Memory Manager puts it
+   (NewPtr, NewHandle, the System heap, temporary memory, resources:
+   difftest probe mman on the G3's 8.6 and, 68k build, the Quadra 650's
+   7.5.5 and 7.6.1). Escape Velocity's PowerPC mask blitter
    (its 'PMBl' fragment) takes a sprite's address & 7 as the mask's bit
    offset: with 4-aligned blocks half its sprites drew 4 pixels of their
    white background beside them, trails as they moved. */
