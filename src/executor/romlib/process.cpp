@@ -1300,6 +1300,18 @@ static bool has_updates(process_info_t *p)
     return false;
 }
 
+/* The desktop's process, the Finder: the first one listed that can come to
+   the front. The background-only applications the system launched are
+   listed ahead of it (launch_background_app), and one brought to the
+   front has no menu bar (Folder Actions: the next click crashed). */
+static process_info_t *desktop_process()
+{
+    for(process_info_t *p = process_info_list; p; p = p->next)
+        if(!(p->mode & 0x0400)) /* SIZE onlyBackground */
+            return p;
+    return process_info_list;
+}
+
 static void raise_layer(process_info_t *p)
 {
     layer_order.erase(std::remove(layer_order.begin(), layer_order.end(), p), layer_order.end());
@@ -1681,7 +1693,7 @@ static void exit_current()
         if(PSN_EQ_P(p->serial_number, me->launcher))
             next = p;
     if(!next)
-        next = process_info_list;
+        next = desktop_process();
 
     if(front_process == me)
     {
@@ -1790,7 +1802,7 @@ static process_info_t *click_elsewhere(process_info_t *me, Point pt)
         return nullptr;
     process_info_t *hit = layer_at(pt);
     if(!hit)
-        hit = process_info_list; /* the desktop */
+        hit = desktop_process();
     if(hit && hit != me && hit->state == process_info_t::parked)
         return hit;
     return nullptr;
