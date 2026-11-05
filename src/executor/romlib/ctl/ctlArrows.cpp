@@ -651,13 +651,22 @@ void Executor::C_new_pos_ctl(INTEGER depth, INTEGER flags, GDHandle target,
     thumbr = (*static_cast<RgnHandle>(CTL_DATA(ctl)))->rgnBBox;
     GlobalToLocalRect(&thumbr);
 
+    /* the thumb's distance from its place at the minimum over its travel
+       (thumb_rect's, the other way), rounded: the 7.6.1 Quadra's Finder
+       window bar (travel 464, range 21546) goes 4644 for 100 pixels and
+       to the maximum at the end. Upstream's (range + 1) / (travel + 1)
+       left a thumb dragged to the end short of the maximum. */
+    auto value_at = [&](int offset, int travel) {
+        if(travel <= 0)
+            return min;
+        offset = std::clamp(offset, 0, travel);
+        return (int)(min + ((int64_t)offset * (max - min) + travel / 2) / travel);
+    };
     if(SB_VERT_P(height, width))
     {
         a = top + width;
         thumb_top = thumbr.top + HiWord(p) - a;
-        CTL_VALUE(ctl) = min + (thumb_top
-                                     * ((LONGINT)max - min + 1)
-                                     / (bottom - a - (2 * width) + 1));
+        CTL_VALUE(ctl) = value_at(thumb_top, height - 3 * width);
         if(CTL_VIS(ctl) == 255)
             draw_thumb(ctl);
     }
@@ -665,9 +674,7 @@ void Executor::C_new_pos_ctl(INTEGER depth, INTEGER flags, GDHandle target,
     {
         a = left + height;
         thumb_left = thumbr.left + LoWord(p) - a;
-        CTL_VALUE(ctl) = min + (thumb_left
-                                     * ((LONGINT)max - min + 1)
-                                     / (right - a - (2 * height) + 1));
+        CTL_VALUE(ctl) = value_at(thumb_left, width - 3 * height);
         if(CTL_VIS(ctl) == 255)
             draw_thumb(ctl);
     }
@@ -950,8 +957,11 @@ LONGINT Executor::C_cdef16(INTEGER var, ControlHandle c, INTEGER mess,
                 pl->axis = hAxisOnly;
                 pl->limitRect.left = pl->limitRect.left
                                         + height - (rp->left - p.h);
+                /* as for the vertical's bottom: less the grab offset
+                   (upstream added it, and a thumb taken by its middle
+                   went over the right arrow) */
                 pl->limitRect.right = pl->limitRect.right
-                                         - height - (p.h - rp->right) - 1;
+                                         - (height - (p.h - rp->right) - 1);
             }
             InsetRect(&pl->slopRect, -20, -20);
             break;
