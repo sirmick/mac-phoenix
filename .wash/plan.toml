@@ -1,7 +1,7 @@
 # wash-plan: written by Wash as the plan changes.
 # Edit it only between workspaces; plan_set {"from": "<this file>"} loads it.
 
-revision = 176
+revision = 275
 
 [[node]]
   id = "cuts"
@@ -196,9 +196,9 @@ revision = 176
   emoji = "📌"
   template = "note"
   parent = "m1"
-  body = "(1) A ctest run once created an Executor data dir at a garbage storage_dir; not reproduced. (2) Executor's 8.6 screen is gamma-shifted vs the G3. (3) STRAGGLERS 70: EventAvail and high-level events. (4) GetPictInfo returns depth 1 for colorsRequested <= 0. (5) SCOREBOARD.md totals combined by hand in merges: regenerate from a full grid run. (6) BBEdit Lite 4.1 on 8.6: 'not enough memory'. (7) MacPhoenixSuite's dns_resolve has no timeout. (8) ROMlib_reserve ignores ROMlib_memnomove_p (deliberate). (9) --watch on PowerPC-written memory crashed a session. (10) Executor keeps rtid/esrc/inte/from as inline AE attributes. (11) Platinum leftovers: indeterminate progress bar, other tab directions, disclosure triangle value1, plain slider thumbs/tick marks, StandardAlert's note icon black pixels transparent, popup window frame (flavour 7), pressed floating boxes, grow corners, Apple menu 1 px right of the G3's. (12) Memory control panel opens no window on Executor 8.6."
+  body = "Owner 2026-11-03: after the native speed test (bench / own benchmark app) lands: measure the MMU cost baseline: mame-68k with Config::mmu on (no guest tables) vs off, and mame-ppc translation on (identity BATs) vs off, on the same benchmark. Confirms the docs' claim that MMU-off pays nothing per access."
   state = "todo"
-  revision = 2
+  revision = 199
 
 [[node]]
   id = "fix-86-2"
@@ -471,8 +471,8 @@ revision = 176
   template = "note"
   parent = "p1"
   body = "(1) Standalone: settings.json without \"version\" refused: default to current. (2) uploads.go: replace=1 drops old overlay before rename. (3) Mixed Mode: stale vector when a SysZone accelerated resource is purged+reloaded. (4) SetBevelButtonContentInfo no dispatcher/selector. (5) BBEdit 6.1 survey while Finder menus up. (6) Servers died ~19:50 2026-11-02. (7) ShutDwnPower/Start skip ROMlib_OurClose. (8) Disks: busy Put Away; ghost icon; hfsPBEject no busy check. (9) font.cpp L757/L965 unchecked width-list derefs. (10) harness needs full Chromium. (11) resMod.cpp direct-append orphans bytes. (12) inputsprocket.cpp:177 Movement 12 B. (13) $A08E paramErr for every selector. (14) MPW New dialog folder pop-up blank. (15) AE 'Berk'/'eley' handler not stored. (16) EV Override 2-colour screen: needs a reference (68k clut probe on the Quadra, or 8-bit modes in the PPC video driver); clut.c merged. (17) localvolume.cpp:658 SetFInfo on a folder paramErr. (18) process.cpp launchProcessSN written back without EPBLength check. (19) THINK PM convert on a read-only image: UpdateResFile gui_assert resMod.cpp:455; hfsPBOpen grants write on a locked volume. (20) ResourceDispatch unknown-selector fallback relies on D0's high byte. (21) ctlMouse.cpp:246 control repeat every 6 ticks: KeyRepThresh? confirm on a Mac with another repeat setting."
-  state = "active"
-  revision = 172
+  state = "reported"
+  revision = 229
 
 [[node]]
   id = "m1-audit"
@@ -530,8 +530,8 @@ revision = 176
   emoji = "🎨"
   template = "package"
   body = "Owner 2026-11-03: the library is light on Adobe/DTP. Selection and status in ~/storage/serials.json (private, mode 600, never committed or baked into keys/records; owner fills 'serial'; empty = skip). Steps: (1) bake.py reads serials from that file (by product id) and types them at the installer's prompt; a missing serial stops the bake and names the product; never use archives' SN# folders, keygens or cracks. (2) Pin missing media (tools/macfetch, Garden mirror) for picks marked 68k/ppc/both. (3) Bake + build images; put WordPerfect 3.5e, Excel 4, Office 98 (already baked) on the tab's Productivity disk. (4) Each pick launched and used on Executor 7.6.1 / 8.6 (tab_m1-style cells); stop on disproportionate apps. ATM last; QuickTime-dependent apps wait for M2. Start when the M1 fixes free a member."
-  state = "reported"
-  revision = 160
+  state = "done"
+  revision = 260
 
 [[node]]
   id = "fix-86-7"
@@ -605,8 +605,8 @@ revision = 176
   emoji = "🔧"
   template = "package"
   body = "From creative2's results (~/storage/tmp/creative-pack/results.md): Excel 4.0 stops at launch with 'Unknown selector 0x2 for trap OSDispatch'; Photoshop 4.0 says it 'lacks the required hardware or system software' after [unimplemented] OS trap $A074 and DisplayDispatch $16. Implement like a Mac (Process Manager / Display Manager docs; difftest where useful), a gtest each, then both apps launched and used on Executor 7.6.1 (68k). Images: productivity-system-7 / creative-system-7 (serial-personalised: never view screenshots after a serial step; use creative3's masking helper)."
-  state = "reported"
-  revision = 147
+  state = "done"
+  revision = 261
 
 [[node]]
   id = "ui-polish"
@@ -615,8 +615,8 @@ revision = 176
   template = "package"
   parent = "p1"
   body = "Owner's notes on the tab UI: (1) Settings > Machine > RAM help text ('0: as the System needs (32 MB on Executor's own, 128 on Apple's). The browser holds it all: ...') is too long: make it short, e.g. '0 = automatic (32 MB for Executor's System, 128 MB for Apple's)'. (2) 'Largest image added (MB)' / 'A disk image the tab adds to the library (written to the disk as it comes)' is unclear: it is the size limit for disk images you upload (Add / drag-and-drop): retitle e.g. 'Largest disk image you can upload (MB)', description 'Bigger uploads are refused.'. Review every setting's title/description for the same plain-English bar. (3) The Disks panel's Library section: a table look (rows: cover/icon, title, tags, size, systems, mounted state; sortable/filterable) instead of the card grid. Both schema copies (web/executor and tools/standalone) stay identical (TestSchemaCopy). Screenshots before/after; tab tests pass."
-  state = "reported"
-  revision = 123
+  state = "done"
+  revision = 262
 
 [[node]]
   id = "app-hacks"
@@ -624,8 +624,8 @@ revision = 176
   emoji = "🧽"
   template = "package"
   body = "Audit 2026-11-03 (orchestrator's Explore pass). Upstream creator-keyed hacks (all live): launch.cpp:339-350 ('Psyg'/'Psod' flushoften for Lemmings; 'Ult3' + res/resGet.cpp:287-291 zeroes a PREF byte), wind/windMisc.cpp:613-623 + qCGrafPort.cpp:193-200 (EVIL_ILLUSTRATOR_7_HACK, 'ART5' forces white back colour), mman/mman.cpp:1884 (MSWD/ddOr skip code-cache flush), qGDevice.cpp:291 ('RLMZ' noDriver), base/patches.cpp:154 ('KR09' CTB trap), res/resGet.cpp:249 ('rAnd' 128 nil), resGet.cpp:259-276 ICKYHACK (missing PACK -> ALRT -3995), plus unkeyed ones written for one app (windInit.cpp:467, ctlMouse.cpp:152, hfsVolume.cpp:765, qColorMgr.cpp:983 ctab_changed_p, qPaletteMgr.cpp:1139, stdfile.cpp:320-335, ROMlib_memnomove_p, AE_hdlr.cpp:329/370, gestalt.cpp:226-243 gestaltVMAttr hidden, prefs per-app config). Recent borderline: init.cpp:103-128 $FE09 whitelist (MacBench), cfm.cpp:1257-1266 MPLibrary declined (needs nanokernel), Pack8 $0830 meaning guessed (HyperCard), TranslationDispatch $24/$20 guessed, OSDispatch $2 meaning unknown. For each: find the general cause or the measured Mac answer (difftest probes on the Quadra/G3), remove the app check, keep the app working (guest cell), or document why it must stay. Corpus regression: grid + M1 cells."
-  state = "reported"
-  revision = 152
+  state = "done"
+  revision = 263
 
 [[node]]
   id = "bench"
@@ -633,8 +633,8 @@ revision = 176
   emoji = "⏱️"
   template = "package"
   body = "Owner 2026-11-03: speed-test Executor in 68k and PPC, and the emulator ROM systems. Benchmarks from the Utilities disk: Speedometer 4.0 (68k+PPC; its splash waits for a click), MacBench 5.0 (PPC only; licence then a test suite), Gauge Series/Clockometer where they finish. Configurations: Executor 7.6.1 68k (mame-68k), Executor 7.6.1 with --executor-ppc, Executor 8.6 PPC (mame-ppc, JIT on/off), each natively and in the tab (wasm, Chromium); ROM machines: Quadra 650 on uae (interpreter, --jit) and mame-68k, G3 on kpx and mame-ppc (--jit, --no-jit), System 7.6.1 / 8.6 as applicable. Same screen size/depth; idlewait off for timing; 3 runs each, median. Result table (scores + relative to a real Quadra 650 / G3 266 where the benchmark gives that) in docs/executor/Speed.md, a script under tools/ to rerun it, screenshots of each benchmark result."
-  state = "active"
-  revision = 137
+  state = "done"
+  revision = 264
 
 [[node]]
   id = "ui-polish-2"
@@ -643,8 +643,8 @@ revision = 176
   template = "package"
   parent = "p1"
   body = "Owner 2026-11-03: (1) Screen size: a dropdown of common classic Mac resolutions (512x342, 512x384, 640x400, 640x480, 800x600, 832x624, 1024x768, 1152x870, 1280x1024 ...) plus 'Custom...' for WxH. (2) An explicit Save button (and Cancel) instead of the X closing and saving; unsaved changes discarded on Cancel/Escape, a 'restart needed' note when applicable. (3) Help text out of the dialog body: shown as mouse-over tooltips (and accessible: title/aria-describedby, keyboard focus shows it). (4) A progress bar or step messages while Executor loads (module download with bytes/percent, System disk fetch, starting the Finder...), replacing the bare 'loading executor'. Both schema copies stay identical; tab tests (settings, standalone, disks) updated; before/after screenshots for the owner."
-  state = "reported"
-  revision = 155
+  state = "done"
+  revision = 265
 
 [[node]]
   id = "sys-additions"
@@ -672,8 +672,8 @@ revision = 176
   template = "package"
   parent = "p1"
   body = "Owner 2026-11-03: \"add a little cpu meter in the top bar, you could measure the cpu thread sleep time.\" In the wasm tab: the thread running Executor measures time spent idle-waiting (WaitNextEvent/idle sleep, Atomics.wait or equivalent) vs running, per ~0.5-1 s window; the page shows a compact meter (bar or sparkline + % on hover) in the top bar. Cheap (no per-instruction cost), unobtrusive, matches the bar's look. Tests + docs."
-  state = "active"
-  revision = 165
+  state = "done"
+  revision = 182
 
 [[node]]
   id = "creative-exec-3"
@@ -683,7 +683,7 @@ revision = 176
   needs = ["sys-additions"]
   body = "From sysadd 724415f6 report and creative4 3801a599: PS4 8.6 'fatal heap error' find_stretch mmansubr.cpp:933 last trap $AAFE during brush stroke; AI8 jumps to 0 at start (unresolved weak imports GetMenuItemRefCon/SetMenuItemRefCon likely); PM6.5 'Please find the RSRC Folder' (Prefs name bake volume 'Applications'); PS5.5 Cmd-S no Save dialog. Details ~/storage/tmp/sys-additions/results.md, docs/executor/M1.md."
   state = "active"
-  revision = 171
+  revision = 217
 
 [[node]]
   id = "works-icons"
@@ -691,5 +691,105 @@ revision = 176
   emoji = "📦"
   template = "package"
   body = "Owner 2026-11-03: Works 4.0b on 7.6.1 + 8.6/9; icon packs Iconfactory classic collection, MacUser Custom Icon Pack IV, Nitrozac pack from MacAddict #63. Research + downloads (md5s verified) in ~/storage/tmp/iconresearch (dl/, hits.txt). Works: Macintosh_Garden_Apps_Collection_M/ms-works-4b-us.sit 8326094 md5 0974486b3291991aea1a4b714a1a4b82 (fat installer, writable Disk 1, no serial). Iconfactory: Macintosh_Garden_Apps_I_2019/IconfactoryIcons.sit 6567095 1648b2c9...; MacUser: Macintosh_Garden_Apps_2023_M/MacUser_Custom_Icon_Pack_IV.sit 149443 4dcf9784...; Nitrozac: MacAddict 063 ':Video & Goodies:Nitrozac comics!:Icons!:'."
-  state = "active"
-  revision = 168
+  state = "done"
+  revision = 266
+
+[[node]]
+  id = "volume-fast"
+  title = "Tab start: Executor's volume restored in one compressed request (and saved in batches)"
+  emoji = "⚡"
+  template = "package"
+  parent = "p1"
+  body = "Owner 2026-11-03: Executor's disk dominates loading. Today sync.js volumeDown GETs objects/SHA one file at a time, sequentially, uncompressed: the saved boot-8.6 volume is 1191 files / 70 MB, boot-7.6.1 1010 / 45 MB = ~1000 round trips. Fix: a bundle endpoint (POST volumes/KEY/bundle or GET with the manifest's shas) streaming every object in one response, gzip/zstd-compressed (Content-Encoding or a framed stream: sha, length, bytes), unpacked in the Worker as it streams (DecompressionStream), so writing overlaps downloading; parallel GETs as the fallback. Save side the same: objects/missing then one batched PUT. Measure before/after (time to Finder) and report; tests in tools/standalone and the tab cells."
+  state = "done"
+  revision = 267
+
+[[node]]
+  id = "os-904"
+  title = "Mac OS 9.0.4 on Executor: survey and first fixes (owner 2026-11-03)"
+  emoji = "9️⃣"
+  template = "package"
+  parent = "m2"
+  body = "Owner: start looking into 9.0.4. Executor runs 8.6 (G3 profile); 9.0.4 images exist (9.0.4.img, dev-9.0.4.img, productivity-9.0.4, tests-9.0.4 on the ROM G3). Survey: boot 9.0.4's System on Executor (--executor-system 9.0.4.img --executor-ppc), what stops it, the grid (tools/executor/grid.py) once the Finder runs, unimplemented calls; plan + first fixes; tab later."
+  state = "done"
+  revision = 275
+
+[[node]]
+  id = "tab-86-input"
+  title = "Tab on 8.6: click hit rects off, small mouse pointer (owner 2026-11-03)"
+  emoji = "🖱️"
+  template = "package"
+  parent = "p1"
+  body = "Owner: on 8.6 in the tab clicks land off target and the pointer is small. Session ~/storage/tmp/standalone-try/data/logs/2026-11-03/mw19795k-1907dfdff9e2c53b.log: --size 1024x768 (owner picked it in Settings) but the auto screenshot -224703.png is 1280x960 = 640x480 at 2x with the 8.6 desktop laid out for 640x480, and 'Executor not answering'. Suspects: screen size vs what 8.6 uses (memory: 8.6+ max-res pitfall), page<->Mac coordinate mapping at devicePixelRatio/scale/fit, cursor drawn at 1x on a 2x canvas."
+  state = "done"
+  revision = 268
+
+[[node]]
+  id = "dyn-res"
+  title = "Dynamic screen resolution: live Display Manager mode switch + fit-to-window (owner 2026-11-03)"
+  emoji = "🖥️"
+  template = "package"
+  parent = "p1"
+  body = "Owner chose live switch + fit-to-window, start now. Executor owns the video driver/GDevice/Display Manager: switch modes at runtime like a Mac's Display Manager (reallocate framebuffer; main GDevice gdRect/PixMap, screenBits, GrayRgn, menu bar; DMRegisterNotifyProc procs, display-notice Apple Event to apps whose SIZE asks; windows moved on screen; Finder relayout) from one path for Settings (x-apply live), Monitors control panel, /api. Page resizes canvas and maps mouse/cursor from Executor's reported size. Then fit-to-window: resolution follows the browser window (debounced). Coordinate with tab-86-input (speedo2: mismatch, clicks, cursor size)."
+  state = "done"
+  revision = 269
+
+[[node]]
+  id = "bench-app"
+  title = "Our own benchmark app (plain C, fat 68k+PPC, unattended), then the MMU on/off baseline"
+  emoji = "🏁"
+  template = "package"
+  parent = "m2"
+  body = "Owner chose Build it now (2026-11-03). Proposal in docs/executor/Speed.md (wash/bench 7551820b, 'Our own benchmark (proposal)'): tests integer/FP (68881 + SANE)/memory/QuickDraw/trap overhead/File+Memory Manager; each timed by Microseconds and host clock via the bridge; min/median; built by tools/mpw/mpw or Retro68 like tests/guest/*; run.py integration across Executor native/tab and ROM machines. Then MMU baseline: mame-68k Config::mmu on vs off, mame-ppc translation on (identity BATs) vs off (loose-ends)."
+  state = "done"
+  revision = 270
+
+[[node]]
+  id = "tab-res-owner"
+  title = "Owner on :8090 (65f1a849): 1280x1024 selected but not shown, small pointer (8.6 PPC)"
+  emoji = "🔎"
+  template = "package"
+  parent = "p1"
+  body = "Owner 2026-11-04 after the update: 8090 still shows a small mouse pointer and 1280x1024 selected without visibly being that resolution. Session log ~/storage/tmp/standalone-try/data/logs/2026-11-04/mw2leu3b-e29b302025e6c4c5.log (20:52, --size 1280x1024 --ppc, saved System Folder). Served binary has the tab-86-input + dynres code (fit_window, resizeMac, 'screen'). Reproduce with a COPY of the owner's data dir (~/storage/tmp/standalone-try/data -> scratch) and the same library, 8.6 PPC at 1280x1024, dpr 1 and 2, window smaller and larger than the screen."
+  state = "done"
+  revision = 271
+
+[[node]]
+  id = "fix-86-9"
+  title = "Owner's reports 2026-11-04: Appearance cp divide-by-zero (MapPt), tab panes overlap, blank cp icons; 8.6 tab"
+  emoji = "🪟"
+  template = "package"
+  parent = "p1"
+  body = "Session ~/storage/tmp/standalone-try/data/logs/2026-11-04/mw2o2azz-67214d975f153929.log + -221558.png (8.6 PPC, 1280x1024, Firefox 1.5). (1) Appearance control panel: 'integer divide by zero' in C_MapPt right after [unimplemented] GetMonitorDesktopRecordFromList (desktop picture API unanswered, output rect unset -> empty source rect). (2) Appearance's window shows several tab panes at once (Themes list + Desktop's Place Picture/Tile on Screen/Set Desktop + Fonts' labels). (3) Control Panels window: Appearance and General Controls icons drawn as dark grey squares. Also 18 unimplemented (IterateThemes, QDSet/GetPatternOrigin, SetIconDevice, LMGetCurLayer, GetSystemFont, DeleteAppleMenuItem, PPC Toolbox, ...)."
+  state = "done"
+  revision = 272
+
+[[node]]
+  id = "res-bar"
+  title = "Resolution in the tab's top bar; Monitors & Sound / Monitors removed from the Systems (owner 2026-11-04)"
+  emoji = "📐"
+  template = "package"
+  parent = "p1"
+  body = "Owner chose Settings-only resolution, plus: add the resolution setting to the main window (top bar), and disable/remove Monitors & Sound (8.x) and Monitors (7.x) since they can't change it on Executor. Live switch exists (dynres, machine.screen x-apply live, display.fit_window)."
+  state = "done"
+  revision = 273
+
+[[node]]
+  id = "hidpi-bar"
+  title = "HiDPI 2x toggle in the tab's top bar (owner 2026-11-04)"
+  emoji = "🔍"
+  template = "package"
+  parent = "p1"
+  body = "Owner: need a control for whether to 2x the resolution for HiDPI: either 2x the modes or a checkbox. Chosen: a checkbox in the bar next to the screen size, 'HiDPI 2x' (display.scale: Auto picks from devicePixelRatio, on = 2, off = 1), live if possible."
+  state = "done"
+  revision = 274
+
+[[node]]
+  id = "fix-86-10"
+  title = "Owner's reports 2026-11-04 (2): THINK C new project index-out-of-bounds, Word 98 out of memory, MPW Shell crash on quit, Works rendering (8.6 tab)"
+  emoji = "🪟"
+  template = "package"
+  parent = "p1"
+  body = "Session ~/storage/tmp/standalone-try/data/logs/2026-11-04/mw2qmnnd-c23bb0bba0cf1e49.log + PNGs -232219 (THINK Project Manager: wasm 'index out of bounds' under C_AEProcessAppleEvent -> 68k handler, creating a project), -232233, -232502 (Word 98: 'possible did actually run out of mem'), -232518 (MPW Shell crashed on quit). Owner also sees render bugs in Microsoft Works (snapshots to come with a new shortcut)."
+  state = "reported"
+  revision = 259
