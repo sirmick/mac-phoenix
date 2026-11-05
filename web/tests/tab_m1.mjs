@@ -274,7 +274,7 @@ const TARGETS = {
         } },
     ],
     'creative-8.img': [
-        { name: 'Adobe Illustrator® 8.0', app: 'Creative:Adobe Illustrator 8.0 ƒ:Adobe Illustrator® 8.0', use: async (t) => {
+        { name: 'Adobe Illustrator® 8.0', app: 'Creative 8:Adobe Illustrator 8.0 ƒ:Adobe Illustrator® 8.0', use: async (t) => {
             // File > New, the rectangle tool (M) dragged across it, Save As
             await t.until(async () => (await t.windows()).some((w) => w.title === '' && w.rect[2] - w.rect[0] > 200), 60000, 'no toolbox');
             await t.key('Meta+KeyN');
@@ -291,9 +291,9 @@ const TARGETS = {
                 throw new Error('nothing drawn');
             await t.saveAs('M1 AI8');
         } },
-        { name: 'Adobe® Photoshop® 5.5', app: 'Creative:Adobe Photoshop 5.5 ƒ:Adobe® Photoshop® 5.5',
+        { name: 'Adobe® Photoshop® 5.5', app: 'Creative 8:Adobe Photoshop 5.5 ƒ:Adobe® Photoshop® 5.5',
           use: (t) => photoshop(t, 'M1 PS5') },
-        { name: 'Adobe® PageMaker® 6.5', app: 'Creative:Adobe PageMaker 6.5 ƒ:Adobe® PageMaker® 6.5', use: async (t) => {
+        { name: 'Adobe® PageMaker® 6.5', app: 'Creative 8:Adobe PageMaker 6.5 ƒ:Adobe® PageMaker® 6.5', use: async (t) => {
             // File > New (Document Setup's defaults), text typed with the
             // text tool (Shift+F4) on the page, Save As
             await t.until(async () => (await t.windows()).some((w) => w.title === 'Styles' || w.title === 'Colors'), 90000, 'no palettes');
