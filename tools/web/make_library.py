@@ -94,7 +94,7 @@ DISKS = [
          {"app": "Microsoft Works 4.0b ƒ:Microsoft Works 4.0", "name": "Microsoft Works 4.0"},
      ]},
     {"name": "creative.img", "label": "Creative",
-     "title": "Creative",
+     "title": "Creative (68k)",
      "tags": ["creative", "68k"],
      "note": "Kid Pix 2.5 (painting, stamps, sounds), Adobe Photoshop 4.0, Adobe Illustrator 6.0, "
              "Macromedia FreeHand 5.5, Deneba Canvas 5.0.2. For Mac OS 7.6.1 and 8.6.",
@@ -107,8 +107,8 @@ DISKS = [
          {"app": "Macromedia FreeHand 5.5 ƒ:FreeHand 5.5", "name": "FreeHand 5.5"},
          {"app": "Deneba Canvas 5.0.2 ƒ:Canvas™ 5", "name": "Canvas™ 5"},
      ]},
-    {"name": "creative-8.img", "label": "Creative",
-     "title": "Creative (Mac OS 8)",
+    {"name": "creative-8.img", "label": "Creative 8",
+     "title": "Creative 8 (PowerPC, Mac OS 8.6)",
      "tags": ["creative", "ppc"],
      "note": "Adobe Illustrator 8.0, Adobe Photoshop 5.5 (with ImageReady 2.0), Adobe PageMaker 6.5 "
              "(with Acrobat 3.0): PowerPC, for Mac OS 8.6.",
