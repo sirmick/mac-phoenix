@@ -231,6 +231,7 @@ void Executor::ROMlib_dialog_item_controls(DialogPtr dp)
         return;
     int count = CountDITL(dp);
     auto &v = itemControlsTable()[dp];
+    int old = v.size();
     v.resize(count);
     for(int item = 1; item <= count; item++)
     {
@@ -244,6 +245,19 @@ void Executor::ROMlib_dialog_item_controls(DialogPtr dp)
             continue;
         v[item - 1] = ROMlib_new_control_with_def(dp, &r, (StringPtr) "", true, 0, 0, 0,
                                                   kControlUserPaneProc, itemControlDef(), 0);
+    }
+    /* The new items, in order, each into the innermost embedder holding
+       it (an earlier item: a user pane, a group box), as 8.6 embeds them
+       (the Appearance control panel's tabs: tests/guest/difftest desk) */
+    for(int item = old + 1; item <= count; item++)
+    {
+        GUEST<INTEGER> type;
+        GUEST<Handle> h;
+        Rect r;
+        GetDialogItem(dp, item, &type, &h, &r);
+        ControlHandle c = ((INTEGER)type & ctrlItem) ? (ControlHandle)(Handle)h : v[item - 1];
+        if(c)
+            AutoEmbedControl(c, dp);
     }
 }
 

@@ -789,6 +789,15 @@
 
 - only-for: Executor
   function:
+    name: GetDefFontSize
+    return: "INTEGER"
+    library: InterfaceLib
+    executor: glue_GetDefFontSize
+
+# ####
+
+- only-for: Executor
+  function:
     name: LMGetSysFontSize
     return: "INTEGER"
     library: InterfaceLib

@@ -17,6 +17,10 @@
 #include <WindowMgr8.h>
 #include <MenuMgr.h>
 #include <quickdraw/cquick.h>
+#include <mman/mman.h>
+#include <FileMgr.h>
+#include <AliasMgr.h>
+#include <Displays.h>
 #include <wind/wind.h>
 #include "appearance_draw.h"
 #include <rsys/appearance.h>
@@ -1252,6 +1256,133 @@ OSStatus Executor::C_GetSmallSystemFont(ScriptCode script, StringPtr outFontName
     return C_GetThemeFont(kThemeSmallSystemFont, script, outFontName, nullptr, nullptr);
 }
 
+/* The same for the system font: AppearanceLib's private call the 8.6
+   Appearance control panel names its large system font popup with (8.6:
+   "Charcoal"). */
+OSStatus Executor::C_GetSystemFont(ScriptCode script, StringPtr outFontName)
+{
+    return C_GetThemeFont(kThemeSystemFont, script, outFontName, nullptr, nullptr);
+}
+
+namespace
+{
+/* A theme's collection as 8.6 hands it to an IterateThemes procedure: the
+   'scen' resource's items and, in tag order with them, 'thme' with the
+   theme file's name (tests/guest/difftest desk). nil if it can't be
+   read. */
+Collection with_file_name(Collection flat, Handle scen, ConstStringPtr file)
+{
+    if(UnflattenCollectionFromHdl(flat, scen) != noErr)
+        return nullptr;
+    Collection c = NewCollection();
+    if(!c)
+        return nullptr;
+    const OSType kFileTag = "thme"_4;
+    bool added = false;
+    auto add_name = [&]() {
+        AddCollectionItem(c, kFileTag, 0, file[0] + 1, file);
+        added = true;
+    };
+    for(LONGINT i = 1, n = CountCollectionItems(flat); i <= n; i++)
+    {
+        GUEST<CollectionTag> tag;
+        GUEST<LONGINT> id, size, attributes;
+        if(GetIndexedCollectionItemInfo(flat, i, &tag, &id, &size, &attributes) != noErr)
+            continue;
+        if(!added && (uint32_t)(OSType)tag >= kFileTag)
+            add_name();
+        if((OSType)tag == kFileTag)
+            continue;
+        GUEST<LONGINT> got = size;
+        Ptr buf = NewPtr(std::max<LONGINT>(size, 1));
+        if(!buf)
+            continue;
+        if(GetIndexedCollectionItem(flat, i, &got, buf) == noErr)
+            AddCollectionItem(c, tag, id, got, buf);
+        DisposePtr(buf);
+    }
+    if(!added)
+        add_name();
+    return c;
+}
+}
+
+/* Each theme ('scen' resource, a flattened collection) of each file in
+   the System Folder's Appearance:Theme Files, in resource order, until
+   the procedure answers false; noErr without the folder. (8.6 on the G3:
+   "Apple platinum" 2000 to 2012, tests/guest/difftest desk.) */
+OSStatus Executor::C_IterateThemes(ThemeIteratorUPP inProc, void *inUserData)
+{
+    if(!inProc)
+        return paramErr;
+    GUEST<INTEGER> vref;
+    GUEST<LONGINT> sysdir;
+    if(FindFolder(kOnSystemDisk, kSystemFolderType, false, &vref, &sysdir) != noErr)
+        return noErr;
+    LONGINT dir = sysdir;
+    StringPtr file = (StringPtr)NewPtr(sizeof(Str255));
+    if(!file)
+        return memFullErr;
+    for(const char *sub : { "Appearance", "Theme Files" })
+    {
+        CInfoPBRec pb = {};
+        file[0] = strlen(sub);
+        memcpy(file + 1, sub, file[0]);
+        pb.hFileInfo.ioNamePtr = file;
+        pb.hFileInfo.ioVRefNum = vref;
+        pb.hFileInfo.ioDirID = dir;
+        if(PBGetCatInfo(&pb, false) != noErr || !(pb.hFileInfo.ioFlAttrib & 0x10 /* a folder */))
+        {
+            DisposePtr((Ptr)file);
+            return noErr;
+        }
+        dir = pb.dirInfo.ioDrDirID;
+    }
+    INTEGER saved = CurResFile();
+    bool go_on = true;
+    for(int i = 1; go_on; i++)
+    {
+        CInfoPBRec pb = {};
+        pb.hFileInfo.ioNamePtr = file;
+        pb.hFileInfo.ioVRefNum = vref;
+        pb.hFileInfo.ioDirID = dir;
+        pb.hFileInfo.ioFDirIndex = i;
+        if(PBGetCatInfo(&pb, false) != noErr)
+            break;
+        if(pb.hFileInfo.ioFlAttrib & 0x10 /* a folder */)
+            continue;
+        INTEGER ref = HOpenResFile(vref, dir, file, fsRdPerm);
+        if(ref == -1)
+            continue;
+        UseResFile(ref);
+        INTEGER n = Count1Resources("scen"_4);
+        for(INTEGER r = 1; r <= n && go_on; r++)
+        {
+            UseResFile(ref);
+            Handle h = Get1IndResource("scen"_4, r);
+            if(!h)
+                continue;
+            GUEST<INTEGER> id;
+            GUEST<ResType> type;
+            Str255 rname;
+            GetResInfo(h, &id, &type, rname);
+            Collection flat = NewCollection();
+            Collection c = flat ? with_file_name(flat, h, file) : nullptr;
+            if(c)
+                go_on = inProc(file, id, c, inUserData);
+            if(c)
+                DisposeCollection(c);
+            if(flat)
+                DisposeCollection(flat);
+            ReleaseResource(h);
+        }
+        CloseResFile(ref);
+    }
+    UseResFile(saved);
+    DisposePtr((Ptr)file);
+    return noErr;
+}
+
 /* Executor plays no theme sounds. */
 Boolean Executor::C_AreThemeSoundsEnabled()
 {
@@ -1518,11 +1649,385 @@ OSStatus Executor::C_GetPictureFromFile(FSSpec *file, Ptr outPicture)
     return fnfErr;
 }
 
-/* Double-clicking a title bar does nothing in Executor (1 would be:
-   collapse it). */
+namespace
+{
+UInt32 double_click_action = 0;
+}
+
+/* What double-clicking a title bar does (1: collapse the window): kept for
+   the Appearance control panel's Options tab; Executor's windows don't
+   collapse on a double click either way. */
 UInt32 Executor::C_GetWindowDoubleClickAction()
 {
-    return 0;
+    return double_click_action;
+}
+
+OSStatus Executor::C_SetWindowDoubleClickAction(UInt32 action)
+{
+    double_click_action = action;
+    return noErr;
+}
+
+/* ── Monitor desktop lists: WindowsLib's private desktop picture calls ─
+
+   The 8.6 Appearance control panel's Desktop tab edits a copy of each
+   screen's desktop settings (a "monitor desktop list"), draws its preview
+   from it and makes it current when the user sets the desktop. The
+   signatures come from the panel's call sites (tools/macdecode/pef.py
+   --dis), the answers and the record's layout from the G3's 8.6
+   (tests/guest/difftest desk): 372 bytes a record, one record a screen,
+   numbered from 1; an index out of range is paramErr. Executor keeps the
+   settings for the session and draws no picture on its desktop (the
+   pattern only). */
+
+namespace
+{
+struct MonitorDesktopRecord
+{
+    GUEST_STRUCT;
+    GUEST<AliasHandle> alias;  /* the picture file, nil for none */
+    GUEST<OSType> fileType;    /* its type */
+    GUEST<Handle> picture;     /* the picture read (nil: none read) */
+    GUEST<UInt32> alignment;   /* 1 to 4 */
+    GUEST<UInt32> automatic;   /* alignment 5: "position automatically" */
+    GUEST<UInt32> displayID;
+    GUEST<GDHandle> device;
+    GUEST<UInt32> unknown1c[2];
+    GUEST<Rect> pictureFrame;
+    GUEST<uint8_t> reserved[0x174 - 0x2c];
+};
+static_assert(sizeof(MonitorDesktopRecord) == 0x174);
+
+struct MonitorDesktopList
+{
+    GUEST_STRUCT;
+    GUEST<UInt32> count;
+    MonitorDesktopRecord records[1];
+};
+
+enum
+{
+    kMonitorDesktopAutomatic = 5
+};
+
+/* The current settings, one record a screen (made from the screens on
+   first use). */
+std::vector<MonitorDesktopRecord> &current_desktops()
+{
+    static std::vector<MonitorDesktopRecord> current;
+    if(current.empty())
+    {
+        for(GDHandle gd = GetDeviceList(); gd; gd = GetNextDevice(gd))
+        {
+            if(!TestDeviceAttribute(gd, screenDevice) || !TestDeviceAttribute(gd, screenActive))
+                continue;
+            MonitorDesktopRecord r;
+            memset(&r, 0, sizeof r);
+            GUEST<uint32_t> id;
+            if(DMGetDisplayIDByGDevice(gd, &id, true) == noErr)
+                r.displayID = id;
+            r.device = gd;
+            current.push_back(r);
+        }
+    }
+    return current;
+}
+
+/* A copy of a record's file alias, owned by whoever holds the copy. */
+void own_alias(MonitorDesktopRecord &r)
+{
+    if(!r.alias)
+        return;
+    GUEST<Handle> h = (Handle)r.alias;
+    if(HandToHand(&h) == noErr)
+        r.alias = (AliasHandle)(Handle)h;
+    else
+        r.alias = nullptr;
+}
+
+MonitorDesktopList *new_list(const std::vector<MonitorDesktopRecord> &recs)
+{
+    TheZoneGuard guard(LM(SysZone));
+    auto *list = (MonitorDesktopList *)NewPtrClear(
+        offsetof(MonitorDesktopList, records) + std::max<size_t>(recs.size(), 1) * sizeof(MonitorDesktopRecord));
+    if(!list)
+        return nullptr;
+    list->count = recs.size();
+    for(size_t i = 0; i < recs.size(); i++)
+    {
+        list->records[i] = recs[i];
+        own_alias(list->records[i]);
+    }
+    return list;
+}
+
+MonitorDesktopRecord *record_of(Ptr list, UInt32 index)
+{
+    auto *l = (MonitorDesktopList *)list;
+    if(!l || index < 1 || index > l->count)
+        return nullptr;
+    return &l->records[index - 1];
+}
+
+void clear_picture(MonitorDesktopRecord &r)
+{
+    if(r.alias)
+        DisposeHandle((Handle)r.alias);
+    if(r.picture)
+        DisposeHandle(r.picture);
+    r.alias = nullptr;
+    r.picture = nullptr;
+    r.fileType = 0;
+    r.pictureFrame = Rect{};
+}
+
+void set_alignment(MonitorDesktopRecord &r, UInt32 alignment)
+{
+    r.automatic = alignment == kMonitorDesktopAutomatic;
+    r.alignment = alignment == kMonitorDesktopAutomatic ? 0 : alignment;
+}
+}
+
+OSStatus Executor::C_GetCurrentMonitorDesktopList(GUEST<Ptr> *outList)
+{
+    if(!outList)
+        return paramErr;
+    MonitorDesktopList *list = new_list(current_desktops());
+    *outList = (Ptr)list;
+    return list ? noErr : memFullErr;
+}
+
+/* A new list for the screens there are now (the caller disposes of the
+   old one): a screen keeps the old list's picture and its alignment, the
+   rest start over (on the G3 an alignment set without a picture is
+   gone). */
+OSStatus Executor::C_RefreshMonitorDesktopList(Ptr list, GUEST<Ptr> *outList)
+{
+    auto *old = (MonitorDesktopList *)list;
+    if(!old || !outList)
+        return paramErr;
+    std::vector<MonitorDesktopRecord> recs = current_desktops();
+    for(auto &r : recs)
+    {
+        r.alias = nullptr;
+        r.picture = nullptr;
+        r.fileType = 0;
+        r.alignment = 0;
+        r.automatic = 0;
+        r.pictureFrame = Rect{};
+        for(UInt32 i = 0; i < old->count; i++)
+        {
+            const MonitorDesktopRecord &o = old->records[i];
+            if(o.displayID == r.displayID && o.alias)
+            {
+                r.alias = o.alias;
+                r.fileType = o.fileType;
+                r.alignment = o.alignment;
+                r.automatic = o.automatic;
+            }
+        }
+    }
+    MonitorDesktopList *fresh = new_list(recs);
+    *outList = (Ptr)fresh;
+    return fresh ? noErr : memFullErr;
+}
+
+OSStatus Executor::C_DisposeMonitorDesktopList(Ptr list)
+{
+    auto *l = (MonitorDesktopList *)list;
+    if(!l)
+        return paramErr;
+    for(UInt32 i = 0; i < l->count; i++)
+        clear_picture(l->records[i]);
+    DisposePtr(list);
+    return noErr;
+}
+
+/* The list's settings become the screens' (the panel then draws the
+   desktop). */
+OSStatus Executor::C_SetCurrentMonitorDesktopList(Ptr list)
+{
+    auto *l = (MonitorDesktopList *)list;
+    if(!l)
+        return paramErr;
+    auto &current = current_desktops();
+    for(auto &r : current)
+        clear_picture(r);
+    current.clear();
+    for(UInt32 i = 0; i < l->count; i++)
+    {
+        current.push_back(l->records[i]);
+        current.back().picture = nullptr;
+        own_alias(current.back());
+    }
+    return noErr;
+}
+
+OSStatus Executor::C_CountMonitorDesktopRecordsInList(Ptr list, GUEST<UInt32> *outCount)
+{
+    auto *l = (MonitorDesktopList *)list;
+    if(!l || !outCount)
+        return paramErr;
+    *outCount = l->count;
+    return noErr;
+}
+
+OSStatus Executor::C_GetMonitorDesktopRecordFromList(Ptr list, UInt32 index, Ptr outRecord)
+{
+    MonitorDesktopRecord *r = record_of(list, index);
+    if(!r || !outRecord)
+        return paramErr;
+    memcpy(outRecord, r, sizeof *r);
+    return noErr;
+}
+
+/* 1 to 4, or 5 (kMonitorDesktopAutomatic); 0 before any was set. */
+OSStatus Executor::C_GetMonitorDesktopAlignment(Ptr list, UInt32 index, GUEST<UInt32> *outAlignment)
+{
+    MonitorDesktopRecord *r = record_of(list, index);
+    if(!r || !outAlignment)
+        return paramErr;
+    *outAlignment = r->automatic ? (UInt32)kMonitorDesktopAutomatic : (UInt32)r->alignment;
+    return noErr;
+}
+
+OSStatus Executor::C_SetMonitorDesktopAlignment(Ptr list, UInt32 index, UInt32 alignment)
+{
+    MonitorDesktopRecord *r = record_of(list, index);
+    if(!r || alignment < 1 || alignment > kMonitorDesktopAutomatic)
+        return paramErr;
+    set_alignment(*r, alignment);
+    return noErr;
+}
+
+OSStatus Executor::C_MonitorDesktopHasPicture(Ptr list, UInt32 index, Boolean *outHasPicture)
+{
+    MonitorDesktopRecord *r = record_of(list, index);
+    if(!r || !outHasPicture)
+        return paramErr;
+    *outHasPicture = r->alias != nullptr;
+    return noErr;
+}
+
+/* A picture file for the screen (nil: none) and its alignment, 1 to 5. */
+OSStatus Executor::C_SetMonitorDesktopToFile(Ptr list, UInt32 index, FSSpec *file, UInt32 alignment)
+{
+    MonitorDesktopRecord *r = record_of(list, index);
+    if(!r || alignment < 1 || alignment > kMonitorDesktopAutomatic)
+        return paramErr;
+    GUEST<AliasHandle> alias = nullptr;
+    FInfo info;
+    if(file)
+    {
+        OSErr err = FSpGetFInfo(file, &info);
+        if(err == noErr)
+            err = NewAliasMinimal(file, &alias);
+        if(err != noErr)
+            return err;
+    }
+    clear_picture(*r);
+    r->alias = alias;
+    r->fileType = file ? (OSType)info.fdType : 0;
+    set_alignment(*r, alignment);
+    return noErr;
+}
+
+/* The picture settings of one list's record into another's. */
+OSStatus Executor::C_CopyMonitorDesktopFile(Ptr fromList, UInt32 fromIndex, Ptr toList, UInt32 toIndex)
+{
+    MonitorDesktopRecord *from = record_of(fromList, fromIndex);
+    MonitorDesktopRecord *to = record_of(toList, toIndex);
+    if(!from || !to)
+        return paramErr;
+    if(from == to)
+        return noErr;
+    MonitorDesktopRecord copy = *from;
+    copy.picture = nullptr;
+    own_alias(copy);
+    clear_picture(*to);
+    to->alias = copy.alias;
+    to->fileType = copy.fileType;
+    to->alignment = copy.alignment;
+    to->automatic = copy.automatic;
+    return noErr;
+}
+
+/* A picture takes time to draw (the panel draws a placeholder first). */
+OSStatus Executor::C_DrawMonitorDesktopFromListWillTakeTime(Ptr list, UInt32 index, GrafPtr port,
+                                                             const Rect *bounds, Boolean *outWillTakeTime)
+{
+    (void)port, (void)bounds;
+    MonitorDesktopRecord *r = record_of(list, index);
+    if(!r || !outWillTakeTime)
+        return paramErr;
+    *outWillTakeTime = r->alias != nullptr;
+    return noErr;
+}
+
+/* A screen's desktop as the preview shows it: the region filled with the
+   pattern given (nothing without one; as on the G3, no picture drawn
+   here). */
+OSStatus Executor::C_DrawMonitorDesktopFromList(Ptr list, UInt32 index, GrafPtr port, const Rect *bounds,
+                                                RgnHandle region, PixPatHandle pattern, Point origin,
+                                                Boolean flag)
+{
+    (void)bounds, (void)origin, (void)flag;
+    if(!record_of(list, index))
+        return paramErr;
+    if(!port || !region || !pattern)
+        return noErr;
+    ThePortGuard guard(port);
+    FillCRgn(region, pattern);
+    return noErr;
+}
+
+/* Files the panel takes for a picture: Executor draws PICT files only. */
+OSStatus Executor::C_FileContainsPossibleDesktopPicture(FSSpec *file, Boolean *outIsPicture)
+{
+    if(!file || !outIsPicture)
+        return paramErr;
+    FInfo info;
+    OSErr err = FSpGetFInfo(file, &info);
+    if(err != noErr)
+        return err;
+    *outIsPicture = info.fdType == "PICT"_4;
+    return noErr;
+}
+
+/* The desktop pattern from a 'ppat' resource's data (the caller keeps
+   its handle) and its name. */
+OSStatus Executor::C_SetDesktopPattern(Handle ppat, ConstStringPtr name)
+{
+    (void)name;
+    PixPatHandle pp;
+    {
+        TheZoneGuard guard(LM(SysZone));
+        pp = ROMlib_pixpat_from_ppat(ppat);
+    }
+    if(!pp)
+        return paramErr;
+    PixPatHandle old = LM(DeskCPat);
+    LM(DeskCPat) = pp;
+    USE_DESKCPAT_VAR |= USE_DESKCPAT_BIT;
+    if(PIXPAT_TYPE(pp) == pixpat_old_style_pattern)
+        LM(DeskPattern) = PIXPAT_1DATA(pp);
+    if(old && old != pp)
+        DisposePixPat(old);
+    return noErr;
+}
+
+/* A screen's picture file (nil: none) and placement: Executor draws no
+   picture, so this only forgets one. */
+OSStatus Executor::C_SetDesktopPictureForDevice(GDHandle device, FSSpec *file, UInt32 placement)
+{
+    (void)device, (void)placement;
+    return file ? (OSStatus)paramErr : (OSStatus)noErr;
+}
+
+/* The desktop drawn again (after SetDesktopPattern). */
+void Executor::C_DrawDesktop()
+{
+    PaintOne(nullptr, LM(GrayRgn));
 }
 
 /* ── Drawing state ───────────────────────────────────────────────────── */

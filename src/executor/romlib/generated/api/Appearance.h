@@ -929,6 +929,7 @@ OSStatus C_GetTheme(Collection ioCollection);LIBRARY_FUNCTION(AppearanceLib, Get
 
 
 
+OSStatus C_IterateThemes(ThemeIteratorUPP inProc, void *inUserData);LIBRARY_FUNCTION(AppearanceLib, IterateThemes, C_IterateThemes);
 
 
 OSStatus C_DrawThemeTabPane(const Rect *inRect, ThemeDrawState inState);LIBRARY_FUNCTION(AppearanceLib, DrawThemeTabPane, C_DrawThemeTabPane);
@@ -1188,6 +1189,9 @@ OSStatus C_GetViewsFont(ScriptCode script, StringPtr outFontName, GUEST<SInt16> 
 
 
 OSStatus C_GetSmallSystemFont(ScriptCode script, StringPtr outFontName);LIBRARY_FUNCTION(AppearanceLib, GetSmallSystemFont, C_GetSmallSystemFont);
+
+
+OSStatus C_GetSystemFont(ScriptCode script, StringPtr outFontName);LIBRARY_FUNCTION(AppearanceLib, GetSystemFont, C_GetSystemFont);
 
 
 Boolean C_AreThemeSoundsEnabled();LIBRARY_FUNCTION(AppearanceLib, AreThemeSoundsEnabled, C_AreThemeSoundsEnabled);

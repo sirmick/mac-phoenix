@@ -850,3 +850,26 @@
     dispatcher: IconDispatch
     selector: 0x041C
     executor: C_
+
+# ####
+
+# MacPhoenix: PrivateInterfaceLib's icon device, the screen Icon Utilities
+# choose an icon's depth for (the 8.6 Finder sets it for each window it
+# draws). nil until set (the G3's 8.6: tests/guest/difftest desk).
+- function:
+    name: SetIconDevice
+    args:
+      - name: theScreen
+        type: GDHandle
+    library: PrivateInterfaceLib
+    executor: C_
+
+# ####
+
+- function:
+    name: GetIconDevice
+    args:
+      - name: theScreen
+        type: GDHandle*
+    library: PrivateInterfaceLib
+    executor: C_

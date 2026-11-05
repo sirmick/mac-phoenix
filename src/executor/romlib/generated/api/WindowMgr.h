@@ -543,6 +543,9 @@ WindowPtr C_GetCurLayer();PASCAL_SUBTRAP(GetCurLayer, 0xA829, 0x0003, LayerDispa
 LIBRARY_ALSO(PrivateInterfaceLib, GetCurLayer, InterfaceLib);
 
 
+WindowPtr C_LMGetCurLayer();LIBRARY_FUNCTION(PrivateInterfaceLib, LMGetCurLayer, C_LMGetCurLayer);
+
+
 // Selector 4: WindowList, AuxWinHead and AuxCtlHead become the layer's
 // (nil: the root).
 void C_SetCurLayer(WindowPtr layer);PASCAL_SUBTRAP(SetCurLayer, 0xA829, 0x0204, LayerDispatch);

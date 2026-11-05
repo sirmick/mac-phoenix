@@ -424,7 +424,19 @@ typedef GUEST<pixpat_res_ptr> *pixpat_res_handle;
 
 PixPatHandle Executor::C_GetPixPat(INTEGER pixpat_id)
 {
-    pixpat_res_handle pixpat_res;
+    Handle res = GetResource("ppat"_4, pixpat_id);
+    if(res == nullptr)
+        return (PixPatHandle)nullptr;
+    if(*res == nullptr)
+        LoadResource(res);
+    return ROMlib_pixpat_from_ppat(res);
+}
+
+/* A pixel pattern made from a 'ppat' resource's data (a resource or a
+   copy of one: WindowsLib's SetDesktopPattern takes the data). */
+PixPatHandle Executor::ROMlib_pixpat_from_ppat(Handle ppat)
+{
+    pixpat_res_handle pixpat_res = (pixpat_res_handle)ppat;
     PixPatHandle pixpat;
     PixMapHandle patmap;
     int pixpat_data_offset, pixpat_data_size;
@@ -432,11 +444,8 @@ PixPatHandle Executor::C_GetPixPat(INTEGER pixpat_id)
     int ctab_size;
     Handle xdata;
 
-    pixpat_res = (pixpat_res_handle)GetResource("ppat"_4, pixpat_id);
-    if(pixpat_res == nullptr)
+    if(!ppat || !*ppat)
         return (PixPatHandle)nullptr;
-    if(*pixpat_res == nullptr)
-        LoadResource((Handle)pixpat_res);
 
     pixpat = (PixPatHandle)NewHandle(sizeof(PixPat));
     patmap = (PixMapHandle)NewHandle(sizeof(PixMap));

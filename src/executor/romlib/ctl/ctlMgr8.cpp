@@ -333,6 +333,27 @@ void Executor::ROMlib_control8_draw_subs(ControlHandle c)
         Draw1Control(s);
 }
 
+/* ShowControl of a control whose embedder is hidden: shown with it later
+   (8.6: ShowDialogItem on an item of a hidden pane, tests/guest/difftest
+   desk); HideControl of one so marked: stays hidden. */
+bool Executor::ROMlib_control8_latent_show(ControlHandle c, bool show)
+{
+    ControlExtras *x = findExtras(c);
+    if(!x)
+        return false;
+    if(show)
+    {
+        if(x->super && !CTL_VIS(x->super))
+        {
+            x->latentVisible = true;
+            return true;
+        }
+        return false;
+    }
+    x->latentVisible = false;
+    return false;
+}
+
 void Executor::ROMlib_control8_show_subs(ControlHandle c, bool show)
 {
     ControlExtras *x = findExtras(c);
@@ -455,12 +476,27 @@ OSErr Executor::C_SetControlVisibility(ControlRef inControl, Boolean inIsVisible
         else
             HideControl(inControl);
     }
-    else
+    else if(inIsVisible && !CTL_VIS(inControl))
     {
-        CTL_VIS(inControl) = inIsVisible ? 255 : 0;
+        /* as ShowControl and HideControl, nothing drawn or erased: the
+           subcontrols the embedder hid come back, those hidden on their
+           own stay hidden (8.6, tests/guest/difftest desk) */
+        CTL_VIS(inControl) = 255;
         if(ControlExtras *x = findExtras(inControl))
-            for(ControlHandle s : x->subs)
-                C_SetControlVisibility(s, inIsVisible, false);
+        {
+            std::vector<ControlHandle> subs = x->subs;
+            for(ControlHandle s : subs)
+                if(extras(s).latentVisible)
+                {
+                    extras(s).latentVisible = false;
+                    C_SetControlVisibility(s, true, false);
+                }
+        }
+    }
+    else if(!inIsVisible && CTL_VIS(inControl))
+    {
+        CTL_VIS(inControl) = 0;
+        ROMlib_control8_show_subs(inControl, false);
     }
     return noErr;
 }
@@ -872,11 +908,23 @@ OSErr Executor::C_EmbedControl(ControlRef inControl, ControlRef inContainer)
         return errCantEmbedIntoSelf;
     if(rootOf(CTL_OWNER(inControl)) == inControl)
         return errCantEmbedRoot;
-    if(!(features(inContainer) & kControlSupportsEmbedding))
+    /* A definition embeds into its own control whatever it answers for
+       features (8.6's list box, 0x174, embeds its scroll bars; anyone else
+       gets errControlIsNotEmbedder: tests/guest/difftest desk) */
+    if(!(features(inContainer) & kControlSupportsEmbedding) && !ROMlib_control_def_running(inContainer))
         return errControlIsNotEmbedder;
     detach(inControl);
     extras(inControl).super = inContainer;
     extras(inContainer).subs.push_back(inControl);
+    /* into a hidden embedder: hidden with it until it is shown (the 8.6
+       Appearance control panel's tab panes, invisible user panes its
+       items are appended into: tests/guest/difftest desk) */
+    if(!CTL_VIS(inContainer) && CTL_VIS(inControl))
+    {
+        extras(inControl).latentVisible = true;
+        CTL_VIS(inControl) = 0;
+        ROMlib_control8_show_subs(inControl, false);
+    }
     CtlCallGuard guard(inContainer);
     message8(inContainer, kControlMsgSubControlAdded, ptr_to_longint(inControl));
     return noErr;
@@ -886,8 +934,12 @@ static ControlHandle embedderFor(ControlHandle c, ControlHandle candidate, const
 {
     if(candidate == c || !(features(candidate) & kControlSupportsEmbedding))
         return nullptr;
+    /* inside it, and not its own size (8.6: a control the size of a pane
+       is the pane's sibling; the Appearance panel's tab panes are all the
+       same rectangle: tests/guest/difftest desk) */
     Rect sect;
-    if(!SectRect(&r, &CTL_RECT(candidate), &sect) || !EqualRect(&sect, &r))
+    if(!SectRect(&r, &CTL_RECT(candidate), &sect) || !EqualRect(&sect, &r)
+       || EqualRect(&r, &CTL_RECT(candidate)))
         return nullptr;
     if(ControlExtras *x = findExtras(candidate))
         for(auto it = x->subs.rbegin(); it != x->subs.rend(); ++it)

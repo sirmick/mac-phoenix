@@ -13,8 +13,4 @@ values.16bit	16-bit view of 32-bit values: 8.6 keeps the low word (70000 -> 4464
 # 8.0 dialogs with the control hierarchy: every item is a control on 8.6
 # (static text, edit text, user items too); Executor makes only ctrlItems
 # controls.
-dialog.root.count*	items as controls: only ctrlItems are controls in Executor
-dialog.item.*	static/edit/user items aren't controls in Executor
-dialog.appended.7*	static text item isn't a control in Executor
-dialog.group.count*	static text item isn't a control in Executor (one fewer embedded)
 dialog.Advance.shortened	no focusable control left: the edit text item isn't a control in Executor

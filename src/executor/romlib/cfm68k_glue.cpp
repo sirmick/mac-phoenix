@@ -202,6 +202,14 @@ INTEGER glue_GetAppFont()
     return LM(ApFontID);
 }
 
+/* SysFontSiz, 12 when it is 0 (Inside Macintosh: Text; the G3's on 8.6,
+   difftest desk's strip section) */
+INTEGER glue_GetDefFontSize()
+{
+    INTEGER size = LM(SysFontSiz);
+    return size ? size : 12;
+}
+
 INTEGER glue_LMGetSysFontSize()
 {
     return LM(SysFontSiz);

@@ -5,6 +5,7 @@
 // FIXME: #warning the icon suite representation is our own brew -- tests should
 // FIXME: #warning be written and we should do what the Mac does
 
+#include <OSUtil.h>
 #include <base/common.h>
 #include <SysErr.h>
 
@@ -661,6 +662,7 @@ void fill_outline(uint8_t *bits, int w, int h, int rb)
 
 const uint8_t gray_rows[2] = { 0xAA, 0x55 };     /* 50% */
 const uint8_t ltgray_rows[4] = { 0x88, 0x00, 0x22, 0x00 }; /* 12.5% */
+const uint8_t open8_rows[2] = { 0x88, 0x22 };      /* 25%: 8.x's open items */
 
 void tint(RGBColor& c, const RGBColor& label, bool selected, bool disabled)
 {
@@ -698,6 +700,11 @@ OSErr plot(IconSource& src, const Rect *rect, IconAlignmentType align,
     bool selected = (transform & ttSelected) != 0;
     bool disabled = state == ttDisabled;
     bool patterned = state == ttOpen || state == ttOffline;
+    /* 8.x draws an open item (a running control panel, an open folder)
+       with the outline in black and, inside, every fourth pixel black over
+       the highlight colour (the G3's 8.6 Finder: lavender with dots; 7.5.5
+       a 50% grey) */
+    bool open8 = state == ttOpen && (uint16_t)LM(SysVersion) >= 0x0800;
 
     RGBColor label_rgb = ROMlib_black_rgb_color;
     bool labelled = label >= 1 && label <= 7 && port_depth() > 1;
@@ -755,7 +762,7 @@ OSErr plot(IconSource& src, const Rect *rect, IconAlignmentType align,
                                                && in_mask(px, y - 1) && in_mask(px, y + 1)))
                             outline |= 0x80 >> b;
                     }
-                    d[i] = (m[i] & gray_rows[y & 1]) | outline;
+                    d[i] = (m[i] & (open8 ? open8_rows[y & 1] : gray_rows[y & 1])) | outline;
                 }
                 else if(state == ttOffline)
                     d[i] = (d[i] & ~m[i]) | (m[i] & ltgray_rows[y & 3]);
@@ -776,6 +783,8 @@ OSErr plot(IconSource& src, const Rect *rect, IconAlignmentType align,
             fg_rgb = CPORT_RGB_FG_COLOR(port);
             bk_rgb = CPORT_RGB_BK_COLOR(port);
             RGBColor back = ROMlib_white_rgb_color;
+            if(open8 && port_depth() > 1)
+                back = LM(HiliteRGB);
             if(selected)
                 tint(back, ROMlib_white_rgb_color, true, false);
             RGBForeColor(labelled ? &label_rgb : &ROMlib_black_rgb_color);
@@ -1147,4 +1156,22 @@ void Executor::C_SetIconDrawContext(int32_t context)
 void Executor::C_GetIconDrawContext(GUEST<int32_t> *context)
 {
     *context = icon_draw_context;
+}
+
+/* PrivateInterfaceLib's icon device: kept, not consulted (Executor picks
+   an icon's depth from the port); nil until set, as on the G3's 8.6. */
+namespace
+{
+GDHandle icon_device;
+}
+
+void Executor::C_SetIconDevice(GDHandle theScreen)
+{
+    icon_device = theScreen;
+}
+
+void Executor::C_GetIconDevice(GUEST<GDHandle> *theScreen)
+{
+    if(theScreen)
+        *theScreen = icon_device;
 }

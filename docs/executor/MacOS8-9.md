@@ -274,6 +274,14 @@ Third run (`~/storage/executor-grid/8.6-r3/`): no host crashes.
   controls). WindowsLib's desktop calls and AppearanceLib's theme calls
   are Executor's now (signatures from the panel's call sites); Appearance
   opens, its tabs not drawn right yet (the tab control, panes overlapping).
+  2026-11-04 (difftest `desk`): the monitor desktop list calls answer as
+  the G3 does (Executor had stopped dividing by zero in MapPt on the empty
+  screen rectangle a missing record left), the Desktop tab's preview and
+  Set Desktop work; one tab's pane shows at a time (appended items go into
+  the pane holding them and hide with it, DialogSelect takes the topmost
+  visible item); the Themes tab lists the Appearance folder's themes (now
+  extracted with the System Folder). Open items' icons draw 8.x's way
+  (lavender with dots), not 7.5's grey.
 * Energy Saver says its extension isn't running (as on a Mac without it);
   Disk Copy shows its menus (`SetMenuBar`'s copy reused the old master
   pointer, so the bar looked drawn); Mac OS Setup Assistant and Sherlock

@@ -1424,6 +1424,16 @@
 
 # ####
 
+# The current layer as the CurLayer low-memory global's accessor
+# (PrivateInterfaceLib; on the G3's 8.6 the same as GetCurLayer).
+- function:
+    name: LMGetCurLayer
+    return: WindowPtr
+    library: PrivateInterfaceLib
+    executor: C_
+
+# ####
+
 - function:
     name: SetCurLayer
     args:

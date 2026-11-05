@@ -14,6 +14,9 @@
 #include <quickdraw/cquick.h>
 #include <quickdraw/region.h>
 
+#include <algorithm>
+#include <vector>
+
 using namespace Executor;
 
 static Boolean EquivRect(const Rect *, const Rect *);
@@ -128,6 +131,25 @@ void Executor::C_ScalePt(GUEST<Point> *pt, const Rect *srcr, const Rect *dstr)
     }
 }
 
+/* One coordinate of MapPt, measured on the G3's 8.6 (tests/guest/difftest
+   desk): an offset when the two sizes are the same (two empty sizes
+   too), 0 from an empty source; otherwise scaled by the Fixed ratio of
+   the sizes, rounded to the nearest (half up), or, for a negative ratio
+   (an inverted rectangle), half a pixel towards zero and truncated. */
+static INTEGER map_coord(INTEGER n, INTEGER srcd, INTEGER dstd)
+{
+    if(srcd == dstd)
+        return n;
+    if(srcd == 0)
+        return 0;
+    int64_t ratio = ((((int64_t)dstd << 17) / srcd) + 1) >> 1; /* rounded */
+    int64_t x = (int64_t)n * ratio;
+    if(ratio >= 0)
+        return (x + 0x8000) >> 16;
+    x += x > 0 ? -0x8000 : x < 0 ? 0x8000 : 0;
+    return x / 0x10000;
+}
+
 void Executor::C_MapPt(GUEST<Point> *pt, const Rect *srcr, const Rect *dstr)
 {
     INTEGER srcdh, srcdv, dstdh, dstdv;
@@ -137,12 +159,8 @@ void Executor::C_MapPt(GUEST<Point> *pt, const Rect *srcr, const Rect *dstr)
     dstdh = dstr->right - dstr->left;
     dstdv = dstr->bottom - dstr->top;
 
-    pt->h = pt->h - (srcr->left);
-    pt->v = pt->v - (srcr->top);
-    pt->h = (LONGINT)pt->h * dstdh / srcdh;
-    pt->v = (LONGINT)pt->v * dstdv / srcdv;
-    pt->h = pt->h + (dstr->left);
-    pt->v = pt->v + (dstr->top);
+    pt->h = map_coord(pt->h - srcr->left, srcdh, dstdh) + dstr->left;
+    pt->v = map_coord(pt->v - srcr->top, srcdv, dstdv) + dstr->top;
 }
 
 void Executor::C_MapRect(Rect *r, const Rect *srcr, const Rect *dstr)
@@ -151,111 +169,73 @@ void Executor::C_MapRect(Rect *r, const Rect *srcr, const Rect *dstr)
     MapPt((GUEST<Point> *)&r->bottom, srcr, dstr);
 }
 
-#define IMPOSSIBLE -1
-#define MAPH(x) (x = UNFIX((x - xoff1) * xcoff) + xoff2)
-#define MAPV(y) (y = UNFIX((y - yoff1) * ycoff) + yoff2)
-#define UNFIX(x) ((x) >> 16)
-
+/* MapRgn maps each inversion point as MapPt does and builds the region
+   again: lines that land on the same row merge, points that meet cancel,
+   and a mirrored mapping (an inverted rectangle) turns the region over as
+   8.6 does on the G3 (tests/guest/difftest desk). Nothing to scale from or
+   to leaves it empty. */
 void Executor::C_MapRgn(RgnHandle rh, const Rect *srcr, const Rect *dstr)
 {
-    GUEST<INTEGER> *ip, *op, *saveop;
-    INTEGER oldv, newv, *tempp, srcdh, dstdh, srcdv, dstdv;
-    INTEGER xoff1, xoff2, yoff1, yoff2, x1, x2;
-    Fixed xcoff, ycoff;
-    INTEGER buf1[1000], buf2[1000], *mergebuf, *freebuf, *ipe;
-    LONGINT hold;
-    Boolean done;
+    INTEGER srcdh, dstdh, srcdv, dstdv;
 
     if(EquivRect(srcr, dstr))
         OffsetRgn(rh, dstr->left - srcr->left,
                   dstr->top - srcr->top);
+    else if(RGN_SMALL_P(rh))
+        MapRect(&(*rh)->rgnBBox, srcr, dstr);
+    else if(srcr->right == srcr->left || srcr->bottom == srcr->top || EmptyRect(dstr))
+        SetEmptyRgn(rh);
     else
     {
-        if(RGN_SMALL_P(rh))
-            MapRect(&(*rh)->rgnBBox, srcr, dstr);
-        else
+        srcdh = srcr->right - srcr->left;
+        dstdh = dstr->right - dstr->left;
+        srcdv = srcr->bottom - srcr->top;
+        dstdv = dstr->bottom - dstr->top;
+
+        struct Line
         {
-            srcdh = srcr->right - (xoff1 = srcr->left);
-            dstdh = dstr->right - (xoff2 = dstr->left);
-            srcdv = srcr->bottom - (yoff1 = srcr->top);
-            dstdv = dstr->bottom - (yoff2 = dstr->top);
-            xcoff = FixRatio(dstdh, srcdh);
-            ycoff = FixRatio(dstdv, srcdv);
-            ip = op = (GUEST<INTEGER> *)*rh + 5;
-            oldv = -32768;
-            buf1[0] = 32767;
-            mergebuf = buf1;
-            freebuf = buf2;
-            do
-            {
-                done = (newv = *ip++) == 32767;
-                MAPV(newv);
-                if(newv != oldv || done)
-                {
-                    if(mergebuf[0] != 32767)
-                    {
-                        *op++ = oldv;
-                        saveop = op;
-                        hold = IMPOSSIBLE;
-                        for(tempp = mergebuf; (x1 = *tempp++) != 32767;)
-                        {
-                            MAPH(x1);
-                            if(hold == IMPOSSIBLE)
-                                hold = (unsigned short)x1;
-                            else if(hold == x1)
-                                hold = IMPOSSIBLE;
-                            else
-                            {
-                                *op++ = hold;
-                                hold = (unsigned short)x1;
-                            }
-                        }
-                        if(hold != IMPOSSIBLE)
-                            *op++ = hold;
-                        gui_assert(!((op - saveop) & 1));
-                        if(op == saveop)
-                            --op;
-                        else
-                            *op++ = 32767;
-                    }
-                    gui_assert(op < ip);
-                    mergebuf[0] = 32767;
-                    oldv = newv;
-                }
-                if(!done)
-                {
-                    for(tempp = freebuf, ipe = mergebuf,
-                    x1 = *ip++, x2 = *ipe++;
-                        ;)
-                    {
-                        if(x1 < x2)
-                        {
-                            *tempp++ = x1;
-                            x1 = *ip++;
-                        }
-                        else if(x1 > x2)
-                        {
-                            *tempp++ = x2;
-                            x2 = *ipe++;
-                        }
-                        else
-                        {
-                            if(x1 == 32767)
-                                /*-->*/ break;
-                            x1 = *ip++;
-                            x2 = *ipe++;
-                        }
-                    }
-                    gui_assert(!((tempp - freebuf) & 1));
-                    *tempp++ = 32767;
-                    tempp = freebuf;
-                    freebuf = mergebuf;
-                    mergebuf = tempp;
-                }
-            } while(!done);
-            *op++ = 32767;
-            ROMlib_sizergn(rh, false);
+            INTEGER v;
+            std::vector<INTEGER> xs;
+        };
+        std::vector<Line> lines;
+        GUEST<INTEGER> *ip = (GUEST<INTEGER> *)*rh + 5;
+        for(INTEGER v; (v = *ip++) != 32767;)
+        {
+            Line l;
+            l.v = map_coord(v - srcr->top, srcdv, dstdv) + dstr->top;
+            for(INTEGER x; (x = *ip++) != 32767;)
+                l.xs.push_back(map_coord(x - srcr->left, srcdh, dstdh) + dstr->left);
+            lines.push_back(std::move(l));
         }
+        std::stable_sort(lines.begin(), lines.end(),
+                         [](const Line &a, const Line &b) { return a.v < b.v; });
+
+        /* no longer than it was: written over the old data */
+        GUEST<INTEGER> *op = (GUEST<INTEGER> *)*rh + 5;
+        for(size_t i = 0; i < lines.size();)
+        {
+            std::vector<INTEGER> xs;
+            size_t j = i;
+            for(; j < lines.size() && lines[j].v == lines[i].v; j++)
+                xs.insert(xs.end(), lines[j].xs.begin(), lines[j].xs.end());
+            std::sort(xs.begin(), xs.end());
+            std::vector<INTEGER> kept;
+            for(INTEGER x : xs)
+                if(!kept.empty() && kept.back() == x)
+                    kept.pop_back();
+                else
+                    kept.push_back(x);
+            if(!kept.empty())
+            {
+                *op++ = lines[i].v;
+                for(INTEGER x : kept)
+                    *op++ = x;
+                *op++ = 32767;
+            }
+            i = j;
+        }
+        *op++ = 32767;
+        ROMlib_sizergn(rh, false);
     }
 }
 
@@ -263,6 +243,9 @@ void Executor::C_MapPoly(PolyHandle poly, const Rect *srcr, const Rect *dstr)
 {
     GUEST<Point> *ip, *ep;
 
+    if(EmptyRect(srcr) || EmptyRect(dstr))
+        /* left alone (8.6 on the G3) */
+        return;
     if(EquivRect(srcr, dstr))
         OffsetPoly(poly, dstr->left - srcr->left,
                    dstr->top - srcr->top);

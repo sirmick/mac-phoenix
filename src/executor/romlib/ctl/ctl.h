@@ -68,6 +68,7 @@ extern void sb_ctl_init(void);
 using ctlfuncp = UPP<LONGINT (INTEGER var, ControlHandle ctl, INTEGER mess, LONGINT param)>;
 
 extern LONGINT ROMlib_ctlcall(ControlHandle c, INTEGER i, LONGINT l);
+extern bool ROMlib_control_def_running(ControlHandle c);
 extern ControlHandle ROMlib_new_control_at(INTEGER cid, WindowPtr wst,
                                            const Point *topleft);
 extern ControlHandle ROMlib_new_control_with_def(WindowPtr wst, const Rect *r, ConstStringPtr title,
@@ -84,6 +85,7 @@ extern void ROMlib_control8_forget_window(WindowPtr w);
 extern bool ROMlib_control8_embedded(ControlHandle c);
 extern void ROMlib_control8_draw_subs(ControlHandle c);
 extern void ROMlib_control8_show_subs(ControlHandle c, bool show);
+extern bool ROMlib_control8_latent_show(ControlHandle c, bool show);
 extern bool ROMlib_control8_find(WindowPtr w, Point p, ControlHandle *hit, INTEGER *part);
 extern bool ROMlib_control8_handles_tracking(ControlHandle c);
 extern bool ROMlib_control8_live_feedback(ControlHandle c);

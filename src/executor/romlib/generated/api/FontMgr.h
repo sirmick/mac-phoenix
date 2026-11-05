@@ -359,6 +359,9 @@ INTEGER glue_GetSysFont();LIBRARY_FUNCTION(InterfaceLib, GetSysFont, glue_GetSys
 INTEGER glue_GetAppFont();LIBRARY_FUNCTION(InterfaceLib, GetAppFont, glue_GetAppFont);
 
 
+INTEGER glue_GetDefFontSize();LIBRARY_FUNCTION(InterfaceLib, GetDefFontSize, glue_GetDefFontSize);
+
+
 INTEGER glue_LMGetSysFontSize();LIBRARY_FUNCTION(InterfaceLib, LMGetSysFontSize, glue_LMGetSysFontSize);
 
 
