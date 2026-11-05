@@ -21,8 +21,8 @@
 //     pointer moved to a Mac pixel's centre on the page is at that pixel on
 //     the Mac (web_main.cpp's 'mouse'; within one when shrunk), at points
 //     across the screen;
-//   - the pointer is 16 Mac pixels at the canvas's scale, never under 16
-//     CSS pixels (cursor.js);
+//   - the pointer is 16 Mac pixels at the canvas's scale, shrunk with it
+//     (cursor.js);
 //   - a click on the Special menu's title opens it (Restart drawn), a
 //     double-click on the startup disk's icon (the right edge) its window;
 //   - the page's watch never said "not answering" (the Finder starting
@@ -120,9 +120,9 @@ for (const cell of cells) {
         }
         check(!misses.length, `${tag}: the pointer lands on the Mac pixel${misses.length ? ' ' + misses.join(' ') : ''}`);
 
-        // The pointer: 16 Mac pixels, each the canvas's device pixels, or
-        // a CSS pixel's when the screen is shrunk.
-        const want = 16 * Math.max(1, Math.round(cell.dpr), Math.round(box.width / W * cell.dpr));
+        // The pointer: 16 Mac pixels, each the canvas's device pixels (at
+        // least one).
+        const want = 16 * Math.max(1, Math.round(box.width / W * cell.dpr));
         const got = await page.evaluate(() => new Promise((resolve) => {
             const m = /url\("?([^")]+)"?\)/.exec(document.getElementById('screen').style.cursor);
             if (!m)
