@@ -1,0 +1,3 @@
+# snd on Executor (8.6 System) against the G3 (8.6): known differences.
+# key-glob<TAB>reason. Remove a line when Executor matches (run.py lists those).
+short.f1.short.*	A 2-byte handle: Apple reads past its end and answers what is there (noErr, an offset from beyond the handle); Executor stops at the handle size: badFormat, 0

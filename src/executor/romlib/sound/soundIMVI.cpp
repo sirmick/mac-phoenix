@@ -721,29 +721,43 @@ OSErr Executor::C_GetSoundOutputDevice(GUEST<uint32_t> *outputDevice)
     return noErr;
 }
 
+/* The offset of a 'snd ' resource's sound header: the second word of
+   its first soundCmd or bufferCmd that has the data offset flag
+   (0x8000), as it is, wherever the header really is. A format other
+   than 1 is read as format 2. No such command: badFormat, offset 0; an
+   empty handle: nilHandleErr, offset left alone (Apple's 8.6 on a G3,
+   tests/guest/difftest/snd.c). Its command words compared as unsigned:
+   signed, 0x8051 never matched and every sound was badFormat (Ares). */
 OSErr Executor::C_GetSoundHeaderOffset(Handle sndHandle, GUEST<LONGINT> *offset)
 {
-    OSErr retval;
-    int num_commands;
-    SndCommand *cmds;
-    int i;
-
     warning_sound_log("");
 
-    num_commands = ROMlib_get_snd_cmds(sndHandle, &cmds);
+    if(!sndHandle || !*sndHandle)
+        return nilHandleErr;
+    const uint8_t *p = (const uint8_t *)*sndHandle;
+    LONGINT size = GetHandleSize(sndHandle);
+    auto u16 = [&](LONGINT at) { return (uint16_t)(p[at] << 8 | p[at + 1]); };
 
-    retval = badFormat;
-    for(i = 0; i < num_commands; ++i)
+    LONGINT at;
+    if(size >= 4 && u16(0) == 1)
+        at = 4 + 6 * (LONGINT)u16(2);           /* the modifiers */
+    else
+        at = 4;                                 /* format 2: format, refCount */
+    *offset = 0;
+    if(at + 2 > size)
+        return badFormat;
+    int n = u16(at);
+    at += 2;
+    for(int i = 0; i < n && at + 8 <= size; ++i, at += 8)
     {
-        if(cmds[i].cmd == (bufferCmd | 0x8000) || cmds[i].cmd == (soundCmd | 0x8000))
+        uint16_t cmd = u16(at);
+        if(cmd == (0x8000 | bufferCmd) || cmd == (0x8000 | soundCmd))
         {
-            *offset = cmds[i].param2;
-            retval = noErr;
-            break;
+            *offset = (LONGINT)((uint32_t)u16(at + 4) << 16 | u16(at + 6));
+            return noErr;
         }
     }
-
-    return retval;
+    return badFormat;
 }
 
 /* value * multiplier / divisor, all unsigned 16.16 (rates: a sample rate

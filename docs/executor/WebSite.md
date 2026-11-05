@@ -68,8 +68,8 @@ TMPDIR=~/storage/tmp tools/web/make_library.py /srv/executor-web/library
 | `creative.img` | 106 MB | Kid Pix 2.5, Adobe Photoshop 4.0, Adobe Illustrator 6.0, Macromedia FreeHand 5.5 and Deneba Canvas 5.0.2 (personalised with the owner's serials) | 7.6.1, 8.6 |
 | `creative-8.img` | 276 MB | volume "Creative 8" (not "Creative": both can be in at once): Adobe Illustrator 8.0, Photoshop 5.5 (with ImageReady 2.0), PageMaker 6.5 (with Acrobat 3.0) | 8.6, PowerPC ticked |
 | `development.img` | 392 MB | MPW, CodeWarrior Pro 4 (IDE 3.2), THINK C 6, THINK Pascal 4.5, HyperCard 2.4.1, MacPerl 5.2, ResEdit 2.1.3, BBEdit Lite 4.1 | 7.6.1, 8.6 |
-| `games-68k.img` | 71 MB | 18 games that run on the 68k side (Lemmings, Maelstrom, SimEarth, Monkey Island, ...) | 7.6.1 |
-| `games-ppc.img` | 476 MB | fat and PowerPC games (Marathon 2, Escape Velocity, EV Nova, Ferazel's Wand, ...) | 8.6, PowerPC ticked |
+| `games-68k.img` | 391 MB | 26 games that run on the 68k side (Lemmings, Maelstrom, Civilization II, Warcraft II, SimTower, Marathon Infinity, Monkey Island, ...) | 7.6.1 |
+| `games-ppc.img` | 521 MB | fat and PowerPC games (Marathon 2, Escape Velocity, EV Nova, Ares, Ferazel's Wand, ...) | 8.6, PowerPC ticked |
 | `macaddict-*.iso` | 650-675 MB each | MacAddict's cover CDs #16 (Dec 1997), #25 (Sep 1998), #58 (Jun 2001), #63 (Nov 2001), as they came, with cover scans | any |
 
 Whole application folders are copied as installed (`make_disk.py`, both

@@ -153,8 +153,9 @@ DISKS = [
      "title": "Games (68k)",
      "tags": ["games", "68k"],
      "note": "Games that run on Executor's 68k side: A-Train, Apeiron, Avara, Bolo, Civilization, "
-             "Exile I and II, Lemmings, Maelstrom, Master of Orion, Pathways into Darkness, Populous II, "
-             "Prince of Persia, SimEarth, SimLife, Spectre, Swoop, The Secret of Monkey Island. "
+             "Civilization II, Digital Messiah, Exile I and II, Glider PRO, Lemmings, Maelstrom, Marathon Infinity, "
+             "Master of Orion, Pathways into Darkness, Populous II, Prince of Persia 1 and 2, SimAnt, SimEarth, "
+             "SimLife, SimTower, Spectre, Swoop, The Secret of Monkey Island, Warcraft II. "
              "Mac OS 7.6.1 (8.6 too).",
      "systems": ["7.6.1"],
      "take": [("games.img", ["A-Train ƒ", "Apeiron 1.0.2 ƒ", "Avara 1.0.2 ƒ", "Bolo 0.99.7 ƒ",
@@ -162,7 +163,9 @@ DISKS = [
                              "Lemmings 1.5.2 ƒ", "Maelstrom 1.4.2 ƒ", "Master of Orion ƒ",
                              "Pathways into Darkness 1.1 ƒ", "Populous II ƒ", "Prince of Persia ƒ",
                              "SimEarth 2.0 ƒ", "SimLife 1.0.1 ƒ", "Spectre 1.1 ƒ", "Swoop 1.0.2 ƒ",
-                             "The Secret of Monkey Island ƒ"])],
+                             "The Secret of Monkey Island ƒ", "Civilization II ƒ", "Digital Messiah ƒ",
+                             "Glider PRO 1.1.2 ƒ", "Marathon Infinity 1.5 ƒ", "Prince of Persia 2 ƒ",
+                             "SimAnt ƒ", "SimTower 1.2 ƒ", "Warcraft II 1.22 ƒ"])],
      "launch": [
          {"app": "Lemmings 1.5.2 ƒ:Lemmings", "name": "Lemmings"},
          {"app": "Maelstrom 1.4.2 ƒ:Maelstrom", "name": "Maelstrom"},
@@ -170,25 +173,34 @@ DISKS = [
          {"app": "Prince of Persia ƒ:Prince of Persia", "name": "Prince of Persia"},
          {"app": "The Secret of Monkey Island ƒ:Monkey Island", "name": "Monkey Island"},
          {"app": "Master of Orion ƒ:Master of Orion", "name": "Master of Orion"},
+         {"app": "Civilization II ƒ:Civilization II", "name": "Civilization II"},
+         {"app": "Digital Messiah ƒ:Digital Messiah 2.0", "name": "Digital Messiah 2.0"},
+         {"app": "Glider PRO 1.1.2 ƒ:Glider PRO™", "name": "Glider PRO™"},
+         {"app": "Marathon Infinity 1.5 ƒ:Marathon ∞ 1.5", "name": "Marathon ∞ 1.5"},
+         {"app": "Prince of Persia 2 ƒ:Prince of Persia 2", "name": "Prince of Persia 2"},
+         {"app": "SimAnt ƒ:SimAnt™ Color", "name": "SimAnt™ Color"},
+         {"app": "SimTower 1.2 ƒ:SimTower", "name": "SimTower"},
+         {"app": "Warcraft II 1.22 ƒ:Warcraft II v.1.22", "name": "Warcraft II v.1.22"},
      ]},
     {"name": "games-ppc.img", "label": "Games PPC",
      "title": "Games (PowerPC)",
      "tags": ["games", "ppc"],
      "note": "Fat and PowerPC games, on Mac OS 8.6 with PowerPC ticked: Marathon, Marathon 2, "
-             "Escape Velocity, EV Override, EV Nova, Bubble Trouble, Barrack, Chiral, Flashback, "
+             "Escape Velocity, EV Override, EV Nova, Ares, Bubble Trouble, Barrack, Chiral, Flashback, "
              "SimCity 2000, Wolfenstein 3D, Ferazel's Wand, Slithereens, Mars Rising; "
              "GameBox Classic, a library to launch them from.",
      "systems": ["8.6"],
      "take": [("games.img", ["Marathon 1.2 ƒ", "Marathon 2 ƒ", "Escape Velocity 1.0.5 ƒ",
                              "EV Override 1.0.2 ƒ", "Bubble Trouble 1.0.1 ƒ", "Barrack 1.0.4 ƒ",
                              "Chiral 1.0.4 ƒ", "Flashback 1.0 ƒ", "SimCity 2000® Collection ƒ",
-                             "Wolfenstein 3D 1.0.2 ƒ"]),
+                             "Wolfenstein 3D 1.0.2 ƒ", "Ares 1.2.0 ƒ"]),
               ("games-ppc.img", ["EV Nova 1.0.10 ƒ", "Ferazel's Wand 1.0.3 ƒ", "Slithereens 1.0.1 ƒ",
                                  "Mars Rising 1.0.2 ƒ", "GameBox Classic 1.2.0 ƒ"])],
      "launch": [
          {"app": "Marathon 2 ƒ:Marathon 2", "name": "Marathon 2"},
          {"app": "Escape Velocity 1.0.5 ƒ:Escape Velocity", "name": "Escape Velocity"},
          {"app": "Bubble Trouble 1.0.1 ƒ:Bubble Trouble", "name": "Bubble Trouble"},
+         {"app": "Ares 1.2.0 ƒ:Ares", "name": "Ares"},
          {"app": "EV Nova 1.0.10 ƒ:EV Nova", "name": "EV Nova", "source": "games-ppc.img"},
          {"app": "Ferazel's Wand 1.0.3 ƒ:Ferazel's Wand", "name": "Ferazel's Wand", "source": "games-ppc.img"},
          {"app": "Slithereens 1.0.1 ƒ:Slithereens", "name": "Slithereens", "source": "games-ppc.img"},
