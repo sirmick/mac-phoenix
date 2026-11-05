@@ -1,7 +1,7 @@
 # wash-plan: written by Wash as the plan changes.
 # Edit it only between workspaces; plan_set {"from": "<this file>"} loads it.
 
-revision = 275
+revision = 280
 
 [[node]]
   id = "cuts"
@@ -472,7 +472,7 @@ revision = 275
   parent = "p1"
   body = "(1) Standalone: settings.json without \"version\" refused: default to current. (2) uploads.go: replace=1 drops old overlay before rename. (3) Mixed Mode: stale vector when a SysZone accelerated resource is purged+reloaded. (4) SetBevelButtonContentInfo no dispatcher/selector. (5) BBEdit 6.1 survey while Finder menus up. (6) Servers died ~19:50 2026-11-02. (7) ShutDwnPower/Start skip ROMlib_OurClose. (8) Disks: busy Put Away; ghost icon; hfsPBEject no busy check. (9) font.cpp L757/L965 unchecked width-list derefs. (10) harness needs full Chromium. (11) resMod.cpp direct-append orphans bytes. (12) inputsprocket.cpp:177 Movement 12 B. (13) $A08E paramErr for every selector. (14) MPW New dialog folder pop-up blank. (15) AE 'Berk'/'eley' handler not stored. (16) EV Override 2-colour screen: needs a reference (68k clut probe on the Quadra, or 8-bit modes in the PPC video driver); clut.c merged. (17) localvolume.cpp:658 SetFInfo on a folder paramErr. (18) process.cpp launchProcessSN written back without EPBLength check. (19) THINK PM convert on a read-only image: UpdateResFile gui_assert resMod.cpp:455; hfsPBOpen grants write on a locked volume. (20) ResourceDispatch unknown-selector fallback relies on D0's high byte. (21) ctlMouse.cpp:246 control repeat every 6 ticks: KeyRepThresh? confirm on a Mac with another repeat setting."
   state = "reported"
-  revision = 229
+  revision = 279
 
 [[node]]
   id = "m1-audit"
@@ -791,5 +791,5 @@ revision = 275
   template = "package"
   parent = "p1"
   body = "Session ~/storage/tmp/standalone-try/data/logs/2026-11-04/mw2qmnnd-c23bb0bba0cf1e49.log + PNGs -232219 (THINK Project Manager: wasm 'index out of bounds' under C_AEProcessAppleEvent -> 68k handler, creating a project), -232233, -232502 (Word 98: 'possible did actually run out of mem'), -232518 (MPW Shell crashed on quit). Owner also sees render bugs in Microsoft Works (snapshots to come with a new shortcut)."
-  state = "reported"
-  revision = 259
+  state = "done"
+  revision = 280
