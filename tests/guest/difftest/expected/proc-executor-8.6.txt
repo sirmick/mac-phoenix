@@ -1,0 +1,13 @@
+# proc on Executor (8.6 System) against the G3 (8.6): known differences.
+# key-glob<TAB>reason. Remove a line when Executor matches (run.py lists those).
+list.count	Control Strip Extension and Application Switcher are not running (below)
+list.order	the same
+list.launch_order	the same; and Executor launches the background applications at the Finder's first idle calls, after it (the Finder is its first process), though it lists them ahead of it
+list.Control Strip Extension.*	off in the extension policy: its strip needs the Process Manager's private window calls (OSDispatch $5A-$66), not in Executor yet
+list.Application Switcher.*	off in the extension policy; the G3 runs it on some boots, not others (not looked into)
+gestalt.Gestalt.*	the Control Strip Extension's, which isn't running
+list.Folder Actions.size	the partition: SIZE's preferred size plus what Executor adds, more than the G3 (not looked into)
+list.Finder.mode	bit $10000 (not looked into)
+list.BridgeAgent*	the session's agent: the file's name and folder differ by setup
+list.MacPhoenixSuite.launcher	the agent's name (BridgeAgent.bin here)
+layers.bind.GetWindowLayer	the G3's PrivateInterfaceLib doesn't export it; Executor's does (the 7.5.5 Layer Manager's name)

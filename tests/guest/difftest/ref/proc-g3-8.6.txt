@@ -1,0 +1,53 @@
+# probe fa8d227e0feb6ba026e24d59351d3d5d1d75f0641e3a205da188d922b560a2ea
+== list
+list.count: 6
+list.order: Application Switcher, Control Strip Extension, Folder Actions, Finder, BridgeAgent, MacPhoenixSuite
+list.launch_order: Application Switcher, Control Strip Extension, Folder Actions, Finder, BridgeAgent, MacPhoenixSuite
+list.Application Switcher.type: appe apsw
+list.Application Switcher.mode: 00005ce4
+list.Application Switcher.size: 245692
+list.Application Switcher.launcher: system
+list.Application Switcher.folder: Extensions
+list.Control Strip Extension.type: appe sdev
+list.Control Strip Extension.mode: 00005cc8
+list.Control Strip Extension.size: 169048
+list.Control Strip Extension.launcher: system
+list.Control Strip Extension.folder: Extensions
+list.Folder Actions.type: appe ssrv
+list.Folder Actions.mode: 00005cc0
+list.Folder Actions.size: 480848
+list.Folder Actions.launcher: system
+list.Folder Actions.folder: Extensions
+list.Finder.type: FNDR MACS
+list.Finder.mode: 00017bec
+list.Finder.size: 1051884
+list.Finder.launcher: none
+list.Finder.folder: System Folder
+list.BridgeAgent.type: APPL MxBA
+list.BridgeAgent.mode: 000410c0
+list.BridgeAgent.size: 1105920
+list.BridgeAgent.launcher: Finder
+list.BridgeAgent.folder: 3361068
+list.MacPhoenixSuite.type: APPL DfPr
+list.MacPhoenixSuite.mode: 00000080
+list.MacPhoenixSuite.size: 1243060
+list.MacPhoenixSuite.launcher: BridgeAgent
+list.MacPhoenixSuite.folder: Host
+== layers
+layers.bind.ActiveWindow: found
+layers.bind.NewFloatLayer: found
+layers.bind.DisableSwitching: found
+layers.bind.EnableSwitching: found
+layers.bind.IsLayer: found
+layers.bind.GetWindowLayer: missing
+layers.bind.FragRegisterMemLib: found
+layers.ActiveWindow.none: nil
+layers.ActiveWindow.shown: nil
+layers.ActiveWindow.hidden_new: nil
+layers.ActiveWindow.after_events: nil
+layers.DisableSwitching: returned
+layers.NewFloatLayer: err 0 layer
+layers.NewFloatLayer.IsLayer: 1
+== gestalt
+gestalt.Gestalt.sdev: err 0 0000007f
+gestalt.Gestalt.csvr: err 0 02008002

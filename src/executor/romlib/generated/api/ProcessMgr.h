@@ -169,11 +169,18 @@ OSErr glue_GetFrontProcess(ProcessSerialNumber *serial_number);LIBRARY_FUNCTION(
 WindowPtr C_GetLayerAtPoint(Point pt);PASCAL_SUBTRAP(GetLayerAtPoint, 0xA88F, 0x000F, OSDispatch);
 
 
-// MacPhoenix (name is a guess; Apple's at RAM $2A386 counts up a word in its globals, $1A counts it down). No parameters, no result. The System's StillDown and WaitMouseUp patches bracket every poll with the pair, and the Drag Manager its tracking loop: no process switch while held.
-void C_HoldProcessSwitching();PASCAL_SUBTRAP(HoldProcessSwitching, 0xA88F, 0x0019, OSDispatch);
+// MacPhoenix (Apple's name: the G3 ROM's PrivateInterfaceLib glue calls OSDispatch $19 for it; Apple's at RAM $2A386 counts up a word in its globals, $1A counts it down). No parameters, no result. The System's StillDown and WaitMouseUp patches bracket every poll with the pair, the Drag Manager its tracking loop, 8.6's Control Strip its own tracking: no process switch while held.
+void C_DisableSwitching();PASCAL_SUBTRAP(DisableSwitching, 0xA88F, 0x0019, OSDispatch);
+LIBRARY_ALSO(PrivateInterfaceLib, DisableSwitching, InterfaceLib);
 
 
-void C_ReleaseProcessSwitching();PASCAL_SUBTRAP(ReleaseProcessSwitching, 0xA88F, 0x001A, OSDispatch);
+void C_EnableSwitching();PASCAL_SUBTRAP(EnableSwitching, 0xA88F, 0x001A, OSDispatch);
+LIBRARY_ALSO(PrivateInterfaceLib, EnableSwitching, InterfaceLib);
+
+
+// MacPhoenix (PrivateInterfaceLib's glue: OSDispatch $48, procInfo $3AE: an OSErr, the layer by reference). 8.6's Control Strip makes its strip's layer with it, floating over every process's; the G3's 8.6 answers noErr and a layer IsLayer says is one (difftest proc).
+OSErr C_NewFloatLayer(GUEST<WindowPtr> *layer);PASCAL_SUBTRAP(NewFloatLayer, 0xA88F, 0x0048, OSDispatch);
+LIBRARY_ALSO(PrivateInterfaceLib, NewFloatLayer, InterfaceLib);
 
 
 // MacPhoenix (name is a guess; Apple's at RAM $2A78C, the call itself at $2B582). Runs a Pascal routine in another process: its world (A5, low memory, stack) switched in, paramSize bytes of parameters pushed as a stack image, the routine's word result returned. With paramSize of 4 or less, params is the image itself (a long pushed by value); otherwise it points at the image. procNotFound for the current process. The Drag Manager runs a drop target's tracking and receive handlers through it.

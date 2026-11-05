@@ -226,6 +226,9 @@ static uint32_t mode_switch(UniversalProcPtr theProcPtr, ProcInfoType procinfo,
 
     RoutineRecord m68kroutine = {};
     const RoutineRecord* routine = nullptr;
+    /* MacPhoenix: the caller's dispatch selector chose the routine and is
+       not one of its parameters (below). */
+    bool selector_consumed = false;
 
     if(theProcPtr->goMixedModeTrap == MIXED_MODE_TRAP)
     {
@@ -236,6 +239,39 @@ static uint32_t mode_switch(UniversalProcPtr theProcPtr, ProcInfoType procinfo,
                     [](const RoutineRecord& rr) { return rr.ISA == kPowerPCISA; });
         if(routine == endRoutines)
             routine = beginRoutines;
+
+        /* MacPhoenix: a descriptor of several routines, each with its
+           selector, called from PowerPC with a dispatched procInfo (the
+           selector after the procInfo, r5): the selector picks the record,
+           one with selector -1 when none has it, and the routine gets the
+           parameters after it. 8.6's ControlStripLib calls the strip's
+           ControlStripRD so: selector $3FF (no record) with a short and a
+           pointer reaches record 0 (selector -1, procInfo $3A0: short,
+           pointer), whose code takes the short in r3. */
+        int caller_convention = procinfo & 0xf;
+        if(fromISA == kPowerPCISA && theProcPtr->routineCount > 0
+           && (caller_convention == kD0DispatchedPascalStackBased
+               || caller_convention == kD0DispatchedCStackBased
+               || caller_convention == kD1DispatchedPascalStackBased
+               || caller_convention == kStackDispatchedPascalStackBased))
+        {
+            static const uint32_t masks[4] = { 0xFFFF, 0xFF, 0xFFFF, 0xFFFFFFFF };
+            uint32_t mask = masks[(procinfo >> 6) & 3];
+            uint32_t selector = getPowerCore().r[5] & mask;
+            const RoutineRecord *match = std::find_if(beginRoutines, endRoutines,
+                [&](const RoutineRecord& rr) { return ((uint32_t)rr.selector & mask) == selector; });
+            if(match == endRoutines)
+                match = std::find_if(beginRoutines, endRoutines,
+                    [](const RoutineRecord& rr) { return (int32_t)rr.selector == -1; });
+            if(match != endRoutines)
+            {
+                routine = match;
+                int own = match->procInfo & 0xf;
+                selector_consumed = own != kD0DispatchedPascalStackBased
+                    && own != kD0DispatchedCStackBased && own != kD1DispatchedPascalStackBased
+                    && own != kStackDispatchedPascalStackBased;
+            }
+        }
     
         if(routine == endRoutines)
         {
@@ -463,8 +499,9 @@ static uint32_t mode_switch(UniversalProcPtr theProcPtr, ProcInfoType procinfo,
     {
         PowerPCFrame& parentFrame = *ptr_from_longint<PowerPCFrame*>(cpu.r[1]);
 
+        int skip = selector_consumed ? 1 : 0;
         for(int i = 0; i < nParameters; i++)
-            paramValues[i] = (i+2) < 8 ? cpu.r[i+2+3] : parentFrame.parameters[i+2].get();
+            paramValues[i] = (i+2+skip) < 8 ? cpu.r[i+2+skip+3] : parentFrame.parameters[i+2+skip].get();
     }
     else
         std::abort();

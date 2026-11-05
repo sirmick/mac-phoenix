@@ -37,6 +37,13 @@ Speech
 Shared Library Manager
 System AINI -32700
 Microsoft OLE Extension
+# 8.x's background applications ('appe'), launched by the Process Manager
+# once the Finder is up (process.cpp). The G3's 8.6 has Control Strip
+# Extension, Folder Actions and (not every boot) Application Switcher
+# running then (tests/guest/difftest proc). Control Strip Extension waits
+# for the Process Manager's private window calls (OSDispatch $5A-$66): its
+# strip setup fails without them and the session goes down.
+Folder Actions
 # The Monitors control panels and their Control Strip modules: the screen's
 # size is the tab's (the bar, Settings) or /api/resolution's; Monitors 7.5.6
 # lists only the current size, Monitors & Sound shows no monitor without the

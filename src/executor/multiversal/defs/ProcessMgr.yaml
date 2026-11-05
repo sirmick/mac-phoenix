@@ -532,24 +532,45 @@
 # ####
 
 - function:
-    name: HoldProcessSwitching
+    name: DisableSwitching
     dispatcher: OSDispatch
     selector: 0x0019
+    library: PrivateInterfaceLib
     executor: C_
     comment: >
-      MacPhoenix (name is a guess; Apple's at RAM $2A386 counts up a word
-      in its globals, $1A counts it down). No parameters, no result. The
-      System's StillDown and WaitMouseUp patches bracket every poll with
-      the pair, and the Drag Manager its tracking loop: no process switch
-      while held.
+      MacPhoenix (Apple's name: the G3 ROM's PrivateInterfaceLib glue calls
+      OSDispatch $19 for it; Apple's at RAM $2A386 counts up a word in its
+      globals, $1A counts it down). No parameters, no result. The System's
+      StillDown and WaitMouseUp patches bracket every poll with the pair,
+      the Drag Manager its tracking loop, 8.6's Control Strip its own
+      tracking: no process switch while held.
 
 # ####
 
 - function:
-    name: ReleaseProcessSwitching
+    name: EnableSwitching
     dispatcher: OSDispatch
     selector: 0x001A
+    library: PrivateInterfaceLib
     executor: C_
+
+# ####
+
+- function:
+    name: NewFloatLayer
+    return: OSErr
+    args:
+      - name: layer
+        type: WindowPtr*
+    dispatcher: OSDispatch
+    selector: 0x0048
+    library: PrivateInterfaceLib
+    executor: C_
+    comment: >
+      MacPhoenix (PrivateInterfaceLib's glue: OSDispatch $48, procInfo
+      $3AE: an OSErr, the layer by reference). 8.6's Control Strip makes its
+      strip's layer with it, floating over every process's; the G3's 8.6
+      answers noErr and a layer IsLayer says is one (difftest proc).
 
 # ####
 

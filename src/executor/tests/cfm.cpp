@@ -238,7 +238,7 @@ struct PEFBuilder
 /* Data: two words, the second a pointer to itself as the linker saw it,
    at data_default + 4; RelocBySectDWithSkip (skip 1, relocate 1) adds the
    data section's place. */
-std::vector<uint8_t> make_pef(uint32_t data_default)
+std::vector<uint8_t> make_pef(uint32_t data_default, uint8_t data_share = kPEFProcessShare)
 {
     PEFBuilder p;
     p.u32("Joy!"_4); p.u32("peff"_4); p.u32("pwpc"_4);
@@ -268,7 +268,7 @@ std::vector<uint8_t> make_pef(uint32_t data_default)
 
     size_t data = p.b.size();
     p.u32(0); p.u32(data_default + 4);
-    section(1, data_default, 8, kPEFUnpackedDataSection, kPEFProcessShare, 4, data);
+    section(1, data_default, 8, kPEFUnpackedDataSection, data_share, 4, data);
 
     size_t loader = p.b.size();
     p.u32(1); p.u32(0);                 /* main: the data section's start */
@@ -319,6 +319,43 @@ TEST(CFM, RelocationIsRelativeToDefaultAddress)
     EXPECT_EQ(start + 4, word);
 }
 
+/* FragRegisterMemLib, as 8.6's Control Strip Extension calls it: a
+   library prepared from memory with GetMemFragment, registered by name,
+   is what GetSharedLibrary (and so an import) of that name finds; its
+   global data section is the one the registering preparation made. Taken
+   back with (..., 1), once. */
+TEST(CFM, FragRegisterMemLibNamesALibraryInMemory)
+{
+    std::vector<uint8_t> pef = make_pef(0, kPEFGlobalShare);
+    Ptr image = NewPtr(pef.size());
+    memcpy(image, pef.data(), pef.size());
+    StringPtr name = (StringPtr) "\012TestMemLib";
+    GUEST<ConnectionID> cid, cid2;
+    GUEST<Ptr> main, main2;
+    Str255 err;
+    /* (no name: only the registration names it) */
+    ASSERT_EQ(noErr, GetMemFragment(image, pef.size(), (StringPtr) "\0", kReferenceCFrag, &cid, &main, err));
+    EXPECT_EQ(fragLibNotFound, GetSharedLibrary(name, "pwpc"_4, kReferenceCFrag, &cid2, &main2, err));
+
+    struct
+    {
+        GUEST<int32_t> kind;
+        GUEST<Ptr> address;
+        GUEST<uint32_t> length;
+        uint8_t in_place, pad[3];
+    } locator = { 0, image, (uint32_t)pef.size(), 0, {} };
+    Ptr loc = NewPtr(sizeof locator); /* guest memory */
+    memcpy(loc, &locator, sizeof locator);
+    EXPECT_EQ(noErr, C_FragRegisterMemLib(loc, 0, name, false));
+
+    ASSERT_EQ(noErr, GetSharedLibrary(name, "pwpc"_4, kReferenceCFrag, &cid2, &main2, err));
+    EXPECT_EQ(main.get(), main2.get()); /* the same data instance */
+
+    EXPECT_EQ(noErr, C_FragRegisterMemLib(loc, 0, name, true));
+    EXPECT_EQ(fragConnectionIDNotFound, C_FragRegisterMemLib(loc, 0, name, true));
+    DisposePtr(loc);
+}
+
 /* PrivateInterfaceLib's low-memory accessors applications import from it
    (8.6's exports them): MPW Shell keeps its globals in HpChk ($316) through
    LMSetHpChk and LMGetHpChk. */
@@ -354,6 +391,25 @@ TEST(CFM, InterfaceLibExportsHWCfgFlags)
     for(const char *name : { "LMGetHWCfgFlags", "LMSetHWCfgFlags" })
         EXPECT_EQ(noErr, FindSymbol(cid, PSTR(name), &addr, &cls)) << name;
     EXPECT_EQ(0xEC00, (uint16_t)LMGetHWCfgFlags());
+}
+
+/* 8.6's Control Strip: its panel imports GetDefFontSize, its extension's
+   strip code FragRegisterMemLib and the Layer and Process Manager calls
+   from PrivateInterfaceLib (where the G3's ROM has them). */
+TEST(CFM, InterfaceLibExportsControlStripCalls)
+{
+    GUEST<ConnectionID> cid;
+    GUEST<Ptr> main, addr;
+    uint8_t cls;
+    Str255 errname;
+    ASSERT_EQ(noErr, GetSharedLibrary((StringPtr) "\014InterfaceLib", "pwpc"_4,
+                                      kReferenceCFrag, &cid, &main, errname));
+    EXPECT_EQ(noErr, FindSymbol(cid, (StringPtr) "\016GetDefFontSize", &addr, &cls));
+    ASSERT_EQ(noErr, GetSharedLibrary((StringPtr) "\023PrivateInterfaceLib", "pwpc"_4,
+                                      kReferenceCFrag, &cid, &main, errname));
+    for(const char *name : { "FragRegisterMemLib", "ActiveWindow", "NewFloatLayer",
+                             "DisableSwitching", "EnableSwitching" })
+        EXPECT_EQ(noErr, FindSymbol(cid, PSTR(name), &addr, &cls)) << name;
 }
 
 /* Apple's MPLibrary needs the nanokernel: Executor declines it, file or
