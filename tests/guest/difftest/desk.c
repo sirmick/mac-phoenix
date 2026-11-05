@@ -694,6 +694,38 @@ static void finder_calls(void)
         out("LMGetCurLayer", "%s", lm_layer() == get_layer() ? "GetCurLayer" : lm_layer() ? "other" : "nil");
 }
 
+/* The Control Strip panel's: GetDefFontSize (with SysFontSiz 0 too), and
+   the Gestalt selectors it checks before it loads. */
+static void strip_calls(void)
+{
+    typedef short (*Size_t)(void);
+    typedef void (*SetSize_t)(short);
+    Size_t def_size = (Size_t)probe_bind("InterfaceLib", "GetDefFontSize");
+    Size_t lm_size = (Size_t)probe_bind("InterfaceLib", "LMGetSysFontSize");
+    SetSize_t lm_set = (SetSize_t)probe_bind("InterfaceLib", "LMSetSysFontSize");
+    static const OSType sels[] = { 'sdev', 'csvr' };
+    int i;
+    if(def_size && lm_size)
+        out("GetDefFontSize", "%d SysFontSiz %d", def_size(), lm_size());
+    if(def_size && lm_size && lm_set)
+    {
+        short was = lm_size();
+        lm_set(0);
+        out("GetDefFontSize.0", "%d", def_size());
+        lm_set(9);
+        out("GetDefFontSize.9", "%d", def_size());
+        lm_set(was);
+    }
+    for(i = 0; i < 2; i++)
+    {
+        char k[24];
+        long r = 0;
+        OSErr err = Gestalt(sels[i], &r);
+        sprintf(k, "Gestalt.%.4s", (const char *)&sels[i]);
+        out(k, "err %d %08lx", err, err ? 0UL : (unsigned long)r);
+    }
+}
+
 int main(void)
 {
     probe_open("desk");
@@ -707,6 +739,8 @@ int main(void)
         panes();
     if(SECTION("finder"))
         finder_calls();
+    if(SECTION("strip"))
+        strip_calls();
     probe_close();
     return 0;
 }

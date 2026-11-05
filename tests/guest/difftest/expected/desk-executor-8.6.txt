@@ -2,3 +2,5 @@
 # key-glob<TAB>reason. Remove a line when Executor matches (run.py lists those).
 list.GetRecord.1.gdRect	the main screen's size: the session's screen, not something the probe asks
 list.pict.size	the test picture OpenPicture recorded: 134 bytes on Executor, 66 on 8.6 (not looked into; the desktop calls only take the file)
+strip.Gestalt.sdev	the Control Strip Extension (an 'appe' background application with INIT 0) installs it; Executor runs no 'appe' at startup (the panel shows "not installed")
+strip.Gestalt.csvr	the same: the Control Strip Extension's version, $02008002 on the G3
