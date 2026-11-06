@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""test_hfsplus_writer.py -- Executor's HFS+ writer (src/executor/romlib/hfs/plus/
+"""test_hfsplus_writer.py -- Executor's HFS+ writer (executor/core/romlib/hfs/plus/
 writer.cpp, btree.cpp) driven through hfsplus_dump's script mode on blank
 volumes (the fixtures: mkfs.hfsplus, bare and HFS-wrapped), checked by
 tools that share nothing with it:
@@ -36,7 +36,7 @@ import sys
 import tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-FIXTURES = os.path.join(ROOT, "src", "executor", "tests", "fixtures", "hfsplus")
+FIXTURES = os.path.join(ROOT, "executor", "tests", "fixtures", "hfsplus")
 RECON = os.path.expanduser("~/storage/hfsplus-recon")
 IMAGE = "macphoenix-hfsprogs"
 

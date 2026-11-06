@@ -19,42 +19,42 @@ find_package(Threads REQUIRED)
 # guest-to-host conversion of 0 as UB.
 set(EXECUTOR_COMMON_FLAGS -fno-delete-null-pointer-checks)
 
-include(${CMAKE_CURRENT_SOURCE_DIR}/CMakeRC.cmake)
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/CMakeRC.cmake)
 cmrc_add_resource_library(resources
-        WHENCE res
-        res/System
-        res/System.ad
-        res/Browser
-        res/Browser.ad
-        res/Printer
-        res/Printer.ad
-        res/godata.sav
-        res/printdef.ini
-        res/printers.ini
-        res/about/1_License.txt
-        res/about/2_Credits.txt
-        res/about/3_Tips.txt
-        res/resource-policy.txt
-        res/extension-policy.txt
+        WHENCE core/res
+        core/res/System
+        core/res/System.ad
+        core/res/Browser
+        core/res/Browser.ad
+        core/res/Printer
+        core/res/Printer.ad
+        core/res/godata.sav
+        core/res/printdef.ini
+        core/res/printers.ini
+        core/res/about/1_License.txt
+        core/res/about/2_Credits.txt
+        core/res/about/3_Tips.txt
+        core/res/resource-policy.txt
+        core/res/extension-policy.txt
     )
 
 # --- CPU facade --------------------------------------------------------------
 # syn68k_common.cpp implements the syn68k API on a cpu::Core
 # (src/cpu/core), chosen at startup (--core): mame-68k.
 add_library(executor_cpu STATIC
-    cpu/syn68k_common.cpp
-    cpu/PowerCore.cpp
+    core/cpu/syn68k_common.cpp
+    core/cpu/PowerCore.cpp
     # syn68k_host.h: the guest windows' memory
-    $<IF:$<BOOL:${EMSCRIPTEN}>,cpu/host/wasm/memory.cpp,cpu/host/posix/memory.cpp>
+    $<IF:$<BOOL:${EMSCRIPTEN}>,core/cpu/host/wasm/memory.cpp,core/cpu/host/posix/memory.cpp>
 )
-target_include_directories(executor_cpu PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/cpu)
-target_include_directories(executor_cpu PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/romlib)   # base/trap_history.h
+target_include_directories(executor_cpu PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/core/cpu)
+target_include_directories(executor_cpu PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/core/romlib)   # base/trap_history.h
 target_compile_options(executor_cpu PRIVATE ${EXECUTOR_COMMON_FLAGS})
 target_link_libraries(executor_cpu PUBLIC cpu_core Threads::Threads)
 phoenix_exempt_from_hardening(executor_cpu)
 
 # --- Toolbox -------------------------------------------------------------------
-add_subdirectory(romlib)
+add_subdirectory(core/romlib)   # and the front ends (frontends/)
 target_compile_options(romlib PRIVATE ${EXECUTOR_COMMON_FLAGS} -Wno-deprecated-declarations)
 # --logtraps support (cheap when the flag is off).
 target_compile_definitions(romlib PUBLIC EXECUTOR_ENABLE_LOGGING)
@@ -84,10 +84,10 @@ if(EXECUTOR_SKIA)
     if(NOT SKIA_LIB OR NOT SKIA_FREETYPE_LIB OR NOT EXISTS "${SKIA_DIR}/include/core/SkCanvas.h")
         message(FATAL_ERROR "EXECUTOR_SKIA: no Skia in ${SKIA_DIR} (tools/skia/fetch.sh, or -DSKIA_DIR=...)")
     endif()
-    target_sources(romlib PRIVATE romlib/hidpi/hidpi.cpp romlib/hidpi/hidpi_skia.cpp)
+    target_sources(romlib PRIVATE core/romlib/hidpi/hidpi.cpp core/romlib/hidpi/hidpi_skia.cpp)
     # Skia's headers for the one file that draws (its include root has
     # include/ and src/ directories of its own)
-    set_source_files_properties(romlib/hidpi/hidpi_skia.cpp TARGET_DIRECTORY romlib PROPERTIES
+    set_source_files_properties(core/romlib/hidpi/hidpi_skia.cpp TARGET_DIRECTORY romlib PROPERTIES
         INCLUDE_DIRECTORIES "${SKIA_DIR}")
     target_compile_definitions(romlib PUBLIC EXECUTOR_HIDPI=1)
     # FreeType inside Skia is its own static copy (FTL), not the system's
@@ -120,12 +120,11 @@ target_compile_options(front-end-phoenix PRIVATE ${EXECUTOR_COMMON_FLAGS})
 # Into the one binary (its g_platform comes from src/core). Not in the
 # wasm build, which has no mac-phoenix.
 if(TARGET mac-phoenix)
-    target_sources(mac-phoenix PRIVATE host/executor_child.cpp)
+    target_sources(mac-phoenix PRIVATE frontends/phoenix/executor_child.cpp)
     target_link_libraries(mac-phoenix PRIVATE front-end-phoenix)
     target_compile_definitions(mac-phoenix PRIVATE HAVE_EXECUTOR=1)
     target_include_directories(mac-phoenix PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/host
-        ${CMAKE_CURRENT_SOURCE_DIR}/romlib/config/front-ends/phoenix)
+        ${CMAKE_CURRENT_SOURCE_DIR}/frontends/phoenix)
 endif()
 
 # g_platform for the test binaries, which have no src/core. Compiled into
@@ -144,7 +143,7 @@ if(BUILD_TESTS)
     set(BUILD_GMOCK OFF CACHE BOOL "" FORCE)
     set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
     set(GOOGLETEST_VERSION 1.9.0)
-    add_subdirectory(third_party/googletest EXCLUDE_FROM_ALL)
+    add_subdirectory(core/third_party/googletest EXCLUDE_FROM_ALL)
     add_subdirectory(tests)
 
     if(TARGET mac-phoenix)

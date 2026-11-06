@@ -5,7 +5,7 @@
 // menu and checks the screen changed (input reaches the guest while it
 // tracks the menu).
 //
-//   node web/tests/tab_smoke.mjs DIR OUT.png [SECONDS]
+//   node executor/tests/web/tab_smoke.mjs DIR OUT.png [SECONDS]
 //
 // Needs playwright (harness.mjs).
 import { open } from './harness.mjs';

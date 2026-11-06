@@ -12,7 +12,7 @@
 //     where the page mapped it;
 //   - the overlay (?diag) showing the same.
 //
-//   node web/tests/tab_display.mjs DIR
+//   node executor/tests/web/tab_display.mjs DIR
 //
 // Needs playwright (harness.mjs).
 import fs from 'node:fs';

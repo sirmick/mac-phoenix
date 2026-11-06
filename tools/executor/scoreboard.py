@@ -5,7 +5,7 @@
   run [--only COLUMN/SET ...]   grid.py for every column x application disk,
                                 into OUT/<column>/<set>/ (skips finished ones
                                 unless --force)
-  tab [--only COLUMN/DISK ...]  the site's cells (web/tests/tab_site.mjs, ctest
+  tab [--only COLUMN/DISK ...]  the site's cells (executor/tests/web/tab_site.mjs, ctest
                                 executor.web.site.*, in --build, the wasm build)
                                 for the tab columns, into OUT/<column>/<disk>.jsonl
                                 and screenshots in OUT/<column>/<disk>/
@@ -354,7 +354,7 @@ def cmd_table(opts):
             "copy of the application disk. BridgeAgent launches the application from the",
             "Finder; 20 s later the grid takes a screenshot and reads the log.",
             "**w761**, **w86**: Executor in the browser tab (WebAssembly) on the site's",
-            "library disks, `web/tests/tab_site.mjs` (`scoreboard.py tab`, the",
+            "library disks, `executor/tests/web/tab_site.mjs` (`scoreboard.py tab`, the",
             "`executor.web.site.*` cells): **runs** when the application came to the front,",
             "drew a window, drew its second menu and was still in front with no error alert",
             "after that; blank where the site doesn't offer it. The site's cells check",

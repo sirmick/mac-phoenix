@@ -1,5 +1,5 @@
 # Known failures of the Toolbox suite on Executor (tests/test_toolbox_suite.sh).
-# The same one is disabled in the native run (src/executor/tests/
+# The same one is disabled in the native run (executor/tests/
 # test-properties.cmake): the Host volume keeps no creation date (Linux has
 # none).
 FileTest.SetFInfo_CrDat

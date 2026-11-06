@@ -13,7 +13,7 @@ that runs it:
 |---------|------|------------------|--------------|
 | `uae` (default) | m68k | `uae` (default), `mame-68k` | `src/cpu/cpu_m68k.cpp`, `src/core/` |
 | `kpx` | ppc | `kpx` (default), `mame-ppc` | `src/cpu/kpx/cpu_ppc_kpx.cpp` / `cpu_ppc_mame.cpp` + shared SheepShaver code in `src/cpu/kpx/` |
-| `executor` | m68k | `mame-68k` | `src/executor/` (Toolbox in C++, no ROM) |
+| `executor` | m68k | `mame-68k` | `executor/` (Toolbox in C++, no ROM) |
 
 Cores other than Kheperix implement `cpu::Core`
 (`src/cpu/core/cpu_core.h`): `uae` in `src/cpu/core/uae_core.cpp` over
@@ -73,7 +73,7 @@ MAME cores: [`cpu/PLAN.md`](cpu/PLAN.md).
 
 No ROM: the Executor 2000 Toolbox (C++) runs in the IPC child (or in-process
 with `--no-webserver`) on a 68k core through a syn68k-compatible facade
-(`src/executor/cpu/`) on `mame-68k`, in four address windows (no
+(`executor/core/cpu/`) on `mame-68k`, in four address windows (no
 `vm.mmap_min_addr`); PowerPC code goes through `PowerCore` on `mame-ppc`. Plan, milestones and
 gotchas: [`executor/PLAN.md`](executor/PLAN.md).
 

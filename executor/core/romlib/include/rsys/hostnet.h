@@ -7,7 +7,7 @@
  *   posix  host sockets and the host's resolver (host/posix/net.cpp)
  *   none   no network: sockets fail with ENETDOWN, lookups with EAI_FAIL,
  *          no host threads (host/none/net.cpp)
- *   wasm   the tab's own sockets, out through tools/standalone's relay
+ *   wasm   the tab's own sockets, out through executor/server's relay
  *          (host/wasm/net.cpp; DIRECTION.md, "The network relay")
  *
  * Sockets are POSIX-shaped: descriptors, sockaddrs and flags as

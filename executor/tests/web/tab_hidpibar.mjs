@@ -1,10 +1,10 @@
-// The bar's HiDPI box (web/executor/main.js HiDpiBar; docs/executor/Settings.md,
+// The bar's HiDPI box (executor/web/main.js HiDpiBar; docs/executor/Settings.md,
 // HiDPI.md): display.scale 2 ticked, 1 not, live, at devicePixelRatio 2.
 //
-//   node web/tests/tab_hidpibar.mjs DIR IMAGE
+//   node executor/tests/web/tab_hidpibar.mjs DIR IMAGE
 //
 // IMAGE: a System image with outline fonts (tests-7.6.1.img; only read).
-// On tools/standalone, a 1280x1000 window at dpr 2:
+// On executor/server, a 1280x1000 window at dpr 2:
 //   - at start (Sharpness Auto): ticked, the canvas 1280x960, the menu bar
 //     drawn from outlines (it differs from the 1x frame doubled), the tooltip;
 //   - each of: untick (the canvas 640x480, the 1x frame itself), tick again

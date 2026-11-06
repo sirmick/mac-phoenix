@@ -1,7 +1,7 @@
 // W3's Finder check (docs/executor/DIRECTION.md): Apple's System and
 // Finder from an uploaded disk image, in the tab.
 //
-//   node web/tests/tab_finder.mjs DIR IMAGE
+//   node executor/tests/web/tab_finder.mjs DIR IMAGE
 //
 // IMAGE: an HFS disk image with a blessed System Folder and a Finder (the
 // tests use tests-7.5.5.img; it is only read: mounted read-only, its System

@@ -1,11 +1,11 @@
 // The Monitors control panels left out of a System that has them
-// (src/executor/res/extension-policy.txt's "-NAME" entries;
+// (executor/core/res/extension-policy.txt's "-NAME" entries;
 // docs/executor/DisplayModes.md, "Left out"): a full 7.6.1 System as the
 // server's library disk, Executor's volume (kept on the server) has them in
 // the "(Disabled)" folders and the sound ones where they were; after a
 // reload, on the saved System Folder, still.
 //
-//   node web/tests/tab_monitors.mjs DIR SYSTEM
+//   node executor/tests/web/tab_monitors.mjs DIR SYSTEM
 //
 // SYSTEM: a 7.6.1 image with Monitors, Monitors & Sound and the Monitor
 // Control Strip modules (tests-7.6.1.img; only read). Skips (77) without it.

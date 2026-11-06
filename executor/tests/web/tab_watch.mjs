@@ -5,7 +5,7 @@
 // unanswered by the page itself ('app' never resolves), on Executor's own
 // System.
 //
-//   node web/tests/tab_watch.mjs DIR
+//   node executor/tests/web/tab_watch.mjs DIR
 //
 // Needs playwright (harness.mjs).
 import { open, firstFrame, until } from './harness.mjs';

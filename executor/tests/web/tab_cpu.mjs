@@ -1,7 +1,7 @@
 // The top bar's CPU meter (main.js CpuMeter): the emulator thread's busy
 // share, from its waits (rsys/hostidle.h busy()), each half second.
 //
-//   node web/tests/tab_cpu.mjs DIR LIBRARY
+//   node executor/tests/web/tab_cpu.mjs DIR LIBRARY
 //
 // LIBRARY tools/web/make_library.py's output, with boot-7.6.1.img and
 // games-68k.img (skips, 77, without them). Checks: the meter hidden while

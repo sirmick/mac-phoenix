@@ -153,7 +153,7 @@ them, and MR Browser reaches MR's API.
 
 Each is its archive expanded in the guest. What they report (2026-11-03;
 Executor native = `tests/test_utilities_executor.sh`, the tab = the
-`executor.web.site.*.utilities` cell / `web/tests/tab_site.mjs`):
+`executor.web.site.*.utilities` cell / `executor/tests/web/tab_site.mjs`):
 
 | | Quadra 650, 7.6.1 | G3, 8.6 | Executor 7.6.1 (68k) | Executor 8.6 (PowerPC) | tab 7.6.1 / 8.6 |
 |---|---|---|---|---|---|

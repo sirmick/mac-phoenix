@@ -1,12 +1,12 @@
-// The library's details (web/executor/disks.js): what is on a library disk,
+// The library's details (executor/web/disks.js): what is on a library disk,
 // from its record's "items" (tools/web/make_library.py), on
-// tools/standalone. A disk's "▸ N items" opens a row under it with each
+// executor/server. A disk's "▸ N items" opens a row under it with each
 // item (its group's name above its items, name with description and kind,
 // version, arch, size) and the disk's note, without putting the disk in the
 // Mac; again closes it. The filter finds a disk by an item on it. A CD's
 // items are its top-level folders with their sizes.
 //
-//   node web/tests/tab_library.mjs DIR LIBRARY [DISK] [SHOTS]
+//   node executor/tests/web/tab_library.mjs DIR LIBRARY [DISK] [SHOTS]
 //
 // DIR the wasm build's page, LIBRARY make_library.py's output, DISK a disk
 // in it with items (default development.img: groups, descriptions);
@@ -31,7 +31,7 @@ const cdName = fs.readdirSync(library).find((f) => f.endsWith('.iso') && (record
 
 const server = await startServer(dir, { images: library, include: ['*.img', '*.iso'] });
 if (!server) {
-    console.log('SKIP: no go to build tools/standalone');
+    console.log('SKIP: no go to build executor/server');
     process.exit(77);
 }
 const browser = await launch();

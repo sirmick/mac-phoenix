@@ -82,7 +82,7 @@ if [[ -n "$NO_ASLM" ]]; then
     # the first start extracts.
     $MPW start ${CORE:+--core $CORE} >/dev/null || { echo "FAIL: session did not start"; exit 1; }
     $MPW stop >/dev/null
-    grep -v -e "^Shared Library Manager" -e "AINI -32700" src/executor/res/extension-policy.txt \
+    grep -v -e "^Shared Library Manager" -e "AINI -32700" executor/core/res/extension-policy.txt \
         >"$STORAGE/executor-systems/$MPW_SYSTEM.clean/extension-policy.txt"
 fi
 $MPW start ${CORE:+--core $CORE} --emu=--executor-debug --emu=ot \

@@ -1,7 +1,7 @@
 // The tab's settings (docs/executor/Settings.md): settings.schema.json
 // describes them, this keeps them and makes the Settings dialog from it.
 //
-// Where they are kept: the server's /api/settings (tools/standalone:
+// Where they are kept: the server's /api/settings (executor/server:
 // settings.json, the page's and the server's own); without it (refused:
 // the server restarted, main.js) the defaults, kept nowhere. The page's
 // address overrides some for the visit

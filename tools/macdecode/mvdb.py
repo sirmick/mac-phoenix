@@ -1,6 +1,6 @@
 """Multiversal as a database: names, types, sizes, lowmem addresses, traps.
 
-Loads src/executor/multiversal/defs/*.yaml — the same files Executor's
+Loads executor/core/multiversal/defs/*.yaml — the same files Executor's
 headers are generated from — so a fix made there (a renamed lowmem
 global, a placeholder turned into a real type) changes both the C++
 and the decoder.
@@ -14,7 +14,7 @@ from pathlib import Path
 
 import yaml
 
-DEFAULT_DEFS = Path(__file__).resolve().parents[2] / "src/executor/multiversal/defs"
+DEFAULT_DEFS = Path(__file__).resolve().parents[2] / "executor/core/multiversal/defs"
 
 PRIMITIVES = {  # name: (size, signed)
     "uint8_t": (1, False), "uint16_t": (2, False), "uint32_t": (4, False),

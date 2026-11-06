@@ -2,7 +2,7 @@
 # build-retro68.sh — PartProbe as a 68k application built with Retro68
 # (RETRO68: the toolchain prefix, default ~/opt/retro68/build/toolchain)
 # and as a PowerPC one (RETRO68PPC, default ~/opt/retro68/build-ppc/toolchain)
-# against the headers generated from src/executor/multiversal: writes
+# against the headers generated from executor/core/multiversal: writes
 # PartProbe.bin and PartProbePPC.bin here.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -11,7 +11,7 @@ RETRO68="${RETRO68:-$HOME/opt/retro68/build/toolchain}"
 RETRO68PPC="${RETRO68PPC:-$HOME/opt/retro68/build-ppc/toolchain}"
 WORK="${WORK:-$HOME/storage/tmp/partprobe-retro68.$$}"
 mkdir -p "$WORK"
-(cd "$REPO/src/executor/multiversal" && \
+(cd "$REPO/executor/core/multiversal" && \
     PATH="$RETRO68/bin:$PATH" ruby make-multiverse.rb -G CIncludes -o "$WORK/mv" >/dev/null)
 cmake -S "$HERE" -B "$WORK/m68k" -DCMAKE_TOOLCHAIN_FILE="$RETRO68/m68k-apple-macos/cmake/retro68.toolchain.cmake" \
     -DMV_OUT="$WORK/mv" >/dev/null

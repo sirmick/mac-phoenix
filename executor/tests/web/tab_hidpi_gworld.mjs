@@ -7,7 +7,7 @@
 // 1x pixels, scaled up). The boxes are GWorldGallery's, as in
 // tests/test_hidpi_gworld.sh.
 //
-//   node web/tests/tab_hidpi_gworld.mjs DIR GUEST_DIR SYSTEM
+//   node executor/tests/web/tab_hidpi_gworld.mjs DIR GUEST_DIR SYSTEM
 //
 // SYSTEM: 8.6.img (only read). Skips (77) without it.
 import fs from 'node:fs';

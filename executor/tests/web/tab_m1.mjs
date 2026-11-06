@@ -5,7 +5,7 @@
 // game taken past its title screen. Each application gets a fresh load of
 // the page (the Finder again); one that crashes the tab gets a new tab.
 //
-//   node web/tests/tab_m1.mjs DIR LIBRARY SYSTEM DISK
+//   node executor/tests/web/tab_m1.mjs DIR LIBRARY SYSTEM DISK
 //
 // DIR the wasm build's page, LIBRARY tools/web/make_library.py's output,
 // SYSTEM 7.6.1 or 8.6, DISK a library disk there (productivity.img, creative.img,

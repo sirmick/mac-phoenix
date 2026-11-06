@@ -431,7 +431,7 @@ func (s *Server) static(c *ctx, p string) error {
 	}
 	if err != nil {
 		if norm == "/index.html" {
-			return c.sendBytes(404, []byte("No site in this build: tools/standalone's Makefile embeds make_site.sh's output (or --site DIR).\n"), "text/plain; charset=utf-8")
+			return c.sendBytes(404, []byte("No site in this build: executor/server's Makefile embeds make_site.sh's output (or --site DIR).\n"), "text/plain; charset=utf-8")
 		}
 		return httpErr(404, "not found")
 	}

@@ -1,6 +1,6 @@
 # The tab's Disks panel
 
-The page's disks (`web/executor/disks.js`, `disks.css`; main.js owns the
+The page's disks (`executor/web/disks.js`, `disks.css`; main.js owns the
 disks, the panel draws them). The bar has a **Disks** button (with the
 count of disks in the Mac) and no other disk controls: the panel docks on
 the right and the Mac's screen moves aside (`fitCanvas` leaves out the
@@ -29,7 +29,7 @@ page are added and open it.
   - `INSERTING…`: on its way in (downloading, opening, mounting).
   Buttons: ↺ Revert, ⤓ Download, ⏏ Eject. Below them: **Add disk image or
   application…** (the page's `#add`) or drop files: a disk image is
-  uploaded into the server's library (main.js `uploadImage`, tools/standalone
+  uploaded into the server's library (main.js `uploadImage`, executor/server
   `POST /api/uploads/NAME`, tagged `uploaded`) and put in; one the server
   refuses is held for this visit.
 - **Library**: `library.json`'s disks, one's uploads among them, as a
@@ -130,7 +130,7 @@ Items, Launcher Items, ...) and files of the types that run at startup or
 register themselves anywhere (INIT, cdev, appe, thng, libr, RDEV, fext,
 AINI, ...), and CarbonLib. Kept by name: startup code an application
 can't do without that runs clean on Executor (allowed in
-`src/executor/res/extension-policy.txt`): the Microsoft OLE Extension,
+`executor/core/res/extension-policy.txt`): the Microsoft OLE Extension,
 which Works 4.0b won't start without (make_disk.py `STARTUP_KEPT`,
 hfs_sideload.cpp `startupCode`). What applications need to start is their
 preferences, support files, fonts and shared libraries; installers'
@@ -193,7 +193,7 @@ join `app`, `windows`, `menus`, `launch`; the page's `insert`
 
 ## Tests
 
-`executor.web.disks` (`web/tests/tab_disks.mjs`, standalone, the System
+`executor.web.disks` (`executor/tests/web/tab_disks.mjs`, standalone, the System
 from `EXECUTOR_WEB_SYSTEM` picked in the panel from the library): a blank
 disk put in while the Finder runs (no restart), a folder made on it,
 Revert (the folder gone, the disk back in), Put Away in the Finder (out
@@ -204,7 +204,7 @@ preferences file, a font) copied in as it goes in, the font's restart
 said, kept after it is out, nothing copied twice when it is in again.
 `system_additions` (`tests/test_system_additions.py`, hfsutils): the
 disk's additions folder made from two snapshots. `executor_tests` `HFSUnmountTest.*`
-(`src/executor/tests/hfs_volume.cpp`): a data or resource fork open
+(`executor/tests/hfs_volume.cpp`): a data or resource fork open
 makes a blank HFS floppy busy, the desktop database doesn't, the forced
-unmount closes. The other tab cells reach the panel through `web/tests/harness.mjs`
+unmount closes. The other tab cells reach the panel through `executor/tests/web/harness.mjs`
 (`openDisks`, `pickSystem`, `diskButton`, `diskState`).

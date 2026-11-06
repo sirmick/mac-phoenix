@@ -5,7 +5,7 @@
 // shows the first's screen, runs no Executor, until it takes control; the
 // first then watches. Executor's own System.
 //
-//   node web/tests/tab_standalone.mjs DIR [SHOTS]
+//   node executor/tests/web/tab_standalone.mjs DIR [SHOTS]
 //
 // SHOTS: a directory for screenshots (default: none). Skips (77) without
 // hfsutils' hformat (the library disk is a blank HFS one).

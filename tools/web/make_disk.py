@@ -71,7 +71,7 @@ STARTUP_FOLDERS = {b"Control Panels", b"Startup Items", b"Shutdown Items", b"Con
 STARTUP_TYPES = {b"INIT", b"cdev", b"appe", b"thng", b"libr", b"RDEV", b"fext", b"AINI", b"dbgr",
                  b"scri", b"ADBS"}
 # Startup code applications can't do without and that runs clean on Executor
-# (allowed in src/executor/res/extension-policy.txt): kept by name.
+# (allowed in executor/core/res/extension-policy.txt): kept by name.
 # Microsoft OLE Extension: Works 4.0b won't start without it. Matched without
 # case, as HFS names are (and hfs_sideload.cpp's startupCode).
 STARTUP_KEPT = {b"microsoft ole extension"}

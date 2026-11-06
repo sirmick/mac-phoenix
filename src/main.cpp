@@ -730,7 +730,7 @@ int main(int argc, char **argv)
 		boot_progress_set_ipc_buffer(ipc_buf);
 
 		// Executor: no ROM, no Mac boot. The Toolbox runs in-process on UAE
-		// and publishes frames itself (src/executor/host/executor_child.cpp).
+		// and publishes frames itself (executor/frontends/phoenix/executor_child.cpp).
 		if (emu_config.backend == config::Backend::EXECUTOR) {
 #ifdef HAVE_EXECUTOR
 			g_emulator_initialized = true;

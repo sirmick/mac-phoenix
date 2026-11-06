@@ -2,7 +2,7 @@
 // survives a reload; Reset forgets it. Executor's own System, so no Apple
 // software is needed.
 //
-//   node web/tests/tab_persist.mjs DIR
+//   node executor/tests/web/tab_persist.mjs DIR
 import { open, firstFrame, request, until, openDisks, closeDisks } from './harness.mjs';
 
 const [dir] = process.argv.slice(2);

@@ -1,7 +1,7 @@
 /*
  * web_main.cpp - Executor in a browser tab (docs/executor/DIRECTION.md, W2).
  *
- * The module runs in a Worker (web/executor/worker.js). main() starts
+ * The module runs in a Worker (executor/web/worker.js). main() starts
  * Executor through the same executor_host contract mac-phoenix uses, on
  * this thread: there is no other. Executor's idle waits and a tick about
  * once a frame yield to the browser (rsys/hostidle.h); on the way back the
@@ -154,7 +154,7 @@ EM_JS(void, js_build, (const char *id), {
         Module.onBuild(UTF8ToString(id));
 });
 
-/* The cursor, for the page to draw (a CSS cursor; web/executor/cursor.js). */
+/* The cursor, for the page to draw (a CSS cursor; executor/web/cursor.js). */
 EM_JS(void, js_cursor, (const uint8_t *data, const uint8_t *mask, int hotX, int hotY, int visible), {
     if (Module.onCursor)
         Module.onCursor(HEAPU8.slice(data, data + 32), HEAPU8.slice(mask, mask + 32), hotX, hotY, !!visible);
@@ -541,7 +541,7 @@ void watch_images()
 }
 
 /* The strings drawn lately (ROMlib_text_drawn), oldest first: the page's
-   "drawn" request (web/tests/tab_m1.mjs: a program's output in its window) */
+   "drawn" request (executor/tests/web/tab_m1.mjs: a program's output in its window) */
 std::deque<std::string> drawn;
 void text_drawn(const char *text, int len)
 {
@@ -593,7 +593,7 @@ void on_event_poll()
         else if(op == "mouse")
         {
             /* Where the Mac has the mouse, and its screen: what a click
-               from the page lands on (web/tests/tab_input.mjs). */
+               from the page lands on (executor/tests/web/tab_input.mjs). */
             Point m = LM(MouseLocation);
             reply = "{\"x\":" + std::to_string(m.h) + ",\"y\":" + std::to_string(m.v)
                     + ",\"width\":" + std::to_string(vdriver->width())
@@ -667,7 +667,7 @@ void on_event_poll()
             reply_screen1x(id);
             continue;
         }
-        /* The page's side of Executor stopping (web/tests/tab_stopped.mjs):
+        /* The page's side of Executor stopping (executor/tests/web/tab_stopped.mjs):
            a fatal error of its own, the wasm trapping (an access out of
            bounds: far past any memory it has grown to) */
         else if(op == "test-fatal")
@@ -739,7 +739,7 @@ void on_yield()
  * 32 MB, 128 on Apple's System) and the depth the screen starts in (as
  * --depth; default: as the System's Macs), and an application to start
  * instead of Executor's Browser or the Finder (paths in the module's
- * filesystem). The page's settings (web/executor/settings.js) say which. */
+ * filesystem). The page's settings (executor/web/settings.js) say which. */
 int main(int argc, char **argv)
 {
     executor_host::Config c;
@@ -792,7 +792,7 @@ int main(int argc, char **argv)
     const int apple_ram_mb = 128;
     c.data_dir = DATA_DIR; /* in memory; Executor makes its System Folder */
     /* Disk images are writable (CDs, --cdrom, are not): the page keeps
-       their changes in an overlay (web/executor/overlay.js); the images
+       their changes in an overlay (executor/web/overlay.js); the images
        themselves are never written. */
     c.writable_images = true;
     /* Removable, as a floppy or a CD put in: the Finder puts them away

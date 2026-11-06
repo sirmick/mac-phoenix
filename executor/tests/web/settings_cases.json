@@ -1,5 +1,5 @@
 {
-  "_": "settings.schema.json's checks, the same in tools/standalone (go test) and web/executor/settings.js (tab_settings.mjs). Each case: start (a patch to the defaults first), patch, then error (the path refused) or expect (dotted path -> value after).",
+  "_": "settings.schema.json's checks, the same in executor/server (go test) and executor/web/settings.js (tab_settings.mjs). Each case: start (a patch to the defaults first), patch, then error (the path refused) or expect (dotted path -> value after).",
   "patches": [
     { "patch": { "machine": { "ram_mb": 128, "screen": "800x600" } }, "expect": { "machine.ram_mb": 128, "machine.screen": "800x600" } },
     { "patch": { "machine": { "ram_mb": 9999 } }, "error": "machine.ram_mb" },

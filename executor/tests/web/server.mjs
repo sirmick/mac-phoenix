@@ -1,4 +1,4 @@
-// Shared by the server tests: tools/standalone (the Go server, built here
+// Shared by the server tests: executor/server (the Go server, built here
 // with go, $GO) on a free port, serving SITE (the wasm build's page) with a
 // scratch data directory and a library of IMAGES (images with NAME.img.json
 // records; include: the patterns offered). relay: settings for the relay
@@ -11,9 +11,9 @@ import path from 'node:path';
 import { spawn, execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 
-// tools/standalone's binary with args; once it listens: { url (its
+// executor/server's binary with args; once it listens: { url (its
 // printed address, no slash), stop() }. The process: child.
 export async function runGo(binary, args) {
     const child = spawn(binary, args, { stdio: ['ignore', 'pipe', 'inherit'] });
@@ -67,7 +67,7 @@ function libraryView(images, scratch) {
     return view;
 }
 
-// startServer: tools/standalone built (go; null without it) and run on
+// startServer: executor/server built (go; null without it) and run on
 // --site site, a scratch DATA unless given (its settings.json made from
 // include and relay when there is none); args added. As runGo, and data,
 // settingsFile, bin.
@@ -86,7 +86,7 @@ export async function startServer(site, { images, include, relay, data, args = [
         bin = path.join(scratch, 'executor-standalone');
         try {
             execFileSync(process.env.GO || 'go', ['build', '-o', bin, '.'],
-                         { cwd: path.join(ROOT, 'tools/standalone'), stdio: 'inherit', env: { ...process.env, CGO_ENABLED: '0' } });
+                         { cwd: path.join(ROOT, 'executor/server'), stdio: 'inherit', env: { ...process.env, CGO_ENABLED: '0' } });
         } catch (e) {
             return null;
         }

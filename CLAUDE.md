@@ -69,7 +69,7 @@ ctest --test-dir build -L executor
 # the 1x screen scaled up): Skia, prebuilt, off by default
 tools/skia/fetch.sh && cmake -B build -DEXECUTOR_SKIA=ON
 ./build/mac-phoenix --backend executor --executor-system 8.6.img --executor-ppc --executor-scale 2
-# Executor's API definitions (src/executor/multiversal/defs) are also Retro68's
+# Executor's API definitions (executor/core/multiversal/defs) are also Retro68's
 # Multiversal Interfaces: ctest -R multiversal_retro68 builds a program against
 # the C headers they generate, ctest -R retro68_ runs RetroTest (tests/guest/retro68,
 # 68k + PowerPC, Retro68 with PowerPC in ~/opt/retro68/build-ppc/toolchain) on
@@ -96,10 +96,13 @@ tools/executor/grid_compare.py ~/storage/executor-grid/8.6-r2 ~/storage/executor
 source ~/emsdk/emsdk_env.sh
 emcmake cmake -B build-wasm && cmake --build build-wasm -j4
 ctest --test-dir build-wasm -L executor    # the gtests under node, + executor.web.tab
-# The tab (W2): serve build-wasm/src/executor/romlib/config/front-ends/wasm
+# The tab (W2): serve build-wasm/executor/frontends/wasm
 # (python3 -m http.server) and open index.html; ?size=WxH.
 # executor.web.tab needs -DEXECUTOR_WEB_NODE_PATH=<node_modules with playwright>
 # (and -DEXECUTOR_WEB_CHROMIUM=<browser> if not playwright's own).
+# The Go server with the tab embedded (docs/executor/Standalone.md):
+make -C executor/server WASM_BUILD=$PWD/build-wasm   # -> executor/server/executor-standalone
+(cd executor/server && go test ./...)
 
 # MPW (68k SC/Link/Rez) inside a headless Executor session (docs/MPW.md)
 tools/mpw/mpw setup                    # once: MPW disk + System, built from snapshots
@@ -143,7 +146,7 @@ further backends.
 |---------|------|------|-------|---------|
 | `uae` | m68k | ROM-based Mac; CPU core `--core uae` (interpreter, +optional `--jit`) or `--core mame-68k` (MAME's Musashi: PMMU, softfloat FPU, several instances per process; `src/cpu/mame/`; `musashi` names it too, the vendored v3.32 is gone) | Fast (~5s boot) | Default, end users |
 | `kpx` | ppc | Power Mac G3 machine; CPU core `--core kpx` (Kheperix, +optional `--jit`) or `--core mame-ppc` (MAME's PowerPC recompiler: `--jit` native x86-64 back-end, `--no-jit` UML interpreter; `src/cpu/mame/`, installer `src/cpu/kpx/cpu_ppc_mame.cpp`) | Medium | Default for PPC |
-| `executor` | m68k | Executor 2000 Toolbox in C++ on `mame-68k`; no ROM; PowerPC applications' code on `mame-ppc` (PowerCore facade) | Fast start | Toolbox reimplementation work (`src/executor/`) |
+| `executor` | m68k | Executor 2000 Toolbox in C++ on `mame-68k`; no ROM; PowerPC applications' code on `mame-ppc` (PowerCore facade) | Fast start | Toolbox reimplementation work (`executor/`) |
 
 MAME cores (docs/cpu/PLAN.md): MAME's Musashi with PMMU and FPU as the 68k
 core `mame-68k` (C1, done), MAME's PowerPC recompiler as the PPC core
@@ -195,14 +198,27 @@ src/
     webserver_main.cpp              — HTTP server thread; registers /ws route via WebRTCServer
   webrtc/
     webrtc_server.cpp               — Signaling (/ws), peer connections for H.264/VP9 RTP
-  executor/                         — Executor 2000 Toolbox core (MIT), imported; see docs/executor/PLAN.md
-    cpu/                            — syn68k API facade (syn68k_common) on a cpu::Core + PowerCore (PowerPC) on mame-ppc
-    romlib/                         — the Toolbox (lightly patched upstream source)
-    multiversal/                    — API definitions → generated headers/trap glue (Ruby; output committed in romlib/generated)
-    tests/                          — Executor gtest suite (ctest label: executor)
   common/
     sigsegv.cpp                     — SIGSEGV handler (skips bad accesses)
     include/platform.h              — Platform API (g_platform function pointers)
+
+executor/                           — Executor, its own product (MIT; executor/README.md, docs/executor/PLAN.md)
+  CMakeLists.txt                    — the product's build: core, front ends, host, tests
+  core/
+    cpu/                            — syn68k API facade (syn68k_common) on a cpu::Core + PowerCore (PowerPC) on mame-ppc
+    romlib/                         — the Toolbox (lightly patched upstream source)
+    multiversal/                    — API definitions → generated headers/trap glue (Ruby; output committed in romlib/generated)
+    res/, third_party/              — built-in resources (CMakeRC); googletest, minicoro
+  frontends/
+    phoenix/                        — executor_host API + PhoenixVideoDriver/sound (every front end runs Executor through it);
+                                      executor_child.cpp: mac-phoenix's `--backend executor` IPC child
+    wasm/                           — the tab's module (web_main.cpp: emscripten/JS glue)
+    headless/                       — upstream's headless front end
+  host/                             — front-end logic above executor_host shared by wasm and native front ends
+                                      (session setup, disk images in and out, automation requests)
+  tests/                            — Executor gtest suite (ctest label: executor); web/: the tab's node cells
+  web/                              — the tab (JS/CSS/HTML; copied next to executor-web.wasm)
+  server/                           — the Go server with the tab embedded (executor-standalone; docs/executor/Standalone.md)
 
 BridgeAgent/
   BridgeAgent.c                     — BridgeAgent source (Retro68 m68k); takes requests over the bridge trap $ABE5
@@ -391,7 +407,7 @@ machine.
 
 The whole is GPL-2.0-or-later (UAE, Basilisk II, SheepShaver code); code
 written for MacPhoenix is also MIT (`LICENSE-MIT`), Executor and our
-changes to it are MIT (`src/executor/LICENSE-CONTRIBUTIONS`), MAME cores
+changes to it are MIT (`executor/LICENSE-CONTRIBUTIONS`), MAME cores
 BSD-3. Path-by-path map: `LICENSING.md`. New code is written from
 documentation and behaviour, never adapted from GPL source; code adapted
 from a GPL file keeps its GPL header and goes in LICENSING.md's GPL table.
@@ -436,7 +452,7 @@ PNG encoding (zlib, which Qt already needs) is always available.
 | OpenSSL | `libssl-dev` | `brew install openssl` | DTLS/SRTP for libdatachannel (WebRTC). Our code no longer uses it directly — `QCryptographicHash` handles SHA1/MD5. |
 | pkg-config | `pkg-config` | `brew install pkg-config` | Dependency detection |
 | Qt6 (≥6.4) | `qt6-base-dev` | `brew install qt@6` | Core, Network (QLocalSocket / QTcpServer), Widgets, plus QJsonDocument for all JSON parsing. 6.4 minimum is set by MacBrowser's use of `QWebEngineDownloadRequest` + its `receivedBytesChanged`/`isFinishedChanged` signals. See [docs/qt6/PLAN.md](docs/qt6/PLAN.md) for the port history. |
-| Ruby, Bison, Perl | `ruby bison perl` | `brew install ruby bison` | Only to regenerate Executor's committed generated sources (`src/executor/romlib/generated`, `-DEXECUTOR_REGENERATE=ON`, after editing multiversal YAML, `.map` files, `prefs/parse.ypp` or the blitter templates). Executor needs no other dependency; `-DBUILD_EXECUTOR=OFF` disables it. |
+| Ruby, Bison, Perl | `ruby bison perl` | `brew install ruby bison` | Only to regenerate Executor's committed generated sources (`executor/core/romlib/generated`, `-DEXECUTOR_REGENERATE=ON`, after editing multiversal YAML, `.map` files, `prefs/parse.ypp` or the blitter templates). Executor needs no other dependency; `-DBUILD_EXECUTOR=OFF` disables it. |
 | Qt6 WebEngine (≥6.4) | `qt6-webengine-dev` | included in `brew install qt@6` | Only with `-DBUILD_BROWSER=ON` (experimental MacBrowser; off by default). In-process Chromium for MacBrowser |
 
 ## MacBrowser

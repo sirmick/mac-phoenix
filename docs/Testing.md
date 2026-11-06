@@ -47,7 +47,7 @@ ctest --test-dir build -V              # verbose
 ```
 
 `tests/CMakeLists.txt` registers 65 named tests;
-`src/executor/tests/CMakeLists.txt` adds 343 more named `executor.*`
+`executor/tests/CMakeLists.txt` adds 343 more named `executor.*`
 (408 in all).
 
 ### Labels
@@ -65,7 +65,7 @@ A test can carry several labels.
 | `executor` | The `--backend executor` guest cells and all `executor.*` gtests |
 | `761` | The cells on Mac OS 7.6.1 (`*_761`, `guest_suite_761`, `ot_retro68_68k_rom`, `otcfg_*`, `slm_*`) |
 | `flaky` | `ot_retro68_ppc_rom_761` (STRAGGLERS 66); `ctest -LE flaky` leaves it out |
-| `xfail` | Executor gtests that are expected to fail (`src/executor/tests/test-properties.cmake`). Two of them on each core are also disabled |
+| `xfail` | Executor gtests that are expected to fail (`executor/tests/test-properties.cmake`). Two of them on each core are also disabled |
 
 ### Test List
 
@@ -134,7 +134,7 @@ Timeouts are the ctest `TIMEOUT` values in `tests/CMakeLists.txt`.
 
 **Executor gtests** (label `executor`)
 
-`executor.<Suite>.<Test>`: Executor's Toolbox gtests (`src/executor/tests`)
+`executor.<Suite>.<Test>`: Executor's Toolbox gtests (`executor/tests`)
 built natively and run on mame-68k; `executor.compilefail.*`: checks
 that misuse of the guest value types fails to compile.
 

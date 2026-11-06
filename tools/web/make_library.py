@@ -5,12 +5,12 @@
 
 Makes every disk in DISKS below from the provisioned images (provisioning/
 build.py's, in ~/storage/images) into OUT_DIR (default ~/storage/web-library),
-each with its record, NAME.json: the title, tags and note tools/standalone's
+each with its record, NAME.json: the title, tags and note executor/server's
 library shows, "items", what is on the disk (disk_contents.py: name, kind,
 version, publisher, year, architecture, size, applications, from the disk
 itself; a description and notes from provisioning/library_items.json), and
 "launch", the applications on it, which the site's cells
-(web/tests/tab_site.mjs) open on each of their systems. A disk is made again
+(executor/tests/web/tab_site.mjs) open on each of their systems. A disk is made again
 only when an image it comes from is newer, or with --force.
 
 The boot disks are make_boot_disk.py's cuts of 7.6.1.img and 8.6.img; the

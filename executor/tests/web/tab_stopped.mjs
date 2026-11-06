@@ -5,7 +5,7 @@
 // which chrome-headless-shell turns into the renderer's SIGSEGV; harness.mjs
 // runs a full Chromium).
 //
-//   node web/tests/tab_stopped.mjs DIR
+//   node executor/tests/web/tab_stopped.mjs DIR
 //
 // Needs playwright (harness.mjs).
 import { open, firstFrame, until } from './harness.mjs';

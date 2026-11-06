@@ -1,6 +1,6 @@
 # What we've learned that multiversal doesn't say (yet).
 #
-# Layered over src/executor/multiversal/defs by macdecode: an entry here
+# Layered over executor/core/multiversal/defs by macdecode: an entry here
 # adds a name or replaces multiversal's entry at the same address/trap.
 # Multiversal itself stays untouched until we decide to fold these in.
 #

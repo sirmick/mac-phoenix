@@ -8,7 +8,7 @@ add_library(front-end-phoenix
     phoenix_sound.cpp
     hfs_sideload.h
     hfs_sideload.cpp
-    ../../../main.cpp
+    ../../core/romlib/main.cpp
 )
 target_include_directories(front-end-phoenix PUBLIC . ../headless)
 target_compile_definitions(front-end-phoenix PRIVATE PHOENIX_EMBEDDED HEADLESS_ONLY PHOENIX_FRONT_END)

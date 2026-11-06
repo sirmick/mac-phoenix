@@ -5,7 +5,7 @@
 // nearest-neighbor duplication, which would look identical to a naive
 // pixel-doubling of the 1x run at the sub-pixel level.
 //
-//   node web/tests/tab_hidpi.mjs DIR IMAGE
+//   node executor/tests/web/tab_hidpi.mjs DIR IMAGE
 //
 // IMAGE: an HFS image with a blessed System Folder and a Finder, 640x480
 // (the tests' tests-7.6.1.img). Skips (77) without IMAGE, or without a

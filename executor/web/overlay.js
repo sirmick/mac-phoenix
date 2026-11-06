@@ -229,7 +229,7 @@ class IdbCache {
 }
 
 // Disk image chunks, by the image's ETag (its content id on
-// tools/standalone) and chunk number. Read synchronously, they can't come
+// executor/server) and chunk number. Read synchronously, they can't come
 // from IndexedDB as Executor reads: an image's most recently read ones
 // (up to CHUNKS_PRELOAD bytes: what the last start read; fetched but not
 // read, a read-ahead, doesn't count) go into its memory before Executor
@@ -245,7 +245,7 @@ class RemoteImage {
         this.size = desc.size;
         this.url = desc.remote.url;
         this.etag = desc.remote.etag;
-        this.gzip = !!desc.remote.gzip;  // ranges gzip-compressed (tools/standalone offers it: fetchChunks)
+        this.gzip = !!desc.remote.gzip;  // ranges gzip-compressed (executor/server offers it: fetchChunks)
         this.chunks = Math.ceil(this.size / REMOTE_CHUNK);
         this.have = new Uint8Array(this.chunks);
         this.memory = new Map();         // chunk -> bytes; oldest read first
@@ -310,7 +310,7 @@ class RemoteImage {
         // A stall or a blip: tried again, a few times; the Worker waits
         // meanwhile (Executor's read is synchronous).
         // Compressed (this.gzip): ?bytes=, a 200 the browser decodes
-        // (tools/standalone static.go); anything wrong with it: plain Range
+        // (executor/server static.go); anything wrong with it: plain Range
         // requests from then on.
         const plain = () => {
             console.log(`[web] ${this.name}: compressed ranges failed: plain ones`);

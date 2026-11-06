@@ -1,7 +1,7 @@
 #!/bin/bash
 # build.sh — RetroTest for 68k and PowerPC with Retro68 (RETRO68: the
 # toolchain prefix with both, default ~/opt/retro68/build-ppc/toolchain),
-# against the headers generated from src/executor/multiversal/defs. Writes
+# against the headers generated from executor/core/multiversal/defs. Writes
 # RetroTest68K.bin and RetroTestPPC.bin here (committed: the ctest cells
 # use them).
 set -euo pipefail
@@ -10,7 +10,7 @@ REPO="$(cd "$HERE/../../.." && pwd)"
 RETRO68="${RETRO68:-$HOME/opt/retro68/build-ppc/toolchain}"
 WORK="${WORK:-${TMPDIR:-/tmp}/retrotest.$$}"
 mkdir -p "$WORK"
-(cd "$REPO/src/executor/multiversal" && \
+(cd "$REPO/executor/core/multiversal" && \
     PATH="$RETRO68/bin:$PATH" ruby make-multiverse.rb -G CIncludes -o "$WORK/mv" >/dev/null)
 for arch in 68k ppc; do
     case $arch in

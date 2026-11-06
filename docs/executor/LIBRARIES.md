@@ -1,6 +1,6 @@
 # Libraries in the definitions: ASLM, CFM and components
 
-Executor's API definitions (`src/executor/multiversal/defs`) describe
+Executor's API definitions (`executor/core/multiversal/defs`) describe
 Toolbox traps once and generate both sides from them: Executor's C++
 declarations and trap registrations (`-G Executor`, `romlib/generated`)
 and the Multiversal Interfaces, the C headers Retro68 programs use

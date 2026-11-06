@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""test_hfsplus_reader.py -- Executor's HFS+ reader (src/executor/romlib/hfs/plus,
+"""test_hfsplus_reader.py -- Executor's HFS+ reader (executor/core/romlib/hfs/plus,
 through build's hfsplus_dump) against hfsfuse's hfsdump, image by image:
 every folder's listing, and each item's CNID, kind, type, creator, fork
 sizes and fork bytes. For the long-name fixture also the short names
@@ -8,7 +8,7 @@ against what Mac OS 9.0.4 gave the same items
 
     test_hfsplus_reader.py --dump BUILD/hfsplus_dump [--hfsdump PATH] [--sample N] [IMAGE ...]
 
-Without IMAGEs: the fixtures in src/executor/tests/fixtures/hfsplus
+Without IMAGEs: the fixtures in executor/tests/fixtures/hfsplus
 (gunzipped to a scratch folder) and the images in ~/storage/hfsplus-recon/images
 that are there. Exit 77 (skip) without hfsdump (github.com/0x09/hfsfuse;
 HFSDUMP or --hfsdump; default ~/storage/hfsplus-recon/src/hfsfuse/hfsdump).
@@ -26,7 +26,7 @@ import tempfile
 import unicodedata
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-FIXTURES = os.path.join(ROOT, "src", "executor", "tests", "fixtures", "hfsplus")
+FIXTURES = os.path.join(ROOT, "executor", "tests", "fixtures", "hfsplus")
 ORACLE = os.path.join(ROOT, "tests", "guest", "hfsplus", "oracle-9.0.4", "longnames.txt")
 RECON = os.path.expanduser("~/storage/hfsplus-recon")
 

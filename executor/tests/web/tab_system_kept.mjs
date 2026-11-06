@@ -1,4 +1,4 @@
-// Apple's System on tools/standalone: sideloaded from its image once, then
+// Apple's System on executor/server: sideloaded from its image once, then
 // Executor's own volume is the System Folder (web_main.cpp: "the saved
 // System Folder"), a preference in it kept. The page hidden while the
 // volume is still coming down (its 'save' then) saves nothing of it: a
@@ -7,7 +7,7 @@
 // preferences). A volume saved without System's data fork (%System, no
 // System: an earlier such save) recovers (worker.js).
 //
-//   node web/tests/tab_system_kept.mjs DIR SYSTEM_IMAGE
+//   node executor/tests/web/tab_system_kept.mjs DIR SYSTEM_IMAGE
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';

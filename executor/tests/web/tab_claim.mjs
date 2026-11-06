@@ -1,4 +1,4 @@
-// The claim with tools/standalone (claim.go): the first browser to load
+// The claim with executor/server (claim.go): the first browser to load
 // the tab has the server; its reloads and other tabs keep working, its
 // cookie out of the page's reach (HttpOnly). Another browser gets the
 // in-use page and nothing else (the API, writes, the relay's WebSocket).
@@ -6,7 +6,7 @@
 // the reload claims it again; if another browser was first, that one has
 // it and the old tab says so.
 //
-//   node web/tests/tab_claim.mjs DIR [SHOTS]
+//   node executor/tests/web/tab_claim.mjs DIR [SHOTS]
 //
 // DIR: the wasm build's page. SHOTS: a directory for screenshots (the
 // in-use page, the tab's reload notice). Skips (77) without go.

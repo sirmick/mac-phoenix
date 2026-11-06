@@ -1,6 +1,6 @@
 // The assembled site (docs/executor/WebSite.md): the applications on a
 // library disk, opened in the tab on one of the site's systems and used a
-// moment, as a visitor would: on tools/standalone, its boot disk
+// moment, as a visitor would: on executor/server, its boot disk
 // and the application disk from the library (read lazily), each
 // application launched in turn (a reload between them) and checked:
 //
@@ -14,7 +14,7 @@
 //            says something went wrong (an error, "requires", -7004, ...)
 // An application that crashes the tab fails; the next gets a new tab.
 //
-//   node web/tests/tab_site.mjs DIR LIBRARY SYSTEM DISK
+//   node executor/tests/web/tab_site.mjs DIR LIBRARY SYSTEM DISK
 //
 // DIR the wasm build's page, LIBRARY tools/web/make_library.py's output,
 // SYSTEM 7.6.1 or 8.6 (8.6: PowerPC ticked), DISK a library disk there.
@@ -40,7 +40,7 @@ import { fileURLToPath } from 'node:url';
 import { launch, newPage, firstFrame, request as ask, until } from './harness.mjs';
 import { startServer } from './server.mjs';
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const [dir, library, system, diskName] = process.argv.slice(2);
 const COLUMN = { '7.6.1': 'w761', '8.6': 'w86' }[system];
 const NATIVE = { '7.6.1': 'e761', '8.6': 'e86' }[system];

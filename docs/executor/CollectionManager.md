@@ -17,7 +17,7 @@ the Get routines caps the bytes copied; the Hdl routines resize the handle;
 `CopyCollection` empties the target and copies the default attributes;
 the flattened format is 'flac' (Collections.r), read through each item's
 offset. What Executor does: the comment at the top of
-src/executor/romlib/collections.cpp.
+executor/core/romlib/collections.cpp.
 
 The pages contain no trap numbers or selectors. The function order in
 section 2 is the one this project uses (selector order); the docs do not

@@ -1,4 +1,4 @@
-// The Worker's side of the server's store (tools/standalone, /api/sync):
+// The Worker's side of the server's store (executor/server, /api/sync):
 // when the tab is served by it (main.js asks /api/me), the server is the
 // only store. Sync has the requests: an overlay's blocks as records
 // (block number, uint32 LE, then the 4 KB block), uploaded on the version
@@ -82,7 +82,7 @@ const Sync = {
         return form ? this.sha256(new TextEncoder().encode(JSON.stringify(form))) : null;
     },
 
-    // ---- bundles (tools/standalone volumes.go): records of a sha (32
+    // ---- bundles (executor/server volumes.go): records of a sha (32
     // bytes), a length (uint32 LE) and the bytes, ended by a zero sha and
     // length. The volume's starts with its JSON { version, manifest } (a
     // length, uint32 LE, then the text). ----

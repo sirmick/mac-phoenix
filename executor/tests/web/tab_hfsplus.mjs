@@ -4,7 +4,7 @@
 // its dump must equal the one 9.0.4 wrote, as natively
 // (tests/test_hfsplus_volume.py, the same differences set aside).
 //
-//   node web/tests/tab_hfsplus.mjs DIR GUEST_DIR FIXTURE_GZ
+//   node executor/tests/web/tab_hfsplus.mjs DIR GUEST_DIR FIXTURE_GZ
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';

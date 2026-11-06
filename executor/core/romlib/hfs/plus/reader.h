@@ -4,7 +4,7 @@
  * extents overflow B-trees, the allocation file, forks. Read-only, or
  * read-write on a writable image (writer.cpp). Host code: the File
  * Manager's HFSPlusVolume (file/hfsplusvolume.cpp), the System sideload
- * (front-ends/phoenix/hfs_sideload.cpp) and tools/hfsplus use it.
+ * (frontends/phoenix/hfs_sideload.cpp) and tools/hfsplus use it.
  * docs/executor/HFSPlus.md. */
 #include "image.h"
 

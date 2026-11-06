@@ -1,10 +1,10 @@
-// tools/standalone: a large library disk mounts before it has downloaded.
+// executor/server: a large library disk mounts before it has downloaded.
 // The tab reads it by Range requests as Executor needs it (overlay.js:
 // RemoteImage); the Finder runs on its System having read a fraction of
 // it, and again after a reload (the server is the store: nothing kept in
 // the browser, so a fraction again).
 //
-//   node web/tests/tab_server_lazy.mjs DIR IMAGE
+//   node executor/tests/web/tab_server_lazy.mjs DIR IMAGE
 //
 // IMAGE: an HFS image with a System Folder and a Finder, and its record
 // (IMAGE.json; tests-7.5.5.img). Skips (77) without them.

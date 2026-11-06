@@ -5,7 +5,7 @@
 // window is narrow enough to need it; with the setting off, nothing moves;
 // the Worker lives on.
 //
-//   node web/tests/tab_wheel.mjs DIR SYSTEM
+//   node executor/tests/web/tab_wheel.mjs DIR SYSTEM
 //
 // SYSTEM: Apple's 8.6 (HFS+, the tests' 8.6.img). Skips (77) without it.
 import fs from 'node:fs';

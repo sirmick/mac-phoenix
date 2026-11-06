@@ -59,7 +59,7 @@ Two separate choices:
 |---------|------|------------------|-----------|
 | `uae` (default) | m68k | `uae` (default; `--jit` for the UAE JIT on x86), `mame-68k` (MAME's Musashi; `musashi` is an alias) | `cpu_m68k_install()` (`src/cpu/cpu_m68k.cpp`) |
 | `kpx` | ppc | `kpx` (default; Kheperix, `--jit` for its dyngen JIT), `mame-ppc` (MAME's PowerPC recompiler; `--jit` native x86-64/arm64 back-end, `--no-jit` UML interpreter) | `cpu_ppc_kpx_install()` (`src/cpu/kpx/cpu_ppc_kpx.cpp`) or `cpu_ppc_mame_install()` (`src/cpu/kpx/cpu_ppc_mame.cpp`) |
-| `executor` | m68k | `mame-68k` | `src/executor/` (`executor_child_main()`, `executor_direct_main()`) |
+| `executor` | m68k | `mame-68k` | `executor/` (`executor_child_main()`, `executor_direct_main()`: `executor/frontends/phoenix/executor_child.cpp`) |
 
 `cpu::Core` (`src/cpu/core/cpu_core.h`) is the one interface for the cores
 `uae`, `mame-68k` and `mame-ppc`: `GuestMemory` (the 32-bit guest address
@@ -211,7 +211,7 @@ In the IPC child (`src/main.cpp`), and the same in-process for
 
 ```c++
 if (backend == Backend::EXECUTOR)
-    return executor_child_main(emu_config, ipc_buf);   // src/executor/host/
+    return executor_child_main(emu_config, ipc_buf);   // executor/frontends/phoenix/
 if (is_ppc())
     g_cpu_ctx.init_ppc(emu_config);   // cpu_ppc_mame_install if --core mame-ppc,
                                       // else cpu_ppc_kpx_install
@@ -251,7 +251,7 @@ src/core/command_bridge.{cpp,h}      — read commands + init
 src/core/boot_progress.{cpp,h}       — boot phase / CHECKLOAD tracking
 src/ipc/                             — IPC protocol, child control socket, IPC video
 
-src/executor/                        — Executor 2000 Toolbox; host/ is its IPC child
+executor/                            — Executor 2000 Toolbox (core/), front ends (frontends/phoenix: its IPC child), tab, server
 src/webserver/                       — HTTP server, /ws, API handlers
 src/webrtc/                          — peer-connection plumbing
 ```

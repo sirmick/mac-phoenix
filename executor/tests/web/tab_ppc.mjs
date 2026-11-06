@@ -1,7 +1,7 @@
 // W4's check (docs/executor/DIRECTION.md): PowerPC in the tab, on Apple's
 // Mac OS 8.6 System (HFS+) with the page's PowerPC box (--executor-ppc).
 //
-//   node web/tests/tab_ppc.mjs DIR GUEST_DIR SYSTEM [IMAGE APP_PATH]...
+//   node executor/tests/web/tab_ppc.mjs DIR GUEST_DIR SYSTEM [IMAGE APP_PATH]...
 //
 // SYSTEM: an HFS+ image with a blessed 8.x System Folder (8.6.img; only
 // read). Uploads it with PPCHello, ticks PowerPC, chooses the image as the

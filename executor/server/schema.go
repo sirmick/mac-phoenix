@@ -1,11 +1,11 @@
 package main
 
-// settings.schema.json (web/executor's; the copy here is checked equal by
+// settings.schema.json (executor/web's; the copy here is checked equal by
 // go test): the settings' defaults, types and ranges. What of JSON Schema
 // it uses, and so what this checks: type (one or a list), enum, minimum,
 // maximum, minLength, maxLength, pattern, items, maxItems, properties,
-// additionalProperties: false, readOnly, default. web/executor/settings.js
-// checks the same; the cases in web/tests/settings_cases.json hold both
+// additionalProperties: false, readOnly, default. executor/web/settings.js
+// checks the same; the cases in executor/tests/web/settings_cases.json hold both
 // to it.
 
 import (
@@ -314,7 +314,7 @@ func deepCopy(v any) any {
 }
 
 // migrate brings a settings file to the schema's version. Version 1 (no
-// "version"): tools/standalone's first settings, flat.
+// "version"): executor/server's first settings, flat.
 func migrate(doc map[string]any) (map[string]any, error) {
 	ver := 1.0
 	if v, ok := doc["version"]; ok {

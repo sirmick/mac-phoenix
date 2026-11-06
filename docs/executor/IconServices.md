@@ -10,7 +10,7 @@ registration has one owner; UnregisterIconRef invalidates the ref at once
 IsIconRefComposite answers noErr and two nils; GetIconFamilyData of a
 missing element is paramErr; ReleaseIconRef(nil) is invalidIconRefErr;
 a folder's icon from its FSSpec isn't the generic folder ref. What
-Executor does: the comment at the top of src/executor/romlib/iconservices.cpp.
+Executor does: the comment at the top of executor/core/romlib/iconservices.cpp.
 
 A specification of Apple's Icon Services (Mac OS 8.5 to 9; `IconRef`,
 `IconServicesLib`, the 68k trap `_IconServicesDispatch` $AA75), written from

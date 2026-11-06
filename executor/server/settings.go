@@ -3,7 +3,7 @@ package main
 // The settings: settings.json (--config; default DATA/settings.json), GET
 // and POST /api/settings. settings.schema.json is their one description
 // (schema.go): the categories of the tab's settings dialog
-// (web/executor/settings.js), each setting's default, type, range, label
+// (executor/web/settings.js), each setting's default, type, range, label
 // and help. The page's (x-scope page) are the tab's: kept here for it, used
 // by the page; the server's (x-scope server) are this program's. Version 1
 // files (flat, this program's first) are migrated on load and saved as 2.

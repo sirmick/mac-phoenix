@@ -1,6 +1,6 @@
 package main
 
-// Volumes (web/executor/worker.js: Executor's own volume, per System
+// Volumes (executor/web/worker.js: Executor's own volume, per System
 // choice): a manifest, { dirs, files: {
 // path: { size, mtime, sha } } }, versioned and based like the overlays;
 // the files' contents are objects by SHA-256, shared by every volume,
@@ -433,7 +433,7 @@ func (v *VolumeStore) collect() {
 }
 
 // ---- bundles: a volume's objects in one response, objects up in one
-// request (web/executor/sync.js) ----
+// request (executor/web/sync.js) ----
 //
 // A bundle is records: a sha (32 bytes), a length (uint32 LE), that many
 // bytes; ended by a record with a zero sha and length (a bundle without

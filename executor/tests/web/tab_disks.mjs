@@ -1,4 +1,4 @@
-// The Disks panel (web/executor/disks.js): disks in and out of the running
+// The Disks panel (executor/web/disks.js): disks in and out of the running
 // Mac. On a System picked in the panel from the library (standalone: the
 // server keeps the changes), a blank library disk is put in while the
 // Finder runs (no restart), a folder made on it in the Finder, the disk
@@ -14,7 +14,7 @@
 // System as it goes in, the page told the font takes a restart; they stay
 // after it is out, and in again nothing is copied twice.
 //
-//   node web/tests/tab_disks.mjs DIR SYSTEM [SHOTS]
+//   node executor/tests/web/tab_disks.mjs DIR SYSTEM [SHOTS]
 //
 // DIR the wasm build's page, SYSTEM an HFS image with a System Folder and
 // Finder (7.x); SHOTS a directory for screenshots. Skips (77) without
@@ -73,7 +73,7 @@ record('apps.img', { title: 'Apps', tags: [], systems: ['7.6.1'] });   // (its a
 
 const server = await startServer(dir, { images, include: ['*.img', '*.iso'] });
 if (!server) {
-    console.log('SKIP: no go to build tools/standalone');
+    console.log('SKIP: no go to build executor/server');
     process.exit(77);
 }
 const browser = await launch();

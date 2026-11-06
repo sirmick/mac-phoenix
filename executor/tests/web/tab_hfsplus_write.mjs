@@ -7,7 +7,7 @@
 // docker (the macphoenix-hfsprogs image): the image downloaded from the
 // page passes fsck.hfsplus.
 //
-//   node web/tests/tab_hfsplus_write.mjs DIR GUEST_DIR FIXTURE_GZ
+//   node executor/tests/web/tab_hfsplus_write.mjs DIR GUEST_DIR FIXTURE_GZ
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';

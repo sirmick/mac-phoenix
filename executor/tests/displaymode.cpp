@@ -225,7 +225,7 @@ TEST(DisplayMode, SetDisplayModeChangesTheScreen)
 
 /* Any size the host asks for (Settings, the browser window: the request
    itself, taken at the front process's event call, is the tab cell's,
-   web/tests/tab_dynres.mjs); the list then names it. */
+   executor/tests/web/tab_dynres.mjs); the list then names it. */
 TEST(DisplayMode, CustomSize)
 {
     EXPECT_TRUE(ROMlib_dm_set_screen_size(700, 500));

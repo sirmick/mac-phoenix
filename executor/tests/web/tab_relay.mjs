@@ -1,11 +1,11 @@
-// The network relay (tools/standalone's /relay, host/wasm/net.cpp): the
+// The network relay (executor/server's /relay, host/wasm/net.cpp): the
 // tab's MacTCP and Open Transport against an echo server on this host,
 // through the relay. MacPhoenixSuite's network and mactcp
 // sections and OTTestRetro68K (Open Transport, Executor's own) report all
 // PASS, as natively (mactcp_executor, ot_retro68_68k_executor); their
 // passive opens and listeners connect inside the tab.
 //
-//   node web/tests/tab_relay.mjs DIR GUEST_DIR
+//   node executor/tests/web/tab_relay.mjs DIR GUEST_DIR
 //
 // The relay may reach this host here (allow_private): the echo server is on
 // it, at the address the guest knows as 127.0.0.1.
@@ -18,7 +18,7 @@ import { launch, newPage, firstFrame, request, until } from './harness.mjs';
 import { startServer } from './server.mjs';
 
 const [dir, guest] = process.argv.slice(2);
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 let failed = 0;
 const check = (ok, what) => {
     console.log(`${ok ? 'PASS' : 'FAIL'} ${what}`);

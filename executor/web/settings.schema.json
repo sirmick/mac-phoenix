@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "settings.schema.json",
   "title": "Executor settings",
-  "description": "settings.json: the tab's and its server's settings (docs/executor/Settings.md). The one source of defaults, types, ranges, labels and help: tools/standalone validates with it, settings.js makes the dialog from it. x-scope: page (the tab's) or server (tools/standalone's own). x-apply: live, executor (Executor restarts to apply), server (at the server's next start). x-choices: options the page fills in (systems: disk images; screens).",
+  "description": "settings.json: the tab's and its server's settings (docs/executor/Settings.md). The one source of defaults, types, ranges, labels and help: executor/server validates with it, settings.js makes the dialog from it. x-scope: page (the tab's) or server (executor/server's own). x-apply: live, executor (Executor restarts to apply), server (at the server's next start). x-choices: options the page fills in (systems: disk images; screens).",
   "type": "object",
   "x-version": 2,
   "additionalProperties": false,

@@ -9,7 +9,7 @@
 # -DEXECUTOR_REGENERATE=ON (needs ruby, perl and bison): the build (or
 # just --target executor-generated) writes them into generated/ again;
 # commit the result.
-option(EXECUTOR_REGENERATE "Regenerate src/executor/romlib/generated (needs ruby, perl, bison)" OFF)
+option(EXECUTOR_REGENERATE "Regenerate executor/core/romlib/generated (needs ruby, perl, bison)" OFF)
 set(GEN_DIR ${CMAKE_CURRENT_SOURCE_DIR}/generated)
 if(EXECUTOR_REGENERATE)
     find_program(PERL_COMMAND perl)
@@ -109,10 +109,14 @@ if(CMAKE_COMPILER_IS_GNUCXX)
         -Wno-enum-compare)
 endif()
 
-add_subdirectory(config/front-ends/headless)
-add_subdirectory(config/front-ends/phoenix)
+# The front ends (executor/frontends), here so they build with the options
+# above; their build trees beside core's (build/executor/frontends/...).
+set(EXECUTOR_FRONTENDS ${CMAKE_CURRENT_SOURCE_DIR}/../../frontends)
+set(EXECUTOR_FRONTENDS_BINARY ${CMAKE_CURRENT_BINARY_DIR}/../../frontends)
+add_subdirectory(${EXECUTOR_FRONTENDS}/headless ${EXECUTOR_FRONTENDS_BINARY}/headless)
+add_subdirectory(${EXECUTOR_FRONTENDS}/phoenix ${EXECUTOR_FRONTENDS_BINARY}/phoenix)
 if(EMSCRIPTEN)
-    add_subdirectory(config/front-ends/wasm)
+    add_subdirectory(${EXECUTOR_FRONTENDS}/wasm ${EXECUTOR_FRONTENDS_BINARY}/wasm)
 endif()
 
 function(linkheader from to variant)
@@ -639,7 +643,7 @@ set(sources ${base_sources} ${mman_sources} ${vdriver_sources}
 
 # MacPhoenix: the host network edge (include/rsys/hostnet.h): host sockets,
 # none (MacTCP and Open Transport answer with errors; no host threads), or
-# wasm (the tab's sockets, over tools/standalone's relay).
+# wasm (the tab's sockets, over executor/server's relay).
 set(EXECUTOR_NET posix CACHE STRING "Executor's network backend: posix | none | wasm")
 set_property(CACHE EXECUTOR_NET PROPERTY STRINGS posix none wasm)
 if(NOT EXECUTOR_NET MATCHES "^(posix|none|wasm)$")

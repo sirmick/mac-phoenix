@@ -17,7 +17,7 @@
 //                    LIST the names (wildcards, -NAME leaves out; 1: all);
 //                    &nesting=N calls nested N deep (default 6); ?debug=OPTS Executor's
 //                    --executor-debug options. Everything printed goes to the
-//                    server too (log.js; tools/standalone keeps it per session)
+//                    server too (log.js; executor/server keeps it per session)
 //   ?ppcbreak=SPEC   PowerPC breakpoints (as --executor-ppc-break; several
 //                    separated by ';'; docs/executor/PPCTrace.md)
 // library.json beside the page (optional) offers more disks: [{ title,
@@ -25,7 +25,7 @@
 // setting) and loaded like ?disk=. The Disks panel (disks.js; docs/executor/Disks.md)
 // shows the System, the disks in the Mac and the library, and puts disks in
 // and takes them out while Executor runs.
-// Served by tools/standalone (api/me's mode; served by anything else the
+// Served by executor/server (api/me's mode; served by anything else the
 // page says it needs it): the server is the only store: disks read by
 // Range as needed, their changes and Executor's volume kept on the server
 // (sync.js: Store), the last of them in a beacon when the page goes.
@@ -179,7 +179,7 @@ async function remove(name) {
 // it (overlay.js: RemoteImage). Where the server gives no ranges (or
 // ?lazy=0): downloaded into memory.
 // A disk's identity, for its overlay's key (overlay.js): the server's
-// content id (X-Image-Id, tools/standalone), name -> id.
+// content id (X-Image-Id, executor/server), name -> id.
 const imageIds = {};
 const plainKey = (name, size, time) => `${name}-${size}-${time}`.replace(/[^\w.-]/g, '_');
 
@@ -225,7 +225,7 @@ async function fetchDisk(url, { starting = false } = {}) {
     if (!res.ok)
         throw new Error(`${name}: ${res.status}`);
     // Compressed in transit, Content-Length is the compressed size;
-    // tools/standalone says the real one (X-Decoded-Length).
+    // executor/server says the real one (X-Decoded-Length).
     const total = Number(res.headers.get('X-Decoded-Length'))
         || (res.headers.get('Content-Encoding') ? 0 : Number(res.headers.get('Content-Length')) || 0);
     const reader = res.body.getReader();
@@ -492,7 +492,7 @@ async function revert(f) {
 }
 
 // A disk image the user adds goes into the server's library
-// (tools/standalone uploads.go) and is mounted from there, so it and its
+// (executor/server uploads.go) and is mounted from there, so it and its
 // changes are kept; resolves to its library entry. Rejects with .status
 // (409: there is one of that name, { replace: true } replaces it).
 async function uploadImage(file, { replace = false } = {}) {
@@ -551,7 +551,7 @@ document.getElementById('add').addEventListener('change', async (e) => {
     addFiles(files);
 });
 
-// One's upload deleted from the server's library (tools/standalone: the
+// One's upload deleted from the server's library (executor/server: the
 // image, its record and its overlay).
 async function removeUpload(d) {
     if (!confirm(`Delete ${d.title} from the server? The image and its changes are gone.`))
@@ -829,7 +829,7 @@ function showSystems(files) {
     Settings.choicesChanged();      // (the Settings dialog's list, if open)
 }
 
-// ---- the server: tools/standalone (api/me's mode), the tab's store ----
+// ---- the server: executor/server (api/me's mode), the tab's store ----
 let standalone = false;
 const modeKnown = (async () => {
     let me = null, code = 0;
@@ -842,10 +842,10 @@ const modeKnown = (async () => {
     if (code === 401 || code === 403)
         lostClaim(code);
     else if (!standalone)
-        status.textContent = "Executor's tab needs its server: tools/standalone (docs/executor/Standalone.md)";
+        status.textContent = "Executor's tab needs its server: executor/server (docs/executor/Standalone.md)";
 })();
 
-// ---- standalone: one tab in control (tools/standalone's session.go) ----
+// ---- standalone: one tab in control (executor/server's session.go) ----
 // This tab says it is there every BEAT ms while it watches; in control,
 // its Worker does (its timers aren't held back in a background tab) and
 // says what the server answered ('session'). Taken over: saved, stopped,
@@ -866,7 +866,7 @@ async function beat(take = false) {
     }
 }
 
-// tools/standalone (claim.go): the first browser to load the tab has the
+// executor/server (claim.go): the first browser to load the tab has the
 // server until it stops. Refused now (401: it restarted; 403: and another
 // browser has it), this tab's cookie opens nothing: a reload claims it
 // again. Said once, and kept over other notices.

@@ -1,11 +1,11 @@
-// Where the tab's start goes on tools/standalone (not a ctest: a
+// Where the tab's start goes on executor/server (not a ctest: a
 // measurement, docs/executor/Standalone.md "Start-up costs"): a copy of a
 // server's data directory (its settings: the System, the disks mounted;
 // its saved volumes), the tab loaded RUNS times, the Worker's milestones
 // timed from the navigation: the module, Executor's disk restored (the
 // Worker's "[web] restored" line), the disks' changes, main, the Finder.
 //
-//   node web/tests/bench_start.mjs SITE DATA IMAGES [RUNS] [--slow] [--warm]
+//   node executor/tests/web/bench_start.mjs SITE DATA IMAGES [RUNS] [--slow] [--warm]
 //
 // SITE: the page (tools/web/make_site.sh's output); DATA: copied to
 // scratch each run (TMPDIR), never written; IMAGES: the library (seen

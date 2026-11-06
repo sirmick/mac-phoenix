@@ -23,7 +23,7 @@ import time
 import urllib.request
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-FIXTURE = os.path.join(ROOT, "src", "executor", "tests", "fixtures", "hfsplus", "longnames.img.gz")
+FIXTURE = os.path.join(ROOT, "executor", "tests", "fixtures", "hfsplus", "longnames.img.gz")
 
 
 def appledouble(path):

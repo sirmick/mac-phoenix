@@ -104,7 +104,7 @@ SIGSEGV handler and runs `platform->cpu_execute_fast()` on its main thread:
 - **PPC** — `cpu_ppc_kpx.cpp` / `cpu_ppc_mame.cpp` enter the ROM at
   `ROMBase + 0x310000` (the nanokernel), with their own tick thread.
 - **Executor** — `executor_child_main()` runs the Toolbox on its 68k core
-  and publishes frames itself (`src/executor/host/executor_child.cpp`).
+  and publishes frames itself (`executor/frontends/phoenix/executor_child.cpp`).
 
 ## Boundaries between threads
 

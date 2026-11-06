@@ -15,26 +15,29 @@ changed, its licence, and where the rest is documented.
   Wolfgang Thaller's revival of ARDI's Executor (Abacus Research &
   Development, 1986–2004; MIT since 2008).
 * **Imported:** upstream commit `b2569eb1` (2026-10-06), its multiversal
-  submodule at `1594ced0`, into `src/executor/`.
-* **Reference checkout:** `executor/` at the repository root (gitignored),
-  for comparisons and as a differential oracle.
-  `tools/executor-upstream-diff.sh` clones it if missing.
+  submodule at `1594ced0`, into `src/executor/`; since 2026-11-06 in
+  `executor/`, the product's own top-level directory (what lives where:
+  [executor/README.md](../../executor/README.md)).
+* **Reference checkout:** `executor-upstream/` at the repository root
+  (gitignored), for comparisons and as a differential oracle.
+  `tools/executor-upstream-diff.sh` clones it if missing (or
+  `EXECUTOR_UPSTREAM=DIR`).
 
 | Upstream | MacPhoenix |
 |---|---|
-| `src/` | `src/executor/romlib/` |
-| `multiversal/` (submodule) | `src/executor/multiversal/` (vendored) |
-| `tests/` | `src/executor/tests/` |
-| `syn68k/` (submodule): the 68k CPU | `src/executor/cpu/syn68k_common.cpp`: the syn68k API on a `cpu::Core` (MAME's 68000) |
-| `PowerCore/` (submodule): the PowerPC CPU | `src/executor/cpu/PowerCore.*`: the same interface on MAME's PowerPC recompiler |
-| `src/config/front-ends/{qt,x,sdl,sdl2,wayland,...}` | `romlib/config/front-ends/phoenix/` (video, cursor, sound to the web UI) and `src/executor/host/executor_child.cpp` |
+| `src/` | `executor/core/romlib/` |
+| `multiversal/` (submodule) | `executor/core/multiversal/` (vendored) |
+| `tests/` | `executor/tests/` |
+| `syn68k/` (submodule): the 68k CPU | `executor/core/cpu/syn68k_common.cpp`: the syn68k API on a `cpu::Core` (MAME's 68000) |
+| `PowerCore/` (submodule): the PowerPC CPU | `executor/core/cpu/PowerCore.*`: the same interface on MAME's PowerPC recompiler |
+| `src/config/front-ends/{qt,x,sdl,sdl2,wayland,...}` | `executor/frontends/`: `headless/` (upstream's), `phoenix/` (video, cursor, sound, the `executor_host` API; `executor_child.cpp`, mac-phoenix's IPC child), `wasm/` (the tab's module) |
 | `cxmon/`, `lmdb/` | not imported |
 
 ## Licence
 
-Executor is MIT ([src/executor/COPYING](../../src/executor/COPYING)).
+Executor is MIT ([executor/COPYING](../../executor/COPYING)).
 MacPhoenix's changes to it, and the CPU glue, are MIT too
-([src/executor/LICENSE-CONTRIBUTIONS](../../src/executor/LICENSE-CONTRIBUTIONS)),
+([executor/LICENSE-CONTRIBUTIONS](../../executor/LICENSE-CONTRIBUTIONS)),
 so upstream or anyone else can take them on Executor's terms. MAME's CPU
 cores are BSD-3-Clause. The rest of MacPhoenix's licensing:
 [LICENSING.md](../../LICENSING.md).
@@ -79,7 +82,7 @@ to upstream files are described in
 | Component Manager | `component.cpp` | `$A82A`; System file, extension and `thng` components |
 | Finder | `finder.cpp`, `menu/sysmenu.cpp`, `alias.cpp`, `icon.cpp`, `quickdraw/displays.cpp`, `desk.cpp` | the Desktop Manager, Apple/Help/Application menus, alias resolution, Icon Utilities and the Display Manager calls Finder makes |
 | Networking | `mactcp/mactcp.cpp`, `mactcp/dnr.cpp`, `opentransport/` | MacTCP on host sockets (async calls, the resolver); Open Transport 1.1's 68k client API in C++ (on by default, `--no-executor-ot` to leave it out; [OpenTransport.md](OpenTransport.md)) |
-| Devices | `hostdisk.cpp`, `vdriver/videodrvr.cpp`, `sound/snddispatch.cpp`, `config/front-ends/phoenix/phoenix_sound.cpp` | `.Disk` for host-folder volumes, `.Display`, the Sound Manager's dispatch groups and sound output |
+| Devices | `hostdisk.cpp`, `vdriver/videodrvr.cpp`, `sound/snddispatch.cpp`, `frontends/phoenix/phoenix_sound.cpp` | `.Disk` for host-folder volumes, `.Display`, the Sound Manager's dispatch groups and sound output |
 | Debugging | `base/trap_history.*`, `mman/whatis.*` | the last traps and host memory moves for crash reports; what lives at a guest address |
 | PowerPC | `cfm.cpp`, `base/builtinlibs.cpp`, `base/functions.impl.h`, `base/cpu.cpp` | the PowerCore wiring, unresolved-import logging, upstream's PPC parameter passing |
 
@@ -141,7 +144,7 @@ APIs, the Display Manager, layers and other Process Manager calls, the
 Thread Manager, ...) can reach Retro68 programs too:
 
 ```bash
-cd src/executor/multiversal
+cd executor/core/multiversal
 ruby make-multiverse.rb -G CIncludes -o OUT    # OUT/CIncludes, OUT/lib68k (glue)
 ```
 

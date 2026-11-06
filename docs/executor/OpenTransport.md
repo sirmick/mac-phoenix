@@ -1,7 +1,7 @@
 # Open Transport on Executor
 
 Executor answers Open Transport 1.1's 68k client API in C++
-(`src/executor/romlib/opentransport/`), on host sockets, so 68k applications
+(`executor/core/romlib/opentransport/`), on host sockets, so 68k applications
 built with Apple's OT glue run unchanged. On by default since 2026-10-23
 (`--no-executor-ot` leaves it out: Gestalt then has no `'otan'` and
 applications fall back to MacTCP); milestone M3i in PLAN.md.

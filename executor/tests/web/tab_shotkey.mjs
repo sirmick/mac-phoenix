@@ -1,9 +1,9 @@
-// Ctrl+Alt+S (web/executor/main.js; docs/executor/Settings.md): a screenshot
+// Ctrl+Alt+S (executor/web/main.js; docs/executor/Settings.md): a screenshot
 // to the server's session log that works with the mouse button down.
 //
-//   node web/tests/tab_shotkey.mjs DIR IMAGE
+//   node executor/tests/web/tab_shotkey.mjs DIR IMAGE
 //
-// IMAGE: a System image (tests-7.6.1.img; only read). On tools/standalone at
+// IMAGE: a System image (tests-7.6.1.img; only read). On executor/server at
 // dpr 2 (the canvas's pixels and Executor's 1x frame both sent):
 //   - the button up: the note asked for first, the shot with it in the log;
 //   - the button held on the Special menu's title (the menu tracked): the

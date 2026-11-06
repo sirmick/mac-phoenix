@@ -17,7 +17,7 @@ the registers each one changed.
 that they can be set over the API later. Reports go to stderr (the session's
 log) as they happen, and the last eight are kept for the API.
 
-Code: `src/executor/romlib/base/ppc_break.cpp` (`rsys/ppc_break.h`); the core
+Code: `executor/core/romlib/base/ppc_break.cpp` (`rsys/ppc_break.h`); the core
 side is `cpu::Core::set_instruction_hook` (`Config::instruction_hook`), which
 mame-ppc implements with MAME's own per-instruction debugger call
 (`UML_DEBUG`), generated only when the core is made with it: a session without

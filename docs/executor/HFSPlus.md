@@ -9,7 +9,7 @@ File Manager changes them as Mac OS 9.0.4 does.
 
 | Piece | State |
 |-------|-------|
-| Reader (`src/executor/romlib/hfs/plus/`) | done: matches hfsdump on 8 images and 2 CDs (below) |
+| Reader (`executor/core/romlib/hfs/plus/`) | done: matches hfsdump on 8 images and 2 CDs (below) |
 | File Manager volume (`file/hfsplusvolume.cpp`) | done: VolDump on Executor = VolDump on 9.0.4, 20 images (32 MB to 20 GB, bare and wrapped, hard links, forks near 2 GB) |
 | Mounting (`try_to_mount_disk`) | done: bare, HFS wrapper, Apple partition map |
 | System sideload (`hfs_sideload.cpp`) | done: an HFS+ image's blessed System Folder |
@@ -19,7 +19,7 @@ File Manager changes them as Mac OS 9.0.4 does.
 
 ## The reader
 
-`src/executor/romlib/hfs/plus/`, the `executor_hfsplus` library: host
+`executor/core/romlib/hfs/plus/`, the `executor_hfsplus` library: host
 code, no guest types, written from TN1150 ("HFS Plus Volume Format") and
 TN1189 (partitions). The File Manager's volume, the System sideload and
 `hfsplus_dump` use it.
@@ -143,7 +143,7 @@ mounts HFS+ there (`hfsPlusMountVol`), HFS through the old code; offsets
 are 64-bit on the way. The old code's wrapper placeholder ("needs Mac OS
 8.1") is what a wrapped volume the reader can't open still gets.
 
-The System sideload (`front-ends/phoenix/hfs_sideload.cpp`,
+The System sideload (`frontends/phoenix/hfs_sideload.cpp`,
 `--executor-system` and the web tab's System choice): an image's HFS+
 volume with a blessed folder goes through the reader (short names, local
 dates), else HFS as before.
@@ -345,7 +345,7 @@ badMovErr (it was ioErr).
   without it): every folder's listing, each item's CNID, kind, type,
   creator, fork sizes and bytes; the long-name fixture's short names
   against 9.0.4's. Images: the fixtures in
-  `src/executor/tests/fixtures/hfsplus` (gzipped: `longnames.img`, made on
+  `executor/tests/fixtures/hfsplus` (gzipped: `longnames.img`, made on
   9.0.4; `blank-64m.img`, `blank-wrapped-64m.img`, `blank-hfsx-64m.img`
   from `mkfs.hfsplus`; `hardlinks.img`, a blank with hard links made by
   `hfsplus_dump`: hfsdump follows them by path) and, where present,
@@ -356,7 +356,7 @@ badMovErr (it was ioErr).
   in full; the reader's tree through the partition map equals its tree of
   the partition alone. hfsdump itself reads no partition map and loops
   listing an empty folder (the test times it out and compares valences).
-- `executor.HFSPlusUnicode.*` (`src/executor/tests/hfsplus_unicode.cpp`):
+- `executor.HFSPlusUnicode.*` (`executor/tests/hfsplus_unicode.cpp`):
   the order, MacRoman round trips, decomposition, the 9.0.4 short names.
 - `executor.hfsplus_volume` (`tests/test_hfsplus_volume.py`): VolDump
   (`tests/guest/hfsplus/VolDump.c`: every item's PBGetCatInfo by index, by
@@ -370,12 +370,12 @@ badMovErr (it was ioErr).
   1 to 20 GB are made by the test (`fixtures/hfsplus/generated.json`:
   sparse, `mkfs.hfsplus` in docker, a script of `hfsplus_dump`'s; not
   compared without docker, nor their dates and volume ID).
-- `executor.HFSPlusVolumeTest.*` (`src/executor/tests/hfsplus_volume.cpp`):
+- `executor.HFSPlusVolumeTest.*` (`executor/tests/hfsplus_volume.cpp`):
   the long-name fixture mounted with `ROMlib_openharddisk` in the gtest
   binary: names, folders, paths, a fork past its 8 extents, a resource
   fork, the locked volume's errors; natively and, in the wasm build, under
   node.
-- `executor.web.hfsplus` (`web/tests/tab_hfsplus.mjs`, wasm build): the
+- `executor.web.hfsplus` (`executor/tests/web/tab_hfsplus.mjs`, wasm build): the
   fixture uploaded in the tab and VolDump run there; its dump equals
   9.0.4's (the same machine differences set aside).
 - `executor.hfsplus_writer` (`tests/test_hfsplus_writer.py`): seeded
@@ -420,7 +420,7 @@ badMovErr (it was ioErr).
 - `executor.HFSPlusWriteTest.*`, `executor.HFSXWriteTest.*`: a blank
   volume (HFS+, HFSX) written in the gtest binary (natively and under
   node).
-- `executor.web.hfsplus_write` (`web/tests/tab_hfsplus_write.mjs`, wasm
+- `executor.web.hfsplus_write` (`executor/tests/web/tab_hfsplus_write.mjs`, wasm
   build): the same in the tab, through the overlay; fsck on the image
   downloaded from the page.
 - `executor.hfsplus_sideload` (`tests/test_hfsplus_sideload.py`):

@@ -3,7 +3,7 @@
 // the window" (display.fit_window) as the browser window changes, while the
 // Finder and SimpleText run.
 //
-//   node web/tests/tab_dynres.mjs DIR SYSTEM
+//   node executor/tests/web/tab_dynres.mjs DIR SYSTEM
 //
 // SYSTEM: an image with a blessed System Folder and SimpleText
 // (tests-7.6.1.img; only read). At 640x480, SimpleText launched; then:

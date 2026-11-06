@@ -1,4 +1,4 @@
-// Executor's own volume on tools/standalone (sync.js, volumes.go): saved
+// Executor's own volume on executor/server (sync.js, volumes.go): saved
 // in bundles (objects/missing, then POST objects/bundle, no PUT a file),
 // restored from one request (POST volumes/KEY/bundle, gzip), every file
 // as it was; again with every object from this browser's cache
@@ -8,7 +8,7 @@
 // and a bundle cut short, restore it all the same through objects/SHA.
 // Executor's own System.
 //
-//   node web/tests/tab_volume.mjs DIR
+//   node executor/tests/web/tab_volume.mjs DIR
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';

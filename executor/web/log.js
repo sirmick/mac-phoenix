@@ -1,4 +1,4 @@
-// What the tab prints, sent to the server too (tools/standalone: POST
+// What the tab prints, sent to the server too (executor/server: POST
 // /api/log): console.log/info/warn/error, uncaught errors and rejected
 // promises, in the page and in its Worker (Executor's stdout and stderr come
 // through Module.print/printErr). A batch a second, at once after an error,

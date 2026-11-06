@@ -94,8 +94,8 @@ docs/ppc/late-*-artifacts/perf/*.data
 MacBrowser/icons.r
 BridgeAgent/icons.r
 
-# Upstream Executor checkouts kept as reference/oracle (the import lives in src/executor/)
-/executor/
+# Upstream Executor checkouts kept as reference/oracle (the import lives in executor/)
+/executor-upstream/
 /executor-old/
 
 # qemu-user core dumps (tools/xarch runs)

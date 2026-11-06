@@ -3,7 +3,7 @@
 // reset the size), the page fitted and mapped clicks for 1024x768 and drew
 // the pointer for it: clicks landed off target, the pointer small.
 //
-//   node web/tests/tab_input.mjs DIR SYSTEM [ppc]
+//   node executor/tests/web/tab_input.mjs DIR SYSTEM [ppc]
 //
 // SYSTEM: an image with a blessed System Folder (8.6.img with "ppc", the
 // page's PowerPC box; tests-7.6.1.img without; only read). For each cell

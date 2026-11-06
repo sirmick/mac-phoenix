@@ -13,14 +13,14 @@ import (
 	"testing"
 )
 
-// The schema here is web/executor's.
+// The schema here is executor/web's.
 func TestSchemaCopy(t *testing.T) {
-	page, err := os.ReadFile("../../web/executor/settings.schema.json")
+	page, err := os.ReadFile("../web/settings.schema.json")
 	if err != nil {
 		t.Skip(err)
 	}
 	if !bytes.Equal(page, schemaJSON) {
-		t.Fatal("settings.schema.json differs from web/executor's: cp ../../web/executor/settings.schema.json .")
+		t.Fatal("settings.schema.json differs from executor/web's: cp ../web/settings.schema.json .")
 	}
 }
 
@@ -39,7 +39,7 @@ type settingsCases struct {
 }
 
 func loadCases(t *testing.T) settingsCases {
-	b, err := os.ReadFile("../../web/tests/settings_cases.json")
+	b, err := os.ReadFile("../tests/web/settings_cases.json")
 	if err != nil {
 		t.Skip(err)
 	}

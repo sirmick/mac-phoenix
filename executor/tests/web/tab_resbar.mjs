@@ -1,10 +1,10 @@
-// The bar's screen size (web/executor/main.js ScreenBar; docs/executor/Settings.md):
+// The bar's screen size (executor/web/main.js ScreenBar; docs/executor/Settings.md):
 // the same settings as the dialog (machine.screen, display.fit_window),
 // applied live, the Mac's real size shown, the two in step both ways.
 //
-//   node web/tests/tab_resbar.mjs DIR
+//   node executor/tests/web/tab_resbar.mjs DIR
 //
-// On Executor's own System (no image needed), on tools/standalone:
+// On Executor's own System (no image needed), on executor/server:
 //   - at start: 640 × 480 chosen, the tooltip says so;
 //   - 1024 × 768 from the bar: the setting, the Mac's screen and the page's,
 //     the dialog's list opened afterwards;

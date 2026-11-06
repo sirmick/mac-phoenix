@@ -14,14 +14,14 @@
 #include "emulator_config.h"
 #include "ipc_protocol.h"
 #include "guest_bridge.h"
-#include "../../drivers/audio/audio_direct.h"
+#include "../../../src/drivers/audio/audio_direct.h"
 
 #include <csignal>
 #include <execinfo.h>
 #include <cstdio>
 
-#include "../../core/snapshot.h"
-#include "../../common/include/m68k_registers.h"
+#include "../../../src/core/snapshot.h"
+#include "../../../src/common/include/m68k_registers.h"
 
 #include <algorithm>
 #include <atomic>

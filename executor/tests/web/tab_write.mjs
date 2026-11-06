@@ -7,7 +7,7 @@
 // Executor's PBSetCatInfo wrote a folder's dates there, and every library
 // disk's window opened scrolled far from its icons.
 //
-//   node web/tests/tab_write.mjs DIR IMAGE
+//   node executor/tests/web/tab_write.mjs DIR IMAGE
 //
 // IMAGE: an HFS image with a System Folder and a Finder (the tests'
 // tests-7.5.5.img). Skips (77) without it, or without hfsutils' hls.
@@ -32,7 +32,7 @@ function hls(img) {
     return names;
 }
 // A folder's frScroll, by tools/diskaudit's HFS reader.
-const audit = path.join(path.dirname(new URL(import.meta.url).pathname), '..', '..', 'tools', 'diskaudit');
+const audit = path.join(path.dirname(new URL(import.meta.url).pathname), '..', '..', '..', 'tools', 'diskaudit');
 const folderScroll = (img, folder) => execFileSync('python3', ['-c',
     'import sys; sys.path.insert(0, sys.argv[1]); from disk_audit import Volume\n'
     + 'print([n.scroll for n in Volume(sys.argv[2]).nodes.values() if n.is_dir and n.name == sys.argv[3]])',

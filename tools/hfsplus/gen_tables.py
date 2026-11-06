@@ -2,7 +2,7 @@
 """gen_tables.py -- the Unicode tables Executor's HFS+ reader needs, made
 from published data (docs/executor/HFSPlus.md):
 
-  src/executor/romlib/hfs/plus/unicode_tables.h
+  executor/core/romlib/hfs/plus/unicode_tables.h
 
 1. The case-folding table of HFS+'s case-insensitive name order (TN1150,
    "Case-Insensitive String Comparison Algorithm": FastUnicodeCompare and
@@ -186,7 +186,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("unicodedata")
     ap.add_argument("roman")
-    ap.add_argument("-o", default=os.path.join(ROOT, "src", "executor", "romlib", "hfs", "plus", "unicode_tables.h"))
+    ap.add_argument("-o", default=os.path.join(ROOT, "executor", "core", "romlib", "hfs", "plus", "unicode_tables.h"))
     ap.add_argument("--check-casefold")
     ap.add_argument("--check-decomposition")
     args = ap.parse_args()

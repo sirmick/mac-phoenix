@@ -66,7 +66,7 @@ Finder window dragged about and `/api/resolution` (BridgeAgent's
   PowerPC procs through `callPPC`, and 68k ones with A7 below the PowerPC
   frames, which sit just below the 68k stack there.
 
-The page (`web/executor/main.js` `fitCanvas`) shows a Mac pixel as a whole
+The page (`executor/web/main.js` `fitCanvas`) shows a Mac pixel as a whole
 number of device pixels that fits the window, but never less than a CSS
 pixel when that fits, and as large as the room when the screen is bigger
 than it; the pointer is at least 16 CSS pixels (`client/cursor.js`). (A
@@ -85,7 +85,7 @@ answering". (A later report of 640x480 at scale 2 came from a server
 still running a build before 7c77d4b5, the screen size kept through a
 depth change: its restart had failed, the port still held.)
 
-Diagnostics (the session log, `tools/standalone` keeps it per session):
+Diagnostics (the session log, `executor/server` keeps it per session):
 the page writes a `[display]` line at start and whenever the display
 changes (window resize, dpr: zoom or another monitor, fullscreen, the
 Mac's size, the fit): the browser and OS parsed from the UA (and the UA),
@@ -106,7 +106,7 @@ keys (Ctrl+Alt+S: a screenshot, also with the mouse button down;
 Settings.md).
 
 Tests: `executor_tests --gtest_filter='DisplayMode.*'`
-(`src/executor/tests/displaymode.cpp`); the tab cells `executor.web.dynres`,
+(`executor/tests/displaymode.cpp`); the tab cells `executor.web.dynres`,
 `executor.web.input_86_laptop`, `executor.web.input_86_firefox`, `executor.web.watch`,
 `executor.web.display_diag`, `executor.web.resbar` (the bar's control),
 `executor.web.boot_disks_audit`, `executor.web.monitors_policy`.

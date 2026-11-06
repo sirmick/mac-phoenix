@@ -1,4 +1,4 @@
-// Shared by the tab tests: the wasm build's page on tools/standalone
+// Shared by the tab tests: the wasm build's page on executor/server
 // (server.mjs: built here with go; none: exit 77), headless Chromium on
 // it (TAB_BROWSER=firefox: playwright's Firefox; none installed: exit 77).
 // Needs the playwright package (NODE_PATH; none: exit 77) and
@@ -66,7 +66,7 @@ export async function newPage(browser, { log = true, tag = '', scale = 1 } = {})
     return page;
 }
 
-// The tab from dir on tools/standalone (images: its library; include:
+// The tab from dir on executor/server (images: its library; include:
 // the patterns offered), in a browser of its own at index.html?query
 // (viewport and dpr: the window's size and devicePixelRatio): the page,
 // close(), and the server ({ url, data, ... }: server.mjs).
@@ -106,10 +106,10 @@ export async function until(fn, ms, every = 250) {
     }
 }
 
-// The Disks panel (web/executor/disks.js): open, closed (it moves the
+// The Disks panel (executor/web/disks.js): open, closed (it moves the
 // screen aside), the System picked in it.
 // (through Disks: a small viewport can leave the panel's buttons outside
-// it; web/tests/tab_disks.mjs clicks the real ones)
+// it; executor/tests/web/tab_disks.mjs clicks the real ones)
 export async function openDisks(page) {
     await page.evaluate(() => Disks.open());
 }

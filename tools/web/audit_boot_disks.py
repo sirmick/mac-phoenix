@@ -5,7 +5,7 @@
 
 Every boot-*.img in LIBRARY (tools/web/make_library.py's output; or the
 ones named): no file in the System Folder, at any depth, has a name the
-policy denies ("-NAME" in src/executor/res/extension-policy.txt: the
+policy denies ("-NAME" in executor/core/res/extension-policy.txt: the
 Monitors control panels and their Control Strip modules), and no alias
 there (Apple Menu Items, Launcher Items, Startup Items, ...) points at one.
 Prints what it found per disk; exit 1 if anything, 77 without a boot disk.

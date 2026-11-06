@@ -1,5 +1,5 @@
-// The Settings dialog (web/executor/settings.js), its settings kept in
-// tools/standalone's settings.json: changes in the dialog are a draft,
+// The Settings dialog (executor/web/settings.js), its settings kept in
+// executor/server's settings.json: changes in the dialog are a draft,
 // kept by Save (across a reload), forgotten by Cancel and Escape; an
 // invalid one is refused there (and by the server's API); the screen's
 // sizes and Custom…; the help is a tooltip the control is described by,
@@ -11,7 +11,7 @@
 // Settings > Machine's one setting, each following the other, the dialog's
 // list from the disks and the library. Screenshots of every tab.
 //
-//   node web/tests/tab_settings.mjs DIR [SHOTS]
+//   node executor/tests/web/tab_settings.mjs DIR [SHOTS]
 //
 // DIR: the wasm build's page. SHOTS: a directory for the screenshots.
 // The Go server is built here (go; without it, skips: 77).
@@ -23,9 +23,9 @@ import { fileURLToPath } from 'node:url';
 import { launch, newPage, firstFrame } from './harness.mjs';
 import { startServer } from './server.mjs';
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const [dir, shots] = process.argv.slice(2);
-const cases = JSON.parse(fs.readFileSync(path.join(ROOT, 'web/tests/settings_cases.json'), 'utf8'));
+const cases = JSON.parse(fs.readFileSync(path.join(ROOT, 'executor/tests/web/settings_cases.json'), 'utf8'));
 const scratch = fs.mkdtempSync(path.join(process.env.TMPDIR || os.tmpdir(), 'tab-settings-'));
 if (shots)
     fs.mkdirSync(shots, { recursive: true });
@@ -174,7 +174,7 @@ const page = async () => {
     return p;
 };
 try {
-    // ---- tools/standalone: settings.json ----
+    // ---- executor/server: settings.json ----
     fs.mkdirSync(path.join(scratch, 'images'));
     const go = await startServer(dir, { images: path.join(scratch, 'images') });
     if (!go) {
@@ -182,7 +182,7 @@ try {
         process.exit(77);
     } else {
         const p = await page();
-        await exercise(p, `${go.url}/`, 'tools/standalone', { network: true });
+        await exercise(p, `${go.url}/`, 'executor/server', { network: true });
         // The schema's cases, as settings.js checks them.
         const bad = await p.evaluate((cases) => {
             const out = [];
@@ -214,20 +214,20 @@ try {
         await ready(p);
         const file = JSON.parse(fs.readFileSync(go.settingsFile, 'utf8'));
         check(file.version === 2 && file.machine.ram_mb === 128 && file.sound.volume === 35,
-              `tools/standalone: in ${go.settingsFile} (version ${file.version})`);
+              `executor/server: in ${go.settingsFile} (version ${file.version})`);
         const res = await p.evaluate(() => fetch('api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' },
                                                                    body: '{"display":{"scale":9}}' })
             .then(async (r) => [r.status, (await r.json()).path]));
-        check(res[0] === 400 && res[1] === 'display.scale', `tools/standalone: the API refuses a scale of 9 (${res})`);
+        check(res[0] === 400 && res[1] === 'display.scale', `executor/server: the API refuses a scale of 9 (${res})`);
         // A server setting: applies at the next start, says so.
         await openDialog(p);
         await p.click('nav button[data-category=network]');
         await p.fill('#setting-network-port', '8123');
         await p.press('#setting-network-port', 'Tab');
-        check(/server applies Port/.test(await p.textContent('.settings-unsaved')), 'tools/standalone: the port: Save says at the next start');
+        check(/server applies Port/.test(await p.textContent('.settings-unsaved')), 'executor/server: the port: Save says at the next start');
         await save(p);
         await p.waitForFunction(() => document.querySelector('.settings-notice.server'));
-        check((await p.textContent('.settings-notice.server')).includes('Port'), 'tools/standalone: the port, at the next start');
+        check((await p.textContent('.settings-notice.server')).includes('Port'), 'executor/server: the port, at the next start');
         // A library disk, mounted from the Disks tab (a blank HFS one: hformat).
         const blank = path.join(scratch, 'images', 'blank.img');
         fs.writeFileSync(blank, Buffer.alloc(800 * 1024));
@@ -248,10 +248,10 @@ try {
             await p.click('nav button[data-category=disks]');
             await p.selectOption('.settings-disks select', 'disks/blank.img');
             check((await p.textContent('.settings-disks ol')).includes('Blank disk'),
-                  'tools/standalone: a library disk in the Disks tab\'s list');
+                  'executor/server: a library disk in the Disks tab\'s list');
             await save(p);
             await p.waitForFunction(() => Settings.get('disks.mounted').length === 1);
-            check(true, 'tools/standalone: ... mounted, saved');
+            check(true, 'executor/server: ... mounted, saved');
 
             // The System: one setting (machine.system) behind the Disks
             // panel's choice and Settings > Machine's, each following the
@@ -272,7 +272,7 @@ try {
             };
             let m = await machine();
             check(m.options.some(([v, t]) => v.endsWith('/sys-a.img') && t === 'System A (from the library)')
-                  && m.options.some(([v]) => v.endsWith('/sys-b.img')), `tools/standalone: Settings offers the library's Systems (${JSON.stringify(m.options)})`);
+                  && m.options.some(([v]) => v.endsWith('/sys-b.img')), `executor/server: Settings offers the library's Systems (${JSON.stringify(m.options)})`);
             await p.keyboard.press('Escape');
             // The panel's choice, then the dialog opened again
             const panelPick = (n) => p.evaluate((n) => {
@@ -286,15 +286,15 @@ try {
             m = await machine();
             const label = (m.options.find(([v]) => v === m.value) || [])[1] || '';
             check(m.value === 'sys-a.img' && !/not here/.test(label),
-                  `tools/standalone: the panel's System shown in Settings when it opens (${m.value}: ${label})`);
+                  `executor/server: the panel's System shown in Settings when it opens (${m.value}: ${label})`);
             // ... and while it is open: a change from the page reaches it
             await p.keyboard.press('Escape');
             m = await machine();
             await p.evaluate(() => Settings.set({ machine: { system: 'blank.img' } }));
             check(await p.$eval('#setting-machine-system', (s) => s.value) === 'blank.img',
-                  'tools/standalone: the open dialog follows a change of the System');
+                  'executor/server: the open dialog follows a change of the System');
             await p.waitForFunction(() => !Settings.get('disks.mounted').some((u) => u.endsWith('sys-a.img')));
-            check(true, "tools/standalone: ... the last System's library disk out of disks.mounted");
+            check(true, "executor/server: ... the last System's library disk out of disks.mounted");
             // The dialog's choice (a library System disk, by its url), saved:
             // the panel follows, the disk put in
             const bUrl = (await p.$$eval('#setting-machine-system option', (o) => o.map((x) => x.value))).find((v) => v.endsWith('/sys-b.img'));
@@ -302,9 +302,9 @@ try {
             await save(p);
             await p.waitForFunction(() => Settings.get('machine.system') === 'sys-b.img');
             const panel = await p.evaluate(() => systemSelect.value);
-            check(/sys-b\.img$/.test(panel), `tools/standalone: Settings' System shown in the Disks panel (${panel})`);
+            check(/sys-b\.img$/.test(panel), `executor/server: Settings' System shown in the Disks panel (${panel})`);
             await p.waitForFunction(() => Settings.get('disks.mounted').some((u) => u.endsWith('sys-b.img')));
-            check(true, "tools/standalone: ... the library's System disk put in (disks.mounted)");
+            check(true, "executor/server: ... the library's System disk put in (disks.mounted)");
             // a -> b -> a in the panel: only the System's disk stays in, each time
             const after = [];
             for (const n of ['sys-a.img', 'sys-b.img', 'sys-a.img']) {
@@ -314,7 +314,7 @@ try {
                 after.push((await systemsIn()).join('+'));
             }
             check(after.join(' ') === 'sys-a.img sys-b.img sys-a.img',
-                  `tools/standalone: System a -> b -> a: only the System's library disk in disks.mounted (${after.join(', ')})`);
+                  `executor/server: System a -> b -> a: only the System's library disk in disks.mounted (${after.join(', ')})`);
         }
         if (shots) {
             // Every tab, over Executor running.

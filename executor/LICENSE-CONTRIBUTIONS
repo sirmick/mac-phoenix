@@ -9,9 +9,10 @@ else on Executor's own terms.
 
 Covered (the MacPhoenix changes and additions in):
 
-  src/executor/            everything, including romlib/, multiversal/,
-                           cpu/ (the syn68k facade, PowerCore on mame-ppc),
-                           host/ and tests/; third_party/ keeps its own
+  executor/                everything, including core/ (romlib/,
+                           multiversal/, cpu/: the syn68k facade, PowerCore
+                           on mame-ppc), frontends/, host/, tests/, web/
+                           and server/; core/third_party/ keeps its own
                            licences
   src/cpu/core/            the cpu::Core interface and its glue, except
                            uae_core.cpp (glue to the GPL UAE core)

@@ -1,7 +1,7 @@
 // W3's check (docs/executor/DIRECTION.md): Playwright drives uploaded
 // applications in the tab.
 //
-//   node web/tests/tab_apps.mjs DIR GUEST_DIR
+//   node executor/tests/web/tab_apps.mjs DIR GUEST_DIR
 //
 // DIR is the wasm build's executor-web output, GUEST_DIR tests/guest. Both
 // applications are uploaded through the page's file input (onto Executor's volume),

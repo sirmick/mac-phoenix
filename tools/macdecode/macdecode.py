@@ -12,7 +12,7 @@ multiversal, reloading the defs whenever a YAML file changes.
 
 SNAPSHOT is a directory written by POST /api/snapshot (ram.bin, rom.bin,
 meta.json). Names, types and addresses come from
-src/executor/multiversal/defs/*.yaml; anything the decoder can't name is
+executor/core/multiversal/defs/*.yaml; anything the decoder can't name is
 reported so it can be added there (see `placeholders`). Vocabulary:
 docs/executor/MEMORY_MAP.md.
 """

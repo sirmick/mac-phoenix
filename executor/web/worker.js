@@ -11,7 +11,7 @@
 // themselves are never written). Anything else uploaded (an application in
 // MacBinary) is copied into Executor's own volume, in "executor:Uploads".
 //
-// The server (tools/standalone) keeps it all (sync.js: Store): a server
+// The server (executor/server) keeps it all (sync.js: Store): a server
 // disk's overlay comes from it before Executor mounts the disk, and
 // Executor's volume is restored from it; both are saved there about every
 // second and when Executor flushes; what is left for when the
@@ -163,7 +163,7 @@ const progress = (step, what) => postMessage({ type: 'progress', step, ...what }
 
 // The download's bytes counted as WebAssembly reads them (a few times a
 // second to the page). Compressed in transit, Content-Length is the
-// compressed size; tools/standalone says the real one (X-Decoded-Length).
+// compressed size; executor/server says the real one (X-Decoded-Length).
 function counted(res) {
     const total = Number(res.headers.get('X-Decoded-Length'))
         || (res.headers.get('Content-Encoding') ? 0 : Number(res.headers.get('Content-Length')) || 0);

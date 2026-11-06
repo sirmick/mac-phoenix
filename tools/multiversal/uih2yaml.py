@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """uih2yaml.py HEADER.h [--library LIB] [--dispatcher NAME:TRAP]: a Universal
-Interfaces 3.4 header as multiversal YAML (src/executor/multiversal/defs).
+Interfaces 3.4 header as multiversal YAML (executor/core/multiversal/defs).
 
 The declarations only: enums, typedefs, structs (an anonymous union member
 as a union named <Struct>Union), opaque types, callback types (funptr) and

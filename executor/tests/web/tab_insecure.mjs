@@ -1,8 +1,8 @@
 // The site from a page that isn't a secure context (plain http to a host
-// other than this computer: tools/standalone opened by its LAN address),
+// other than this computer: executor/server opened by its LAN address),
 // where the browser gives no OPFS, Cache Storage or Web Locks. The site as
 // tools/web/make_site.sh assembles it (every file the Worker imports),
-// served by tools/standalone; Chromium reaches it as http://executor.test
+// served by executor/server; Chromium reaches it as http://executor.test
 // (a host-resolver rule), at devicePixelRatio 1.5. The server is the
 // store, so that changes nothing but sound; a System image from the
 // library runs the Finder, read by Range as needed (overlay.js:
@@ -12,7 +12,7 @@
 // was over at a fractional ratio (main.js: guestPoint, the whole-number
 // scale).
 //
-//   node web/tests/tab_insecure.mjs BUILD_WASM IMAGE
+//   node executor/tests/web/tab_insecure.mjs BUILD_WASM IMAGE
 //
 // IMAGE: an HFS image with a System Folder, a Finder and its record
 // (IMAGE.json; tests-7.5.5.img). Skips (77) without them, or hformat.
@@ -24,7 +24,7 @@ import { fileURLToPath } from 'node:url';
 import { launch, newPage, firstFrame, request, until, openDisks, closeDisks, diskState } from './harness.mjs';
 import { startServer } from './server.mjs';
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const [build, image] = process.argv.slice(2);
 if (!image || !fs.existsSync(image) || !fs.existsSync(`${image}.json`)) {
     console.log(`SKIP: no System image with a record (${image || 'none given'})`);

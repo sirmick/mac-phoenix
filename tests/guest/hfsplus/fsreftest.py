@@ -31,7 +31,7 @@ import guest          # noqa: E402
 import install_macbinary  # noqa: E402
 
 STORAGE = os.environ.get("MACEMU_STORAGE", os.path.expanduser("~/storage"))
-FIXTURES = os.path.join(ROOT, "src", "executor", "tests", "fixtures", "hfsplus")
+FIXTURES = os.path.join(ROOT, "executor", "tests", "fixtures", "hfsplus")
 CFG = os.environ.get("FSREFTEST_CFG", "read LongNames\rwrite Blank\rwrite untitled\rbig BigFork")   # mkfs.hfsplus -h names its HFS volume so
 
 
@@ -40,7 +40,7 @@ def main():
     ap.add_argument("--machine", choices=["9.0.4", "executor"], required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--port", type=int, default=guest.free_port())
-    ap.add_argument("--dump", default=os.path.join(ROOT, "build", "src", "executor", "romlib", "hfsplus_dump"))
+    ap.add_argument("--dump", default=os.path.join(ROOT, "build", "executor", "core", "romlib", "hfsplus_dump"))
     ap.add_argument("--bin", default=os.path.join(HERE, "FSRefTest.bin"),
                     help="the FSRefTest to run (FSRefTestPPC.bin: the PowerPC one)")
     args = ap.parse_args()

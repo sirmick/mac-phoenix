@@ -79,7 +79,7 @@ if(CMAKE_SYSTEM_NAME MATCHES Retro.*)
     #add_subdirectory(googletest)
     #target_link_libraries(tests gtest)
 
-    set(GTEST_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../third_party/googletest")
+    set(GTEST_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../core/third_party/googletest")
     include_directories("${GTEST_DIR}/include")
     include_directories("${GTEST_DIR}")
     add_definitions( -DGTEST_HAS_STREAM_REDIRECTION=0 -DGTEST_HAS_POSIX_RE=0 -DPATH_MAX=256)
