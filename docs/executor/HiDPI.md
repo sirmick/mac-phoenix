@@ -496,7 +496,7 @@ resizes to the scaled dimensions in the Worker.
 
 In the tab the scale changes while the Mac runs (the bar's HiDPI box,
 Settings > Display > Sharpness; Settings.md). The page's `'scale'` request
-(`web_main.cpp`) calls `VideoDriver::requestScale`; the Display Manager
+(`executor/host/requests.cpp`) calls `VideoDriver::requestScale`; the Display Manager
 takes it at the front process's next event call, as a screen size
 (`ROMlib_dm_poll`, `displays.cpp` `dm_set_scale`):
 `PhoenixVideoDriver::setScale` sets the scale under the frame lock

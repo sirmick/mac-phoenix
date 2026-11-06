@@ -95,7 +95,7 @@ self.Module = {
             ejected(name, true);
         postMessage({ type: 'reply', id, result });
     },
-    // A disk image's volumes gone (web_main.cpp: ejected here or by the Finder).
+    // A disk image's volumes gone (executor/host/images.cpp: ejected here or by the Finder).
     onEjected(path) {
         ejected(path.replace(/^\/uploads\//, ''));
     },

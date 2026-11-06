@@ -49,7 +49,7 @@ page are added and open it.
 ## In and out while Executor runs
 
 Inserting needs no restart (main.js `putIn` -> worker.js `insert` ->
-web_main.cpp `mount`):
+executor/host `mount`, requests.cpp):
 
 1. The page has the file (a library disk, uploads included, read by Range
    as needed; one held for the visit in memory).
@@ -86,7 +86,7 @@ already); the volume's own files (its B-trees, the desktop database's
 FCB) don't count, and go with it. The Finder's Put Away gets the same answer.
 Executor's end (`ROMlib_OurClose`) closes what is still open first.
 Whatever unmounts or ejects a disk image, the Finder's Put Away
-included, web_main.cpp notices at the next event call (`watch_images`: a
+included, executor/host notices at the next event call (images.cpp `watch_images`: a
 drive of `/uploads/` that had a volume and has none; an ejected volume
 still known offline is unmounted, so no grey icon stays) and calls
 `Module.onEjected`; the Worker sends the overlay's changes to the server
@@ -185,7 +185,7 @@ In the tab (web_main.cpp `add_to_system`, hfs_sideload.cpp
   volume forgotten) is the way back to a plain one.
 - CDs (`--cdrom`, `mount-cd`) are left as they are.
 
-## Requests (web_main.cpp)
+## Requests (executor/host/requests.cpp, web_main.cpp)
 
 `mount PATH`, `mount-cd PATH`, `eject PATH` and `volumes` (the mounted volumes' names)
 join `app`, `windows`, `menus`, `launch`; the page's `insert`

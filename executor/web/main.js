@@ -38,7 +38,7 @@
 // AudioWorklet: no sound.
 //
 // Automation: window.executor.request(op, arg) -> Promise. At the running
-// application's next event call (web_main.cpp): 'app', 'windows', 'menus',
+// application's next event call (executor/host/requests.cpp): 'app', 'windows', 'menus',
 // 'drawn' (the strings drawn lately, oldest first), 'launch' "Volume:Folder:App". At once, by the Worker: 'read' PATH (text or null),
 // 'write' [PATH, TEXT], 'list' PATH (names or null); Executor's own volume
 // is /executor, its "Host" volume /host.
@@ -311,7 +311,7 @@ let imageState = {};                // name -> { modified, changed, writable, on
 
 // ---- disks in and out of the running Mac ----
 // Executor running: a disk goes in at once (the Worker opens it, Executor
-// mounts it as a floppy put in: web_main.cpp 'mount'); not yet, at the start.
+// mounts it as a floppy put in: executor/host 'mount'); not yet, at the start.
 const live = () => !!worker && window.executor.frames > 0;
 const inserting = new Set();        // names on their way in
 const reverting = new Set();        // taken out to be put back
@@ -321,7 +321,7 @@ const FBSY = -47, NSV = -35;
 const isCD = (name) => /\.(iso|toast|cdr)$/i.test(name)
     || library.some((d) => fileName(d.url) === name && (d.tags || []).includes('cd'));
 
-// A disk's System Folder additions (web_main.cpp) go in only on a System
+// A disk's System Folder additions (executor/host/session.cpp) go in only on a System
 // its record lists: the library System's own ("systems" of a boot disk is
 // its version). An 8.6 disk's libraries in 7.6.1's System Folder, or a
 // disk or System not from the library: none.
