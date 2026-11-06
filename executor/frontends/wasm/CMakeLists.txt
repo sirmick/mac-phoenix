@@ -1,7 +1,7 @@
 # Executor in a browser tab (docs/executor/DIRECTION.md, W2): executor-web.js
 # and .wasm, for executor/web's Worker. The wasm build only.
 add_executable(executor-web web_main.cpp)
-target_link_libraries(executor-web PRIVATE front-end-phoenix executor_platform_glue)
+target_link_libraries(executor-web PRIVATE executor-host front-end-phoenix executor_platform_glue)
 target_link_options(executor-web PRIVATE
     -sENVIRONMENT=worker
     -sEXIT_RUNTIME=0

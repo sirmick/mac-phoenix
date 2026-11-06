@@ -6,6 +6,9 @@
 #   romlib                the imported Toolbox
 #   front-end-phoenix     video/cursor front end + executor_host API,
 #                         linked into mac-phoenix (`--backend executor`)
+#                         and the tab (frontends/)
+#   executor-host         front-end logic above it: sessions, disk images,
+#                         automation requests (host/)
 #   executor_tests        Executor's gtest suite, on mame-68k
 # =============================================================================
 
@@ -116,6 +119,9 @@ endif()
 phoenix_exempt_from_hardening(romlib)
 phoenix_exempt_from_hardening(front-end-phoenix)
 target_compile_options(front-end-phoenix PRIVATE ${EXECUTOR_COMMON_FLAGS})
+
+# Front-end logic shared by the tab and native front ends (host/session.h)
+add_subdirectory(host)
 
 # Into the one binary (its g_platform comes from src/core). Not in the
 # wasm build, which has no mac-phoenix.
