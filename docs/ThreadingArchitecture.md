@@ -17,9 +17,10 @@ parent (mac-phoenix)
 │   │                             worker): signaling JSON, input, PNG/WebP
 │   │                             frames, Opus packets for those codecs
 │   └── stream threads         — one per /api/stream long-poll (same handoff)
-├── WebRTC thread              — webrtc_server_main(): keep-alive only;
-│                                 libdatachannel runs its own threads for
-│                                 peer connections and RTP
+├── WebRTC thread              — webrtc_server_main(): sends the peers the
+│                                 cursor image when it changes (checked
+│                                 every 20 ms); libdatachannel runs its own
+│                                 threads for peer connections and RTP
 ├── video encoder thread       — video_encoder_main(): waits on the notify
 │                                 socket fd, copies the ready frame out of
 │                                 the SHM, submits it to the VideoOutput
@@ -48,7 +49,9 @@ child (mac-phoenix --ipc --no-webserver, started with QProcess)
 │                                 PPC installers have their own)
 ├── Time Manager thread        — PRECISE_TIMING_POSIX (src/core/timer.cpp)
 ├── audio thread               — audio_direct.cpp: on the parent's request,
-│                                 runs the Apple Mixer and writes PCM to the SHM
+│                                 raises the sound interrupt (the Mac runs
+│                                 the Apple Mixer on the CPU thread) and
+│                                 copies the PCM to the SHM ring
 ├── Ethernet RX thread         — with --network socket (ether_socket.cpp)
 └── Qt WebEngine thread        — with --browser (experimental MacBrowser)
 ```
@@ -104,7 +107,12 @@ SIGSEGV handler and runs `platform->cpu_execute_fast()` on its main thread:
 - **PPC** — `cpu_ppc_kpx.cpp` / `cpu_ppc_mame.cpp` enter the ROM at
   `ROMBase + 0x310000` (the nanokernel), with their own tick thread.
 - **Executor** — `executor_child_main()` runs the Toolbox on its 68k core
-  and publishes frames itself (`executor/frontends/phoenix/executor_child.cpp`).
+  and publishes frames and sound itself
+  (`executor/frontends/phoenix/executor_child.cpp`). Beside the control
+  worker it starts two small threads: one answers
+  `/api/executor/ppc-break` and resize requests, one samples the CPU load
+  for `/api/status`. Executor's other front ends (the tab, `executor-desktop`)
+  don't use this process model; see `Architecture.md`.
 
 ## Boundaries between threads
 
@@ -140,7 +148,8 @@ Rough numbers on a quiet workstation; see
 
 The parent's SIGINT/SIGTERM/SIGHUP handler calls
 `EmulatorSubprocess::stop()` (SIGTERM via `QProcess::terminate()`, SIGKILL
-after a second) and `_exit(0)`s. The child's SIGTERM handler unlinks the SHM
+after a second), removes Executor's per-session System copy if there is
+one (`executor_systems::remove_session_copy()`) and `_exit(0)`s. The child's SIGTERM handler unlinks the SHM
 and sockets and `_exit(0)`s; it also has `PR_SET_PDEATHSIG` so it dies with
 the parent. A guest shutdown exits the child from `ShutdownEmulator()`.
 

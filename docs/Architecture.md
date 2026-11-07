@@ -78,8 +78,8 @@ Kheperix (`kpx`) is not a `cpu::Core`: `cpu_ppc_kpx.cpp` drives SheepShaver's
 machine side (ROM patches, EmulOps, NativeOps, thunks, drivers) in
 `src/cpu/kpx/`.
 
-Docs: `cpu/PLAN.md` (MAME cores), `ppc/README.md` (the PPC machine),
-`executor/PLAN.md` (Executor).
+Docs: `docs/cpu/PLAN.md` (MAME cores), `docs/ppc/README.md` (the PPC
+machine), `docs/executor/PLAN.md` (Executor).
 
 ## Memory
 
@@ -121,7 +121,8 @@ Mac address, and no sysctl is needed.
 ### Executor
 
 No ROM. Runs on `mame-68k` in four address windows (no
-`vm.mmap_min_addr`). See `executor/MEMORY_MAP.md`.
+`vm.mmap_min_addr`); PowerPC code runs on `mame-ppc` through `PowerCore`
+(`executor/core/cpu/`). See `docs/executor/MEMORY_MAP.md`.
 
 ## EmulOps and traps
 
@@ -189,6 +190,26 @@ child then).
 
 See `ThreadingArchitecture.md` for threads and IPC.
 
+## Executor's front ends
+
+Executor (`executor/`) is also a product of its own. Every front end runs
+the same core through the `executor_host` API
+(`executor/frontends/phoenix/executor_host.h`); the tab and the desktop
+application share the session logic in `executor/host/`.
+
+- **mac-phoenix `--backend executor`**: the IPC child above
+  (`executor/frontends/phoenix/executor_child.cpp`), behind mac-phoenix's
+  web server and API. Native, on `mame-68k` / `mame-ppc`.
+- **The tab**: Executor built as WebAssembly (`executor/frontends/wasm/`,
+  page in `executor/web/`), served by the Go server `executor-standalone`
+  (`executor/server/`, the tab's only server; `docs/executor/Standalone.md`).
+- **`executor-desktop`**: a Qt 6 Widgets application with Executor
+  in-process (`executor/frontends/desktop/README.md`). Linux (also as an
+  AppImage), and Windows cross-built with llvm-mingw (`tools/windows/`).
+
+What lives where: `executor/README.md`; the rest of Executor's
+documentation: `docs/executor/README.md`.
+
 ## Web stack
 
 One TCP listener on `--port` (default 11000), `src/webserver/http_server.cpp`:
@@ -207,7 +228,8 @@ over UDP ports libdatachannel binds, not through the HTTP listener.
 ## Backend selection flow
 
 In the IPC child (`src/main.cpp`), and the same in-process for
-`--no-webserver`:
+`--no-webserver`, where Executor starts with `executor_direct_main()`
+instead:
 
 ```c++
 if (backend == Backend::EXECUTOR)
@@ -251,7 +273,8 @@ src/core/command_bridge.{cpp,h}      — read commands + init
 src/core/boot_progress.{cpp,h}       — boot phase / CHECKLOAD tracking
 src/ipc/                             — IPC protocol, child control socket, IPC video
 
-executor/                            — Executor 2000 Toolbox (core/), front ends (frontends/phoenix: its IPC child), tab, server
+executor/                            — Executor: core/ (Toolbox, CPU facade), frontends/ (phoenix, wasm, desktop,
+                                       headless), host/, web/ (the tab), server/ (executor-standalone)
 src/webserver/                       — HTTP server, /ws, API handlers
 src/webrtc/                          — peer-connection plumbing
 ```
@@ -265,4 +288,5 @@ src/webrtc/                          — peer-connection plumbing
 - `deepdive/MemoryArchitecture.md`, `deepdive/cpu/*` — quirks and gotchas.
 - `ppc/README.md` — the PPC machine in detail.
 - `cpu/PLAN.md` — the MAME cores.
-- `executor/PLAN.md` — the Executor backend.
+- `executor/README.md` — Executor's documentation;
+  `../executor/README.md` — its source tree.
