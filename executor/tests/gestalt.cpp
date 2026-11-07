@@ -134,6 +134,50 @@ TEST(Gestalt, SystemVersionSetsTheMachineBothWays)
     gestalt_set_system_version((LONGINT)sysv);
 }
 
+/* Selectors the Quadra (7.6.1) and the G3 (7.6.1, 8.6) answer alike
+   (tests/guest/gestalt), the hardware attributes each machine's, and the
+   8.x ones only from 8.0. */
+TEST(Gestalt, CommonSelectorsAndHardware)
+{
+    GUEST<LONGINT> sysv;
+    ASSERT_EQ(noErr, C_Gestalt(gestaltSystemVersion, &sysv));
+    bool prefer_ppc = ROMlib_prefer_ppc;
+    ROMlib_prefer_ppc = false;
+    auto get = [&](OSType sel) {
+        GUEST<LONGINT> r;
+        OSErr err = C_Gestalt(sel, &r);
+        return err ? (LONGINT)err : (LONGINT)r;
+    };
+    uint32_t version = system_version;
+    auto set = [](uint32_t v) {
+        system_version = v;
+        gestalt_set_system_version(v);
+    };
+    gestalt_set_memory_size(64 * 1024 * 1024);
+    set(0x0761);
+    EXPECT_EQ(1, get(gestaltDITLExtAttr));
+    EXPECT_EQ(3, get(gestaltMiscAttr));
+    EXPECT_EQ(0x2000, get(gestaltLowMemorySize));
+    EXPECT_EQ(0x01008000, get("sysu"_4));
+    EXPECT_EQ(0x0108489D, get("hdwr"_4));
+    EXPECT_EQ(gestaltUndefSelectorErr, get("rram"_4));
+    EXPECT_EQ(gestaltUndefSelectorErr, get("dlog"_4));
+    EXPECT_EQ(gestaltUndefSelectorErr, get("cpuf"_4));
+    set(0x0755);
+    EXPECT_EQ(gestaltUndefSelectorErr, get("sysu"_4));
+    EXPECT_EQ(0x0008489D, get("hdwr"_4));
+    set(0x0860);
+    EXPECT_EQ(0x41680011, get("hdwr"_4));
+    EXPECT_EQ(64 * 1024 * 1024, get("rram"_4));
+    EXPECT_EQ(64 * 1024 * 1024, get("uram"_4));
+    EXPECT_EQ(1, get("dlog"_4));
+    EXPECT_EQ(1, get("cntl"_4));
+    EXPECT_EQ(0x108, get("cpuf"_4));
+    ROMlib_prefer_ppc = prefer_ppc;
+    system_version = version;
+    gestalt_set_system_version((LONGINT)sysv);
+}
+
 /* One script system (Roman), as 7.6.1's Quadra and 8.6's G3 answer
    'scr#': Canvas 5 can't initialize without it (-5551) */
 TEST(Gestalt, ScriptCount)
