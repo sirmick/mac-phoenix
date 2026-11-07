@@ -34,6 +34,7 @@
 #include <commandline/flags.h>
 #include <rsys/segment.h>
 #include <res/resource.h>
+#include <clib/clib.h>
 #include <hfs/hfs.h>
 #include <rsys/osutil.h>
 #include <rsys/stdfile.h>
@@ -157,6 +158,11 @@ cfm_launch(Handle cfrg0, OSType desired_arch, FSSpecPtr fsp)
         if(CFIR_LOCATION(cfirp) == kOnDiskFlat)
         {
             // #warning were ignoring a lot of the cfir attributes
+            struct Launching
+            {
+                Launching() { clib::launchingApplication = true; }
+                ~Launching() { clib::launchingApplication = false; }
+            } launching;
             err = GetDiskFragment(fsp, CFIR_OFFSET_TO_FRAGMENT(cfirp),
                             CFIR_FRAGMENT_LENGTH(cfirp), fragname,
                             kLoadLib,

@@ -409,6 +409,13 @@ if(NODE_COMMAND AND GO_COMMAND)
                 $<TARGET_FILE_DIR:executor-web> ${EXECUTOR_WEB_LIBRARY})
     set_tests_properties(executor.web.cpu PROPERTIES
         LABELS "executor;web" TIMEOUT 600 SKIP_RETURN_CODE 77 ENVIRONMENT "${EXECUTOR_WEB_ENV}")
+    # A file written across WaitNextEvent on 8.6 reaches the disk image
+    # (executor/tests/web/tab_stdio.mjs; tests/guest/stdiowait).
+    add_test(NAME executor.web.stdio
+        COMMAND ${NODE_COMMAND} ${PROJECT_SOURCE_DIR}/executor/tests/web/tab_stdio.mjs
+                $<TARGET_FILE_DIR:executor-web> ${EXECUTOR_WEB_LIBRARY})
+    set_tests_properties(executor.web.stdio PROPERTIES
+        LABELS "executor;web" TIMEOUT 600 SKIP_RETURN_CODE 77 ENVIRONMENT "${EXECUTOR_WEB_ENV}")
 endif()
 if(NODE_COMMAND AND GO_COMMAND)
     foreach(cell "7.6.1 productivity" "7.6.1 creative" "7.6.1 development" "7.6.1 games-68k" "7.6.1 utilities"

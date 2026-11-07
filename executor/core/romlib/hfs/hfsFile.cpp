@@ -1173,6 +1173,27 @@ static OSErr dirtyfcbp(filecontrolblock *fcbp)
         return noErr;
 }
 
+/* MacPhoenix: every file open on the volume, its catalog record as its
+   FCB has it (length, extents), as a Mac's FlushVol writes "all access
+   path buffers for the volume": a program that writes, flushes the
+   volume and never closes the file (it crashes, the session ends) leaves
+   it on the disk at the length written, not the length it was opened at. */
+OSErr Executor::ROMlib_flushvcbfiles(HVCB *vcbp)
+{
+    OSErr retval = noErr;
+    short length = *(GUEST<INTEGER> *)LM(FCBSPtr);
+    auto *efcbp = (filecontrolblock *)((char *)LM(FCBSPtr) + length);
+    for(auto *fcbp = (filecontrolblock *)((short *)LM(FCBSPtr) + 1); fcbp < efcbp;
+        fcbp = (filecontrolblock *)((char *)fcbp + LM(FSFCBLen)))
+        if(fcbp->fcbFlNum && fcbp->fcbVPtr == vcbp)
+        {
+            OSErr err = dirtyfcbp(fcbp);
+            if(retval == noErr)
+                retval = err;
+        }
+    return retval;
+}
+
 OSErr Executor::hfsPBFlushFile(ParmBlkPtr pb, Boolean async)
 {
     filecontrolblock *fcbp;
@@ -1185,6 +1206,8 @@ OSErr Executor::hfsPBFlushFile(ParmBlkPtr pb, Boolean async)
         err = dirtyfcbp(fcbp);
     if(err == noErr)
         err = ROMlib_flushvcbp(fcbp->fcbVPtr);
+    if(err == noErr)
+        ROMlib_syncvcb(fcbp->fcbVPtr);
 
     fs_err_hook(err);
     PBRETURN((IOParam *)pb, err);
