@@ -4,16 +4,19 @@
 # Executor's own System) reaches its event loop, and the screen (the 1x
 # frame) and the window (the frame through the widget) are written.
 #
-#   desktop_finder.sh BINARY WORKDIR [SYSTEM_IMAGE [DISK_IMAGE]]
+#   desktop_finder.sh BINARY WORKDIR [SYSTEM_IMAGE [DISK_IMAGE VOLUME]]
 #
 # With a System image (Apple's, from the web library), and a disk: the disk
-# is mounted from the start, writable through its overlay, and the image
-# itself stays as it was. Exit 77 (skipped) when an image isn't there.
+# is mounted from the start, a file written on it (VOLUME:desktop-test, the
+# touch request), the image itself as it was and the write in its overlay,
+# which a second run finds again. Exit 77 (skipped) when an image isn't
+# there.
 set -u
 BIN=$1
 WORK=$2
 SYSTEM=${3:-}
 DISK=${4:-}
+VOLUME=${5:-}
 
 for img in "$SYSTEM" "$DISK"; do
     if [ -n "$img" ] && [ ! -f "$img" ]; then
@@ -26,7 +29,7 @@ rm -rf "$WORK"
 mkdir -p "$WORK"
 args=(--data "$WORK/data" --screenshot "$WORK/screen.png" --screenshot-delay 3 --quit --timeout 120)
 [ -n "$SYSTEM" ] && args+=(--system "$SYSTEM")
-[ -n "$DISK" ] && args+=(--disk "$DISK")
+[ -n "$DISK" ] && args+=(--disk "$DISK" --request "touch $VOLUME:desktop-test")
 [ -n "$DISK" ] && sum_before=$(sha1sum < "$DISK")
 
 QT_QPA_PLATFORM=offscreen "$BIN" "${args[@]}" > "$WORK/log.txt" 2>&1
@@ -50,8 +53,14 @@ if [ -n "$SYSTEM" ]; then
 fi
 if [ -n "$DISK" ]; then
     [ "$(sha1sum < "$DISK")" = "$sum_before" ] || fail "$DISK was written"
-    # mounted writable through its overlay (written only if the Mac writes:
-    # executor.OverlayTest and executor.ImageIO cover the writes)
-    grep -q "^\[desktop\] $DISK: changes in .*\.overlay" "$WORK/log.txt" || fail "not through an overlay"
+    grep -q "^\[desktop\] request touch $VOLUME:desktop-test: 0" "$WORK/log.txt" || fail "the touch failed"
+    ls "$WORK/data/overlays/"*.overlay > /dev/null 2>&1 || fail "no overlay"
+    # again: the overlay's changes are found (a version, blocks)
+    QT_QPA_PLATFORM=offscreen "$BIN" --data "$WORK/data" --system "$SYSTEM" --disk "$DISK" \
+        --screenshot "$WORK/again.png" --screenshot-delay 1 --quit --timeout 120 > "$WORK/again.txt" 2>&1
+    grep "^\[desktop\] $DISK: changes" "$WORK/again.txt"
+    grep -q "^\[desktop\] $DISK: changes in .*\.overlay (version [1-9]" "$WORK/again.txt" \
+        || fail "the second run didn't find the changes"
+    [ "$(sha1sum < "$DISK")" = "$sum_before" ] || fail "$DISK was written"
 fi
 echo PASS

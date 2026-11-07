@@ -48,8 +48,8 @@ target_compile_features(executor-desktop PRIVATE cxx_std_17)
 phoenix_exempt_from_hardening(executor-desktop)
 
 # Offscreen to the Finder (executor/tests/desktop_finder.sh): Executor's
-# own System, and Apple's 7.6.1 from the web library with a disk mounted
-# (skipped when the library isn't there).
+# own System, and Apple's 7.6.1 from the web library with a disk mounted and
+# written through its overlay (skipped when the library isn't there).
 if(BUILD_TESTS)
     set(_desktop_test ${CMAKE_CURRENT_SOURCE_DIR}/../../tests/desktop_finder.sh)
     set(EXECUTOR_WEB_LIBRARY "$ENV{HOME}/storage/web-library" CACHE PATH
@@ -59,7 +59,7 @@ if(BUILD_TESTS)
         COMMAND ${_desktop_test} $<TARGET_FILE:executor-desktop> ${CMAKE_CURRENT_BINARY_DIR}/test-finder)
     add_test(NAME executor.desktop.apple761
         COMMAND ${_desktop_test} $<TARGET_FILE:executor-desktop> ${CMAKE_CURRENT_BINARY_DIR}/test-apple761
-                ${_library}/boot-7.6.1.img ${_library}/utilities.img)
+                ${_library}/boot-7.6.1.img ${_library}/utilities.img Utilities)
     set_tests_properties(executor.desktop.finder executor.desktop.apple761 PROPERTIES
         LABELS executor TIMEOUT 150 SKIP_RETURN_CODE 77)
 endif()
