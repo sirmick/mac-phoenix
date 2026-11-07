@@ -231,7 +231,6 @@ set(hfs_sources
     hfs/drive_flags.h
     hfs/futzwithdosdisks.h
     hfs/hfsBtree.cpp hfs/hfsChanging.cpp hfs/hfsCreate.cpp hfs/hfsFile.cpp
-    hfs/image_io.h hfs/image_io.cpp
     hfs/hfsHelper.cpp hfs/hfsHier.cpp hfs/hfsMisc.cpp hfs/hfsVolume.cpp
     hfs/hfsWorkingdir.cpp hfs/hfsXbar.cpp hfs/futzwithdosdisks.cpp)
 source_group(HFS FILES ${hfs_sources})
@@ -679,7 +678,10 @@ add_library(executor_hfsplus STATIC
     hfs/plus/image.h hfs/plus/image.cpp
     hfs/plus/unicode.h hfs/plus/unicode.cpp hfs/plus/unicode_tables.h
     hfs/plus/reader.h hfs/plus/reader.cpp
-    hfs/plus/btree.h hfs/plus/btree.cpp hfs/plus/writer.cpp)
+    hfs/plus/btree.h hfs/plus/btree.cpp hfs/plus/writer.cpp
+    # the images' reads and writes (a front end's opener first): the File
+    # Manager and hfsplus_dump alike
+    hfs/image_io.h hfs/image_io.cpp)
 target_include_directories(executor_hfsplus PUBLIC .)
 target_compile_features(executor_hfsplus PUBLIC cxx_std_17)
 target_link_libraries(romlib executor_hfsplus)
