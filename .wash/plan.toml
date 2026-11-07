@@ -1,7 +1,7 @@
 # wash-plan: written by Wash as the plan changes.
 # Edit it only between workspaces; plan_set {"from": "<this file>"} loads it.
 
-revision = 8
+revision = 16
 
 [[node]]
   id = "cuts"
@@ -682,8 +682,8 @@ revision = 8
   template = "package"
   needs = ["sys-additions"]
   body = "From sysadd 724415f6 report and creative4 3801a599: PS4 8.6 'fatal heap error' find_stretch mmansubr.cpp:933 last trap $AAFE during brush stroke; AI8 jumps to 0 at start (unresolved weak imports GetMenuItemRefCon/SetMenuItemRefCon likely); PM6.5 'Please find the RSRC Folder' (Prefs name bake volume 'Applications'); PS5.5 Cmd-S no Save dialog. Details ~/storage/tmp/sys-additions/results.md, docs/executor/M1.md."
-  state = "active"
-  revision = 2
+  state = "done"
+  revision = 16
 
 [[node]]
   id = "works-icons"
@@ -812,8 +812,8 @@ revision = 8
   parent = "p2"
   needs = ["repo-move"]
   body = "See p2."
-  state = "todo"
-  revision = 2
+  state = "active"
+  revision = 14
 
 [[node]]
   id = "p2"
@@ -841,8 +841,8 @@ revision = 8
   template = "package"
   parent = "p2"
   body = "(1) Microsoft Works draw and spreadsheet module snapshots (rendering). (2) THINK C repro (fix-86-10: new project index out of bounds). (3) NewGWorld rowBytes padding as the Mac pads (difftest). (4) 9.0.4 next steps from .wash/local/handoffs/os904b.md (big items Appearance 1.1/HFS+/TEC/MP/Keychain/Sherlock/CarbonLib need the owner: list them, don't start)."
-  state = "todo"
-  revision = 8
+  state = "active"
+  revision = 10
 
 [[node]]
   id = "tab-store-2"
@@ -851,8 +851,8 @@ revision = 8
   template = "package"
   parent = "p2"
   body = "Open from the 2026-11-05 stop: (1) in the tab on 8.6 a file written then the app idles in WaitNextEvent loses the write (benchapp saw it; handoff .wash/local/handoffs/bench-app.md if present); (2) Executor creating a file on a disk image is slow (measure natively and in the tab; profile the File Manager/HFS path, LocalVolume/overlay)."
-  state = "todo"
-  revision = 8
+  state = "active"
+  revision = 11
 
 [[node]]
   id = "web-fails"
@@ -861,5 +861,5 @@ revision = 8
   template = "package"
   parent = "p2"
   body = "Found by mover 2026-11-07 (they fail on grid2 before the move too): executor.web.system_kept, executor.web.disks, executor.web.m1.7.6.1.creative (3 cells), executor.web.m1.8.6.games-ppc; native scroll_bars_rom_ppc_86. (boot_uae_jit: known JIT stalls, ignore.) Find each cause (bisect from 58efc58f where native was 489/489), fix in Executor/tab or in the cell if the cell is wrong."
-  state = "todo"
-  revision = 8
+  state = "active"
+  revision = 12

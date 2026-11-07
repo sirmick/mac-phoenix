@@ -1,0 +1,86 @@
+{
+  "advanced": {
+    "debug": "",
+    "logtraps": "",
+    "logtraps_nesting": 6,
+    "ppc_break": "",
+    "screenshot_button": true
+  },
+  "disks": {
+    "exclude": [],
+    "images": "",
+    "include": [
+      "*.img",
+      "*.iso"
+    ],
+    "max_image_mb": 4096,
+    "mounted": [
+      "/library/games.img"
+    ]
+  },
+  "display": {
+    "fit_window": false,
+    "fullscreen_button": true,
+    "scale": 0,
+    "smoothing": false
+  },
+  "input": {
+    "command_key": "ctrl",
+    "keyboard_capture": true,
+    "right_click": "control",
+    "wheel_scroll": true
+  },
+  "machine": {
+    "depth": 0,
+    "ppc": false,
+    "ram_mb": 0,
+    "screen": "1024x768",
+    "system": ""
+  },
+  "network": {
+    "bind": "127.0.0.1",
+    "max_upload_mb": 64,
+    "port": 9000,
+    "relay_allow_private": false,
+    "relay_enabled": true,
+    "relay_max_connections": 4,
+    "relay_max_sockets": 32,
+    "relay_nameserver": "",
+    "relay_ports": [
+      7,
+      13,
+      20,
+      21,
+      23,
+      25,
+      37,
+      43,
+      53,
+      70,
+      79,
+      80,
+      110,
+      113,
+      119,
+      123,
+      143,
+      194,
+      443,
+      563,
+      993,
+      995,
+      1080,
+      6667,
+      8080
+    ],
+    "secure_cookies": "auto",
+    "tls_cert": "",
+    "tls_key": "",
+    "trusted_proxies": []
+  },
+  "sound": {
+    "enabled": true,
+    "volume": 40
+  },
+  "version": 2
+}

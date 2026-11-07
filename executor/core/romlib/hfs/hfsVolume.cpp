@@ -6,6 +6,7 @@
 #include <OSUtil.h>
 #include <FileMgr.h>
 #include <MemoryMgr.h>
+#include <hfs/image_io.h>
 #include <hfs/hfs.h>
 #include <file/file.h>
 #include <hfs/hfs_plus.h>
@@ -173,11 +174,7 @@ void Executor::ROMlib_syncvcb(HVCB *vcbp)
 {
     int fd = ((VCBExtra *)vcbp)->u.hfs.fd;
     if(unsynced_fds.erase(fd))
-    {
-#ifndef _WIN32
-        fsync(fd);
-#endif
-    }
+        image_io::fsync(fd);
 }
 
 static OSErr writevolumeinfo(HVCB *vcbp, Ptr p)
