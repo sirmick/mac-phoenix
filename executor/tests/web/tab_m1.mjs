@@ -365,6 +365,11 @@ const TARGETS = {
         { name: 'MPW Shell', app: 'Development:MPW:MPW Shell', use: async (t) => {
             // The Worksheet: a compile (SC) and its {Status} in an alert.
             await t.until(async () => (await t.windows()).some((w) => /Worksheet$/.test(w.title)), 30000, 'no Worksheet');
+            // The Worksheet opens before the Startup script runs; keys typed
+            // while it runs go astray (Enter ran a line of the Worksheet's,
+            // Date, in Commando). Its BuildMenu, near its end, adds Build.
+            await t.until(async () => ((await request('menus')) || []).some((m) => m.title === 'Build'), 60000, 'no Build menu (Startup never ran)');
+            await t.pause(2000);
             await t.key('Meta+KeyA');
             await t.type('SC -o "{MPW}M1Count.c.o" "{MPW}Examples:CExamples:Count.c"; Alert "M1 build {Status}"');
             await t.key('Meta+KeyA', 'NumpadEnter');
