@@ -134,13 +134,33 @@ hardened runtime (`MAP_JIT`, the `com.apple.security.cs.allow-jit`
 entitlement); Skia's macOS prebuilt; keys use `nativeVirtualKey`
 (untested). The data folder is `~/Library/Application Support/MacPhoenix/Executor`.
 
-**Windows `.exe`** (not built): an MSVC or MinGW build of Executor first:
-core/cpu/host has no Windows side (VirtualAlloc for the guest memory
-windows), and core and host/ use POSIX file calls (pread/pwrite, fsync,
-ftruncate in hfs/image_io.cpp and host/overlay.cpp: `_pread`-style or
-Win32 equivalents behind the same functions); then windeployqt, an `.ico`,
-an installer or a zip. Keys' set 1 table and log_capture's `_pipe`/`_dup2`
-path are untested.
+**Windows zip** (cross-built here: `cmake/ExecutorWindows.cmake`):
+`tools/windows/build.sh` fetches llvm-mingw 20231128 (LLVM 17, UCRT) and
+Qt's own llvm-mingw build of Qt 6.8.2 (aqtinstall) into
+`~/storage/deps/windows` and builds `build-windows/executor-desktop.exe`
+(toolchain `tools/windows/llvm-mingw.cmake`; moc/rcc/uic are the build
+machine's Qt 6.8). `tools/windows/package.sh` makes
+`executor-windows-VERSION.zip`: the stripped exe, Qt's DLLs and plugins
+(qwindows, qoffscreen, the modern Windows style, ico/jpeg/gif), libc++,
+libunwind and winpthreads, `executor-standalone.exe` (the Go server, as
+`make dist` builds it), `README.txt` (`tools/windows/README.txt`), the
+licences and SHA256SUMS; the unstripped exe beside the zip, for
+`tools/windows/symbolize.sh`. `tools/windows/smoke.sh ZIP DIR [--system
+IMAGE [--ppc]]` runs the zip under Wine in a Debian container
+(`tools/windows/wine.Dockerfile`): Executor's own System, an Apple System,
+`--crash-test`, and the server.
+On Windows: a GUI executable with a manifest (UTF-8 code page: Executor's
+paths are UTF-8 `char` strings; per-monitor DPI), `--console` for a
+console; the log's first line names the version (also in the window's
+title); crashes (unhandled exceptions, `std::terminate`, `abort()`) write
+`crash-STAMP.dmp` (a minidump) and `crash-STAMP.txt` (the stack as
+module+offset, the log's tail) to `logs/` and say so in a dialog
+(`windows_support.h`). The data folder is `%AppData%\MacPhoenix\Executor`.
+Mac names that Windows forbids in a file name map to the Services for
+Macintosh private-use characters (`util/macstrings.cpp`). Not yet: the
+network (`EXECUTOR_NET=none`: Winsock types only), Skia (HiDPI), the
+gtests on Windows. Keys' set 1 table and WASAPI sound are untested on real
+Windows (Wine has neither keyboard input offscreen nor a sound device).
 
 Disk images given on the command line without `--disk` (opened from a
 file manager: the desktop entry's `%F`, `application/x-apple-diskimage`)

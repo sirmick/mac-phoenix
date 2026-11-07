@@ -1,0 +1,80 @@
+#!/bin/bash
+# The Windows zip under Wine (a Debian container, tools/windows/wine.Dockerfile):
+#   - executor-desktop.exe offscreen to Executor's own System's shell: a
+#     screenshot, the log file in the data folder, its first line the version;
+#   - with --system IMAGE (and --ppc): that System's Finder;
+#   - --crash-test writes crash-*.dmp and crash-*.txt beside the log;
+#   - executor-standalone.exe serves the tab (curl).
+#
+#   tools/windows/smoke.sh ZIP WORKDIR [--system IMAGE [--ppc]]
+#
+# IMAGE is a path on this machine (mounted read-only); the run's data stays
+# in WORKDIR. Exit 0: every check passed.
+set -uo pipefail
+ZIP=$(realpath "$1")
+WORK=$(realpath -m "$2")
+shift 2
+SYSTEM= PPC=
+while [ $# -gt 0 ]; do
+    case $1 in
+        --system) SYSTEM=$(realpath "$2"); shift ;;
+        --ppc) PPC=--ppc ;;
+    esac
+    shift
+done
+IMAGE=macphoenix-wine:13
+if ! docker image inspect $IMAGE > /dev/null 2>&1; then
+    docker build -t $IMAGE -f "$(dirname "$0")/wine.Dockerfile" "$(dirname "$0")" || exit 1
+fi
+
+rm -rf "$WORK"
+mkdir -p "$WORK/.home"
+python3 -c "import sys, zipfile; zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])" "$ZIP" "$WORK/app"
+APP=$(ls -d "$WORK"/app/executor-windows-*)
+APPNAME=$(basename "$APP")
+VOLS=(-v "$WORK:/work")
+[ -n "$SYSTEM" ] && VOLS+=(-v "$(dirname "$SYSTEM"):/sys:ro")
+
+# wine in the container, as this user; LANG: Wine's Unix file names in UTF-8
+wine_run() {
+    timeout 300 docker run --rm --user "$(id -u):$(id -g)" -e HOME=/work/.home -e LANG=C.UTF-8 \
+        -e WINEDEBUG=-all -e QT_QPA_PLATFORM=offscreen "${VOLS[@]}" $IMAGE bash -c "$1"
+}
+EXE="wine /work/app/$APPNAME/executor-desktop.exe"
+fails=0
+check() {  # check WHAT COMMAND...
+    local what=$1; shift
+    if "$@"; then echo "ok   $what"; else echo "FAIL $what"; fails=$((fails + 1)); fi
+}
+
+echo "== Executor's own System"
+wine_run "$EXE --data 'Z:\\work\\own' --screenshot 'Z:\\work\\own.png' --screenshot-delay 3 --quit --timeout 120 > /work/own.txt 2>&1"
+check "own System: in its event loop" grep -q 'is in its event loop' "$WORK/own.txt"
+check "own System: screenshot" test -s "$WORK/own.png"
+log=$(ls "$WORK"/own/logs/executor-*.log 2>/dev/null | head -1)
+check "log file in the data folder (${log#$WORK/})" test -s "$log"
+check "the log's first line is the version" bash -c "head -1 '$log' | grep -q '^\[desktop\] Executor [^ ]* on Windows'"
+check "UTF-8 code page" grep -q 'code page 65001' "$WORK/own.txt"
+
+if [ -n "$SYSTEM" ]; then
+    echo "== $(basename "$SYSTEM") $PPC"
+    wine_run "$EXE --data 'Z:\\work\\apple' --system 'Z:\\sys\\$(basename "$SYSTEM")' $PPC --screenshot 'Z:\\work\\apple.png' --screenshot-delay 3 --quit --timeout 150 > /work/apple.txt 2>&1"
+    check "Apple's System: the Finder in its event loop" grep -q 'Finder is in its event loop' "$WORK/apple.txt"
+    check "Apple's System: screenshot" test -s "$WORK/apple.png"
+fi
+
+echo "== --crash-test"
+wine_run "$EXE --data 'Z:\\work\\crash' --crash-test --timeout 60 > /work/crash.txt 2>&1"
+check "crash report .txt" bash -c "ls '$WORK'/crash/logs/crash-*.txt > /dev/null 2>&1"
+check "crash report .dmp" bash -c "ls '$WORK'/crash/logs/crash-*.dmp > /dev/null 2>&1"
+check "the report names the access violation" bash -c "grep -q 'access violation' '$WORK'/crash/logs/crash-*.txt"
+
+echo "== executor-standalone.exe"
+wine_run "wine /work/app/$APPNAME/executor-standalone.exe --data 'Z:\\work\\web' --port 18095 > /work/standalone.txt 2>&1 &
+          for i in \$(seq 60); do curl -sf -o /work/index.html http://127.0.0.1:18095/ && break; sleep 1; done
+          curl -sf -o /dev/null -w '%{http_code} %{size_download}\n' http://127.0.0.1:18095/executor-web.wasm > /work/wasm.txt"
+check "the page is served" grep -qi '<html' "$WORK/index.html"
+check "the wasm is served" grep -q '^200 ' "$WORK/wasm.txt"
+
+echo "$fails failed"
+[ $fails -eq 0 ]

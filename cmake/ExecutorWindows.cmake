@@ -19,8 +19,8 @@ option(BUILD_TESTS "Build test suite" OFF)
 function(phoenix_exempt_from_hardening target)
 endfunction()
 
-# Static C++ runtime pieces so the exe needs only Qt's DLLs and the
-# toolchain's libc++/libunwind (which Qt's own DLLs need anyway).
+# C++ exceptions (ExitToShell unwinds a process); windows.h without the
+# rarely used half, no min/max macros; M_PI & co.
 add_compile_options(-fexceptions)
 add_compile_definitions(WIN32_LEAN_AND_MEAN NOMINMAX _USE_MATH_DEFINES)
 

@@ -8,7 +8,9 @@
 #include <map>
 #include <sys/stat.h>
 #include <unistd.h>
+#ifdef _WIN32
 #include <rsys/win32_posix.h>
+#endif
 
 namespace Executor::image_io {
 
