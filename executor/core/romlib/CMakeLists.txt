@@ -456,7 +456,7 @@ set(mman_sources
     mman/mman_private.h
     mman/tempalloc.h
 
-    mman/mman.cpp mman/mmansubr.cpp mman/whatis.cpp
+    mman/mman.cpp mman/mmansubr.cpp mman/fullheap.cpp mman/whatis.cpp
     mman/mmlib.cpp
     mman/tempmem.cpp
 )

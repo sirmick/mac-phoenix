@@ -47,7 +47,7 @@ set(NATIVE_TEST_SOURCES
         files_internal.cpp guestvalues.cpp cpu.cpp
         sane.cpp
         localvolume_macbinary.cpp
-        typeselect.cpp datetime.cpp numformat.cpp textedit.cpp sysheap.cpp memorymgr.cpp
+        typeselect.cpp datetime.cpp numformat.cpp textedit.cpp sysheap.cpp memorymgr.cpp fullheap.cpp
         sysroutines.cpp resprivate.cpp unknownselectors.cpp folders.cpp cursordev.cpp dialogs.cpp printing.cpp displaymode.cpp
         aehdlr.cpp stdclib.cpp
         aedesc.cpp aeresolve.cpp

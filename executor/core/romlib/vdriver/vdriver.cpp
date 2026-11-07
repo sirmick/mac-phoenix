@@ -184,9 +184,13 @@ void VideoDriver::putScrap(OSType type, LONGINT length, char *p, int scrap_cnt)
 {
 }
 
+/* MacPhoenix: no host clipboard here, so the Mac's own scrap answers
+   (GetScrap reads it at -1). 0 said "the host has none of that type" and
+   left every GetScrap empty: what one application put on the scrap was
+   never there for the next one's paste. */
 LONGINT VideoDriver::getScrap(OSType type, Handle h)
 {
-    return 0;
+    return -1;
 }
 
 void VideoDriver::weOwnScrap()

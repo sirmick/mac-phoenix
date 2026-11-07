@@ -136,17 +136,22 @@ TEST(Windows, ScrollBarThumbPositionGivesTheValue)
 }
 #endif
 
-/* GetNewCWindow attaches the 'pltt' of the window's ID, and DisposeWindow
-   leaves that palette in the heap: a 7.6.1 Quadra keeps 4144 bytes per
-   window with a 256-colour palette (and Executor about the same).
-   Speedometer 4.0's Color QuickDraw tests open such a window (WIND/pltt
-   507) about 214 times, so its heap fills up on both machines. */
-TEST(Windows, DisposeWindowKeepsItsAutomaticPalette)
+/* GetNewCWindow attaches the 'pltt' of the window's ID, and the window's
+   disposal leaves that palette in the heap: a 7.6.1 Quadra keeps 4144
+   bytes per window (not purgeable, PurgeMem gives nothing back) whatever
+   the window's visibility, storage (nil or a pointer of the caller's, as
+   Speedometer 4.0 gives), CloseWindow or DisposeWindow, or the palette's
+   private word (Speedometer's pltt 507 has 0x2004). Speedometer opens 24
+   such windows over its five colour depths on the Quadra, about 72 per
+   depth on Executor (faster QuickDraw, more repetitions): its heap fills
+   only there. */
+static long retained_per_window(bool visible, bool own_storage, bool close_only, unsigned short priv, std::string *steps)
 {
     StringPtr name = PSTR("test-wind-pltt");
     CreateResFile(name);
     short ref = OpenResFile(name);
-    ASSERT_NE(-1, ref);
+    if(ref == -1)
+        return -1;
 
     unsigned char wind[18 + 2] = {};
     const short wr[4] = { 60, 60, 160, 260 };
@@ -155,18 +160,20 @@ TEST(Windows, DisposeWindowKeepsItsAutomaticPalette)
         wind[2 * i] = wr[i] >> 8;
         wind[2 * i + 1] = wr[i] & 0xFF;
     }
-    wind[9] = 4;                                /* noGrowDocProc; invisible, no go-away */
+    wind[9] = 4;                                /* noGrowDocProc, no go-away */
+    wind[11] = visible;
     wind[18] = 1;
     wind[19] = 'W';
     Handle w_h = NewHandle(sizeof wind);
     memcpy(*w_h, wind, sizeof wind);
     AddResource(w_h, 'WIND', 200, PSTR(""));
-    ASSERT_EQ(noErr, ResError());
 
     const int entries = 256;
     Handle p_h = NewHandleClear(16 + 16 * entries);
     (*p_h)[0] = entries >> 8;
     (*p_h)[1] = entries & 0xFF;
+    (*p_h)[6] = priv >> 8;                      /* the private word, as in the resource */
+    (*p_h)[7] = priv & 0xFF;
     for(int i = 0; i < entries; i++)
     {
         unsigned char *e = (unsigned char *)*p_h + 16 + 16 * i;
@@ -176,31 +183,64 @@ TEST(Windows, DisposeWindowKeepsItsAutomaticPalette)
         e[7] = 2;
     }
     AddResource(p_h, 'pltt', 200, PSTR(""));
-    ASSERT_EQ(noErr, ResError());
     WriteResource(w_h);
     WriteResource(p_h);
 
-    auto once = [] {
-        WindowPtr w = GetNewCWindow(200, nullptr, (WindowPtr)-1);
+    int state = -1;
+    auto once = [&] {
+        /* own storage as Speedometer 4.0 gives it: a pointer of its own,
+           which DisposeWindow then frees */
+        Ptr storage = own_storage ? NewPtr(170) : nullptr;
+        WindowPtr w = GetNewCWindow(200, storage, (WindowPtr)-1);
         if(!w)
             return false;
         bool attached = GetPalette(w) != nullptr;
-        DisposeWindow(w);
+        if(attached)
+            state = HGetState((Handle)GetPalette(w));
+        if(close_only)
+            CloseWindow(w);
+        else
+            DisposeWindow(w);
+        if(close_only)
+            DisposePtr((Ptr)w);
         return attached;
     };
     MaxApplZone();
-    ASSERT_TRUE(once()) << "the pltt is attached";
-    long before = FreeMem();
-    std::string steps;
-    for(int i = 0; i < 10; i++)
+    long per = -1;
+    if(once())
     {
+        long before = FreeMem();
+        for(int i = 0; i < 10; i++)
+        {
+            long f = FreeMem();
+            once();
+            *steps += " " + std::to_string(f - FreeMem());
+        }
+        per = (before - FreeMem()) / 10;
         long f = FreeMem();
-        once();
-        steps += " " + std::to_string(f - FreeMem());
+        PurgeMem(0x7FFFFFFF);
+        *steps += " | state " + std::to_string(state) + ", PurgeMem gave " + std::to_string(FreeMem() - f)
+            + ", CompactMem " + std::to_string(CompactMem(0x7FFFFFFF));
     }
-    long after = FreeMem();
-
     CloseResFile(ref);
     FSDelete(name, 0);
-    EXPECT_LE(after, before - 10 * 4096) << "before " << before << ", after " << after << "; each:" << steps;
+    return per;
+}
+
+TEST(Windows, AutomaticPaletteAfterDisposal)
+{
+    struct { bool visible, own, close; unsigned short priv; } ways[] = {
+        { false, false, false, 0 }, { true, true, false, 0 },
+        { true, true, false, 0x2004 }, { true, true, false, 0x2000 }, { true, true, false, 0x0004 },
+        { false, false, false, 0x2000 }, { true, false, true, 0x2000 },
+    };
+    std::string report;
+    for(auto &w : ways)
+    {
+        std::string steps;
+        long per = retained_per_window(w.visible, w.own, w.close, w.priv, &steps);
+        report = std::string("visible ") + (w.visible ? "1" : "0") + " storage " + (w.own ? "own" : "nil")
+            + (w.close ? " CloseWindow" : " DisposeWindow") + " private " + std::to_string(w.priv) + ": " + std::to_string(per) + " per window;" + steps;
+        EXPECT_GE(per, 4096) << report;
+    }
 }

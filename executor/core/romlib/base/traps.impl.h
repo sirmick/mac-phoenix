@@ -122,6 +122,7 @@ void LibraryFunction<Ret (Args...), fptr>::init()
     if(logging::enabled())
         builtinlibs::addPPCEntrypoint(libname, name,
             [this](PowerCore& cpu) {
+                ServedTrap served(this);
                 if(auto ret = this->checkBreakPPC(cpu); ~ret)
                     return ret;
                 return callfromPPC::Invoker<Ret (Args...)>::invokeFromPPC(cpu, logging::makeLoggedFunction(name, fptr));
@@ -131,6 +132,7 @@ void LibraryFunction<Ret (Args...), fptr>::init()
 #endif
         builtinlibs::addPPCEntrypoint(libname, name,
             [this](PowerCore& cpu) {
+                ServedTrap served(this);
                 if(auto ret = this->checkBreakPPC(cpu); ~ret)
                     return ret;
                 return callfromPPC::Invoker<Ret (Args...)>::invokeFromPPC(cpu, fptr);
@@ -138,6 +140,7 @@ void LibraryFunction<Ret (Args...), fptr>::init()
         );
     builtinlibs::addCFM68KEntrypoint(libname, name,
         [this, pops = builtinlibs::cfm68kCalleePops(name)](syn68k_addr_t addr) {
+            ServedTrap served(this);
             if(auto ret = this->checkBreak68K(addr); ~ret)
                 return ret;
 #ifdef EXECUTOR_ENABLE_LOGGING
@@ -237,6 +240,7 @@ void WrappedFunction<Ret (Args...), fptr, CallConv>::init()
         guestFP = (UPP<Ret (Args...),CallConv>)SYN68K_TO_US(callback_install(
                 [this](syn68k_addr_t addr)
                 {
+                    ServedTrap served(this);
                     if(auto ret = this->checkBreak68K(addr); ~ret)
                         return ret;
 
@@ -249,6 +253,7 @@ void WrappedFunction<Ret (Args...), fptr, CallConv>::init()
         guestFP = (UPP<Ret (Args...),CallConv>)SYN68K_TO_US(callback_install(
                 [this](syn68k_addr_t addr)
                 {
+                    ServedTrap served(this);
                     if(auto ret = this->checkBreak68K(addr); ~ret)
                         return ret;
 
@@ -267,6 +272,7 @@ void WrappedFunction<Ret (Args...), fptr, CallConv>::init()
         if(logging::enabled())
             builtinlibs::addPPCEntrypoint(libname, name,
                 [this](PowerCore& cpu) { 
+                    ServedTrap served(this);
                     if(auto ret = this->checkBreakPPC(cpu); ~ret)
                         return ret;
                     auto call = [this](Args... args) -> Ret { return this->callFromLibrary(args...); };
@@ -278,6 +284,7 @@ void WrappedFunction<Ret (Args...), fptr, CallConv>::init()
 #endif
             builtinlibs::addPPCEntrypoint(libname, name,
                 [this](PowerCore& cpu) { 
+                    ServedTrap served(this);
                     if(auto ret = this->checkBreakPPC(cpu); ~ret)
                         return ret;
                     auto call = [this](Args... args) -> Ret { return this->callFromLibrary(args...); };
@@ -286,6 +293,7 @@ void WrappedFunction<Ret (Args...), fptr, CallConv>::init()
             );
         builtinlibs::addCFM68KEntrypoint(libname, name,
             [this, pops = builtinlibs::cfm68kCalleePops(name)](syn68k_addr_t addr) {
+                ServedTrap served(this);
                 if(auto ret = this->checkBreak68K(addr); ~ret)
                     return ret;
                 auto call = [this](Args... args) -> Ret { return this->callFromLibrary(args...); };
@@ -360,6 +368,7 @@ syn68k_addr_t DispatcherTrap<SelectorConvention>::invokeFrom68K(syn68k_addr_t ad
     auto it = self->selectors.find(sel);
     if(it != self->selectors.end())
     {
+        ServedTrap served(it->second.entrypoint);
         if(auto ret = it->second.entrypoint->checkBreak68K(addr); ~ret)
             return ret;
 
@@ -448,6 +457,7 @@ void TrapVariant<Trap, Ret (Args...), flags...>::init()
             builtinlibs::addPPCEntrypoint(libname, name,
                 [this](PowerCore& cpu)
                 {
+                    ServedTrap served(this);
                     if(auto ret = this->checkBreakPPC(cpu); ~ret)
                         return ret;
 
@@ -464,6 +474,7 @@ void TrapVariant<Trap, Ret (Args...), flags...>::init()
             builtinlibs::addPPCEntrypoint(libname, name,
                 [this](PowerCore& cpu)
                 {
+                    ServedTrap served(this);
                     if(auto ret = this->checkBreakPPC(cpu); ~ret)
                         return ret;
 
@@ -474,6 +485,7 @@ void TrapVariant<Trap, Ret (Args...), flags...>::init()
         }
         builtinlibs::addCFM68KEntrypoint(libname, name,
             [this, pops = builtinlibs::cfm68kCalleePops(name)](syn68k_addr_t addr) {
+                ServedTrap served(this);
                 if(auto ret = this->checkBreak68K(addr); ~ret)
                     return ret;
                 auto call = [this](Args... args) -> Ret { return (*this)(args...); };

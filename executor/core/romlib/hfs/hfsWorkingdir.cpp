@@ -59,7 +59,8 @@ OSErr Executor::ROMlib_mkwd(WDPBPtr pb, HVCB *vcbp, LONGINT dirid,
         saveZone = LM(TheZone);
         LM(TheZone) = LM(SysZone);
         newptr = NewPtr(new_n_wd_bytes);
-        LM(SysZone) = LM(TheZone);
+        LM(TheZone) = saveZone; /* MacPhoenix: was LM(SysZone) = LM(TheZone),
+                                   leaving the System heap current */
         if(!newptr)
             retval = tmwdoErr;
         else
