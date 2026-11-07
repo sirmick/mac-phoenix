@@ -102,7 +102,32 @@ The rule depends on the routine being served, not on the call site.
    restart. Executor's SysError is the splash screen's alert: it waits for
    a click and then returns. The rule ends the session itself so that
    nothing ever gets a nil.
-4. **Log and count.** The first fallback for each routine in each process
+4. **The guest's reserve, once the heap has run out.** After the
+   application heap has needed a fallback, a Toolbox allocation that would
+   leave it with less than a sixteenth of its size free (at most 64 KB)
+   goes to the System heap at once, if the System heap can take it above
+   its floor. If the System heap can't, the allocation is made in the
+   application heap after all. InitZone clears the state, so a new
+   partition at the same address starts afresh. Without the reserve, the
+   Toolbox filled Speedometer's heap to the last bytes before falling back.
+   Speedometer's own NewRgn then got nil, which is correct but never
+   happens on a Quadra. Speedometer passed the nil to OpenRgn/CloseRgn, and
+   that crashed the fifth depth.
+
+   The reserve applies only after the heap has run out. A heap that is
+   merely low is common, and programs don't expect the Toolbox's handles
+   in the System heap. With the reserve in force from the start,
+   AppleScript's initialisation in MacPerl failed
+   (`macperl_smoke_executor`: "couldn't initialize AppleScript"). Until a
+   heap runs out, Executor behaves as the Mac does.
+5. **Zones keep their own master pointers.** MoreMasters' block is never
+   taken from the System heap (`FullHeapInZone`). An application zone with
+   master pointers in the System heap gives its handles negative offsets
+   to their zone, which corrupted the heap; DrawPicture's allocations did
+   this in Speedometer. When a zone's master pointers run out and it can't
+   make more, the handle comes from the System heap whole, master pointer
+   and all.
+6. **Log and count.** The first fallback for each routine in each process
    (keyed by its ApplZone) logs
    `[full heap] TRAP: system heap fallback (N so far; K left above the floor)`.
    `ROMlib_full_heap_fallbacks()` counts them all.
@@ -141,12 +166,39 @@ FillCRect, ScrollRect, DrawString, EraseRect, FrameRgn, NewDialog,
 NewWindow, wdef0 and TENew. The System heap had about 4970 K left above
 the floor.
 
+## Speedometer (7.6.1, 2026-11-07)
+
+`~/storage/tmp/gestalt3/spcolor.py` runs Speedometer 4.0's colour test
+(Color QuickDraw at the 5 depths) in one Executor session. All 5 depths
+ran and wrote their reports (runs spck6, spck7 and spfinal in
+`~/storage/tmp/fullheap`):
+
+- Before this rule, Executor crashed after 2 or 3 depths (Speed.md).
+- With the reserve at a flat 64 KB from the start: 327,347 fallbacks, and
+  the System heap ended 2,331 K above the floor.
+- With the reserve proportional from the start: 1,157,354 fallbacks,
+  1,902 K above the floor (about 2.1 MB of the System heap in one session).
+- The rule as committed (the reserve only after the heap has run out,
+  run spfinal): 512,066 fallbacks. The System heap ended 4,741 K above
+  the floor, about 140 K below where the session started.
+
+Most of the fallbacks are short-lived: regions and pattern buffers made
+and freed within one drawing call. A temporary per-trap heap walk found
+the MoreMasters corruption. At boot it also reported one block in a
+200 KB zone whose master pointer slot holds the System heap's start. That
+report did not change for the rest of the run, the zone's free count
+added up, and nothing failed, so it is probably the walk misreading a
+non-standard block. It is not explained.
+
 ## Costs
 
 - The System heap does not shrink back. Blocks that the fallback made stay
   there after the application quits, unless the application disposes of
   them first. A Mac would have freed them with the partition. The floor
-  limits the damage: the next process still has 256 KB.
+  limits the damage: the next process still has 256 KB. Speedometer's
+  colour test kept about 140 K there (spfinal). Freeing a process's
+  fallback blocks when it quits would need the blocks marked as the
+  process's; not done.
 - Some guest calls work where the Quadra stops: NewPixPat, TENew,
   NewDialog, and the region and pattern calls. No application relies on
   system error 25.
@@ -161,7 +213,11 @@ the floor.
     once;
   - a region made while serving FrameOval comes from the System heap, and
     one made while serving NewRgn is nil;
-  - the floor's three answers;
-  - past the floor: exit 70 and "System error 25".
+  - the floor's three answers, and nil when no routine is being served;
+  - past the floor: exit 70 and "System error 25";
+  - MoreMasters keeps a zone's master pointers in the zone;
+  - `FullHeapReserve`: with the application heap inside its reserve, a
+    Toolbox allocation comes from the System heap and the guest's own
+    from the application heap.
 - The probe on Executor (7.6.1).
 - Speedometer's colour test, all 5 depths in one session (7.6.1).

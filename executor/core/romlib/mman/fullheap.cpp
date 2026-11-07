@@ -25,6 +25,7 @@
 #include <error/error.h>
 
 #include <set>
+#include <algorithm>
 #include <string>
 #include <utility>
 #include <stdio.h>
@@ -37,6 +38,17 @@ namespace
 constexpr INTEGER ds_mem_full_err = 25; /* dsMemFullErr (Inside Macintosh: System errors) */
 uint32_t fallbacks;
 std::set<std::pair<std::string, uint32_t>> logged; /* (routine, ApplZone) */
+std::set<uint32_t> ran_out; /* zones that have run out (their reserve applies) */
+}
+
+void Executor::ROMlib_full_heap_ran_out(THz zone)
+{
+    ran_out.insert(US_TO_SYN68K(zone));
+}
+
+void Executor::ROMlib_full_heap_zone_reset(THz zone)
+{
+    ran_out.erase(US_TO_SYN68K(zone));
 }
 
 uint32_t Executor::ROMlib_full_heap_fallbacks()
@@ -48,6 +60,7 @@ void Executor::ROMlib_full_heap_reset()
 {
     fallbacks = 0;
     logged.clear();
+    ran_out.clear();
 }
 
 int32_t Executor::ROMlib_full_heap_system_room()
@@ -60,7 +73,7 @@ full_heap_answer Executor::ROMlib_full_heap_decide(Size size)
     /* No routine served: Executor's own code (its launch, a gtest standing
        in for the guest) keeps the Memory Manager's answer. */
     const traps::Entrypoint *e = traps::served_entry;
-    if(!e || e->guestAllocator)
+    if(!e || e->guestAllocator || FullHeapInZone::active())
         return full_heap_answer::fail;
     /* More than the System heap could give at all: a size Executor's code
        tries and copes without (a buffer it then makes smaller, a GWorld
@@ -71,6 +84,20 @@ full_heap_answer Executor::ROMlib_full_heap_decide(Size size)
     if(room - (int32_t)size - HDRSIZE < FULL_HEAP_SYSTEM_FLOOR)
         return full_heap_answer::exhausted;
     return full_heap_answer::system_heap;
+}
+
+int32_t Executor::ROMlib_full_heap_appl_reserve(THz zone)
+{
+    int32_t size = (Ptr)ZONE_BK_LIM(zone) - (Ptr)zone;
+    return std::min(FULL_HEAP_APPL_RESERVE, size / 16);
+}
+
+bool Executor::ROMlib_full_heap_prefer_system(THz zone, Size size)
+{
+    if(zone != LM(ApplZone) || zone == LM(SysZone) || !ran_out.count(US_TO_SYN68K(zone))
+       || ZONE_ZCB_FREE(zone) - (int32_t)size - HDRSIZE >= ROMlib_full_heap_appl_reserve(zone))
+        return false;
+    return ROMlib_full_heap_decide(size) == full_heap_answer::system_heap;
 }
 
 static const char *served_name()
@@ -109,3 +136,4 @@ void Executor::ROMlib_full_heap_exhausted(Size size)
     fflush(nullptr);
     _exit(70);
 }
+

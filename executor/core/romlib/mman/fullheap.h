@@ -14,6 +14,18 @@ namespace Executor
    would leave less is dsMemFullErr. */
 constexpr int32_t FULL_HEAP_SYSTEM_FLOOR = 256 * 1024;
 
+/* What the application heap keeps for the guest's own allocations once
+   it has run out (a fallback made for it): a sixteenth of it, at most
+   64K. From then on the Toolbox's allocation that would leave less free
+   goes to the System heap at once. Without it the Toolbox fills the heap
+   to the last bytes, and the guest's own NewRgn then gets nil where a
+   Quadra's never does (Speedometer's fifth colour depth: OpenRgn with
+   it). Not before the heap has run out: a heap that is merely low is
+   common, and programs don't expect the Toolbox's handles elsewhere
+   (AppleScript's initialisation in MacPerl failed so). */
+constexpr int32_t FULL_HEAP_APPL_RESERVE = 64 * 1024;
+int32_t ROMlib_full_heap_appl_reserve(THz zone);
+
 enum class full_heap_answer
 {
     fail,        /* the guest's own allocation call: nil, MemErr -108 */
@@ -21,8 +33,29 @@ enum class full_heap_answer
     exhausted,   /* the Toolbox's, the System heap at its floor: dsMemFullErr */
 };
 
+/* An allocation that must stay in its zone (MoreMasters: master pointers
+   are threaded into the zone's own free list) never falls back. */
+class FullHeapInZone
+{
+    static inline int depth = 0;
+public:
+    FullHeapInZone() { ++depth; }
+    ~FullHeapInZone() { --depth; }
+    FullHeapInZone(const FullHeapInZone &) = delete;
+    FullHeapInZone &operator=(const FullHeapInZone &) = delete;
+    static bool active() { return depth > 0; }
+};
+
 /* For an allocation of `size` that failed outside the System heap. */
 full_heap_answer ROMlib_full_heap_decide(Size size);
+/* An allocation of `size` about to be made in `zone`: true when it is
+   the Toolbox's, would take `zone` (the application heap) into its
+   reserve, and the System heap can take it above its floor. */
+bool ROMlib_full_heap_prefer_system(THz zone, Size size);
+/* `zone` has run out: its reserve applies from now on. */
+void ROMlib_full_heap_ran_out(THz zone);
+/* InitZone: a zone starts afresh (a new partition at the same place). */
+void ROMlib_full_heap_zone_reset(THz zone);
 /* A fallback is being made: counted, logged once per routine and process. */
 void ROMlib_full_heap_count();
 /* System error 25: ends the session. */

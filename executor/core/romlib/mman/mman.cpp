@@ -608,8 +608,13 @@ void MoreMasters(void)
 
     current_zone = LM(TheZone);
 
-    handles = (GUEST<Ptr> *)NewPtr(ZONE_MORE_MAST(current_zone)
-                                   * sizeof(uint32_t));
+    {
+        /* the zone's own master pointers: never from the System heap
+           (fullheap.cpp), or the zone's handles have masters outside it */
+        FullHeapInZone in_zone;
+        handles = (GUEST<Ptr> *)NewPtr(ZONE_MORE_MAST(current_zone)
+                                       * sizeof(uint32_t));
+    }
 
     if(handles == nullptr)
     {
@@ -662,6 +667,7 @@ void InitZone(GrowZoneUPP pGrowZone, int16_t cMoreMasters,
 
     limitPtr = limitPtr - 8;
     init_zones.insert(US_TO_SYN68K(zone));
+    ROMlib_full_heap_zone_reset(zone);
 
     first_block = ZONE_HEAP_DATA(zone);
     /* a span of 16s: every block then starts as aligned as the first
@@ -823,6 +829,7 @@ static Handle full_heap_handle(Size size, bool clear_p)
         case full_heap_answer::system_heap:
             break;
     }
+    ROMlib_full_heap_ran_out(LM(TheZone));
     Handle h = _NewHandle_flags(size, true, clear_p);
     if(!h)
         ROMlib_full_heap_exhausted(size);
@@ -841,6 +848,7 @@ static Ptr full_heap_ptr(Size size, bool clear_p)
         case full_heap_answer::system_heap:
             break;
     }
+    ROMlib_full_heap_ran_out(LM(TheZone));
     Ptr p = _NewPtr_flags(size, true, clear_p);
     if(!p)
         ROMlib_full_heap_exhausted(size);
@@ -863,6 +871,19 @@ _NewHandle_flags(Size size, bool sys_p, bool clear_p)
     if(sys_p)
         LM(TheZone) = LM(SysZone);
     current_zone = LM(TheZone);
+
+    if(!sys_p && ROMlib_full_heap_prefer_system(current_zone, size))
+    {
+        /* the Toolbox's, and the heap is near full: the System heap
+           first (fullheap.cpp); if that has no room, here after all */
+        LM(TheZone) = save_zone;
+        if(Handle r = _NewHandle_flags(asked, true, clear_p))
+        {
+            ROMlib_full_heap_count();
+            return r;
+        }
+        LM(TheZone) = current_zone;
+    }
 
     newh = NewEmptyHandle();
     if(newh == nullptr)
@@ -1330,6 +1351,19 @@ Ptr _NewPtr_flags(Size size, bool sys_p, bool clear_p)
         LM(TheZone) = LM(SysZone);
 
     current_zone = LM(TheZone);
+
+    if(!sys_p && ROMlib_full_heap_prefer_system(current_zone, size))
+    {
+        /* the Toolbox's, and the heap is near full: the System heap
+           first (fullheap.cpp); if that has no room, here after all */
+        LM(TheZone) = save_zone;
+        if(Ptr r = _NewPtr_flags(asked, true, clear_p))
+        {
+            ROMlib_full_heap_count();
+            return r;
+        }
+        LM(TheZone) = current_zone;
+    }
 
     size += HDRSIZE;
 

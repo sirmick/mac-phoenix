@@ -146,15 +146,17 @@ MacBench's scores are relative to a **Power Macintosh G3/300 = 1000**
 - **Performance Rating** is left out: the report garbles its line
   (`Performance Rating:  KWhetsto15.359`) and the PowerPC rows' values
   don't follow their parts.
-- **Executor crashes in the colour tests** after two or three depths,
-  natively (7.6.1 and 8.6, 68k and PowerPC; not in the tab): each test
-  opens a window with a 256-colour palette that stays in the heap after
-  DisposeWindow (on the Quadra too), so Speedometer's 1.5 MB heap fills,
-  and Executor's host code then writes through a nil handle somewhere
-  (seen 2026-11-07: TENew from GetNewDialog, xdata_for_pattern from
-  InvertRect; before: InsetRgn/XorRgn, fixed in 4f2b3304). The Quadra
-  survives the full heap. run.py runs the remaining depths in a new
-  session; the colour column is the mean of the depths that ran.
+- **Executor's colour tests fill the heap.** Each test opens a window
+  with a 256-colour palette. The palette stays in the heap after
+  DisposeWindow, on the Quadra too. Executor runs many more tests than a
+  Quadra, so Speedometer's 1.5 MB heap fills. Executor's host code then
+  wrote through a nil handle, after two or three depths (2026-11-07: TENew
+  from GetNewDialog, xdata_for_pattern from InvertRect). Since the
+  full-heap rule (FullHeap.md), the Toolbox's own allocations come from
+  the System heap. All 5 depths then run in one session (natively, 7.6.1,
+  68k). That run leaves about 140 K behind in the System heap. run.py still runs
+  any remaining depths in a new session if one crashes, and the colour
+  column is the mean of the depths that ran.
 - **uae with `--jit`** doesn't reach the Finder in these sessions (the
   known uae JIT problem); no row.
 - **MacBench 5.0** gets past its splash only on the G3 on Kheperix

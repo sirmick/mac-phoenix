@@ -9,6 +9,7 @@
 #include <base/traps.h>
 
 #include <initializer_list>
+#include <vector>
 #include <string.h>
 
 using namespace Executor;
@@ -154,6 +155,27 @@ TEST_F(FullHeap, RegionByTheTrapServed)
     EXPECT_EQ(fallbacks0 + 1, ROMlib_full_heap_fallbacks());
 }
 
+/* With the zone's master pointers used up, MoreMasters' block stays in the
+   zone: from the System heap it would put masters of the zone's handles
+   outside it (Speedometer's fifth depth: a corrupt heap in DrawPicture).
+   The handle comes from the System heap whole. */
+TEST_F(FullHeap, MasterPointersStayInTheirZone)
+{
+    {
+        traps::ServedTrap own(traps::entrypoints.at("NewEmptyHandle"));
+        while(NewEmptyHandle())
+            ;
+    }
+    ASSERT_EQ(nullptr, (Ptr)ZONE_HFST_FREE(zone));
+    traps::ServedTrap t(traps::entrypoints.at("TENew"));
+    Handle h = NewHandle(16);
+    ASSERT_NE(nullptr, h);
+    EXPECT_EQ(LM(SysZone), HandleZone(h));
+    EXPECT_EQ(nullptr, (Ptr)ZONE_HFST_FREE(zone)) << "no master pointers from elsewhere";
+    EXPECT_EQ(fallbacks0 + 1, ROMlib_full_heap_fallbacks());
+    DisposeHandle(h);
+}
+
 TEST_F(FullHeap, FloorDecides)
 {
     int32_t room = ROMlib_full_heap_system_room();
@@ -186,3 +208,58 @@ TEST_F(FullHeap, PastTheFloorIsSystemError25)
         ::testing::ExitedWithCode(70), "System error 25 \\(dsMemFullErr\\): TENew");
 }
 #endif
+
+/* Once the application heap has run out, its last
+   ROMlib_full_heap_appl_reserve stay the guest's: a Toolbox allocation that
+   would go into them comes from the System heap, the guest's own NewHandle
+   still from the application heap. Before, the Toolbox's stays at home. */
+TEST(FullHeapReserve, ToolboxLeavesTheReserveToTheGuest)
+{
+    GUEST<THz> saved = LM(TheZone);
+    SetZone(LM(ApplZone));
+    std::vector<Ptr> ps;
+    {
+        traps::ServedTrap own(traps::entrypoints.at("NewPtr"));
+        for(Size s = 1024 * 1024; s >= 1024; s /= 2)
+            while(LM(ApplZone)->zcbFree - s > ROMlib_full_heap_appl_reserve(LM(ApplZone)) / 2)
+            {
+                Ptr p = NewPtr(s);
+                if(!p)
+                    break;
+                ps.push_back(p);
+            }
+    }
+    ASSERT_LT(LM(ApplZone)->zcbFree, ROMlib_full_heap_appl_reserve(LM(ApplZone)));
+    ASSERT_GT(LM(ApplZone)->zcbFree, 8192);
+    uint32_t f0 = ROMlib_full_heap_fallbacks();
+    Handle toolbox, guest;
+    {
+        /* not run out yet: the Mac's heap, the Toolbox's handle at home */
+        traps::ServedTrap t(traps::entrypoints.at("TENew"));
+        Handle h = NewHandle(1024);
+        ASSERT_NE(nullptr, h);
+        EXPECT_EQ(LM(ApplZone), HandleZone(h));
+        DisposeHandle(h);
+    }
+    EXPECT_EQ(f0, ROMlib_full_heap_fallbacks());
+    ROMlib_full_heap_ran_out(LM(ApplZone));
+    {
+        traps::ServedTrap t(traps::entrypoints.at("TENew"));
+        toolbox = NewHandle(1024);
+    }
+    {
+        traps::ServedTrap t(traps::entrypoints.at("NewHandle"));
+        guest = NewHandle(1024);
+    }
+    ASSERT_NE(nullptr, toolbox);
+    ASSERT_NE(nullptr, guest);
+    EXPECT_EQ(LM(SysZone), HandleZone(toolbox));
+    EXPECT_EQ(LM(ApplZone), HandleZone(guest));
+    EXPECT_EQ(f0 + 1, ROMlib_full_heap_fallbacks());
+    DisposeHandle(toolbox);
+    DisposeHandle(guest);
+    ROMlib_full_heap_zone_reset(LM(ApplZone));
+    for(Ptr p : ps)
+        DisposePtr(p);
+    LM(TheZone) = saved;
+}
