@@ -23,6 +23,9 @@
  *   eject PATH       a disk image's volumes unmounted through _UnmountVol
  *                    (fBsyErr: in use)
  *   volumes          the volumes mounted: their names
+ *   flush            every volume's changes written out (FlushVol), as
+ *                    before a shutdown: a native front end about to quit
+ *                    (frontends/desktop); the count flushed
  *   resize WxH       the Mac's screen at that size, live
  *   scale N          the Mac drawn at N times its size, live
  */
@@ -275,6 +278,14 @@ std::optional<std::string> request(const std::string &op, const std::string &arg
     }
     else if(op == "eject")
         reply = std::to_string(eject_image(arg));
+    else if(op == "flush")
+    {
+        int n = 0;
+        for(HVCB *v = (HVCB *)LM(VCBQHdr).qHead; v; v = (HVCB *)v->qLink)
+            if(v->vcbDrvNum && FlushVol(nullptr, v->vcbVRefNum) == noErr)
+                n++;
+        reply = std::to_string(n);
+    }
     else if(op == "resize")
     {
         /* "WxH": the Mac's screen at that size, live (the tab's Settings,

@@ -72,7 +72,7 @@ void event_call_end();
 
 /* An automation request at an event call: app, windows [items], menus,
    mouse, drawn, launch PATH, volumes, mount PATH, mount-additions PATH,
-   mount-cd PATH, eject PATH, resize WxH, scale N. The reply as JSON;
+   mount-cd PATH, eject PATH, flush, resize WxH, scale N. The reply as JSON;
    nothing for an op it doesn't know. */
 std::optional<std::string> request(const std::string &op, const std::string &arg);
 

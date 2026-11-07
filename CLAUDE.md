@@ -92,6 +92,13 @@ tools/executor/grid_compare.py ~/storage/executor-grid/8.6-r2 ~/storage/executor
 # Toolbox selectors/OT functions a session called that Executor lacks: "[unimplemented]"
 # in the log, collected in ~/storage/executor/unimplemented.log (date, app, call)
 
+# Executor as a desktop application (executor/frontends/desktop/README.md): Qt 6
+# Widgets, in-process; settings from executor/web/settings.schema.json, data in
+# the OS's app-data folder (--data DIR), disks written through working copies
+./build/executor-desktop [--system ~/storage/web-library/boot-8.6.img --ppc]
+QT_QPA_PLATFORM=offscreen ./build/executor-desktop --data /tmp/d --screenshot s.png --quit
+ctest --test-dir build -R executor.desktop
+
 # Executor as WebAssembly (docs/executor/DIRECTION.md, W1): emsdk in ~/emsdk
 source ~/emsdk/emsdk_env.sh
 emcmake cmake -B build-wasm && cmake --build build-wasm -j4
