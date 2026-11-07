@@ -10,6 +10,7 @@
 #include <ControlMgr8.h>
 #include <OSUtil.h>
 #include <MemoryMgr.h>
+#include <mman/mman.h>
 
 #include <quickdraw/cquick.h>
 #include <ctl/ctl.h>
@@ -255,14 +256,30 @@ int32_t Executor::ROMlib_ctlcall(ControlHandle c, int16_t i, int32_t l)
        the handle asking for the indicator. Not a definition that takes
        the 8.0 messages: its empty region is the answer (8.6's bevel
        button, for an empty rectangle, in Navigation Services' Save
-       dialog), and its calcCRgns keeps the handle's low 24 bits. */
+       dialog), and its calcCRgns keeps the handle's low 24 bits, so it is
+       given a region in the System heap, below 16 MB, and the answer copied
+       (Microsoft Works 4's CDEF clears the high byte: an application
+       heap's region above 16 MB made it write through a stray handle). */
     if((i == calcCntlRgn || i == calcThumbRgn) && l
        && EmptyRgn(ptr_from_longint<RgnHandle>(l))
        && !((uint16_t)LM(SysVersion) >= 0x0800
             && (uint32_t)cp(VAR(c), c, kControlMsgTestNewMsgSupport, 0)
                    == kControlSupportsNewMessages))
-        retval = cp(VAR(c), c, calcCRgns,
-                    i == calcThumbRgn ? (l | 0x80000000) : l);
+    {
+        RgnHandle low;
+        {
+            TheZoneGuard guard(LM(SysZone));
+            low = NewRgn();
+        }
+        if(low && ptr_to_longint(low) < 0x01000000)
+        {
+            retval = cp(VAR(c), c, calcCRgns,
+                        ptr_to_longint(low) | (i == calcThumbRgn ? 0x80000000 : 0));
+            CopyRgn(low, ptr_from_longint<RgnHandle>(l));
+        }
+        if(low)
+            DisposeRgn(low);
+    }
 
     return retval;
 }

@@ -48,7 +48,7 @@ add_library(executor_cpu STATIC
     core/cpu/syn68k_common.cpp
     core/cpu/PowerCore.cpp
     # syn68k_host.h: the guest windows' memory
-    $<IF:$<BOOL:${EMSCRIPTEN}>,core/cpu/host/wasm/memory.cpp,core/cpu/host/posix/memory.cpp>
+    $<IF:$<BOOL:${EMSCRIPTEN}>,core/cpu/host/wasm/memory.cpp,$<IF:$<BOOL:${WIN32}>,core/cpu/host/windows/memory.cpp,core/cpu/host/posix/memory.cpp>>
 )
 target_include_directories(executor_cpu PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/core/cpu)
 target_include_directories(executor_cpu PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/core/romlib)   # base/trap_history.h

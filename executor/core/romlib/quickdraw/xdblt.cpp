@@ -375,7 +375,14 @@ void Executor::xdblt_xdata_complex(RgnHandle rh, int mode,
         xdblt_stub_table = x->stub_table_for_mode[mode];
     else
         xdblt_stub_table = x->stub_table_for_mode[mode & 3];
-    xdblt_pattern_row_0 = (-pat_y_rotate_count) & x->height_minus_1;
+    /* MacPhoenix: the region's rows are the port's local coordinates, and
+       QuickDraw starts the pattern at local row 0 wherever the bitmap's
+       bounds put it (difftest patalign: windows at odd screen rows, GWorlds
+       with odd bounds.top, SetOrigin; the horizontal phase already was).
+       Adding bounds.top (-pat_y_rotate_count) shifted it: Works 4's
+       spreadsheet grid dotted a row off. */
+    (void)pat_y_rotate_count;
+    xdblt_pattern_row_0 = 0;
     xdblt_pattern_height_minus_1 = x->height_minus_1;
     SETUP_SPECIAL_RGN(rh, xdblt_rgn_start);
 

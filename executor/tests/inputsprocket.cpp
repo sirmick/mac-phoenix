@@ -50,7 +50,9 @@ TEST(InputSprocket, NoDevicesIdleElements)
     uint8_t move[12];
     memset(move, 0xAA, sizeof move);
     EXPECT_EQ(noErr, C_ISpElement_GetComplexState(els[2], sizeof move, move));
-    EXPECT_EQ(0, move[0]);
+    /* idle movement: both axes centred ($7FFFFFFF), the pad idle (0) */
+    const uint8_t idle[12] = { 0x7F, 0xFF, 0xFF, 0xFF, 0x7F, 0xFF, 0xFF, 0xFF, 0, 0, 0, 0 };
+    EXPECT_EQ(0, memcmp(idle, move, sizeof move));
 
     GUEST<ISpElementListReference> list;
     ASSERT_EQ(noErr, C_ISpElementList_New(3, els, &list, 0));

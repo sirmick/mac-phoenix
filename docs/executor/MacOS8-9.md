@@ -818,6 +818,47 @@ Next, in order:
 9. **Extensions** (the 7.6.1 round again): Speech (`AliasDispatch $2F`),
    then what each of 8/9's extensions needs.
 
+## 9.0.4: what is open (2026-11-07)
+
+Measured on the 9.0.4 grids (G3 reference against Executor; the os904
+round's notes). Not started; kept here so they aren't lost.
+
+**Calls every 9.0.4 session makes at startup that Executor lacks.** Most
+are private: each needs its signature read from Apple's glue (the G3 ROM's
+PrivateInterfaceLib/InterfaceLib exports, or the System's dispatcher
+tables) and its answer measured on the G3 before it is written. They are
+logged as `[unimplemented]` now.
+
+| Call | Where | Note |
+|---|---|---|
+| `SetIconDevice` (and `GetIconDevice`) | PowerPC import (Icon Services, private) | |
+| `ResolveIDConflicts` | PowerPC import | |
+| `PPCOpenSync`, `PPCInformAsync`, `PPCCloseSync` | PPC Toolbox | `PPC.yaml` has its types only, no parameter blocks or functions; the 68k `_PPC` answers only `PPCInit` (IM: Interapplication Communication ch. 11) |
+| `GetSystemFont`, `GetParent`, `DeleteAppleMenuItem` | PrivateInterfaceLib | `DeleteAppleMenuItem` pairs with the `AddAppleMenuItem` Executor has (OSDispatch $31); its selector and arguments are unknown |
+| OSDispatch $75, HighLevelFSDispatch $15, FSDispatch $50 | 68k dispatchers, through Mixed Mode | answered `paramErr` |
+| `FragGetConnectionInfo` (7 items), `FragAddNotifyProc` (3) | CFM, private | |
+| `BrianBits` | Sherlock 2 | |
+| `DrawMBARString` | private | harmless |
+
+**Smaller open items** (os904 round): General Controls draws a stray icon
+at about (285,190) (it draws in `initDev` while its window is still at
+(100,100), then moves; showing the window after `initDev` loses its grey);
+AppleScript applets (ColorSync Extras) get -1717 where the G3 runs them
+(Finder event handlers); Software Update's stray lines and group box,
+DialogDispatch $FD; the Text panel clipped at the bottom.
+
+**The big items: the owner's call** (effort guesses, one person):
+
+| Item | What | Guess |
+|---|---|---|
+| Appearance 1.1 | 9.x's theme calls, theme fonts, brushes and sounds beyond 8.6's | 3-5 days |
+| HFS+ end to end | reader and writer exist; the System volume path, FSRef calls, catalog edge cases | 3-5 days |
+| Text Encoding Converter | Apple's file runs now; Executor's own C++ only if the policy wants it gone | 1-2 weeks |
+| Multiprocessing Services | MP tasks, queues, semaphores, scheduled cooperatively | 1 week |
+| Keychain Manager | the store and its unlock interface | 1 week or more |
+| Sherlock 2 | Find by Content index (`BrianBits`), plug-ins, network search | 2 weeks or more; low value |
+| CarbonLib | Script Editor, StuffIt 6.0.1 and other Carbon applications | weeks to months |
+
 ## Tools
 
 * `tools/macdecode/pef.py`: a PEF container's imports by library and

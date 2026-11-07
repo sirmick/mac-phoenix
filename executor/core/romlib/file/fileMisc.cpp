@@ -335,7 +335,12 @@ static void ForEachPath(std::string_view macVolumes, F f)
 {
     std::string::size_type p = 0, q;
     
-    while((q = macVolumes.find_first_of(":;",  p)) != std::string::npos)
+#ifdef _WIN32
+    const char *separators = ";";  /* ':' is a drive letter's */
+#else
+    const char *separators = ":;";
+#endif
+    while((q = macVolumes.find_first_of(separators,  p)) != std::string::npos)
     {
         if(auto s = macVolumes.substr(p, q-p); !s.empty())
             f(s);

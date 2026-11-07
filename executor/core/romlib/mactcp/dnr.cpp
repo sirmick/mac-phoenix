@@ -27,12 +27,16 @@
 #include <rsys/hostdns.h>
 #include <rsys/mactcp.h>
 
+#ifdef _WIN32
+#include <rsys/win32_net.h>
+#else
 #include <arpa/nameser.h>
 
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
+#endif
 
 #include <algorithm>
 #include <cctype>

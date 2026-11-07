@@ -710,7 +710,21 @@ static Handle fond_outline(FHandle fh, INTEGER face, INTEGER *stylep)
         /* (whether it's there: outline_strike loads the one it uses) */
         Boolean resload = LM(ResLoad);
         SetResLoad(false);
-        Handle h = GetResource("sfnt"_4, id);
+        /* MacPhoenix: the FOND's own suitcase first. Suitcases copied in
+           without a Mac's boot renumbering them all number their outline
+           9217 (Apple's free 7.5.3 image): from the top of the chain,
+           Chicago took Times' outline. */
+        Handle h = nullptr;
+        INTEGER home = HomeResFile((Handle)fh);
+        if(home != -1)
+        {
+            INTEGER saved = LM(CurMap);
+            UseResFile(home);
+            h = Get1Resource("sfnt"_4, id);
+            LM(CurMap) = saved;
+        }
+        if(!h)
+            h = GetResource("sfnt"_4, id);
         SetResLoad(resload);
         if(h)
         {
@@ -754,7 +768,8 @@ static void retire_outline_strikes(size_t n)
             int n_entries = GetHandleSize(wlh) / sizeof(GUEST<Handle>);
             for(int j = 0; j < n_entries; j++)
             {
-                if(!hp[j] || (LONGINT)hp[j].raw() == (LONGINT)-1)
+                if(!hp[j] || (LONGINT)hp[j].raw() == (LONGINT)-1
+                   || !width_entry_mapped(&hp[j], j))
                     continue;
                 WPtr wp = *hp[j];
                 if(wp && wp->tabFont == strike && wp != (WPtr)LM(WidthPtr))
@@ -964,12 +979,16 @@ static void newwidthtable(FMInput *fmip)
         GUEST<WHandle> *whp = *WIDTHLISTHAND;
         int n = GetHandleSize((Handle)LM(WidthListHand)) / sizeof(GUEST<Handle>);
         for(int i = n - 1; i >= 0 && !LM(WidthTabHandle); i--)
-            if(whp[i] && whp[i].raw() != (uint32_t)-1 && *whp[i])
+            if(whp[i] && whp[i].raw() != (uint32_t)-1 && width_entry_mapped(&whp[i], i))
             {
                 LM(WidthTabHandle) = guest_cast<WidthTableHandle>(whp[i]);
                 Munger((Handle)LM(WidthListHand), i * sizeof(GUEST<Handle>), nullptr,
                        sizeof(GUEST<Handle>), (Ptr) "", 0);
             }
+        /* none to reuse: no table this time (WidthPtr stays as it was)
+           rather than a nil handle listed and locked */
+        if(!LM(WidthTabHandle))
+            return;
     }
     Munger((Handle)LM(WidthListHand), (LONGINT)0, (Ptr)0, 0,
            (Ptr)&LM(WidthTabHandle), sizeof(LM(WidthTabHandle)));

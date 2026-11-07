@@ -16,12 +16,16 @@
 
 #include <rsys/hostdns.h>
 
+#ifdef _WIN32
+#include <rsys/win32_net.h>
+#else
 #include <arpa/inet.h>
 #include <arpa/nameser.h>
 #include <ifaddrs.h>
 #include <netdb.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
+#endif
 #include <unistd.h>
 
 #include <algorithm>

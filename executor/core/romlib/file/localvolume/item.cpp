@@ -46,15 +46,25 @@ int64_t Executor::hostToMacTime(int64_t t)
 {
     time_t tt = t;
     struct tm tm;
+#ifdef _WIN32
+    /* no tm_gmtoff: local time read back as if it were UTC */
+    localtime_s(&tm, &tt);
+    return (int64_t)_mkgmtime(&tm) + macToUnixEpoch;
+#else
     localtime_r(&tt, &tm);
     return t + tm.tm_gmtoff + macToUnixEpoch;
+#endif
 }
 
 int64_t Executor::macToHostTime(int64_t t)
 {
     time_t wall = t - macToUnixEpoch;
     struct tm tm;
+#ifdef _WIN32
+    gmtime_s(&tm, &wall);
+#else
     gmtime_r(&wall, &tm);
+#endif
     tm.tm_isdst = -1;
     return mktime(&tm);
 }

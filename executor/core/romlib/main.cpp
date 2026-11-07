@@ -84,6 +84,16 @@
 
 #include <iostream>
 
+#ifdef _WIN32
+/* kernel32's thread stack and memory calls (Windows 8 on), from their own
+   API-set headers rather than <windows.h>, whose macros clash with
+   Toolbox names (DrawText, InsertMenu, ...) */
+#include <windef.h>
+#include <processthreadsapi.h>
+#include <memoryapi.h>
+#undef pascal  /* minwindef.h: a calling convention; a name in Executor */
+#endif
+
 using namespace Executor;
 using namespace std;
 
@@ -559,12 +569,33 @@ int executor_main_entry(int argc, char **argv)
 
     pthread_attr_t attr;
     pthread_attr_init(&attr);
+#ifdef _WIN32
+    /* Windows threads take no stack of the caller's (winpthreads ignores
+       setstack): one of this size, made addressable as window 2 by the
+       thread itself before the core starts */
+    syn68k_free_low(stack, stackSize);
+    pthread_attr_setstacksize(&attr, stackSize);
+    pthread_t executorThread;
+    pthread_create(&executorThread, &attr, [](void *arg) -> void * {
+        ULONG_PTR lo, hi;
+        GetCurrentThreadStackLimits(&lo, &hi);
+        /* all of it committed: the guest reads its frames anywhere, not
+           only down from the guard page as the stack grows */
+        VirtualAlloc((void *)lo, hi - lo, MEM_COMMIT, PAGE_READWRITE);
+        DWORD old;
+        VirtualProtect((void *)lo, hi - lo, PAGE_READWRITE /* the guard page's off */, &old);
+        syn68k_set_stack_window((const void *)lo, hi - lo);
+        (*(std::function<void()> *)arg)();
+        return nullptr;
+    }, &executorBody);
+#else
     pthread_attr_setstack(&attr, stack, stackSize);
     pthread_t executorThread;
     pthread_create(&executorThread, &attr, [](void *arg) -> void * {
         (*(std::function<void()> *)arg)();
         return nullptr;
     }, &executorBody);
+#endif
     pthread_attr_destroy(&attr);
 
     vdriver->runEventLoop();

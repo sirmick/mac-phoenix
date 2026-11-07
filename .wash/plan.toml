@@ -1,7 +1,7 @@
 # wash-plan: written by Wash as the plan changes.
 # Edit it only between workspaces; plan_set {"from": "<this file>"} loads it.
 
-revision = 40
+revision = 61
 
 [[node]]
   id = "cuts"
@@ -404,8 +404,8 @@ revision = 40
   emoji = "📦"
   template = "milestone"
   body = "Owner decision 2026-11-01: Executor stays in the browser (wasm); a single Go binary per OS (linux/darwin/windows, amd64/arm64) serves the embedded front end and module, the images dir, settings, relay, logs. Images only for v1 (Macintosh HD is an image; no host folders/ExtFS). The server is the only store: image overlays beside images, Executor's volume as manifest+blobs. One browser session per backend. Later: tabbed settings dialog, mDNS, AppleTalk (LToUDP), archive unpacking, host folders (REMOTEFS)."
-  state = "active"
-  revision = 2
+  state = "done"
+  revision = 50
 
 [[node]]
   id = "tab-store"
@@ -471,8 +471,8 @@ revision = 40
   template = "note"
   parent = "p1"
   body = "(1) Standalone: settings.json without \"version\" refused: default to current. (2) uploads.go: replace=1 drops old overlay before rename. (3) Mixed Mode: stale vector when a SysZone accelerated resource is purged+reloaded. (4) SetBevelButtonContentInfo no dispatcher/selector. (5) BBEdit 6.1 survey while Finder menus up. (6) Servers died ~19:50 2026-11-02. (7) ShutDwnPower/Start skip ROMlib_OurClose. (8) Disks: busy Put Away; ghost icon; hfsPBEject no busy check. (9) font.cpp L757/L965 unchecked width-list derefs. (10) harness needs full Chromium. (11) resMod.cpp direct-append orphans bytes. (12) inputsprocket.cpp:177 Movement 12 B. (13) $A08E paramErr for every selector. (14) MPW New dialog folder pop-up blank. (15) AE 'Berk'/'eley' handler not stored. (16) EV Override 2-colour screen: needs a reference (68k clut probe on the Quadra, or 8-bit modes in the PPC video driver); clut.c merged. (17) localvolume.cpp:658 SetFInfo on a folder paramErr. (18) process.cpp launchProcessSN written back without EPBLength check. (19) THINK PM convert on a read-only image: UpdateResFile gui_assert resMod.cpp:455; hfsPBOpen grants write on a locked volume. (20) ResourceDispatch unknown-selector fallback relies on D0's high byte. (21) ctlMouse.cpp:246 control repeat every 6 ticks: KeyRepThresh? confirm on a Mac with another repeat setting."
-  state = "reported"
-  revision = 2
+  state = "done"
+  revision = 48
 
 [[node]]
   id = "m1-audit"
@@ -841,8 +841,8 @@ revision = 40
   template = "package"
   parent = "p2"
   body = "(1) Microsoft Works draw and spreadsheet module snapshots (rendering). (2) THINK C repro (fix-86-10: new project index out of bounds). (3) NewGWorld rowBytes padding as the Mac pads (difftest). (4) 9.0.4 next steps from .wash/local/handoffs/os904b.md (big items Appearance 1.1/HFS+/TEC/MP/Keychain/Sherlock/CarbonLib need the owner: list them, don't start)."
-  state = "active"
-  revision = 31
+  state = "done"
+  revision = 49
 
 [[node]]
   id = "tab-store-2"
@@ -872,8 +872,8 @@ revision = 40
   parent = "p2"
   needs = ["desktop-app"]
   body = "Owner 2026-11-07: a zip with two exes (executor-standalone.exe: the Go server + embedded tab, already cross-built by make dist; executor-desktop.exe: the Qt app). Cross-build here: llvm-mingw + Qt's official MinGW 64-bit build (aqtinstall), deps in ~/storage/deps. Port core/cpu/host (VirtualAlloc guest windows), pread/pwrite/fsync/ioctl uses, mame-ppc's DRC on the Win64 ABI; windeployqt-equivalent DLL set. Logging for the owner's run: log file always in the data folder, --console (or a console-subsystem twin exe), crash handler writing a minidump + last log lines, version in title and log. Wine smoke test (Executor's own System to the Finder) before handing it over. 68k first, then PowerPC."
-  state = "active"
-  revision = 24
+  state = "done"
+  revision = 53
   overrides = ["2026-11-07: started by Orchestrator before desktop-app (reported): desktop-app's Linux work is merged (ed28f66e); this is its Windows step"]
 
 [[node]]
@@ -884,4 +884,24 @@ revision = 40
   parent = "p2"
   body = "From gestalt3 2026-11-07: Speedometer's colour test with all 5 depths in one session fills the app heap (window palettes stay after DisposeWindow, as on the Quadra); Executor's C++ then writes through nil (TENew, xdata_for_pattern) where the Quadra survives. Find the host allocation sites that don't check, decide a central policy (what a Mac does: memFullErr / purge / system heap / temp mem), fix, and a gtest + the Speedometer run as the check."
   state = "active"
-  revision = 29
+  revision = 57
+
+[[node]]
+  id = "showcase"
+  title = "Showcase: Executor on public software only (Apple's free 7.5.3/7.5.5 from the Internet Archive + freeware), a README and 2x screenshots"
+  emoji = "✨"
+  template = "package"
+  parent = "p2"
+  body = "Owner 2026-11-07: show Executor off (old Mac at HiDPI) with nothing we distribute: everything public, e.g. Internet Archive. A README is enough (no download feature). System: archive.org/details/AppleMacintoshSystem753 (System7_5_3.img, md5 c7661911bbf3c56a77601ad53e139f62; Apple gave 7.5.3 away) reaches the Finder menu bar on Executor then 'unhandled trap 3' (address error) at pc 0x3E22AEB: fix; then Apple's free 7.5.5 update (archive.org/details/system-7.5.5-update) on top if it installs. Software: freeware/shareware that authors released for redistribution (Info-Mac: archive.org/details/info-mac-archive, 2005 snapshot) that runs on Executor and looks good at 2x. README with links + checksums + steps, and 2x screenshots."
+  state = "done"
+  revision = 61
+
+[[node]]
+  id = "mpw-tab"
+  title = "Tab regression: m1.7.6.1.development, MPW Shell opens a Commando dialog for the typed SC line"
+  emoji = "🐛"
+  template = "package"
+  parent = "p2"
+  body = "Found by leftovers 2026-11-07: executor.web.m1.7.6.1.development fails ('no alert M1 build 0'): MPW Shell opens a Commando dialog for the typed SC line (Commando opens on a command ending in '…' (option-;) or when Enter runs a line MPW thinks is incomplete). Fails on grid2's build-wasm at ed28f66e too, passed at 840d764b (mover's run): bisect 840d764b..ed28f66e (desktop merge: host/ keys? creative5: tab_m1). ResourceDispatch selector $5 logged unimplemented in both runs. Logs ~/storage/tmp/leftovers/mpw-tab{,-base}.log."
+  state = "done"
+  revision = 55

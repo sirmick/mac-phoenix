@@ -20,10 +20,14 @@
 #include <rsys/hostnet.h>
 #include "ot_provider.h"
 
+#ifdef _WIN32
+#include <rsys/win32_net.h>
+#else
 #include <netinet/in.h>
 #include <netinet/ip.h>
 #include <netinet/tcp.h>
 #include <sys/socket.h>
+#endif
 
 #include <algorithm>
 #include <cstring>
@@ -186,7 +190,9 @@ bool set_on_socket(int fd, const Opt &o, const std::vector<uint8_t> &v)
         }
         case Shape::Linger:
         {
-            struct linger lg = { be32(v, 0) == T_YES, (int)be32(v, 4) };
+            struct linger lg = {};  /* Winsock's members are u_short */
+            lg.l_onoff = be32(v, 0) == T_YES;
+            lg.l_linger = (int)be32(v, 4);
             return hostnet::setsockopt(fd, o.sol, o.so, &lg, sizeof lg) == 0;
         }
         case Shape::KeepAlive:

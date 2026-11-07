@@ -740,7 +740,26 @@ OSErr Executor::LaunchApplication(LaunchParamBlockRec *lpbp)
     }
 
     /* MacPhoenix: launchContinue (the launcher keeps running) starts a
-       new process; otherwise the launcher is replaced, as before. */
+       new process; otherwise the launcher is replaced, as before. A block
+       shorter than extendedBlockLen has only the fields launchEPBLength
+       covers: launchProcessSN is written back only if it is there, and
+       launchAppParameters is not read. */
+    if(lpbp->launchBlockID == extendedBlock
+       && (lpbp->launchControlFlags & launchContinue)
+       && lpbp->launchEPBLength < extendedBlockLen)
+    {
+        LaunchParamBlockRec full = {};
+        full.launchBlockID = extendedBlock;
+        full.launchEPBLength = extendedBlockLen;
+        full.launchFileFlags = lpbp->launchFileFlags;
+        full.launchControlFlags = lpbp->launchControlFlags;
+        full.launchAppSpec = lpbp->launchAppSpec;
+        OSErr err = process_launch(&full);
+        if(lpbp->launchEPBLength >= (int32_t)(offsetof(LaunchParamBlockRec, launchPreferredSize)
+                                              - offsetof(LaunchParamBlockRec, launchFileFlags)))
+            lpbp->launchProcessSN = full.launchProcessSN;
+        return err;
+    }
     if(lpbp->launchBlockID == extendedBlock
        && (lpbp->launchControlFlags & launchContinue))
         return process_launch(lpbp);

@@ -5,7 +5,7 @@
 /* Miscellaneous subroutines for memory management */
 
 #include <unistd.h>
-#include <crash_handler.h>
+#include <backtrace.h>
 #include <base/common.h>
 
 #include <MemoryMgr.h>

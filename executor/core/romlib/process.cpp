@@ -2563,6 +2563,34 @@ static void share_system_part()
     share(lowmem_template);
 }
 
+/* MacPhoenix: at ShutDwnPower/ShutDwnStart every process ends, and an
+   application's end closes its resource files, writing changed maps
+   (ExitToShell's CloseResFile(0)). The other processes' chains are in
+   their saved low memory: each in turn is made the current chain for
+   UpdateResFile on its own files (those above the shared system part). */
+void Executor::ROMlib_update_other_processes_resource_files()
+{
+    resmaphand sysmap = ROMlib_rntohandl(LM(SysMap), nullptr);
+    GUEST<Handle> save_top = LM(TopMapHndl);
+    for(process_info_t *p = process_info_list; p; p = p->next)
+    {
+        if(p == current_process_info || p->state == process_info_t::dead)
+            continue;
+        auto *slot = (GUEST<Handle> *)lowmem_slot(p->lowmem, 0xA50 /* TopMapHndl */, 4);
+        if(!slot)
+            continue;
+        LM(TopMapHndl) = *slot;
+        std::vector<INTEGER> own;
+        resmaphand m = (resmaphand)(Handle)LM(TopMapHndl);
+        for(int n = 0; m && m != sysmap && n < 1024; m = (resmaphand)(*m)->nextmap, n++)
+            if(!ROMlib_system_resource_file_p((*m)->resfn))
+                own.push_back((*m)->resfn);
+        for(INTEGER rn : own)
+            UpdateResFile(rn);
+    }
+    LM(TopMapHndl) = save_top;
+}
+
 void Executor::ROMlib_system_resource_file_opened(INTEGER rn)
 {
     if(!ROMlib_system_resource_file_p(rn))

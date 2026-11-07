@@ -661,8 +661,11 @@ void LocalVolume::setInfoCommon(const ItemPtr& item, CInfoPBPtr pb, InfoKind inf
     }
     else if(auto ditem = std::dynamic_pointer_cast<DirectoryItem>(item))
     {
+        /* MacPhoenix: a file-only call on a folder is fnfErr on a Mac, as
+           its Get here (and Executor's HFS, HFS+ and host volumes;
+           tests/hfs_volume.cpp) */
         if(infoKind != InfoKind::CatInfo)
-            throw OSErrorException(paramErr);
+            throw OSErrorException(fnfErr);
         ItemInfo info;
         info.dir.info = pb->dirInfo.ioDrUsrWds;
         info.dir.xinfo = pb->dirInfo.ioDrFndrInfo;
@@ -1150,9 +1153,11 @@ static void MountLocalVolume(fs::path root, std::string name = {})
     --ROMlib_nextvrn;
     vp->vcb.vcbVRefNum = ROMlib_nextvrn;
 
-    std::string rootName = name.empty() ? root.root_name().string() : name.substr(0, 27);
+    std::string rootName = name.substr(0, 27);
     if(rootName.empty() && root.has_relative_path())
         rootName = root.filename().string().substr(0, 27);
+    if(rootName.empty())
+        rootName = root.root_name().string();  /* a Windows drive's own root: "C:" */
     if(rootName.empty())
         rootName = "vol";
     else if(rootName.back() == ':')
@@ -1198,17 +1203,6 @@ static void MountLocalVolume(fs::path root, std::string name = {})
 
 void Executor::MountLocalVolumes()
 {
-#ifdef _WIN32
-    uint32_t drives = ::GetLogicalDrives();
-    for(int i = 0; i < 26; i++)
-        if(drives & (1 << i))
-        {
-            std::error_code ec;
-            fs::path path = fs::canonical(std::string(1, 'A' + i) + ":/", ec);
-            if(!ec)
-                MountLocalVolume(path);
-        }
-#else
     if(!ROMlib_local_volume_roots.empty())
     {
         // MacPhoenix: only the folders the host chose, never the host root.
@@ -1221,6 +1215,17 @@ void Executor::MountLocalVolumes()
             }
         return;
     }
+#ifdef _WIN32
+    uint32_t drives = ::GetLogicalDrives();
+    for(int i = 0; i < 26; i++)
+        if(drives & (1 << i))
+        {
+            std::error_code ec;
+            fs::path path = fs::canonical(std::string(1, 'A' + i) + ":/", ec);
+            if(!ec)
+                MountLocalVolume(path);
+        }
+#else
     MountLocalVolume("/");
 #endif
 }

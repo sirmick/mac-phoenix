@@ -17,12 +17,16 @@
 #include <functional>
 #include <vector>
 
+#ifdef _WIN32
+#include <rsys/win32_net.h>
+#else
 #include <ifaddrs.h>
 #include <netdb.h>
 #include <netinet/in.h>
 #include <poll.h>
 #include <sys/socket.h>
 #include <sys/uio.h>
+#endif
 
 namespace Executor
 {

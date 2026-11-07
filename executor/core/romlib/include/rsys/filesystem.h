@@ -13,6 +13,9 @@
 #include <system_error>
 #include <fcntl.h>
 #include <sys/stat.h>
+#ifdef _WIN32
+#include <sys/utime.h>
+#endif
 
 namespace fs
 {
@@ -22,6 +25,20 @@ using ifstream = std::ifstream;
 using ofstream = std::ofstream;
 using fstream = std::fstream;
 
+#ifdef _WIN32
+/* Windows: wide paths (path::c_str() is wchar_t), the CRT's 64-bit calls. */
+inline std::time_t last_write_time(const path &p, std::error_code &ec)
+{
+    struct _stat64 st;
+    if(_wstat64(p.c_str(), &st) != 0)
+    {
+        ec.assign(errno, std::generic_category());
+        return (std::time_t)-1;
+    }
+    ec.clear();
+    return st.st_mtime;
+}
+#else
 inline std::time_t last_write_time(const path &p, std::error_code &ec)
 {
     struct stat st;
@@ -33,6 +50,7 @@ inline std::time_t last_write_time(const path &p, std::error_code &ec)
     ec.clear();
     return st.st_mtime;
 }
+#endif
 
 inline std::time_t last_write_time(const path &p)
 {
@@ -46,6 +64,16 @@ inline std::time_t last_write_time(const path &p)
 /* The modification time; the access time is left as it is. */
 inline void last_write_time(const path &p, std::time_t t, std::error_code &ec)
 {
+#ifdef _WIN32
+    struct _stat64 st;
+    struct __utimbuf64 times;
+    times.actime = _wstat64(p.c_str(), &st) == 0 ? st.st_atime : t;
+    times.modtime = t;
+    if(_wutime64(p.c_str(), &times) != 0)
+        ec.assign(errno, std::generic_category());
+    else
+        ec.clear();
+#else
     struct timespec times[2];
     times[0].tv_sec = 0;
     times[0].tv_nsec = UTIME_OMIT;
@@ -55,6 +83,7 @@ inline void last_write_time(const path &p, std::time_t t, std::error_code &ec)
         ec.assign(errno, std::generic_category());
     else
         ec.clear();
+#endif
 }
 
 inline void last_write_time(const path &p, std::time_t t)

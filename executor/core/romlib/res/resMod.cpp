@@ -12,6 +12,7 @@
 #include <res/resource.h>
 #include <mman/mman.h>
 #include <file/file.h>
+#include <hfs/hfs.h>
 
 #include <map>
 #include <vector>
@@ -343,7 +344,9 @@ static void writeResourceInternal(resmaphand map, resref *rr)
                || rsize > disksize)
             {
                 rr->doff[0] = rr->doff[1] = rr->doff[2] = 0xFF;
-                (*map)->resfatr |= mapChanged;
+                /* its old data is dead space: compacted at UpdateResFile,
+                   as ChangedResource marks a resource it saw grown */
+                (*map)->resfatr |= mapChanged | mapCompact;
             }
         }
         if(rr->doff[0] == 0xFF && rr->doff[1] == 0xFF && rr->doff[2] == 0xFF)
@@ -510,6 +513,15 @@ void Executor::C_UpdateResFile(INTEGER rn)
      *	  the one (above) it replaces.
      */
     fp = PRNTOFPERR((*map)->resfn, &err);
+    /* MacPhoenix: a file open for writing on a locked volume (THINK Project
+       Manager converting a project on a read-only image): nothing can be
+       written, so the map isn't rewritten for it; the volume's error */
+    if(err == noErr && (fp->fcflags & fcwriteperm) && fp->fcvptr
+       && (err = ROMlib_writevcbp((HVCB *)(VCB *)fp->fcvptr)) != noErr)
+    {
+        ROMlib_setreserr(err);
+        return;
+    }
     if(err == noErr && (fp->fcflags & fcwriteperm))
     {
         needtowalk = true;

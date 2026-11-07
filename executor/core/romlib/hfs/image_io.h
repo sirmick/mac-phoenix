@@ -19,6 +19,11 @@
 #include <memory>
 #include <string>
 #include <sys/types.h>
+#ifdef _WIN32
+/* mingw's _FILE_OFFSET_BITS=64 makes stat a macro (_stat64): defined
+   before stat() below in every file, so all of them name the same function */
+#include <sys/stat.h>
+#endif
 
 namespace Executor::image_io {
 
