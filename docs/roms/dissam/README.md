@@ -45,7 +45,10 @@ docs/roms/dissam/
                                patch_sites.py (where patch_rom_32's sites land
                                in another ROM); vendor/ (gitignored) from
                                bootstrap.sh
-  common/                   ← shared reference: traps, low-mem globals, HW map
+  common/                   ← shared reference: the hardware map
+                               (hardware_map.md); trap names are in
+                               tools/mac_traps.py, low-mem globals in
+                               tools/vendor/
   se/                       ← Mac SE
   macii/                    ← Mac II (rev A listing; boot flow for rev A and B)
   maciib/                   ← Mac II rev B (listing only)

@@ -6,10 +6,9 @@ visible they are to a user interacting with the WebUI. Code locations are
 given by function; line numbers drift.
 
 The healthy parts, for reference, are the WebSocket → ADB ring-buffer
-input fast-path and the QLocalSocket-notify-driven encoder wakeup
-(IPC Phase 3b replaced the prior eventfd path with a Qt-wrapped Unix
-domain socket: same kernel-level wakeup, no extra fd). Everything
-below is a deviation from that baseline.
+input fast-path and the encoder's wakeup on the child's notify socket
+(a QLocalServer, `macemu-notify-<pid>`: one byte per published frame).
+Everything below is a deviation from that baseline.
 
 ## Input path (WebUI → ADB)
 
@@ -124,9 +123,11 @@ requested, but there's a brief (~50 ms) init stall around it.
 
 ### MED — Mode switch shows black until new keyframe arrives
 
-`switch_to_current_mode` in `src/drivers/video/video_webrtc.cpp`
+`ipc_monitor_desc::switch_to_current_mode` in `src/main.cpp` (the 68k IPC
+child's video driver)
 
-`switch_to_current_mode()` memsets the framebuffer to zero and requests a
+`switch_to_current_mode()` memsets the framebuffer to zero and publishes
+the new size; the encoder sees the size change, re-inits and sends a
 keyframe. The client renders black until the keyframe at the new resolution
 finishes encoding and ships, perceptually ~500 ms. Holding the last frame
 at old resolution until the new keyframe is ready, or cross-fading, would

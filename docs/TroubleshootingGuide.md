@@ -17,9 +17,6 @@ listed in [`Commands.md`](Commands.md#environment-variables).
 
 # Ignore the saved config (~/.config/mac-phoenix/config.json) for a scratch run
 ./build/mac-phoenix --config /dev/null --no-webserver --timeout 5 ~/roms/quadra.rom
-
-# Trace first N instructions (m68k, UAE core)
-CPU_TRACE=0-1000 ./build/mac-phoenix --no-webserver ~/roms/quadra.rom 2>&1 | head -100
 ```
 
 ## Common issues
@@ -29,16 +26,20 @@ CPU_TRACE=0-1000 ./build/mac-phoenix --no-webserver ~/roms/quadra.rom 2>&1 | hea
 Check `boot_phase` in `/api/status` (or the stderr `[Boot +  N.NNs]`
 milestones) to see which phase stalled.
 
-m68k: enable `CPU_TRACE` over the suspect range (UAE core), look for an
-EmulOp loop. EmulOps are `0x71xx` (`src/common/include/emul_op.h`; the IRQ
-EmulOp is `0x7129`); `src/core/rom_patches.cpp` emits them through
+m68k: look for an EmulOp loop (a breakpoint on `m68k::EmulOp`, below) or
+take a snapshot (`POST /api/snapshot`; with `--trace-atraps` it includes
+the A-traps called and their callers) and read it with `tools/macdecode`.
+EmulOps are `0x71xx` (`src/common/include/emul_op.h`; the IRQ EmulOp is
+`0x7129`); `src/core/rom_patches.cpp` emits them through
 `platform_make_emulop()`. Trying the other core (`--core mame-68k` vs
 `--core uae`) tells a core bug from a patching one. UAE `--jit` stalls are a
 known issue.
 
-PPC: enable `MACEMU_PPC_TRACE` to find the last EmulOp dispatched; compare
-`--core kpx` with `--core mame-ppc` (`--debug-mame-ppc` prints a per-second
-PC sample on mame-ppc).
+PPC: `MACEMU_PPC_TRACE=/tmp/ppc.log` writes one line per EmulOp (PC,
+selector, registers); the last lines show where it stopped, and two logs
+diffed show where two runs part. Compare `--core kpx` with
+`--core mame-ppc` (`--debug-mame-ppc` prints a per-second PC sample on
+mame-ppc).
 
 ### "ROM not found"
 
@@ -52,8 +53,9 @@ from `MACEMU_ROM`, which ctest sets from the `TEST_ROM` (68k) or
 ### Port already in use
 
 Pick a different `--port`. There is no separate signaling port: `/ws`
-rides the same TCP listener. Tests use fixed ports in 18080-18442
-([Testing.md](Testing.md#running-in-parallel)).
+rides the same TCP listener. Tests use fixed ports in a nominal range
+18000-18999, moved per checkout by its port base
+([Testing.md](Testing.md#ports)).
 
 ### Log says `Desktop ready` but the screen is hourglass-only or black
 
@@ -77,8 +79,8 @@ Flags: `--log-level 0-3`, `--debug-perf` (encoder statistics),
 with snapshots), and for Executor `--executor-logtraps`, `--executor-debug`
 and `--watch ADDR[:LEN]` (`./build/mac-phoenix --help`).
 
-Environment variables (m68k `CPU_TRACE*`, `MACEMU_DEBUG_FRAMES`,
-`MACEMU_DEBUG_AUDIO`, the PPC `MACEMU_PPC_*` knobs) are tabulated in
+Environment variables (`MACEMU_DEBUG_FRAMES`, `MACEMU_DEBUG_AUDIO`, the
+PPC `MACEMU_PPC_*` knobs) are tabulated in
 [`Commands.md`](Commands.md#environment-variables).
 
 ## GDB
@@ -95,7 +97,7 @@ Useful breakpoints:
 | `m68k_do_execute` (`src/cpu/uae_cpu/newcpu.cpp`) | UAE interpreter inner loop (opcode fetch, `cpufunctbl` dispatch, `SPCFLAGS` check) |
 | `trigger_interrupt` (`src/cpu/core/platform_cpu.cpp`) | Where `g_platform.cpu_trigger_interrupt` lands on the 68k machines (any 68k core) |
 | `command_bridge_read` (`src/core/command_bridge.cpp`) | Bridge read commands |
-| `bridge_command` (`src/webserver/api_handlers.cpp`) | Action commands (LAUNCH/QUIT/SHUTDOWN/RESTART) |
+| `bridge_command` (`src/webserver/api_handlers.cpp`) | Action commands (LAUNCH, QUIT, SCRIPT, SHUTDOWN, RESTART, ...) |
 | `ppc::EmulOp` (`src/cpu/kpx/emul_op_ppc.cpp`), `ppc_native_op_pure` (`src/cpu/kpx/native_ops_ppc.cpp`) | PPC EmulOp / NativeOp dispatch |
 
 ## Memory debugging
@@ -135,5 +137,5 @@ grep -iE "error|fail|crash|abort|assert" /tmp/run.log
 | Video frame issues | `src/drivers/video/video_output.cpp`, `src/drivers/video/video_encoder_thread.cpp` |
 | WebRTC / signaling | `src/webrtc/`, `src/webserver/websocket.cpp` |
 | Text feed (`/api/text`) | `src/core/text_feed.cpp` |
-| Executor | `executor/`, [executor/PLAN.md](executor/PLAN.md) |
+| Executor | `executor/core/` (Toolbox, CPU facade), `executor/frontends/phoenix/` (mac-phoenix's child), [executor/README.md](../executor/README.md), [docs/executor/PLAN.md](executor/PLAN.md) |
 | MacBrowser | `src/drivers/browser/`, `MacBrowser/MacBrowser.c`, [MacBrowser.md](MacBrowser.md) |

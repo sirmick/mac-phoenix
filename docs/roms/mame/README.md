@@ -62,8 +62,10 @@ MAME expects its own named/hashed ROM files under
 under `~/storage/roms/`. The bootstrap script will symlink
 `bin/roms -> ~/mame/roms/` if that directory exists; otherwise you need to
 stage ROM files yourself. On this machine there is no `~/mame`: MAME is
-built in `src/` (only `maciici` so far) and `bin/roms/` is a staged
-directory (`maciici`, `adbmodem`).
+built in `src/` (`maciici`, and `mactrace`, the tracing build of
+[`boottrace/`](boottrace/README.md) with the Mac II family and the IIci)
+and `bin/roms/` is a staged directory (`maciici`, `adbmodem`, `macii`,
+`mac2fdhd`, `macse30`, `nb_mdc824`).
 
 Minimum ROM files per machine:
 - `macse`:    `342-0701-a.rom` or similar SE ROM dump
@@ -237,7 +239,7 @@ EXTERNAL_MAME=/nonexistent ./bootstrap.sh
 
 The script will clone MAME into `docs/roms/mame/src/` (shallow, ~500
 MB) and build the three subtargets (~15-40 min depending on CPU).
-It builds with `-j$(nproc)`; on this box (20 GB, no swap) that can
+It builds with `-j$(nproc)`; on this box (48 GB, no swap) that can
 OOM-kill the session, so build a subtarget by hand with `-j4` instead
 (`make SUBTARGET=macii SOURCES=src/mame/apple/macii.cpp -j4` in `src/`).
 

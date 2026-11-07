@@ -74,8 +74,11 @@ MAME cores: [`cpu/PLAN.md`](cpu/PLAN.md).
 No ROM: the Executor 2000 Toolbox (C++) runs in the IPC child (or in-process
 with `--no-webserver`) on a 68k core through a syn68k-compatible facade
 (`executor/core/cpu/`) on `mame-68k`, in four address windows (no
-`vm.mmap_min_addr`); PowerPC code goes through `PowerCore` on `mame-ppc`. Plan, milestones and
-gotchas: [`executor/PLAN.md`](executor/PLAN.md).
+`vm.mmap_min_addr`); PowerPC code goes through `PowerCore` on `mame-ppc`.
+The same core also runs in the browser tab and in `executor-desktop`
+([Architecture.md](Architecture.md#executors-front-ends)); the source tree
+is described in [`executor/README.md`](../executor/README.md). Plan,
+milestones and gotchas: [`docs/executor/PLAN.md`](executor/PLAN.md).
 
 ## Common Development Tasks
 
@@ -150,7 +153,7 @@ Full test inventory in [Testing.md](Testing.md).
 ```bash
 sudo sysctl kernel.perf_event_paranoid=-1
 perf record -g -F 997 ./build/mac-phoenix --backend uae \
-    --no-webserver ~/storage/roms/quadra.rom
+    --no-webserver ~/roms/quadra.rom
 perf report
 ```
 
@@ -182,7 +185,8 @@ Detailed explanation of what changed and why.
   [Testing.md](Testing.md), [TroubleshootingGuide.md](TroubleshootingGuide.md)
 - [deepdive/](deepdive/) — quirks and detailed analyses
 - [ppc/](ppc/) — the PPC machine
-- [executor/](executor/) — the Executor backend
+- [executor/](executor/) — Executor's documentation;
+  [../executor/](../executor/README.md) — its source
 - [cpu/PLAN.md](cpu/PLAN.md) — MAME cores: Musashi with PMMU (C1), PowerPC recompiler (C2), host 68k on the PPC machine (C3)
 
 ### External

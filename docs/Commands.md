@@ -24,11 +24,42 @@ cmake -B build -DBUILD_NET_BRIDGE=OFF      # skip Rust net-bridge
 cmake -B build -DBUILD_BROWSER=ON          # MacBrowser host pipeline (experimental; off by default)
 cmake -B build -DBUILD_BRIDGE_AGENT=OFF    # skip Retro68 build of BridgeAgent.bin
 cmake -B build -DBUILD_MAC_BROWSER=OFF     # skip Retro68 build of MacBrowser.bin
-cmake -B build -DBUILD_EXECUTOR=OFF        # skip the Executor backend
+cmake -B build -DBUILD_EXECUTOR=OFF        # skip Executor (backend and desktop app)
 cmake -B build -DBUILD_TESTS=OFF           # skip the test suite
+
+# Executor options
+cmake -B build -DEXECUTOR_DESKTOP=OFF      # skip executor-desktop (Qt 6 Widgets)
+cmake -B build -DEXECUTOR_NET=none         # MacTCP/OT with no network (default: posix)
+cmake -B build -DEXECUTOR_REGENERATE=ON    # remake romlib/generated (Ruby, Bison, Perl)
+tools/skia/fetch.sh && cmake -B build -DEXECUTOR_SKIA=ON   # for --executor-scale
 ```
 
 Big parallel builds can run out of memory on a small box; `-j4` is safe.
+
+### Executor's other front ends
+
+Executor lives in `executor/` (core, front ends, host, tests, web, server).
+Besides `--backend executor` it builds as:
+
+```bash
+# Desktop application (executor/frontends/desktop/README.md)
+cmake --build build --target executor-desktop
+./build/executor-desktop [--system IMAGE --ppc]
+cmake --build build --target executor-desktop-appimage   # Linux AppImage
+tools/windows/build.sh && tools/windows/package.sh       # Windows, cross-built
+
+# WebAssembly (the tab), emsdk in ~/emsdk
+source ~/emsdk/emsdk_env.sh
+emcmake cmake -B build-wasm && cmake --build build-wasm -j4
+ctest --test-dir build-wasm -L executor
+
+# The Go server with the tab embedded
+make -C executor/server WASM_BUILD=$PWD/build-wasm   # -> executor/server/executor-standalone
+(cd executor/server && go test ./...)
+```
+
+`executor-standalone` is the tab's only server. Its API is in
+[executor/Standalone.md](executor/Standalone.md), not here.
 
 ## Run
 
@@ -51,7 +82,7 @@ Big parallel builds can run out of memory on a small box; `-j4` is safe.
 
 # Executor (no ROM), on the System Folder of a disk image in <storage>/images
 ./build/mac-phoenix --backend executor --executor-system 7.5.5.img
-./build/mac-phoenix --backend executor --executor-system 7.5.5.img
+./build/mac-phoenix --backend executor --executor-system 8.6.img --executor-ppc
 
 # Custom port + screen
 ./build/mac-phoenix --port 9000 --screen 1024x768 ~/roms/quadra.rom
@@ -66,7 +97,7 @@ Big parallel builds can run out of memory on a small box; `-j4` is safe.
 
 Executor runs on `mame-68k` and needs no `vm.mmap_min_addr`. `--executor-system` takes a disk image in `<storage>/images`
 (its System Folder is extracted into `<storage>/executor-systems` on first
-use and the image is mounted read-only beside it) or the name of a prepared
+use and the image is mounted locked beside it) or the name of a prepared
 System there. Without it Executor runs on its own data folder
 (`<storage>/executor`) and starts in its Browser.
 
@@ -82,29 +113,48 @@ Machine:
   --rom PATH                 ROM file (or positional arg)
   --ram MB                   RAM size in megabytes (default: 64)
   --screen WxH               Display resolution (default: 640x480)
+  --depth N                  68k and Executor: colour depth the screen starts in, bits
+                             (1 2 4 8 16 32; default 32, Executor 32 on 8.x and 8 on 7.x;
+                             8 for 256-colour games)
   --disk PATH                Disk image (repeatable)
   --cdrom PATH               CD-ROM image (repeatable)
-  --extfs PATH               Shared folder (only first is mounted; ExtFS is single-volume)
+  --extfs PATH               Shared folder (repeatable; the ROM machines mount only the first)
   --bootdriver N             0=any, -62=CD-ROM (default: 0)
   --storage-dir PATH         Default storage root (default: ~/storage)
   --executor-data PATH       Executor data dir (default: <storage>/executor)
   --executor-app PATH        App Executor starts instead of Browser (host path)
-  --executor-system NAME     System under <storage>/executor-systems to run on
+  --executor-system IMAGE    Run on the System Folder of <storage>/images/IMAGE (copied
+                             to <storage>/executor-systems on first use; image mounted too)
   --executor-start WHAT      finder | browser | path inside the System (default: finder)
   --[no-]executor-fresh      Start each run from the System's clean copy (default: on)
-  --executor-logtraps        Executor logs every trap call to stderr (each call line ends
-                             with @ and the trap's guest address: the call site)
+  --executor-logtraps        Executor logs every trap call to stderr
   --executor-debug OPTS      Executor's own debug options, comma-separated: memcheck (heap
                              consistency checks at every Memory Manager call, slow), allocs
-                             (allocations >= 4K and the code that asked), fslog,
+                             (allocations >= 4K and the code that asked), pcsample (where
+                             PowerPC code spends its time, every 5 s), hidpi (the text
+                             --executor-scale redraws, and what became of it), ppcinterp
+                             (mame-ppc's UML interpreter, not its native back-end), mmu68k
+                             (mame-68k with its PMMU, no tables set up), mmuppc (mame-ppc
+                             translating every access, identity), fslog,
                              trace, trapfailure, unimplemented, unexpected, errno, sound, all
   --watch ADDR[:LEN]         Report every write to guest memory ADDR (hex; LEN 1-16, default 4):
                              old/new value, 68k PC and registers, last traps, host stack (Executor)
+  --executor-ppc-break SPEC  PowerPC breakpoint (Executor; repeatable; docs/executor/PPCTrace.md):
+                             WHERE[@N][*HITS][#MEM], WHERE $ADDR, FRAGMENT[:SECT]+OFF (hex) or
+                             !Routine (Executor's); on a hit registers, back chain, stack, MEM
+                             (rN+OFF:LEN, $ADDR:LEN, ^ reads through), then N instructions traced;
+                             HITS hits reported (default 1, 0 all). "on": none yet, for the API
   --executor-logtraps-nesting N  ... and calls nested N deep in Toolbox callbacks (default 1)
-  --executor-writable-images Executor mounts disk images read-write (default: read-only)
+  --executor-logtraps-filter LIST  ... only calls whose names match these comma-separated
+                             wildcards ("Gestalt,HideWindow,PB*"): less slowdown;
+                             -NAME leaves calls out ("-WaitNextEvent,-Get*")
+  --executor-writable-images Executor mounts disk images read-write (default: read-only;
+                             not the --executor-system image unless --disk names it too)
   --[no-]executor-ot         Executor answers Open Transport (default: on)
   --executor-ppc             Executor runs fat applications' PowerPC code (PowerPC-only
                              applications always run it; default: off)
+  --executor-scale X         Executor's display scale (2: text drawn from outlines at
+                             twice the size; 1x for programs; needs -DEXECUTOR_SKIA=ON)
 
 CPU:
   --backend NAME             uae | kpx | executor
@@ -154,6 +204,8 @@ Logging:
   --debug-perf
   --debug-network
   --debug-mame-ppc           mame-ppc: log host ops, exceptions, a per-second CPU sample
+  --cpu-mmu                  The MMU's cost (docs/executor/Speed.md): mame-68k with its PMMU
+                             (the ROM's tables), mame-ppc translating every access (identity)
   --trace-atraps             Record every (A-trap, caller PC); snapshots write atraps.tsv
   --no-text-feed             Don't patch _StdText (the strings on screen for /api/text)
   --deterministic            Virtual clock (instruction-counted ticks, fixed date); implies --no-idlewait
@@ -163,7 +215,9 @@ Logging:
 
 Not in `--help`: `--no-dismiss-shutdown-dialog`; `--max-resolution WxH`
 (cap on the screen modes offered to the guest; JSON `max_resolution`);
-`--ipc` (set by the parent on the CPU subprocess it spawns); and the old
+`--ipc` (set by the parent on the CPU subprocess it spawns);
+`--executor-locked-disk PATH` (parent to Executor child: an image mounted
+locked whatever `--executor-writable-images` says); and the old
 spellings `--executor-cpu` (= `--core`) and `--jit68k`/`--no-jit68k`
 (retired, ignored with a warning).
 
@@ -181,13 +235,16 @@ unknown argument and ignored, leaving the default.
 ctest --test-dir build -j4
 
 # By label
-ctest --test-dir build -L unit       # mac_roman, browser_shm, cpu_cores
+ctest --test-dir build -L unit       # mac_roman, browser_shm, cpu_cores, multiversal_retro68
 ctest --test-dir build -L api        # api_endpoints, config_api, extfs
 ctest --test-dir build -L boot       # boot_*, mouse_position*, command_bridge*
 ctest --test-dir build -L bridge     # bridge_trap{,_ppc,_executor}
 ctest --test-dir build -L guest      # apps in the guest: suites, notify, keyboard, OT, ...
 ctest --test-dir build -L mame       # everything on mame-68k / mame-ppc
-ctest --test-dir build -L executor   # Executor guest cells + executor.* gtests
+ctest --test-dir build -L executor   # Executor guest cells, executor.* gtests, executor.desktop.*
+ctest --test-dir build -L provisioning   # bake/build helpers (bake_serials, hfs_glob, ...)
+ctest --test-dir build -L tools      # disk_audit, disk_contents
+ctest --test-dir build-wasm -L web   # the tab's node/browser cells (executor.web.*)
 
 # Specific
 ctest --test-dir build -R api_endpoints
@@ -205,7 +262,8 @@ cmake -B build -DTEST_ROM=/path/to/quadra.rom \
                -DTEST_PPC_ROM=/path/to/g3.rom \
                -DTEST_SE_ROM=/path/to/mac-se.rom
 
-# Playwright E2E (spawns its own emulator on :18094)
+# Playwright E2E (spawns its own emulator on nominal port 18094, moved to the
+# checkout's range by tests/lib/ports.py)
 npx playwright test
 npx playwright test --headed
 ```
@@ -238,16 +296,13 @@ or by trace/debug code paths.
 
 | Variable | Scope | Purpose |
 |----------|-------|---------|
-| `MACEMU_ROM`, `MACEMU_DISK`, `MACEMU_SE_ROM`, `MACEMU_SE_DISK`, `MACEMU_IICI_ROM`, `MACEMU_IICI_DISK`, `MACEMU_BINARY`, `MACEMU_STORAGE` | tests | Override the test ROM, disk, binary and storage paths |
+| `MACEMU_ROM`, `MACEMU_DISK`, `MACEMU_SE_ROM`, `MACEMU_SE_DISK`, `MACEMU_IICI_ROM`, `MACEMU_IICI_DISK`, `MACEMU_BINARY`, `MACPHOENIX_EMULATOR`, `MACEMU_STORAGE` | tests | Override the test ROM, disk, binary and storage paths |
 | `MACEMU_ROM_M68K`, `MACEMU_ROM_PPC`, `MACEMU_DISK_755`, `MACEMU_DISK_761` | `run_boot_matrix.sh` | ROMs and disks for the matrix |
 
 ### Tracing (m68k, UAE core)
 
 | Variable | Effect |
 |----------|--------|
-| `CPU_TRACE=N` or `N-M` | Trace the first N instructions, or the range N-M |
-| `CPU_TRACE_MEMORY=1` | Include memory reads in the trace |
-| `CPU_TRACE_QUIET=1` | No banner, trace only |
 | `M68K_LOG_FILE=<path>` | Where UAE's instruction history log goes (default `log.68k`) |
 
 For performance statistics use `--debug-perf`. `--trace-atraps` records
@@ -283,13 +338,6 @@ CPU sample.
 ```bash
 cmake --build build -j$(nproc) && \
     ./build/mac-phoenix --timeout 5 --no-webserver ~/roms/quadra.rom
-```
-
-### Instruction trace (m68k)
-
-```bash
-CPU_TRACE=0-250000 ./build/mac-phoenix --backend uae --timeout 2 \
-    --no-webserver ~/roms/quadra.rom > uae.log 2>&1
 ```
 
 ### GDB
