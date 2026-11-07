@@ -833,7 +833,7 @@ static Handle full_heap_handle(Size size, bool clear_p)
     Handle h = _NewHandle_flags(size, true, clear_p);
     if(!h)
         ROMlib_full_heap_exhausted(size);
-    ROMlib_full_heap_count();
+    ROMlib_full_heap_count(h, true);
     return h;
 }
 
@@ -852,7 +852,7 @@ static Ptr full_heap_ptr(Size size, bool clear_p)
     Ptr p = _NewPtr_flags(size, true, clear_p);
     if(!p)
         ROMlib_full_heap_exhausted(size);
-    ROMlib_full_heap_count();
+    ROMlib_full_heap_count(p, false);
     return p;
 }
 
@@ -879,7 +879,7 @@ _NewHandle_flags(Size size, bool sys_p, bool clear_p)
         LM(TheZone) = save_zone;
         if(Handle r = _NewHandle_flags(asked, true, clear_p))
         {
-            ROMlib_full_heap_count();
+            ROMlib_full_heap_count(r, true);
             return r;
         }
         LM(TheZone) = current_zone;
@@ -975,6 +975,8 @@ void DisposeHandle(Handle h)
 
         *h = ZONE_HFST_FREE(current_zone);
         ZONE_HFST_FREE(current_zone) = (Ptr)h;
+        if(ROMlib_full_heap_tracked)
+            ROMlib_full_heap_forget(h);
 
         LM(TheZone) = save_zone;
     }
@@ -1359,7 +1361,7 @@ Ptr _NewPtr_flags(Size size, bool sys_p, bool clear_p)
         LM(TheZone) = save_zone;
         if(Ptr r = _NewPtr_flags(asked, true, clear_p))
         {
-            ROMlib_full_heap_count();
+            ROMlib_full_heap_count(r, false);
             return r;
         }
         LM(TheZone) = current_zone;
@@ -1446,6 +1448,8 @@ void DisposePtr(Ptr p)
             TheZoneGuard guard(zone);
 
             ROMlib_freeblock(block);
+            if(ROMlib_full_heap_tracked)
+                ROMlib_full_heap_forget(p);
         }
         else
         {

@@ -18,6 +18,7 @@
 #include <rsys/cfm.h>
 #include <PowerCore.h>
 #include <rsys/process.h>
+#include <mman/fullheap.h>
 #include <ScrapMgr.h>
 #include <FileMgr.h>
 #include <file/file.h>
@@ -1625,6 +1626,25 @@ static void remove_tasks_in(Ptr lo, Ptr hi)
     }
 }
 
+uintptr_t Executor::ROMlib_process_key()
+{
+    return (uintptr_t)current_process_info;
+}
+
+/* What system-wide lists hold in [lo, hi) of a quitting process's memory:
+   its fallback blocks in the System heap (fullheap.cpp), as for its
+   partition. A global component whose code is there goes too; components
+   it owned have gone already. */
+static void release_range(uint32_t lo, uint32_t hi)
+{
+    remove_tasks_in((Ptr)SYN68K_TO_US(lo), (Ptr)SYN68K_TO_US(hi));
+    ProcessSerialNumber none = {};
+    ROMlib_components_process_exit(&none, lo, hi);
+    ROMlib_ot_process_exit(lo, hi);
+    ROMlib_cfm_process_exit(lo, hi);
+    ROMlib_forget_ports_in(lo, hi);
+}
+
 /* The current process quits: tidy up, switch to its launcher (or the
    first process) and let the coroutine end. */
 static void exit_current()
@@ -1685,6 +1705,14 @@ static void exit_current()
     ROMlib_ot_process_exit(part_lo, part_hi);
     ROMlib_cfm_process_exit(part_lo, part_hi);
     ROMlib_forget_ports_in(part_lo, part_hi);
+    /* The Toolbox's allocations it made in the System heap when its heap
+       was full go with it (docs/executor/FullHeap.md). */
+    /* Its copies of the per-process low-memory globals (AuxWinHead,
+       AuxCtlHead, ...) are still in place, and die with it. */
+    std::vector<std::pair<uint32_t, uint32_t>> dead_lowmem;
+    for(const lm_range &r : lm_ranges)
+        dead_lowmem.push_back({ r.addr, r.addr + (uint32_t)r.len });
+    ROMlib_full_heap_process_exit((uintptr_t)me, part_lo, part_hi, release_range, dead_lowmem);
     me->state = process_info_t::dead;
     reap_list.push_back(me);
 

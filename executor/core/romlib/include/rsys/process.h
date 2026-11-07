@@ -25,6 +25,8 @@ static_assert(sizeof(size_resource_t) == 10);
    ROMlib_InitZones (re)creates it and forgets any partition in it. */
 extern THz ROMlib_pm_zone;
 extern void process_reset_heap(THz pm_zone);
+/* The current process, as a key (fullheap.cpp lists blocks by it); 0: none yet. */
+extern uintptr_t ROMlib_process_key();
 
 /* Lay out an application's partition in the Process Manager heap, as
    7.5.5 does (docs/executor/MEMORY_MAP.md): reads SIZE and CODE 0 from

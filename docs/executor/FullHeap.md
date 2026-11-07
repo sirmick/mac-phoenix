@@ -190,15 +190,53 @@ report did not change for the rest of the run, the zone's free count
 added up, and nothing failed, so it is probably the walk misreading a
 non-standard block. It is not explained.
 
+## When a process ends
+
+A Mac frees everything in an application's heap with its partition. The
+fallback blocks are in the System heap instead, so Executor frees them
+itself (`ROMlib_full_heap_process_exit`, called from `exit_current` in
+process.cpp after the partition goes):
+
+1. **The list.** Each fallback block is listed under the process it was
+   made for. DisposeHandle and DisposePtr take it off.
+2. **System-wide lists first.** For every block, the clean-up Executor
+   does for the partition's address range is done for the block's
+   range too (`release_range`): VBL tasks, components whose code is
+   there, OT clients, CFM connections, the port list (`LM(PortList)`).
+3. **Still named?** Guest memory outside the dead process is scanned
+   for a longword that names a block exactly: a handle's master pointer
+   address, or a pointer. The scan covers low memory, the System heap
+   and the other partitions. It leaves out:
+   - the dead partition;
+   - the dead process's own copies of the per-process low-memory globals
+     (AuxWinHead and AuxCtlHead among them), which are still in place;
+   - the free blocks of the System and Process Manager heaps;
+   - the listed blocks themselves.
+
+   A named block is kept, and so is anything a kept block names.
+   Matching addresses anywhere inside a block's data kept almost
+   everything: pixel and font data are full of values that fall inside
+   the palettes' range. Master pointers are recycled, so a stale
+   longword can still name a new handle by chance. Such a block is
+   kept, never freed while named.
+4. **Kept blocks are tried again** at every later process's end, so a
+   block kept because of a stale value goes when the value does.
+5. **Logged:** `[full heap] process exit: N fallback blocks (E kept at an
+   earlier end): F freed (K), M kept (K, referenced from outside it);
+   System heap X K free`.
+
+What the scan can't see is Executor's own C++ state. Executor clears
+what it holds for a process by address range, and step 2 does the same
+for each block. Host code that caches a guest handle with no range
+clean-up would be left with a freed block. Without the fallback, such a
+block would have been in the partition and freed with it, so that is no
+new hazard.
+
 ## Costs
 
-- The System heap does not shrink back. Blocks that the fallback made stay
-  there after the application quits, unless the application disposes of
-  them first. A Mac would have freed them with the partition. The floor
-  limits the damage: the next process still has 256 KB. Speedometer's
-  colour test kept about 140 K there (spfinal). Freeing a process's
-  fallback blocks when it quits would need the blocks marked as the
-  process's; not done.
+- A process's fallback blocks outlive its partition until it ends (see
+  "When a process ends"). A block that something outside the process
+  still names stays in the System heap.
 - Some guest calls work where the Quadra stops: NewPixPat, TENew,
   NewDialog, and the region and pattern calls. No application relies on
   system error 25.
@@ -216,6 +254,9 @@ non-standard block. It is not explained.
   - the floor's three answers, and nil when no routine is being served;
   - past the floor: exit 70 and "System error 25";
   - MoreMasters keeps a zone's master pointers in the zone;
+  - `ProcessExitFreesItsFallbackBlocks`: unnamed blocks freed, a block
+    a System heap block names kept with what it names;
+    `DisposedBlocksLeaveTheList`;
   - `FullHeapReserve`: with the application heap inside its reserve, a
     Toolbox allocation comes from the System heap and the guest's own
     from the application heap.

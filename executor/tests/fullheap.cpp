@@ -7,6 +7,7 @@
 #include <mman/fullheap.h>
 #include <base/cpu.h>
 #include <base/traps.h>
+#include <rsys/process.h>
 
 #include <initializer_list>
 #include <vector>
@@ -174,6 +175,59 @@ TEST_F(FullHeap, MasterPointersStayInTheirZone)
     EXPECT_EQ(nullptr, (Ptr)ZONE_HFST_FREE(zone)) << "no master pointers from elsewhere";
     EXPECT_EQ(fallbacks0 + 1, ROMlib_full_heap_fallbacks());
     DisposeHandle(h);
+}
+
+/* A process's fallback blocks go when it ends, except those guest memory
+   outside it still names (here a System heap block) and what those name. */
+TEST_F(FullHeap, ProcessExitFreesItsFallbackBlocks)
+{
+    uintptr_t me = ROMlib_process_key();
+    size_t n0 = ROMlib_full_heap_listed(me);
+    Handle a, c, e;
+    Ptr b, d;
+    {
+        traps::ServedTrap t(traps::entrypoints.at("TENew"));
+        a = NewHandle(2000);   /* named by nothing: freed */
+        b = NewPtr(3000);      /* freed */
+        c = NewHandle(1000);   /* named only by b: freed */
+        d = NewPtr(500);       /* named from the System heap: kept */
+        e = NewHandle(700);    /* named by d: kept */
+    }
+    for(void *x : { (void *)a, (void *)b, (void *)c, (void *)d, (void *)e })
+        ASSERT_NE(nullptr, x);
+    EXPECT_EQ(LM(SysZone), HandleZone(a));
+    EXPECT_EQ(LM(SysZone), PtrZone(b));
+    memset(b, 0, 3000);
+    memset(d, 0, 500);
+    WRITEUL(US_TO_SYN68K(b), US_TO_SYN68K(c));
+    WRITEUL(US_TO_SYN68K(d), US_TO_SYN68K(e));
+    Ptr holder = NewPtrSysClear(16);
+    WRITEUL(US_TO_SYN68K(holder), US_TO_SYN68K(d));
+    EXPECT_EQ(n0 + 5, ROMlib_full_heap_listed(me));
+
+    int32_t free_before = LM(SysZone)->zcbFree;
+    ROMlib_full_heap_process_exit(me, 0, 0, nullptr);
+    EXPECT_EQ(0u, ROMlib_full_heap_listed(me));
+    EXPECT_GE(LM(SysZone)->zcbFree, free_before + 2000 + 3000 + 1000);
+    EXPECT_EQ(500, GetPtrSize(d));
+    EXPECT_EQ(700, GetHandleSize(e));
+    DisposeHandle(e);
+    DisposePtr(d);
+    DisposePtr(holder);
+}
+
+/* Disposing a fallback block takes it off its process's list. */
+TEST_F(FullHeap, DisposedBlocksLeaveTheList)
+{
+    uintptr_t me = ROMlib_process_key();
+    size_t n0 = ROMlib_full_heap_listed(me);
+    traps::ServedTrap t(traps::entrypoints.at("TENew"));
+    Handle h = NewHandle(100);
+    Ptr p = NewPtr(100);
+    EXPECT_EQ(n0 + 2, ROMlib_full_heap_listed(me));
+    DisposeHandle(h);
+    DisposePtr(p);
+    EXPECT_EQ(n0, ROMlib_full_heap_listed(me));
 }
 
 TEST_F(FullHeap, FloorDecides)
