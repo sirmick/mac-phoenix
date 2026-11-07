@@ -1,7 +1,7 @@
 # wash-plan: written by Wash as the plan changes.
 # Edit it only between workspaces; plan_set {"from": "<this file>"} loads it.
 
-revision = 16
+revision = 25
 
 [[node]]
   id = "cuts"
@@ -812,8 +812,8 @@ revision = 16
   parent = "p2"
   needs = ["repo-move"]
   body = "See p2."
-  state = "active"
-  revision = 14
+  state = "done"
+  revision = 25
 
 [[node]]
   id = "p2"
@@ -851,8 +851,8 @@ revision = 16
   template = "package"
   parent = "p2"
   body = "Open from the 2026-11-05 stop: (1) in the tab on 8.6 a file written then the app idles in WaitNextEvent loses the write (benchapp saw it; handoff .wash/local/handoffs/bench-app.md if present); (2) Executor creating a file on a disk image is slow (measure natively and in the tab; profile the File Manager/HFS path, LocalVolume/overlay)."
-  state = "active"
-  revision = 11
+  state = "reported"
+  revision = 22
 
 [[node]]
   id = "web-fails"
@@ -863,3 +863,15 @@ revision = 16
   body = "Found by mover 2026-11-07 (they fail on grid2 before the move too): executor.web.system_kept, executor.web.disks, executor.web.m1.7.6.1.creative (3 cells), executor.web.m1.8.6.games-ppc; native scroll_bars_rom_ppc_86. (boot_uae_jit: known JIT stalls, ignore.) Find each cause (bisect from 58efc58f where native was 489/489), fix in Executor/tab or in the cell if the cell is wrong."
   state = "active"
   revision = 12
+
+[[node]]
+  id = "desktop-windows"
+  title = "Windows build: executor-desktop.exe (cross-built here) + the server, one zip, with logging for the owner's first run"
+  emoji = "🪟"
+  template = "package"
+  parent = "p2"
+  needs = ["desktop-app"]
+  body = "Owner 2026-11-07: a zip with two exes (executor-standalone.exe: the Go server + embedded tab, already cross-built by make dist; executor-desktop.exe: the Qt app). Cross-build here: llvm-mingw + Qt's official MinGW 64-bit build (aqtinstall), deps in ~/storage/deps. Port core/cpu/host (VirtualAlloc guest windows), pread/pwrite/fsync/ioctl uses, mame-ppc's DRC on the Win64 ABI; windeployqt-equivalent DLL set. Logging for the owner's run: log file always in the data folder, --console (or a console-subsystem twin exe), crash handler writing a minidump + last log lines, version in title and log. Wine smoke test (Executor's own System to the Finder) before handing it over. 68k first, then PowerPC."
+  state = "active"
+  revision = 24
+  overrides = ["2026-11-07: started by Orchestrator before desktop-app (reported): desktop-app's Linux work is merged (ed28f66e); this is its Windows step"]
