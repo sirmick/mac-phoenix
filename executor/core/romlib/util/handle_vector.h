@@ -1,6 +1,7 @@
 #pragma once
 
 #include <MemoryMgr.h>
+#include <base/traps.h>
 #include <type_traits>
 #include <utility>
 #include <string.h>
@@ -19,14 +20,16 @@ class handle_vector
 
     static constexpr size_t elem_size = sizeof(GUEST<T>);
 
-    /* MacPhoenix: a handle of `bytes`, in the current heap or, when that
-       is full, the system heap (which grows): QuickDraw's regions are
-       built here, and a small application's heap runs out (Sherlock's
-       930K on 8.6). The caller gets a region it can use and dispose. */
+    /* MacPhoenix: a handle of `bytes`. QuickDraw's regions are built
+       here, and a small application's heap runs out (Sherlock's 930K on
+       8.6): serving a guest's call, the Memory Manager makes it in the
+       System heap unless that call is the guest's own NewRgn (fullheap.cpp,
+       docs/executor/FullHeap.md). Host code serving none (a gtest standing
+       in for the guest) retries in the System heap here, as before. */
     static Handle new_handle(size_t bytes)
     {
         Handle h = NewHandle(bytes);
-        if(!h)
+        if(!h && !traps::served_entry)
         {
             THz save = LM(TheZone);
             LM(TheZone) = LM(SysZone);
@@ -36,17 +39,14 @@ class handle_vector
         return h;
     }
 
-    /* handle_ resized to `bytes`, moved to the system heap if it can't
-       grow where it is. */
+    /* handle_ resized to `bytes`, moved to a new handle (in the System
+       heap, by the same rule) if it can't grow where it is. */
     void resize(size_t bytes, size_t keep)
     {
         SetHandleSize(handle_, bytes);
         if(LM(MemErr) == noErr || !owned_)
             return; /* not ours: the caller holds this handle */
-        THz save = LM(TheZone);
-        LM(TheZone) = LM(SysZone);
-        Handle h = NewHandle(bytes);
-        LM(TheZone) = save;
+        Handle h = new_handle(bytes);
         if(!h)
             return;
         memcpy(*h, *handle_, keep);

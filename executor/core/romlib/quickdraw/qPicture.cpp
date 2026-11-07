@@ -22,10 +22,21 @@ PicHandle Executor::ROMlib_OpenPicture_helper(
     GUEST<INTEGER> *ip;
     GUEST<RgnHandle> temprh;
 
-    HidePen();
+    /* MacPhoenix: on a full heap the guest's OpenPicture answers nil,
+       MemErr -108, and the port records nothing (the 7.6.1 Quadra,
+       tests/guest/fullheap; docs/executor/FullHeap.md). */
     pch = (piccachehand)NewHandle(sizeof(piccache));
+    ph = pch ? (PicHandle)NewHandle((Size)INITIALPICSIZE) : nullptr;
+    temprh = ph ? NewRgn() : nullptr;
+    if(!temprh)
+    {
+        DisposeHandle((Handle)ph);
+        DisposeHandle((Handle)pch);
+        LM(MemErr) = memFullErr;
+        return nullptr;
+    }
+    HidePen();
     PORT_PIC_SAVE(qdGlobals().thePort) = (Handle)pch;
-    ph = (PicHandle)NewHandle((Size)INITIALPICSIZE);
     (*pch)->pichandle = ph;
 
     (*ph)->picSize = 10 + 16 * sizeof(INTEGER);
@@ -64,7 +75,6 @@ PicHandle Executor::ROMlib_OpenPicture_helper(
 
     (*pch)->picsize = INITIALPICSIZE;
     (*pch)->pichowfar = (LONGINT)(*ph)->picSize;
-    temprh = NewRgn();
     (*pch)->picclip = temprh;
     /* -32766 below is an attempt to force a reload */
     SetRectRgn((*pch)->picclip, -32766, -32766, 32767, 32767);

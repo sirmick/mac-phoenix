@@ -52,9 +52,33 @@ void traps::internal::DeferredInit::initAll()
         p->init();
 }
 
+const traps::Entrypoint *Executor::traps::served_entry = nullptr;
+
+/* MacPhoenix: the guest's own allocation calls, whose answer on a full
+   heap is nil (or an error) on the Mac: measured on the Quadra 650 with
+   7.6.1 (tests/guest/fullheap) for NewHandle, NewPtr, NewRgn, NewPalette,
+   NewGWorld and OpenPicture; the rest of the Memory Manager's and the
+   Resource Manager's loaders by Inside Macintosh. While one of these is
+   served, a failure stays a failure; under any other routine Executor's
+   own allocation falls back to the System heap (mman/fullheap.cpp). */
+const char *const traps::guest_allocators[] = {
+    "_NewHandle_flags", "NewHandle", "NewHandleClear", "NewHandleSys", "NewHandleSysClear",
+    "_NewPtr_flags", "NewPtr", "NewPtrClear", "NewPtrSys", "NewPtrSysClear",
+    "_NewEmptyHandle_flags", "NewEmptyHandle", "NewEmptyHandleSys",
+    "ReallocateHandle", "SetHandleSize", "SetPtrSize", "MoreMasters", "TempNewHandle",
+    "HandToHand", "PtrToHand", "PtrToXHand", "HandAndHand", "PtrAndHand",
+    "NewRgn", "NewPalette", "NewGWorld", "UpdateGWorld", "OpenPicture", "OpenCPicture",
+    "GetResource", "Get1Resource", "GetNamedResource", "Get1NamedResource",
+    "GetIndResource", "Get1IndResource", "LoadResource",
+    nullptr
+};
+
 void traps::Entrypoint::init()
 {
     entrypoints[name] = this;
+    for(const char *const *p = guest_allocators; *p; p++)
+        if(!strcmp(*p, name))
+            guestAllocator = true;
 }
 
 void traps::LibraryRawExport::init()

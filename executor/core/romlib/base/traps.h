@@ -89,6 +89,10 @@ public:
     const char *name;
     const char *libname;
     bool breakpoint = false;
+    /* MacPhoenix: one of the guest's own allocation calls (NewHandle,
+       NewRgn, GetResource, ...): its Memory Manager failures stay failures
+       (docs/executor/FullHeap.md; set by Entrypoint::init). */
+    bool guestAllocator = false;
 
     uint32_t checkBreak68K(uint32_t addr)
     {
@@ -108,6 +112,26 @@ public:
 private:
     uint32_t break68K(uint32_t addr);
     uint32_t breakPPC(PowerCore& cpu);
+};
+
+/* MacPhoenix: the routine the guest called that Executor is serving (the
+   innermost: guest code Executor calls makes its own calls), or nullptr
+   at none. Every guest entry (68k trap, dispatcher selector, PowerPC and
+   CFM-68K library call) sets it for the call; a host call doesn't, so an
+   allocation the Toolbox makes while serving GetNewDialog is
+   GetNewDialog's. Each process's coroutine has its own stack of these,
+   so a switch inside WaitNextEvent comes back to the right one. */
+extern const Entrypoint *served_entry;
+extern const char *const guest_allocators[]; /* names; nullptr-terminated */
+
+class ServedTrap
+{
+    const Entrypoint *saved;
+public:
+    explicit ServedTrap(const Entrypoint *e) : saved(served_entry) { served_entry = e; }
+    ~ServedTrap() { served_entry = saved; }
+    ServedTrap(const ServedTrap &) = delete;
+    ServedTrap &operator=(const ServedTrap &) = delete;
 };
 
 class GenericDispatcherTrap : public Entrypoint

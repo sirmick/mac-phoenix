@@ -31,6 +31,7 @@
 #include <vdriver/vdriver.h>   /* for WeOwnScrapX */
 #include <algorithm>
 #include <mman/whatis.h>
+#include <mman/fullheap.h>
 #include <base/trapglue.h>
 #include <base/cpu.h>
 
@@ -808,9 +809,49 @@ static void log_alloc(const char *what, Size size, THz zone, void *result)
             result ? (unsigned)US_TO_SYN68K(result) : 0u, pc, at, ret, caller);
 }
 
+/* MacPhoenix: an allocation outside the System heap failed: the guest's
+   own call keeps nil (MemErr -108); the Toolbox's goes to the System
+   heap, or past its floor is dsMemFullErr (fullheap.cpp). */
+static Handle full_heap_handle(Size size, bool clear_p)
+{
+    switch(ROMlib_full_heap_decide(size))
+    {
+        case full_heap_answer::fail:
+            return nullptr;
+        case full_heap_answer::exhausted:
+            ROMlib_full_heap_exhausted(size);
+        case full_heap_answer::system_heap:
+            break;
+    }
+    Handle h = _NewHandle_flags(size, true, clear_p);
+    if(!h)
+        ROMlib_full_heap_exhausted(size);
+    ROMlib_full_heap_count();
+    return h;
+}
+
+static Ptr full_heap_ptr(Size size, bool clear_p)
+{
+    switch(ROMlib_full_heap_decide(size))
+    {
+        case full_heap_answer::fail:
+            return nullptr;
+        case full_heap_answer::exhausted:
+            ROMlib_full_heap_exhausted(size);
+        case full_heap_answer::system_heap:
+            break;
+    }
+    Ptr p = _NewPtr_flags(size, true, clear_p);
+    if(!p)
+        ROMlib_full_heap_exhausted(size);
+    ROMlib_full_heap_count();
+    return p;
+}
+
 Handle
 _NewHandle_flags(Size size, bool sys_p, bool clear_p)
 {
+    const Size asked = size;
     Handle newh;
     block_header_t *block;
     GUEST<THz> save_zone;
@@ -856,6 +897,8 @@ done:
     log_alloc("NewHandle", size >= HDRSIZE && newh ? size - HDRSIZE : size, current_zone, newh);
     MM_SLAM("exit");
     LM(TheZone) = save_zone;
+    if(!newh && current_zone != LM(SysZone))
+        return full_heap_handle(asked, clear_p);
     return newh;
 }
 
@@ -1274,6 +1317,7 @@ done:
 
 Ptr _NewPtr_flags(Size size, bool sys_p, bool clear_p)
 {
+    const Size asked = size;
     Ptr p;
     block_header_t *b;
     GUEST<THz> save_zone;
@@ -1307,6 +1351,8 @@ Ptr _NewPtr_flags(Size size, bool sys_p, bool clear_p)
         LM(TheZone) = save_zone;
         SET_MEM_ERR(memFullErr);
         MM_SLAM("exit");
+        if(current_zone != LM(SysZone))
+            return full_heap_ptr(asked, clear_p);
         return nullptr;
     }
 
