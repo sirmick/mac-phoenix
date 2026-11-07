@@ -14,7 +14,7 @@ There is no `jGNEFilter` patch and no polling of files: the agent sleeps in `Wai
 ./build/mac-phoenix --bridge --extfs /my/dir ...   # bridge dir under /my/dir
 ```
 
-Or via JSON config / UI: `bridge_enabled: true` (Settings → Guest Additions → "Enable bridge agent"). The first `--extfs` path is the ExtFS root (the guest's `Host` volume); without one a temp root is created. The bridge dir is `<root>/MacPhoenix/<pid>` (the parent's pid, shared with the CPU child through `MACPHOENIX_HOST_PID`), `Host:MacPhoenix:<pid>` in the guest (`command_bridge_guest_dir()`). It carries the agent, what the guest reads at startup (`netcfg.txt`, `NetworkInfo.txt`) and MacBrowser's handshake file `browser_shm.txt` (leaf names in `src/common/include/bridge_paths.h`); MacBrowser's persistent data is at the root, `<root>/macbrowser/`. No commands pass through files.
+Or via JSON config / UI: `bridge_enabled: true` (Settings → Guest Additions → "Enable bridge agent"). The first `--extfs` path is the ExtFS root (the guest's `Host` volume); without one a temp root is created. The bridge dir is `<root>/MacPhoenix/<pid>` (the parent's pid, shared with the CPU child through `MACPHOENIX_HOST_PID`), `Host:MacPhoenix:<pid>` in the guest (`command_bridge_guest_dir()`). It carries the agent, what the guest reads at startup (`netcfg.txt`, `NetworkInfo.txt`) and MacBrowser's handshake file `browser_shm.txt` (leaf names in `bridge_paths.h`); MacBrowser's persistent data is at the root, `<root>/macbrowser/`. No commands pass through files.
 
 `--headless-http` sets `bridge_enabled = true` automatically; `--no-webserver` does not.
 
@@ -189,8 +189,7 @@ Not before System 7 (no Process Manager: a launch would replace the
 Finder), and not if an agent has said hello already (one installed in
 Startup Items by hand or by an older emulator): the trap refuses a second
 agent's `AGENT_HELLO`, and that agent quits; a new agent asks any older
-one (creator `MxBr`, the agent's before it became `MxBA`; MacBrowser's
-too) to quit, every 5 s (Startup Items open after it).
+one (creator `MxBA`) to quit, every 5 s (Startup Items open after it).
 Launched in the background, the agent leaves the front process as it is;
 started in front (from Startup Items) it gives the front to the Finder.
 `/api/ui` answers for the front process the agent reports (`STATE`): on
@@ -267,9 +266,9 @@ A checkbox in Settings → Guest Additions → "Enable bridge agent" toggles `br
 | `provisioning/install_bridge_agent.sh` | By hand: hfsutils install of `BridgeAgent.bin` into an image's `:System Folder:Startup Items:` |
 | `tests/guest/bridgedemo/` | The trap alone, on every machine |
 | `tests/guest/suite/` | MacPhoenixSuite, the guest test suite (fat C app, `tools/mpw/mpw build tests/guest/suite -o tests/guest/suite`) |
-| `tests/test_command_bridge.sh` | Integration test for `/api/app`, `/api/windows`, `/api/wait`, `/api/launch`, `/api/quit` |
+| `tests/test_command_bridge.sh` | Integration test for `/api/app`, `/api/windows`, `/api/wait`, `/api/launch` |
 | `tests/test_guest_suite.sh` | Boot → dispatch script → collect results |
 
 ## Process Topology
 
-In webserver mode the host runs **two processes**: a parent that owns the HTTP server and a child it starts (`QProcess`, `emulator_subprocess.cpp`) that runs the CPU. They share the IPC SHM region (boot phase, mouse position, framebuffer, the bridge slot). In headless mode (`--no-webserver`, `--headless-http`) a ROM machine runs in one process and the slot is a static one; Executor always runs in a child.
+In webserver mode the host runs **two processes**: a parent that owns the HTTP server and a forked child that runs the CPU. They share the IPC SHM region (boot phase, mouse position, framebuffer, the bridge slot). In headless mode (`--no-webserver`, `--headless-http`) there's only one process and the slot is a static one.

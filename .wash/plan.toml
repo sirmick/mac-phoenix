@@ -1,7 +1,7 @@
 # wash-plan: written by Wash as the plan changes.
 # Edit it only between workspaces; plan_set {"from": "<this file>"} loads it.
 
-revision = 76
+revision = 84
 
 [[node]]
   id = "cuts"
@@ -197,8 +197,8 @@ revision = 76
   template = "note"
   parent = "m1"
   body = "Owner 2026-11-03: after the native speed test (bench / own benchmark app) lands: measure the MMU cost baseline: mame-68k with Config::mmu on (no guest tables) vs off, and mame-ppc translation on (identity BATs) vs off, on the same benchmark. Confirms the docs' claim that MMU-off pays nothing per access."
-  state = "todo"
-  revision = 2
+  state = "reported"
+  revision = 83
 
 [[node]]
   id = "fix-86-2"
@@ -932,5 +932,5 @@ revision = 76
   emoji = "📚"
   template = "package"
   body = "Owner 2026-11-07: merge everything to local main, thoroughly update the README and documentation (stale), push. Three members on disjoint files (docs-top: README.md + docs/*.md project-level; docs-exec: executor/README.md, docs/executor/*, frontends READMEs; docs-claude: CLAUDE.md), one branch wash/docs from grid2 0ed52614, then a reviewer that checks every command/flag/path named exists, then merge to grid2 -> main, push both."
-  state = "active"
-  revision = 76
+  state = "done"
+  revision = 84

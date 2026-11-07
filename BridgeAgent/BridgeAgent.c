@@ -1004,7 +1004,7 @@ static void quit_other_agents(void)
         info.processInfoLength = sizeof(info);
         info.processName = NULL;
         info.processAppSpec = NULL;
-        if (GetProcessInformation(&psn, &info) != noErr || info.processSignature != 'MxBr')
+        if (GetProcessInformation(&psn, &info) != noErr || info.processSignature != 'MxBA')
             continue;
         if (SameProcess(&psn, &self, &same) == noErr && !same)
             do_quit_target(&psn);
