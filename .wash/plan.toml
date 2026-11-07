@@ -1,7 +1,7 @@
 # wash-plan: written by Wash as the plan changes.
 # Edit it only between workspaces; plan_set {"from": "<this file>"} loads it.
 
-revision = 55
+revision = 61
 
 [[node]]
   id = "cuts"
@@ -884,7 +884,7 @@ revision = 55
   parent = "p2"
   body = "From gestalt3 2026-11-07: Speedometer's colour test with all 5 depths in one session fills the app heap (window palettes stay after DisposeWindow, as on the Quadra); Executor's C++ then writes through nil (TENew, xdata_for_pattern) where the Quadra survives. Find the host allocation sites that don't check, decide a central policy (what a Mac does: memFullErr / purge / system heap / temp mem), fix, and a gtest + the Speedometer run as the check."
   state = "active"
-  revision = 29
+  revision = 57
 
 [[node]]
   id = "showcase"
@@ -893,8 +893,8 @@ revision = 55
   template = "package"
   parent = "p2"
   body = "Owner 2026-11-07: show Executor off (old Mac at HiDPI) with nothing we distribute: everything public, e.g. Internet Archive. A README is enough (no download feature). System: archive.org/details/AppleMacintoshSystem753 (System7_5_3.img, md5 c7661911bbf3c56a77601ad53e139f62; Apple gave 7.5.3 away) reaches the Finder menu bar on Executor then 'unhandled trap 3' (address error) at pc 0x3E22AEB: fix; then Apple's free 7.5.5 update (archive.org/details/system-7.5.5-update) on top if it installs. Software: freeware/shareware that authors released for redistribution (Info-Mac: archive.org/details/info-mac-archive, 2005 snapshot) that runs on Executor and looks good at 2x. README with links + checksums + steps, and 2x screenshots."
-  state = "active"
-  revision = 42
+  state = "done"
+  revision = 61
 
 [[node]]
   id = "mpw-tab"
