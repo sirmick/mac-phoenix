@@ -34,6 +34,7 @@
 #include <commandline/flags.h>
 #include <rsys/segment.h>
 #include <res/resource.h>
+#include <clib/clib.h>
 #include <hfs/hfs.h>
 #include <rsys/osutil.h>
 #include <rsys/stdfile.h>
@@ -154,6 +155,15 @@ cfm_launch(Handle cfrg0, OSType desired_arch, FSSpecPtr fsp)
         Str63 fragname;
         memcpy(fragname, CFIR_NAME(cfirp), std::min<int>(CFIR_NAME(cfirp)[0], 63) + 1);
 
+        /* Executor's StdCLib starts afresh for the libraries this
+           application's fragment imports, however it is prepared (clib.h,
+           stdclibImported); ended before the code runs. */
+        struct Launching
+        {
+            Launching() { clib::launchingApplication = true; }
+            ~Launching() { clib::launchingApplication = false; }
+            void end() { clib::launchingApplication = false; }
+        } launching;
         if(CFIR_LOCATION(cfirp) == kOnDiskFlat)
         {
             // #warning were ignoring a lot of the cfir attributes
@@ -189,6 +199,7 @@ cfm_launch(Handle cfrg0, OSType desired_arch, FSSpecPtr fsp)
 
             fprintf(stderr, "Memory leak from segmented fragment\n");
         }
+        launching.end();
         /* MacPhoenix: a fragment that doesn't prepare (a library not
            found: Slithereens without InputSprocket) isn't launched; the
            Finder's words go to the log, and without the Process Manager to

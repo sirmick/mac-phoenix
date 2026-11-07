@@ -1457,6 +1457,19 @@ void Executor::clib::stdclibStart(bool m68k)
     stdioStart(m68k);
 }
 
+bool Executor::clib::launchingApplication = false;
+
+/* StdCLib's state is one for all its clients. Started afresh at every
+   import, the Finder on 8.6 loading ATSUnicodeLib and LayoutCore (which
+   import it) behind an application that had just launched closed nothing
+   and forgot that application's open streams: what it wrote after, and
+   its fclose, never reached the file (the tab, MacPhoenixBench). */
+void Executor::clib::stdclibImported(bool m68k)
+{
+    if(launchingApplication || !clientZone)
+        stdclibStart(m68k);
+}
+
 void Executor::clib::stdclibProcessExit()
 {
     /* Only for the application that has it. */

@@ -151,18 +151,44 @@ them, and MR Browser reaches MR's API.
 |---|---|---|
 | `utilities.img` | Speedometer 4.0, MacBench 5.0 (PowerPC), TattleTech 2.84, Gestalt.Appl 2.7.9, Newer Technology's Gauge Series (Clockometer, Cache-22, RAMometer, SCSI Info, Slot Info) | any 7.x-9 profile |
 
-Each is its archive expanded in the guest. What they report (2026-11-03;
+Each is its archive expanded in the guest. What they report (2026-11-07;
 Executor native = `tests/test_utilities_executor.sh`, the tab = the
-`executor.web.site.*.utilities` cell / `executor/tests/web/tab_site.mjs`):
+`executor.web.site.*.utilities` cell / `executor/tests/web/tab_site.mjs`,
+2026-11-03; the ROM machines dismiss alerts at once, so theirs were caught
+by screenshots taken right after the launch):
 
 | | Quadra 650, 7.6.1 | G3, 8.6 | Executor 7.6.1 (68k) | Executor 8.6 (PowerPC) | tab 7.6.1 / 8.6 |
 |---|---|---|---|---|---|
-| Gestalt.Appl: selectors | | 158 | 59; `cput` 68040 | | 59 / 65 |
+| Gestalt.Appl: selectors | 111 | 158 | 68 (`--executor-ppc`: 73) | 81 | 59 / 65 |
 | TattleTech: machine | runs | Power Mac 9500/9600 (67), 32-bit capable | exits at once (below); `--executor-ppc`: as the G3 | as the G3 | — / not in front |
-| Clockometer | 68040, ??.?? MHz, hangs | | 68040, hangs (`--executor-ppc`: 68030) | "Unknown processor type" | |
-| Cache-22 | quits | quits | "Unknown processor type" | "Unknown processor type" | |
-| Speedometer 4.0 | splash until a click, then its registration screen | registration form | as the Quadra; Hardware Information: Macintosh, 68040 | as the Quadra; Power Macintosh | |
+| Clockometer | 68040, ??.?? MHz, hangs | "Unknown processor type" | 68040, about 630 MHz (`--executor-ppc`: as the G3) | as the G3 | |
+| Cache-22 | "requires a PowerPC" | "Unknown processor type" | as the Quadra (`--executor-ppc`: as the G3) | as the G3 | |
+| Speedometer 4.0 | splash until a click, then its registration screen | registration form | as the Quadra; Hardware Information as the Quadra but ROM $007C, 128K and the RAM Executor has | as the G3 (Power Macintosh, MC68020, PowerPC Math, Integral MMU), ROM and RAM as on 7.6.1 | |
 | MacBench 5.0 | needs a PowerPC | licence | needs a PowerPC 601 | licence | — / quits at Cmd-. (its licence's Quit) |
+
+Gestalt: the machine Executor says it is (romlib/gestalt.cpp) is the
+Quadra 650 on 7.x with 68k code and the G3 with PowerPC code (8.x, or
+`--executor-ppc`): machine type, CPU, FPU, MMU, addressing, hardware
+attributes and clocks as each answers (`tests/guest/gestalt`, ctest
+`gestalt_executor_*`). 7.5.5 with `--executor-ppc` keeps a 68k
+architecture (its components' PowerPC side runs wild at boot) and so has
+none of the Power Mac's own selectors. What the G3 answers that Executor
+doesn't is mostly managers it hasn't got (QuickTime, QuickDraw 3D,
+AppleScript, AppleTalk, the Communications Toolbox, Apple Guide, the PPC
+Toolbox, the Dictionary Manager) and hardware (serial, sound input, power,
+video); the ROM is none (`'romv'` 0x7C, `'rom '` 128K; INITs patch the ROM
+by its version). The 8.6 differences, one reason each:
+`tests/guest/difftest/expected/sys-executor-8.6.txt`.
+
+Speedometer 4.0 runs every test on Executor, 68k and PowerPC. Its Color
+QuickDraw test opens a window with a 256-colour palette (WIND/pltt 507)
+for each test, and the palette stays in the heap after DisposeWindow, on
+the Quadra too (Windows.DisposeWindowKeepsItsAutomaticPalette); its 1.5 MB
+heap fills by the fourth or fifth depth. The Quadra's Toolbox survives a
+full heap; Executor's does not yet everywhere (TENew, pattern data:
+host code that doesn't check its allocations), so all five depths in one
+session crash it now and then (`tools/bench/run.py` takes the rest in a
+new session).
 
 The benchmarks' numbers, every machine and core: docs/executor/Speed.md
 (`tools/bench/run.py`).
@@ -174,7 +200,8 @@ Executor with PowerPC code (its Name Registry: the root and `Devices`);
 on the Quadra the local is stack junk, not a file, and the call does
 nothing; on Executor's 68k Mac the stack there is still zero, so it makes
 the System file current, doesn't find its own `'tCFG'`, and quits
-(2026-11-03).
+(2026-11-03). Left as the application's bug: no stack filling, no
+special case for it; it runs on 8.6 and on 7.6.1 with `--executor-ppc`.
 
 ## CDs
 
