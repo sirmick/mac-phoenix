@@ -3,6 +3,7 @@
 #include "compat.h"
 
 #include <MemoryMgr.h>
+#include <clib/clib.h>
 #include <string.h>
 
 /* StdCLib's stdio (romlib/clib/stdio.cpp), Executor's own: the stream
@@ -51,4 +52,31 @@ TEST(StdCLib, StreamReadFillsItsBuffer)
     EXPECT_EQ(2u, (uint32_t)field(f, 0));
     memset(ptr_from_longint<Ptr>(f), 0, 24);
     DisposePtr(buf);
+}
+
+/* StdCLib is one state for all its clients: an import of it starts it
+   afresh only while an application is being launched (or with no client),
+   not when another process loads a library that imports it. The Finder on
+   8.6 loading ATSUnicodeLib behind an application cleared its open streams
+   (executor/tests/web/tab_stdio.mjs). */
+TEST(StdCLib, OnlyAnApplicationsLaunchStartsItAfresh)
+{
+    uint32_t f = stream(37);
+    auto flag = [&]() -> GUEST<uint16_t> & { return *ptr_from_longint<GUEST<uint16_t> *>(f + 18); };
+
+    clib::launchingApplication = true;          /* this test's "application" */
+    clib::stdclibImported();
+    clib::launchingApplication = false;
+    memset(ptr_from_longint<Ptr>(f), 0, 24);
+    flag() = 0x0002;                            /* _IOWRT: a stream it has open */
+
+    clib::stdclibImported();                    /* a library loaded meanwhile */
+    EXPECT_EQ(0x0002, (uint16_t)flag()) << "the client's stream was cleared";
+
+    clib::launchingApplication = true;          /* the next application */
+    clib::stdclibImported();
+    clib::launchingApplication = false;
+    EXPECT_EQ(0, (uint16_t)flag());
+
+    clib::stdclibProcessExit();                 /* no client again */
 }
