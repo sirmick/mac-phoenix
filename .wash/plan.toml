@@ -1,7 +1,7 @@
 # wash-plan: written by Wash as the plan changes.
 # Edit it only between workspaces; plan_set {"from": "<this file>"} loads it.
 
-revision = 50
+revision = 53
 
 [[node]]
   id = "cuts"
@@ -872,8 +872,8 @@ revision = 50
   parent = "p2"
   needs = ["desktop-app"]
   body = "Owner 2026-11-07: a zip with two exes (executor-standalone.exe: the Go server + embedded tab, already cross-built by make dist; executor-desktop.exe: the Qt app). Cross-build here: llvm-mingw + Qt's official MinGW 64-bit build (aqtinstall), deps in ~/storage/deps. Port core/cpu/host (VirtualAlloc guest windows), pread/pwrite/fsync/ioctl uses, mame-ppc's DRC on the Win64 ABI; windeployqt-equivalent DLL set. Logging for the owner's run: log file always in the data folder, --console (or a console-subsystem twin exe), crash handler writing a minidump + last log lines, version in title and log. Wine smoke test (Executor's own System to the Finder) before handing it over. 68k first, then PowerPC."
-  state = "active"
-  revision = 46
+  state = "done"
+  revision = 53
   overrides = ["2026-11-07: started by Orchestrator before desktop-app (reported): desktop-app's Linux work is merged (ed28f66e); this is its Windows step"]
 
 [[node]]
@@ -903,5 +903,5 @@ revision = 50
   template = "package"
   parent = "p2"
   body = "Found by leftovers 2026-11-07: executor.web.m1.7.6.1.development fails ('no alert M1 build 0'): MPW Shell opens a Commando dialog for the typed SC line (Commando opens on a command ending in '…' (option-;) or when Enter runs a line MPW thinks is incomplete). Fails on grid2's build-wasm at ed28f66e too, passed at 840d764b (mover's run): bisect 840d764b..ed28f66e (desktop merge: host/ keys? creative5: tab_m1). ResourceDispatch selector $5 logged unimplemented in both runs. Logs ~/storage/tmp/leftovers/mpw-tab{,-base}.log."
-  state = "todo"
-  revision = 50
+  state = "active"
+  revision = 51
