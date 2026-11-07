@@ -147,7 +147,10 @@ static Handle new_gw_pixels(Size size, GWorldFlags flags)
 /* MacPhoenix: a GWorld's rowBytes as the Mac's NewGWorld makes them: the
    row's bytes plus a long, rounded up to 16 (difftest mman, section
    rowbytes: the same on the Quadra's 7.5.5/7.6.1 and the G3's 8.6, any
-   depth, any left edge; 80 -> 96, 640 -> 656) */
+   depth, any left edge; 80 -> 96, 640 -> 656). Not measured: what the
+   Mac answers when this passes 0x3FFE (the top bits are flags; at 32 bits
+   from 4092 pixels wide, Executor's old rounding from 4096); nothing
+   checks it here, as before. */
 static int gw_row_bytes(int width, int depth)
 {
     return ((width * depth + 7) / 8 + 4 + 15) & ~15;

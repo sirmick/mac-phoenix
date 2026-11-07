@@ -13,6 +13,7 @@
 #include <SegmentLdr.h>
 
 #include <rsys/segment.h>
+#include <rsys/process.h>
 #include <ResourceMgr.h>
 #include <hfs/hfs.h>
 
@@ -22,9 +23,12 @@ using namespace Executor;
    several processes, ExitToShell would only end the caller). Shutdown
    procs are not run (ShutDwnInstall is unimplemented). Resource files are
    closed (changed maps written) and every volume unmounted, as ExitToShell
-   does: a DOS disk's file system writes back, HFS volumes are flushed. */
+   does: a DOS disk's file system writes back, HFS volumes are flushed.
+   The other processes' resource files are written first, as their
+   ending would. */
 void Executor::C_ShutDwnPower()
 {
+    ROMlib_update_other_processes_resource_files();
     CloseResFile(0);
     ROMlib_OurClose();
     ROMlib_exit = true;
@@ -42,6 +46,7 @@ void Executor::C_ShutDwnPower()
    it starts the child again, as a ROM machine reboots. */
 void Executor::C_ShutDwnStart()
 {
+    ROMlib_update_other_processes_resource_files();
     CloseResFile(0);
     ROMlib_OurClose();
     ROMlib_exit = true;
