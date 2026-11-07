@@ -8,7 +8,7 @@
  * the log shows there as it is written, as well as in the log file.
  *
  * A crash (an unhandled exception, std::terminate, abort()) writes
- * crash-STAMP.dmp (a minidump) and crash-STAMP.txt (what happened, the
+ * crash-STAMP-PID.dmp (a minidump) and crash-STAMP-PID.txt (what happened, the
  * crashing thread's stack as module+offset, the log's last lines) to the
  * logs folder, and a dialog says where they are (none with
  * QT_QPA_PLATFORM=offscreen). tools/windows/symbolize.sh turns the stack
@@ -29,7 +29,9 @@ void install_crash_handler(const QString &logs, const QString &log);
    paths) */
 QString describe();
 
-/* --crash-test: crash now, as a bad pointer would (the handler's test) */
-[[noreturn]] void crash_now();
+/* --crash-test: crash now, as a bad pointer would (the handler's test);
+   --crash-test-heap: with the process heap locked first, as a crash inside
+   malloc leaves it (the text report must still come) */
+[[noreturn]] void crash_now(bool heapLocked);
 
 }

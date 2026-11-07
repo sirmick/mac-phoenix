@@ -22,7 +22,11 @@ endfunction()
 # C++ exceptions (ExitToShell unwinds a process); windows.h without the
 # rarely used half, no min/max macros; M_PI & co.
 add_compile_options(-fexceptions)
-add_compile_definitions(WIN32_LEAN_AND_MEAN NOMINMAX _USE_MATH_DEFINES)
+# _FILE_OFFSET_BITS=64: mingw's off_t, lseek, fseeko, ftruncate and struct
+# stat's st_size are 32-bit otherwise (images and overlays over 2 GB)
+# _WIN32_WINNT: Windows 10's API (the manifest's minimum too)
+add_compile_definitions(WIN32_LEAN_AND_MEAN NOMINMAX _USE_MATH_DEFINES _FILE_OFFSET_BITS=64
+    _WIN32_WINNT=0x0A00 WINVER=0x0A00)
 
 # The desktop app's resources (manifest, icon, version)
 enable_language(RC)

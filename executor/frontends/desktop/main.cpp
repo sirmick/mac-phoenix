@@ -111,7 +111,7 @@ int main(int argc, char **argv)
     Automation automation;
     QStringList passThrough;  /* for session::parse_args */
     QString size, scale, ram, depth;
-    bool ppc = false, crashTest = false;
+    bool ppc = false, crashTest = false, crashTestHeap = false;
     for(int i = 0; i < args.size(); i++)
     {
         const QString &a = args[i];
@@ -150,6 +150,8 @@ int main(int argc, char **argv)
         }
         else if(a == "--crash-test")
             crashTest = true;
+        else if(a == "--crash-test-heap")
+            crashTest = crashTestHeap = true;
         else if(a == "--help" || a == "-h")
         {
             printf("executor-desktop [--data DIR] [--system IMAGE] [--disk IMAGE]... [--ppc] [--size WxH]\n"
@@ -298,9 +300,9 @@ int main(int argc, char **argv)
     Emulator::instance().start(o, setup);
 #ifdef _WIN32
     if(crashTest)
-        QTimer::singleShot(2000, [] { windows_support::crash_now(); });
+        QTimer::singleShot(2000, [crashTestHeap] { windows_support::crash_now(crashTestHeap); });
 #else
-    (void)crashTest;
+    (void)crashTest, (void)crashTestHeap;
 #endif
     int rc = app.exec();
     window.quit(rc);

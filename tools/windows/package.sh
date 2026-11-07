@@ -76,24 +76,38 @@ make -s -C "$ROOT/executor/server" site WASM_BUILD="$WASM_BUILD"
 
 echo "== README, licences"
 sed "s/@VERSION@/$VERSION/g" "$ROOT/tools/windows/README.txt" > "$P/README.txt"
-cp "$ROOT/LICENSE" "$P/licenses/MacPhoenix-GPL-2.0.txt"
+# What is linked into the two executables (no GPL code: LICENSING.md's GPL
+# rows are the ROM machines, which the Windows build leaves out; Executor's
+# only use of src/common/include/crash_handler.h goes through backtrace.h)
 cp "$ROOT/LICENSE-MIT" "$P/licenses/MacPhoenix-MIT.txt"
-cp "$ROOT/LICENSING.md" "$P/licenses/LICENSING.md"
-cp "$ROOT/executor/LICENSE-CONTRIBUTIONS" "$P/licenses/Executor-MIT.txt"
+cp "$ROOT/executor/COPYING" "$P/licenses/Executor-MIT.txt"
+cp "$ROOT/executor/LICENSE-CONTRIBUTIONS" "$P/licenses/Executor-contributions-MIT.txt"
+cp "$ROOT/src/cpu/mame/LICENSE-MAME" "$P/licenses/MAME-BSD-3-Clause.txt"
+cp "$ROOT/src/cpu/mame/LICENSE-asmjit" "$P/licenses/asmjit-zlib.txt"
+cp "$ROOT/src/cpu/mame/third_party/softfloat3/COPYING.txt" "$P/licenses/SoftFloat-BSD-3-Clause.txt"
 cp /usr/share/common-licenses/LGPL-3 "$P/licenses/Qt-LGPL-3.0.txt"
 cp /usr/share/common-licenses/GPL-3 "$P/licenses/Qt-GPL-3.0.txt"
 cp "$LLVM_MINGW/LICENSE.TXT" "$P/licenses/llvm-mingw-libc++-libunwind-winpthreads.txt"
 cat > "$P/licenses/README.txt" <<EOF
-Qt 6.8.2 (Qt6Core.dll, Qt6Gui.dll, Qt6Widgets.dll and the plugins) is used
-under the GNU LGPL version 3 (Qt-LGPL-3.0.txt, with Qt-GPL-3.0.txt), as
-The Qt Company builds it, unmodified; you may replace these DLLs with your
-own build of Qt 6.8. Its source: https://download.qt.io/archive/qt/6.8/6.8.2/
-libc++.dll and libunwind.dll (LLVM 17, Apache-2.0 with LLVM exceptions) and
-libwinpthread-1.dll (mingw-w64, MIT/ZPL) come from llvm-mingw 20231128:
-llvm-mingw-libc++-libunwind-winpthreads.txt; https://github.com/mstorsjo/llvm-mingw
-MacPhoenix and Executor: LICENSING.md (GPL-2.0-or-later as a whole; Executor
-and code written for MacPhoenix also MIT). Their source at version
-$VERSION comes from whoever gave you this zip, on request.
+executor-desktop.exe and executor-standalone.exe, version $VERSION:
+- Executor (Executor 2000 and MacPhoenix's changes and front ends): MIT
+  (Executor-MIT.txt, Executor-contributions-MIT.txt); code written for
+  MacPhoenix: MIT (MacPhoenix-MIT.txt).
+- MAME's 68000 and PowerPC cores: BSD-3-Clause (MAME-BSD-3-Clause.txt);
+  Berkeley SoftFloat 3e: BSD-3-Clause (SoftFloat-BSD-3-Clause.txt); asmjit:
+  zlib (asmjit-zlib.txt); minicoro: MIT-0 / Unlicense; miniaudio: MIT-0 /
+  public domain (both in their source headers).
+- Qt 6.8.2 (Qt6Core.dll, Qt6Gui.dll, Qt6Widgets.dll and the plugins):
+  GNU LGPL version 3 (Qt-LGPL-3.0.txt, with Qt-GPL-3.0.txt), as The Qt
+  Company builds it, unmodified; you may replace these DLLs with your own
+  build of Qt 6.8. Its source: https://download.qt.io/archive/qt/6.8/6.8.2/
+- libc++.dll and libunwind.dll (LLVM 17, Apache-2.0 with LLVM exceptions)
+  and libwinpthread-1.dll (mingw-w64, MIT/ZPL): llvm-mingw 20231128
+  (llvm-mingw-libc++-libunwind-winpthreads.txt;
+  https://github.com/mstorsjo/llvm-mingw).
+- executor-standalone.exe: the Go standard library (BSD-3-Clause).
+No GPL code is in either executable (MacPhoenix's GPL parts, from UAE,
+Basilisk II and SheepShaver, are its ROM machines, not built here).
 EOF
 
 (cd "$P" && find . -type f ! -name SHA256SUMS | sed 's|^\./||' | sort | xargs sha256sum > SHA256SUMS)

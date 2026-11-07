@@ -20,15 +20,23 @@
 #endif
 
 #ifdef _WIN32
-/* UTF-8 paths, and the CRT's 64-bit sizes */
+/* UTF-8 paths (64-bit off_t and st_size: _FILE_OFFSET_BITS=64,
+   cmake/ExecutorWindows.cmake) */
 #define open_path win32_open_utf8
 #define unlink_path win32_unlink_utf8
-#define stat _stat64
-#define fstat _fstat64
-#define ftruncate _chsize_s
+static_assert(sizeof(off_t) == 8, "overlays over 2 GB need a 64-bit off_t");
+/* the C runtime's 64-bit call (mingw's ftruncate64 faults under Wine) */
+static int truncate_fd(int fd, uint64_t size)
+{
+    return _chsize_s(fd, (long long)size) == 0 ? 0 : -1;
+}
 #else
 #define open_path ::open
 #define unlink_path ::unlink
+static int truncate_fd(int fd, uint64_t size)
+{
+    return ftruncate(fd, (off_t)size);
+}
 #endif
 
 namespace executor_host {
@@ -259,7 +267,7 @@ bool Overlay::load(std::string *error)
        mount's too (the file is open read-write either way; only what no
        commit vouches for goes) */
     if(good < size)
-        (void)!ftruncate(file_, (off_t)good);
+        (void)!truncate_fd(file_, good);
     end_ = good;
     return true;
 }
@@ -405,7 +413,7 @@ bool Overlay::sync()
     if(!write_all(file_, buf.data(), buf.size(), end_) || sync_fd(file_) != 0)
     {
         fprintf(stderr, "[overlay] %s: write failed: %s\n", path_.c_str(), strerror(errno));
-        (void)!ftruncate(file_, (off_t)end_);
+        (void)!truncate_fd(file_, end_);
         return false;
     }
     for(const auto &[b, off] : places)
