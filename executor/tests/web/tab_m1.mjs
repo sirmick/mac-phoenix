@@ -252,21 +252,36 @@ const TARGETS = {
         { name: 'Canvas™ 5', app: 'Creative:Deneba Canvas 5.0.2 ƒ:Canvas™ 5', use: async (t) => {
             // Untitled-1 opens at launch; the rectangle tool (the
             // toolbox's third row, left) dragged across the page, Save As.
-            // On the Quadra the toolbox's content is 47x191 at the left.
+            // The toolbox: 50x206 at the left, a drag bar, 24-pixel rows.
+            // Without QuickTime (the library's System has none) it says
+            // "QuickTime extension is not installed. Tool will be disabled."
+            // first, over its splash, in a window of its own (no dialog, no
+            // title; its text isn't in the text feed): the front window,
+            // alert-sized (97x176 on 7.6.1 and 8.6). OK, the default button.
+            let quicktime = false;
             await t.until(async () => {
-                const m = (await t.windows(true)).find((w) => w.title === 'Canvas Message' || w.kind === DIALOG_KIND);
+                const ws = await t.windows(true);
+                const m = ws.find((w) => w.title === 'Canvas Message' || w.kind === DIALOG_KIND);
                 if (m)
                     throw new Error(`alert "${said(m).replace(/\s+/g, ' ')}"`);
-                return (await t.windows()).some((w) => /Untitled-1/.test(w.title));
+                if (ws.some((w) => /Untitled-1/.test(w.title)))
+                    return true;
+                const [top, left, bottom, right] = ws.length ? ws[0].rect : [0, 0, 0, 0];
+                if (!quicktime && ws[0] && ws[0].title === '' && bottom - top < 130 && right - left > 140 && right - left < 260) {
+                    quicktime = true;
+                    await shot('quicktime');
+                    await t.key('Enter');
+                }
+                return false;
             }, 90000, 'no Untitled-1');
             await t.pause(2000);
             const tools = (await t.windows()).find((w) => w.title === '' && w.rect[2] - w.rect[0] > 150 && w.rect[3] - w.rect[1] < 70);
             if (!tools)
                 throw new Error('no toolbox');
             const before = await sample();
-            await t.click(tools.rect[1] + 11, tools.rect[0] + 58);
+            await t.click(tools.rect[1] + 11, tools.rect[0] + 71);   // the drag bar, then 24-pixel rows
             await t.pause(500);
-            await t.drag([[220, 160], [400, 330]]);
+            await t.drag([[220, 160], [400, 330]], 500);
             await t.pause(1000);
             if (changed(before, await sample()) < 0.002)
                 throw new Error('nothing drawn');
@@ -289,14 +304,16 @@ const TARGETS = {
             await t.pause(1000);
             if (changed(before, await sample()) < 0.002)
                 throw new Error('nothing drawn');
-            await t.saveAs('M1 AI8');
+            await t.saveAs('M1 AI8', 'Illustrator Format');
         } },
         { name: 'Adobe® Photoshop® 5.5', app: 'Creative 8:Adobe Photoshop 5.5 ƒ:Adobe® Photoshop® 5.5',
           use: (t) => photoshop(t, 'M1 PS5') },
         { name: 'Adobe® PageMaker® 6.5', app: 'Creative 8:Adobe PageMaker 6.5 ƒ:Adobe® PageMaker® 6.5', use: async (t) => {
             // File > New (Document Setup's defaults), text typed with the
             // text tool (Shift+F4) on the page, Save As
-            await t.until(async () => (await t.windows()).some((w) => w.title === 'Styles' || w.title === 'Colors'), 90000, 'no palettes');
+            // Ready: its palettes up (Styles and Colors share one tabbed
+            // palette without a title; the Control Palette has one)
+            await t.until(async () => (await t.windows()).some((w) => ['Styles', 'Colors', 'Control Palette'].includes(w.title)), 90000, 'no palettes');
             await t.key('Meta+KeyN');
             await t.until(async () => (await t.windows(true)).some((w) => w.kind === DIALOG_KIND), 20000, 'no Document Setup');
             await t.key('Enter');
@@ -583,7 +600,7 @@ const said = (w) => w.kind !== DIALOG_KIND ? ''
         : [w.text, ...(w.params || [])].filter(Boolean).join('\n');
 
 // A game's dialog answered by the first of these buttons it has.
-const SAFE = [/^Not Yet/i, /^Later/i, /^Leave Alone/i, /^Don.t (Change|Switch)/i, /^Switch\b/i, /^(Continue|OK|Okay)\b/i, /^(Play|Start|Begin|New Game)\b/i, /^(Done|Skip)\b/i, /^Cancel\b/i];
+const SAFE = [/^Not Yet/i, /^Later/i, /^Leave Alone/i, /^Let it be/i, /^Don.t (Change|Switch)/i, /^Switch\b/i, /^(Continue|OK|Okay)\b/i, /^(Play|Start|Begin|New Game)\b/i, /^(Done|Skip)\b/i, /^Cancel\b/i];
 
 // M1_LOG: each action too.
 const trace = (...a) => process.env.M1_LOG && console.log('[m1]', ...a);
@@ -626,12 +643,20 @@ const t = {
         await page.mouse.up();
     },
     // the button held along points (a pencil stroke)
-    async drag(points) {
+    // hold: ms after the press and before the release, as a hand does, for
+    // an application that follows the mouse in a tracking loop of its own
+    // slower than the moves come (Canvas 5: its rectangle started and
+    // ended short of them).
+    async drag(points, hold = 0) {
         trace('drag', JSON.stringify(points));
         await page.mouse.move(...await at(...points[0]));
         await page.mouse.down();
+        if (hold)
+            await t.pause(hold);
         for (const p of points.slice(1))
             await page.mouse.move(...await at(...p), { steps: 10 });
+        if (hold)
+            await t.pause(hold);
         await page.mouse.up();
     },
     async until(fn, ms, why) {
@@ -652,13 +677,20 @@ const t = {
         await t.key('Enter');
     },
     // Save As: the Standard File dialog, the name typed (the field's text
-    // is selected), the window then has the name.
-    async saveAs(name) {
+    // is selected), the window then has the name. options: the title of
+    // the dialog the application asks its format options in after the
+    // name (Illustrator 8's "Illustrator Format"), its defaults taken.
+    async saveAs(name, options) {
         await t.key('Meta+KeyS');
         await t.until(async () => (await t.windows()).some((w) => w.kind === DIALOG_KIND), 20000, 'no Save dialog');
         await t.pause(1000);
         await t.type(name);
         await t.key('Enter');
+        if (options) {
+            await t.until(async () => (await t.windows()).some((w) => w.title === options), 20000, `no ${options}`);
+            await t.pause(1000);
+            await t.key('Enter');
+        }
         const lower = name.toLowerCase();
         await t.until(async () => (await t.windows()).some((w) => w.title.toLowerCase().startsWith(lower)), 30000,
                       `no window named ${name} after saving`);
