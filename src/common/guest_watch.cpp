@@ -6,10 +6,12 @@
 #include <cerrno>
 #include <cstdlib>
 #include <cstring>
+#ifndef _WIN32
 #include <signal.h>
 #include <dlfcn.h>
 #include <sys/mman.h>
 #include <unistd.h>
+#endif
 
 #if defined(__linux__) && defined(__x86_64__)
 #include <ucontext.h>

@@ -552,7 +552,8 @@ void syn68k_restore_context(const void *context)
 /*
  * Four 1GB windows (syn68k_public.h), placed at the first allocation:
  * guest RAM (0), a pool for syn68k_alloc_low (1) and the binary's data (3),
- * each anywhere in the host address space. Window 2 is spare.
+ * each anywhere in the host address space. Window 2 is Executor's thread's
+ * stack where that can't come from the pool (Windows), otherwise spare.
  */
 static const uint64 WINDOW = 1ull << 30;
 static bool windows_placed;
@@ -597,6 +598,12 @@ static void place_windows()
         abort();
     }
     set_window(3, (void *)data, data_end - data);
+}
+
+void syn68k_set_stack_window(const void *lo, size_t size)
+{
+    place_windows();
+    set_window(2, lo, std::min<uint64>(size, WINDOW));
 }
 
 int syn68k_is_guest_mapped(uintptr_t addr, size_t len)

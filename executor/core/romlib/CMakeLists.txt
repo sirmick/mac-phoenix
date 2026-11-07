@@ -79,7 +79,7 @@ if(WIN32)
         config/os/win32/win_serial.h
         config/os/win32/win_stat.h
         config/os/win32/win_stat.cpp)
-    set(host_os_libs)
+    set(host_os_libs ws2_32)  # MacPhoenix: rsys/win32_net.h's byte-order calls
 elseif(APPLE AND UNIX)
     set(HOST_OS "macosx")
     set(host_os_sources
@@ -683,7 +683,7 @@ add_library(executor_hfsplus STATIC
 target_include_directories(executor_hfsplus PUBLIC .)
 target_compile_features(executor_hfsplus PUBLIC cxx_std_17)
 target_link_libraries(romlib executor_hfsplus)
-if(NOT EMSCRIPTEN)
+if(NOT EMSCRIPTEN AND NOT WIN32)
     # An HFS+ image's tree and forks, for tests/test_hfsplus_reader.py.
     add_executable(hfsplus_dump hfs/plus/hfsplus_dump.cpp)
     target_link_libraries(hfsplus_dump executor_hfsplus)

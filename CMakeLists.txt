@@ -20,6 +20,13 @@ if(EMSCRIPTEN)
   return()
 endif()
 
+# Windows (cross-built: tools/windows/build.sh): Executor and its desktop
+# application alone (cmake/ExecutorWindows.cmake).
+if(WIN32)
+  include(ExecutorWindows)
+  return()
+endif()
+
 # Mirror debian/rules hardening flags so a plain `cmake -B build`
 # fails the same way the .deb build would (LTO undefined refs,
 # format-string regressions, missing frame pointers). Opt-out for

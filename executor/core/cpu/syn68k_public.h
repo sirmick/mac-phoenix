@@ -309,6 +309,10 @@ void *syn68k_map_guest_ram(size_t size);
 /* Allocate host memory the guest can address (window 1). */
 void *syn68k_alloc_low(size_t size);
 void syn68k_free_low(void *p, size_t size);
+/* Make [lo, lo+size) addressable as window 2: the stack of the thread
+ * Executor runs on, where it can't be given one from window 1 (Windows'
+ * threads take no caller-supplied stack). Before initialize_68k_emulator. */
+void syn68k_set_stack_window(const void *lo, size_t size);
 /* True if [addr, addr+len) lies inside memory the facade knows the guest
  * can touch: guest RAM, low allocations, and the binary's own image. */
 int syn68k_is_guest_mapped(uintptr_t addr, size_t len);

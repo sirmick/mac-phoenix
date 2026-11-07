@@ -14,8 +14,8 @@ target_include_directories(cpu_core PUBLIC
 target_link_libraries(cpu_core PUBLIC mame_m68k mame_ppc)
 target_compile_features(cpu_core PUBLIC cxx_std_17)
 
-if(EMSCRIPTEN)
-    return()  # no ROM machine, no UAE
+if(EMSCRIPTEN OR WIN32)
+    return()  # no ROM machine, no UAE (wasm, Windows: Executor alone)
 endif()
 
 # UAE: a library of its own, for the ROM machine only (registry.cpp,

@@ -17,6 +17,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <rsys/win32_locale.h>
 
 using namespace Executor;
 using namespace Executor::clib;
