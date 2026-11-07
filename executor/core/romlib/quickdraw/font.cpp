@@ -710,7 +710,21 @@ static Handle fond_outline(FHandle fh, INTEGER face, INTEGER *stylep)
         /* (whether it's there: outline_strike loads the one it uses) */
         Boolean resload = LM(ResLoad);
         SetResLoad(false);
-        Handle h = GetResource("sfnt"_4, id);
+        /* MacPhoenix: the FOND's own suitcase first. Suitcases copied in
+           without a Mac's boot renumbering them all number their outline
+           9217 (Apple's free 7.5.3 image): from the top of the chain,
+           Chicago took Times' outline. */
+        Handle h = nullptr;
+        INTEGER home = HomeResFile((Handle)fh);
+        if(home != -1)
+        {
+            INTEGER saved = LM(CurMap);
+            UseResFile(home);
+            h = Get1Resource("sfnt"_4, id);
+            LM(CurMap) = saved;
+        }
+        if(!h)
+            h = GetResource("sfnt"_4, id);
         SetResLoad(resload);
         if(h)
         {

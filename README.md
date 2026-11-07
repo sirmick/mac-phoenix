@@ -21,7 +21,8 @@ three ways to run Mac software:
 * **Executor** (`--backend executor`): Executor 2000's Toolbox in C++, with
   no ROM, grown here until Apple's own 7.5.5 Finder and System run on it;
   PowerPC applications run on MAME's PowerPC core
-  ([docs/executor/README.md](docs/executor/README.md)).
+  ([docs/executor/README.md](docs/executor/README.md)). It can draw an
+  old Mac's screen at 2x: [executor/SHOWCASE.md](executor/SHOWCASE.md).
 
 The emulator is a headless server. The browser gets the screen over
 WebRTC (H.264/VP9), a WebSocket (PNG/WebP) or HTTP; sound as Opus; input

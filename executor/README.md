@@ -8,6 +8,10 @@ directory is Executor as its own product: the core, its front ends, the
 browser tab and the server that hands the tab out. The ROM-based machines
 are MacPhoenix's, in `src/`.
 
+**[SHOWCASE.md](SHOWCASE.md)**: a classic Mac at 2x in the desktop
+application or a browser, on Apple's free System 7.5.3 or Executor's own,
+with 18 freeware titles (where to download them, step by step).
+
 | Directory | What |
 |---|---|
 | `CMakeLists.txt` | the build: `add_subdirectory(executor)` from the top level (native) or `cmake/ExecutorWasm.cmake` (wasm) |

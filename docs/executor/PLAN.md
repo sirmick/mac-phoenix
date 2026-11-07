@@ -501,8 +501,10 @@ Kept small so upstream fixes can be merged by hand:
 * `executor.cpp`: launches `FNDR` files (Finder) as well as `APPL`/`MPST`.
 * `alias.cpp`: `FindFolder` with `kCreateFolder` creates the folder (was a
   `paramErr` stub).
-* `res/resGetinfo.cpp`: `GetResourceSizeOnDisk` returns the on-disk length
-  (compressed size), not the loaded handle's size.
+* `res/resGetinfo.cpp`: `GetResourceSizeOnDisk` returns a loaded
+  resource's handle size, else the length on disk, a compressed resource's
+  uncompressed size (as the Quadra's ROM; Finder 7.5 sizes its code cache
+  from it).
 * `mman/tempmem.cpp`: temporary memory comes from the Process Manager heap.
 * `file/localvolume/item.cpp`: Mac/Unix epoch counts 1904's leap day
   (host file dates were a day early).
