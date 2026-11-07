@@ -661,8 +661,11 @@ void LocalVolume::setInfoCommon(const ItemPtr& item, CInfoPBPtr pb, InfoKind inf
     }
     else if(auto ditem = std::dynamic_pointer_cast<DirectoryItem>(item))
     {
+        /* MacPhoenix: a file-only call on a folder is fnfErr on a Mac, as
+           its Get here (and Executor's HFS, HFS+ and host volumes;
+           tests/hfs_volume.cpp) */
         if(infoKind != InfoKind::CatInfo)
-            throw OSErrorException(paramErr);
+            throw OSErrorException(fnfErr);
         ItemInfo info;
         info.dir.info = pb->dirInfo.ioDrUsrWds;
         info.dir.xinfo = pb->dirInfo.ioDrFndrInfo;

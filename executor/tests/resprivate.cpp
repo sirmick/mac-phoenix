@@ -302,3 +302,34 @@ TEST_F(ResPrivate, SetScanOverridePopsItsBoolean)
         EXPECT_EQ(-1, ResError());
     }
 }
+
+/* A link in the map chain outside memory, or whose master pointer is,
+   ends the walk as the end of the chain does (the tab read past memory
+   there: THINK Project Manager's UseResFile in an Apple event handler). */
+TEST_F(ResPrivate, ChainBadLinkEndsWalk)
+{
+    INTEGER a = open("a");
+    INTEGER b = open("b");
+    resmaphand bmap = (resmaphand)map_of(b);
+    ASSERT_NE(nullptr, bmap);
+    uint32_t link = ptr_to_longint(&(*bmap)->nextmap);
+    uint32_t saved = READUL(link);
+
+    Handle junk = NewHandle(4);
+    uint32_t junk_mp = ptr_to_longint(junk);
+    uint32_t junk_saved = READUL(junk_mp);
+    for(uint32_t bad : { 0xFFFFFFF0u, junk_mp })
+    {
+        if(bad == junk_mp)
+            WRITEUL(junk_mp, 0xFFFFFFF0u);
+        WRITEUL(link, bad);
+        EXPECT_EQ(nullptr, ROMlib_rntohandl(a, nullptr));
+        EXPECT_EQ(bmap, ROMlib_rntohandl(b, nullptr));
+        UseResFile(a);
+        EXPECT_EQ(resFNotFound, ResError());
+        WRITEUL(link, saved);
+    }
+    WRITEUL(junk_mp, junk_saved);
+    DisposeHandle(junk);
+    EXPECT_NE(nullptr, ROMlib_rntohandl(a, nullptr));
+}

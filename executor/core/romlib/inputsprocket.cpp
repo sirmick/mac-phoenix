@@ -214,6 +214,15 @@ OSStatus Executor::C_ISpElement_GetComplexState(ISpElementReference inElement, U
     if(bufferSize < o->dataSize)
         return kISpBufferToSmallErr;
     memset(outState, 0, o->dataSize);
+    /* a movement's idle state: both axes centred, as GetSimpleState's
+       axis, and its pad idle (ISpMovementData: xAxis, yAxis, direction) */
+    if(o->kind == kISpElementKind_Movement && o->dataSize >= 12)
+    {
+        GUEST<UInt32> *m = (GUEST<UInt32> *)outState;
+        m[0] = (UInt32)kISpAxisMiddle;
+        m[1] = (UInt32)kISpAxisMiddle;
+        m[2] = (UInt32)kISpPadIdle;
+    }
     return noErr;
 }
 

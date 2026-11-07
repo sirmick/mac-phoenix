@@ -13,16 +13,24 @@
 #include <SegmentLdr.h>
 
 #include <rsys/segment.h>
-#include <file/fsm.h>
+#include <rsys/process.h>
+#include <ResourceMgr.h>
+#include <hfs/hfs.h>
 
 using namespace Executor;
 
 /* MacPhoenix: power off ends the machine, every process with it (with
    several processes, ExitToShell would only end the caller). Shutdown
-   procs are not run (ShutDwnInstall is unimplemented). */
+   procs are not run (ShutDwnInstall is unimplemented). Resource files are
+   closed (changed maps written) and every volume unmounted, as ExitToShell
+   does: a DOS disk's file system writes back, HFS volumes are flushed.
+   The other processes' resource files are written first, as their
+   ending would. */
 void Executor::C_ShutDwnPower()
 {
-    ROMlib_fsm_unmount_all(); /* a DOS disk's file system writes back */
+    ROMlib_update_other_processes_resource_files();
+    CloseResFile(0);
+    ROMlib_OurClose();
     ROMlib_exit = true;
     fprintf(stderr, "[Executor] ShutDwnPower: powering off\n");
     fflush(nullptr);
@@ -38,7 +46,9 @@ void Executor::C_ShutDwnPower()
    it starts the child again, as a ROM machine reboots. */
 void Executor::C_ShutDwnStart()
 {
-    ROMlib_fsm_unmount_all();
+    ROMlib_update_other_processes_resource_files();
+    CloseResFile(0);
+    ROMlib_OurClose();
     ROMlib_exit = true;
     fprintf(stderr, "[Executor] ShutDwnStart: restarting\n");
     fflush(nullptr);

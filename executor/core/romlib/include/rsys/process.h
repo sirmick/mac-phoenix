@@ -125,6 +125,9 @@ extern bool ROMlib_process_click_taken(EventRecord *evt);
    launched later. */
 extern bool ROMlib_in_system_mode();
 extern bool ROMlib_system_resource_file_p(INTEGER rn);
+/* Writes every other running process's own resource maps (UpdateResFile on
+   each file above the shared system part of its chain): shutdown. */
+extern void ROMlib_update_other_processes_resource_files();
 extern void ROMlib_system_resource_file_opened(INTEGER rn);
 extern void ROMlib_system_resource_file_closed(INTEGER rn);
 /* A pending suspend/resume event for the current process. */

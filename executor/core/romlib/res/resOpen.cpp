@@ -473,14 +473,35 @@ Executor::ROMlib_mgetres2(resmaphand map, resref *rr)
 
 resmaphand Executor::ROMlib_rntohandl(INTEGER rn, Handle *pph) /* INTERNAL */
 {
-    resmaphand map, ph;
+    resmaphand map = nullptr, ph;
 
     ph = 0;
-    WALKMAPTOP(map)
-    if((*map)->resfn == rn)
-        break;
-    ph = map;
-    EWALKMAP()
+    /* MacPhoenix: the chain is walked by guest address, and ends at a link
+       outside memory (its handle or master pointer) as at the end of the
+       chain, with a line in the log. THINK Project Manager's UseResFile,
+       in an Apple event handler, read such a link in the tab (a wasm
+       out-of-bounds access); not reproduced natively. */
+    for(uint32_t h = ptr_to_longint((Handle)LM(TopMapHndl)); h;)
+    {
+        uint32_t mp = 0;
+        bool link_mapped = syn68k_is_guest_addr_mapped(h, sizeof(GUEST<resmapptr>));
+        if(!link_mapped || !(mp = READUL(h))
+           || !syn68k_is_guest_addr_mapped(mp, sizeof(resmap)))
+        {
+            fprintf(stderr, "[bad handle] resource map chain: link $%08X after file %d %s\n",
+                    h, ph ? (int)(*ph)->resfn : 0,
+                    link_mapped ? "with a bad master pointer" : "outside memory");
+            break;
+        }
+        resmaphand m = ptr_from_longint<resmaphand>(h);
+        if((*m)->resfn == rn)
+        {
+            map = m;
+            break;
+        }
+        ph = m;
+        h = READUL(mp + offsetof(resmap, nextmap));
+    }
 
     /* MacPhoenix: on a Mac the System file's reference number is always
        2, and code says so (MPW Shell's WDEF does UseResFile(2) to reach
