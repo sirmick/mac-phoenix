@@ -47,6 +47,15 @@ target_compile_options(executor-desktop PRIVATE ${EXECUTOR_COMMON_FLAGS})
 target_compile_features(executor-desktop PRIVATE cxx_std_17)
 phoenix_exempt_from_hardening(executor-desktop)
 
+# A Linux AppImage (tools/desktop/appimage.sh: linuxdeploy and its Qt
+# plugin, fetched once): BUILD/Executor-x86_64.AppImage
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    add_custom_target(executor-desktop-appimage
+        COMMAND ${PROJECT_SOURCE_DIR}/tools/desktop/appimage.sh ${CMAKE_BINARY_DIR} ${CMAKE_BINARY_DIR}
+        DEPENDS executor-desktop
+        USES_TERMINAL)
+endif()
+
 # Offscreen to the Finder (executor/tests/desktop_finder.sh): Executor's
 # own System, and Apple's 7.6.1 from the web library with a disk mounted and
 # written through its overlay (skipped when the library isn't there).

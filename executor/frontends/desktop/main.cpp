@@ -44,6 +44,8 @@
 #include <QDateTime>
 #include <QDir>
 #include <QFileInfo>
+#include <QFontDatabase>
+#include <QFontInfo>
 #include <QStandardPaths>
 
 #include <cmath>
@@ -73,6 +75,27 @@ int main(int argc, char **argv)
     QApplication::setOrganizationName("MacPhoenix");
     QApplication::setApplicationDisplayName("Executor");
     QApplication app(argc, argv);
+    /* A system with no fonts (a server, a bare container): the ones the
+       package carries (tools/desktop/appimage.sh: share/executor/fonts
+       beside bin/) */
+    QDir fonts(QCoreApplication::applicationDirPath() + "/../share/executor/fonts");
+    QStringList systemFonts = QFontDatabase::families();
+    if(fonts.exists() && (systemFonts.isEmpty() || !systemFonts.contains(QFontInfo(QApplication::font()).family())))
+    {
+        QString family;
+        for(const QString &f : fonts.entryList({ "*.ttf", "*.otf" }, QDir::Files))
+        {
+            QStringList added = QFontDatabase::applicationFontFamilies(QFontDatabase::addApplicationFont(fonts.filePath(f)));
+            if(family.isEmpty() && !added.isEmpty())
+                family = added[0];
+        }
+        if(!family.isEmpty())
+        {
+            QApplication::setFont(QFont(family));
+            fprintf(stderr, "[desktop] no system fonts (%d families): %s\n", (int)systemFonts.size(),
+                    family.toLocal8Bit().constData());
+        }
+    }
 
     /* the command line: ours, and this run's settings */
     QStringList args = app.arguments().mid(1);
@@ -122,6 +145,8 @@ int main(int argc, char **argv)
                    "                 [--request \"OP ARG\"]... [APP]\n");
             return 0;
         }
+        else if(!a.startsWith('-') && Disks::isImage(a) && QFileInfo(a).isFile())
+            disks << QFileInfo(a).absoluteFilePath(), disksSet = true;  /* opened (the desktop entry's %F) */
         else
             passThrough << a;
     }

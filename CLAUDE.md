@@ -98,6 +98,7 @@ tools/executor/grid_compare.py ~/storage/executor-grid/8.6-r2 ~/storage/executor
 ./build/executor-desktop [--system ~/storage/web-library/boot-8.6.img --ppc]
 QT_QPA_PLATFORM=offscreen ./build/executor-desktop --data /tmp/d --screenshot s.png --quit
 ctest --test-dir build -R executor.desktop
+cmake --build build --target executor-desktop-appimage   # Linux AppImage (tools/desktop/appimage.sh; --test runs it in debian:stable)
 
 # Executor as WebAssembly (docs/executor/DIRECTION.md, W1): emsdk in ~/emsdk
 source ~/emsdk/emsdk_env.sh
