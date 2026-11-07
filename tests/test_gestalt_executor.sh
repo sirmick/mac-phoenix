@@ -12,6 +12,7 @@
 #     7.6.1      the 68k probe on 7.6.1 against the Quadra 650's
 #     7.6.1-ppc  the PowerPC probe with --executor-ppc against the G3's 7.6.1
 #     8.6        the PowerPC probe on 8.6 against the G3's
+#   GESTALT_OUT=FILE keeps the probe's whole output there.
 set -uo pipefail
 
 CONFIG="$1"; shift
@@ -24,16 +25,18 @@ while [[ $# -gt 0 ]]; do
 done
 DIR="$(cd "$(dirname "$0")" && pwd)"
 G="$DIR/guest/gestalt"
-KEYS="mach proc cput sysa fpu_ mmu_ addr pgsz pclk bclk nreg pop! micn kbd_ vers nmgr rsrc icon"
+KEYS="mach proc cput sysa fpu_ mmu_ addr pgsz pclk bclk nreg hdwr pop! micn kbd_ vers nmgr rsrc icon ditl misc sysu"
 case "$CONFIG" in
-    7.6.1)     ARGS=(--os-version 7.6.1); APP="$G/GProbe68k.bin"; REF="$G/ref/quadra-7.6.1.txt"; SAME_AS="" ;;
+    7.6.1)     ARGS=(--os-version 7.6.1); APP="$G/GProbe68k.bin"; REF="$G/ref/quadra-7.6.1.txt"; SAME_AS=""
+               KEYS+=" lmem" ;;  # Executor's low memory is the Quadra's 0x2000 (the G3's 0x3000)
     7.6.1-ppc) ARGS=(--os-version 7.6.1 --executor-ppc); APP="$G/GProbePPC.bin"; REF="$G/ref/g3-7.6.1.txt"; SAME_AS="" ;;
-    8.6)       ARGS=(--image 8.6 --executor-ppc); APP="$G/GProbePPC.bin"; REF="$G/ref/g3-8.6.txt"; SAME_AS="" ;;
+    8.6)       ARGS=(--image 8.6 --executor-ppc); APP="$G/GProbePPC.bin"; REF="$G/ref/g3-8.6.txt"; SAME_AS=""
+               KEYS+=" cpuf dlog cntl" ;;
     *) echo "Unknown config: $CONFIG"; exit 1 ;;
 esac
 
 KEEP="$(mktemp -d "${TMPDIR:-/tmp}/gestalt-$CONFIG-XXXXXX")"
-trap 'rm -rf "$KEEP"' EXIT
+trap '[[ -n "${GESTALT_OUT:-}" && -f "$KEEP/gestalt.txt" ]] && cp "$KEEP/gestalt.txt" "$GESTALT_OUT"; rm -rf "$KEEP"' EXIT
 bash "$DIR/test_guest_suite.sh" --backend executor "${ARGS[@]}" --app "$APP" \
     --results gestalt.txt --network none --timeout 150 --port "$PORT" --keep-dir "$KEEP" \
     > "$KEEP/run.log" 2>&1
