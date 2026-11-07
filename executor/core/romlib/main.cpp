@@ -85,14 +85,13 @@
 #include <iostream>
 
 #ifdef _WIN32
-/* kernel32 (Windows 8 on), declared here rather than with <windows.h>,
-   whose macros clash with Toolbox names */
-extern "C" __declspec(dllimport) void __stdcall GetCurrentThreadStackLimits(unsigned long long *lo,
-                                                                         unsigned long long *hi);
-extern "C" __declspec(dllimport) void *__stdcall VirtualAlloc(void *addr, size_t size, unsigned long type,
-                                                            unsigned long protect);
-extern "C" __declspec(dllimport) int __stdcall VirtualProtect(void *addr, size_t size, unsigned long protect,
-                                                            unsigned long *old);
+/* kernel32's thread stack and memory calls (Windows 8 on), from their own
+   API-set headers rather than <windows.h>, whose macros clash with
+   Toolbox names (DrawText, InsertMenu, ...) */
+#include <windef.h>
+#include <processthreadsapi.h>
+#include <memoryapi.h>
+#undef pascal  /* minwindef.h: a calling convention; a name in Executor */
 #endif
 
 using namespace Executor;
@@ -578,13 +577,13 @@ int executor_main_entry(int argc, char **argv)
     pthread_attr_setstacksize(&attr, stackSize);
     pthread_t executorThread;
     pthread_create(&executorThread, &attr, [](void *arg) -> void * {
-        unsigned long long lo, hi;
+        ULONG_PTR lo, hi;
         GetCurrentThreadStackLimits(&lo, &hi);
         /* all of it committed: the guest reads its frames anywhere, not
            only down from the guard page as the stack grows */
-        VirtualAlloc((void *)lo, hi - lo, 0x1000 /* MEM_COMMIT */, 0x04 /* PAGE_READWRITE */);
-        unsigned long old;
-        VirtualProtect((void *)lo, hi - lo, 0x04 /* PAGE_READWRITE: the guard page's off */, &old);
+        VirtualAlloc((void *)lo, hi - lo, MEM_COMMIT, PAGE_READWRITE);
+        DWORD old;
+        VirtualProtect((void *)lo, hi - lo, PAGE_READWRITE /* the guard page's off */, &old);
         syn68k_set_stack_window((const void *)lo, hi - lo);
         (*(std::function<void()> *)arg)();
         return nullptr;

@@ -55,6 +55,7 @@ log=$(ls "$WORK"/own/logs/executor-*.log 2>/dev/null | head -1)
 check "log file in the data folder (${log#$WORK/})" test -s "$log"
 check "the log's first line is the version" bash -c "head -1 '$log' | grep -q '^\[desktop\] Executor [^ ]* on Windows'"
 check "UTF-8 code page" grep -q 'code page 65001' "$WORK/own.txt"
+check "no crash report files from a run that didn't crash" bash -c "! ls '$WORK'/own/logs/crash-* > /dev/null 2>&1"
 
 if [ -n "$SYSTEM" ]; then
     echo "== $(basename "$SYSTEM") $PPC"
@@ -68,6 +69,11 @@ wine_run "$EXE --data 'Z:\\work\\crash' --crash-test --timeout 60 > /work/crash.
 check "crash report .txt" bash -c "ls '$WORK'/crash/logs/crash-*.txt > /dev/null 2>&1"
 check "crash report .dmp" bash -c "ls '$WORK'/crash/logs/crash-*.dmp > /dev/null 2>&1"
 check "the report names the access violation" bash -c "grep -q 'access violation' '$WORK'/crash/logs/crash-*.txt"
+
+echo "== --crash-test-heap (the process heap locked, as a crash inside malloc leaves it)"
+wine_run "$EXE --data 'Z:\\work\\crashheap' --crash-test-heap --timeout 120 > /work/crashheap.txt 2>&1"
+check "heap locked: the text report still comes" bash -c "grep -q 'access violation' '$WORK'/crashheap/logs/crash-*.txt"
+check "heap locked: the CRASH line in the log" bash -c "grep -q 'CRASH: access violation' '$WORK'/crashheap/logs/executor-*.log"
 
 echo "== executor-standalone.exe"
 # one cookie jar: the first browser claims the server (its cookie), others get 403

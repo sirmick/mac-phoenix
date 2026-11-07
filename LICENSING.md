@@ -26,7 +26,7 @@ falls under below, not the GPL of the whole.
 | `src/config/`, `src/ipc/`, `src/main.cpp` | configuration, parent/child IPC, entry point |
 | `src/drivers/` (except the GPL files below) | video/audio pipelines and encoders, MacBrowser host side, socket ethernet, timer, adapters |
 | `src/core/`: `boot_progress`, `command_bridge`, `cpu_context`, `emulator_init`, `emulator_subprocess`, `executor_systems`, `guest_ui`, `mac_roman`, `network_info`, `snapshot`, `text_feed`, `atrap_dispatchers.inc` | boot tracking, the command bridge, `/api/ui` and `/api/text`, snapshots |
-| `src/common/`: `crash_handler_init.cpp`, `guest/`, `guest_watch.cpp`, `platform.cpp`; in `include/`: `bridge_paths.h`, `config.h`, `crash_handler_init.h`, `guest_bridge.h`, `guest_watch.h`, `m68k_registers.h`, `MacBrowser.h`, `memory_access.h`, `mon.h`, `platform.h`, `ppc_boundary_trace.h`, `video_modes.h` | the Platform API and shared host code |
+| `src/common/`: `crash_handler_init.cpp`, `guest/`, `guest_watch.cpp`, `platform.cpp`; in `include/`: `backtrace.h`, `bridge_paths.h`, `config.h`, `crash_handler_init.h`, `guest_bridge.h`, `guest_watch.h`, `m68k_registers.h`, `MacBrowser.h`, `memory_access.h`, `mon.h`, `platform.h`, `ppc_boundary_trace.h`, `video_modes.h` | the Platform API and shared host code |
 | `src/cpu/core/` (except `uae_core.cpp`), `src/cpu/cpu_m68k.*`, `src/cpu/cpu_trace.*`, `src/cpu/emulop_c_wrapper.cpp` | `cpu::Core`, `GuestMemory`, the 68k ROM machine on it |
 | `src/cpu/mame/`: `mame_68k_core.cpp`, `mame_ppc_core.cpp`, `shim/`, `CMakeLists.txt` | MAME cores as `cpu::Core`s, the stand-in for MAME's framework |
 | `client/` (code) | the browser UI |

@@ -65,5 +65,6 @@ PowerPC ones (Settings > PowerPC) run as on Linux. Not yet on Windows:
 networking from inside the Mac (MacTCP/Open Transport have no network in
 this build). Sound uses Windows' default output device.
 
-Licences: licenses\ (Qt is LGPL-3.0; MacPhoenix GPL-2.0-or-later, Executor
-MIT). SHA256SUMS lists every file's checksum.
+Licences: licenses\ (Executor and MacPhoenix's code MIT, the MAME CPU cores
+BSD-3-Clause, Qt LGPL-3.0; licenses\README.txt says what is what).
+SHA256SUMS lists every file's checksum.

@@ -35,7 +35,7 @@
 #include <cstring>
 #include <unistd.h>
 #include <guest_watch.h>
-#include <crash_handler.h>
+#include <backtrace.h>
 #include <base/trap_history.h>
 #include <base/trapglue.h>
 

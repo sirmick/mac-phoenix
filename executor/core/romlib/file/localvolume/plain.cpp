@@ -52,7 +52,7 @@ size_t PlainDataFork::getEOF()
 void PlainDataFork::setEOF(size_t sz)
 {
 #if defined(_WIN32)
-    chsize(fd, sz);
+    _chsize_s(fd, (long long)sz);
 #else
     ftruncate(fd, sz);
 #endif
