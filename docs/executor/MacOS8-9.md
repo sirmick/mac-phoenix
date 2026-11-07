@@ -4,7 +4,9 @@ Executor runs Apple's 7.5.5 and 7.6.1 System Folders with its own Toolbox
 (`--executor-system`). Mac OS 8.6 and 9.0.4 are PowerPC-only, but nothing
 in the design rules them out: Executor is the Toolbox (no Mac OS ROM, no
 nanokernel), and PowerPC code runs on mame-ppc (`--executor-ppc`). This
-is where they stand (2026-10-28) and the work, in order.
+is where they stood (2026-10-28) and the work, in order; 8.6 runs
+since (SCOREBOARD.md), and what is open for 9.0.4 is in "9.0.4: what is
+open" near the end.
 
 ```bash
 cp ~/storage/images/8.6.img ~/storage/images/os86-scratch.img    # a scratch copy

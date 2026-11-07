@@ -33,9 +33,8 @@ differs: copy it after editing).
 
 The schema's own keywords, beside the standard ones:
 
-- `x-scope`: `page` (the tab's) or `server` (executor/server's own). A
-  hosted server offers and keeps only the page's; its own settings are
-  its `server.toml`. Without a server, the page's only, in the browser.
+- `x-scope`: `page` (the tab's, and the desktop application's) or
+  `server` (executor/server's own).
 - `x-apply`: `live` (at once), `executor` (Executor restarts: the dialog
   and the bar say "Restart Executor to apply" until it has), `server` (at
   the server's next start: `restart_needed`).
@@ -205,5 +204,3 @@ every 10 s (it can wait for a garbage collection): 331 MB there.
   (Disks.md); uploaded images are not part of the settings (they are files).
 - Network: the relay settings are the Go server's; the tab itself has no
   network setting (it uses the relay whenever the server offers one).
-- Hosted: the owner edits the server's settings in `server.toml`, not in
-  the dialog.

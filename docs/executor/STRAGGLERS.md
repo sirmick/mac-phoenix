@@ -1,9 +1,12 @@
-# Executor stragglers — where we are (2026-10-27)
+# Executor stragglers
 
-The list agreed after the Finder scripting work. Speech, QuickTime and
-networking are punted until later; everything else is in scope.
+Numbered problems and their fixes; each row's State is kept current. The
+list was agreed after the Finder scripting work, and the order below on
+2026-10-25 (as it stood on 2026-10-27). What comes next now is M2
+(PLAN.md, "The product's milestones"); new problems still get a number
+here.
 
-**Order of work (agreed 2026-10-25)** and where it stands:
+**Order of work (agreed 2026-10-25)**, as of 2026-10-27:
 
 1. Rechecks 46, 53, 50 — done.
 2. Test reliability 35, 33, 14 — not reproduced; 55 (`drag_executor`, about
