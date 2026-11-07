@@ -169,6 +169,10 @@ else()
     target_compile_definitions(executor_overlay_tests PRIVATE EXECUTOR_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/..")
     target_compile_features(executor_overlay_tests PRIVATE cxx_std_17)
     phoenix_exempt_from_hardening(executor_overlay_tests)
+    if(EMSCRIPTEN)
+        # the fixtures are the host's files, as executor_tests' are
+        target_link_options(executor_overlay_tests PRIVATE -sNODERAWFS=1)
+    endif()
     gtest_discover_tests(executor_overlay_tests
         TEST_PREFIX "executor."
         PROPERTIES LABELS executor
