@@ -25,7 +25,8 @@ TN1189 (partitions). The File Manager's volume, the System sideload and
 `hfsplus_dump` use it.
 
 - `image.h`: what it reads from, at 64-bit offsets (`pread`; in the
-  browser the same call reaches WORKERFS/OVERLAYFS files). Executor's old
+  browser the same call reaches the tab's OVERLAYFS files, over a
+  server disk's ranges or an uploaded File). Executor's old
   disk I/O (`ROMlib_readwrite`) takes 32-bit offsets.
 - `reader.h`: `volumeStarts` (every `Apple_HFS`/`Apple_HFSX` partition of
   an Apple partition map, else offset 0), `isHFSPlus`, `Reader::open` (a

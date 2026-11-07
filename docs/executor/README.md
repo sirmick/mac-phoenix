@@ -1,13 +1,16 @@
 # Executor in MacPhoenix
 
-MacPhoenix's `--backend executor` runs classic Mac applications on
-[Executor 2000](https://github.com/autc04/executor), a reimplementation of
-the Mac Toolbox in C++, without a Mac ROM. MacPhoenix took Executor's
-Toolbox ("romlib"), put it on its own CPU cores and front end, and has since
-grown it to run Apple's 7.5.5 Finder and System on top of it.
+Executor runs classic Mac applications, 68k and PowerPC, on a
+reimplementation of the Mac Toolbox in C++, without a Mac ROM. MacPhoenix
+took [Executor 2000](https://github.com/autc04/executor)'s Toolbox
+("romlib"), put it on MAME's CPU cores and its own front ends, and has
+since grown it to run Apple's System 7.5.5, 7.6.1 and Mac OS 8.6 System
+Folders and Finder (9.0.4 under way) as well as its own System.
 
-This page is the entry point: where the code came from, what MacPhoenix
-changed, its licence, and where the rest is documented.
+This page is the technical index: where the code came from, what
+MacPhoenix changed, its licence, and every document here. Running and
+building it (the desktop application, the tab and its server,
+`mac-phoenix --backend executor`): [executor/README.md](../../executor/README.md).
 
 ## Origin
 
@@ -30,7 +33,8 @@ changed, its licence, and where the rest is documented.
 | `tests/` | `executor/tests/` |
 | `syn68k/` (submodule): the 68k CPU | `executor/core/cpu/syn68k_common.cpp`: the syn68k API on a `cpu::Core` (MAME's 68000) |
 | `PowerCore/` (submodule): the PowerPC CPU | `executor/core/cpu/PowerCore.*`: the same interface on MAME's PowerPC recompiler |
-| `src/config/front-ends/{qt,x,sdl,sdl2,wayland,...}` | `executor/frontends/`: `headless/` (upstream's), `phoenix/` (video, cursor, sound, the `executor_host` API; `executor_child.cpp`, mac-phoenix's IPC child), `wasm/` (the tab's module) |
+| `src/config/front-ends/{qt,x,sdl,sdl2,wayland,...}` | `executor/frontends/`: `headless/` (upstream's), `phoenix/` (video, cursor, sound, the `executor_host` API; `executor_child.cpp`, mac-phoenix's IPC child), `wasm/` (the tab's module), `desktop/` (the Qt 6 desktop application) |
+| | ours alone: `executor/host/` (session code the tab and the desktop share), `executor/web/` (the tab), `executor/server/` (the Go server) |
 | `cxmon/`, `lmdb/` | not imported |
 
 ## Licence
@@ -44,16 +48,18 @@ cores are BSD-3-Clause. The rest of MacPhoenix's licensing:
 
 ## What MacPhoenix changed
 
-`tools/executor-upstream-diff.sh` (today):
+`tools/executor-upstream-diff.sh` (2026-11-07):
 
 | | new files | removed | changed | lines |
 |---|---|---|---|---|
-| `romlib/` | 45 | 65 | 126 | +20,419 −10,873 |
-| `multiversal/` | 3 | 0 | 28 | +2,548 −24 |
-| `tests/` | 7 | 0 | 8 | +1,067 −33 |
+| `core/romlib/` | 397 | 7 | 210 | +97,946 −4,745 |
+| `frontends/` | 43 | 61 | 2 | +88,249 −8,346 |
+| `core/multiversal/` | 24 | 0 | 56 | +29,580 −119 |
+| `tests/` | 74 | 0 | 11 | +8,370 −40 |
 
-The removals are the dropped front ends and the cxmon debugger. Changed
-code is marked `MacPhoenix:` in comments (about 290 places in romlib). The changes
+The front ends' removals are upstream's qt/x/sdl/wayland ones; their
+additions include vendored single-header libraries (miniaudio). Changed
+code is marked `MacPhoenix:` in comments (about 880 places in romlib). The changes
 to upstream files are described in
 [PLAN.md, "Changes to imported Executor code"](PLAN.md#changes-to-imported-executor-code);
 `tools/executor-upstream-diff.sh --patch` prints the complete diff.
@@ -76,15 +82,21 @@ to upstream files are described in
 
 | Area | Files | What |
 |---|---|---|
-| Process Manager | `process.cpp` (257 → 3,412 lines), `include/rsys/process.h` | several processes side by side, each on its own host thread; partitions, layers, high-level events, the Thread Manager, desk accessories in DA Handler processes |
-| Apple's System file | `res/resPolicy.cpp`, `res/resPrivate.cpp`, `sysroutines.cpp`, `extensions.cpp` | runs on Apple's 7.5.5 System file: chooses Apple's or Executor's version of each System resource, private ResourceDispatch selectors, the low-memory routines 7.5.5 expects, allowed INITs/cdevs at startup |
+| Process Manager | `process.cpp`, `include/rsys/process.h` | several processes side by side, each a minicoro coroutine on Executor's one host thread (DIRECTION.md, section 2); partitions, layers, high-level events, the Thread Manager, desk accessories in DA Handler processes |
+| Apple's System file | `res/resPolicy.cpp`, `res/resPrivate.cpp`, `sysroutines.cpp`, `extensions.cpp` | runs on Apple's 7.5.5–8.6 System files: chooses Apple's or Executor's version of each System resource, private ResourceDispatch selectors, the low-memory routines the System expects, allowed INITs/cdevs at startup |
 | Apple's packages in place of Executor's | `drag.cpp`, `helppkg.cpp`, `stdfilepkg.cpp`, `textservices.cpp`, `quickdraw/qSaveBits.cpp` | the Drag Manager, Help Manager, Standard File and Text Services from the System file, with the private calls they need |
 | Component Manager | `component.cpp` | `$A82A`; System file, extension and `thng` components |
 | Finder | `finder.cpp`, `menu/sysmenu.cpp`, `alias.cpp`, `icon.cpp`, `quickdraw/displays.cpp`, `desk.cpp` | the Desktop Manager, Apple/Help/Application menus, alias resolution, Icon Utilities and the Display Manager calls Finder makes |
-| Networking | `mactcp/mactcp.cpp`, `mactcp/dnr.cpp`, `opentransport/` | MacTCP on host sockets (async calls, the resolver); Open Transport 1.1's 68k client API in C++ (on by default, `--no-executor-ot` to leave it out; [OpenTransport.md](OpenTransport.md)) |
+| Networking | `mactcp/mactcp.cpp`, `mactcp/dnr.cpp`, `opentransport/` | MacTCP on host sockets (async calls, the resolver); Open Transport's client API in C++ for 68k (ASLM) and PowerPC clients (on by default, `--no-executor-ot` to leave it out; [OpenTransport.md](OpenTransport.md)); all through `rsys/hostnet.h`: host sockets natively, the server's relay in the tab |
 | Devices | `hostdisk.cpp`, `vdriver/videodrvr.cpp`, `sound/snddispatch.cpp`, `frontends/phoenix/phoenix_sound.cpp` | `.Disk` for host-folder volumes, `.Display`, the Sound Manager's dispatch groups and sound output |
 | Debugging | `base/trap_history.*`, `mman/whatis.*` | the last traps and host memory moves for crash reports; what lives at a guest address |
-| PowerPC | `cfm.cpp`, `base/builtinlibs.cpp`, `base/functions.impl.h`, `base/cpu.cpp` | the PowerCore wiring, unresolved-import logging, upstream's PPC parameter passing |
+| PowerPC | `cfm.cpp`, `base/builtinlibs.cpp`, `base/functions.impl.h`, `base/cpu.cpp`, `clib/` | the PowerCore wiring, unresolved-import logging, upstream's PPC parameter passing; StdCLib and MathLib in C++ ([PPCLibs.md](PPCLibs.md)) |
+| CFM-68K | `cfm68k_glue.cpp`, `cfm.cpp` | 68k code fragments on Executor's own Code Fragment Manager, no Enabler ([CFM68K.md](CFM68K.md)) |
+| File systems | `file/hfsplusvolume.cpp`, `file/fsref.cpp`, `file/fsm.cpp`, `hfs/image_io.h` | HFS+ volumes and the FSRef calls ([HFSPlus.md](HFSPlus.md)); the File System Manager, so PC Exchange mounts DOS disks ([FSM.md](FSM.md)); disk images through an opener (overlays in the tab and the desktop) |
+| Mac OS 8 | `appearance*.cpp`, `iconservices.cpp`, `collections.cpp`, `nameregistry.cpp`, `quickdraw/displays.cpp` | the Appearance Manager and the platinum look ([Appearance.md](Appearance.md)), Icon Services ([IconServices.md](IconServices.md)), the Collection Manager ([CollectionManager.md](CollectionManager.md)), the Name Registry, live display modes ([DisplayModes.md](DisplayModes.md)) |
+| Drawing at 2x | `hidpi/` | text and chrome from outlines and shapes over the 1x screen, GWorld shadows ([HiDPI.md](HiDPI.md)) |
+| Memory | `mman/fullheap.cpp` | Executor's host code on a full application heap ([FullHeap.md](FullHeap.md)) |
+| Games | `inputsprocket.cpp` | InputSprocket |
 
 ### Application special cases
 
@@ -182,16 +194,52 @@ Executor` / `not-for: Executor`: `TMTask`'s `tmAddr`, `GetFrontProcess`,
 
 ## Documentation
 
+Plans and where things stand:
+
 | Document | What |
 |---|---|
-| [PLAN.md](PLAN.md) | design (the CPU facades, "Apple's code or ours"), milestones M0–M4 and P, working notes, every change to imported code |
-| [DIRECTION.md](DIRECTION.md) | where it goes: MAME cores, process switching, WebAssembly, PowerPC, A/UX |
-| [STRAGGLERS.md](STRAGGLERS.md) | open problems and their fixes |
-| [MEMORY_MAP.md](MEMORY_MAP.md) | the System 7 memory map Executor rebuilds, from snapshots of real boots |
-| [OpenTransport.md](OpenTransport.md) | Open Transport on Executor |
-| [LIBRARIES.md](LIBRARIES.md) | plan: ASLM and CFM libraries and Component Manager calls in the definitions |
-| [../MPW.md](../MPW.md) | MPW and ToolServer running headless on Executor |
+| [PLAN.md](PLAN.md) | design (the CPU facades, "Apple's code or ours"), the core's milestones (M0–M4, P), the product milestones (M1, P1, P2 done; M2 next), working notes, every change to imported code |
+| [DIRECTION.md](DIRECTION.md) | why a C++ Toolbox, and the architecture steps: MAME cores, minicoro processes, WebAssembly and the relay, PowerPC, A/UX |
+| [M1.md](M1.md) | M1's audit: every target application × System, the tab cells that cover it, the last result |
+| [SCOREBOARD.md](SCOREBOARD.md) | the target applications on Executor (7.6.1, 8.6; native and the tab) beside the ROM machines |
+| [STRAGGLERS.md](STRAGGLERS.md) | numbered open problems and their fixes |
+| [APPLE-DISKS.md](APPLE-DISKS.md) | every item on Apple's 7.5.5 and 7.6.1 disks opened on Executor: the fix list, the extension policy, the cut boot disks |
+| [MacOS8-9.md](MacOS8-9.md) | Mac OS 8.6 and 9.0.4: what the Finder needed, the 8.6 grid, the work list; "9.0.4: what is open" |
+| [Speed.md](Speed.md) | Executor 68k and PowerPC, native and in the tab, against the ROM machines; MacPhoenixBench; the MMU's cost |
 
-Running it: `./build/mac-phoenix --backend executor` (Executor's own
-System), `--executor-system 7.5.5.img` (Apple's System and Finder),
-`--core mame-68k`, `--executor-ppc`; tests: `ctest -L executor`.
+The tab, its server and the desktop application:
+
+| Document | What |
+|---|---|
+| [Standalone.md](Standalone.md) | `executor-standalone`: building, a release, flags, the claim, the API, start-up costs, tests |
+| [WebSite.md](WebSite.md) | putting the site up: the tab's build, the library disks, systemd, HTTPS, backups, the site's cells |
+| [Settings.md](Settings.md) | the settings document and its schema, the API, the dialog, how the page applies them |
+| [Disks.md](Disks.md) | the tab's Disks panel, disks in and out live, System Folder additions |
+| [DisplayModes.md](DisplayModes.md) | the screen's resolution changed live (Display Manager, fit to window) |
+| [HiDPI.md](HiDPI.md) | drawing at 2x: the design, phases 1, 2 and 4 as built, in the tab too |
+| [../../executor/frontends/desktop/README.md](../../executor/frontends/desktop/README.md) | the desktop application: use, data folder, command line, packaging (AppImage, Windows zip, macOS status) |
+
+Subsystems:
+
+| Document | What |
+|---|---|
+| [MEMORY_MAP.md](MEMORY_MAP.md) | the System 7 memory map Executor rebuilds, from snapshots of real boots |
+| [FullHeap.md](FullHeap.md) | a full application heap: what the Mac does, Executor's rule |
+| [OpenTransport.md](OpenTransport.md) | Open Transport in C++, 68k and PowerPC clients, the configuration database |
+| [CFM68K.md](CFM68K.md) | CFM-68K applications on Executor's Code Fragment Manager |
+| [PPCLibs.md](PPCLibs.md) | StdCLib and MathLib for PowerPC, in C++ |
+| [LIBRARIES.md](LIBRARIES.md) | ASLM and CFM libraries and Component Manager calls in the definitions |
+| [HFSPlus.md](HFSPlus.md) | HFS+ volumes and the FSRef calls |
+| [FSM.md](FSM.md) | the File System Manager; PC Exchange and DOS disks |
+| [Appearance.md](Appearance.md) | the Appearance Manager: themes, brushes, the platinum drawing |
+| [IconServices.md](IconServices.md) | Icon Services: behavioural specification |
+| [CollectionManager.md](CollectionManager.md) | the Collection Manager: behavioural specification |
+| [cleanroom/README.md](cleanroom/README.md) | clean-room specifications for parts first worked out from Apple's code |
+
+Tools:
+
+| Document | What |
+|---|---|
+| [PPCTrace.md](PPCTrace.md) | PowerPC breakpoints and traces in a session (`--executor-ppc-break`) |
+| [DiffTest.md](DiffTest.md) | differential probes: Apple's 8/9 libraries against Executor's, key by key |
+| [../MPW.md](../MPW.md) | MPW and ToolServer running headless on Executor |

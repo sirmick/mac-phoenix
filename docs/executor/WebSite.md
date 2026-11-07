@@ -70,6 +70,10 @@ TMPDIR=~/storage/tmp tools/web/make_library.py /srv/executor-web/library
 | `development.img` | 392 MB | MPW, CodeWarrior Pro 4 (IDE 3.2), THINK C 6, THINK Pascal 4.5, HyperCard 2.4.1, MacPerl 5.2, ResEdit 2.1.3, BBEdit Lite 4.1 | 7.6.1, 8.6 |
 | `games-68k.img` | 391 MB | 26 games that run on the 68k side (Lemmings, Maelstrom, Civilization II, Warcraft II, SimTower, Marathon Infinity, Monkey Island, ...) | 7.6.1 |
 | `games-ppc.img` | 521 MB | fat and PowerPC games (Marathon 2, Escape Velocity, EV Nova, Ares, Ferazel's Wand, ...) | 8.6, PowerPC ticked |
+| `tools-8.img` | 25 MB | BBEdit Lite 6.1.2, ResEdit 2.1.3, Resorcerer 2.0, Disk Copy 6.3.3, StuffIt Expander 6.0.1, ZTerm, MacsBug 6.6.3 | 8.6 |
+| `utilities.img` | 9 MB | what the Mac says it is and how fast it runs: Gestalt.Appl, TattleTech, Speedometer, MacBench, ... (Speed.md) | 7.6.1, 8.6 |
+| `internet.img` | 13 MB | MR Browser, Hotline Connect, Serial MReader (the network through the server's relay) | 8.6 |
+| `icons.img` | 22 MB | custom icon collections (The Iconfactory, MacUser's Custom Icon Pack IV, ...) | 7.6.1, 8.6 |
 | `macaddict-*.iso` | 650-675 MB each | MacAddict's cover CDs #16 (Dec 1997), #25 (Sep 1998), #58 (Jun 2001), #63 (Nov 2001), as they came, with cover scans | any |
 
 Whole application folders are copied as installed (`make_disk.py`, both
