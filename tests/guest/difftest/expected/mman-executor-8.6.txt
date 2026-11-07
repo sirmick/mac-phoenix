@@ -1,3 +1,0 @@
-# mman on Executor (8.6 System) against the G3 (8.6): known differences.
-# key-glob<TAB>reason. Remove a line when Executor matches (run.py lists those).
-gworld.w*.rowBytes	NewGWorld: 8.6 pads rowBytes (1 -> 16, 8 -> 16, 80 -> 96, 81 -> 96, 640 -> 656); Executor rounds to 4s

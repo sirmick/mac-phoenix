@@ -144,6 +144,15 @@ static Handle new_gw_pixels(Size size, GWorldFlags flags)
     return NewHandle(size);
 }
 
+/* MacPhoenix: a GWorld's rowBytes as the Mac's NewGWorld makes them: the
+   row's bytes plus a long, rounded up to 16 (difftest mman, section
+   rowbytes: the same on the Quadra's 7.5.5/7.6.1 and the G3's 8.6, any
+   depth, any left edge; 80 -> 96, 640 -> 656) */
+static int gw_row_bytes(int width, int depth)
+{
+    return ((width * depth + 7) / 8 + 4 + 15) & ~15;
+}
+
 QDErr Executor::C_NewGWorld(GUEST<GWorldPtr> *graphics_world_out,
                             INTEGER depth, const Rect *bounds, CTabHandle ctab,
                             GDHandle gw_gd, GWorldFlags flags)
@@ -198,7 +207,7 @@ QDErr Executor::C_NewGWorld(GUEST<GWorldPtr> *graphics_world_out,
 
         gd_pixmap = GD_PMAP(gw_gd);
 
-        row_bytes = ((RECT_WIDTH(bounds) * depth + 31) / 32) * 4;
+        row_bytes = gw_row_bytes(RECT_WIDTH(bounds), depth);
         PIXMAP_SET_ROWBYTES(gd_pixmap, row_bytes);
 
         gd_pixmap_baseaddr = new_gw_pixels(row_bytes * RECT_HEIGHT(bounds), flags);
@@ -291,7 +300,7 @@ QDErr Executor::C_NewGWorld(GUEST<GWorldPtr> *graphics_world_out,
         /* #### the `OpenCPort ()' initialization of `gw' sets the
 	      default depth of `gw_pixmap' to that of the gworld,
 	      which may not match `depth' */
-        row_bytes = ((RECT_WIDTH(bounds) * depth + 31) / 32) * 4;
+        row_bytes = gw_row_bytes(RECT_WIDTH(bounds), depth);
 
         PIXMAP_SET_ROWBYTES(gw_pixmap, row_bytes);
 

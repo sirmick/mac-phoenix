@@ -135,6 +135,36 @@ int main(void)
             }
         }
     }
+    if(SECTION("rowbytes"))
+    {
+        /* NewGWorld's rowBytes by depth and left edge, a width a column */
+        static const short widths[] = { 1, 2, 3, 4, 15, 16, 17, 31, 32, 33, 63, 64, 100, 127, 128, 129, 512 };
+        static const short depths[] = { 1, 2, 4, 8, 16, 32 };
+        static const short lefts[] = { 0, 3, 17 };
+        int d, l;
+        for(d = 0; d < (int)(sizeof depths / sizeof depths[0]); d++)
+            for(l = 0; l < (int)(sizeof lefts / sizeof lefts[0]); l++)
+            {
+                char k[32], v[256];
+                int n = 0;
+                for(i = 0; i < (int)(sizeof widths / sizeof widths[0]); i++)
+                {
+                    GWorldPtr g = NULL;
+                    Rect b;
+                    SetRect(&b, lefts[l], 5, lefts[l] + widths[i], 9);
+                    err = NewGWorld(&g, depths[d], &b, NULL, NULL, 0);
+                    if(err == noErr)
+                    {
+                        n += sprintf(v + n, " %d", (**GetGWorldPixMap(g)).rowBytes & 0x3FFF);
+                        DisposeGWorld(g);
+                    }
+                    else
+                        n += sprintf(v + n, " e%d", err);
+                }
+                sprintf(k, "d%d.l%d", depths[d], lefts[l]);
+                out(k, "%s", v);
+            }
+    }
     probe_close();
     return 0;
 }
