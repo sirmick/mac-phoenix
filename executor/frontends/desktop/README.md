@@ -107,18 +107,42 @@ be stopped and started again. Known limit: there is no guest shutdown, so
 an application's unsaved documents are lost and the Mac isn't told it is
 going (as when a Mac's power is cut after a disk flush).
 
-## Packaging (to do)
+## Packaging
 
-- Linux AppImage: linuxdeploy with its Qt plugin (xcb, wayland, platform
-  themes, image formats); miniaudio dlopens libpulse/libasound, which stay
-  the system's.
-- macOS `.app`: `MACOSX_BUNDLE`, Info.plist (name, icon, `NSHighResolutionCapable`),
-  macdeployqt, codesign and notarisation; the guest memory windows
-  (core/cpu/host/posix) on arm64 macOS (MAP_FIXED, 16 KB pages) and
-  mame-ppc's arm64 back end under the hardened runtime (`MAP_JIT`,
-  `com.apple.security.cs.allow-jit`) need checking.
-- Windows `.exe`: an MSVC or MinGW build of Executor (core/cpu/host has no
-  Windows side yet: VirtualAlloc for the guest windows; pread/pwrite, fsync,
-  `ioctl` uses in core), windeployqt; keys' set 1 table is untested.
-- All: an application icon, a desktop entry / file associations for `.img`
-  and `.dsk`.
+**Linux AppImage** (done): `cmake --build build --target executor-desktop-appimage`
+or `tools/desktop/appimage.sh [BUILD [OUT]]` makes `Executor-x86_64.AppImage`
+(53 MB with `-DEXECUTOR_SKIA=ON`: the binary is 39 MB stripped, Skia and
+Executor's resources in it; Qt and the rest 70 MB before compression) with
+linuxdeploy and its Qt plugin, fetched once into `~/storage/deps/linuxdeploy`.
+Platform plugins: xcb, Wayland and offscreen. It also carries what
+linuxdeploy's excludelist leaves to a desktop system (libglvnd's dispatch
+libraries, X11/xcb/Wayland client libraries, fontconfig, FreeType,
+HarfBuzz) and DejaVu Sans, loaded only when the system has no fonts, so it
+starts on a bare system: `tools/desktop/appimage.sh --test APPIMAGE` runs it
+in a plain `debian:stable` container, offscreen, to Executor's own System's
+Browser. It needs the glibc it was built against or newer (built on
+Debian 13: Debian 13, Ubuntu 25.04 and later; build on an older system for
+older targets). Sound uses the system's libpulse or libasound if present
+(miniaudio loads them), none otherwise.
+
+**macOS `.app`** (not built): `MACOSX_BUNDLE` on the target, an Info.plist
+(name, `executor.svg` as an `.icns`, `NSHighResolutionCapable`, the `.img`
+and `.dsk` document types), `macdeployqt`, codesign and notarisation. To
+check first: the guest memory windows (core/cpu/host/posix) on arm64 macOS
+(fixed mappings, 16 KB pages) and mame-ppc's arm64 back end under the
+hardened runtime (`MAP_JIT`, the `com.apple.security.cs.allow-jit`
+entitlement); Skia's macOS prebuilt; keys use `nativeVirtualKey`
+(untested). The data folder is `~/Library/Application Support/MacPhoenix/Executor`.
+
+**Windows `.exe`** (not built): an MSVC or MinGW build of Executor first:
+core/cpu/host has no Windows side (VirtualAlloc for the guest memory
+windows), and core and host/ use POSIX file calls (pread/pwrite, fsync,
+ftruncate in hfs/image_io.cpp and host/overlay.cpp: `_pread`-style or
+Win32 equivalents behind the same functions); then windeployqt, an `.ico`,
+an installer or a zip. Keys' set 1 table and log_capture's `_pipe`/`_dup2`
+path are untested.
+
+Disk images given on the command line without `--disk` (opened from a
+file manager: the desktop entry's `%F`, `application/x-apple-diskimage`)
+are mounted as `--disk` ones; on macOS and Windows that needs the
+platform's open-file event (`QFileOpenEvent`) too.

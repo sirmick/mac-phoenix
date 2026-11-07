@@ -7,7 +7,12 @@
 #include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QRegularExpression>
 #include <QSaveFile>
+
+#include <algorithm>
+#include <climits>
+#include <cstdio>
 
 #include <cctype>
 #include <cstring>
@@ -167,17 +172,79 @@ QStringList Settings::list(const QString &key) const
     return out;
 }
 
-void Settings::set(const QString &key, const QJsonValue &v)
+/* V against KEY's schema, as far as the server checks a page setting
+   (schema.go validate): type, enum, range, length, pattern, items. Empty:
+   valid. */
+QString Settings::invalid(const QString &key, const QJsonValue &v) const
+{
+    QJsonObject p = property(key);
+    if(p.isEmpty())
+        return "not a setting";
+    QStringList types;
+    QJsonValue t = p.value("type");
+    if(t.isArray())
+        for(const QJsonValue &x : t.toArray())
+            types << x.toString();
+    else
+        types << t.toString();
+    auto is = [&](const QJsonValue &x, const QString &type) {
+        return (type == "string" && x.isString()) || (type == "boolean" && x.isBool())
+               || (type == "array" && x.isArray())
+               || (type == "integer" && x.isDouble() && x.toDouble() == (double)(qint64)x.toDouble());
+    };
+    if(std::none_of(types.begin(), types.end(), [&](const QString &type) { return is(v, type); }))
+        return "a " + types.join(" or ");
+    if(p.contains("enum") && !p.value("enum").toArray().contains(v))
+        return "not one of its choices";
+    if(v.isDouble())
+    {
+        if(p.contains("minimum") && v.toDouble() < p.value("minimum").toDouble())
+            return "below its minimum";
+        if(p.contains("maximum") && v.toDouble() > p.value("maximum").toDouble())
+            return "above its maximum";
+    }
+    if(v.isString())
+    {
+        if(p.contains("maxLength") && v.toString().size() > p.value("maxLength").toInt())
+            return QString("longer than %1").arg(p.value("maxLength").toInt());
+        if(p.contains("pattern") && !QRegularExpression(p.value("pattern").toString()).match(v.toString()).hasMatch())
+            return "not of its form";
+    }
+    if(v.isArray())
+    {
+        QJsonArray a = v.toArray();
+        if(p.contains("maxItems") && a.size() > p.value("maxItems").toInt())
+            return QString("more than %1 items").arg(p.value("maxItems").toInt());
+        QJsonObject items = p.value("items").toObject();
+        for(const QJsonValue &x : a)
+            if(items.value("type").toString() == "string"
+               && (!x.isString() || x.toString().size() > items.value("maxLength").toInt(INT_MAX)
+                   || x.toString().size() < items.value("minLength").toInt(0)))
+                return "an item is not of its form";
+    }
+    return {};
+}
+
+bool Settings::set(const QString &key, const QJsonValue &v)
 {
     if(get(key) == v)
-        return;
+        return true;
+    /* the server refuses a file with a value the schema doesn't allow:
+       never written */
+    QString why = invalid(key, v);
+    if(!why.isEmpty())
+    {
+        fprintf(stderr, "[desktop] setting %s not changed: %s\n", key.toLocal8Bit().constData(),
+                why.toLocal8Bit().constData());
+        return false;
+    }
     QString g = key.section('.', 0, 0), p = key.section('.', 1);
     QJsonObject group = values_[g].toObject();
     group[p] = v;
     values_[g] = group;
-    values_["version"] = schema_["properties"].toObject()["version"].toObject()["default"];
     save();
     emit changed(key);
+    return true;
 }
 
 void Settings::setDesktop(const QString &key, const QJsonValue &v)
@@ -186,8 +253,11 @@ void Settings::setDesktop(const QString &key, const QJsonValue &v)
     write_json(dataDir_ + "/desktop.json", desktop_);
 }
 
+/* As the server's (settings.go saveSettings): version, as the schema's
+   (without it the server takes the file for version 1's flat keys) */
 bool Settings::save()
 {
+    values_["version"] = schema_["properties"].toObject()["version"].toObject()["default"];
     QDir().mkpath(dataDir_);
     return write_json(dataDir_ + "/settings.json", values_);
 }

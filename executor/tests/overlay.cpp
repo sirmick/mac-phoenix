@@ -146,7 +146,8 @@ TEST_F(OverlayTest, RoundTripCutShortAndCompacted)
         out << std::string(1000, 'q');
     }
     {
-        auto o = Overlay::open(image, ov, true);
+        /* a locked mount's open cuts it off too, as overlay.go's load */
+        auto o = Overlay::open(image, ov, false);
         EXPECT_EQ(model, contents(*o));
         EXPECT_EQ(good, fs::file_size(ov));
     }
