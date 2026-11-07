@@ -23,6 +23,13 @@
  *   eject PATH       a disk image's volumes unmounted through _UnmountVol
  *                    (fBsyErr: in use)
  *   volumes          the volumes mounted: their names
+ *   flush            every volume's changes written out (FlushVol), as
+ *                    before a shutdown: a native front end about to quit
+ *                    (frontends/desktop); the count flushed
+ *   touch VOL:NAME   a small file written there (made if it isn't) and the
+ *                    volume flushed: a write to a disk image the front
+ *                    end can check (executor/tests/desktop_finder.sh); the
+ *                    OSErr
  *   resize WxH       the Mac's screen at that size, live
  *   scale N          the Mac drawn at N times its size, live
  */
@@ -46,6 +53,7 @@
 #include <util/macstrings.h>
 #include <wind/wind.h>
 
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -275,6 +283,52 @@ std::optional<std::string> request(const std::string &op, const std::string &arg
     }
     else if(op == "eject")
         reply = std::to_string(eject_image(arg));
+    else if(op == "flush")
+    {
+        int n = 0;
+        for(HVCB *v = (HVCB *)LM(VCBQHdr).qHead; v; v = (HVCB *)v->qLink)
+            if(v->vcbDrvNum && FlushVol(nullptr, v->vcbVRefNum) == noErr)
+                n++;
+        reply = std::to_string(n);
+    }
+    else if(op == "touch")
+    {
+        /* names and data in the system heap: guest-addressable */
+        StringPtr name = (StringPtr)NewPtrSysClear(256);
+        const char text[] = "written by a touch request\r";
+        Ptr data = name ? NewPtrSys(sizeof text - 1) : nullptr;
+        if(!name || !data)
+        {
+            if(name)
+                DisposePtr((Ptr)name);
+            return std::to_string(memFullErr);
+        }
+        name[0] = (uint8_t)std::min<size_t>(arg.size(), 255);
+        memcpy(name + 1, arg.data(), name[0]);
+        memcpy(data, text, sizeof text - 1);
+        OSErr err = HCreate(0, 0, name, "ttxt"_4, "TEXT"_4);
+        GUEST<INTEGER> ref;
+        if(err == noErr || err == dupFNErr)
+            err = HOpenDF(0, 0, name, fsRdWrPerm, &ref);
+        if(err == noErr)
+        {
+            GUEST<LONGINT> count = sizeof text - 1;
+            err = FSWrite(ref, &count, data);
+            OSErr closed = FSClose(ref);
+            if(err == noErr)
+                err = closed;
+        }
+        /* the volume: the name up to its first colon */
+        size_t colon = arg.find(':');
+        if(err == noErr && colon != std::string::npos)
+        {
+            name[0] = (uint8_t)(colon + 1);
+            err = FlushVol(name, 0);
+        }
+        DisposePtr((Ptr)name);
+        DisposePtr(data);
+        reply = std::to_string(err);
+    }
     else if(op == "resize")
     {
         /* "WxH": the Mac's screen at that size, live (the tab's Settings,

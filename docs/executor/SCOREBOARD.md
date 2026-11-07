@@ -35,7 +35,7 @@ Visual verdicts and owner overrides: `tools/executor/scoreboard_notes.json`.
 | 7.6.1 | e761ppc | 21 | 3 | 9 |
 | 7.6.1 | w761 | 28 | 0 | 2 |
 | 8.6 | e86 | 77 | 6 | 29 |
-| 8.6 | w86 | 18 | 0 | 6 |
+| 8.6 | w86 | 21 | 0 | 6 |
 
 Gaps in the references and the method:
 
@@ -196,6 +196,9 @@ Rows with a fault, by owner:
 | creative-system-7 | Adobe Illustrator 6.0 ƒ:Adobe Illustrator® 6.0 | 68k | runs? | runs | runs? | (e86: front process unknown) | e86/creative/001.png |  |
 | creative-system-7 | Macromedia FreeHand 5.5 ƒ:FreeHand 5.5 | 68k | runs | runs | runs |  | e86/creative/005.png |  |
 | creative-system-7 | Deneba Canvas 5.0.2 ƒ:Canvas™ 5 | 68k | runs? | fails | runs? | w86: no menu: stays behind its splash, no Untitled-1 (Executor; the Quadra and the G3 run it) | w86/creative/8.6-Canvas_5.png | fix-prod |
+| creative-macos-8 | Adobe Photoshop 5.5 ƒ:Adobe® Photoshop® 5.5 | ppc | runs? | runs | runs? | (e86: front process unknown) | e86/creative8/003.png |  |
+| creative-macos-8 | Adobe Illustrator 8.0 ƒ:Adobe Illustrator® 8.0 | ppc | runs? | runs | runs? | (e86: front process unknown) | e86/creative8/001.png |  |
+| creative-macos-8 | Adobe PageMaker 6.5 ƒ:Adobe® PageMaker® 6.5 | fat | runs? | runs | runs? | (e86: front process unknown) | e86/creative8/002.png |  |
 | dev-tools-system-7 | MPW:MPW Shell | fat | runs | runs | runs | (e86: unimplemented PowerPC LMSetHpChk) | e86/dev/005.png |  |
 | dev-tools-system-7 | CodeWarrior Pro 4 ƒ:Metrowerks CodeWarrior:CodeWarrior IDE 3.2 | fat | runs | runs | runs | (e86: unimplemented PowerPC MPPOpen) | e86/dev/001.png |  |
 | dev-tools-system-7 | THINK C 6.0 ƒ:THINK C:THINK Project Manager | 68k | fails | runs | runs | e86: TranslationDispatch selector $24: no size in the selector, session stopped (called from $555f6) | e86/dev/006.png | fix-dev |

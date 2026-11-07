@@ -1,4 +1,5 @@
 #include "image.h"
+#include <hfs/image_io.h>
 
 #include <algorithm>
 #include <cerrno>
@@ -25,10 +26,11 @@ bool ImageReader::zero(uint64_t offset, uint64_t n)
 FdImageReader::FdImageReader(int fd, bool owns, bool writable)
     : fd_(fd), owns_(owns), writable_(writable)
 {
-    struct stat st;
-    if(fstat(fd_, &st) == 0)
-        size_ = (uint64_t)st.st_size;
-    if(!size_)                                  /* a device: its end */
+    uint64_t size;
+    bool regular;
+    if(Executor::image_io::stat(fd_, &size, &regular))
+        size_ = size;
+    if(!size_ && !Executor::image_io::is_virtual(fd_))    /* a device: its end */
     {
         off_t end = lseek(fd_, 0, SEEK_END);
         if(end > 0)
@@ -39,12 +41,12 @@ FdImageReader::FdImageReader(int fd, bool owns, bool writable)
 FdImageReader::~FdImageReader()
 {
     if(owns_ && fd_ >= 0)
-        close(fd_);
+        Executor::image_io::close(fd_);
 }
 
 std::shared_ptr<FdImageReader> FdImageReader::open(const std::string& path, std::string *error)
 {
-    int fd = ::open(path.c_str(), O_RDONLY | O_BINARY);
+    int fd = Executor::image_io::open(path.c_str(), O_RDONLY | O_BINARY);
     if(fd < 0)
     {
         if(error)
@@ -59,7 +61,7 @@ bool FdImageReader::read(uint64_t offset, void *buf, size_t n)
     auto *p = static_cast<uint8_t *>(buf);
     while(n)
     {
-        ssize_t got = pread(fd_, p, n, (off_t)offset);
+        ssize_t got = Executor::image_io::pread(fd_, p, n, offset);
         if(got < 0 && errno == EINTR)
             continue;
         if(got <= 0)
@@ -78,7 +80,7 @@ bool FdImageReader::write(uint64_t offset, const void *buf, size_t n)
     auto *p = static_cast<const uint8_t *>(buf);
     while(n)
     {
-        ssize_t put = pwrite(fd_, p, n, (off_t)offset);
+        ssize_t put = Executor::image_io::pwrite(fd_, p, n, offset);
         if(put < 0 && errno == EINTR)
             continue;
         if(put <= 0)
@@ -95,7 +97,7 @@ bool FdImageReader::zero(uint64_t offset, uint64_t n)
     if(!writable_)
         return false;
 #if defined(__linux__) && !defined(__EMSCRIPTEN__)
-    if(offset + n <= size_
+    if(offset + n <= size_ && !Executor::image_io::is_virtual(fd_)
        && fallocate(fd_, FALLOC_FL_PUNCH_HOLE | FALLOC_FL_KEEP_SIZE, (off_t)offset, (off_t)n) == 0)
         return true;
 #endif
@@ -107,5 +109,5 @@ bool FdImageReader::zero(uint64_t offset, uint64_t n)
 void FdImageReader::sync()
 {
     if(writable_)
-        fsync(fd_);
+        Executor::image_io::fsync(fd_);
 }

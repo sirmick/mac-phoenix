@@ -6,6 +6,7 @@
 #include <OSUtil.h>
 #include <FileMgr.h>
 #include <MemoryMgr.h>
+#include <hfs/image_io.h>
 #include <hfs/hfs.h>
 #include <file/file.h>
 #include <hfs/hfs_plus.h>
@@ -158,9 +159,7 @@ static OSErr readvolumeinfo(HVCB *vcbp) /* call once during mounting */
 
 void Executor::vcbsync(HVCB *vcbp)
 {
-#ifndef _WIN32
-    fsync(((VCBExtra *)vcbp)->u.hfs.fd);
-#endif
+    image_io::fsync(((VCBExtra *)vcbp)->u.hfs.fd);
 }
 
 static OSErr writevolumeinfo(HVCB *vcbp, Ptr p)

@@ -17,6 +17,7 @@
 #include <file/file.h>
 #include <file/fsm.h>
 #include <hfs/partition.h>
+#include <hfs/image_io.h>
 #include <sys/stat.h>
 #include <algorithm>
 
@@ -126,7 +127,7 @@ OSErr Executor::ROMlib_ejectfloppy(LONGINT floppyfd)
         }
 #endif
         if(floppyfd != -1)
-            close(floppyfd);
+            image_io::close(floppyfd);
 #if defined(__linux__) || defined(MACOSX_)
         eject_floppy_notify();
 #endif
@@ -233,25 +234,27 @@ static LONGINT try_to_open_disk(const char *dname, LONGINT *bsizep,
 
 
     // MacPhoenix: images shared with the ROM emulator are mounted locked,
-    // and CDs always.
+    // and CDs always. Opened through image_io: the front end's opener may
+    // keep the Mac's changes apart from the image (image_io.h).
     floppyfd = ROMlib_readonly_images || ROMlib_locked_images.count(dname) ? -1
-                                      : open(dname, O_BINARY | O_RDWR | EXTRA_BITS, 0000);
+                                      : image_io::open(dname, O_BINARY | O_RDWR | EXTRA_BITS);
 
     if(floppyfd < 0)
     {
         *flagsp |= DRIVE_FLAGS_LOCKED;
-        floppyfd = open(dname, O_BINARY | O_RDONLY | EXTRA_BITS, 0000);
+        floppyfd = image_io::open(dname, O_BINARY | O_RDONLY | EXTRA_BITS);
     }
 
     if(floppyfd >= 0)
     {
-        struct stat sbuf;
+        uint64_t size;
+        bool regular;
 
         *bsizep = PHYSBSIZE;
         *maxbytesp = 1024L * 1024;
 
-        if(fstat(floppyfd, &sbuf) >= 0 && (S_IFREG & sbuf.st_mode))
-            *offsetp = sbuf.st_size % PHYSBSIZE;
+        if(image_io::stat(floppyfd, &size, &regular) && regular)
+            *offsetp = size % PHYSBSIZE;
         else
             *offsetp = 0;
     }
@@ -608,10 +611,11 @@ Executor::try_to_mount_disk(const char *dname, LONGINT floppyfd, GUEST<LONGINT> 
        disk): the drive keeps it open, readable through its driver, its
        size in blocks, for the File System Manager's foreign file systems
        (file/fsm.cpp) */
-    struct stat sbuf;
-    if(!foundmap && fstat(floppyfd, &sbuf) == 0 && S_ISREG(sbuf.st_mode))
+    uint64_t size;
+    bool regular;
+    if(!foundmap && image_io::stat(floppyfd, &size, &regular) && regular)
     {
-        ULONGINT blocks = (sbuf.st_size - hfs.offset) / PHYSBSIZE;
+        ULONGINT blocks = (size - hfs.offset) / PHYSBSIZE;
         dqp->hfs.fd = floppyfd;
         dqp->dq.dQDrvSz = blocks;
         dqp->dq.dQDrvSz2 = blocks >> 16;
@@ -669,7 +673,7 @@ INTEGER Executor::ROMlib_image_drive(const char *path)
     LONGINT fd = try_to_open_disk(dname, &bsize, &maxbytes, &flags, &offset);
     if(fd < 0)
         return 0;
-    close(fd);
+    image_io::close(fd);
     hfs_access_t hfs = { -1, (LONGINT)offset, bsize, maxbytes };
     DrvQExtra *dqp = ROMlib_addtodq(2048L * 2, dname, 0, OURHFSDREF, flags, &hfs);
     return dqp ? (INTEGER)dqp->dq.dQDrive : 0;
@@ -690,9 +694,21 @@ OSErr Executor::ROMlib_readwrite(LONGINT fd, char *buffer, LONGINT count,
     LONGINT remainder, totransfer;
     Boolean needlseek;
     OSErr err;
-    int (*readfp)(int fd, void *buf, int nbytes);
-    int (*writefp)(int fd, const void *buf, int nbytes);
-    off_t (*seekfp)(int fd, off_t where, int how);
+    /* MacPhoenix: at a position of its own, through image_io */
+    off_t pos = 0;
+    auto seekfp = [&pos](int, off_t where, int) { return pos = where; };
+    auto readfp = [&pos](int fd, void *buf, int nbytes) {
+        ssize_t n = image_io::pread(fd, buf, nbytes, pos);
+        if(n > 0)
+            pos += n;
+        return (int)n;
+    };
+    auto writefp = [&pos](int fd, const void *buf, int nbytes) {
+        ssize_t n = image_io::pwrite(fd, buf, nbytes, pos);
+        if(n > 0)
+            pos += n;
+        return (int)n;
+    };
 
     if(blocksize > 18 * 1024)
     {
@@ -705,9 +721,6 @@ OSErr Executor::ROMlib_readwrite(LONGINT fd, char *buffer, LONGINT count,
         blocksize = 2048;
         warning_unexpected("fd = 0x%x, zero block size", fd);
     }
-    seekfp = (off_t(*)(int, off_t, int))lseek;
-    readfp = (int (*)(int, void *, int))read;
-    writefp = (int (*)(int, const void *, int))write;
 
     err = noErr;
     newbuffer = 0;

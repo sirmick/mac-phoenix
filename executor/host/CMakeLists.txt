@@ -8,6 +8,8 @@ add_library(executor-host STATIC
     images.cpp
     requests.cpp
     frames.cpp
+    overlay.h
+    overlay.cpp
 )
 target_include_directories(executor-host PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(executor-host PUBLIC front-end-phoenix)

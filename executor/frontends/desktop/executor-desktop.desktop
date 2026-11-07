@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Executor
+Comment=Classic Mac applications on a reimplemented Toolbox
+Exec=executor-desktop %F
+Icon=executor
+Categories=System;Emulator;
+MimeType=application/x-apple-diskimage;
+Terminal=false
