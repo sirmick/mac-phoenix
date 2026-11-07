@@ -225,6 +225,24 @@ process.cpp after the partition goes):
    earlier end): F freed (K), M kept (K, referenced from outside it);
    System heap X K free`.
 
+Speedometer's colour test three times in one 7.6.1 session (quit
+between, run sp3f in `~/storage/tmp/fullheap`):
+
+| Quit | Freed | Kept | System heap free |
+|---|---|---|---|
+| 1 | 371 (717 K) | 83 (33 K) | 1312 K |
+| 2 | 307 (569 K) | 186 (104 K) | 1238 K |
+| 3 | 368 (678 K) | 260 (129 K) | 1207 K |
+
+Before this, every quit left all of its fallback blocks behind, about
+700 K. What is still kept grows from run to run, and the blocks kept at
+one end are kept again at the next. So something that lasts names them,
+not a stale value. **Open:** find what that is. The candidates are the
+Palette Manager's `window_palette_alist` elements: on a window's close
+they go to a free list rather than being disposed, and they keep their
+palette. Other candidates are the System resource map's entries for
+resources loaded during the run.
+
 What the scan can't see is Executor's own C++ state. Executor clears
 what it holds for a process by address range, and step 2 does the same
 for each block. Host code that caches a guest handle with no range
