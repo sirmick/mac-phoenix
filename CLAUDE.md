@@ -99,6 +99,12 @@ tools/executor/grid_compare.py ~/storage/executor-grid/8.6-r2 ~/storage/executor
 QT_QPA_PLATFORM=offscreen ./build/executor-desktop --data /tmp/d --screenshot s.png --quit
 ctest --test-dir build -R executor.desktop
 cmake --build build --target executor-desktop-appimage   # Linux AppImage (tools/desktop/appimage.sh; --test runs it in debian:stable)
+# Windows (cross-built: llvm-mingw + Qt 6.8 llvm-mingw, fetched into ~/storage/deps/windows;
+# cmake/ExecutorWindows.cmake): exe -> build-windows/, zip with executor-standalone.exe ->
+# ~/storage/tmp/windows-try; smoke test under Wine (docker); crash reports' stacks named
+tools/windows/build.sh && tools/windows/package.sh
+tools/windows/smoke.sh ZIP ~/storage/tmp/win-smoke --system ~/storage/web-library/boot-8.6.img --ppc
+tools/windows/symbolize.sh crash-STAMP.txt [executor-desktop.exe unstripped]
 
 # Executor as WebAssembly (docs/executor/DIRECTION.md, W1): emsdk in ~/emsdk
 source ~/emsdk/emsdk_env.sh

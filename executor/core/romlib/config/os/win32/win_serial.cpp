@@ -5,6 +5,7 @@
 
 #define _WINSOCKAPI_ // Make sure windows.h doesn't #include <winsock.h>, which can redefine 'struct timeval'
 #include <windows.h>
+#undef pascal  // minwindef.h: a calling convention; a parameter name here
 
 #include <base/common.h>
 #include <error/error.h>

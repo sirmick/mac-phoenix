@@ -12,6 +12,17 @@
 #ifndef CRASH_HANDLER_H
 #define CRASH_HANDLER_H
 
+/* MacPhoenix: Windows has no signals or ucontext (the desktop app has its
+   own crash handler, frontends/desktop/crash_win32.cpp); only what
+   Executor calls. */
+#ifdef _WIN32
+#include <stdio.h>
+static inline void print_backtrace(const char *prefix)
+{
+	fprintf(stderr, "\n=== %s (no backtrace on this host) ===\n", prefix);
+}
+#else
+
 #include <signal.h>
 /* MacPhoenix: no execinfo (WebAssembly, musl): no backtrace. */
 #if __has_include(<execinfo.h>)
@@ -257,5 +268,7 @@ static inline void print_crash_header(int sig, siginfo_t *info, const char *comp
 #ifdef __cplusplus
 }
 #endif
+
+#endif /* _WIN32 */
 
 #endif /* CRASH_HANDLER_H */

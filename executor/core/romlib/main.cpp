@@ -84,6 +84,17 @@
 
 #include <iostream>
 
+#ifdef _WIN32
+/* kernel32 (Windows 8 on), declared here rather than with <windows.h>,
+   whose macros clash with Toolbox names */
+extern "C" __declspec(dllimport) void __stdcall GetCurrentThreadStackLimits(unsigned long long *lo,
+                                                                         unsigned long long *hi);
+extern "C" __declspec(dllimport) void *__stdcall VirtualAlloc(void *addr, size_t size, unsigned long type,
+                                                            unsigned long protect);
+extern "C" __declspec(dllimport) int __stdcall VirtualProtect(void *addr, size_t size, unsigned long protect,
+                                                            unsigned long *old);
+#endif
+
 using namespace Executor;
 using namespace std;
 
@@ -559,12 +570,33 @@ int executor_main_entry(int argc, char **argv)
 
     pthread_attr_t attr;
     pthread_attr_init(&attr);
+#ifdef _WIN32
+    /* Windows threads take no stack of the caller's (winpthreads ignores
+       setstack): one of this size, made addressable as window 2 by the
+       thread itself before the core starts */
+    syn68k_free_low(stack, stackSize);
+    pthread_attr_setstacksize(&attr, stackSize);
+    pthread_t executorThread;
+    pthread_create(&executorThread, &attr, [](void *arg) -> void * {
+        unsigned long long lo, hi;
+        GetCurrentThreadStackLimits(&lo, &hi);
+        /* all of it committed: the guest reads its frames anywhere, not
+           only down from the guard page as the stack grows */
+        VirtualAlloc((void *)lo, hi - lo, 0x1000 /* MEM_COMMIT */, 0x04 /* PAGE_READWRITE */);
+        unsigned long old;
+        VirtualProtect((void *)lo, hi - lo, 0x04 /* PAGE_READWRITE: the guard page's off */, &old);
+        syn68k_set_stack_window((const void *)lo, hi - lo);
+        (*(std::function<void()> *)arg)();
+        return nullptr;
+    }, &executorBody);
+#else
     pthread_attr_setstack(&attr, stack, stackSize);
     pthread_t executorThread;
     pthread_create(&executorThread, &attr, [](void *arg) -> void * {
         (*(std::function<void()> *)arg)();
         return nullptr;
     }, &executorBody);
+#endif
     pthread_attr_destroy(&attr);
 
     vdriver->runEventLoop();

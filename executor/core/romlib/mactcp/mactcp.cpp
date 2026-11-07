@@ -54,9 +54,13 @@
 
 #include <rsys/hostnet.h>
 
-#include <arpa/inet.h>
 #include <errno.h>
+#ifdef _WIN32
+#include <rsys/win32_net.h>
+#else
+#include <arpa/inet.h>
 #include <netinet/tcp.h>
+#endif
 
 #include <algorithm>
 #include <chrono>

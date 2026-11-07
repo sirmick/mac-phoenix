@@ -187,16 +187,51 @@ mac_string Executor::toMacRoman(const std::u32string& src)
 }
 
 
+#ifdef _WIN32
+/* MacPhoenix: what Windows doesn't allow in a file name (control
+   characters, "*\/<>?\\|", a trailing space or period) as the private-use
+   characters Services for Macintosh used for them (and macOS's SMB client
+   still does): U+F001-U+F01F, then U+F020-U+F029 in that order. */
+static wchar_t toWindowsNameChar(wchar_t c, bool last)
+{
+    if(c >= 0x01 && c <= 0x1F)
+        return 0xF000 + c;
+    static const wchar_t specials[] = L"\"*/<>?\\|";
+    for(int i = 0; specials[i]; i++)
+        if(c == specials[i])
+            return 0xF020 + i;
+    if(last && c == ' ')
+        return 0xF028;
+    if(last && c == '.')
+        return 0xF029;
+    return c;
+}
+
+static wchar_t fromWindowsNameChar(wchar_t c)
+{
+    if(c >= 0xF001 && c <= 0xF01F)
+        return c - 0xF000;
+    static const wchar_t specials[] = L"\"*/<>?\\| .";
+    if(c >= 0xF020 && c <= 0xF029)
+        return specials[c - 0xF020];
+    return c;
+}
+#endif
+
 fs::path Executor::toUnicodeFilename(mac_string_view sv)
 {
     std::wstring s;
     s.reserve(sv.size());
     for(unsigned char c : sv)
     {
+#ifdef _WIN32
+        s.push_back(toWindowsNameChar(macToUniTable[c], s.size() + 1 == sv.size()));
+#else
         if(c == '/')
             s.push_back(':');
         else
             s.push_back(macToUniTable[c]);
+#endif
     }
     return s;
 }
@@ -252,6 +287,9 @@ mac_string Executor::toMacRomanFilename(const fs::path& p, int index)
             break;
         }
 
+#ifdef _WIN32
+        c = fromWindowsNameChar(c);
+#endif
         if(c == ':')
             dst.push_back('/');
         else

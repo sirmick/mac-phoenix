@@ -24,6 +24,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <vector>
+#include <rsys/win32_locale.h>
 
 extern unsigned char XPRAM[8192];
 

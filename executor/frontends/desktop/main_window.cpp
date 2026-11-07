@@ -47,7 +47,7 @@ MainWindow::MainWindow(Settings &settings, Disks &disks, const Automation &autom
                        const QStringList &restartArgs)
     : settings_(settings), disks_(disks), automation_(automation), restartArgs_(restartArgs)
 {
-    setWindowTitle("Executor");
+    setWindowTitle("Executor " EXECUTOR_VERSION);
     setAcceptDrops(true);
     screen_ = new ScreenWidget;
     setCentralWidget(screen_);
@@ -478,7 +478,7 @@ void MainWindow::poll()
     {
         app_ = QString::fromStdString(app);
         appLabel_->setText(app_);
-        setWindowTitle(app_.isEmpty() ? "Executor" : app_ + " — Executor");
+        setWindowTitle(app_.isEmpty() ? "Executor " EXECUTOR_VERSION : app_ + " — Executor " EXECUTOR_VERSION);
     }
     double busy = executor_host::cpu_busy();
     if(busy >= 0)

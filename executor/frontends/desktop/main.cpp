@@ -29,6 +29,9 @@
 #include "log_capture.h"
 #include "main_window.h"
 #include "settings.h"
+#ifdef _WIN32
+#include "windows_support.h"
+#endif
 
 #include "executor_host.h"
 #include "overlay.h"
@@ -47,6 +50,8 @@
 #include <QFontDatabase>
 #include <QFontInfo>
 #include <QStandardPaths>
+#include <QSysInfo>
+#include <QTimer>
 
 #include <cmath>
 #include <cstdio>
@@ -106,7 +111,7 @@ int main(int argc, char **argv)
     Automation automation;
     QStringList passThrough;  /* for session::parse_args */
     QString size, scale, ram, depth;
-    bool ppc = false;
+    bool ppc = false, crashTest = false;
     for(int i = 0; i < args.size(); i++)
     {
         const QString &a = args[i];
@@ -137,12 +142,20 @@ int main(int argc, char **argv)
             automation.timeout = next().toDouble();
         else if(a == "--request")
             automation.requests << next();
+        else if(a == "--console")
+        {
+#ifdef _WIN32
+            windows_support::attach_console();
+#endif
+        }
+        else if(a == "--crash-test")
+            crashTest = true;
         else if(a == "--help" || a == "-h")
         {
             printf("executor-desktop [--data DIR] [--system IMAGE] [--disk IMAGE]... [--ppc] [--size WxH]\n"
                    "                 [--scale N] [--ram MB] [--depth BPP] [--screenshot PNG\n"
                    "                 [--screenshot-delay S] [--quit]] [--timeout S]\n"
-                   "                 [--request \"OP ARG\"]... [APP]\n");
+                   "                 [--request \"OP ARG\"]... [--console] [APP]\n");
             return 0;
         }
         else if(!a.startsWith('-') && Disks::isImage(a) && QFileInfo(a).isFile())
@@ -155,8 +168,19 @@ int main(int argc, char **argv)
     data = QFileInfo(data).absoluteFilePath();
     QDir().mkpath(data + "/logs");
 
-    LogCapture::instance().start(data + "/logs/executor-" + QDate::currentDate().toString("yyyy-MM-dd") + ".log");
+    QString logFile = data + "/logs/executor-" + QDate::currentDate().toString("yyyy-MM-dd") + ".log";
+    LogCapture::instance().start(logFile);
+    fprintf(stderr, "[desktop] Executor %s on %s (%s), started %s\n", EXECUTOR_VERSION,
+            QSysInfo::prettyProductName().toLocal8Bit().constData(),
+            QSysInfo::currentCpuArchitecture().toLocal8Bit().constData(),
+            QDateTime::currentDateTime().toString(Qt::ISODate).toLocal8Bit().constData());
     fprintf(stderr, "[desktop] Executor, data folder %s\n", data.toLocal8Bit().constData());
+#ifdef _WIN32
+    windows_support::install_crash_handler(data + "/logs", logFile);
+    fprintf(stderr, "[desktop] log %s; crash reports go beside it; %s\n",
+            QDir::toNativeSeparators(logFile).toLocal8Bit().constData(),
+            windows_support::describe().toLocal8Bit().constData());
+#endif
 
     Settings settings(data);
     Disks diskLibrary(settings);
@@ -272,6 +296,12 @@ int main(int argc, char **argv)
     fprintf(stderr, "[desktop] Executor %dx%d, System %s, data %s\n", c.width, c.height,
             system.isEmpty() ? "Executor's own" : system.toLocal8Bit().constData(), setup.data_dir.c_str());
     Emulator::instance().start(o, setup);
+#ifdef _WIN32
+    if(crashTest)
+        QTimer::singleShot(2000, [] { windows_support::crash_now(); });
+#else
+    (void)crashTest;
+#endif
     int rc = app.exec();
     window.quit(rc);
     return rc;

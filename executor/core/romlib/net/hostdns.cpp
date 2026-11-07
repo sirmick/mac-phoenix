@@ -8,10 +8,14 @@
 #include <rsys/hostnet.h>
 #include <rsys/hostdns.h>
 
+#ifdef _WIN32
+#include <rsys/win32_net.h>
+#else
 #include <arpa/nameser.h>
 #include <netdb.h>
 #include <netinet/in.h>
 #include <resolv.h>
+#endif
 
 #include <algorithm>
 

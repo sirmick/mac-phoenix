@@ -79,7 +79,7 @@ if(WIN32)
         config/os/win32/win_serial.h
         config/os/win32/win_stat.h
         config/os/win32/win_stat.cpp)
-    set(host_os_libs)
+    set(host_os_libs ws2_32)  # MacPhoenix: rsys/win32_net.h's byte-order calls
 elseif(APPLE AND UNIX)
     set(HOST_OS "macosx")
     set(host_os_sources
@@ -680,7 +680,7 @@ add_library(executor_hfsplus STATIC
     hfs/plus/unicode.h hfs/plus/unicode.cpp hfs/plus/unicode_tables.h
     hfs/plus/reader.h hfs/plus/reader.cpp
     hfs/plus/btree.h hfs/plus/btree.cpp hfs/plus/writer.cpp)
-target_include_directories(executor_hfsplus PUBLIC .)
+target_include_directories(executor_hfsplus PUBLIC . PRIVATE include)  # include: rsys/win32_posix.h
 target_compile_features(executor_hfsplus PUBLIC cxx_std_17)
 target_link_libraries(romlib executor_hfsplus)
 if(NOT EMSCRIPTEN)

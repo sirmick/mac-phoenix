@@ -13,8 +13,22 @@
 #include <unistd.h>
 #include <vector>
 
+#include <rsys/win32_posix.h>
+
 #ifndef O_BINARY
 #define O_BINARY 0
+#endif
+
+#ifdef _WIN32
+/* UTF-8 paths, and the CRT's 64-bit sizes */
+#define open_path win32_open_utf8
+#define unlink_path win32_unlink_utf8
+#define stat _stat64
+#define fstat _fstat64
+#define ftruncate _chsize_s
+#else
+#define open_path ::open
+#define unlink_path ::unlink
 #endif
 
 namespace executor_host {
@@ -50,7 +64,7 @@ bool read_all(int fd, void *buf, size_t n, uint64_t at)
     auto *p = static_cast<uint8_t *>(buf);
     while(n)
     {
-        ssize_t got = ::pread(fd, p, n, (off_t)at);
+        ssize_t got = ::pread(fd, p, n, at);
         if(got < 0 && errno == EINTR)
             continue;
         if(got <= 0)
@@ -65,7 +79,7 @@ bool write_all(int fd, const void *buf, size_t n, uint64_t at)
     auto *p = static_cast<const uint8_t *>(buf);
     while(n)
     {
-        ssize_t put = ::pwrite(fd, p, n, (off_t)at);
+        ssize_t put = ::pwrite(fd, p, n, at);
         if(put < 0 && errno == EINTR)
             continue;
         if(put <= 0)
@@ -125,7 +139,7 @@ std::unique_ptr<Overlay> Overlay::open(const std::string &image, const std::stri
                                        std::string *error)
 {
     std::unique_ptr<Overlay> o(new Overlay);
-    o->base_ = ::open(image.c_str(), O_RDONLY | O_BINARY);
+    o->base_ = open_path(image.c_str(), O_RDONLY | O_BINARY);
     if(o->base_ < 0)
     {
         if(error)
@@ -137,7 +151,7 @@ std::unique_ptr<Overlay> Overlay::open(const std::string &image, const std::stri
         o->baseSize_ = (uint64_t)st.st_size;
     o->path_ = overlay;
     o->writable_ = writable;
-    o->metaName_ = image.substr(image.find_last_of('/') + 1);
+    o->metaName_ = image.substr(image.find_last_of("/\\") + 1);
     if(!o->load(error))
         return nullptr;
     return o;
@@ -155,7 +169,7 @@ Overlay::~Overlay()
 /* The overlay file as overlay.go's load reads it */
 bool Overlay::load(std::string *error)
 {
-    file_ = ::open(path_.c_str(), O_RDWR | O_BINARY);
+    file_ = open_path(path_.c_str(), O_RDWR | O_BINARY);
     if(file_ < 0)
     {
         if(errno == ENOENT)
@@ -254,7 +268,7 @@ bool Overlay::create()
 {
     if(file_ >= 0)
         return true;
-    file_ = ::open(path_.c_str(), O_RDWR | O_CREAT | O_EXCL | O_BINARY, 0644);
+    file_ = open_path(path_.c_str(), O_RDWR | O_CREAT | O_EXCL | O_BINARY, 0644);
     if(file_ < 0)
         return false;
     std::vector<uint8_t> head(MAGIC, MAGIC + 4);
@@ -263,7 +277,7 @@ bool Overlay::create()
     {
         ::close(file_);
         file_ = -1;
-        ::unlink(path_.c_str());
+        unlink_path(path_.c_str());
         return false;
     }
     end_ = head.size();
@@ -416,7 +430,7 @@ void Overlay::maybeCompact()
     if(file_ < 0 || dead_ < 256 || dead_ < index_.size())
         return;
     std::string tmp = path_ + ".tmp";
-    int f = ::open(tmp.c_str(), O_RDWR | O_CREAT | O_TRUNC | O_BINARY, 0644);
+    int f = open_path(tmp.c_str(), O_RDWR | O_CREAT | O_TRUNC | O_BINARY, 0644);
     if(f < 0)
         return;
     std::vector<uint8_t> head(MAGIC, MAGIC + 4);
@@ -443,6 +457,24 @@ void Overlay::maybeCompact()
     put_head(c, KIND_COMMIT, version_, reset_);
     ok = ok && write_all(f, c.data(), c.size(), at) && sync_fd(f) == 0;
     at += c.size();
+#ifdef _WIN32
+    /* Windows renames only files nobody has open: both closed, the
+       compacted one put in place and opened again (the old one again if
+       that fails) */
+    ::close(f);
+    if(ok)
+    {
+        ::close(file_);
+        ok = win32_replace_file(tmp, path_) == 0;
+        file_ = open_path(path_.c_str(), O_RDWR | O_BINARY);
+    }
+    if(!ok)
+    {
+        unlink_path(tmp.c_str());
+        return;
+    }
+    f = file_;
+#else
     if(!ok || ::rename(tmp.c_str(), path_.c_str()) != 0)
     {
         ::close(f);
@@ -450,6 +482,7 @@ void Overlay::maybeCompact()
         return;
     }
     ::close(file_);
+#endif
     file_ = f;
     end_ = at;
     index_ = std::move(index);
