@@ -10,7 +10,7 @@ to check it (tests/test_hfsplus_volume.py compares the two).
 Each image's volume needs a name of its own; images are copied sparse
 (the big ones of test_hfsplus_volume.py are mostly holes). MACPHOENIX_EMULATOR names the
 emulator (default build/mac-phoenix); --dump the build's hfsplus_dump
-(default build/src/executor/romlib/hfsplus_dump), which reads the names.
+(default build/executor/core/romlib/hfsplus_dump), which reads the names.
 """
 import argparse
 import json
@@ -63,7 +63,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--machine", choices=["9.0.4", "executor"], required=True)
     ap.add_argument("--out", required=True)
-    ap.add_argument("--dump", default=os.path.join(ROOT, "build", "src", "executor", "romlib", "hfsplus_dump"))
+    ap.add_argument("--dump", default=os.path.join(ROOT, "build", "executor", "core", "romlib", "hfsplus_dump"))
     ap.add_argument("--port", type=int, default=guest.free_port())
     ap.add_argument("--work")
     ap.add_argument("images", nargs="+")

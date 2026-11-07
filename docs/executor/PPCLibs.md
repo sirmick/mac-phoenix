@@ -4,7 +4,7 @@ Milestone P (PLAN.md). A Power Mac has Apple's StdCLib (the MPW C library)
 and MathLib (fp.h, fenv.h, SANE's decimal records) in ROM; MPW-built
 PowerPC applications import both, CodeWarrior's import MathLib (MSL formats
 numbers with `num2dec`). Executor has no ROM, so it answers both itself in
-C++, as it does InterfaceLib and Open Transport: `src/executor/romlib/clib/`.
+C++, as it does InterfaceLib and Open Transport: `executor/core/romlib/clib/`.
 
 ```bash
 ctest -R clib_executor             # CLibTest on Executor's libraries

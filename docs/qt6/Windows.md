@@ -10,7 +10,7 @@
 > CPU cores, the Executor backend (Boost, Ruby, Bison, Perl; a
 > low-address link layout), PPC identity addressing for `--core kpx`,
 > `net-bridge` listening on a Unix socket, and about 36 non-vendored
-> sources outside `src/executor` that include `<sys/mman.h>`,
+> sources outside `executor/` that include `<sys/mman.h>`,
 > `<sys/socket.h>`, `<poll.h>` or `<unistd.h>`. Treat the steps below
 > as an untested starting point.
 

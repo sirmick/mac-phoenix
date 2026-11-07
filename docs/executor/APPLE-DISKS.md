@@ -65,7 +65,7 @@ same way (C ones answer kOTNotSupportedErr, Pascal ones stop).
 Plan (2026-10-24): next session, turn these on one at a time in the policy
 and tackle what each runs into.
 
-These work on a real Mac, but Executor's `src/executor/res/extension-policy.txt`
+These work on a real Mac, but Executor's `executor/core/res/extension-policy.txt`
 turns off what they need. Each is a policy decision before it is a fix:
 
 - **Network Extension** (denied: it aborts on `$A08E`, see STRAGGLERS #8):

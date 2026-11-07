@@ -1,6 +1,6 @@
 # The standalone server: one program, the tab inside
 
-`tools/standalone` is Executor's tab and what it needs from a server as
+`executor/server` is Executor's tab and what it needs from a server as
 one Go program per OS, with no other files: the page and the wasm module
 are embedded, the library is a directory of images, and the server keeps
 everything the tab changes (P1 in the plan: images only, no accounts).
@@ -12,9 +12,9 @@ uses it, below). Putting it on a host for others: WebSite.md.
 ## Building
 
 ```bash
-make -C tools/standalone WASM_BUILD=build-wasm        # site/ (make_site.sh), ./executor-standalone
-make -C tools/standalone dist WASM_BUILD=build-wasm   # dist/: a release (below)
-make -C tools/standalone test                         # go test
+make -C executor/server WASM_BUILD=build-wasm        # site/ (make_site.sh), ./executor-standalone
+make -C executor/server dist WASM_BUILD=build-wasm   # dist/: a release (below)
+make -C executor/server test                         # go test
 ```
 
 Go 1.24 or later, no cgo, no modules beyond the standard library:
@@ -30,7 +30,7 @@ them decompressed as they go out. `make nosite` builds with whatever
 `make dist [VERSION=V]` (V defaults to `git describe --always --dirty`)
 makes `dist/` from scratch: `executor-standalone-V-OS-ARCH[.exe]` for the
 six targets, `SHA256SUMS` (`sha256sum -c SHA256SUMS` checks them) and
-`README.txt` for whoever downloads them (`tools/standalone/README.dist.txt`,
+`README.txt` for whoever downloads them (`executor/server/README.dist.txt`,
 V filled in): which file is which, checking a download, first run,
 where images go. Build it from a clean tree, so the name has no `-dirty`,
 with `WASM_BUILD` a Skia, `EXECUTOR_NET=wasm` Release build (WebSite.md).
@@ -95,7 +95,7 @@ rest. `os.UserConfigDir()` is `~/.config` (or `$XDG_CONFIG_HOME`) on
 Linux, `~/Library/Application Support` on macOS, `%AppData%` on Windows.
 
 While Executor starts, the tab shows its steps over the screen until the
-first frame (`web/executor/loading.js`): the module (about 70 MB the
+first frame (`executor/web/loading.js`): the module (about 70 MB the
 first time: megabytes and percent as it streams, then compiling; after
 that from the browser's Cache Storage, revalidated by ETag), the disks,
 the files the server keeps (Executor's disk, the disks' changes), the Mac
@@ -104,7 +104,7 @@ starting. A step that fails says so there.
 ## Settings
 
 One file, version 2, nested by category, described by
-`web/executor/settings.schema.json` (Settings.md): the tab's Settings
+`executor/web/settings.schema.json` (Settings.md): the tab's Settings
 dialog edits it. The page's settings (machine, disks mounted, keys,
 display, sound, logging) are kept here for the tab; the server's own
 (`disks.images`/`include`/`exclude`, `network.*`) are this program's;
@@ -279,7 +279,7 @@ Sec-Fetch-Site). In more detail:
 
 ## Start-up costs
 
-Measured 2026-11-03 with `web/tests/bench_start.mjs SITE DATA IMAGES
+Measured 2026-11-03 with `executor/tests/web/bench_start.mjs SITE DATA IMAGES
 [RUNS] [--slow]` (a copy of a server's data directory each run: its
 settings, the disks mounted, the saved volumes; times from the
 navigation; `--slow` is Chromium's network emulation, 50 Mbit/s down,
@@ -366,7 +366,7 @@ printed address, `--tls auto` with its certificate pinned, the claim over
 HTTPS with a Secure cookie, a restart freeing it); and what the API can't show:
 the overlay log across restarts, a write cut short, compaction, merge,
 the gzip-only files, the session lease. In build-wasm,
-`executor.web.claim` is the claim in a browser (`web/tests/tab_claim.mjs`:
+`executor.web.claim` is the claim in a browser (`executor/tests/web/tab_claim.mjs`:
 the first browser has it, HttpOnly; its reloads and tabs; another
 browser's in-use page and refusals; a restart, the tab's reload notice
 and Reload; another browser first after a restart; screenshots in

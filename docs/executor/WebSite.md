@@ -1,6 +1,6 @@
-# The site: Executor in a tab, served by tools/standalone
+# The site: Executor in a tab, served by executor/server
 
-The site is `tools/standalone` (Standalone.md: the program, its API and
+The site is `executor/server` (Standalone.md: the program, its API and
 who may use it) in front of three things this page says how to put in
 place: the tab (the wasm build, embedded in the program or `--site
 DIR`), the library (boot and application disks) and the data directory
@@ -8,7 +8,7 @@ DIR`), the library (boot and application disks) and the data directory
 volumes, the tab's logs). A visitor picks a System and adds disks from
 the library; the disks are read by Range requests as Executor needs it,
 and what it changes (a disk's blocks, Executor's own volume) is kept by
-the server (`web/executor/sync.js`, `Store`).
+the server (`executor/web/sync.js`, `Store`).
 
 It is a private service: **the first browser to open the tab after the
 server starts has it until the server stops** (Standalone.md, "Who uses
@@ -24,7 +24,7 @@ source ~/emsdk/emsdk_env.sh
 tools/skia/build-wasm.sh                                 # once: Skia for wasm, ~/storage/deps/skia-m144-wasm-wasm
 emcmake cmake -B build-wasm -DCMAKE_BUILD_TYPE=Release -DEXECUTOR_SKIA=ON -DEXECUTOR_NET=wasm
 cmake --build build-wasm -j2
-make -C tools/standalone WASM_BUILD=$PWD/build-wasm      # the site embedded: ./tools/standalone/executor-standalone
+make -C executor/server WASM_BUILD=$PWD/build-wasm      # the site embedded: ./executor/server/executor-standalone
 ```
 
 The site's module is built with Skia (`-DEXECUTOR_SKIA=ON`, HiDPI.md):
@@ -111,11 +111,11 @@ one-sentence description, notes (first launch, registration; never a
 serial number), and `publisher`, `year`, `kind` or `version` where the
 disk's `vers` resources are silent or wrong (`null` drops what the disk
 says). On a CD, `items` are the top-level folders and files, with their
-sizes; folders aren't opened. `tools/standalone` passes `items` through in
+sizes; folders aren't opened. `executor/server` passes `items` through in
 `/library.json`. In the tab, a library row's "▸ N items" opens a row under
 it with the disk's note and the items (Name, Version, Arch, Size; the
 description and kind under the name). Tests: `disk_contents` (a fixture
-image) and `executor.web.site.library` (`web/tests/tab_library.mjs`,
+image) and `executor.web.site.library` (`executor/tests/web/tab_library.mjs`,
 `ctest -L site`).
 
 A link opens a System with disks already added, e.g.
@@ -131,7 +131,7 @@ service with `User=`):
 ```ini
 # ~/.config/systemd/user/executor-web.service
 [Unit]
-Description=Executor in a tab (tools/standalone)
+Description=Executor in a tab (executor/server)
 After=network.target
 
 [Service]
@@ -143,7 +143,7 @@ WantedBy=default.target
 ```
 
 ```bash
-cp tools/standalone/executor-standalone ~/bin/
+cp executor/server/executor-standalone ~/bin/
 systemctl --user daemon-reload && systemctl --user enable --now executor-web
 loginctl enable-linger $USER          # keeps running signed out
 journalctl --user -u executor-web     # its log (--quiet: errors only); the first line, its address
@@ -235,8 +235,8 @@ them back, start it.
 
 ## The site's cells
 
-`web/tests/tab_site.mjs` opens every application in a library disk's
-record on a System, as a visitor would: on a scratch `tools/standalone`
+`executor/tests/web/tab_site.mjs` opens every application in a library disk's
+record on a System, as a visitor would: on a scratch `executor/server`
 whose library is `make_library.py`'s output, the boot disk and the
 application disk added, each application launched in turn (the page
 reloaded between them) and checked: in front, a window of its own (or,

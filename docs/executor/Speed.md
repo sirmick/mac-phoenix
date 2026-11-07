@@ -83,7 +83,7 @@ table again from a run's `results.jsonl`):
   the PowerPC side of fat applications on `mame-ppc`) and on 8.6
   (PowerPC; `mame-ppc` with its native back-end, and without it:
   `--executor-debug ppcinterp`). Executor in the tab: the wasm build
-  (`build-wasm`, Release) in headless Chromium on `tools/standalone`,
+  (`build-wasm`, Release) in headless Chromium on `executor/server`,
   booting the site's 7.6.1 and 8.6 disks (`boot-7.6.1.img`,
   `boot-8.6.img`: `tools/web/make_boot_disk.py`, the System Folder cut to
   what Executor runs), `?ppc=1` for PowerPC (`tools/bench/tab.mjs`).

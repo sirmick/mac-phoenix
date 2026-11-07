@@ -202,7 +202,7 @@ components (PEF code, main a routine descriptor), Script Editor opens
 (wildcard Apple event dispatch, null targets). Starting it then says
 "Could not initialize the application because of a scripting-system
 (OSA) error": the next thing to find, with `AppleScript @ 8.0` added to
-src/executor/res/extension-policy.txt (8.6's file has no ™).
+executor/core/res/extension-policy.txt (8.6's file has no ™).
 
 Called and still unanswered (8.6, 2026-10-30): `GetQDGlobals`,
 `QDGet`/`SetPatternOrigin`, `LMGetBrianBits`, `LMGetCurLayer`,

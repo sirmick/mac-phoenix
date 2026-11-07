@@ -1,19 +1,19 @@
 # Executor's tab: settings
 
 One JSON document, described by one JSON Schema:
-`web/executor/settings.schema.json`. The schema is where every setting's
+`executor/web/settings.schema.json`. The schema is where every setting's
 category, default, type, range, label and help text are; nothing else
 repeats them. Two implementations check a document against it, with
 the same subset of JSON Schema and the same messages:
 
 | | Where | Keeps |
 |---|---|---|
-| `tools/standalone` (`schema.go`, `settings.go`) | the Go server | `settings.json` (`--config`; default in the data directory, Standalone.md): all of it |
-| `web/executor/settings.js` | the tab | on the server, through `/api/settings` (without it: the defaults, kept nowhere) |
+| `executor/server` (`schema.go`, `settings.go`) | the Go server | `settings.json` (`--config`; default in the data directory, Standalone.md): all of it |
+| `executor/web/settings.js` | the tab | on the server, through `/api/settings` (without it: the defaults, kept nowhere) |
 
-`web/tests/settings_cases.json` holds them to the same answers (go test,
+`executor/tests/web/settings_cases.json` holds them to the same answers (go test,
 `tab_settings.mjs`). The Go server embeds a copy of the
-schema (`tools/standalone/settings.schema.json`; go test fails if it
+schema (`executor/server/settings.schema.json`; go test fails if it
 differs: copy it after editing).
 
 ## The document
@@ -33,7 +33,7 @@ differs: copy it after editing).
 
 The schema's own keywords, beside the standard ones:
 
-- `x-scope`: `page` (the tab's) or `server` (tools/standalone's own). A
+- `x-scope`: `page` (the tab's) or `server` (executor/server's own). A
   hosted server offers and keeps only the page's; its own settings are
   its `server.toml`. Without a server, the page's only, in the browser.
 - `x-apply`: `live` (at once), `executor` (Executor restarts: the dialog

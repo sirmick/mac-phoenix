@@ -1,7 +1,7 @@
 // The Mac's cursor as the page's own (a CSS cursor), so the pointer moves
 // at the browser's speed and is never part of the frames: the guest only
 // says what it looks like. Shared by mac-phoenix's client (client.js, the
-// Executor backend) and Executor's tab (web/executor; the wasm build
+// Executor backend) and Executor's tab (executor/web; the wasm build
 // copies this file there).
 //
 //   const cursor = new MacCursor(element, guestWidth);

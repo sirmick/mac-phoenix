@@ -479,9 +479,9 @@ between them (`glyph_lefts`, hidpi_internal.h; a lone glyph is centred).
 ### The wasm tab
 
 Built with `tools/skia/build-wasm.sh` (above) and `--scale` on
-`executor-web`'s own argv at start (`web/executor/main.js`: the
+`executor-web`'s own argv at start (`executor/web/main.js`: the
 `display.scale` setting or `?scale=`, default `devicePixelRatio`;
-`web/executor/worker.js` passes it through), then changed live (below).
+`executor/web/worker.js` passes it through), then changed live (below).
 `PhoenixVideoDriver::render()`'s `rectsHook` branch (wasm's only path)
 now calls `hidpi::compose()` and publishes the whole `scaled_` surface
 through the same `rectsHook` every time (`compose()` doesn't report how
@@ -496,7 +496,7 @@ resizes to the scaled dimensions in the Worker.
 
 In the tab the scale changes while the Mac runs (the bar's HiDPI box,
 Settings > Display > Sharpness; Settings.md). The page's `'scale'` request
-(`web_main.cpp`) calls `VideoDriver::requestScale`; the Display Manager
+(`executor/host/requests.cpp`) calls `VideoDriver::requestScale`; the Display Manager
 takes it at the front process's next event call, as a screen size
 (`ROMlib_dm_poll`, `displays.cpp` `dm_set_scale`):
 `PhoenixVideoDriver::setScale` sets the scale under the frame lock
@@ -514,12 +514,12 @@ clicks and pointer are in 1x pixels already. Only where the frames go out
 through `rectsHook` (the tab): natively the parent sized its shared frames
 for the scale Executor started with, so `--executor-scale` stays fixed
 there (`setScale` answers false). Test: `ctest -R executor.web.hidpibar`
-(web/tests/tab_hidpibar.mjs: 7.6.1 at dpr 2, 2x, 1x and 2x again: the
+(executor/tests/web/tab_hidpibar.mjs: 7.6.1 at dpr 2, 2x, 1x and 2x again: the
 canvas's size, the menu bar from outlines, the pointer and a menu click
 exact, the setting kept over a reload).
 
 Gate: `ctest -R executor.web.hidpi` (needs a Playwright-capable
-`EXECUTOR_WEB_NODE_PATH`; `web/tests/tab_hidpi.mjs`). Boots the same
+`EXECUTOR_WEB_NODE_PATH`; `executor/tests/web/tab_hidpi.mjs`). Boots the same
 7.6.1 Finder at `?scale=1` and `?scale=2`, and checks the 2x run's menu
 bar actually differs from a naive nearest-neighbor doubling of the 1x
 run by more than a sliver -- the plain-upscale look that not calling
@@ -667,7 +667,7 @@ is taken now only round the old text still under the new one.
 
 The same in the wasm tab, nothing tab-specific (the runs reach the
 screen's list, which `compose()` draws): `executor.web.hidpi_gworld`
-(web/tests/tab_hidpi_gworld.mjs) launches GWorldGallery at `?scale=2` on
+(executor/tests/web/tab_hidpi_gworld.mjs) launches GWorldGallery at `?scale=2` on
 8.6 with PowerPC and checks the canvas's pixels: the copied text has
 anti-aliasing greys, the inverted GWorld's text and the masked-out part
 none.

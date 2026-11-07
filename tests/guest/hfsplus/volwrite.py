@@ -3,8 +3,8 @@
 
 VolWrite (this folder) on a writable HFS+ volume, an application copied
 onto it (/api/copy), then VolDump on the result: on Mac OS 9.0.4 (the G3 machine on mame-ppc) for the oracle, or on
-Executor to compare (tests/test_hfsplus_write.py, web/tests/tab_hfsplus_write.mjs).
-The volume: src/executor/tests/fixtures/hfsplus/blank-long-64m.img.gz, the
+Executor to compare (tests/test_hfsplus_write.py, executor/tests/web/tab_hfsplus_write.mjs).
+The volume: executor/tests/fixtures/hfsplus/blank-long-64m.img.gz, the
 blank fixture (mkfs.hfsplus, "Blank") with a folder "Long" of long-named
 files made by hfsplus_dump's script mode (names the classic calls can't
 make).
@@ -36,7 +36,7 @@ STORAGE = os.environ.get("MACEMU_STORAGE", os.path.expanduser("~/storage"))
 #   mkdir Long
 #   create "Long/A file whose name is longer than thirty-one.txt" TEXT ttxt  (1500 bytes)
 #   create "Long/Another long name, to be deleted.txt" TEXT ttxt  (70000, 300 in the resource fork)
-FIXTURE = os.path.join(ROOT, "src", "executor", "tests", "fixtures", "hfsplus", "blank-long-64m.img.gz")
+FIXTURE = os.path.join(ROOT, "executor", "tests", "fixtures", "hfsplus", "blank-long-64m.img.gz")
 
 
 def run(g, host, app, cfg_name, cfg, out_name):
@@ -62,7 +62,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--machine", choices=["9.0.4", "executor"], required=True)
     ap.add_argument("--out", required=True)
-    ap.add_argument("--dump", default=os.path.join(ROOT, "build", "src", "executor", "romlib", "hfsplus_dump"))
+    ap.add_argument("--dump", default=os.path.join(ROOT, "build", "executor", "core", "romlib", "hfsplus_dump"))
     ap.add_argument("--port", type=int, default=guest.free_port())
     ap.add_argument("--big", action="store_true")
     args = ap.parse_args()

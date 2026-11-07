@@ -77,7 +77,7 @@ Who fills them:
 | 68k ROM machine | `cpu_m68k_install(p, core, jit)` (`src/cpu/cpu_m68k.cpp`) | `cpu::platform_install()` (`src/cpu/core/platform_cpu.cpp`) supplies memory, registers, `Execute68k`, interrupt and cache entries for any `Core`; `cpu_m68k.cpp` adds init, reset (PC = ROM + `$2A`, SSP = `$2000`), the run loop and the NMI |
 | PPC on Kheperix | `cpu_ppc_kpx_install()` | |
 | PPC on mame-ppc | `cpu_ppc_mame_install()` (`src/cpu/kpx/cpu_ppc_mame.cpp`) | its own entries on a `mame-ppc` `Core` |
-| Executor | `src/executor/cpu/syn68k_common.cpp` | a syn68k API facade on a `Core`; `platform_cpu.cpp` for the memory entries |
+| Executor | `executor/core/cpu/syn68k_common.cpp` | a syn68k API facade on a `Core`; `platform_cpu.cpp` for the memory entries |
 
 Which installer runs: `src/main.cpp` calls `cpu_m68k_install()` for
 `--backend uae`; `CPUContext::init_ppc()` (`src/core/cpu_context.cpp`)

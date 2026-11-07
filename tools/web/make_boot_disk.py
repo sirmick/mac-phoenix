@@ -4,7 +4,7 @@
     tools/web/make_boot_disk.py SOURCE.img OUT.img [--label NAME] [--keep PATH]
 
 Executor runs only the startup files its policy allows
-(src/executor/res/extension-policy.txt), and in a browser tab every
+(executor/core/res/extension-policy.txt), and in a browser tab every
 megabyte of disk is download time. This keeps what Executor uses and the
 user sees, and leaves out the rest:
 
@@ -46,7 +46,7 @@ sys.path.insert(0, str(ROOT / "tools/diskaudit"))
 from rsrc import Disk, glob_quote  # noqa: E402
 import tidy  # noqa: E402
 
-POLICY = ROOT / "src/executor/res/extension-policy.txt"
+POLICY = ROOT / "executor/core/res/extension-policy.txt"
 EXTENSION_FOLDERS = {b"Scripting Additions", b"Voices"}
 # The Finder's desktop database (its file IDs are the source volume's) and
 # the provisioning record: not copied.

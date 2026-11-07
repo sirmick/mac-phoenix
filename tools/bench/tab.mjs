@@ -1,5 +1,5 @@
 // tools/bench/run.py's tab: Executor in headless Chromium (the wasm
-// build's page on tools/standalone, web/tests/server.mjs), driven by one
+// build's page on executor/server, executor/tests/web/server.mjs), driven by one
 // JSON command a line on stdin, one {"result": ...} line on stdout each.
 //
 //   node tools/bench/tab.mjs PAGE-DIR LIBRARY SYSTEM QUERY-JSON [DISKS]
@@ -23,8 +23,8 @@ import { fileURLToPath } from 'node:url';
 
 console.log = (...a) => console.error(...a);   // stdout is the protocol: the page's log to stderr
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-const { launch, newPage, firstFrame, request, until } = await import(path.join(ROOT, 'web/tests/harness.mjs'));
-const { startServer } = await import(path.join(ROOT, 'web/tests/server.mjs'));
+const { launch, newPage, firstFrame, request, until } = await import(path.join(ROOT, 'executor/tests/web/harness.mjs'));
+const { startServer } = await import(path.join(ROOT, 'executor/tests/web/server.mjs'));
 
 const [dir, library, system, queryJson, disksArg] = process.argv.slice(2);
 const disks = (disksArg || 'utilities.img').split(',');
@@ -51,7 +51,7 @@ const at = async (x, y) => {
     const b = await page.locator('#screen').boundingBox();
     return [b.x + x * b.width / 640, b.y + y * b.height / 480];
 };
-// Mac key codes -> the browser's (web/executor/keys.js maps them back)
+// Mac key codes -> the browser's (executor/web/keys.js maps them back)
 const KEYS = { 36: 'Enter', 18: 'Digit1', 19: 'Digit2', 20: 'Digit3', 21: 'Digit4', 23: 'Digit5', 22: 'Digit6',
                11: 'KeyB', 14: 'KeyE', 45: 'KeyN', 8: 'KeyC', 4: 'KeyH', 53: 'Escape' };
 

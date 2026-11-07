@@ -239,7 +239,7 @@ def group(origin):
 def load_policy():
     """(type, id) the resource policy serves from Executor."""
     out = set()
-    for line in (ROOT / "src/executor/res/resource-policy.txt").read_text().splitlines():
+    for line in (ROOT / "executor/core/res/resource-policy.txt").read_text().splitlines():
         f = line.split("#")[0].split()
         if len(f) >= 3 and f[2] == "executor":
             out.add((f[0], int(f[1])))
@@ -277,7 +277,7 @@ class Names:
         self.db, self.ui, self.ds = db, ui_names(), Dispatchers(db)
         # Traps Executor implements as raw register-level 68k stubs; multiversal
         # declares these functions without their trap words.
-        stubs = ROOT / "src/executor/romlib/base/emustubs.h"
+        stubs = ROOT / "executor/core/romlib/base/emustubs.h"
         self.raw = {trap_key(int(t, 16)) for t in
                     re.findall(r"RAW_68K_TRAP\(\w+,\s*(0x[0-9A-Fa-f]+)", stubs.read_text())}
         self.basilisk_traps, self.basilisk_drivers = basilisk_impls()

@@ -2,7 +2,7 @@
 # multiversal-headers.sh DIR M68K-GCC [PPC-GCC]
 #
 # The Multiversal Interfaces from Executor's API definitions
-# (src/executor/multiversal, `make-multiverse.rb -G CIncludes`) for building
+# (executor/core/multiversal, `make-multiverse.rb -G CIncludes`) for building
 # Mac programs with Retro68 against them alone:
 #   DIR/out/CIncludes, RIncludes, lib68k (glue), libppc (with PPC-GCC)
 #   DIR/include      the toolchain's own headers (newlib, Retro68's) without
@@ -16,7 +16,7 @@ DIR="${1:?usage: multiversal-headers.sh DIR M68K-GCC [PPC-GCC]}"
 GCC="${2:?usage: multiversal-headers.sh DIR M68K-GCC [PPC-GCC]}"
 PPC_GCC="${3:-}"
 REPO="$(cd "$(dirname "$0")/../.." && pwd)"
-MV="$REPO/src/executor/multiversal"
+MV="$REPO/executor/core/multiversal"
 
 GENPATH="$(dirname "$GCC"):$PATH"
 [[ -n "$PPC_GCC" ]] && GENPATH="$(dirname "$PPC_GCC"):$GENPATH"

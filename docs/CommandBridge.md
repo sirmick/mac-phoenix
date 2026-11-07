@@ -257,7 +257,7 @@ A checkbox in Settings → Guest Additions → "Enable bridge agent" toggles `br
 | `src/common/include/guest_bridge.h` | The trap's protocol: `call()`, `request()`, the slot |
 | `src/ipc/ipc_protocol.h` | `IPCBridgeSlot` in the IPC buffer |
 | `src/core/text_feed.cpp` | `bridge_trap_install()` (ROM machines) |
-| `src/executor/romlib/init.cpp` | The trap in Executor |
+| `executor/core/romlib/init.cpp` | The trap in Executor |
 | `src/core/command_bridge.{cpp,h}` | Read commands; init |
 | `src/webserver/api_handlers.cpp` | HTTP endpoints; `bridge_command()` |
 | `src/config/emulator_config.cpp` | `bridge_enabled`, `bridge_dir`, `--bridge` CLI flag, auto extfs mount |

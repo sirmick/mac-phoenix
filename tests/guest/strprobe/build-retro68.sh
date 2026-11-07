@@ -1,6 +1,6 @@
 #!/bin/bash
 # build-retro68.sh — StrProbe built with Retro68 against the headers
-# generated from src/executor/multiversal, for 68k (StrProbe.bin: 68k code
+# generated from executor/core/multiversal, for 68k (StrProbe.bin: 68k code
 # links Apple's GetIndString/GetIndPattern glue from Interface.o, so it
 # measures the Mac's answer, not Executor's) and for PowerPC
 # (StrProbePPC.bin: InterfaceLib's, Executor's C_GetIndString).
@@ -12,7 +12,7 @@ RETRO68="${RETRO68:-$HOME/opt/retro68/build/toolchain}"
 RETRO68_PPC="${RETRO68_PPC:-$HOME/opt/retro68/build-ppc/toolchain}"
 WORK="${WORK:-$HOME/storage/tmp/strprobe-retro68.$$}"
 mkdir -p "$WORK"
-(cd "$REPO/src/executor/multiversal" && \
+(cd "$REPO/executor/core/multiversal" && \
     PATH="$RETRO68/bin:$PATH" ruby make-multiverse.rb -G CIncludes -o "$WORK/mv" >/dev/null)
 cmake -S "$HERE" -B "$WORK/m68k" -DCMAKE_TOOLCHAIN_FILE="$RETRO68/m68k-apple-macos/cmake/retro68.toolchain.cmake" \
     -DMV_OUT="$WORK/mv" >/dev/null

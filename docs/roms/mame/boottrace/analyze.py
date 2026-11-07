@@ -17,7 +17,7 @@ from bisect import bisect_right
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, "..", "..", "..", ".."))
 LOMEM = os.path.join(REPO, "docs/roms/dissam/tools/vendor/classic-mac-rom-ghidra-tools/lomem_globals.txt")
-TRAPDEFS = os.path.join(REPO, "src/executor/multiversal/defs")
+TRAPDEFS = os.path.join(REPO, "executor/core/multiversal/defs")
 
 LOCAL = re.compile(r"^(LAB|caseD|switchD|switchdataD|default|USHORT|PTR_DAT|DAT|PTR)(_|$)")
 

@@ -5,7 +5,7 @@ Mac through the File System Manager (FSM): it installs a foreign file system
 (FFS) with `InstallFS` and the FSM hands it the drives no Mac file system
 reads, and then every File Manager call for the volumes it mounted. Executor
 had no FSM, so PC Exchange declined to install ("not installed" in its
-control panel). Now `src/executor/romlib/file/fsm.cpp` is one, written from
+control panel). Now `executor/core/romlib/file/fsm.cpp` is one, written from
 Apple's `FSM.h` (records, selectors, constants) and the behaviour of PC
 Exchange 2.1.1 (7.6.1) and 2.0.5 (7.5.5): which calls it makes, in which
 order, what it reads back.

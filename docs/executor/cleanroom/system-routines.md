@@ -125,7 +125,7 @@ locked until the outermost call returns.
 
 ## Tests to write
 
-gtests in `src/executor/tests` (they run on both 68k cores:
+gtests in `executor/tests` (they run on both 68k cores:
 `executor.*` and `executor.mame68k.*`), building small tables and fake
 packages in guest memory and calling through `execute68K`:
 

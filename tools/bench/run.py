@@ -216,7 +216,7 @@ class Native:
 
 
 class Tab:
-    """Executor in headless Chromium (build-wasm's page on tools/standalone),
+    """Executor in headless Chromium (build-wasm's page on executor/server),
     through tools/bench/tab.mjs: one JSON command a line."""
 
     def __init__(self, wasm, work, system, query, disks):
@@ -971,7 +971,7 @@ def main():
     ap.add_argument("--first", type=int, default=1, help="number of the first run (resuming a run)")
     ap.add_argument("--out", default=os.path.join(HOME, "storage/tmp/bench/out"))
     ap.add_argument("--binary", default=os.path.join(REPO, "build/mac-phoenix"))
-    ap.add_argument("--wasm", default=os.path.join(REPO, "build-wasm/src/executor/romlib/config/front-ends/wasm"))
+    ap.add_argument("--wasm", default=os.path.join(REPO, "build-wasm/executor/frontends/wasm"))
     ap.add_argument("--port", type=int, default=19420)
     ap.add_argument("--limit", type=float, default=600, help="seconds a test may take")
     ap.add_argument("--keep", action="store_true", help="keep each session's disk images")

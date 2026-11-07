@@ -34,13 +34,15 @@ falls under below, not the GPL of the whole.
 | `BridgeAgent/`, `MacBrowser/` (sources) | the guest-side apps |
 | `provisioning/`, `tools/`, `tests/`, `docs/`, `cmake/`, `packaging/`, `debian/`, `rpm/`, the `CMakeLists.txt` files | everything else |
 
-### MIT: Executor ([src/executor/COPYING](src/executor/COPYING), [src/executor/LICENSE-CONTRIBUTIONS](src/executor/LICENSE-CONTRIBUTIONS))
+### MIT: Executor ([executor/COPYING](executor/COPYING), [executor/LICENSE-CONTRIBUTIONS](executor/LICENSE-CONTRIBUTIONS))
 
-`src/executor/` is Executor 2000 (© 1986–2004 Abacus Research & Development,
-© 2018– Wolfgang Thaller), imported from
+`executor/core/` and `executor/frontends/headless/` are Executor 2000 (© 1986–2004
+Abacus Research & Development, © 2018– Wolfgang Thaller), imported from
 [autc04/executor](https://github.com/autc04/executor); see
 [docs/executor/README.md](docs/executor/README.md). MacPhoenix's changes to it
-are MIT too, so they can go back upstream.
+are MIT too, so they can go back upstream, and so is the rest of `executor/`,
+MacPhoenix's own (the other front ends, `host/`, `tests/`, the tab in `web/`,
+the server in `server/`; [executor/README.md](executor/README.md)).
 
 ### BSD and other permissive: third-party code
 
@@ -50,8 +52,8 @@ are MIT too, so they can go back upstream.
 | `src/cpu/mame/third_party/softfloat3/` | BSD-3-Clause (Berkeley SoftFloat 3e) |
 | `src/cpu/mame/third_party/asmjit/` | zlib ([LICENSE-asmjit](src/cpu/mame/LICENSE-asmjit)) |
 | `subprojects/libdatachannel/` | MPL-2.0; its `deps/`: libjuice MPL-2.0, libsrtp and usrsctp BSD-3-Clause, plog and nlohmann/json MIT |
-| `src/executor/third_party/googletest/` | BSD-3-Clause |
-| `src/executor/third_party/minicoro/` | Unlicense or MIT-0 (minicoro 0.2.0, Eduardo Bart; the end of `minicoro.h`) |
+| `executor/core/third_party/googletest/` | BSD-3-Clause |
+| `executor/core/third_party/minicoro/` | Unlicense or MIT-0 (minicoro 0.2.0, Eduardo Bart; the end of `minicoro.h`) |
 | `tools/macdecode/dcmp0_ext.py` | MIT (adapted from rsrcfork) |
 | Skia, with its FreeType, libpng and zlib (not in the tree: `tools/skia/fetch.sh` for the native/arm64 prebuilt, `tools/skia/build-wasm.sh` for the wasm one; linked only with `-DEXECUTOR_SKIA=ON`) | BSD-3-Clause (Skia); FreeType under the FTL (BSD-style, credit in the documentation); libpng under the libpng licence (BSD-style); zlib under the zlib licence (BSD-style) |
 

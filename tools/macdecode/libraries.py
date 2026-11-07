@@ -44,7 +44,7 @@ import yaml
 REPO = Path(__file__).resolve().parents[2]
 STORAGE = Path(os.environ.get("MACEMU_STORAGE", Path.home() / "storage"))
 INDEX = STORAGE / "macdecode" / "libraries.json"
-DEFS = REPO / "src/executor/multiversal/defs"
+DEFS = REPO / "executor/core/multiversal/defs"
 MPW_DISK = STORAGE / "images" / "mpw.img"
 STUBS = ":Interfaces&Libraries:Libraries:SharedLibraries:"
 

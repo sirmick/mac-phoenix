@@ -26,7 +26,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "provisioning"))
 import guest  # noqa: E402
 
-FIXTURE = os.path.join(ROOT, "src", "executor", "tests", "fixtures", "hfsplus", "blank-64m.img.gz")
+FIXTURE = os.path.join(ROOT, "executor", "tests", "fixtures", "hfsplus", "blank-64m.img.gz")
 STORAGE = os.environ.get("MACEMU_STORAGE", os.path.expanduser("~/storage"))
 LINES = ["Hello from SimpleText on HFS+.", " Second line.", "Opened again: "]
 
@@ -46,7 +46,7 @@ def resource_types(fork):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--dump", default=os.path.join(ROOT, "build", "src", "executor", "romlib", "hfsplus_dump"))
+    ap.add_argument("--dump", default=os.path.join(ROOT, "build", "executor", "core", "romlib", "hfsplus_dump"))
     ap.add_argument("--port", type=int, default=guest.free_port())
     ap.add_argument("--keep")
     args = ap.parse_args()

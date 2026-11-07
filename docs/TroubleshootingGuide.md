@@ -135,5 +135,5 @@ grep -iE "error|fail|crash|abort|assert" /tmp/run.log
 | Video frame issues | `src/drivers/video/video_output.cpp`, `src/drivers/video/video_encoder_thread.cpp` |
 | WebRTC / signaling | `src/webrtc/`, `src/webserver/websocket.cpp` |
 | Text feed (`/api/text`) | `src/core/text_feed.cpp` |
-| Executor | `src/executor/`, [executor/PLAN.md](executor/PLAN.md) |
+| Executor | `executor/`, [executor/PLAN.md](executor/PLAN.md) |
 | MacBrowser | `src/drivers/browser/`, `MacBrowser/MacBrowser.c`, [MacBrowser.md](MacBrowser.md) |
