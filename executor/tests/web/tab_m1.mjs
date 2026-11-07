@@ -250,7 +250,11 @@ const TARGETS = {
                 throw new Error('nothing drawn');
             await t.saveAs('M1 FH');
         } },
-        { name: 'Canvas™ 5', app: 'Creative:Deneba Canvas 5.0.2 ƒ:Canvas™ 5', use: async (t) => {
+        // Known exception (M1.md): with the disk's Claris XTND System in the
+        // System Folder its Save dialog gets wrong keyDowns (7.6.1) or
+        // Executor traps in NewPixMap (8.6); natively, without XTND, the name
+        // types. Everything up to there must work; a save fails the cell.
+        { name: 'Canvas™ 5', app: 'Creative:Deneba Canvas 5.0.2 ƒ:Canvas™ 5', known: /^no window named M1 CV after saving$/, use: async (t) => {
             // Untitled-1 opens at launch; the rectangle tool (the
             // toolbox's third row, left) dragged across the page, Save As.
             // The toolbox: 50x206 at the left, a drag bar, 24-pixel rows.
@@ -286,7 +290,15 @@ const TARGETS = {
             await t.pause(1000);
             if (changed(before, await sample()) < 0.002)
                 throw new Error('nothing drawn');
-            await t.saveAs('M1 CV');
+            try {
+                await t.saveAs('M1 CV');
+            } catch (e) {
+                if (!/^no window named M1 CV after saving$/.test(e.message))
+                    throw e;
+                await shot('known');
+                return;
+            }
+            throw new Error('saved: no longer a known exception (take known out, M1.md)');
         } },
     ],
     'creative-8.img': [
