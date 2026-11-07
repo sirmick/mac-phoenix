@@ -71,10 +71,11 @@ Only used with the UAE core and `jit: true`.
 | `ram_mb` | int | `64` | RAM size in megabytes |
 | `screen` | string | `"640x480"` | Boot display resolution (`"WxH"`) |
 | `max_resolution` | string | `""` | Cap on the screen modes offered to the guest (`"WxH"`; empty = no cap). CLI: `--max-resolution` |
+| `depth` | int | `32` | Colour depth the screen starts in, bits (1, 2, 4, 8, 16, 32; other values ignored); 68k Macs and Executor. Read only when the file has it: Executor otherwise starts at its System's depth (32 on 8.x, 8 on 7.x). The web UI doesn't send it. CLI: `--depth` |
 | `rom` | string | `""` | ROM file path (absolute, or relative to `storage_dir/roms/`) |
 | `disks` | array | `[]` | Disk image paths (absolute, or relative to `storage_dir/images/`) |
 | `cdroms` | array | `[]` | CD-ROM image paths (same resolution rules) |
-| `extfs` | array | `[]` | Host folders to share. Only the first is mounted (the Host volume); a string is read as a one-element array |
+| `extfs` | array | `[]` | Host folders to share. The ROM machines mount only the first (the Host volume); Executor mounts them all. A string is read as a one-element array |
 | `bootdriver` | int | `0` | Boot driver (`0` = any, `-62` = CD-ROM) |
 | `audio` | bool | `false` | Send sound to the browser: Opus on the WebRTC track with H.264/VP9, over `/ws` with PNG/WebP. The Mac has its sound hardware either way |
 
@@ -124,8 +125,10 @@ Used with `"backend": "executor"`.
 | `executor_app` | string | `""` | Host path of the application to start; overrides `executor_start` |
 
 The other Executor options (`--no-executor-ot`, `--executor-ppc`,
-`--executor-writable-images`, `--executor-logtraps`, `--executor-debug`,
-`--watch`) are CLI-only.
+`--executor-scale`, `--executor-writable-images`, `--executor-logtraps`
+and its `-nesting`/`-filter`, `--executor-debug`, `--executor-ppc-break`,
+`--watch`) are CLI-only. Executor's desktop application and the tab keep
+their own settings (`executor/web/settings.schema.json`), not this file.
 
 ### Server
 
