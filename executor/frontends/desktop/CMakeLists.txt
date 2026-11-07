@@ -41,6 +41,28 @@ set_target_properties(executor-desktop PROPERTIES
     AUTOMOC ON AUTORCC ON
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 target_include_directories(executor-desktop PRIVATE third_party/miniaudio)
+
+# The version (git describe) in the window's title and the log's first line
+if(NOT EXECUTOR_VERSION)
+    execute_process(COMMAND git describe --always --dirty --tags
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        OUTPUT_VARIABLE EXECUTOR_VERSION OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+    if(NOT EXECUTOR_VERSION)
+        set(EXECUTOR_VERSION unknown)
+    endif()
+endif()
+target_compile_definitions(executor-desktop PRIVATE EXECUTOR_VERSION="${EXECUTOR_VERSION}")
+
+# Windows (cmake/ExecutorWindows.cmake): a GUI executable (--console for a
+# console), its manifest (UTF-8 code page), icon and version, and the crash
+# report (windows_support.h: minidumps through dbghelp)
+if(WIN32)
+    configure_file(windows/executor-desktop.rc.in ${CMAKE_CURRENT_BINARY_DIR}/executor-desktop.rc @ONLY)
+    target_sources(executor-desktop PRIVATE windows_support.h windows_support.cpp
+        ${CMAKE_CURRENT_BINARY_DIR}/executor-desktop.rc)
+    set_target_properties(executor-desktop PROPERTIES WIN32_EXECUTABLE ON)
+    target_link_libraries(executor-desktop PRIVATE dbghelp)
+endif()
 target_link_libraries(executor-desktop PRIVATE
     executor-host executor_platform_glue Qt6::Core Qt6::Gui Qt6::Widgets ${CMAKE_DL_LIBS})
 target_compile_options(executor-desktop PRIVATE ${EXECUTOR_COMMON_FLAGS})

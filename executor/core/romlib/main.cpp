@@ -89,6 +89,10 @@
    whose macros clash with Toolbox names */
 extern "C" __declspec(dllimport) void __stdcall GetCurrentThreadStackLimits(unsigned long long *lo,
                                                                          unsigned long long *hi);
+extern "C" __declspec(dllimport) void *__stdcall VirtualAlloc(void *addr, size_t size, unsigned long type,
+                                                            unsigned long protect);
+extern "C" __declspec(dllimport) int __stdcall VirtualProtect(void *addr, size_t size, unsigned long protect,
+                                                            unsigned long *old);
 #endif
 
 using namespace Executor;
@@ -576,6 +580,11 @@ int executor_main_entry(int argc, char **argv)
     pthread_create(&executorThread, &attr, [](void *arg) -> void * {
         unsigned long long lo, hi;
         GetCurrentThreadStackLimits(&lo, &hi);
+        /* all of it committed: the guest reads its frames anywhere, not
+           only down from the guard page as the stack grows */
+        VirtualAlloc((void *)lo, hi - lo, 0x1000 /* MEM_COMMIT */, 0x04 /* PAGE_READWRITE */);
+        unsigned long old;
+        VirtualProtect((void *)lo, hi - lo, 0x04 /* PAGE_READWRITE: the guard page's off */, &old);
         syn68k_set_stack_window((const void *)lo, hi - lo);
         (*(std::function<void()> *)arg)();
         return nullptr;

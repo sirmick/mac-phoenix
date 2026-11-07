@@ -33,9 +33,30 @@ bool LogCapture::start(const QString &file)
     if(pipe(fds) != 0)
         return false;
     fflush(stderr);
+#if defined(Q_OS_WIN)
+    /* A GUI executable starts with no stderr or stdout (unless --console
+       gave it one): descriptors first, then both into the pipe, in binary
+       mode (no CRs). Executor writes to stdout as well. */
+    if(_fileno(stderr) < 0)
+        (void)!freopen("NUL", "w", stderr);
+    if(_fileno(stdout) < 0)
+        (void)!freopen("NUL", "w", stdout);
+    int err = _fileno(stderr);
+    int original = dup(err);
+    if(original < 0 || dup2(fds[1], err) < 0)
+        return false;
+    _setmode(err, _O_BINARY);
+    fflush(stdout);
+    if(dup2(fds[1], _fileno(stdout)) == 0)
+    {
+        _setmode(_fileno(stdout), _O_BINARY);
+        setvbuf(stdout, nullptr, _IONBF, 0);
+    }
+#else
     int original = dup(2);
     if(original < 0 || dup2(fds[1], 2) < 0)
         return false;
+#endif
     setvbuf(stderr, nullptr, _IONBF, 0);
     FILE *log = file.isEmpty() ? nullptr : fopen(file.toLocal8Bit().constData(), "a");
     std::thread([this, in = fds[0], original, log] {

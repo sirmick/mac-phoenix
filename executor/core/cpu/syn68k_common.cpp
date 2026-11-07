@@ -604,6 +604,7 @@ void syn68k_set_stack_window(const void *lo, size_t size)
 {
     place_windows();
     set_window(2, lo, std::min<uint64>(size, WINDOW));
+    fprintf(stderr, "[syn68k] window 2: Executor's thread's stack %p (%zu MB)\n", lo, size >> 20);
 }
 
 int syn68k_is_guest_mapped(uintptr_t addr, size_t len)

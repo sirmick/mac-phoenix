@@ -24,14 +24,8 @@ endfunction()
 add_compile_options(-fexceptions)
 add_compile_definitions(WIN32_LEAN_AND_MEAN NOMINMAX _USE_MATH_DEFINES)
 
-# The version (git describe) in the window title and the log's first line
-execute_process(COMMAND git describe --always --dirty --tags
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-    OUTPUT_VARIABLE EXECUTOR_VERSION OUTPUT_STRIP_TRAILING_WHITESPACE
-    ERROR_QUIET)
-if(NOT EXECUTOR_VERSION)
-    set(EXECUTOR_VERSION unknown)
-endif()
+# The desktop app's resources (manifest, icon, version)
+enable_language(RC)
 
 find_package(Threads REQUIRED)
 
