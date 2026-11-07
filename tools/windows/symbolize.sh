@@ -3,9 +3,9 @@
 # executor/frontends/desktop/windows_support.cpp): each
 # "executor-desktop.exe+0xOFFSET" line through llvm-symbolizer, against the
 # unstripped executable of the same build (tools/windows/package.sh keeps it
-# as executor-desktop.debug.exe beside the zip).
+# as executor-windows-VERSION-debug/executor-desktop.exe beside the zip).
 #
-#   tools/windows/symbolize.sh crash-STAMP.txt [executor-desktop.debug.exe]
+#   tools/windows/symbolize.sh crash-STAMP.txt [executor-windows-VERSION-debug/executor-desktop.exe]
 set -euo pipefail
 REPORT=$1
 EXE=${2:-$(dirname "$0")/../../build-windows/executor-desktop.exe}
