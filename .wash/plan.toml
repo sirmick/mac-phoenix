@@ -1,7 +1,7 @@
 # wash-plan: written by Wash as the plan changes.
 # Edit it only between workspaces; plan_set {"from": "<this file>"} loads it.
 
-revision = 53
+revision = 55
 
 [[node]]
   id = "cuts"
@@ -903,5 +903,5 @@ revision = 53
   template = "package"
   parent = "p2"
   body = "Found by leftovers 2026-11-07: executor.web.m1.7.6.1.development fails ('no alert M1 build 0'): MPW Shell opens a Commando dialog for the typed SC line (Commando opens on a command ending in '…' (option-;) or when Enter runs a line MPW thinks is incomplete). Fails on grid2's build-wasm at ed28f66e too, passed at 840d764b (mover's run): bisect 840d764b..ed28f66e (desktop merge: host/ keys? creative5: tab_m1). ResourceDispatch selector $5 logged unimplemented in both runs. Logs ~/storage/tmp/leftovers/mpw-tab{,-base}.log."
-  state = "active"
-  revision = 51
+  state = "done"
+  revision = 55
