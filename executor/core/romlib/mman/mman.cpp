@@ -918,7 +918,7 @@ done:
     log_alloc("NewHandle", size >= HDRSIZE && newh ? size - HDRSIZE : size, current_zone, newh);
     MM_SLAM("exit");
     LM(TheZone) = save_zone;
-    if(!newh && current_zone != LM(SysZone))
+    if(!newh && ROMlib_full_heap_own_zone(current_zone))
         return full_heap_handle(asked, clear_p);
     return newh;
 }
@@ -1387,7 +1387,7 @@ Ptr _NewPtr_flags(Size size, bool sys_p, bool clear_p)
         LM(TheZone) = save_zone;
         SET_MEM_ERR(memFullErr);
         MM_SLAM("exit");
-        if(current_zone != LM(SysZone))
+        if(ROMlib_full_heap_own_zone(current_zone))
             return full_heap_ptr(asked, clear_p);
         return nullptr;
     }

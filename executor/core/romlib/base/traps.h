@@ -119,8 +119,10 @@ private:
    at none. Every guest entry (68k trap, dispatcher selector, PowerPC and
    CFM-68K library call) sets it for the call; a host call doesn't, so an
    allocation the Toolbox makes while serving GetNewDialog is
-   GetNewDialog's. Each process's coroutine has its own stack of these,
-   so a switch inside WaitNextEvent comes back to the right one. */
+   GetNewDialog's. Each process's and Thread Manager thread's coroutine
+   has its own: a switch saves and restores it (process.cpp wait_turn),
+   so a context resumed inside WaitNextEvent, YieldToThread or a grow-zone
+   procedure gets its own back, never the one that ran before it. */
 extern const Entrypoint *served_entry;
 extern const char *const guest_allocators[]; /* names; nullptr-terminated */
 

@@ -19,6 +19,7 @@
 #include <PowerCore.h>
 #include <rsys/process.h>
 #include <mman/fullheap.h>
+#include <base/traps.h>
 #include <ScrapMgr.h>
 #include <FileMgr.h>
 #include <file/file.h>
@@ -1349,14 +1350,19 @@ static void hand_baton(process_info_t *to)
 }
 
 /* Until it is the calling context's turn: the running context's own
-   (mco_running(), null for the root). */
+   (mco_running(), null for the root). The routine being served
+   (traps::served_entry, what a full heap's fallback goes by) is the
+   context's own: whoever ran meanwhile, a process or a Thread Manager
+   thread, leaves it as it was here. */
 static void wait_turn()
 {
+    const traps::Entrypoint *served = traps::served_entry;
     mco_coro *me = mco_running();
     if(me)
     {
         while(turn() != me)
             mco_yield(me);
+        traps::served_entry = served;
         return;
     }
     for(mco_coro *next; (next = turn()) != nullptr;)
@@ -1370,6 +1376,7 @@ static void wait_turn()
             gui_fatal("process switch to a context that cannot run");
         }
     }
+    traps::served_entry = served;
 }
 
 /* ── Process coroutines ──
@@ -1744,6 +1751,7 @@ static void threads_shutdown(process_info_t *p);
 static void process_body(process_info_t *p)
 {
     wait_turn();
+    traps::served_entry = nullptr; /* its own code runs, serving nothing */
     fresh_world(p);
     if(p->appl_scratch_set)
         memcpy(LMGetApplScratch(), p->appl_scratch, sizeof p->appl_scratch);
@@ -3634,6 +3642,7 @@ static void thread_finish(pm_thread *t, uint32_t result, bool quit_app)
 static void thread_body(pm_thread *t)
 {
     wait_turn();
+    traps::served_entry = nullptr; /* its entry is guest code */
     syn68k_restore_context(t->cpu.data());
     uint32_t result = 0;
     bool quit_app = false;

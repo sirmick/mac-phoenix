@@ -2,6 +2,7 @@
 
 #include <MemoryMgr.h>
 #include <QuickDraw.h>
+#include <ScrapMgr.h>
 #include <mman/mman.h>
 #include <mman/mman_private.h>
 #include <mman/fullheap.h>
@@ -211,6 +212,89 @@ TEST_F(FullHeap, ProcessExitFreesItsFallbackBlocks)
                                         std::make_pair((uint32_t)US_TO_SYN68K(b), (uint32_t)US_TO_SYN68K(b) + 3000)));
     EXPECT_EQ(2u, released.size());
     DisposePtr(holder);
+}
+
+/* The desk scrap outlives the application that put it there: ZeroScrap
+   makes its handle in the System heap and PutScrap grows it there
+   (SetHandleSize never falls back), so neither is a fallback block of
+   the process and its end leaves the data for the next one's GetScrap. */
+TEST_F(FullHeap, ScrapOutlivesTheProcess)
+{
+    uintptr_t me = ROMlib_process_key();
+    size_t n0 = ROMlib_full_heap_listed(me);
+    /* a fresh scrap, made with the application heap full */
+    INTEGER state0 = LM(ScrapState);
+    Handle handle0 = LM(ScrapHandle);
+    LONGINT size0 = LM(ScrapSize);
+    LM(ScrapState) = -1;
+
+    std::vector<char> data(6000);
+    for(size_t i = 0; i < data.size(); i++)
+        data[i] = (char)(i * 7);
+    {
+        traps::ServedTrap t(traps::entrypoints.at("ZeroScrap"));
+        ASSERT_EQ(noErr, ZeroScrap());
+    }
+    {
+        traps::ServedTrap t(traps::entrypoints.at("PutScrap"));
+        ASSERT_EQ(noErr, PutScrap(data.size(), "TEXT"_4, (Ptr)data.data()));
+    }
+    Handle scrap = LM(ScrapHandle);
+    EXPECT_EQ(LM(SysZone), HandleZone(scrap));
+    EXPECT_EQ(n0, ROMlib_full_heap_listed(me)) << "no fallback block";
+
+    ROMlib_full_heap_process_exit(me, nullptr);
+
+    EXPECT_EQ(scrap, LM(ScrapHandle));
+    Handle h = NewHandleSys(0);
+    ASSERT_NE(nullptr, h);
+    GUEST<LONGINT> off;
+    EXPECT_EQ((LONGINT)data.size(), GetScrap(h, "TEXT"_4, &off));
+    ASSERT_EQ((Size)data.size(), GetHandleSize(h));
+    EXPECT_EQ(0, memcmp(*h, data.data(), data.size()));
+    DisposeHandle(h);
+
+    DisposeHandle(scrap);
+    LM(ScrapHandle) = handle0;
+    LM(ScrapSize) = size0;
+    LM(ScrapState) = state0;
+}
+
+/* Only the application's own zones fall back: a zone outside its heap
+   (another process's, the Process Manager's, here one in the System
+   heap) keeps the Memory Manager's nil, or a block that outlives the
+   application would be freed with it. The test's zone is inside the
+   application heap, so it does. */
+TEST_F(FullHeap, OnlyOwnZonesFallBack)
+{
+    EXPECT_TRUE(ROMlib_full_heap_own_zone(zone));
+    EXPECT_FALSE(ROMlib_full_heap_own_zone(LM(SysZone)));
+    EXPECT_FALSE(ROMlib_full_heap_own_zone(ROMlib_pm_zone));
+
+    constexpr Size n = 8 * 1024;
+    Ptr other_mem = NewPtrSys(n);
+    ASSERT_NE(nullptr, other_mem);
+    InitZone(nullptr, 4, other_mem + n, (THz)other_mem);
+    THz other = (THz)other_mem;
+    EXPECT_FALSE(ROMlib_full_heap_own_zone(other));
+    SetZone(other);
+    {
+        traps::ServedTrap own(traps::entrypoints.at("NewPtr"));
+        while(NewPtr(64))
+            ;
+    }
+    uintptr_t me = ROMlib_process_key();
+    size_t n0 = ROMlib_full_heap_listed(me);
+    {
+        traps::ServedTrap t(traps::entrypoints.at("TENew"));
+        EXPECT_EQ(nullptr, NewHandle(1024));
+        EXPECT_EQ(memFullErr, LM(MemErr));
+        EXPECT_EQ(nullptr, NewPtr(1024));
+    }
+    EXPECT_EQ(n0, ROMlib_full_heap_listed(me));
+    EXPECT_EQ(fallbacks0, ROMlib_full_heap_fallbacks());
+    SetZone(zone);
+    DisposePtr(other_mem);
 }
 
 /* Disposing a fallback block takes it off its process's list. */

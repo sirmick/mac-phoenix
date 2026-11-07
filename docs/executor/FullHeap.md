@@ -62,13 +62,40 @@ The rule depends on the routine being served, not on the call site.
   GetNewDialog.
 - Guest code that Executor calls makes its own guest calls, and each
   marks itself. A WDEF's own NewHandle is the guest's NewHandle.
-- Each process's coroutine keeps its own saved values on its own stack.
-  After a process switch inside WaitNextEvent, each process returns to its
-  own value.
+- Each process's and each Thread Manager thread's coroutine has its own
+  value. `wait_turn` (process.cpp), where every one of them waits for its
+  turn, saves it and puts it back. A process or thread resumed inside
+  WaitNextEvent, YieldToThread or a grow-zone procedure gets its own
+  value back, not the one that ran before it. A new process or thread
+  starts with none.
 
-`_NewHandle_flags` and `_NewPtr_flags` can fail outside the System heap
-(the application's heap or any zone of its own). They then ask
-`ROMlib_full_heap_decide`:
+A fallback is made only when `_NewHandle_flags` or `_NewPtr_flags` fails
+in one of the current application's own zones
+(`ROMlib_full_heap_own_zone`): ApplZone, or a zone inside it. A fallback
+belongs to the current process and is freed when it ends. So memory
+meant to outlive the application never becomes one: the System heap,
+the Process Manager's heap (partitions, temporary memory, CFM's global
+sections and system-owned fragments, `cfm_new_ptr`) and other processes'
+zones (a desktop pattern's data, `xdata.cpp`, made in its own handle's
+zone) keep the Memory Manager's nil there. What Executor shares across
+processes it makes in the System heap on purpose, which is never a
+fallback either (an audit, 2026-11-07):
+
+- the desk scrap (ZeroScrap; PutScrap grows it in place);
+- high-level events and Apple Events sent to another process (hle.cpp
+  copies them into the System heap);
+- the Component Manager's names and code, Gestalt's links, width tables,
+  the Process Manager's layers and icons, the main GDevice's tables.
+
+There are known lifetime gaps that the fallback neither causes nor fixes
+(open):
+- `default_aux_ctl` (ctlMisc.cpp) is made in each application's heap and
+  not switched per process.
+- Sound channels are linked into the global `allchans` and are not
+  removed when their process ends.
+- GrayRgn and DeskCPat are in the first process's heap.
+
+The routines that can fail in an own zone ask `ROMlib_full_heap_decide`:
 
 1. **The guest's own allocator calls keep nil and MemErr -108.** This is
    `traps::guest_allocators`:
@@ -120,6 +147,12 @@ The rule depends on the routine being served, not on the call site.
    AppleScript's initialisation in MacPerl failed
    (`macperl_smoke_executor`: "couldn't initialize AppleScript"). Until a
    heap runs out, Executor behaves as the Mac does.
+
+   The reserve guards ApplZone only (`ROMlib_full_heap_prefer_system`).
+   Another zone of the application's own (one it made with InitZone, in
+   its heap or in temporary memory) still gets fallbacks once it is
+   full, but never the reserve: the Toolbox fills it to the last bytes
+   first.
 5. **Zones keep their own master pointers.** MoreMasters' block is never
    taken from the System heap (`FullHeapInZone`). An application zone with
    master pointers in the System heap gives its handles negative offsets
@@ -259,6 +292,18 @@ because it could only ever add chance keeps, not safety. Executor's own
 C++ state, which the scan could not see anyway, is cleared by address
 range as in step 2.
 
+## Growing a block doesn't fall back
+
+SetHandleSize, SetPtrSize and ReallocateHandle never use the System
+heap. A handle's block can't move to another zone: its master pointer
+is in its own zone, and HandleZone, RecoverHandle and the zone's own
+compaction go by where the block is. So growth that the full heap can't
+give fails as before, memFullErr, as it does on the Mac (Inside
+Macintosh: Memory, SetHandleSize). Toolbox code that grows a handle in
+the application heap (TextEdit's text, say) therefore gets the error on
+a full heap, not a fallback. Only new blocks fall back. A handle made
+in the System heap (the desk scrap's) grows there.
+
 ## Costs
 
 - A process's fallback blocks outlive its partition until it ends (see
@@ -282,6 +327,10 @@ range as in step 2.
   - MoreMasters keeps a zone's master pointers in the zone;
   - `ProcessExitFreesItsFallbackBlocks`: every block freed, one a
     System heap block names too, and `release` told of each;
+    `ScrapOutlivesTheProcess`: with the heap full, ZeroScrap and PutScrap
+    of 6000 bytes, the process's end, then GetScrap reads them back;
+    `OnlyOwnZonesFallBack`: a full zone in the System heap gives nil, no
+    fallback;
     `DisposedBlocksLeaveTheList`;
   - `FullHeapReserve`: with the application heap inside its reserve, a
     Toolbox allocation comes from the System heap and the guest's own

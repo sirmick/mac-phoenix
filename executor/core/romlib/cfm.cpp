@@ -19,6 +19,7 @@
 #include <ResourceMgr.h>
 
 #include <rsys/cfm.h>
+#include <mman/fullheap.h>
 #include <base/traps.h>
 #include <rsys/opentransport.h>
 #include <PEFBinaryFormat.h>
@@ -474,13 +475,20 @@ cfm_new_ptr(Size n)
         }
         return p ? p : NewPtrSys(n);
     }
-    Ptr p = loading_system_fragment ? nullptr : NewPtr(n);
+    Ptr p = nullptr;
+    if(!loading_system_fragment)
+    {
+        /* MacPhoenix: a full heap's System heap fallback (FullHeap.md)
+           only after temporary memory, as before it existed */
+        FullHeapInZone in_zone;
+        p = NewPtr(n);
+    }
     if(!p && ROMlib_pm_zone)
     {
         TheZoneGuard guard(ROMlib_pm_zone);
         p = NewPtr(n);
     }
-    if(!p && loading_system_fragment)
+    if(!p)
         p = NewPtr(n);
     return p;
 }

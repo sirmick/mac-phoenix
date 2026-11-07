@@ -30,7 +30,6 @@
 #include <unordered_map>
 #include <vector>
 #include <algorithm>
-#include <string>
 #include <utility>
 #include <stdio.h>
 #include <unistd.h>
@@ -41,7 +40,9 @@ namespace
 {
 constexpr INTEGER ds_mem_full_err = 25; /* dsMemFullErr (Inside Macintosh: System errors) */
 uint32_t fallbacks;
-std::set<std::pair<std::string, uint32_t>> logged; /* (routine, ApplZone) */
+/* (routine served, ApplZone) pairs already logged, sorted: looked up at
+   every fallback, so no strings */
+std::vector<std::pair<const traps::Entrypoint *, uint32_t>> logged;
 std::set<uint32_t> ran_out; /* zones that have run out (their reserve applies) */
 
 /* The fallback blocks still allocated: handle (its master pointer's
@@ -151,8 +152,9 @@ void Executor::ROMlib_full_heap_process_exit(uintptr_t owner, void (*release)(ui
         it = listed.erase(it);
     }
     ROMlib_full_heap_tracked = listed.size();
-    for(auto z = logged.begin(); z != logged.end();)
-        z = z->second == (uint32_t)US_TO_SYN68K(LM(ApplZone)) ? logged.erase(z) : std::next(z);
+    uint32_t appl = US_TO_SYN68K(LM(ApplZone));
+    logged.erase(std::remove_if(logged.begin(), logged.end(), [appl](const auto &l) { return l.second == appl; }),
+                 logged.end());
     if(blocks.empty())
         return;
 
@@ -203,6 +205,14 @@ int32_t Executor::ROMlib_full_heap_system_room()
     return ZONE_ZCB_FREE(LM(SysZone)) + std::max<int32_t>(ROMlib_syszone_reserve_left(), 0);
 }
 
+bool Executor::ROMlib_full_heap_own_zone(THz zone)
+{
+    THz appl = LM(ApplZone);
+    if(!zone || !appl || zone == LM(SysZone) || zone == ROMlib_pm_zone)
+        return false;
+    return zone == appl || ((Ptr)zone > (Ptr)appl && (Ptr)zone < (Ptr)ZONE_BK_LIM(appl));
+}
+
 full_heap_answer Executor::ROMlib_full_heap_decide(Size size)
 {
     /* No routine served: Executor's own code (its launch, a gtest standing
@@ -245,11 +255,14 @@ void Executor::ROMlib_full_heap_count(void *block, bool handle)
     listed[US_TO_SYN68K(block)] = { ROMlib_process_key(), handle };
     ROMlib_full_heap_tracked = listed.size();
     ++fallbacks;
-    const char *name = served_name();
-    if(logged.insert({ name, (uint32_t)US_TO_SYN68K(LM(ApplZone)) }).second)
-        fprintf(stderr, "[full heap] %s: system heap fallback (%u so far; %d K left above the floor)\n",
-                name, (unsigned)fallbacks,
-                (int)((ROMlib_full_heap_system_room() - FULL_HEAP_SYSTEM_FLOOR) / 1024));
+    std::pair<const traps::Entrypoint *, uint32_t> key{ traps::served_entry, US_TO_SYN68K(LM(ApplZone)) };
+    auto at = std::lower_bound(logged.begin(), logged.end(), key);
+    if(at != logged.end() && *at == key)
+        return;
+    logged.insert(at, key);
+    fprintf(stderr, "[full heap] %s: system heap fallback (%u so far; %d K left above the floor)\n",
+            served_name(), (unsigned)fallbacks,
+            (int)((ROMlib_full_heap_system_room() - FULL_HEAP_SYSTEM_FLOOR) / 1024));
 }
 
 void Executor::ROMlib_full_heap_exhausted(Size size)

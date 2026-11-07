@@ -46,7 +46,14 @@ public:
     static bool active() { return depth > 0; }
 };
 
-/* For an allocation of `size` that failed outside the System heap. */
+/* Whether an allocation that failed in `zone` may fall back at all: the
+   current application's own heap (ApplZone) or a zone inside it. Not the
+   System heap, nor the Process Manager's heap (partitions, temporary
+   memory, CFM's global sections: what outlives the application), nor
+   another process's zone: a fallback is the current process's, freed
+   when it ends. */
+bool ROMlib_full_heap_own_zone(THz zone);
+/* For an allocation of `size` that failed in an own zone. */
 full_heap_answer ROMlib_full_heap_decide(Size size);
 /* An allocation of `size` about to be made in `zone`: true when it is
    the Toolbox's, would take `zone` (the application heap) into its
