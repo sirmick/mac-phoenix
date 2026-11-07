@@ -85,6 +85,12 @@ DISK="${MACEMU_DISK:-$(bash tests/lib/refresh_test_disk.sh "tests-$OS_VERSION" $
 
 # --- Build the application ---------------------------------------------------
 echo -n "Building $APP_NAME (Retro68)..."
+# A build directory configured from another source path (executor/tests was
+# src/executor/tests before the repo move) is made again
+if [[ -f "$APP_BUILD/CMakeCache.txt" ]] &&
+   ! grep -qx "CMAKE_HOME_DIRECTORY:INTERNAL=$PROJECT_ROOT/executor/tests" "$APP_BUILD/CMakeCache.txt"; then
+    rm -rf "$APP_BUILD"
+fi
 if [[ ! -f "$APP_BUILD/CMakeCache.txt" ]]; then
     cmake -S executor/tests -B "$APP_BUILD" \
         -DCMAKE_TOOLCHAIN_FILE="$TOOLCHAIN" >/dev/null
