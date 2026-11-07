@@ -1,7 +1,7 @@
 # wash-plan: written by Wash as the plan changes.
 # Edit it only between workspaces; plan_set {"from": "<this file>"} loads it.
 
-revision = 75
+revision = 76
 
 [[node]]
   id = "cuts"
@@ -925,3 +925,12 @@ revision = 75
   body = "From suiterom 2026-11-07 (~/storage/tmp/suiterom/REPORT.md): PBGetWDInfo(0) answers the default directory on Executor, the root on the Quadra; PBOpenWD of a volume's root makes a WD on Executor, the Quadra gives back the volume's number. ResourceTest.ChangedThenGrown/ChangedThenGrownCompacted/AddedEmptySizeOnDisk: the Quadra damages the file / answers -109; Executor keeps 67d84e32's THINK C behaviour; open: what THINK C really calls. Align with the Quadra where no app depends on the difference."
   state = "todo"
   revision = 75
+
+[[node]]
+  id = "docs-refresh"
+  title = "Documentation refresh after P2 (README, CLAUDE.md, docs/, executor docs), then main + push"
+  emoji = "📚"
+  template = "package"
+  body = "Owner 2026-11-07: merge everything to local main, thoroughly update the README and documentation (stale), push. Three members on disjoint files (docs-top: README.md + docs/*.md project-level; docs-exec: executor/README.md, docs/executor/*, frontends READMEs; docs-claude: CLAUDE.md), one branch wash/docs from grid2 0ed52614, then a reviewer that checks every command/flag/path named exists, then merge to grid2 -> main, push both."
+  state = "active"
+  revision = 76
