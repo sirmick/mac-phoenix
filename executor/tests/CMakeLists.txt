@@ -51,7 +51,7 @@ set(NATIVE_TEST_SOURCES
         sysroutines.cpp resprivate.cpp unknownselectors.cpp folders.cpp cursordev.cpp dialogs.cpp printing.cpp displaymode.cpp
         aehdlr.cpp stdclib.cpp
         aedesc.cpp aeresolve.cpp
-        hfsplus_unicode.cpp hfsplus_volume.cpp hfs_volume.cpp
+        hfsplus_unicode.cpp hfsplus_volume.cpp hfs_volume.cpp image_io.cpp
         exports.cpp cfm.cpp gestalt.cpp timemgr.cpp menus85.cpp widemath.cpp ot_memory.cpp inputsprocket.cpp nameregistry.cpp hidpi_layout.cpp appearance.cpp sound.cpp
         # Native-only: drives the .IPP driver through the Device Manager.
         # The dual-mode ABI comparison against Apple's headers belongs in
@@ -159,6 +159,21 @@ else()
     phoenix_exempt_from_hardening(executor_tests)
 
     gtest_discover_tests(executor_tests
+        TEST_PREFIX "executor."
+        PROPERTIES LABELS executor
+        DISCOVERY_TIMEOUT 30)
+
+    # executor/host's overlays against executor/server's (host/overlay.h)
+    add_executable(executor_overlay_tests overlay.cpp)
+    target_link_libraries(executor_overlay_tests gtest gtest_main executor-host executor_platform_glue)
+    target_compile_definitions(executor_overlay_tests PRIVATE EXECUTOR_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/..")
+    target_compile_features(executor_overlay_tests PRIVATE cxx_std_17)
+    phoenix_exempt_from_hardening(executor_overlay_tests)
+    if(EMSCRIPTEN)
+        # the fixtures are the host's files, as executor_tests' are
+        target_link_options(executor_overlay_tests PRIVATE -sNODERAWFS=1)
+    endif()
+    gtest_discover_tests(executor_overlay_tests
         TEST_PREFIX "executor."
         PROPERTIES LABELS executor
         DISCOVERY_TIMEOUT 30)

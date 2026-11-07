@@ -18,6 +18,7 @@ are MacPhoenix's, in `src/`.
 | `core/third_party/` | googletest, minicoro (their own licences) |
 | `frontends/phoenix/` | the `executor_host` contract (`executor_host.h`: run, input, hooks), `PhoenixVideoDriver` and the sound driver, the System sideload (`hfs_sideload.h`); every front end runs Executor through it. `executor_child.cpp`: mac-phoenix's `--backend executor` (the IPC child), compiled into mac-phoenix only |
 | `frontends/wasm/` | the tab's module, `executor-web.js`/`.wasm`: `web_main.cpp` is the emscripten/JS glue; the tab's ctest cells (`executor.web.*`) are registered here |
+| `frontends/desktop/` | the desktop application, `executor-desktop` (Qt 6 Widgets, Executor in-process through `host/`; its README.md); its ctest cells `executor.desktop.*` |
 | `frontends/headless/` | upstream's headless front end |
 | `host/` | front-end logic above `executor_host` that the tab and a native desktop front end share (`session.h`): the command line, the System Folder a session runs on, disks' System Folder additions, disk images mounted and ejected live, automation requests (`app`, `windows`, `menus`, `launch`, `mount`, `eject`, `resize`, ...), frames as RGBA |
 | `tests/` | the gtest suite (`executor_tests`, ctest label `executor`), its fixtures, `smoke_web_backend.sh`; `tests/web/`: the tab's node/Playwright cells |

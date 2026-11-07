@@ -412,7 +412,7 @@ if(NODE_COMMAND AND GO_COMMAND)
 endif()
 if(NODE_COMMAND AND GO_COMMAND)
     foreach(cell "7.6.1 productivity" "7.6.1 creative" "7.6.1 development" "7.6.1 games-68k" "7.6.1 utilities"
-                 "8.6 productivity" "8.6 creative" "8.6 development" "8.6 games-ppc")
+                 "8.6 productivity" "8.6 creative" "8.6 creative-8" "8.6 development" "8.6 games-ppc")
         separate_arguments(cell)
         list(GET cell 0 system)
         list(GET cell 1 disk)

@@ -66,7 +66,9 @@ static gestaltentry_t gtable[] = {
     /*  gestaltCTBVersion,		UNKNOWN,*/ /* should return gestaltUnknownErr */
     /*  gestaltDBAccessMgrAttr,	0,	*/
     {
-        gestaltDITLExtAttr, gestaltDITLExtPresent,
+        /* MacPhoenix: the bit, not its number (that was 0: "absent"); the
+           Quadra and the G3 answer 1 */
+        gestaltDITLExtAttr, 1 << gestaltDITLExtPresent,
     },
     /*  gestaltEasyAccessAttr,	gestaltEasyAccessOff,	*/
 
@@ -87,7 +89,9 @@ static gestaltentry_t gtable[] = {
     /*  gestaltFXfrMgrAttr,		0,	*/
     /*  gestaltHardwareAttr,	0,	*/
     /*  gestaltHelpMgrAttr,		0,	*/
-    /*  gestaltMiscAttr,		0,	*/
+    /* MacPhoenix: gestaltScrollingThrottle and gestaltSquareMenuBar, as
+       the Quadra and the G3 answer on 7.6.1 and 8.6 */
+    { gestaltMiscAttr, 3 },
     /*  gestaltNotificatinMgrAttr,	0,	*/
     /*  gestaltNuBusConnectors,	0,	*/
     /*  gestaltOSAttr,		0,	*/
@@ -155,8 +159,15 @@ static gestaltentry_t gtable[] = {
         gestaltLogicalRAMSize, (LONGINT)3 * 1024 * 1024,
     },
     {
-        gestaltLowMemorySize, 0x1000,
+        /* MacPhoenix: Executor's low memory ends at 0x2000, where the
+           System heap starts (lastlowglobal; the Quadra answers 0x2000, the
+           G3 0x3000) */
+        gestaltLowMemorySize, 0x2000,
     },
+    /* MacPhoenix: real and user-visible RAM, as 8.6 answers on the G3
+       (the RAM size; 8.x only, gestalt_set_memory_size) */
+    { "rram"_4, (LONGINT)3 * 1024 * 1024 },
+    { "uram"_4, (LONGINT)3 * 1024 * 1024 },
     {
         gestaltMMUType, gestaltNoMMU,
     },
@@ -360,6 +371,15 @@ static gestaltentry_t since_table[] = {
     /* QuickDraw Text 1.0 (gestaltQDTextVersion, 8.5's): its FontManager
        library is Executor's (quickdraw/fontmgr85.cpp) */
     { "qdtx"_4, 0x00000100 },
+    /* System Update 1.0, as 7.6.1 on the Quadra and the G3 and 8.6 on the
+       G3 answer */
+    { "sysu"_4, 0x01008000 },
+    /* the 8.x Dialog Manager (dial/dialMgr8.cpp) and Control Manager
+       (Appearance's controls), present; the processor family (a PowerPC
+       750's, as 'cput'): 8.6 on the G3 */
+    { "dlog"_4, 0x00000001 },
+    { "cntl"_4, 0x00000001 },
+    { "cpuf"_4, 0x00000108 },
 };
 /* the Notification Manager's and the Resource Manager's from 7.0: a
    Quadra on 7.6.1 answers them (tests/guest/gestalt) */
@@ -367,6 +387,7 @@ static const uint16_t since_versions[std::size(since_table)] = {
     0x0800, 0x0800, 0x0700, 0x0850, 0x0800, 0x0800,
     0x0850, 0x0800, 0x0700, 0x0700,
     0x0850, 0x0850,
+    0x0760, 0x0800, 0x0800, 0x0800,
 };
 
 static gestaltentry_t *
@@ -400,6 +421,11 @@ find_selector_in_table(OSType selector, gestaltentry_t table[],
         case "bclk"_4:
         case "nreg"_4:
             if(!power_mac)
+                selector = -1;
+            break;
+        case "rram"_4:
+        case "uram"_4:
+            if(system_version < 0x0800)
                 selector = -1;
             break;
         case gestaltSpeechAttr:
@@ -446,8 +472,11 @@ replace_selector_in_table(OSType selector, LONGINT new_value,
 void
 Executor::gestalt_set_memory_size(uint32_t size)
 {
-    REPLACE_SELECTOR_IN_TABLE(gestaltLogicalRAMSize, size, gtable);
-    REPLACE_SELECTOR_IN_TABLE(gestaltPhysicalRAMSize, size, gtable);
+    /* MacPhoenix: the table itself, whatever System answers which */
+    for(auto &e : gtable)
+        if(e.selector == gestaltLogicalRAMSize || e.selector == gestaltPhysicalRAMSize
+           || e.selector == "rram"_4 || e.selector == "uram"_4)
+            e.value = size;
 }
 
 void
@@ -484,6 +513,10 @@ Executor::gestalt_set_system_version(uint32_t version)
     REPLACE_SELECTOR_IN_TABLE(gestaltProcessorType, ppc ? 3 /* gestalt68020 */ : gestalt68040, gtable);
     REPLACE_SELECTOR_IN_TABLE(gestaltFPUType, ppc ? 0 : 3, gtable);
     REPLACE_SELECTOR_IN_TABLE(gestaltMMUType, ppc ? 5 : gestaltNoMMU, gtable);
+    /* the machine's hardware attributes: the G3's (7.6.1 and 8.6), the
+       Quadra's as 7.6.1 answers them (bit 24 more than the table's 7.5.5
+       value) */
+    REPLACE_SELECTOR_IN_TABLE("hdwr"_4, ppc ? 0x41680011 : version >= 0x0760 ? 0x0108489D : 0x0008489D, gtable);
     power_mac = ppc_architecture;
     /* An 8.x System runs on PowerPC Macs only: a G3, as the G3 the 8.6 and
        9.0.4 images come from (Microsoft's installers refuse a 68k Mac).

@@ -17,5 +17,7 @@ changing `gprobe.c`; the output ends with `---`, the guest suite's end.
 `ref/`: the answers measured 2026-11-03 on the Quadra 650 ROM machine
 (7.6.1, 68k build) and mame-ppc's G3 (7.6.1 and 8.6, PowerPC build).
 Machine-specific values (RAM, ROM, table addresses, bug-fix bits) differ
-by run; the identity (mach, proc, cput, sysa, fpu, mmu, addr, pclk, bclk)
-is what Executor matches (romlib/gestalt.cpp).
+by run; the identity (mach, proc, cput, sysa, fpu, mmu, addr, hdwr, pclk,
+bclk) and the managers both machines answer as Executor has them (ditl,
+misc, sysu; lmem on 68k; cpuf, dlog, cntl on 8.6) are what Executor matches
+(romlib/gestalt.cpp; the keys in `tests/test_gestalt_executor.sh`).

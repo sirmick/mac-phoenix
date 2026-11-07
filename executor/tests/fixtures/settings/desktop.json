@@ -1,0 +1,20 @@
+{
+    "disks": {
+        "mounted": [
+            "/library/utilities.img",
+            "/library/games.iso"
+        ]
+    },
+    "input": {
+        "right_click": "click"
+    },
+    "machine": {
+        "ppc": true,
+        "screen": "800x600",
+        "system": "/library/boot-8.6.img"
+    },
+    "sound": {
+        "volume": 55
+    },
+    "version": 2
+}

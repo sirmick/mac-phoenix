@@ -81,6 +81,7 @@ async function photoshop(t, doc) {
     if (changed(before, await sample()) < 0.002)
         throw new Error('nothing drawn');
     await t.saveAs(doc);
+    await t.pause(3000);   // (the window repainted, for the last screenshot)
 }
 const TARGETS = {
     'productivity.img': [
@@ -304,16 +305,28 @@ const TARGETS = {
             await t.pause(1000);
             if (changed(before, await sample()) < 0.002)
                 throw new Error('nothing drawn');
-            await t.saveAs('M1 AI8', 'Illustrator Format');
+            // Save As, then its Illustrator Format options (8.0's
+            // compatibility, the default): OK
+            await t.key('Meta+KeyS');
+            await t.until(async () => (await t.windows()).some((w) => w.kind === DIALOG_KIND), 20000, 'no Save dialog');
+            await t.pause(1000);
+            await t.type('M1 AI8');
+            await t.key('Enter');
+            await t.until(async () => (await t.windows()).some((w) => w.title === 'Illustrator Format'), 30000, 'no Illustrator Format dialog');
+            await t.pause(1000);
+            await t.key('Enter');
+            await t.until(async () => (await t.windows()).some((w) => /^M1 AI8/.test(w.title)), 30000,
+                          'no window named M1 AI8 after saving');
+            await t.pause(3000);
         } },
         { name: 'Adobe® Photoshop® 5.5', app: 'Creative 8:Adobe Photoshop 5.5 ƒ:Adobe® Photoshop® 5.5',
           use: (t) => photoshop(t, 'M1 PS5') },
         { name: 'Adobe® PageMaker® 6.5', app: 'Creative 8:Adobe PageMaker 6.5 ƒ:Adobe® PageMaker® 6.5', use: async (t) => {
             // File > New (Document Setup's defaults), text typed with the
-            // text tool (Shift+F4) on the page, Save As
-            // Ready: its palettes up (Styles and Colors share one tabbed
-            // palette without a title; the Control Palette has one)
-            await t.until(async () => (await t.windows()).some((w) => ['Styles', 'Colors', 'Control Palette'].includes(w.title)), 90000, 'no palettes');
+            // text tool (the toolbox's T) on the page, Save As. Its palettes have
+            // no titles (it draws their tabs, Styles and Colors); the
+            // Control Palette, last up, has.
+            await t.until(async () => (await t.windows()).some((w) => w.title === 'Control Palette'), 90000, 'no palettes');
             await t.key('Meta+KeyN');
             await t.until(async () => (await t.windows(true)).some((w) => w.kind === DIALOG_KIND), 20000, 'no Document Setup');
             await t.key('Enter');
@@ -321,8 +334,11 @@ const TARGETS = {
             await t.pause(2000);
             const w = (await t.windows()).find((x) => /^Untitled/.test(x.title));
             const [top, left, bottom, right] = w.rect;
+            const tools = (await t.windows()).find((x) => x.title === '' && x.rect[2] - x.rect[0] > 150 && x.rect[3] - x.rect[1] < 70);
+            if (!tools)
+                throw new Error('no toolbox');
             const before = await sample();
-            await t.key('Shift+F4');
+            await t.click(tools.rect[1] + 40, tools.rect[0] + 50);   // the text tool, T
             await t.pause(500);
             await t.click((left + right) / 2 - 60, (top + bottom) / 2 - 40);
             await t.pause(500);
@@ -677,20 +693,13 @@ const t = {
         await t.key('Enter');
     },
     // Save As: the Standard File dialog, the name typed (the field's text
-    // is selected), the window then has the name. options: the title of
-    // the dialog the application asks its format options in after the
-    // name (Illustrator 8's "Illustrator Format"), its defaults taken.
-    async saveAs(name, options) {
+    // is selected), the window then has the name.
+    async saveAs(name) {
         await t.key('Meta+KeyS');
         await t.until(async () => (await t.windows()).some((w) => w.kind === DIALOG_KIND), 20000, 'no Save dialog');
         await t.pause(1000);
         await t.type(name);
         await t.key('Enter');
-        if (options) {
-            await t.until(async () => (await t.windows()).some((w) => w.title === options), 20000, `no ${options}`);
-            await t.pause(1000);
-            await t.key('Enter');
-        }
         const lower = name.toLowerCase();
         await t.until(async () => (await t.windows()).some((w) => w.title.toLowerCase().startsWith(lower)), 30000,
                       `no window named ${name} after saving`);
