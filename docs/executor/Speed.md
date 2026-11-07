@@ -341,6 +341,22 @@ What it says:
 
   (The same on the boot volume, Executor's own host folder: 35–100 ms
   natively, 75–135 ms in the tab, unchanged.)
+
+  What a crash between a write and the next sync point loses, with the
+  sync deferred: natively (a POSIX image), nothing if Executor dies, the
+  blocks being in the file already; only a crash of the host itself can
+  lose what the kernel had not written yet. On the desktop app the
+  overlay (host/overlay.cpp) gathers blocks in memory and commits them at
+  image_io's fsync, so Executor dying loses the blocks since the last
+  `FlushVol`, `FlushFile`, close or unmount (it committed after every
+  catalog or bitmap block before). In the tab the blocks are in the
+  overlay at once, saved to the server every second and in the page's
+  beacon (every 250 ms) whatever the sync: a tab closed or crashed loses
+  at most about the last second, as before; the sync only sends them at
+  once. Either way the B-tree cache and an open file's length in its FCB
+  are in Executor's memory until a flush, as before. A Mac loses the
+  same: its File Manager keeps the volume's cache and an open file's
+  length until `FlushVol`, a close or an unmount.
 - **The G3's Files column** (0.05–0.34) is Mac OS 8.6's File Manager on
   that machine, 3–20 times slower than the Quadra's 7.6.1 for the same
   calls; its
