@@ -504,6 +504,7 @@ extern OSErr ROMlib_mkwd(WDPBPtr pb, HVCB *vcbp, LONGINT dirid,
                          LONGINT procid);
 extern OSErr ROMlib_pbvolrename(IOParam *pb, StringPtr newnamep);
 extern OSErr ROMlib_flushvcbp(HVCB *vcbp);
+extern OSErr ROMlib_flushvcbfiles(HVCB *vcbp);
 extern HVCB *ROMlib_vcbbyvrn(short vrefnum);
 extern VCBExtra *ROMlib_vcbbyunixname(const char *uname);
 extern HVCB *ROMlib_vcbbybiggestunixname(const char *uname);
@@ -586,6 +587,7 @@ extern void try_to_mount_disk(const char *dname, LONGINT floppyfd,
 extern void ROMlib_OurClose(void);
 
 extern void vcbsync(HVCB *vcbp);
+extern void ROMlib_syncvcb(HVCB *vcbp);
 
 static_assert(sizeof(xtntdesc) == 4);
 static_assert(sizeof(volumeinfo) == 162);

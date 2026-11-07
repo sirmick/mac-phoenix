@@ -233,6 +233,12 @@ void addMathLib();
 
 /* A new application imports StdCLib: its state starts afresh. */
 void stdclibStart(bool m68k = false);
+/* A fragment imports StdCLib: started afresh (stdclibStart) for an
+   application being launched (launchingApplication: its fragment and the
+   libraries it imports being prepared) or when StdCLib has no client;
+   not for a library another process loads meanwhile. */
+extern bool launchingApplication;
+void stdclibImported(bool m68k = false);
 /* Calls a routine of the client application (qsort's comparison, an atexit
    or signal handler): a PowerPC TV, or a CFM-68K one for a NuStdCLib
    client. */
