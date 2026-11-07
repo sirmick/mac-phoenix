@@ -189,7 +189,7 @@ Not before System 7 (no Process Manager: a launch would replace the
 Finder), and not if an agent has said hello already (one installed in
 Startup Items by hand or by an older emulator): the trap refuses a second
 agent's `AGENT_HELLO`, and that agent quits; a new agent asks any older
-one (creator `MxBr`) to quit, every 5 s (Startup Items open after it).
+one (creator `MxBA`) to quit, every 5 s (Startup Items open after it).
 Launched in the background, the agent leaves the front process as it is;
 started in front (from Startup Items) it gives the front to the Finder.
 `/api/ui` answers for the front process the agent reports (`STATE`): on

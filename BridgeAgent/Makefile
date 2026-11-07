@@ -27,7 +27,7 @@ $(BIN): $(CODE_BIN) BridgeAgent.r
 		-I$(RINCLUDES) \
 		--copy $(CODE_BIN) \
 		-o $(BIN) \
-		-t APPL -c MxBr \
+		-t APPL -c MxBA \
 		--cc $(DSK) --cc $(APPL)
 
 clean:
