@@ -231,6 +231,7 @@ set(hfs_sources
     hfs/drive_flags.h
     hfs/futzwithdosdisks.h
     hfs/hfsBtree.cpp hfs/hfsChanging.cpp hfs/hfsCreate.cpp hfs/hfsFile.cpp
+    hfs/image_io.h hfs/image_io.cpp
     hfs/hfsHelper.cpp hfs/hfsHier.cpp hfs/hfsMisc.cpp hfs/hfsVolume.cpp
     hfs/hfsWorkingdir.cpp hfs/hfsXbar.cpp hfs/futzwithdosdisks.cpp)
 source_group(HFS FILES ${hfs_sources})

@@ -123,6 +123,12 @@ target_compile_options(front-end-phoenix PRIVATE ${EXECUTOR_COMMON_FLAGS})
 # Front-end logic shared by the tab and native front ends (host/session.h)
 add_subdirectory(host)
 
+# The desktop application (frontends/desktop: Qt 6 Widgets), native only
+option(EXECUTOR_DESKTOP "Executor's desktop application (executor/frontends/desktop, Qt 6 Widgets)" ON)
+if(EXECUTOR_DESKTOP AND NOT EMSCRIPTEN)
+    add_subdirectory(frontends/desktop)
+endif()
+
 # Into the one binary (its g_platform comes from src/core). Not in the
 # wasm build, which has no mac-phoenix.
 if(TARGET mac-phoenix)
