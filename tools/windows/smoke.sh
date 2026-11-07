@@ -70,9 +70,10 @@ check "crash report .dmp" bash -c "ls '$WORK'/crash/logs/crash-*.dmp > /dev/null
 check "the report names the access violation" bash -c "grep -q 'access violation' '$WORK'/crash/logs/crash-*.txt"
 
 echo "== executor-standalone.exe"
+# one cookie jar: the first browser claims the server (its cookie), others get 403
 wine_run "wine /work/app/$APPNAME/executor-standalone.exe --data 'Z:\\work\\web' --port 18095 > /work/standalone.txt 2>&1 &
-          for i in \$(seq 60); do curl -sf -o /work/index.html http://127.0.0.1:18095/ && break; sleep 1; done
-          curl -sf -o /dev/null -w '%{http_code} %{size_download}\n' http://127.0.0.1:18095/executor-web.wasm > /work/wasm.txt"
+          for i in \$(seq 60); do curl -sf -c /tmp/jar -b /tmp/jar -o /work/index.html http://127.0.0.1:18095/ && break; sleep 1; done
+          curl -s -c /tmp/jar -b /tmp/jar -o /dev/null -w '%{http_code} %{size_download}\n' http://127.0.0.1:18095/executor-web.wasm > /work/wasm.txt"
 check "the page is served" grep -qi '<html' "$WORK/index.html"
 check "the wasm is served" grep -q '^200 ' "$WORK/wasm.txt"
 
