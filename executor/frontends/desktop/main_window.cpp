@@ -70,7 +70,7 @@ MainWindow::MainWindow(Settings &settings, Disks &disks, const Automation &autom
         statusBar()->showMessage("Executor stopped: " + m);
     });
     connect(&e, &Emulator::ejected, this, [this](const QString &path) {
-        QString image = disks_.imageFor(path);
+        const QString &image = path;
         fprintf(stderr, "[desktop] ejected %s\n", image.toLocal8Bit().constData());
         mounted_.removeAll(image);
         settings_.set("disks.mounted", QJsonArray::fromStringList(mounted_));
@@ -82,7 +82,7 @@ MainWindow::MainWindow(Settings &settings, Disks &disks, const Automation &autom
         for(const QJsonValue &v : o.value("restart").toArray())
             restart << v.toString();
         QString msg = QString("%1: %2 files added to the System Folder")
-                          .arg(QFileInfo(disks_.imageFor(path)).fileName())
+                          .arg(QFileInfo(path).fileName())
                           .arg(o.value("copied").toInt());
         if(!restart.isEmpty())
             msg += "; restart for " + restart.join(", ");
@@ -283,14 +283,7 @@ void MainWindow::showDisks()
 
 void MainWindow::mount(const QString &image)
 {
-    QString err;
-    QString path = disks_.mountPath(image, &err);
-    if(path.isEmpty())
-    {
-        statusBar()->showMessage(err, 8000);
-        showDisks();
-        return;
-    }
+    QString path = image;  /* the Mac's changes go to its overlay (main.cpp's opener) */
     QString op = Disks::isCD(image) ? "mount-cd"
                : disks_.additionsFor(image, settings_.str("machine.system")) ? "mount-additions" : "mount";
     pendingMounts_ << image;
@@ -312,8 +305,7 @@ void MainWindow::mount(const QString &image)
 
 void MainWindow::eject(const QString &image)
 {
-    QString path = Disks::isCD(image) ? image : disks_.mountPath(image);
-    Emulator::instance().request("eject", path, [this, image](const QString &r) {
+    Emulator::instance().request("eject", image, [this, image](const QString &r) {
         fprintf(stderr, "[desktop] eject %s: %s\n", image.toLocal8Bit().constData(), r.toLocal8Bit().constData());
         if(r != "0")
         {

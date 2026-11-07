@@ -163,6 +163,17 @@ else()
         PROPERTIES LABELS executor
         DISCOVERY_TIMEOUT 30)
 
+    # executor/host's overlays against executor/server's (host/overlay.h)
+    add_executable(executor_overlay_tests overlay.cpp)
+    target_link_libraries(executor_overlay_tests gtest gtest_main executor-host executor_platform_glue)
+    target_compile_definitions(executor_overlay_tests PRIVATE EXECUTOR_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/..")
+    target_compile_features(executor_overlay_tests PRIVATE cxx_std_17)
+    phoenix_exempt_from_hardening(executor_overlay_tests)
+    gtest_discover_tests(executor_overlay_tests
+        TEST_PREFIX "executor."
+        PROPERTIES LABELS executor
+        DISCOVERY_TIMEOUT 30)
+
     add_compilefail_tests(guestvalues.compfail.cpp)
 
     set_property(DIRECTORY

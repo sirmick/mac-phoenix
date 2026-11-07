@@ -5,12 +5,13 @@
  * The library is the images the user added (Add…, dropped on the window)
  * and those in library folders (desktop.json "library"), with what their
  * records say (NAME.json beside them, tools/web/make_library.py's: title,
- * note, system, systems). An image itself is never written: the Mac
- * writes a working copy in the data folder's overlays/ (KEY.img, KEY from
- * the image's path, size and time, so a changed image starts afresh),
- * made the first time it is mounted (a clone where the file system has
- * them: Linux FICLONE, macOS clonefile; a copy elsewhere). Revert
- * removes it. CDs (.iso, .toast, .cdr) are mounted locked, as they are.
+ * note, system, systems). An image itself is never written: the Mac's
+ * changes go to an overlay in the data folder's overlays/ (KEY.overlay,
+ * KEY from the image's name, path, size and time, so a changed image
+ * starts afresh), the changed 4 KB blocks in executor/server's format
+ * (host/overlay.h), through the opener main.cpp gives the File Manager
+ * (hfs/image_io.h). Revert removes it. CDs (.iso, .toast, .cdr) are
+ * mounted locked, as they are, with no overlay.
  */
 #include <QObject>
 #include <QStringList>
@@ -42,13 +43,10 @@ public:
     void addFolder(const QString &folder);
     void removeImage(const QString &path);
 
-    /* What the Mac mounts for IMAGE: its working copy (made now if there
-       is none: blocking) or the image itself (a CD). Empty: no copy. */
-    QString mountPath(const QString &image, QString *error = nullptr);
-    /* The image a mount path is the working copy of (or the path) */
-    QString imageFor(const QString &mountPath) const;
+    /* IMAGE's overlay in DATA's overlays/ (none for a CD: empty) */
+    static QString overlayPath(const QString &data, const QString &image);
     bool hasChanges(const QString &image) const;
-    /* The working copy removed: the image as it was. Not while mounted. */
+    /* The overlay removed: the image as it was. Not while mounted. */
     bool revert(const QString &image);
 
     /* Whether DISK's System Folder additions go in on SYSTEM (main.js
@@ -59,6 +57,5 @@ signals:
     void libraryChanged();
 
 private:
-    QString workingCopy(const QString &image) const;
     Settings &settings_;
 };

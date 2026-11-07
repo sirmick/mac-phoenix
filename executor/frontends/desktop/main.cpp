@@ -14,7 +14,7 @@
  * The data folder (default: the OS's application data folder,
  * QStandardPaths::AppDataLocation) holds settings.json, desktop.json,
  * Executor's volumes (volumes/NAME/executor: one a System, its System Folder and
- * preferences: what the Mac saves there stays), the disks' working copies
+ * preferences: what the Mac saves there stays), the disks' overlays
  * (overlays/), screenshots/ and logs/. It is the store: nothing is
  * anyone else's copy. The command line's choices are for this run only,
  * as mac-phoenix's are: settings.json keeps the dialog's.
@@ -31,10 +31,12 @@
 #include "settings.h"
 
 #include "executor_host.h"
+#include "overlay.h"
 #include "session.h"
 
 #include <base/common.h>
 #include <hfs/hfs.h>
+#include <hfs/image_io.h>
 
 #include <QApplication>
 #include <QJsonArray>
@@ -161,16 +163,10 @@ int main(int argc, char **argv)
     {
         if(!QFileInfo::exists(d))
             continue;
-        QString err, path = diskLibrary.mountPath(d, &err);
-        if(path.isEmpty())
-        {
-            fprintf(stderr, "[desktop] %s: %s\n", d.toLocal8Bit().constData(), err.toLocal8Bit().constData());
-            continue;
-        }
         add(Disks::isCD(d) ? "--cdrom" : "--disk");
-        add(path);
+        add(d);
         if(diskLibrary.additionsFor(d, system))
-            add("--additions"), add(path);
+            add("--additions"), add(d);
         mountedNow << d;
     }
     if(!system.isEmpty())
@@ -203,9 +199,26 @@ int main(int argc, char **argv)
     session::Options o = session::parse_args((int)sargv.size(), sargv.data());
     executor_host::Config &c = o.config;
 
-    /* The disks are the working copies, written; the System's image (a
-       library disk, shared) mounted too, locked, unless it's in the Mac
-       as a disk of its own; CDs locked. */
+    /* Disk images are writable, their changes in overlays (the opener:
+       hfs/image_io.h, host/overlay.h), the images never written; the
+       System's image mounted too, locked, unless it's in the Mac as a
+       disk of its own; CDs locked, no overlay. */
+    QDir().mkpath(data + "/overlays");
+    Executor::image_io::set_opener([data](const std::string &path, bool writable)
+                                       -> std::unique_ptr<Executor::image_io::File> {
+        QString p = QString::fromStdString(path);
+        QString overlay = Disks::overlayPath(data, p);
+        if(overlay.isEmpty() || !QFileInfo(p).isFile())
+            return nullptr;
+        std::string err;
+        auto o = executor_host::Overlay::open(path, overlay.toStdString(), writable, &err);
+        if(!o)
+            fprintf(stderr, "[desktop] %s: %s\n", path.c_str(), err.c_str());
+        else
+            fprintf(stderr, "[desktop] %s%s: changes in %s (version %u, %zu blocks)\n", path.c_str(),
+                    writable ? "" : " (locked)", overlay.toLocal8Bit().constData(), o->version(), o->blocks());
+        return o;
+    });
     c.writable_images = true;
     Executor::ROMlib_ejectable_images = true;
     if(!system.isEmpty() && !mountedNow.contains(system))
@@ -219,7 +232,7 @@ int main(int argc, char **argv)
 
     session::Setup setup;
     setup.data_dir = volume_for(data, system).toStdString();
-    setup.images = (data + "/overlays/").toStdString();
+    setup.images = "";  /* the images are where the user keeps them: every drive's watched */
     setup.log_prefix = "[desktop]";
     setup.ram_mb = 32;
     setup.apple_ram_mb = 128;

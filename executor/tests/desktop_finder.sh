@@ -7,8 +7,8 @@
 #   desktop_finder.sh BINARY WORKDIR [SYSTEM_IMAGE [DISK_IMAGE]]
 #
 # With a System image (Apple's, from the web library), and a disk: the disk
-# is mounted from the start, written through its working copy, and the
-# image itself stays as it was. Exit 77 (skipped) when an image isn't there.
+# is mounted from the start, writable through its overlay, and the image
+# itself stays as it was. Exit 77 (skipped) when an image isn't there.
 set -u
 BIN=$1
 WORK=$2
@@ -50,6 +50,8 @@ if [ -n "$SYSTEM" ]; then
 fi
 if [ -n "$DISK" ]; then
     [ "$(sha1sum < "$DISK")" = "$sum_before" ] || fail "$DISK was written"
-    ls "$WORK/data/overlays/"*.img > /dev/null 2>&1 || fail "no working copy"
+    # mounted writable through its overlay (written only if the Mac writes:
+    # executor.OverlayTest and executor.ImageIO cover the writes)
+    grep -q "^\[desktop\] $DISK: changes in .*\.overlay" "$WORK/log.txt" || fail "not through an overlay"
 fi
 echo PASS

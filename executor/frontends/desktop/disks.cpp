@@ -1,5 +1,5 @@
 /*
- * disks.cpp - the library and working copies (disks.h).
+ * disks.cpp - the library and overlays (disks.h).
  */
 #include "disks.h"
 #include "settings.h"
@@ -14,14 +14,6 @@
 #include <QJsonObject>
 #include <QRegularExpression>
 
-#if defined(Q_OS_LINUX)
-#include <fcntl.h>
-#include <linux/fs.h>
-#include <sys/ioctl.h>
-#include <unistd.h>
-#elif defined(Q_OS_MACOS)
-#include <sys/clonefile.h>
-#endif
 
 namespace {
 
@@ -36,31 +28,6 @@ QStringList strings(const QJsonValue &v)
     return out;
 }
 
-/* A clone of FROM at TO where the file system makes them (no data
-   copied), else false */
-bool clone(const QString &from, const QString &to)
-{
-#if defined(Q_OS_LINUX)
-    int in = ::open(QFile::encodeName(from).constData(), O_RDONLY);
-    if(in < 0)
-        return false;
-    int out = ::open(QFile::encodeName(to).constData(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
-    bool ok = out >= 0 && ioctl(out, FICLONE, in) == 0;
-    if(in >= 0)
-        ::close(in);
-    if(out >= 0)
-        ::close(out);
-    if(!ok)
-        QFile::remove(to);
-    return ok;
-#elif defined(Q_OS_MACOS)
-    return clonefile(QFile::encodeName(from).constData(), QFile::encodeName(to).constData(), 0) == 0;
-#else
-    (void)from;
-    (void)to;
-    return false;
-#endif
-}
 
 }
 
@@ -132,58 +99,28 @@ void Disks::removeImage(const QString &path)
     }
 }
 
-/* overlays/NAME-HASH.img: HASH of the image's path, size and time */
-QString Disks::workingCopy(const QString &image) const
+/* overlays/NAME-HASH.overlay: HASH of the image's path, size and time */
+QString Disks::overlayPath(const QString &data, const QString &image)
 {
+    if(isCD(image))
+        return {};
     QFileInfo fi(image);
     QByteArray id = fi.absoluteFilePath().toUtf8() + '\0' + QByteArray::number(fi.size()) + '\0'
                     + QByteArray::number(fi.lastModified().toMSecsSinceEpoch());
     QString hash = QCryptographicHash::hash(id, QCryptographicHash::Sha1).toHex().left(12);
-    return settings_.dataDir() + "/overlays/" + fi.completeBaseName() + "-" + hash + "." + fi.suffix();
-}
-
-QString Disks::mountPath(const QString &image, QString *error)
-{
-    if(isCD(image))
-        return image;
-    QString copy = workingCopy(image);
-    if(QFileInfo::exists(copy))
-        return copy;
-    QDir().mkpath(QFileInfo(copy).path());
-    QString part = copy + ".part";
-    QFile::remove(part);
-    bool ok = clone(image, part) || QFile::copy(image, part);
-    if(ok)
-    {
-        QFile::setPermissions(part, QFile::permissions(part) | QFileDevice::WriteOwner | QFileDevice::ReadOwner);
-        ok = QFile::rename(part, copy);
-    }
-    if(!ok)
-    {
-        QFile::remove(part);
-        if(error)
-            *error = "can't make the working copy " + copy;
-        return {};
-    }
-    return copy;
-}
-
-QString Disks::imageFor(const QString &mountPath) const
-{
-    for(const DiskInfo &d : library())
-        if(d.path == mountPath || workingCopy(d.path) == mountPath)
-            return d.path;
-    return mountPath;
+    return data + "/overlays/" + fi.completeBaseName() + "-" + hash + ".overlay";
 }
 
 bool Disks::hasChanges(const QString &image) const
 {
-    return !isCD(image) && QFileInfo::exists(workingCopy(image));
+    QString o = overlayPath(settings_.dataDir(), image);
+    return !o.isEmpty() && QFileInfo::exists(o);
 }
 
 bool Disks::revert(const QString &image)
 {
-    return QFile::remove(workingCopy(image));
+    QString o = overlayPath(settings_.dataDir(), image);
+    return !o.isEmpty() && QFile::remove(o);
 }
 
 bool Disks::additionsFor(const QString &disk, const QString &system) const

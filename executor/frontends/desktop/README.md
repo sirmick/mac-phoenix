@@ -28,9 +28,11 @@ application out; it is also left out when Qt 6 Widgets isn't there.
   folders (Add Folder…, e.g. `~/storage/web-library`; each image's record,
   `NAME.img.json`, gives its title, note and System). Tick to put a disk in,
   untick to eject it (as the Finder's Put Away). An image is never written:
-  the Mac writes a working copy in the data folder's `overlays/`, made the
-  first time it's mounted (a clone where the file system makes them, else a
-  copy); Revert throws it away. CDs (`.iso`, `.toast`, `.cdr`) are locked.
+  the Mac's changes go to an overlay in the data folder's `overlays/`, its
+  changed 4 KB blocks in the format executor/server keeps the tab's in
+  (`host/overlay.h`; either reads the other's), through the File Manager's
+  image opener (`core/romlib/hfs/image_io.h`); Revert throws it away. CDs
+  (`.iso`, `.toast`, `.cdr`) are locked, no overlay.
   A disk whose record is for the System running (`systems`) has its System
   Folder additions copied in, as in the tab.
 - **Screen size**: the schema's sizes, or Auto (the Mac's screen follows the
@@ -59,7 +61,7 @@ is the server):
 | `settings.json` | the settings, in the server's format (the schema's) |
 | `desktop.json` | the window, the library's images and folders |
 | `volumes/NAME/executor/` | Executor's volume for a System (its own: `Executor`; Apple's: one per System image): its System Folder, preferences and what the Mac saves there |
-| `overlays/` | the disks' working copies |
+| `overlays/` | the disks' overlays (`NAME-HASH.overlay`: the image's path, size and time; a changed image starts afresh) |
 | `screenshots/`, `logs/`, `unimplemented.log` | |
 
 ## Command line
@@ -90,7 +92,7 @@ no display (the ctest cells `executor.desktop.*`).
 | `keys.*` | Mac key codes by the physical key (evdev on Linux, virtual keys on macOS, set 1 on Windows; Qt::Key offscreen) |
 | `audio.*` | miniaudio (`third_party/miniaudio`, public domain / MIT-0): Executor's 48 kHz frames through a ring; full, `on_audio` says no and Executor offers the frame again |
 | `settings.*`, `settings_dialog.*` | settings.json and the dialog from the schema |
-| `disks.*` | the library and working copies |
+| `disks.*` | the library and overlays' names (the opener is in `main.cpp`, the overlay in `host/overlay.*`) |
 | `log_capture.*` | stderr to the Log view and `logs/` |
 | `main_window.*` | the window, tool bar, Disks and Log panels, automation |
 
@@ -101,7 +103,9 @@ Multimedia also isn't in Qt's base packages.
 
 Quitting asks the Mac to write its volumes out (`flush`, at its next event
 call, three seconds at most) and ends the process: Executor's threads can't
-be stopped and started again.
+be stopped and started again. Known limit: there is no guest shutdown, so
+an application's unsaved documents are lost and the Mac isn't told it is
+going (as when a Mac's power is cut after a disk flush).
 
 ## Packaging (to do)
 
@@ -117,5 +121,4 @@ be stopped and started again.
   Windows side yet: VirtualAlloc for the guest windows; pread/pwrite, fsync,
   `ioctl` uses in core), windeployqt; keys' set 1 table is untested.
 - All: an application icon, a desktop entry / file associations for `.img`
-  and `.dsk`, and the working copies' cost on file systems without clones
-  (block overlays in the server's format need an image I/O seam in core).
+  and `.dsk`.
