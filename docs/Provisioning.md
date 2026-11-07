@@ -200,7 +200,8 @@ Executor with PowerPC code (its Name Registry: the root and `Devices`);
 on the Quadra the local is stack junk, not a file, and the call does
 nothing; on Executor's 68k Mac the stack there is still zero, so it makes
 the System file current, doesn't find its own `'tCFG'`, and quits
-(2026-11-03).
+(2026-11-03). Left as the application's bug: no stack filling, no
+special case for it; it runs on 8.6 and on 7.6.1 with `--executor-ppc`.
 
 ## CDs
 
