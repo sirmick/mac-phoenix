@@ -1,18 +1,25 @@
 # Windows build environment
 
-> **Status (checked 2026-10-21):** a plan that was never carried out.
-> There is no Windows build: no commit since the Qt port (merged
-> 2026-05-06) has worked on Windows, there is no Windows CI job, and
-> git history shows no MSVC build of the tree. The only Windows-specific code is
-> Phase 7's `HAVE_WIN32_EXCEPTIONS` define (`src/core/CMakeLists.txt`,
-> `e80f314f`), never exercised. Since this was written the tree has
-> gained a lot that was never looked at with Windows in mind: the MAME
-> CPU cores, the Executor backend (Boost, Ruby, Bison, Perl; a
-> low-address link layout), PPC identity addressing for `--core kpx`,
-> `net-bridge` listening on a Unix socket, and about 36 non-vendored
-> sources outside `executor/` that include `<sys/mman.h>`,
-> `<sys/socket.h>`, `<poll.h>` or `<unistd.h>`. Treat the steps below
-> as an untested starting point.
+> **Status (checked 2026-11-07):** for mac-phoenix itself, a plan that
+> was never carried out. There is no Windows build of `mac-phoenix`: no
+> Windows CI job, no MSVC build of the tree. Its only Windows-specific
+> code is Phase 7's `HAVE_WIN32_EXCEPTIONS` define
+> (`src/core/CMakeLists.txt`, `e80f314f`), never exercised. Since this was
+> written the tree has gained a lot that was never looked at with Windows
+> in mind: PPC identity addressing for `--core kpx`, `net-bridge`
+> listening on a Unix socket, and about 36 non-vendored sources outside
+> `executor/` that include `<sys/mman.h>`, `<sys/socket.h>`, `<poll.h>` or
+> `<unistd.h>`. Treat the steps below as an untested starting point.
+>
+> **Executor does build for Windows**, without the rest of mac-phoenix:
+> Executor and its Qt 6 desktop application, `executor-desktop`
+> ([../../executor/frontends/desktop/README.md](../../executor/frontends/desktop/README.md)),
+> with the MAME cores, are cross-built from Linux with llvm-mingw and Qt
+> 6.8 (`cmake/ExecutorWindows.cmake`, `tools/windows/build.sh`), packaged
+> as a zip with `executor-standalone.exe` (`tools/windows/package.sh`;
+> the user's notes: `tools/windows/README.txt`) and smoke-tested under
+> Wine (`tools/windows/smoke.sh`). No network there yet
+> (`EXECUTOR_NET=none`).
 
 Setup notes for a Windows VM/host that can build MacPhoenix as part of
 the Qt6 port (PLAN Phase 10). **Phase 10 is not done yet** — this doc
@@ -89,7 +96,7 @@ These are the Linux deps from `debian/control`. Windows mapping:
 | `qt6-base-dev` (≥ 6.4) | Qt installer (above) | Required |
 | `cmake` | bundled with VS 2022 | ≥ 3.16 |
 | `cargo` / `rustc` | rustup (above) | net-bridge subproject (uses a Unix socket: `std::os::unix`) |
-| Boost, Ruby, Bison, Perl | not worked out | Executor backend only; `-DBUILD_EXECUTOR=OFF` skips it |
+| Ruby, Bison, Perl | not needed | only to regenerate Executor's committed sources (`-DEXECUTOR_REGENERATE=ON`); `-DBUILD_EXECUTOR=OFF` skips Executor |
 
 (The `libxcb*` deps this table used to list went away with Phase 8.)
 
