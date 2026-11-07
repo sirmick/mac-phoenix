@@ -1,7 +1,7 @@
 # wash-plan: written by Wash as the plan changes.
 # Edit it only between workspaces; plan_set {"from": "<this file>"} loads it.
 
-revision = 72
+revision = 75
 
 [[node]]
   id = "cuts"
@@ -913,5 +913,15 @@ revision = 72
   template = "package"
   parent = "loose-ends"
   body = "Full run 2026-11-07 (c9ac165d+): toolbox_suite_uae and toolbox_suite_uae_761 time out: the suite (executor/tests built with Retro68) hangs at QuickDraw.MapEmptyRects (added a070a2f7 2026-11-04 for Executor's MapPt divide-by-zero; the real ROM probably divides by zero), and Files.GetWDInfoVolumeIsRoot / GetWDInfoIndexedGivesWDNumber (f52442bb, 'as Apple's 7.6.1 answers') fail on the Quadra. The suite is the ground truth for Executor: measure what the Quadra does, fix the tests or the expected-failure lists (tests/guest/toolbox_expected_uae*.txt), and skip only what hangs real hardware (with a note). Executor suites pass."
-  state = "active"
-  revision = 72
+  state = "done"
+  revision = 74
+
+[[node]]
+  id = "wd-diverge"
+  title = "Executor vs the Quadra: PBGetWDInfo(0) and PBOpenWD of a root; THINK C's resource growth (ChangedThenGrown)"
+  emoji = "🔍"
+  template = "note"
+  parent = "loose-ends"
+  body = "From suiterom 2026-11-07 (~/storage/tmp/suiterom/REPORT.md): PBGetWDInfo(0) answers the default directory on Executor, the root on the Quadra; PBOpenWD of a volume's root makes a WD on Executor, the Quadra gives back the volume's number. ResourceTest.ChangedThenGrown/ChangedThenGrownCompacted/AddedEmptySizeOnDisk: the Quadra damages the file / answers -109; Executor keeps 67d84e32's THINK C behaviour; open: what THINK C really calls. Align with the Quadra where no app depends on the difference."
+  state = "todo"
+  revision = 75
