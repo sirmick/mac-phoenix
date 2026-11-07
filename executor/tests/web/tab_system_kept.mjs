@@ -38,10 +38,11 @@ const check = (ok, what) => {
 };
 const PREF = '/executor/System Folder/Preferences/volfast prefs';
 const SYS = '/executor/System Folder/System';
-// The volume on the server (its manifest file: this test's data).
+// The volume on the server (its manifest file, KEY.json: this test's data;
+// KEY.history/ beside it holds the versions it replaced).
 const manifestFile = () => {
     const dirv = path.join(data, 'volumes');
-    const f = fs.existsSync(dirv) && fs.readdirSync(dirv).find((n) => n.startsWith('sys.img-'));
+    const f = fs.existsSync(dirv) && fs.readdirSync(dirv).find((n) => n.startsWith('sys.img-') && n.endsWith('.json'));
     return f ? path.join(dirv, f) : null;
 };
 const manifest = () => {

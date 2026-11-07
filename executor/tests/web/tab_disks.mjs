@@ -117,7 +117,8 @@ const contains = (name, text) => page.evaluate(async ([name, text]) => {
 try {
     await page.goto(server.url);
     await firstFrame(page, 90000);
-    check(!(await page.locator('#bar select').count()), 'the bar has no System choice');
+    // (the bar's one select is the screen size, #res: tab_resbar.mjs)
+    check(!(await page.locator('#bar select#system').count()), 'the bar has no System choice');
     await page.click('#disks-button');
     check(await page.locator('#disks-panel').isVisible(), 'the Disks button opens the panel');
     check(await page.locator('#disks-system #system').isVisible(), 'the System choice is in the panel');
