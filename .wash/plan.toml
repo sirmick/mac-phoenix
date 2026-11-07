@@ -1,7 +1,7 @@
 # wash-plan: written by Wash as the plan changes.
 # Edit it only between workspaces; plan_set {"from": "<this file>"} loads it.
 
-revision = 38
+revision = 40
 
 [[node]]
   id = "cuts"
@@ -851,8 +851,8 @@ revision = 38
   template = "package"
   parent = "p2"
   body = "Open from the 2026-11-05 stop: (1) in the tab on 8.6 a file written then the app idles in WaitNextEvent loses the write (benchapp saw it; handoff .wash/local/handoffs/bench-app.md if present); (2) Executor creating a file on a disk image is slow (measure natively and in the tab; profile the File Manager/HFS path, LocalVolume/overlay)."
-  state = "active"
-  revision = 36
+  state = "done"
+  revision = 40
 
 [[node]]
   id = "web-fails"
