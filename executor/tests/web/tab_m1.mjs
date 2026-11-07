@@ -300,7 +300,7 @@ const TARGETS = {
             const before = await sample();
             await t.key('KeyM');
             await t.pause(500);
-            await t.drag([[left + 150, top + 100], [left + 350, top + 260]]);
+            await t.drag([[left + 150, top + 100], [left + 350, top + 260]], 500);   // (no hold, under load: a click, its Rectangle size dialog)
             await t.pause(1000);
             if (changed(before, await sample()) < 0.002)
                 throw new Error('nothing drawn');
