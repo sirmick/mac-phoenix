@@ -1627,8 +1627,13 @@ static OSErr PBOpenHelper(IOParam *pb, Forktype ft, LONGINT dirid,
     }
     else
     {
+        /* MacPhoenix: on a locked volume the current permission is read
+           only, as for a locked file; asked for write, the open succeeds
+           and the writes fail (wPrErr/vLckdErr), as on 9.0.4
+           (hfsplusvolume.cpp) */
         if(permssn == fsCurPerm)
-            permssn = fsRdWrPerm;
+            permssn = (btparamrec.vcbp->vcbAtrb & (VSOFTLOCKBIT | VHARDLOCKBIT))
+                ? fsRdPerm : fsRdWrPerm;
         fcbp->fcbMdRByt = 0;
     }
     switch(permssn)
