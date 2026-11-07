@@ -185,10 +185,12 @@ ran and wrote their reports (runs spck6, spck7 and spfinal in
 Most of the fallbacks are short-lived: regions and pattern buffers made
 and freed within one drawing call. A temporary per-trap heap walk found
 the MoreMasters corruption. At boot it also reported one block in a
-200 KB zone whose master pointer slot holds the System heap's start. That
-report did not change for the rest of the run, the zone's free count
-added up, and nothing failed, so it is probably the walk misreading a
-non-standard block. It is not explained.
+200 KB zone whose master pointer slot holds the System heap's start. A
+`--watch` on the slot (run w1 in `~/storage/tmp/fullheap`) shows the
+Finder doing it on purpose. Its 68k code (running from a 210 K zone in
+the Process Manager heap) takes the slot's address from `ApplScratch+4`
+(`$0A7C`), stores `SysZone` (`$2000`) in the slot, and puts the old value
+back later, many times a second. It is harmless.
 
 ## When a process ends
 
@@ -203,58 +205,64 @@ process.cpp after the partition goes):
    does for the partition's address range is done for the block's
    range too (`release_range`): VBL tasks, components whose code is
    there, OT clients, CFM connections, the port list (`LM(PortList)`).
-3. **Still named?** Guest memory outside the dead process is scanned
-   for a longword that names a block exactly: a handle's master pointer
-   address, or a pointer. The scan covers low memory, the System heap
-   and the other partitions. It leaves out:
-   - the dead partition;
-   - the dead process's own copies of the per-process low-memory globals
-     (AuxWinHead and AuxCtlHead among them), which are still in place;
-   - the free blocks of the System and Process Manager heaps;
-   - the listed blocks themselves.
-
-   A named block is kept, and so is anything a kept block names.
-   Matching addresses anywhere inside a block's data kept almost
-   everything: pixel and font data are full of values that fall inside
-   the palettes' range. Master pointers are recycled, so a stale
-   longword can still name a new handle by chance. Such a block is
-   kept, never freed while named.
-4. **Kept blocks are tried again** at every later process's end, so a
-   block kept because of a stale value goes when the value does.
-5. **Logged:** `[full heap] process exit: N fallback blocks (E kept at an
-   earlier end): F freed (K), M kept (K, referenced from outside it);
+3. **Then every block is freed**, whatever still names it. Without the
+   fallback each would have been in the partition and gone with it, so
+   what names one names freed memory on a Mac too. Resources are no
+   exception: a map in the System heap (the System file's) loads its
+   resources into the System heap itself (`ROMlib_load_zone`), never
+   through the fallback, and the application's own maps are closed
+   before this.
+4. **Logged:** `[full heap] process exit: N fallback blocks freed (K);
    System heap X K free`.
 
-Speedometer's colour test three times in one 7.6.1 session (quit
-between, run sp3f in `~/storage/tmp/fullheap`):
+Speedometer's colour test three times in one 7.6.1 session, quit
+between (`~/storage/tmp/fullheap/sp2x.py`, runs sp3f, sp9 and sp11 in
+`~/storage/tmp/fullheap`):
 
-| Quit | Freed | Kept | System heap free |
+| Quit | Scan, every byte outside the process (sp3f) | Scan, heap-aware (sp9) | No scan (sp11) |
 |---|---|---|---|
-| 1 | 371 (717 K) | 83 (33 K) | 1312 K |
-| 2 | 307 (569 K) | 186 (104 K) | 1238 K |
-| 3 | 368 (678 K) | 260 (129 K) | 1207 K |
+| 1 | 83 kept (33 K), 1312 K free | 1 kept (0 K), 1348 K free | 432 freed (707 K), 1348 K free |
+| 2 | 186 kept (104 K), 1238 K free | 3 kept (4 K), 1342 K free | 422 freed (663 K), 1346 K free |
+| 3 | 260 kept (129 K), 1207 K free | 3 kept (4 K), 1340 K free | 402 freed (623 K), 1344 K free |
 
-Before this, every quit left all of its fallback blocks behind, about
-700 K. What is still kept grows from run to run, and the blocks kept at
-one end are kept again at the next. So something that lasts names them,
-not a stale value. **Open:** find what that is. The candidates are the
-Palette Manager's `window_palette_alist` elements: on a window's close
-they go to a free list rather than being disposed, and they keep their
-palette. Other candidates are the System resource map's entries for
-resources loaded during the run.
+Before any of this, every quit left all of its fallback blocks behind,
+about 700 K.
 
-What the scan can't see is Executor's own C++ state. Executor clears
-what it holds for a process by address range, and step 2 does the same
-for each block. Host code that caches a guest handle with no range
-clean-up would be left with a freed block. Without the fallback, such a
-block would have been in the partition and freed with it, so that is no
-new hazard.
+### The scan, and why it went
+
+The first version scanned guest memory outside the dead process (low
+memory, the System heap, the other partitions) for a longword naming a
+block, kept what was named and what that named, and tried the kept
+blocks again at later ends. What it kept grew from run to run. A
+diagnostic printing each holder (where it was, the block around it)
+found no holder that outlives the process:
+
+- **Slack and headers.** Most holders were bytes after a block's
+  logical size (what an earlier block there left) or a block header's
+  size field that happened to equal a handle's address. Reading only the
+  logical data of blocks in use (and walking a partition as its own
+  zone) left 1 to 3 blocks kept per quit (sp9 above).
+- **Coincidences in code.** What was left was chance. Apple's PACK 3
+  (Standard File, in the System heap) has `3D68 0008 03C0`
+  (`move.w 8(a0),$3C0(a6)`) at offset 4718. In two runs that equalled a
+  Speedometer AuxCtlRec's handle, `$000803C0`. The heap's layout is the
+  same from run to run, so the coincidence repeats. The AuxCtlRecs
+  (22 bytes: `acNext`, `acOwner`, `acCTable`, ...) name one another, so
+  one hit kept a whole chain (63 blocks in run sp10). Palettes
+  (4112 bytes, 256 entries) and their 4-byte seeds handles were kept the
+  same way, from pixel-like data in other heaps.
+- **AuxCtlHead and AuxWinHead** are per-process low memory: the dead
+  process's copies were the only real heads of those chains.
+
+The heap-aware scan took 3.8 ms per exit (64 MB, Speedometer). It went
+because it could only ever add chance keeps, not safety. Executor's own
+C++ state, which the scan could not see anyway, is cleared by address
+range as in step 2.
 
 ## Costs
 
 - A process's fallback blocks outlive its partition until it ends (see
-  "When a process ends"). A block that something outside the process
-  still names stays in the System heap.
+  "When a process ends").
 - Some guest calls work where the Quadra stops: NewPixPat, TENew,
   NewDialog, and the region and pattern calls. No application relies on
   system error 25.
@@ -272,8 +280,8 @@ new hazard.
   - the floor's three answers, and nil when no routine is being served;
   - past the floor: exit 70 and "System error 25";
   - MoreMasters keeps a zone's master pointers in the zone;
-  - `ProcessExitFreesItsFallbackBlocks`: unnamed blocks freed, a block
-    a System heap block names kept with what it names;
+  - `ProcessExitFreesItsFallbackBlocks`: every block freed, one a
+    System heap block names too, and `release` told of each;
     `DisposedBlocksLeaveTheList`;
   - `FullHeapReserve`: with the application heap inside its reserve, a
     Toolbox allocation comes from the System heap and the guest's own

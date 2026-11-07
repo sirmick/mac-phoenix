@@ -1707,12 +1707,7 @@ static void exit_current()
     ROMlib_forget_ports_in(part_lo, part_hi);
     /* The Toolbox's allocations it made in the System heap when its heap
        was full go with it (docs/executor/FullHeap.md). */
-    /* Its copies of the per-process low-memory globals (AuxWinHead,
-       AuxCtlHead, ...) are still in place, and die with it. */
-    std::vector<std::pair<uint32_t, uint32_t>> dead_lowmem;
-    for(const lm_range &r : lm_ranges)
-        dead_lowmem.push_back({ r.addr, r.addr + (uint32_t)r.len });
-    ROMlib_full_heap_process_exit((uintptr_t)me, part_lo, part_hi, release_range, dead_lowmem);
+    ROMlib_full_heap_process_exit((uintptr_t)me, release_range);
     me->state = process_info_t::dead;
     reap_list.push_back(me);
 

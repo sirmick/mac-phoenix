@@ -4,8 +4,6 @@
    full (fullheap.cpp, docs/executor/FullHeap.md). */
 
 #include <MemoryMgr.h>
-#include <utility>
-#include <vector>
 
 namespace Executor
 {
@@ -65,15 +63,10 @@ void ROMlib_full_heap_count(void *block, bool handle);
 extern size_t ROMlib_full_heap_tracked; /* how many are listed */
 void ROMlib_full_heap_forget(void *block);
 /* The process keyed `owner` (process.cpp) has ended, its partition gone:
-   its fallback blocks are released. `release(lo, hi)` first drops what
-   system-wide lists hold in [lo, hi) (as for the partition); a block
-   still referenced from guest memory outside the dead process (low
-   memory, the System heap, other partitions), or from a block kept so,
-   stays. `dead`: more guest ranges [lo, hi) that were the process's (its
-   copies of the per-process low-memory globals), not looked at. Logged. */
-void ROMlib_full_heap_process_exit(uintptr_t owner, uint32_t part_lo, uint32_t part_hi,
-                                   void (*release)(uint32_t lo, uint32_t hi),
-                                   const std::vector<std::pair<uint32_t, uint32_t>> &dead = {});
+   its fallback blocks go too. `release(lo, hi)` first drops what
+   system-wide lists hold in each block [lo, hi), as for the partition.
+   Logged. */
+void ROMlib_full_heap_process_exit(uintptr_t owner, void (*release)(uint32_t lo, uint32_t hi));
 /* The fallback blocks listed for `owner`, and their bytes (tests). */
 size_t ROMlib_full_heap_listed(uintptr_t owner, size_t *bytes = nullptr);
 /* System error 25: ends the session. */

@@ -9,7 +9,9 @@
 #include <base/traps.h>
 #include <rsys/process.h>
 
+#include <algorithm>
 #include <initializer_list>
+#include <utility>
 #include <vector>
 #include <string.h>
 
@@ -177,42 +179,37 @@ TEST_F(FullHeap, MasterPointersStayInTheirZone)
     DisposeHandle(h);
 }
 
-/* A process's fallback blocks go when it ends, except those guest memory
-   outside it still names (here a System heap block) and what those name. */
+/* A process's fallback blocks go when it ends, named from elsewhere or
+   not (in its partition they would have gone with it), and what lists in
+   them `release` is told of. */
 TEST_F(FullHeap, ProcessExitFreesItsFallbackBlocks)
 {
     uintptr_t me = ROMlib_process_key();
     size_t n0 = ROMlib_full_heap_listed(me);
-    Handle a, c, e;
-    Ptr b, d;
+    Handle a;
+    Ptr b;
     {
         traps::ServedTrap t(traps::entrypoints.at("TENew"));
-        a = NewHandle(2000);   /* named by nothing: freed */
-        b = NewPtr(3000);      /* freed */
-        c = NewHandle(1000);   /* named only by b: freed */
-        d = NewPtr(500);       /* named from the System heap: kept */
-        e = NewHandle(700);    /* named by d: kept */
+        a = NewHandle(2000);
+        b = NewPtr(3000);
     }
-    for(void *x : { (void *)a, (void *)b, (void *)c, (void *)d, (void *)e })
-        ASSERT_NE(nullptr, x);
+    ASSERT_NE(nullptr, a);
+    ASSERT_NE(nullptr, b);
     EXPECT_EQ(LM(SysZone), HandleZone(a));
     EXPECT_EQ(LM(SysZone), PtrZone(b));
-    memset(b, 0, 3000);
-    memset(d, 0, 500);
-    WRITEUL(US_TO_SYN68K(b), US_TO_SYN68K(c));
-    WRITEUL(US_TO_SYN68K(d), US_TO_SYN68K(e));
     Ptr holder = NewPtrSysClear(16);
-    WRITEUL(US_TO_SYN68K(holder), US_TO_SYN68K(d));
-    EXPECT_EQ(n0 + 5, ROMlib_full_heap_listed(me));
+    WRITEUL(US_TO_SYN68K(holder), US_TO_SYN68K(b));
+    EXPECT_EQ(n0 + 2, ROMlib_full_heap_listed(me));
 
+    static std::vector<std::pair<uint32_t, uint32_t>> released;
+    released.clear();
     int32_t free_before = LM(SysZone)->zcbFree;
-    ROMlib_full_heap_process_exit(me, 0, 0, nullptr);
+    ROMlib_full_heap_process_exit(me, [](uint32_t lo, uint32_t hi) { released.push_back({ lo, hi }); });
     EXPECT_EQ(0u, ROMlib_full_heap_listed(me));
-    EXPECT_GE(LM(SysZone)->zcbFree, free_before + 2000 + 3000 + 1000);
-    EXPECT_EQ(500, GetPtrSize(d));
-    EXPECT_EQ(700, GetHandleSize(e));
-    DisposeHandle(e);
-    DisposePtr(d);
+    EXPECT_GE(LM(SysZone)->zcbFree, free_before + 2000 + 3000);
+    EXPECT_NE(released.end(), std::find(released.begin(), released.end(),
+                                        std::make_pair((uint32_t)US_TO_SYN68K(b), (uint32_t)US_TO_SYN68K(b) + 3000)));
+    EXPECT_EQ(2u, released.size());
     DisposePtr(holder);
 }
 
