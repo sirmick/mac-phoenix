@@ -1,0 +1,85 @@
+<!doctype html>
+<!-- Executor in a tab (docs/executor/DIRECTION.md, W2/W3): no ROM, served by
+     executor/server, which keeps what it changes. The module runs in
+     worker.js; this page shows its frames on an OffscreenCanvas and sends
+     it mouse and keyboard input. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Executor</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #333; color: #ccc;
+               font: 13px system-ui, sans-serif; }
+  body { display: flex; flex-direction: column; align-items: center;
+         justify-content: center; gap: 8px; }
+  #bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  #bar button, #bar label { background: #555; color: #eee; border: 0;
+         border-radius: 4px; padding: 4px 10px; font: inherit; cursor: pointer; }
+  #bar select { background: #444; color: #eee; border: 0; font: inherit; }
+  #viewer { background: #345; color: #cdf; border-radius: 4px; padding: 4px 10px; }
+  #viewer button { background: #567; color: #eee; border: 0; border-radius: 4px; padding: 2px 8px; font: inherit; cursor: pointer; }
+  /* The CPU meter (main.js): a sparkline and the last half second's %. */
+  #cpu { display: inline-flex; align-items: center; gap: 6px; background: #444; border-radius: 4px;
+         padding: 3px 8px; font-variant-numeric: tabular-nums; cursor: default; }
+  #cpu[hidden] { display: none; }
+  #cpu canvas { display: block; }
+  #cpu-pct { min-width: 3.2em; text-align: right; color: #eee; }
+  #mem { border-left: 1px solid #666; padding-left: 6px; color: #eee; }
+  /* The screen size (main.js ScreenBar): machine.screen and display.fit_window. */
+  #res-box { display: inline-flex; align-items: center; background: #444; border-radius: 4px;
+             padding: 3px 4px 3px 8px; font-variant-numeric: tabular-nums; }
+  #res { padding: 0 2px; cursor: pointer; }
+  #res:disabled { cursor: default; color: #999; }
+  /* The HiDPI box (main.js HiDpiBar): display.scale 2 or 1. */
+  #bar #hidpi-box.disabled { cursor: default; color: #999; }
+  #status.lost { background: #543; color: #fda; border-radius: 4px; padding: 4px 10px; }
+  /* Sized by main.js: a whole number of device pixels a guest pixel. */
+  canvas { background: #000; image-rendering: pixelated; outline: none; }
+  /* The loading panel (loading.js): over the screen, until its first frame. */
+  #screen-box { position: relative; }
+  #screen-box canvas + #loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); }
+  #loading { background: #2b2b2b; border: 1px solid #555; border-radius: 8px; padding: 14px 18px;
+             width: 340px; box-shadow: 0 8px 28px rgba(0, 0, 0, .5); }
+  #loading[hidden] { display: none; }
+  #loading .loading-title { font-size: 14px; font-weight: 600; color: #eee; margin-bottom: 8px; }
+  #loading ol { list-style: none; margin: 0; padding: 0; }
+  #loading li { display: grid; grid-template-columns: 18px 1fr; column-gap: 6px; padding: 4px 0; color: #777; }
+  #loading li::before { content: '○'; grid-row: 1 / span 3; }
+  #loading li.active { color: #eee; }
+  #loading li.active::before { content: '●'; color: #7af; animation: loading-pulse 1s ease-in-out infinite alternate; }
+  @keyframes loading-pulse { from { opacity: 1; } to { opacity: .25; } }
+  #loading li.done { color: #aaa; }
+  #loading li.done::before { content: '✓'; color: #6c6; }
+  #loading li.error { color: #fda; }
+  #loading li.error::before { content: '!'; color: #f88; font-weight: 700; }
+  #loading .loading-detail { grid-column: 2; font-size: 12px; color: #999; }
+  #loading .loading-detail:empty { display: none; }
+  #loading progress { grid-column: 2; width: 100%; height: 6px; margin-top: 3px; accent-color: #6a8fd0; }
+</style>
+<link rel="stylesheet" href="settings.css">
+<link rel="stylesheet" href="disks.css">
+</head>
+<body>
+<div id="bar">
+  <button id="disks-button" title="Disks: the System the Mac starts from, the disks in it, the library; add your own">Disks</button>
+  <input id="add" type="file" multiple hidden>
+  <label title="Run fat applications' PowerPC code (PowerPC-only ones always do)"><input id="ppc" type="checkbox">PowerPC</label>
+  <button id="restart">Restart</button>
+  <button id="shot" title="Send a picture of the screen to the server, for a look later (with what this page printed). Ctrl+Alt+S takes one too, also with the mouse button down (a menu open, a drag): the note is asked for after">Screenshot</button>
+  <span id="res-box"><select id="res" aria-label="The Mac's screen size"></select></span>
+  <label id="hidpi-box"><input id="hidpi" type="checkbox">HiDPI</label>
+  <span id="cpu" hidden title="Mac CPU busy: how much of the last half second the emulated Mac spent working rather than waiting for events (the last 15 seconds drawn)"><canvas width="60" height="14"></canvas><span id="cpu-pct"></span><span id="mem"></span></span>
+</div>
+<div id="viewer" hidden>Executor is open in another tab, which has control: its screen, here.
+  <button id="take">Take control</button></div>
+<div id="screen-box"></div>
+<div id="status">Loading Executor…</div>
+<script src="log.js"></script>
+<script src="keys.js"></script>
+<script src="settings.js"></script>
+<script src="cursor.js"></script>
+<script src="disks.js"></script>
+<script src="loading.js"></script>
+<script src="main.js"></script>
+</body>
+</html>

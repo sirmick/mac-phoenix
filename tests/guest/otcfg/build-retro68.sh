@@ -2,7 +2,7 @@
 # build-retro68.sh — CfgTest as 68k and PowerPC applications built with
 # Retro68 (RETRO68: the toolchain prefix with both, default
 # ~/opt/retro68/build-ppc/toolchain) against the headers and glue generated
-# from src/executor/multiversal: writes CfgTest68K.bin and CfgTestPPC.bin
+# from executor/core/multiversal: writes CfgTest68K.bin and CfgTestPPC.bin
 # here (committed; the otcfg_* ctest cells use them).
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -10,7 +10,7 @@ REPO="$(cd "$HERE/../../.." && pwd)"
 RETRO68="${RETRO68:-$HOME/opt/retro68/build-ppc/toolchain}"
 WORK="${WORK:-${TMPDIR:-/tmp}/cfgtest-retro68.$$}"
 mkdir -p "$WORK"
-(cd "$REPO/src/executor/multiversal" && \
+(cd "$REPO/executor/core/multiversal" && \
     PATH="$RETRO68/bin:$PATH" ruby make-multiverse.rb -G CIncludes -o "$WORK/mv" >/dev/null)
 for arch in 68k ppc; do
     case $arch in

@@ -2,7 +2,7 @@
 #
 # test_toolbox_suite.sh — Executor's Toolbox tests, as a 68k Mac application.
 #
-# src/executor/tests builds two ways: natively against Executor's Toolbox
+# executor/tests builds two ways: natively against Executor's Toolbox
 # (ctest label "executor"), and with Retro68 into a Mac application that
 # runs the same tests on whatever System it is launched under. This runs
 # that application on a backend:
@@ -85,8 +85,14 @@ DISK="${MACEMU_DISK:-$(bash tests/lib/refresh_test_disk.sh "tests-$OS_VERSION" $
 
 # --- Build the application ---------------------------------------------------
 echo -n "Building $APP_NAME (Retro68)..."
+# A build directory configured from another source path (executor/tests was
+# src/executor/tests before the repo move) is made again
+if [[ -f "$APP_BUILD/CMakeCache.txt" ]] &&
+   ! grep -qx "CMAKE_HOME_DIRECTORY:INTERNAL=$PROJECT_ROOT/executor/tests" "$APP_BUILD/CMakeCache.txt"; then
+    rm -rf "$APP_BUILD"
+fi
 if [[ ! -f "$APP_BUILD/CMakeCache.txt" ]]; then
-    cmake -S src/executor/tests -B "$APP_BUILD" \
+    cmake -S executor/tests -B "$APP_BUILD" \
         -DCMAKE_TOOLCHAIN_FILE="$TOOLCHAIN" >/dev/null
 fi
 if ! cmake --build "$APP_BUILD" -j"$(nproc)" --target tests_APPL >${TMPDIR:-/tmp}/toolbox_build_$$.log 2>&1; then

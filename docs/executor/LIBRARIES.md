@@ -1,6 +1,6 @@
 # Libraries in the definitions: ASLM, CFM and components
 
-Executor's API definitions (`src/executor/multiversal/defs`) describe
+Executor's API definitions (`executor/core/multiversal/defs`) describe
 Toolbox traps once and generate both sides from them: Executor's C++
 declarations and trap registrations (`-G Executor`, `romlib/generated`)
 and the Multiversal Interfaces, the C headers Retro68 programs use
@@ -307,7 +307,7 @@ Executor has/lacks and imported or not ("work list"), with the routes
 
 What Executor answers is its export tables as CFM binds them, which the
 executor_tests export test writes to `build/executor-exports.json`
-(`ctest -R executor.Exports`; `tests/exports.cpp`, which also fails if an
+(`ctest -R executor.Exports`; `executor/tests/exports.cpp`, which also fails if an
 implementation's own name, `_NewPtr_flags`, is exported). They are the
 definitions as the trap macros expand them: a `lowmem:` entry gives
 `LMGetX`/`LMSetX`, a File Manager call `PBXSync`/`PBXAsync`, a trap with

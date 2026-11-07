@@ -4,7 +4,7 @@
     tools/web/make_boot_disk.py SOURCE.img OUT.img [--label NAME] [--keep PATH]
 
 Executor runs only the startup files its policy allows
-(src/executor/res/extension-policy.txt), and in a browser tab every
+(executor/core/res/extension-policy.txt), and in a browser tab every
 megabyte of disk is download time. This keeps what Executor uses and the
 user sees, and leaves out the rest:
 
@@ -19,7 +19,8 @@ user sees, and leaves out the rest:
   left out the rest of Extensions (Apple Guide help, other printer drivers,
            QuickTime, Apple's Open Transport, ...), what doesn't work on
            Executor (DROP: Energy Saver, AppleTalk's and QuickTime's
-           items), MacsBug, the top-level folders (Apple Extras,
+           items; the policy's "-NAME" ones: the Monitors control panels
+           and their Control Strip modules), MacsBug, the top-level folders (Apple Extras,
            Utilities), and the desktop database (keyed by the source
            volume's file IDs)
 
@@ -42,10 +43,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools/macdecode"))
 sys.path.insert(0, str(ROOT / "tools/diskaudit"))
-from rsrc import Disk  # noqa: E402
+from rsrc import Disk, glob_quote  # noqa: E402
 import tidy  # noqa: E402
 
-POLICY = ROOT / "src/executor/res/extension-policy.txt"
+POLICY = ROOT / "executor/core/res/extension-policy.txt"
 EXTENSION_FOLDERS = {b"Scripting Additions", b"Voices"}
 # The Finder's desktop database (its file IDs are the source volume's) and
 # the provisioning record: not copied.
@@ -116,14 +117,19 @@ def chosen_printer(disk):
     return data[1:1 + data[0]] if data and data[0] else None
 
 
-def policy_names(path, version):
+def policy_names(path, version, denied=False):
     """The policy's names, read as Executor reads them (extensions.cpp):
-    '#' comments and spaces cut, "NAME @ 7.6" only from that version."""
+    '#' comments and spaces cut, "NAME @ 7.6" only from that version. With
+    denied, its "-NAME" ones instead (the Monitors control panels: never
+    used, so never copied)."""
     names = set()
     for line in Path(path).read_text().splitlines():
         line = line.split("#", 1)[0].strip()
         if not line or line.startswith("System AINI"):
             continue
+        if line.startswith("-") != denied:
+            continue
+        line = line[1:] if denied else line
         name, at, since = line.partition(" @ ")
         if at:
             major, _, minor = since.strip().partition(".")
@@ -159,7 +165,7 @@ class Writer:
         self.run("hformat", "-l", label, str(self.image))
 
     def mkdir(self, path):
-        self.run("hmkdir", b":" + path)
+        self.run("hmkdir", glob_quote(b":" + path))     # (hcopy's destination is literal)
 
     def put(self, path, macbinary, scratch):
         tmp = Path(scratch) / "file.bin"
@@ -167,19 +173,19 @@ class Writer:
         self.run("hcopy", "-m", str(tmp), b":" + path)
 
     def hide(self, path):
-        self.run("hattrib", "+i", b":" + path)
+        self.run("hattrib", "+i", glob_quote(b":" + path))
 
     def bless(self, path):
-        self.run("hattrib", "-b", b":" + path)
+        self.run("hattrib", "-b", glob_quote(b":" + path))
 
     def close(self):
         subprocess.run(["humount"], env=self.env, capture_output=True)
 
 
-def plan(disk, allowed, keep=()):
+def plan(disk, allowed, keep=(), denied=()):
     """(folders, files) to copy: raw Mac paths, parents first."""
     folders, files = [], []
-    drop = {mac(n) for n in DROP}
+    drop = {mac(n) for n in DROP} | set(denied)
     libraries = {mac(n) for n in LIBRARIES}
     printer = chosen_printer(disk)
 
@@ -274,7 +280,8 @@ def main():
         try:
             version = system_version(disk)
             folders, files = plan(disk, policy_names(POLICY, version),
-                                  [mac(k) for k in args.keep])
+                                  [mac(k) for k in args.keep],
+                                  policy_names(POLICY, version, denied=True))
             blobs = {}
             for path in files:
                 blob = disk.macbinary(path)

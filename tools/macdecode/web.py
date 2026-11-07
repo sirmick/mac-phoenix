@@ -605,7 +605,7 @@ class Site:
             "<p class='mut'>Imported = the PEF containers on the disk images that import the symbol (PowerPC, "
             "CFM-68K; libraries.py --scan). Apple = in the export table of Apple's library as MPW ships it. "
             "Executor = its export tables as CFM binds them (build/executor-exports.json, written by "
-            "ctest -R executor.Exports from the definitions in src/executor/multiversal/defs); rebuild and "
+            "ctest -R executor.Exports from the definitions in executor/core/multiversal/defs); rebuild and "
             "rerun it after editing a YAML file. System = Apple's "
             "libraries (the rest ship with their applications).</p>"
             "<details open><summary><b>Per library</b></summary><div class='wrap'><table><tr><th>Library</th>"

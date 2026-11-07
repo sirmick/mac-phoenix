@@ -1,10 +1,13 @@
 # Testing
 
 MacPhoenix has three kinds of tests: **CTest tests** (host unit tests, shell
-scripts that drive the emulator binary over its HTTP API with curl, and
+and Python scripts that drive the emulator binary over its HTTP API, and
 Executor's Toolbox gtests), **Playwright E2E tests** (browser tests of the
 web UI and the video pipeline) and a few **node unit tests** for the web
-client.
+client. Executor's front ends have their own layers
+([Executor front ends](#executor-front-ends)): the desktop application's
+cells, the WebAssembly tab's cells in `build-wasm`, the Go server's
+`go test` and a Windows smoke test.
 
 All of them need a built tree (`cmake --build build -j4`). The ROM-machine
 tests need the ROMs and the provisioned test images described under
@@ -46,9 +49,9 @@ ctest --test-dir build -L "boot|bridge"
 ctest --test-dir build -V              # verbose
 ```
 
-`tests/CMakeLists.txt` registers 65 named tests;
-`src/executor/tests/CMakeLists.txt` adds 343 more named `executor.*`
-(408 in all).
+`tests/CMakeLists.txt` registers 206 named tests; `executor/` adds 413
+more named `executor.*` (619 in all, in a native build with the HFS+
+tools; a few cells depend on what configure finds).
 
 ### Labels
 
@@ -56,16 +59,19 @@ A test can carry several labels.
 
 | Label | Tests |
 |-------|-------|
-| `unit` | `mac_roman`, `browser_shm`, `cpu_cores`: host-only, no emulator |
+| `unit` | `mac_roman`, `browser_shm`, `cpu_cores`, `multiversal_retro68`: no emulator |
 | `api` | `api_endpoints`, `config_api`, `extfs` |
-| `boot` | The `boot_*` tests, `command_bridge*` and `mouse_position*` (22) |
+| `boot` | The `boot_*` tests, `mouse_position*` and the `command_bridge*` cells but the two `command_bridge_quit_*` (24) |
 | `bridge` | `bridge_trap`, `bridge_trap_ppc`, `bridge_trap_executor` |
-| `guest` | Tests that run an application in the guest: the suites, `bridge_trap*`, `notify_*`, `keyboard_guest*`, `drag_executor*`, `aslm_executor*`, `toolbox_suite_*`, `mpw_toolchain_executor`, `guest_builds_current`, `ot_executor*`, `threads_executor*`, `ppc_hello_executor*` (37) |
-| `mame` | Tests on the MAME cores (`--core mame-68k`, `--core mame-ppc`), plus `cpu_cores` |
-| `executor` | The `--backend executor` guest cells and all `executor.*` gtests |
-| `761` | The cells on Mac OS 7.6.1 (`*_761`, `guest_suite_761`, `ot_retro68_68k_rom`, `otcfg_*`, `slm_*`) |
+| `guest` | Tests that run an application in the guest: the suites, the probes and the real-application cells below, and the `executor.hfsplus_*` cells that boot (156) |
+| `mame` | Most tests on the MAME cores (`--core mame-68k`, `--core mame-ppc`), plus `cpu_cores` |
+| `executor` | Most `--backend executor` cells and every `executor.*` test (522) |
+| `761` | The cells on Mac OS 7.6.1 (`*_761`, `guest_suite_761`, `ot_retro68_68k_rom`, `otcfg_*`, `slm_*`; 44) |
+| `provisioning` | `bake_serials`, `bake_exclude`, `custom_icons`, `system_additions`, `build_printer`, `hfs_glob`: the provisioning scripts, no emulator |
+| `tools` | `disk_audit`, `disk_contents`: host-side disk tools on fixture images |
 | `flaky` | `ot_retro68_ppc_rom_761` (STRAGGLERS 66); `ctest -LE flaky` leaves it out |
-| `xfail` | Executor gtests that are expected to fail (`src/executor/tests/test-properties.cmake`). Two of them on each core are also disabled |
+| `xfail` | Three Executor gtests expected to fail (`executor/tests/test-properties.cmake`); `executor.FileTest.SetFInfo_CrDat` is also disabled |
+| `web`, `site` | The tab's cells, in `build-wasm` only ([below](#executor-front-ends)) |
 
 ### Test List
 
@@ -78,6 +84,9 @@ Timeouts are the ctest `TIMEOUT` values in `tests/CMakeLists.txt`.
 | `mac_roman` | `test_mac_roman.cpp` | unit | 5 s | MacRoman to UTF-8 conversion |
 | `browser_shm` | `test_browser_shm.cpp` | unit | 10 s | The BrowserShm SPSC ring (`src/drivers/browser/ring.cpp`) |
 | `cpu_cores` | `test_cpu_cores.cpp` | unit, mame | 10 s | Two mame-68k cores in one process |
+| `multiversal_retro68` | `test_multiversal_retro68.sh` | unit, executor | 120 s | Executor's API definitions as Retro68's Multiversal Interfaces: the C headers and glue generated, a program built against them; skips without Retro68 |
+| `bake_serials`, `bake_exclude`, `custom_icons`, `system_additions`, `build_printer`, `hfs_glob` | `test_*.py` | provisioning | 60-120 s | `provisioning/bake.py` and `build.py` steps, library disks' System additions, hfsutils names with glob characters |
+| `disk_audit`, `disk_contents` | `test_disk_audit.py`, `test_disk_contents.py` | tools | 120 s | `tools/diskaudit/disk_audit.py` and `tools/web/disk_contents.py` on fixture images |
 | `api_endpoints` | `test_api_endpoints.sh` | api | 30 s | The `/api/*` endpoints return the expected status and JSON |
 | `config_api` | `test_config_api.sh` | api | 30 s | Config round trip through `/api/config`, CD-ROM paths, boot driver |
 | `extfs` | `test_extfs.sh` | api | 60 s | ExtFS config, CLI and backward compatibility (8 checks) |
@@ -101,7 +110,7 @@ Timeouts are the ctest `TIMEOUT` values in `tests/CMakeLists.txt`.
 | `command_bridge_ppc` | `test_command_bridge.sh --backend kpx` | The same on the G3 (Kheperix) |
 | `command_bridge_ppc_mame_m68k` | `test_command_bridge.sh --backend kpx --core mame-ppc --jit --m68k-host 1` | The same on mame-ppc with host-initiated 68k routines on a mame-68k core (C3a) |
 | `command_bridge_executor` | `test_command_bridge.sh --backend executor` | The same on Executor |
-| `command_bridge_quit_executor_761`, `command_bridge_quit_ppc_executor_761` | `test_command_bridge.sh --backend executor --os-version 7.6.1 [--executor-ppc] --quit-app ... SimpleSound` | The same, then SimpleSound launched and quit with `/api/quit` (the Quit Apple event, AppleScript's PACK 8 on 7.6.1), its 68k code and its PowerPC code |
+| `command_bridge_quit_executor_761`, `command_bridge_quit_ppc_executor_761` | `test_command_bridge.sh --backend executor --os-version 7.6.1 [--executor-ppc] --quit-app ... SimpleSound` | The same, then SimpleSound launched and quit with `/api/quit` (the Quit Apple event, AppleScript's PACK 8 on 7.6.1), its 68k code and its PowerPC code. Labels `executor`, `761`, not `boot` |
 
 **Guest** (label `guest`; plus `executor`, `mame`, `bridge` as noted in
 `ctest -N -L`)
@@ -124,19 +133,105 @@ Timeouts are the ctest `TIMEOUT` values in `tests/CMakeLists.txt`.
 | `aslm_executor` | `test_aslm_executor.sh` | Apple's Shared Library Manager on Executor through Apple's ASLM test tools in MPW Shell; skips without `~/storage/aslm-kit` |
 | `toolbox_suite_uae`, `toolbox_suite_executor` | `test_toolbox_suite.sh` | Executor's Toolbox gtests built with Retro68 into a 68k application and run in the guest: on Apple's ROM and System (the ground truth) and on Executor. Expected failures in `tests/guest/toolbox_expected_<backend>.txt` (`..._<backend>_<version>.txt` with `--os-version`, where there is one). Skips without Retro68; the two share a build directory (`RESOURCE_LOCK toolbox_app`) |
 | `mpw_toolchain_executor` | `test_mpw_toolchain.sh` | Apple's MPW (SC, Link, ToolServer) on Executor through `tools/mpw/mpw`; skips without the MPW disk (`tools/mpw/mpw setup`) |
-| `guest_builds_current` | `test_guest_builds.sh` | The committed guest programs (MacPhoenixSuite, OTTest) are their sources' builds: rebuilt with `tools/mpw/mpw` and compared |
+| `guest_builds_current` | `test_guest_builds.sh` | The committed guest programs (MacPhoenixSuite, OTTest, BridgeDemo, NotifyTest) are their sources' builds: rebuilt with `tools/mpw/mpw` and compared |
 | `ot_executor` | `test_ot_executor.sh` | Executor's native Open Transport through Apple's 68k OT glue (`tests/guest/ot`, an MPW tool run in ToolServer) against a host echo server |
 | `otcfg_rom`, `otcfg_rom_ppc`, `otcfg_executor`, `otcfg_executor_ppc` | `test_guest_suite.sh --os-version 7.6.1 --app CfgTest68K.bin` (`CfgTestPPC.bin`) | Open Transport's configuration database (what the TCP/IP control panel reads and writes; `tests/guest/otcfg`) called directly, from 68k code and PowerPC code: Apple's OT 1.1.1 on the Quadra and the G3 (the reference) and Executor's |
 | `slm_rom_ppc`, `slm_executor_ppc` | `test_guest_suite.sh --os-version 7.6.1 --app SLMTest.bin` | The Shared Library Manager's PowerPC side through the ASLM SDK's glue (`tests/guest/slm`, MPW MrCpp: InitLibraryManager, operator new and delete, TRY/CATCH/Fail, the current client and global world, a death watcher), what the TCP/IP control panel's PowerPC code uses: Apple's "Shared Library Manager PPC" on the G3 (the reference) and Executor's |
 | `drag_ppc_executor_761`, `drag_rom_ppc_761`, `drag_rom_ppc_904` | `test_guest_suite.sh --app DragTestPPC.bin` | The Drag Manager from PowerPC code (DragLib: `tests/guest/drag`): on Executor glue to Apple's 68k Drag Manager, Apple's own on the G3 (7.6.1, 9.0.4) |
 | `threads_executor` | `test_threads_executor.sh` | The Thread Manager on Executor through UserLand Frontier's UserTalk threads (`/api/script`) |
+| `guest_suite_ppc_executor` | `test_guest_suite.sh --backend executor --executor-ppc` | The fat suite's PowerPC code on Executor |
+| `guest_suite_retro68`, `guest_suite_retro68_executor`, `guest_suite_retro68_ppc`, `guest_suite_retro68_ppc_executor` | `test_guest_suite.sh --app .../retro68/MacPhoenixSuite*.bin` | The suite built with Retro68 on the Multiversal Interfaces alone, 68k and PowerPC, on Apple's systems and on Executor |
+| `guest_suite_cfm68k`, `guest_suite_cfm68k_executor` | `test_guest_suite.sh --app MacPhoenixSuiteCFM68K.bin` | The suite as a CFM-68K application: Apple's CFM-68K Runtime Enabler on the Quadra (`dev-7.6.1`), Executor's own Code Fragment Manager |
+| `retro68_executor`, `retro68_ppc_executor`, `retro68_rom`, `retro68_rom_ppc`, `retro68_ppc_executor_asl` | `test_guest_suite.sh --app RetroTest*.bin` | RetroTest (`tests/guest/retro68`): traps, Component Manager and OSA inlines, InterfaceLib and AppleScriptLib imports. `_asl`: Executor's own AppleScriptLib, Apple's deleted |
+| `retro68_automated_executor` | `tools/retro68/automated_tests.py` | Retro68's own AutomatedTests on Executor through LaunchAPPL; skips without `~/opt/retro68/build-ppc` |
+| `clib_executor`, `clib_rom_ppc`, `clib_cfm68k_executor`, `clib_cfm68k` | `test_guest_suite.sh --app CLibTest*.bin` | StdCLib and MathLib (`tests/guest/clib`): Executor's against Apple's on 9.0.4 (PowerPC) and NuStdCLib on 7.6.1 (CFM-68K) |
+| `devtest_executor`, `devtest_rom_ppc` | `test_guest_suite.sh --app DevTest.bin` | StdCLib's device table and descriptor layer (`tests/guest/devtest`) |
+| `ppc_break_executor` | `test_executor_ppc_break.sh` | PowerPC breakpoints from the command line and over `/api/executor/ppc-break` |
+| `mactcp_executor`, `mactcp_rom`, `mactcp_rom_ppc` | `test_guest_suite.sh --sections "network mactcp"` | MacTCP in depth: async calls, ASRs, passive open, UDP, the resolver. Executor against a host echo server, Open Transport's MacTCP as the reference |
+| `ot_executor_noaslm` | `test_ot_executor.sh --no-aslm` | `ot_executor` without Apple's Shared Library Manager |
+| `ot_ppc_executor`, `ot_retro68_ppc_executor`, `ot_retro68_ppc_rom`, `ot_retro68_68k_executor`, `ot_retro68_68k_rom` | `test_guest_suite.sh --app OTTest*.bin` | OTTest from PowerPC code (Apple's glue, MPW) and built with Retro68 (68k and PowerPC); Apple's OT on the G3 (9.0.4) and the Quadra (7.6.1) against net-bridge's echo service |
+| `ressize_*`, `itemstyle_*`, `listcell_*` (`_guest`, `_executor`) | `test_guest_suite.sh --os-version 7.6.1 --app ...` | Small probes for single calls (SizeResource, GetItemStyle, LNextCell); the ROM machine is the reference |
+| `threads_ppc_executor_761`, `threads_rom_ppc_761`, `collections_ppc_executor_761`, `collections_rom_ppc_904`, `icons_*` | `test_guest_suite.sh --app ...PPC.bin` | The Thread Manager, Collection Manager and Icon Services from PowerPC code (Retro68 probes), Executor against Apple's on the G3 |
+| `partition_*`, `cglue_*`, `strprobe_*`, `mman68k_executor_761` | `test_guest_suite.sh`, `tests/guest/difftest/mman68k.sh` | Probes against the Macs: an application's partition, InterfaceLib's lowercase C routines, GetIndString out of range, Memory Manager alignment |
+| `difftest_*_executor_86`, `difftest_vminfo_executor_904` | `tools/difftest/run.py PROBE --no-refresh` | Differential probes on Executor against the committed G3 references ([DiffTest.md](executor/DiffTest.md)); one at a time (`RESOURCE_LOCK difftest_executor`) |
+| `applemenu_submenus_*_86`, `scroll_bars_*_86` | `test_apple_menu_submenus.sh`, `test_scroll_bars_86.sh` | Apple Menu Options' submenus and live scrolling on 8.6, the G3 the reference |
+| `appleworks_executor_761_68k`, `_ppc` | `test_appleworks.py` | AppleWorks 5 on Executor's 7.6.1: a document made, saved, opened and saved again, 68k and PowerPC |
+| `codewarrior_executor_86`, `mpw_executor_86`, `thinkc_run_executor` | `test_codewarrior_86.sh`, `test_mpw_86.sh`, `test_thinkc_run_executor.sh` | CodeWarrior IDE 3.2 and MPW Shell (PowerPC) on 8.6, THINK C 6's Project > Run on 7.6.1 |
+| `utilities_executor_7.6.1`, `_8.6`, `gestalt_executor_*` | `test_utilities_executor.sh`, `test_gestalt_executor.sh` | The Utilities disk (Gestalt.Appl, TattleTech, MacBench) on Executor; Executor's Gestalt against answers measured on the Quadra and the G3 |
+| `pcexchange_executor` | `test_pcexchange_executor.sh` | A FAT16 image through PC Exchange on Executor's File System Manager (7.6.1) |
+| `executor.hfsplus_volume`, `_write`, `_fsref`, `_app` | `tests/test_hfsplus_*.py` | The File Manager on HFS+ volumes on Executor against Mac OS 9.0.4's (label `executor` too) |
+
+**Executor sessions** (label `executor`, not `guest`): scripts that drive an
+Executor session and check its screen or log. Most skip without their
+System image.
+
+| Name | Script | What it tests |
+|------|--------|---------------|
+| `cursor_executor_png`, `cursor_executor_h264` | `test_cursor_executor.sh` | The page draws Executor's cursor (`client/cursor.js`) on both transports; headless Chromium through playwright (`PLAYWRIGHT_NODE_PATH`) |
+| `hidpi_chrome_executor`, `hidpi_gworld_executor`, `hidpi_windows_executor`, `hidpi_labels_executor` | `test_hidpi_*.sh` | `--executor-scale 2` on 8.6 against the 1x frame scaled up ([HiDPI.md](executor/HiDPI.md)); the chrome and GWorld cells skip without Skia |
+| `desktop_labels_executor`, `platinum_86_executor`, `text_hilite_executor`, `modal_idle_executor` | `test_*_executor.sh` | 8.6 drawing where the G3 was measured: desktop labels, platinum chrome, the highlight colour; an alert left up idles the host |
+| `finder_executor_904`, `office98_executor`, `relaunch_ppc_executor` | `test_finder_904_executor.sh`, `test_office98_executor.sh`, `test_relaunch_ppc_executor.sh` | 9.0.4's own System to the Finder; Word 98 to Office First Run; a PowerPC application launched twice |
+| `cdev_shell_executor` | `test_cdev_shell.py` | The control panel shell against the G3's 9.0.4 (`tests/guest/cdev/expected.txt`) |
+| `system_sessions_executor`, `system_locked_executor` | `test_executor_system_*.sh` | Two sessions on one `--executor-system`; that image mounted locked |
+| `executor.smoke.web_backend` | `executor/tests/smoke_web_backend.sh` | The web parent starts `--backend executor` as its IPC child; input through the API changes the screen |
+| `executor.hfsplus_reader`, `executor.hfsplus_writer`, `executor.hfsplus_sideload` | `tests/test_hfsplus_*.py` | The HFS+ reader and writer against hfsfuse's `hfsdump` (and `fsck.hfsplus` in docker); Executor's System from an HFS+ image |
+| `executor.desktop.*` | see [Executor front ends](#executor-front-ends) | |
 | `*_761` | the cell's script with `--os-version 7.6.1` | The same cells on Mac OS 7.6.1 (`tests-7.6.1`; label `761`): on the Quadra the guest suite (Retro68 build), RetroTest, the Finder and MacTCP sections, the command bridge and the Toolbox suite (`toolbox_expected_uae_7.6.1.txt`: 7.6.1's List Manager makes larger lists); on the G3 under mame-ppc the guest suite (MPW and Retro68 builds), RetroTest, OTTest and the command bridge; on Executor (Apple's 7.6.1 System) the guest suite in all four builds, RetroTest, OTTest (MPW, PowerPC, Retro68 68k and PowerPC), the command bridge, the Toolbox suite, Finder, MacTCP and the Notification Manager. `ot_retro68_ppc_rom_761` is also labelled `flaky`: Apple's OT 1.1.1 on the G3 crashes in `tcp_async` about half the runs (STRAGGLERS 66) |
 
 **Executor gtests** (label `executor`)
 
-`executor.<Suite>.<Test>`: Executor's Toolbox gtests (`src/executor/tests`)
-built natively and run on mame-68k; `executor.compilefail.*`: checks
-that misuse of the guest value types fails to compile.
+`executor.<Suite>.<Test>`: Executor's Toolbox gtests (`executor/tests`,
+`executor_tests`) built natively and run on mame-68k, and the overlay
+tests (`executor_overlay_tests`: `executor/host`'s disk overlays against
+`executor/server`'s format); `executor.compilefail.*`: checks that misuse
+of the guest value types fails to compile.
+
+### Executor front ends
+
+```bash
+# The desktop application (Qt 6 Widgets), in the native build
+ctest --test-dir build -R executor.desktop
+
+# The tab: the gtests under node and the executor.web.* cells
+source ~/emsdk/emsdk_env.sh
+emcmake cmake -B build-wasm && cmake --build build-wasm -j4
+ctest --test-dir build-wasm -L executor
+ctest --test-dir build-wasm -L site        # the long executor.web.site.* cells
+
+# The Go server
+(cd executor/server && go test ./...)
+
+# The Windows zip under Wine (docker)
+tools/windows/build.sh && tools/windows/package.sh
+tools/windows/smoke.sh ZIP ~/storage/tmp/win-smoke --system IMAGE [--ppc]
+```
+
+- **`executor.desktop.*`** (label `executor`): `finder` and `apple761`
+  run `executor-desktop` offscreen to the System's shell application
+  (`executor/tests/desktop_finder.sh`), on Executor's own System and on
+  Apple's 7.6.1 from `~/storage/web-library` with a disk written through
+  its overlay (skipped without the library); `settings` checks the
+  desktop's `settings.json` against the server's (a file the server wrote
+  loads; what the desktop writes is what the schema allows).
+- **`executor.web.*`** (labels `executor`, `web`; `build-wasm` only): the
+  tab under headless Chromium through playwright (`executor/tests/web/*.mjs`)
+  on `executor/server`, which `harness.mjs` builds with go. Finder, writes,
+  persistence, PowerPC, HiDPI, input at each screen size and
+  devicePixelRatio, the Disks and Settings panels, the claim, the relay.
+  `executor.web.standalone_server` runs `make -C executor/server test`
+  (the binary and `go test`). They need `-DEXECUTOR_WEB_NODE_PATH=` (a
+  `node_modules` with playwright) and go, and skip without them.
+  `executor.web.site.*` (labels `web`, `site`, not `executor`) open each
+  application of the web library on each of the site's systems; long, and
+  skipped without `EXECUTOR_WEB_LIBRARY`.
+- **`go test ./...`** in `executor/server`: the API over a real
+  connection, the claim, uploads, settings, overlays (against the C++
+  ones), shutdown, the standalone binary.
+- **`tools/windows/smoke.sh`**: the Windows zip in a Debian container
+  under Wine: `executor-desktop.exe` offscreen to a screenshot and its
+  log, a System's Finder with `--system`, a crash report
+  (`executor-desktop.exe --crash-test`), and `executor-standalone.exe` serving the tab. Not in
+  ctest.
 
 ### Configuration
 
@@ -167,8 +262,14 @@ tests are swept on the next call. Without a PID it makes the fixed
 Some guest tests also need software that is not on every machine: the MPW
 disk (`tools/mpw/mpw setup`) for `mpw_toolchain_executor`,
 `guest_builds_current` and `ot_executor*`; the Retro68 toolchain
-(`toolchain/retro68`) for `toolbox_suite_*`; the ASLM kit for
-`aslm_executor*`. Without them they skip.
+(`toolchain/retro68`) for `toolbox_suite_*` and `multiversal_retro68`;
+Retro68's PowerPC build (`~/opt/retro68/build-ppc`) for
+`retro68_automated_executor`; the ASLM kit for `aslm_executor`; Skia
+(`-DEXECUTOR_SKIA=ON`) for `hidpi_chrome_executor` and
+`hidpi_gworld_executor`; the web library (`~/storage/web-library`) for
+`executor.desktop.apple761`. Without them they skip. The
+`executor.hfsplus_*` cells are registered only when the build has
+hfsfuse's `hfsdump` (the `hfsplus_dump` target).
 
 ### Running in parallel
 

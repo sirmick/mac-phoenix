@@ -20,6 +20,13 @@ if(EMSCRIPTEN)
   return()
 endif()
 
+# Windows (cross-built: tools/windows/build.sh): Executor and its desktop
+# application alone (cmake/ExecutorWindows.cmake).
+if(WIN32)
+  include(ExecutorWindows)
+  return()
+endif()
+
 # Mirror debian/rules hardening flags so a plain `cmake -B build`
 # fails the same way the .deb build would (LTO undefined refs,
 # format-string regressions, missing frame pointers). Opt-out for
@@ -321,7 +328,7 @@ if(BUILD_BRIDGE_AGENT)
     set(RETRO68_RINCLUDES "${RETRO68_ROOT}/m68k-apple-macos/RIncludes")
 
     # The Mac interfaces: the Multiversal Interfaces generated from
-    # Executor's API definitions (src/executor/multiversal; needs ruby),
+    # Executor's API definitions (executor/core/multiversal; needs ruby),
     # alone: none of the toolchain's own or Apple's
     # (tools/retro68/multiversal-headers.sh). Without ruby the committed
     # .bin files stay.
@@ -331,9 +338,9 @@ if(BUILD_BRIDGE_AGENT)
     execute_process(COMMAND "${RETRO68_GCC}" -print-file-name=include
                     OUTPUT_VARIABLE RETRO68_GCC_INCLUDE OUTPUT_STRIP_TRAILING_WHITESPACE)
     file(GLOB MV_GUEST_DEPS
-         "${CMAKE_CURRENT_SOURCE_DIR}/src/executor/multiversal/defs/*.yaml"
-         "${CMAKE_CURRENT_SOURCE_DIR}/src/executor/multiversal/*.rb"
-         "${CMAKE_CURRENT_SOURCE_DIR}/src/executor/multiversal/custom/*")
+         "${CMAKE_CURRENT_SOURCE_DIR}/executor/core/multiversal/defs/*.yaml"
+         "${CMAKE_CURRENT_SOURCE_DIR}/executor/core/multiversal/*.rb"
+         "${CMAKE_CURRENT_SOURCE_DIR}/executor/core/multiversal/custom/*")
     add_custom_command(
       OUTPUT "${MV_STAMP}"
       COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/tools/retro68/multiversal-headers.sh"
@@ -581,7 +588,7 @@ endif()
 # =============================================================================
 option(BUILD_EXECUTOR "Build the Executor Toolbox core (mac-phoenix-executor)" ON)
 if(BUILD_EXECUTOR)
-    add_subdirectory(src/executor)
+    add_subdirectory(executor)
 endif()
 
 # =============================================================================

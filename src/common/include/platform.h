@@ -119,6 +119,7 @@ typedef struct {
     bool ppc_jit;            // true: enable PPC dyngen JIT; false: interpreter only
     int ppc_m68k_host;       // --m68k-host (mame-ppc): 0 off, 1 68k routines on mame-68k, 2 + A-line traps
     bool ppc_debug_trace;    // --debug-mame-ppc
+    bool cpu_mmu;            // --cpu-mmu: mame-68k's PMMU, mame-ppc's identity translation
     // PPC instructions executed so far: the virtual clock behind Microseconds()
     // and timer_current_time() on the PPC machine (4 ns each). NULL off PPC.
     uint64_t (*ppc_insn_count)(void);

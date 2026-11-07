@@ -36,7 +36,7 @@ add_link_options(
 enable_testing()
 add_subdirectory(src/cpu/mame)
 add_subdirectory(src/cpu/core)
-add_subdirectory(src/executor)
+add_subdirectory(executor)
 
 # The cores' unit test, and its --bench under node (W4: drcbec in wasm
 # against the native back-ends).

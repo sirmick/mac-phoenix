@@ -9,7 +9,8 @@ guest applications are never rebuilt in a package build
 Build dependencies come from `debian/control` (`apt-get build-dep .`),
 for local builds and CI alike. The Executor backend needs nothing beyond
 the C++ compiler (its generated sources are committed), so packages
-include `--backend executor`.
+include `--backend executor`. Executor's own programs (the desktop
+application, the standalone server) are not in the packages: below.
 
 ## Locally: `packaging/run_matrix.sh`
 
@@ -43,9 +44,6 @@ dist/
   <target>.log, <target>.boot.log       build and boot-test logs
 ```
 
-The UAE core needs `vm.mmap_min_addr=0` on the Docker host for the boot
-test ([Install.md](Install.md#host-settings)).
-
 `packaging/start-sandbox.sh` / `delete-sandbox.sh` run an Ubuntu 24.04
 container to try the built packages by hand. `packaging/ci/smoke-installed.sh`
 checks an installed package's layout; `Dockerfile.deb` and CI run it.
@@ -72,3 +70,15 @@ docker run --rm -it -v "$PWD":/src -v ~/storage:/storage:ro -p 11000:11000 mac-p
 
 `packaging/homebrew/` has a formula draft, never published and not built
 on macOS yet: [packaging/homebrew/README.md](../packaging/homebrew/README.md).
+
+## Executor's programs
+
+Built and packaged by hand, not in CI:
+
+| What | Command | Details |
+|---|---|---|
+| Linux AppImage of `executor-desktop` (`Executor-x86_64.AppImage`) | `cmake --build build --target executor-desktop-appimage` or `tools/desktop/appimage.sh [BUILD [OUT]]`; `--test APPIMAGE` runs it in `debian:stable` | [desktop README](../executor/frontends/desktop/README.md), "Packaging" |
+| Windows zip (`executor-windows-VERSION.zip`: `executor-desktop.exe`, its DLLs, `executor-standalone.exe`) | `tools/windows/build.sh && tools/windows/package.sh`; `tools/windows/smoke.sh ZIP DIR` under Wine; `tools/windows/symbolize.sh` for crash reports | the same; the zip's README is `tools/windows/README.txt` |
+| `executor-standalone` for six OS/arch targets, `SHA256SUMS`, `README.txt` | `make -C executor/server dist WASM_BUILD=$PWD/build-wasm [VERSION=V]` | [Standalone.md](executor/Standalone.md), "A release" |
+
+None of them is signed (what signing would take: Standalone.md).

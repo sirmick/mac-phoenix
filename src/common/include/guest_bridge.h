@@ -56,6 +56,8 @@ enum Selector : uint32_t {
                            ("Host:MacPhoenix:<pid>"), its length; 0 none */
     kLaunchPost = 0x18, /* the launcher's timer task: -> 1 to post its notification,
                            0 not now, -1 stop */
+    kHostClock = 0x19,  /* -> the host's steady clock in microseconds, the low 32
+                           bits (tests/guest/bench: a test timed by the host too) */
 };
 
 using Clock = std::chrono::steady_clock;
@@ -221,6 +223,9 @@ uint32_t call(uint32_t selector, uint32_t a0, uint32_t d1, Read8 read8, Write8 w
             write8(a0 + i, (uint8_t)s.guest_dir[i]);
         return n;
     }
+    case kHostClock:
+        return (uint32_t)std::chrono::duration_cast<std::chrono::microseconds>(
+            Clock::now().time_since_epoch()).count();
     case kPending:
         if (s.due != Clock::time_point{} && Clock::now() >= s.due) {
             s.due = Clock::time_point{};

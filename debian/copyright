@@ -36,13 +36,13 @@ License: GPL-2+
 Comment: and the headers in src/common/include/ that carry Christian
  Bauer's notice.
 
-Files: src/executor/*
+Files: executor/*
 Copyright: 1986-2004 Abacus Research & Development, Inc.
            2018-2026 Wolfgang Thaller
            2026 Mick <sirmick@gmail.com>
 License: Expat
 
-Files: src/executor/third_party/googletest/*
+Files: executor/core/third_party/googletest/*
 Copyright: 2008 Google Inc.
 License: BSD-3-clause
 

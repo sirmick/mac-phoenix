@@ -1,0 +1,19 @@
+{
+ "note": "Nitrozac's icons (The Joy of Tech) off MacAddict #63's cover CD (Video & Goodies:Nitrozac comics!:Icons!): Nitroicons, Bambi, fawn, After Y2K, Joy of Tech, OS X Geek Ghost icons, as custom icons of folders and ResEdit files. Copied by the guest from the CD",
+ "kind": "copy",
+ "os": "tools-7.6.1",
+ "cdroms": [
+  "MacAddict_063_2001_11.iso"
+ ],
+ "expect": [
+  "Icons!"
+ ],
+ "steps": [
+  {
+   "copy": {
+    "from": "MacAddict 63:Video & Goodies:Nitrozac comics!:Icons!",
+    "to": "{target}:"
+   }
+  }
+ ]
+}

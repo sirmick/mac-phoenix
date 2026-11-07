@@ -1,9 +1,11 @@
 # Executor: where it goes next
 
-Agreed in discussion 2026-10-09. [PLAN.md](PLAN.md) tracks the current
-milestones (Finder, Apple's extensions, AppleScript); this file is the
-longer direction those milestones feed into. D1 is under way on the
-`executor-musashi` branch (see Order of work); the rest is not started.
+Agreed in discussion 2026-10-09. [PLAN.md](PLAN.md) has the milestones;
+this file is the longer direction they feed into. Where it stands
+(2026-11-07; Order of work): D1–D4 done (MAME cores, minicoro, a
+compiler-only build with host edges, the tab), D6 well along (PowerPC
+applications and Mac OS 8.6), D5 partly (2x drawing), D7 not started;
+C1, C2 and C3a done, C4 left to M2.
 
 ## Why build it
 
@@ -62,7 +64,10 @@ host-file story come before more Apple extensions loading.
 
 ### 1. CPU: Musashi with translated addressing
 
-Executor runs on UAE today with identity addressing: guest RAM mapped at
+**Done 2026-10-23** (D1, W0): Executor runs on `mame-68k` in its four
+windows. The plan as written:
+
+Executor ran on UAE with identity addressing: guest RAM mapped at
 host address 0, everything the guest sees below 4GB. That costs
 `vm.mmap_min_addr=0`, a low non-PIE binary, the `syn68k_alloc_low`
 stack and framebuffer pools, and portability: 64-bit macOS reserves the
@@ -170,9 +175,10 @@ hosting):
   (`--global-base` and friends), or guest RAM is a fixed carve-out.
 * minicoro's Asyncify backend for processes; JSPI or wasm stack switching
   once browsers ship them.
-* Framebuffer to `<canvas>`, DOM input to `EventSink`, a preloaded System
-  Folder and applications in the Emscripten filesystem, OPFS or
-  IndexedDB for persistence, WebAudio for sound.
+* Framebuffer to `<canvas>`, DOM input to `EventSink`, the System
+  Folder and applications in the Emscripten filesystem, WebAudio for
+  sound. What the tab changes is kept by its server (`executor/server`:
+  Standalone.md); the browser only caches.
 * `WaitNextEvent` idle yields to the browser event loop.
 * No native JIT runs in wasm, and not because of a W^X policy: wasm has no
   executable linear memory at all; code exists only inside compiled
@@ -189,8 +195,7 @@ hosting):
 First gate: the built-in Browser app headless to a canvas, then the
 Finder.
 
-**Decided 2026-10-23** (planning still open; layout below is being
-discussed):
+**Decided 2026-10-23:**
 
 * **Processes: minicoro, Asyncify in the browser.** Plain static hosting,
   no COOP/COEP headers, no `SharedArrayBuffer`. Emscripten pthreads
@@ -211,16 +216,13 @@ discussed):
 * **No Apple software on the site.** It boots Executor's own System; users
   add disk images (theirs: an Apple System, applications) to the
   server's library, or upload them for a visit.
-* **One server: the standalone** (decided 2026-11-02). `tools/standalone`
+* **One server: the standalone** (decided 2026-11-02). `executor/server`
   (Go, one binary with the tab inside: Standalone.md, WebSite.md) is the
   only server; it keeps what the tab changes, and the first browser to
-  open it has it until it stops. The hosted Python server
-  (`tools/web/server`: accounts, invitations, each user's changes synced
-  from OPFS) is retired; it is in git history up to the merge of
-  `wash/auth`. So is the static site (the tab on any host, keeping disks
-  and changes in the browser's OPFS; `tools/web/serve.py`,
-  `make_demo.sh`): one mode only, the tab on its server, which keeps
-  everything (W3's OPFS work below is history).
+  open it has it until it stops. One mode only, the tab on its server.
+  (Before it, until the merge of `wash/auth`: a hosted Python server with
+  accounts, and a static site keeping everything in the browser's OPFS;
+  both are in git history only.)
 * **Networking: none at first; the socket layer becomes a host
   interface.** A page can't open TCP/UDP, only fetch, WebSocket, WebRTC,
   WebTransport. Executor's MacTCP and OT are C++ over host sockets, so the
@@ -241,11 +243,11 @@ runs the gtest suite under node.
 | Layer | Native | wasm |
 |---|---|---|
 | `romlib/` | the same | the same |
-| Front end | `config/front-ends/phoenix/` (`executor_host.h`) | `config/front-ends/wasm/`: the same `executor_host` contract, exported to the Worker |
-| Host process | `host/executor_child.cpp` (IPC to the parent) | not built |
+| Front end | `frontends/phoenix/` (`executor_host.h`) | `frontends/wasm/`: the same `executor_host` contract, exported to the Worker |
+| Host process | `frontends/phoenix/executor_child.cpp` (IPC to the parent) | not built |
 | CPU | `cpu/` + cpu_core: `mame-68k`, `mame-ppc` with every back-end | the same; `drcbec` only |
 | Host edges | POSIX implementation | Emscripten implementation |
-| Page | `client/` (mac-phoenix's UI) | `web/executor/`: static HTML/JS, Worker, upload |
+| Page | `client/` (mac-phoenix's UI) | `executor/web/`: static HTML/JS, Worker, upload |
 
 Not in the wasm build: the mac-phoenix parent (Qt, webserver, WebRTC),
 net-bridge, the ROM machines, UAE, asmjit.
@@ -277,11 +279,13 @@ to use (RAM + 64KB tail, a 16–32MB pool) behind the memory host edge.
 | W-spike | minicoro on Emscripten fibers + `emscripten_sleep` under Asyncify, in a Worker | two coroutines switching, each yielding to the browser, a C++→callback→yield stack resumed. **Passed 2026-10-23** (Emscripten 5.0.7, node 22 and a headless-Chromium Worker): yield from C++ → indirect call → `std::function` → `mco_yield`, coroutine stacks from our allocator (`alloc_cb`), one coroutine writing into another's frame, `emscripten_sleep` inside a coroutine; the page's main thread kept ticking. A hot switch-and-indirect-call loop: native 246 ms, wasm 245 ms, wasm with Asyncify instrumenting the loop 350 ms (≈1.4×). minicoro's header includes `<emscripten/fiber.h>` inside its `extern "C"`, which Emscripten 5's C++ templates reject: include `<emscripten.h>` and `<emscripten/fiber.h>` first. Yield to the browser at idle and per frame, not on a counter: each `emscripten_sleep(0)` is a `setTimeout` (≈0.7 ms) |
 | W0 | Native clean-up: UAE out of Executor, minicoro (D2), Boost → `std`, generated files committed, host edges (files, clock, sockets, faults, windows) as interfaces (D3) | the native suites pass as today. **UAE out 2026-10-23**: the facade has only the four windows (no identity layout, `MAP_32BIT` pool or low link for `executor_tests`), `--core` for Executor is `mame-68k` (a saved `uae` is replaced), the `_mame68k` twin cells merged into the plain ones; UAE is its own library (`cpu_core_uae`, `cpu::register_uae()` from the ROM machine), so `executor_tests` links no UAE. `--deterministic` moved with it: the virtual clock is core-independent (`src/common/vclock.cpp`), mame-68k counts instructions through the shim's instruction hook. **minicoro (D2) 2026-10-23**: section 2 |
 | W1 | wasm under node | `ctest --test-dir build-wasm -L executor`. **Passed 2026-10-23** (Emscripten 5.0.7, node 22): 197/197, the two upstream failures disabled as natively, the network gtests skipped (`hostnet::available()`); 16 s. `emcmake cmake -B build-wasm` takes `cmake/ExecutorWasm.cmake`: Executor, the MAME cores (mame-ppc on `drcbec`, no asmjit), `cpu/host/wasm` (aligned allocations; window 1 64MB; window 3 all memory below `__heap_base`, so the C stack is guest-addressable and the tests run on it), `EXECUTOR_NET=none`, Asyncify, JS exceptions, `NODERAWFS`. What it took besides: libc++ (no `char_traits<unsigned char>`: `mac_string` has `mac_char_traits`; `vector` of an incomplete type in `LocalVolume`; narrowing), SANE's extended conversion by value where `long double` isn't the x87's (also arm64 Linux, macOS arm64), the blitters called through their real type (wasm checks indirect calls' signatures), termios on every POSIX host, `SetDateTime` never setting the host clock, `GuestMemory::PAGE_SIZE` renamed `PAGE_BYTES` (a libc macro), no `execinfo` backtrace. Not exercised yet: process and thread switches (coroutines under Asyncify) |
-| W2 | A tab: Worker, `OffscreenCanvas`, DOM input, Executor's own System | the built-in Browser app in a tab. **Passed 2026-10-23**: `web/executor` (page, Worker, key map) beside `executor-web.js`/`.wasm` (`romlib/config/front-ends/wasm/web_main.cpp`: the `executor_host` contract mac-phoenix uses, on the Worker's one thread). Executor runs on the calling thread wherever its stack is guest-addressable (`main.cpp`), its idle waits and a tick about once a frame between the cores' slices yield to the browser (`rsys/hostidle.h`, `host/wasm/idle.cpp`), and the yield hook takes the page's queued input and renders what changed (`PhoenixVideoDriver::pump`) as RGBA to the canvas. The render pool runs without threads where they can't start. First frame 0.2 s after load (local), menus track the mouse; ctest `executor.web.tab` (headless Chromium: frames, and a press on File opens the menu; skips without playwright). Not yet: process switches (the Browser launches nothing here), sound, files from the user |
-| W3 | A usable site: Finder, OPFS, disk image upload, WebAudio, JS automation (`/api/ui`/`/api/text` on the Worker) | Playwright drives an uploaded application. **Passed 2026-10-23** (`executor.web.apps`): PPCHello and MacPhoenixSuite uploaded through the page (kept in OPFS; disk images mounted read-only from the page's Files with WORKERFS, other files copied into `executor:Uploads`), launched from the Browser with the `launch` request (process switches: the coroutines under Asyncify), PPCHello's PowerPC code passing on mame-ppc's C back-end, the suite's keyboard section getting "hello 123" typed on the canvas, its SysBeep reaching the page's AudioWorklet. Automation is `window.executor.request(op, arg)`: `app`, `windows`, `launch` at the application's next event call, `read`/`write` of the module's files (the Host volume is `/host`). SysBeep where the System has no `'snd ' 1` (Executor's own) is a square wave. Apple's System and Finder from an uploaded image: the page's System choice; `executor_host::sideload_system` (`front-ends/phoenix/hfs_sideload.cpp`, an HFS reader from Inside Macintosh: Files: bare or Apple-partitioned HFS, not HFS+) copies the blessed folder's System, Finder and the six folders `sideload_system.py` takes into Executor's volume, byte-identical but for fuller Finder info, and the Finder starts (7.5.5's in 0.6 s; `executor.web.finder` opens the image's disk with a double-click). Native extraction uses it too now (`executor_systems::sideload_hook`; Python only without Executor). **Boot speed** (2026-10-23): `tools/web/make_boot_disk.py` cuts a boot disk from a System image (the System Folder Executor uses: the policy's extensions only, no Apple Guide, printer drivers, QuickTime or Apple's OT; SimpleText; no desktop database): 7.5.5.img 250 MB (34 used) -> 16 MB, 6 MB gzipped; `tools/web/serve.py` sends pre-compressed files (the module 38 -> 3.7 MB); `tools/web/make_demo.sh` assembles a demo directory. The HFS reader reads whole extents (per-block reads through WORKERFS cost 3 s), the Worker loads the module while the page fetches the disks. The Finder from a link: 0.6 s over loopback, 2.2 s at 50 Mbit/s (was ~49 s: 286 MB uncompressed). **Kept in OPFS** (2026-10-23): `?disk=` downloads stream into OPFS (`disk-cache/`, revalidated by ETag: later visits 0.6 s at 50 Mbit/s, two 304s), the module into Cache Storage the same way; Executor's own volume is saved per System choice (`volumes/KEY/`: a manifest and blobs, every 2 s while running, on hide and before a restart; restored before main, and a saved System Folder is used as is, preferences and all; not System 7.5's `Shutdown Check`), with a Reset button (`executor.web.persist`). **Writable disk images** (2026-10-23): `web/executor/overlay.js`, a copy-on-write overlay per exact image version in OPFS (`overlays/KEY/`: 4 KB blocks in `data`, a block index, written through FileSystemSyncAccessHandle; the index saved with the volume), mounted for Executor as OVERLAYFS in place of WORKERFS (`c.writable_images`); the image itself is never written; per image the page offers the image as changed (a Blob of the original's slices and the changed blocks) and Revert; a changed base image drops its old overlay; another tab holding it: read-only (`executor.web.write`). **Library** (2026-10-23): a `library.json` beside the page (`[{title, url, note}]`) offers disks to add; a pick is remembered (localStorage) and loaded like `?disk=`, ✕ forgets it. `tools/web/make_disk.py` cuts such a disk from chosen top-level folders of other images (MacBinary through hfsutils). Games checked on the tab (7.5.5's Finder, 33 games): 27 run, cut into Arcade (24 MB gzipped) and Strategy & Adventure (23 MB); out: Apache Strike and Dark Castle (illegal instruction), Beyond Dark Castle (FPU), Enchanted Scepters (heap error), SimCity 1.3c (quits to the Finder), Oids (PowerPC: `LMGetCurApName`). Glider PRO overflowed the stack: its sound callback queues more with `SndDoCommand` mid-mix, and the mix started there nested without end (the native stack is merely deeper); `PhoenixSoundDriver` mixes no more inside a mix. `app` and window titles are decoded from MacRoman, `launch` paths encoded to it |
+| W2 | A tab: Worker, `OffscreenCanvas`, DOM input, Executor's own System | the built-in Browser app in a tab. **Passed 2026-10-23**: `executor/web` (page, Worker, key map) beside `executor-web.js`/`.wasm` (`frontends/wasm/web_main.cpp`: the `executor_host` contract mac-phoenix uses, on the Worker's one thread). Executor runs on the calling thread wherever its stack is guest-addressable (`main.cpp`), its idle waits and a tick about once a frame between the cores' slices yield to the browser (`rsys/hostidle.h`, `host/wasm/idle.cpp`), and the yield hook takes the page's queued input and renders what changed (`PhoenixVideoDriver::pump`) as RGBA to the canvas. The render pool runs without threads where they can't start. First frame 0.2 s after load (local), menus track the mouse; ctest `executor.web.tab` (headless Chromium: frames, and a press on File opens the menu; skips without playwright). Not yet: process switches (the Browser launches nothing here), sound, files from the user |
+| W3 | A usable site: Finder, disk images, WebAudio, JS automation | Playwright drives an uploaded application. **Passed 2026-10-23** (`executor.web.apps`): PPCHello and MacPhoenixSuite added through the page, launched from the Browser with the `launch` request (process switches: the coroutines under Asyncify), PPCHello's PowerPC code passing on mame-ppc's C back-end, the suite's keyboard section getting "hello 123" typed on the canvas, its SysBeep reaching the page's AudioWorklet. Automation is `window.executor.request(op, arg)`: `app`, `windows`, `launch` at the application's next event call, `read`/`write` of the module's files. Apple's System and Finder from a disk image: `executor_host::sideload_system` (`frontends/phoenix/hfs_sideload.cpp`, an HFS and HFS+ reader) copies the blessed folder's System, Finder and folders into Executor's volume, and the Finder starts (7.5.5's in 0.6 s; `executor.web.finder`). Boot disks: `tools/web/make_boot_disk.py` cuts one from a System image (7.5.5.img 250 MB -> 16 MB, 6 MB gzipped; APPLE-DISKS.md). The first site kept disks, overlays and Executor's volume in the browser's OPFS and was served by a Python server or any static host; since P1 (2026-11-02) the Go server keeps them all and the browser only caches (Standalone.md). Games checked on the tab then (7.5.5's Finder, 33 games): 27 ran. Glider PRO overflowed the stack: its sound callback queues more with `SndDoCommand` mid-mix, and the mix started there nested without end; `PhoenixSoundDriver` mixes no more inside a mix |
 | W4 | PPC applications on `mame-ppc` + `drcbec` | a PPC application in a tab (StdCLib/MathLib native since 2026-10-26, D6). **Measured 2026-10-31** (`executor.web.ppc`: Apple's 8.6 System from its HFS+ image through the page's System choice and the PowerPC box, `--executor-ppc`'s equivalent; headless Chromium, 640x480). The cores (`test_cpu_cores --bench 50`, a lwz/addi/stw/addic./bne loop, memory through calls as PowerCore has it, inline memory in brackets): native x86-64 back-end 1156 MIPS (1678), native `drcbec` 79 (89), `drcbec` in wasm under node 22 40 (62) before and 77 (66) after dropping `execute()`'s try/catch and fesetround pair on Emscripten (the try sent every call in the loop through a JS `invoke_*`); without Asyncify it would be 86, the instrumentation's price (a host op switches processes from inside `execute()`, so it can't be left out; JSPI later). 8.6, native (x86-64 back-end / `drcbec`) and the tab: the Finder's desktop 1.3 / 1.4 s and 3.0–4.4 s (first visit: 0.4 s of it copies the System Folder out of the image), a disk's window 0.21 / 0.21 and 0.21–0.25 s, PPCHello's report 0.57 / 0.62 and 0.63–0.69 s, Ferazel's Wand (games-ppc) to its CD prompt 0.26 and 0.48 s. The tab's boot profile: 3.2 s busy, 49% of it Executor's File Manager on Emscripten's JS MEMFS (every `stat`/`open` a path walk in JS: `LocalVolume`'s item factories stat and open each entry), 14% the System copy, `drcbec` itself 7%, Asyncify and the yield hook under 1%. Taken: the try/catch, the 68k disassembler built once (alloc-failure reports built a new one per line, 160 ms), the factories use the directory entry's type. A program's `DisposePtr` of a non-block read through a zone word outside memory and killed the tab (natively it reads stray host memory): `legit_addr_p` checks guest memory now. Open: AppleWorks 5.0.3 runs natively on both back-ends but in the tab jumps to 0 after four 68k-to-PowerPC callbacks (wasm only). Mars Rising and Slithereens crash in `FindSymbol`, EV Nova runs into garbage, natively too. **Recommendation: `drcbec` is enough for M1**, C4 stays in M2: in the tab PowerPC applications are bound by the Toolbox and the file system, not by the interpreter (native `drcbec` is within 10% of the x86-64 back-end on all of the above); the next M1 wins are the File Manager on MEMFS (fewer stats, or WASMFS) and the AppleWorks failure. C4's size: a `drcbe_wasm` emitting one module per hot-block batch (the x86-64 back-end is 6.7k lines, `drcbec` 2.6k): about 3–4k lines of C++ and 200 of JS, plus generated code that exits to `execute()` before every host op (Asyncify can't unwind through modules made at run time) |
 
-Then networking (the relay, WebRTC AppleTalk), HiDPI, C4.
+Since then: the network relay (below), 2x drawing in the tab
+(HiDPI.md), the server as the store (P1, Standalone.md). Not yet: C4
+(M2), WebRTC AppleTalk.
 
 #### The network relay
 
@@ -289,9 +293,9 @@ The tab's MacTCP and Open Transport are the native C++ over
 `rsys/hostnet.h`; in the tab that header's backend is
 `host/wasm/net.cpp` (`EXECUTOR_NET=wasm`, the wasm build's default), a
 table of the tab's own sockets. What leaves the tab goes over one
-WebSocket to `/relay` on `tools/standalone` (`relay.go`), opened at the
+WebSocket to `/relay` on `executor/server` (`relay.go`), opened at the
 first socket that needs it, served by it only (the page tells the Worker,
-`web/executor/net.js`; served elsewhere, or under node, `available()` is
+`executor/web/net.js`; served elsewhere, or under node, `available()` is
 false). What stays in the tab:
 
 * **Listeners.** `bind`/`listen`/`accept` are the tab's; the relay never
@@ -430,13 +434,13 @@ D2's clean-up of the 68k side; C2 and C3 are independent of D.
 | D1 | Musashi behind the syn68k facade, four windows restored | done 2026-10-23: `ctest -L executor` and the `_executor` bridge suites match UAE; no `mmap_min_addr`; UAE out of Executor (W0) |
 | D2 | minicoro Process Manager; timer at yield points | Finder + several applications switching as today; Qt gone from `romlib`. **Done 2026-10-23** (section 2) |
 | D3 | Dependencies and host edges | builds with only a C++17 compiler (generated files committed). **Compiler-only build done 2026-10-23**: Boost → `std` (`rsys/filesystem.h`: `fs` over `std::filesystem` with `time_t` modification times and `unique_path`; `commandline/options.h` for program_options), generated sources in `romlib/generated` (`-DEXECUTOR_REGENERATE=ON`, target `executor-generated`). **Host edges 2026-10-23**: the network (`rsys/hostnet.h`: POSIX-shaped sockets, the resolver calls, `run_detached` for lookups and one socket `Watcher` for MacTCP and OT; `romlib/host/posix/net.cpp` or `host/none/net.cpp` by `-DEXECUTOR_NET=posix|none`; on none MacTCP and OT load and answer with errors, no host threads) and the guest windows' memory (`cpu/syn68k_host.h`: reserve, window 1's pool size, the binary's data range; `cpu/host/posix/memory.cpp`). Left as they are, since Emscripten has them: files (`std::filesystem`, POSIX I/O), the clock (`std::chrono`), faults (`base/fault_handler.cpp`, one file already) |
-| D4 | wasm build (W steps in section 4; decided 2026-10-23) | built-in Browser, then the Finder, in a browser tab |
-| D5 | Demo features | HiDPI QuickDraw (2×), host files as Mac files, rootless windows; HyperCard from a link |
-| D6 | PPC applications on the C2 core behind the PowerCore facade | a PPC application runs (milestone P). **Started 2026-10-21**: PowerPC-only applications on InterfaceLib run (`ppc_hello_executor`); StdCLib and MathLib native since 2026-10-26 (docs/executor/PPCLibs.md; `clib_executor`, `guest_suite_ppc_executor`) |
+| D4 | wasm build (W steps in section 4; decided 2026-10-23) | built-in Browser, then the Finder, in a browser tab. **Done** (W0–W4, 2026-10-23 to 10-31); the site since: WebSite.md |
+| D5 | Demo features | HiDPI QuickDraw (2×), host files as Mac files, rootless windows; HyperCard from a link. **2× done** (HiDPI.md, natively and in the tab); rootless windows not started |
+| D6 | PPC applications on the C2 core behind the PowerCore facade | a PPC application runs (milestone P). **Started 2026-10-21**: PowerPC-only applications on InterfaceLib run (`ppc_hello_executor`); StdCLib and MathLib native since 2026-10-26 (docs/executor/PPCLibs.md; `clib_executor`, `guest_suite_ppc_executor`). Since 2026-10-28 Mac OS 8.6's System and Finder with its PowerPC applications (MacOS8-9.md, SCOREBOARD.md); 9.0.4 under way |
 | D7 | A/UX user-mode kernel | the five steps above |
-| C1 | MAME's Musashi (PMMU, softfloat FPU, instanceable) as the 68k core | `--core mame-68k` passes every suite UAE and Musashi pass today; two instances in one process; vendored v3.32 retired. **C1a–c done 2026-10-10** (`src/cpu/mame/`); C1d PMMU gate open; **C1e done 2026-10-11** (v3.32 deleted, `musashi` an alias of `mame-68k`) |
-| C2 | MAME's PowerPC recompiler as the PPC core, one base offset | boot matrix PPC cells pass with the UML interpreter, then the x86-64 back-end, then arm64 on Apple Silicon; no `mmap_min_addr`. **C2a–c done 2026-10-10**: `--backend kpx --core mame-ppc` boots 7.5.5 to the Finder, 1.6 s with the x86-64 back-end (`--jit`), and Mac OS 9.0.4 in 10 s with the guest suite passing as on Kheperix; merged to main; arm64 (C2d) and the base offset open |
-| C3 | Host 68k core in place of the nanokernel's 68k emulator | PPC machine boots 7.5.5 to Finder and passes the bridge suites with Musashi running the 68k side; boot and benchmark numbers against the DR emulator. **C3a done 2026-10-10** as a hybrid: host-initiated routines start on Musashi, Apple's 68k dispatcher included, and hand off at routine descriptors; C3b (the main 68k thread) open |
+| C1 | MAME's Musashi (PMMU, softfloat FPU, instanceable) as the 68k core | `--core mame-68k` passes every suite UAE and Musashi pass today; two instances in one process; vendored v3.32 retired. **C1a–c done 2026-10-10** (`src/cpu/mame/`); C1d PMMU parked (assessed 2026-10-11); **C1e done 2026-10-11** (v3.32 deleted, `musashi` an alias of `mame-68k`) |
+| C2 | MAME's PowerPC recompiler as the PPC core, one base offset | boot matrix PPC cells pass with the UML interpreter, then the x86-64 back-end, then arm64 on Apple Silicon; no `mmap_min_addr`. **C2a–c done 2026-10-10**: `--backend kpx --core mame-ppc` boots 7.5.5 to the Finder, 1.6 s with the x86-64 back-end (`--jit`), and Mac OS 9.0.4 in 10 s with the guest suite passing as on Kheperix; merged to main. Since: arm64 Linux (C2d, 2026-10-11, under qemu; Apple Silicon not tried) and the base offset (mame-ppc's guest memory in a 4GB reservation, no `mmap_min_addr`) |
+| C3 | Host 68k core in place of the nanokernel's 68k emulator | PPC machine boots 7.5.5 to Finder and passes the bridge suites with Musashi running the 68k side; boot and benchmark numbers against the DR emulator. **C3a done 2026-10-10** as a hybrid: host-initiated routines start on Musashi, Apple's 68k dispatcher included, and hand off at routine descriptors; C3b (the main 68k thread) experimental, does not boot yet |
 | C4 | UML→wasm back-end | PPC machine in a tab faster than the interpreter (after D4). Not needed for M1 (W4's measurements, 2026-10-31): M2 |
 
 D1–D3 and C1–C2 also make the native build portable (macOS, Windows).
@@ -486,7 +490,10 @@ with it. (mac-phoenix itself stays linked low for Kheperix.)
 * **Apple binaries or our own.** The current milestones run Apple's
   System file, Finder and extensions. A distributable build needs
   Executor's own System resources and a Finder replacement. Decide which
-  the demo uses.
+  the demo uses. Today both run: the site's library offers Apple's
+  Systems as disk images the owner provides, and the public showcase
+  (executor/SHOWCASE.md) uses Executor's own System or Apple's free
+  7.5.3.
 * **Musashi's FPU** (settled 2026-10-10 by C1). MAME's Musashi brings its
   softfloat FPU and the 030/040 PMMU.
 * **Musashi re-entrancy** (settled in D1). `CALL_EMULATOR` runs nested

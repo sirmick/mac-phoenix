@@ -151,6 +151,10 @@ struct EmulatorConfig {
     std::string watch;                 // --watch ADDR[:LEN]: write watchpoint on guest memory (Executor; guest_watch.h)
     std::vector<std::string> executor_ppc_break; // --executor-ppc-break SPEC (repeatable; "on": none yet): PowerPC breakpoints (rsys/ppc_break.h)
     bool executor_writable_images = false; // Executor mounts disk images read-write (test copies)
+    // Parent -> child only (--executor-locked-disk): images Executor mounts
+    // locked whatever executor_writable_images says (the --executor-system
+    // image: its System Folder is a copy, the image is the shared original).
+    std::vector<std::string> executor_locked_disks;
     bool executor_ot = true;               // Executor answers Open Transport (romlib/opentransport)
     bool executor_ppc = false;             // Executor runs the PowerPC code of fat applications (mame-ppc)
     double executor_scale = 1.0;           // Executor's display scale (docs/executor/HiDPI.md; needs EXECUTOR_SKIA)
@@ -188,6 +192,7 @@ struct EmulatorConfig {
     bool trace_atraps = false;         // record (A-trap, caller) pairs; dumped with snapshots
     bool text_feed = true;             // patch _StdText: the strings on screen for /api/text
     bool debug_mame_ppc = false;       // --core mame-ppc: host ops, exceptions, per-second sample
+    bool cpu_mmu = false;              // --cpu-mmu: MAME cores with the MMU on (a baseline of its cost)
     int m68k_host = 0;                 // --core mame-ppc: 68k routines on a mame-68k core (C3a); 0 off, 1 on, 2 experiment
     bool deterministic = false;        // virtual clock: time counted in instructions (vclock.h)
     std::string snapshot_at;           // "NAME@SECONDS": snapshot that long after the traced app starts

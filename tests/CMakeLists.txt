@@ -626,6 +626,15 @@ add_test(
 )
 set_tests_properties(bake_exclude PROPERTIES TIMEOUT 60 LABELS "provisioning")
 
+# Folders' custom icons through the pipeline: snapshot.py lists the invisible
+# "Icon\r" files, a capture keeps them (top-level noise and .DS_Store out,
+# reported), tidy.py sets their folders' kHasCustomIcon (no emulator).
+add_test(
+  NAME custom_icons
+  COMMAND ${Python3_EXECUTABLE} ${TEST_DIR}/test_custom_icons.py
+)
+set_tests_properties(custom_icons PROPERTIES TIMEOUT 60 LABELS "provisioning" SKIP_RETURN_CODE 77)
+
 # A library disk's System Folder additions (tools/web/make_disk.py
 # --system-from, make_library.py's place mapping): hfsutils, no emulator.
 add_test(
@@ -923,11 +932,46 @@ set_tests_properties(platinum_86_executor PROPERTIES
   TIMEOUT 200 LABELS "executor" SKIP_RETURN_CODE 77
   ENVIRONMENT "MACEMU_BINARY=$<TARGET_FILE:mac-phoenix>")
 
+# Mac OS 9.0.4's own System starts to the Finder on Executor (its
+# extensions to the end, BridgeAgent, a folder window).
+add_test(NAME finder_executor_904
+  COMMAND bash ${TEST_DIR}/test_finder_904_executor.sh --port 18624)
+set_tests_properties(finder_executor_904 PROPERTIES
+  TIMEOUT 200 LABELS "executor" SKIP_RETURN_CODE 77
+  ENVIRONMENT "MACEMU_BINARY=$<TARGET_FILE:mac-phoenix>")
+
+# Word 98 on 8.6 finds Microsoft_Office_98 in the folder its 'cfrg' names
+# (appSubdirID's 'alis'), its relocations past RelocLgRepeat done, and starts
+# Office First Run (its 'MVis' event sent by signature), as on the G3.
+add_test(NAME office98_executor
+  COMMAND bash ${TEST_DIR}/test_office98_executor.sh --port 18632)
+set_tests_properties(office98_executor PROPERTIES
+  TIMEOUT 240 LABELS "executor" SKIP_RETURN_CODE 77
+  ENVIRONMENT "MACEMU_BINARY=$<TARGET_FILE:mac-phoenix>")
+
+# The control panel shell (cdevshell.cpp) against the G3's 9.0.4: CdevTest's
+# nine variants (tests/guest/cdev) say what they are sent: macDev and the
+# 'mach' masks, error codes passed on, cursorDev, the window and its 'wloc'.
+# The reference: tests/guest/cdev/expected.txt (--backend kpx --record).
+add_test(NAME cdev_shell_executor
+  COMMAND ${Python3_EXECUTABLE} ${TEST_DIR}/test_cdev_shell.py --backend executor)
+set_tests_properties(cdev_shell_executor PROPERTIES
+  TIMEOUT 420 LABELS "executor" SKIP_RETURN_CODE 77
+  ENVIRONMENT "MACPHOENIX_EMULATOR=$<TARGET_FILE:mac-phoenix>")
+
 # Two sessions on one --executor-system at once: the second runs on a copy
 # of its own (executor-systems/run/<pid>), both keep their BridgeAgent.
 add_test(NAME system_sessions_executor
   COMMAND bash ${TEST_DIR}/test_executor_system_sessions.sh --port 18540)
 set_tests_properties(system_sessions_executor PROPERTIES
+  TIMEOUT 180 LABELS "executor" SKIP_RETURN_CODE 77
+  ENVIRONMENT "MACEMU_BINARY=$<TARGET_FILE:mac-phoenix>")
+
+# --executor-writable-images doesn't reach the --executor-system image: it is
+# mounted locked (the shared original; the System Folder runs from a copy).
+add_test(NAME system_locked_executor
+  COMMAND bash ${TEST_DIR}/test_executor_system_locked.sh --port 18541)
+set_tests_properties(system_locked_executor PROPERTIES
   TIMEOUT 180 LABELS "executor" SKIP_RETURN_CODE 77
   ENVIRONMENT "MACEMU_BINARY=$<TARGET_FILE:mac-phoenix>")
 
@@ -1454,10 +1498,38 @@ foreach(cell "strprobe_rom_761;;StrProbe.bin;--os-version 7.6.1;${TEST_ROM};1856
   )
 endforeach()
 
+# The mman probe's 68k build (Memory Manager alignment, docs/executor/DiffTest.md)
+# on Executor's 7.6.1 against the Quadra's (16, as on the G3).
+add_test(
+  NAME mman68k_executor_761
+  COMMAND bash ${CMAKE_SOURCE_DIR}/tests/guest/difftest/mman68k.sh --backend executor --os-version 7.6.1 --port 18568
+)
+set_tests_properties(mman68k_executor_761 PROPERTIES
+  TIMEOUT 230
+  LABELS "guest;761;executor"
+  SKIP_RETURN_CODE 77
+)
+
+# ... and on Executor's 9.0.4 (its own System) against the G3's 9.0.4, for
+# calls 9.0 added.
+foreach(probe vminfo)
+  add_test(
+    NAME difftest_${probe}_executor_904
+    COMMAND python3 ${CMAKE_SOURCE_DIR}/tools/difftest/run.py ${probe} --target executor-9.0.4 --no-refresh
+  )
+  set_tests_properties(difftest_${probe}_executor_904 PROPERTIES
+    TIMEOUT 1200
+    LABELS "guest;executor"
+    SKIP_RETURN_CODE 77
+    RESOURCE_LOCK difftest_executor
+    ENVIRONMENT "DIFFTEST_LOCK_TIMEOUT=300"
+  )
+endforeach()
+
 # Differential probes (docs/executor/DiffTest.md): each probe's answers on
 # Executor (8.6 System) against the committed G3 8.6 reference, known
 # differences in tests/guest/difftest/expected/. Fails on a new difference.
-foreach(probe aevt appr ctl menu sys text textutil wind)
+foreach(probe aevt appr ctl desk intl menu mman patalign proc qdorigin snd sys text textutil wide wind)
   add_test(
     NAME difftest_${probe}_executor_86
     COMMAND python3 ${CMAKE_SOURCE_DIR}/tools/difftest/run.py ${probe} --no-refresh

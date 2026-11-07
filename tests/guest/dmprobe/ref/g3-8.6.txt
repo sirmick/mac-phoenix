@@ -1,0 +1,270 @@
+dplv 00020404
+state start: gdRect 0,0,2160,3840 pmBounds 0,0,2160,3840 rowBytes 15360 depth 32 screenBits 0,0,2160,3840 gray 20,0,2160,3840 mbar 20 win 2018,3534,2147,3827
+DMRegisterNotifyProc 0
+extnotify message=1 data=00000000 ticks=1412
+DMRegisterExtendedNotifyProc 0
+AEInstall dspl 0 cnfg 0 dsum 0
+current: mode 133 data 149
+modes: 25 (display 256)
+mode 0: id 130 640x480 flags 00000000 switch mode 128 data 130 maxdepth 133 name 640 x 480, 60Hz depths 133:32
+mode 1: id 132 800x600 flags 00000000 switch mode 128 data 132 maxdepth 133 name 800 x 600, 60Hz depths 133:32
+mode 2: id 139 832x624 flags 00000000 switch mode 128 data 139 maxdepth 133 name 832 x 624, 75Hz depths 133:32
+mode 3: id 133 1024x768 flags 00000000 switch mode 128 data 133 maxdepth 133 name 1024 x 768, 75Hz depths 133:32
+mode 4: id 140 1152x870 flags 00000000 switch mode 128 data 140 maxdepth 133 name 1152 x 870, 75Hz depths 133:32
+mode 5: id 156 1280x800 flags 00000000 switch mode 128 data 156 maxdepth 133 name 1280 x 800, 60Hz depths 133:32
+mode 6: id 141 1440x900 flags 00000000 switch mode 128 data 141 maxdepth 133 name 1440 x 900, 60Hz depths 133:32
+mode 7: id 136 1280x1024 flags 00000000 switch mode 128 data 136 maxdepth 133 name 1280 x 1024, 75Hz depths 133:32
+mode 8: id 150 1600x900 flags 00000000 switch mode 128 data 150 maxdepth 133 name 1600 x 900, 60Hz depths 133:32
+mode 9: id 158 2560x720 flags 00000000 switch mode 128 data 158 maxdepth 133 name 2560 x 720, 60Hz depths 133:32
+mode 10: id 137 1600x1200 flags 00000000 switch mode 128 data 137 maxdepth 133 name 1600 x 1200, 75Hz depths 133:32
+mode 11: id 142 1920x1080 flags 00000000 switch mode 128 data 142 maxdepth 133 name 1920 x 1080, 60Hz depths 133:32
+mode 12: id 143 1920x1200 flags 00000000 switch mode 128 data 143 maxdepth 133 name 1920 x 1200, 60Hz depths 133:32
+mode 13: id 144 2560x1080 flags 00000000 switch mode 128 data 144 maxdepth 133 name 2560 x 1080, 60Hz depths 133:32
+mode 14: id 157 2240x1400 flags 00000000 switch mode 128 data 157 maxdepth 133 name 2240 x 1400, 60Hz depths 133:32
+mode 15: id 151 2256x1504 flags 00000000 switch mode 128 data 151 maxdepth 133 name 2256 x 1504, 60Hz depths 133:32
+mode 16: id 145 2560x1440 flags 00000000 switch mode 128 data 145 maxdepth 133 name 2560 x 1440, 60Hz depths 133:32
+mode 17: id 152 2560x1600 flags 00000000 switch mode 128 data 152 maxdepth 133 name 2560 x 1600, 60Hz depths 133:32
+mode 18: id 147 3840x1080 flags 00000000 switch mode 128 data 147 maxdepth 133 name 3840 x 1080, 60Hz depths 133:32
+mode 19: id 146 3440x1440 flags 00000000 switch mode 128 data 146 maxdepth 133 name 3440 x 1440, 60Hz depths 133:32
+mode 20: id 153 2880x1800 flags 00000000 switch mode 128 data 153 maxdepth 133 name 2880 x 1800, 60Hz depths 133:32
+mode 21: id 154 3024x1964 flags 00000000 switch mode 128 data 154 maxdepth 133 name 3024 x 1964, 60Hz depths 133:32
+mode 22: id 148 3840x1600 flags 00000000 switch mode 128 data 148 maxdepth 133 name 3840 x 1600, 60Hz depths 133:32
+mode 23: id 155 3456x2234 flags 00000000 switch mode 128 data 155 maxdepth 133 name 3456 x 2234, 60Hz depths 133:32
+mode 24: id 149 3840x2160 flags 00000000 switch mode 128 data 149 maxdepth 133 name 3840 x 2160, 60Hz depths 133:32
+switch small to 130 depthMode 133 ticks=1445
+extnotify message=4 data=00000000 ticks=1445
+extnotify message=6 data=03756B5E ticks=1445
+extnotify message=2 data=03756B44 ticks=1446
+  - aevt 866
+    dspl reco 780
+      #100 reco 760
+        dold reco 372
+          dmcv long 4 : 00 00 00 00
+          dmcf long 4 : 00 00 00 00
+          dmcr long 4 : 00 00 00 00
+          dmid long 4 : 00 00 01 00
+          dmdc long 4 : 00 01 00 01
+          dmdd long 4 : 00 00 3C B4
+          dmdf long 4 : 00 00 00 14
+          dmdm long 4 : 00 00 00 95
+          dmmr long 4 : 00 00 00 00
+          dmdr long 4 : 00 00 00 00
+          dddf shor 2 : BC 21
+          dddm long 4 : 00 00 00 85
+          dddr qdrt 8 : 00 00 00 00 08 70 0F 00
+          dpdr qdrt 8 : 00 00 00 00 08 70 0F 00
+          dphr fixd 4 : 00 48 00 00
+          dpvr fixd 4 : 00 48 00 00
+          dppt shor 2 : 00 10
+          dpps shor 2 : 00 20
+          dpcc shor 2 : 00 03
+          dpcs shor 2 : 00 08
+          dppr long 2 : 00 00
+          dpct long 4 : 00 00 00 18
+        dnew reco 372
+          dmcv long 4 : 00 00 00 00
+          dmcf long 4 : 00 00 00 00
+          dmcr long 4 : 00 00 00 00
+          dmid long 4 : 00 00 01 00
+          dmdc long 4 : 00 01 00 01
+          dmdd long 4 : 00 00 3C B4
+          dmdf long 4 : 00 00 00 14
+          dmdm long 4 : 00 00 00 82
+          dmmr long 4 : 00 00 00 00
+          dmdr long 4 : 00 00 00 00
+          dddf shor 2 : BC 21
+          dddm long 4 : 00 00 00 85
+          dddr qdrt 8 : 00 00 00 00 01 E0 02 80
+          dpdr qdrt 8 : 00 00 00 00 01 E0 02 80
+          dphr fixd 4 : 00 48 00 00
+          dpvr fixd 4 : 00 48 00 00
+          dppt shor 2 : 00 10
+          dpps shor 2 : 00 20
+          dpcc shor 2 : 00 03
+          dpcs shor 2 : 00 08
+          dppr long 2 : 00 00
+          dpct long 4 : 00 00 00 18
+notify ticks=1447
+ event aevt/cnfg
+  - aevt 866
+    dspl reco 780
+      #100 reco 760
+        dold reco 372
+          dmcv long 4 : 00 00 00 00
+          dmcf long 4 : 00 00 00 00
+          dmcr long 4 : 00 00 00 00
+          dmid long 4 : 00 00 01 00
+          dmdc long 4 : 00 01 00 01
+          dmdd long 4 : 00 00 3C B4
+          dmdf long 4 : 00 00 00 14
+          dmdm long 4 : 00 00 00 95
+          dmmr long 4 : 00 00 00 00
+          dmdr long 4 : 00 00 00 00
+          dddf shor 2 : BC 21
+          dddm long 4 : 00 00 00 85
+          dddr qdrt 8 : 00 00 00 00 08 70 0F 00
+          dpdr qdrt 8 : 00 00 00 00 08 70 0F 00
+          dphr fixd 4 : 00 48 00 00
+          dpvr fixd 4 : 00 48 00 00
+          dppt shor 2 : 00 10
+          dpps shor 2 : 00 20
+          dpcc shor 2 : 00 03
+          dpcs shor 2 : 00 08
+          dppr long 2 : 00 00
+          dpct long 4 : 00 00 00 18
+        dnew reco 372
+          dmcv long 4 : 00 00 00 00
+          dmcf long 4 : 00 00 00 00
+          dmcr long 4 : 00 00 00 00
+          dmid long 4 : 00 00 01 00
+          dmdc long 4 : 00 01 00 01
+          dmdd long 4 : 00 00 3C B4
+          dmdf long 4 : 00 00 00 14
+          dmdm long 4 : 00 00 00 82
+          dmmr long 4 : 00 00 00 00
+          dmdr long 4 : 00 00 00 00
+          dddf shor 2 : BC 21
+          dddm long 4 : 00 00 00 85
+          dddr qdrt 8 : 00 00 00 00 01 E0 02 80
+          dpdr qdrt 8 : 00 00 00 00 01 E0 02 80
+          dphr fixd 4 : 00 48 00 00
+          dpvr fixd 4 : 00 48 00 00
+          dppt shor 2 : 00 10
+          dpps shor 2 : 00 20
+          dpcc shor 2 : 00 03
+          dpcs shor 2 : 00 08
+          dppr long 2 : 00 00
+          dpct long 4 : 00 00 00 18
+DMSetDisplayMode -> 0 depthMode 133 ticks=1450
+state after DMSetDisplayMode: gdRect 0,0,480,640 pmBounds 0,0,480,640 rowBytes 2560 depth 32 screenBits 0,0,480,640 gray 20,0,480,640 mbar 20 win 458,347,587,640
+state after events: gdRect 0,0,480,640 pmBounds 0,0,480,640 rowBytes 2560 depth 32 screenBits 0,0,480,640 gray 20,0,480,640 mbar 20 win 458,347,587,640
+switch back to 149 depthMode 133 ticks=1571
+extnotify message=4 data=00000000 ticks=1571
+extnotify message=6 data=03756B5E ticks=1571
+extnotify message=2 data=03756B44 ticks=1584
+  - aevt 866
+    dspl reco 780
+      #100 reco 760
+        dold reco 372
+          dmcv long 4 : 00 00 00 00
+          dmcf long 4 : 00 00 00 00
+          dmcr long 4 : 00 00 00 00
+          dmid long 4 : 00 00 01 00
+          dmdc long 4 : 00 01 00 01
+          dmdd long 4 : 00 00 3C B4
+          dmdf long 4 : 00 00 00 14
+          dmdm long 4 : 00 00 00 82
+          dmmr long 4 : 00 00 00 00
+          dmdr long 4 : 00 00 00 00
+          dddf shor 2 : BC 21
+          dddm long 4 : 00 00 00 85
+          dddr qdrt 8 : 00 00 00 00 01 E0 02 80
+          dpdr qdrt 8 : 00 00 00 00 01 E0 02 80
+          dphr fixd 4 : 00 48 00 00
+          dpvr fixd 4 : 00 48 00 00
+          dppt shor 2 : 00 10
+          dpps shor 2 : 00 20
+          dpcc shor 2 : 00 03
+          dpcs shor 2 : 00 08
+          dppr long 2 : 00 00
+          dpct long 4 : 00 00 00 18
+        dnew reco 372
+          dmcv long 4 : 00 00 00 00
+          dmcf long 4 : 00 00 00 00
+          dmcr long 4 : 00 00 00 00
+          dmid long 4 : 00 00 01 00
+          dmdc long 4 : 00 01 00 01
+          dmdd long 4 : 00 00 3C B4
+          dmdf long 4 : 00 00 00 14
+          dmdm long 4 : 00 00 00 95
+          dmmr long 4 : 00 00 00 00
+          dmdr long 4 : 00 00 00 00
+          dddf shor 2 : BC 21
+          dddm long 4 : 00 00 00 85
+          dddr qdrt 8 : 00 00 00 00 08 70 0F 00
+          dpdr qdrt 8 : 00 00 00 00 08 70 0F 00
+          dphr fixd 4 : 00 48 00 00
+          dpvr fixd 4 : 00 48 00 00
+          dppt shor 2 : 00 10
+          dpps shor 2 : 00 20
+          dpcc shor 2 : 00 03
+          dpcs shor 2 : 00 08
+          dppr long 2 : 00 00
+          dpct long 4 : 00 00 00 18
+notify ticks=1585
+ event aevt/cnfg
+  - aevt 866
+    dspl reco 780
+      #100 reco 760
+        dold reco 372
+          dmcv long 4 : 00 00 00 00
+          dmcf long 4 : 00 00 00 00
+          dmcr long 4 : 00 00 00 00
+          dmid long 4 : 00 00 01 00
+          dmdc long 4 : 00 01 00 01
+          dmdd long 4 : 00 00 3C B4
+          dmdf long 4 : 00 00 00 14
+          dmdm long 4 : 00 00 00 82
+          dmmr long 4 : 00 00 00 00
+          dmdr long 4 : 00 00 00 00
+          dddf shor 2 : BC 21
+          dddm long 4 : 00 00 00 85
+          dddr qdrt 8 : 00 00 00 00 01 E0 02 80
+          dpdr qdrt 8 : 00 00 00 00 01 E0 02 80
+          dphr fixd 4 : 00 48 00 00
+          dpvr fixd 4 : 00 48 00 00
+          dppt shor 2 : 00 10
+          dpps shor 2 : 00 20
+          dpcc shor 2 : 00 03
+          dpcs shor 2 : 00 08
+          dppr long 2 : 00 00
+          dpct long 4 : 00 00 00 18
+        dnew reco 372
+          dmcv long 4 : 00 00 00 00
+          dmcf long 4 : 00 00 00 00
+          dmcr long 4 : 00 00 00 00
+          dmid long 4 : 00 00 01 00
+          dmdc long 4 : 00 01 00 01
+          dmdd long 4 : 00 00 3C B4
+          dmdf long 4 : 00 00 00 14
+          dmdm long 4 : 00 00 00 95
+          dmmr long 4 : 00 00 00 00
+          dmdr long 4 : 00 00 00 00
+          dddf shor 2 : BC 21
+          dddm long 4 : 00 00 00 85
+          dddr qdrt 8 : 00 00 00 00 08 70 0F 00
+          dpdr qdrt 8 : 00 00 00 00 08 70 0F 00
+          dphr fixd 4 : 00 48 00 00
+          dpvr fixd 4 : 00 48 00 00
+          dppt shor 2 : 00 10
+          dpps shor 2 : 00 20
+          dpcc shor 2 : 00 03
+          dpcs shor 2 : 00 08
+          dppr long 2 : 00 00
+          dpct long 4 : 00 00 00 18
+DMSetDisplayMode -> 0 depthMode 133 ticks=1588
+state after DMSetDisplayMode: gdRect 0,0,2160,3840 pmBounds 0,0,2160,3840 rowBytes 15360 depth 32 screenBits 0,0,2160,3840 gray 20,0,2160,3840 mbar 20 win 458,347,587,640
+state after events: gdRect 0,0,2160,3840 pmBounds 0,0,2160,3840 rowBytes 15360 depth 32 screenBits 0,0,2160,3840 gray 20,0,2160,3840 mbar 20 win 458,347,587,640
+extnotify message=3 data=00000000 ticks=1708
+removed 0 0
+switch small2 to 130 depthMode 133 ticks=1708
+DMSetDisplayMode -> 0 depthMode 133 ticks=1711
+state after DMSetDisplayMode: gdRect 0,0,480,640 pmBounds 0,0,480,640 rowBytes 2560 depth 32 screenBits 0,0,480,640 gray 20,0,480,640 mbar 20 win 458,347,587,640
+state after events: gdRect 0,0,480,640 pmBounds 0,0,480,640 rowBytes 2560 depth 32 screenBits 0,0,480,640 gray 20,0,480,640 mbar 20 win 458,347,587,640
+switch back2 to 149 depthMode 133 ticks=1832
+DMSetDisplayMode -> 0 depthMode 133 ticks=1845
+state after DMSetDisplayMode: gdRect 0,0,2160,3840 pmBounds 0,0,2160,3840 rowBytes 15360 depth 32 screenBits 0,0,2160,3840 gray 20,0,2160,3840 mbar 20 win 458,347,587,640
+state after events: gdRect 0,0,2160,3840 pmBounds 0,0,2160,3840 rowBytes 15360 depth 32 screenBits 0,0,2160,3840 gray 20,0,2160,3840 mbar 20 win 458,347,587,640
+begin 0
+switch small3 to 130 depthMode 133 ticks=1966
+DMSetDisplayMode -> 0 depthMode 133 ticks=1966
+state after DMSetDisplayMode: gdRect 0,0,480,640 pmBounds 0,0,480,640 rowBytes 2560 depth 32 screenBits 0,0,2160,3840 gray 20,0,2160,3840 mbar 20 win 458,347,587,640
+state after events: gdRect 0,0,480,640 pmBounds 0,0,480,640 rowBytes 2560 depth 32 screenBits 0,0,2160,3840 gray 20,0,2160,3840 mbar 20 win 458,347,587,640
+end 0
+state after end: gdRect 0,0,480,640 pmBounds 0,0,480,640 rowBytes 2560 depth 32 screenBits 0,0,480,640 gray 20,0,480,640 mbar 20 win 458,347,587,640
+switch back3 to 149 depthMode 133 ticks=2211
+DMSetDisplayMode -> 0 depthMode 133 ticks=2211
+state after DMSetDisplayMode: gdRect 0,0,2160,3840 pmBounds 0,0,2160,3840 rowBytes 15360 depth 32 screenBits 0,0,480,640 gray 20,0,480,640 mbar 20 win 458,347,587,640
+state after events: gdRect 0,0,2160,3840 pmBounds 0,0,2160,3840 rowBytes 15360 depth 32 screenBits 0,0,480,640 gray 20,0,480,640 mbar 20 win 458,347,587,640
+state after end: gdRect 0,0,2160,3840 pmBounds 0,0,2160,3840 rowBytes 15360 depth 32 screenBits 0,0,2160,3840 gray 20,0,2160,3840 mbar 20 win 458,347,587,640
+---

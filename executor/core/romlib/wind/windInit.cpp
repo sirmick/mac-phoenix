@@ -1,0 +1,707 @@
+/* Copyright 1986-1995 by Abacus Research and
+ * Development, Inc.  All rights reserved.
+ */
+
+/* Forward declarations in WindowMgr.h (DO NOT DELETE THIS LINE) */
+
+#include <base/common.h>
+#include <rsys/process.h>
+#include <QuickDraw.h>
+#include <CQuickDraw.h>
+#include <WindowMgr.h>
+#include <ToolboxUtil.h>
+#include <ResourceMgr.h>
+#include <FontMgr.h>
+#include <MemoryMgr.h>
+#include <ctl/ctl.h>
+#include <SegmentLdr.h>
+#include <OSUtil.h>
+#include <OSEvent.h>
+#include <ControlMgr.h>
+#include <MenuMgr.h>
+#include <SysErr.h>
+#include <DialogMgr.h>
+
+#include <quickdraw/cquick.h>
+#include <wind/wind.h>
+#include <menu/menu.h>
+#include <res/resource.h>
+#include <error/system_error.h>
+
+#include <prefs/prefs.h>
+#include <commandline/flags.h>
+
+#include <rsys/segment.h>
+#include <file/file.h>
+#include <rsys/executor.h>
+#include <hidpi/hidpi.h>
+#include <prefs/options.h>
+#include <rsys/launch.h>
+#include <res/resource.h>
+
+#include <algorithm>
+
+using namespace Executor;
+
+static void
+exit_executor(void)
+{
+    ROMlib_exit = true;
+    ExitToShell();
+}
+
+void Executor::ROMLib_InitGrayRgn()
+{
+    ThePortGuard guard((GrafPtr)LM(WMgrCPort));
+
+        // reset clip and vis, in case this is invoked when resizing the screen
+    RectRgn(PORT_VIS_REGION(wmgr_port), &PORT_RECT(wmgr_port));
+    RectRgn(PORT_CLIP_REGION(wmgr_port), &PORT_RECT(wmgr_port));
+    OpenRgn();
+    if(!ROMlib_rect_screen)
+        FrameRoundRect(&GD_BOUNDS(LM(TheGDevice)), 16, 16);
+    else
+        FrameRect(&GD_BOUNDS(LM(TheGDevice)));
+    CloseRgn(LM(GrayRgn));
+    RgnHandle mrgn = NewRgn();
+    SetRectRgn(mrgn, 0, 0, GD_BOUNDS(LM(TheGDevice)).right,
+                LM(MBarHeight));
+    SectRgn(LM(GrayRgn), mrgn, mrgn);
+    RgnHandle corners = NewRgn();
+    SetRectRgn(corners, 0, 0, GD_BOUNDS(LM(TheGDevice)).right,
+                GD_BOUNDS(LM(TheGDevice)).bottom);
+    DiffRgn(corners, LM(GrayRgn), corners);
+    PaintRgn(corners);
+    CopyRgn(LM(GrayRgn), PORT_VIS_REGION(wmgr_port));
+    DiffRgn(LM(GrayRgn), mrgn, LM(GrayRgn));
+    PenPat(&qdGlobals().white);
+    PaintRgn(mrgn);
+    PenPat(&qdGlobals().black);
+    MoveTo(0, LM(MBarHeight) - 1);
+    Line(GD_BOUNDS(LM(TheGDevice)).right, 0);
+    if(!ROMlib_rootless_drawdesk(LM(GrayRgn)))
+    {
+        if((USE_DESKCPAT_VAR & USE_DESKCPAT_BIT)
+        && PIXMAP_PIXEL_SIZE(GD_PMAP(LM(MainDevice))) > 2)
+            FillCRgn(LM(GrayRgn), LM(DeskCPat));
+        else
+            FillRgn(LM(GrayRgn), &LM(DeskPattern));
+    }
+    DisposeRgn(mrgn);
+    DisposeRgn(corners);
+    CopyRgn(LM(GrayRgn), PORT_CLIP_REGION(wmgr_port));
+}
+
+RgnHandle Executor::C_GetGrayRgn()
+{
+    return LM(GrayRgn);
+}
+
+void Executor::C_InitWindows()
+{
+    PatHandle ph;
+    PixPatHandle new_ph;
+
+    LM(AuxWinHead) = default_aux_win;
+    LM(SaveVisRgn) = nullptr;
+
+    {
+        ThePortGuard guard(qdGlobals().thePort);
+
+        /* MacPhoenix: the Window Manager ports, desktop pattern and gray
+           region belong to the machine.  The first process sets them up
+           and paints the desktop; a later one (Process Manager) only gets
+           its own window list, menus and palettes, like on 7.5.5 where
+           launching an application leaves the screen alone. */
+        bool first_process = !ROMlib_process_has_thread();
+        if(first_process)
+        {
+            /* FIXME: is this a memory leak, to just call InitPort () again? */
+            InitPort(LM(WMgrPort));
+            InitCPort(LM(WMgrCPort));
+
+            ph = GetPattern(deskPatID);
+            new_ph = GetPixPat(deskPatID);
+            if(new_ph)
+                LM(DeskCPat) = new_ph;
+            else
+                USE_DESKCPAT_VAR &= ~USE_DESKCPAT_BIT;
+        }
+        InitPalettes();
+        InitMenus();
+        if(first_process)
+        {
+            /* InitMenus may have purged it (the menu bar's font loaded) */
+            if(ph && !*ph)
+                LoadResource((Handle)ph);
+            if(ph && *ph)
+                LM(DeskPattern) = **ph;
+            LM(GrayRgn) = NewRgn();
+            ROMLib_InitGrayRgn();
+        }
+        LM(WindowList) = nullptr;
+        LM(SaveUpdate) = -1;
+        LM(PaintWhite) = -1;
+        LM(DeskHook) = nullptr;
+        LM(GhostWindow) = nullptr;
+        LM(DragPattern) = qdGlobals().gray;
+    }
+    ROMlib_rootless_update();
+
+    /* since there is no `InitControls ()', we do this here */
+    ctl_color_init();
+
+    LM(WWExist) = EXIST_YES;
+
+    {
+        static bool issued_system_file_version_skew_warning_p = false;
+
+        if(system_file_version_skew_p
+           && !issued_system_file_version_skew_warning_p)
+        {
+            system_error("\
+The system file you have installed appears to be too old. \
+Executor may die without warning because of this mismatch",
+                         0,
+                         "Continue", "Exit", nullptr,
+                         nullptr, exit_executor, nullptr);
+        }
+        issued_system_file_version_skew_warning_p = true;
+    }
+
+    switch(ROMlib_launch_failure)
+    {
+        case launch_no_failure:
+            break;
+        case launch_cfm_requiring:
+            system_error("CFM-requiring applications are not currently supported.",
+                         0, "OK", nullptr, nullptr, nullptr, nullptr, nullptr);
+            break;
+        case launch_ppc_only:
+#if !defined(powerpc) && !defined(__ppc__)
+            system_error("That application is PowerPC-only.  This version of "
+                         "Executor doesn't run PowerPC applications.  "
+                         "You need to find an M68k version of that application.",
+                         0, "OK", nullptr, nullptr, nullptr, nullptr, nullptr);
+#else
+            system_error("That application is PowerPC-only.  To attempt to run "
+                         "it, Executor must be started using the \"-ppc\" "
+                         "command-line switch.",
+                         0, "OK", nullptr, nullptr, nullptr, nullptr, nullptr);
+#endif
+            break;
+        case launch_damaged:
+            system_error("That application appears damaged (lacks CODE and cfrg).",
+                         0, "OK", nullptr, nullptr, nullptr, nullptr, nullptr);
+            break;
+
+        case launch_compressed_ge7:
+            system_error("That application has a compressed CODE 0.  "
+                         "It is probably unusable under Executor but "
+                         "might work in System 6 mode",
+                         0, "OK", nullptr, nullptr, nullptr, nullptr, nullptr);
+            break;
+        case launch_compressed_lt7:
+            system_error("That application has a compressed CODE 0.  "
+                         "It will not run under this version of Executor.",
+                         0, "OK", nullptr, nullptr, nullptr, nullptr, nullptr);
+            break;
+
+        case launch_cfm_failed:
+            system_error(ROMlib_launch_failure_message.c_str(), 0, "OK",
+                         nullptr, nullptr, nullptr, nullptr, nullptr);
+            break;
+
+        default:
+            warning_unexpected("%d", ROMlib_launch_failure);
+            break;
+    }
+    ROMlib_launch_failure = launch_no_failure;
+
+    if(!size_info.application_p)
+        return;
+
+    /* only issue warnings once */
+    size_info.application_p = false;
+
+#ifndef TWENTYFOUR_BIT_ADDRESSING
+    if((!size_info.size_resource_present_p
+        || (size_info.size_flags & SZis32BitCompatible) != SZis32BitCompatible)
+       && !ROMlib_nowarn32)
+    {
+        /* MacPhoenix: a note in the log, not Executor's alert; 7.5.5 in
+           32-bit mode runs such an application without a word (Kid Pix's
+           SlideShow is one). */
+        fprintf(stderr, "[Executor] the application does not claim to be 32-bit clean\n");
+    }
+#endif
+
+    if(size_info.size_resource_present_p
+       && ROMlib_applzone_size < size_info.preferred_size)
+    {
+        char msg_buf[1024];
+        int applzone_in_k, preferred_size_in_k;
+
+        applzone_in_k = ROMlib_applzone_size / 1024;
+        preferred_size_in_k = (size_info.preferred_size + 1023) / 1024;
+
+        sprintf(msg_buf, "This application prefers `%dk' of memory, "
+                         "but only '%dk' of memory is available in the application "
+                         "zone.  You should exit Executor and run it again "
+                         "with \"-applzone %dk\".",
+                preferred_size_in_k, applzone_in_k,
+                preferred_size_in_k);
+
+        system_error(msg_buf, 0,
+                     "Continue", "Browser", "Exit",
+                     nullptr, C_ExitToShell, exit_executor);
+    }
+}
+
+void Executor::C_GetWMgrPort(GUEST<GrafPtr> *wp)
+{
+    *wp = LM(WMgrPort);
+}
+
+void Executor::C_GetCWMgrPort(GUEST<CGrafPtr> *wp)
+{
+    *wp = LM(WMgrCPort);
+}
+
+void Executor::C_SetDeskCPat(PixPatHandle ph)
+{
+    PatHandle bw_ph;
+
+    if(ph)
+    {
+        LM(DeskCPat) = ph;
+        USE_DESKCPAT_VAR |= USE_DESKCPAT_BIT;
+    }
+    else
+    {
+        bw_ph = GetPattern(deskPatID);
+        LM(DeskPattern) = **bw_ph;
+        USE_DESKCPAT_VAR &= ~USE_DESKCPAT_BIT;
+    }
+    PaintOne((WindowPeek)0, LM(GrayRgn));
+}
+
+/* MacPhoenix: false, and nothing made, when the heap can't hold the
+   window's regions, its AuxWinRec and title (NewWindow answers nil, as
+   on a Mac with the heap full: a 100K application's first alert). */
+static bool
+ROMlib_new_window_common(WindowPeek w,
+                         int allocated_p, int cwindow_p,
+                         const Rect *bounds, ConstStringPtr title, Boolean visible_p,
+                         INTEGER proc_id, WindowPtr behind,
+                         Boolean go_away_flag, LONGINT ref_con)
+{
+    WindowPeek t_w;
+    AuxWinHandle t_aux_w;
+    GrafPtr save_port;
+
+    save_port = qdGlobals().thePort;
+    if(!title)
+        title = (StringPtr) ""; /* thank MS Word for pointing this out */
+
+    RgnHandle struct_rgn = NewRgn(), cont_rgn = NewRgn(), update_rgn = NewRgn();
+    t_aux_w = (AuxWinHandle)NewHandle(sizeof(AuxWinRec));
+    GUEST<Handle> title_h = nullptr;
+    PtrToHand((Ptr)title, &title_h, (LONGINT)title[0] + 1);
+    if(!struct_rgn || !cont_rgn || !update_rgn || !t_aux_w || !title_h)
+    {
+        for(RgnHandle r : { struct_rgn, cont_rgn, update_rgn })
+            if(r)
+                DisposeRgn(r);
+        if(t_aux_w)
+            DisposeHandle((Handle)t_aux_w);
+        if(title_h)
+            DisposeHandle(title_h);
+        if(allocated_p)
+            DisposePtr((Ptr)w);
+        LM(MemErr) = memFullErr;
+        return false;
+    }
+    /* The palette manager is told that `FrontWindow ()' may have changed
+       once the window is made (below): MacPhoenix: told here, as the
+       window went in, its ActivatePalette repainted with the new record
+       first in the list and its fields not yet set, and ClipAbove took its
+       garbage for a structure region (Ares, the tab: a wasm trap). */
+    bool front_maybe_changed = false;
+    if(!behind)
+    {
+        WINDOW_NEXT_WINDOW(w) = nullptr;
+        if(LM(WindowList))
+        {
+            for(t_w = LM(WindowList);
+                WINDOW_NEXT_WINDOW(t_w);
+                t_w = WINDOW_NEXT_WINDOW(t_w))
+                ;
+            WINDOW_NEXT_WINDOW(t_w) = w;
+        }
+        else
+        {
+            LM(WindowList) = w;
+            front_maybe_changed = visible_p;
+        }
+    }
+    else if(behind == (WindowPtr)-1L)
+    {
+        WINDOW_NEXT_WINDOW(w) = LM(WindowList);
+        LM(WindowList) = (WindowPeek)w;
+        front_maybe_changed = visible_p;
+    }
+    else
+    {
+        WINDOW_NEXT_WINDOW(w) = WINDOW_NEXT_WINDOW(behind);
+        WINDOW_NEXT_WINDOW(behind) = (WindowPeek)w;
+    }
+    WINDOW_KIND(w) = userKind;
+    WINDOW_VISIBLE(w) = visible_p;
+    for(t_w = LM(WindowList);
+        t_w && !WINDOW_VISIBLE(t_w);
+        t_w = WINDOW_NEXT_WINDOW(t_w))
+        ;
+    WINDOW_HILITED(w) = visible_p && (t_w == w);
+    if(WINDOW_HILITED(w))
+    {
+        LM(CurActivate) = (WindowPtr)w;
+        for(t_w = WINDOW_NEXT_WINDOW(t_w);
+            t_w && !WINDOW_HILITED(t_w);
+            t_w = WINDOW_NEXT_WINDOW(t_w))
+            ;
+    }
+    else
+        t_w = 0; /* t_w will be used later */
+    WINDOW_GO_AWAY_FLAG(w) = go_away_flag;
+    WINDOW_SPARE_FLAG(w) = 0; /* will be used zoombox (wNew) */
+    WINDOW_DATA(w) = 0;
+    WINDOW_STRUCT_REGION(w) = struct_rgn;
+    WINDOW_CONT_REGION(w) = cont_rgn;
+    WINDOW_UPDATE_REGION(w) = update_rgn;
+    WINDOW_DEF_PROC(w) = GetResource("WDEF"_4, proc_id >> 4);
+    if(!WINDOW_DEF_PROC(w))
+    {
+        WINDOW_DEF_PROC(w) = GetResource("WDEF"_4, 0);
+        if(!WINDOW_DEF_PROC(w))
+        {
+            if(allocated_p)
+                DisposePtr((Ptr)w);
+            /* fatal_error ("no window (?)"); */
+            gui_fatal("Unable to find WDEF.");
+        }
+    }
+
+    (*t_aux_w)->awNext = LM(AuxWinHead);
+    (*t_aux_w)->awOwner = (WindowPtr)w;
+    (*t_aux_w)->awCTable = (CTabHandle)GetResource("wctb"_4, 0);
+    (*t_aux_w)->dialogCItem = 0;
+    (*t_aux_w)->awFlags = (proc_id & 0xF) << 24;
+    (*t_aux_w)->awReserved = 0;
+    (*t_aux_w)->awRefCon = 0;
+    LM(AuxWinHead) = t_aux_w;
+
+    WINDOW_TITLE(w) = guest_cast<StringHandle>(title_h);
+
+    if(cwindow_p)
+        OpenCPort((CGrafPtr)w);
+    else
+        OpenPort((GrafPtr)w);
+    OffsetRect(&PORT_BOUNDS(w), -bounds->left, -bounds->top);
+    PORT_RECT(w) = *bounds;
+    OffsetRect(&PORT_RECT(w), -bounds->left, -bounds->top);
+    {
+        HLockGuard guard(WINDOW_TITLE(w));
+        WINDOW_TITLE_WIDTH(w) = StringWidth(*WINDOW_TITLE(w));
+    }
+
+    TextFont(applFont);
+    WINDOW_CONTROL_LIST(w) = nullptr;
+    WINDOW_PIC(w) = nullptr;
+    WINDOW_REF_CON(w) = ref_con;
+    WINDCALL((WindowPtr)w, wNew, 0);
+    if(WINDOW_VISIBLE(w))
+    {
+        ThePortGuard guard(wmgr_port);
+        WINDCALL((WindowPtr)w, wCalcRgns, 0);
+        SetClip(WINDOW_STRUCT_REGION(w));
+        ClipAbove(w);
+        PenPat(&qdGlobals().black);
+        WINDCALL((WindowPtr)w, wDraw, 0);
+        CalcVis(w);
+        EraseRgn(WINDOW_CONT_REGION(w));
+        CopyRgn(WINDOW_CONT_REGION(w), WINDOW_UPDATE_REGION(w));
+        /* MacPhoenix: the layers behind too, even with nothing behind in
+           this layer (see CalcVisBehind). */
+        CalcVisBehind(WINDOW_NEXT_WINDOW(w), WINDOW_STRUCT_REGION(w));
+
+        ROMlib_rootless_update();
+    }
+    else
+        SetEmptyRgn(PORT_VIS_REGION(w));
+    if(t_w)
+    {
+        HiliteWindow((WindowPtr)t_w, false);
+        LM(CurDeactive) = (WindowPtr)t_w;
+    }
+    if(front_maybe_changed)
+        pm_front_window_maybe_changed_hook();
+
+    SetPort(save_port);
+    return true;
+}
+
+WindowPtr Executor::C_NewWindow(void* window_storage, const Rect *bounds,
+                                ConstStringPtr title, Boolean visible_p,
+                                INTEGER proc_id, WindowPtr behind,
+                                Boolean go_away_flag, LONGINT ref_con)
+{
+    WindowPeek w;
+    int allocated_p = 0;
+
+    if(!window_storage)
+    {
+        allocated_p = 1;
+        /* A WindowRecord, whatever the title: the Quadra gives 156 bytes
+           for "Modal" too (upstream's Dark Castle Demo hack allocated a
+           DialogRecord for those; UpdateDialog copes with the demo's
+           window instead). */
+        w = (WindowPeek)_NewPtr_flags(sizeof *w, false, true);
+    }
+    else
+        w = (WindowPeek)window_storage;
+
+    if(!w || !ROMlib_new_window_common(w, allocated_p, 0,
+                                       bounds, title, visible_p, proc_id, behind,
+                                       go_away_flag, ref_con))
+        return nullptr;
+    return (WindowPtr)w;
+}
+
+WindowPtr Executor::C_NewCWindow(void* window_storage, const Rect *bounds,
+                                  ConstStringPtr title, Boolean visible_p,
+                                  INTEGER proc_id, WindowPtr behind,
+                                  Boolean go_away_flag, LONGINT ref_con)
+{
+    WindowPeek w;
+    int allocated_p = 0;
+
+    if(!window_storage)
+    {
+        allocated_p = 1;
+        w = (WindowPeek)NewPtr(sizeof *w);
+    }
+    else
+        w = (WindowPeek)window_storage;
+
+    if(!w || !ROMlib_new_window_common(w, allocated_p, 1,
+                                       bounds, title, visible_p, proc_id,
+                                       (WindowPtr)behind,
+                                       go_away_flag, ref_con))
+        return nullptr;
+    return (WindowPtr)w;
+}
+
+typedef windrestype *windrestypeptr;
+
+typedef GUEST<windrestypeptr> *windrestypehand;
+
+WindowPtr Executor::C_GetNewCWindow(INTEGER window_id, void* window_storage,
+                                     WindowPtr behind)
+{
+    WindowPtr new_cwin;
+    windrestypehand win_res;
+    Handle win_ctab_res;
+    PaletteHandle palette;
+
+    win_res = (windrestypehand)ROMlib_getrestid("WIND"_4, window_id);
+    if(!win_res)
+        return nullptr;
+
+    /* MacPhoenix: the bounds, title and refCon are read from the resource
+       while NewCWindow allocates: locked, or the 'WIND' moves and the new
+       window record lands where they were (Works 4.0's tool palette, WIND
+       4001: portRect 0 wide, then a divide by zero sizing its buffer). */
+    HLockGuard guard((Handle)win_res);
+    new_cwin = NewCWindow(window_storage, &(*win_res)->_wrect,
+                          (StringPtr)((char *)&(*win_res)->_wrect + 18),
+                          (*win_res)->_wvisible != 0,
+                          (*win_res)->_wprocid,
+                          behind, (*win_res)->_wgoaway != 0,
+                          *(GUEST<LONGINT> *)((char *)&(*win_res)->_wrect + 14));
+
+    win_ctab_res = ROMlib_getrestid("wctb"_4, window_id);
+    if(win_ctab_res != nullptr)
+    {
+        ThePortGuard guard(qdGlobals().thePort);
+        SetWinColor(new_cwin, ROMlib_window_ctab_copy(win_ctab_res));
+    }
+
+    /* if this is a color window we must check if a palette
+     corresponding to this window id exists */
+
+    palette = GetNewPalette(window_id);
+    if(palette)
+        NSetPalette((WindowPtr)new_cwin, palette, (INTEGER)pmAllUpdates);
+
+    return new_cwin;
+}
+
+WindowPtr Executor::C_GetNewWindow(INTEGER wid, void* wst, WindowPtr behind)
+{
+    windrestypehand wh;
+    WindowPtr tp;
+
+    wh = (windrestypehand)GetResource("WIND"_4, wid);
+    if(!wh)
+        return (0);
+    if(!*wh)
+        LoadResource((Handle)wh);
+    HLockGuard guard((Handle)wh);  /* as GetNewCWindow */
+    tp = NewWindow(wst, &((*wh)->_wrect),
+                   (StringPtr)((char *)&(*wh)->_wrect + 18),
+                   (*wh)->_wvisible != 0, (*wh)->_wprocid, (WindowPtr)behind,
+                   (*wh)->_wgoaway != 0,
+                   *(GUEST<LONGINT> *)((char *)&(*wh)->_wrect + 14));
+    return (tp);
+}
+
+/*
+ * NOTE below:  On the Mac+ if after you close a window, the top most
+ *		window is non-visible, it will shuffle things.
+ */
+
+void Executor::C_CloseWindow(WindowPtr w)
+{
+    WindowPeek wptmp;
+    GrafPtr savgp;
+
+    AuxWinHandle saveauxh;
+    GUEST<AuxWinHandle> *auxhp;
+    ControlHandle c, t;
+
+    if(ROMlib_layer_p(w)) /* MacPhoenix: a layer record is not in a list */
+        return;
+    if(FrontWindow() == w)
+    {
+        wptmp = ROMlib_firstvisible((WindowPtr)WINDOW_NEXT_WINDOW(w));
+        if(wptmp)
+        {
+            HiliteWindow((WindowPtr)wptmp, true);
+            LM(CurActivate) = (WindowPtr)wptmp;
+        }
+    }
+    if(LM(WindowList) == (WindowPeek)w)
+    {
+        LM(WindowList) = WINDOW_NEXT_WINDOW(w);
+        wptmp = LM(WindowList);
+    }
+    else
+    {
+        for(wptmp = LM(WindowList);
+            wptmp && WINDOW_NEXT_WINDOW(wptmp) != (WindowPeek)w;
+            wptmp = WINDOW_NEXT_WINDOW(wptmp))
+            ;
+        if(wptmp)
+            WINDOW_NEXT_WINDOW(wptmp) = WINDOW_NEXT_WINDOW(w);
+    }
+
+    /* notify the palette manager this window has been deleted */
+    pm_window_closed(w);
+    hidpi::window_gone(w);
+
+    /* notify the palette manager that the `FrontWindow ()' may have
+       changed */
+    pm_front_window_maybe_changed_hook();
+
+    /* NOTE: tests have shown that the behaviour implemented below is
+       indeed what a Mac+ does */
+
+    /* NOTE: we can't use THEPORT_SAVE_EXCURSION here, becuase of this
+       odd behavior */
+    savgp = qdGlobals().thePort == (GrafPtr)w ? wmgr_port : qdGlobals().thePort;
+    SetPort(wmgr_port);
+    SetClip(LM(GrayRgn));
+    /* MacPhoenix: only a visible window uncovers anything; a hidden one's
+       regions are where it last was (Apple's Help Manager closes its
+       hidden balloon window, whose old place would be repainted over the
+       desktop icons there). With no window behind in this layer,
+       CalcVisBehind still recomputes the layers behind (their windows
+       kept visible regions that excluded this one; Finder's windows under
+       a closed Script Editor window stayed blank). */
+    if(WINDOW_VISIBLE(w))
+    {
+        PaintBehind(WINDOW_NEXT_WINDOW(w), WINDOW_STRUCT_REGION(w));
+        CalcVisBehind(WINDOW_NEXT_WINDOW(w), WINDOW_STRUCT_REGION(w));
+    }
+
+    DisposeRgn(WINDOW_STRUCT_REGION(w));
+    DisposeRgn(WINDOW_CONT_REGION(w));
+    DisposeRgn(WINDOW_UPDATE_REGION(w));
+    DisposeHandle((Handle)WINDOW_TITLE(w));
+    for(auxhp = (GUEST<AuxWinHandle> *)&LM(AuxWinHead);
+        *auxhp && (**auxhp)->awOwner != w;
+        auxhp = (GUEST<AuxWinHandle> *)&(**auxhp)->awNext)
+        ;
+    if(*auxhp)
+    {
+        saveauxh = *auxhp;
+        *auxhp = (**auxhp)->awNext;
+        ROMlib_window_ctab_release((*saveauxh)->awCTable);
+        DisposeHandle((Handle)saveauxh);
+    }
+
+#if defined(NOTAGOODIDEA)
+    // FIXME: #warning "what the hell does this mean?! DANGER WILL ROBINSON!"
+    Cx (*(Ptr *)Cx)(((WindowPeek)w)->windowDefProc) = 0;
+    DisposeHandle(((WindowPeek)w)->windowDefProc);
+#endif /* NOTAGOODIDEA */
+
+/*
+ * TODO: Fix this.  Tests on the mac show that KillControls is called,
+ * but just replacing the for loop causes many apps to die.  It could
+ * be because some window information that DisposeControl wants is
+ * destroyed already, or it could be DisposeControl or KillControl
+ * makes some false assumptions.  More tests need to be written.
+ */
+    ROMlib_control8_forget_window(w);
+#if 1
+    for(c = WINDOW_CONTROL_LIST(w); c;)
+    {
+        t = c;
+        c = (*c)->nextControl;
+#if 0
+	DisposeHandle((*t)->contrlDefProc);
+#endif /* 0 */
+        DisposeHandle((Handle)t);
+    }
+#else /* 0 */
+    KillControls(w);
+#endif /* 0 */
+
+    if(WINDOW_PIC(w))
+        KillPicture(WINDOW_PIC(w));
+    ClosePort((GrafPtr)w);
+    SetPort(savgp);
+    if(LM(CurActivate) == w)
+        LM(CurActivate) = 0;
+    if(LM(CurDeactive) == w)
+        LM(CurDeactive) = 0;
+    WINDCALL((WindowPtr)w, wDispose, 0);
+    ROMlib_window8_forget(w);
+
+    ROMlib_rootless_update();
+}
+
+void Executor::C_DisposeWindow(WindowPtr w)
+{
+    /* MacPhoenix: a layer record (the Help Manager disposes its balloon
+       layer so). */
+    if(ROMlib_layer_p(w))
+    {
+        ROMlib_dispose_layer(w);
+        return;
+    }
+    CloseWindow(w);
+    DisposePtr((Ptr)w);
+}

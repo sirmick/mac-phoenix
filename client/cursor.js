@@ -1,7 +1,7 @@
 // The Mac's cursor as the page's own (a CSS cursor), so the pointer moves
 // at the browser's speed and is never part of the frames: the guest only
 // says what it looks like. Shared by mac-phoenix's client (client.js, the
-// Executor backend) and Executor's tab (web/executor; the wasm build
+// Executor backend) and Executor's tab (executor/web; the wasm build
 // copies this file there).
 //
 //   const cursor = new MacCursor(element, guestWidth);
@@ -49,7 +49,10 @@ class MacCursor {
         const w = this.element.getBoundingClientRect().width || this.guestWidth();
         const scale = w / this.guestWidth();
         const dpr = window.devicePixelRatio || 1;
-        const px = Math.max(1, Math.round(scale * dpr));    // device pixels a guest pixel
+        // Device pixels a guest pixel, the canvas's: the pointer is the size
+        // it is on the Mac's screen, a screen shrunk to fit too.
+        const px = Math.max(1, Math.round(scale * dpr));
+        this.px = 16 * px;      // the image's device pixels (the tab's diagnostics)
         const key = `${px}:${c.hotX},${c.hotY}:${Array.from(c.data).join(',')}:${Array.from(c.mask).join(',')}`;
         let css = this.cache.get(key);
         if (!css) {

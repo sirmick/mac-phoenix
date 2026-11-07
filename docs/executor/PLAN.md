@@ -1,58 +1,75 @@
 # Executor core in MacPhoenix
 
-Goal: run the real Finder on a Toolbox reimplemented in C++, inside the
-MacPhoenix shell (web UI, WebRTC video, HTTP API, bridge), on the UAE
-68k JIT instead of syn68k.
+Goal: Executor's Toolbox, reimplemented in C++, running Apple's System
+Folders and Finder (7.5.5 to 8.6) and its own, on MAME's CPU cores, in
+three front ends: the desktop application, the tab with its server, and
+mac-phoenix's `--backend executor` (executor/README.md).
 
 Source: Executor 2000 (autc04/executor), MIT licence. Imported from
-upstream commit `b2569eb1` into `src/executor/`. The upstream checkout in
-`executor/` stays outside git as the reference and differential oracle.
+upstream commit `b2569eb1` into `src/executor/` (since 2026-11-06
+`executor/`, the product's own directory: [executor/README.md](../../executor/README.md)).
+The upstream checkout in `executor-upstream/` stays outside git as the
+reference and differential oracle.
 
-Longer direction (Musashi with translated addressing, minicoro
+Longer direction (MAME cores with translated addressing, minicoro
 processes, wasm, A/UX user-mode kernel): [DIRECTION.md](DIRECTION.md).
+
+## The product's milestones
+
+The project plan (`.wash/plan.toml`) records these. They are not the
+core's M0–M4 and P ("The core's milestones", below), which came first.
+
+| | What | State |
+|---|---|---|
+| M1 | First cut: AppleWorks, the development environments and games on 7.6.1 and 8.6 in a private browser site | done (2026-11-03; the audit: [M1.md](M1.md)) |
+| P1 | Standalone: one Go binary, the server with the tab embedded, images only ([Standalone.md](Standalone.md)) | done (2026-11-07); the Python server and the tab's hosted mode (accounts, OPFS, sync) gone since 2026-11-02 |
+| P2 | Executor as its own product: `executor/` at the top level, `host/` shared by the front ends, the Qt desktop application (AppImage, Windows zip) | done (2026-11-07) |
+| M2 | QuickTime; Mac OS 9.0.4's Finder and the 9-only applications ([MacOS8-9.md](MacOS8-9.md), "9.0.4: what is open"); Apple's CarbonLib; C4 (UML to wasm) if needed; relay v2; AppleScript on 8.6; Navigation Services; the 8.6 Translation Manager (STRAGGLERS 71); the long tail of unimplemented 8.x calls | next; 9.0.4's survey and first fixes done |
+| M3 | G4 (AltiVec) on mame-ppc | after M2 |
 
 ## Shape
 
 ```
-mac-phoenix (parent: web UI, HTTP, WebRTC, bridge)
-   │ exec `mac-phoenix --ipc --backend executor` + SHM/socket
-   ▼
-mac-phoenix (child, same binary)
-   ├── host/executor_child.cpp   frames → SHM, control socket → input hooks
-   ├── romlib                    Executor Toolbox, imported nearly unchanged
-   ├── syn68k facade             syn68k_public.h implemented over UAE
-   ├── PowerCore facade          on the mame-ppc core
-   └── front-ends/phoenix        render + cursor composite, executor_host API
+executor-desktop             executor-web.wasm in a Worker      mac-phoenix parent (web UI, HTTP, WebRTC, bridge)
+  (Qt, in-process)             (the tab; executor/server)          │ exec `mac-phoenix --ipc --backend executor` + SHM/socket
+        │                             │                            ▼
+        │                             │                       frontends/phoenix/executor_child.cpp
+        └────────── host/ ────────────┘                       (frames -> SHM, control socket -> input hooks)
+                      │                                            │
+                      └─────────── frontends/phoenix: executor_host API, video, sound
+                                        │
+                     romlib (the Toolbox) on two facades:
+                       syn68k facade on mame-68k, PowerCore facade on mame-ppc
 ```
 
-The swap happens behind two facades so the 120k lines of Toolbox code
-compile with minimal edits:
+The CPUs sit behind two facades so the Toolbox code compiles with
+minimal edits:
 
-* **syn68k facade** (`src/executor/cpu/`). Same header name and API:
-  `cpu_state`, `EM_Dn/EM_An`, `READ*/WRITE*`, `callback_install`,
-  `trap_install_handler`, `interrupt_generate`, `CALL_EMULATOR`,
-  `destroy_blocks`. Implemented on UAE:
-  * **Addressing is identity.** Guest address == host address. Guest
-    RAM is mapped at host 0 (needs `vm.mmap_min_addr=0`, same as KPX),
-    the binary links below 4GB like `mac-phoenix`, the emulator thread
-    stack and framebuffer are allocated below 4GB. UAE runs
-    `DIRECT_ADDRESSING` with `MEMBaseDiff = 0`, which keeps the JIT
-    usable. Executor's four 1GB windows collapse into one.
-  * **Callbacks** are 2-byte cells in a guest-visible callback page,
-    each holding one EmulOp opcode. The handler finds the slot from the
-    PC, syncs UAE registers into `cpu_state`, calls the host function,
-    syncs back and jumps to the returned address.
-  * **A-line traps** use the real exception: vector 10 at `$28` points
-    at a callback, which reads the trap PC from the 68040 frame and calls
-    Executor's `alinehandler`. The guest runs in supervisor mode, as
-    Mac OS does, so the frame lands on A7.
-  * **Interrupts**: `interrupt_generate(4)` raises a UAE level-4
-    interrupt; vector 28 points at a callback; `MAGIC_RTE_ADDRESS` is a
-    real `RTE` in the callback page.
-  * **Nested execution**: `CALL_EMULATOR` pushes the exit address (an
-    EmulOp cell) and re-enters `m68k_execute`, the same path
-    BasiliskII's `Execute68k` uses.
-  * `destroy_blocks` flushes the JIT cache range.
+* **syn68k facade** (`executor/core/cpu/syn68k_common.cpp`). Same header
+  name and API as upstream's syn68k: `cpu_state`, `EM_Dn/EM_An`,
+  `READ*/WRITE*`, `callback_install`, `trap_install_handler`,
+  `interrupt_generate`, `CALL_EMULATOR`, `destroy_blocks`. Implemented on
+  a `cpu::Core`, `mame-68k` (MAME's Musashi):
+  * **Four 1GB windows** (`syn68k_public.h`), as upstream: guest RAM
+    (with a 64KB tail), a pool for `syn68k_alloc_low` (stacks,
+    framebuffer), the binary's data; the core's `GuestMemory` maps each.
+    No `vm.mmap_min_addr`. Window backing is per host
+    (`core/cpu/host/posix`, `host/wasm`).
+  * **Callbacks** are 2-byte cells in a guest-visible callback page
+    holding host op `$7101`; the core hands it to the facade, which runs
+    the callback the cell belongs to and continues at the address it
+    returns.
+  * **Exceptions** (A-line traps, interrupts) go through real guest
+    vectors, each pointing at a forwarding callback, as syn68k's did.
+  * **Nested execution**: `CALL_EMULATOR` runs guest code until it
+    returns into the exit cell (host op `$7100`, which stops the core's
+    `run()`).
+  * **Interrupts**: the core's interrupt line follows
+    `cpu_state.interrupt_pending[]`, updated on the core's thread (after
+    callbacks, and from `Host::attention()` when another thread raised a
+    level).
+  * UAE ran the facade until 2026-10-23, with identity addressing (guest
+    RAM at host 0); see DIRECTION.md, D1 and W0.
 * **PowerCore facade** (`cpu/PowerCore.cpp`). PowerCore has no licence
   and does not come across; Executor's code keeps its shape (registers in
   `PowerCoreState`, `execute()`, `syscall`, `handleInterrupt`) and it runs
@@ -89,7 +106,7 @@ Executor/syn68k, so not the UAE facade. Likely direct heap/lowmem
 pokes by a pre-32-bit-clean app; revisit with the M1 heap work.
 
 **Decoder:** `tools/macdecode/macdecode.py SNAPSHOT [--serve]` decodes a
-snapshot using multiversal (`src/executor/multiversal/defs/*.yaml`) as
+snapshot using multiversal (`executor/core/multiversal/defs/*.yaml`) as
 its database: lowmem globals by multiversal name and type, zones
 (including the Process Manager heap and app partitions, found by
 scanning), resource maps, and trap names. `--serve` (port 8765) shows the
@@ -131,7 +148,7 @@ Apple's System file into an Executor data directory, and
 `--executor-data DIR` (config `executor_data_dir`) points Executor at it.
 Apple's 68k definition procedures would replace Executor's native stubs
 (Apple's MBDF calls unimplemented `$A81E` and recursed into a crash), so
-a resource policy (`src/executor/res/resource-policy.txt`, embedded;
+a resource policy (`executor/core/res/resource-policy.txt`, embedded;
 `<data_dir>/resource-policy.txt` overrides) serves Executor's version of
 listed System resources from `ROMlib_mgetres2`; the map stays Apple's.
 Executor's Browser now runs on Apple's 7.5.5 System file; System
@@ -172,7 +189,7 @@ points (traps, selectors, drivers, components) with checkbox filters;
 the work list (needed, not in Executor) is 28. Hardware/boot/debug tags
 live in `learned.yaml` (`tags:`) for review.
 
-**Where we left off:** snapshot API and a first reader (lowmem, heap
+**Where it was left (2026-10-07):** snapshot API and a first reader (lowmem, heap
 walk, trap classification) work; reference snapshot
 `~/storage/snapshots/7.5.5-finder-idle`. Next: find the Process
 Manager heap and partitions, tag System heap blocks with resource
@@ -373,7 +390,10 @@ stay registered but are never loaded. Chosen over running Apple's
 libraries on an Ethernet driver backed by net-bridge, because the same
 C++ can later answer CFM's OpenTransportLib for PPC applications (P).
 
-## Milestones
+## The core's milestones
+
+October 2026, before the product milestones above; status as recorded
+then.
 
 | | Milestone | Gate | Status |
 |---|---|---|---|
@@ -389,7 +409,7 @@ C++ can later answer CFM's OpenTransportLib for PPC applications (P).
 | M3d | Thread Manager in C++ | Gestalt `'thds'`; a threaded app (Netscape 2/3, Fetch) runs (needs M3h for its network) | done (2026-10-14): process.cpp, "Thread Manager", ThreadMgr.yaml. A coroutine per 68k thread but the main one (a host thread each until 2026-10-23), one baton for processes and threads (a context runs when its process has the baton and its thread is the running one), a 68k stack per thread in the application heap, cooperative round-robin with the application's scheduler, switcher and terminator procedures; DisposeThread of a parked thread and ExitToShell unwind it on its own coroutine with an exception. Preemptive threads are scheduled as cooperative ones. Frontier runs its agents and scripts on it, NetEvents starts; `threads_executor` drives Frontier's thread verbs (finite, endless, kill, two at once, quit with one alive). It needed the cores' innermost-run stop flag per context (a context parked inside run() had its flag taken by a run on another, and spun on its exit cell): `thread_local` while contexts were host threads, part of mame-68k's saved context since they are coroutines |
 | M3e | Apple's packs | Help Manager `PACK` 14 shows balloons; Apple Event Manager `PACK` 8 tried against Finder `oapp`/`odoc` | done (2026-10-10): Apple's `PACK` 8 runs (installed by AppleScript), `oapp`/AppParameters in Apple's wire format; the System's `PACK` 14 is the Help Manager (`helppkg.cpp`: detached handle at `$BE0`, lock count at ExpandMem+$130, its globals at ExpandMem+$78 as the boot code leaves them, the trap entered through `$668`; Executor's `balloon.cpp` stubs answer only without Apple's System file). Show/Hide Balloons and About Balloon Help are the System's MenuSelect patch in `sysmenu.cpp`; balloons for menu items (Executor's MDEF calls `HMShowMenuBalloon` as Apple's MDEF 0 does), windows (`hwin`, through the idle selector -4 from `SystemTask`), Finder's icons (`HMShowBalloon`) draw with Apple's WDEF 126 in a floating layer. Needed: the Layer Manager (`LayerDispatch` -1/-5/-7/1-5, floating layers in front of every process, process.cpp), `SaveRestoreBits` ($A81E 1-3), `DialogDispatch` 1/2/-1/-2, `ResourceDispatch` -1, `TextServicesDispatch` $16/$17, OSDispatch $64, `TEGetHeight` pinning both ends to the line count, `CloseWindow` of a hidden window repainting nothing. Open: STRAGGLERS.md 18, 19 |
 | M3f | Extension set | Speech Manager + MacinTalk 3, AppleScript + Finder Scripting Extension, QuickTime load and work (QuickTime movie plays in SimpleText) | in progress: AppleScript loads by default; Script Editor runs `3 + 4 -> 7`; scripting additions run from MacPerl; Finder Scripting Extension loads. Speech Manager 1.5 + MacinTalk 3 load (SoundDispatch group $C, DTInstall, SysError in D0, ROMBase set for INITs) and MacinTalk speaks through the audio pipeline (extSH buffers). Open: after an utterance the guest clock stalls (Time Manager/vcatch stop firing while the 68k thread spins; SpeechBusy stays 1), `tell application "Finder"` (target spec empty, `finder_suite_executor` fails), QuickTime |
-| M3g | Sound output | host `SoundDriver` replaces `SoundFake`; `SysBeep` and `SndPlay` audible in the web UI | done (2026-10-10): with `--audio`, `PhoenixSoundDriver` (front-ends/phoenix) mixes at 22255 Hz and hands 48 kHz stereo frames to the IPC audio ring the ROM machines use (Opus, WebRTC); `SysBeep` plays the System's "Simple Beep" through `SndPlay`; the mixer gained the square-wave synthesizer (`freqCmd`, `noteCmd`, `waitCmd`, `restCmd`, `ampCmd`) that sound uses. Open: the Sound control panel's alert choice, `volumeCmd` |
+| M3g | Sound output | host `SoundDriver` replaces `SoundFake`; `SysBeep` and `SndPlay` audible in the web UI | done (2026-10-10): with `--audio`, `PhoenixSoundDriver` (frontends/phoenix) mixes at 22255 Hz and hands 48 kHz stereo frames to the IPC audio ring the ROM machines use (Opus, WebRTC); `SysBeep` plays the System's "Simple Beep" through `SndPlay`; the mixer gained the square-wave synthesizer (`freqCmd`, `noteCmd`, `waitCmd`, `restCmd`, `ampCmd`) that sound uses. Open: the Sound control panel's alert choice, `volumeCmd` |
 | M3h | MacTCP finished | `dnrp` resolver, UDP, async calls on the `accRun` pump; Fetch connects to a host name | mostly done (2026-10-14): TCP and UDP on host sockets; asynchronous calls park on their stream and finish at interrupt time, as MacTCP's did: a watcher thread polls the parked sockets and raises an Executor interrupt (`time/syncint`), whose handler completes the calls (completion routines are pascal, the iopb on the stack, not the Device Manager's A0), delivers the ASRs (TCP data arrival, closing, terminate; UDP data arrival) and the resolver's results. UDPRead and TCPNoCopyRcv lend pieces of the stream's receive area. `TCPPassiveOpen` listens. The resolver is Executor's `'dnrp'` (`mactcp/dnr.cpp`): without MacTCP's control panel, `GetIndResource('dnrp', 1)` hands out a JMP to a callback that answers StrToAddr/AddrToName from the host's resolver on a worker thread (cacheFault, then the result procedure) and AddrToStr at once. `ipctlGetAddr` reports the host's default-route address (GUSI sends 127.0.0.1 there). `--executor-debug mactcp` logs calls, completions, ASRs and lookups. The guest suite resolves `example.com` and round-trips UDP and TCP with a host echo server the harness starts (`tests/lib/echo_server.py`, named to the guest in `Host:net_echo.txt`); gtests `MacTCP.UdpRoundTrip`, `MacTCP.NoCopyRcvLendsFromTheReceiveArea`. Since 2026-10-23: synchronous calls wait in slices and run the interrupts that came due (completion routines and ASRs of other calls, Time Manager), as PBControlSync's spin did; with both sides closed TCPRcv answers connectionDoesntExist (OT's MacTCP does); `TCPGlobalInfo` (TCPParam, TCPStats, the stream table); the resolver's HInfo and MXInfo on the host's name servers (`net/hostdns.cpp`, shared with OT). MacPhoenixSuite's `mactcp` section (async open/receive with completions, ASRs, TCPStatus, TCPNoCopyRcv, 32K through a 4K area, orderly close, passive open to itself, refused and timed-out connects, a completion during a synchronous call, UDP ASR/async read/MTU, TCPGlobalInfo, AddrToStr/AddrToName/HInfo/MXInfo): `mactcp_executor` 28/28; `mactcp_rom` (OT 1.1's MacTCP, 7.5.5) and `mactcp_rom_ppc` (9.0.4) are the reference, skipping what OT's MacTCP doesn't do (UDP data-arrival ASR, TCPGlobalInfo records). Open: the multicast UDP calls, `TCPExtendedStat`, ICMP reports; the guest sees the host's address, not a 10.0.2.x network |
 | M3i | Open Transport | OT 1.1's 68k client API through Apple's own glue, no Apple code on the way | on by default since 2026-10-23 (`--no-executor-ot` to leave it out; docs/executor/OpenTransport.md): OT's function sets (`ot_names.inc`) bound to C++ through a Shared Library Manager of Executor's own (`ot_slm.cpp`; with Apple's ASLM running, OT clients still get Executor's manager and never reach Apple's code). TCP and UDP endpoints on host sockets in every mode, blocking calls that let interrupts run and can be cancelled, listen/accept, datagrams in pieces (T_MORE), DNSAddresses, options on host socket options, deferred and system tasks, atomics and lists, the Ethernet port, the resolver and HINFO/MX/any-record queries on the host's. `ot_executor`, `ot_executor_noaslm`: OTTest's 20 cases. Open: T_UDERR, AppleTalk-only calls, the PPC binding |
 | M4 | 7.5.5 + Drag Manager | Drag Manager; drag between SimpleText and Finder; TSM/Dictionary/Collection stubs; TrueType via FreeType | Drag Manager done (2026-10-13): Apple's, the System's `proc` -16512..-16516 dispatched by `drag.cpp` (the `gpch` 668 patch's job in C++: the selector tables, CallDetachedPackage entry, the globals at ExpandMem+$118, Finder's hook trampolines, Gestalt `drag` and `teat`, the exit-time cleanup `ROMlib_drag_process_exit`). Needed: OSDispatch $F `GetLayerAtPoint`, $19/$1A hold switching, $53 `CallProcessRoutine` (a routine run in another process's world on its stack, process.cpp), $56 `GetDesktopProcess`, $62 `GetWindowProcess`; `GetFrontProcess` with a layer; LayerDispatch 6/7 and SetCurLayer to another process's layer; `TEGetHiliteRgn` (TEDispatch $F); a `TranslationDispatch` stub; `NewAliasMinimal` for folders; `GetIntlResourceTable` for the system script. Finder icons move, files move into folders, to the desktop and the Trash; text dragged out of SimpleText becomes a clipping file on the desktop, and the clipping dragged back lands in the text (cross-process both ways). `drag_executor` tests it; `--executor-debug drag` logs the dispatch. Open: TSM/Dictionary/Collection stubs, TrueType |
@@ -406,7 +426,8 @@ Tools carried alongside:
 
 ## Open questions
 
-* Open Transport: on by default (M3i); the PPC binding is next.
+* Open Transport: on by default (M3i), for 68k and PowerPC clients
+  (OpenTransport.md).
 * Boot phase: reproduce the post-boot-2 state from a snapshot of real
   System 7.1 under MacPhoenix.
 
@@ -426,7 +447,7 @@ Tools carried alongside:
   hand-made `NAME.clean`. `--executor-start finder|browser|path`,
   `--[no-]executor-fresh`; resolved by the parent
   (`src/core/executor_systems.cpp`) into `--executor-data/--executor-app`.
-  The web UI offers a built-in "exec" profile.
+  The web UI offers a built-in `7.5.5-executor` profile.
 * Without a System, Executor's files live in `<storage>/executor/` (System Folder, prefs).
   That folder and the configured shared folder are the only host folders the
   guest sees; Executor's default of mounting `/` is disabled. Disk images
@@ -484,8 +505,8 @@ Kept small so upstream fixes can be merged by hand:
   `long double` is x87), `quickdraw/rawpatblt.cpp`/`rawsrcblt.cpp` (blitters
   called through their real type), `serial.cpp` (termios on every POSIX
   host but macOS), `osutil.cpp` (`SetDateTime` never sets the host clock),
-  `tests/main_executor.cpp` (tests on the main stack where it is
-  guest-addressable), `tests/mactcp.cpp` (network tests skip without one).
+  `executor/tests/main_executor.cpp` (tests on the main stack where it is
+  guest-addressable), `executor/tests/mactcp.cpp` (network tests skip without one).
 * `mactcp/`, `opentransport/`, `net/hostdns.cpp` (all ours): the host's
   network only through `rsys/hostnet.h` (DIRECTION.md, D3); the two socket
   watchers are its one `Watcher`.
@@ -499,8 +520,10 @@ Kept small so upstream fixes can be merged by hand:
 * `executor.cpp`: launches `FNDR` files (Finder) as well as `APPL`/`MPST`.
 * `alias.cpp`: `FindFolder` with `kCreateFolder` creates the folder (was a
   `paramErr` stub).
-* `res/resGetinfo.cpp`: `GetResourceSizeOnDisk` returns the on-disk length
-  (compressed size), not the loaded handle's size.
+* `res/resGetinfo.cpp`: `GetResourceSizeOnDisk` returns a loaded
+  resource's handle size, else the length on disk, a compressed resource's
+  uncompressed size (as the Quadra's ROM; Finder 7.5 sizes its code cache
+  from it).
 * `mman/tempmem.cpp`: temporary memory comes from the Process Manager heap.
 * `file/localvolume/item.cpp`: Mac/Unix epoch counts 1904's leap day
   (host file dates were a day early).
@@ -527,7 +550,7 @@ Kept small so upstream fixes can be merged by hand:
   child snapshots RAM and registers as `executor-fatal`).
 * `res/resPrivate.cpp` (new): private `ResourceDispatch` selectors;
   multiversal `ResourceDispatch` selector mask `D0<0xFF>`.
-* `config/front-ends/phoenix/executor_host.cpp`: the data folder (and the
+* `frontends/phoenix/executor_host.cpp`: the data folder (and the
   shared folders) are the volumes, so the boot volume's root holds the
   System Folder; volumes are named after their folder.
 * `mman/mman.cpp`: `HandleZone` keeps an empty handle in `TheZone` when that
@@ -718,7 +741,7 @@ Kept small so upstream fixes can be merged by hand:
   head insertion keeps their order (Color Picker takes the first `cpkr`
   found: HSL on 7.5.5).
 * `dial/dialHandle.cpp`: `ModalDialogMenuSetup` ($AA67), a no-op.
-* `config/front-ends/phoenix/phoenix_sound.cpp` (new), `sound/sounddriver.cpp`,
+* `frontends/phoenix/phoenix_sound.cpp` (new), `sound/sounddriver.cpp`,
   `sound/sound.cpp`: a `SoundDriver` that resamples the 22255 Hz mix to
   48 kHz S16 stereo and pushes 20 ms frames to the IPC audio ring
   (`audio_direct_push_frame`); `sound_init` turns the Sound Manager on
@@ -788,6 +811,6 @@ Kept small so upstream fixes can be merged by hand:
   with 0 and a log line; `sane/float4.cpp` `Fx2dec` sized its buffers for
   the number (two stack overflows from about 1e170 up).
 * `base/functions.impl.h`: `callfromPPC::ParameterPasser` from upstream
-  `b6290b62` (2026-10-19), with its gtests in `tests/cpu.cpp`.
+  `b6290b62` (2026-10-19), with its gtests in `executor/tests/cpu.cpp`.
 * `file/fileHighlevel.cpp`, multiversal `FileMgr.yaml`: `HDelete` and
   `HRename`, exported to InterfaceLib.

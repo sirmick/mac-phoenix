@@ -168,8 +168,8 @@ without that accounting, `write_idx` can land exactly on `read_idx`
 after a successful push, which then *looks* empty and silently loses
 the just-pushed payload.
 
-`tests/test_browser_shm.cpp` (10 cases / 47 assertions, ctest `unit`
-label) round-trips messages under wraparound, fill-to-full,
+`tests/test_browser_shm.cpp` (10 cases, ctest `browser_shm`, label
+`unit`) round-trips messages under wraparound, fill-to-full,
 interleaved push/pop, bidirectional independence, oversized
 rejection, and truncation reporting. Compiles `ring.cpp` directly so
 we exercise the exact code `shm.cpp` links against.
@@ -202,6 +202,7 @@ warning rather than partial-dispatched.
 | `BR_EV_TITLE` | `QWebEnginePage::titleChanged`; emitted only on change |
 | `BR_EV_HISTORY` | `QWebEngineHistory::canGoBack/canGoForward` after each url/load transition; emitted only on change |
 | `BR_EV_ZOOM` | After every `setZoomFactor()` from `BR_CMD_ZOOM_*`; emitted only on change |
+| `BR_EV_PAGE` | Defined, not sent (`BR_EV_TITLE` and `BR_EV_PAGE_METRICS` carry what it would) |
 | `BR_EV_FRAME` | Defined but not sent: the capture timer (60 Hz, 4 Hz when idle) bumps `fb.seq` and the guest polls it every pass of its loop |
 | `BR_EV_SELECTION` | Reply to the CDP `Runtime.evaluate` |
 | `BR_EV_PAGE_METRICS` | Metrics timer (4 Hz) `runJavaScript` of [scrollWidth, scrollHeight, scrollX, scrollY, innerWidth, innerHeight] |
@@ -283,7 +284,8 @@ and `BR_CMD_PASTE` / `_GET_SELECTION` for the clipboard bridge.
 |---|---|
 | `MacBrowser.c` | App: window, URL bar, toolbar, viewport, event loop, BlockMove + CopyBits from shm |
 | `browser_shm.{h,c}` | Guest-side ring helpers, magic/version check |
-| `MacBrowser.r` / `icons.r` | Resources: SIZE, WIND, MENU, ALRT, icon family |
+| `MacBrowser.r` | Resources: SIZE, WIND, MENU, ALRT; includes `icons.r`, the icon family CMake generates from `tools/icons/macbrowser-{32,16}.png` (`tools/png2icn.py`) |
+| `Makefile` | A build by hand with Retro68 on `PATH` |
 | `MacBrowser.bin` | Committed binary (CMake regenerates from source when Retro68 is detected) |
 | `MacBrowser.dsk` | Committed floppy image used by tests + the docs example boot |
 

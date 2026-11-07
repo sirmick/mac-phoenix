@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Executor's application icon: a compact Mac, drawn for the desktop
+     application (MIT, as executor/LICENSE-CONTRIBUTIONS). -->
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <rect x="48" y="16" width="160" height="200" rx="14" fill="#e8e4d8" stroke="#3a3a3a" stroke-width="6"/>
+  <rect x="70" y="38" width="116" height="92" rx="6" fill="#2b3f6b" stroke="#3a3a3a" stroke-width="4"/>
+  <path d="M110 66 v14 M146 66 v14" stroke="#f2f2f2" stroke-width="8" stroke-linecap="round"/>
+  <path d="M106 98 q22 18 44 0" fill="none" stroke="#f2f2f2" stroke-width="7" stroke-linecap="round"/>
+  <rect x="86" y="160" width="60" height="8" rx="3" fill="#3a3a3a"/>
+  <rect x="64" y="216" width="128" height="22" rx="4" fill="#d6d1c2" stroke="#3a3a3a" stroke-width="6"/>
+</svg>

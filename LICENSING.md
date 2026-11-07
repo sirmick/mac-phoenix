@@ -26,7 +26,7 @@ falls under below, not the GPL of the whole.
 | `src/config/`, `src/ipc/`, `src/main.cpp` | configuration, parent/child IPC, entry point |
 | `src/drivers/` (except the GPL files below) | video/audio pipelines and encoders, MacBrowser host side, socket ethernet, timer, adapters |
 | `src/core/`: `boot_progress`, `command_bridge`, `cpu_context`, `emulator_init`, `emulator_subprocess`, `executor_systems`, `guest_ui`, `mac_roman`, `network_info`, `snapshot`, `text_feed`, `atrap_dispatchers.inc` | boot tracking, the command bridge, `/api/ui` and `/api/text`, snapshots |
-| `src/common/`: `crash_handler_init.cpp`, `guest/`, `guest_watch.cpp`, `platform.cpp`; in `include/`: `bridge_paths.h`, `config.h`, `crash_handler_init.h`, `guest_bridge.h`, `guest_watch.h`, `m68k_registers.h`, `MacBrowser.h`, `memory_access.h`, `mon.h`, `platform.h`, `ppc_boundary_trace.h`, `video_modes.h` | the Platform API and shared host code |
+| `src/common/`: `crash_handler_init.cpp`, `guest/`, `guest_watch.cpp`, `platform.cpp`; in `include/`: `backtrace.h`, `bridge_paths.h`, `config.h`, `crash_handler_init.h`, `guest_bridge.h`, `guest_watch.h`, `m68k_registers.h`, `MacBrowser.h`, `memory_access.h`, `mon.h`, `platform.h`, `ppc_boundary_trace.h`, `video_modes.h` | the Platform API and shared host code |
 | `src/cpu/core/` (except `uae_core.cpp`), `src/cpu/cpu_m68k.*`, `src/cpu/cpu_trace.*`, `src/cpu/emulop_c_wrapper.cpp` | `cpu::Core`, `GuestMemory`, the 68k ROM machine on it |
 | `src/cpu/mame/`: `mame_68k_core.cpp`, `mame_ppc_core.cpp`, `shim/`, `CMakeLists.txt` | MAME cores as `cpu::Core`s, the stand-in for MAME's framework |
 | `client/` (code) | the browser UI |
@@ -34,13 +34,15 @@ falls under below, not the GPL of the whole.
 | `BridgeAgent/`, `MacBrowser/` (sources) | the guest-side apps |
 | `provisioning/`, `tools/`, `tests/`, `docs/`, `cmake/`, `packaging/`, `debian/`, `rpm/`, the `CMakeLists.txt` files | everything else |
 
-### MIT: Executor ([src/executor/COPYING](src/executor/COPYING), [src/executor/LICENSE-CONTRIBUTIONS](src/executor/LICENSE-CONTRIBUTIONS))
+### MIT: Executor ([executor/COPYING](executor/COPYING), [executor/LICENSE-CONTRIBUTIONS](executor/LICENSE-CONTRIBUTIONS))
 
-`src/executor/` is Executor 2000 (© 1986–2004 Abacus Research & Development,
-© 2018– Wolfgang Thaller), imported from
+`executor/core/` and `executor/frontends/headless/` are Executor 2000 (© 1986–2004
+Abacus Research & Development, © 2018– Wolfgang Thaller), imported from
 [autc04/executor](https://github.com/autc04/executor); see
 [docs/executor/README.md](docs/executor/README.md). MacPhoenix's changes to it
-are MIT too, so they can go back upstream.
+are MIT too, so they can go back upstream, and so is the rest of `executor/`,
+MacPhoenix's own (the other front ends, `host/`, `tests/`, the tab in `web/`,
+the server in `server/`; [executor/README.md](executor/README.md)).
 
 ### BSD and other permissive: third-party code
 
@@ -50,8 +52,8 @@ are MIT too, so they can go back upstream.
 | `src/cpu/mame/third_party/softfloat3/` | BSD-3-Clause (Berkeley SoftFloat 3e) |
 | `src/cpu/mame/third_party/asmjit/` | zlib ([LICENSE-asmjit](src/cpu/mame/LICENSE-asmjit)) |
 | `subprojects/libdatachannel/` | MPL-2.0; its `deps/`: libjuice MPL-2.0, libsrtp and usrsctp BSD-3-Clause, plog and nlohmann/json MIT |
-| `src/executor/third_party/googletest/` | BSD-3-Clause |
-| `src/executor/third_party/minicoro/` | Unlicense or MIT-0 (minicoro 0.2.0, Eduardo Bart; the end of `minicoro.h`) |
+| `executor/core/third_party/googletest/` | BSD-3-Clause |
+| `executor/core/third_party/minicoro/` | Unlicense or MIT-0 (minicoro 0.2.0, Eduardo Bart; the end of `minicoro.h`) |
 | `tools/macdecode/dcmp0_ext.py` | MIT (adapted from rsrcfork) |
 | Skia, with its FreeType, libpng and zlib (not in the tree: `tools/skia/fetch.sh` for the native/arm64 prebuilt, `tools/skia/build-wasm.sh` for the wasm one; linked only with `-DEXECUTOR_SKIA=ON`) | BSD-3-Clause (Skia); FreeType under the FTL (BSD-style, credit in the documentation); libpng under the libpng licence (BSD-style); zlib under the zlib licence (BSD-style) |
 

@@ -65,7 +65,7 @@ same way (C ones answer kOTNotSupportedErr, Pascal ones stop).
 Plan (2026-10-24): next session, turn these on one at a time in the policy
 and tackle what each runs into.
 
-These work on a real Mac, but Executor's `src/executor/res/extension-policy.txt`
+These work on a real Mac, but Executor's `executor/core/res/extension-policy.txt`
 turns off what they need. Each is a policy decision before it is a fix:
 
 - **Network Extension** (denied: it aborts on `$A08E`, see STRAGGLERS #8):
@@ -207,7 +207,7 @@ Scripting Additions and Voices folders; the volume's top-level files; no
 desktop database. Both sources are plain HFS (8.6's image too), so hfsutils
 reads and writes them and no HFS+ path is needed.
 
-**7.6.1** (`make_boot_disk.py 7.6.1.img boot-7.6.1.img`): 262 MB → 19.6 MB,
+**7.6.1** (`make_boot_disk.py 7.6.1.img boot-7.6.1.img`): 262 MB → 19.4 MB,
 7.6 MB gzipped.
 
 | Dropped | Why |
@@ -216,6 +216,7 @@ reads and writes them and no HFS+ path is needed.
 | Energy Saver | no power management: it says its extension isn't running |
 | AppleTalk, AppleTalk Switch, File Sharing Monitor, Sharing Setup, Users & Groups | AppleTalk only: Executor's Open Transport has TCP only (item 12), so the panel only alerts and file sharing has nothing to run on |
 | QuickTime™ Settings | QuickTime is not until M2 |
+| Monitors, Monitors & Sound (the AV one); Control Strip: Monitor Resolution, Monitor BitDepth | can't change Executor's screen (the tab's bar and Settings do): the policy's `-NAME` entries, never copied (DisplayModes.md); sound stays in the Sound control panel, the Sound Volume strip and SimpleSound |
 | Apple Extras, Utilities, MacsBug | not System; MacsBug doesn't run on Executor |
 | Aliases to what isn't copied (Apple Menu Items: AppleCD Audio Player, Automated Tasks; Launcher Items: Script Editor) | the Finder could only say the original can't be found |
 
@@ -223,6 +224,9 @@ Kept and in use: PC Exchange (its INIT runs: the policy's `@ 7.6` is read
 now), the policy's control panels and extensions, ObjectSupportLib,
 MacinTalk 2 and 3 with their voices, Scripting Additions, Apple Menu Items
 (Graphing Calculator: PowerPC only), SimpleText and the About documents.
+`tools/web/audit_boot_disks.py LIBRARY` (`executor.web.boot_disks_audit`)
+checks the library's boot disks hold nothing the policy denies, nor an
+alias to it.
 
 **8.6** (`make_boot_disk.py 8.6.img boot-8.6.img --keep
 Applications:SimpleText`): 524 MB → 43.9 MB, 17.3 MB gzipped (the System
@@ -235,6 +239,7 @@ file alone is 10.7 MB).
 | Energy Saver, Energy Settings | as for 7.6.1 |
 | AppleTalk, AppleTalk Switch, Network Browser, File Sharing, File Sharing Strip, Users & Groups | AppleTalk only (Network Browser: `MPPOpen`; File Sharing and Users & Groups: a paramErr trap in the 8.6 grid) |
 | QuickTime™ Settings | not until M2 |
+| Monitors & Sound; Control Strip: Monitor Resolution, Monitor BitDepth | as for 7.6.1; 8.6's sound settings were in Monitors & Sound only: the Sound Volume strip and SimpleSound (alert sounds) are left |
 | System Folder: Help (12.5 MB), ColorSync Profiles, Internet Search Sites, MS Preference Panels | Mac OS Help is Apple Guide and HTML help; ColorSync's extension is off; Sherlock's sites; Office's panels, not the System's |
 | Applications (but SimpleText), Apple Extras, Internet, Utilities, Assistants, read-me files | not System |
 | Aliases to what isn't copied (Apple Menu Items: Apple FM Radio, AppleCD Audio Player, Automated Tasks, Recent Applications' Mac OS Setup Assistant; Launcher Items: Script Editor) | their originals are in Applications or Apple Extras: the Finder could only say the original can't be found |

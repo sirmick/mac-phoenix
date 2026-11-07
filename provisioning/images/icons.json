@@ -1,0 +1,28 @@
+{
+ "title": "Icons",
+ "tags": [
+  "icons",
+  "68k",
+  "ppc"
+ ],
+ "note": "Custom icon collections, to paste onto folders and files with Get Info: The Iconfactory's classic collection (1997-2001 sets), MacUser's Custom Icon Pack IV (Mac models) and Nitrozac's icons from MacAddict #63's CD (The Joy of Tech), each with its Read Mes. For any 7.x-9 profile; the Iconfactory collection's icons are 'icns' resources (as it was repacked on Mac OS X), which Mac OS 8.5 and later show.",
+ "label": "Icons",
+ "size_mb": 64,
+ "place": [
+  {
+   "snapshot": "iconfactory-icons",
+   "take": "IconfactoryIcons",
+   "as": "Iconfactory Classic Icons ƒ"
+  },
+  {
+   "snapshot": "macuser-icon-pack-iv",
+   "take": "MacUser's Custom Icon Pack IV",
+   "as": "MacUser Custom Icon Pack IV ƒ"
+  },
+  {
+   "snapshot": "nitrozac-icons",
+   "take": "Icons!",
+   "as": "Nitrozac Icons (MacAddict 63) ƒ"
+  }
+ ]
+}

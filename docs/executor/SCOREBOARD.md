@@ -13,7 +13,7 @@ copy of 7.6.1 (games at `--depth 8`, as Executor's screen); **e86** Executor on
 copy of the application disk. BridgeAgent launches the application from the
 Finder; 20 s later the grid takes a screenshot and reads the log.
 **w761**, **w86**: Executor in the browser tab (WebAssembly) on the site's
-library disks, `web/tests/tab_site.mjs` (`scoreboard.py tab`, the
+library disks, `executor/tests/web/tab_site.mjs` (`scoreboard.py tab`, the
 `executor.web.site.*` cells): **runs** when the application came to the front,
 drew a window, drew its second menu and was still in front with no error alert
 after that; blank where the site doesn't offer it. The site's cells check
@@ -33,9 +33,9 @@ Visual verdicts and owner overrides: `tools/executor/scoreboard_notes.json`.
 |---|---|---|---|---|
 | 7.6.1 | e761 | 78 | 8 | 23 |
 | 7.6.1 | e761ppc | 21 | 3 | 9 |
-| 7.6.1 | w761 | 20 | 0 | 2 |
+| 7.6.1 | w761 | 28 | 0 | 2 |
 | 8.6 | e86 | 77 | 6 | 29 |
-| 8.6 | w86 | 17 | 0 | 6 |
+| 8.6 | w86 | 21 | 0 | 6 |
 
 Gaps in the references and the method:
 
@@ -109,10 +109,10 @@ Rows with a fault, by owner:
 | games | Chiral 1.0.4 ƒ:Chiral Basics | 68k | runs |  |  | runs |  | e761/games/020.png |  |
 | games | Civilization 1.0.6 ƒ:Civilization™ | 68k | runs |  |  | runs? | (e761: front process unknown) | e761/games/021.png |  |
 | games | Civilization II ƒ:Civ II Map Editor | 68k | partial |  |  | runs | e761: desktop around the map window drawn black instead of grey; window and dialog otherwise match | e761/games/022.png | fix-games |
-| games | Civilization II ƒ:Civilization II | 68k | runs |  |  | runs |  | e761/games/023.png |  |
+| games | Civilization II ƒ:Civilization II | 68k | runs |  | runs | runs |  | e761/games/023.png |  |
 | games | Civilization II ƒ:Civilization II Files:Civilopedia:Civilopedia | fat | fails | fails |  | fails | e761: just the desktop (File menu only); ref shows full-screen black Civilopedia screen | e761/games/024.png | fix-games (ref fails too) |
 | games | Cythera 1.0.4 ƒ:Cythera | fat | fails | fails |  | runs | e761: alert "Sorry - you need to install the QuickTime 3.0 or later"; ref shows main menu | e761/games/025.png | fix-games |
-| games | Digital Messiah ƒ:Digital Messiah 2.0 | 68k | runs |  |  | runs |  | e761/games/026.png |  |
+| games | Digital Messiah ƒ:Digital Messiah 2.0 | 68k | runs |  | runs | runs |  | e761/games/026.png |  |
 | games | Escape Velocity 1.0.5 ƒ:Escape Velocity | fat | runs | runs |  | runs | (e761ppc: PowerPC exception 6 logged, title screen up as on the reference) | e761ppc/games/010.png |  |
 | games | EV Override 1.0.2 ƒ:EV Override | fat | runs | runs |  | runs | (e761ppc: latent: unresolved imports UpperString, HGetVol) | e761ppc/games/011.png |  |
 | games | Exile 2.0.1 ƒ:Exile Editor v1.1.2:Exile.editor v1.1.2 | 68k | runs |  |  | runs |  | e761/games/029.png |  |
@@ -122,7 +122,7 @@ Rows with a fault, by owner:
 | games | Exile III 1.0.3 ƒ:Exile III (fat) v1.0.3 | fat | fails | fails |  | runs | e761: fatal: unimplemented (qPict2.cpp:53) | e761/games/033.png | fix-games |
 | games | Exile III 1.0.3 ƒ:Exile III Editor v1.0.2 | 68k | runs |  |  | runs |  | e761/games/034.png |  |
 | games | Flashback 1.0 ƒ:Flashback | fat | runs | runs |  | runs | (e761ppc: latent: unresolved imports GetWDInfo, MIDISignOut, MIDISignIn (+4)) | e761ppc/games/013.png |  |
-| games | Glider PRO 1.1.2 ƒ:Glider PRO™ | fat | runs | runs |  | runs? | (e761: front process unknown) | e761/games/036.png |  |
+| games | Glider PRO 1.1.2 ƒ:Glider PRO™ | fat | runs | runs | runs | runs? | (e761: front process unknown) | e761/games/036.png |  |
 | games | Glider PRO 1.1.2 ƒ:Utilities:Foundation Mover | fat | runs | runs |  | runs |  | e761/games/037.png |  |
 | games | Glider PRO 1.1.2 ƒ:Utilities:Glider Edit 1.1.1 | 68k | runs |  |  | runs |  | e761/games/038.png |  |
 | games | Glider PRO 1.1.2 ƒ:Utilities:Moving Van | 68k | runs |  |  | runs |  | e761/games/039.png |  |
@@ -130,7 +130,7 @@ Rows with a fault, by owner:
 | games | Maelstrom 1.4.2 ƒ:Maelstrom | 68k | runs |  | runs | runs |  | e761/games/041.png |  |
 | games | Marathon 1.2 ƒ:Marathon v1.2 | fat | runs | runs |  | runs | (e761ppc: unimplemented PowerPC HGetVol) | e761ppc/games/016.png |  |
 | games | Marathon 2 ƒ:Marathon 2 | fat | runs | runs |  | runs | (e761ppc: latent: unresolved imports CrsrDevMoveTo, CrsrDevNextDevice, SGetCString (+14)) | e761ppc/games/017.png |  |
-| games | Marathon Infinity 1.5 ƒ:Marathon ∞ 1.5 | fat | runs | runs |  | runs? | (e761: front process unknown) | e761/games/044.png |  |
+| games | Marathon Infinity 1.5 ƒ:Marathon ∞ 1.5 | fat | runs | runs | runs | runs? | (e761: front process unknown) | e761/games/044.png |  |
 | games | Master of Orion ƒ:Master of Orion | 68k | runs |  | runs | runs |  | e761/games/045.png |  |
 | games | Monkey Island 2 ƒ:LeChuck's Revenge | 68k | fails |  |  | fails | e761: alert "Sorry, the file 'Monkey2.005' could not be found. Please be sure that the data files are in the same folder as the application." on black screen | e761/games/046.png | — (disk: 'Monkey2.005' missing, the ROM machines fail alike) |
 | games | Oids 2.0.1 ƒ:OIDS | ppc | fails |  |  | n/a | e761: alert "OIDS requires a newer version of SoundManager (try version 3.0) in order to run properly." on black screen (PPC-only, no reference) | e761/games/047.png | fix-games |
@@ -139,10 +139,10 @@ Rows with a fault, by owner:
 | games | Populous II ƒ:MacPopulousII:MacPopulousII | 68k | runs |  |  | fails |  | e761/games/050.png |  |
 | games | Populous II ƒ:MacPopulousII:MacPopulousII (Mono) | 68k | runs |  |  | fails |  | e761/games/051.png |  |
 | games | Populous II ƒ:MacPopulousII:MacPopulousII (SC) | 68k | runs |  |  | fails |  | e761/games/052.png |  |
-| games | Prince of Persia 2 ƒ:Prince of Persia 2 | 68k | runs |  |  | runs |  | e761/games/053.png |  |
+| games | Prince of Persia 2 ƒ:Prince of Persia 2 | 68k | runs |  | runs | runs |  | e761/games/053.png |  |
 | games | Prince of Persia ƒ:Prince of Persia | 68k | runs |  | runs | runs |  | e761/games/054.png |  |
 | games | SimAnt ƒ:E-Doc 1.0.20 | fat | runs | partial |  | runs | e761ppc: Standard File's directory popup drawn as a plain box without its arrow, list without icons | e761ppc/games/019.png | fix-games |
-| games | SimAnt ƒ:SimAnt™ Color | 68k | runs |  |  | fails | (e761: front process unknown) | e761/games/056.png |  |
+| games | SimAnt ƒ:SimAnt™ Color | 68k | runs |  | runs | fails | (e761: front process unknown) | e761/games/056.png |  |
 | games | SimCity 2000® Collection ƒ:SimCity 2000® 1.2 | fat | runs | runs |  | runs? | (e761: front process unknown) | e761/games/057.png |  |
 | games | SimCity 2000® Collection ƒ:Urban Renewal Kit | fat | runs | runs |  | runs |  | e761/games/058.png |  |
 | games | SimEarth 2.0 ƒ:SimEarth Black & White | 68k | runs |  |  | runs |  | e761/games/059.png |  |
@@ -150,13 +150,13 @@ Rows with a fault, by owner:
 | games | SimFarm ƒ:SimFarm | 68k | fails |  |  | runs | e761: crashed: blank white screen (host signal 11) | e761/games/061.png | fix-games |
 | games | SimLife 1.0.1 ƒ:SimLife™ Color | 68k | runs |  |  | fails | (e761: front process unknown) | e761/games/062.png |  |
 | games | SimLife 1.0.1 ƒ:SimLife™ Monochrome | 68k | runs |  |  | runs? | (e761: front process unknown) | e761/games/063.png |  |
-| games | SimTower 1.2 ƒ:SimTower | fat | runs | fails |  | runs | e761ppc: crashed: blank white screen (host signal 11) | e761ppc/games/022.png | fix-games |
+| games | SimTower 1.2 ƒ:SimTower | fat | runs | fails | runs | runs | e761ppc: crashed: blank white screen (host signal 11) | e761ppc/games/022.png | fix-games |
 | games | Spectre 1.1 ƒ:Spectre 1.1 | 68k | runs |  |  | runs |  | e761/games/065.png |  |
 | games | Swoop 1.0.2 ƒ:Swoop | 68k | runs |  |  | runs |  | e761/games/066.png |  |
 | games | The Secret of Monkey Island ƒ:Monkey Island | 68k | runs |  | runs | runs |  | e761/games/067.png |  |
 | games | Warcraft II 1.22 ƒ:Editors:Warcraft II Map Editor | fat | runs | fails |  | fails | e761ppc: desktop only, empty menu bar; the reference's "You must have the Warcraft II CD in order to run the map editor" alert never appears (PowerPC exception 7) | e761ppc/games/023.png | fix-games (ref fails too) |
 | games | Warcraft II 1.22 ƒ:Editors:Warcraft II Sound Editor | fat | runs | partial |  | runs | e761ppc: Standard File's directory popup drawn without its arrow, list without icons | e761ppc/games/024.png | fix-games |
-| games | Warcraft II 1.22 ƒ:Warcraft II v.1.22 | 68k | runs |  |  | runs |  | e761/games/070.png |  |
+| games | Warcraft II 1.22 ƒ:Warcraft II v.1.22 | 68k | runs |  | runs | runs |  | e761/games/070.png |  |
 | games | Wolfenstein 3D 1.0.2 ƒ:Wolfenstein 3D™ | fat | runs | runs |  | runs? | (e761: front process unknown) | e761/games/071.png |  |
 | games-classic | Airborne! ƒ:Airborne! | 68k | fails |  |  | runs | e761: Fatal error alert: "init.cpp:147: in 'syn68k_addr_t unhandled_trap(syn68k_addr_t, void*)' Fatal error: unhandled trap 14 at pc 0x3C0AE88 (Format error)" | e761/classic/001.png | fix-games |
 | games-classic | Apache Strike 1.2 ƒ:Apache Strike | 68k | fails |  |  | fails | e761: blank screen (not in front) | e761/classic/002.png | fix-games (ref fails too) |
@@ -196,6 +196,9 @@ Rows with a fault, by owner:
 | creative-system-7 | Adobe Illustrator 6.0 ƒ:Adobe Illustrator® 6.0 | 68k | runs? | runs | runs? | (e86: front process unknown) | e86/creative/001.png |  |
 | creative-system-7 | Macromedia FreeHand 5.5 ƒ:FreeHand 5.5 | 68k | runs | runs | runs |  | e86/creative/005.png |  |
 | creative-system-7 | Deneba Canvas 5.0.2 ƒ:Canvas™ 5 | 68k | runs? | fails | runs? | w86: no menu: stays behind its splash, no Untitled-1 (Executor; the Quadra and the G3 run it) | w86/creative/8.6-Canvas_5.png | fix-prod |
+| creative-macos-8 | Adobe Photoshop 5.5 ƒ:Adobe® Photoshop® 5.5 | ppc | runs? | runs | runs? | (e86: front process unknown) | e86/creative8/003.png |  |
+| creative-macos-8 | Adobe Illustrator 8.0 ƒ:Adobe Illustrator® 8.0 | ppc | runs? | runs | runs? | (e86: front process unknown) | e86/creative8/001.png |  |
+| creative-macos-8 | Adobe PageMaker 6.5 ƒ:Adobe® PageMaker® 6.5 | fat | runs? | runs | runs? | (e86: front process unknown) | e86/creative8/002.png |  |
 | dev-tools-system-7 | MPW:MPW Shell | fat | runs | runs | runs | (e86: unimplemented PowerPC LMSetHpChk) | e86/dev/005.png |  |
 | dev-tools-system-7 | CodeWarrior Pro 4 ƒ:Metrowerks CodeWarrior:CodeWarrior IDE 3.2 | fat | runs | runs | runs | (e86: unimplemented PowerPC MPPOpen) | e86/dev/001.png |  |
 | dev-tools-system-7 | THINK C 6.0 ƒ:THINK C:THINK Project Manager | 68k | fails | runs | runs | e86: TranslationDispatch selector $24: no size in the selector, session stopped (called from $555f6) | e86/dev/006.png | fix-dev |
@@ -212,7 +215,7 @@ Rows with a fault, by owner:
 | games | A-Train ƒ:ATrain Editor 1.0Beta | 68k | fails |  | runs | e86: crashed: blank screen (TranslationDispatch selector $24, session stopped) | e86/games/003.png | fix-86 |
 | games | Afterlife 1.0 ƒ:Afterlife | fat | fails |  | fails | e86: alert: "Afterlife has detected that you are running an out-of-date version of the Sound Manager that is incompatible with Afterlife." (reference fails differently, on the CD-ROM driver) | e86/games/004.png | fix-games (ref fails too) |
 | games | Apeiron 1.0.2 ƒ:Apeiron | 68k | runs |  | fails |  | e86/games/005.png |  |
-| games | Ares 1.2.0 ƒ:Ares | fat | partial |  | fails | e86: alert: "Without QuickTime 2.1 or later, you can't see any of the movies for "Ares."" (Quit/Continue); no QuickTime on Executor | e86/games/006.png | fix-games (ref fails too) |
+| games | Ares 1.2.0 ƒ:Ares | fat | partial | runs | fails | e86: alert: "Without QuickTime 2.1 or later, you can't see any of the movies for "Ares."" (Quit/Continue; Continue plays). w86: past it, intro, main menu, a mission (GetSoundHeaderOffset answered badFormat to every sound: fixed, wash/libfix) | w86/games-ppc/8.6-Ares.png | fix-games (ref fails too) |
 | games | Ares 1.2.0 ƒ:GameRanger Folder:GameRanger | ppc | runs |  | runs | (e86: latent: unresolved imports OTExitPatchPriv, OTLeaveNotifier, OTEnterNotifier (+46)) | e86/games/007.png |  |
 | games | Ares 1.2.0 ƒ:Hera 1.0.0 ƒ:Hera | ppc | fails |  | runs | e86: crashed: blank screen (host signal 11 at $c105eee0) | e86/games/008.png | fix-games |
 | games | Avara 1.0.2 ƒ:Avara | 68k | runs |  | runs |  | e86/games/009.png |  |

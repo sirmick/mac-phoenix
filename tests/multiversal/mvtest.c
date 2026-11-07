@@ -1,6 +1,6 @@
 /*
  * mvtest.c: a Retro68 application built against the Multiversal Interfaces
- * generated from src/executor/multiversal/defs (tests/test_multiversal_retro68.sh).
+ * generated from executor/core/multiversal/defs (tests/test_multiversal_retro68.sh).
  * It is compiled and linked, not run: it checks that the C headers and the
  * glue library made from Executor's definitions work for a Mac program,
  * through the Universal Interfaces header names and the calls MacPhoenix

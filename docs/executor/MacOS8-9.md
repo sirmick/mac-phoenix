@@ -4,7 +4,9 @@ Executor runs Apple's 7.5.5 and 7.6.1 System Folders with its own Toolbox
 (`--executor-system`). Mac OS 8.6 and 9.0.4 are PowerPC-only, but nothing
 in the design rules them out: Executor is the Toolbox (no Mac OS ROM, no
 nanokernel), and PowerPC code runs on mame-ppc (`--executor-ppc`). This
-is where they stand (2026-10-28) and the work, in order.
+is where they stood (2026-10-28) and the work, in order; 8.6 runs
+since (SCOREBOARD.md), and what is open for 9.0.4 is in "9.0.4: what is
+open" near the end.
 
 ```bash
 cp ~/storage/images/8.6.img ~/storage/images/os86-scratch.img    # a scratch copy
@@ -202,7 +204,7 @@ components (PEF code, main a routine descriptor), Script Editor opens
 (wildcard Apple event dispatch, null targets). Starting it then says
 "Could not initialize the application because of a scripting-system
 (OSA) error": the next thing to find, with `AppleScript @ 8.0` added to
-src/executor/res/extension-policy.txt (8.6's file has no ™).
+executor/core/res/extension-policy.txt (8.6's file has no ™).
 
 Called and still unanswered (8.6, 2026-10-30): `GetQDGlobals`,
 `QDGet`/`SetPatternOrigin`, `LMGetBrianBits`, `LMGetCurLayer`,
@@ -274,6 +276,14 @@ Third run (`~/storage/executor-grid/8.6-r3/`): no host crashes.
   controls). WindowsLib's desktop calls and AppearanceLib's theme calls
   are Executor's now (signatures from the panel's call sites); Appearance
   opens, its tabs not drawn right yet (the tab control, panes overlapping).
+  2026-11-04 (difftest `desk`): the monitor desktop list calls answer as
+  the G3 does (Executor had stopped dividing by zero in MapPt on the empty
+  screen rectangle a missing record left), the Desktop tab's preview and
+  Set Desktop work; one tab's pane shows at a time (appended items go into
+  the pane holding them and hide with it, DialogSelect takes the topmost
+  visible item); the Themes tab lists the Appearance folder's themes (now
+  extracted with the System Folder). Open items' icons draw 8.x's way
+  (lavender with dots), not 7.5's grey.
 * Energy Saver says its extension isn't running (as on a Mac without it);
   Disk Copy shows its menus (`SetMenuBar`'s copy reused the old master
   pointer, so the bar looked drawn); Mac OS Setup Assistant and Sherlock
@@ -809,6 +819,47 @@ Next, in order:
    hardware plug-ins: not Apple's).
 9. **Extensions** (the 7.6.1 round again): Speech (`AliasDispatch $2F`),
    then what each of 8/9's extensions needs.
+
+## 9.0.4: what is open (2026-11-07)
+
+Measured on the 9.0.4 grids (G3 reference against Executor; the os904
+round's notes). Not started; kept here so they aren't lost.
+
+**Calls every 9.0.4 session makes at startup that Executor lacks.** Most
+are private: each needs its signature read from Apple's glue (the G3 ROM's
+PrivateInterfaceLib/InterfaceLib exports, or the System's dispatcher
+tables) and its answer measured on the G3 before it is written. They are
+logged as `[unimplemented]` now.
+
+| Call | Where | Note |
+|---|---|---|
+| `SetIconDevice` (and `GetIconDevice`) | PowerPC import (Icon Services, private) | |
+| `ResolveIDConflicts` | PowerPC import | |
+| `PPCOpenSync`, `PPCInformAsync`, `PPCCloseSync` | PPC Toolbox | `PPC.yaml` has its types only, no parameter blocks or functions; the 68k `_PPC` answers only `PPCInit` (IM: Interapplication Communication ch. 11) |
+| `GetSystemFont`, `GetParent`, `DeleteAppleMenuItem` | PrivateInterfaceLib | `DeleteAppleMenuItem` pairs with the `AddAppleMenuItem` Executor has (OSDispatch $31); its selector and arguments are unknown |
+| OSDispatch $75, HighLevelFSDispatch $15, FSDispatch $50 | 68k dispatchers, through Mixed Mode | answered `paramErr` |
+| `FragGetConnectionInfo` (7 items), `FragAddNotifyProc` (3) | CFM, private | |
+| `BrianBits` | Sherlock 2 | |
+| `DrawMBARString` | private | harmless |
+
+**Smaller open items** (os904 round): General Controls draws a stray icon
+at about (285,190) (it draws in `initDev` while its window is still at
+(100,100), then moves; showing the window after `initDev` loses its grey);
+AppleScript applets (ColorSync Extras) get -1717 where the G3 runs them
+(Finder event handlers); Software Update's stray lines and group box,
+DialogDispatch $FD; the Text panel clipped at the bottom.
+
+**The big items: the owner's call** (effort guesses, one person):
+
+| Item | What | Guess |
+|---|---|---|
+| Appearance 1.1 | 9.x's theme calls, theme fonts, brushes and sounds beyond 8.6's | 3-5 days |
+| HFS+ end to end | reader and writer exist; the System volume path, FSRef calls, catalog edge cases | 3-5 days |
+| Text Encoding Converter | Apple's file runs now; Executor's own C++ only if the policy wants it gone | 1-2 weeks |
+| Multiprocessing Services | MP tasks, queues, semaphores, scheduled cooperatively | 1 week |
+| Keychain Manager | the store and its unlock interface | 1 week or more |
+| Sherlock 2 | Find by Content index (`BrianBits`), plug-ins, network search | 2 weeks or more; low value |
+| CarbonLib | Script Editor, StuffIt 6.0.1 and other Carbon applications | weeks to months |
 
 ## Tools
 

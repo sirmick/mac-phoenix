@@ -12,7 +12,7 @@ file's open bits, and writing to a fork 9.0.4's Finder holds open (opWrErr).
 
     test_hfsplus_volume.py [--dump BUILD/hfsplus_dump]
 
-Images: the fixtures (src/executor/tests/fixtures/hfsplus), the big ones
+Images: the fixtures (executor/tests/fixtures/hfsplus), the big ones
 made here as generated.json says (sparse, 1 to 20 GB: mkfs.hfsplus in
 docker, then a script of hfsplus_dump's; their dates and volume ID are
 not compared) and, where present,
@@ -32,7 +32,7 @@ import sys
 import tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-FIXTURES = os.path.join(ROOT, "src", "executor", "tests", "fixtures", "hfsplus")
+FIXTURES = os.path.join(ROOT, "executor", "tests", "fixtures", "hfsplus")
 ORACLE = os.path.join(ROOT, "tests", "guest", "hfsplus", "oracle-9.0.4")
 RECON = os.path.expanduser("~/storage/hfsplus-recon/images")
 
@@ -73,7 +73,7 @@ def make_image(dump, work, stem, spec):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--dump", default=os.path.join(ROOT, "build", "src", "executor", "romlib", "hfsplus_dump"))
+    ap.add_argument("--dump", default=os.path.join(ROOT, "build", "executor", "core", "romlib", "hfsplus_dump"))
     args = ap.parse_args()
     if not os.path.exists(os.path.join(os.path.expanduser("~/storage/images"), "tests-7.5.5.img")):
         print("SKIP: no tests-7.5.5.img")

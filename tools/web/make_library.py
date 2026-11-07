@@ -5,12 +5,12 @@
 
 Makes every disk in DISKS below from the provisioned images (provisioning/
 build.py's, in ~/storage/images) into OUT_DIR (default ~/storage/web-library),
-each with its record, NAME.json: the title, tags and note tools/standalone's
+each with its record, NAME.json: the title, tags and note executor/server's
 library shows, "items", what is on the disk (disk_contents.py: name, kind,
 version, publisher, year, architecture, size, applications, from the disk
 itself; a description and notes from provisioning/library_items.json), and
 "launch", the applications on it, which the site's cells
-(web/tests/tab_site.mjs) open on each of their systems. A disk is made again
+(executor/tests/web/tab_site.mjs) open on each of their systems. A disk is made again
 only when an image it comes from is newer, or with --force.
 
 The boot disks are make_boot_disk.py's cuts of 7.6.1.img and 8.6.img; the
@@ -75,13 +75,13 @@ DISKS = [
      "tags": ["productivity", "68k", "ppc"],
      "note": "AppleWorks 5.0.3 (word processing, drawing, painting, spreadsheet, database), "
              "ClarisWorks 4.0v4, ClarisDraw 1.0v4, Corel WordPerfect 3.5e, Microsoft Excel 4.0, "
-             "FileMaker Pro 4.0, Aldus Persuasion 3.0: "
+             "FileMaker Pro 4.0, Aldus Persuasion 3.0, Microsoft Works 4.0b: "
              "for Mac OS 7.6.1 and 8.6. Microsoft Office 98 (Word, Excel, PowerPoint; PowerPC: "
              "Mac OS 8.6 with PowerPC ticked) asks for its CD key at first launch.",
      "take": [("productivity-system-7.img", ["AppleWorks 5.0.3 ƒ", "ClarisWorks 4.0v4 ƒ", "ClarisDraw 1.0v4 ƒ",
                                               "Corel WordPerfect 3.5e ƒ", "Microsoft Excel 4.0 ƒ",
                                               "Microsoft Office 98 ƒ", "FileMaker Pro 4.0 ƒ",
-                                              "Aldus Persuasion 3.0 ƒ"])],
+                                              "Aldus Persuasion 3.0 ƒ", "Microsoft Works 4.0b ƒ"])],
      "launch": [
          {"app": "AppleWorks 5.0.3 ƒ:AppleWorks", "name": "AppleWorks"},
          {"app": "ClarisWorks 4.0v4 ƒ:ClarisWorks", "name": "ClarisWorks"},
@@ -91,9 +91,10 @@ DISKS = [
          {"app": "Microsoft Office 98 ƒ:Microsoft Word", "name": "Microsoft Word", "systems": ["8.6"]},
          {"app": "FileMaker Pro 4.0 ƒ:FileMaker Pro", "name": "FileMaker Pro"},
          {"app": "Aldus Persuasion 3.0 ƒ:Aldus Persuasion 3.0", "name": "Aldus Persuasion 3.0"},
+         {"app": "Microsoft Works 4.0b ƒ:Microsoft Works 4.0", "name": "Microsoft Works 4.0"},
      ]},
     {"name": "creative.img", "label": "Creative",
-     "title": "Creative",
+     "title": "Creative (68k)",
      "tags": ["creative", "68k"],
      "note": "Kid Pix 2.5 (painting, stamps, sounds), Adobe Photoshop 4.0, Adobe Illustrator 6.0, "
              "Macromedia FreeHand 5.5, Deneba Canvas 5.0.2. For Mac OS 7.6.1 and 8.6.",
@@ -106,8 +107,8 @@ DISKS = [
          {"app": "Macromedia FreeHand 5.5 ƒ:FreeHand 5.5", "name": "FreeHand 5.5"},
          {"app": "Deneba Canvas 5.0.2 ƒ:Canvas™ 5", "name": "Canvas™ 5"},
      ]},
-    {"name": "creative-8.img", "label": "Creative",
-     "title": "Creative (Mac OS 8)",
+    {"name": "creative-8.img", "label": "Creative 8",
+     "title": "Creative 8 (PowerPC, Mac OS 8.6)",
      "tags": ["creative", "ppc"],
      "note": "Adobe Illustrator 8.0, Adobe Photoshop 5.5 (with ImageReady 2.0), Adobe PageMaker 6.5 "
              "(with Acrobat 3.0): PowerPC, for Mac OS 8.6.",
@@ -152,8 +153,9 @@ DISKS = [
      "title": "Games (68k)",
      "tags": ["games", "68k"],
      "note": "Games that run on Executor's 68k side: A-Train, Apeiron, Avara, Bolo, Civilization, "
-             "Exile I and II, Lemmings, Maelstrom, Master of Orion, Pathways into Darkness, Populous II, "
-             "Prince of Persia, SimEarth, SimLife, Spectre, Swoop, The Secret of Monkey Island. "
+             "Civilization II, Digital Messiah, Exile I and II, Glider PRO, Lemmings, Maelstrom, Marathon Infinity, "
+             "Master of Orion, Pathways into Darkness, Populous II, Prince of Persia 1 and 2, SimAnt, SimEarth, "
+             "SimLife, SimTower, Spectre, Swoop, The Secret of Monkey Island, Warcraft II. "
              "Mac OS 7.6.1 (8.6 too).",
      "systems": ["7.6.1"],
      "take": [("games.img", ["A-Train ƒ", "Apeiron 1.0.2 ƒ", "Avara 1.0.2 ƒ", "Bolo 0.99.7 ƒ",
@@ -161,7 +163,9 @@ DISKS = [
                              "Lemmings 1.5.2 ƒ", "Maelstrom 1.4.2 ƒ", "Master of Orion ƒ",
                              "Pathways into Darkness 1.1 ƒ", "Populous II ƒ", "Prince of Persia ƒ",
                              "SimEarth 2.0 ƒ", "SimLife 1.0.1 ƒ", "Spectre 1.1 ƒ", "Swoop 1.0.2 ƒ",
-                             "The Secret of Monkey Island ƒ"])],
+                             "The Secret of Monkey Island ƒ", "Civilization II ƒ", "Digital Messiah ƒ",
+                             "Glider PRO 1.1.2 ƒ", "Marathon Infinity 1.5 ƒ", "Prince of Persia 2 ƒ",
+                             "SimAnt ƒ", "SimTower 1.2 ƒ", "Warcraft II 1.22 ƒ"])],
      "launch": [
          {"app": "Lemmings 1.5.2 ƒ:Lemmings", "name": "Lemmings"},
          {"app": "Maelstrom 1.4.2 ƒ:Maelstrom", "name": "Maelstrom"},
@@ -169,30 +173,49 @@ DISKS = [
          {"app": "Prince of Persia ƒ:Prince of Persia", "name": "Prince of Persia"},
          {"app": "The Secret of Monkey Island ƒ:Monkey Island", "name": "Monkey Island"},
          {"app": "Master of Orion ƒ:Master of Orion", "name": "Master of Orion"},
+         {"app": "Civilization II ƒ:Civilization II", "name": "Civilization II"},
+         {"app": "Digital Messiah ƒ:Digital Messiah 2.0", "name": "Digital Messiah 2.0"},
+         {"app": "Glider PRO 1.1.2 ƒ:Glider PRO™", "name": "Glider PRO™"},
+         {"app": "Marathon Infinity 1.5 ƒ:Marathon ∞ 1.5", "name": "Marathon ∞ 1.5"},
+         {"app": "Prince of Persia 2 ƒ:Prince of Persia 2", "name": "Prince of Persia 2"},
+         {"app": "SimAnt ƒ:SimAnt™ Color", "name": "SimAnt™ Color"},
+         {"app": "SimTower 1.2 ƒ:SimTower", "name": "SimTower"},
+         {"app": "Warcraft II 1.22 ƒ:Warcraft II v.1.22", "name": "Warcraft II v.1.22"},
      ]},
     {"name": "games-ppc.img", "label": "Games PPC",
      "title": "Games (PowerPC)",
      "tags": ["games", "ppc"],
      "note": "Fat and PowerPC games, on Mac OS 8.6 with PowerPC ticked: Marathon, Marathon 2, "
-             "Escape Velocity, EV Override, EV Nova, Bubble Trouble, Barrack, Chiral, Flashback, "
+             "Escape Velocity, EV Override, EV Nova, Ares, Bubble Trouble, Barrack, Chiral, Flashback, "
              "SimCity 2000, Wolfenstein 3D, Ferazel's Wand, Slithereens, Mars Rising; "
              "GameBox Classic, a library to launch them from.",
      "systems": ["8.6"],
      "take": [("games.img", ["Marathon 1.2 ƒ", "Marathon 2 ƒ", "Escape Velocity 1.0.5 ƒ",
                              "EV Override 1.0.2 ƒ", "Bubble Trouble 1.0.1 ƒ", "Barrack 1.0.4 ƒ",
                              "Chiral 1.0.4 ƒ", "Flashback 1.0 ƒ", "SimCity 2000® Collection ƒ",
-                             "Wolfenstein 3D 1.0.2 ƒ"]),
+                             "Wolfenstein 3D 1.0.2 ƒ", "Ares 1.2.0 ƒ"]),
               ("games-ppc.img", ["EV Nova 1.0.10 ƒ", "Ferazel's Wand 1.0.3 ƒ", "Slithereens 1.0.1 ƒ",
                                  "Mars Rising 1.0.2 ƒ", "GameBox Classic 1.2.0 ƒ"])],
      "launch": [
          {"app": "Marathon 2 ƒ:Marathon 2", "name": "Marathon 2"},
          {"app": "Escape Velocity 1.0.5 ƒ:Escape Velocity", "name": "Escape Velocity"},
          {"app": "Bubble Trouble 1.0.1 ƒ:Bubble Trouble", "name": "Bubble Trouble"},
+         {"app": "Ares 1.2.0 ƒ:Ares", "name": "Ares"},
          {"app": "EV Nova 1.0.10 ƒ:EV Nova", "name": "EV Nova", "source": "games-ppc.img"},
          {"app": "Ferazel's Wand 1.0.3 ƒ:Ferazel's Wand", "name": "Ferazel's Wand", "source": "games-ppc.img"},
          {"app": "Slithereens 1.0.1 ƒ:Slithereens", "name": "Slithereens", "source": "games-ppc.img"},
          {"app": "GameBox Classic 1.2.0 ƒ:GameBox", "name": "GameBox", "source": "games-ppc.img"},
      ]},
+    {"name": "icons.img", "label": "Icons",
+     "title": "Icons",
+     "tags": ["icons", "68k", "ppc"],
+     "note": "Custom icons to paste onto folders and files (Get Info, then Paste): The Iconfactory's "
+             "classic collection, MacUser's Custom Icon Pack IV (Mac models) and Nitrozac's icons from "
+             "MacAddict #63's CD, with their Read Mes. Mac OS 7.6.1 and 8.6 (the Iconfactory's are "
+             "Mac OS 8.5's 'icns' icons: they show on 8.6, not on 7.6.1).",
+     "take": [("icons.img", ["Iconfactory Classic Icons ƒ", "MacUser Custom Icon Pack IV ƒ",
+                             "Nitrozac Icons (MacAddict 63) ƒ"])],
+     "launch": []},
     {"name": "internet.img", "label": "Internet",
      "title": "Internet",
      "tags": ["internet", "ppc"],
@@ -285,6 +308,9 @@ def make(d, images, out, baked):
         if snaps:
             cmd += ["--system-from", *map(str, snaps)]
         cmd += ["--additions-record", str(additions_path(out, d))]
+        boots = [out / SYSTEMS[s] for s in d.get("systems", list(SYSTEMS)) if (out / SYSTEMS[s]).exists()]
+        if boots:                       # (the boot disks are made first: aliases into them checked)
+            cmd += ["--with", *map(str, boots)]
     subprocess.run(cmd, check=True)
     if "boot" not in d:                 # make_boot_disk.py tidies its own
         done = tidy.tidy(str(tmp))

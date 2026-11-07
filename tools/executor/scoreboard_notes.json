@@ -685,5 +685,9 @@
  "w86|Creative:Deneba Canvas 5.0.2 ƒ:Canvas™ 5": {
   "status": "fails",
   "blocker": "no menu: stays behind its splash, no Untitled-1 (Executor; the Quadra and the G3 run it)"
+ },
+ "e761|Utilities:TattleTech 2.84 ƒ:TattleTech 2.84": {
+  "status": "fails",
+  "blocker": "app bug, left as is: UseResFile on a local only its Name Registry path sets (stack junk on the Quadra, zero on Executor); runs on 8.6 and with --executor-ppc, as the G3 (docs/Provisioning.md, the utilities disk)"
  }
 }

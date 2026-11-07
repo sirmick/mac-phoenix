@@ -491,7 +491,10 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             printf("                             consistency checks at every Memory Manager call, slow), allocs\n");
             printf("                             (allocations >= 4K and the code that asked), pcsample (where\n");
             printf("                             PowerPC code spends its time, every 5 s), hidpi (the text\n");
-            printf("                             --executor-scale redraws, and what became of it), fslog,\n");
+            printf("                             --executor-scale redraws, and what became of it), ppcinterp\n");
+            printf("                             (mame-ppc's UML interpreter, not its native back-end), mmu68k\n");
+            printf("                             (mame-68k with its PMMU, no tables set up), mmuppc (mame-ppc\n");
+            printf("                             translating every access, identity), fslog,\n");
             printf("                             trace, trapfailure, unimplemented, unexpected, errno, sound, all\n");
             printf("  --watch ADDR[:LEN]         Report every write to guest memory ADDR (hex; LEN 1-16, default 4):\n");
             printf("                             old/new value, 68k PC and registers, last traps, host stack (Executor)\n");
@@ -504,7 +507,8 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             printf("  --executor-logtraps-filter LIST  ... only calls whose names match these comma-separated\n");
             printf("                             wildcards (\"Gestalt,HideWindow,PB*\"): less slowdown;\n");
             printf("                             -NAME leaves calls out (\"-WaitNextEvent,-Get*\")\n");
-            printf("  --executor-writable-images Executor mounts disk images read-write (default: read-only)\n");
+            printf("  --executor-writable-images Executor mounts disk images read-write (default: read-only;\n");
+            printf("                             not the --executor-system image unless --disk names it too)\n");
             printf("  --[no-]executor-ot         Executor answers Open Transport (default: on)\n");
             printf("  --executor-ppc             Executor runs fat applications' PowerPC code (PowerPC-only\n");
             printf("                             applications always run it; default: off)\n");
@@ -552,6 +556,8 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
             printf("  --debug-perf\n");
             printf("  --debug-network\n");
             printf("  --debug-mame-ppc           mame-ppc: log host ops, exceptions, a per-second CPU sample\n");
+            printf("  --cpu-mmu                  The MMU's cost (docs/executor/Speed.md): mame-68k with its PMMU\n");
+            printf("                             (the ROM's tables), mame-ppc translating every access (identity)\n");
             printf("  --trace-atraps             Record every (A-trap, caller PC); snapshots write atraps.tsv\n");
             printf("  --no-text-feed             Don't patch _StdText (the strings on screen for /api/text)\n");
             printf("  --deterministic            Virtual clock (instruction-counted ticks, fixed date); implies --no-idlewait\n");
@@ -702,6 +708,10 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
         }
         if (strcmp(argv[i], "--executor-writable-images") == 0) {
             config.executor_writable_images = true; argv[i] = nullptr; continue;
+        }
+        if (strcmp(argv[i], "--executor-locked-disk") == 0 && i+1 < argc) {
+            config.executor_locked_disks.push_back(argv[i+1]);
+            argv[i] = nullptr; argv[++i] = nullptr; continue;
         }
         // --core <name> (--executor-cpu: older spelling)
         if ((strcmp(argv[i], "--core") == 0 || strcmp(argv[i], "--executor-cpu") == 0) && i+1 < argc) {
@@ -867,6 +877,9 @@ static const char* apply_cli_overrides(EmulatorConfig& config, int& argc, char**
         }
         if (strcmp(argv[i], "--debug-mame-ppc") == 0) {
             config.debug_mame_ppc = true; argv[i] = nullptr; continue;
+        }
+        if (strcmp(argv[i], "--cpu-mmu") == 0) {
+            config.cpu_mmu = true; argv[i] = nullptr; continue;
         }
         if (strcmp(argv[i], "--m68k-host") == 0 && i+1 < argc) {
             config.m68k_host = atoi(argv[i+1]);

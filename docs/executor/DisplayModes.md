@@ -1,0 +1,172 @@
+# Display modes: the screen's resolution changed live
+
+Executor's screen changes size while the Mac runs, as a Mac's Display
+Manager changes it: from the bar's size control or Settings (the tab), the
+browser window (Auto, `display.fit_window`), `/api/resolution` (native), or inside the
+Mac with any program's `DMSetDisplayMode` (the Monitors control panels are
+left out: below). One path does it: `ROMlib_dm_set_screen_size`
+(`romlib/quickdraw/displays.cpp`).
+
+## What a Mac does (measured)
+
+`tests/guest/dmprobe` (Retro68, 68k; `ref/` has its output) on the Quadra's
+7.6.1 (Display Manager 2.2.2) and the G3's 8.6 (2.4.4), switching from
+1024x768 (8.6: 3840x2160) to 640x480 and back, plus SimpleText's and a
+Finder window dragged about and `/api/resolution` (BridgeAgent's
+`DMSetDisplayMode`):
+
+- The mode list has every resolution the driver offers; each resolution's
+  depths are depth modes from 0x80.
+- `DMSetDisplayMode` changes the GDevice (gdRect, the PixMap's bounds,
+  rowBytes, base address), the application's `screenBits`, `GrayRgn` and
+  the windows before it returns. Between `DMBeginConfigureDisplays` and
+  `DMEndConfigureDisplays` the GDevice changes at once, `screenBits` and
+  `GrayRgn` at the end.
+- Extended notify procs get `kDMNotifyInstalled` (1) when registered,
+  `kDMNotifyRemoved` (3) when removed, and for a change `kDMNotifyPrep`
+  (4, no data), `kDMNotifyDependents` (6) and `kDMNotifyEvent` (2, the
+  event); then classic notify procs get the same event: `'aevt'/'cnfg'`
+  with a `'dspl'` record holding one record per display, keyed by its
+  display ID, each with `'dold'` and `'dnew'` (display ID, flags, mode,
+  device flags and rect, pixmap rect, resolution, pixel type and size,
+  component count and size, colour table seed).
+- No Apple Event is sent, to Display Manager aware applications or others.
+- Windows of every application, Display Manager aware or not, whose title
+  bar the new screen doesn't show are moved: up until the title bar's
+  bottom is on the screen's bottom edge, and left by as much as the part of
+  the window on the old screen ran past the new right edge. A window whose
+  title bar is still on screen (partly, horizontally) stays.
+- The Finder (it registers notify procs) lays its icons out again and keeps
+  its windows on screen; the Control Strip moves itself to the new edge.
+
+## Executor
+
+- `VideoDriver::requestSize(w, h)` (any thread) is the host's request; the
+  Display Manager takes it at the front process's next event call
+  (`ROMlib_dm_poll` in `doevent`). The wasm front end's `resize` request
+  (`web_main.cpp`) and the native child's `resize W H` IPC command
+  (`/api/resolution` on the executor backend) call it.
+- `gd_set_screen_size` (`qGDevice.cpp`): the framebuffer (one block kept as
+  large as the largest screen allowed: the low allocator reuses only blocks
+  of the same size, and the wasm build has 64 MB for it and the coroutine
+  stacks; 3840x2400 native, 1920x1200 wasm), the main GDevice, the screen's
+  ports (a GWorld's port keeps its own bounds), ScrnBase, ScreenRow.
+- Then `GrayRgn`, every layer's windows moved (`ROMlib_dm_window_offset`,
+  `ROMlib_layers_screen_changed` in `process.cpp`; a window with no title
+  bar, the Control Strip's, comes on screen whole), the screen repainted.
+- Each process catches up at its own event call: its `screenBits`, its menu
+  bar's layout (and drawing, in front), its notify procs, in its own world.
+  The process that made the change does so before `DMSetDisplayMode`
+  returns. Procs registered for `kSystemProcess` (extensions) run in the
+  process that made the change.
+- The display scale (the tab's HiDPI box) is taken at the same event call
+  (`VideoDriver::requestScale`): no mode change for programs, the screen
+  painted again at the new scale (HiDPI.md, "The scale changed live").
+- Notify procs called at an event call from PowerPC code (8.6's Finder):
+  PowerPC procs through `callPPC`, and 68k ones with A7 below the PowerPC
+  frames, which sit just below the 68k stack there.
+
+The page (`executor/web/main.js` `fitCanvas`) shows a Mac pixel as a whole
+number of device pixels that fits the window, but never less than a CSS
+pixel when that fits, and as large as the room when the screen is bigger
+than it; the pointer is at least 16 CSS pixels (`client/cursor.js`). (A
+1280x1024 screen at dpr 2 in a 1440x900 window was drawn a device pixel
+each, a quarter of the window, the pointer 8 CSS pixels: the owner saw
+"1280x1024 doesn't take effect, the pointer is small".)
+
+Firefox (the owner's, Windows, dpr 1.25 and 1.5; `executor.web.input_86_firefox`)
+fits, maps and draws the pointer the same: its pointer events have device
+pixels (its mouse events whole CSS pixels), the `image-set()` cursor is
+taken. Its dpr 1.5 rounds to display scale 2: 1280x1024 renders 2560x2048,
+and 8.6's Finder starting makes no event call for 8 s here, 15 on the
+owner's machine. The page's watch counts that as busy while Executor
+reports its load (`executor.web.watch`); it once logged "Executor not
+answering". (A later report of 640x480 at scale 2 came from a server
+still running a build before 7c77d4b5, the screen size kept through a
+depth change: its restart had failed, the port still held.)
+
+Diagnostics (the session log, `executor/server` keeps it per session):
+the page writes a `[display]` line at start and whenever the display
+changes (window resize, dpr: zoom or another monitor, fullscreen, the
+Mac's size, the fit): the browser and OS parsed from the UA (and the UA),
+`devicePixelRatio`, `visualViewport.scale`, the window's inner and outer
+size, `screen`, the canvas in CSS and device pixels, the fit (device
+pixels a Mac pixel), the Mac's size asked and reported, the HiDPI scale,
+the pointer image's device pixels, fit-to-window, fullscreen. `[build]`:
+the server's version and commit (`/api/server` `revision`, from go's
+build info) and the module's build id (git describe at build time,
+`build_id.cmake`), also the status line's tooltip: a server left on an
+old build shows at once. Executor logs every mode change, `[display] mode
+WxHxBPP -> WxHxBPP (cause)`, the cause `boot`, `SetDepth`, `DM`
+(DMSetDisplayMode), `driver` (the video driver's SwitchMode) or `request`
+(the page's resize). The first three clicks after a change: `[display]
+click`, where on the page, the Mac point it maps to and the Mac's mouse
+after it. `?diag` or Ctrl+Alt+D shows the same over the screen, and the
+keys (Ctrl+Alt+S: a screenshot, also with the mouse button down;
+Settings.md).
+
+Tests: `executor_tests --gtest_filter='DisplayMode.*'`
+(`executor/tests/displaymode.cpp`); the tab cells `executor.web.dynres`,
+`executor.web.input_86_laptop`, `executor.web.input_86_firefox`, `executor.web.watch`,
+`executor.web.display_diag`, `executor.web.resbar` (the bar's control),
+`executor.web.boot_disks_audit`, `executor.web.monitors_policy`.
+
+## Open
+
+- After growing back, 7.6.1's Finder leaves its icons where they were on
+  the smaller screen; on the Quadra they went back to the right edge.
+  What is known: the Finder's desktop window has an empty structure
+  region and a content region that follows the desktop; its portRect keeps
+  the size it had (1024x768 at the shrink's notification, 640x480 at the
+  grow's). After the change the Finder calls the private
+  `DMKeepWindowOnScreen` (a no-op here) on it. Setting the portRect to the
+  content's bounds there did not change the layout, so the Finder takes it
+  from elsewhere: next would be the Finder's notify proc on the Quadra
+  against Executor (the desktop icon region at ExpandMem+$1F4, which the
+  Finder edits before `DMDesktopIconRgnChanged`, is a candidate).
+
+## Left out: the Monitors control panels
+
+Executor's screen size is the tab's (the bar's size control and Settings,
+Settings.md) or `/api/resolution` natively. The panels that can't change it
+are out (2026-11-04, the owner's call): Monitors (7.x), Monitors & Sound
+(8.x, and the AV one on 7.6.1's image) and the Control Strip modules Monitor
+Resolution and Monitor BitDepth (8.6's both offer "Open Monitors & Sound").
+They are `-NAME` entries in `res/extension-policy.txt`: at every start
+Executor moves them into their folder's "(Disabled)" one (Control Panels
+(Disabled), Control Strip (Disabled)), whatever they run at
+startup, and leaves them there; `make_boot_disk.py` doesn't copy them, so
+the library's boot disks lack them (`audit_boot_disks.py`,
+`executor.web.boot_disks_audit`). A saved System Folder (the tab's Executor
+volume kept on the server, or a native `executor-systems/<image>`) that
+has them from an older cut gets them moved at its next start, a change
+saved with the volume; nothing else in it changes. They can still be
+opened from the "(Disabled)" folder, as before, to the same effect. Taking
+a name off the policy doesn't move a file back (a plain control panel isn't
+listed): drag it back.
+
+Sound without Monitors & Sound: on 7.6.1 the Sound control panel (its four
+pages work: APPLE-DISKS.md item 6; volume and mute apply to what Executor
+sends out), the Control Strip's Sound Volume and SimpleSound (alert
+sounds); on 8.6, whose sound settings were in Monitors & Sound only, the
+Control Strip's Sound Volume (it sets the volume through the sound output
+component, which Executor answers; not tried in this change) and SimpleSound in the Apple menu (lists and plays the alert
+sounds and sets the alert, `SetAlertBeepResID`); SoundSource Strip is
+there too (an input source: Executor has none). The tab's own volume
+(Settings > Sound) is the browser's, over all of it.
+
+What each panel would have needed (not chased: disproportionate):
+
+- **Monitors 7.5.6** (7.6.1) lists only the current resolution: it builds
+  its list from the video card's sResources through the Slot Manager, not
+  from the Display Manager. It would need a pseudo slot for the screen with
+  a declaration ROM (a board sResource and one video sResource per
+  resolution, IDs matching the mode list's) answered by Executor's Slot
+  Manager calls. The driver's `cscSwitchMode` already goes through the
+  Display Manager, so a choice there would work once listed.
+- **Monitors & Sound** (8.6) shows no Monitor panel without the Display
+  Enabler extension, which Executor's extension policy leaves off. Either
+  let the Enabler load over Executor's Display Manager (its patches would
+  replace ours; unknown cost) or answer what the panel asks of the Enabler
+  in its place (a trap trace of the panel with the Enabler on, on the G3,
+  would give the list).

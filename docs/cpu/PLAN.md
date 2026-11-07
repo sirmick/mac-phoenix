@@ -1,10 +1,11 @@
 # MAME cores in MacPhoenix
 
-Status 2026-10-21: C1a–c, C1e, C2a–c, C2d (arm64 Linux) and C3a done;
+Status 2026-11-07: C1a–c, C1e, C2a–c, C2d (arm64 Linux) and C3a done;
 `mame-68k` and `mame-ppc` are the `--core` choices beside `uae` and `kpx`,
-and Executor's PowerPC runs on `mame-ppc` (C2e's PowerCore part). Open:
-C1d (parked), C2d on Apple Silicon, the rest of C2e (Kheperix still in
-tree), C3b (does not boot), C3c, C4, and the open Stragglers (S20 AltiVec).
+and Executor's PowerPC runs on `mame-ppc` (C2e's PowerCore part); Executor
+has no other 68k core. Open: C1d (parked), C2d on Apple Silicon, the rest
+of C2e (Kheperix still in tree and the default PPC core), C3b (does not
+boot), C3c, C4, and the open Stragglers (S20 AltiVec).
 
 Agreed 2026-10-10. Three goals, one shared piece of work:
 
@@ -36,8 +37,19 @@ now an alias of `mame-68k`); C1d was assessed and parked; C2d boots on
 arm64 Linux under qemu; S4 gave mame-ppc a guest-memory base offset, so it
 needs no `vm.mmap_min_addr`; mame-ppc reports a 750 PVR (S20); Executor's
 PowerPC code runs on mame-ppc behind the PowerCore facade
-(`src/executor/cpu/PowerCore.cpp`, ../executor/README.md). The PPC
+(`executor/core/cpu/PowerCore.cpp`, ../executor/README.md). The PPC
 machine boots 7.5.5, 7.6.1, 8.6 and 9.0.4.
+
+**Since (to 2026-11-07).** UAE left Executor (2026-10-23), so mame-68k is
+its only 68k core. mame-ppc's C back-end (`drcbec`) runs in Executor's
+WebAssembly build, and the cores build for Windows with Executor's
+cross-build (`shim/osdlib.cpp`: `VirtualAlloc`). The back-ends save and
+restore an execution's state for Executor's PowerPC threads on coroutines
+(`exec_context`). `--cpu-mmu` turns on mame-68k's PMMU and an identity
+translation on mame-ppc, to measure the MMU's cost
+(docs/executor/Speed.md). mame-ppc completes misaligned FP and
+multiple-word accesses in software and drops recompiled code on
+`MakeDataExecutable`.
 
 ## Source
 
@@ -113,7 +125,7 @@ the DRC files went to `cpu/`, MAME's layout, and the inline memory path
 became MAME's fastram in guest byte order, S3.)
 
 Imported files keep MAME's copyright headers and are edited as little as
-possible, as `src/executor/romlib` is; a "Changes to imported MAME code"
+possible, as `executor/core/romlib` is; a "Changes to imported MAME code"
 list at the end of this file tracks every edit.
 
 ### The shim
@@ -147,7 +159,7 @@ nothing more:
 | C2b | Mac side on the new core | the KPX machine's ROM patches, EmulOps (primary opcode 6 as a UML op calling the Host), `HandleInterrupt`, `execute_68k` run on `mame-ppc`; guest memory at one base offset, `VMBaseDiff` a variable; 7.5.5 boots to Finder (`tests/test_boot_ppc.sh`); no `mmap_min_addr` | done 2026-10-10 except the base offset: `src/cpu/kpx/cpu_ppc_mame.cpp` installs the SheepShaver machine side on the core (`--backend kpx --core mame-ppc`); 7.5.5 boots to the Finder desktop, BridgeAgent up, identical screen to Kheperix; ctest `boot_ppc_mame`, `boot_ppc_mame_api`. 13 s to desktop on the UML interpreter against 3 s on Kheperix. Addressing is still identity (so `mmap_min_addr` stays), the base offset moves to C2e (done since as S4, 2026-10-11) |
 | C2c | x86-64 back-end | `drcbex64` with `drcbe_guestmem` READ/WRITE lowering; asmjit vendored; boot matrix `kpx-jit-*` cells pass as `mame-ppc` cells; boot time at or under KPX `--jit` | done 2026-10-10: `drcbex64` + `x86log` lifted, asmjit vendored (`third_party/asmjit`, zlib); memory accesses call the shim's `address_space` member functions through MAME's own resolved-accessor fallback (no `drcbe_guestmem` inline fast path yet); `--backend kpx --core mame-ppc --jit` boots 7.5.5 to the desktop in 1.6 s (Kheperix JIT 1.1 s, Kheperix interpreter 3.1 s, UML interpreter 13 s); ctest `boot_ppc_mame_jit` |
 | C2d | arm64 back-end | `drcbearm64` builds and boots 7.5.5 on arm64 Linux and Apple Silicon (`MAP_JIT`); the `kpx_stub` is gone | arm64 Linux done 2026-10-11 (under qemu, `tools/xarch/xarch.sh arm64`): 7.5.5 to the desktop in 22 s on `--jit` under emulation (166 s on the UML interpreter); `cpu_cores` passes; the native back-end runs the `test_cpu_cores --bench` loop at 121 MIPS under qemu (x86-64 native: 1500). Apple Silicon not done: it needed S4 (no mapping at 0 on macOS; done for mame-ppc 2026-10-11) and still needs `MAP_JIT` (`shim/osdlib.cpp` is plain `mmap`); `kpx_stub.cpp` is still there, standing in for Kheperix on non-x86 hosts |
-| C2e | Retire Kheperix | `src/cpu/kpx/src`, `dyngen_precompiled`, `regen_dyngen_ops.sh` deleted; `--backend kpx` keeps its name on the new core; PowerCore facade (`src/executor/cpu/PowerCore.*`) implemented on it for Executor's milestone P | PowerCore part done 2026-10-21: the facade runs on mame-ppc (a 750, translation off, native back-end) over the 68k core's GuestMemory; ctest `ppc_hello_executor`, `ppc_hello_executor_mame68k` and the PowerPC `executor.CPU.*` gtests (`executePPC`, `ppcArguments*`). Kheperix not retired: still the default PPC core (`--core kpx`) and the web UI profiles' core, and it keeps the AltiVec mame-ppc lacks (S20) |
+| C2e | Retire Kheperix | `src/cpu/kpx/src`, `dyngen_precompiled`, `regen_dyngen_ops.sh` deleted; `--backend kpx` keeps its name on the new core; PowerCore facade (`executor/core/cpu/PowerCore.*`) implemented on it for Executor's milestone P | PowerCore part done 2026-10-21: the facade runs on mame-ppc (a 750, translation off, native back-end) over the 68k core's GuestMemory; ctest `ppc_hello_executor` and the PowerPC `executor.CPU.*` gtests (`executePPC`, `ppcArguments*`). Kheperix not retired: still the default PPC core (`--core kpx`) and the web UI profiles' core, and it keeps the AltiVec mame-ppc lacks (S20) |
 | C3a | `execute_68k` on Musashi | host-initiated 68k calls run on a `mame-68k` instance sharing the PPC machine's GuestMemory: import the GPR contract, run to the EXEC_RETURN word, export; everything else still on the DR emulator; bridge suites pass | done 2026-10-10 as a hybrid (`--m68k-host 1` on `--core mame-ppc`): host-initiated 68k routines run on a `mame-68k` core over the PPC machine's memory; the ROM's EmulOp words and EXEC_RETURN are handled in the 68k host; at the first A-line word the registers go into the emulator's convention (through a thunk that sets the CCR) and the nanokernel's emulator finishes the routine. 7.5.5 boots to the desktop in 1.6 s and the command bridge passes 7/7 on it. Mode 2 (Musashi takes A-line traps through the ROM dispatcher at $28) boots too but breaks the bridge: a divergence after the dispatcher hands off at a routine descriptor, not yet understood |
 | C3b | The 68k side on Musashi | the emulator's entry points patched to SHEEP ops that enter Musashi; exits at `$AAFE` (Mixed Mode), EXEC_RETURN, interrupts (Musashi's IRQ line instead of the DR poll word), bus errors as 68k frames; `0xFExx`/`$71xx` EmulOps as host ops; 7.5.5 boots to Finder and passes the bridge suites | in progress (experimental `--m68k-host 3`): the opcode table is patched at `OP_RESET` so every ordinary slot enters Musashi through a host op (native op 63); Musashi hands A-line, non-EmulOp `$FExx` and illegal words back to the emulator at its dispatch loop, and stops for interrupts. The boot runs ~2,300 hand-backs and then goes wrong (see Notes from C3b). Write-up: [C3b-STATUS.md](C3b-STATUS.md) |
 | C3c | Numbers | boot time and a 68k-heavy benchmark (MacPerl guest suite section) against the DR emulator on x86-64; the same on arm64 against the interpreter-only PPC | not started: needs C3b booting |
@@ -296,7 +308,7 @@ referred to; strike them here when done.
 | S11 | ~~**No mame-ppc cells in the boot matrix.** `tests/run_boot_matrix.sh` still enumerates the Kheperix cells only; add `mame-ppc` (interpreter and `--jit`) and `mame-68k` cells~~ | done 2026-10-10: `--core` per cell and a `core` CSV column; `mame68k-{755,761}` and `mameppc-{interp,jit}-{755,761}` all pass (mame-ppc 8-9 s interpreted, 1 s on `--jit`). The two `uae-jit` cells stall at a grey desktop, as UAE `--jit` long has |
 | S12 | ~~**Executor on mame-68k has unit tests only.**~~ `executor.mame68k.*` (150 gtests) pass; there were no `_executor_mame68k` bridge, guest, Finder or keyboard cells. Added 2026-10-11 once STRAGGLERS.md 20 (the Gestalt trap-table addresses) was fixed: `command_bridge_executor_mame68k`, `finder_suite_executor_mame68k` and `keyboard_guest_executor_mame68k` pass (Finder in 5 s, the same as Musashi); `guest_suite_executor_mame68k` stops where the UAE and Musashi cells do (Executor's parked heap corruption, STRAGGLERS.md; after that fix it stopped at MacPerl's launch until STRAGGLERS.md 22, the FPU-less core and a completion routine run at its host pointer, 2026-10-11) | done |
 | S13 | **x86log without the disassembler.** MAME's i386 disassembler was not lifted, so native-code logs show bytes. Logging is off (`emu_options`) | cosmetic |
-| S14 | **PMMU has no workload.** `Config::mmu` picks the PMMU inits but no machine turns it on; the Virtual Memory boot (C1d) is the first real test | open (C1d) |
+| S14 | **PMMU has no workload.** `Config::mmu` picks the PMMU inits but no machine turns it on; the Virtual Memory boot (C1d) is the first real test | open (C1d). Since 2026-11-04 `--cpu-mmu` turns it on for the ROM machine as a measurement (no measurable cost; whether the ROM turned translation on wasn't checked: docs/executor/Speed.md) |
 | S15 | ~~**`--jit68k` does nothing.**~~ The only reader, the DR-emulator activation in `emul_op_ppc.cpp`, is `if (PrefsFindBool("jit68k") && 0)`, so Apple's DR emulator is never switched on, on either PPC core: the Power Mac's 68k code always runs on the ROM's interpretive 68k emulator. The flag and the web UI's "Enable 68k JIT (DR emulator)" box are no-ops. Removed 2026-10-11: the flag, the JSON key, the UI box and the subprocess argument are gone; `--jit68k`/`--no-jit68k` are still accepted with a warning and old JSON files' `jit68k` is ignored. The activation block stays in `emul_op_ppc.cpp` under `if (0)` as the record of what the DR emulator needs (KernelData +$17a0/+$17c0/+$17c4/+$1b00/+$1b04, the emulator copied out of ROM+$370000). The nanokernel's interpretive 68k emulator runs the Power Mac's 68k code until C3b | done |
 | S16 | **`--m68k-host` is CLI-only.** C3a's mode is not in the JSON config or the web UI, so it can't be picked from Settings or kept in a profile | open (until C3b decides the default) |
 | S17 | **riscv64 never run.** It builds under `tools/xarch/xarch.sh riscv64` with `-DBUILD_BROWSER=OFF` (no Qt WebEngine there) and MAME's C back-end; no test has run on it. MAME has no RISC-V recompiler back-end and asmjit has no RISC-V assembler, so a native one would be new work | runs 2026-10-11: 7.5.5 boots to the desktop in 509 s under qemu (C back-end); `cpu_cores` passes; `test_cpu_cores --bench` 7-8 MIPS. A native RISC-V back-end would still be new work |
@@ -552,3 +564,16 @@ understood.
   execution.
 * `cpu/x86log.cpp`: the i386 disassembler dependency removed; code ranges
   are logged as bytes.
+* `cpu/drcuml.h`, `cpu/drcbex64.cpp`, `cpu/drcbearm64.cpp`:
+  `exec_context_size()`/`save_exec_context()`/`restore_exec_context()`, an
+  execution's near state and UML registers as one record, for executions
+  suspended on separate host coroutines (Executor's PowerPC threads).
+* `cpu/drcbec.cpp`: under Emscripten no `try` around `execute()` and no
+  rounding calls (wasm rounds to nearest only); `SETFMOD` and `RESTORE`
+  set the rounding mode through `SET_ROUNDING`.
+* `powerpc/ppcdrc.cpp`: after a host op, `generate_set_fmod` (the host may
+  have set FPSCR[RN]); the instruction hook also when
+  `DEBUG_FLAG_ENABLED` is set (`Config::instruction_hook`).
+* `powerpc/ppc.h`, `ppccom.cpp`, `ppcdrc.cpp`:
+  `ppc_set_translation_identity()` (`--cpu-mmu`): data translation whatever
+  MSR[DR] says, every page mapped to itself.

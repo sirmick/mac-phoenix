@@ -8,7 +8,11 @@ ordinary host sockets, so the Mac reaches the Internet without root,
 cargo is installed (`-DBUILD_NET_BRIDGE=OFF` skips it).
 
 ROM machines only: Executor has no Ethernet; its MacTCP and Open Transport
-go straight to host sockets ([executor/README.md](executor/README.md)).
+reach the host through `rsys/hostnet.h`, whose backend CMake picks with
+`EXECUTOR_NET`: `posix` (host sockets and the host's resolver; the native
+build), `wasm` (the tab's sockets through `executor/server`'s relay) or
+`none` (no network; the Windows build)
+([executor/README.md](executor/README.md)).
 
 ## Turning it on
 

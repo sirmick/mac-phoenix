@@ -1,6 +1,6 @@
-# The site: Executor in a tab, served by tools/standalone
+# The site: Executor in a tab, served by executor/server
 
-The site is `tools/standalone` (Standalone.md: the program, its API and
+The site is `executor/server` (Standalone.md: the program, its API and
 who may use it) in front of three things this page says how to put in
 place: the tab (the wasm build, embedded in the program or `--site
 DIR`), the library (boot and application disks) and the data directory
@@ -8,7 +8,7 @@ DIR`), the library (boot and application disks) and the data directory
 volumes, the tab's logs). A visitor picks a System and adds disks from
 the library; the disks are read by Range requests as Executor needs it,
 and what it changes (a disk's blocks, Executor's own volume) is kept by
-the server (`web/executor/sync.js`, `Store`).
+the server (`executor/web/sync.js`, `Store`).
 
 It is a private service: **the first browser to open the tab after the
 server starts has it until the server stops** (Standalone.md, "Who uses
@@ -24,7 +24,7 @@ source ~/emsdk/emsdk_env.sh
 tools/skia/build-wasm.sh                                 # once: Skia for wasm, ~/storage/deps/skia-m144-wasm-wasm
 emcmake cmake -B build-wasm -DCMAKE_BUILD_TYPE=Release -DEXECUTOR_SKIA=ON -DEXECUTOR_NET=wasm
 cmake --build build-wasm -j2
-make -C tools/standalone WASM_BUILD=$PWD/build-wasm      # the site embedded: ./tools/standalone/executor-standalone
+make -C executor/server WASM_BUILD=$PWD/build-wasm      # the site embedded: ./executor/server/executor-standalone
 ```
 
 The site's module is built with Skia (`-DEXECUTOR_SKIA=ON`, HiDPI.md):
@@ -66,9 +66,14 @@ TMPDIR=~/storage/tmp tools/web/make_library.py /srv/executor-web/library
 | `boot-8.6.img` | 44 MB | Mac OS 8.6, the same, with SimpleText | |
 | `productivity.img` | 208 MB | AppleWorks 5.0.3, ClarisWorks 4.0v4, ClarisDraw 1.0v4, Corel WordPerfect 3.5e, Microsoft Excel 4.0, FileMaker Pro 4.0 and Aldus Persuasion 3.0 (personalised with the owner's serials); Microsoft Office 98 (PowerPC, asks for its CD key) | 7.6.1, 8.6 (Office: 8.6, PowerPC ticked) |
 | `creative.img` | 106 MB | Kid Pix 2.5, Adobe Photoshop 4.0, Adobe Illustrator 6.0, Macromedia FreeHand 5.5 and Deneba Canvas 5.0.2 (personalised with the owner's serials) | 7.6.1, 8.6 |
+| `creative-8.img` | 276 MB | volume "Creative 8" (not "Creative": both can be in at once): Adobe Illustrator 8.0, Photoshop 5.5 (with ImageReady 2.0), PageMaker 6.5 (with Acrobat 3.0) | 8.6, PowerPC ticked |
 | `development.img` | 392 MB | MPW, CodeWarrior Pro 4 (IDE 3.2), THINK C 6, THINK Pascal 4.5, HyperCard 2.4.1, MacPerl 5.2, ResEdit 2.1.3, BBEdit Lite 4.1 | 7.6.1, 8.6 |
-| `games-68k.img` | 71 MB | 18 games that run on the 68k side (Lemmings, Maelstrom, SimEarth, Monkey Island, ...) | 7.6.1 |
-| `games-ppc.img` | 476 MB | fat and PowerPC games (Marathon 2, Escape Velocity, EV Nova, Ferazel's Wand, ...) | 8.6, PowerPC ticked |
+| `games-68k.img` | 391 MB | 26 games that run on the 68k side (Lemmings, Maelstrom, Civilization II, Warcraft II, SimTower, Marathon Infinity, Monkey Island, ...) | 7.6.1 |
+| `games-ppc.img` | 521 MB | fat and PowerPC games (Marathon 2, Escape Velocity, EV Nova, Ares, Ferazel's Wand, ...) | 8.6, PowerPC ticked |
+| `tools-8.img` | 25 MB | BBEdit Lite 6.1.2, ResEdit 2.1.3, Resorcerer 2.0, Disk Copy 6.3.3, StuffIt Expander 6.0.1, ZTerm, MacsBug 6.6.3 | 8.6 |
+| `utilities.img` | 9 MB | what the Mac says it is and how fast it runs: Gestalt.Appl, TattleTech, Speedometer, MacBench, ... (Speed.md) | 7.6.1, 8.6 |
+| `internet.img` | 13 MB | MR Browser, Hotline Connect, Serial MReader (the network through the server's relay) | 8.6 |
+| `icons.img` | 22 MB | custom icon collections (The Iconfactory, MacUser's Custom Icon Pack IV, ...) | 7.6.1, 8.6 |
 | `macaddict-*.iso` | 650-675 MB each | MacAddict's cover CDs #16 (Dec 1997), #25 (Sep 1998), #58 (Jun 2001), #63 (Nov 2001), as they came, with cover scans | any |
 
 Whole application folders are copied as installed (`make_disk.py`, both
@@ -110,11 +115,11 @@ one-sentence description, notes (first launch, registration; never a
 serial number), and `publisher`, `year`, `kind` or `version` where the
 disk's `vers` resources are silent or wrong (`null` drops what the disk
 says). On a CD, `items` are the top-level folders and files, with their
-sizes; folders aren't opened. `tools/standalone` passes `items` through in
+sizes; folders aren't opened. `executor/server` passes `items` through in
 `/library.json`. In the tab, a library row's "▸ N items" opens a row under
 it with the disk's note and the items (Name, Version, Arch, Size; the
 description and kind under the name). Tests: `disk_contents` (a fixture
-image) and `executor.web.site.library` (`web/tests/tab_library.mjs`,
+image) and `executor.web.site.library` (`executor/tests/web/tab_library.mjs`,
 `ctest -L site`).
 
 A link opens a System with disks already added, e.g.
@@ -130,7 +135,7 @@ service with `User=`):
 ```ini
 # ~/.config/systemd/user/executor-web.service
 [Unit]
-Description=Executor in a tab (tools/standalone)
+Description=Executor in a tab (executor/server)
 After=network.target
 
 [Service]
@@ -142,7 +147,7 @@ WantedBy=default.target
 ```
 
 ```bash
-cp tools/standalone/executor-standalone ~/bin/
+cp executor/server/executor-standalone ~/bin/
 systemctl --user daemon-reload && systemctl --user enable --now executor-web
 loginctl enable-linger $USER          # keeps running signed out
 journalctl --user -u executor-web     # its log (--quiet: errors only); the first line, its address
@@ -234,8 +239,8 @@ them back, start it.
 
 ## The site's cells
 
-`web/tests/tab_site.mjs` opens every application in a library disk's
-record on a System, as a visitor would: on a scratch `tools/standalone`
+`executor/tests/web/tab_site.mjs` opens every application in a library disk's
+record on a System, as a visitor would: on a scratch `executor/server`
 whose library is `make_library.py`'s output, the boot disk and the
 application disk added, each application launched in turn (the page
 reloaded between them) and checked: in front, a window of its own (or,

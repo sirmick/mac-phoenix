@@ -1,0 +1,164 @@
+#if !defined(__rsys_process_h__)
+#define __rsys_process_h__
+
+#include <MemoryMgr.h>
+#include <PPC.h>
+#include <ProcessMgr.h>
+#include <EventMgr.h>
+#include <functional>
+#include <string>
+#include <vector>
+
+namespace Executor
+{
+typedef struct size_resource
+{
+    GUEST_STRUCT;
+    GUEST<int16_t> flags;
+    GUEST<int32_t> pref_size;
+    GUEST<int32_t> min_size;
+} size_resource_t;
+
+static_assert(sizeof(size_resource_t) == 10);
+
+/* The Process Manager heap: above the System heap, up to BufPtr.
+   ROMlib_InitZones (re)creates it and forgets any partition in it. */
+extern THz ROMlib_pm_zone;
+extern void process_reset_heap(THz pm_zone);
+/* The current process, as a key (fullheap.cpp lists blocks by it); 0: none yet. */
+extern uintptr_t ROMlib_process_key();
+
+/* Lay out an application's partition in the Process Manager heap, as
+   7.5.5 does (docs/executor/MEMORY_MAP.md): reads SIZE and CODE 0 from
+   the application file in the current directory, then sets ApplZone,
+   HeapEnd, ApplLimit, CurStackBase, CurrentA5 and MemTop.  The heap is
+   left as TheZone, so the application's resource map lands in it. */
+extern void process_layout_partition(ConstStringPtr app_name);
+
+/* Whether guest address addr lies in the partition of a process other
+   than the current one (a parked process's). */
+extern bool process_in_other_partition(uint32_t addr);
+
+/* MacPhoenix Process Manager (process.cpp). */
+
+/* Remember the low memory and CPU state a new process starts from (the
+   first process's, just before its launch). */
+extern void process_capture_template();
+/* Host state that is per process: saved and restored on every switch,
+   zeroed for a new process. */
+extern void ROMlib_process_register_state(void *p, size_t n);
+/* Is the current process one that runs on its own thread (not the first)? */
+extern bool ROMlib_process_has_thread();
+/* Did the launcher post the current process's opening Apple event? */
+extern bool ROMlib_process_open_event_posted();
+/* Called on every event call: where processes switch. */
+/* A Quit Apple event for a process that cannot take one: the puppet
+   string (a menu-bar click answered with File > Quit). False when the
+   process is high-level-event aware or not found. */
+extern bool ROMlib_process_puppet_quit(const ProcessSerialNumber *psn);
+/* MenuSelect asks whether its answer is the puppet string's. */
+extern bool ROMlib_process_take_puppet_menu();
+/* StackSpace in a Thread Manager thread: the bottom of its stack (guest
+   address); 0 in the main thread. */
+extern uint32_t ROMlib_thread_stack_low();
+/* Every event call, with its event mask. */
+extern void ROMlib_process_event_hook(INTEGER mask);
+/* WaitNextEvent: the caller sleeps (ticks) in its event loop. */
+extern void ROMlib_process_idle_hook(int32_t sleep);
+/* WakeUpProcess was called for the current process (once). */
+extern bool ROMlib_process_take_wake();
+/* LaunchApplication with launchContinue: create the process. */
+extern OSErr process_launch(LaunchParamBlockRec *lpbp);
+/* launch.cpp: start the application in the (new) current process. */
+extern void ROMlib_launch_process(FSSpec *app);
+
+/* The processes, for the Application menu. */
+struct ROMlib_process_entry
+{
+    ProcessSerialNumber psn;
+    Str31 name;
+    Handle icon;   /* icon suite, System heap */
+    bool current;
+};
+extern std::vector<ROMlib_process_entry> ROMlib_process_entries();
+/* The front process's name as of its last event call (any thread); empty
+   before the first application's. */
+extern std::string ROMlib_front_process_name();
+/* The process whose signature this is; false if none. */
+extern bool ROMlib_process_with_signature(OSType sig, ProcessSerialNumber *psn);
+
+/* Layers (process.cpp): the Window Manager asks about other processes'
+   windows -- clip out those in front (and, for the desktop, behind), and
+   carry painting / visible regions on into the layers behind. */
+extern void ROMlib_layers_clip_above(RgnHandle rgn);
+extern void ROMlib_layers_clip_below(RgnHandle rgn);
+extern void ROMlib_layers_paint_behind(RgnHandle rgn);
+/* PaintBehind of a layer record: that layer's windows and those of every
+   layer behind it (the root layer: all of them). */
+extern void ROMlib_layers_paint_from(WindowPtr layer, RgnHandle rgn);
+extern void ROMlib_layers_calcvis_behind(RgnHandle rgn);
+/* Runs f with the layer that holds w as the one looked at (its windows in
+   WindowList); false if w is in no layer's list. */
+extern bool ROMlib_layers_with_window(WindowPeek w, const std::function<void()> &f);
+/* 7.5.5's Layer Manager (LayerDispatch), as far as the Help Manager's
+   balloon window needs: a layer is a window record of its own; floating
+   layers are in front of every process. */
+extern bool ROMlib_layer_p(WindowPtr w);
+extern void ROMlib_dispose_layer(WindowPtr w); /* DisposeWindow of one */
+extern bool ROMlib_root_layer_current(); /* SetCurLayer(root) */
+extern WindowPeek ROMlib_layers_window_at(Point pt); /* any layer, front first */
+/* FindWindow over every layer (the root layer current meanwhile). */
+extern INTEGER ROMlib_layers_find_window(Point pt, GUEST<WindowPtr> *window);
+/* SetCurLayer to another process's layer (Apple's Drag Manager descends
+   into the drop target's layer that way): FindWindow looks at that
+   process's windows only. */
+extern bool ROMlib_layers_foreign_current();
+extern WindowPeek ROMlib_layers_foreign_window_at(Point pt);
+/* Is the current process the front one (gets mouse and keyboard)? */
+extern bool ROMlib_process_is_front();
+/* GetNextEvent's mouse-down was in another process's window: that process
+   comes to the front (the click is re-posted for it if it wants front
+   clicks); true if so. */
+extern bool ROMlib_process_click_taken(EventRecord *evt);
+
+/* System mode (OSDispatch $40/$41): resource files opened in it belong to
+   the system. They sit just above the System file in every process's
+   resource chain, survive the opener's exit and are seen by processes
+   launched later. */
+extern bool ROMlib_in_system_mode();
+extern bool ROMlib_system_resource_file_p(INTEGER rn);
+/* Writes every other running process's own resource maps (UpdateResFile on
+   each file above the shared system part of its chain): shutdown. */
+extern void ROMlib_update_other_processes_resource_files();
+extern void ROMlib_system_resource_file_opened(INTEGER rn);
+extern void ROMlib_system_resource_file_closed(INTEGER rn);
+/* A pending suspend/resume event for the current process. */
+extern bool ROMlib_process_os_event(EventRecord *evt, bool remove);
+
+/* The desktop was repainted there: an update for the desktop layer. */
+extern void ROMlib_desktop_layer_invalidate(RgnHandle rgn);
+/* The desktop layer's visRgn (Finder's desktop window shares it). */
+extern bool ROMlib_desktop_layer_region_p(RgnHandle rgn);
+/* The desktop layer's visRgn, or null before TakeDesktopLayer: the desktop
+   less the windows in front, and inside the Finder's BeginUpdate (its
+   desktop window shares the region) only what is being updated. */
+extern RgnHandle ROMlib_desktop_layer_vis_region();
+/* Quit All (Finder's Restart and Shut Down, refcon 'rest' or 'shut'), and
+   the applications' answers to its Quit events. */
+extern void ROMlib_process_quit_all(int32_t refcon);
+extern void ROMlib_process_system_reply(int32_t return_id, Ptr msg, int32_t len);
+/* While held, no other process comes to the front (background time goes
+   on): the Notification Manager's alert. */
+extern void ROMlib_process_hold_front(bool hold);
+/* Notification Manager requests waiting for the front process's event
+   call (notify.cpp). */
+extern void ROMlib_notify_poll();
+/* The current process is in ModalDialog (dialHandle.cpp). */
+extern bool ROMlib_in_modal_dialog();
+
+/* The current process's PPC port name (its high-level events' sender). */
+extern void ROMlib_process_port_name(PPCPortRec *port);
+/* That process's port; false if there is no such process. */
+extern bool ROMlib_process_port_name_of(const ProcessSerialNumber *psn, PPCPortRec *port);
+}
+#endif /* !defined (__rsys_process_h__) */

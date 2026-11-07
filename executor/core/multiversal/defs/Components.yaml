@@ -1,0 +1,749 @@
+# The Component Manager (_ComponentDispatch, $A82A; Inside Macintosh: More
+# Macintosh Toolbox ch. 6). Executor's routines are romlib/component.cpp;
+# CallComponent (selector 0) and CallComponentFunction (-1), which reshape
+# the caller's stack, are raw handlers there on the same dispatcher.
+
+- struct:
+    name: ComponentRecord
+    members:
+      - name: data
+        type: LONGINT[1]
+    size: 4
+
+# ####
+
+- typedef:
+    name: Component
+    type: ComponentRecord*
+
+# ####
+
+- struct:
+    name: ComponentInstanceRecord
+    members:
+      - name: data
+        type: LONGINT[1]
+    size: 4
+
+# ####
+
+- typedef:
+    name: ComponentInstance
+    type: ComponentInstanceRecord*
+
+# ####
+
+- typedef:
+    name: ComponentResult
+    type: LONGINT
+
+# ####
+
+- struct:
+    name: ComponentDescription
+    members:
+      - name: componentType
+        type: OSType
+      - name: componentSubType
+        type: OSType
+      - name: componentManufacturer
+        type: OSType
+      - name: componentFlags
+        type: uint32_t
+      - name: componentFlagsMask
+        type: uint32_t
+    size: 20
+
+# ####
+
+- struct:
+    name: ResourceSpec
+    members:
+      - name: resType
+        type: OSType
+      - name: resID
+        type: INTEGER
+    size: 6
+
+# ####
+
+- struct:
+    name: ComponentResource
+    members:
+      - name: cd
+        type: ComponentDescription
+      - name: component
+        type: ResourceSpec
+      - name: componentName
+        type: ResourceSpec
+      - name: componentInfo
+        type: ResourceSpec
+      - name: componentIcon
+        type: ResourceSpec
+    size: 44
+
+# ####
+
+- typedef:
+    name: ComponentResourcePtr
+    type: ComponentResource*
+
+# ####
+
+- typedef:
+    name: ComponentResourceHandle
+    type: ComponentResourcePtr*
+
+# ####
+
+- struct:
+    name: ComponentParameters
+    members:
+      - name: flags
+        type: uint8_t
+      - name: paramSize
+        type: uint8_t
+      - name: what
+        type: INTEGER
+      - name: params
+        type: LONGINT[1]
+    size: 8
+
+# ####
+
+# A global variable InterfaceLib exports (Components.h): a routine
+# descriptor that code which isn't 68k passes to CallUniversalProc, with a
+# ComponentParameters block, to make a component call by hand. Executor's
+# copies the block onto the 68k stack and calls _ComponentDispatch
+# (cfm68k_glue.cpp).
+- data:
+    name: CallComponentUPP
+    type: UniversalProcPtr
+    library: InterfaceLib
+    executor: true
+
+# ####
+
+# InterfaceLib's CallComponentFunction[WithStorage], which a PowerPC
+# component's entry calls to hand a request to one of its routines: the
+# parameter block's arguments (and the storage first) to the routine
+# descriptor. 68k code reaches the same through _ComponentDispatch -1.
+- only-for: executor
+  function:
+    name: CallComponentFunction
+    return: ComponentResult
+    args:
+      - name: params
+        type: ComponentParameters*
+      - name: func
+        type: UniversalProcPtr
+    library: InterfaceLib
+    executor: C_
+
+# ####
+
+- only-for: executor
+  function:
+    name: CallComponentFunctionWithStorage
+    return: ComponentResult
+    args:
+      - name: storage
+        type: Handle
+      - name: params
+        type: ComponentParameters*
+      - name: func
+        type: UniversalProcPtr
+    library: InterfaceLib
+    executor: C_
+
+# ####
+
+- funptr:
+    name: ComponentRoutineUPP
+    return: ComponentResult
+    args:
+      - name: cp
+        type: ComponentParameters*
+      - name: componentStorage
+        type: Handle
+
+# ####
+
+- enum:
+    values:
+      - name: kAnyComponentType
+        value: 0
+      - name: kAnyComponentSubType
+        value: 0
+      - name: kAnyComponentManufacturer
+        value: 0
+      - name: kAnyComponentFlagsMask
+        value: 0
+      - name: cmpWantsRegisterMessage
+        value: 0x80000000
+      - name: registerComponentGlobal
+        value: 1
+      - name: registerComponentNoDuplicates
+        value: 2
+      - name: registerComponentAfterExisting
+        value: 4
+      - name: componentDoAutoVersion
+        value: 1
+      - name: componentWantsUnregister
+        value: 2
+      - name: componentAutoVersionIncludeFlags
+        value: 4
+      - name: componentHasMultiplePlatforms
+        value: 8
+      - name: defaultComponentIdentical
+        value: 0
+      - name: defaultComponentAnyFlags
+        value: 1
+      - name: defaultComponentAnyManufacturer
+        value: 2
+      - name: defaultComponentAnySubType
+        value: 4
+
+# ####
+
+- enum:
+    values:
+      - name: kComponentOpenSelect
+        value: -1
+      - name: kComponentCloseSelect
+        value: -2
+      - name: kComponentCanDoSelect
+        value: -3
+      - name: kComponentVersionSelect
+        value: -4
+      - name: kComponentRegisterSelect
+        value: -5
+      - name: kComponentTargetSelect
+        value: -6
+      - name: kComponentUnregisterSelect
+        value: -7
+
+# ####
+
+- enum:
+    values:
+      - name: invalidComponentID
+        value: -3000
+      - name: validInstancesExist
+        value: -3001
+      - name: componentNotCaptured
+        value: -3002
+      - name: componentDontRegister
+        value: -3003
+      - name: unresolvedComponentDLLErr
+        value: -3004
+
+# ####
+
+- enum:
+    values:
+      - name: badComponentInstance
+        value: 0x80008001
+      - name: badComponentSelector
+        value: 0x80008002
+
+# ####
+
+- dispatcher:
+    name: ComponentDispatch
+    trap: 0xA82A
+    selector-location: D0W
+
+# ####
+
+- function:
+    name: RegisterComponent
+    return: Component
+    args:
+      - name: cd
+        type: ComponentDescription*
+      - name: componentEntryPoint
+        type: ComponentRoutineUPP
+      - name: global
+        type: INTEGER
+      - name: componentName
+        type: Handle
+      - name: componentInfo
+        type: Handle
+      - name: componentIcon
+        type: Handle
+    dispatcher: ComponentDispatch
+    selector: 0x01
+    executor: C_
+
+# ####
+
+- function:
+    name: UnregisterComponent
+    return: OSErr
+    args:
+      - name: aComponent
+        type: Component
+    dispatcher: ComponentDispatch
+    selector: 0x02
+    executor: C_
+
+# ####
+
+- function:
+    name: CountComponents
+    return: LONGINT
+    args:
+      - name: looking
+        type: ComponentDescription*
+    dispatcher: ComponentDispatch
+    selector: 0x03
+    executor: C_
+
+# ####
+
+- function:
+    name: FindNextComponent
+    return: Component
+    args:
+      - name: aComponent
+        type: Component
+      - name: looking
+        type: ComponentDescription*
+    dispatcher: ComponentDispatch
+    selector: 0x04
+    executor: C_
+
+# ####
+
+- function:
+    name: GetComponentInfo
+    return: OSErr
+    args:
+      - name: aComponent
+        type: Component
+      - name: cd
+        type: ComponentDescription*
+      - name: componentName
+        type: Handle
+      - name: componentInfo
+        type: Handle
+      - name: componentIcon
+        type: Handle
+    dispatcher: ComponentDispatch
+    selector: 0x05
+    executor: C_
+
+# ####
+
+- function:
+    name: GetComponentListModSeed
+    return: LONGINT
+    dispatcher: ComponentDispatch
+    selector: 0x06
+    executor: C_
+
+# ####
+
+- function:
+    name: OpenComponent
+    return: ComponentInstance
+    args:
+      - name: aComponent
+        type: Component
+    dispatcher: ComponentDispatch
+    selector: 0x07
+    executor: C_
+
+# ####
+
+- function:
+    name: CloseComponent
+    return: OSErr
+    args:
+      - name: aComponentInstance
+        type: ComponentInstance
+    dispatcher: ComponentDispatch
+    selector: 0x08
+    executor: C_
+
+# ####
+
+- function:
+    name: GetComponentInstanceError
+    return: OSErr
+    args:
+      - name: aComponentInstance
+        type: ComponentInstance
+    dispatcher: ComponentDispatch
+    selector: 0x0A
+    executor: C_
+
+# ####
+
+- function:
+    name: SetComponentInstanceError
+    args:
+      - name: aComponentInstance
+        type: ComponentInstance
+      - name: theError
+        type: OSErr
+    dispatcher: ComponentDispatch
+    selector: 0x0B
+    executor: C_
+
+# ####
+
+- function:
+    name: GetComponentInstanceStorage
+    return: Handle
+    args:
+      - name: aComponentInstance
+        type: ComponentInstance
+    dispatcher: ComponentDispatch
+    selector: 0x0C
+    executor: C_
+
+# ####
+
+- function:
+    name: SetComponentInstanceStorage
+    args:
+      - name: aComponentInstance
+        type: ComponentInstance
+      - name: theStorage
+        type: Handle
+    dispatcher: ComponentDispatch
+    selector: 0x0D
+    executor: C_
+
+# ####
+
+- function:
+    name: GetComponentInstanceA5
+    return: LONGINT
+    args:
+      - name: aComponentInstance
+        type: ComponentInstance
+    dispatcher: ComponentDispatch
+    selector: 0x0E
+    executor: C_
+
+# ####
+
+- function:
+    name: SetComponentInstanceA5
+    args:
+      - name: aComponentInstance
+        type: ComponentInstance
+      - name: theA5
+        type: LONGINT
+    dispatcher: ComponentDispatch
+    selector: 0x0F
+    executor: C_
+
+# ####
+
+- function:
+    name: GetComponentRefcon
+    return: LONGINT
+    args:
+      - name: aComponent
+        type: Component
+    dispatcher: ComponentDispatch
+    selector: 0x10
+    executor: C_
+
+# ####
+
+- function:
+    name: SetComponentRefcon
+    args:
+      - name: aComponent
+        type: Component
+      - name: theRefcon
+        type: LONGINT
+    dispatcher: ComponentDispatch
+    selector: 0x11
+    executor: C_
+
+# ####
+
+- function:
+    name: RegisterComponentResource
+    return: Component
+    args:
+      - name: cr
+        type: ComponentResourceHandle
+      - name: global
+        type: INTEGER
+    dispatcher: ComponentDispatch
+    selector: 0x12
+    executor: C_
+
+# ####
+
+- function:
+    name: CountComponentInstances
+    return: LONGINT
+    args:
+      - name: aComponent
+        type: Component
+    dispatcher: ComponentDispatch
+    selector: 0x13
+    executor: C_
+
+# ####
+
+- function:
+    name: RegisterComponentResourceFile
+    return: LONGINT
+    args:
+      - name: resRefNum
+        type: INTEGER
+      - name: global
+        type: INTEGER
+    dispatcher: ComponentDispatch
+    selector: 0x14
+    executor: C_
+
+# ####
+
+- function:
+    name: OpenComponentResFile
+    return: INTEGER
+    args:
+      - name: aComponent
+        type: Component
+    dispatcher: ComponentDispatch
+    selector: 0x15
+    executor: C_
+
+# ####
+
+- function:
+    name: CloseComponentResFile
+    return: OSErr
+    args:
+      - name: refnum
+        type: INTEGER
+    dispatcher: ComponentDispatch
+    selector: 0x18
+    executor: C_
+
+# ####
+
+- function:
+    name: CaptureComponent
+    return: Component
+    args:
+      - name: capturedComponent
+        type: Component
+      - name: capturingComponent
+        type: Component
+    dispatcher: ComponentDispatch
+    selector: 0x1C
+    executor: C_
+
+# ####
+
+- function:
+    name: UncaptureComponent
+    return: OSErr
+    args:
+      - name: aComponent
+        type: Component
+    dispatcher: ComponentDispatch
+    selector: 0x1D
+    executor: C_
+
+# ####
+
+- function:
+    name: SetDefaultComponent
+    return: OSErr
+    args:
+      - name: aComponent
+        type: Component
+      - name: flags
+        type: INTEGER
+    dispatcher: ComponentDispatch
+    selector: 0x1E
+    executor: C_
+
+# ####
+
+- function:
+    name: ResolveComponentAlias
+    return: Component
+    args:
+      - name: aComponent
+        type: Component
+    dispatcher: ComponentDispatch
+    selector: 0x20
+    executor: C_
+
+# ####
+
+- function:
+    name: OpenDefaultComponent
+    return: ComponentInstance
+    args:
+      - name: componentType
+        type: OSType
+      - name: componentSubType
+        type: OSType
+    dispatcher: ComponentDispatch
+    selector: 0x21
+    executor: C_
+
+# ####
+
+- function:
+    name: DelegateComponentCall
+    return: ComponentResult
+    args:
+      - name: originalParams
+        type: ComponentParameters*
+      - name: ci
+        type: ComponentInstance
+    dispatcher: ComponentDispatch
+    selector: 0x24
+    executor: C_
+
+# ####
+
+- function:
+    name: GetComponentTypeModSeed
+    return: LONGINT
+    args:
+      - name: componentType
+        type: OSType
+    dispatcher: ComponentDispatch
+    selector: 0x2C
+    executor: C_
+
+# ####
+
+- function:
+    name: OpenAComponent
+    return: OSErr
+    args:
+      - name: aComponent
+        type: Component
+      - name: ci
+        type: ComponentInstance*
+    dispatcher: ComponentDispatch
+    selector: 0x2D
+    executor: C_
+
+# ####
+
+- function:
+    name: OpenADefaultComponent
+    return: OSErr
+    args:
+      - name: componentType
+        type: OSType
+      - name: componentSubType
+        type: OSType
+      - name: ci
+        type: ComponentInstance*
+    dispatcher: ComponentDispatch
+    selector: 0x2E
+    executor: C_
+
+# ####
+
+- function:
+    name: OpenAComponentResFile
+    return: OSErr
+    args:
+      - name: aComponent
+        type: Component
+      - name: resRef
+        type: INTEGER*
+    dispatcher: ComponentDispatch
+    selector: 0x2F
+    executor: C_
+
+# ####
+
+- function:
+    name: GetComponentResource
+    return: OSErr
+    args:
+      - name: aComponent
+        type: Component
+      - name: resType
+        type: OSType
+      - name: resID
+        type: INTEGER
+      - name: theResource
+        type: Handle*
+    dispatcher: ComponentDispatch
+    selector: 0x35
+    executor: C_
+
+# ####
+
+- only-for: Executor
+  function:
+    name: GetComponentMgrVersion
+    return: LONGINT
+    dispatcher: ComponentDispatch
+    selector: 0x19
+    executor: C_
+    comment: |
+      MacPhoenix: private; Gestalt 'cpnt' on 7.5.5 calls it. Name and value
+      guessed (3.0).
+
+# ####
+
+# The calls every component answers itself (Components.h: the instance,
+# then a negative selector through CallComponent), exported by InterfaceLib:
+# Illustrator 8.0's plug-ins import GetComponentVersion.
+- dispatcher:
+    name: ComponentInstanceCall
+    trap: 0xA82A
+    selector-location: Component
+
+# ####
+
+- function:
+    name: ComponentFunctionImplemented
+    return: LONGINT
+    args:
+      - name: ci
+        type: ComponentInstance
+      - name: ftnNumber
+        type: INTEGER
+    dispatcher: ComponentInstanceCall
+    selector: 0xFFFD
+    library: InterfaceLib
+
+# ####
+
+- function:
+    name: GetComponentVersion
+    return: LONGINT
+    args:
+      - name: ci
+        type: ComponentInstance
+    dispatcher: ComponentInstanceCall
+    selector: 0xFFFC
+    library: InterfaceLib
+
+# ####
+
+- function:
+    name: ComponentSetTarget
+    return: LONGINT
+    args:
+      - name: ci
+        type: ComponentInstance
+      - name: target
+        type: ComponentInstance
+    dispatcher: ComponentInstanceCall
+    selector: 0xFFFA
+    library: InterfaceLib

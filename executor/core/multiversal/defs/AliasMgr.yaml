@@ -1,0 +1,347 @@
+- funptr:
+    return: Boolean
+    args:
+      - type: CInfoPBPtr
+      - type: Boolean*
+      - type: Ptr
+    name: AliasFilterUPP
+
+# ####
+
+- typedef:
+    name: AliasHandle
+    type: Handle
+
+# ####
+
+- typedef:
+    name: AliasTypeInfo
+    type: int16_t
+
+# ####
+
+- enum:
+    values:
+      - name: kSystemFolderType
+        value: "'macs'"
+      - name: kDesktopFolderType
+        value: "'desk'"
+      - name: kTrashFolderType
+        value: "'trsh'"
+      - name: kWhereToEmptyTrashFolderType
+        value: "'empt'"
+      - name: kPrintMonitorDocsFolderType
+        value: "'prnt'"
+      - name: kStartupFolderType
+        value: "'strt'"
+      - name: kAppleMenuFolderType
+        value: "'amnu'"
+      - name: kControlPanelFolderType
+        value: "'ctrl'"
+      - name: kExtensionFolderType
+        value: "'extn'"
+      - name: kPreferencesFolderType
+        value: "'pref'"
+      - name: kTemporaryFolderType
+        value: "'temp'"
+      - name: kFontFolderType
+        value: "'font'"
+
+# ####
+
+- enum:
+    values:
+      - name: kOnSystemDisk
+        value: -32768
+      - name: kCreateFolder
+        value: 1
+      - name: kDontCreateFolder
+        value: 0
+
+# ####
+
+- dispatcher:
+    name: AliasDispatch
+    trap: 0xA823
+    # The low byte: Folders.h's glue has the argument size in the high
+    # byte (0x062F), 9.0.4's Apple Menu Options calls with moveq #$2F.
+    selector-location: D0<0xFF>
+
+# ####
+
+- function:
+    name: FindFolder
+    return: OSErr
+    args:
+      - name: vRefNum
+        type: int16_t
+      - name: folderType
+        type: OSType
+      - name: createFolder
+        type: Boolean
+      - name: foundVRefNum
+        type: int16_t*
+      - name: foundDirID
+        type: int32_t*
+    dispatcher: AliasDispatch
+    selector: 0x0000
+    executor: C_
+
+# ####
+
+- function:
+    name: FindFolderWithTable
+    comment: |
+      MacPhoenix: private selector, name a guess (learned.yaml). FindFolder
+      plus a list of extra folder descriptions; Finder Scripting Extension
+      calls it from its FindFolder patch.
+    return: OSErr
+    args:
+      - name: vRefNum
+        type: int16_t
+      - name: folderType
+        type: OSType
+      - name: createFolder
+        type: Boolean
+      - name: foundVRefNum
+        type: int16_t*
+      - name: foundDirID
+        type: int32_t*
+      - name: table
+        type: Ptr
+    dispatcher: AliasDispatch
+    selector: 0x000A
+    executor: C_
+
+# ####
+
+- function:
+    name: GetFolderName
+    comment: |
+      MacPhoenix: private on 7.5.5, name a guess (the later Folder Manager
+      has a GetFolderName with these arguments). Finder Scripting Extension
+      asks it for the Trash's name.
+    return: OSErr
+    args:
+      - name: vRefNum
+        type: int16_t
+      - name: folderType
+        type: OSType
+      - name: foundVRefNum
+        type: int16_t*
+      - name: name
+        type: StringPtr
+    dispatcher: AliasDispatch
+    selector: 0x000E
+    executor: C_
+
+# ####
+
+- funptr:
+    return: OSStatus
+    args:
+      - name: message
+        type: OSType
+      - name: arg
+        type: void*
+      - name: userRefCon
+        type: void*
+    name: FolderManagerNotificationUPP
+
+# ####
+
+# Folders.h, InterfaceLib 9.0. 9.0.4's Apple Menu Options INIT registers
+# one at startup.
+- function:
+    name: FolderManagerRegisterNotificationProc
+    return: OSErr
+    args:
+      - name: notificationProc
+        type: FolderManagerNotificationUPP
+      - name: refCon
+        type: void*
+      - name: options
+        type: UInt32
+    dispatcher: AliasDispatch
+    selector: 0x062F
+    executor: C_
+
+# ####
+
+- function:
+    name: FolderManagerUnregisterNotificationProc
+    return: OSErr
+    args:
+      - name: notificationProc
+        type: FolderManagerNotificationUPP
+      - name: refCon
+        type: void*
+    dispatcher: AliasDispatch
+    selector: 0x0430
+    executor: C_
+
+# ####
+
+- function:
+    name: NewAlias
+    return: OSErr
+    args:
+      - name: fromFile
+        type: FSSpecPtr
+      - name: target
+        type: FSSpecPtr
+      - name: alias
+        type: AliasHandle*
+    dispatcher: AliasDispatch
+    selector: 0x0002
+    executor: C_
+
+# ####
+
+- function:
+    name: NewAliasMinimal
+    return: OSErr
+    args:
+      - name: target
+        type: FSSpecPtr
+      - name: alias
+        type: AliasHandle*
+    dispatcher: AliasDispatch
+    selector: 0x0008
+    executor: C_
+
+# ####
+
+- function:
+    name: NewAliasMinimalFromFullPath
+    return: OSErr
+    args:
+      - name: fullpathLength
+        type: int16_t
+      - name: fullpath
+        type: Ptr
+      - name: zoneName
+        type: Str32
+      - name: serverName
+        type: Str31
+      - name: alias
+        type: AliasHandle*
+    dispatcher: AliasDispatch
+    selector: 0x0009
+    executor: C_
+
+# ####
+
+- function:
+    name: UpdateAlias
+    return: OSErr
+    args:
+      - name: fromFile
+        type: FSSpecPtr
+      - name: target
+        type: FSSpecPtr
+      - name: alias
+        type: AliasHandle
+      - name: wasChanged
+        type: Boolean*
+    dispatcher: AliasDispatch
+    selector: 0x0006
+    executor: C_
+
+# ####
+
+- function:
+    name: ResolveAlias
+    return: OSErr
+    args:
+      - name: fromFile
+        type: FSSpecPtr
+      - name: alias
+        type: AliasHandle
+      - name: target
+        type: FSSpecPtr
+      - name: wasAliased
+        type: Boolean*
+    dispatcher: AliasDispatch
+    selector: 0x0003
+    executor: C_
+
+# ####
+
+- function:
+    name: ResolveAliasFile
+    return: OSErr
+    args:
+      - name: theSpec
+        type: FSSpecPtr
+      - name: resolveAliasChains
+        type: Boolean
+      - name: targetIsFolder
+        type: Boolean*
+      - name: wasAliased
+        type: Boolean*
+    dispatcher: AliasDispatch
+    selector: 0x000C
+    executor: C_
+
+# ####
+
+- function:
+    name: FollowFinderAlias
+    return: OSErr
+    args:
+      - name: fromFile
+        type: FSSpecPtr
+      - name: alias
+        type: AliasHandle
+      - name: logon
+        type: Boolean
+      - name: target
+        type: FSSpecPtr
+      - name: wasChanged
+        type: Boolean*
+    dispatcher: AliasDispatch
+    selector: 0x000F
+    executor: C_
+
+# ####
+
+- function:
+    name: MatchAlias
+    return: OSErr
+    args:
+      - name: fromFile
+        type: FSSpecPtr
+      - name: rulesMask
+        type: int32_t
+      - name: alias
+        type: AliasHandle
+      - name: aliasCount
+        type: int16_t*
+      - name: aliasList
+        type: FSSpecArrayPtr
+      - name: needsUpdate
+        type: Boolean*
+      - name: aliasFilter
+        type: AliasFilterUPP
+      - name: yourDataPtr
+        type: Ptr
+    dispatcher: AliasDispatch
+    selector: 0x0005
+    executor: C_
+
+# ####
+
+- function:
+    name: GetAliasInfo
+    return: OSErr
+    args:
+      - name: alias
+        type: AliasHandle
+      - name: index
+        type: AliasTypeInfo
+      - name: theString
+        type: Str63
+    dispatcher: AliasDispatch
+    selector: 0x0007
+    executor: C_

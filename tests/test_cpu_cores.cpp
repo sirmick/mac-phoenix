@@ -129,6 +129,28 @@ static int test_ppc(bool jit)
     return 0;
 }
 
+/* Code changed in a sequence reached by a local branch from an unchanged
+ * one of the same block (the block's checksum is at each sequence's head,
+ * and the branch goes past it): invalidate() of just that range makes the
+ * new code run (CFM loading a fragment where another's code was).
+ * cmpwi r4,0 ; beq +8 ; addi r3,r0,2 ; addi r3,r0,1 ; host op 0 */
+static void test_ppc_invalidate_branch_target(bool jit)
+{
+    static const uint32_t prog[] = { 0x2c040000, 0x41820008, 0x38600002, 0x38600001, 0x18000000 };
+    PpcMachine p(prog, 5, jit);
+    p.core->reset();
+    p.core->set_pc(0x1000);
+    p.core->set_reg(cpu::ppc::GPR0 + 4, 0);
+    CHECK(p.core->run() == cpu::StopReason::HostOp);
+    CHECK(p.core->reg(cpu::ppc::GPR0 + 3) == 1);
+
+    p.mem.write32(0x100c, 0x38600005);   /* addi r3,r0,5 */
+    p.core->invalidate(0x100c, 4);
+    p.core->set_pc(0x1000);
+    CHECK(p.core->run() == cpu::StopReason::HostOp);
+    CHECK(p.core->reg(cpu::ppc::GPR0 + 3) == 5);
+}
+
 /* A double stored to and loaded from an address that isn't word-aligned:
  * the 750 takes an alignment exception, which the installer completes in
  * software (as Mac OS's handler does; BBEdit Lite 4.1's setjmp).
@@ -321,6 +343,8 @@ int main(int argc, char **argv)
 
     test_ppc(false);
     test_ppc(true);
+    test_ppc_invalidate_branch_target(false);
+    test_ppc_invalidate_branch_target(true);
     test_ppc_misaligned_fp(false);
     test_ppc_misaligned_fp(true);
     test_ppc_instruction_hook(false);

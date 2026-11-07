@@ -68,3 +68,22 @@ reach it may control the emulator.
   ([JsonConfig.md](JsonConfig.md)); `--config /dev/null` ignores it.
 * With `--network socket`, the net-bridge socket (`/tmp/mac-ether.sock`;
   [Networking.md](Networking.md)).
+
+## Executor in a browser: `executor-standalone`
+
+Executor's browser tab is served by a program of its own, not by
+`mac-phoenix`: `executor/server`, built as `executor-standalone`
+([executor/Standalone.md](executor/Standalone.md)). Executor runs in the
+browser (WebAssembly), so the host only serves the page, the disk images
+and what the tab saves. How it differs from `mac-phoenix`:
+
+| | `mac-phoenix` | `executor-standalone` |
+|---|---|---|
+| The Mac runs | on the host | in the browser |
+| Port | 11000 (`--port`) | 127.0.0.1:8090 (`--bind`, `--port`) |
+| Who may use it | anyone who reaches the port | the first browser to open it, until it stops (a cookie) |
+| Disks | `--storage-dir` | a library of images (`--images`); changes in overlays beside them |
+| HTTPS | from a proxy | itself (`--tls auto`, `--tls-cert`/`--tls-key`) or from a proxy |
+
+On a host for others (a systemd user service, nginx or Caddy in front,
+what to back up): [executor/WebSite.md](executor/WebSite.md).

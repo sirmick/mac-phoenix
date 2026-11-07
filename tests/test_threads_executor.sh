@@ -108,7 +108,9 @@ field() { grep -oP "(^| )$1=\K[^ ]+" <<<"$2" || true; }
 echo "=== Thread Manager Test (Executor, Frontier) ==="
 echo "Image: $IMAGE  Port: $PORT  Core: ${CORE:-default}"
 
-EXTRA_FLAGS=(--executor-system "$IMAGE_NAME" --executor-writable-images)
+# --disk too: the per-run copy is written (the application saves on quit),
+# not mounted locked as an --executor-system image alone is.
+EXTRA_FLAGS=(--executor-system "$IMAGE_NAME" --disk "$IMAGE" --executor-writable-images)
 [[ -n "$CORE" ]] && EXTRA_FLAGS+=(--core "$CORE")
 "$BINARY" --backend executor --timeout "$((TIMEOUT + 10))" \
     --config /dev/null --dismiss-shutdown-dialog --headless-http \

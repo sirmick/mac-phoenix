@@ -79,7 +79,7 @@ included.
 
 ## Tests to write
 
-gtests in `src/executor/tests` (resources.cpp has fixtures for opening
+gtests in `executor/tests` (resources.cpp has fixtures for opening
 resource files): each selector's normal and error cases, ResErr after
 each, and the GetOverrideMap table above (set the override bit on maps of
 test files you open and arrange). Call them as the trap does, through

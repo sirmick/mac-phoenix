@@ -1,0 +1,54 @@
+# Extensions, control panels and Finder extensions Executor lets run at
+# startup, by file name: the ones whose code works on Executor so far
+# (phase 1, and AppleScript and Finder Scripting from phase 2, of tools/macdecode/inits.yaml, which records why each file is
+# where it is). As Extensions Manager does, any other file that runs code
+# at startup (INIT, RDEV, fext, appe, AINI, a cdev with INITs or AINIs) is moved into
+# "Extensions (Disabled)" / "Control Panels (Disabled)" / "System
+# Extensions (Disabled)", and moved back once it is listed. 8.x's control
+# panels that are applications ('APPC') run their INITs when listed and
+# stay where they are when not. Override per
+# data directory with <data_dir>/extension-policy.txt (same format; it
+# replaces this list). "System AINI <id>" allows one of the System file's
+# 'AINI' resources, which the loader runs before any INIT (-32700 is the
+# ASLM Loader, which starts the Shared Library Manager); a file's own
+# 'AINI' resources run when the file is allowed. "NAME @ 7.6": allowed only
+# on System 7.6 or later (7.5.5's PC Exchange 2.0.5 stays off: STRAGGLERS 62).
+# "-NAME": never, whatever the file runs at startup: moved into its folder's
+# "(Disabled)" one (Control Strip Modules: "Control Strip (Disabled)") and
+# left there.
+WindowShade
+Mouse
+Find File Extension
+General Controls
+Date & Time
+Apple Menu Options
+Launcher
+Control Strip
+CloseView
+Mac OS Easy Open
+Macintosh Easy Open
+PC Exchange @ 7.6
+Clipping Extension
+AppleScript™
+Finder Scripting Extension
+Color Picker
+Speech Manager
+Speech
+Shared Library Manager
+System AINI -32700
+Microsoft OLE Extension
+# 8.x's background applications ('appe'), launched by the Process Manager
+# once the Finder is up (process.cpp). The G3's 8.6 has Control Strip
+# Extension, Folder Actions and (not every boot) Application Switcher
+# running then (tests/guest/difftest proc). Control Strip Extension waits
+# for the Process Manager's private window calls (OSDispatch $5A-$66): its
+# strip setup fails without them and the session goes down.
+Folder Actions
+# The Monitors control panels and their Control Strip modules: the screen's
+# size is the tab's (the bar, Settings) or /api/resolution's; Monitors 7.5.6
+# lists only the current size, Monitors & Sound shows no monitor without the
+# Display Enabler (docs/executor/DisplayModes.md).
+-Monitors
+-Monitors & Sound
+-Monitor Resolution
+-Monitor BitDepth

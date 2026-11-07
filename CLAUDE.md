@@ -1,340 +1,285 @@
 # MacPhoenix
 
-Classic Mac emulator with web-based UI. Boots Mac OS 7.5.5 to Finder on a Quadra 650 ROM.
+Classic Mac emulator with a web UI. Two kinds of machine:
+
+- The ROM machines (`src/`): a 68k Mac (Quadra 650 ROM; also SE, IIci) and a
+  Power Mac G3, booting Apple's Systems 6.0.8 to 9.0.4.
+- Executor (`executor/`, its own product: `executor/README.md`): the Toolbox
+  in C++, no ROM. It runs in mac-phoenix (`--backend executor`), as a desktop
+  application (`executor-desktop`), and as WebAssembly in a browser tab served
+  by a Go server (`executor-standalone`).
 
 ## Quick Reference
 
 ```bash
-# Configure (first time, or after changing CMakeLists.txt)
-cmake -B build
+# Configure, build (emulator, executor-desktop, net-bridge's Rust NAT); -j4 at most here
+cmake -B build                       # -DTEST_ROM=PATH  -DBUILD_NET_BRIDGE=OFF (no cargo)
+cmake --build build -j4
 
-# Build (emulator + net-bridge Rust NAT)
-cmake --build build -j$(nproc)
+# Run (web UI on http://localhost:11000), or headless and timed
+./build/mac-phoenix ~/roms/quadra.rom
+./build/mac-phoenix --timeout 10 --no-webserver ~/roms/quadra.rom
+./build/mac-phoenix --backend kpx --core mame-ppc --jit --rom ~/storage/roms/g3.rom --disk IMG
 
-# Disable net-bridge build (skip cargo, e.g. in minimal CI)
-cmake -B build -DBUILD_NET_BRIDGE=OFF
-
-# Run (with web UI)
-./build/mac-phoenix /home/mick/quadra.rom
-
-# Run (headless, timed)
-./build/mac-phoenix --timeout 10 --no-webserver /home/mick/quadra.rom
-
-# Test (all)
-ctest --test-dir build
-
-# Test (verbose)
-ctest --test-dir build -V
-
-# Test (by label: api or boot)
+# Tests (labels: api boot bridge executor guest mame provisioning tools unit; ctest --print-labels)
+ctest --test-dir build -j4
 ctest --test-dir build -L api
-ctest --test-dir build -L boot
+ctest --test-dir build -R api_endpoints -V
+npx playwright test                  # tests/e2e, against a running emulator
 
-# Test (specific)
-ctest --test-dir build -R api_endpoints
-
-# Configure with test ROM path
-cmake -B build -DTEST_ROM=/path/to/quadra.rom
-
-# Playwright E2E tests (requires running emulator)
-npx playwright test
-
-# Executor backend: no ROM, C++ Toolbox (docs/executor/PLAN.md), on the
-# mame-68k core only (Executor's four address windows, no sysctl). Pick
+# Executor in mac-phoenix (docs/executor/PLAN.md): mame-68k only, no ROM.
 # "Executor" in the web UI, or:
-./build/mac-phoenix --backend executor
-# ... on Apple's 7.5.5 System with real Finder (Settings > System disk):
-./build/mac-phoenix --backend executor --executor-system 7.5.5.img
-# ... with sound (Executor mixes in C++ and feeds the same Opus/WebRTC path):
-./build/mac-phoenix --backend executor --audio
-# MacTCP/OT reach the host through rsys/hostnet.h: -DEXECUTOR_NET=none builds them
-# with no network (the wasm build's default until the relay exists).
-# Open Transport is native C++ and on by default (docs/executor/OpenTransport.md),
-# for 68k (ASLM) and PowerPC (OTClientLib & co.) clients alike, its interface in
-# multiversal/defs/OpenTransport.yaml + OpenTptInternet.yaml (also Retro68's
-# headers, 68k + PowerPC glue in custom/OpenTransportGlue.c: tests/guest/ot/build-retro68.sh)
-# (ctest -R 'ot_'); --no-executor-ot leaves applications to MacTCP:
-./build/mac-phoenix --backend executor --executor-system 7.5.5.img --no-executor-ot
-# CFM-68K applications (CodeWarrior IDE 3.2) run on Executor's own Code Fragment
-# Manager, no Enabler (docs/executor/CFM68K.md; ctest -R guest_suite_cfm68k)
-# DOS (FAT) disk images (--disk) mount through PC Exchange (7.6.1) on Executor's File
-# System Manager (docs/executor/FSM.md; ctest -R pcexchange_executor;
-# tests/lib/fat_image.py makes and checks them)
-# ... PowerPC code on mame-ppc: PowerPC-only apps always, fat apps' with
-# --executor-ppc; StdCLib and MathLib are Executor's own C++ (docs/executor/PPCLibs.md;
-# ctest -R 'clib_|guest_suite_ppc_executor'):
-./build/mac-phoenix --backend executor --executor-system 7.5.5.img --executor-ppc
+./build/mac-phoenix --backend executor                                  # its own System
+./build/mac-phoenix --backend executor --executor-system 7.5.5.img      # Apple's System and Finder
+./build/mac-phoenix --backend executor --executor-system 8.6.img --executor-ppc   # fat apps' PowerPC code
 ctest --test-dir build -L executor
-# High-resolution screen (docs/executor/HiDPI.md; phase 1: text from outlines over
-# the 1x screen scaled up): Skia, prebuilt, off by default
+# Open Transport is Executor's own C++, on by default (docs/executor/OpenTransport.md;
+# ctest -R 'ot_'); --no-executor-ot leaves applications to MacTCP. -DEXECUTOR_NET=none
+# builds MacTCP/OT with no network (the Windows build's default; wasm: the relay).
+# CFM-68K on Executor's Code Fragment Manager (docs/executor/CFM68K.md; ctest -R guest_suite_cfm68k).
+# FAT disk images through PC Exchange (docs/executor/FSM.md; ctest -R pcexchange_executor;
+# tests/lib/fat_image.py). StdCLib/MathLib for PowerPC in C++ (docs/executor/PPCLibs.md;
+# ctest -R 'clib_|guest_suite_ppc_executor'). Heaps that fill: docs/executor/FullHeap.md.
+# Calls Executor lacks: "[unimplemented]" in the log, and ~/storage/executor/unimplemented.log.
+
+# HiDPI (docs/executor/HiDPI.md): prebuilt Skia, off by default
 tools/skia/fetch.sh && cmake -B build -DEXECUTOR_SKIA=ON
 ./build/mac-phoenix --backend executor --executor-system 8.6.img --executor-ppc --executor-scale 2
-# Executor's API definitions (src/executor/multiversal/defs) are also Retro68's
-# Multiversal Interfaces: ctest -R multiversal_retro68 builds a program against
-# the C headers they generate, ctest -R retro68_ runs RetroTest (tests/guest/retro68,
-# 68k + PowerPC, Retro68 with PowerPC in ~/opt/retro68/build-ppc/toolchain) on
-# Executor and Apple's systems (docs/executor/README.md, LIBRARIES.md)
-# Retro68's own AutomatedTests on Executor through LaunchAPPL -e executor:
-# tools/retro68/automated_tests.py (ctest -R retro68_automated_executor)
-# Every control panel and application on an 8.x System image, one per Executor session
-# (screenshots, crashes, unimplemented calls; docs/executor/MacOS8-9.md "The 8.6 grid"):
-tools/executor/grid.py 8.6.img --jobs 3        # -> ~/storage/executor-grid/8.6/grid.md
-# Differential probes: Apple's 8/9 libraries (G3 ROM) against Executor's, key by key
-# (docs/executor/DiffTest.md; references and expected differences committed):
-tools/difftest/run.py appr [--dump]            # ctest -R difftest_
-tools/macdecode/libraries.py --census --rom ~/storage/roms/g3.rom --system FOLDER --logs GRID-DIR
-tools/executor/grid_compare.py ~/storage/executor-grid/8.6-r2 ~/storage/executor-grid/8.6-r3
-# PowerPC breakpoints/traces in an Executor session: break at $ADDR, FRAGMENT+OFF or
-# !Routine, dump registers/back chain/stack/#memory, trace N instructions
-# (docs/executor/PPCTrace.md; also /api/executor/ppc-break; ctest -R ppc_break_executor):
-./build/mac-phoenix --backend executor --executor-system 8.6.img --executor-ppc \
-    --executor-ppc-break 'BBEdit Lite 6.1+17a218@200*2#r30:40' --executor-ppc-break '!AESend'
-# Toolbox selectors/OT functions a session called that Executor lacks: "[unimplemented]"
-# in the log, collected in ~/storage/executor/unimplemented.log (date, app, call)
 
-# Executor as WebAssembly (docs/executor/DIRECTION.md, W1): emsdk in ~/emsdk
+# Executor tools
+tools/executor/grid.py 8.6.img --jobs 3        # every app/control panel, one session each
+                                               # -> ~/storage/executor-grid/8.6/grid.md (docs/executor/MacOS8-9.md)
+tools/executor/grid_compare.py OLD-GRID NEW-GRID
+tools/difftest/run.py appr [--dump]            # Apple's 8.6 libraries vs Executor's (docs/executor/DiffTest.md;
+                                               # probes in tests/guest/difftest; ctest -R difftest_)
+tools/macdecode/libraries.py --census --rom ~/storage/roms/g3.rom --system FOLDER --logs GRID-DIR
+./build/mac-phoenix --backend executor --executor-system 8.6.img --executor-ppc \
+    --executor-ppc-break '!AESend'             # docs/executor/PPCTrace.md; ctest -R ppc_break_executor
+# Executor's API definitions (executor/core/multiversal/defs) are also Retro68's
+# Multiversal Interfaces (docs/executor/LIBRARIES.md): ctest -R multiversal_retro68;
+# RetroTest (tests/guest/retro68) on Executor and Apple's Systems: ctest -R retro68_
+tools/retro68/automated_tests.py               # Retro68's AutomatedTests (ctest -R retro68_automated_executor)
+
+# Executor desktop application (executor/frontends/desktop/README.md): Qt 6 Widgets
+./build/executor-desktop [--system ~/storage/web-library/boot-8.6.img --ppc]
+QT_QPA_PLATFORM=offscreen ./build/executor-desktop --data DIR --screenshot s.png --quit
+ctest --test-dir build -R executor.desktop
+cmake --build build --target executor-desktop-appimage   # tools/desktop/appimage.sh; --test APPIMAGE: debian:stable
+
+# Windows, cross-built here (cmake/ExecutorWindows.cmake, tools/windows; toolchain and
+# Qt in ~/storage/deps/windows): exe in build-windows/, zip in ~/storage/tmp/windows-try
+tools/windows/build.sh && tools/windows/package.sh
+tools/windows/smoke.sh ZIP ~/storage/tmp/win-smoke --system ~/storage/web-library/boot-8.6.img --ppc   # Wine, docker
+tools/windows/symbolize.sh crash-STAMP.txt [unstripped executor-desktop.exe]
+
+# WebAssembly (docs/executor/DIRECTION.md): emsdk in ~/emsdk
 source ~/emsdk/emsdk_env.sh
 emcmake cmake -B build-wasm && cmake --build build-wasm -j4
-ctest --test-dir build-wasm -L executor    # the gtests under node, + executor.web.tab
-# The tab (W2): serve build-wasm/src/executor/romlib/config/front-ends/wasm
-# (python3 -m http.server) and open index.html; ?size=WxH.
-# executor.web.tab needs -DEXECUTOR_WEB_NODE_PATH=<node_modules with playwright>
-# (and -DEXECUTOR_WEB_CHROMIUM=<browser> if not playwright's own).
+ctest --test-dir build-wasm -L executor        # gtests under node, executor.web.* cells
+# executor.web.* need go and -DEXECUTOR_WEB_NODE_PATH=<node_modules with playwright>
+# (-DEXECUTOR_WEB_CHROMIUM=<browser> if not playwright's own).
+# The Go server with the tab embedded, the tab's only server (docs/executor/Standalone.md):
+make -C executor/server WASM_BUILD=$PWD/build-wasm   # -> executor/server/executor-standalone
+make -C executor/server test                         # go test
+executor/server/executor-standalone --data DIR [--images DIR] [--port 8090]   # -h: all flags
 
-# MPW (68k SC/Link/Rez) inside a headless Executor session (docs/MPW.md)
-tools/mpw/mpw setup                    # once: MPW disk + System, built from snapshots
+# MPW (SC/Link/Rez) in a headless Executor session (docs/MPW.md)
+tools/mpw/mpw setup                    # once: MPW disk + System, from snapshots
 tools/mpw/mpw build tests/guest/ot     # build.mpw; products -> DIR/build/*.bin
-tools/mpw/mpw run 'Version'            # exit code = {Status}; mpw stop when done
-tools/mpw/mpw --toolchain cw build DIR  # CodeWarrior Pro 4's MPW (MWC68K, MWCPPC; public media)
+tools/mpw/mpw run 'Version'            # exit code = {Status}; tools/mpw/mpw stop when done
+tools/mpw/mpw --toolchain cw build DIR # CodeWarrior Pro 4's MPW (MWC68K, MWCPPC)
 
-# Guest software (docs/Provisioning.md, docs/provisioning/PLAN.md): pinned
-# media (provisioning/media.json) -> bakes run in the guest -> snapshots
-# (~/storage/baked) -> images (provisioning/images/*.json). Dev disks:
-# dev-tools-system-7.img + dev-7.5.5.img / dev-7.6.1.img, for both 68k and PPC;
-# dev-tools-macos-8-9.img + dev-8.6.img / dev-9.0.4.img, PPC only (G3 ROM).
-python3 provisioning/bake.py --all --jobs 3     # snapshots not up to date
-python3 provisioning/build.py --all             # images not up to date
-python3 provisioning/test_image.py dev-7.6.1 dev-tools-system-7   # launch every app, 68k + PPC
-python3 provisioning/bake.py NAME --explore --record       # work out a bake; --do/--finish
+# Guest software (docs/Provisioning.md): pinned media (provisioning/media.json) ->
+# bakes in the guest -> snapshots (~/storage/baked) -> images (provisioning/images/*.json)
+python3 provisioning/bake.py --all --jobs 3          # snapshots not up to date
+python3 provisioning/build.py --all                  # images not up to date
+python3 provisioning/test_image.py dev-7.6.1 dev-tools-system-7   # launch every app
+python3 provisioning/bake.py NAME --explore --record # work out a bake; --do / --finish
+tools/web/make_library.py                            # images -> ~/storage/web-library (the tab's)
 
-# arm64 / riscv64 builds on this x86-64 box: Debian containers under qemu
-# (binfmt_misc + docker). Build dirs build-arm64/, build-riscv64/.
+# arm64 / riscv64 in Debian containers under qemu (build-arm64/, build-riscv64/)
 tools/xarch/xarch.sh arm64                     # configure + build
-tools/xarch/xarch.sh arm64 ctest -R cpu_cores  # run tests inside
-tools/xarch/xarch.sh riscv64 shell             # interactive
+tools/xarch/xarch.sh arm64 ctest -R cpu_cores
+tools/xarch/xarch.sh riscv64 shell
 
-# Boot capacity matrix (all backend × JIT config × OS cells)
-# Writes CSV + PNG screenshots + per-cell logs to --out dir.
-tests/run_boot_matrix.sh --out /home/mick/mac-phoenix/test-results/boot-matrix
-# Single cell:
-tests/test_boot_matrix.sh --label uae-755 --backend uae \
-    --rom ~/roms/quadra.rom --disk ~/storage/images/7.5.5.img \
-    --timeout 60 --port 19300 --screenshot-dir /tmp/one-cell
+# Boot matrix: every backend x core x JIT x OS cell -> CSV, screenshots, logs
+tests/run_boot_matrix.sh --out ~/storage/tmp/boot-matrix [--only LABEL,...]
 ```
 
 ## CPU Backends
 
-Selected via `--backend` flag (default: `uae`). The backend token uniquely
-determines the CPU architecture — there is no separate `--arch` flag. The
-`Backend` enum and Platform API are kept as the extension point for adding
-further backends.
+`--backend` picks the machine and so the architecture; `--core` the CPU core.
 
-| Backend | Arch | What | Speed | Use for |
-|---------|------|------|-------|---------|
-| `uae` | m68k | ROM-based Mac; CPU core `--core uae` (interpreter, +optional `--jit`) or `--core mame-68k` (MAME's Musashi: PMMU, softfloat FPU, several instances per process; `src/cpu/mame/`; `musashi` names it too, the vendored v3.32 is gone) | Fast (~5s boot) | Default, end users |
-| `kpx` | ppc | Power Mac G3 machine; CPU core `--core kpx` (Kheperix, +optional `--jit`) or `--core mame-ppc` (MAME's PowerPC recompiler: `--jit` native x86-64 back-end, `--no-jit` UML interpreter; `src/cpu/mame/`, installer `src/cpu/kpx/cpu_ppc_mame.cpp`) | Medium | Default for PPC |
-| `executor` | m68k | Executor 2000 Toolbox in C++ on `mame-68k`; no ROM; PowerPC applications' code on `mame-ppc` (PowerCore facade) | Fast start | Toolbox reimplementation work (`src/executor/`) |
+| Backend | Arch | Cores | What |
+|---------|------|-------|------|
+| `uae` (default) | m68k | `uae` (interpreter, `--jit`), `mame-68k` (MAME's Musashi: PMMU, softfloat FPU; `musashi` names it too) | ROM-based 68k Mac, ~5 s to the desktop |
+| `kpx` | ppc | `kpx` (Kheperix, `--jit`), `mame-ppc` (MAME's PowerPC recompiler: `--jit` native x86-64/arm64 back-end, `--no-jit` UML interpreter) | Power Mac G3; `--core mame-ppc --jit` boots 7.5.5 in 0.9 s, 9.0.4 in 9.7 s |
+| `executor` | m68k | `mame-68k` only; PowerPC code on `mame-ppc` | Executor's Toolbox, no ROM |
 
-MAME cores (docs/cpu/PLAN.md): MAME's Musashi with PMMU and FPU as the 68k
-core `mame-68k` (C1, done), MAME's PowerPC recompiler as the PPC core
-`mame-ppc` (C2: core, Mac side and the x86-64 back-end done, `--jit`; arm64
-back-end boots 7.5.5 on arm64 Linux under qemu, `tools/xarch`), and the host 68k core replacing the nanokernel's 68k
-emulator on the PPC machine (C3a: `--m68k-host 1` runs host-initiated
-68k routines on a `mame-68k` core with handoff to the emulator at the first
-trap; `2` is an experiment that breaks the bridge; the main 68k thread is
-still the nanokernel's emulator). `--core mame-ppc --jit` boots 7.5.5 to the
-desktop in 0.9 s and Mac OS 9.0.4 in 9.7 s. Reference checkout:
-`/home/mick/src/mame-src`. Tests: `ctest -R 'cpu_cores|boot_core_mame68k|boot_ppc_mame|guest_suite_ppc_mame'` (and `-L executor`: Executor runs only on mame-68k) (`boot_ppc_mame_jit` is the native back-end;
-`guest_suite_ppc_mame` is the Mac OS 9.0.4 guest suite on it;
-`command_bridge_ppc_mame_m68k` is C3a). `--debug-mame-ppc` prints host ops,
-exceptions and a per-second PC and framebuffer sample from the mame-ppc
-installer. Open items: the Stragglers
-section of docs/cpu/PLAN.md.
+MAME cores are in `src/cpu/mame/` (mame-ppc's installer: `src/cpu/kpx/cpu_ppc_mame.cpp`;
+reference checkout `/home/mick/src/mame-src`). The goal is MAME cores only
+(docs/cpu/PLAN.md, open items in its Stragglers section). `--m68k-host 1` runs
+host-initiated 68k routines on a mame-68k core on the PPC machine (C3a); the
+main 68k thread is still the nanokernel's emulator. Tests:
+`ctest -R 'cpu_cores|boot_core_mame68k|boot_ppc_mame|guest_suite_ppc_mame|command_bridge_ppc_mame_m68k'`.
 
 ## Project Structure
 
 ```
-src/
-  main.cpp                          — Entry point, thread orchestration
-  config/
-    emulator_config.cpp             — Unified config: CLI args, JSON, env vars, save/load
-  core/
-    boot_progress.cpp               — Boot milestone tracking (phases, CHECKLOAD counting)
-    rom_patches.cpp                 — ROM patching, EmulOp insertion
-    emul_op.cpp                     — EmulOp handlers (RESET, IRQ, CHECKLOAD, CMD_DISPATCH)
-    command_bridge.cpp              — Read commands (peek Mac mem from IRQ); init
-    command_bridge.h                — CmdType enum, CommandResult, init signatures
-    emulator_subprocess.h           — Subprocess management for m68k and PPC (IPC via SHM+socket)
-    adb.cpp                         — ADB mouse/keyboard emulation
-    cpu_context.cpp                 — Memory allocation, backend init
-  cpu/
-    uae_cpu/                        — UAE interpreter source (newcpu.cpp, cpuemu.cpp)
-    kpx/                            — KPX PPC backend (SheepShaver Kheperix interpreter)
-    cpu_m68k.cpp                    — The ROM-based 68k Mac on a cpu::Core (EmulOps, InterruptFlags, reset)
-    core/                           — cpu::Core: one interface for every core (GuestMemory, host ops, run/step, IRQ, contexts); uae + mame-68k
-    core/platform_cpu.cpp           — g_platform's memory/CPU/Execute68k/interrupt entries on the active core (every machine)
-  drivers/
-    video/video_output.h            — Lock-free triple buffer for frames
-    video/video_webrtc.cpp          — WebRTC video driver
-    platform/platform_unix.cpp      — Unix platform: disk I/O + ExtFS filesystem driver
-    platform/timer_interrupt.cpp    — 60Hz timer via clock_gettime
-  webserver/
-    http_server.cpp                 — HTTP/1.1 server, stream routes, RFC 6455 WS upgrade
-    websocket.cpp                   — In-process WebSocket (RFC 6455 framing + SHA1/base64 handshake)
-    api_handlers.cpp                — All /api/ endpoints
-    webserver_main.cpp              — HTTP server thread; registers /ws route via WebRTCServer
-  webrtc/
-    webrtc_server.cpp               — Signaling (/ws), peer connections for H.264/VP9 RTP
-  executor/                         — Executor 2000 Toolbox core (MIT), imported; see docs/executor/PLAN.md
-    cpu/                            — syn68k API facade (syn68k_common) on a cpu::Core + PowerCore (PowerPC) on mame-ppc
-    romlib/                         — the Toolbox (lightly patched upstream source)
-    multiversal/                    — API definitions → generated headers/trap glue (Ruby; output committed in romlib/generated)
-    tests/                          — Executor gtest suite (ctest label: executor)
-  common/
-    sigsegv.cpp                     — SIGSEGV handler (skips bad accesses)
-    include/platform.h              — Platform API (g_platform function pointers)
-
-BridgeAgent/
-  BridgeAgent.c                     — BridgeAgent source (Retro68 m68k); takes requests over the bridge trap $ABE5
-  BridgeAgent.bin                   — Pre-built MacBinary (committed; rebuilt by CMake when Retro68 and ruby are
-                                      present, against the Multiversal Interfaces generated from Executor's definitions)
-  BridgeAgent.r                     — Resource fork: SIZE, BNDL, FREF, creator sig, icons.r include
-
-tests/
-  test_api_endpoints.sh             — API smoke tests (10 checks)
-  test_boot_to_finder.sh            — Boot-to-Finder test (parameterized by backend)
-  test_mouse_position.sh            — Mouse position API test
-  test_command_bridge.sh            — Command bridge integration tests (7 checks)
-  test_guest_suite.sh               — Boot → launch MacPhoenixSuite via /api/launch → read results
-  guest/suite/                      — MacPhoenixSuite: the guest test suite (files, audio, AppleScript, network, keyboard, Finder), a fat C app built by tools/mpw/mpw (Apple or CodeWarrior)
-  test_extfs.sh                     — ExtFS config, CLI, backward compat tests (8 checks)
-  test_boot_matrix.sh               — Single-cell capacity check ({backend,arch,disk,jit} → Finder)
-  run_boot_matrix.sh                — Orchestrator: 14 cells (uae, mame-68k, kpx, mame-ppc), serial, CSV + PNG + per-cell log
-  e2e/                              — Playwright browser tests
-
-client/                             — Browser UI (vanilla JS)
-
+src/                                 — the ROM machines and mac-phoenix's server
+  main.cpp                           — entry point, threads; the emulator runs in a child process
+  config/emulator_config.cpp         — config: CLI flags, JSON, save/load, --help
+  core/                              — boot_progress, rom_patches, emul_op (EmulOps), command_bridge,
+                                       emulator_subprocess.h (child IPC: SHM + socket), adb, cpu_context,
+                                       text_feed (/api/text)
+  cpu/                               — uae_cpu/, kpx/, mame/; cpu_m68k.cpp (the ROM 68k Mac on a cpu::Core);
+                                       core/: cpu::Core, one interface for every core; core/platform_cpu.cpp
+  drivers/                           — video (triple buffer, encoders, WebRTC), audio, platform (disk I/O,
+                                       ExtFS, timer), browser/ (MacBrowser, -DBUILD_BROWSER=ON)
+  webserver/                         — http_server, websocket, api_handlers (/api/*), file_scanner (storage)
+  webrtc/webrtc_server.cpp           — /ws signaling, H.264/VP9 + Opus RTP
+  common/include/platform.h          — g_platform; guest_bridge.h (trap $ABE5)
+executor/                            — Executor (MIT); its directory table: executor/README.md
+  core/                              — cpu/ (syn68k API on cpu::Core, PowerCore on mame-ppc), romlib/ (the
+                                       Toolbox), multiversal/ (API definitions -> generated headers), res/, third_party/
+  frontends/                         — phoenix/ (executor_host API; executor_child.cpp: --backend executor),
+                                       wasm/ (the tab's module), desktop/ (executor-desktop), headless/
+  host/                              — shared by the tab and the desktop app: session, disk images, overlays, requests
+  tests/                             — gtest suite (label executor); web/: the tab's node/Playwright cells
+  web/                               — the tab (JS/CSS/HTML)
+  server/                            — executor-standalone (Go)
+  SHOWCASE.md                        — Executor at 2x on Apple's free 7.5.3 and freeware
+BridgeAgent/                         — the guest agent for action commands (Retro68; .bin committed)
+MacBrowser/                          — MacBrowser guest app (experimental)
+client/                              — mac-phoenix's browser UI (vanilla JS)
+provisioning/                        — media, bakes, image definitions (docs/Provisioning.md)
+tests/                               — test_*.sh cells, lib/, guest/ (MacPhoenixSuite, OT, difftest probes,
+                                       retro68 ...), e2e/ (Playwright)
+tools/                               — executor/, difftest/, macdecode/, mpw/, retro68/, skia/, web/, desktop/,
+                                       windows/, xarch/, macfetch/, ...
+cmake/                               — ExecutorWasm.cmake, ExecutorWindows.cmake, ...
+docs/                                — README.md indexes them; API.md, Architecture.md, executor/, cpu/
 ```
 
 ## API Endpoints
 
-The main ones; every endpoint with its parameters: `docs/API.md`.
+mac-phoenix's main endpoints; all of them, with parameters: `docs/API.md`.
+executor-standalone's API: `docs/executor/Standalone.md`.
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/api/status` | GET | `{emulator_running, boot_phase, checkload_count, boot_elapsed}` |
-| `/api/mouse` | GET | `{x, y}` — Mac cursor position (503 if not running) |
-| `/api/mouse` | POST | Move cursor: `{"x":N,"y":N}` absolute, `{"dx":N,"dy":N}` relative |
-| `/api/screenshot` | GET | PNG image of current framebuffer (503 if no frames) |
-| `/api/config` | GET/POST | Unified JSON config |
-| `/api/emulator/start` | POST | Start CPU execution |
-| `/api/emulator/stop` | POST | Stop CPU execution |
-| `/api/storage` | GET | Available ROMs and disk images |
-| `/api/codec` | POST | Change video codec (h264/vp9/png/webp) |
-| `/api/codecs` | GET | Available codecs: `{codecs: [{id, name, available}]}` |
-| `/api/keypress` | POST | Send key event: `{"key": "return"}` or `{"key": 36}` |
-| `/api/invoke-debug` | POST | Invoke debugger (Programmer's Key: NMI on 68k, Cmd+Power on PPC) |
-| `/api/app` | GET | Current app name (read command — peek `CurApName`) |
-| `/api/windows` | GET | Window list (read command — walk `WindowList`) |
-| `/api/ui` | GET | Read command: front process's windows (screen rects), controls, dialog items, menus (open popups included) as JSON — click by name, fall back to pixels |
-| `/api/text` | GET | Text on screen now, as QuickDraw drew it (`src/core/text_feed.cpp`: `_StdText`/`_CopyBits`/`_ScrollRect` patched in the trap table; ROM machines): strings with screen rects, font, window/app, `inverted` (looks selected). `?since=N`: the draw log (offscreen too). For what `/api/ui` can't name: List Manager lists, self-drawn controls, open popups |
-| `/api/wait` | POST | Poll condition: `boot=Finder`, `app=Name`, `text=Substring` (drawn on screen) |
-| `/api/executor/ppc-break` | GET/POST | Executor's PowerPC breakpoints and hit reports (docs/executor/PPCTrace.md) |
-| `/api/annotate` | POST | `{"text": "..."}` — a line from whatever drives the guest (provisioning/bake.py posts each step); the last 6 are in `/api/status` `annotations` and shown over the screen by the web UI. `{"text": ""}` clears. Open the UI with `?view` to watch without sending input |
-| `/api/launch` | POST | Launch app via BridgeAgent: `{"path":"HD:App"}`. With `"open":true`, opens the document via generic `'aevt'/'odoc'` (any registered creator: Frontier `LAND`, MacPerl `McPL`, MPW `MPS `, …) |
-| `/api/script` | POST | Generic do-script via `'misc'/'dosc'`: `{"creator":"McPL","script":"..."}` (or `"script_b64"` for exact MacRoman bytes). Works for MacPerl, Frontier UserLand, MPW Shell, AppleScript editor — any app registered for `dosc`. |
-| `/api/copy` | POST | In-guest File Manager copy via BridgeAgent, both forks + Finder info: `{"from":"Vol:Item","to":"Vol:Folder:"}` (`"replace":true`: merge into a folder of the same name, files replaced) |
-| `/api/quit` | POST | Quit front app via BridgeAgent (`kAEQuitApplication`) |
-| `/api/shutdown` | POST | Graceful guest OS shutdown via BridgeAgent (`ShutDwnPower`) |
-| `/api/restart` | POST | Graceful guest OS restart via BridgeAgent (`ShutDwnStart`) |
+| `/api/status` | GET | `emulator_running`, `boot_phase`, `boot_elapsed`, `bridge_agent_connected`, `annotations`, ... |
+| `/api/screenshot` | GET | the screen as PNG (`?scale=1`: Executor's 1x screen) |
+| `/api/mouse` | GET/POST | cursor `{x, y}`; POST `{"x","y"}` or `{"dx","dy"}`, `"button"`/`"down"` |
+| `/api/keypress` | POST | `{"key":"return"}` or a key code `{"key":36}` |
+| `/api/config` | GET/POST | the JSON config (docs/JsonConfig.md) |
+| `/api/emulator/start`, `/stop`, `/restart` | POST | the machine |
+| `/api/storage` | GET | ROMs, disk images, Executor Systems |
+| `/api/app`, `/api/ui` | GET | read commands: front application; its windows, controls, dialog items, menus |
+| `/api/text` | GET | text on screen as QuickDraw drew it (ROM machines; `?since=N`: the draw log) |
+| `/api/wait` | POST | until `boot=Finder`, `app=Name` or `text=Substring` holds |
+| `/api/launch`, `/api/quit`, `/api/script`, `/api/exec`, `/api/copy`, `/api/shutdown`, `/api/restart` | POST | action commands through BridgeAgent |
+| `/api/annotate` | POST | a line shown over the screen (provisioning posts each step) |
+| `/api/snapshot` | POST | guest RAM and ROM to `<storage>/snapshots/NAME/` (tools/macdecode) |
+| `/api/executor/ppc-break` | GET/POST | Executor's PowerPC breakpoints and hits |
 
 ## Boot Phases
 
-Tracked in `boot_progress.cpp`, exposed via `/api/status`:
-
+`boot_progress.cpp`, in `/api/status`:
 `pre-reset` → `ROM init` → `boot globs` → `drivers` → `warm start` → `boot blocks` → `extensions` → `Finder` → `desktop`
 
 ## CLI Flags
 
+`./build/mac-phoenix --help` (copy it here again when flags change). `executor-desktop --help` and
+`executor-standalone -h` have their own (executor/frontends/desktop/README.md,
+docs/executor/Standalone.md).
+
 ```
-./build/mac-phoenix [options] [rom-path]
+Usage: ./build/mac-phoenix [options] [rom-path]
 
 Machine:
   --rom PATH                 ROM file (or positional arg)
   --ram MB                   RAM size in megabytes (default: 64)
   --screen WxH               Display resolution (default: 640x480)
-  --depth N                  68k and Executor: colour depth the screen starts in (1 2 4 8 16 32;
-                             default 32; Executor 32 on 8.x Systems, 8 on 7.x;
-                             8 for games that run only in 256 colours)
+  --depth N                  68k and Executor: colour depth the screen starts in, bits
+                             (1 2 4 8 16 32; default 32, Executor 32 on 8.x and 8 on 7.x;
+                             8 for 256-colour games)
   --disk PATH                Disk image (repeatable)
   --cdrom PATH               CD-ROM image (repeatable)
-  --model-id N               Machine type the Mac is told (Gestalt ID - 6; default: the
-                             profile's). Quadra-family ROMs only: 5 = IIci, for System 7.0/7.1
-                             (7.1 bombs with the Quadra's 14)
   --extfs PATH               Shared folder (repeatable; the ROM machines mount only the first)
   --bootdriver N             0=any, -62=CD-ROM (default: 0)
   --storage-dir PATH         Default storage root (default: ~/storage)
   --executor-data PATH       Executor data dir (default: <storage>/executor)
-  --executor-system IMAGE    Run on the System Folder of <storage>/images/IMAGE
-                             (copied out on first use, image mounted too)
-  --executor-start WHAT      finder | browser | path in the System (default: finder)
-  --executor-app PATH        Application Executor starts instead (host path)
-  --executor-writable-images Executor mounts disk images read-write (default: read-only)
-  --[no-]executor-fresh      Restore the System from its clean copy each run (default: on)
+  --executor-app PATH        App Executor starts instead of Browser (host path)
+  --executor-system IMAGE    Run on the System Folder of <storage>/images/IMAGE (copied
+                             to <storage>/executor-systems on first use; image mounted too)
+  --executor-start WHAT      finder | browser | path inside the System (default: finder)
+  --[no-]executor-fresh      Start each run from the System's clean copy (default: on)
+  --executor-logtraps        Executor logs every trap call to stderr
+  --executor-debug OPTS      Executor's own debug options, comma-separated: memcheck (heap
+                             consistency checks at every Memory Manager call, slow), allocs
+                             (allocations >= 4K and the code that asked), pcsample (where
+                             PowerPC code spends its time, every 5 s), hidpi (the text
+                             --executor-scale redraws, and what became of it), ppcinterp
+                             (mame-ppc's UML interpreter, not its native back-end), mmu68k
+                             (mame-68k with its PMMU, no tables set up), mmuppc (mame-ppc
+                             translating every access, identity), fslog,
+                             trace, trapfailure, unimplemented, unexpected, errno, sound, all
+  --watch ADDR[:LEN]         Report every write to guest memory ADDR (hex; LEN 1-16, default 4):
+                             old/new value, 68k PC and registers, last traps, host stack (Executor)
+  --executor-ppc-break SPEC  PowerPC breakpoint (Executor; repeatable; docs/executor/PPCTrace.md):
+                             WHERE[@N][*HITS][#MEM], WHERE $ADDR, FRAGMENT[:SECT]+OFF (hex) or
+                             !Routine (Executor's); on a hit registers, back chain, stack, MEM
+                             (rN+OFF:LEN, $ADDR:LEN, ^ reads through), then N instructions traced;
+                             HITS hits reported (default 1, 0 all). "on": none yet, for the API
+  --executor-logtraps-nesting N  ... and calls nested N deep in Toolbox callbacks (default 1)
+  --executor-logtraps-filter LIST  ... only calls whose names match these comma-separated
+                             wildcards ("Gestalt,HideWindow,PB*"): less slowdown;
+                             -NAME leaves calls out ("-WaitNextEvent,-Get*")
+  --executor-writable-images Executor mounts disk images read-write (default: read-only;
+                             not the --executor-system image unless --disk names it too)
   --[no-]executor-ot         Executor answers Open Transport (default: on)
-  --executor-ppc             Executor runs fat apps' PowerPC code on mame-ppc (PowerPC-only
-                             apps always do; InterfaceLib only so far; default: off)
-  --executor-scale X         Executor's display scale (docs/executor/HiDPI.md; -DEXECUTOR_SKIA=ON):
-                             frames X times the Mac's screen, programs still see 1x;
-                             /api/screenshot?scale=1 the 1x screen (default: 1)
+  --executor-ppc             Executor runs fat applications' PowerPC code (PowerPC-only
+                             applications always run it; default: off)
+  --executor-scale X         Executor's display scale (2: text drawn from outlines at
+                             twice the size; 1x for programs; needs -DEXECUTOR_SKIA=ON)
 
 CPU:
   --backend NAME             uae | kpx | executor
-                             (default: uae; backend implies architecture;
-                             executor needs no ROM)
+                             (default: uae)
   --core NAME                CPU core for the backend's architecture:
-                             68k uae | mame-68k (default: uae; Executor: mame-68k only;
-                             musashi = mame-68k since the vendored v3.32 was retired)
+                             68k uae | mame-68k (default: uae; musashi = mame-68k)
                              ppc kpx | mame-ppc (default: kpx)
   --jit / --no-jit           Enable backend's primary JIT (uae, kpx)
-  --m68k-host N              mame-ppc: 1 runs host-initiated 68k routines on a
-                             mame-68k core (C3a); 2 the parked experiment;
-                             3 all 68k code on mame-68k (C3b, experimental:
-                             does not boot yet)
+  --m68k-host N              mame-ppc only: 0 off; 1 host-initiated 68k routines on a
+                             mame-68k core; 2 also A-line traps (experiment, breaks the bridge);
+                             3 all 68k code on mame-68k (C3b, experimental, does not boot yet)
   --idlewait / --no-idlewait Pause CPU when guest idle (default: on)
 
 Media:
-  --audio                    Send sound to the browser (default: off; the Mac has its
-                             sound hardware either way: games refuse to start without it)
-  --audio-dump PATH          Append the sound sent out (S16LE 48 kHz stereo) to PATH
+  --audio                    Send sound to the browser (default: off; the Mac has sound hardware either way)
+  --audio-dump PATH          Append the audio sent out (raw S16LE 48 kHz stereo) to PATH
   --zap-pram                 Clear PRAM on startup
+  --model-id N               Machine type reported to the Mac (default: the ROM
+                             machine's; 5 = IIci for Systems before 7.5)
   --dismiss-shutdown-dialog  Auto-dismiss improper-shutdown dialog
-                             (--no-dismiss-shutdown-dialog to see it)
 
 Networking:
-  --network MODE             none | socket[:PATH] (default: none; docs/Networking.md)
+  --network MODE             none | socket[:PATH] (default: none)
 
 Serial:
-  --serial-a PATH            Port A: pty (allocate one), a device path, or none
-  --serial-b PATH            Port B, the same
+  --serial-a PATH            Port A: 'pty' (auto-allocate),
+                             /dev/pts/N or /dev/ttyUSB0 (open path),
+                             'none'/'off' or omit (disabled)
+  --serial-b PATH            Port B (same syntax as --serial-a)
 
 Automation:
-  --bridge                   Enable automation bridge (BridgeAgent + auto ExtFS mount)
-  --browser                  Run MacBrowser (in-process Chromium via Qt6 WebEngine)
-  --headless-http            HTTP API only (no video/audio); implies --bridge
+  --bridge                   Enable automation bridge
+  --browser                  Run MacBrowser (experimental; needs a -DBUILD_BROWSER=ON build)
+  --headless-http            HTTP API only (no video/audio)
 
 Server:
-  --port N                   HTTP+WS port (default: 11000) — also hosts /ws signaling
+  --port N                   HTTP+WS port (default: 11000)
   --no-webserver             Headless, no HTTP/WebRTC
   --timeout N                Auto-exit after N seconds
   --config PATH              JSON config file
@@ -342,50 +287,52 @@ Server:
 
 Logging:
   --log-level N              0–3
-  --debug-connection         Debug WebRTC connections
-  --debug-mode-switch        Debug video mode switches
-  --debug-perf               Debug performance
-  --debug-network            Debug net-bridge NAT/DNS/ICMP/TCP/UDP
-  --debug-mame-ppc           mame-ppc: host ops, exceptions, per-second CPU sample
-  --trace-atraps             Record (A-trap, caller PC) pairs; snapshots write atraps.tsv
-  --no-text-feed             Don't patch _StdText & co. (no /api/text)
+  --debug-connection
+  --debug-mode-switch
+  --debug-perf
+  --debug-network
+  --debug-mame-ppc           mame-ppc: log host ops, exceptions, a per-second CPU sample
+  --cpu-mmu                  The MMU's cost (docs/executor/Speed.md): mame-68k with its PMMU
+                             (the ROM's tables), mame-ppc translating every access (identity)
+  --trace-atraps             Record every (A-trap, caller PC); snapshots write atraps.tsv
+  --no-text-feed             Don't patch _StdText (the strings on screen for /api/text)
   --deterministic            Virtual clock (instruction-counted ticks, fixed date); implies --no-idlewait
-  --snapshot-at NAME@SECS    With --deterministic: snapshot SECS virtual seconds after the Finder starts
-  --executor-logtraps        Executor logs every trap call to stderr
-  --executor-logtraps-nesting N  ... and calls nested N deep in Toolbox callbacks
-  --executor-logtraps-filter LIST  ... only these names (comma-separated wildcards; -NAME leaves
-                             out); PowerPC calls show their caller's address
-  --executor-debug OPTS      Executor's own debug options: memcheck (heap checks at every
-                             Memory Manager call), allocs (log allocations >= 4K with the
-                             calling code), drag (the Drag Manager's dispatch and Finder's
-                             hook calls), pcsample (the PowerPC PC every 5 ms; every 5 s the
-                             top addresses as fragment+offset and nearest export), hidpi (the
-                             text --executor-scale redraws from outlines), fslog,
-                             trace, trapfailure, unimplemented, ...
-  --executor-ppc-break SPEC  PowerPC breakpoint (Executor; repeatable; "on": none, for the API):
-                             WHERE[@N][*HITS][#MEM], WHERE $ADDR | FRAGMENT[:SECT]+OFF | !Routine;
-                             registers, back chain, stack, then N instructions traced
-                             (docs/executor/PPCTrace.md)
-  --watch ADDR[:LEN]         Report every write to guest memory ADDR (Executor, Linux x86-64):
-                             old/new value, 68k PC/registers/code, last traps, host stack
+  --snapshot-at NAME@SECS    With --deterministic: snapshot SECS virtual seconds after Finder starts
+  -h, --help                 Show this help message
 ```
+
+`--executor-debug` also takes `drag` (the Drag Manager's dispatch and the
+Finder's hook calls).
 
 ## Environment Variables
 
-Configuration is CLI flags only; the binary reads no environment variables
-for it. The exceptions are Kheperix-era diagnostic switches on the PPC
-machine.
+Configuration is CLI flags and JSON only. The binary reads environment
+variables only as debug switches:
 
-| Var | Scope | Description |
-|-----|-------|-------------|
-| `MACEMU_ROM` | Test scripts only | Default ROM path (not read by the binary) |
-| `MACEMU_PPC_NO_IRQ`, `MACEMU_PPC_TRACE_TRAP` | `--backend kpx` | Kheperix-era debug switches |
+| Var | Scope | What |
+|-----|-------|------|
+| `MACEMU_ROM`, `MACEMU_DISK` | test scripts | ROM and boot disk (not read by the binary) |
+| `MACEMU_PPC_NO_IRQ`, `MACEMU_PPC_TRACE_TRAP`, `MACEMU_PPC_TRACE` | PPC machine | Kheperix-era debug switches |
+| `CPU_TRACE`, `CPU_TRACE_QUIET`, `CPU_TRACE_MEMORY` | 68k | instruction trace (`src/cpu/cpu_trace.c`) |
+| `MACEMU_DEBUG_FRAMES`, `MACEMU_DEBUG_AUDIO`, `MACEMU_TRACE_DISKPRIME` | all | frame, Opus and disk-read logging |
+
+## ROMs and Test Images
+
+Tests expect the Quadra 650 ROM at `~/roms/quadra.rom`, the G3 ROM at
+`~/storage/roms/g3.rom` and the IIci's at `~/storage/roms/iici.rom`
+(`~/storage/roms` and `~/storage/images` are the private assets repo:
+never commit built images). Boot disks are copies made per test run by
+`tests/lib/refresh_test_disk.sh NAME $$` (`test-NAME-PID.img`, removed at
+exit, so `ctest -j` is safe) of images `provisioning/build.py` makes:
+`tests-7.5.5`, `tests-7.6.1`, `tests-9.0.4`, `6.0.8` (SE and IIci), built on
+demand from `~/storage/baked`. Override with `MACEMU_ROM` / `MACEMU_DISK` or
+`-DTEST_ROM=`. ROMs and disk images are not distributed.
 
 ## Licensing
 
 The whole is GPL-2.0-or-later (UAE, Basilisk II, SheepShaver code); code
 written for MacPhoenix is also MIT (`LICENSE-MIT`), Executor and our
-changes to it are MIT (`src/executor/LICENSE-CONTRIBUTIONS`), MAME cores
+changes to it are MIT (`executor/LICENSE-CONTRIBUTIONS`), MAME cores
 BSD-3. Path-by-path map: `LICENSING.md`. New code is written from
 documentation and behaviour, never adapted from GPL source; code adapted
 from a GPL file keeps its GPL header and goes in LICENSING.md's GPL table.
@@ -394,95 +341,43 @@ Executor's origin and what we changed: `docs/executor/README.md`
 
 ## Key Architectural Decisions
 
-- **Platform API**: All backends implement the same `g_platform` function pointer table. Core code never calls backend-specific functions directly.
-- **PPC guest memory**: Kheperix (`--core kpx`) uses identity addressing (Mac address = host address; needs `vm.mmap_min_addr=0`). `--core mame-ppc` puts guest memory in a 4GB-aligned 4GB reservation, host = `VMBaseDiff` + Mac address, so it needs no sysctl.
-- **Memory layout**: RAM(32MB @ 0x0) + ROM(1MB @ 0x02000000) + ScratchMem(64KB @ 0x02100000) + FrameBuffer(4MB @ 0x02110000). Framebuffer is outside RAM to avoid corrupting Mac data structures.
-- **EmulOps**: ROM patches insert trap opcodes (0x71xx) that trigger host-side handlers for I/O, drivers, and system functions.
-- **Single config system**: `EmulatorConfig` — handles CLI args and JSON file. `cpu_core` (`--core`) is in the JSON and the web UI (Settings > Advanced > CPU core) and is reset to the backend's default when it doesn't fit (`normalize_cpu_core()`). The web UI has built-in profiles, named OS-machine, oldest OS first: `6.0.8-se`, `6.0.8-iici` (System 6 in colour: 24-bit, 8 MB), `7.1-68k`, `7.5.5-68k`/`-ppc`, `7.6.1-68k`/`-ppc`, `7.6.1-dev-68k`/`-ppc`, `8.6-ppc`, `9.0.4-ppc`, `9.0.4-dev-ppc` and `7.5.5-executor` (client.js `ROM_PROFILES`), shown when their ROM and disks are in storage. The disk list shows each image's title, tags and note from its record (`<name>.img.json`; `provisioning/build.py` writes them from the definitions' `title`/`tags`/`note`) and a Happy Mac for disks with a blessed System Folder (`file_scanner.cpp`). `model_id` (`--model-id`; Settings > Advanced > Machine type, client.js `MACHINE_TYPES`) is shown only for the 1 MB 68k ROMs, the only machines it changes, and cleared elsewhere; `7.1-68k` sets it to the IIci. CLI args override at runtime but are never saved. UI changes go through `merge_ui_json()` which updates both runtime config and `file_config_` (what gets persisted). Flat JSON format; backend token (`uae`/`kpx`) determines architecture; legacy `architecture`+`cpu_backend`+`m68k.*`+`ppc.*` keys are coerced on load for one release of backward compat.
-- **Triple buffer video**: CPU writes frames, encoder reads them, screenshot API reads them — all lock-free via atomic indices.
-- **Single-port HTTP + WebSocket**: HTTP/1.1 server in `src/webserver/http_server.cpp`: a QThread accept loop (POSIX `accept` on the listening fd) hands each connection to a pool of 16 QThread workers, which read and answer on the fd with `poll()`-bounded `recv`/`send`. API handlers run one at a time under a lock, except routes registered with `allow_concurrent` (the bridge's, `/api/wait`), so a long `/api/exec` or `/api/copy` doesn't hold up the rest. On `Upgrade: websocket` the handshake is written and the fd is `dup()`'d off to a thread that owns the WebSocket. Long-poll stream routes (`/api/stream`) use the same fd-handoff pattern. `src/webserver/websocket.cpp` implements RFC 6455 in-process on the dup'd fd. One TCP listener serves static UI, REST API, `/api/frame` long-poll, and `/ws` (signaling + input + PNG/WebP frames). libdatachannel's `rtc::WebSocketServer` is not used. WebRTC RTP (H.264/VP9 media + Opus audio) still rides direct UDP ports negotiated via ICE.
-- **Three transport modes**: PNG/WebP → WebSocket binary on `/ws`; H.264/VP9 → WebRTC RTP track; `httpstream` → `/api/frame` long-poll. Signaling JSON + input events always ride the `/ws` WebSocket regardless of codec. Sound: an Opus RTP track with H.264/VP9; with PNG/WebP, `"OPUS"` + the packet as `/ws` binary messages (video frames there start with 8 zero bytes), decoded by WebCodecs `AudioDecoder` (client.js `WsAudioPlayer`).
-- **Command bridge**: Two layers. **Read commands** (`/api/app`, `/api/windows`) peek Mac memory directly from the IRQ — no guest cooperation. **Action commands** (`/api/launch`, `/api/exec`, `/api/shutdown`, `/api/restart`, `/api/quit`, …) go to a guest-side `BridgeAgent` app (the emulator launches it from the bridge dir on the Host volume at desktop time; the boot disks aren't written) through the bridge trap `$ABE5` (`guest_bridge.h`; the request slot is in the IPC buffer), which wakes it with a Time Manager task; it executes them via Process Manager / Shutdown Manager / AppleEvents and answers through the trap. `/api/status` `bridge_agent_connected` says it's there. Enable with `--bridge` or `bridge_enabled: true`. See `docs/CommandBridge.md`.
+- **Platform API**: every machine implements the `g_platform` function table; shared code reaches CPU and memory only through it.
+- **Child process**: the emulator runs in a child (`--ipc`); the server talks to it over shared memory and a socket (`emulator_subprocess.h`). Stopping kills the child.
+- **68k memory**: one block, `[RAM][ROM 1 MB][ScratchMem 64 KB][frame buffer 8 MB]` (`cpu_context.cpp`): the frame buffer is outside RAM.
+- **PPC memory**: Kheperix uses identity addressing (Mac address = host address; needs `vm.mmap_min_addr=0`). mame-ppc puts guest memory in a 4 GB-aligned 4 GB reservation at `VMBaseDiff`, no sysctl.
+- **EmulOps**: ROM patches insert `0x71xx` opcodes handled on the host (I/O, drivers, system calls).
+- **Config**: `EmulatorConfig`, flat JSON. CLI flags override at runtime and are never saved; UI changes go through `merge_ui_json()` (runtime and persisted config). `cpu_core` is reset to the backend's default when it doesn't fit (`normalize_cpu_core()`). The web UI's built-in profiles (client.js `ROM_PROFILES`, OS-machine, oldest first: `6.0.8-se` ... `9.0.4-dev-ppc`, and `7.5.5-executor`) show when their ROM and disks are in storage. Disks show the title, tags and note of their record (`NAME.img.json`, from `provisioning/build.py`). `model_id` (client.js `MACHINE_TYPES`) only for 1 MB 68k ROMs.
+- **Video**: a lock-free triple buffer; the encoder and the screenshot API read it.
+- **One port**: `src/webserver/http_server.cpp`, a POSIX accept loop and a pool of worker threads. Handlers run one at a time under a lock, except routes registered `allow_concurrent` (bridge commands, `/api/wait`). WebSocket upgrades and long-poll streams (`/api/stream`) are handed off on a `dup()`'d fd; `websocket.cpp` is RFC 6455 in-process. The port serves the UI, the API, `/api/frame` and `/ws`.
+- **Transports**: PNG/WebP frames as `/ws` binary messages (sound as `"OPUS"`+packet there, client.js `WsAudioPlayer`); H.264/VP9 and Opus as WebRTC RTP over ICE-negotiated UDP; `/api/frame` long-poll. Signaling and input always on `/ws`.
+- **Command bridge** (docs/CommandBridge.md): read commands (`/api/app`, `/api/ui`) peek guest memory; action commands go to BridgeAgent, launched from the bridge folder on the Host volume at desktop time (boot disks not written), over trap `$ABE5` (`guest_bridge.h`), woken by a Time Manager task. `--bridge` or `bridge_enabled`.
+- **Executor front ends**: all run Executor through `executor/frontends/phoenix` (`executor_host.h`); the tab and the desktop app share `executor/host` (session, disks, requests).
+- **Disk images never written by the tab or desktop app**: the Mac's changes go to an overlay of changed 4 KB blocks (`executor/host/overlay.h` over `core/romlib/hfs/image_io.h`), the same format as `executor/server/overlay.go`, so each reads the other's.
+- **executor-standalone**: one Go binary per OS with the tab embedded, the tab's only server: images only, no accounts; the first browser to open it claims it (cookie); it keeps the overlays and settings.
+- **Windows**: the desktop app and executor-standalone, cross-built on Linux with llvm-mingw (cmake/ExecutorWindows.cmake): no network, no Skia, none of mac-phoenix itself.
 
-## ROM
+## Dependencies
 
-Tests expect a Quadra 650 ROM at `~/roms/quadra.rom`, a G3 ROM at `~/storage/roms/g3.rom`, and boot copies (`tests/lib/refresh_test_disk.sh NAME $$`: one per test run, `test-NAME-PID.img`, removed when the test exits, so `ctest -j` is safe) of the images `provisioning/build.py` makes: `tests-7.5.5`, `tests-7.6.1`, `tests-9.0.4` and `6.0.8` (the SE and the IIci, whose ROM is `~/storage/roms/iici.rom`; built on demand from the snapshots in `~/storage/baked`). Override with `MACEMU_ROM` / `MACEMU_DISK` env vars or `cmake -B build -DTEST_ROM=/path/to/rom`. ROMs and disk images are not distributed.
+Required: CMake, pkg-config, OpenSSL (`libssl-dev`: libdatachannel's DTLS/SRTP),
+Qt 6.4+ (`qt6-base-dev`: Core, Network, Widgets; executor-desktop needs Widgets,
+`-DEXECUTOR_DESKTOP=OFF` leaves it out). Optional: cargo (net-bridge),
+Ruby + Bison + Perl (only for `-DEXECUTOR_REGENERATE=ON`, after editing
+multiversal YAML, `.map` files, `prefs/parse.ypp` or blitter templates;
+the output is committed), Retro68 (rebuilds BridgeAgent and MacBrowser;
+the committed `.bin`s work without), Qt 6 WebEngine (only `-DBUILD_BROWSER=ON`).
+`-DBUILD_EXECUTOR=OFF` leaves Executor out.
 
-## Optional Codec Dependencies
-
-Video/audio codecs are auto-detected at configure time. If a library is missing, the codec is disabled and won't appear in the UI.
-
-| Library | Package (Ubuntu) | Package (macOS) | Codec |
-|---------|-----------------|-----------------|-------|
-| OpenH264 | `libopenh264-dev` | `brew install openh264` | H.264 |
-| libvpx | `libvpx-dev` | `brew install libvpx` | VP9 |
-| libwebp | `libwebp-dev` | `brew install webp` | WebP |
-| Opus | `libopus-dev` | `brew install opus` | Audio |
-| libyuv | `libyuv-dev` | `brew install libyuv` | Color conversion |
-
-PNG encoding (zlib, which Qt already needs) is always available.
-
-## Required Dependencies
-
-| Library | Package (Ubuntu) | Package (macOS) | Purpose |
-|---------|-----------------|-----------------|---------|
-| CMake | `cmake` | Xcode CLI Tools or `brew install cmake` | Build system |
-| OpenSSL | `libssl-dev` | `brew install openssl` | DTLS/SRTP for libdatachannel (WebRTC). Our code no longer uses it directly — `QCryptographicHash` handles SHA1/MD5. |
-| pkg-config | `pkg-config` | `brew install pkg-config` | Dependency detection |
-| Qt6 (≥6.4) | `qt6-base-dev` | `brew install qt@6` | Core, Network (QLocalSocket / QTcpServer), Widgets, plus QJsonDocument for all JSON parsing. 6.4 minimum is set by MacBrowser's use of `QWebEngineDownloadRequest` + its `receivedBytesChanged`/`isFinishedChanged` signals. See [docs/qt6/PLAN.md](docs/qt6/PLAN.md) for the port history. |
-| Ruby, Bison, Perl | `ruby bison perl` | `brew install ruby bison` | Only to regenerate Executor's committed generated sources (`src/executor/romlib/generated`, `-DEXECUTOR_REGENERATE=ON`, after editing multiversal YAML, `.map` files, `prefs/parse.ypp` or the blitter templates). Executor needs no other dependency; `-DBUILD_EXECUTOR=OFF` disables it. |
-| Qt6 WebEngine (≥6.4) | `qt6-webengine-dev` | included in `brew install qt@6` | Only with `-DBUILD_BROWSER=ON` (experimental MacBrowser; off by default). In-process Chromium for MacBrowser |
+Codecs, detected at configure time (missing: not offered in the UI):
+OpenH264 (`libopenh264-dev`, H.264), libvpx (`libvpx-dev`, VP9), libwebp
+(`libwebp-dev`), Opus (`libopus-dev`, sound), libyuv (`libyuv-dev`). PNG is
+always there.
 
 ## MacBrowser
 
-**Experimental, off by default.** Configure with `-DBUILD_BROWSER=ON` (needs
-Qt6 WebEngine); that defines `MACPHOENIX_BROWSER=1` and compiles
-`src/drivers/browser/`. Without it `--browser` and `browser_enabled` are
-ignored with a warning and `/api/config` reports `browser_available: false`.
-
-`--browser` runs an in-process Chromium via Qt6 WebEngine and pipes
-its rendered pixels into a guest Mac app called **MacBrowser**. The
-guest app provides a native Mac chrome (toolbar, URL bar, V/H
-scrollbars) over a 1:1 pixel viewport; clicks/keys/scroll reach the
-hidden `QWebEngineView` through the Chrome DevTools Protocol
-(`cdp_client.cpp`, `Input.dispatch*Event`). See
-[`docs/MacBrowser.md`](docs/MacBrowser.md) for the architecture
-deep-dive (memory layout, ring protocol, capture pipeline).
-
-**Build**: `MacBrowser/MacBrowser.bin` is the m68k guest app, built
-by CMake from `MacBrowser/MacBrowser.c` whenever the Retro68
-toolchain is available. Same opt-in pattern as BridgeAgent (`-DBUILD_MAC_BROWSER=OFF`
-to skip; the committed `.bin` always works as fallback).
-
-**Run**: mount the floppy + `--browser`:
-
-```bash
-./build/mac-phoenix --browser \
-  --disk MacBrowser/MacBrowser.dsk \
-  --bridge \
-  /path/to/quadra.rom
-```
-
-Inside the guest, double-click `MacBrowser` on the floppy.
-
-**Wire protocol** (between host and guest, via SPSC rings in
-BrowserShm):
-
-| Command (g2h) | Description |
-|---|---|
-| `BR_CMD_NAV` | Navigate to URL — `QWebEnginePage::load` |
-| `BR_CMD_CLICK` / `_MOUSE_MOVE` / `_MOUSE_OUT` | Pointer input (host-polled, mostly) |
-| `BR_CMD_KEY_DOWN` / `_KEY_UP` | Key events; mods passed through, special keys remapped to W3C codepoints |
-| `BR_CMD_SCROLL` | Wheel scroll, dx/dy in CSS px |
-| `BR_CMD_BACK` / `_FORWARD` / `_RELOAD` / `_STOP` | Toolbar nav |
-| `BR_CMD_RESIZE` | Window grew/shrunk → resize the QWebEngineView |
-| `BR_CMD_GET_SELECTION` / `_PASTE` / `_SELECT_ALL` | Clipboard + select-all bridge |
-| `BR_CMD_ZOOM_IN` / `_ZOOM_OUT` / `_ZOOM_RESET` | CSS-zoom step |
-
-| Event (h2g) | Description |
-|---|---|
-| `BR_EV_STATUS` | Loading / Ready / Error + URL — drives URL bar |
-| `BR_EV_FRAME` | defined, not sent: the guest polls `fb.seq` and re-blits the dirty rects |
-| `BR_EV_SELECTION` | Reply to GET_SELECTION → write to TEScrap |
-| `BR_EV_PAGE_METRICS` | page_w/h, scroll_x/y, viewport_w/h — drives V/H scrollbar thumb + active state |
-| `BR_EV_DOWNLOAD` | download start/progress/done (to `Host:macbrowser:Downloads`) |
+Experimental, off by default: `-DBUILD_BROWSER=ON` (Qt 6 WebEngine) builds
+`src/drivers/browser/`; otherwise `--browser` is ignored with a warning and
+`/api/config` says `browser_available: false`. An in-process Chromium renders
+into the guest app MacBrowser (native chrome over a 1:1 viewport; input
+through the DevTools protocol, `cdp_client.cpp`). Run with
+`--browser --bridge --disk MacBrowser/MacBrowser.dsk ROM` and open it on the
+floppy. Architecture and the host/guest ring protocol: `docs/MacBrowser.md`.

@@ -54,6 +54,7 @@ public:
          * interpreter. Read by drcuml_state's constructor in device_start. */
         machine().mutable_options().set_drc_use_c(!config.jit);
         ppc_set_translation_off(!config.mmu);
+        ppc_set_translation_identity(config.mmu_identity);
         /* Verify every opcode of a block before running it (the Mac ROM's
          * 68k emulator recycles its translation buffer), flush the PC
          * before memory accesses, accurate single-precision results. */
@@ -156,11 +157,27 @@ public:
     void flush_code() { code_flush_cache(); }
     void invalidate_code(uint32_t addr, uint32_t len)
     {
-        /* The recompiler validates each block's opcodes against memory
-         * before running it (the checksum), so changed code is recompiled
-         * on its own; a flush just makes that happen at once. */
-        (void)addr; (void)len;
-        set_cache_dirty();
+        /* The checksum at a sequence's head is skipped by a local branch
+         * into it from an earlier sequence of the same block, so code
+         * replaced under a block whose first sequence is unchanged (CFM
+         * loading a fragment where another's code was) would run stale.
+         * A range drops the hash entries of every sequence a block
+         * reaching into it may start at (a block covers
+         * COMPILE_BACKWARDS_BYTES before its entry and
+         * COMPILE_FORWARDS_BYTES after); its code stays in the cache for
+         * frames still returning into it, where a flush would free it
+         * under nested executions. Everything is the flush, at the next
+         * slice. */
+        if(len == 0 || len >= 0x80000000u)
+        {
+            set_cache_dirty();
+            return;
+        }
+        constexpr uint32_t reach = COMPILE_BACKWARDS_BYTES + COMPILE_FORWARDS_BYTES;
+        uint32_t start = addr - std::min(addr, reach);
+        uint32_t end = addr + len - 1;
+        end = end > 0xFFFFFFFFu - reach ? 0xFFFFFFFFu : end + reach;
+        invalidate_code_range(start, end);
     }
 
     /* get_cr/set_cr/get_xer/set_xer are inline in ppccom.cpp, so the same
@@ -442,7 +459,11 @@ public:
     void save_context(void *dst) const override { memcpy(dst, &dev_.core(), sizeof(MamePpcDevice::State)); }
     void restore_context(const void *src) override { memcpy(&dev_.core(), src, sizeof(MamePpcDevice::State)); }
 
-    void invalidate(uint32_t addr, uint32_t len) override { dev_.invalidate_code(addr, len); }
+    void invalidate(uint32_t addr, uint32_t len) override
+    {
+        dev_.invalidate_code(addr, len);
+        dev_.core().icount = 0;   /* out of the block running now */
+    }
 
     bool set_instruction_hook(InstructionHook hook, void *ctx) override
     {

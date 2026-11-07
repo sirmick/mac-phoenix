@@ -16,6 +16,7 @@
 #include <cstring>
 #include <chrono>
 #include <deque>
+#include <filesystem>
 #include <string>
 #include <thread>
 #include <unistd.h>
@@ -191,18 +192,30 @@ std::vector<std::string> EmulatorSubprocess::build_child_args()
         args.push_back(config_->rom_path);
     }
 
+    // Executor: the System's image is mounted too (its applications),
+    // locked: the System Folder runs from a copy, and the image is the
+    // shared original even with --executor-writable-images. Named with
+    // --disk as well as --executor-writable-images, it is a copy the
+    // caller made to be written (the tests' per-run copies: Frontier and
+    // MPW Shell save on its volume when they quit), so it is mounted as
+    // the other disks are.
+    std::string system_img;
+    if (config_->backend_string() == "executor")
+        system_img = executor_systems::system_image(*config_);
+    bool system_img_writable = false;
     for (const auto& d : config_->disk_paths) {
+        std::error_code ec;
+        if (!system_img.empty() && (d == system_img || std::filesystem::equivalent(d, system_img, ec))) {
+            if (!config_->executor_writable_images)
+                continue;
+            system_img_writable = true;
+        }
         args.push_back("--disk");
         args.push_back(d);
     }
-    // Executor: the System's image is mounted too (its applications).
-    if (config_->backend_string() == "executor") {
-        std::string img = executor_systems::system_image(*config_);
-        if (!img.empty() && std::find(config_->disk_paths.begin(), config_->disk_paths.end(), img)
-                            == config_->disk_paths.end()) {
-            args.push_back("--disk");
-            args.push_back(img);
-        }
+    if (!system_img.empty() && !system_img_writable) {
+        args.push_back("--executor-locked-disk");
+        args.push_back(system_img);
     }
     for (const auto& c : config_->cdrom_paths) {
         args.push_back("--cdrom");
@@ -264,6 +277,9 @@ std::vector<std::string> EmulatorSubprocess::build_child_args()
     }
     if (config_->debug_mame_ppc) {
         args.push_back("--debug-mame-ppc");
+    }
+    if (config_->cpu_mmu) {
+        args.push_back("--cpu-mmu");
     }
     if (config_->m68k_host) {
         args.push_back("--m68k-host");

@@ -50,7 +50,7 @@ HOST_EXPECTED = os.path.join(ROOT, "tests", "guest", "hfsplus", "executor-host-f
 
 def fixture_created(stem):
     """an HFS+ fixture's createDate (its volume header, Technote 1150)"""
-    with gzip.open(os.path.join(ROOT, "src", "executor", "tests", "fixtures", "hfsplus", stem + ".img.gz")) as f:
+    with gzip.open(os.path.join(ROOT, "executor", "tests", "fixtures", "hfsplus", stem + ".img.gz")) as f:
         return struct.unpack(">I", f.read(1024 + 20)[1024 + 16:])[0]
 
 

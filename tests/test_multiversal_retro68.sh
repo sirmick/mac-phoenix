@@ -2,7 +2,7 @@
 # test_multiversal_retro68.sh — the Multiversal Interfaces as Retro68 sees them.
 #
 # Generates the C headers and glue library from Executor's API definitions
-# (src/executor/multiversal, `make-multiverse.rb -G CIncludes`) and builds
+# (executor/core/multiversal, `make-multiverse.rb -G CIncludes`) and builds
 # Mac programs with Retro68's m68k compiler against them alone: Apple's
 # Universal Interfaces, if the toolchain has them installed, are left out.
 #
@@ -15,7 +15,7 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-MV="$REPO/src/executor/multiversal"
+MV="$REPO/executor/core/multiversal"
 GCC=""
 PPC_GCC=""
 WORK="${TMPDIR:-/tmp}/multiversal-retro68.$$"

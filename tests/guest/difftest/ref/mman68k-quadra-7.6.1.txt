@@ -1,0 +1,56 @@
+# mman68k.bin 1a8f1ebd0c1cd81199b79775af85e3aced0491bf3f2b13595b22ee498512f21d, Quadra 650 ROM, 7.6.1
+== ptr
+ptr.NewPtr:  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0
+ptr.NewPtrClear:  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0
+ptr.NewPtr.reused:  0  0  0  0  0  0  0  0  0  0  0  0
+ptr.NewPtrSys:  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0
+== handle
+handle.NewHandle:  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0
+handle.SetHandleSize:  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0
+handle.MoveHHi:  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0
+handle.CompactMem:  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0
+handle.NewHandleSys:  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0
+handle.TempNewHandle:  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0
+== resource
+resource.PAT#.0: 
+resource.PAT#.0.data:  0
+== gworld
+gworld.w1.err: 0
+gworld.w1.rowBytes: 16
+gworld.w1.base:  0
+gworld.w7.err: 0
+gworld.w7.rowBytes: 16
+gworld.w7.base:  0
+gworld.w8.err: 0
+gworld.w8.rowBytes: 16
+gworld.w8.base:  0
+gworld.w80.err: 0
+gworld.w80.rowBytes: 96
+gworld.w80.base:  0
+gworld.w81.err: 0
+gworld.w81.rowBytes: 96
+gworld.w81.base:  0
+gworld.w640.err: 0
+gworld.w640.rowBytes: 656
+gworld.w640.base:  0
+== rowbytes
+rowbytes.d1.l0:  16 16 16 16 16 16 16 16 16 16 16 16 32 32 32 32 80
+rowbytes.d1.l3:  16 16 16 16 16 16 16 16 16 16 16 16 32 32 32 32 80
+rowbytes.d1.l17:  16 16 16 16 16 16 16 16 16 16 16 16 32 32 32 32 80
+rowbytes.d2.l0:  16 16 16 16 16 16 16 16 16 16 32 32 32 48 48 48 144
+rowbytes.d2.l3:  16 16 16 16 16 16 16 16 16 16 32 32 32 48 48 48 144
+rowbytes.d2.l17:  16 16 16 16 16 16 16 16 16 16 32 32 32 48 48 48 144
+rowbytes.d4.l0:  16 16 16 16 16 16 16 32 32 32 48 48 64 80 80 80 272
+rowbytes.d4.l3:  16 16 16 16 16 16 16 32 32 32 48 48 64 80 80 80 272
+rowbytes.d4.l17:  16 16 16 16 16 16 16 32 32 32 48 48 64 80 80 80 272
+rowbytes.d8.l0:  16 16 16 16 32 32 32 48 48 48 80 80 112 144 144 144 528
+rowbytes.d8.l3:  16 16 16 16 32 32 32 48 48 48 80 80 112 144 144 144 528
+rowbytes.d8.l17:  16 16 16 16 32 32 32 48 48 48 80 80 112 144 144 144 528
+rowbytes.d16.l0:  16 16 16 16 48 48 48 80 80 80 144 144 208 272 272 272 1040
+rowbytes.d16.l3:  16 16 16 16 48 48 48 80 80 80 144 144 208 272 272 272 1040
+rowbytes.d16.l17:  16 16 16 16 48 48 48 80 80 80 144 144 208 272 272 272 1040
+rowbytes.d32.l0:  16 16 16 32 64 80 80 128 144 144 256 272 416 512 528 528 2064
+rowbytes.d32.l3:  16 16 16 32 64 80 80 128 144 144 256 272 416 512 528 528 2064
+rowbytes.d32.l17:  16 16 16 32 64 80 80 128 144 144 256 272 416 512 528 528 2064
+DONE 0
+---

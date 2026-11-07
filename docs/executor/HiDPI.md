@@ -8,10 +8,10 @@ while programs keep seeing the 640x480-style 1x screen they were written
 for. The ROM machines can't do this: their QuickDraw is Apple's code in
 ROM.
 
-Status: phase 1 (text on the screen) implemented, 2026-10-31; phase 2
-(chrome) and phase 4 (GWorld shadows) started 2026-11-01: see
-"Phase 1, as built" and the sections after it at the end. The rest is
-design.
+Status: phase 1 (text on the screen) built 2026-10-31; phase 2 (chrome)
+and phase 4 (GWorld shadows) built from 2026-11-01; all of it in the tab
+too (`executor.web.hidpi`, `hidpi_gworld`). See "Phase 1, as built" and
+the sections after it at the end. Phases 3, 5 and 6 are design.
 
 ## The idea in one paragraph
 
@@ -479,8 +479,9 @@ between them (`glyph_lefts`, hidpi_internal.h; a lone glyph is centred).
 ### The wasm tab
 
 Built with `tools/skia/build-wasm.sh` (above) and `--scale` on
-`executor-web`'s own argv (`web/executor/main.js`'s `?scale=`, default
-`devicePixelRatio`; `web/executor/worker.js` passes it through).
+`executor-web`'s own argv at start (`executor/web/main.js`: the
+`display.scale` setting or `?scale=`, default `devicePixelRatio`;
+`executor/web/worker.js` passes it through), then changed live (below).
 `PhoenixVideoDriver::render()`'s `rectsHook` branch (wasm's only path)
 now calls `hidpi::compose()` and publishes the whole `scaled_` surface
 through the same `rectsHook` every time (`compose()` doesn't report how
@@ -491,8 +492,34 @@ canvas element's `width`/`height` IDL attributes freeze at the 1x size
 before `transferControlToOffscreen()` detaches the backing buffer that
 resizes to the scaled dimensions in the Worker.
 
+### The scale changed live
+
+In the tab the scale changes while the Mac runs (the bar's HiDPI box,
+Settings > Display > Sharpness; Settings.md). The page's `'scale'` request
+(`executor/host/requests.cpp`) calls `VideoDriver::requestScale`; the Display Manager
+takes it at the front process's next event call, as a screen size
+(`ROMlib_dm_poll`, `displays.cpp` `dm_set_scale`):
+`PhoenixVideoDriver::setScale` sets the scale under the frame lock
+(`hidpi::set_scale` drops every run, the screen's and the offscreen
+buffers'), makes `scaled_` again at the new size (none at 1) and marks the
+whole screen; then the whole screen is painted, as after a size change with
+nothing moved (`ROMlib_layers_screen_changed(now, now)`: frames, desktop,
+update events for the contents) and the menu bar drawn, so text and chrome
+are recorded again at the new scale (an application's contents when it
+answers its update event). Programs see nothing: the 1x screen, the
+GDevice and the Display Manager's mode are unchanged. Executor logs
+`[display] scale 1 -> 2`. The frames then go out at the new size and the
+Worker's canvas follows them (worker.js `onRects`); the page's fit,
+clicks and pointer are in 1x pixels already. Only where the frames go out
+through `rectsHook` (the tab): natively the parent sized its shared frames
+for the scale Executor started with, so `--executor-scale` stays fixed
+there (`setScale` answers false). Test: `ctest -R executor.web.hidpibar`
+(executor/tests/web/tab_hidpibar.mjs: 7.6.1 at dpr 2, 2x, 1x and 2x again: the
+canvas's size, the menu bar from outlines, the pointer and a menu click
+exact, the setting kept over a reload).
+
 Gate: `ctest -R executor.web.hidpi` (needs a Playwright-capable
-`EXECUTOR_WEB_NODE_PATH`; `web/tests/tab_hidpi.mjs`). Boots the same
+`EXECUTOR_WEB_NODE_PATH`; `executor/tests/web/tab_hidpi.mjs`). Boots the same
 7.6.1 Finder at `?scale=1` and `?scale=2`, and checks the 2x run's menu
 bar actually differs from a naive nearest-neighbor doubling of the 1x
 run by more than a sliver -- the plain-upscale look that not calling
@@ -640,7 +667,7 @@ is taken now only round the old text still under the new one.
 
 The same in the wasm tab, nothing tab-specific (the runs reach the
 screen's list, which `compose()` draws): `executor.web.hidpi_gworld`
-(web/tests/tab_hidpi_gworld.mjs) launches GWorldGallery at `?scale=2` on
+(executor/tests/web/tab_hidpi_gworld.mjs) launches GWorldGallery at `?scale=2` on
 8.6 with PowerPC and checks the canvas's pixels: the copied text has
 anti-aliasing greys, the inverted GWorld's text and the masked-out part
 none.

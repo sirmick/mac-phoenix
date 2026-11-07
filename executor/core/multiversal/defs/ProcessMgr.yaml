@@ -1,0 +1,758 @@
+- typedef:
+    name: LaunchFlags
+    type: INTEGER
+
+# ####
+
+- struct:
+    name: ProcessSerialNumber
+    members:
+      - name: highLongOfPSN
+        type: uint32_t
+      - name: lowLongOfPSN
+        type: uint32_t
+    size: 8
+
+# ####
+
+- struct:
+    members:
+      - name: magic
+        type: uint32_t
+      - name: n_fsspec
+        type: INTEGER
+      - name: fsspec
+        type: FSSpec[0]
+    name: ROMlib_AppParameters_t
+
+# ####
+
+- enum:
+    values:
+      - name: APP_PARAMS_MAGIC
+        value: 0xd6434a1b
+    comment: |
+      chosen from /dev/random
+
+# ####
+
+- typedef:
+    name: AppParametersPtr
+    type: ROMlib_AppParameters_t*
+
+# ####
+
+- struct:
+    name: LaunchParamBlockRec
+    members:
+      - name: reserved1
+        type: LONGINT
+      - name: reserved2
+        type: INTEGER
+      - name: launchBlockID
+        type: INTEGER
+      - name: launchEPBLength
+        type: LONGINT
+      - name: launchFileFlags
+        type: INTEGER
+      - name: launchControlFlags
+        type: LaunchFlags
+      - name: launchAppSpec
+        type: FSSpecPtr
+      - name: launchProcessSN
+        type: ProcessSerialNumber
+      - name: launchPreferredSize
+        type: LONGINT
+      - name: launchMinimumSize
+        type: LONGINT
+      - name: launchAvailableSize
+        type: LONGINT
+      - name: launchAppParameters
+        type: AppParametersPtr
+    size: 44
+
+# ####
+
+- enum:
+    values:
+      - name: extendedBlock
+        value: 0x4C43
+
+# ####
+
+- enum:
+    values:
+      - name: extendedBlockLen
+        value: sizeof(LaunchParamBlockRec) - 12
+
+# ####
+
+- enum:
+    values:
+      - name: launchContinue
+        value: 0x4000
+      - name: launchNoFileFlags
+        value: 0x0800
+      - name: launchUseMinimum
+        value: 0x0400
+      - name: launchDontSwitch
+        value: 0x0200
+      - name: launchAllow24Bit
+        value: 0x0100
+      - name: launchInhibitDaemon
+        value: 0x0080
+
+# ####
+
+- struct:
+    name: ProcessInfoRec
+    members:
+      - name: processInfoLength
+        type: uint32_t
+      - name: processName
+        type: StringPtr
+      - name: processNumber
+        type: ProcessSerialNumber
+      - name: processType
+        type: uint32_t
+      - name: processSignature
+        type: OSType
+      - name: processMode
+        type: uint32_t
+      - name: processLocation
+        type: Ptr
+      - name: processSize
+        type: uint32_t
+      - name: processFreeMem
+        type: uint32_t
+      - name: processLauncher
+        type: ProcessSerialNumber
+      - name: processLaunchDate
+        type: uint32_t
+      - name: processActiveTime
+        type: uint32_t
+      - name: processAppSpec
+        type: FSSpecPtr
+    size: 60
+
+# ####
+
+- typedef:
+    name: ProcessInfoPtr
+    type: ProcessInfoRec*
+
+# ####
+
+- enum:
+    values:
+      - name: modeDeskAccessory
+        value: 0x00020000
+      - name: modeMultiLaunch
+        value: 0x00010000
+      - name: modeNeedSuspendResume
+        value: 0x00004000
+      - name: modeCanBackground
+        value: 0x00001000
+      - name: modeDoesActivateOnFGSwitch
+        value: 0x00000800
+      - name: modeOnlyBackground
+        value: 0x00000400
+      - name: modeGetFrontClicks
+        value: 0x00000200
+      - name: modeGetAppDiedMsg
+        value: 0x00000100
+      - name: mode32BitCompatible
+        value: 0x00000080
+      - name: modeHighLevelEventAware
+        value: 0x00000040
+      - name: modeLocalAndRemoteHLEvents
+        value: 0x00000020
+      - name: modeStationeryAware
+        value: 0x00000010
+      - name: modeUseTextEditServices
+        value: 0x00000008
+      - name: modeDisplayManagerAware
+        value: 0x00000004
+    comment: |
+      flags for the `processMode' field of the `ProcessInformationRec'
+         record
+
+# ####
+
+- enum:
+    values:
+      - name: kNoProcess
+        value: 0
+      - name: kSystemProcess
+        value: 1
+      - name: kCurrentProcess
+        value: 2
+
+# ####
+
+- enum:
+    values:
+      - name: procNotFound
+        value: -600
+
+# ####
+
+- only-for: Executor
+  verbatim: |
+    extern void process_create(bool desk_accessory_p,
+                               uint32_t type, uint32_t signature);
+
+# ####
+
+# MacPhoenix: private OSDispatch selectors Finder 7.5.5 calls, identified
+# from a traced real boot and Apple's Process Manager (System 'scod'
+# -16463; tools/macdecode). Names are our guesses (learned.yaml).
+
+# Mac OS 8's form of TakeDesktopLayer, which its Finder calls from PowerPC
+# code (PrivateInterfaceLib): the desk layer's window into *layer, an error
+# (the Finder then calls SysError) if it can't be had. The form is from the
+# 8.6 Finder's call; Executor's is TakeDesktopLayer's.
+- only-for: executor
+  function:
+    name: NewDesktopLayerOwner
+    return: OSErr
+    args:
+      - name: layer
+        type: WindowPtr*
+    library: PrivateInterfaceLib
+    executor: C_
+
+# ####
+
+- function:
+    name: GetProcessManagerID
+    return: int32_t
+    args:
+      - name: id
+        type: Ptr
+    dispatcher: OSDispatch
+    selector: 0x0002
+    executor: C_
+    comment: |
+      MacPhoenix (name is a guess): OSDispatch $2, as Apple's 7.6.1 answers
+      it (a probe on the Quadra): the 8 bytes 'TWIT' '1889' at id, 0
+      returned, the selector and id popped. Excel 4.0's start-up asks.
+
+# ####
+
+- function:
+    name: TakeDesktopLayer
+    return: OSErr
+    args:
+      - name: layer
+        type: WindowPtr*
+    dispatcher: OSDispatch
+    selector: 0x0014
+    executor: C_
+    comment: >
+      The first caller (Finder) takes the Process Manager's desk layer: a
+      window-shaped port whose visRgn is the desktop (GrayRgn), and gets
+      protocolErr after that. Finder adopts its regions for its desktop
+      window and SysErrors(41) unless this returns noErr.
+
+# ####
+
+- function:
+    name: AddProcessCallback
+    return: OSErr
+    args:
+      - name: proc
+        type: Ptr
+      - name: refCon
+        type: int32_t
+    dispatcher: OSDispatch
+    selector: 0x0042
+    executor: C_
+    comment: >
+      Apple's links {next, proc, refCon, current PSN} into a Process Manager
+      list (PM globals -$136); Finder registers one of its routines.
+
+# ####
+
+- function:
+    name: RemoveProcessCallback
+    return: OSErr
+    args:
+      - name: proc
+        type: Ptr
+      - name: refCon
+        type: int32_t
+    dispatcher: OSDispatch
+    selector: 0x0043
+    executor: C_
+    comment: >
+      Undoes AddProcessCallback (name is a guess): Finder passes the same
+      proc and refCon as it did to $42 when it quits (restart, shut down).
+
+# ####
+
+- function:
+    name: GetTempMemInfo
+    return: OSErr
+    args:
+      - name: freeBytes
+        type: int32_t*
+      - name: maxBlock
+        type: int32_t*
+    dispatcher: OSDispatch
+    selector: 0x0047
+    executor: C_
+    comment: >
+      Either pointer may be nil. Apple's fills them from HeapDispatch $19 and
+      $18 (Process Manager heap); which one is the total free and which the
+      largest block is our best reading. Finder checks memory with it.
+
+# ####
+
+- function:
+    name: SetProcessDragHooks
+    return: OSErr
+    args:
+      - name: hooks
+        type: int32_t
+    dispatcher: OSDispatch
+    selector: 0x0055
+    executor: C_
+    comment: >
+      Stores a long in the current process's record (+$15C in Apple's);
+      Finder passes its drag-hook record (see DragDispatch $C301).
+
+# ####
+
+- function:
+    name: FindInputWindow
+    return: INTEGER
+    args:
+      - name: pt
+        type: Point
+      - name: window
+        type: WindowPtr*
+    dispatcher: OSDispatch
+    selector: 0x0064
+    executor: C_
+    comment: |
+      MacPhoenix (name is a guess): 7.5.5's OSDispatch $64, the window
+      under a point among the Text Services Manager's floating input
+      windows (TextServicesDispatch 23 when the TSM is present, else 0).
+      Apple's Help Manager asks before it shows a window's balloon. None
+      here (textservices.cpp).
+
+# ####
+
+- function:
+    name: SetHideDesktopInBackground
+    return: OSErr
+    args:
+      - name: hide
+        type: Boolean
+    dispatcher: OSDispatch
+    selector: 0x005E
+    executor: C_
+    comment: >
+      General Controls' driver passes its "Show Desktop when in background"
+      setting, inverted (name is a guess; learned.yaml).  Apple's stores the
+      byte in its globals and, when it turns on while another process is in
+      front, hides the desk owner's layer.  Executor only keeps the flag.
+
+# ####
+
+- function:
+    name: AddAppleMenuItem
+    return: OSErr
+    args:
+      - name: name
+        type: StringPtr
+      - name: sortGroup
+        type: int16_t
+      - name: flagA
+        type: int16_t
+      - name: iconSuite
+        type: Handle
+      - name: flagB
+        type: int16_t
+      - name: info
+        type: StringPtr
+      - name: key
+        type: int32_t
+    dispatcher: OSDispatch
+    selector: 0x0031
+    library: PrivateInterfaceLib
+    executor: C_
+    comment: >
+      Finder feeds the Apple Menu Items folder to the Process Manager, which
+      draws the Apple menu (22 bytes of params; System 'scod' -16463 +3020).
+      name must be non-empty and key nonzero, else paramErr. The entry keeps
+      the name behind two placeholder bytes (the icon's room), the suite,
+      the key, sortGroup (passed to the sort comparison), the low bytes of
+      flagA/flagB and a copy of info. Names other than name, iconSuite and
+      key are guesses.
+
+# ####
+
+- function:
+    name: RemoveAppleMenuItems
+    return: OSErr
+    args:
+      - name: key
+        type: int32_t
+    dispatcher: OSDispatch
+    selector: 0x0032
+    executor: C_
+    comment: >
+      Removes the caller's items with that key (0: all of them).
+
+# ####
+
+- function:
+    name: GetCurrentProcess
+    return: OSErr
+    args:
+      - name: serial_number
+        type: ProcessSerialNumber*
+    dispatcher: OSDispatch
+    selector: 0x0037
+    executor: C_
+
+# ####
+
+- function:
+    name: GetNextProcess
+    return: OSErr
+    args:
+      - name: serial_number
+        type: ProcessSerialNumber*
+    dispatcher: OSDispatch
+    selector: 0x0038
+    executor: C_
+
+# ####
+
+- function:
+    name: GetProcessInformation
+    return: OSErr
+    args:
+      - name: serial_number
+        type: ProcessSerialNumber*
+      - name: info
+        type: ProcessInfoPtr
+    dispatcher: OSDispatch
+    selector: 0x003A
+    executor: C_
+
+# ####
+
+- function:
+    name: SameProcess
+    return: OSErr
+    args:
+      - name: serial_number0
+        type: ProcessSerialNumber*
+      - name: serial_number1
+        type: ProcessSerialNumber*
+      - name: same_out
+        type: Boolean*
+    dispatcher: OSDispatch
+    selector: 0x003D
+    executor: C_
+
+# ####
+
+- only-for: Executor
+  function:
+    name: GetFrontProcess
+    return: OSErr
+    args:
+      - name: serial_number
+        type: ProcessSerialNumber*
+      - name: dummy
+        type: int32_t
+    dispatcher: OSDispatch
+    selector: 0x0039
+    executor: C_
+    export: false
+    comment: >
+      The inline pushes a long -1 after the PSN pointer (Processes.h:
+      moveq #-1,d0; move.l d0,-(sp)); dummy is that long. Apple's (scod
+      -16463, RAM $29E94 on the reference boot) takes anything else as a
+      layer or window and answers the process owning it (procNotFound if
+      none): the Drag Manager finds a drop target's process that way.
+      InterfaceLib's export, below, takes the PSN pointer alone.
+
+# ####
+
+- only-for: Executor
+  function:
+    name: GetFrontProcess
+    return: OSErr
+    args:
+      - name: serial_number
+        type: ProcessSerialNumber*
+    library: InterfaceLib
+    executor: glue_GetFrontProcess
+    comment: >
+      MacPhoenix: one argument, as the inline's; the second the trap's
+      export took was whatever the caller left in r4 (BBEdit Lite 6.1:
+      -2, taken for a window and read).
+
+# ####
+
+# Apple's: the inline pushes the -1 Executor's takes as a second argument.
+- not-for: Executor
+  function:
+    name: GetFrontProcess
+    return: OSErr
+    args:
+      - name: PSN
+        type: ProcessSerialNumber*
+    m68k-inline: [0x70FF, 0x2F00, 0x3F3C, 0x0039, 0xA88F]
+
+# ####
+
+- function:
+    name: GetLayerAtPoint
+    return: WindowPtr
+    args:
+      - name: pt
+        type: Point
+    dispatcher: OSDispatch
+    selector: 0x000F
+    executor: C_
+    comment: >
+      MacPhoenix (name is a guess; Apple's at RAM $2874A). The layer whose
+      window is under the point, searched from the root (FindWindowInLayer
+      with the root current), nil if none. The Drag Manager's
+      FinderTrackDrag starts from it; the System's GetNextEvent patch
+      routes clicks with it.
+
+# ####
+
+- function:
+    name: DisableSwitching
+    dispatcher: OSDispatch
+    selector: 0x0019
+    library: PrivateInterfaceLib
+    executor: C_
+    comment: >
+      MacPhoenix (Apple's name: the G3 ROM's PrivateInterfaceLib glue calls
+      OSDispatch $19 for it; Apple's at RAM $2A386 counts up a word in its
+      globals, $1A counts it down). No parameters, no result. The System's
+      StillDown and WaitMouseUp patches bracket every poll with the pair,
+      the Drag Manager its tracking loop, 8.6's Control Strip its own
+      tracking: no process switch while held.
+
+# ####
+
+- function:
+    name: EnableSwitching
+    dispatcher: OSDispatch
+    selector: 0x001A
+    library: PrivateInterfaceLib
+    executor: C_
+
+# ####
+
+- function:
+    name: NewFloatLayer
+    return: OSErr
+    args:
+      - name: layer
+        type: WindowPtr*
+    dispatcher: OSDispatch
+    selector: 0x0048
+    library: PrivateInterfaceLib
+    executor: C_
+    comment: >
+      MacPhoenix (PrivateInterfaceLib's glue: OSDispatch $48, procInfo
+      $3AE: an OSErr, the layer by reference). 8.6's Control Strip makes its
+      strip's layer with it, floating over every process's; the G3's 8.6
+      answers noErr and a layer IsLayer says is one (difftest proc).
+
+# ####
+
+- function:
+    name: CallProcessRoutine
+    return: OSErr
+    args:
+      - name: psn
+        type: ProcessSerialNumber*
+      - name: routine
+        type: ProcPtr
+      - name: params
+        type: int32_t
+      - name: paramSize
+        type: int16_t
+    dispatcher: OSDispatch
+    selector: 0x0053
+    executor: C_
+    comment: >
+      MacPhoenix (name is a guess; Apple's at RAM $2A78C, the call itself
+      at $2B582). Runs a Pascal routine in another process: its world (A5,
+      low memory, stack) switched in, paramSize bytes of parameters pushed
+      as a stack image, the routine's word result returned. With paramSize
+      of 4 or less, params is the image itself (a long pushed by value);
+      otherwise it points at the image. procNotFound for the current
+      process. The Drag Manager runs a drop target's tracking and receive
+      handlers through it.
+
+# ####
+
+- function:
+    name: GetDesktopProcess
+    return: OSErr
+    args:
+      - name: psn
+        type: ProcessSerialNumber*
+    dispatcher: OSDispatch
+    selector: 0x0056
+    executor: C_
+    comment: >
+      MacPhoenix (name is a guess; Apple's at RAM $2A2E0). The process
+      that took the desktop layer (TakeDesktopLayer: Finder), -603 if
+      none. The Drag Manager's drop target for a point on the desktop.
+
+# ####
+
+- function:
+    name: GetWindowProcess
+    return: OSErr
+    args:
+      - name: window
+        type: WindowPtr
+      - name: psn
+        type: ProcessSerialNumber*
+    dispatcher: OSDispatch
+    selector: 0x0062
+    executor: C_
+    comment: >
+      MacPhoenix (name is a guess; Apple's at RAM $28BB0). The process
+      owning a window, procNotFound if none.
+
+# ####
+
+- function:
+    name: SetFrontProcess
+    return: OSErr
+    args:
+      - name: serial_number
+        type: ProcessSerialNumber*
+    dispatcher: OSDispatch
+    selector: 0x003B
+    executor: C_
+
+# ####
+
+- function:
+    name: WakeUpProcess
+    return: OSErr
+    args:
+      - name: serial_number
+        type: ProcessSerialNumber*
+    dispatcher: OSDispatch
+    selector: 0x003C
+    executor: C_
+
+# ####
+
+- function:
+    name: GetProcessSerialNumberFromPortName
+    return: OSErr
+    args:
+      - name: port_name
+        type: PPCPortPtr
+      - name: serial_number
+        type: ProcessSerialNumber*
+    dispatcher: OSDispatch
+    selector: 0x0035
+    executor: C_
+
+# ####
+
+- function:
+    name: LaunchDeskAccessory
+    return: OSErr
+    args:
+      - name: pFileSpec
+        type: const FSSpec*
+      - name: pDAName
+        type: ConstStringPtr
+    dispatcher: OSDispatch
+    selector: 0x0036
+    executor: C_
+
+# ####
+
+# Processes.h, InterfaceLib 9.0: a control panel ('cdev') in an application
+# shell of the Process Manager's, as LaunchDeskAccessory runs a desk
+# accessory. The 9.0.4 Finder opens control panels this way.
+- function:
+    name: LaunchControlPanel
+    return: OSErr
+    args:
+      - name: pFileSpec
+        type: const FSSpec*
+    dispatcher: OSDispatch
+    selector: 0x007B
+    executor: C_
+
+# ####
+
+# MacPhoenix: private Process Manager calls (names: status guess). No
+# parameters, OSErr result. Apple's code brackets opening a resource file
+# with them so the file belongs to the system rather than the caller
+# (AppleScript, the Desktop Manager, the Process Manager itself).
+- function:
+    name: BeginSystemMode
+    return: OSErr
+    dispatcher: OSDispatch
+    selector: 0x0040
+    library: PrivateInterfaceLib
+    executor: C_
+
+# ####
+
+- function:
+    name: EndSystemMode
+    return: OSErr
+    dispatcher: OSDispatch
+    selector: 0x0041
+    library: PrivateInterfaceLib
+    executor: C_
+
+# ####
+
+- function:
+    name: GetPortNameFromProcessSerialNumber
+    return: OSErr
+    args:
+      - name: port_name
+        type: PPCPortPtr
+      - name: serial_number
+        type: ProcessSerialNumber*
+    dispatcher: OSDispatch
+    selector: 0x0046
+    executor: C_
+
+# ####
+
+- function:
+    name: LaunchApplication
+    return: OSErr
+    args:
+      - name: params
+        type: LaunchParamBlockRec*
+        register: A0
+    executor: true
+    trap: 0xA9F2
+    returnreg: D0
+
+# ####
+
+- only-for: Executor
+  verbatim: |
+    extern OSErr NewLaunch(ConstStringPtr appl, INTEGER vrefnum,
+                           LaunchParamBlockRec *lpbp);

@@ -75,6 +75,7 @@ choice, is a real trap on these Systems.) `tests/guest/bridgedemo` (ctest
 | `STATE` (0x14) | agent | the front process's name |
 | `LAUNCH_POST` (0x18), `LAUNCH_CHECK` (0x15), `LAUNCHED` (0x16) | the launcher | see Launching the agent |
 | `BRIDGE_DIR` (0x17) | agent, MacBrowser | the bridge dir's guest path |
+| `HOST_CLOCK` (0x19) | tests/guest/bench | the host's steady clock, µs (low 32 bits): a test timed by the host too |
 
 * **The slot** (`IPCBridgeSlot`, `ipc_protocol.h`): one request at a time,
   with ids. In the IPC buffer when the CPU runs in a child process (the ROM
@@ -188,7 +189,7 @@ Not before System 7 (no Process Manager: a launch would replace the
 Finder), and not if an agent has said hello already (one installed in
 Startup Items by hand or by an older emulator): the trap refuses a second
 agent's `AGENT_HELLO`, and that agent quits; a new agent asks any older
-one (creator `MxBr`) to quit, every 5 s (Startup Items open after it).
+one (creator `MxBA`) to quit, every 5 s (Startup Items open after it).
 Launched in the background, the agent leaves the front process as it is;
 started in front (from Startup Items) it gives the front to the Finder.
 `/api/ui` answers for the front process the agent reports (`STATE`): on
@@ -256,7 +257,7 @@ A checkbox in Settings → Guest Additions → "Enable bridge agent" toggles `br
 | `src/common/include/guest_bridge.h` | The trap's protocol: `call()`, `request()`, the slot |
 | `src/ipc/ipc_protocol.h` | `IPCBridgeSlot` in the IPC buffer |
 | `src/core/text_feed.cpp` | `bridge_trap_install()` (ROM machines) |
-| `src/executor/romlib/init.cpp` | The trap in Executor |
+| `executor/core/romlib/init.cpp` | The trap in Executor |
 | `src/core/command_bridge.{cpp,h}` | Read commands; init |
 | `src/webserver/api_handlers.cpp` | HTTP endpoints; `bridge_command()` |
 | `src/config/emulator_config.cpp` | `bridge_enabled`, `bridge_dir`, `--bridge` CLI flag, auto extfs mount |

@@ -1,0 +1,221 @@
+#include <OSUtil.h>
+#include "emustubs.h"
+
+#include <SegmentLdr.h>
+#include <error/error.h>
+#include <error/system_error.h>
+#include <base/debugger.h>
+#include <sound/soundopts.h>
+#include <rsys/executor.h>
+#include <rsys/helppkg.h>
+#include <base/traps.h>
+
+using namespace Executor;
+
+static uint16_t bad_traps[10];
+static int n_bad_traps = 0;
+
+void
+Executor::ROMlib_reset_bad_trap_addresses(void)
+{
+    n_bad_traps = 0;
+}
+
+static void
+add_to_bad_trap_addresses(bool tool_p, unsigned short index)
+{
+    int i;
+    uint16_t aline_trap;
+
+    aline_trap = 0xA000 + index;
+    if(tool_p)
+        aline_trap += 0x800;
+
+    for(i = 0; i < n_bad_traps && i < std::size(bad_traps) && bad_traps[i] != aline_trap; ++i)
+        ;
+    if(i >= n_bad_traps)
+    {
+        bad_traps[n_bad_traps % std::size(bad_traps)] = aline_trap;
+        ++n_bad_traps;
+    }
+}
+
+RAW_68K_IMPLEMENTATION(bad_trap_unimplemented)
+{
+    char buf[1024];
+
+    sprintf(buf,
+            "Fatal error.\r"
+            "Jumped to unimplemented trap handler, "
+            "probably by getting the address of one of these traps: [");
+    {
+        int i;
+        bool need_comma_p;
+
+        need_comma_p = false;
+        for(i = 0; i < (int)std::size(bad_traps) && i < n_bad_traps; ++i)
+        {
+            if(need_comma_p)
+                strcat(buf, ",");
+            {
+                char trap_buf[7];
+                sprintf(trap_buf, "0x%04x", bad_traps[i]);
+                gui_assert(trap_buf[6] == 0);
+                strcat(buf, trap_buf);
+            }
+            need_comma_p = true;
+        }
+    }
+    strcat(buf, "].");
+    /* MacPhoenix: the log says where from (a patch chaining to the address
+       GetTrapAddress gave it for a trap Executor lacks) */
+    {
+        char what[256];
+        snprintf(what, sizeof what,
+                 "jumped to the unimplemented-trap address: top of stack $%08x, "
+                 "last trap $%04x, traps whose address was taken [%s",
+                 (unsigned)READUL(EM_A7), (unsigned)mostrecenttrap,
+                 strchr(buf, '[') + 1);
+        traps::log_unimplemented(what);
+    }
+    system_error(buf, 0,
+                    "Restart", nullptr, nullptr,
+                    nullptr, nullptr, nullptr);
+
+    ExitToShell();
+    return /* dummy */ -1;
+}
+
+RAW_68K_IMPLEMENTATION(Unimplemented)
+{
+    char buf[1024];
+
+    sprintf(buf,
+            "Fatal error.\r"
+            "encountered unknown, unimplemented trap `%X'.",
+            mostrecenttrap);
+    int button = system_error(buf, 0,
+                    "Quit", base::Debugger::instance ? "Debugger" : nullptr, nullptr,
+                    nullptr, nullptr, nullptr);
+
+    if(button == 0 || !base::Debugger::instance)
+    {
+        ExitToShell();
+    }
+
+    if(base::Debugger::instance)
+        if(auto ret = base::Debugger::instance->trapBreak68K(trap_address, "Unimplemented"); ~ret)
+            return ret;
+
+    return POPADDR();
+}
+
+
+static int getTrapIndex(uint16_t trapnum, bool newTraps, bool &tool)
+{
+    /* MacPhoenix: a whole Toolbox trap word in the old numbering reaches
+       the full table, as on a 7.6.1 Quadra: Apple's linked-patch loader
+       (Mac OS Easy Open's INIT) installs $ABFC with SetTrapAddress $A447
+       and D0 = $ABFC, and a Mac has it in $ABFC's slot, not $A9FC's. */
+    if(!newTraps && (trapnum & 0xF800) == 0xA800)
+    {
+        tool = true;
+        return trapnum & 0x3FF;
+    }
+    if(!newTraps)
+    {
+        trapnum &= 0x1FF;
+        tool = trapnum > 0x4F && trapnum  != 0x54 && trapnum != 0x57;
+    }
+    return trapnum & (tool ? 0x3FF : 0xFF);
+}
+
+
+static bool shouldHideTrap(bool tool, int index)
+{
+    if(tool)
+    {
+        switch(index)
+        {
+            case 0x00: /* SoundDispatch -- if sound is off, soundispatch is unimpl */
+                return ROMlib_PretendSound == soundoff;
+            case 0x8F: /* OSDispatch (Word uses old, undocumented selectors) */
+                return system_version < 0x700;
+            case 0x30: /* Pack14: Executor's own is stubs; Apple's shows */
+                return !ROMlib_help_package_p();
+            /* MacPhoenix: ScriptUtil ($B5) is no longer hidden behind
+               ROMlib_pretend_script: every System 7 has a Script Manager, and
+               Apple's Text control panel won't open without it. */
+            default:
+                return false;
+        }   
+    }
+    else
+    {
+        switch(index)
+        {
+            case 0x77: /* CountADBs */
+            case 0x78: /* GetIndADB */
+            case 0x79: /* GetADBInfo */
+            case 0x7A: /* SetADBInfo */
+            case 0x7B: /* ADBReInit */
+            case 0x7C: /* ADBOp */
+            case 0x4F: /* RDrvrInstall */
+                return true;
+            default:
+                return false;
+        }
+    }
+}
+
+ProcPtr Executor::_GetTrapAddress_flags(uint16_t n, bool newTraps, bool tool)
+{
+    int index = getTrapIndex(n, newTraps, tool);
+    
+    syn68k_addr_t addr = (tool ? tooltraptable : ostraptable)[index];
+
+    if(addr == tooltraptable[_Unimplemented & 0x3FF] || shouldHideTrap(tool, index))
+    {
+        add_to_bad_trap_addresses(tool, index);
+        return (ProcPtr)&stub_bad_trap_unimplemented;
+    }
+    return ptr_from_longint<ProcPtr>(addr);
+}
+
+void Executor::_SetTrapAddress_flags(ProcPtr addr, uint16_t n, bool newTraps, bool tool)
+{
+    int index = getTrapIndex(n, newTraps, tool);
+    
+    (tool ? tooltraptable : ostraptable)[index] = ptr_to_longint(addr);
+}
+
+void Executor::C_SetToolboxTrapAddress(ProcPtr addr, uint16_t n)
+{
+    _SetTrapAddress_flags(addr, n, true, true);
+}
+
+ProcPtr Executor::C_GetToolboxTrapAddress(uint16_t n)
+{
+    return _GetTrapAddress_flags(n, true, true);
+}
+
+ProcPtr Executor::C_NGetTrapAddress(uint16_t n, TrapType ttype) /* IMII-384 */
+{
+    return _GetTrapAddress_flags(n, true, ttype != kOSTrapType);
+}
+
+/* MacPhoenix: InterfaceLib's GetTrapVector: where a trap word's address is
+   kept, its slot in the dispatch table (low memory, $400 and $E00 as on a
+   Mac). Mac OS Easy Open's PowerPC Translation library keeps what it
+   answers for $ABFC and calls through what the slot holds each time. */
+Ptr Executor::glue_GetTrapVector(uint16_t trapWord)
+{
+    bool tool = trapWord & 0x0800;
+    int index = getTrapIndex(trapWord, true, tool);
+    return (Ptr)&(tool ? tooltraptable : ostraptable)[index];
+}
+
+void Executor::C_NSetTrapAddress(ProcPtr addr, uint16_t n, TrapType ttype)
+{
+    _SetTrapAddress_flags(addr, n, true, ttype != kOSTrapType);
+}

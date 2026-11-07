@@ -1,0 +1,1177 @@
+/* Copyright 1995, 1996 by Abacus Research and
+ * Development, Inc.  All rights reserved.
+ */
+
+// FIXME: #warning the icon suite representation is our own brew -- tests should
+// FIXME: #warning be written and we should do what the Mac does
+
+#include <OSUtil.h>
+#include <base/common.h>
+#include <SysErr.h>
+
+#include <QuickDraw.h>
+#include <CQuickDraw.h>
+#include <Iconutil.h>
+
+#include <quickdraw/cquick.h>
+#include <res/resource.h>
+#include <mman/mman.h>
+#include <rsys/icon.h>
+#include <base/functions.impl.h>
+
+#include <algorithm>
+#include <vector>
+#include <cstring>
+
+using namespace Executor;
+
+#define ICON_RETURN_ERROR(error)                                     \
+    do{                                                               \
+        OSErr _error_ = (error);                                     \
+                                                                     \
+        if(_error_ != noErr)                                         \
+            warning_unexpected("error `%s', `%d'", #error, _error_); \
+        return _error_;                                              \
+    }while(false)
+
+OSErr Executor::C_PlotIconID(const Rect *rect, IconAlignmentType align,
+                             IconTransformType transform, short res_id)
+{
+    Handle icon_suite;
+    OSErr err;
+
+    err = GetIconSuite(out(icon_suite), res_id, svAllAvailableData);
+    if(err != noErr)
+        ICON_RETURN_ERROR(err);
+
+    err = PlotIconSuite(rect, align, transform, icon_suite);
+    if(err != noErr)
+        ICON_RETURN_ERROR(err);
+
+    DisposeIconSuite(icon_suite, false);
+
+    ICON_RETURN_ERROR(noErr);
+}
+
+void Executor::C_PlotIcon(const Rect *rect, Handle icon)
+{
+    if(icon == nullptr)
+        return;
+
+    if(!*icon)
+        LoadResource(icon);
+
+    HLockGuard guard(icon);
+    BitMap bm;
+
+    bm.baseAddr = *icon;
+    bm.rowBytes = 4;
+    bm.bounds.left = bm.bounds.top = 0;
+    if(GetHandleSize(icon) == 2 * 16)
+    {
+        bm.rowBytes = 2;
+        bm.bounds.bottom = 16;
+    }
+    else
+    {
+        bm.rowBytes = 4;
+        bm.bounds.bottom = 32;
+    }
+    bm.bounds.right = bm.bounds.bottom;
+    CopyBits(&bm, PORT_BITS_FOR_COPY(qdGlobals().thePort), &bm.bounds, rect,
+             srcCopy, nullptr);
+}
+
+OSErr Executor::C_PlotIconHandle(const Rect *rect, IconAlignmentType align,
+                                 IconTransformType transform, Handle icon)
+{
+    /* #### change plotting routines to respect alignment and transform */
+    if(align != atNone)
+        warning_unimplemented("unhandled icon alignment `%d'", align);
+    if(transform != ttNone)
+        warning_unimplemented("unhandled icon transform `%d'", transform);
+
+    PlotIcon(rect, icon);
+
+    ICON_RETURN_ERROR(noErr);
+}
+
+void Executor::C_PlotCIcon(const Rect *rect, CIconHandle icon)
+{
+    /* when plotting, `ignore' the current fg/bk colors */
+    GrafPtr current_port;
+    RGBColor bk_rgb, fg_rgb;
+    GUEST<int32_t> bk_color, fg_color;
+    int cgrafport_p;
+
+    if(!icon)
+        return;
+
+    current_port = qdGlobals().thePort;
+
+    cgrafport_p = CGrafPort_p(current_port);
+    if(cgrafport_p)
+    {
+        fg_rgb = CPORT_RGB_FG_COLOR(current_port);
+        bk_rgb = CPORT_RGB_BK_COLOR(current_port);
+    }
+    fg_color = PORT_FG_COLOR(current_port);
+    bk_color = PORT_BK_COLOR(current_port);
+
+    RGBForeColor(&ROMlib_black_rgb_color);
+    RGBBackColor(&ROMlib_white_rgb_color);
+
+    HLockGuard guard(icon);
+    PixMapHandle gd_pixmap;
+
+    BitMap *mask_bm;
+    BitMap *icon_bm;
+
+    icon_bm = &CICON_BMAP(icon);
+
+    mask_bm = &CICON_MASK(icon);
+    BITMAP_BASEADDR(mask_bm) = (Ptr)CICON_MASK_DATA(icon);
+
+    gd_pixmap = GD_PMAP(LM(MainDevice));
+
+    if((PORT_BASEADDR(current_port) == PIXMAP_BASEADDR(gd_pixmap)
+        && PIXMAP_PIXEL_SIZE(gd_pixmap) > 2)
+       || (CGrafPort_p(current_port)
+           && PIXMAP_PIXEL_SIZE(CPORT_PIXMAP(current_port)) > 2)
+       || !BITMAP_ROWBYTES(icon_bm))
+    {
+        Handle icon_data;
+
+        icon_data = CICON_DATA(icon);
+        HLockGuard guard(icon_data);
+
+        PixMap *icon_pm;
+
+        icon_pm = &CICON_PMAP(icon);
+        BITMAP_BASEADDR(icon_pm) = *icon_data;
+
+        CopyMask((BitMap *)icon_pm,
+                 mask_bm,
+                 PORT_BITS_FOR_COPY(current_port),
+                 &BITMAP_BOUNDS(icon_pm),
+                 &BITMAP_BOUNDS(mask_bm),
+                 /* #### fix up the need for this cast */
+                 (Rect *)rect);
+    }
+    else
+    {
+        Rect *icon_bm_bounds;
+        Ptr bm_baseaddr;
+        int height;
+        int mask_data_size;
+
+        icon_bm_bounds = &BITMAP_BOUNDS(icon_bm);
+
+        height = RECT_HEIGHT(icon_bm_bounds);
+        mask_data_size = BITMAP_ROWBYTES(icon_bm) * height;
+        bm_baseaddr = (Ptr)((char *)CICON_MASK_DATA(icon)
+                            + mask_data_size);
+
+        BITMAP_BASEADDR(icon_bm) = bm_baseaddr;
+        CopyMask(icon_bm,
+                 mask_bm,
+                 PORT_BITS_FOR_COPY(current_port),
+                 icon_bm_bounds,
+                 &BITMAP_BOUNDS(mask_bm),
+                 /* #### fix up the need for this cast */
+                 (Rect *)rect);
+    }
+
+    if(cgrafport_p)
+    {
+        CPORT_RGB_FG_COLOR(current_port) = fg_rgb;
+        CPORT_RGB_BK_COLOR(current_port) = bk_rgb;
+    }
+    PORT_FG_COLOR(current_port) = fg_color;
+    PORT_BK_COLOR(current_port) = bk_color;
+}
+
+OSErr Executor::C_PlotCIconHandle(const Rect *rect, IconAlignmentType align,
+                                  IconTransformType transform, CIconHandle icon)
+{
+    /* #### change plotting routines to respect alignment and transform */
+    if(align != atNone)
+        warning_unimplemented("unhandled icon alignment `%d'", align);
+    if(transform != ttNone)
+        warning_unimplemented("unhandled icon transform `%d'", transform);
+
+    PlotCIcon(rect, icon);
+
+    ICON_RETURN_ERROR(noErr);
+}
+
+OSErr Executor::C_PlotSICNHandle(const Rect *rect, IconAlignmentType align,
+                                 IconTransformType transform, Handle icon)
+{
+    /* #### change plotting routines to respect alignment and transform */
+    if(align != atNone)
+        warning_unimplemented("unhandled icon alignment `%d'", align);
+    if(transform != ttNone)
+        warning_unimplemented("unhandled icon transform `%d'", transform);
+
+    PlotIcon(rect, icon);
+
+    ICON_RETURN_ERROR(noErr);
+}
+
+Handle Executor::C_GetIcon(short icon_id)
+{
+    return ROMlib_getrestid("ICON"_4, icon_id);
+}
+
+CIconHandle Executor::C_GetCIcon(short icon_id)
+{
+    CIconHandle cicon_handle;
+    CIconHandle cicon_res_handle;
+    CIconPtr cicon_res;
+    int height;
+    int mask_data_size;
+    int bmap_data_size;
+    int new_size;
+
+    cicon_res_handle = (CIconHandle)ROMlib_getrestid("cicn"_4, icon_id);
+    if(cicon_res_handle == nullptr)
+        return nullptr;
+    /* MacPhoenix: a purged (or empty) resource: loaded again, nil when it
+       can't be, as for no resource. */
+    if(!*cicon_res_handle)
+        LoadResource((Handle)cicon_res_handle);
+    if(!*cicon_res_handle || GetHandleSize((Handle)cicon_res_handle) < (Size)sizeof(CIcon))
+        return nullptr;
+
+    cicon_res = *cicon_res_handle;
+    height = RECT_HEIGHT(&cicon_res->iconPMap.bounds);
+    mask_data_size = cicon_res->iconMask.rowBytes * height;
+    bmap_data_size = cicon_res->iconBMap.rowBytes * height;
+    new_size = sizeof(CIcon) - sizeof(INTEGER) + mask_data_size + bmap_data_size;
+
+    cicon_handle = (CIconHandle)NewHandle(new_size);
+    if(!cicon_handle)
+        return nullptr;
+    HLockGuard guard1(cicon_handle), guard2(cicon_res_handle);
+
+    CTabPtr tmp_ctab;
+    int mask_data_offset;
+    int bmap_data_offset;
+    int pmap_ctab_offset;
+    int pmap_ctab_size;
+    int pmap_data_offset;
+    int pmap_data_size;
+    CIconPtr cicon;
+
+    cicon = *cicon_handle;
+    cicon_res = *cicon_res_handle;
+
+    BlockMoveData((Ptr)cicon_res, (Ptr)cicon, new_size);
+
+    mask_data_offset = 0;
+
+    bmap_data_offset = mask_data_size;
+
+    pmap_ctab_offset = bmap_data_offset + bmap_data_size;
+    tmp_ctab = (CTabPtr)((char *)&cicon_res->iconMaskData + pmap_ctab_offset);
+    pmap_ctab_size = sizeof(ColorTable) + (tmp_ctab->ctSize
+                                           * sizeof(ColorSpec));
+
+    pmap_data_offset = pmap_ctab_offset + pmap_ctab_size;
+    pmap_data_size = (cicon->iconPMap.rowBytes
+                      & ROWBYTES_VALUE_BITS)
+        * height;
+
+    cicon->iconMask.baseAddr = nullptr;
+
+    cicon->iconBMap.baseAddr = nullptr;
+
+    {
+        CTabHandle color_table;
+
+        color_table
+            = (CTabHandle)NewHandle(pmap_ctab_size);
+        BlockMoveData((Ptr)&cicon_res->iconMaskData + pmap_ctab_offset,
+                      (Ptr)*color_table,
+                      pmap_ctab_size);
+        CTAB_SEED(color_table) = GetCTSeed();
+        cicon->iconPMap.pmTable = color_table;
+
+        cicon->iconPMap.baseAddr = nullptr;
+        cicon->iconData = NewHandle(pmap_data_size);
+        BlockMoveData((Ptr)&cicon_res->iconMaskData + pmap_data_offset,
+                      (Ptr)(*cicon->iconData),
+                      pmap_data_size);
+    }
+
+    return cicon_handle;
+}
+
+void Executor::C_DisposeCIcon(CIconHandle icon)
+{
+    /* MacPhoenix: nil, or an icon gone, is nothing to do (Kid Pix's
+       SlideShow disposes one it never got). */
+    if(!icon || !*icon)
+    {
+        if(icon)
+            DisposeHandle((Handle)icon);
+        return;
+    }
+    DisposeHandle(CICON_DATA(icon));
+    DisposeHandle((Handle)CICON_PMAP(icon).pmTable);
+    DisposeHandle((Handle)icon);
+}
+
+/* MacPhoenix: labels 0 (none) to 7, as the System keeps them: 'lstr' and
+   'rgb ' -16392 + label, the name and colour the Labels control panel
+   edits. Label 7 is Essential, 1 Project 2: the Finder lists them 7 first
+   (the table here had them the other way round, and the Labels window
+   came out upside down). Without them (Executor's own System), the names
+   and Color QuickDraw's nearest standard colours. */
+static const struct
+{
+    const char *name;
+    int qd_color; /* ROMlib_QDColors index */
+} default_labels[8] = {
+    { "\004None", 0 },          /* black */
+    { "\011Project 2", 0 },     /* brown: black */
+    { "\011Project 1", 5 },     /* green */
+    { "\010Personal", 6 },      /* blue */
+    { "\004Cool", 4 },          /* cyan */
+    { "\013In Progress", 2 },   /* magenta */
+    { "\003Hot", 3 },           /* red */
+    { "\011Essential", 1 },     /* orange: yellow */
+};
+
+OSErr Executor::C_GetLabel(short label, RGBColor *label_color,
+                           Str255 label_string)
+{
+    if(label < 0 || label > 7)
+        ICON_RETURN_ERROR(paramErr);
+
+    /* the System file's, whatever the application's files hold */
+    auto system_resource = [](ResType type, INTEGER id) {
+        INTEGER save = CurResFile();
+        UseResFile(LM(SysMap));
+        Handle h = Get1Resource(type, id);
+        UseResFile(save);
+        return h;
+    };
+
+    /* Either output may be nil (Finder asks for colours only). */
+    if(label_color)
+    {
+        Handle h = system_resource("rgb "_4, -16392 + label);
+        if(h && *h && GetHandleSize(h) >= (Size)sizeof(RGBColor))
+            *label_color = *(RGBColor *)*h;
+        else
+            *label_color = ROMlib_QDColors[default_labels[label].qd_color].rgb;
+    }
+    if(label_string)
+    {
+        Handle h = system_resource("lstr"_4, -16392 + label);
+        if(h && *h && GetHandleSize(h) >= 1 && GetHandleSize(h) > *(uint8_t *)*h)
+            str255assign(label_string, (StringPtr)*h);
+        else
+            str255assign(label_string, (StringPtr)default_labels[label].name);
+    }
+    ICON_RETURN_ERROR(noErr);
+}
+
+/* Icon families (IM More Macintosh Toolbox ch. 5, Icon Utilities).
+ *
+ * MacPhoenix rewrite of Executor's suite code. Suites and icon caches share
+ * one layout (rsys/icon.h); a cache is a suite whose missing members come
+ * from its getter. Every drawing, region and hit-test call works on an
+ * IconSource: a suite, a cache, or a PlotIconMethod-style getter. */
+
+namespace
+{
+const ResType restype_for_icon[N_SUITE_ICONS] = {
+    large1BitMask, large4BitData, large8BitData,
+    small1BitMask, small4BitData, small8BitData,
+    mini1BitMask, mini4BitData, mini8BitData,
+};
+
+const IconSelectorValue mask_for_icon[N_SUITE_ICONS] = {
+    svLarge1Bit, svLarge4Bit, svLarge8Bit,
+    svSmall1Bit, svSmall4Bit, svSmall8Bit,
+    svMini1Bit, svMini4Bit, svMini8Bit,
+};
+
+enum
+{
+    kLargeBase = 0, /* ICN#, icl4, icl8 */
+    kSmallBase = 3, /* ics#, ics4, ics8 */
+    kMiniBase = 6,  /* icm#, icm4, icm8: 16 wide, 12 high */
+    kSuiteIsCache = 1,
+};
+
+int restype_to_index(ResType type)
+{
+    for(int i = 0; i < N_SUITE_ICONS; i++)
+        if(type == restype_for_icon[i])
+            return i;
+    return -1;
+}
+
+suite_layout_t *layout(Handle suite)
+{
+    return (suite_layout_t *)*suite;
+}
+
+/* A purged resource member is reloaded; a purged non-resource is gone. */
+Handle usable(Handle h)
+{
+    if(!h)
+        return nullptr;
+    /* An empty handle has no block to keep its flags (HGetState fails),
+       so try reloading it as a resource: a member got with ResLoad off,
+       or purged. */
+    if(!*h)
+        LoadResource(h);
+    return *h ? h : nullptr;
+}
+
+struct IconSource
+{
+    virtual ~IconSource() = default;
+    virtual Handle get(int index) = 0;
+    virtual int label() { return 0; }
+};
+
+struct SuiteSource : IconSource
+{
+    Handle suite;
+    explicit SuiteSource(Handle s) : suite(s) {}
+
+    Handle get(int index) override
+    {
+        Handle h = usable(layout(suite)->icons[index]);
+        if(!h && (layout(suite)->flags & kSuiteIsCache) && layout(suite)->cacheProc)
+        {
+            IconGetterUPP proc = layout(suite)->cacheProc;
+            h = proc(restype_for_icon[index], layout(suite)->cacheData);
+            /* the getter may move memory */
+            layout(suite)->icons[index] = h;
+            h = usable(h);
+        }
+        return h;
+    }
+    int label() override { return layout(suite)->label; }
+};
+
+struct MethodSource : IconSource
+{
+    IconGetterUPP method;
+    void *data;
+    Handle got[N_SUITE_ICONS] = {};
+    bool asked[N_SUITE_ICONS] = {};
+    MethodSource(IconGetterUPP m, void *d) : method(m), data(d) {}
+
+    Handle get(int index) override
+    {
+        if(!asked[index])
+        {
+            asked[index] = true;
+            got[index] = method(restype_for_icon[index], data);
+        }
+        return usable(got[index]);
+    }
+};
+
+/* Which member to draw for a rectangle: mini icons below 16 pixels, small
+   below 32, large otherwise, falling back to the nearest size the family
+   has; the deepest colour data the port can show; the mask is always the
+   second half of the black-and-white member. A mini member may be stored
+   16 rows high (7.5.5 Finder hands over its SICN-shaped ones that way);
+   its middle 12 rows are drawn, as a real boot does. */
+struct Chosen
+{
+    Handle mask = nullptr; /* ICN# / ics# / icm# */
+    Handle data = nullptr; /* mask, or the 4/8-bit member */
+    int w = 32, h = 32;
+    int rows = 32; /* rows stored per plane */
+    int skip = 0;  /* rows above the drawn ones */
+    int bpp = 1;
+    bool no_mask = false; /* the member holds the bitmap only */
+    int mask_bytes() const { return w * h / 8; }
+    int row_bytes() const { return w / 8; }
+    const uint8_t *bits() const { return (const uint8_t *)*mask + skip * row_bytes(); }
+    const uint8_t *mask_bits() const { return no_mask ? bits() : bits() + rows * row_bytes(); }
+    Ptr data_bits() const { return *data + skip * row_bytes() * bpp; }
+};
+
+int port_depth()
+{
+    GrafPtr port = qdGlobals().thePort;
+    return CGrafPort_p(port) ? (int)toHost(PIXMAP_PIXEL_SIZE(CPORT_PIXMAP(port))) : 1;
+}
+
+OSErr choose(IconSource& src, const Rect *rect, Chosen& c, bool needData = true)
+{
+    static const int order[3][3] = {
+        { kLargeBase, kSmallBase, kMiniBase },
+        { kSmallBase, kLargeBase, kMiniBase },
+        { kMiniBase, kSmallBase, kLargeBase },
+    };
+    int rw = RECT_WIDTH(rect), rh = RECT_HEIGHT(rect);
+    int want = (rw < 16 || rh < 16) ? 2 : (rw < 32 || rh < 32) ? 1 : 0;
+    int base = -1;
+    for(int b : order[want])
+    {
+        /* a member too short for its type is ignored */
+        c.mask = src.get(b);
+        if(!c.mask)
+            continue;
+        c.w = b == kLargeBase ? 32 : 16;
+        c.h = c.rows = b == kLargeBase ? 32 : b == kSmallBase ? 16 : 12;
+        c.skip = 0;
+        if(b == kMiniBase && GetHandleSize(c.mask) >= 16 * 2 * 2)
+            c.rows = 16, c.skip = 2;
+        c.no_mask = false;
+        if(GetHandleSize(c.mask) >= c.rows * c.row_bytes() * 2)
+        {
+            base = b;
+            break;
+        }
+        /* MacPhoenix: the bitmap without its mask, an 'ICON' handed over
+           as the 'ICN#' (the Sound control panel's output device list does
+           so with the component's icon, which a real Mac draws): its bits
+           stand for the mask */
+        if(GetHandleSize(c.mask) >= c.rows * c.row_bytes())
+        {
+            c.no_mask = true;
+            base = b;
+            break;
+        }
+    }
+    if(base < 0)
+        return noMaskFoundErr;
+    c.data = c.mask;
+    c.bpp = 1;
+    if(!needData)
+        return noErr;
+    int depth = port_depth();
+    if(depth >= 8 && (c.data = src.get(base + 2)))
+        c.bpp = 8;
+    else if(depth >= 4 && (c.data = src.get(base + 1)))
+        c.bpp = 4;
+    else
+    {
+        c.data = c.mask;
+        c.bpp = 1;
+    }
+    if(GetHandleSize(c.data) < c.rows * c.row_bytes() * c.bpp)
+    {
+        c.data = c.mask;
+        c.bpp = 1;
+    }
+    return noErr;
+}
+
+/* Where the icon goes inside rect: atNone fills the rectangle; otherwise
+   the icon keeps its size (shrunk proportionally if it doesn't fit) and is
+   placed by the alignment. */
+Rect place(const Rect *rect, IconAlignmentType align, const Chosen& c)
+{
+    Rect r = *rect;
+    if(align == atNone)
+        return r;
+    int w = RECT_WIDTH(rect), h = RECT_HEIGHT(rect);
+    /* shrink proportionally to fit */
+    int sw = c.w, sh = c.h;
+    if(sw > w || sh > h)
+    {
+        if(w * c.h < h * c.w)
+            sw = w, sh = c.h * w / c.w;
+        else
+            sh = h, sw = c.w * h / c.h;
+    }
+    int dx = 0, dy = 0;
+    switch(align & 3)
+    {
+        case atTop: dy = 0; break;
+        case atBottom: dy = h - sh; break;
+        case atVerticalCenter: dy = (h - sh) / 2; break;
+        default: dy = (h - sh) / 2; break; /* no vertical alignment: centre */
+    }
+    switch(align & 12)
+    {
+        case atLeft: dx = 0; break;
+        case atRight: dx = w - sw; break;
+        default: dx = (w - sw) / 2; break;
+    }
+    r.left = rect->left + dx;
+    r.top = rect->top + dy;
+    r.right = r.left + sw;
+    r.bottom = r.top + sh;
+    return r;
+}
+
+/* A rows x rowBytes copy of bits in the current heap (BitMap needs a guest
+   address), or the system heap when that is full: plotting a menu bar's
+   icons mustn't fail in a small application's full heap (Register StuffIt
+   Expander's 100K, in its first InitWindows). Not the system heap first:
+   Frontier, plotting icons all the time, stalls. */
+Ptr copy_bits(const void *bits, int bytes)
+{
+    Ptr p = NewPtr(bytes);
+    if(!p)
+    {
+        TheZoneGuard guard(LM(SysZone));
+        p = NewPtr(bytes);
+    }
+    if(p)
+        memcpy(p, bits, bytes);
+    return p;
+}
+
+/* The mask of an icon that has none (an 'ICON'): the bits with the white
+   inside the outline filled, everything not reached from the edges through
+   white pixels, as CalcMask makes it. A selected 'ICON' is darkened inside
+   its outline that way on 7.5.5 (the Sound control panel's output device). */
+void fill_outline(uint8_t *bits, int w, int h, int rb)
+{
+    std::vector<uint8_t> outside(w * h, 0);
+    std::vector<int> todo;
+    auto set = [&](int x, int y) { return bits[y * rb + x / 8] & (0x80 >> (x & 7)); };
+    auto visit = [&](int x, int y) {
+        if(x < 0 || y < 0 || x >= w || y >= h || outside[y * w + x] || set(x, y))
+            return;
+        outside[y * w + x] = 1;
+        todo.push_back(y * w + x);
+    };
+    for(int x = 0; x < w; x++)
+        visit(x, 0), visit(x, h - 1);
+    for(int y = 0; y < h; y++)
+        visit(0, y), visit(w - 1, y);
+    while(!todo.empty())
+    {
+        int i = todo.back();
+        todo.pop_back();
+        int x = i % w, y = i / w;
+        visit(x - 1, y), visit(x + 1, y), visit(x, y - 1), visit(x, y + 1);
+    }
+    for(int y = 0; y < h; y++)
+        for(int x = 0; x < w; x++)
+            if(!outside[y * w + x])
+                bits[y * rb + x / 8] |= 0x80 >> (x & 7);
+}
+
+const uint8_t gray_rows[2] = { 0xAA, 0x55 };     /* 50% */
+const uint8_t ltgray_rows[4] = { 0x88, 0x00, 0x22, 0x00 }; /* 12.5% */
+const uint8_t open8_rows[2] = { 0x88, 0x22 };      /* 25%: 8.x's open items */
+
+void tint(RGBColor& c, const RGBColor& label, bool selected, bool disabled)
+{
+    auto ch = [&](uint16_t v, uint16_t l) {
+        uint32_t x = v;
+        if(label.red | label.green | label.blue | 1)
+            x = x * l / 0xFFFF;
+        if(selected)
+            x /= 2;
+        if(disabled)
+            x = (x + 0xFFFF) / 2;
+        return (uint16_t)x;
+    };
+    c.red = ch(c.red, label.red);
+    c.green = ch(c.green, label.green);
+    c.blue = ch(c.blue, label.blue);
+}
+
+OSErr plot(IconSource& src, const Rect *rect, IconAlignmentType align,
+           IconTransformType transform)
+{
+    /* MacPhoenix: nothing to draw into before InitGraf (no port): Apple's
+       Icon Services answers noErr there too (IconTest on 9.0.4). */
+    if(LM(QDExist) != EXIST_YES)
+        return noErr;
+    Chosen c;
+    OSErr err = choose(src, rect, c);
+    if(err != noErr)
+        return err;
+
+    int label = (transform >> 8) & 0xF;
+    if(!label)
+        label = src.label() & 0xF;
+    int state = transform & 0xFF;
+    bool selected = (transform & ttSelected) != 0;
+    bool disabled = state == ttDisabled;
+    bool patterned = state == ttOpen || state == ttOffline;
+    /* 8.x draws an open item (a running control panel, an open folder)
+       with the outline in black and, inside, every fourth pixel black over
+       the highlight colour (the G3's 8.6 Finder: lavender with dots; 7.5.5
+       a 50% grey) */
+    bool open8 = state == ttOpen && (uint16_t)LM(SysVersion) >= 0x0800;
+
+    RGBColor label_rgb = ROMlib_black_rgb_color;
+    bool labelled = label >= 1 && label <= 7 && port_depth() > 1;
+    if(labelled)
+        GetLabel(label, &label_rgb, nullptr);
+
+    int w = c.w, h = c.h;
+    int mask_bytes = c.mask_bytes();
+    HLockGuard g1(c.mask), g2(c.data);
+    const uint8_t *mask_src = c.mask_bits();
+
+    Rect icon_rect = { 0, 0, (int16_t)h, (int16_t)w };
+    Rect dst = place(rect, align, c);
+    GrafPtr port = qdGlobals().thePort;
+
+    Ptr mask_p = copy_bits(mask_src, mask_bytes);
+    if(!mask_p)
+        return memFullErr;
+    if(c.no_mask)
+        fill_outline((uint8_t *)mask_p, w, h, c.row_bytes());
+    BitMap mask_bm;
+    mask_bm.baseAddr = mask_p;
+    mask_bm.rowBytes = c.row_bytes();
+    mask_bm.bounds = icon_rect;
+
+    if(c.bpp == 1 || patterned)
+    {
+        /* black and white: transforms work on the bits themselves */
+        Ptr data_p = copy_bits(c.bits(), mask_bytes);
+        if(!data_p)
+        {
+            DisposePtr(mask_p);
+            return memFullErr;
+        }
+        uint8_t *d = (uint8_t *)data_p;
+        const uint8_t *m = (const uint8_t *)mask_p;
+        bool color_port = CGrafPort_p(port);
+        int rb = c.row_bytes();
+        auto in_mask = [&](int x, int y) {
+            return x >= 0 && y >= 0 && x < w && y < h && (m[y * rb + x / 8] & (0x80 >> (x & 7)));
+        };
+        for(int y = 0; y < h; y++)
+            for(int x = 0; x < rb; x++)
+            {
+                int i = y * rb + x;
+                if(state == ttOpen)
+                {
+                    /* As 7.5.5 draws an open item: the mask's outline in
+                       black, a 50% pattern inside. */
+                    uint8_t outline = 0;
+                    for(int b = 0; b < 8; b++)
+                    {
+                        int px = x * 8 + b;
+                        if(in_mask(px, y) && !(in_mask(px - 1, y) && in_mask(px + 1, y)
+                                               && in_mask(px, y - 1) && in_mask(px, y + 1)))
+                            outline |= 0x80 >> b;
+                    }
+                    d[i] = (m[i] & (open8 ? open8_rows[y & 1] : gray_rows[y & 1])) | outline;
+                }
+                else if(state == ttOffline)
+                    d[i] = (d[i] & ~m[i]) | (m[i] & ltgray_rows[y & 3]);
+                if(disabled)
+                    d[i] &= gray_rows[y & 1];
+                /* Selected: inverted in black and white; on a colour port
+                   the white parts take the selection darkening instead. */
+                if(selected && !color_port)
+                    d[i] = m[i] & ~d[i];
+            }
+        BitMap data_bm = mask_bm;
+        data_bm.baseAddr = data_p;
+
+        GUEST<int32_t> fg = PORT_FG_COLOR(port), bk = PORT_BK_COLOR(port);
+        RGBColor fg_rgb, bk_rgb;
+        if(color_port)
+        {
+            fg_rgb = CPORT_RGB_FG_COLOR(port);
+            bk_rgb = CPORT_RGB_BK_COLOR(port);
+            RGBColor back = ROMlib_white_rgb_color;
+            if(open8 && port_depth() > 1)
+                back = LM(HiliteRGB);
+            if(selected)
+                tint(back, ROMlib_white_rgb_color, true, false);
+            RGBForeColor(labelled ? &label_rgb : &ROMlib_black_rgb_color);
+            RGBBackColor(&back);
+        }
+        CopyMask(&data_bm, &mask_bm, PORT_BITS_FOR_COPY(port), &icon_rect,
+                 &icon_rect, &dst);
+        if(color_port)
+        {
+            RGBForeColor(&fg_rgb);
+            RGBBackColor(&bk_rgb);
+        }
+        PORT_FG_COLOR(port) = fg;
+        PORT_BK_COLOR(port) = bk;
+        DisposePtr(data_p);
+    }
+    else
+    {
+        /* colour: label, selection and dimming change the colour table */
+        CTabHandle ctab = GetCTable(c.bpp);
+        if(!ctab)
+        {
+            TheZoneGuard guard(LM(SysZone)); /* as copy_bits */
+            ctab = GetCTable(c.bpp);
+        }
+        if(!ctab)
+        {
+            DisposePtr(mask_p);
+            return memFullErr;
+        }
+        if(labelled || selected || disabled)
+        {
+            HLockGuard g3(ctab);
+            int count = CTAB_SIZE(ctab) + 1;
+            for(int i = 0; i < count; i++)
+            {
+                RGBColor rgb = CTAB_TABLE(ctab)[i].rgb;
+                tint(rgb, labelled ? label_rgb : ROMlib_white_rgb_color, selected, disabled);
+                CTAB_TABLE(ctab)[i].rgb = rgb;
+            }
+            CTAB_SEED(ctab) = GetCTSeed();
+        }
+        PixMap pm;
+        memset(&pm, 0, sizeof pm);
+        pm.baseAddr = c.data_bits();
+        pm.rowBytes = (w * c.bpp / 8) | PIXMAP_DEFAULT_ROW_BYTES;
+        pm.bounds = icon_rect;
+        pm.pixelSize = pm.cmpSize = c.bpp;
+        pm.cmpCount = 1;
+        pm.pmTable = ctab;
+
+        GUEST<int32_t> fg = PORT_FG_COLOR(port), bk = PORT_BK_COLOR(port);
+        RGBColor fg_rgb = CPORT_RGB_FG_COLOR(port), bk_rgb = CPORT_RGB_BK_COLOR(port);
+        RGBForeColor(&ROMlib_black_rgb_color);
+        RGBBackColor(&ROMlib_white_rgb_color);
+        CopyMask((BitMap *)&pm, &mask_bm, PORT_BITS_FOR_COPY(port), &icon_rect,
+                 &icon_rect, &dst);
+        RGBForeColor(&fg_rgb);
+        RGBBackColor(&bk_rgb);
+        PORT_FG_COLOR(port) = fg;
+        PORT_BK_COLOR(port) = bk;
+        DisposeCTable(ctab);
+    }
+    DisposePtr(mask_p);
+    return noErr;
+}
+
+/* The mask as a region over the placed icon. */
+OSErr to_rgn(IconSource& src, RgnHandle rgn, const Rect *rect, IconAlignmentType align)
+{
+    Chosen c;
+    OSErr err = choose(src, rect, c, false);
+    if(err != noErr)
+        return err;
+    HLockGuard g(c.mask);
+    Ptr mask_p = copy_bits(c.mask_bits(), c.mask_bytes());
+    if(!mask_p)
+        return memFullErr;
+    BitMap bm;
+    bm.baseAddr = mask_p;
+    bm.rowBytes = c.row_bytes();
+    bm.bounds = { 0, 0, (int16_t)c.h, (int16_t)c.w };
+    err = BitMapToRegion(rgn, &bm);
+    DisposePtr(mask_p);
+    if(err != noErr)
+        return err;
+    Rect icon_rect = bm.bounds;
+    Rect dst = place(rect, align, c);
+    MapRgn(rgn, &icon_rect, &dst);
+    return noErr;
+}
+
+bool pt_in(IconSource& src, Point pt, const Rect *rect, IconAlignmentType align)
+{
+    Chosen c;
+    if(choose(src, rect, c, false) != noErr)
+        return false;
+    Rect dst = place(rect, align, c);
+    if(!PtInRect(pt, &dst))
+        return false;
+    int x = (pt.h - dst.left) * c.w / RECT_WIDTH(&dst);
+    int y = (pt.v - dst.top) * c.h / RECT_HEIGHT(&dst);
+    const uint8_t *m = c.mask_bits();
+    return (m[y * c.row_bytes() + x / 8] >> (7 - (x & 7))) & 1;
+}
+
+bool rect_in(IconSource& src, const Rect *test, const Rect *rect, IconAlignmentType align)
+{
+    RgnHandle rgn = NewRgn();
+    bool in = to_rgn(src, rgn, rect, align) == noErr && RectInRgn(test, rgn);
+    DisposeRgn(rgn);
+    return in;
+}
+
+Handle new_suite()
+{
+    return NewHandleClear(sizeof(suite_layout_t));
+}
+}
+
+OSErr Executor::C_GetIconSuite(GUEST<Handle> *icon_suite_return, short res_id,
+                               IconSelectorValue selector)
+{
+    *icon_suite_return = nullptr;
+    Handle suite = new_suite();
+    if(!suite)
+        ICON_RETURN_ERROR(memFullErr);
+    for(int i = 0; i < N_SUITE_ICONS; i++)
+        if(selector & mask_for_icon[i])
+        {
+            Handle icon = GetResource(restype_for_icon[i], res_id);
+            layout(suite)->icons[i] = icon;
+        }
+    *icon_suite_return = suite;
+    ICON_RETURN_ERROR(noErr);
+}
+
+OSErr Executor::C_NewIconSuite(GUEST<Handle> *icon_suite_return)
+{
+    Handle suite = new_suite();
+    *icon_suite_return = suite;
+    if(!suite)
+        ICON_RETURN_ERROR(memFullErr);
+    ICON_RETURN_ERROR(noErr);
+}
+
+OSErr Executor::C_AddIconToSuite(Handle icon_data, Handle icon_suite,
+                                 ResType type)
+{
+    int i = restype_to_index(type);
+    if(i < 0)
+        ICON_RETURN_ERROR(paramErr);
+    layout(icon_suite)->icons[i] = icon_data;
+    ICON_RETURN_ERROR(noErr);
+}
+
+OSErr Executor::C_GetIconFromSuite(GUEST<Handle> *icon_data_return,
+                                   Handle icon_suite, ResType type)
+{
+    int i = restype_to_index(type);
+    Handle h = i < 0 ? nullptr : (Handle)layout(icon_suite)->icons[i];
+    if(!h)
+        ICON_RETURN_ERROR(paramErr);
+    *icon_data_return = h;
+    ICON_RETURN_ERROR(noErr);
+}
+
+OSErr Executor::C_PlotIconSuite(const Rect *rect, IconAlignmentType align,
+                                IconTransformType transform, Handle icon_suite)
+{
+    SuiteSource src(icon_suite);
+    HLockGuard guard(icon_suite);
+    ICON_RETURN_ERROR(plot(src, rect, align, transform));
+}
+
+OSErr Executor::C_PlotIconMethod(const Rect *rect, IconAlignmentType align,
+                                 IconTransformType transform,
+                                 IconGetterUPP method, void *data)
+{
+    MethodSource src(method, data);
+    ICON_RETURN_ERROR(plot(src, rect, align, transform));
+}
+
+OSErr Executor::C_ForEachIconDo(Handle suite, IconSelectorValue selector,
+                                IconActionUPP action, void *data)
+{
+    for(int i = 0; i < N_SUITE_ICONS; i++)
+    {
+        if(!(selector & mask_for_icon[i]))
+            continue;
+        GUEST<Handle> h = layout(suite)->icons[i];
+        OSErr err = action(restype_for_icon[i], &h, data);
+        layout(suite)->icons[i] = h;
+        if(err != noErr)
+            return err;
+    }
+    return noErr;
+}
+
+short Executor::C_GetSuiteLabel(Handle suite)
+{
+    return layout(suite)->label;
+}
+
+OSErr Executor::C_SetSuiteLabel(Handle suite, short label)
+{
+    if(label < 0 || label > 7)
+        ICON_RETURN_ERROR(paramErr);
+
+    /* the System file's, whatever the application's files hold */
+    auto system_resource = [](ResType type, INTEGER id) {
+        INTEGER save = CurResFile();
+        UseResFile(LM(SysMap));
+        Handle h = Get1Resource(type, id);
+        UseResFile(save);
+        return h;
+    };
+    layout(suite)->label = label;
+    return noErr;
+}
+
+OSErr Executor::C_DisposeIconSuite(Handle suite, Boolean dispose_data_p)
+{
+    if(dispose_data_p)
+        for(int i = 0; i < N_SUITE_ICONS; i++)
+        {
+            Handle icon = layout(suite)->icons[i];
+            if(icon && !(HGetState(icon) & RSRCBIT))
+                DisposeHandle(icon);
+        }
+    DisposeHandle(suite);
+    ICON_RETURN_ERROR(noErr);
+}
+
+OSErr Executor::C_IconSuiteToRgn(RgnHandle rgn, const Rect *rect,
+                                 IconAlignmentType align, Handle suite)
+{
+    SuiteSource src(suite);
+    ICON_RETURN_ERROR(to_rgn(src, rgn, rect, align));
+}
+
+OSErr Executor::C_IconIDToRgn(RgnHandle rgn, const Rect *rect,
+                              IconAlignmentType align, short icon_id)
+{
+    Handle suite;
+    OSErr err = GetIconSuite(out(suite), icon_id, svAllAvailableData);
+    if(err != noErr)
+        ICON_RETURN_ERROR(err);
+    err = IconSuiteToRgn(rgn, rect, align, suite);
+    DisposeIconSuite(suite, false);
+    ICON_RETURN_ERROR(err);
+}
+
+OSErr Executor::C_IconMethodToRgn(RgnHandle rgn, const Rect *rect,
+                                  IconAlignmentType align,
+                                  IconGetterUPP method, void *data)
+{
+    MethodSource src(method, data);
+    ICON_RETURN_ERROR(to_rgn(src, rgn, rect, align));
+}
+
+Boolean Executor::C_PtInIconSuite(Point test_pt, const Rect *rect,
+                                  IconAlignmentType align, Handle suite)
+{
+    SuiteSource src(suite);
+    return pt_in(src, test_pt, rect, align);
+}
+
+Boolean Executor::C_PtInIconID(Point test_pt, const Rect *rect,
+                               IconAlignmentType align, short icon_id)
+{
+    Handle suite;
+    if(GetIconSuite(out(suite), icon_id, svAllAvailableData) != noErr)
+        return false;
+    Boolean in = PtInIconSuite(test_pt, rect, align, suite);
+    DisposeIconSuite(suite, false);
+    return in;
+}
+
+Boolean Executor::C_PtInIconMethod(Point test_pt, const Rect *rect,
+                                   IconAlignmentType align,
+                                   IconGetterUPP method, void *data)
+{
+    MethodSource src(method, data);
+    return pt_in(src, test_pt, rect, align);
+}
+
+Boolean Executor::C_RectInIconSuite(const Rect *test_rect, const Rect *rect,
+                                    IconAlignmentType align, Handle suite)
+{
+    SuiteSource src(suite);
+    return rect_in(src, test_rect, rect, align);
+}
+
+Boolean Executor::C_RectInIconID(const Rect *test_rect, const Rect *rect,
+                                 IconAlignmentType align, short icon_id)
+{
+    Handle suite;
+    if(GetIconSuite(out(suite), icon_id, svAllAvailableData) != noErr)
+        return false;
+    Boolean in = RectInIconSuite(test_rect, rect, align, suite);
+    DisposeIconSuite(suite, false);
+    return in;
+}
+
+Boolean Executor::C_RectInIconMethod(const Rect *test_rect, const Rect *rect,
+                                     IconAlignmentType align,
+                                     IconGetterUPP method, void *data)
+{
+    MethodSource src(method, data);
+    return rect_in(src, test_rect, rect, align);
+}
+
+OSErr Executor::C_MakeIconCache(GUEST<Handle> *cache, IconGetterUPP make_icon,
+                                void *data)
+{
+    Handle suite = new_suite();
+    *cache = suite;
+    if(!suite)
+        ICON_RETURN_ERROR(memFullErr);
+    layout(suite)->flags = kSuiteIsCache;
+    layout(suite)->cacheProc = make_icon;
+    layout(suite)->cacheData = data;
+    ICON_RETURN_ERROR(noErr);
+}
+
+/* Fetch the members a plot of rect would use, without drawing. */
+OSErr Executor::C_LoadIconCache(const Rect *rect, IconAlignmentType align,
+                                IconTransformType transform, Handle cache)
+{
+    SuiteSource src(cache);
+    Chosen c;
+    ICON_RETURN_ERROR(choose(src, rect, c));
+}
+
+OSErr Executor::C_GetIconCacheData(Handle cache, GUEST<void *> *data)
+{
+    *data = layout(cache)->cacheData;
+    return noErr;
+}
+
+OSErr Executor::C_SetIconCacheData(Handle cache, void *data)
+{
+    layout(cache)->cacheData = data;
+    return noErr;
+}
+
+OSErr Executor::C_GetIconCacheProc(Handle cache, GUEST<IconGetterUPP> *proc)
+{
+    *proc = layout(cache)->cacheProc;
+    return noErr;
+}
+
+OSErr Executor::C_SetIconCacheProc(Handle cache, IconGetterUPP proc)
+{
+    layout(cache)->cacheProc = proc;
+    return noErr;
+}
+
+/* MacPhoenix: see SetIconDrawContext in Iconutil.yaml. Executor's icon
+   drawing has no use for the value; it is kept for GetIconDrawContext. */
+static int32_t icon_draw_context;
+
+void Executor::C_SetIconDrawContext(int32_t context)
+{
+    icon_draw_context = context;
+}
+
+void Executor::C_GetIconDrawContext(GUEST<int32_t> *context)
+{
+    *context = icon_draw_context;
+}
+
+/* PrivateInterfaceLib's icon device: kept, not consulted (Executor picks
+   an icon's depth from the port); nil until set, as on the G3's 8.6. */
+namespace
+{
+GDHandle icon_device;
+}
+
+void Executor::C_SetIconDevice(GDHandle theScreen)
+{
+    icon_device = theScreen;
+}
+
+void Executor::C_GetIconDevice(GUEST<GDHandle> *theScreen)
+{
+    if(theScreen)
+        *theScreen = icon_device;
+}

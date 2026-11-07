@@ -1,0 +1,489 @@
+# probe 36380ce331168daa4cd406f37ea43d926391107fc2e3cdcc534de058d0fdaf9d
+== map
+map.MapPt.0.0: 10,10
+map.MapPt.0.0.toempty: 5,5
+map.MapPt.0.1: 10,10
+map.MapPt.0.1.toempty: 12,10
+map.MapPt.0.2: 10,10
+map.MapPt.0.2.toempty: 205,2
+map.MapPt.0.3: 10,10
+map.MapPt.0.3.toempty: -35,1005
+map.MapPt.0.4: 10,10
+map.MapPt.0.4.toempty: 0,-10
+map.MapPt.0.5: 10,10
+map.MapPt.0.5.toempty: 20,10
+map.MapRect.0: 10,10,10,10
+map.MapRgn.rect.0: bbox 10,10,10,10 size 10 crc 7526c9cf
+map.MapRgn.complex.0: bbox 0,0,0,0 size 10 crc 76a4e2e8
+map.MapPoly.0: bbox 4,3,40,30 crc 953bd6df
+map.MapPt.1.0: 10,10
+map.MapPt.1.0.toempty: -5,-15
+map.MapPt.1.1: 10,10
+map.MapPt.1.1.toempty: 2,-10
+map.MapPt.1.2: 10,10
+map.MapPt.1.2.toempty: 195,-18
+map.MapPt.1.3: 10,10
+map.MapPt.1.3.toempty: -45,985
+map.MapPt.1.4: 10,10
+map.MapPt.1.4.toempty: -10,-30
+map.MapPt.1.5: 10,10
+map.MapPt.1.5.toempty: 10,-10
+map.MapRect.1: 10,10,10,10
+map.MapRgn.rect.1: bbox 10,10,10,10 size 10 crc 7526c9cf
+map.MapRgn.complex.1: bbox 0,0,0,0 size 10 crc 76a4e2e8
+map.MapPoly.1: bbox 4,3,40,30 crc 953bd6df
+map.MapPt.2.0: 10,10
+map.MapPt.2.0.toempty: 5,5
+map.MapPt.2.1: 13,10
+map.MapPt.2.1.toempty: 5,10
+map.MapPt.2.2: 106,10
+map.MapPt.2.2.toempty: 5,2
+map.MapPt.2.3: -9,10
+map.MapPt.2.3.toempty: 5,1005
+map.MapPt.2.4: 8,10
+map.MapPt.2.4.toempty: 5,-10
+map.MapPt.2.5: 17,10
+map.MapPt.2.5.toempty: 5,10
+map.MapRect.2: 11,10,24,10
+map.MapRgn.rect.2: bbox 11,10,24,10 size 10 crc ccf3b565
+map.MapRgn.complex.2: bbox 0,0,0,0 size 10 crc 76a4e2e8
+map.MapPoly.2: bbox 4,3,40,30 crc 953bd6df
+map.MapPt.3.0: 10,10
+map.MapPt.3.0.toempty: 5,5
+map.MapPt.3.1: 10,13
+map.MapPt.3.1.toempty: 12,5
+map.MapPt.3.2: 10,8
+map.MapPt.3.2.toempty: 205,5
+map.MapPt.3.3: 10,650
+map.MapPt.3.3.toempty: -35,5
+map.MapPt.3.4: 10,0
+map.MapPt.3.4.toempty: 0,5
+map.MapPt.3.5: 10,13
+map.MapPt.3.5.toempty: 20,5
+map.MapRect.3: 10,13,10,36
+map.MapRgn.rect.3: bbox 10,13,10,36 size 10 crc 1bd01810
+map.MapRgn.complex.3: bbox 0,0,0,0 size 10 crc 76a4e2e8
+map.MapPoly.3: bbox 4,3,40,30 crc 953bd6df
+map.MapPt.4.0: 57,73
+map.MapPt.4.0.toempty: 5,5
+map.MapPt.4.1: 54,70
+map.MapPt.4.1.toempty: 5,5
+map.MapPt.4.2: -37,75
+map.MapPt.4.2.toempty: 5,5
+map.MapPt.4.3: 76,-565
+map.MapPt.4.3.toempty: 5,5
+map.MapPt.4.4: 59,83
+map.MapPt.4.4.toempty: 5,5
+map.MapPt.4.5: 50,70
+map.MapPt.4.5.toempty: 5,5
+map.MapRect.4: 56,70,43,47
+map.MapRgn.rect.4: bbox 56,70,43,47 size 10 crc a552306c
+map.MapRgn.complex.4: bbox 28,15,56,70 size 44 crc b143fae6
+map.MapPoly.4: bbox 4,3,40,30 crc 953bd6df
+map.MapPt.5.0: 10,10
+map.MapPt.5.0.toempty: 5,5
+map.MapPt.5.1: 11,11
+map.MapPt.5.1.toempty: 5,5
+map.MapPt.5.2: 30,10
+map.MapPt.5.2.toempty: 5,5
+map.MapPt.5.3: 6,110
+map.MapPt.5.3.toempty: 5,5
+map.MapPt.5.4: 9,8
+map.MapPt.5.4.toempty: 5,5
+map.MapPt.5.5: 12,11
+map.MapPt.5.5.toempty: 5,5
+map.MapRect.5: 10,10,13,14
+map.MapRgn.rect.5: bbox 10,10,13,14 size 10 crc 77041b53
+map.MapRgn.complex.5: bbox 10,10,16,19 size 44 crc cde8fc1d
+map.MapPoly.5: bbox 10,10,14,13 crc d7715f81
+map.MapPt.6.0: 10,10
+map.MapPt.6.0.toempty: 5,5
+map.MapPt.6.1: 11,11
+map.MapPt.6.1.toempty: 5,5
+map.MapPt.6.2: 30,10
+map.MapPt.6.2.toempty: 5,5
+map.MapPt.6.3: 6,110
+map.MapPt.6.3.toempty: 5,5
+map.MapPt.6.4: 9,8
+map.MapPt.6.4.toempty: 5,5
+map.MapPt.6.5: 12,11
+map.MapPt.6.5.toempty: 5,5
+map.MapRect.6: 5,5,5,5
+map.MapRgn.rect.6: bbox 5,5,5,5 size 10 crc 9add745b
+map.MapRgn.complex.6: bbox 0,0,0,0 size 10 crc 76a4e2e8
+map.MapPoly.6: bbox 4,3,40,30 crc 953bd6df
+== list
+list.bind.GetCurrentMonitorDesktopList: found
+list.bind.DisposeMonitorDesktopList: found
+list.bind.RefreshMonitorDesktopList: found
+list.bind.CountMonitorDesktopRecordsInList: found
+list.bind.GetMonitorDesktopRecordFromList: found
+list.bind.GetMonitorDesktopAlignment: found
+list.bind.SetMonitorDesktopAlignment: found
+list.bind.MonitorDesktopHasPicture: found
+list.bind.SetMonitorDesktopToFile: found
+list.bind.DrawMonitorDesktopFromListWillTakeTime: found
+list.bind.DrawMonitorDesktopFromList: found
+list.bind.FileContainsPossibleDesktopPicture: found
+list.GetCurrent.err: 0
+list.GetCurrent.list: set
+list.GetCurrent.list.size~: 0
+list.Count: err 0 n 1
+list.GetRecord.0.err: -50
+list.GetRecord.0.size~: 0
+list.GetAlignment.0: err -50 a5a5a5a5
+list.HasPicture.0: err -50 ffffffa5
+list.WillTakeTime.0: err -50 ffffffa5
+list.GetRecord.1.err: 0
+list.GetRecord.1.size~: 372
+list.GetRecord.1.000~: 00000000000000000000000000000000000000000000010000003cb400000000
+list.GetRecord.1.020~: 000000000000000000000000000000000000000000040000074136900751bbc0
+list.GetRecord.1.040~: 00000001000000000005a003000818c200000000000061e00000000015acbcd0
+list.GetRecord.1.060~: 07411d88074128cb0000000100000001000000000d1629540007edf60751bcf0
+list.GetRecord.1.080~: 060001900000000107411a140751bbe80751bd480000fffe073fe0760751bd10
+list.GetRecord.1.0a0~: 073e8f10073f245c074128880751bc1022200822073fd8880000002c0751bd30
+list.GetRecord.1.0c0~: 07411d88001b08a00084bbe00084c91006000190073fe06c000000080751bc4f
+list.GetRecord.1.0e0~: 000000010000000100000000240008070600019005ff516e000000000751bc50
+list.GetRecord.1.100~: 000f4a90073f01a0000000000000001a073e8f0c073e8e20074136700751bc80
+list.GetRecord.1.120~: 22200822001b2954074128880751bc90074136e80000a322000000360751bca0
+list.GetRecord.1.140~: 00000000073ee0dc073e8e200751bca007411d88001b1f400000000d0000000e
+list.GetRecord.1.160~: 000e79b4073e000c0000001a0751bcd000000000
+list.GetRecord.1.gd: main
+list.GetRecord.1.gdRect: 0,0,2160,3840
+list.GetAlignment.1: err 0 00000000
+list.HasPicture.1: err 0 00
+list.WillTakeTime.1: err 0 00
+list.GetRecord.2.err: -50
+list.GetRecord.2.size~: 0
+list.GetAlignment.2: err -50 a5a5a5a5
+list.HasPicture.2: err -50 ffffffa5
+list.WillTakeTime.2: err -50 ffffffa5
+list.SetAlignment.1.2: 0
+list.SetAlignment.1.2.after: err 0 00000002
+list.SetAlignment.1.2.record.size~: 372
+list.SetAlignment.1.2.record.000~: 00000000000000000000000000000002000000000000010000003cb400000000
+list.SetAlignment.1.2.record.020~: 000000000000000000000000000000000000000000040000074136900751bbc0
+list.SetAlignment.1.2.record.040~: 00000001000000000005a003000818c200000000000061e00000000015acbcd0
+list.SetAlignment.1.2.record.060~: 07411d88074128cb0000000100000001000000000d1629540007edf60751bcf0
+list.SetAlignment.1.2.record.080~: 060001900000000107411a140751bbe80751bd480000fffe073fe0760751bd10
+list.SetAlignment.1.2.record.0a0~: 073e8f10073f245c074128880751bc1022200822073fd8880000002c0751bd30
+list.SetAlignment.1.2.record.0c0~: 07411d88001b08a00084bbe00084c91006000190073fe06c000000080751bc4f
+list.SetAlignment.1.2.record.0e0~: 000000010000000100000000240008070600019005ff516e000000000751bc50
+list.SetAlignment.1.2.record.100~: 000f4a90073f01a0000000000000001a073e8f0c073e8e20074136700751bc80
+list.SetAlignment.1.2.record.120~: 22200822001b2954074128880751bc90074136e80000a322000000360751bca0
+list.SetAlignment.1.2.record.140~: 00000000073ee0dc073e8e200751bca007411d88001b1f400000000d0000000e
+list.SetAlignment.1.2.record.160~: 000e79b4073e000c0000001a0751bcd000000000
+list.SetAlignment.9: -50
+list.SetToFile.nil: 0
+list.SetToFile.nil.HasPicture: err 0 00
+list.SetToFile.nil.record.size~: 372
+list.SetToFile.nil.record.000~: 00000000000000000000000000000000000000010000010000003cb400000000
+list.SetToFile.nil.record.020~: 000000000000000000000000000000000000000000040000074136900751bbc0
+list.SetToFile.nil.record.040~: 00000001000000000005a003000818c200000000000061e00000000015acbcd0
+list.SetToFile.nil.record.060~: 07411d88074128cb0000000100000001000000000d1629540007edf60751bcf0
+list.SetToFile.nil.record.080~: 060001900000000107411a140751bbe80751bd480000fffe073fe0760751bd10
+list.SetToFile.nil.record.0a0~: 073e8f10073f245c074128880751bc1022200822073fd8880000002c0751bd30
+list.SetToFile.nil.record.0c0~: 07411d88001b08a00084bbe00084c91006000190073fe06c000000080751bc4f
+list.SetToFile.nil.record.0e0~: 000000010000000100000000240008070600019005ff516e000000000751bc50
+list.SetToFile.nil.record.100~: 000f4a90073f01a0000000000000001a073e8f0c073e8e20074136700751bc80
+list.SetToFile.nil.record.120~: 22200822001b2954074128880751bc90074136e80000a322000000360751bca0
+list.SetToFile.nil.record.140~: 00000000073ee0dc073e8e200751bca007411d88001b1f400000000d0000000e
+list.SetToFile.nil.record.160~: 000e79b4073e000c0000001a0751bcd000000000
+list.DrawFromList.err: 0
+list.DrawFromList: 64x48 depth 32 crc 6605d7f7
+list.DrawFromList.pixpat.err: 0
+list.DrawFromList.pixpat: 64x48 depth 32 crc 822050cb
+list.DrawFromList.pixpat.flag.err: 0
+list.DrawFromList.pixpat.flag: 64x48 depth 32 crc 822050cb
+list.DrawFromList.flag.err: 0
+list.DrawFromList.flag: 64x48 depth 32 crc 6605d7f7
+list.DrawFromList.0.err: -50
+list.DrawFromList.0: 64x48 depth 32 crc 6605d7f7
+list.pict.create: 0
+list.pict.size: 66
+list.pict.0.set: -50
+list.pict.0.alignment: err 0 00000005
+list.pict.0.HasPicture: err 0 00
+list.pict.0.WillTakeTime: err 0 00
+list.pict.0.record.size~: 372
+list.pict.0.record.000~: 00000000000000000000000000000000000000010000010000003cb400000000
+list.pict.0.record.020~: 000000000000000000000000000000000000000000040000074136900751bbc0
+list.pict.0.record.040~: 00000001000000000005a003000818c200000000000061e00000000015acbcd0
+list.pict.0.record.060~: 07411d88074128cb0000000100000001000000000d1629540007edf60751bcf0
+list.pict.0.record.080~: 060001900000000107411a140751bbe80751bd480000fffe073fe0760751bd10
+list.pict.0.record.0a0~: 073e8f10073f245c074128880751bc1022200822073fd8880000002c0751bd30
+list.pict.0.record.0c0~: 07411d88001b08a00084bbe00084c91006000190073fe06c000000080751bc4f
+list.pict.0.record.0e0~: 000000010000000100000000240008070600019005ff516e000000000751bc50
+list.pict.0.record.100~: 000f4a90073f01a0000000000000001a073e8f0c073e8e20074136700751bc80
+list.pict.0.record.120~: 22200822001b2954074128880751bc90074136e80000a322000000360751bca0
+list.pict.0.record.140~: 00000000073ee0dc073e8e200751bca007411d88001b1f400000000d0000000e
+list.pict.0.record.160~: 000e79b4073e000c0000001a0751bcd000000000
+list.pict.0.rect: 0,0,0,0
+list.pict.0.data: nil
+list.pict.0.draw.err: 0
+list.pict.0.draw: 64x48 depth 32 crc 6605d7f7
+list.pict.1.set: 0
+list.pict.1.alignment: err 0 00000001
+list.pict.1.HasPicture: err 0 01
+list.pict.1.WillTakeTime: err 0 01
+list.pict.1.record.size~: 372
+list.pict.1.record.000~: 009b06a0504943540000000000000001000000000000010000003cb400000000
+list.pict.1.record.020~: 000000000000000000000000000000000000000000040000074136900751bbc0
+list.pict.1.record.040~: 00000001000000000005a003000818c200000000000061e00000000015acbcd0
+list.pict.1.record.060~: 07411d88074128cb0000000100000001000000000d1629540007edf60751bcf0
+list.pict.1.record.080~: 060001900000000107411a140751bbe80751bd480000fffe073fe0760751bd10
+list.pict.1.record.0a0~: 073e8f10073f245c074128880751bc1022200822073fd8880000002c0751bd30
+list.pict.1.record.0c0~: 07411d88001b08a00084bbe00084c91006000190073fe06c000000080751bc4f
+list.pict.1.record.0e0~: 000000010000000100000000240008070600019005ff516e000000000751bc50
+list.pict.1.record.100~: 000f4a90073f01a0000000000000001a073e8f0c073e8e20074136700751bc80
+list.pict.1.record.120~: 22200822001b2954074128880751bc90074136e80000a322000000360751bca0
+list.pict.1.record.140~: 00000000073ee0dc073e8e200751bca007411d88001b1f400000000d0000000e
+list.pict.1.record.160~: 000e79b4073e000c0000001a0751bcd000000000
+list.pict.1.rect: 0,0,0,0
+list.pict.1.data: nil
+list.pict.1.draw.err: 0
+list.pict.1.draw: 64x48 depth 32 crc 6605d7f7
+list.pict.2.set: 0
+list.pict.2.alignment: err 0 00000002
+list.pict.2.HasPicture: err 0 01
+list.pict.2.WillTakeTime: err 0 01
+list.pict.2.record.size~: 372
+list.pict.2.record.000~: 009b06a0504943540000000000000002000000000000010000003cb400000000
+list.pict.2.record.020~: 000000000000000000000000000000000000000000040000074136900751bbc0
+list.pict.2.record.040~: 00000001000000000005a003000818c200000000000061e00000000015acbcd0
+list.pict.2.record.060~: 07411d88074128cb0000000100000001000000000d1629540007edf60751bcf0
+list.pict.2.record.080~: 060001900000000107411a140751bbe80751bd480000fffe073fe0760751bd10
+list.pict.2.record.0a0~: 073e8f10073f245c074128880751bc1022200822073fd8880000002c0751bd30
+list.pict.2.record.0c0~: 07411d88001b08a00084bbe00084c91006000190073fe06c000000080751bc4f
+list.pict.2.record.0e0~: 000000010000000100000000240008070600019005ff516e000000000751bc50
+list.pict.2.record.100~: 000f4a90073f01a0000000000000001a073e8f0c073e8e20074136700751bc80
+list.pict.2.record.120~: 22200822001b2954074128880751bc90074136e80000a322000000360751bca0
+list.pict.2.record.140~: 00000000073ee0dc073e8e200751bca007411d88001b1f400000000d0000000e
+list.pict.2.record.160~: 000e79b4073e000c0000001a0751bcd000000000
+list.pict.2.rect: 0,0,0,0
+list.pict.2.data: nil
+list.pict.2.draw.err: 0
+list.pict.2.draw: 64x48 depth 32 crc 6605d7f7
+list.pict.3.set: 0
+list.pict.3.alignment: err 0 00000003
+list.pict.3.HasPicture: err 0 01
+list.pict.3.WillTakeTime: err 0 01
+list.pict.3.record.size~: 372
+list.pict.3.record.000~: 009b06a0504943540000000000000003000000000000010000003cb400000000
+list.pict.3.record.020~: 000000000000000000000000000000000000000000040000074136900751bbc0
+list.pict.3.record.040~: 00000001000000000005a003000818c200000000000061e00000000015acbcd0
+list.pict.3.record.060~: 07411d88074128cb0000000100000001000000000d1629540007edf60751bcf0
+list.pict.3.record.080~: 060001900000000107411a140751bbe80751bd480000fffe073fe0760751bd10
+list.pict.3.record.0a0~: 073e8f10073f245c074128880751bc1022200822073fd8880000002c0751bd30
+list.pict.3.record.0c0~: 07411d88001b08a00084bbe00084c91006000190073fe06c000000080751bc4f
+list.pict.3.record.0e0~: 000000010000000100000000240008070600019005ff516e000000000751bc50
+list.pict.3.record.100~: 000f4a90073f01a0000000000000001a073e8f0c073e8e20074136700751bc80
+list.pict.3.record.120~: 22200822001b2954074128880751bc90074136e80000a322000000360751bca0
+list.pict.3.record.140~: 00000000073ee0dc073e8e200751bca007411d88001b1f400000000d0000000e
+list.pict.3.record.160~: 000e79b4073e000c0000001a0751bcd000000000
+list.pict.3.rect: 0,0,0,0
+list.pict.3.data: nil
+list.pict.3.draw.err: 0
+list.pict.3.draw: 64x48 depth 32 crc 6605d7f7
+list.pict.4.set: 0
+list.pict.4.alignment: err 0 00000004
+list.pict.4.HasPicture: err 0 01
+list.pict.4.WillTakeTime: err 0 01
+list.pict.4.record.size~: 372
+list.pict.4.record.000~: 009b06a0504943540000000000000004000000000000010000003cb400000000
+list.pict.4.record.020~: 000000000000000000000000000000000000000000040000074136900751bbc0
+list.pict.4.record.040~: 00000001000000000005a003000818c200000000000061e00000000015acbcd0
+list.pict.4.record.060~: 07411d88074128cb0000000100000001000000000d1629540007edf60751bcf0
+list.pict.4.record.080~: 060001900000000107411a140751bbe80751bd480000fffe073fe0760751bd10
+list.pict.4.record.0a0~: 073e8f10073f245c074128880751bc1022200822073fd8880000002c0751bd30
+list.pict.4.record.0c0~: 07411d88001b08a00084bbe00084c91006000190073fe06c000000080751bc4f
+list.pict.4.record.0e0~: 000000010000000100000000240008070600019005ff516e000000000751bc50
+list.pict.4.record.100~: 000f4a90073f01a0000000000000001a073e8f0c073e8e20074136700751bc80
+list.pict.4.record.120~: 22200822001b2954074128880751bc90074136e80000a322000000360751bca0
+list.pict.4.record.140~: 00000000073ee0dc073e8e200751bca007411d88001b1f400000000d0000000e
+list.pict.4.record.160~: 000e79b4073e000c0000001a0751bcd000000000
+list.pict.4.rect: 0,0,0,0
+list.pict.4.data: nil
+list.pict.4.draw.err: 0
+list.pict.4.draw: 64x48 depth 32 crc 6605d7f7
+list.pict.5.set: 0
+list.pict.5.alignment: err 0 00000005
+list.pict.5.HasPicture: err 0 01
+list.pict.5.WillTakeTime: err 0 01
+list.pict.5.record.size~: 372
+list.pict.5.record.000~: 009b06a0504943540000000000000000000000010000010000003cb400000000
+list.pict.5.record.020~: 000000000000000000000000000000000000000000040000074136900751bbc0
+list.pict.5.record.040~: 00000001000000000005a003000818c200000000000061e00000000015acbcd0
+list.pict.5.record.060~: 07411d88074128cb0000000100000001000000000d1629540007edf60751bcf0
+list.pict.5.record.080~: 060001900000000107411a140751bbe80751bd480000fffe073fe0760751bd10
+list.pict.5.record.0a0~: 073e8f10073f245c074128880751bc1022200822073fd8880000002c0751bd30
+list.pict.5.record.0c0~: 07411d88001b08a00084bbe00084c91006000190073fe06c000000080751bc4f
+list.pict.5.record.0e0~: 000000010000000100000000240008070600019005ff516e000000000751bc50
+list.pict.5.record.100~: 000f4a90073f01a0000000000000001a073e8f0c073e8e20074136700751bc80
+list.pict.5.record.120~: 22200822001b2954074128880751bc90074136e80000a322000000360751bca0
+list.pict.5.record.140~: 00000000073ee0dc073e8e200751bca007411d88001b1f400000000d0000000e
+list.pict.5.record.160~: 000e79b4073e000c0000001a0751bcd000000000
+list.pict.5.rect: 0,0,0,0
+list.pict.5.data: nil
+list.pict.5.draw.err: 0
+list.pict.5.draw: 64x48 depth 32 crc 6605d7f7
+list.pict.6.set: -50
+list.pict.6.alignment: err 0 00000005
+list.pict.6.HasPicture: err 0 01
+list.pict.6.WillTakeTime: err 0 01
+list.pict.6.record.size~: 372
+list.pict.6.record.000~: 009b06a0504943540000000000000000000000010000010000003cb400000000
+list.pict.6.record.020~: 000000000000000000000000000000000000000000040000074136900751bbc0
+list.pict.6.record.040~: 00000001000000000005a003000818c200000000000061e00000000015acbcd0
+list.pict.6.record.060~: 07411d88074128cb0000000100000001000000000d1629540007edf60751bcf0
+list.pict.6.record.080~: 060001900000000107411a140751bbe80751bd480000fffe073fe0760751bd10
+list.pict.6.record.0a0~: 073e8f10073f245c074128880751bc1022200822073fd8880000002c0751bd30
+list.pict.6.record.0c0~: 07411d88001b08a00084bbe00084c91006000190073fe06c000000080751bc4f
+list.pict.6.record.0e0~: 000000010000000100000000240008070600019005ff516e000000000751bc50
+list.pict.6.record.100~: 000f4a90073f01a0000000000000001a073e8f0c073e8e20074136700751bc80
+list.pict.6.record.120~: 22200822001b2954074128880751bc90074136e80000a322000000360751bca0
+list.pict.6.record.140~: 00000000073ee0dc073e8e200751bca007411d88001b1f400000000d0000000e
+list.pict.6.record.160~: 000e79b4073e000c0000001a0751bcd000000000
+list.pict.6.rect: 0,0,0,0
+list.pict.6.data: nil
+list.pict.6.draw.err: 0
+list.pict.6.draw: 64x48 depth 32 crc 6605d7f7
+list.pict.7.set: -50
+list.pict.7.alignment: err 0 00000005
+list.pict.7.HasPicture: err 0 01
+list.pict.7.WillTakeTime: err 0 01
+list.pict.7.record.size~: 372
+list.pict.7.record.000~: 009b06a0504943540000000000000000000000010000010000003cb400000000
+list.pict.7.record.020~: 000000000000000000000000000000000000000000040000074136900751bbc0
+list.pict.7.record.040~: 00000001000000000005a003000818c200000000000061e00000000015acbcd0
+list.pict.7.record.060~: 07411d88074128cb0000000100000001000000000d1629540007edf60751bcf0
+list.pict.7.record.080~: 060001900000000107411a140751bbe80751bd480000fffe073fe0760751bd10
+list.pict.7.record.0a0~: 073e8f10073f245c074128880751bc1022200822073fd8880000002c0751bd30
+list.pict.7.record.0c0~: 07411d88001b08a00084bbe00084c91006000190073fe06c000000080751bc4f
+list.pict.7.record.0e0~: 000000010000000100000000240008070600019005ff516e000000000751bc50
+list.pict.7.record.100~: 000f4a90073f01a0000000000000001a073e8f0c073e8e20074136700751bc80
+list.pict.7.record.120~: 22200822001b2954074128880751bc90074136e80000a322000000360751bca0
+list.pict.7.record.140~: 00000000073ee0dc073e8e200751bca007411d88001b1f400000000d0000000e
+list.pict.7.record.160~: 000e79b4073e000c0000001a0751bcd000000000
+list.pict.7.rect: 0,0,0,0
+list.pict.7.data: nil
+list.pict.7.draw.err: 0
+list.pict.7.draw: 64x48 depth 32 crc 6605d7f7
+list.pict.clear: -50
+list.FileContains.app: err 0 00
+list.Refresh.err: 0
+list.Refresh.list: new
+list.Refresh.count: 1
+list.Refresh.alignment: 00000005
+list.Refresh.dispose.new: 0
+list.Dispose: 0
+== themes
+themes.bind.IterateThemes: found
+themes.bind.GetSystemFont: found
+themes.bind.GetSmallSystemFont: found
+themes.GetSystemFont.err: 0
+themes.GetSystemFont: "Charcoal" (8)
+themes.GetSystemFont.roman: err 0
+themes.GetSystemFont.roman.name: "Charcoal" (8)
+themes.GetSmallSystemFont.err: 0
+themes.GetSmallSystemFont: "Geneva" (6)
+themes.IterateThemes.0: "Apple platinum" (14)
+themes.IterateThemes.0.id: 2000 items 17 data ok
+themes.IterateThemes.0.tags: coll/0/1 epic/0/2 hcnm/0/7 hcol/0/6 lgsf/0/9 name/0/15 patn/0/15 patt/0/16822 sbar/0/2 sbth/0/2 smoo/0/1 smsf/0/7 snds/0/1 thme/0/15 varn/0/9 vfnt/0/7 vfsz/0/2 
+themes.IterateThemes.1: "Apple platinum" (14)
+themes.IterateThemes.1.id: 2002 items 21 data ok
+themes.IterateThemes.1.tags: coll/0/1 dpnm/0/15 epic/0/2 hcnm/0/5 hcol/0/6 lgsf/0/7 name/0/12 patn/0/11 patt/0/126 sbar/0/2 sbth/0/2 smoo/0/1 smos/0/2 smsf/0/7 smsk/0/4 snds/0/1 sndt/0/16 thme/0/15 varn/0/5 vfnt/0/7 vfsz/0/2 
+themes.IterateThemes.2: "Apple platinum" (14)
+themes.IterateThemes.2.id: 2003 items 18 data ok
+themes.IterateThemes.2.tags: coll/0/1 dpnm/0/13 epic/0/2 hcnm/0/6 hcol/0/6 lgsf/0/9 name/0/13 patn/0/13 patt/0/17198 sbar/0/2 sbth/0/2 smoo/0/1 smsf/0/7 snds/0/1 thme/0/15 varn/0/4 vfnt/0/7 vfsz/0/2 
+themes.IterateThemes.3: "Apple platinum" (14)
+themes.IterateThemes.3.id: 2005 items 18 data ok
+themes.IterateThemes.3.tags: coll/0/1 epic/0/2 hcnm/0/5 hcol/0/6 lgsf/0/9 name/0/9 patn/0/9 patt/0/8406 sbar/0/2 sbth/0/2 smoo/0/1 smsf/0/7 snds/0/1 sndt/0/16 thme/0/15 varn/0/8 vfnt/0/7 vfsz/0/2 
+themes.IterateThemes.4: "Apple platinum" (14)
+themes.IterateThemes.4.id: 2007 items 21 data ok
+themes.IterateThemes.4.tags: coll/0/1 dpnm/0/6 epic/0/2 hcnm/0/7 hcol/0/6 lgsf/0/7 name/0/8 patn/0/20 patt/0/16894 sbar/0/2 sbth/0/2 smoo/0/1 smos/0/2 smsf/0/7 smsk/0/4 snds/0/1 sndt/0/16 thme/0/15 varn/0/6 vfnt/0/7 vfsz/0/2 
+themes.IterateThemes.5: "Apple platinum" (14)
+themes.IterateThemes.5.id: 2001 items 19 data ok
+themes.IterateThemes.5.tags: coll/0/1 epic/0/2 hcnm/0/6 hcol/0/6 lgsf/0/8 name/0/8 patn/0/14 patt/0/16950 sbar/0/2 sbth/0/2 smoo/0/1 smos/0/2 smsf/0/7 snds/0/1 sndt/0/16 thme/0/15 varn/0/6 vfnt/0/7 vfsz/0/2 
+themes.IterateThemes.6: "Apple platinum" (14)
+themes.IterateThemes.6.id: 2008 items 17 data ok
+themes.IterateThemes.6.tags: coll/0/1 epic/0/2 hcol/0/6 lgsf/0/9 name/0/9 patn/0/9 patt/0/65630 sbar/0/2 sbth/0/2 smoo/0/1 smos/0/2 smsf/0/7 snds/0/1 thme/0/15 varn/0/10 vfnt/0/7 vfsz/0/2 
+themes.IterateThemes.7: "Apple platinum" (14)
+themes.IterateThemes.7.id: 2009 items 17 data ok
+themes.IterateThemes.7.tags: coll/0/1 epic/0/2 hcol/0/6 lgsf/0/9 name/0/11 patn/0/11 patt/0/65630 sbar/0/2 sbth/0/2 smoo/0/1 smos/0/2 smsf/0/7 snds/0/1 thme/0/15 varn/0/9 vfnt/0/7 vfsz/0/2 
+themes.IterateThemes.8: "Apple platinum" (14)
+themes.IterateThemes.8.id: 2010 items 17 data ok
+themes.IterateThemes.8.tags: coll/0/1 epic/0/2 hcol/0/6 lgsf/0/9 name/0/11 patn/0/11 patt/0/65630 sbar/0/2 sbth/0/2 smoo/0/1 smos/0/2 smsf/0/7 snds/0/1 thme/0/15 varn/0/8 vfnt/0/7 vfsz/0/2 
+themes.IterateThemes.9: "Apple platinum" (14)
+themes.IterateThemes.9.id: 2011 items 17 data ok
+themes.IterateThemes.9.tags: coll/0/1 epic/0/2 hcol/0/6 lgsf/0/9 name/0/11 patn/0/11 patt/0/65630 sbar/0/2 sbth/0/2 smoo/0/1 smos/0/2 smsf/0/7 snds/0/1 thme/0/15 varn/0/6 vfnt/0/7 vfsz/0/2 
+themes.IterateThemes.10: "Apple platinum" (14)
+themes.IterateThemes.10.id: 2012 items 17 data ok
+themes.IterateThemes.10.tags: coll/0/1 epic/0/2 hcol/0/6 lgsf/0/9 name/0/11 patn/0/11 patt/0/65630 sbar/0/2 sbth/0/2 smoo/0/1 smos/0/2 smsf/0/7 snds/0/1 thme/0/15 varn/0/8 vfnt/0/7 vfsz/0/2 
+themes.IterateThemes.11: "Apple platinum" (14)
+themes.IterateThemes.11.id: 2004 items 18 data ok
+themes.IterateThemes.11.tags: coll/0/1 epic/0/2 hcnm/0/7 hcol/0/6 lgsf/0/9 name/0/10 patn/0/18 patt/0/126 sbar/0/2 sbth/0/2 smoo/0/1 smos/0/2 smsf/0/7 snds/0/1 thme/0/15 varn/0/12 vfnt/0/7 vfsz/0/2 
+themes.IterateThemes.12: "Apple platinum" (14)
+themes.IterateThemes.12.id: 2006 items 18 data ok
+themes.IterateThemes.12.tags: coll/0/1 epic/0/2 hcnm/0/5 hcol/0/6 lgsf/0/5 name/0/6 patn/0/12 patt/0/16822 sbar/0/2 sbth/0/2 smoo/0/1 smos/0/2 smsf/0/7 snds/0/1 thme/0/15 varn/0/5 vfnt/0/7 vfsz/0/2 
+themes.IterateThemes.err: 0 calls 13
+== panes
+panes.count: 4
+panes.item2.super: err 0 pane
+panes.item3.super: err 0 pane
+panes.item4.super: err 0 pane
+panes.appended.visible: ----
+panes.ShowControl.visible: VVVV
+panes.HideControl.visible: ----
+panes.ShowControl.again.visible: V-VV
+panes.SetControlVisibility.hide: 0
+panes.SetControlVisibility.hide.visible: ----
+panes.SetControlVisibility.show.visible: VVVV
+panes.SetControlVisibility.child.visible: V-VV
+panes.EmbedControl.hidden: err 0 visible 0
+panes.EmbedControl.shown: visible 1
+panes.AutoEmbedControl.hidden: err 0 visible 0 super pane
+panes.AutoEmbed.same.check: err 0 visible 1 super root
+panes.AutoEmbed.same.pane: err 0 visible 1 super root
+panes.AutoEmbed.inset.check: err 0 visible 0 super pane
+panes.AutoEmbed.inset.pane: err 0 visible 0 super pane
+panes.AutoEmbed.across.check: err 0 visible 1 super root
+panes.AutoEmbed.across.pane: err 0 visible 1 super root
+panes.ShowControl.inhidden: visible 0
+panes.ShowControl.inhidden.pane: visible 1
+panes.ShowDialogItem.visible: ----
+panes.ShowDialogItem.pane.visible: VVVV
+panes.pane2.item2.super: pane2
+panes.pane2.visible: VVVV
+panes.pane2.super: root
+panes.pane1.after.visible: ----
+panes.listbox.data: err 0 list
+panes.listbox.vScroll: super listbox visible 0
+panes.listbox.hScroll: super listbox visible 0
+panes.listbox.visible: 0
+panes.listbox.features: err 0 00000174
+panes.EmbedControl.listbox: err -30590 super root
+panes.EmbedControl.button: err -30590 super root
+panes.listbox.shown: 1 v 1 h 1
+== finder
+finder.bind.SetIconDevice: found
+finder.bind.GetIconDevice: found
+finder.bind.QDSetPatternOrigin: found
+finder.bind.QDGetPatternOrigin: found
+finder.bind.LMGetCurLayer: found
+finder.bind.GetCurLayer: found
+finder.GetIconDevice: nil
+finder.SetIconDevice.main: main
+finder.SetIconDevice.nil: nil
+finder.QDGetPatternOrigin: 0,0
+finder.QDSetPatternOrigin: 3,5
+finder.LMGetCurLayer: GetCurLayer
+== strip
+strip.bind.GetDefFontSize: found
+strip.bind.LMGetSysFontSize: found
+strip.bind.LMSetSysFontSize: found
+strip.GetDefFontSize: 12 SysFontSiz 12
+strip.GetDefFontSize.0: 12
+strip.GetDefFontSize.9: 9
+strip.Gestalt.sdev: err 0 0000007f
+strip.Gestalt.csvr: err 0 02008002

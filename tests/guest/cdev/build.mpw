@@ -1,0 +1,13 @@
+# build.mpw — CdevTest, a 68k control panel in nine variants (cdevtest.r)
+#   tools/mpw/mpw build tests/guest/cdev -o tests/guest/cdev
+# products: CdevMac CdevAll CdevNoRun CdevInitRes CdevNulMem CdevHitGen CdevMachII CdevMachADB CdevMach0
+SC -b cdevtest.c -o cdevtest.c.o
+Delete -i CdevCode
+Link -rt cdev=-4064 -m MAIN -sg CdevTest -t cdev -c 'MPcd' cdevtest.c.o "{Libraries}Interface.o" -o CdevCode
+Set v 0
+For n In CdevMac CdevAll CdevNoRun CdevInitRes CdevNulMem CdevHitGen CdevMachII CdevMachADB CdevMach0
+	Set v `Evaluate {v} + 1`
+	Duplicate -y CdevCode {n}
+	Rez -a -d V={v} cdevtest.r -o {n}
+	SetFile -t cdev -c 'MPcd' {n}
+End

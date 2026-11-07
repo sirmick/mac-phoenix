@@ -1,0 +1,281 @@
+/*
+ * PowerCore.cpp - Executor's PowerPC on MAME's PowerPC recompiler.
+ *
+ * The core ("mame-ppc", a 750 with translation off) is made at the first
+ * execute() and runs on syn68k_guest_memory(), so a guest address means the
+ * same to both CPUs. Executor's processes run on host threads of their own
+ * and may park inside a system call; the core keeps its stop flag per
+ * thread, and a parked caller reloads the registers from PowerCoreState when
+ * its system call returns (process switches save and restore that state with
+ * the 68k context, syn68k_common.cpp).
+ *
+ * Exceptions are skipped and logged, as on the SheepShaver machine: the
+ * vectors at 0 are Mac low memory here.
+ */
+#include "PowerCore.h"
+#include <syn68k_public.h>
+#include "cpu_core.h"
+
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <exception>
+
+namespace {
+
+namespace R = cpu::ppc;
+
+/* Static: in the data window (3). */
+uint32_t exit_cell;
+
+std::atomic<cpu::Core *> the_core{nullptr};
+
+/* MacPhoenix: an exception out of a system call (ExitToShell's, from a
+   library's exit()) can't unwind through the recompiler's native frames:
+   the core stops at the exit cell and execute() rethrows it. Per host
+   thread, as the core's stop flag is. */
+thread_local std::exception_ptr pending_exception;
+
+void to_core(PowerCore &p, cpu::Core &c)
+{
+    for(int i = 0; i < 32; i++)
+    {
+        c.set_reg(R::GPR0 + i, p.r[i]);
+        uint64_t bits;
+        memcpy(&bits, &p.f[i], sizeof bits);
+        c.set_fpr(i, bits);
+    }
+    c.set_reg(R::CR, p.cr);
+    c.set_reg(R::LR, p.lr);
+    c.set_reg(R::CTR, p.ctr);
+    c.set_reg(R::FPSCR, p.fpscr);
+    c.set_reg(R::XER, (c.reg(R::XER) & 0x1FFFFFFFu) | p.getXER());
+    c.set_pc(p.CIA);
+}
+
+void from_core(PowerCore &p, cpu::Core &c)
+{
+    for(int i = 0; i < 32; i++)
+    {
+        p.r[i] = c.reg(R::GPR0 + i);
+        uint64_t bits = c.fpr(i);
+        memcpy(&p.f[i], &bits, sizeof bits);
+    }
+    p.cr = c.reg(R::CR);
+    p.lr = c.reg(R::LR);
+    p.ctr = c.reg(R::CTR);
+    p.fpscr = c.reg(R::FPSCR);
+    p.setXER(c.reg(R::XER));
+    p.CIA = c.pc();
+}
+
+class PpcHost final : public cpu::Host
+{
+public:
+    OpResult host_op(cpu::Core &c, uint32_t opcode, uint32_t op_pc) override
+    {
+        PowerCore &p = PowerCore::instance();
+        if(opcode == POWERCORE_OP_EXIT && op_pc == p.exitAddress())
+        {
+            c.set_pc(op_pc);  /* stay on the exit cell */
+            return OpResult::Stop;
+        }
+        if(opcode == POWERCORE_OP_SYSCALL && p.syscall)
+        {
+            from_core(p, c);
+            p.CIA = op_pc;
+            try
+            {
+                p.CIA = p.syscall(p);
+            }
+            catch(...)
+            {
+                pending_exception = std::current_exception();
+                c.set_pc(p.exitAddress());
+                return OpResult::Stop;
+            }
+            to_core(p, c);
+            return OpResult::Continue;
+        }
+        fprintf(stderr, "executor: unexpected PowerPC host op %08x at %08x\n", opcode, op_pc);
+        abort();
+    }
+
+    void attention(cpu::Core &c) override
+    {
+        PowerCore &p = PowerCore::instance();
+        if(p.interruptFlag.test_and_set() || !p.handleInterrupt)
+            return;
+        from_core(p, c);
+        p.handleInterrupt(p);
+        to_core(p, c);
+    }
+
+    void slice_end(cpu::Core &c) override
+    {
+        if(syn68k_slice_hook)
+            syn68k_slice_hook();
+        PowerCore &p = PowerCore::instance();
+        if(p.sliceHook)
+            p.sliceHook(p, c.pc());
+    }
+};
+PpcHost ppc_host;
+
+void (*instruction_hook)(PowerCore&, uint32_t) = nullptr;
+
+void call_instruction_hook(cpu::Core &, uint32_t pc, void *)
+{
+    if(instruction_hook)
+        instruction_hook(PowerCore::instance(), pc);
+}
+
+cpu::Core &core()
+{
+    if(cpu::Core *c = the_core.load())
+        return *c;
+    cpu::Config config;
+    config.arch = cpu::Arch::PPC;
+    config.model = 750;
+    config.mmu = false;
+    config.mmu_identity = PowerCore::instance().mmuIdentity;
+    config.timers = false;      /* Executor's own timer thread */
+    config.exceptions = false;  /* skip and log */
+    config.jit = PowerCore::instance().jit;  /* the native back-end where there is one */
+    config.instruction_hook = PowerCore::instance().instructionHooks;
+    cpu::Core *c = cpu::create("mame-ppc", config, syn68k_guest_memory(), ppc_host).release();
+    if(!c)
+    {
+        fprintf(stderr, "executor: cannot start the mame-ppc core\n");
+        abort();
+    }
+    c->reset();
+    c->set_reg(R::MSR, 0x2000);  /* supervisor, FP available, big-endian */
+    if(config.mmu_identity || !config.jit)
+        fprintf(stderr, "[PowerCore] mame-ppc: %s%s\n", config.jit ? "native back-end" : "UML interpreter",
+                config.mmu_identity ? ", translation on (identity)" : "");
+    if(instruction_hook)
+        c->set_instruction_hook(&call_instruction_hook, nullptr);
+    the_core = c;
+    return *c;
+}
+
+/* Executor's debugger (never attached in MacPhoenix). mame-ppc's step()
+ * runs a whole recompiled block, so a breakpoint is only seen where a
+ * block starts. */
+void step_with_debugger(PowerCore &p, cpu::Core &c)
+{
+    uint32_t pc = c.pc();
+    if(p.getNextBreakpoint(pc) == pc)
+    {
+        from_core(p, c);
+        p.debugger(p);
+        to_core(p, c);
+        if(p.CIA != pc)
+            return;
+    }
+    c.step();
+}
+
+}  // namespace
+
+PowerCore &PowerCore::instance()
+{
+    static PowerCore p;
+    return p;
+}
+
+uint32_t PowerCore::exitAddress()
+{
+    uint32_t addr = US_TO_SYN68K(&exit_cell);
+    if(!exit_cell)
+        syn68k_guest_memory().write32(addr, POWERCORE_OP_EXIT);
+    return addr;
+}
+
+size_t PowerCore::execContextSize() const
+{
+    cpu::Core *c = the_core.load();
+    return c ? c->exec_context_size() : 0;
+}
+
+void PowerCore::saveExecContext(void *dst) const
+{
+    if(cpu::Core *c = the_core.load())
+        c->save_exec_context(dst);
+}
+
+void PowerCore::restoreExecContext(const void *src)
+{
+    if(cpu::Core *c = the_core.load())
+        c->restore_exec_context(src);
+}
+
+bool PowerCore::setInstructionHook(void (*hook)(PowerCore&, uint32_t pc))
+{
+    if(!instructionHooks)
+        return false;
+    instruction_hook = hook;
+    if(cpu::Core *c = the_core.load())
+        return c->set_instruction_hook(hook ? &call_instruction_hook : nullptr, nullptr);
+    return true;
+}
+
+void PowerCore::liveState(PowerCoreState &s) const
+{
+    PowerCore p;
+    if(cpu::Core *c = the_core.load())
+        from_core(p, *c);
+    s = p;
+}
+
+int PowerCore::disassemble(uint32_t addr, char *buf, size_t len) const
+{
+    cpu::Core *c = the_core.load();
+    return c ? c->disassemble(addr, buf, len) : 0;
+}
+
+bool PowerCore::peek32(uint32_t addr, uint32_t &value) const
+{
+    cpu::GuestMemory &m = syn68k_guest_memory();
+    if(!m.mapped(addr) || !m.mapped(addr + 3))
+        return false;
+    value = m.read32(addr);
+    return true;
+}
+
+void PowerCore::flushCache(uint32_t addr, uint32_t len)
+{
+    if(cpu::Core *c = the_core.load())
+        c->invalidate(addr, len);
+}
+
+void PowerCore::requestInterrupt()
+{
+    interruptFlag.clear();
+    if(cpu::Core *c = the_core.load())
+        c->request_attention();
+}
+
+void PowerCore::execute()
+{
+    cpu::Core &c = core();
+    uint32_t exit = exitAddress();
+    to_core(*this, c);
+    c.request_attention();  /* an interrupt asked for before we ran */
+    bool debugging = debugger && getNextBreakpoint;
+    while(c.pc() != exit)
+    {
+        if(debugging)
+            step_with_debugger(*this, c);
+        else
+            c.run();
+    }
+    from_core(*this, c);
+    if(pending_exception)
+    {
+        std::exception_ptr e = pending_exception;
+        pending_exception = nullptr;
+        std::rethrow_exception(e);
+    }
+}

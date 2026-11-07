@@ -1,5 +1,5 @@
 {
- "note": "The Apple Shared Library Manager SDK (ASLM 2.0: interfaces, the SC/CFront/MrC/THINK glue libraries, MPW tools, the Developer's Guide, examples, debugging tools) from E.T.O. #22's Past&Future:Archive, copied by the guest. Executor's Open Transport implements the part of ASLM OT's glue reaches (src/executor/romlib/opentransport/ot_slm.cpp) from these headers; the MPW disks get the interfaces, libraries and tools merged in (provisioning/images/mpw.json).",
+ "note": "The Apple Shared Library Manager SDK (ASLM 2.0: interfaces, the SC/CFront/MrC/THINK glue libraries, MPW tools, the Developer's Guide, examples, debugging tools) from E.T.O. #22's Past&Future:Archive, copied by the guest. Executor's Open Transport implements the part of ASLM OT's glue reaches (executor/core/romlib/opentransport/ot_slm.cpp) from these headers; the MPW disks get the interfaces, libraries and tools merged in (provisioning/images/mpw.json).",
  "kind": "copy",
  "disks": [
   {

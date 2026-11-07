@@ -15,16 +15,19 @@ Read commands (`/api/app`, `/api/windows`, `/api/ui`, `/api/text`) read
 guest memory directly and need nothing in the guest. How both work:
 [CommandBridge.md](CommandBridge.md).
 
+This is mac-phoenix's API. Executor's Go server (`executor-standalone`,
+the tab's server) has its own: [executor/Standalone.md](executor/Standalone.md).
+
 ## Status and screen
 
 | Endpoint | | |
 |---|---|---|
-| `/api/status` | GET | `emulator_running`, `cpu_state`, `boot_phase`, `boot_elapsed`, `checkload_count`, `bridge_agent_connected`, `annotations`, the guest's text clipboard (`mac`), and a crash report if the child died |
+| `/api/status` | GET | `emulator_running`, `cpu_state`, `boot_phase`, `boot_elapsed`, `checkload_count`, `cpu_busy` (Executor: the share of the last half second its emulator thread worked rather than waited for events, 0..1), `bridge_agent_connected`, `bridge_agent_protocol`, `annotations`, `mac` (the front application, windows, menu bar and text clipboard, refreshed every half second), and `child_exit` (signal or exit code and the last log lines) if the child died |
 | `/api/screenshot` | GET | the screen as PNG (503 before the first frame); as the frames are, so at Executor's `--executor-scale` the high-resolution screen; `?scale=1`: the Mac's own 1x pixels then |
 | `/api/frame` | GET | one frame for HTTP polling: 45-byte header (dirty rect, size, cursor) + PNG; `?sid=` from the `X-Frame-Sid` header of the first reply; 204 when nothing changed |
 | `/api/stream` | GET | the same frames as one chunked HTTP response (`?fps=N`) |
 | `/api/resolutions` | GET | screen modes the machine offers, with the configured cap |
-| `/api/resolution` | POST | `{"w":N,"h":N}`: switch the guest's screen to the nearest mode (bridge) |
+| `/api/resolution` | POST | `{"w":N,"h":N}`: switch the guest's screen to the nearest mode (bridge); Executor takes any size in its range, through its Display Manager, no bridge |
 
 ## Input
 

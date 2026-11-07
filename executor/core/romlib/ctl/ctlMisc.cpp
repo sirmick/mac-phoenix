@@ -1,0 +1,285 @@
+/* Copyright 1986, 1988, 1989, 1990, 1995 by Abacus Research and
+ * Development, Inc.  All rights reserved.
+ */
+
+/* Forward declarations in ControlMgr.h (DO NOT DELETE THIS LINE) */
+
+#include <base/common.h>
+#include <WindowMgr.h>
+#include <ControlMgr.h>
+#include <ControlMgr8.h>
+#include <OSUtil.h>
+#include <MemoryMgr.h>
+#include <mman/mman.h>
+
+#include <quickdraw/cquick.h>
+#include <ctl/ctl.h>
+#include <res/resource.h>
+#include <rsys/hook.h>
+#include <base/functions.impl.h>
+
+/* cheat, and make this a plain ctab, so we can use our old accessor
+   macros */
+
+#include <algorithm>
+#include <vector>
+
+using namespace Executor;
+
+AuxCtlHandle Executor::default_aux_ctl;
+
+#define BLACK_RGB         \
+    {                     \
+        0            \
+        , 0, 0, \
+    }
+#define WHITE_RGB                                                   \
+    {                                                               \
+        (unsigned short)0xFFFF                                 \
+        , (unsigned short)0xFFFF, (unsigned short)0xFFFF, \
+    }
+
+#define LT_BLUISH_RGB                                              \
+    {                                                              \
+        (unsigned short)0xCCCC                                \
+        , (unsigned short)0xCCCC, (unsigned short)0xFFFF \
+    }
+#define DK_BLUISH_RGB              \
+    {                              \
+        0x3333                \
+        , 0x3333, 0x6666 \
+    }
+
+#define DK_GRAY                                                    \
+    {                                                              \
+        (unsigned short)0x5555                                \
+        , (unsigned short)0x5555, (unsigned short)0x5555 \
+    }
+
+const ColorSpec Executor::default_ctl_colors[] = {
+    { cFrameColor, BLACK_RGB },
+    { cBodyColor, WHITE_RGB },
+    { cTextColor, BLACK_RGB },
+    { cThumbColor, WHITE_RGB },
+    { 4, DK_GRAY },
+    { cArrowsColorLight, WHITE_RGB },
+    { cArrowsColorDark, BLACK_RGB },
+    { cThumbLight, WHITE_RGB },
+    { cThumbDark, BLACK_RGB },
+    /* used same as the w... color component */
+    { cHiliteLight, WHITE_RGB },
+    { cHiliteDark, BLACK_RGB },
+    { cTitleBarLight, WHITE_RGB },
+    { cTitleBarDark, BLACK_RGB },
+    { cTingeLight, LT_BLUISH_RGB },
+    { cTingeDark, DK_BLUISH_RGB },
+};
+
+#define KEEP_DEFAULT_CTL_CTAB_AROUND_FOR_OLD_SYSTEM_FILE_USERS
+
+#if defined(KEEP_DEFAULT_CTL_CTAB_AROUND_FOR_OLD_SYSTEM_FILE_USERS)
+CTabHandle Executor::default_ctl_ctab;
+#endif
+
+void Executor::ctl_color_init(void)
+{
+    default_aux_ctl = (AuxCtlHandle)NewHandle(sizeof(AuxCtlRec));
+
+#if defined(KEEP_DEFAULT_CTL_CTAB_AROUND_FOR_OLD_SYSTEM_FILE_USERS)
+    default_ctl_ctab = (CTabHandle)ROMlib_getrestid("cctb"_4, 0);
+
+    if(!default_ctl_ctab)
+    {
+        default_ctl_ctab
+            = (CTabHandle)NewHandle(CTAB_STORAGE_FOR_SIZE(14));
+        CTAB_SIZE(default_ctl_ctab) = 14;
+        CTAB_SEED(default_ctl_ctab) = 0;
+        CTAB_FLAGS(default_ctl_ctab) = 0;
+        memcpy(&CTAB_TABLE(default_ctl_ctab)[0],
+               &default_ctl_colors[0],
+               15 * sizeof default_ctl_colors[0]);
+    }
+#endif
+
+    (*default_aux_ctl)->acNext = nullptr;
+    (*default_aux_ctl)->acOwner = nullptr;
+    (*default_aux_ctl)->acCTable = (CCTabHandle)GetResource("cctb"_4, 0);
+    (*default_aux_ctl)->acFlags = 0;
+    (*default_aux_ctl)->acReserved = 0;
+    (*default_aux_ctl)->acRefCon = 0;
+}
+
+GUEST<AuxCtlHandle> *
+Executor::lookup_aux_ctl(ControlHandle ctl)
+{
+    GUEST<AuxCtlHandle> *t;
+
+    for(t = &LM(AuxCtlHead);
+        *t && (**t)->acOwner != ctl;
+        t = &(**t)->acNext)
+        ;
+    return t;
+}
+
+ControlPtr Executor::ROMlib_control_record(ControlHandle c, const char *who)
+{
+    if(c && syn68k_is_guest_mapped((uintptr_t)c, sizeof(GUEST<ControlPtr>)))
+    {
+        ControlPtr p = *c;
+        if(p && syn68k_is_guest_mapped((uintptr_t)p, sizeof(ControlRecord)))
+            return p;
+    }
+    fprintf(stderr, "[bad handle] %s: ControlHandle %s\n", who,
+            !c ? "nil"
+               : !syn68k_is_guest_mapped((uintptr_t)c, sizeof(GUEST<ControlPtr>))
+                   ? "outside memory"
+                   : "with a bad master pointer");
+    return nullptr;
+}
+
+void Executor::C_SetControlReference(ControlHandle c, LONGINT data) /* IMI-327 */
+{
+    if(ControlPtr p = ROMlib_control_record(c, "SetControlReference"))
+        p->contrlRfCon = data;
+}
+
+LONGINT Executor::C_GetControlReference(ControlHandle c) /* IMI-327 */
+{
+    ControlPtr p = ROMlib_control_record(c, "GetControlReference");
+    return p ? p->contrlRfCon.get() : 0;
+}
+
+void Executor::C_SetControlAction(ControlHandle c, ControlActionUPP a) /* IMI-328 */
+{
+    if(a != (ControlActionUPP)-1)
+        (*c)->contrlAction = a;
+    else
+        (*c)->contrlAction = guest_cast<ControlActionUPP>(-1);
+}
+
+ControlActionUPP Executor::C_GetControlAction(ControlHandle c) /* IMI-328 */
+{
+    ControlPtr p = ROMlib_control_record(c, "GetControlAction");
+    return p ? p->contrlAction.get() : nullptr;
+}
+
+INTEGER Executor::C_GetControlVariant(ControlHandle c) /* IMV-222 */
+{
+    AuxCtlHandle h;
+
+    for(h = LM(AuxCtlHead); h != 0 && (*h)->acOwner != c; h = (*h)->acNext)
+        ;
+    return h != 0 ? (*h)->acFlags.get() : (INTEGER)0;
+}
+
+/* according to IM-MTE; this has been renamed
+   `GetAuxiliaryControlRecord ()', possibly because of the
+   inconsistency below, i can only assume they have the same trap word */
+Boolean Executor::C_GetAuxiliaryControlRecord(ControlHandle ctl,
+                              GUEST<AuxCtlHandle> *aux_ctl) /* IMV-222 */
+{
+    /* according to testing on the Mac+
+     `GetAuxiliaryControlRecord ()' returns false (not true) and leaves
+     aux_ctl untouched; this is not the case of later
+     mac version, such as the color classic v7.1 */
+
+    if(!ctl)
+    {
+        *aux_ctl = default_aux_ctl;
+        return true;
+    }
+    else
+    {
+        GUEST<AuxCtlHandle> t;
+
+        t = *lookup_aux_ctl(ctl);
+        if(t)
+        {
+            *aux_ctl = t;
+            return false;
+        }
+        else
+        {
+            *aux_ctl = default_aux_ctl;
+            return true;
+        }
+    }
+}
+
+/* The controls whose definitions are running, innermost last. */
+static std::vector<ControlHandle> &running_defs()
+{
+    static std::vector<ControlHandle> v;
+    return v;
+}
+
+bool Executor::ROMlib_control_def_running(ControlHandle c)
+{
+    auto &v = running_defs();
+    return std::find(v.begin(), v.end(), c) != v.end();
+}
+
+int32_t Executor::ROMlib_ctlcall(ControlHandle c, int16_t i, int32_t l)
+{
+    Handle defproc;
+    int32_t retval;
+    ctlfuncp cp;
+
+    defproc = CTL_DEFPROC(c);
+
+    /* MacPhoenix: no definition (purged and not reloadable): nothing to
+       call, 0 as from a definition that ignores the message. */
+    if(!defproc)
+        return 0;
+    if(*defproc == nullptr)
+        LoadResource(defproc);
+    if(*defproc == nullptr)
+        return 0;
+
+    cp = (ctlfuncp)*defproc;
+
+    ROMlib_hook(ctl_cdefnumber);
+    HLockGuard guard(defproc);
+    {
+        struct Running
+        {
+            Running(ControlHandle c) { running_defs().push_back(c); }
+            ~Running() { running_defs().pop_back(); }
+        } running(c);
+        retval = cp(VAR(c), c, i, l);
+    }
+
+    /* MacPhoenix: a CDEF that knows only the 24-bit calcCRgns (the
+       Speech panel's sliders) leaves the region empty for calcCntlRgn and
+       calcThumbRgn, and a Mac still erases such a control when it is
+       hidden or disposed of. Ask again with calcCRgns, the high bit of
+       the handle asking for the indicator. Not a definition that takes
+       the 8.0 messages: its empty region is the answer (8.6's bevel
+       button, for an empty rectangle, in Navigation Services' Save
+       dialog), and its calcCRgns keeps the handle's low 24 bits, so it is
+       given a region in the System heap, below 16 MB, and the answer copied
+       (Microsoft Works 4's CDEF clears the high byte: an application
+       heap's region above 16 MB made it write through a stray handle). */
+    if((i == calcCntlRgn || i == calcThumbRgn) && l
+       && EmptyRgn(ptr_from_longint<RgnHandle>(l))
+       && !((uint16_t)LM(SysVersion) >= 0x0800
+            && (uint32_t)cp(VAR(c), c, kControlMsgTestNewMsgSupport, 0)
+                   == kControlSupportsNewMessages))
+    {
+        RgnHandle low;
+        {
+            TheZoneGuard guard(LM(SysZone));
+            low = NewRgn();
+        }
+        if(low && ptr_to_longint(low) < 0x01000000)
+        {
+            retval = cp(VAR(c), c, calcCRgns,
+                        ptr_to_longint(low) | (i == calcThumbRgn ? 0x80000000 : 0));
+            CopyRgn(low, ptr_from_longint<RgnHandle>(l));
+        }
+        if(low)
+            DisposeRgn(low);
+    }
+
+    return retval;
+}
