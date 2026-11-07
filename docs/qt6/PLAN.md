@@ -21,6 +21,14 @@
 > `985ac3bc`, 2026-10-11), so the default build links only Qt Core and
 > Network. OpenSSL is still a build dependency for libdatachannel.
 > CLAUDE.md describes the current code.
+>
+> For Executor (not mac-phoenix), what phases 9 and 10 were after exists
+> in another form: `executor-desktop`, a native Qt 6 Widgets application
+> with Executor in-process
+> ([../../executor/frontends/desktop/README.md](../../executor/frontends/desktop/README.md)),
+> and a Windows cross-build of it from Linux (llvm-mingw, Qt 6.8:
+> `cmake/ExecutorWindows.cmake`, `tools/windows/README.txt`). See the status
+> note in [Windows.md](Windows.md).
 
 Branch: `qt-port` (merged). Hard-switched POSIX/X11 subsystems to Qt6 to
 enable a proper Windows port and easier macOS distribution. Each phase

@@ -7,7 +7,8 @@ code builds from the host's command line. Guest test programs (MPW tools
 that drive a Toolbox subsystem and print what they find) are built this way.
 
 ```bash
-tools/mpw/mpw setup                  # once: provisioning/build.py mpw tests-7.5.5 (snapshots; MPW from E.T.O. #22)
+tools/mpw/mpw setup                  # once: provisioning/build.py mpw tests-7.5.5 (snapshots; MPW from E.T.O. #22;
+                                     #   --toast CD: the disk straight from the CD)
 tools/mpw/mpw build tests/guest/ot   # mirror, build.mpw, products as MacBinary
 tools/mpw/mpw run 'Version'          # any MPW command; exit code = {Status}
 tools/mpw/mpw status | stop
@@ -27,7 +28,8 @@ tools/mpw/mpw --toolchain cw build tests/guest/suite -o /tmp/cw
   volume (`~/.cache/mac-phoenix/mpw/host`). It is ready when BridgeAgent
   has said hello and ToolServer answers, about 7 s. It stays up until
   `mpw stop`. `mpw start --core mame-68k` and `--emu=FLAG` (repeatable,
-  e.g. `--emu=--no-executor-ot`) pass on to the emulator.
+  e.g. `--emu=--no-executor-ot`) pass on to the emulator, which is
+  `build/mac-phoenix` unless `MACPHOENIX_BINARY` names another.
 * **Commands.** ToolServer is MPW's headless command server. A command is
   written to a script file in `Host:.mpw:`; a wrapper sent to ToolServer as
   a 'misc'/'dosc' Apple Event (BridgeAgent, `POST /api/exec`) runs it as a
@@ -187,7 +189,7 @@ current folder); `'\n'` is 13 here too (`-mapcr`, the default).
 error, a rebuild after host-side deletes. Skips without the MPW disk.
 
 `ctest -R guest_builds_current`: the committed guest programs
-(MacPhoenixSuite, OTTest) are their sources' builds (built again and
-compared by `tests/lib/macbinary_same.py`, which leaves out a PEF's
-timestamp and the resource map's scratch), and projects with a
-`build.cw.mpw` build with CodeWarrior.
+(MacPhoenixSuite, OTTest, BridgeDemo, NotifyTest) are their sources'
+builds (built again and compared by `tests/lib/macbinary_same.py`, which
+leaves out a PEF's timestamp and the resource map's scratch), and projects
+with a `build.cw.mpw` build with CodeWarrior when its disk is there.

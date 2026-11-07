@@ -70,7 +70,7 @@ is the server):
 executor-desktop [--data DIR] [--system IMAGE] [--disk IMAGE]... [--ppc]
                  [--size WxH] [--scale N] [--ram MB] [--depth BPP]
                  [--screenshot PNG [--screenshot-delay S] [--quit]] [--timeout S]
-                 [--request "OP ARG"]... [APP]
+                 [--request "OP ARG"]... [--console] [APP]
 ```
 
 For this run only (settings.json keeps the dialog's). `--screenshot`: once
@@ -79,7 +79,8 @@ screen to PNG and the window to PNG-window.png, then `--quit`.
 `--request`: an automation request at that point (host/session.h:
 `resize WxH`, `scale N`, `volumes`, `windows`, ...; `mount`/`eject IMAGE` as
 the Disks panel). Executor's own options (`--logtraps`, `--debug`, ...) pass
-through to `session::parse_args`. `QT_QPA_PLATFORM=offscreen` runs it with
+through to `session::parse_args`. `--console`: on Windows, a console
+showing the log. `QT_QPA_PLATFORM=offscreen` runs it with
 no display (the ctest cells `executor.desktop.*`).
 
 ## How it works

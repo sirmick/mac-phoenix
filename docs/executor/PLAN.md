@@ -1,8 +1,9 @@
 # Executor core in MacPhoenix
 
-Goal: run the real Finder on a Toolbox reimplemented in C++, inside the
-MacPhoenix shell (web UI, WebRTC video, HTTP API, bridge), on the UAE
-68k JIT instead of syn68k.
+Goal: Executor's Toolbox, reimplemented in C++, running Apple's System
+Folders and Finder (7.5.5 to 8.6) and its own, on MAME's CPU cores, in
+three front ends: the desktop application, the tab with its server, and
+mac-phoenix's `--backend executor` (executor/README.md).
 
 Source: Executor 2000 (autc04/executor), MIT licence. Imported from
 upstream commit `b2569eb1` into `src/executor/` (since 2026-11-06
@@ -10,51 +11,65 @@ upstream commit `b2569eb1` into `src/executor/` (since 2026-11-06
 The upstream checkout in `executor-upstream/` stays outside git as the
 reference and differential oracle.
 
-Longer direction (Musashi with translated addressing, minicoro
+Longer direction (MAME cores with translated addressing, minicoro
 processes, wasm, A/UX user-mode kernel): [DIRECTION.md](DIRECTION.md).
+
+## The product's milestones
+
+The project plan (`.wash/plan.toml`) records these. They are not the
+core's M0–M4 and P ("The core's milestones", below), which came first.
+
+| | What | State |
+|---|---|---|
+| M1 | First cut: AppleWorks, the development environments and games on 7.6.1 and 8.6 in a private browser site | done (2026-11-03; the audit: [M1.md](M1.md)) |
+| P1 | Standalone: one Go binary, the server with the tab embedded, images only ([Standalone.md](Standalone.md)) | done (2026-11-07); the Python server and the tab's hosted mode (accounts, OPFS, sync) gone since 2026-11-02 |
+| P2 | Executor as its own product: `executor/` at the top level, `host/` shared by the front ends, the Qt desktop application (AppImage, Windows zip) | done (2026-11-07) |
+| M2 | QuickTime; Mac OS 9.0.4's Finder and the 9-only applications ([MacOS8-9.md](MacOS8-9.md), "9.0.4: what is open"); Apple's CarbonLib; C4 (UML to wasm) if needed; relay v2; AppleScript on 8.6; Navigation Services; the 8.6 Translation Manager (STRAGGLERS 71); the long tail of unimplemented 8.x calls | next; 9.0.4's survey and first fixes done |
+| M3 | G4 (AltiVec) on mame-ppc | after M2 |
 
 ## Shape
 
 ```
-mac-phoenix (parent: web UI, HTTP, WebRTC, bridge)
-   │ exec `mac-phoenix --ipc --backend executor` + SHM/socket
-   ▼
-mac-phoenix (child, same binary)
-   ├── frontends/phoenix/executor_child.cpp  frames → SHM, control socket → input hooks
-   ├── romlib                    Executor Toolbox, imported nearly unchanged
-   ├── syn68k facade             syn68k_public.h implemented over UAE
-   ├── PowerCore facade          on the mame-ppc core
-   └── frontends/phoenix         render + cursor composite, executor_host API
+executor-desktop             executor-web.wasm in a Worker      mac-phoenix parent (web UI, HTTP, WebRTC, bridge)
+  (Qt, in-process)             (the tab; executor/server)          │ exec `mac-phoenix --ipc --backend executor` + SHM/socket
+        │                             │                            ▼
+        │                             │                       frontends/phoenix/executor_child.cpp
+        └────────── host/ ────────────┘                       (frames -> SHM, control socket -> input hooks)
+                      │                                            │
+                      └─────────── frontends/phoenix: executor_host API, video, sound
+                                        │
+                     romlib (the Toolbox) on two facades:
+                       syn68k facade on mame-68k, PowerCore facade on mame-ppc
 ```
 
-The swap happens behind two facades so the 120k lines of Toolbox code
-compile with minimal edits:
+The CPUs sit behind two facades so the Toolbox code compiles with
+minimal edits:
 
-* **syn68k facade** (`executor/core/cpu/`). Same header name and API:
-  `cpu_state`, `EM_Dn/EM_An`, `READ*/WRITE*`, `callback_install`,
-  `trap_install_handler`, `interrupt_generate`, `CALL_EMULATOR`,
-  `destroy_blocks`. Implemented on UAE:
-  * **Addressing is identity.** Guest address == host address. Guest
-    RAM is mapped at host 0 (needs `vm.mmap_min_addr=0`, same as KPX),
-    the binary links below 4GB like `mac-phoenix`, the emulator thread
-    stack and framebuffer are allocated below 4GB. UAE runs
-    `DIRECT_ADDRESSING` with `MEMBaseDiff = 0`, which keeps the JIT
-    usable. Executor's four 1GB windows collapse into one.
-  * **Callbacks** are 2-byte cells in a guest-visible callback page,
-    each holding one EmulOp opcode. The handler finds the slot from the
-    PC, syncs UAE registers into `cpu_state`, calls the host function,
-    syncs back and jumps to the returned address.
-  * **A-line traps** use the real exception: vector 10 at `$28` points
-    at a callback, which reads the trap PC from the 68040 frame and calls
-    Executor's `alinehandler`. The guest runs in supervisor mode, as
-    Mac OS does, so the frame lands on A7.
-  * **Interrupts**: `interrupt_generate(4)` raises a UAE level-4
-    interrupt; vector 28 points at a callback; `MAGIC_RTE_ADDRESS` is a
-    real `RTE` in the callback page.
-  * **Nested execution**: `CALL_EMULATOR` pushes the exit address (an
-    EmulOp cell) and re-enters `m68k_execute`, the same path
-    BasiliskII's `Execute68k` uses.
-  * `destroy_blocks` flushes the JIT cache range.
+* **syn68k facade** (`executor/core/cpu/syn68k_common.cpp`). Same header
+  name and API as upstream's syn68k: `cpu_state`, `EM_Dn/EM_An`,
+  `READ*/WRITE*`, `callback_install`, `trap_install_handler`,
+  `interrupt_generate`, `CALL_EMULATOR`, `destroy_blocks`. Implemented on
+  a `cpu::Core`, `mame-68k` (MAME's Musashi):
+  * **Four 1GB windows** (`syn68k_public.h`), as upstream: guest RAM
+    (with a 64KB tail), a pool for `syn68k_alloc_low` (stacks,
+    framebuffer), the binary's data; the core's `GuestMemory` maps each.
+    No `vm.mmap_min_addr`. Window backing is per host
+    (`core/cpu/host/posix`, `host/wasm`).
+  * **Callbacks** are 2-byte cells in a guest-visible callback page
+    holding host op `$7101`; the core hands it to the facade, which runs
+    the callback the cell belongs to and continues at the address it
+    returns.
+  * **Exceptions** (A-line traps, interrupts) go through real guest
+    vectors, each pointing at a forwarding callback, as syn68k's did.
+  * **Nested execution**: `CALL_EMULATOR` runs guest code until it
+    returns into the exit cell (host op `$7100`, which stops the core's
+    `run()`).
+  * **Interrupts**: the core's interrupt line follows
+    `cpu_state.interrupt_pending[]`, updated on the core's thread (after
+    callbacks, and from `Host::attention()` when another thread raised a
+    level).
+  * UAE ran the facade until 2026-10-23, with identity addressing (guest
+    RAM at host 0); see DIRECTION.md, D1 and W0.
 * **PowerCore facade** (`cpu/PowerCore.cpp`). PowerCore has no licence
   and does not come across; Executor's code keeps its shape (registers in
   `PowerCoreState`, `execute()`, `syscall`, `handleInterrupt`) and it runs
@@ -174,7 +189,7 @@ points (traps, selectors, drivers, components) with checkbox filters;
 the work list (needed, not in Executor) is 28. Hardware/boot/debug tags
 live in `learned.yaml` (`tags:`) for review.
 
-**Where we left off:** snapshot API and a first reader (lowmem, heap
+**Where it was left (2026-10-07):** snapshot API and a first reader (lowmem, heap
 walk, trap classification) work; reference snapshot
 `~/storage/snapshots/7.5.5-finder-idle`. Next: find the Process
 Manager heap and partitions, tag System heap blocks with resource
@@ -375,7 +390,10 @@ stay registered but are never loaded. Chosen over running Apple's
 libraries on an Ethernet driver backed by net-bridge, because the same
 C++ can later answer CFM's OpenTransportLib for PPC applications (P).
 
-## Milestones
+## The core's milestones
+
+October 2026, before the product milestones above; status as recorded
+then.
 
 | | Milestone | Gate | Status |
 |---|---|---|---|
@@ -408,7 +426,8 @@ Tools carried alongside:
 
 ## Open questions
 
-* Open Transport: on by default (M3i); the PPC binding is next.
+* Open Transport: on by default (M3i), for 68k and PowerPC clients
+  (OpenTransport.md).
 * Boot phase: reproduce the post-boot-2 state from a snapshot of real
   System 7.1 under MacPhoenix.
 
@@ -428,7 +447,7 @@ Tools carried alongside:
   hand-made `NAME.clean`. `--executor-start finder|browser|path`,
   `--[no-]executor-fresh`; resolved by the parent
   (`src/core/executor_systems.cpp`) into `--executor-data/--executor-app`.
-  The web UI offers a built-in "exec" profile.
+  The web UI offers a built-in `7.5.5-executor` profile.
 * Without a System, Executor's files live in `<storage>/executor/` (System Folder, prefs).
   That folder and the configured shared folder are the only host folders the
   guest sees; Executor's default of mounting `/` is disabled. Disk images
@@ -486,8 +505,8 @@ Kept small so upstream fixes can be merged by hand:
   `long double` is x87), `quickdraw/rawpatblt.cpp`/`rawsrcblt.cpp` (blitters
   called through their real type), `serial.cpp` (termios on every POSIX
   host but macOS), `osutil.cpp` (`SetDateTime` never sets the host clock),
-  `tests/main_executor.cpp` (tests on the main stack where it is
-  guest-addressable), `tests/mactcp.cpp` (network tests skip without one).
+  `executor/tests/main_executor.cpp` (tests on the main stack where it is
+  guest-addressable), `executor/tests/mactcp.cpp` (network tests skip without one).
 * `mactcp/`, `opentransport/`, `net/hostdns.cpp` (all ours): the host's
   network only through `rsys/hostnet.h` (DIRECTION.md, D3); the two socket
   watchers are its one `Watcher`.
@@ -792,6 +811,6 @@ Kept small so upstream fixes can be merged by hand:
   with 0 and a log line; `sane/float4.cpp` `Fx2dec` sized its buffers for
   the number (two stack overflows from about 1e170 up).
 * `base/functions.impl.h`: `callfromPPC::ParameterPasser` from upstream
-  `b6290b62` (2026-10-19), with its gtests in `tests/cpu.cpp`.
+  `b6290b62` (2026-10-19), with its gtests in `executor/tests/cpu.cpp`.
 * `file/fileHighlevel.cpp`, multiversal `FileMgr.yaml`: `HDelete` and
   `HRename`, exported to InterfaceLib.

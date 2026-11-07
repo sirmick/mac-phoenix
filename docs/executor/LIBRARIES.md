@@ -307,7 +307,7 @@ Executor has/lacks and imported or not ("work list"), with the routes
 
 What Executor answers is its export tables as CFM binds them, which the
 executor_tests export test writes to `build/executor-exports.json`
-(`ctest -R executor.Exports`; `tests/exports.cpp`, which also fails if an
+(`ctest -R executor.Exports`; `executor/tests/exports.cpp`, which also fails if an
 implementation's own name, `_NewPtr_flags`, is exported). They are the
 definitions as the trap macros expand them: a `lowmem:` entry gives
 `LMGetX`/`LMSetX`, a File Manager call `PBXSync`/`PBXAsync`, a trap with

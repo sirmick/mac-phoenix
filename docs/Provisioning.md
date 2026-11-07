@@ -83,7 +83,7 @@ The E.T.O. #22 disc is a local-only pin: a machine without it gets
 |---|---|---|
 | `games-classic.img` | Silicon Beach's Airborne!, Enchanted Scepters, Dark Castle, Beyond Dark Castle, Apache Strike; Rescue! 2.0.4, SimCity 1.3c, Shufflepuck Café, Glider 4.0.4, Crystal Quest, Oregon Trail, Spaceward Ho! 3.0.1 | `6.0.8` on the SE or IIci |
 | `games.img` | Ambrosia (Maelstrom, Escape Velocity, EV Override, Apeiron, Barrack, Swoop, Chiral, Bubble Trouble, Ares, Avara, Cythera), Digital Messiah, Maxis (SimCity 2000, SimAnt, SimEarth, SimLife, SimTower, SimFarm, A-Train), Civilization I and II, Marathon 1/2/Infinity, Pathways into Darkness, Spectre, Bolo, Glider PRO, Master of Orion, Warcraft II, Lemmings, Populous II, Afterlife; Prince of Persia 1 and 2, Monkey Island 1 and 2, Wolfenstein 3D, Flashback, Spiderweb's Exile I–III, Oids, Pararena 2 | `7.5.5` / `7.6.1`, 68k or PowerPC |
-| `games-ppc.img` | EV Nova, Ferazel's Wand 1.0.3, Mars Rising, Slithereens, Master of Orion II (Large Install; its CD image can be attached too) | `8.6` / `9.0.4` |
+| `games-ppc.img` | EV Nova, Ferazel's Wand 1.0.3, Mars Rising, Slithereens, Master of Orion II (Large Install; its CD image can be attached too); GameBox Classic 1.2.0, a library to launch them from | `8.6` / `9.0.4` |
 | `world-builder-1.2.img` | World Builder 1.2 and Mountain of Mayhem | any 68k |
 
 One bake per game (`provisioning/bakes/`, the media pinned in `media.json`):
@@ -103,7 +103,7 @@ check for the target's name can't match the Install button. An image's
 |---|---|---|
 | `productivity-system-7.img` | AppleWorks 5.0.3, ClarisWorks 4.0v4, ClarisDraw 1.0v4 (68k), Corel WordPerfect 3.5e (with the 3.5e2 update), Microsoft Excel 4.0, Microsoft Office 98 (PowerPC), GraphicConverter 3.9.1, Acrobat Reader 3.01, FileMaker Pro 4.0 and Aldus Persuasion 3.0 (68k; personalised with the owner's serial numbers), Microsoft Works 4.0b (68k; Microsoft's shared tools in its folder) | `productivity-7.6.1`, 68k or PowerPC |
 | `creative-system-7.img` | Kid Pix 2.5 (68k), Adobe Photoshop 4.0, Adobe Illustrator 6.0, Macromedia FreeHand 5.5 and Deneba Canvas 5.0.2 (68k; personalised with the owner's serial numbers) | `creative-7.6.1`, 68k or PowerPC |
-| `creative-macos-8.img` | Adobe Illustrator 8.0 (PowerPC; personalised with the owner's serial number; its upgrade installer found the owner's Illustrator 6.0 on the bake's startup disk: base `tools-8.6-ai6`) | `creative-8.6` |
+| `creative-macos-8.img` | PowerPC, personalised with the owner's serial numbers: Adobe Illustrator 8.0 (its upgrade installer found the owner's Illustrator 6.0 on the bake's startup disk: base `tools-8.6-ai6`), Adobe Photoshop 5.5 (with ImageReady 2.0), Adobe PageMaker 6.5 (with the Acrobat 3.0 it installs: Reader, Distiller); Illustrator's and Photoshop's bakes run on an 832x624 screen (their `"args"`) | `creative-8.6` |
 | `productivity-macos-9.img` | AppleWorks 5.0.4, Corel WordPerfect 3.5e, Microsoft Excel 4.0, Microsoft Office 98, GraphicConverter 3.9.1, Acrobat Reader 3.01, Microsoft Works 4.0b (68k) | `productivity-9.0.4` |
 | `icons.img` | Custom icon collections: The Iconfactory's classic collection (its icons are 'icns', shown by 8.5 and later), MacUser's Custom Icon Pack IV, Nitrozac's icons from MacAddict #63 | any 7.x-9 boot disk |
 
@@ -115,14 +115,16 @@ personalisation is typed (`{"type": "Mac Phoenix"}`). Word 5.1a
 (`word-5.1a`, `"wip"`) doesn't install yet: see its note. Office 98 is its CD's
 drag-install folder; its first launch asks for the CD key, which is left to
 the user (`needs_serial`). Products whose installer takes a serial number
-are `"kind": "stage"` bakes: pinned media, no snapshot, only on the
-Installers disk (PageMaker 6.5, FreeHand 8, the QuarkXPress 4.0 upgrade; Photoshop
-3.0.5, whose bake rejects the owner's serial, and QuarkXPress 3.31, whose installer
-waits for a disk-insert event: `"wip"`). Canvas comes from its 5.0.2 CD. No
+and can't be installed with the owner's serial are only on the Installers
+disk: the QuarkXPress 4.0 upgrade is a `"kind": "stage"` bake (pinned media, no
+snapshot; it wants a QuarkXPress 3.x to upgrade), and the bakes still `"wip"` are
+staged the same way (Photoshop 3.0.5, whose bake rejects the owner's serial;
+QuarkXPress 3.31, whose installer waits for a disk-insert event; FreeHand 8, whose
+installer data is damaged). Canvas comes from its 5.0.2 CD. No
 serial is typed for them, and serials that came inside an archive are left out
 of it (a bake's `"exclude"` paths, `"Folder:Name"`, leave them off the Installers
-disk too: Office 98's "Serial number" file). Photoshop 4.0, Illustrator 6.0,
-FileMaker Pro 4.0, Persuasion 3.0, FreeHand 5.5 and Canvas 5.0.2 install with the owner's serial numbers
+disk too: Office 98's "Serial number" file). Photoshop 4.0 and 5.5, Illustrator 6.0 and 8.0,
+PageMaker 6.5, FileMaker Pro 4.0, Persuasion 3.0, FreeHand 5.5 and Canvas 5.0.2 install with the owner's serial numbers
 (`{"serial": ID}` steps), and keep what their installers and registrations
 wrote about the owner's licence (registration data, preferences, installer logs:
 the images are private, and Photoshop 4.0 won't start without its Pipeline
@@ -212,8 +214,8 @@ SHA-256, the archive.org item), and `provisioning/cds.py [--fetch]` checks
 them (pinned digests, an HFS volume behind the partition map with the
 expected name) and writes each record, `NAME.iso.json`, beside the image.
 They mount as CDs on the ROM machines (`--cdrom`) and as read-only disks on
-Executor (`--disk`); `tools/web/make_library.py` offers them on the site
-with their covers.
+Executor (`--disk`); `tools/web/make_library.py` puts them in the web
+library (the directory `executor/server` serves) with their covers.
 
 | Image | Volume | What |
 |---|---|---|
@@ -232,7 +234,7 @@ cover used here.
 | Image | What |
 |---|---|
 | `installers-games.img` | every game bake's installer or archive |
-| `installers-productivity.img` | the productivity bakes' installers, and those only staged: PageMaker 6.5, FreeHand 8, QuarkXPress 4.0 upgrade, Word 5.1a, Photoshop 3.0.5, QuarkXPress 3.31 |
+| `installers-productivity.img` | the productivity bakes' installers, and those only staged: FreeHand 8, QuarkXPress 4.0 upgrade, Word 5.1a, Photoshop 3.0.5, QuarkXPress 3.31 |
 | `installers-development.img` | System 7's: CodeWarrior Pro 4, MPW 3.4.2, ToolServer, the ASLM SDK, THINK C/Pascal, Symantec C++, MacPerl 5.2, MacPython 1.5.2, HyperCard, Frontier, ResEdit, Resorcerer, BBEdit Lite 4.1, ZTerm, MacsBug |
 | `installers-development-macos-8-9.img` | Mac OS 8–9's: CodeWarrior Pro 7.2, MPW-GM, MacPerl 5.6.1, MacPython 2.3.5, BBEdit Lite 6.1.2 (one HFS volume can't hold both CodeWarrior CDs) |
 | `installers-internet.img` | the internet bakes' archives: MR Browser 0.39 (68k and PowerPC), Hotline Connect Client 1.9.1, Serial MReader 0.03 |
@@ -270,6 +272,7 @@ volume (`{target}`, named `Install`) as the install target. Kinds:
 | `install` | the product's installer, driven by `steps` |
 | `expand` | `archive`: StuffIt Expander expands it in the guest (then any `steps`: a first launch) |
 | `copy` | `steps` of `{"copy": {"from": ..., "to": "{target}:"}}` from attached CDs or disk images |
+| `stage` | no snapshot: the media only, put on an Installers disk (an installer that stops at a serial number) |
 | `derive` | a snapshot made on the host from other snapshots (`from`) |
 | `os` | a System: its installer (and updaters) run by `steps` onto a blank target (`Macintosh HD`), then the guest restarts from it for any `first_boot` steps; the snapshot is the whole bootable volume |
 
@@ -292,7 +295,8 @@ the host: a self-mounting HFS+ image (CarbonLib 1.6) that only the guest
 can mount. An `os` bake run from a System whose volume has the target's
 name has its boot disk renamed `Bootstrap`. Scripted guests are capped at
 640x480 (`--max-resolution`): 8.6 and later take the driver's largest mode
-at their first boot.
+at their first boot. A bake's `"args"` can raise it (Photoshop 5.5 wants
+832x624).
 
 Steps (see `provisioning/guest.py`) click by name where they can: `/api/ui`
 gives the front process's windows, controls, dialog items and open menus

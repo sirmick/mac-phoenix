@@ -11,17 +11,17 @@ through or delete when fixed.
    `std::thread` in `main`'s lambda #8). Passing runs look like crashes; each
    log has to be read past it.
 3. Release builds' crash backtraces have few line numbers ("rebuild with
-   Debug"). A RelWithDebInfo default (`-O2 -g`) would make most crashes one
-   look instead of a debugging round.
-4. `tests/test_guest_suite.sh` removes its ExtFS folder, results file and all;
-   the results survive only inside the log, where long result lines wrap.
-   An option to keep the folder (or the results file copied next to the
-   log) would help.
-5. No index of what is on the disk images. "Which applications import
-   StdCLib / call X" meant a raw scan of every image for PEF containers
-   (`~/storage/tmp/ppclibs/survey.py`, minutes per pass). A cached per-image
-   list of applications with their PEF imports and exports (tools/macdecode)
-   would answer these at once.
+   Debug"). CMake's default is already RelWithDebInfo (`-O2 -g`), but the
+   main checkout's `build/` and `tools/ci/integration.sh` configure
+   `-DCMAKE_BUILD_TYPE=Release`; RelWithDebInfo there would make most
+   crashes one look instead of a debugging round.
+4. ~~`tests/test_guest_suite.sh` removed its ExtFS folder, results file and
+   all.~~ Fixed 2026-10-30: `--keep-dir DIR` copies what the guest wrote on
+   Host: to DIR, whatever the outcome.
+5. ~~No index of what is on the disk images ("which applications import
+   StdCLib").~~ Fixed 2026-10-26: `tools/macdecode/libraries.py --scan`
+   caches every image's PEF imports per library and symbol
+   (`<storage>/macdecode/libraries.json`).
 6. MPW's `CIncludes` are MacRoman with CR line ends: grep treats them as
    binary (`grep -a`, `tr '\r' '\n'` each time). A UTF-8/LF copy of the
    interfaces (declarations only, clean-room safe) beside the toolchain would

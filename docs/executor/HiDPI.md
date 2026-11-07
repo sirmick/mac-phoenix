@@ -8,10 +8,10 @@ while programs keep seeing the 640x480-style 1x screen they were written
 for. The ROM machines can't do this: their QuickDraw is Apple's code in
 ROM.
 
-Status: phase 1 (text on the screen) implemented, 2026-10-31; phase 2
-(chrome) and phase 4 (GWorld shadows) started 2026-11-01: see
-"Phase 1, as built" and the sections after it at the end. The rest is
-design.
+Status: phase 1 (text on the screen) built 2026-10-31; phase 2 (chrome)
+and phase 4 (GWorld shadows) built from 2026-11-01; all of it in the tab
+too (`executor.web.hidpi`, `hidpi_gworld`). See "Phase 1, as built" and
+the sections after it at the end. Phases 3, 5 and 6 are design.
 
 ## The idea in one paragraph
 
