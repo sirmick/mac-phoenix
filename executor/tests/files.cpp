@@ -66,20 +66,43 @@ TEST(Files, GetWDInfo)
     EXPECT_GT(dirID, 0);
 }
 
+#ifdef EXECUTOR
+#define WDPB(p) ((HParmBlkPtr)(p))
+#else
+#define WDPB(p) (p)
+#endif
+
+/* The default directory as HGetVol has it, with its volume's own number:
+   the tests run in a folder of their own (main.cpp: HSetVol with its
+   directory ID; natively a working directory). PBGetWDInfo with
+   ioVRefNum 0 is no way to find it: the Quadra's 7.5.5 and 7.6.1 answer
+   the default volume's root there. */
+static void defaultDirectory(short *vRefNum, long *dirID)
+{
+    WDPBRec wpb;
+    memset(&wpb, 0, sizeof(wpb));
+    PBHGetVolSync(WDPB(&wpb));
+    *dirID = wpb.ioWDDirID;
+    short v = wpb.ioVRefNum;
+    memset(&wpb, 0, sizeof(wpb));
+    wpb.ioVRefNum = v;
+    PBGetWDInfoSync(&wpb);
+    *vRefNum = wpb.ioWDVRefNum;
+}
+
 /* A volume's own reference number names its root directory, even with
-   the default directory a folder on it (a 7.6.1 Quadra: PBGetWDInfo says
-   2; OpenRFPerm and PBHGetFInfo with it look in the root); 0 names the
-   default directory. The tests run in a folder of their own. */
+   the default directory a folder on it (the Quadra's 7.5.5 and 7.6.1:
+   PBGetWDInfo says 2; OpenRFPerm and PBHGetFInfo with it look in the
+   root). */
 TEST(Files, GetWDInfoVolumeIsRoot)
 {
-    WDPBRec wdpb;
-    memset(&wdpb, 0, sizeof(wdpb));
-    PBGetWDInfoSync(&wdpb);
-    ASSERT_EQ(noErr, wdpb.ioResult);
-    short vRefNum = wdpb.ioWDVRefNum;
-    long dirID = wdpb.ioWDDirID;
+    short vRefNum;
+    long dirID;
+    defaultDirectory(&vRefNum, &dirID);
+    ASSERT_LT(vRefNum, 0);
     ASSERT_NE(2, dirID) << "the tests' folder isn't the root";
 
+    WDPBRec wdpb;
     memset(&wdpb, 0, sizeof(wdpb));
     wdpb.ioVRefNum = vRefNum;
     PBGetWDInfoSync(&wdpb);
@@ -90,17 +113,18 @@ TEST(Files, GetWDInfoVolumeIsRoot)
 }
 
 /* Indexed (ioWDIndex > 0) on a volume: ioVRefNum comes back as each
-   working directory's own number (a 7.6.1 Quadra), not the volume's;
-   Persuasion 3.0 finds its folder's working directory this way. */
+   working directory's own number (the Quadra's 7.5.5 and 7.6.1), not the
+   volume's; Persuasion 3.0 finds its folder's working directory this
+   way. */
 TEST(Files, GetWDInfoIndexedGivesWDNumber)
 {
-    WDPBRec wdpb;
-    memset(&wdpb, 0, sizeof(wdpb));
-    PBGetWDInfoSync(&wdpb);
-    ASSERT_EQ(noErr, wdpb.ioResult);
-    short vRefNum = wdpb.ioWDVRefNum;
-    long dirID = wdpb.ioWDDirID;
+    short vRefNum;
+    long dirID;
+    defaultDirectory(&vRefNum, &dirID);
+    /* the Quadra's PBOpenWD of a root gives back the volume's number */
+    ASSERT_NE(2, dirID) << "the tests' folder isn't the root";
 
+    WDPBRec wdpb;
     memset(&wdpb, 0, sizeof(wdpb));
     wdpb.ioVRefNum = vRefNum;
     wdpb.ioWDDirID = dirID;
@@ -1859,12 +1883,6 @@ TEST(Files, GetAliasInfo)
 
 /* A directory ID the volume hasn't is fnfErr, the default left where it
    was: the Quadra's HFS answers so for negative IDs, 1, 999999. */
-#ifdef EXECUTOR
-#define WDPB(p) ((HParmBlkPtr)(p))
-#else
-#define WDPB(p) (p)
-#endif
-
 TEST_F(FileTest, HSetVolMissingDirectory)
 {
     WDPBRec wpb;
