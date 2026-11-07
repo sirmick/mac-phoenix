@@ -1,7 +1,7 @@
 # wash-plan: written by Wash as the plan changes.
 # Edit it only between workspaces; plan_set {"from": "<this file>"} loads it.
 
-revision = 70
+revision = 72
 
 [[node]]
   id = "cuts"
@@ -905,3 +905,13 @@ revision = 70
   body = "Found by leftovers 2026-11-07: executor.web.m1.7.6.1.development fails ('no alert M1 build 0'): MPW Shell opens a Commando dialog for the typed SC line (Commando opens on a command ending in '…' (option-;) or when Enter runs a line MPW thinks is incomplete). Fails on grid2's build-wasm at ed28f66e too, passed at 840d764b (mover's run): bisect 840d764b..ed28f66e (desktop merge: host/ keys? creative5: tab_m1). ResourceDispatch selector $5 logged unimplemented in both runs. Logs ~/storage/tmp/leftovers/mpw-tab{,-base}.log."
   state = "done"
   revision = 55
+
+[[node]]
+  id = "suite-rom"
+  title = "Toolbox suite on the ROM machine (uae, 7.5.5 + 7.6.1): MapEmptyRects hangs the Quadra, GetWDInfo tests fail"
+  emoji = "🧪"
+  template = "package"
+  parent = "loose-ends"
+  body = "Full run 2026-11-07 (c9ac165d+): toolbox_suite_uae and toolbox_suite_uae_761 time out: the suite (executor/tests built with Retro68) hangs at QuickDraw.MapEmptyRects (added a070a2f7 2026-11-04 for Executor's MapPt divide-by-zero; the real ROM probably divides by zero), and Files.GetWDInfoVolumeIsRoot / GetWDInfoIndexedGivesWDNumber (f52442bb, 'as Apple's 7.6.1 answers') fail on the Quadra. The suite is the ground truth for Executor: measure what the Quadra does, fix the tests or the expected-failure lists (tests/guest/toolbox_expected_uae*.txt), and skip only what hangs real hardware (with a note). Executor suites pass."
+  state = "active"
+  revision = 72
