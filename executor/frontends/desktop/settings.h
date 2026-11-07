@@ -29,8 +29,11 @@ public:
     int integer(const QString &key) const { return get(key).toInt(); }
     bool boolean(const QString &key) const { return get(key).toBool(); }
     QStringList list(const QString &key) const;
-    /* Changed: changed(key), saved. */
-    void set(const QString &key, const QJsonValue &v);
+    /* Changed: changed(key), saved. False: V isn't a value the schema
+       allows (the server would refuse the file), nothing changed. */
+    bool set(const QString &key, const QJsonValue &v);
+    /* Why V isn't a value KEY may have; empty: it is */
+    QString invalid(const QString &key, const QJsonValue &v) const;
 
     /* The schema: the groups in order, each one's properties in order */
     const QJsonObject &schema() const { return schema_; }

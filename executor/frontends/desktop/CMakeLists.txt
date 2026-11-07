@@ -62,4 +62,19 @@ if(BUILD_TESTS)
                 ${_library}/boot-7.6.1.img ${_library}/utilities.img Utilities)
     set_tests_properties(executor.desktop.finder executor.desktop.apple761 PROPERTIES
         LABELS executor TIMEOUT 150 SKIP_RETURN_CODE 77)
+
+    # settings.json is executor/server's (executor/tests/desktop_settings.cpp)
+    add_executable(executor_desktop_tests
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../tests/desktop_settings.cpp
+        settings.h settings.cpp
+        ${CMAKE_CURRENT_BINARY_DIR}/desktop.qrc)
+    set_target_properties(executor_desktop_tests PROPERTIES AUTOMOC ON AUTORCC ON)
+    target_include_directories(executor_desktop_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    target_compile_definitions(executor_desktop_tests PRIVATE
+        EXECUTOR_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../..")
+    target_link_libraries(executor_desktop_tests PRIVATE gtest Qt6::Core)
+    target_compile_features(executor_desktop_tests PRIVATE cxx_std_17)
+    phoenix_exempt_from_hardening(executor_desktop_tests)
+    add_test(NAME executor.desktop.settings COMMAND executor_desktop_tests)
+    set_tests_properties(executor.desktop.settings PROPERTIES LABELS executor TIMEOUT 30)
 endif()
