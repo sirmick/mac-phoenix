@@ -296,7 +296,13 @@ std::optional<std::string> request(const std::string &op, const std::string &arg
         /* names and data in the system heap: guest-addressable */
         StringPtr name = (StringPtr)NewPtrSysClear(256);
         const char text[] = "written by a touch request\r";
-        Ptr data = NewPtrSys(sizeof text - 1);
+        Ptr data = name ? NewPtrSys(sizeof text - 1) : nullptr;
+        if(!name || !data)
+        {
+            if(name)
+                DisposePtr((Ptr)name);
+            return std::to_string(memFullErr);
+        }
         name[0] = (uint8_t)std::min<size_t>(arg.size(), 255);
         memcpy(name + 1, arg.data(), name[0]);
         memcpy(data, text, sizeof text - 1);

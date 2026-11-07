@@ -241,7 +241,10 @@ bool Overlay::load(std::string *error)
         if(bad)
             break;
     }
-    if(good < size && writable_)  /* a write cut short */
+    /* a write cut short: cut off, as overlay.go's load does, a locked
+       mount's too (the file is open read-write either way; only what no
+       commit vouches for goes) */
+    if(good < size)
         (void)!ftruncate(file_, (off_t)good);
     end_ = good;
     return true;
