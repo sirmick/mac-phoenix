@@ -73,8 +73,9 @@ cleanup() {
         wait "$EMU_PID" 2>/dev/null || true
     fi
     rm -rf "$EXTFS_DIR"
-    [[ "$(basename "$DISK")" == test-8.6-$$.img ]] && rm -f "$DISK"
-    [[ -n "$PROD" ]] && rm -f "$PROD"
+    # (ifs: a false test as the trap's last command is the script's status)
+    if [[ "$(basename "$DISK")" == test-8.6-$$.img ]]; then rm -f "$DISK"; fi
+    if [[ -n "$PROD" ]]; then rm -f "$PROD"; fi
 }
 trap cleanup EXIT SIGTERM SIGINT
 
