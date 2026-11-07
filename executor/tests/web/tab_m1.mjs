@@ -250,28 +250,55 @@ const TARGETS = {
                 throw new Error('nothing drawn');
             await t.saveAs('M1 FH');
         } },
-        { name: 'Canvas™ 5', app: 'Creative:Deneba Canvas 5.0.2 ƒ:Canvas™ 5', use: async (t) => {
+        // Known exception (M1.md): with the disk's Claris XTND System in the
+        // System Folder its Save dialog gets wrong keyDowns (7.6.1) or
+        // Executor traps in NewPixMap (8.6); natively, without XTND, the name
+        // types. Everything up to there must work; a save fails the cell.
+        { name: 'Canvas™ 5', app: 'Creative:Deneba Canvas 5.0.2 ƒ:Canvas™ 5', known: /^no window named M1 CV after saving$/, use: async (t) => {
             // Untitled-1 opens at launch; the rectangle tool (the
             // toolbox's third row, left) dragged across the page, Save As.
-            // On the Quadra the toolbox's content is 47x191 at the left.
+            // The toolbox: 50x206 at the left, a drag bar, 24-pixel rows.
+            // Without QuickTime (the library's System has none) it says
+            // "QuickTime extension is not installed. Tool will be disabled."
+            // first, over its splash, in a window of its own (no dialog, no
+            // title; its text isn't in the text feed): the front window,
+            // alert-sized (97x176 on 7.6.1 and 8.6). OK, the default button.
+            let quicktime = false;
             await t.until(async () => {
-                const m = (await t.windows(true)).find((w) => w.title === 'Canvas Message' || w.kind === DIALOG_KIND);
+                const ws = await t.windows(true);
+                const m = ws.find((w) => w.title === 'Canvas Message' || w.kind === DIALOG_KIND);
                 if (m)
                     throw new Error(`alert "${said(m).replace(/\s+/g, ' ')}"`);
-                return (await t.windows()).some((w) => /Untitled-1/.test(w.title));
+                if (ws.some((w) => /Untitled-1/.test(w.title)))
+                    return true;
+                const [top, left, bottom, right] = ws.length ? ws[0].rect : [0, 0, 0, 0];
+                if (!quicktime && ws[0] && ws[0].title === '' && bottom - top < 130 && right - left > 140 && right - left < 260) {
+                    quicktime = true;
+                    await shot('quicktime');
+                    await t.key('Enter');
+                }
+                return false;
             }, 90000, 'no Untitled-1');
             await t.pause(2000);
             const tools = (await t.windows()).find((w) => w.title === '' && w.rect[2] - w.rect[0] > 150 && w.rect[3] - w.rect[1] < 70);
             if (!tools)
                 throw new Error('no toolbox');
             const before = await sample();
-            await t.click(tools.rect[1] + 11, tools.rect[0] + 58);
+            await t.click(tools.rect[1] + 11, tools.rect[0] + 71);   // the drag bar, then 24-pixel rows
             await t.pause(500);
-            await t.drag([[220, 160], [400, 330]]);
+            await t.drag([[220, 160], [400, 330]], 500);
             await t.pause(1000);
             if (changed(before, await sample()) < 0.002)
                 throw new Error('nothing drawn');
-            await t.saveAs('M1 CV');
+            try {
+                await t.saveAs('M1 CV');
+            } catch (e) {
+                if (!/^no window named M1 CV after saving$/.test(e.message))
+                    throw e;
+                await shot('known');
+                return;
+            }
+            throw new Error('saved: no longer a known exception (take known out, M1.md)');
         } },
     ],
     'creative-8.img': [
@@ -286,7 +313,7 @@ const TARGETS = {
             const before = await sample();
             await t.key('KeyM');
             await t.pause(500);
-            await t.drag([[left + 150, top + 100], [left + 350, top + 260]]);
+            await t.drag([[left + 150, top + 100], [left + 350, top + 260]], 500);   // (no hold, under load: a click, its Rectangle size dialog)
             await t.pause(1000);
             if (changed(before, await sample()) < 0.002)
                 throw new Error('nothing drawn');
@@ -601,7 +628,7 @@ const said = (w) => w.kind !== DIALOG_KIND ? ''
         : [w.text, ...(w.params || [])].filter(Boolean).join('\n');
 
 // A game's dialog answered by the first of these buttons it has.
-const SAFE = [/^Not Yet/i, /^Later/i, /^Leave Alone/i, /^Don.t (Change|Switch)/i, /^Switch\b/i, /^(Continue|OK|Okay)\b/i, /^(Play|Start|Begin|New Game)\b/i, /^(Done|Skip)\b/i, /^Cancel\b/i];
+const SAFE = [/^Not Yet/i, /^Later/i, /^Leave Alone/i, /^Let it be/i, /^Don.t (Change|Switch)/i, /^Switch\b/i, /^(Continue|OK|Okay)\b/i, /^(Play|Start|Begin|New Game)\b/i, /^(Done|Skip)\b/i, /^Cancel\b/i];
 
 // M1_LOG: each action too.
 const trace = (...a) => process.env.M1_LOG && console.log('[m1]', ...a);
@@ -644,12 +671,20 @@ const t = {
         await page.mouse.up();
     },
     // the button held along points (a pencil stroke)
-    async drag(points) {
+    // hold: ms after the press and before the release, as a hand does, for
+    // an application that follows the mouse in a tracking loop of its own
+    // slower than the moves come (Canvas 5: its rectangle started and
+    // ended short of them).
+    async drag(points, hold = 0) {
         trace('drag', JSON.stringify(points));
         await page.mouse.move(...await at(...points[0]));
         await page.mouse.down();
+        if (hold)
+            await t.pause(hold);
         for (const p of points.slice(1))
             await page.mouse.move(...await at(...p), { steps: 10 });
+        if (hold)
+            await t.pause(hold);
         await page.mouse.up();
     },
     async until(fn, ms, why) {

@@ -615,7 +615,7 @@ ConnectionID builtinlibs::getBuiltinLib(ConstStr255Param libname, OSType arch)
         if(name == "NuStdCLib" || name == "NuIntEnv")
         {
             name = "StdCLib";
-            clib::stdclibStart(true);
+            clib::stdclibImported(true);
         }
         /* One connection per library: its exports never move. */
         static std::unordered_map<std::string, ConnectionID> connections;
@@ -647,7 +647,7 @@ ConnectionID builtinlibs::getBuiltinLib(ConstStr255Param libname, OSType arch)
     {
         /* An application's own StdCLib: its state starts afresh. */
         if(name == "StdCLib")
-            clib::stdclibStart();
+            clib::stdclibImported();
         /* One connection per library, as for 68k: its exports never move.
            One per request built the whole export table again in the System
            heap each time; CodeWarrior IDE's plug-ins, thirty-odd fragments

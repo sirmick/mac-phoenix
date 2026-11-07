@@ -1,7 +1,7 @@
 # wash-plan: written by Wash as the plan changes.
 # Edit it only between workspaces; plan_set {"from": "<this file>"} loads it.
 
-revision = 25
+revision = 40
 
 [[node]]
   id = "cuts"
@@ -559,8 +559,8 @@ revision = 25
   template = "package"
   needs = ["utils-disk"]
   body = "From the Utilities disk (utils-disk, docs/Provisioning.md results table): on 8.6 PPC Executor answers 'Mac Quadra 900 (20)' and not 32-bit capable (G3: Power Mac 9500/9600, capable); Clockometer sees 68030 with --executor-ppc and 'Unknown processor type' on 8.6; Gestalt.Appl lists 59 (7.6.1) / 65 (8.6) selectors vs the G3's 158; Speedometer 4.0 stuck on its splash (68k and PPC; idle in its event loop); TattleTech exits at once on 7.6.1. Decide what Executor should claim to be (a 68040 Quadra on 7.x 68k; a PowerPC machine on PPC), make Gestalt consistent (gestaltMachineType, gestaltNativeCPUtype, gestaltProcessorType, gestaltAddressingModeAttr, gestaltSysArchitecture...), add common selectors the G3 answers, then Speedometer and TattleTech. difftest probe (sys) for the selectors."
-  state = "active"
-  revision = 2
+  state = "done"
+  revision = 27
 
 [[node]]
   id = "gamebox"
@@ -842,7 +842,7 @@ revision = 25
   parent = "p2"
   body = "(1) Microsoft Works draw and spreadsheet module snapshots (rendering). (2) THINK C repro (fix-86-10: new project index out of bounds). (3) NewGWorld rowBytes padding as the Mac pads (difftest). (4) 9.0.4 next steps from .wash/local/handoffs/os904b.md (big items Appearance 1.1/HFS+/TEC/MP/Keychain/Sherlock/CarbonLib need the owner: list them, don't start)."
   state = "active"
-  revision = 10
+  revision = 31
 
 [[node]]
   id = "tab-store-2"
@@ -851,8 +851,8 @@ revision = 25
   template = "package"
   parent = "p2"
   body = "Open from the 2026-11-05 stop: (1) in the tab on 8.6 a file written then the app idles in WaitNextEvent loses the write (benchapp saw it; handoff .wash/local/handoffs/bench-app.md if present); (2) Executor creating a file on a disk image is slow (measure natively and in the tab; profile the File Manager/HFS path, LocalVolume/overlay)."
-  state = "reported"
-  revision = 22
+  state = "done"
+  revision = 40
 
 [[node]]
   id = "web-fails"
@@ -861,8 +861,8 @@ revision = 25
   template = "package"
   parent = "p2"
   body = "Found by mover 2026-11-07 (they fail on grid2 before the move too): executor.web.system_kept, executor.web.disks, executor.web.m1.7.6.1.creative (3 cells), executor.web.m1.8.6.games-ppc; native scroll_bars_rom_ppc_86. (boot_uae_jit: known JIT stalls, ignore.) Find each cause (bisect from 58efc58f where native was 489/489), fix in Executor/tab or in the cell if the cell is wrong."
-  state = "active"
-  revision = 12
+  state = "done"
+  revision = 38
 
 [[node]]
   id = "desktop-windows"
@@ -875,3 +875,13 @@ revision = 25
   state = "active"
   revision = 24
   overrides = ["2026-11-07: started by Orchestrator before desktop-app (reported): desktop-app's Linux work is merged (ed28f66e); this is its Windows step"]
+
+[[node]]
+  id = "full-heap"
+  title = "Executor's host code on a full application heap: no nil writes (Speedometer's 5-depth colour test)"
+  emoji = "🧱"
+  template = "package"
+  parent = "p2"
+  body = "From gestalt3 2026-11-07: Speedometer's colour test with all 5 depths in one session fills the app heap (window palettes stay after DisposeWindow, as on the Quadra); Executor's C++ then writes through nil (TENew, xdata_for_pattern) where the Quadra survives. Find the host allocation sites that don't check, decide a central policy (what a Mac does: memFullErr / purge / system heap / temp mem), fix, and a gtest + the Speedometer run as the check."
+  state = "active"
+  revision = 29

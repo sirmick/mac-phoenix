@@ -675,6 +675,7 @@ target_link_libraries(romlib resources)
 # MacPhoenix: the HFS+ reader (docs/executor/HFSPlus.md): host code, no
 # guest types; the File Manager, the System sideload and hfsplus_dump use it.
 add_library(executor_hfsplus STATIC
+    hfs/image_io.h hfs/image_io.cpp     # (its FdImageReader reads through it)
     hfs/plus/image.h hfs/plus/image.cpp
     hfs/plus/unicode.h hfs/plus/unicode.cpp hfs/plus/unicode_tables.h
     hfs/plus/reader.h hfs/plus/reader.cpp

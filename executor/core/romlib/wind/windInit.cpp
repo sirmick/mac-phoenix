@@ -322,6 +322,12 @@ ROMlib_new_window_common(WindowPeek w,
         LM(MemErr) = memFullErr;
         return false;
     }
+    /* The palette manager is told that `FrontWindow ()' may have changed
+       once the window is made (below): MacPhoenix: told here, as the
+       window went in, its ActivatePalette repainted with the new record
+       first in the list and its fields not yet set, and ClipAbove took its
+       garbage for a structure region (Ares, the tab: a wasm trap). */
+    bool front_maybe_changed = false;
     if(!behind)
     {
         WINDOW_NEXT_WINDOW(w) = nullptr;
@@ -336,24 +342,14 @@ ROMlib_new_window_common(WindowPeek w,
         else
         {
             LM(WindowList) = w;
-            if(visible_p)
-            {
-                /* notify the palette manager that the `FrontWindow ()'
-		 may have changed */
-                pm_front_window_maybe_changed_hook();
-            }
+            front_maybe_changed = visible_p;
         }
     }
     else if(behind == (WindowPtr)-1L)
     {
         WINDOW_NEXT_WINDOW(w) = LM(WindowList);
         LM(WindowList) = (WindowPeek)w;
-        if(visible_p)
-        {
-            /* notify the palette manager that the `FrontWindow ()' may have
-	     changed */
-            pm_front_window_maybe_changed_hook();
-        }
+        front_maybe_changed = visible_p;
     }
     else
     {
@@ -448,6 +444,8 @@ ROMlib_new_window_common(WindowPeek w,
         HiliteWindow((WindowPtr)t_w, false);
         LM(CurDeactive) = (WindowPtr)t_w;
     }
+    if(front_maybe_changed)
+        pm_front_window_maybe_changed_hook();
 
     SetPort(save_port);
     return true;

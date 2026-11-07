@@ -322,9 +322,44 @@ What it says:
 - **The Toolbox in C++** is where Executor is far ahead: QuickDraw 22–32
   times uae's Quadra (`CopyBits`, regions, text: native code), the Memory
   Manager 5–10, the File Manager 3–7. Not everywhere: `file_create_disk`
-  (200 creates and deletes on a disk image) takes 600 ms on Executor
-  against 48 ms on uae's Quadra, and `CopyBits` from a 32-bit GWorld to an
+  (200 creates and deletes on a disk image) took 600 ms on Executor
+  against 48 ms on uae's Quadra (since 2026-11-07 1.8 ms natively, 6–9 ms
+  in the tab: below), and `CopyBits` from a 32-bit GWorld to an
   8-bit screen 217 ms against Apple's 178 ms on the G3.
+- **Creating a file on a disk image** (`file_create_disk`) was Executor's
+  HFS code syncing the image after every block it wrote: a create and a
+  delete wrote the catalog, the bitmap and the volume header, each an
+  `fsync` (natively a millisecond or more), in the tab each a flush to
+  the server (overlay.js: a beacon built and a save round started). The
+  image is now written through as before and synced only where a program
+  asks for it (`FlushVol`, `FlushFile`, a close, the volume unmounted).
+  Medians of 5 runs, `wash/tabstore2`, this box:
+
+  | 200 creates + deletes on the disk | before | after |
+  |---|---|---|
+  | native, 7.6.1, 68k (`exec-761-68k`) | 933 ms | 1.8 ms |
+  | native, 7.6.1, PowerPC (`exec-761-ppc`) | 627 ms | 1.8 ms |
+  | tab, 7.6.1, 68k (`tab-761-68k`) | 2642 ms | 5.8 ms |
+  | tab, 8.6 (`tab-86`) | 46 ms | 8.7 ms |
+
+  (The same on the boot volume, Executor's own host folder: 35–100 ms
+  natively, 75–135 ms in the tab, unchanged.)
+
+  What a crash between a write and the next sync point loses, with the
+  sync deferred: natively (a POSIX image), nothing if Executor dies, the
+  blocks being in the file already; only a crash of the host itself can
+  lose what the kernel had not written yet. On the desktop app the
+  overlay (host/overlay.cpp) gathers blocks in memory and commits them at
+  image_io's fsync, so Executor dying loses the blocks since the last
+  `FlushVol`, `FlushFile`, close or unmount (it committed after every
+  catalog or bitmap block before). In the tab the blocks are in the
+  overlay at once, saved to the server every second and in the page's
+  beacon (every 250 ms) whatever the sync: a tab closed or crashed loses
+  at most about the last second, as before; the sync only sends them at
+  once. Either way the B-tree cache and an open file's length in its FCB
+  are in Executor's memory until a flush, as before. A Mac loses the
+  same: its File Manager keeps the volume's cache and an open file's
+  length until `FlushVol`, a close or an unmount.
 - **The G3's Files column** (0.05–0.34) is Mac OS 8.6's File Manager on
   that machine, 3–20 times slower than the Quadra's 7.6.1 for the same
   calls; its
@@ -379,13 +414,19 @@ Baselines for the cores with the MMU on, against the same rows without
   68k row).
 - The tab boots the site's cut-down Systems with 128 MB, native runs
   Apple's full images with 64 MB, as in the Speedometer table.
-- **Executor in the tab on 8.6 loses the session** when an application
-  calls `WaitNextEvent` for two seconds on end (the clock check did, as
-  first written): the application goes, the Finder comes back, and what
-  it wrote to its disk is gone (an empty file, though flushed with
-  `FlushVol` after each line). Not in the tab on 7.6.1, not natively.
-  The same happens to the whole set with 5 runs of each test (each third
-  of the set with 5 runs, and the whole set with 1, come through). Not
-  looked into here; the clock check now waits busily, the tab rows are
-  from that build (f47e5934; the tests are the native rows' build's),
-  and `tab-86` is 5 sessions of 1 run each.
+- **Executor in the tab on 8.6 lost what the application wrote** when it
+  called `WaitNextEvent` for two seconds on end (the clock check did, as
+  first written): the file on its disk came back empty, though flushed
+  with `FlushVol` after each line. The application didn't go: it ran to
+  its end, but its stream was gone. The Finder, given time in the wait,
+  loaded libraries that import StdCLib (ATSUnicodeLib, LayoutCore), and
+  Executor's StdCLib, one state for all its clients, started afresh at
+  every import: the application's open stream was forgotten, what it
+  wrote after went nowhere and its `fclose` closed nothing. Only in the
+  tab on 8.6 because there the bench launches before the Finder has
+  loaded them. Fixed 2026-11-07 (StdCLib starts afresh for an application
+  being launched, or with no client; `FlushVol` also writes the open
+  files' catalog records, as a Mac's does: a file left open keeps what
+  was flushed); `executor.web.stdio` (tests/guest/stdiowait) is the cell.
+  The tab rows above are from the build before (f47e5934; the clock
+  check waits busily there), and `tab-86` is 5 sessions of 1 run each.

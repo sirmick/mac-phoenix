@@ -1,0 +1,11 @@
+# build.mpw — StdioWait, PowerPC only, StdCLib's streams (MrC, PPCLink);
+# tools/mpw/mpw build tests/guest/stdiowait
+# products: StdioWait
+Delete -i StdioWait
+MrC stdiowait.c -o stdiowait.ppc.o
+PPCLink -main __start stdiowait.ppc.o ∂
+	"{SharedLibraries}InterfaceLib" "{SharedLibraries}StdCLib" ∂
+	"{PPCLibraries}StdCRuntime.o" "{PPCLibraries}PPCCRuntime.o" ∂
+	-t APPL -c 'SWai' -o StdioWait
+Rez -a stdiowait.r -o StdioWait
+SetFile -t APPL -c 'SWai' -a B StdioWait

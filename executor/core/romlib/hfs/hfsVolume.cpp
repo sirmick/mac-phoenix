@@ -11,6 +11,7 @@
 #include <file/file.h>
 #include <hfs/hfs_plus.h>
 #include <unistd.h>
+#include <unordered_set>
 
 
 using namespace Executor;
@@ -157,9 +158,23 @@ static OSErr readvolumeinfo(HVCB *vcbp) /* call once during mounting */
 #define VOLUMEINFOBACKUP(vcbp) \
     ((vcbp->vcbNmAlBlks * vcbp->vcbAlBlkSiz) + (vcbp->vcbAlBlSt * PHYSBSIZE))
 
+/* MacPhoenix: the image written through (the blocks are in the file at
+   once), synced (fsync) only where a program asks for its changes on the
+   disk: FlushVol, FlushFile (a close too), the volume unmounted. Synced
+   after every block written, a file created and deleted took a dozen
+   fsyncs, each a save to the server in the tab (overlay.js flush). */
+static std::unordered_set<int> unsynced_fds;
+
 void Executor::vcbsync(HVCB *vcbp)
 {
-    image_io::fsync(((VCBExtra *)vcbp)->u.hfs.fd);
+    unsynced_fds.insert(((VCBExtra *)vcbp)->u.hfs.fd);
+}
+
+void Executor::ROMlib_syncvcb(HVCB *vcbp)
+{
+    int fd = ((VCBExtra *)vcbp)->u.hfs.fd;
+    if(unsynced_fds.erase(fd))
+        image_io::fsync(fd);
 }
 
 static OSErr writevolumeinfo(HVCB *vcbp, Ptr p)
@@ -859,7 +874,13 @@ OSErr Executor::hfsPBFlushVol(ParmBlkPtr pb, Boolean async)
     vcbp = ROMlib_findvcb(pb->volumeParam.ioVRefNum,
                           pb->volumeParam.ioNamePtr, (LONGINT *)0, true);
     if(vcbp)
-        err = ROMlib_flushvcbp(vcbp);
+    {
+        err = ROMlib_flushvcbfiles(vcbp);
+        OSErr err1 = ROMlib_flushvcbp(vcbp);
+        if(err == noErr)
+            err = err1;
+        ROMlib_syncvcb(vcbp);
+    }
     else
         err = nsvErr;
     PBRETURN((VolumeParam *)pb, err);
@@ -933,6 +954,7 @@ OSErr Executor::hfsPBUnmountVol(ParmBlkPtr pb, bool force)
         if(err != noErr)
             PBRETURN((VolumeParam *)pb, err);
         err = ROMlib_flushvcbp(vcbp);
+        ROMlib_syncvcb(vcbp);
         ROMlib_desktop_unmounting(vcbp->vcbVRefNum);
         freevcbfcbs(vcbp);
         Dequeue((QElemPtr)vcbp, &LM(VCBQHdr));
