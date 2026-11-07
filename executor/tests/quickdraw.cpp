@@ -1143,7 +1143,18 @@ TEST(QuickDraw, DrawPictureWithPixPatsNoLeak)
    (tests/guest/difftest desk): an empty source divides by nothing (the
    Appearance control panel's preview mapped through an empty rectangle
    and Executor stopped on a division by zero), the same sizes only
-   offset, the Fixed ratio rounded, an inverted source towards zero. */
+   offset, the Fixed ratio rounded, an inverted source towards zero.
+
+   The Quadra's 7.5.5 and 7.6.1 agree only where the sizes are the same or
+   the source isn't empty or inverted. Their ROM's MapPt is a DIVU.W by the
+   source's height and width: an empty source onto a destination of
+   another size is a zero divide exception (System Error 4, a bomb), and
+   an inverted one divides unsigned ({100,100,0,0} onto dst: (0,0) gives
+   (10,10), (-40,1000) (10,11), (-5,-15) (10,10)); MapPoly maps every
+   point so (the triangle from an inverted source all (10,10), from the
+   screen onto an empty rectangle all (5,5)). On the ROM machine the
+   test runs only the cases they agree on; Executor answers as 8.6 on any
+   System. */
 TEST(QuickDraw, MapEmptyRects)
 {
     auto map = [](Point p, Rect src, Rect dst) {
@@ -1154,31 +1165,38 @@ TEST(QuickDraw, MapEmptyRects)
     };
     using P = std::pair<int, int>;
     Rect dst = { 10, 10, 58, 74 }, none = { 5, 5, 5, 5 };
+#ifdef EXECUTOR
     EXPECT_EQ(P(10, 10), map({ 7, 5 }, { 0, 0, 0, 0 }, dst));
     EXPECT_EQ(P(13, 10), map({ 7, 5 }, { 0, 0, 100, 0 }, dst));
     EXPECT_EQ(P(-9, 10), map({ -40, 1000 }, { 0, 0, 100, 0 }, dst));
     EXPECT_EQ(P(10, 650), map({ -40, 1000 }, { 0, 0, 0, 100 }, dst));
+#endif
     EXPECT_EQ(P(-35, 5), map({ -40, 1000 }, { 0, 0, 0, 100 }, none));
     EXPECT_EQ(P(0, -10), map({ -5, -15 }, { 0, 0, 0, 0 }, none));
+#ifdef EXECUTOR
     EXPECT_EQ(P(57, 73), map({ 0, 0 }, { 100, 100, 0, 0 }, dst));
     EXPECT_EQ(P(76, -565), map({ -40, 1000 }, { 100, 100, 0, 0 }, dst));
     EXPECT_EQ(P(59, 83), map({ -5, -15 }, { 100, 100, 0, 0 }, dst));
+#endif
     EXPECT_EQ(P(11, 11), map({ 7, 5 }, { 0, 0, 480, 640 }, dst));
     EXPECT_EQ(P(6, 110), map({ -40, 1000 }, { 0, 0, 480, 640 }, dst));
     EXPECT_EQ(P(9, 8), map({ -5, -15 }, { 0, 0, 480, 640 }, dst));
     EXPECT_EQ(P(12, 11), map({ 15, 5 }, { 0, 0, 480, 640 }, dst));
 
     Rect r = { 3, 4, 30, 40 }, src = { 0, 0, 100, 0 };
+#ifdef EXECUTOR
     MapRect(&r, &src, &dst);
     EXPECT_EQ(11, r.top);
     EXPECT_EQ(10, r.left);
     EXPECT_EQ(24, r.bottom);
     EXPECT_EQ(10, r.right);
+#endif
 
     /* a region of two rectangles: empty from an empty source or onto an
        empty destination; a rectangle's region maps as MapRect */
     RgnHandle rgn = NewRgn(), rgn2 = NewRgn();
     Rect r1 = { 3, 4, 30, 40 }, r2 = { 20, 30, 60, 90 }, screen = { 0, 0, 480, 640 };
+#ifdef EXECUTOR
     for(Rect s : { Rect{ 0, 0, 0, 0 }, Rect{ 0, 0, 100, 0 }, Rect{ 0, 0, 0, 100 } })
     {
         RectRgn(rgn, &r1);
@@ -1187,15 +1205,18 @@ TEST(QuickDraw, MapEmptyRects)
         MapRgn(rgn, &s, &dst);
         EXPECT_TRUE(EmptyRgn(rgn));
     }
+#endif
     RectRgn(rgn, &r1);
     RectRgn(rgn2, &r2);
     UnionRgn(rgn, rgn2, rgn);
     MapRgn(rgn, &screen, &none);
     EXPECT_TRUE(EmptyRgn(rgn));
+#ifdef EXECUTOR
     RectRgn(rgn, &r1);
     MapRgn(rgn, &src, &dst);
     EXPECT_EQ(11, (*rgn)->rgnBBox.top);
     EXPECT_EQ(24, (*rgn)->rgnBBox.bottom);
+#endif
     DisposeRgn(rgn);
     DisposeRgn(rgn2);
 
@@ -1207,6 +1228,7 @@ TEST(QuickDraw, MapEmptyRects)
     LineTo(17, 40);
     LineTo(3, 4);
     ClosePoly();
+#ifdef EXECUTOR
     for(Rect s : { Rect{ 0, 0, 0, 0 }, Rect{ 100, 100, 0, 0 } })
     {
         MapPoly(poly, &s, &dst);
@@ -1215,6 +1237,7 @@ TEST(QuickDraw, MapEmptyRects)
     }
     MapPoly(poly, &screen, &none);
     EXPECT_EQ(40, (*poly)->polyBBox.bottom);
+#endif
     MapPoly(poly, &screen, &dst);
     EXPECT_EQ(10, (*poly)->polyBBox.top);
     EXPECT_EQ(14, (*poly)->polyBBox.bottom);

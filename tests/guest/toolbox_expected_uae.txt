@@ -6,3 +6,12 @@
 # on 7.5.5 the spec's parID is not the test folder and the second lookup
 # answers fnfErr.
 FileTest.MakeFSSpec
+# Executor's resource writing for THINK C 6 (67d84e32), not what the Mac
+# does (measured 2026-11-07): a resource grown after ChangedResource is
+# written where it was and damages the file (after reopening, 128 is gone;
+# compacted, 130 and 131 come back empty or garbage), and AddResource of an
+# empty handle answers nilHandleErr (-109). Executor keeps the file whole
+# and adds the empty handle.
+ResourceTest.ChangedThenGrown
+ResourceTest.ChangedThenGrownCompacted
+ResourceTest.AddedEmptySizeOnDisk

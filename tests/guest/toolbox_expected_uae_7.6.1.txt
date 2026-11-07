@@ -5,6 +5,9 @@
 #
 # As on 7.5.5 (toolbox_expected_uae.txt).
 FileTest.MakeFSSpec
+ResourceTest.ChangedThenGrown
+ResourceTest.ChangedThenGrownCompacted
+ResourceTest.AddedEmptySizeOnDisk
 # 7.6.1's List Manager makes a list 2 bytes larger than 7.5.5's (LNew of
 # 3x7 cells: 132 bytes, not $56 + 22 * 2 = 130; 70x40: 5690, not 5688).
 # The tests have 7.5.5's sizes, which Executor's List Manager gives on
