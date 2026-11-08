@@ -318,6 +318,27 @@ alone; a script whose such port something already listens on fails at once
 killed would otherwise hold the test up until its timeout. (The old
 per-checkout registry, `~/.cache/macphoenix/port-bases`, is no longer read.)
 
+### Flaky tests
+
+`tests/flaky.txt` lists the tests known to fail now and then: one a line,
+`NAME-OR-REGEX  DATE-SEEN  REASON` (the regex matched against the whole
+ctest name, so a plain name is itself; `difftest_.*_86`). A line goes when
+its cause is fixed. `tools/ci/rerun_flaky.py` sorts a run's failures:
+
+    ctest --test-dir build -L executor -j4 > ctest.log
+    tools/ci/rerun_flaky.py --test-dir build --log ctest.log [--env K=V ...]
+
+reruns each failure alone (`ctest -R '^NAME$'`, one at a time; `--env`
+for the variables the run had) and classifies it: passes alone and listed
+= **flake**; passes alone, not listed = **new flake** (add it?); fails or
+skips alone = **real**. It writes `rerun.md` and `rerun.json` (and each
+rerun's log) to `--out` (default `build/rerun`) and exits 0 (no failures),
+3 (listed flakes only), 4 (flakes, some new) or 1 (a real failure). Without
+`--log` it reads `build/Testing/Temporary/LastTestsFailed.log`, which also
+keeps failures of earlier runs that this one didn't run again. The
+`flaky` ctest label (`ctest -LE flaky`) is separate: it marks
+`ot_retro68_ppc_rom_761` only.
+
 ### Guest tests and the bridge
 
 The guest tests run with `--bridge` (or `--headless-http`, which implies it)
