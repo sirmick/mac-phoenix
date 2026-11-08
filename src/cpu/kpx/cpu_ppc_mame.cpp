@@ -69,6 +69,8 @@ extern void ADBKeyUp(int code);
 using namespace ppc;
 namespace R = cpu::ppc;
 
+void ppc_via_tick(void);    /* emul_op_ppc.cpp: the 60 Hz ticks, counted */
+
 namespace {
 
 /* SHEEP opcode fields (cpu_ppc_kpx.cpp): FN at bit 19, NATIVE_OP bits
@@ -1021,6 +1023,7 @@ void tick_thread_func()
                 g_core->request_attention();
             }
         }
+        ppc_via_tick();     /* counted: emul_op_ppc.cpp */
         if(ReadMacInt32(XLM_IRQ_NEST) == 0)
         {
             SetInterruptFlag(INTFLAG_VIA);

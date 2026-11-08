@@ -35,6 +35,7 @@
 #include "scsi.h"
 #include "video.h"
 #include "audio.h"
+#include <atomic>
 #include "ether.h"
 #include "serial.h"
 #include "clip.h"
@@ -62,6 +63,24 @@ extern bool tick_inhibit;
 extern void command_bridge_drain_from_irq_ppc(M68kRegisters *r);
 
 void PlayStartupSound();
+
+// 60 Hz ticks the tick thread (cpu_ppc_kpx.cpp, cpu_ppc_mame.cpp) has
+// counted and OP_IRQ hasn't yet given the Mac. A tick that came while Mac OS
+// had interrupts off, or merged with the next one into a single interrupt,
+// was lost: under load TickCount ran 5-35% slow (QTTest's movies "done too
+// soon" by the ticks). A VIA interrupt takes them all: one is the interrupt
+// itself, the rest go straight into Ticks (raising the interrupt again for
+// each, back to back, made Apple's OT 1.1.1 on 7.6.1 hang every run in
+// OTTest's tcp_async). At most a tenth of a second is owed.
+std::atomic<int> ppc_via_ticks_pending{0};
+static const int MAX_VIA_TICKS_PENDING = 6;
+
+void ppc_via_tick(void)
+{
+	int n = ppc_via_ticks_pending.load();
+	while (n < MAX_VIA_TICKS_PENDING && !ppc_via_ticks_pending.compare_exchange_weak(n, n + 1))
+		;
+}
 
 // TVector of MakeExecutable
 static uint32 MakeExecutableTvec;
@@ -345,6 +364,9 @@ void ppc::EmulOp(M68kRegisters *r, uint32 pc, int selector)
 			if (started) {
 				if (iflags & INTFLAG_VIA) {
 					ClearInterruptFlag(INTFLAG_VIA);
+					int owed = ppc_via_ticks_pending.exchange(0);
+					if (owed > 1)
+						WriteMacInt32(0x16a, ReadMacInt32(0x16a) + owed - 1);	// Ticks
 #if !PRECISE_TIMING
 					TimerInterrupt();
 #endif

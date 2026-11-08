@@ -496,11 +496,15 @@ void ppc::CheckLoad(uint32 type, int16 id, uint16 *p, uint32 size)
 		uint32 c_type = ReadMacInt32(thing);
 		uint32 sub_type = ReadMacInt32(thing + 4);
 		if (c_type == FOURCC('s','d','e','v') && sub_type == FOURCC('s','i','n','g')) {
-			WriteMacInt32(thing + 4, FOURCC('a','w','g','c'));
+			WriteMacInt32(thing + 4, SoundOutputSubtype);
 			D(bug("thng %d, type %c%c%c%c (%08x), sub type %c%c%c%c (%08x), data %p\n", id, c_type >> 24, (c_type >> 16) & 0xff, (c_type >> 8) & 0xff, c_type & 0xff, c_type, sub_type >> 24, (sub_type >> 16) & 0xff, (sub_type >> 8) & 0xff, sub_type & 0xff, sub_type, p));
 			AddSifter(ReadMacInt32(thing + componentResType), ReadMacInt16(thing + componentResID));
 			if (ReadMacInt32(thing + componentPFCount))
 				AddSifter(ReadMacInt32(thing + componentPFResType), ReadMacInt16(thing + componentPFResID));
+		} else if (c_type == FOURCC('s','d','e','v') && !FindSifter(ReadMacInt32(thing + componentResType), ReadMacInt16(thing + componentResID))) {
+			// Sound output hardware (rom_patches_ppc.cpp: SoundOutputSubtype)
+			D(bug("thng %d, sdev %08x disabled\n", id, sub_type));
+			DisableSoundOutputComponent(thing);
 		}
 
 	} else if (type == FOURCC('s','i','f','t') || type == FOURCC('n','i','f','t')) {
