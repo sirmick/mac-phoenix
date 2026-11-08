@@ -3,9 +3,11 @@
 # applications on Executor 7.6.1, through Executor's movie controller
 # (executor/core/romlib/mc.cpp; docs/executor/QuickTime.md). 7.6.1's
 # "Demo click&drag" (tests/guest/qt/disk_movies.sh) is opened in MoviePlayer
-# 2.5 and in SimpleText 1.4; in each:
-#   - the movie's window comes up with the movie drawn and the controller's
-#     bar under it;
+# 2.5 and in SimpleText 1.4, and HyperCard 2.4.1's Simple Movie in a windoid
+# by the QuickTime Tools stack's Movie XCMD (a HyperTalk "movie" command
+# over /api/script; dev-tools-system-7.img, a copy mounted writable, or that
+# part is skipped); in each:
+#   - the movie comes up drawn, with the controller's bar under it;
 #   - a click on the bar's play button plays it: the movie's pixels change;
 #   - the application quits.
 # Skipped without the movie (its image) or the test disk.
@@ -30,6 +32,13 @@ mkdir -p "$EXTFS_DIR"
 python3 "$SCRIPT_DIR/guest/install_macbinary.py" "$CACHE/demo-click.bin" "$EXTFS_DIR" Demo >/dev/null
 python3 "$SCRIPT_DIR/guest/install_macbinary.py" "$CACHE/demo-click.bin" "$EXTFS_DIR" DemoText >/dev/null
 printf 'ttxt' | dd of="$EXTFS_DIR/.finf/DemoText" bs=1 seek=4 conv=notrunc 2>/dev/null
+HC_ARGS=()
+HC_IMAGE="${MACEMU_IMAGES:-$HOME/storage/images}/dev-tools-system-7.img"
+if [[ -f "$HC_IMAGE" && $'\n'"$MOVIES"$'\n' == *$'\n'hc-simple$'\n'* ]]; then
+    cp "$HC_IMAGE" "$WORK/hypercard.img"     # HyperCard writes its stacks
+    python3 "$SCRIPT_DIR/guest/install_macbinary.py" "$CACHE/hc-simple.bin" "$EXTFS_DIR" "Simple Movie" >/dev/null
+    HC_ARGS=(--disk "$WORK/hypercard.img")
+fi
 cleanup() {
     [[ -n "${EMU_PID:-}" ]] && kill "$EMU_PID" 2>/dev/null && wait "$EMU_PID" 2>/dev/null
     [[ ${EXIT_CODE:-1} -eq 0 ]] && rm -rf "$WORK" || echo "kept: $WORK"
@@ -38,7 +47,8 @@ cleanup() {
 trap cleanup EXIT
 
 "$BINARY" --backend executor --config /dev/null --headless-http --port "$PORT" --timeout 300 \
-    --executor-system "$(basename "$DISK")" --executor-writable-images --extfs "$EXTFS_DIR" >"$LOG" 2>&1 &
+    --executor-system "$(basename "$DISK")" --executor-writable-images --extfs "$EXTFS_DIR" \
+    ${HC_ARGS[@]+"${HC_ARGS[@]}"} >"$LOG" 2>&1 &
 EMU_PID=$!
 
 FAIL=0
@@ -55,23 +65,27 @@ for i in $(seq 1 90); do
     sleep 1
 done
 
-# the movie's rectangle on the screen, "top left bottom right": found by
-# the controller's bar under it, a 320-pixel run of black on two rows 15
-# apart (its frame). /api/ui doesn't answer while MoviePlayer runs.
+# the movie's rectangle on the screen, "top left bottom right" (find_movie
+# SCREENSHOT WIDTH HEIGHT): found by the controller's bar under it, a run of
+# black as wide as the movie on two rows 15 apart (its frame), not black
+# between them (a black panel on a HyperCard card isn't one). /api/ui
+# doesn't answer while MoviePlayer runs.
 find_movie() {
-    python3 - "$1" <<'PY'
+    python3 - "$@" <<'PY'
 import sys
 from PIL import Image
 im = Image.open(sys.argv[1]).convert("RGB")
+mw, mh = int(sys.argv[2]), int(sys.argv[3])
 w, h = im.size
 px = im.load()
 black = lambda x, y: px[x, y] == (0, 0, 0)
-for y in range(176, h - 15):
+for y in range(mh, h - 15):
     x = 0
-    while x + 320 <= w:
-        if black(x, y) and black(x + 319, y) and black(x, y + 15) and black(x + 319, y + 15) \
-                and all(black(i, y) and black(i, y + 15) for i in range(x, x + 320, 8)):
-            print(y - 176, x, y, x + 320)
+    while x + mw <= w:
+        if black(x, y) and black(x + mw - 1, y) and black(x, y + 15) and black(x + mw - 1, y + 15) \
+                and all(black(i, y) and black(i, y + 15) for i in range(x, x + mw, 8)) \
+                and sum(not black(i, y + 8) for i in range(x, x + mw)) > mw // 2:
+            print(y - mh, x, y, x + mw)
             sys.exit(0)
         x += 1
 sys.exit(1)
@@ -92,16 +106,14 @@ print(sum(1 for x, y in zip(pa, pb) if x != y), len(set(pa)))
 PY
 }
 
-run_app() {   # run_app NAME DOCUMENT
-    local app="$1" doc="$2" shot0="$WORK/$1-0.png" shot1="$WORK/$1-1.png"
-    api -X POST "$URL/api/launch" -d "{\"path\":\"Host:$doc\",\"open\":true}" >/dev/null \
-        || { echo "FAIL: $app: launch"; FAIL=1; return; }
-    api -X POST "$URL/api/wait" -d "{\"condition\":\"app=$app\",\"timeout\":60}" >/dev/null \
-        || { echo "FAIL: $app: not in front"; FAIL=1; return; }
+# check_movie APP WIDTH HEIGHT: the movie and its controller on the screen,
+# then played by a click on the bar's play button
+check_movie() {
+    local app="$1" width="$2" height="$3" shot0="$WORK/$1-0.png" shot1="$WORK/$1-1.png"
     local win=""
     for i in $(seq 1 20); do
         api "$URL/api/screenshot?scale=1" -o "$shot0"
-        win=$(find_movie "$shot0") && break
+        win=$(find_movie "$shot0" "$width" "$height") && break
         sleep 0.5
     done
     [[ -n "$win" ]] || { echo "FAIL: $app: no movie with a controller on the screen ($shot0)"; FAIL=1; return; }
@@ -112,7 +124,6 @@ run_app() {   # run_app NAME DOCUMENT
     read -r _ bar_colours <<< "$(diff_pixels "$shot0" "$shot0" $mb $ml $((mb + 16)) $mr)"
     check "$app: the movie drawn ($movie_colours colours)" test "$movie_colours" -gt 1
     check "$app: the controller's bar drawn ($bar_colours colours)" test "$bar_colours" -gt 2
-    # the movie's pixels before playing, after the controller drew its first frame
     # play: the second button of the bar (after the speaker)
     api -X POST "$URL/api/mouse" -d "{\"x\":$((ml + 23)),\"y\":$((mb + 8))}" >/dev/null
     sleep 0.3
@@ -123,14 +134,42 @@ run_app() {   # run_app NAME DOCUMENT
     api "$URL/api/screenshot?scale=1" -o "$shot1"
     read -r changed _ <<< "$(diff_pixels "$shot0" "$shot1" $mt $ml $mb $mr)"
     check "$app: playing changes the movie ($changed pixels)" test "$changed" -gt 100
+}
+
+quit_app() {
     api -X POST "$URL/api/quit" >/dev/null
     api -X POST "$URL/api/wait" -d '{"condition":"app=Finder","timeout":30}' >/dev/null
 }
 
+run_app() {   # run_app NAME DOCUMENT
+    local app="$1" doc="$2"
+    api -X POST "$URL/api/launch" -d "{\"path\":\"Host:$doc\",\"open\":true}" >/dev/null \
+        || { echo "FAIL: $app: launch"; FAIL=1; return; }
+    api -X POST "$URL/api/wait" -d "{\"condition\":\"app=$app\",\"timeout\":60}" >/dev/null \
+        || { echo "FAIL: $app: not in front"; FAIL=1; return; }
+    check_movie "$app" 320 176
+    quit_app
+}
+
+run_hypercard() {
+    local stack='Development:Languages \u0192:HyperCard 2.4.1 \u0192:HyperCard Stacks:QuickTime Tools'   # JSON escapes
+    api -X POST "$URL/api/launch" -d "{\"path\":\"$stack\",\"open\":true}" >/dev/null \
+        || { echo "FAIL: HyperCard: launch"; FAIL=1; return; }
+    api -X POST "$URL/api/wait" -d '{"condition":"app=HyperCard","timeout":60}' >/dev/null \
+        || { echo "FAIL: HyperCard: not in front"; FAIL=1; return; }
+    sleep 3
+    api -X POST "$URL/api/script" \
+        -d '{"creator":"WILD","script":"movie \"Host:Simple Movie\",\"windoid\",\"200,120\""}' >/dev/null \
+        || { echo "FAIL: HyperCard: the movie command"; FAIL=1; return; }
+    check_movie HyperCard 206 243
+    quit_app
+}
+
 run_app MoviePlayer Demo
 run_app SimpleText DemoText
+if [[ ${#HC_ARGS[@]} -gt 0 ]]; then run_hypercard; else echo "SKIP: HyperCard (no dev-tools-system-7.img)"; fi
 
 grep -n "\[unimplemented\].*\(MovieController\|QuickTime selector\)" "$LOG" | head -20
 EXIT_CODE=$FAIL
-[[ $FAIL -eq 0 ]] && echo "PASS: movies play in MoviePlayer and SimpleText" || echo "FAIL: see above"
+[[ $FAIL -eq 0 ]] && echo "PASS: movies play in MoviePlayer, SimpleText and HyperCard" || echo "FAIL: see above"
 exit $FAIL

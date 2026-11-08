@@ -3267,6 +3267,23 @@ OSErr Executor::C_GetUserData(UserData theUserData, Handle data, OSType udType, 
     return set_error(noErr);
 }
 
+/* an item's data into a buffer of size bytes, which must hold it
+   (HyperCard's Movie XCMD reads its settings so) */
+OSErr Executor::C_GetUserDataItem(UserData theUserData, void *data, LONGINT size, OSType udType, LONGINT index)
+{
+    UserDataS *u = lookup(reg.userdatas, theUserData);
+    if(!u)
+        return set_error(paramErr);
+    const UserItem *i = user_item(u, udType, index ? index : 1);
+    if(!i)
+        return set_error(userDataItemNotFound);
+    if((LONGINT)i->data.size() > size)
+        return set_error(paramErr);
+    if(data)
+        memcpy(data, i->data.data(), i->data.size());
+    return set_error(noErr);
+}
+
 INTEGER Executor::C_CountUserDataType(UserData theUserData, OSType udType)
 {
     UserDataS *u = lookup(reg.userdatas, theUserData);

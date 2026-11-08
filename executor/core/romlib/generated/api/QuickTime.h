@@ -463,6 +463,9 @@ UserData C_GetMovieUserData(Movie theMovie);PASCAL_SUBTRAP(GetMovieUserData, 0xA
 OSErr C_GetUserData(UserData theUserData, Handle data, OSType udType, LONGINT index);PASCAL_SUBTRAP(GetUserData, 0xAAAA, 0x009E, QuickTime);
 
 
+OSErr C_GetUserDataItem(UserData theUserData, void *data, LONGINT size, OSType udType, LONGINT index);PASCAL_SUBTRAP(GetUserDataItem, 0xAAAA, 0x0126, QuickTime);
+
+
 INTEGER C_CountUserDataType(UserData theUserData, OSType udType);PASCAL_SUBTRAP(CountUserDataType, 0xAAAA, 0x014B, QuickTime);
 
 

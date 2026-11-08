@@ -1951,6 +1951,26 @@
 # ####
 
 - function:
+    name: GetUserDataItem
+    return: OSErr
+    args:
+      - name: theUserData
+        type: UserData
+      - name: data
+        type: void*
+      - name: size
+        type: LONGINT
+      - name: udType
+        type: OSType
+      - name: index
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x0126
+    executor: C_
+
+# ####
+
+- function:
     name: CountUserDataType
     return: INTEGER
     args:
