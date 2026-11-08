@@ -1,0 +1,32 @@
+# QTTest's PowerPC code on Executor 8.6 against the G3's 8.6 with QuickTime
+# 3.0.2 (run_qt.sh --known; ctest qt_executor_ppc_86). The movies' own
+# frames (the manifest's pixels) are checked regardless.
+#
+# The ICM's version: Executor's ICM says 12, the G3's 13.
+gestalt.icmp
+#
+# The component lists: Executor registers QuickTime 3.0.2's 68k codecs
+# (cmpFastDispatch, $40000000, in their flags) and not the PowerPlug's
+# native ones, so it has 49 decompressors to the G3's 72
+# (docs/executor/QuickTime.md section 11).
+comp.*
+#
+# Lossy codecs: Executor runs QuickTime 3's 68k compressors and
+# decompressors, the G3 the PowerPlug's PowerPC ones, which round
+# differently. Executor's pixels are the Quadra's 68k codecs' on 7.6.1
+# (expected_rom_68k_761.txt: icm.rpza 3D0F58B7, icm.cvid 5F527BE2,
+# frame.made-cvid.00 1B33AD87).
+icm.rpza
+icm.cvid
+icm.jpeg
+pict.jpeg.compress
+pict.jpeg.draw
+frame.made-cvid.*
+frame.made-rpza.*
+#
+# Open: 'smc ' through the 'base' codec ends -8960 (codecErr) on
+# DecompressImage and on 9 of the 10 frames of the movie made in it; the
+# movie made in Photo-JPEG answers MoviesTask -50.
+icm.smc_
+frame.made-smc.*
+frame.made-jpeg.*
