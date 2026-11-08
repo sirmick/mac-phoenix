@@ -1696,7 +1696,8 @@ set_property(TEST ot_retro68_ppc_rom_761 APPEND PROPERTY LABELS flaky)
 # the lines tests/guest/qt/known_executor_761.txt names (QuickDraw's
 # dithering, the movie controller); no sound from movies yet (qt-b5), so no
 # --audio-dump check there. The _disk cells play the movies on our disks
-# (run_qt.sh --disk: Ares, HyperCard's Simple Movie, 7.6.1's Extensions;
+# (run_qt.sh --disk: Ares, HyperCard's Simple Movie, 7.6.1's Extensions, 8.6's
+# Sample Movie with its compressed header;
 # skipped without their images), frames at fixed times against the Quadra's.
 foreach(cell IN ITEMS "qt_rom_68k_761;rom_68k_761;;--os-version 7.6.1;18860;guest;qt;761"
                       "qt_rom_ppc_86;rom_ppc_86;;--backend kpx --jit --image 8.6;18862;guest;qt"
