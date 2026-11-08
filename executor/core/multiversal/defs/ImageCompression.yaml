@@ -2098,6 +2098,28 @@
 
 # ####
 
+# QuickTime 3's ICMDecompressComplete, an OSErr back.
+- function:
+    name: ICMDecompressCompleteS
+    return: OSErr
+    args:
+      - name: seqID
+        type: ImageSequence
+      - name: err
+        type: OSErr
+      - name: flag
+        type: INTEGER
+      - name: completionRtn
+        type: ICMCompletionProcRecordPtr
+    trap: 0xAAA3
+    dispatcher: CodecDispatch
+    selector: 0x0082
+    library: QuickTimeLib
+    executor: C_
+    export: false
+
+# ####
+
 # QuickTime 3's codecs lock a sequence's destination pixels around a band.
 - function:
     name: ICMSequenceLockBits

@@ -403,6 +403,9 @@ OSErr C_CDSequenceFlush(ImageSequence seqID);PASCAL_SUBTRAP_LIB(CDSequenceFlush,
 OSErr C_MakeImageDescriptionForPixMap(PixMapHandle pixmap, GUEST<ImageDescriptionHandle> *idh);PASCAL_SUBTRAP_LIB(MakeImageDescriptionForPixMap, 0xAAA3, 0x007A, CodecDispatch, QuickTimeLib);
 
 
+OSErr C_ICMDecompressCompleteS(ImageSequence seqID, OSErr err, INTEGER flag, ICMCompletionProcRecordPtr completionRtn);PASCAL_SUBTRAP_LIB(ICMDecompressCompleteS, 0xAAA3, 0x0082, CodecDispatch, QuickTimeLib);
+
+
 OSErr C_ICMSequenceLockBits(ImageSequence srcSeqID, PixMapPtr dst, LONGINT flags);PASCAL_SUBTRAP_LIB(ICMSequenceLockBits, 0xAAA3, 0x007C, CodecDispatch, QuickTimeLib);
 
 
