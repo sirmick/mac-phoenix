@@ -1271,6 +1271,13 @@ void mame_ppc_cursor_move(uint32_t mouse_base, int x, int y)
 
 }  // namespace
 
+/* MakeDataExecutable's range (host_ppc.cpp's MakeExecutable). */
+void mame_invalidate_code(uint32 start, uint32 length)
+{
+    if(g_core && length)
+        g_core->invalidate(start, length);
+}
+
 extern "C" uint16_t kpx_make_emulop_shared(uint16_t op);
 
 extern "C" void cpu_ppc_mame_install(Platform *p)

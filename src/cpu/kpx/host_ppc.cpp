@@ -17,15 +17,23 @@
 uintptr VMBaseDiff = 0;
 
 // FlushCodeCache: Kheperix's, in cpu_ppc_kpx.cpp on x86 and a no-op in
-// kpx_stub.cpp elsewhere. mame-ppc verifies its blocks instead.
+// kpx_stub.cpp elsewhere. mame_invalidate_code: mame-ppc's, when it runs
+// (cpu_ppc_mame.cpp).
 void FlushCodeCache(uintptr start, uintptr end);
+void mame_invalidate_code(uint32 start, uint32 length);
 
+// MakeDataExecutable, patched to here: the guest's own dcbst/icbi never
+// run, so each core is told. mame-ppc's checksum at a sequence's head
+// doesn't catch it on its own: a local branch from an unchanged sequence
+// of the same block skips it, and code CFM loads where other code was
+// (QuickTime 3's PowerPC codecs on 8.6) ran the old translation.
 void MakeExecutable(int dummy, uint32 start, uint32 length)
 {
 	(void)dummy;
 	if ((start >= ROMBase) && (start < (ROMBase + ROM_SIZE)))
 		return;
 	FlushCodeCache(start, start + length);
+	mame_invalidate_code(start, length);
 }
 
 // Interrupt enable/disable, as SheepShaver's main_unix.cpp: DisableInterrupt
