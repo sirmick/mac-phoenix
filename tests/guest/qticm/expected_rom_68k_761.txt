@@ -1,0 +1,44 @@
+PASS CodecManagerVersion 18
+PASS info.raw  'None' v1 r1 vendor=6170706C dflags=00407BFF cflags=0060003F format=00001FFF acc=100/100 level=100
+PASS info.rle  'Animation' v1 r1 vendor=6170706C dflags=00400C7F cflags=0060043F format=00001FFF acc=128/128 level=128
+PASS info.rpza 'Video' v1 r1 vendor=6170706C dflags=00400C78 cflags=00600438 format=00000010 acc=100/100 level=100
+PASS info.cvid 'Cinepak' v1 r1 vendor=6170706C dflags=00002C7C cflags=00A00420 format=00002C48 acc=128/128 level=128
+PASS info.jpeg 'Photo - JPEG' v1 r1 vendor=6170706C dflags=00400028 cflags=00600028 format=00000440 acc=100/100 level=100
+PASS info.smc  'Graphics' v1 r2 vendor=6170706C dflags=00400438 cflags=00600408 format=00001C08 acc=128/128 level=128
+PASS source crc=B548F36E
+PASS compress.raw .32 max=12292 idSize=86 size=12288 data=9D83727D v1 r1 vendor=6170706C tq=0 sq=512 64x48 res=00480000/00480000 frames=1 'None' depth=32 clut=-1
+PASS decompress.raw .32 crc=B548F36E
+PASS decompress.raw .32.half crc=89A741B8
+PASS compress.raw .16 max=12292 idSize=86 size=12288 data=9D83727D v1 r1 vendor=6170706C tq=0 sq=512 64x48 res=00480000/00480000 frames=1 'None' depth=32 clut=-1
+PASS decompress.raw .16 crc=368952A8
+PASS decompress.raw .16.half crc=89A741B8
+PASS compress.rle .32 max=13104 idSize=86 size=6591 data=233BAFE4 v1 r1 vendor=6170706C tq=0 sq=512 64x48 res=00480000/00480000 frames=1 'Animation' depth=32 clut=-1
+PASS decompress.rle .32 crc=B8934E9B
+PASS decompress.rle .32.half crc=89A741B8
+PASS compress.rle .16 max=13104 idSize=86 size=6591 data=233BAFE4 v1 r1 vendor=6170706C tq=0 sq=512 64x48 res=00480000/00480000 frames=1 'Animation' depth=32 clut=-1
+PASS decompress.rle .16 crc=368952A8
+PASS decompress.rle .16.half crc=89A741B8
+PASS compress.rpza.32 max=1540 idSize=86 size=496 data=9029EEA0 v1 r1 vendor=6170706C tq=0 sq=512 64x48 res=00480000/00480000 frames=1 'Video' depth=16 clut=-1
+PASS decompress.rpza.32 crc=0BE0AB53
+PASS decompress.rpza.32.half crc=1E81F66F
+PASS compress.rpza.16 max=1540 idSize=86 size=496 data=9029EEA0 v1 r1 vendor=6170706C tq=0 sq=512 64x48 res=00480000/00480000 frames=1 'Video' depth=16 clut=-1
+PASS decompress.rpza.16 crc=17FC26A5
+PASS decompress.rpza.16.half crc=1E81F66F
+PASS compress.cvid.32 max=10212 idSize=86 size=1260 data=5ADF261A v1 r1 vendor=6170706C tq=0 sq=512 64x48 res=00480000/00480000 frames=1 'Cinepak' depth=24 clut=-1
+PASS decompress.cvid.32 crc=2A9752B7
+PASS decompress.cvid.32.half crc=ABDF3971
+PASS compress.cvid.16 max=10212 idSize=86 size=1260 data=5ADF261A v1 r1 vendor=6170706C tq=0 sq=512 64x48 res=00480000/00480000 frames=1 'Cinepak' depth=24 clut=-1
+PASS decompress.cvid.16 crc=CCAFD2AE
+PASS decompress.cvid.16.half crc=ABDF3971
+PASS compress.jpeg.32 max=9497 idSize=86 size=1027 data=C907B66F v1 r1 vendor=6170706C tq=0 sq=512 64x48 res=00480000/00480000 frames=1 'Photo - JPEG' depth=24 clut=-1
+PASS decompress.jpeg.32 crc=6FC33A33
+PASS decompress.jpeg.32.half crc=CEBB43F2
+PASS compress.jpeg.16 max=9497 idSize=86 size=1027 data=C907B66F v1 r1 vendor=6170706C tq=0 sq=512 64x48 res=00480000/00480000 frames=1 'Photo - JPEG' depth=24 clut=-1
+PASS decompress.jpeg.16 crc=EC79189F
+PASS decompress.jpeg.16.half crc=CEBB43F2
+PASS compress.smc .32 max=3100 idSize=86 size=1662 data=A2A81393 v1 r2 vendor=6170706C tq=0 sq=512 64x48 res=00480000/00480000 frames=1 'Graphics' depth=8 clut=8
+PASS decompress.smc .32 crc=97E71285
+PASS decompress.smc .32.half crc=2E8383FD
+PASS compress.smc .16 max=3100 idSize=86 size=1662 data=A2A81393 v1 r2 vendor=6170706C tq=0 sq=512 64x48 res=00480000/00480000 frames=1 'Graphics' depth=8 clut=8
+PASS decompress.smc .16 crc=FA7E3BF0
+PASS decompress.smc .16.half crc=2E8383FD

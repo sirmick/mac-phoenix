@@ -1739,6 +1739,31 @@ foreach(cell IN ITEMS "qtmath_rom_68k_761;--os-version 7.6.1;18866;guest;qt;761"
   )
 endforeach()
 
+# The Image Compression Manager on a frame of its own (tests/guest/qticm): codec
+# information, compress and decompress (32-bit, 16-bit, a half-size matrix)
+# for Apple's codecs, against a Quadra's 7.6.1 with QuickTime 2.5. Executor's
+# cell skips while Gestalt has no 'icmp' (its ICM isn't complete).
+foreach(cell IN ITEMS "qticm_rom_68k_761;;--os-version 7.6.1;18870;guest;qt;761"
+                      "qticm_executor_761;--needs-icm;--backend executor --os-version 7.6.1;18872;guest;qt;761;executor")
+  list(GET cell 0 name)
+  list(GET cell 1 icm_args)
+  list(GET cell 2 suite)
+  list(GET cell 3 port)
+  list(SUBLIST cell 4 -1 labels)
+  separate_arguments(icm_args UNIX_COMMAND "${icm_args}")
+  separate_arguments(suite_args UNIX_COMMAND "${suite}")
+  add_test(
+    NAME ${name}
+    COMMAND bash ${CMAKE_SOURCE_DIR}/tests/guest/qticm/run_qticm.sh rom_68k_761 ${icm_args} -- ${suite_args} --timeout 150 --port ${port}
+  )
+  set_tests_properties(${name} PROPERTIES
+    TIMEOUT 300
+    LABELS "${labels}"
+    SKIP_RETURN_CODE 77
+    ENVIRONMENT "MACEMU_ROM=${TEST_ROM}"
+  )
+endforeach()
+
 # Every test's scratch (logs, ExtFS folders, mktemp dirs) on the SSD, not in
 # /tmp: /tmp is RAM-backed here, and RAM is what runs out.
 set(TEST_TMPDIR "$ENV{HOME}/storage/tmp" CACHE PATH "TMPDIR for the tests (scratch on disk, not tmpfs)")
