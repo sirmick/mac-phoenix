@@ -1,7 +1,7 @@
 # wash-plan: written by Wash as the plan changes.
 # Edit it only between workspaces; plan_set {"from": "<this file>"} loads it.
 
-revision = 126
+revision = 127
 
 [[node]]
   id = "cuts"
@@ -923,8 +923,8 @@ revision = 126
   template = "note"
   parent = "loose-ends"
   body = "From suiterom 2026-11-07 (~/storage/tmp/suiterom/REPORT.md): PBGetWDInfo(0) answers the default directory on Executor, the root on the Quadra; PBOpenWD of a volume's root makes a WD on Executor, the Quadra gives back the volume's number. ResourceTest.ChangedThenGrown/ChangedThenGrownCompacted/AddedEmptySizeOnDisk: the Quadra damages the file / answers -109; Executor keeps 67d84e32's THINK C behaviour; open: what THINK C really calls. Align with the Quadra where no app depends on the difference."
-  state = "todo"
-  revision = 75
+  state = "parked"
+  revision = 127
 
 [[node]]
   id = "docs-refresh"
@@ -970,8 +970,8 @@ revision = 126
   template = "package"
   parent = "loose-ends"
   body = "Found by QTTest 2026-11-08: on the ROM machines' Host volume (ExtFS), FlattenMovieData writes 705 bytes and returns nil with no error; on the boot disk (Temporary Items) it works. Some File Manager call ExtFS answers wrongly (allocation/SetEOF/PBAllocate/space queries?)."
-  state = "todo"
-  revision = 90
+  state = "parked"
+  revision = 127
 
 [[node]]
   id = "g3-sound-86"
@@ -1060,6 +1060,6 @@ revision = 126
   emoji = "🌫️"
   template = "package"
   parent = "qt"
-  body = "From qtb6 2026-11-08 (~/storage/tmp/qtb6/qt-b4-report.md, ev-20.png/ev-30.png): EV Nova's title makes no ICM calls; it draws with its own PICT reader (817 GetPicture) and ~367k CopyBits between GWorlds. Lead: pmVersion handling of handle-based pixmaps (ROMlib_lock_handle_base matches ==2, handle_baseaddr tests the bit). No real-Mac reference yet: EV Nova quits on 7.6.1 (QT 2.5) and the G3 runs 8.6 at max resolution which it refuses (a bake setting the G3's Monitors to 640x480/256 would give one)."
-  state = "active"
-  revision = 122
+  body = "From qtb6 2026-11-08: EV Nova's title draws with its own PICT reader and ~367k CopyBits between GWorlds; no ICM calls. Parked 2026-11-08 (owner stopped the team); handoff .wash/local/handoffs/evnova.md has three ranked suspects: (1) StdBits' port path (case 3 low_bit) only LockPixels a handle-based pixmap, never unwrapping baseAddr; (2) C_UnlockPixels restores gw_info->pixels_h even when the app replaced baseAddr; (3) pmVersion ==2 vs bit test."
+  state = "parked"
+  revision = 127
