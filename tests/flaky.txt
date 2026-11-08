@@ -1,0 +1,17 @@
+# Known-flaky tests (docs/Testing.md "Flaky tests"): tools/ci/rerun_flaky.py
+# reruns each failure alone; one listed here that passes alone is a flake,
+# one not listed that passes alone a new flake (add it here), one that
+# fails alone a real failure.
+#
+# One a line: NAME-OR-REGEX  DATE-SEEN  REASON. The first field is a Python
+# regex matched against the whole ctest name (a plain name matches itself);
+# remove the line once the cause is fixed.
+
+executor.web.input_86_laptop    2026-11-08  intermittent in the integration round; passes alone
+executor.web.input_86_firefox   2026-11-08  intermittent in the integration round; passes alone
+difftest_.*_86                  2026-11-08  fails under ctest -j; passes alone
+hidpi_windows_executor          2026-11-08  intermittent; passes alone
+ot_retro68_ppc_rom_761          2026-11-08  Apple's OT 1.1.1 on the G3 crashes in tcp_async about half the runs (STRAGGLERS 66; also labelled flaky)
+aslm_executor                   2026-11-08  intermittent host SIGSEGV (cause not found yet)
+multiversal_retro68             2026-11-08  fails under ctest -j; passes alone
+executor.web.input_86            2026-11-08  failed in the first merge gate run (wasm, -j4); passed alone

@@ -28,7 +28,7 @@ match (to remove). A crash leaves a partial log: the run is resumed from
 the section after the last one started (Host:PROBE.start), as often as it
 takes; the crashed sections are reported.
 
-Ports 18600, 18610, 18620 (by target), nominal: the checkout's range
+Ports 18600, 18610, 18620 (by target), nominal: each claims a free port
 (tests/lib/ports.py, MACPHOENIX_PORT_BASE); $DIFFTEST_PORT_BASE moves them.
 A run holds the out directory's .lock: another waits for it, up to
 $DIFFTEST_LOCK_TIMEOUT seconds (default 1800). $DIFFTEST_NO_SKIP=1 (the
@@ -62,7 +62,7 @@ TARGETS = {
     "executor-9.0.4": (["--backend", "executor", "--executor-ppc", "--os-version", "9.0.4"], {}),
 }
 REFERENCE = {"executor-8.6": "g3-8.6", "executor-9.0.4": "g3-9.0.4"}
-# nominal (tests/lib/ports.py maps them to this checkout's range);
+# nominal (tests/lib/ports.py claims a free port for each);
 # $DIFFTEST_PORT_BASE moves them (another run, or someone else's emulator,
 # holding the defaults)
 PORT_BASE = int(os.environ.get("DIFFTEST_PORT_BASE", "18600"))

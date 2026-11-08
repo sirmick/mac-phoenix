@@ -279,8 +279,8 @@ Tests run in parallel (`ctest -j4`) with their own disk copies (above) and,
 with `--network socket`, their own net-bridge
 (`socket:$TMPDIR/mac-ether-test-PID.sock`; plain `socket` would join the
 shared `/tmp/mac-ether.sock` every running MacPhoenix uses). Each test
-has its own fixed port (below), so `ctest -j` in one checkout never binds a
-port twice, and two checkouts never share one.
+claims free ports of its own as it starts (below), so `ctest -j` in one
+checkout never binds a port twice, and two checkouts never share one.
 
 ### Ports
 
@@ -288,29 +288,77 @@ Every port a test binds is named in one nominal range, **18000-18999**
 (`tests/CMakeLists.txt`'s `--port N`, the scripts' defaults,
 `tools/difftest/run.py`'s 18600/18610/18620, Playwright's 18094;
 `guest_builds_current` also uses the next one), away from a running
-emulator on :11000. A new test needs a nominal port no other uses:
-`ctest --show-only=json-v1` lists the commands.
+emulator on :11000. A new test picks a nominal port no other uses
+(`ctest --show-only=json-v1` lists the commands): it keeps the cells
+readable, and is what `MACPHOENIX_PORT_BASE` maps.
 
-Each checkout moves the range to its own **port base**
-(`tests/lib/ports.py`, sourced by the scripts as `tests/lib/ports.sh`):
+Each nominal port a test asks for gets an **actual port claimed for it**
+(`tests/lib/ports.py`, sourced by the scripts as `tests/lib/ports.sh`:
+`PORT=$(mp_port "$PORT")`): a free port from a pool every checkout on the
+box shares, **32000-32767** (below the ephemeral range, clear of the
+emulators started by hand on :11000 and 19000-19999), locked with an
+exclusive `flock` on `~/.cache/macphoenix/ports/<port>` and skipped while
+anything has it open (`/proc/net/tcp`, any state). The claim lasts as long
+as its owner: the script (`$$`; a small holder process watches it and lets
+go when it exits, killed at a timeout too), a Python caller's process
+(`ports.port()`), Playwright's runner. No checkout needs a slot or a
+registry, any number of worktrees run at once, and `ctest -j` in each.
+`python3 tests/lib/ports.py held` lists the claims (port, owner pid,
+nominal, directory); `ports.py port N --pid P` claims one by hand.
+
+`MACPHOENIX_PORT_BASE` (a multiple of 1000) still overrides with the old
+fixed mapping, no claim:
 
     actual = MACPHOENIX_PORT_BASE + (nominal - 18000)
 
-`MACPHOENIX_PORT_BASE` (a multiple of 1000) sets it. By default each
-checkout gets one from a registry every checkout on the box shares
-(`~/.cache/macphoenix/port-bases`, under `flock`): the main tree takes
-18000 (the historical ports), each git worktree (or a copy of a tree that
-isn't a git checkout) the lowest free base with nothing listening in its
-range at the time (20000, 21000, ... 31000, then 12000-17000, then
-61000-64000: below the ephemeral range, away from 10000-11999), kept for as
-long as its directory exists. `python3 tests/lib/ports.py slots` lists
-them, `ports.py base` the checkout's. A port outside 18000-18999 is taken
-as already mapped (or asked for on purpose) and left alone. An emulator
-started by hand: :11000, or 19000-19999, which no checkout is given. A
-script whose port something already listens on fails at once (`FAIL: port N
-is in use by pid ...`): a session left over from a run ctest killed (an MPW
-service outlives its script) would otherwise hold the test up until its
-timeout.
+and `MACPHOENIX_PORT_POOL=LO-HI` moves the pool. A port outside
+18000-18999 is taken as already mapped (or asked for on purpose) and left
+alone; a script whose such port something already listens on fails at once
+(`FAIL: port N is in use by pid ...`): a session left over from a run ctest
+killed would otherwise hold the test up until its timeout. (The old
+per-checkout registry, `~/.cache/macphoenix/port-bases`, is no longer read.)
+
+### Flaky tests
+
+`tests/flaky.txt` lists the tests known to fail now and then: one a line,
+`NAME-OR-REGEX  DATE-SEEN  REASON` (the regex matched against the whole
+ctest name, so a plain name is itself; `difftest_.*_86`). A line goes when
+its cause is fixed. `tools/ci/rerun_flaky.py` sorts a run's failures:
+
+    ctest --test-dir build -L executor -j4 > ctest.log
+    tools/ci/rerun_flaky.py --test-dir build --log ctest.log [--env K=V ...]
+
+reruns each failure alone (`ctest -R '^NAME$'`, one at a time; `--env`
+for the variables the run had) and classifies it: passes alone and listed
+= **flake**; passes alone, not listed = **new flake** (add it?); fails or
+skips alone = **real**. It writes `rerun.md` and `rerun.json` (and each
+rerun's log) to `--out` (default `build/rerun`) and exits 0 (no failures),
+3 (listed flakes only), 4 (flakes, some new) or 1 (a real failure). Without
+`--log` it reads `build/Testing/Temporary/LastTestsFailed.log`, which also
+keeps failures of earlier runs that this one didn't run again. The
+`flaky` ctest label (`ctest -LE flaky`) is separate: it marks
+`ot_retro68_ppc_rom_761` only.
+
+### Merge gate
+
+`tools/ci/merge_gate.sh BRANCH [--into executor-86-grid2] [--jobs N]
+[--apply]` tests a branch merged into the target before the target takes
+it, in a worktree of its own (`~/storage/ci/gate/tree`, its builds kept
+between gates; one gate at a time): the target's head, `git merge --no-ff
+BRANCH` (a conflict: **FAIL**, the files listed), the native and wasm builds
+(`tools/ci/lib.sh`, the configuration `tools/ci/integration.sh` uses; a
+failed build: **FAIL**, no tests run), `ctest -L 'executor|qt'` native
+(from a copy of the binary) and `ctest -L executor` wasm, failures through
+`rerun_flaky.py`. The verdict, a table of the steps with their logs, goes
+to `~/storage/ci/gate/<branch>-<date>.md` (logs in `<branch>-<date>/`):
+**MERGE** (all passed), **FLAKES-ONLY** (every failure passed alone; new
+flakes named), **FAIL** (exit 0, 3, 1). The tested merge commit is kept as
+`refs/ci-gate/<branch>`. `--apply` with MERGE moves the target to it with
+`git update-ref` (the target's value at the start checked, so a change
+meanwhile aborts); a target checked out in a worktree (the main checkout)
+is not moved under its index: the gate prints the `git -C TREE merge
+--ff-only SHA` that takes it (which refuses if the target has moved).
+`--ctest-args "-R qt_"` narrows both suites; `--build-jobs N` (default 4).
 
 ### Guest tests and the bridge
 
