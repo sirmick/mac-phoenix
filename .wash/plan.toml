@@ -1,7 +1,7 @@
 # wash-plan: written by Wash as the plan changes.
 # Edit it only between workspaces; plan_set {"from": "<this file>"} loads it.
 
-revision = 97
+revision = 101
 
 [[node]]
   id = "cuts"
@@ -980,8 +980,8 @@ revision = 97
   template = "package"
   parent = "loose-ends"
   body = "Found by QTTest 2026-11-08. On the G3 under 8.6 the Mac plays no sound at all (both cores), and QuickTime sound movies finish early (the sound clock isn't advancing). The Quadra 7.6.1 plays QTTest's tones correctly."
-  state = "todo"
-  revision = 90
+  state = "active"
+  revision = 98
 
 [[node]]
   id = "mameppc-qt"
@@ -999,8 +999,8 @@ revision = 97
   emoji = "🧱"
   template = "package"
   parent = "qt"
-  state = "active"
-  revision = 95
+  state = "done"
+  revision = 101
 
 [[node]]
   id = "qt-b2"
@@ -1009,8 +1009,9 @@ revision = 97
   template = "package"
   parent = "qt"
   needs = ["qt-b1"]
-  state = "todo"
-  revision = 94
+  state = "active"
+  revision = 100
+  overrides = ["2026-11-08: started by Orchestrator before qt-b1 (reported): qt-b1 merged into grid2 (de50013b); its acceptance waits only on the full test run"]
 
 [[node]]
   id = "qt-b3"
