@@ -430,9 +430,11 @@ static void movie_play(Movie m, const char *test)
     StopMovie(m);
     note("%s: %ld ticks for %ld", test, ticks, want);
     if(!IsMovieDone(m))
-        FAIL(test, "not done after %ld ticks", ticks);
-    else if(ticks < want * 3 / 4 || ticks > want * 2 + 30)
-        FAIL(test, "wall time %ld ticks, duration %ld", ticks, want);
+        FAIL(test, "not done");
+    else if(ticks < want * 3 / 4)
+        FAIL(test, "done too soon");    /* the sound clock racing: no sound output */
+    else if(ticks > want * 2 + 30)
+        FAIL(test, "done too late");
     else
         PASS(test, "done in time");
     if(gw)

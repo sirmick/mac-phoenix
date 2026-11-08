@@ -1684,6 +1684,39 @@ set_property(TEST guest_suite_761 ot_retro68_68k_rom APPEND PROPERTY LABELS 761)
 # runs (STRAGGLERS 66): left in, marked (ctest -LE flaky leaves it out).
 set_property(TEST ot_retro68_ppc_rom_761 APPEND PROPERTY LABELS flaky)
 
+# QuickTime from an application: QTTest (tests/guest/qt, MPW, fat) on the
+# movies tests/lib/qtmovie.py writes, against Apple's QuickTime on the ROM
+# machines (the references tests/guest/qt/expected_*.txt; run_qt.sh NAME
+# --record makes them again): the Quadra with 7.6.1 (QuickTime 2.5, 68k
+# code) and the G3 with 8.6 (QuickTime 3.0.2, PowerPC code). The G3 runs on
+# Kheperix: on mame-ppc QuickTime 3's PowerPC codecs fail differently from
+# run to run. The G3 plays no sound (its reference has playback "done too
+# soon", and no --audio-dump check). On Executor QuickTime is not there yet:
+# the cell skips (77) while Gestalt 'qtim' says so, then compares with the
+# Quadra's reference.
+foreach(cell IN ITEMS "qt_rom_68k_761;rom_68k_761;;--os-version 7.6.1;18860;guest;qt;761"
+                      "qt_rom_ppc_86;rom_ppc_86;--no-audio;--backend kpx --jit --image 8.6;18862;guest;qt"
+                      "qt_executor_761;rom_68k_761;--needs-qt;--backend executor --os-version 7.6.1;18864;guest;qt;761;executor")
+  list(GET cell 0 name)
+  list(GET cell 1 ref)
+  list(GET cell 2 qt_args)
+  list(GET cell 3 suite)
+  list(GET cell 4 port)
+  list(SUBLIST cell 5 -1 labels)
+  separate_arguments(qt_args UNIX_COMMAND "${qt_args}")
+  separate_arguments(suite_args UNIX_COMMAND "${suite}")
+  add_test(
+    NAME ${name}
+    COMMAND bash ${CMAKE_SOURCE_DIR}/tests/guest/qt/run_qt.sh ${ref} ${qt_args} -- ${suite_args} --timeout 400 --port ${port}
+  )
+  set_tests_properties(${name} PROPERTIES
+    TIMEOUT 500
+    LABELS "${labels}"
+    SKIP_RETURN_CODE 77
+    ENVIRONMENT "MACEMU_ROM=$<IF:$<STREQUAL:${ref},rom_ppc_86>,${TEST_PPC_ROM},${TEST_ROM}>"
+  )
+endforeach()
+
 # Every test's scratch (logs, ExtFS folders, mktemp dirs) on the SSD, not in
 # /tmp: /tmp is RAM-backed here, and RAM is what runs out.
 set(TEST_TMPDIR "$ENV{HOME}/storage/tmp" CACHE PATH "TMPDIR for the tests (scratch on disk, not tmpfs)")
