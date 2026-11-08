@@ -1,5 +1,6 @@
 #include <base/common.h>
 #include <base/builtinlibs.h>
+#include <error/error.h>
 #include <base/cpu.h>
 #include <base/traps.h>
 #include <OSUtil.h>
@@ -37,7 +38,11 @@ namespace
         std::function<uint32_t (PowerCore&)> implementation;
     };
 
-    PPCCallback callbacks[4096];
+    /* MacPhoenix: every PowerPC export and every stub for an import no
+       library has (one per unresolved import, per preparation): QuickTimeLib's
+       exports took 4096 past what AppleWorks 5's imports on 8.6 left room
+       for, and the next stub was written over what follows */
+    PPCCallback callbacks[16384];
     int nCallbacks = 0;
 
     /* MacPhoenix: CFM-68K transition vectors (docs/executor/CFM68K.md): the
@@ -237,7 +242,8 @@ std::vector<uint32_t> builtinlibs::callbackAddresses(const std::string& name)
 
 static PPCCallback& new_callback(const char *function, std::function<uint32_t (PowerCore&)> code)
 {
-    assert(nCallbacks < std::size(callbacks));
+    if(nCallbacks >= (int)std::size(callbacks))
+        gui_fatal("PowerPC routine table full (%d)", nCallbacks);
     PPCCallback& callback = callbacks[nCallbacks++];
     callback.sc = POWERCORE_OP_SYSCALL;
     callback.codePtr = &callback.sc;
@@ -399,7 +405,8 @@ Ptr builtinlibs::makeUndefinedSymbolStub(const char *name, OSType arch)
     if(arch == "m68k"_4)
         return (Ptr)new_vector68k(name, nullptr);
 
-    assert(nCallbacks < std::size(callbacks));
+    if(nCallbacks >= (int)std::size(callbacks))
+        gui_fatal("PowerPC routine table full (%d)", nCallbacks);
     PPCCallback& callback = callbacks[nCallbacks++];
     callback.sc = POWERCORE_OP_SYSCALL;
     callback.codePtr = &callback.sc;
