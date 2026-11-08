@@ -1691,13 +1691,15 @@ set_property(TEST ot_retro68_ppc_rom_761 APPEND PROPERTY LABELS flaky)
 # code) and the G3 with 8.6 (QuickTime 3.0.2, PowerPC code), the reference
 # from Kheperix; mame-ppc must give the same (its codecs ran stale code until
 # MakeDataExecutable reached its recompiler). Both machines' --audio-dump must
-# have the tones. On Executor QuickTime is not there yet:
-# the cell skips (77) while Gestalt 'qtim' says so, then compares with the
-# Quadra's reference.
+# have the tones. On Executor, its own Movie Toolbox and ICM over Apple's
+# codecs (docs/executor/QuickTime.md) against the Quadra's reference, but for
+# the lines tests/guest/qt/known_executor_761.txt names (QuickDraw's
+# dithering, the movie controller); no sound from movies yet (qt-b5), so no
+# --audio-dump check there.
 foreach(cell IN ITEMS "qt_rom_68k_761;rom_68k_761;;--os-version 7.6.1;18860;guest;qt;761"
                       "qt_rom_ppc_86;rom_ppc_86;;--backend kpx --jit --image 8.6;18862;guest;qt"
                       "qt_rom_mameppc_86;rom_ppc_86;;--backend kpx --core mame-ppc --jit --image 8.6;18866;guest;qt;mame"
-                      "qt_executor_761;rom_68k_761;--needs-qt;--backend executor --os-version 7.6.1;18864;guest;qt;761;executor")
+                      "qt_executor_761;rom_68k_761;--needs-qt --no-audio --known ${CMAKE_SOURCE_DIR}/tests/guest/qt/known_executor_761.txt;--backend executor --os-version 7.6.1;18864;guest;qt;761;executor")
   list(GET cell 0 name)
   list(GET cell 1 ref)
   list(GET cell 2 qt_args)
@@ -1731,6 +1733,32 @@ foreach(cell IN ITEMS "qtmath_rom_68k_761;--os-version 7.6.1;18866;guest;qt;761"
   add_test(
     NAME ${name}
     COMMAND bash ${CMAKE_SOURCE_DIR}/tests/guest/qtmath/run_qtmath.sh rom_68k_761 -- ${suite_args} --timeout 120 --port ${port}
+  )
+  set_tests_properties(${name} PROPERTIES
+    TIMEOUT 300
+    LABELS "${labels}"
+    SKIP_RETURN_CODE 77
+    ENVIRONMENT "MACEMU_ROM=${TEST_ROM}"
+  )
+endforeach()
+
+# The Image Compression Manager on a frame of its own (tests/guest/qticm): codec
+# information, compress and decompress (32-bit, 16-bit, a half-size matrix)
+# for Apple's codecs, against a Quadra's 7.6.1 with QuickTime 2.5. Executor's
+# own ICM over the same codecs; the lines that differ by dithering are in
+# known_executor_761.txt.
+foreach(cell IN ITEMS "qticm_rom_68k_761;;--os-version 7.6.1;18870;guest;qt;761"
+                      "qticm_executor_761;--needs-icm --known ${CMAKE_SOURCE_DIR}/tests/guest/qticm/known_executor_761.txt;--backend executor --os-version 7.6.1;18872;guest;qt;761;executor")
+  list(GET cell 0 name)
+  list(GET cell 1 icm_args)
+  list(GET cell 2 suite)
+  list(GET cell 3 port)
+  list(SUBLIST cell 4 -1 labels)
+  separate_arguments(icm_args UNIX_COMMAND "${icm_args}")
+  separate_arguments(suite_args UNIX_COMMAND "${suite}")
+  add_test(
+    NAME ${name}
+    COMMAND bash ${CMAKE_SOURCE_DIR}/tests/guest/qticm/run_qticm.sh rom_68k_761 ${icm_args} -- ${suite_args} --timeout 150 --port ${port}
   )
   set_tests_properties(${name} PROPERTIES
     TIMEOUT 300

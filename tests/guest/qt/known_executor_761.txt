@@ -1,0 +1,43 @@
+# QTTest lines Executor 7.6.1 answers differently from the Quadra's 7.6.1
+# with QuickTime 2.5 (run_qt.sh --known; ctest qt_executor_761). The
+# movies' own frames (the manifest's pixels) are checked regardless.
+#
+# Sound output: Executor's own component ('xctr') where the Quadra has its
+# hardware ('asc ') (docs/executor/QuickTime.md section 7).
+comp.sdev.00
+#
+# 'smc ' compresses 8-bit pixels: the ICM copies the 32-bit frame to an
+# 8-bit offscreen first, and the Quadra's copy is dithered, Executor's
+# CopyBits not (ditherCopy drawn as srcCopy; QTICM's known lines too). The
+# movie made in smc then decodes other data.
+icm.smc_
+frame.made-smc.00
+frame.made-smc.01
+frame.made-smc.02
+frame.made-smc.03
+frame.made-smc.04
+frame.made-smc.05
+frame.made-smc.06
+frame.made-smc.07
+frame.made-smc.08
+frame.made-smc.09
+#
+# The source picture is Executor's own OpenPicture/CopyBits recording, not
+# the Quadra's bytes (57742 against 18334); the JPEG in it is the same
+# size, and draws the Quadra's pixels (pict.jpeg.draw).
+pict.jpeg.compress
+#
+# Photo-JPEG's first two frames of the movie QTTest makes: on the Quadra they
+# come out one of two ways from run to run (qttest.c, movie_frames); on
+# Executor the same every run (crc 18EDA7F1, C91E9213), not the reference's.
+# Frames 2-9 match.
+frame.made-jpeg.00
+frame.made-jpeg.01
+#
+# The movie controller ('play') is not Executor's yet (qt-b4):
+# NewMovieController answers nil.
+mc.new
+mc.bounds
+mc.draw
+mc.play
+mc.stop

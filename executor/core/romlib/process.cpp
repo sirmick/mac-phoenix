@@ -50,6 +50,7 @@ using namespace Executor;
 #include <osevent/osevent.h>
 #include <res/resource.h>
 #include <syn68k_public.h>
+#include <rsys/quicktime.h>
 #include <base/trapglue.h>
 
 #include <minicoro.h>
@@ -1646,6 +1647,7 @@ static void release_range(uint32_t lo, uint32_t hi)
 {
     remove_tasks_in((Ptr)SYN68K_TO_US(lo), (Ptr)SYN68K_TO_US(hi));
     ProcessSerialNumber none = {};
+    ROMlib_movies_process_exit(lo, hi);
     ROMlib_components_process_exit(&none, lo, hi);
     ROMlib_ot_process_exit(lo, hi);
     ROMlib_cfm_process_exit(lo, hi);
@@ -1708,6 +1710,7 @@ static void exit_current()
         pending_front = nullptr;
     forget_process(me);
     ROMlib_hle_forget(&me->serial_number);
+    ROMlib_movies_process_exit(part_lo, part_hi);
     ROMlib_components_process_exit(&me->serial_number, part_lo, part_hi);
     ROMlib_ot_process_exit(part_lo, part_hi);
     ROMlib_cfm_process_exit(part_lo, part_hi);

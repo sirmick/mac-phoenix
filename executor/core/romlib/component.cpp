@@ -212,6 +212,32 @@ int32_t call_select(Comp *c, Inst *in, int16_t what, const uint32_t *args, int n
     return r;
 }
 
+}
+
+int32_t Executor::ROMlib_call_component(uint32_t instance, int16_t what, std::initializer_list<ComponentArg> args)
+{
+    Inst *in = inst_of(instance);
+    if(!in)
+        return badComponentInstance;
+    uint32_t size = 0;
+    for(const ComponentArg &a : args)
+    {
+        if(a.bytes == 2)
+            PUSHUW(a.value);
+        else
+            PUSHUL(a.value);
+        size += a.bytes;
+    }
+    PUSHUW(what);
+    PUSHUW(size); /* flags 0, paramSize */
+    uint32_t params = EM_A7;
+    int32_t r = call_entry(in->comp, in, params);
+    EM_A7 = params + 4 + size;
+    return r;
+}
+
+namespace
+{
 bool load_code(Comp *c)
 {
     if(c->entry)

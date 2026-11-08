@@ -12,6 +12,54 @@ void describeStruct(const MovieRecord& x, std::ostream& os)
     os << "}";
 }
 
+void describeStruct(const TrackRecord& x, std::ostream& os)
+{
+    os << "TrackRecord{";
+    logging::logField(os, "data", x.data);
+    os << "}";
+}
+
+void describeStruct(const MediaRecord& x, std::ostream& os)
+{
+    os << "MediaRecord{";
+    logging::logField(os, "data", x.data);
+    os << "}";
+}
+
+void describeStruct(const TimeBaseRecord& x, std::ostream& os)
+{
+    os << "TimeBaseRecord{";
+    logging::logField(os, "data", x.data);
+    os << "}";
+}
+
+void describeStruct(const UserDataRecord& x, std::ostream& os)
+{
+    os << "UserDataRecord{";
+    logging::logField(os, "data", x.data);
+    os << "}";
+}
+
+void describeStruct(const TimeRecord& x, std::ostream& os)
+{
+    os << "TimeRecord{";
+    logging::logField(os, "value", x.value);
+    logging::logField(os, "scale", x.scale);
+    logging::logField(os, "base", x.base);
+    os << "}";
+}
+
+void describeStruct(const SampleDescription& x, std::ostream& os)
+{
+    os << "SampleDescription{";
+    logging::logField(os, "descSize", x.descSize);
+    logging::logField(os, "dataFormat", x.dataFormat);
+    logging::logField(os, "resvd1", x.resvd1);
+    logging::logField(os, "resvd2", x.resvd2);
+    logging::logField(os, "dataRefIndex", x.dataRefIndex);
+    os << "}";
+}
+
 } // namespace Executor
 
 namespace Executor { namespace structdump {
@@ -21,12 +69,42 @@ void dump_MovieRecord(std::ostream& os, const void* p)
 {
     describeStruct(*(const MovieRecord*)p, os);
 }
+void dump_TrackRecord(std::ostream& os, const void* p)
+{
+    describeStruct(*(const TrackRecord*)p, os);
+}
+void dump_MediaRecord(std::ostream& os, const void* p)
+{
+    describeStruct(*(const MediaRecord*)p, os);
+}
+void dump_TimeBaseRecord(std::ostream& os, const void* p)
+{
+    describeStruct(*(const TimeBaseRecord*)p, os);
+}
+void dump_UserDataRecord(std::ostream& os, const void* p)
+{
+    describeStruct(*(const UserDataRecord*)p, os);
+}
+void dump_TimeRecord(std::ostream& os, const void* p)
+{
+    describeStruct(*(const TimeRecord*)p, os);
+}
+void dump_SampleDescription(std::ostream& os, const void* p)
+{
+    describeStruct(*(const SampleDescription*)p, os);
+}
 }
 
 void registerStructDumps_QuickTime()
 {
     static const TypeDesc types[] = {
         { "MovieRecord", sizeof(MovieRecord), &dump_MovieRecord },
+        { "TrackRecord", sizeof(TrackRecord), &dump_TrackRecord },
+        { "MediaRecord", sizeof(MediaRecord), &dump_MediaRecord },
+        { "TimeBaseRecord", sizeof(TimeBaseRecord), &dump_TimeBaseRecord },
+        { "UserDataRecord", sizeof(UserDataRecord), &dump_UserDataRecord },
+        { "TimeRecord", sizeof(TimeRecord), &dump_TimeRecord },
+        { "SampleDescription", sizeof(SampleDescription), &dump_SampleDescription },
     };
     registerTypes(types, sizeof(types) / sizeof(types[0]));
 }
