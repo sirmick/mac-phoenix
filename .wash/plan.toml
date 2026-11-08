@@ -1,7 +1,7 @@
 # wash-plan: written by Wash as the plan changes.
 # Edit it only between workspaces; plan_set {"from": "<this file>"} loads it.
 
-revision = 128
+revision = 130
 
 [[node]]
   id = "cuts"
@@ -1070,5 +1070,5 @@ revision = 128
   emoji = "🛠️"
   template = "package"
   body = "Owner 2026-11-08 approved items 1-3 of the round's retrospective: (1) tools/ci/merge_gate.sh BRANCH: merge into a temporary copy of grid2 (never the main checkout), build native + wasm checking exit codes, run executor+qt labels native and wasm executor, rerun failures alone against the known-flaky list, one verdict, then fast-forward grid2 only on success; (2) a known-flaky list with automatic rerun-alone in ctest; (3) automatic test ports replacing the full per-worktree registry (tests/lib/ports.py)."
-  state = "active"
-  revision = 128
+  state = "done"
+  revision = 130
