@@ -747,9 +747,11 @@ MC calls are declared in `QuickTime.yaml` under a component dispatcher
   cell until it finishes.
 - **EV Nova 1.0.10** (`games-ppc`, 8.6, `--executor-ppc`, `--ram 128`: it
   asks for a 51 MB partition) passes its QuickTime 3 check, opens Nova Music
-  (an MP3: NewMovieFromFile answers -2048, no MPEG importer) and loads its
-  title pictures, then crashes in its own picture-stream reader: a
-  BlockMoveData from a handle whose master pointer reads `$80008000`, right
-  after a DisposeHandle. Not QuickTime; its movies (`Race N.mov`, Cinepak)
-  come after the title screen and need the base codec's completion queue
-  above.
+  (an MP3: NewMovieFromFile answers -2048, no MPEG importer) and reaches its
+  title screen. It had crashed in its picture reader: it builds its own
+  pixmaps over handles (pmVersion 2) and GetPixBaseAddr gave the handle, so
+  a 16-bit picture was decoded over the master pointers (fixed in
+  `qGWorld.cpp`; gtest `QuickDraw.PixBaseAddrOfHandlePixMap`). Parts of the
+  title (the logo band, the centre panel) are noise, probably because its compressed title
+  pictures go through the base codec, as rpza does (not checked). Its movies (`Race N.mov`,
+  Cinepak) come later.

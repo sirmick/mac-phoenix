@@ -1303,3 +1303,36 @@ TEST(QuickDraw, OpenIconLook)
     DisposeGWorld(world);
 }
 #endif
+
+#ifdef EXECUTOR
+/* An application's own pixmap over a handle (pmVersion 2, as Executor's
+   unlocked GWorlds have it): GetPixBaseAddr gives the pixels, not the
+   handle, and LockPixels/UnlockPixels lock and unlock it. EV Nova decoded
+   its title pictures into the master pointers when GetPixBaseAddr gave
+   the handle. */
+TEST(QuickDraw, PixBaseAddrOfHandlePixMap)
+{
+    PixMapHandle pm = NewPixMap();
+    ASSERT_NE(nullptr, pm);
+    Handle pixels = NewHandleClear(4096);
+    ASSERT_NE(nullptr, pixels);
+    Ptr saved_base = (*pm)->baseAddr;
+    (*pm)->baseAddr = (Ptr)pixels;
+    (*pm)->pmVersion = 2;
+
+    EXPECT_EQ(*pixels, GetPixBaseAddr(pm));
+    EXPECT_TRUE(LockPixels(pm));
+    EXPECT_TRUE(HGetState(pixels) & 0x80);
+    EXPECT_EQ(*pixels, GetPixBaseAddr(pm));
+    UnlockPixels(pm);
+    EXPECT_FALSE(HGetState(pixels) & 0x80);
+
+    /* an ordinary pixmap's baseAddr as it is */
+    (*pm)->pmVersion = 0;
+    (*pm)->baseAddr = saved_base;
+    EXPECT_EQ(saved_base, GetPixBaseAddr(pm));
+
+    DisposeHandle(pixels);
+    DisposePixMap(pm);
+}
+#endif

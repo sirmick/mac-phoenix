@@ -37,6 +37,7 @@
 #include <Gestalt.h>
 #include <base/cpu.h>
 #include <base/traps.impl.h>
+#include <res/resource.h>
 
 #include <algorithm>
 #include <functional>
@@ -906,13 +907,37 @@ LONGINT Executor::C_RegisterComponentResourceFile(INTEGER resRefNum, INTEGER glo
 
 namespace
 {
+/* A component's resource file, opened for it: how many opens are open, and
+   whether the file was open before the first (then it is never closed
+   here). QuickTime 3's codecs share the QuickTime file: OpenResFile gives
+   each the same refnum, and one closing it freed what another had loaded
+   from it (rpza's band ran code where a resource map had been put). */
+struct ResFileUse
+{
+    int opens = 0;
+    bool was_open = false;
+};
+std::map<INTEGER, ResFileUse> res_file_uses;
+
 INTEGER open_res_file(Component aComponent)
 {
     Comp *c = comp_of(gid(aComponent));
     if(!c || !c->from_file)
         return -1;
+    std::vector<INTEGER> open_before;
+    resmaphand map;
+    WALKMAPTOP(map)
+        open_before.push_back((*map)->resfn);
+    EWALKMAP()
     FSSpec spec = c->file;
-    return FSpOpenResFile(&spec, fsRdPerm);
+    INTEGER rn = FSpOpenResFile(&spec, fsRdPerm);
+    if(rn != -1)
+    {
+        ResFileUse &u = res_file_uses[rn];
+        if(u.opens++ == 0)
+            u.was_open = std::find(open_before.begin(), open_before.end(), rn) != open_before.end();
+    }
+    return rn;
 }
 }
 
@@ -931,6 +956,16 @@ OSErr Executor::C_OpenAComponentResFile(Component aComponent, GUEST<INTEGER> *re
 
 OSErr Executor::C_CloseComponentResFile(INTEGER refnum)
 {
+    auto it = res_file_uses.find(refnum);
+    if(it != res_file_uses.end())
+    {
+        if(--it->second.opens > 0)
+            return noErr;
+        bool was_open = it->second.was_open;
+        res_file_uses.erase(it);
+        if(was_open)
+            return noErr;
+    }
     CloseResFile(refnum);
     return ResError();
 }

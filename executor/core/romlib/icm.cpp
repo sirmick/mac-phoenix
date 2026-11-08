@@ -2379,7 +2379,6 @@ const IcmSelector icm_selectors[] = {
     { 0x7F, 16, 2, "CDSequenceGetDataSource" },
     { 0x80, 24, 2, "QTNewGWorld" },
     { 0x81, 24, 4, "QTUpdateGWorld" },
-    { 0x82, 12, 2, "ICMDecompressCompleteS" },
     { 0x83, 8, 2, "ICMGetPixelFormatInfo" },
     { 0x84, 12, 2, "GetGraphicsImporterForFileWithFlags" },
     { 0x85, 16, 2, "GetGraphicsImporterForDataRefWithFlags" },
@@ -2592,5 +2591,14 @@ OSErr Executor::C_ICMSequenceLockBits(ImageSequence seqID, PixMapPtr dst, LONGIN
 
 OSErr Executor::C_ICMSequenceUnlockBits(ImageSequence seqID, LONGINT flags)
 {
+    return noErr;
+}
+
+/* QuickTime 3's form, an OSErr back: the 'base' codec calls it as each
+   frame is done (flags $33: source, destination, unlock bits, flush). */
+OSErr Executor::C_ICMDecompressCompleteS(ImageSequence seqID, OSErr err, INTEGER flag,
+                                         ICMCompletionProcRecordPtr completionRtn)
+{
+    C_ICMDecompressComplete(seqID, err, flag, completionRtn);
     return noErr;
 }
