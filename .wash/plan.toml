@@ -1,7 +1,7 @@
 # wash-plan: written by Wash as the plan changes.
 # Edit it only between workspaces; plan_set {"from": "<this file>"} loads it.
 
-revision = 115
+revision = 123
 
 [[node]]
   id = "cuts"
@@ -1030,8 +1030,8 @@ revision = 115
   template = "package"
   parent = "qt"
   needs = ["qt-b3"]
-  state = "active"
-  revision = 114
+  state = "done"
+  revision = 123
   overrides = ["2026-11-08: started by Orchestrator before qt-b3 (failed): qt-b3 merged into grid2; its acceptance waits only on the orchestrator's test run"]
 
 [[node]]
@@ -1053,3 +1053,13 @@ revision = 115
   body = "Found by g3sound 2026-11-08 (before and after its change): the oracle cell qt_rom_68k_761 fails 4 of 6 runs on the Photo-JPEG frame 00 CRC. An oracle must be deterministic: find whether it's QTTest (timing-dependent first frame, uninitialised GWorld, a codec's quality setting), the ROM machine (uae core, FPU), or JPEG's own nondeterminism on a Mac, and fix it or make the check robust (and say why)."
   state = "done"
   revision = 109
+
+[[node]]
+  id = "evnova-noise"
+  title = "EV Nova's title screen on Executor 8.6 turns to noise (logo band, centre panel): a QuickDraw/GWorld fault, not QuickTime"
+  emoji = "🌫️"
+  template = "package"
+  parent = "qt"
+  body = "From qtb6 2026-11-08 (~/storage/tmp/qtb6/qt-b4-report.md, ev-20.png/ev-30.png): EV Nova's title makes no ICM calls; it draws with its own PICT reader (817 GetPicture) and ~367k CopyBits between GWorlds. Lead: pmVersion handling of handle-based pixmaps (ROMlib_lock_handle_base matches ==2, handle_baseaddr tests the bit). No real-Mac reference yet: EV Nova quits on 7.6.1 (QT 2.5) and the G3 runs 8.6 at max resolution which it refuses (a bake setting the G3's Monitors to 640x480/256 would give one)."
+  state = "active"
+  revision = 122
