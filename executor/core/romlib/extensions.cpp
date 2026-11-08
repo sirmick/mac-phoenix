@@ -17,6 +17,7 @@
 #include <MemoryMgr.h>
 #include <ResourceMgr.h>
 #include <OSUtil.h>
+#include <Gestalt.h>
 #include <Package.h>
 #include <file/file.h>
 #include <mman/mman.h>
@@ -27,6 +28,8 @@
 #include <SegmentLdr.h>
 #include <rsys/component.h>
 #include <sound/sounddriver.h>
+#include <rsys/quicktime.h>
+#include <rsys/gestalt.h>
 #include <rsys/version.h>
 #include <prefs/prefs.h>
 #include <util/macstrings.h>
@@ -495,6 +498,74 @@ static void register_component_files()
     }
 }
 
+/* MacPhoenix: QuickTime's components without QuickTime's INIT
+   (docs/executor/QuickTime.md, route B): the codecs, handlers and the
+   music synthesizer of the QuickTime files on the System disk, in
+   Extensions or where the policy put them, registered as
+   RegisterComponentResourceFile would. The INIT stays off; Executor
+   answers the calls around them. A file the policy lets run registers
+   its own. */
+static void register_quicktime_files(const std::set<std::string> &allow)
+{
+    GUEST<INTEGER> vref_g;
+    GUEST<LONGINT> sysdir_g;
+    if(FindFolder(-32768 /* kOnSystemDisk */, "macs"_4, false, &vref_g, &sysdir_g) != noErr)
+        return;
+    INTEGER vref = vref_g;
+    gestalt_set_quicktime_version(0x02508000);
+    for(const char *folder : { "Extensions", "Extensions (Disabled)" })
+    {
+        LONGINT dirid = sub_folder(vref, sysdir_g, folder, false);
+        if(!dirid)
+            continue;
+        for(const Item &it : folder_files(vref, dirid))
+        {
+            std::string name = to_string(it.name);
+            if(name != "QuickTime™" && name != "QuickTime™ PowerPlug"
+               && name != "QuickTime™ Musical Instruments")
+                continue;
+            if(listed(allow, name) && !denied(allow, name))
+                continue;
+            /* PowerPlug's are PowerPC code a 68k Mac never loads; on a
+               PowerPC Mac they are native codecs QuickTime™ has 68k ones
+               of (one each in a G3's lists), which call back through
+               QuickTimeLib routines Executor doesn't export
+               (ImageCodecBusy, the remap tables) and
+               CallComponentFunctionWithStorageProcInfo: left out, Apple's
+               68k codecs decode through Mixed Mode */
+            if(name == "QuickTime™ PowerPlug")
+                continue;
+            /* a component file in Extensions: register_component_files's */
+            if(it.type == "thng"_4 && !strcmp(folder, "Extensions"))
+                continue;
+            Str63 pname;
+            memcpy(pname, it.name, it.name[0] + 1);
+            INTEGER rn;
+            {
+                TheZoneGuard guard(LM(SysZone));
+                rn = HOpenResFile(vref, dirid, pname, fsRdPerm);
+            }
+            if(rn == -1)
+                continue;
+            int32_t n = ROMlib_register_components(rn, true, true);
+            fprintf(stderr, "[Executor] components: %s registered %d (without its INIT)\n", name.c_str(), n);
+            /* Gestalt 'qtim': the version of the QuickTime whose
+               components these are, its 'vers' 1 (3.0.2 on 8.6, as the G3
+               answers; EV Nova wants 3.0) */
+            if(name == "QuickTime™" && n > 0)
+            {
+                INTEGER saved = CurResFile();
+                UseResFile(rn);
+                if(Handle v = Get1Resource("vers"_4, 1))
+                    if(GetHandleSize(v) >= 4)
+                        gestalt_set_quicktime_version(READUL(ptr_to_longint(*v)));
+                UseResFile(saved);
+            }
+            CloseResFile(rn);
+        }
+    }
+}
+
 /* What InitAllPacks leaves: AppPacks holding the System file's PACK 0-7.
    The packages themselves run in C++ (the Pack traps never call these),
    but code checks the handles: Date & Time's clock draws nothing unless
@@ -570,6 +641,7 @@ void Executor::ROMlib_load_extensions()
     /* Executor's own components first: the System's of the same types are
        then left out (its 'sdev's stand for sound hardware). */
     ROMlib_install_sound_output_component();
+    ROMlib_install_movie_controller();
     /* The System file's own components first, as its boot code does. */
     int32_t n = ROMlib_register_components(LM(SysMap), true);
     fprintf(stderr, "[Executor] components: System registered %d\n", n);
@@ -579,6 +651,7 @@ void Executor::ROMlib_load_extensions()
     if(allow.empty())
     {
         register_component_files();
+        register_quicktime_files(allow);
         return;
     }
 
@@ -624,4 +697,5 @@ void Executor::ROMlib_load_extensions()
     if(!ROMlib_shrink_pm_zone(LM(BufPtr)))
         fprintf(stderr, "[Executor] extensions: BufPtr lowered into a used Process Manager heap\n");
     register_component_files();
+    register_quicktime_files(allow);
 }

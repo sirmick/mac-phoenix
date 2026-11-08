@@ -1,0 +1,10 @@
+# build.mpw — QTStress, PowerPC (MrC, PPCLink on QuickTimeLib); qtstress.c.
+#   tools/mpw/mpw build tests/guest/qtstress -o tests/guest/qtstress
+# products: QTStress
+MrC qtstress.c -o qtstress.ppc.o
+PPCLink -main __start qtstress.ppc.o ∂
+	"{SharedLibraries}InterfaceLib" "{SharedLibraries}StdCLib" "{SharedLibraries}QuickTimeLib" ∂
+	"{PPCLibraries}StdCRuntime.o" "{PPCLibraries}PPCCRuntime.o" ∂
+	-t APPL -c 'QTst' -o QTStress
+Rez -a qtstress.r -o QTStress
+SetFile -t APPL -c 'QTst' -a B QTStress

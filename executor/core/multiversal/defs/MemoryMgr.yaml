@@ -1183,6 +1183,160 @@
 
 # ####
 
+# Selectors 0-5 (the names are ours): HLock, HUnlock, HPurge, HNoPurge,
+# HGetState and HSetState on the handle in A0 (the state in A1), the fast
+# kind that changes the handle's flags and nothing else: no checks, MemErr
+# left as it was. The 7.6.1 System's HeapDispatch ('gpch' 667) has them;
+# QuickTime and its components (codecs, media and data handlers) call 2
+# and 3 around nearly everything, 0 and 1 for their own blocks.
+- only-for: Executor
+  function:
+    name: HeapDispatchHLock
+    return: OSErr
+    args:
+      - name: h
+        type: Handle
+        register: A0
+    trap: 0xA0A4
+    dispatcher: HeapDispatch
+    selector: 0x0000
+    returnreg: D0
+    executor: C_
+    export: false
+
+# ####
+
+- only-for: Executor
+  function:
+    name: HeapDispatchHUnlock
+    return: OSErr
+    args:
+      - name: h
+        type: Handle
+        register: A0
+    trap: 0xA0A4
+    dispatcher: HeapDispatch
+    selector: 0x0001
+    returnreg: D0
+    executor: C_
+    export: false
+
+# ####
+
+- only-for: Executor
+  function:
+    name: HeapDispatchHPurge
+    return: OSErr
+    args:
+      - name: h
+        type: Handle
+        register: A0
+    trap: 0xA0A4
+    dispatcher: HeapDispatch
+    selector: 0x0002
+    returnreg: D0
+    executor: C_
+    export: false
+
+# ####
+
+- only-for: Executor
+  function:
+    name: HeapDispatchHNoPurge
+    return: OSErr
+    args:
+      - name: h
+        type: Handle
+        register: A0
+    trap: 0xA0A4
+    dispatcher: HeapDispatch
+    selector: 0x0003
+    returnreg: D0
+    executor: C_
+    export: false
+
+# ####
+
+- only-for: Executor
+  function:
+    name: HeapDispatchHGetState
+    return: SignedByte
+    args:
+      - name: h
+        type: Handle
+        register: A0
+    trap: 0xA0A4
+    dispatcher: HeapDispatch
+    selector: 0x0004
+    returnreg: D0
+    executor: C_
+    export: false
+
+# ####
+
+- only-for: Executor
+  function:
+    name: HeapDispatchHSetState
+    return: OSErr
+    args:
+      - name: h
+        type: Handle
+        register: A0
+      - name: flags
+        type: LONGINT
+        register: A1
+    trap: 0xA0A4
+    dispatcher: HeapDispatch
+    selector: 0x0005
+    returnreg: D0
+    executor: C_
+    export: false
+
+# ####
+
+# Selectors 6 and 8 (the names are ours): ask to be told when a handle's
+# block is trashed, and stop. 6: A0 a record on the caller's stack,
+# {handle (0: any), priority.w, procedure}, D0.w 0 on success. 8: A0 the
+# procedure, A1 the handle. QuickTime's media and data handlers ask for
+# their buffers. Executor keeps no list and sends no notices: both are
+# accepted.
+- only-for: Executor
+  function:
+    name: HeapDispatchAddTrashNotification
+    return: OSErr
+    args:
+      - name: rec
+        type: Ptr
+        register: A0
+    trap: 0xA0A4
+    dispatcher: HeapDispatch
+    selector: 0x0006
+    returnreg: D0
+    executor: C_
+    export: false
+
+# ####
+
+- only-for: Executor
+  function:
+    name: HeapDispatchRemoveTrashNotification
+    return: OSErr
+    args:
+      - name: proc
+        type: Ptr
+        register: A0
+      - name: h
+        type: Handle
+        register: A1
+    trap: 0xA0A4
+    dispatcher: HeapDispatch
+    selector: 0x0008
+    returnreg: D0
+    executor: C_
+    export: false
+
+# ####
+
 # Selector $20, no arguments: a heap for system-wide allocations that
 # isn't the application's: ATSSupport makes it the current zone to
 # allocate a 256 KB cache, and falls back to the system heap when that

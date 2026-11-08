@@ -382,6 +382,16 @@ void Executor::ROMlib_unlock_handle_base(handle_base_lock *l)
     l->h = nullptr;
 }
 
+/* MacPhoenix: the pixels handle of a pixmap that isn't a GWorld's and whose
+   pmVersion says its baseAddr is a handle; nullptr otherwise */
+static Handle handle_baseaddr(PixMapHandle pixels)
+{
+    if(!pixels || !(PIXMAP_VERSION(pixels) & gw_pm_version_handle))
+        return nullptr;
+    Handle h = (Handle)PIXMAP_BASEADDR(pixels);
+    return ROMlib_live_handle_p(h) && *h ? h : nullptr;
+}
+
 Boolean Executor::C_LockPixels(PixMapHandle pixels)
 {
     gw_info_t *gw_info = lookup_gw_info_by_gw_pixmap(pixels);
@@ -407,6 +417,11 @@ Boolean Executor::C_LockPixels(PixMapHandle pixels)
 
         HSetState((Handle)pixels, HGetState((Handle)pixels) | LOCKBIT);
     }
+    else if(Handle h = handle_baseaddr(pixels))
+        /* MacPhoenix: an application's own pixmap over a handle (pmVersion
+           says so): the handle is locked, so the pointer GetPixBaseAddr
+           gives stays good (EV Nova draws its title through one) */
+        HLock(h);
 
     return true;
 }
@@ -441,6 +456,8 @@ void Executor::C_UnlockPixels(PixMapHandle pixels)
             HSetState((Handle)pixels, HGetState((Handle)pixels) & ~LOCKBIT);
         }
     }
+    else if(Handle h = handle_baseaddr(pixels))
+        HUnlock(h);
 }
 
 GWorldFlags Executor::C_UpdateGWorld(GUEST<GWorldPtr> *graphics_world,
@@ -733,6 +750,12 @@ Ptr Executor::C_GetPixBaseAddr(PixMapHandle pixels)
     {
         gw_info = lookup_gw_info_by_gw_gd_pixmap(pixels);
 
+        /* MacPhoenix: an application's own pixmap whose pmVersion says
+           its baseAddr is a handle: the pixels, not the handle (EV Nova
+           decoded its title pictures into the master pointers there) */
+        if(gw_info == nullptr)
+            if(Handle h = handle_baseaddr(pixels))
+                return *h;
         if(gw_info == nullptr
            /* don't dereference the screen baseaddr! */
            || gw_info->gw_gd == LM(MainDevice))

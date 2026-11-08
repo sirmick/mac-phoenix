@@ -25,6 +25,8 @@ using namespace Executor;
 /* true when we want to pretend this host has no sound support. */
 bool Executor::sound_disabled_p;
 
+int Executor::ROMlib_sound_rate;
+
 /*
  * TODO: The flag values below are just ctm guesses.  We need to run
  *	 tests on a Mac to see whether or not these flags are present
@@ -200,11 +202,24 @@ static const uint8_t mix8[] = {
    but oh well.  A nullptr orig_outbuf is OK; the resampled waveform
    will simply be lost. */
 
+/* MacPhoenix: a sample at volume vol ($100 full; volumeCmd) */
+static inline unsigned int
+at_volume(uint8_t s, unsigned int vol)
+{
+    if(vol == 0x100)
+        return s;
+    /* rounded: truncated, a volume just below full ($FF) silenced the
+       quietest samples (Ares's fades) */
+    int d = ((int)s - 128) * (int)vol;
+    int v = 128 + (d >= 0 ? (d + 0x80) >> 8 : -((-d + 0x80) >> 8));
+    return (unsigned int)std::max(0, std::min(255, v));
+}
+
 static bool
 resample(uint8_t *inbuf, uint8_t *orig_outbuf, unsigned int insize,
          unsigned int outsize, uint32_t infreq, uint32_t outfreq,
          snd_time *current_start, uint8_t *prev_samp,
-         snd_time *chan_time, snd_time until)
+         snd_time *chan_time, snd_time until, unsigned int vol = 0x100)
 
 {
     snd_time step;
@@ -221,7 +236,7 @@ resample(uint8_t *inbuf, uint8_t *orig_outbuf, unsigned int insize,
 
     while(SND_PROMOTE(*chan_time) < *current_start)
     {
-        outbuf[*chan_time % outsize] = mix8[((unsigned int)*prev_samp
+        outbuf[*chan_time % outsize] = mix8[(at_volume(*prev_samp, vol)
                                              + (unsigned int)outbuf[*chan_time % outsize])];
         (*chan_time)++;
     }
@@ -241,7 +256,7 @@ resample(uint8_t *inbuf, uint8_t *orig_outbuf, unsigned int insize,
 
     while(out_t < until && SND_DEMOTE(in_t) < insize - 1)
     {
-        outbuf[out_t % outsize] = mix8[((unsigned int)inbuf[SND_DEMOTE(in_t)]
+        outbuf[out_t % outsize] = mix8[(at_volume(inbuf[SND_DEMOTE(in_t)], vol)
                                         + (unsigned int)outbuf[out_t % outsize])];
         in_t += step;
         out_t += 1;
@@ -451,6 +466,7 @@ OSErr Executor::C_SndNewChannel(GUEST<SndChannelPtr> *chanpp, INTEGER synth,
                 ms->sq_on = false;
                 ms->cmd_started = false;
                 ms->cmd_end = 0;
+                ms->vol_left = ms->vol_right = 0x100;
             }
             chanp->callBack = userroutinep;
             /*chanp->userInfo = 0;*/
@@ -577,6 +593,13 @@ snd_duration(SoundHeaderPtr hp)
 
 #define CMD_DONE(c) ((c)->flags &= ~CHAN_CMDINPROG_FLAG)
 
+/* MacPhoenix: the channel's volume for the mono output */
+static unsigned int chan_volume(SndChannelPtr chanp)
+{
+    ModifierStub *ms = SND_CHAN_FIRSTMOD(chanp);
+    return ((unsigned int)ms->vol_left + ms->vol_right) / 2;
+}
+
 /* MacPhoenix: the square-wave synthesizer (snth 1), for sounds like the
    System's "Simple Beep": freqCmd/noteCmd choose a MIDI note, ampCmd the
    amplitude, and the timed commands (waitCmd, restCmd, noteCmd) let the
@@ -695,12 +718,18 @@ do_current_command(SndChannelPtr chanp, HungerInfo info)
                         &SND_CHAN_CURRENT_START(chanp),
                         &SND_CHAN_PREV_SAMP(chanp),
                         &SND_CHAN_TIME(chanp),
-                        info.t3))
+                        info.t3, chan_volume(chanp)))
             {
                 CMD_DONE(chanp);
             }
             break;
         }
+
+        case volumeCmd: /* param2: right << 16 | left */
+            SND_CHAN_FIRSTMOD(chanp)->vol_left = (uint16_t)chanp->cmdInProg.param2;
+            SND_CHAN_FIRSTMOD(chanp)->vol_right = (uint16_t)(chanp->cmdInProg.param2 >> 16);
+            CMD_DONE(chanp);
+            break;
 
         case callBackCmd:
             warning_sound_log("callBackCmd");
@@ -804,7 +833,7 @@ do_current_db(SndChannelPtr chanp, HungerInfo info)
                 &SND_CHAN_CURRENT_START(chanp),
                 &SND_CHAN_PREV_SAMP(chanp),
                 &SND_CHAN_TIME(chanp),
-                info.t3))
+                info.t3, chan_volume(chanp)))
     {
         /* We are done with this buffer */
         dbp->dbFlags &= ~dbBufferReady;
@@ -855,6 +884,7 @@ Executor::sound_callback(syn68k_addr_t interrupt_addr, void *unused)
     bool did_something = false;
 
     HungerInfo info = sound_driver->HungerStart();
+    ROMlib_sound_rate = info.rate;
 
     /* For each channel, grab some samples and mix them in */
     for(SndChannelPtr chanp = allchans; chanp != nullptr; chanp = chanp->nextChan)
@@ -1024,6 +1054,20 @@ OSErr Executor::C_SndDoImmediate(SndChannelPtr chanp, SndCommand *cmdp)
                         warning_sound_log("quietCmd");
                         CMD_DONE(chanp);
                         SND_DB_DONE(chanp);
+                        retval = noErr;
+                        break;
+
+                    case volumeCmd:
+                        SND_CHAN_FIRSTMOD(chanp)->vol_left = (uint16_t)cmd.param2;
+                        SND_CHAN_FIRSTMOD(chanp)->vol_right = (uint16_t)(cmd.param2 >> 16);
+                        retval = noErr;
+                        break;
+
+                    case getVolumeCmd: /* param2: where the volume goes */
+                        if(cmd.param2)
+                            *guest_cast<GUEST<uint32_t> *>(cmd.param2)
+                                = (uint32_t)SND_CHAN_FIRSTMOD(chanp)->vol_right << 16
+                                  | SND_CHAN_FIRSTMOD(chanp)->vol_left;
                         retval = noErr;
                         break;
 

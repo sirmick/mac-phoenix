@@ -1,3 +1,4 @@
+#include <rsys/quicktime.h>
 #include <vector>
 #include <cstring>
 #include <syn68k_public.h>
@@ -343,6 +344,54 @@ uint32_t Executor::traps::unknown_selector_68k(const char *trap_name, uint32_t s
         EM_A7 += 10;
         WRITEUW(EM_A7, (uint16_t)-3025); /* noTranslationPathErr */
         EM_D0 = (uint32_t)-3025;
+        return ret;
+    }
+    uint32_t icm_args, icm_result;
+    const char *icm_name;
+    if(strcmp(trap_name, "QuickTime") == 0
+       && ROMlib_movies_unknown_selector(sel, &icm_args, &icm_result, &icm_name))
+    {
+        /* MacPhoenix: the Movie Toolbox's selectors by their declarations
+           (movies.cpp) */
+        snprintf(what, sizeof what, "QuickTime selector $%x (%s, %u argument bytes): answered %s",
+                 (unsigned)sel, icm_name, (unsigned)icm_args, icm_result == 2 ? "paramErr" : "0");
+        log_unimplemented(what);
+        syn68k_addr_t ret = POPADDR();
+        EM_A7 += icm_args;
+        if(icm_result == 2)
+            WRITEUW(EM_A7, (uint16_t)-50);
+        else if(icm_result == 4)
+            WRITEUL(EM_A7, 0);
+        EM_D0 = icm_result == 2 ? (uint32_t)-50 : 0;
+        return ret;
+    }
+    if(strcmp(trap_name, "CodecDispatch") == 0
+       && ROMlib_icm_unknown_selector(sel, &icm_args, &icm_result, &icm_name))
+    {
+        /* MacPhoenix: the ICM's selectors by their declarations (icm.cpp);
+           its private ones that Executor answers */
+        int32_t icm_value;
+        if(ROMlib_icm_private_selector(sel, EM_A7 + 4, &icm_value))
+        {
+            syn68k_addr_t ret = POPADDR();
+            EM_A7 += icm_args;
+            if(icm_result == 2)
+                WRITEUW(EM_A7, (uint16_t)icm_value);
+            else if(icm_result == 4)
+                WRITEUL(EM_A7, icm_value);
+            EM_D0 = icm_value;
+            return ret;
+        }
+        snprintf(what, sizeof what, "CodecDispatch selector $%x (%s, %u argument bytes): answered %s",
+                 (unsigned)sel, icm_name, (unsigned)icm_args, icm_result == 2 ? "paramErr" : "0");
+        log_unimplemented(what);
+        syn68k_addr_t ret = POPADDR();
+        EM_A7 += icm_args;
+        if(icm_result == 2)
+            WRITEUW(EM_A7, (uint16_t)-50);
+        else if(icm_result == 4)
+            WRITEUL(EM_A7, 0);
+        EM_D0 = icm_result == 2 ? (uint32_t)-50 : 0;
         return ret;
     }
     snprintf(what, sizeof what, "%s selector $%x: no size in the selector, session stopped (called from $%x)",

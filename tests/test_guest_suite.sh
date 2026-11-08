@@ -28,8 +28,13 @@
 # e.g. dev-7.6.1, whose Extensions have the CFM-68K Runtime Enabler.
 # --host-file PATH: put a file on Host: before the launch (repeatable;
 # tools/difftest's probe.start / probe.dump).
+# --host-macbinary PATH: a MacBinary file on Host:, both forks, named as
+# PATH without its .bin (repeatable; QTTest's movies from the disks).
 # --keep-dir DIR: copy the files the guest wrote on Host: to DIR at the end,
-# whatever the outcome (tools/difftest keeps probe logs and pixel dumps).
+# whatever the outcome (tools/difftest keeps probe logs and pixel dumps;
+# QTTest the movies it made, *.mov).
+# --audio-dump PATH: the sound the Mac played, raw S16LE 48 kHz stereo, to
+# PATH (the emulator's --audio-dump; it runs behind the web server for it).
 # --echo-gateway: on a ROM machine, name net-bridge's echo service
 # (10.0.2.1 port 7) in Host:net_echo.txt, for OTTest.
 # --delete-file: delete a file from the run's copy of the image before the
@@ -65,6 +70,7 @@ ROM_OVERRIDE=""
 EXTRA_FLAGS=()
 DELETE_FILES=()
 HOST_FILES=()
+HOST_MACBINARIES=()
 DISMISS=1
 NETWORK="socket"
 SCRIPT_NAME=""
@@ -84,6 +90,7 @@ while [[ $# -gt 0 ]]; do
         --executor-debug) EXTRA_FLAGS+=("$1" "$2"); shift 2 ;;   # Executor's --debug options (memcheck,...)
         --watch) EXTRA_FLAGS+=("$1" "$2"); shift 2 ;;            # write watchpoint on guest memory (Executor)
         --executor-logtraps) EXTRA_FLAGS+=("$1"); shift ;;       # Executor logs every trap call
+        --executor-logtraps-nesting|--executor-logtraps-filter) EXTRA_FLAGS+=("$1" "$2"); shift 2 ;;
         --executor-ppc) EXTRA_FLAGS+=("$1"); shift ;;            # Executor runs fat apps' PowerPC code
         --arch) ARCH="$2"; shift 2 ;;
         --os-version) OS_VERSION="$2"; shift 2 ;;
@@ -100,10 +107,12 @@ while [[ $# -gt 0 ]]; do
         --echo-gateway) ECHO_GATEWAY=1; shift ;;
         --keep-dir) KEEP_DIR="$2"; shift 2 ;;
         --host-file) HOST_FILES+=("$2"); shift 2 ;;
+        --host-macbinary) HOST_MACBINARIES+=("$2"); shift 2 ;;
+        --audio-dump) AUDIO_DUMP="$2"; shift 2 ;;
         *) echo "Unknown arg: $1"; exit 1 ;;
     esac
 done
-source "$(dirname "$0")/lib/ports.sh"; PORT=$(mp_port "$PORT") || exit 1  # per-worktree (docs/Testing.md)
+source "$(dirname "$0")/lib/ports.sh"; PORT=$(mp_port "$PORT") || exit 1  # a free port (docs/Testing.md "Ports")
 
 # --arch was deprecated; backend determines arch. Derive ARCH from BACKEND for
 # the ROM/RAM/disk selection logic only (not passed to the binary).
@@ -206,6 +215,9 @@ if [[ -n "$SCRIPT_NAME" ]]; then
 else
     python3 "$GUEST_DIR/install_macbinary.py" "$SUITE_APP" "$EXTFS_DIR" MacPhoenixSuite
     for f in ${HOST_FILES[@]+"${HOST_FILES[@]}"}; do cp "$f" "$EXTFS_DIR"/; done
+    for f in ${HOST_MACBINARIES[@]+"${HOST_MACBINARIES[@]}"}; do
+        python3 "$GUEST_DIR/install_macbinary.py" "$f" "$EXTFS_DIR" "$(basename "$f" .bin)" > /dev/null
+    done
     printf '%s\r%s\r' "$RESULTS_NAME" "$SECTIONS" > "$EXTFS_DIR/suite.cfg"
 fi
 
@@ -238,7 +250,7 @@ cleanup() {
     # a crash or a timeout (tools/difftest).
     if [[ -n "${KEEP_DIR:-}" && -d "$EXTFS_DIR" ]]; then
         mkdir -p "$KEEP_DIR"
-        find "$EXTFS_DIR" -maxdepth 1 -type f \( -name '*.txt' -o -name '*.ppm' \) -exec cp {} "$KEEP_DIR"/ \;
+        find "$EXTFS_DIR" -maxdepth 1 -type f \( -name '*.txt' -o -name '*.ppm' -o -name '*.mov' \) -exec cp {} "$KEEP_DIR"/ \;
     fi
     rm -rf "$EXTFS_DIR"
     if [[ -n "$ETHER_SOCK" ]]; then rm -f "$ETHER_SOCK"; fi
@@ -266,9 +278,10 @@ else
 fi
 
 [[ -n "${CORE:-}" ]] && EXTRA_FLAGS+=(--core "$CORE")
+[[ -n "${AUDIO_DUMP:-}" ]] && EXTRA_FLAGS+=(--audio-dump "$AUDIO_DUMP")
 # --headless-http runs the ROM machine in-process, where /api/snapshot has
 # no child to ask; MACTEST_SNAPSHOT runs it behind the web server instead.
-if [[ -n "${MACTEST_SNAPSHOT:-}" ]]; then
+if [[ -n "${MACTEST_SNAPSHOT:-}" || -n "${AUDIO_DUMP:-}" ]]; then
     MODE_FLAGS=(--bridge)
 else
     MODE_FLAGS=(--headless-http)

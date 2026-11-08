@@ -13,6 +13,10 @@
  *       are copied onto the stack and func is jumped to; a storage handle
  *       the caller pushed is then its first argument, and the caller's
  *       result slot is its result slot.
+ *  -2   (private; QuickTime 3's 68k codecs) a fast-dispatch component hands
+ *       the call it is in to another instance: on the stack the instance
+ *       and the call's header long, over the component's own frame; see
+ *       delegate_fast below.
  *
  * Components and instances live here, host side, and are named by opaque
  * 32-bit values ($0001xxxx components, $0002xxxx instances). Name, info
@@ -33,6 +37,7 @@
 #include <Gestalt.h>
 #include <base/cpu.h>
 #include <base/traps.impl.h>
+#include <res/resource.h>
 
 #include <algorithm>
 #include <functional>
@@ -58,6 +63,7 @@ struct Comp
     uint32_t id;
     uint32_t type, subtype, manufacturer, flags, mask;
     uint32_t entry = 0;     /* guest code; 0 until loaded */
+    bool native = false;    /* Executor's own: entered as native_entry, whatever its flags say */
     Handle code = nullptr;  /* loaded from the resource file */
     bool from_file = false;
     FSSpec file = {};
@@ -151,7 +157,15 @@ bool visible(const Comp &c)
     return c.owner.highLongOfPSN == me.highLongOfPSN && c.owner.lowLongOfPSN == me.lowLongOfPSN;
 }
 
-/* Call a component's entry point: (ComponentParameters *, storage). */
+/* Call a component's entry point: (ComponentParameters *, storage). A
+   component with cmpFastDispatch in its flags (QuickTime's codecs, media
+   and data handlers) is entered with D0 the block's header long {flags,
+   paramSize, what} and the call's parameters on the stack as the caller
+   laid them, its storage in the instance's place, the result above: the
+   routine its dispatcher picks is then a Pascal function of (storage,
+   parameters...) that pops them and leaves the result. A0 points at the
+   storage in that frame: QuickTime 3's codecs read their delegate's
+   instance from their globals through it (selector -2). */
 int32_t call_entry(Comp *c, Inst *in, uint32_t params)
 {
     if(!c->entry)
@@ -162,6 +176,26 @@ int32_t call_entry(Comp *c, Inst *in, uint32_t params)
     int32_t result;
     if(c->ppc)
         result = callPPC(c->entry, { params, in ? in->storage : 0 });
+    else if((c->flags & cmpFastDispatch) && !c->native)
+    {
+        uint8_t size = READUB(params + 1);
+        uint32_t saved_sp = EM_A7;
+        PUSHUL(0); /* result */
+        PUSHUL(in ? in->storage : 0);
+        EM_A7 -= size;
+        memmove(SYN68K_TO_US(EM_A7), SYN68K_TO_US(params + 4), size);
+        uint32_t saved_d0 = EM_D0, saved_a0 = EM_A0;
+        EM_D0 = READUL(params);
+        EM_A0 = saved_sp - 8; /* the storage, in the frame */
+        execute68K(c->entry);
+        EM_D0 = saved_d0;
+        EM_A0 = saved_a0;
+        /* what the routine left: the result, with the stack as before its
+           arguments (a routine that popped too much or too little is set
+           right) */
+        result = READUL(saved_sp - 4);
+        EM_A7 = saved_sp;
+    }
     else
     {
         PUSHUL(0); /* result */
@@ -188,6 +222,54 @@ int32_t call_select(Comp *c, Inst *in, int16_t what, const uint32_t *args, int n
     return r;
 }
 
+}
+
+int32_t Executor::ROMlib_call_component(uint32_t instance, int16_t what, std::initializer_list<ComponentArg> args)
+{
+    Inst *in = inst_of(instance);
+    if(!in)
+        return badComponentInstance;
+    uint32_t size = 0;
+    for(const ComponentArg &a : args)
+    {
+        if(a.bytes == 2)
+            PUSHUW(a.value);
+        else
+            PUSHUL(a.value);
+        size += a.bytes;
+    }
+    PUSHUW(what);
+    PUSHUW(size); /* flags 0, paramSize */
+    uint32_t params = EM_A7;
+    int32_t r = call_entry(in->comp, in, params);
+    EM_A7 = params + 4 + size;
+    return r;
+}
+
+namespace
+{
+/* Opens a component's file (for its code, a resource, OpenComponentResFile), and says
+   whether it was open already: then it isn't closed after, for whoever
+   opened it (an OpenComponentResFile of a codec sharing the QuickTime file)
+   still has resources loaded from it. */
+INTEGER open_comp_file(FSSpec *spec, bool *was_open)
+{
+    std::vector<INTEGER> open_before;
+    resmaphand map;
+    WALKMAPTOP(map)
+        open_before.push_back((*map)->resfn);
+    EWALKMAP()
+    INTEGER rn = FSpOpenResFile(spec, fsRdPerm);
+    *was_open = rn != -1 && std::find(open_before.begin(), open_before.end(), rn) != open_before.end();
+    return rn;
+}
+
+void close_comp_file(INTEGER rn, bool was_open)
+{
+    if(!was_open)
+        CloseResFile(rn);
+}
+
 bool load_code(Comp *c)
 {
     if(c->entry)
@@ -197,10 +279,11 @@ bool load_code(Comp *c)
     FSSpec spec = c->file; /* guest-visible: on this stack */
     INTEGER saved = CurResFile();
     INTEGER rn;
+    bool was_open;
     {
         /* the map in the System heap, so the code loads there too */
         TheZoneGuard guard(LM(SysZone));
-        rn = FSpOpenResFile(&spec, fsRdPerm);
+        rn = open_comp_file(&spec, &was_open);
     }
     if(rn == -1)
         return false;
@@ -217,7 +300,7 @@ bool load_code(Comp *c)
         }
     }
     UseResFile(saved);
-    CloseResFile(rn);
+    close_comp_file(rn, was_open);
     if(!h || !*h)
         return false;
     c->code = h;
@@ -294,8 +377,19 @@ OSErr close_component(uint32_t ci)
 
 /* Add a component; null if a duplicate it was asked to avoid, or one
    that declined its register message. */
+/* MacPhoenix: register_file's without_init: components that want their
+   register message are left out. */
+bool no_register_message = false;
+
 Comp *add(std::unique_ptr<Comp> c, int16_t global, bool auto_version)
 {
+    if(no_register_message && (c->flags & cmpWantsRegisterMessage))
+    {
+        fprintf(stderr, "[Executor] component '%.4s' '%.4s': wants its register message; "
+                        "left out without its INIT\n",
+                (char *)&c->type, (char *)&c->subtype);
+        return nullptr;
+    }
     for(auto &o : comps)
         if(o->type == c->type && o->subtype == c->subtype && o->manufacturer == c->manufacturer)
         {
@@ -310,16 +404,18 @@ Comp *add(std::unique_ptr<Comp> c, int16_t global, bool auto_version)
     GetCurrentProcess(&c->owner);
     c->id = kCompBase + next_comp++;
     Comp *p = c.get();
-    /* MacPhoenix: in front of the components of the same type and
-       subtype (unless registerComponentAfterExisting), otherwise last: a
-       Mac finds components of one type in the order they were registered
-       (the Sound control panel registers its four 'sndP' pages one by one
-       and lists them as FindNextComponent answers: Alert Sounds first). */
-    auto pos = comps.end();
-    if(!(global & registerComponentAfterExisting))
-        pos = std::find_if(comps.begin(), comps.end(), [&](const auto &o) {
-            return o->type == p->type && o->subtype == p->subtype;
-        });
+    /* MacPhoenix: a Mac (7.6.1) finds the components of one type in the
+       order of their subtype, then manufacturer, the newest of equals
+       first (unless registerComponentAfterExisting): QuickTime's 16 'imdc'
+       come '.SGI', '8BPS' .. 'yuv2' whatever their resource IDs; the
+       Sound control panel lists its 'sndP' pages ('alrt' .. 'vols') as
+       FindNextComponent answers them, and Color Picker 2.0 takes the
+       first 'cpkr', its HSL picker ('hsl ' before 'rgb '). */
+    auto key = [](const Comp &o) { return ((uint64_t)o.subtype << 32) | o.manufacturer; };
+    bool after = global & registerComponentAfterExisting;
+    auto pos = std::find_if(comps.begin(), comps.end(), [&](const auto &o) {
+        return o->type == p->type && (after ? key(*o) > key(*p) : key(*o) >= key(*p));
+    });
     comps.insert(pos, std::move(c));
     changed(p->type);
     if(p->flags & cmpWantsRegisterMessage)
@@ -590,12 +686,14 @@ Handle sys_pstring(const char *s)
 
 uint32_t Executor::ROMlib_register_native_component(uint32_t type, uint32_t subtype,
                                                     uint32_t manufacturer, const char *name,
-                                                    const char *calls, int32_t version)
+                                                    const char *calls, int32_t version, uint32_t flags)
 {
     auto c = std::make_unique<Comp>();
     c->type = type;
     c->subtype = subtype;
     c->manufacturer = manufacturer;
+    c->flags = flags;
+    c->native = true;
     c->entry = callback_install(native_entry, new NativeComponent{ calls, version });
     c->version = version;
     c->name = sys_pstring(name);
@@ -606,9 +704,12 @@ uint32_t Executor::ROMlib_register_native_component(uint32_t type, uint32_t subt
     return p->id;
 }
 
-int32_t Executor::ROMlib_register_components(INTEGER refnum, bool global)
+int32_t Executor::ROMlib_register_components(INTEGER refnum, bool global, bool without_init)
 {
-    return register_file(refnum, global ? registerComponentGlobal : 0);
+    no_register_message = without_init;
+    int32_t n = register_file(refnum, global ? registerComponentGlobal : 0);
+    no_register_message = false;
+    return n;
 }
 
 void Executor::ROMlib_components_process_exit(const ProcessSerialNumber *psn,
@@ -829,13 +930,33 @@ LONGINT Executor::C_RegisterComponentResourceFile(INTEGER resRefNum, INTEGER glo
 
 namespace
 {
+/* A component's resource file, opened for it: how many opens are open, and
+   whether the file was open before the first (then it is never closed
+   here). QuickTime 3's codecs share the QuickTime file: OpenResFile gives
+   each the same refnum, and one closing it freed what another had loaded
+   from it (rpza's band ran code where a resource map had been put). */
+struct ResFileUse
+{
+    int opens = 0;
+    bool was_open = false;
+};
+std::map<INTEGER, ResFileUse> res_file_uses;
+
 INTEGER open_res_file(Component aComponent)
 {
     Comp *c = comp_of(gid(aComponent));
     if(!c || !c->from_file)
         return -1;
     FSSpec spec = c->file;
-    return FSpOpenResFile(&spec, fsRdPerm);
+    bool was_open;
+    INTEGER rn = open_comp_file(&spec, &was_open);
+    if(rn != -1)
+    {
+        ResFileUse &u = res_file_uses[rn];
+        if(u.opens++ == 0)
+            u.was_open = was_open;
+    }
+    return rn;
 }
 }
 
@@ -854,6 +975,16 @@ OSErr Executor::C_OpenAComponentResFile(Component aComponent, GUEST<INTEGER> *re
 
 OSErr Executor::C_CloseComponentResFile(INTEGER refnum)
 {
+    auto it = res_file_uses.find(refnum);
+    if(it != res_file_uses.end())
+    {
+        if(--it->second.opens > 0)
+            return noErr;
+        bool was_open = it->second.was_open;
+        res_file_uses.erase(it);
+        if(was_open)
+            return noErr;
+    }
     CloseResFile(refnum);
     return ResError();
 }
@@ -938,7 +1069,8 @@ OSErr Executor::C_GetComponentResource(Component aComponent, OSType resType, INT
     {
         FSSpec spec = c->file;
         INTEGER saved = CurResFile();
-        INTEGER rn = FSpOpenResFile(&spec, fsRdPerm);
+        bool was_open;
+        INTEGER rn = open_comp_file(&spec, &was_open);
         if(rn != -1)
         {
             UseResFile(rn);
@@ -951,7 +1083,7 @@ OSErr Executor::C_GetComponentResource(Component aComponent, OSType resType, INT
                 err = noErr;
             }
             UseResFile(saved);
-            CloseResFile(rn);
+            close_comp_file(rn, was_open);
         }
     }
     return err;
@@ -1012,6 +1144,38 @@ syn68k_addr_t call_component_function(syn68k_addr_t)
     return func;
 }
 
+/* Selector -2: a QuickTime 3 codec's dispatcher, for a call it doesn't
+   answer itself, pushes the header long {flags, paramSize, what} and its
+   delegate's instance (its globals' second long) and calls
+   _ComponentDispatch -2. Under them is its own fast-dispatch frame: the
+   return address, the parameters, the storage and the result. The call
+   goes to the delegate with those parameters, its result into that slot,
+   and returns to the frame's caller with the frame popped, as if the
+   codec had answered. Only if the instance isn't one does it return to
+   the codec, its two arguments popped (the codec then answers
+   badComponentSelector). */
+syn68k_addr_t delegate_fast(syn68k_addr_t)
+{
+    uint32_t ret = POPADDR();
+    uint32_t ci = POPUL();
+    uint32_t header = POPUL();
+    Inst *in = inst_of(ci);
+    if(!in)
+    {
+        warning_unexpected("ComponentDispatch -2: %08x isn't an instance", ci);
+        return ret;
+    }
+    uint32_t frame_ret = POPADDR();
+    uint8_t size = (header >> 16) & 0xFF;
+    uint32_t slot = EM_A7 + size + 4;
+    PUSHUL(header); /* the parameters, in place, behind the header */
+    uint32_t params = EM_A7;
+    int32_t r = call_entry(in->comp, in, params);
+    WRITEUL(slot, r);
+    EM_A7 = slot;
+    return frame_ret;
+}
+
 /* MacPhoenix: CallComponentFunction[WithStorage] for PowerPC callers
    (Components.yaml): the block's arguments onto the 68k stack as the
    68k call lays them (the first argument highest; the storage above
@@ -1038,6 +1202,7 @@ static ComponentResult call_function(uint32_t storage, bool with_storage, Compon
 
 traps::Entrypoint call_component_ep("CallComponent");
 traps::Entrypoint call_component_function_ep("CallComponentFunction");
+traps::Entrypoint delegate_fast_ep("ComponentDispatch -2");
 
 struct RawSelectors : traps::internal::DeferredInit
 {
@@ -1045,6 +1210,7 @@ struct RawSelectors : traps::internal::DeferredInit
     {
         ComponentDispatch.addSelector(0, &call_component_ep, call_component);
         ComponentDispatch.addSelector(0xFFFF, &call_component_function_ep, call_component_function);
+        ComponentDispatch.addSelector(0xFFFE, &delegate_fast_ep, delegate_fast);
     }
 } raw_selectors;
 }

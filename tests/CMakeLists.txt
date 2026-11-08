@@ -1684,6 +1684,105 @@ set_property(TEST guest_suite_761 ot_retro68_68k_rom APPEND PROPERTY LABELS 761)
 # runs (STRAGGLERS 66): left in, marked (ctest -LE flaky leaves it out).
 set_property(TEST ot_retro68_ppc_rom_761 APPEND PROPERTY LABELS flaky)
 
+# QuickTime from an application: QTTest (tests/guest/qt, MPW, fat) on the
+# movies tests/lib/qtmovie.py writes, against Apple's QuickTime on the ROM
+# machines (the references tests/guest/qt/expected_*.txt; run_qt.sh NAME
+# --record makes them again): the Quadra with 7.6.1 (QuickTime 2.5, 68k
+# code) and the G3 with 8.6 (QuickTime 3.0.2, PowerPC code), the reference
+# from Kheperix; mame-ppc must give the same (its codecs ran stale code until
+# MakeDataExecutable reached its recompiler). Both machines' --audio-dump must
+# have the tones. On Executor, its own Movie Toolbox and ICM over Apple's
+# codecs (docs/executor/QuickTime.md) against the Quadra's reference, but for
+# the lines tests/guest/qt/known_executor_761.txt names (QuickDraw's
+# dithering, the movie controller); no sound from movies yet (qt-b5), so no
+# --audio-dump check there. QTTest's PowerPC code on Executor 8.6 against the
+# G3's, but for tests/guest/qt/known_executor_ppc_86.txt (QuickTime 3's 68k
+# codecs where the G3 has native ones). The _disk cells play the movies on our disks
+# (run_qt.sh --disk: Ares, HyperCard's Simple Movie, 7.6.1's Extensions, 8.6's
+# Sample Movie with its compressed header;
+# skipped without their images), frames at fixed times against the Quadra's.
+foreach(cell IN ITEMS "qt_rom_68k_761;rom_68k_761;;--os-version 7.6.1;18860;guest;qt;761"
+                      "qt_rom_ppc_86;rom_ppc_86;;--backend kpx --jit --image 8.6;18862;guest;qt"
+                      "qt_rom_mameppc_86;rom_ppc_86;;--backend kpx --core mame-ppc --jit --image 8.6;18882;guest;qt;mame"
+                      "qt_executor_761;rom_68k_761;--needs-qt --known ${CMAKE_SOURCE_DIR}/tests/guest/qt/known_executor_761.txt;--backend executor --os-version 7.6.1;18864;guest;qt;761;executor"
+                      "qt_executor_ppc_86;rom_ppc_86;--needs-qt --known ${CMAKE_SOURCE_DIR}/tests/guest/qt/known_executor_ppc_86.txt;--backend executor --executor-ppc --image 8.6;18884;guest;qt;executor"
+                      "qt_disk_rom_68k_761;disk_rom_68k_761;--disk;--os-version 7.6.1;18876;guest;qt;761"
+                      "qt_disk_executor_761;disk_rom_68k_761;--disk --needs-qt --known ${CMAKE_SOURCE_DIR}/tests/guest/qt/known_disk_executor_761.txt;--backend executor --os-version 7.6.1;18878;guest;qt;761;executor")
+  list(GET cell 0 name)
+  list(GET cell 1 ref)
+  list(GET cell 2 qt_args)
+  list(GET cell 3 suite)
+  list(GET cell 4 port)
+  list(SUBLIST cell 5 -1 labels)
+  separate_arguments(qt_args UNIX_COMMAND "${qt_args}")
+  separate_arguments(suite_args UNIX_COMMAND "${suite}")
+  add_test(
+    NAME ${name}
+    COMMAND bash ${CMAKE_SOURCE_DIR}/tests/guest/qt/run_qt.sh ${ref} ${qt_args} -- ${suite_args} --timeout 400 --port ${port}
+  )
+  set_tests_properties(${name} PROPERTIES
+    TIMEOUT 500
+    LABELS "${labels}"
+    SKIP_RETURN_CODE 77
+    ENVIRONMENT "MACEMU_ROM=$<IF:$<STREQUAL:${ref},rom_ppc_86>,${TEST_PPC_ROM},${TEST_ROM}>"
+  )
+endforeach()
+
+# Movies in applications on Executor 7.6.1 through Executor's movie controller
+# (mc.cpp): 7.6.1's Demo click&drag opened in MoviePlayer and SimpleText, the
+# movie and the controller drawn, a click on play plays it
+# (tests/test_qt_apps_executor.sh; skipped without the movie's image).
+add_test(NAME qt_apps_executor_761 COMMAND bash ${TEST_DIR}/test_qt_apps_executor.sh $<TARGET_FILE:mac-phoenix> 18880)
+set_tests_properties(qt_apps_executor_761 PROPERTIES TIMEOUT 400 LABELS "guest;qt;761;executor" SKIP_RETURN_CODE 77)
+
+# QuickTime's fixed-point, wide and matrix routines ($ABC2; tests/guest/qtmath):
+# Executor's own (qtmath.cpp) against a Quadra's 7.6.1 with QuickTime 2.5,
+# whose run is the reference (qtmath_rom_68k_761 checks it still holds).
+foreach(cell IN ITEMS "qtmath_rom_68k_761;--os-version 7.6.1;18866;guest;qt;761"
+                      "qtmath_executor_761;--backend executor --os-version 7.6.1;18868;guest;qt;761;executor")
+  list(GET cell 0 name)
+  list(GET cell 1 suite)
+  list(GET cell 2 port)
+  list(SUBLIST cell 3 -1 labels)
+  separate_arguments(suite_args UNIX_COMMAND "${suite}")
+  add_test(
+    NAME ${name}
+    COMMAND bash ${CMAKE_SOURCE_DIR}/tests/guest/qtmath/run_qtmath.sh rom_68k_761 -- ${suite_args} --timeout 120 --port ${port}
+  )
+  set_tests_properties(${name} PROPERTIES
+    TIMEOUT 300
+    LABELS "${labels}"
+    SKIP_RETURN_CODE 77
+    ENVIRONMENT "MACEMU_ROM=${TEST_ROM}"
+  )
+endforeach()
+
+# The Image Compression Manager on a frame of its own (tests/guest/qticm): codec
+# information, compress and decompress (32-bit, 16-bit, a half-size matrix)
+# for Apple's codecs, against a Quadra's 7.6.1 with QuickTime 2.5. Executor's
+# own ICM over the same codecs; the lines that differ by dithering are in
+# known_executor_761.txt.
+foreach(cell IN ITEMS "qticm_rom_68k_761;;--os-version 7.6.1;18870;guest;qt;761"
+                      "qticm_executor_761;--needs-icm --known ${CMAKE_SOURCE_DIR}/tests/guest/qticm/known_executor_761.txt;--backend executor --os-version 7.6.1;18872;guest;qt;761;executor")
+  list(GET cell 0 name)
+  list(GET cell 1 icm_args)
+  list(GET cell 2 suite)
+  list(GET cell 3 port)
+  list(SUBLIST cell 4 -1 labels)
+  separate_arguments(icm_args UNIX_COMMAND "${icm_args}")
+  separate_arguments(suite_args UNIX_COMMAND "${suite}")
+  add_test(
+    NAME ${name}
+    COMMAND bash ${CMAKE_SOURCE_DIR}/tests/guest/qticm/run_qticm.sh rom_68k_761 ${icm_args} -- ${suite_args} --timeout 150 --port ${port}
+  )
+  set_tests_properties(${name} PROPERTIES
+    TIMEOUT 300
+    LABELS "${labels}"
+    SKIP_RETURN_CODE 77
+    ENVIRONMENT "MACEMU_ROM=${TEST_ROM}"
+  )
+endforeach()
+
 # Every test's scratch (logs, ExtFS folders, mktemp dirs) on the SSD, not in
 # /tmp: /tmp is RAM-backed here, and RAM is what runs out.
 set(TEST_TMPDIR "$ENV{HOME}/storage/tmp" CACHE PATH "TMPDIR for the tests (scratch on disk, not tmpfs)")

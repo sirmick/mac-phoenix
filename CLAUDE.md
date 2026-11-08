@@ -26,6 +26,10 @@ ctest --test-dir build -j4
 ctest --test-dir build -L api
 ctest --test-dir build -R api_endpoints -V
 npx playwright test                  # tests/e2e, against a running emulator
+python3 tests/lib/ports.py held      # test ports claimed now: each test claims free ones (docs/Testing.md "Ports")
+tools/ci/rerun_flaky.py --test-dir build --log CTEST-OUTPUT   # failures rerun alone: flake / new flake / real (tests/flaky.txt)
+tools/ci/merge_gate.sh BRANCH [--into executor-86-grid2] [--apply]   # merge in a worktree, both builds, ctest
+                                     # -> MERGE / FLAKES-ONLY / FAIL in ~/storage/ci/gate (docs/Testing.md "Merge gate")
 
 # Executor in mac-phoenix (docs/executor/PLAN.md): mame-68k only, no ROM.
 # "Executor" in the web UI, or:

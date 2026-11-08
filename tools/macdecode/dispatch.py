@@ -170,6 +170,8 @@ class Dispatchers:
 
     def _from_multiversal(self):
         for name, v in self.db.dispatchers.items():
+            if v["location"] == "Component":    # a component's selectors, not a trap's
+                continue
             d = self._slot(v["trap"], name, "multiversal")
             d["kind"], d["mask"] = parse_location(v["location"])
         by_name = {d["name"]: d for d in self.slots.values()}

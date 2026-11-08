@@ -151,6 +151,43 @@ static void test_ppc_invalidate_branch_target(bool jit)
     CHECK(p.core->reg(cpu::ppc::GPR0 + 3) == 5);
 }
 
+/* The same through the guest's own icbi (Mac OS's MakeDataExecutable on
+ * the ROM machine), for a block entered on the page after the rewritten
+ * one that branches back into it: its hash entry is outside the page, so
+ * dropping the page's entries alone left the old code running (QuickTime
+ * 3's PowerPC codecs on 8.6).
+ *   0x1ff8 L: addi r3,r0,1 ; b X
+ *   0x2000 E: cmpwi r4,0 ; beq L
+ *   0x2008 X: host op 0
+ *   0x3000:   stw r5,0(r6) ; dcbst 0,r6 ; sync ; icbi 0,r6 ; isync ; host op 0 */
+static void test_ppc_icbi_backward_branch(bool jit)
+{
+    static const uint32_t nop[] = { 0x60000000 };
+    PpcMachine p(nop, 1, jit);
+    static const uint32_t code[] = { 0x38600001, 0x4800000c, 0x2c040000, 0x4182fff4, 0x18000000 };
+    for(size_t i = 0; i < 5; i++)
+        p.mem.write32(0x1ff8 + 4 * i, code[i]);
+    static const uint32_t flush[] = { 0x90a60000, 0x7c00306c, 0x7c0004ac, 0x7c0037ac, 0x4c00012c, 0x18000000 };
+    for(size_t i = 0; i < 6; i++)
+        p.mem.write32(0x3000 + 4 * i, flush[i]);
+    p.core->reset();
+    p.core->set_reg(cpu::ppc::GPR0 + 4, 0);
+    p.core->set_pc(0x2000);
+    CHECK(p.core->run() == cpu::StopReason::HostOp);
+    CHECK(p.core->reg(cpu::ppc::GPR0 + 3) == 1);
+
+    p.core->set_reg(cpu::ppc::GPR0 + 5, 0x38600005);   /* addi r3,r0,5 */
+    p.core->set_reg(cpu::ppc::GPR0 + 6, 0x1ff8);
+    p.core->set_pc(0x3000);
+    CHECK(p.core->run() == cpu::StopReason::HostOp);
+    CHECK(p.mem.read32(0x1ff8) == 0x38600005);
+
+    p.core->set_reg(cpu::ppc::GPR0 + 3, 0);
+    p.core->set_pc(0x2000);
+    CHECK(p.core->run() == cpu::StopReason::HostOp);
+    CHECK(p.core->reg(cpu::ppc::GPR0 + 3) == 5);
+}
+
 /* A double stored to and loaded from an address that isn't word-aligned:
  * the 750 takes an alignment exception, which the installer completes in
  * software (as Mac OS's handler does; BBEdit Lite 4.1's setjmp).
@@ -345,6 +382,8 @@ int main(int argc, char **argv)
     test_ppc(true);
     test_ppc_invalidate_branch_target(false);
     test_ppc_invalidate_branch_target(true);
+    test_ppc_icbi_backward_branch(false);
+    test_ppc_icbi_backward_branch(true);
     test_ppc_misaligned_fp(false);
     test_ppc_misaligned_fp(true);
     test_ppc_instruction_hook(false);

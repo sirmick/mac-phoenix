@@ -1010,6 +1010,8 @@ static int kpx_cpu_execute_one(void)
 static std::atomic<bool> tick_thread_running{false};
 // Tick function — copied from SheepShaver main_unix.cpp tick_func()
 // Tick thread — matches legacy SheepShaver tick_func structure
+void ppc_via_tick(void);    // emul_op_ppc.cpp
+
 static void tick_thread_func() {
     int tick_counter = 0;
     uint64 start = GetTicks_usec();
@@ -1045,7 +1047,8 @@ static void tick_thread_func() {
             WriteMacInt32(0x20c, (uint32)time(NULL) + 0x7C25B080);
         }
 
-        // Trigger 60Hz interrupt
+        // Trigger 60Hz interrupt (counted: emul_op_ppc.cpp ppc_via_tick)
+        ppc_via_tick();
         if (ReadMacInt32(XLM_IRQ_NEST) == 0) {
             SetInterruptFlag(INTFLAG_VIA);
             TriggerInterrupt();

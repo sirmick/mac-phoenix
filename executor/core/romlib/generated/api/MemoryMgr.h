@@ -470,6 +470,30 @@ void C_TempDisposeHandle(Handle h, GUEST<OSErr> *result_code);PASCAL_SUBTRAP(Tem
 DISPATCHER_TRAP(HeapDispatch, 0xA0A4, D0W);
 
 
+OSErr C_HeapDispatchHLock(Handle h);REGISTER_SUBTRAP(HeapDispatchHLock, 0xA0A4, 0x0000, HeapDispatch, D0(A0));
+
+
+OSErr C_HeapDispatchHUnlock(Handle h);REGISTER_SUBTRAP(HeapDispatchHUnlock, 0xA0A4, 0x0001, HeapDispatch, D0(A0));
+
+
+OSErr C_HeapDispatchHPurge(Handle h);REGISTER_SUBTRAP(HeapDispatchHPurge, 0xA0A4, 0x0002, HeapDispatch, D0(A0));
+
+
+OSErr C_HeapDispatchHNoPurge(Handle h);REGISTER_SUBTRAP(HeapDispatchHNoPurge, 0xA0A4, 0x0003, HeapDispatch, D0(A0));
+
+
+SignedByte C_HeapDispatchHGetState(Handle h);REGISTER_SUBTRAP(HeapDispatchHGetState, 0xA0A4, 0x0004, HeapDispatch, D0(A0));
+
+
+OSErr C_HeapDispatchHSetState(Handle h, LONGINT flags);REGISTER_SUBTRAP(HeapDispatchHSetState, 0xA0A4, 0x0005, HeapDispatch, D0(A0, A1));
+
+
+OSErr C_HeapDispatchAddTrashNotification(Ptr rec);REGISTER_SUBTRAP(HeapDispatchAddTrashNotification, 0xA0A4, 0x0006, HeapDispatch, D0(A0));
+
+
+OSErr C_HeapDispatchRemoveTrashNotification(Ptr proc, Handle h);REGISTER_SUBTRAP(HeapDispatchRemoveTrashNotification, 0xA0A4, 0x0008, HeapDispatch, D0(A0, A1));
+
+
 THz C_HeapDispatchSharedZone();PASCAL_SUBTRAP_UNEXPORTED(HeapDispatchSharedZone, 0xA0A4, 0x0020, HeapDispatch);
 
 

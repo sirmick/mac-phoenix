@@ -1,0 +1,11 @@
+# build.mpw — QTICM, a 68k application (SC, Link): the Image Compression
+# Manager on a frame of its own (qticm.c).
+#   tools/mpw/mpw build tests/guest/qticm -o tests/guest/qticm
+# interfaces: 3.3.2
+# products: QTICM
+SC -b qticm.c -o qticm.c.o
+Link -t APPL -c 'QTic' -model near ∂
+	qticm.c.o ∂
+	"{Libraries}MacRuntime.o" "{Libraries}IntEnv.o" "{CLibraries}StdCLib.o" "{Libraries}Interface.o" ∂
+	-o QTICM
+SetFile -t APPL -c 'QTic' QTICM

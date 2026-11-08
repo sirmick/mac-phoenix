@@ -1,0 +1,81 @@
+PASS gestalt.qtim 02508000
+PASS gestalt.icmp 00000012
+PASS enter_movies
+PASS movie.demo-click.open resId=1
+PASS movie.demo-click.info scale=600 duration=2240 tracks=3 [vide scale=600 duration=2240 samples=56 'rle ' 320x176 depth=4] [soun scale=22254 duration=2432 samples=2432 'raw ' ch=1 bits=8 rate=22254] [soun scale=22254 duration=2432 samples=2432 'raw ' ch=1 bits=8 rate=22254]
+PASS disk.demo-click.00 t=140 crc=A84740CC
+PASS disk.demo-click.01 t=420 crc=A84740CC
+PASS disk.demo-click.02 t=700 crc=601CCEFA
+PASS disk.demo-click.03 t=980 crc=36738EDC
+PASS disk.demo-click.04 t=1260 crc=5D10D738
+PASS disk.demo-click.05 t=1540 crc=559C7F99
+PASS disk.demo-click.06 t=1820 crc=9DBA51F1
+PASS disk.demo-click.07 t=2100 crc=9DBA51F1
+PASS disk.demo-click.whole done in time
+PASS movie.demo-lock.open resId=1
+PASS movie.demo-lock.info scale=600 duration=3640 tracks=5 [vide scale=600 duration=3640 samples=91 'rle ' 320x176 depth=4] [soun scale=22254 duration=2432 samples=2432 'raw ' ch=1 bits=8 rate=22254] [soun scale=22254 duration=2432 samples=2432 'raw ' ch=1 bits=8 rate=22254] [soun scale=22254 duration=2432 samples=2432 'raw ' ch=1 bits=8 rate=22254] [soun scale=22254 duration=2432 samples=2432 'raw ' ch=1 bits=8 rate=22254]
+PASS disk.demo-lock.00 t=227 crc=A84740CC
+PASS disk.demo-lock.01 t=682 crc=FE2800EA
+PASS disk.demo-lock.02 t=1137 crc=5D10D738
+PASS disk.demo-lock.03 t=1592 crc=9F3D2426
+PASS disk.demo-lock.04 t=2047 crc=B5D71E46
+PASS disk.demo-lock.05 t=2502 crc=9EEF9B13
+PASS disk.demo-lock.06 t=2957 crc=0B143E90
+PASS disk.demo-lock.07 t=3412 crc=0B143E90
+PASS disk.demo-lock.whole done in time
+PASS movie.demo-single.open resId=1
+PASS movie.demo-single.info scale=600 duration=1480 tracks=2 [vide scale=600 duration=1480 samples=37 'rle ' 320x176 depth=4] [soun scale=22254 duration=2432 samples=2432 'raw ' ch=1 bits=8 rate=22254]
+PASS disk.demo-single.00 t=92 crc=C9006B42
+PASS disk.demo-single.01 t=277 crc=C9006B42
+PASS disk.demo-single.02 t=462 crc=C9006B42
+PASS disk.demo-single.03 t=647 crc=015BE574
+PASS disk.demo-single.04 t=832 crc=A27B3705
+PASS disk.demo-single.05 t=1017 crc=96379A50
+PASS disk.demo-single.06 t=1202 crc=96379A50
+PASS disk.demo-single.07 t=1387 crc=96379A50
+PASS disk.demo-single.whole done in time
+PASS movie.hc-simple.open resId=-1
+PASS movie.hc-simple.info scale=600 duration=3739 tracks=3 [vide scale=600 duration=3540 samples=41 'smc ' 206x243 depth=8] [soun scale=11025 duration=68355 samples=68355 'twos' ch=1 bits=8 rate=11025] [sprt scale=600 duration=600 samples=1 '....']
+PASS disk.hc-simple.00 t=233 crc=D9E9F16B
+PASS disk.hc-simple.01 t=701 crc=C41EA02E
+PASS disk.hc-simple.02 t=1168 crc=D351CCD4
+PASS disk.hc-simple.03 t=1635 crc=A8D7E707
+PASS disk.hc-simple.04 t=2103 crc=8540F73D
+PASS disk.hc-simple.05 t=2570 crc=D652C07E
+PASS disk.hc-simple.06 t=3037 crc=34EE625A
+PASS disk.hc-simple.07 t=3505 crc=D9E9F16B
+PASS disk.hc-simple.whole done in time
+FAIL movie.qt3-sample.open NewMovieFromFile -2002
+PASS movie.ares-1.open resId=-1
+PASS movie.ares-1.info scale=600 duration=14350 tracks=2 [vide scale=24 duration=574 samples=287 'cvid' 320x160 depth=8] [soun scale=11025 duration=263663 samples=263663 'raw ' ch=1 bits=8 rate=11025]
+PASS disk.ares-1.00 t=896 crc=2C0D2927
+PASS disk.ares-1.01 t=2690 crc=DB9D1C45
+PASS disk.ares-1.02 t=4484 crc=55B0F2A9
+PASS disk.ares-1.03 t=6278 crc=C28441E3
+PASS disk.ares-1.04 t=8071 crc=1416B2C3
+PASS disk.ares-1.05 t=9865 crc=106DB9B0
+PASS disk.ares-1.06 t=11659 crc=B286E068
+PASS disk.ares-1.07 t=13453 crc=D6896E31
+PASS disk.ares-1.play time advances
+PASS movie.ares-2.open resId=-1
+PASS movie.ares-2.info scale=600 duration=14600 tracks=2 [vide scale=24 duration=584 samples=292 'cvid' 320x160 depth=8] [soun scale=11025 duration=268275 samples=268275 'raw ' ch=1 bits=8 rate=11025]
+PASS disk.ares-2.00 t=912 crc=F8F4FBBC
+PASS disk.ares-2.01 t=2737 crc=0E934D0D
+PASS disk.ares-2.02 t=4562 crc=4ADE4F65
+PASS disk.ares-2.03 t=6387 crc=025B73E0
+PASS disk.ares-2.04 t=8212 crc=E74A6376
+PASS disk.ares-2.05 t=10037 crc=BBAE1BC2
+PASS disk.ares-2.06 t=11862 crc=46B13139
+PASS disk.ares-2.07 t=13687 crc=DBC49350
+PASS disk.ares-2.play time advances
+PASS movie.ares-3.open resId=-1
+PASS movie.ares-3.info scale=24 duration=614 tracks=2 [vide scale=24 duration=614 samples=303 'cvid' 320x160 depth=8] [soun scale=11025 duration=282516 samples=282516 'raw ' ch=1 bits=8 rate=11025]
+PASS disk.ares-3.00 t=38 crc=FD93D3E6
+PASS disk.ares-3.01 t=115 crc=7BCACF5B
+PASS disk.ares-3.02 t=191 crc=8923CF41
+PASS disk.ares-3.03 t=268 crc=D6FF46C6
+PASS disk.ares-3.04 t=345 crc=053DE086
+PASS disk.ares-3.05 t=422 crc=07DD3A99
+PASS disk.ares-3.06 t=498 crc=36A5F928
+PASS disk.ares-3.07 t=575 crc=0DA61BF6
+PASS disk.ares-3.play time advances

@@ -32,12 +32,14 @@ class ExecutorGenerator < Generator
         return type, "", "" if not type_needs_guest?(type)
         if type =~ /^(.*)(\[[^\[\]]*\])$/ then
             post = $2
-            type1, _, _ = guestify_type($1, true)
-            
+            # MacPhoenix: an array of arrays keeps both bounds
+            # (MatrixRecord's Fixed[3][3])
+            type1, _, inner = guestify_type($1, true)
+
             #if guest then
             #    return "GUEST<#{type1}#{post}>", "", ""
             #else
-                return type1, "", post
+                return type1, "", "#{inner}#{post}"
             #end
         elsif type =~ /^(.*)\*$/ then
             type1, _, _ = guestify_type($1, true)
@@ -555,10 +557,17 @@ class ExecutorGenerator < Generator
             end
         elsif fun["selector"] then
             # `export: false`: the trap's selector only, not an InterfaceLib
-            # export (a private call Apple's headers don't name).
-            @out << (fun["export"] == false ? "PASCAL_SUBTRAP_UNEXPORTED(" : "PASCAL_SUBTRAP(")
-            @out << "#{name}, #{hexlit(trap)}, "
-            @out << "#{hexlit(fun["selector"])}, #{hexlit(fun["dispatcher"])});\n"
+            # export (a private call Apple's headers don't name); with
+            # `library:`, that library's export instead (the ICM's calls,
+            # QuickTimeLib's).
+            if fun["export"] == false and fun["library"] and fun["executor"] then
+                @out << "PASCAL_SUBTRAP_LIB(#{name}, #{hexlit(trap)}, "
+                @out << "#{hexlit(fun["selector"])}, #{hexlit(fun["dispatcher"])}, #{Array(fun["library"])[0]});\n"
+            else
+                @out << (fun["export"] == false ? "PASCAL_SUBTRAP_UNEXPORTED(" : "PASCAL_SUBTRAP(")
+                @out << "#{name}, #{hexlit(trap)}, "
+                @out << "#{hexlit(fun["selector"])}, #{hexlit(fun["dispatcher"])});\n"
+            end
         elsif trap then
             if name == cname then
                 if args.size == 0 && !fun["return"] then
@@ -578,7 +587,12 @@ class ExecutorGenerator < Generator
         # for PowerPC and CFM-68K code (SoundLib's Sound Manager calls): the
         # same entry under that library's name too.
         if fun["library"] and trap and fun["executor"] then
-            Array(fun["library"]).each {|lib| @out << "LIBRARY_ALSO(#{lib}, #{name}, InterfaceLib);\n" }
+            libs = Array(fun["library"])
+            if fun["selector"] and fun["export"] == false then
+                libs[1..-1].each {|lib| @out << "LIBRARY_ALSO(#{lib}, #{name}, #{libs[0]});\n" }
+            else
+                libs.each {|lib| @out << "LIBRARY_ALSO(#{lib}, #{name}, InterfaceLib);\n" }
+            end
         end
         # A selector the guest's own code answers (the Drag Manager's),
         # exported by a library: glue through the dispatcher's table entry.

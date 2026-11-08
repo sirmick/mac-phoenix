@@ -262,8 +262,8 @@ cmake -B build -DTEST_ROM=/path/to/quadra.rom \
                -DTEST_PPC_ROM=/path/to/g3.rom \
                -DTEST_SE_ROM=/path/to/mac-se.rom
 
-# Playwright E2E (spawns its own emulator on nominal port 18094, moved to the
-# checkout's range by tests/lib/ports.py)
+# Playwright E2E (spawns its own emulator on nominal port 18094, given a
+# free port by tests/lib/ports.py)
 npx playwright test
 npx playwright test --headed
 ```

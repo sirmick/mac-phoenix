@@ -1,0 +1,370 @@
+PASS gestalt.qtim 03028000
+PASS gestalt.icmp 00000013
+PASS enter_movies
+PASS comp.imdc count=72
+PASS comp.imdc.00 '.SGI' 'appl' flags=00400028 Apple SGI
+PASS comp.imdc.01 '2vuy' 'appl' flags=004379F8 Apple Component Video - YCrCb
+PASS comp.imdc.02 '8BPS' 'appl' flags=00000029 Apple Planar RGB
+PASS comp.imdc.03 'IV31' 'intl' flags=00000838 Indeo® Video R3.1 Decompressor
+PASS comp.imdc.04 'IV32' 'intl' flags=00000838 Indeo® Video R3.2 Decompressor
+PASS comp.imdc.05 'PNTG' 'appl' flags=00000001 Apple MacPaint
+PASS comp.imdc.06 'SVQ1' 'SVis' flags=00000400 Sorenson Video™ Decompressor
+PASS comp.imdc.07 'WRLE' 'appl' flags=0000002D Apple BMP
+PASS comp.imdc.08 'YVU9' 'intl' flags=00000038 Intel Raw Decompressor
+PASS comp.imdc.09 'avr ' 'appl' flags=00000028 Apple AVR JPEG
+PASS comp.imdc.10 'base' 'appl' flags=00000000
+PASS comp.imdc.11 'blit' 'appl' flags=00000038
+PASS comp.imdc.12 'blnd' 'appl' flags=0044003F Alpha Compositor
+PASS comp.imdc.13 'blur' 'appl' flags=0044003F Blur
+PASS comp.imdc.14 'cinu' 'appl' flags=00007BFF
+PASS comp.imdc.15 'ckey' 'appl' flags=0044003F Chroma Key
+PASS comp.imdc.16 'clou' 'appl' flags=00040030 Cloud
+PASS comp.imdc.17 'clpa' 'pano' flags=00000038 QTVR Warping Codec (CVR)
+PASS comp.imdc.18 'cmyk' 'appl' flags=00000020 Apple CMYK
+PASS comp.imdc.19 'cvid' 'appl' flags=00402C78 Apple Cinepak
+PASS comp.imdc.20 'dmb1' 'appl' flags=00000028 Apple OpenDML JPEG
+PASS comp.imdc.21 'dslv' 'appl' flags=0044003F Cross Fade
+PASS comp.imdc.22 'dvc ' 'appl' flags=00000020 Apple DV
+PASS comp.imdc.23 'dvcp' 'appl' flags=00000020 Apple DV
+PASS comp.imdc.24 'edge' 'appl' flags=0044003F Edge Detection
+PASS comp.imdc.25 'embs' 'appl' flags=0044003F Emboss
+PASS comp.imdc.26 'fire' 'appl' flags=00040038 Fire
+PASS comp.imdc.27 'flic' 'appl' flags=00000030 Apple FLC
+PASS comp.imdc.28 'fmns' 'appl' flags=0044003F Film Noise
+PASS comp.imdc.29 'gain' 'appl' flags=0044003F Alpha Gain
+PASS comp.imdc.30 'geff' 'appl' flags=0040003F Apple Generic Effect
+PASS comp.imdc.31 'genk' 'appl' flags=0044003F General Convolution
+PASS comp.imdc.32 'gif ' 'appl' flags=00400038 Apple GIF
+PASS comp.imdc.33 'glas' 'appl' flags=00000038
+PASS comp.imdc.34 'h263' 'appl' flags=00000420 Apple H.263
+PASS comp.imdc.35 'hslb' 'appl' flags=0044003F HSL Balance
+PASS comp.imdc.36 'iv31' 'intl' flags=00000838 Indeo® Video R3.1 Decompressor
+PASS comp.imdc.37 'iv32' 'intl' flags=00000838 Indeo® Video R3.2 Decompressor
+PASS comp.imdc.38 'jpeg' 'appl' flags=00400028 Apple Photo - JPEG
+PASS comp.imdc.39 'kpcd' 'appl' flags=00407870 Apple Photo CD
+PASS comp.imdc.40 'lcnu' 'appl' flags=00007BFF
+PASS comp.imdc.41 'matt' 'appl' flags=0044003F Gradient Wipe
+PASS comp.imdc.42 'mjpa' 'appl' flags=00000028 Apple Motion JPEG A
+PASS comp.imdc.43 'mjpb' 'appl' flags=00000028 Apple Motion JPEG B
+PASS comp.imdc.44 'mplo' 'appl' flags=0044003F Implode
+PASS comp.imdc.45 'mpyc' 'appl' flags=000379F8 Apple Planar YCbCr Codec
+PASS comp.imdc.46 'msvc' 'appl' flags=00000020 Apple - Microsoft Video 1
+PASS comp.imdc.47 'path' 'appl' flags=0053F9BF Apple Curve
+PASS comp.imdc.48 'png ' 'appl' flags=0040002F Apple PNG
+PASS comp.imdc.49 'push' 'appl' flags=0044003F Push
+PASS comp.imdc.50 'qdgx' 'appl' flags=0013FBFF Apple QuickDraw GX
+PASS comp.imdc.51 'qdrw' 'appl' flags=40000001 Apple QuickDraw
+PASS comp.imdc.52 'raw ' 'appl' flags=005BFBFF Apple None
+PASS comp.imdc.53 'rgbb' 'appl' flags=0044003F RGB Balance
+PASS comp.imdc.54 'ripl' 'appl' flags=00040038 Ripple
+PASS comp.imdc.55 'rle ' 'appl' flags=0040043F Apple Animation
+PASS comp.imdc.56 'rpza' 'appl' flags=00400C78 Apple Video
+PASS comp.imdc.57 'shrp' 'appl' flags=0044003F Sharpen
+PASS comp.imdc.58 'slid' 'appl' flags=0044003F Slide
+PASS comp.imdc.59 'smc ' 'appl' flags=00400438 Apple Graphics
+PASS comp.imdc.60 'smp2' 'appl' flags=0044003F Iris
+PASS comp.imdc.61 'smp3' 'appl' flags=0044003F Radial
+PASS comp.imdc.62 'smp4' 'appl' flags=0044003F Matrix Wipe
+PASS comp.imdc.63 'smpt' 'appl' flags=0044003F Wipe
+PASS comp.imdc.64 'solr' 'appl' flags=0044003F Color Style
+PASS comp.imdc.65 'sync' 'appl' flags=4044003F ColorSync
+PASS comp.imdc.66 'tga ' 'appl' flags=00000038 Apple Targa
+PASS comp.imdc.67 'tiff' 'appl' flags=0040002F Apple TIFF
+PASS comp.imdc.68 'tint' 'appl' flags=0044003F Color Tint
+PASS comp.imdc.69 'xplo' 'appl' flags=0044003F Explode
+PASS comp.imdc.70 'yuv2' 'appl' flags=004379F8 Apple Component Video - YUV
+PASS comp.imdc.71 'yuvu' 'appl' flags=004379F8 Apple Component Video - YUV
+PASS comp.imco count=17
+PASS comp.imco.00 '8BPS' 'appl' flags=00000028 Apple Planar RGB
+PASS comp.imco.01 'IV32' 'intl' flags=00800420 Indeo® Video R3.2 Compressor
+PASS comp.imco.02 'SVQ1' 'SVis' flags=00800420 Sorenson Video™ Compressor
+PASS comp.imco.03 'WRLE' 'appl' flags=0000002D Apple BMP
+PASS comp.imco.04 'YVU9' 'intl' flags=00000020 Intel Raw Compressor
+PASS comp.imco.05 'cvid' 'appl' flags=00C00420 Apple Cinepak
+PASS comp.imco.06 'dvc ' 'appl' flags=00000020 Apple DV - NTSC
+PASS comp.imco.07 'dvcp' 'appl' flags=00000020 Apple DV - PAL
+PASS comp.imco.08 'h263' 'appl' flags=00800430 Apple H.263
+PASS comp.imco.09 'jpeg' 'appl' flags=00400028 Apple Photo - JPEG
+PASS comp.imco.10 'mjpa' 'appl' flags=00000028 Apple Motion JPEG A
+PASS comp.imco.11 'mjpb' 'appl' flags=00000028 Apple Motion JPEG B
+PASS comp.imco.12 'raw ' 'appl' flags=0060003F Apple None
+PASS comp.imco.13 'rle ' 'appl' flags=0060043F Apple Animation
+PASS comp.imco.14 'rpza' 'appl' flags=00600430 Apple Video
+PASS comp.imco.15 'smc ' 'appl' flags=00600408 Apple Graphics
+PASS comp.imco.16 'yuv2' 'appl' flags=00400020 Apple Component Video - YUV
+PASS comp.mhlr count=17
+PASS comp.mhlr.00 'MPEG' 'appl' flags=00000001 Apple muxed MPEG Media Handler
+PASS comp.mhlr.01 'STpn' 'zzzz' flags=00000001 Panorama Media Handler
+PASS comp.mhlr.02 'gnrc' 'appl' flags=40000001 Apple Generic Media Handler
+PASS comp.mhlr.03 'm1a ' 'appl' flags=00000001 Apple elementary audio MPEG Media Handler
+PASS comp.mhlr.04 'm1v ' 'appl' flags=00000001 Apple elementary video MPEG Media Handler
+PASS comp.mhlr.05 'mhlr' 'appl' flags=40000000 Apple Standard Media Handler
+PASS comp.mhlr.06 'musi' 'appl' flags=40000001 Apple Music Media Handler
+PASS comp.mhlr.07 'obje' 'appl' flags=00000001 OBJE Media Handler
+PASS comp.mhlr.08 'pano' 'appl' flags=00000001 Panorama Media Handler
+PASS comp.mhlr.09 'qd3d' 'appl' flags=00000001 QuickDraw 3D Media Handler
+PASS comp.mhlr.10 'qtvr' 'appl' flags=00000001 QTVR Media Handler
+PASS comp.mhlr.11 'soun' 'appl' flags=40000000 Apple Sound Media Handler
+PASS comp.mhlr.12 'sprt' 'appl' flags=40000001 Apple Sprite Media Handler
+PASS comp.mhlr.13 'text' 'appl' flags=40000001 Apple Text Media Handler
+PASS comp.mhlr.14 'tmcd' 'appl' flags=40000001 Apple TimeCode Media Handler
+PASS comp.mhlr.15 'twen' 'appl' flags=40000001 Apple Tween Media Handler
+PASS comp.mhlr.16 'vide' 'appl' flags=40000000 Apple Video Media Handler
+PASS comp.dhlr count=6
+PASS comp.dhlr.00 'alis' 'appl' flags=40000002 Streaming file data handler
+PASS comp.dhlr.01 'alis' 'appl' flags=40000000 Apple Alias Data Handler for CDi Discs
+PASS comp.dhlr.02 'alis' 'appl' flags=40000001 Apple Alias Data Handler
+PASS comp.dhlr.03 'hndl' 'appl' flags=40000000 Apple Handle Data Handler
+PASS comp.dhlr.04 'rsrc' 'appl' flags=40000000 Apple Resource Data Handler
+PASS comp.dhlr.05 'url ' 'appl' flags=40000001 Apple URL File Data Handler
+PASS comp.clok count=4
+PASS comp.clok.00 'icm ' 'appl' flags=40000002 Apple ICM Clock
+PASS comp.clok.01 'micr' 'appl' flags=40000003 Apple Microsecond Clock
+PASS comp.clok.02 'soun' 'appl' flags=00000005 Sound Clock
+PASS comp.clok.03 'tick' 'appl' flags=40000001 Apple Tick Clock
+PASS comp.play count=7
+PASS comp.play.00 '.std' 'appl' flags=40000000 Movie Controller
+PASS comp.play.01 'STpn' 'zzzz' flags=00000001 QTVR 1.0 Panorama Controller
+PASS comp.play.02 'none' 'appl' flags=40000000 None Movie Controller
+PASS comp.play.03 'obje' 'appl' flags=00000003 Navigable Player
+PASS comp.play.04 'pano' 'appl' flags=00000003 Panorama Controller
+PASS comp.play.05 'qtvr' 'appl' flags=00000001 QTVR Controller
+PASS comp.play.06 'stna' 'appl' flags=00000001 QTVR 1.0 Object Controller
+PASS comp.sdev count=1
+PASS comp.sdev.00 'awac' 'appl' flags=80C00C0C Built-in
+PASS comp.eat_ count=72
+PASS comp.eat_.00 '.WAV' 'soun' flags=00046802 Wave
+PASS comp.eat_.01 '3DMF' 'qd3d' flags=00040802 3DMF
+PASS comp.eat_.02 'AIF ' 'soun' flags=00047802 AIFF
+PASS comp.eat_.03 'AIFC' 'soun' flags=00047802 AIFC
+PASS comp.eat_.04 'AIFC' 'soun' flags=00046802 AIFC
+PASS comp.eat_.05 'AIFF' 'soun' flags=00047802 AIFF
+PASS comp.eat_.06 'AIFF' 'soun' flags=40046802 AIFF
+PASS comp.eat_.07 'AU  ' 'soun' flags=00047802 µLaw
+PASS comp.eat_.08 'AVI ' '....' flags=40045A02 AVI
+PASS comp.eat_.09 'DAT ' 'MPEG' flags=00007802 Apple MPEG Import Component
+PASS comp.eat_.10 'DIF ' '....' flags=00047802 DV
+PASS comp.eat_.11 'DV  ' '....' flags=00047802 DV
+PASS comp.eat_.12 'FLC ' 'vide' flags=00045A02 AutoDesk Animator
+PASS comp.eat_.13 'FLI ' 'vide' flags=00045A02 AutoDesk Animator
+PASS comp.eat_.14 'FLI ' 'vide' flags=40044A02 AutoDesk Animator
+PASS comp.eat_.15 'GIF ' 'vide' flags=00045802 Animated GIF
+PASS comp.eat_.16 'GIFf' 'vide' flags=40044802 Animated GIF
+PASS comp.eat_.17 'KAR ' 'musi' flags=00005007 Standard MIDI
+PASS comp.eat_.18 'M15 ' 'm1v ' flags=00007802 Apple MPEG Import Component
+PASS comp.eat_.19 'M1A ' 'm1a ' flags=00007802 Apple MPEG Import Component
+PASS comp.eat_.20 'M1A ' 'm1a ' flags=00006802 Apple MPEG Import Component
+PASS comp.eat_.21 'M1S ' 'MPEG' flags=00007802 Apple MPEG Import Component
+PASS comp.eat_.22 'M1V ' 'm1v ' flags=00007802 Apple MPEG Import Component
+PASS comp.eat_.23 'M1V ' 'm1v ' flags=00006802 Apple MPEG Import Component
+PASS comp.eat_.24 'M75 ' 'm1v ' flags=00007802 Apple MPEG Import Component
+PASS comp.eat_.25 'MID ' 'musi' flags=00005007 Standard MIDI
+PASS comp.eat_.26 'MOV ' '....' flags=00001802 Movie
+PASS comp.eat_.27 'MP2 ' 'm1a ' flags=00007802 Apple MPEG Import Component
+PASS comp.eat_.28 'MPA ' 'm1a ' flags=00007802 Apple MPEG Import Component
+PASS comp.eat_.29 'MPEG' 'MPEG' flags=00007802 Apple MPEG Import Component
+PASS comp.eat_.30 'MPEG' 'MPEG' flags=00006802 Apple MPEG Import Component
+PASS comp.eat_.31 'MPEG' 'm1a ' flags=00007802 Apple MPEG Import Component
+PASS comp.eat_.32 'MPEG' 'm1a ' flags=00006802 Apple MPEG Import Component
+PASS comp.eat_.33 'MPEG' 'm1v ' flags=00007802 Apple MPEG Import Component
+PASS comp.eat_.34 'MPEG' 'm1v ' flags=00006802 Apple MPEG Import Component
+PASS comp.eat_.35 'MPG ' 'MPEG' flags=00007802 Apple MPEG Import Component
+PASS comp.eat_.36 'MPG ' 'MPEG' flags=00006802 Apple MPEG Import Component
+PASS comp.eat_.37 'MPG ' 'm1a ' flags=00007802 Apple MPEG Import Component
+PASS comp.eat_.38 'MPG ' 'm1a ' flags=00006802 Apple MPEG Import Component
+PASS comp.eat_.39 'MPG ' 'm1v ' flags=00007802 Apple MPEG Import Component
+PASS comp.eat_.40 'MPG ' 'm1v ' flags=00006802 Apple MPEG Import Component
+PASS comp.eat_.41 'MPGa' 'm1a ' flags=00006802 Apple MPEG Import Component
+PASS comp.eat_.42 'MPGv' 'm1v ' flags=00006802 Apple MPEG Import Component
+PASS comp.eat_.43 'MPGx' 'MPEG' flags=00006802 Apple MPEG Import Component
+PASS comp.eat_.44 'MPM ' 'MPEG' flags=00007802 Apple MPEG Import Component
+PASS comp.eat_.45 'MPV ' 'm1v ' flags=00007802 Apple MPEG Import Component
+PASS comp.eat_.46 'Midi' 'musi' flags=40004007 Standard MIDI
+PASS comp.eat_.47 'PCT ' 'vide' flags=00005047 Picture
+PASS comp.eat_.48 'PIC ' 'vide' flags=00005047 Picture
+PASS comp.eat_.49 'PICS' 'vide' flags=40000006 PICS
+PASS comp.eat_.50 'PICT' 'vide' flags=00005047 Picture
+PASS comp.eat_.51 'PICT' 'vide' flags=40004047 Picture
+PASS comp.eat_.52 'QCP ' 'soun' flags=80045202 QUALCOMM PureVoice Importer
+PASS comp.eat_.53 'RTF ' 'MPEG' flags=00007802 Apple MPEG Import Component
+PASS comp.eat_.54 'SD2 ' 'soun' flags=00047802 Sound Designer II
+PASS comp.eat_.55 'SFIL' 'soun' flags=00001002 Sound
+PASS comp.eat_.56 'SMF ' 'musi' flags=00005007 Standard MIDI
+PASS comp.eat_.57 'Sd2f' 'soun' flags=40046802 Sound Designer II
+PASS comp.eat_.58 'TEXT' 'text' flags=40000047 Text
+PASS comp.eat_.59 'TXT ' 'text' flags=00001047 Text
+PASS comp.eat_.60 'ULAW' 'soun' flags=40046802 µLaw
+PASS comp.eat_.61 'ULW ' 'soun' flags=00047802 µLaw
+PASS comp.eat_.62 'VfW ' '....' flags=00044A02 AVI
+PASS comp.eat_.63 'WAV ' 'soun' flags=00047802 Wave
+PASS comp.eat_.64 'WAVE' 'soun' flags=40046802 Wave
+PASS comp.eat_.65 'celp' 'soun' flags=80044202 QUALCOMM PureVoice Importer
+PASS comp.eat_.66 'dvc!' '....' flags=40046802 DV
+PASS comp.eat_.67 'grip' '....' flags=40004806 Graphic Files
+PASS comp.eat_.68 'moov' '....' flags=40000001 Movie
+PASS comp.eat_.69 'sfil' 'soun' flags=40000002 Sound
+PASS comp.eat_.70 'snd ' 'soun' flags=40000001 Sound
+PASS comp.eat_.71 'trak' 'soun' flags=40000206 Audio CD
+PASS movie.raw32.open resId=-1
+PASS movie.raw32.info scale=600 duration=600 tracks=1 [vide scale=600 duration=600 samples=10 'raw ' 160x120 depth=32]
+PASS frame.raw32.00 crc=B391B3D8
+PASS frame.raw32.01 crc=7BE8F998
+PASS frame.raw32.02 crc=1A7FA694
+PASS frame.raw32.03 crc=B394D8B0
+PASS frame.raw32.04 crc=653368AE
+PASS frame.raw32.05 crc=982276A3
+PASS frame.raw32.06 crc=276B037D
+PASS frame.raw32.07 crc=5D2B6606
+PASS frame.raw32.08 crc=FE68D3AE
+PASS frame.raw32.09 crc=6CBE598D
+PASS movie.raw16.open resId=-1
+PASS movie.raw16.info scale=30 duration=48 tracks=1 [vide scale=30 duration=48 samples=8 'raw ' 80x60 depth=16]
+PASS frame.raw16.00 crc=B89849BD
+PASS frame.raw16.01 crc=0196F113
+PASS frame.raw16.02 crc=D8929EC6
+PASS frame.raw16.03 crc=B991DC4B
+PASS frame.raw16.04 crc=F0915DBE
+PASS frame.raw16.05 crc=813F39F1
+PASS frame.raw16.06 crc=A564EDB2
+PASS frame.raw16.07 crc=C52BDD22
+PASS movie.rle32.open resId=-1
+PASS movie.rle32.info scale=600 duration=600 tracks=1 [vide scale=600 duration=600 samples=10 'rle ' 160x120 depth=32]
+PASS frame.rle32.00 crc=B391B3D8
+PASS frame.rle32.01 crc=7BE8F998
+PASS frame.rle32.02 crc=1A7FA694
+PASS frame.rle32.03 crc=B394D8B0
+PASS frame.rle32.04 crc=653368AE
+PASS frame.rle32.05 crc=982276A3
+PASS frame.rle32.06 crc=276B037D
+PASS frame.rle32.07 crc=5D2B6606
+PASS frame.rle32.08 crc=FE68D3AE
+PASS frame.rle32.09 crc=6CBE598D
+PASS movie.rle16.open resId=-1
+PASS movie.rle16.info scale=1000 duration=1500 tracks=1 [vide scale=1000 duration=1500 samples=6 'rle ' 64x48 depth=16]
+PASS frame.rle16.00 crc=1F452595
+PASS frame.rle16.01 crc=D02FD7E4
+PASS frame.rle16.02 crc=68386A21
+PASS frame.rle16.03 crc=56084091
+PASS frame.rle16.04 crc=7F88E934
+PASS frame.rle16.05 crc=D65506CD
+PASS movie.tone16.open resId=-1
+PASS movie.tone16.info scale=600 duration=1200 tracks=1 [soun scale=22050 duration=44100 samples=44100 'twos' ch=1 bits=16 rate=22050]
+PASS movie.tone8.open resId=-1
+PASS movie.tone8.info scale=600 duration=600 tracks=1 [soun scale=11025 duration=11025 samples=11025 'raw ' ch=1 bits=8 rate=11025]
+PASS movie.av.open resId=-1
+PASS movie.av.info scale=600 duration=1200 tracks=2 [vide scale=600 duration=1200 samples=20 'raw ' 80x60 depth=32] [soun scale=22050 duration=44100 samples=44100 'twos' ch=1 bits=16 rate=22050]
+PASS frame.av.00 crc=C1135D66
+PASS frame.av.01 crc=8E09B558
+PASS frame.av.02 crc=3C6A0C3D
+PASS frame.av.03 crc=C8D1CE95
+PASS frame.av.04 crc=06FD1C9C
+PASS frame.av.05 crc=266F8B9A
+PASS frame.av.06 crc=F5EFC56D
+PASS frame.av.07 crc=B7D4AEF2
+PASS frame.av.08 crc=460C0667
+PASS frame.av.09 crc=0978AB81
+PASS frame.av.10 crc=88423248
+PASS frame.av.11 crc=E4AC39E9
+PASS frame.av.12 crc=9B9D4311
+PASS frame.av.13 crc=D198B8C2
+PASS frame.av.14 crc=28D54FD1
+PASS frame.av.15 crc=CA2DCC16
+PASS frame.av.16 crc=C1848C81
+PASS frame.av.17 crc=51B347A8
+PASS frame.av.18 crc=96475D63
+PASS frame.av.19 crc=8ABDADB5
+PASS flatten.raw32 returned a movie
+PASS movie.flat-raw32.open resId=-1
+PASS movie.flat-raw32.info scale=600 duration=600 tracks=1 [vide scale=600 duration=600 samples=10 'raw ' 160x120 depth=32]
+PASS frame.flat-raw32.00 crc=B391B3D8
+PASS frame.flat-raw32.01 crc=7BE8F998
+PASS frame.flat-raw32.02 crc=1A7FA694
+PASS frame.flat-raw32.03 crc=B394D8B0
+PASS frame.flat-raw32.04 crc=653368AE
+PASS frame.flat-raw32.05 crc=982276A3
+PASS frame.flat-raw32.06 crc=276B037D
+PASS frame.flat-raw32.07 crc=5D2B6606
+PASS frame.flat-raw32.08 crc=FE68D3AE
+PASS frame.flat-raw32.09 crc=6CBE598D
+PASS icm.source crc=B394D8B0
+PASS icm.raw_ max=76804 size=76800 depth=32 crc=B394D8B0
+PASS icm.rle_ max=78840 size=14005 depth=32 crc=64171E11
+PASS icm.rpza max=9604 size=2236 depth=16 crc=6634CC10
+PASS icm.cvid max=14496 size=4524 depth=24 crc=302F9D8A
+PASS icm.jpeg max=45166 size=2188 depth=24 crc=34E4D07D
+PASS icm.smc_ max=19294 size=2122 depth=8 crc=EF65562A
+PASS pict.jpeg.compress pict=18216 jpeg=2534
+PASS pict.jpeg.draw crc=34E4D07D
+PASS make.cvid made-cvid.mov samples=10 flattened=movie
+PASS movie.made-cvid.open resId=-1
+PASS movie.made-cvid.info scale=600 duration=600 tracks=1 [vide scale=600 duration=600 samples=10 'cvid' 160x120 depth=24]
+PASS frame.made-cvid.00 crc=74EDD294
+PASS frame.made-cvid.01 crc=EC81730A
+PASS frame.made-cvid.02 crc=3D95E26B
+PASS frame.made-cvid.03 crc=E8BA1200
+PASS frame.made-cvid.04 crc=9ED33AF8
+PASS frame.made-cvid.05 crc=52F48F20
+PASS frame.made-cvid.06 crc=265B20BF
+PASS frame.made-cvid.07 crc=447F5824
+PASS frame.made-cvid.08 crc=A06E4755
+PASS frame.made-cvid.09 crc=0E26EF9E
+PASS make.rpza made-rpza.mov samples=10 flattened=movie
+PASS movie.made-rpza.open resId=-1
+PASS movie.made-rpza.info scale=600 duration=600 tracks=1 [vide scale=600 duration=600 samples=10 'rpza' 160x120 depth=16]
+PASS frame.made-rpza.00 crc=0CA2D836
+PASS frame.made-rpza.01 crc=FD55CD21
+PASS frame.made-rpza.02 crc=1E506E13
+PASS frame.made-rpza.03 crc=6634CC10
+PASS frame.made-rpza.04 crc=D2C6A94B
+PASS frame.made-rpza.05 crc=304084FE
+PASS frame.made-rpza.06 crc=2388A07B
+PASS frame.made-rpza.07 crc=5C2792E7
+PASS frame.made-rpza.08 crc=C22A6EFE
+PASS frame.made-rpza.09 crc=6AC37B2C
+PASS make.rle_ made-rle.mov samples=10 flattened=movie
+PASS movie.made-rle.open resId=-1
+PASS movie.made-rle.info scale=600 duration=600 tracks=1 [vide scale=600 duration=600 samples=10 'rle ' 160x120 depth=32]
+PASS frame.made-rle.00 crc=64127579
+PASS frame.made-rle.01 crc=AC6B3F39
+PASS frame.made-rle.02 crc=CDFC6035
+PASS frame.made-rle.03 crc=64171E11
+PASS frame.made-rle.04 crc=B2B0AE0F
+PASS frame.made-rle.05 crc=4FA1B002
+PASS frame.made-rle.06 crc=F0E8C5DC
+PASS frame.made-rle.07 crc=8AA8A0A7
+PASS frame.made-rle.08 crc=29EB150F
+PASS frame.made-rle.09 crc=BB3D9F2C
+PASS make.jpeg made-jpeg.mov samples=10 flattened=movie
+PASS movie.made-jpeg.open resId=-1
+PASS movie.made-jpeg.info scale=600 duration=600 tracks=1 [vide scale=600 duration=600 samples=10 'jpeg' 160x120 depth=24]
+PASS frame.made-jpeg.00 crc=36736468
+PASS frame.made-jpeg.01 crc=479C3FBD
+PASS frame.made-jpeg.02 crc=CEDD069F
+PASS frame.made-jpeg.03 crc=34E4D07D
+PASS frame.made-jpeg.04 crc=55FB0C00
+PASS frame.made-jpeg.05 crc=F68DD83B
+PASS frame.made-jpeg.06 crc=085CE816
+PASS frame.made-jpeg.07 crc=24627256
+PASS frame.made-jpeg.08 crc=CEF49E9A
+PASS frame.made-jpeg.09 crc=96C11433
+PASS make.smc_ made-smc.mov samples=10 flattened=movie
+PASS movie.made-smc.open resId=-1
+PASS movie.made-smc.info scale=600 duration=600 tracks=1 [vide scale=600 duration=600 samples=10 'smc ' 160x120 depth=8]
+PASS frame.made-smc.00 crc=3F45CADE
+PASS frame.made-smc.01 crc=304446DC
+PASS frame.made-smc.02 crc=A6B90DA3
+PASS frame.made-smc.03 crc=BCB25867
+PASS frame.made-smc.04 crc=5870B45C
+PASS frame.made-smc.05 crc=1C5B6984
+PASS frame.made-smc.06 crc=EAF0C1A1
+PASS frame.made-smc.07 crc=5728158B
+PASS frame.made-smc.08 crc=E42BDA99
+PASS frame.made-smc.09 crc=19FB9A25
+PASS play.tone16 done in time
+PASS play.tone8 done in time
+PASS play.av done in time
+PASS mc.new
+PASS mc.bounds 0 0 76 80
+PASS mc.draw bar drawn
+PASS mc.play time advances
+PASS mc.stop time stops

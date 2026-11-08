@@ -964,6 +964,9 @@ void C_CalcCMask(BitMap *srcbp, BitMap *dstbp, const Rect *srcrp, const Rect *ds
 void C_CopyDeepMask(BitMap *srcBits, BitMap *maskBits, BitMap *dstBits, const Rect *srcRect, const Rect *maskRect, const Rect *dstRect, INTEGER mode, RgnHandle maskRgn);PASCAL_TRAP(CopyDeepMask, 0xAA51);
 
 
+LONGINT C_StretchBitsBottleneck(BitMap *srcBits, BitMap *maskBits, BitMap *dstBits, const Rect *srcRect, const Rect *maskRect, const Rect *dstRect, INTEGER mode, Ptr pat, RgnHandle rgnA, RgnHandle rgnB, RgnHandle rgnC, Boolean multColor);PASCAL_TRAP_UNEXPORTED(StretchBitsBottleneck, 0xAB27);
+
+
 BEGIN_EXECUTOR_ONLY
 inline QDGlobals& qdGlobals()
 {

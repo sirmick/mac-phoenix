@@ -27,5 +27,7 @@ extern OSErr C_GestaltTablesOnly(OSType selector,
 
 extern void gestalt_set_system_version(uint32_t version);
 extern void gestalt_set_memory_size(uint32_t size);
+/* MacPhoenix: Gestalt 'qtim', the QuickTime whose components Executor runs */
+extern void gestalt_set_quicktime_version(uint32_t version);
 
 }

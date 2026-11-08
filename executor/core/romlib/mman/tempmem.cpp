@@ -121,6 +121,62 @@ THz Executor::C_HeapDispatchSharedZone()
     return ROMlib_pm_zone ? ROMlib_pm_zone : (THz)LM(SysZone);
 }
 
+/* MacPhoenix: _HeapDispatch selectors 0-5 (MemoryMgr.yaml): the handle
+   calls that leave MemErr alone. */
+namespace
+{
+template<class F>
+auto keeping_memerr(F f)
+{
+    INTEGER saved = LM(MemErr);
+    auto r = f();
+    LM(MemErr) = saved;
+    return r;
+}
+}
+
+OSErr Executor::C_HeapDispatchHLock(Handle h)
+{
+    return keeping_memerr([h] { HLock(h); return noErr; });
+}
+
+OSErr Executor::C_HeapDispatchHUnlock(Handle h)
+{
+    return keeping_memerr([h] { HUnlock(h); return noErr; });
+}
+
+OSErr Executor::C_HeapDispatchHPurge(Handle h)
+{
+    return keeping_memerr([h] { HPurge(h); return noErr; });
+}
+
+OSErr Executor::C_HeapDispatchHNoPurge(Handle h)
+{
+    return keeping_memerr([h] { HNoPurge(h); return noErr; });
+}
+
+SignedByte Executor::C_HeapDispatchHGetState(Handle h)
+{
+    return keeping_memerr([h] { return HGetState(h); });
+}
+
+OSErr Executor::C_HeapDispatchHSetState(Handle h, LONGINT flags)
+{
+    return keeping_memerr([=] { HSetState(h, (SignedByte)flags); return noErr; });
+}
+
+/* MacPhoenix: _HeapDispatch selectors 6 and 8 (MemoryMgr.yaml): trash
+   notices asked for and given up; none are sent. */
+OSErr Executor::C_HeapDispatchAddTrashNotification(Ptr)
+{
+    return noErr;
+}
+
+OSErr Executor::C_HeapDispatchRemoveTrashNotification(Ptr, Handle)
+{
+    return noErr;
+}
+
 /* MacPhoenix: _HeapDispatch selector $A (MemoryMgr.yaml): a zone about to
    go; Executor keeps no list of zones. */
 void Executor::C_HeapDispatchForgetZone()

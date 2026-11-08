@@ -22,6 +22,7 @@
 #include <mman/tempalloc.h>
 #include <print/print.h>
 #include <rsys/executor.h>
+#include <rsys/quicktime.h>
 #include <base/functions.impl.h>
 #include <algorithm>
 #include <vector>
@@ -1685,8 +1686,49 @@ void Executor::C_DrawPicture(PicHandle pic, const Rect *destrp)
 
     scaleh = FixRatio(RECT_WIDTH(&dstpicframe), RECT_WIDTH(&srcpicframe));
     scalev = FixRatio(RECT_HEIGHT(&dstpicframe), RECT_HEIGHT(&srcpicframe));
+    /* MacPhoenix: right after a QuickTime opcode, PnSize($AE, n) says the n
+       bytes of opcodes that follow are for a Mac without QuickTime (its
+       "QuickTime and a ... decompressor are needed" text) */
+    bool after_quicktime = false;
     while((opcode = nextop(vers)) != opEndPic)
     {
+        if(opcode == 0x8200 || opcode == 0x8201)
+        {
+            /* MacPhoenix: CompressedQuickTime, UncompressedQuickTime
+               (Executor's ICM, icm.cpp) */
+            LONGINT n = eatLONGINT();
+            if(n > 0 && !procp)
+            {
+                ROMlib_draw_quicktime_opcode(opcode, (Ptr)nextbytep, n, &srcpicframe, &dstpicframe);
+                nextbytep += n;
+            }
+            else if(n > 0)
+            {
+                Ptr buf = NewPtr(n);
+                if(buf)
+                {
+                    procp(buf, n);
+                    nextbytep += n;
+                    ROMlib_draw_quicktime_opcode(opcode, buf, n, &srcpicframe, &dstpicframe);
+                    DisposePtr(buf);
+                }
+                else
+                    eatNBytes(n);
+            }
+            after_quicktime = true;
+            continue;
+        }
+        if(after_quicktime && opcode == OP_PnSize)
+        {
+            after_quicktime = false;
+            INTEGER v = eatINTEGER(), h = eatINTEGER();
+            if(v == 0x00AE)
+                eatNBytes(h);
+            else
+                PenSize(FixMul(scaleh, (LONGINT)h << 16) >> 16, FixMul(scalev, (LONGINT)v << 16) >> 16);
+            continue;
+        }
+        after_quicktime = false;
         wp = words;
         pp = points;
         bp = bytes;
