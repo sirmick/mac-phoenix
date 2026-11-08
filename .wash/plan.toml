@@ -1,7 +1,7 @@
 # wash-plan: written by Wash as the plan changes.
 # Edit it only between workspaces; plan_set {"from": "<this file>"} loads it.
 
-revision = 93
+revision = 95
 
 [[node]]
   id = "cuts"
@@ -941,9 +941,9 @@ revision = 93
   emoji = "🎬"
   template = "package"
   parent = "m2"
-  body = "Owner 2026-11-08: worried by how invasive Apple's QuickTime INIT is (13 ptch, own lpch loader, hooks QuickDraw/Memory Manager). Routes: (A) Apple's QuickTime as is, on per System/app; (B) Apple's components (codecs, media handlers) registered by Executor + our own C++ Movie Toolbox subset, no INIT/patches; (C) staged. First: survey (qt-survey) + a QT client app (qt-client) run on the ROM machines as the oracle. Draft plan: docs/executor/QuickTime.md (2026-10-30, untracked until qt-survey commits it updated). First run 2026-11-08: QuickTime 2.5 INIT on Executor 7.6.1 stops at HeapDispatch selector $0 (unimplemented)."
+  body = "Owner 2026-11-08 chose route B (docs/executor/QuickTime.md): Executor registers Apple's QuickTime components from the QuickTime™ / PowerPlug / Musical Instruments files on the user's System disk (the INIT never runs) and provides its own C++ ICM, Movie Toolbox subset (~45 calls) and movie controller (~15). Codecs are never shipped by us; Executor's own System has none (later maybe our own raw/rle/Cinepak decoders). Steps: qt-b1 groundwork, qt-b2 ICM, qt-b3 Movie Toolbox, qt-b4 controller + PowerPC exports, qt-b5 sound; Apple's INIT (route A) only if an app needs what B lacks. Oracle: QTTest (tests/guest/qt) vs the Quadra/G3 references."
   state = "active"
-  revision = 85
+  revision = 94
 
 [[node]]
   id = "qt-client"
@@ -992,3 +992,52 @@ revision = 93
   body = "Found by QTTest 2026-11-08 (~/storage/tmp/qt/qt-client-report.md). The same QTTest on the G3 8.6 with --core kpx passes the same way every run; on --core mame-ppc the PowerPC codecs fail non-deterministically. A CPU-core correctness bug (MAME cores are the long-term goal: docs/cpu/PLAN.md), suspects: recompiled-code invalidation for code the codecs build or move (cache flush / MakeDataExecutable / icbi), FPU or rounding, timing. Also matters for Executor's --executor-ppc, which runs on mame-ppc."
   state = "active"
   revision = 91
+
+[[node]]
+  id = "qt-b1"
+  title = "QuickTime B1: groundwork: component files registered without the INIT, cmpFastDispatch, HeapDispatch 0-5, $ABC2 math, honest Gestalt"
+  emoji = "🧱"
+  template = "package"
+  parent = "qt"
+  state = "active"
+  revision = 95
+
+[[node]]
+  id = "qt-b2"
+  title = "QuickTime B2: Executor's ICM over Apple's codecs: DecompressImage, sequences, codec callbacks; compressed PICTs; Open-dialog previews"
+  emoji = "🖼️"
+  template = "package"
+  parent = "qt"
+  needs = ["qt-b1"]
+  state = "todo"
+  revision = 94
+
+[[node]]
+  id = "qt-b3"
+  title = "QuickTime B3: Movie Toolbox subset (moov parser, sample tables, time base, MoviesTask through the ICM): Ares, EV Nova, SimpleText"
+  emoji = "🎬"
+  template = "package"
+  parent = "qt"
+  needs = ["qt-b2"]
+  state = "todo"
+  revision = 94
+
+[[node]]
+  id = "qt-b4"
+  title = "QuickTime B4: movie controller (~15 MC calls: MoviePlayer, SimpleText, HyperCard), then PowerPC QuickTimeLib exports"
+  emoji = "⏯️"
+  template = "package"
+  parent = "qt"
+  needs = ["qt-b3"]
+  state = "todo"
+  revision = 94
+
+[[node]]
+  id = "qt-b5"
+  title = "QuickTime B5: sound tracks through Executor's Sound Manager (raw/twos, IMA 4:1, MACE via Apple's sound converters or ours)"
+  emoji = "🔊"
+  template = "package"
+  parent = "qt"
+  needs = ["qt-b3"]
+  state = "todo"
+  revision = 94
