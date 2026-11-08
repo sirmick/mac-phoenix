@@ -1,7 +1,7 @@
 # wash-plan: written by Wash as the plan changes.
 # Edit it only between workspaces; plan_set {"from": "<this file>"} loads it.
 
-revision = 84
+revision = 87
 
 [[node]]
   id = "cuts"
@@ -934,3 +934,31 @@ revision = 84
   body = "Owner 2026-11-07: merge everything to local main, thoroughly update the README and documentation (stale), push. Three members on disjoint files (docs-top: README.md + docs/*.md project-level; docs-exec: executor/README.md, docs/executor/*, frontends READMEs; docs-claude: CLAUDE.md), one branch wash/docs from grid2 0ed52614, then a reviewer that checks every command/flag/path named exists, then merge to grid2 -> main, push both."
   state = "done"
   revision = 84
+
+[[node]]
+  id = "qt"
+  title = "QuickTime on Executor (M2): decide the route from data, with a QT client app as the oracle"
+  emoji = "🎬"
+  template = "package"
+  parent = "m2"
+  body = "Owner 2026-11-08: worried by how invasive Apple's QuickTime INIT is (13 ptch, own lpch loader, hooks QuickDraw/Memory Manager). Routes: (A) Apple's QuickTime as is, on per System/app; (B) Apple's components (codecs, media handlers) registered by Executor + our own C++ Movie Toolbox subset, no INIT/patches; (C) staged. First: survey (qt-survey) + a QT client app (qt-client) run on the ROM machines as the oracle. Draft plan: docs/executor/QuickTime.md (2026-10-30, untracked until qt-survey commits it updated). First run 2026-11-08: QuickTime 2.5 INIT on Executor 7.6.1 stops at HeapDispatch selector $0 (unimplemented)."
+  state = "active"
+  revision = 85
+
+[[node]]
+  id = "qt-client"
+  title = "QTTest: a QuickTime client app (fat), generated test movies, reference results on the ROM machines"
+  emoji = "🎞️"
+  template = "package"
+  parent = "qt"
+  state = "active"
+  revision = 86
+
+[[node]]
+  id = "qt-survey"
+  title = "QuickTime survey: what target apps call, what QT patches, Apple's components without the INIT"
+  emoji = "🔎"
+  template = "package"
+  parent = "qt"
+  state = "active"
+  revision = 87
