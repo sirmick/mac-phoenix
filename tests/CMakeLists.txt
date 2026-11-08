@@ -1717,6 +1717,28 @@ foreach(cell IN ITEMS "qt_rom_68k_761;rom_68k_761;;--os-version 7.6.1;18860;gues
   )
 endforeach()
 
+# QuickTime's fixed-point, wide and matrix routines ($ABC2; tests/guest/qtmath):
+# Executor's own (qtmath.cpp) against a Quadra's 7.6.1 with QuickTime 2.5,
+# whose run is the reference (qtmath_rom_68k_761 checks it still holds).
+foreach(cell IN ITEMS "qtmath_rom_68k_761;--os-version 7.6.1;18866;guest;qt;761"
+                      "qtmath_executor_761;--backend executor --os-version 7.6.1;18868;guest;qt;761;executor")
+  list(GET cell 0 name)
+  list(GET cell 1 suite)
+  list(GET cell 2 port)
+  list(SUBLIST cell 3 -1 labels)
+  separate_arguments(suite_args UNIX_COMMAND "${suite}")
+  add_test(
+    NAME ${name}
+    COMMAND bash ${CMAKE_SOURCE_DIR}/tests/guest/qtmath/run_qtmath.sh rom_68k_761 -- ${suite_args} --timeout 120 --port ${port}
+  )
+  set_tests_properties(${name} PROPERTIES
+    TIMEOUT 300
+    LABELS "${labels}"
+    SKIP_RETURN_CODE 77
+    ENVIRONMENT "MACEMU_ROM=${TEST_ROM}"
+  )
+endforeach()
+
 # Every test's scratch (logs, ExtFS folders, mktemp dirs) on the SSD, not in
 # /tmp: /tmp is RAM-backed here, and RAM is what runs out.
 set(TEST_TMPDIR "$ENV{HOME}/storage/tmp" CACHE PATH "TMPDIR for the tests (scratch on disk, not tmpfs)")

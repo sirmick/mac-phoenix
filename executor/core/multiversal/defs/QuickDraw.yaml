@@ -3225,6 +3225,49 @@
 
 # ####
 
+# $AB27 (the name is ours): Color QuickDraw's bits bottleneck below
+# CopyBits, CopyMask and CopyDeepMask, called through its trap-table slot
+# ($1A9C) by QuickTime's codecs to put a decompressed band into the
+# destination: srcBits, maskBits (nil: none), dstBits, the three
+# rectangles, the transfer mode, a pattern (nil), three clip regions
+# (nil: none) and a flag, a long back. Not in Apple's headers; the 7.6.1
+# System patches the ROM's. Executor draws it as CopyBits does, clipped
+# to the regions given, not to the current port's.
+- only-for: Executor
+  function:
+    name: StretchBitsBottleneck
+    return: LONGINT
+    args:
+      - name: srcBits
+        type: BitMap*
+      - name: maskBits
+        type: BitMap*
+      - name: dstBits
+        type: BitMap*
+      - name: srcRect
+        type: const Rect*
+      - name: maskRect
+        type: const Rect*
+      - name: dstRect
+        type: const Rect*
+      - name: mode
+        type: INTEGER
+      - name: pat
+        type: Ptr
+      - name: rgnA
+        type: RgnHandle
+      - name: rgnB
+        type: RgnHandle
+      - name: rgnC
+        type: RgnHandle
+      - name: multColor
+        type: Boolean
+    trap: 0xAB27
+    executor: C_
+    export: false
+
+# ####
+
 - only-for: Executor
   verbatim: |
     inline QDGlobals& qdGlobals()

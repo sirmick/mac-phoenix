@@ -1,0 +1,11 @@
+# build.mpw — QTMath, a 68k application (SC, Link): QuickTime's $ABC2
+# math on chosen values (qtmath.c).
+#   tools/mpw/mpw build tests/guest/qtmath -o tests/guest/qtmath
+# interfaces: 3.3.2
+# products: QTMath
+SC -b qtmath.c -o qtmath.c.o
+Link -t APPL -c 'QTmt' -model near ∂
+	qtmath.c.o ∂
+	"{Libraries}MacRuntime.o" "{Libraries}IntEnv.o" "{CLibraries}StdCLib.o" "{Libraries}Interface.o" ∂
+	-o QTMath
+SetFile -t APPL -c 'QTmt' QTMath

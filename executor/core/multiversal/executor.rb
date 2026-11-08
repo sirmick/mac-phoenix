@@ -32,12 +32,14 @@ class ExecutorGenerator < Generator
         return type, "", "" if not type_needs_guest?(type)
         if type =~ /^(.*)(\[[^\[\]]*\])$/ then
             post = $2
-            type1, _, _ = guestify_type($1, true)
-            
+            # MacPhoenix: an array of arrays keeps both bounds
+            # (MatrixRecord's Fixed[3][3])
+            type1, _, inner = guestify_type($1, true)
+
             #if guest then
             #    return "GUEST<#{type1}#{post}>", "", ""
             #else
-                return type1, "", post
+                return type1, "", "#{inner}#{post}"
             #end
         elsif type =~ /^(.*)\*$/ then
             type1, _, _ = guestify_type($1, true)

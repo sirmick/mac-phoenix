@@ -901,7 +901,12 @@ int main(void)
 #endif
 
     if(!test_gestalt())
+    {
+        /* the components are there without QuickTime's INIT too
+           (Executor registers them itself) */
+        test_components();
         goto end;
+    }
     err = EnterMovies();
     if(err != noErr)
     {

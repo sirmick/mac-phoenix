@@ -422,3 +422,71 @@ QuickTime itself under A.
   every run after the multiversal YAML gained component-selector
   dispatchers (`selector-location: Component`). It now skips them
   (a component's selectors, not a trap's).
+
+## 7. Route B: what Executor has (qt-b1, 2026-11-08)
+
+The groundwork of section 5's first step. QuickTime's INIT still never
+runs, and Gestalt `'qtim'`/`'icmp'` stay unanswered until Executor's own
+Movie Toolbox and ICM are there (`rsys/quicktime.h`).
+
+- **Components at startup.** `extensions.cpp` registers the `thng`s of
+  QuickTime™ and QuickTime™ Musical Instruments, from Extensions or from
+  where the policy put them ("Extensions (Disabled)"). That is 115 + 1 on
+  7.6.1, as RegisterComponentResourceFile would register them. QuickTime™
+  PowerPlug's are registered only when PowerPC code runs (a 68k Mac never
+  loads them). A component that wants its register message is left out,
+  because its code would run without the INIT. A file the policy lets run
+  registers its own.
+- **Search order.** A 7.6.1 Mac finds the components of one type by
+  subtype, then manufacturer, not in registration order (QTTest's lists
+  on the Quadra). The Sound panel's `'sndP'` pages and Color Picker's
+  `'cpkr'`s, which the old rule was written for, come out the same.
+  QTTest's component lists on Executor 7.6.1 now match the Quadra's in
+  72 of 73 lines. The odd one is `'sdev'`: Executor's own sound output
+  (`'xctr'`) where the Quadra has its hardware (`'asc '`).
+- **cmpFastDispatch** (`component.cpp` `call_entry`). D0 is the header
+  long. The caller's parameters are copied below the storage and the
+  result, and the routine pops them as a Pascal function.
+- **HeapDispatch** 0–5 (HLock … HSetState(A1), MemErr left alone) and 6/8
+  (trash notices accepted; A0 is a {handle, priority.w, proc} record, or
+  A0 = proc and A1 = handle) (`MemoryMgr.yaml`, `tempmem.cpp`).
+- **`$ABC2`**: all 33 routines Universal Interfaces 3.3.2 names
+  (`ImageCompression.yaml`, `qtmath.cpp`). The rounding and edge cases
+  follow a Quadra with QuickTime 2.5, measured by `tests/guest/qtmath`.
+  Its 195 compared lines match; ctest `qtmath_executor_761` checks
+  Executor, and `qtmath_rom_68k_761` checks that the reference still
+  holds. The behaviour measured:
+  - CompShift rounds to nearest; CompFixMul rounds down.
+  - CompDiv saturates, with remainder $80000000.
+  - FixMulDiv rounds by adding the divisor's signed half. An overflow is
+    $80000000 | the product's high long; a zero divisor gives
+    $80000000 | mul.
+  - Perspective matrices are refused: points answer -1 and stay as they
+    were, and InverseMatrix answers true without writing.
+  - ConcatMatrix(a, b) is b then a. TransformFixedRect is true only
+    without rotation. Points round halves away from zero.
+  - Apple's sine, exponent, logarithm and power are approximations
+    (about 2^-12). Executor's are exact, so the probe prints those as
+    notes.
+  - CompSquareRoot ($11) is QuickTime 3.0's: on 2.5 it never returns.
+- **`$AB27`**, QuickDraw's bits bottleneck below CopyBits (the name in
+  `QuickDraw.yaml`, `StretchBitsBottleneck`, is ours). The codecs call it
+  through its trap-table slot `$1A9C` to put a band into the destination.
+  That was the survey's "jump into the unimplemented handler" in
+  BandDecompress.
+- **The ICM so far** (`icm.cpp`, `$AAA3`): CodecManagerVersion (18),
+  GetImageDescriptionCTable ($1E), ICMDecompressComplete ($63, which the
+  `rle ` codec calls at the end of a band). The other 140 of the 143
+  selectors ImageCompression.h names pop their arguments (sizes from
+  the declarations) and answer paramErr, logged. An application that
+  checks the trap's address rather than Gestalt (AppleWorks 5:
+  GetGraphicsImporterForFile) now finds `$AAA3` and carries on.
+- **The 1998 stubs** stop pretending: EnterMovies and NewMovieFromFile
+  answer -4 (unimpErr) while there is no Movie Toolbox.
+
+`tools/qt/probe` (QTCodecProbe), run by `tests/test_guest_suite.sh`, now
+uses Executor's own calls. On Executor 7.6.1, `raw ` and `rle ` get
+through GetCodecInfo, PreDecompress (the Quadra's flags) and
+BandDecompress. `rle `'s pixels equal the Quadra's. `raw `'s are the
+input's, where the Quadra, driven this way without its ICM, gives other
+values. QTTest's ICM round trips are B2's pixel check.

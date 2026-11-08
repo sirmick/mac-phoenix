@@ -372,6 +372,36 @@ void Executor::C_CopyDeepMask(BitMap *srcBits, BitMap *maskBits,
     C_CopyMask(srcBits, maskBits, dstBits, srcRect, maskRect, dstRect);
 }
 
+/* MacPhoenix: $AB27, the bits bottleneck below CopyBits (QuickDraw.yaml):
+   QuickTime's codecs call it through its trap-table slot to put a band
+   into the destination. Drawn as StdBits draws, the mask the regions'
+   intersection; a mask bitmap isn't seen yet. */
+LONGINT Executor::C_StretchBitsBottleneck(BitMap *srcBits, BitMap *maskBits, BitMap *dstBits,
+                                          const Rect *srcRect, const Rect *maskRect, const Rect *dstRect,
+                                          INTEGER mode, Ptr pat, RgnHandle rgnA, RgnHandle rgnB,
+                                          RgnHandle rgnC, Boolean multColor)
+{
+    if(maskBits || pat)
+        warning_unimplemented("StretchBitsBottleneck: a mask bitmap or pattern, drawn without");
+    RgnHandle clip = nullptr;
+    for(RgnHandle r : { rgnA, rgnB, rgnC })
+    {
+        if(!r)
+            continue;
+        if(!clip)
+        {
+            clip = NewRgn();
+            CopyRgn(r, clip);
+        }
+        else
+            SectRgn(clip, r, clip);
+    }
+    ROMlib_bogo_stdbits(srcBits, dstBits, srcRect, dstRect, mode, clip);
+    if(clip)
+        DisposeRgn(clip);
+    return 0;
+}
+
 /* MeasureText is in qd/qStdText.c */
 
 INTEGER *Executor::C_GetMaskTable() /* IMIV-25 */
