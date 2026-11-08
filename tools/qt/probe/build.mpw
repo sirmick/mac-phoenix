@@ -1,0 +1,9 @@
+# build.mpw — QTCodecProbe, an application (SC + Link): QuickTime's codecs
+# without QuickTime's INIT (docs/executor/QuickTime.md, route B).
+#   tools/mpw/mpw build tools/qt/probe
+# products: QTCodecProbe
+SC -b QTCodecProbe.c -o QTCodecProbe.c.o
+Link -t APPL -c 'QTcp' -d ∂
+	QTCodecProbe.c.o ∂
+	"{Libraries}MacRuntime.o" "{Libraries}IntEnv.o" "{CLibraries}StdCLib.o" "{Libraries}Interface.o" ∂
+	-o QTCodecProbe
