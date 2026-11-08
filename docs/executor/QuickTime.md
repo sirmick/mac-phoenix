@@ -639,8 +639,8 @@ selectors in `QuickTime.yaml`, from Universal Interfaces 3.4's Movies.h.
   colorized white to black. The ICM now makes the destination (a GWorld
   with its own device) current around the band.
 - **Open.**
-  - The movie controller (B4) and sound tracks (B5): sound media only
-    keep time.
+  - Sound tracks (B5): sound media only keep time. The movie controller
+    is section 10.
   - Time base callbacks (NewCallBack, CallMeWhen): none of the surveyed
     applications calls them. A time base runs on Executor's millisecond
     clock, the one TickCount and the Time Manager use.
@@ -650,3 +650,46 @@ selectors in `QuickTime.yaml`, from Universal Interfaces 3.4's Movies.h.
   - Alternate groups pick their first enabled track, not by language or
     quality.
 
+
+## 10. Route B: Executor's movie controller (qt-b4, 2026-11-08)
+
+`mc.cpp`, the `'play'` component in C++ (registered before the System's
+components, so Apple's `'play'` thng is left out). NewMovieController and 44
+MC calls are declared in `QuickTime.yaml` under a component dispatcher
+(`MovieController`), as Executor's sound output component is.
+
+- **What it answers.** NewMovieController (top left, centred, or scaled
+  down to fit, its proportions kept; `mcNotVisible`, `mcWithBadge`),
+  DisposeMovieController; MCSetMovie, MCNewAttachedController, MCGetIndMovie,
+  MCRemoveAMovie/AllMovies; MCIsPlayerEvent, MCIdle, MCKey, MCClick, MCDraw,
+  MCActivate, MCInvalidate, MCAdjustCursor; MCDoAction (play, preroll and
+  play, go to time, volume, step, looping, palindrome, selection, keys, play
+  selection, badge, flags, play every frame, rate, time slider rectangle,
+  drag, cursor setting, color table, and the notices it ignores);
+  MCSetActionFilter and MCSetActionFilterWithRefCon (every action goes to the
+  filter first, MCDoAction's too); attached, visible, port, bounds rectangle
+  and region, window region, MCPositionController, MCMovieChanged,
+  MCSetDuration, MCGetCurrentTime, MCGetControllerInfo, MCSetClip/MCGetClip,
+  MCDrawBadge, MCPtInController. Movie Toolbox: HasMovieChanged and
+  ClearMovieChanged (track edits; MoviePlayer asks before closing).
+- **The bar.** 16 pixels under the movie, as QuickTime 2.5's: a speaker
+  (a click mutes and unmutes), play/pause, the time slider (dragged: the
+  movie follows), steps back and forward (held: they repeat);
+  `mcFlagSuppressSpeakerButton`/`StepButtons` take theirs away; grey when
+  inactive. Executor's own drawing, not Apple's pictures.
+- **Events.** A null event idles the movie (MoviesTask; at the end it stops,
+  loops or turns back). An update draws the movie and the bar and again at
+  the next idle (after the application's own update), and isn't consumed. A
+  click in the bar or the movie is (the movie: play/pause). Keys only with
+  `mcActionSetKeysEnabled`: space or return play/pause, arrows step and
+  change the volume.
+- **Not done.** Editing (cut, copy, paste, clear, undo): MCSetUpEditMenu
+  leaves those items disabled, "Can't Undo". The badge is a small film frame.
+- **Tests.** QTTest's `mc.*` lines (`qt_executor_761`) and its component
+  list now match the Quadra's (`'play'` described as QuickTime 2.5's: subtype
+  `"\0std"`, cmpFastDispatch; Executor enters its native components as
+  native whatever their flags). `qt_apps_executor_761`
+  (`tests/test_qt_apps_executor.sh`): 7.6.1's Demo click&drag opened in
+  MoviePlayer 2.5 and SimpleText 1.4, the movie and the bar drawn, a click on
+  play plays it. `/api/ui` gets no answer while MoviePlayer is in front, so
+  the cell finds the movie by the bar's frame in the screenshot.
