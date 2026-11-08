@@ -1690,13 +1690,13 @@ set_property(TEST ot_retro68_ppc_rom_761 APPEND PROPERTY LABELS flaky)
 # --record makes them again): the Quadra with 7.6.1 (QuickTime 2.5, 68k
 # code) and the G3 with 8.6 (QuickTime 3.0.2, PowerPC code), the reference
 # from Kheperix; mame-ppc must give the same (its codecs ran stale code until
-# MakeDataExecutable reached its recompiler). The G3 plays no sound (its reference has playback "done too
-# soon", and no --audio-dump check). On Executor QuickTime is not there yet:
+# MakeDataExecutable reached its recompiler). Both machines' --audio-dump must
+# have the tones. On Executor QuickTime is not there yet:
 # the cell skips (77) while Gestalt 'qtim' says so, then compares with the
 # Quadra's reference.
 foreach(cell IN ITEMS "qt_rom_68k_761;rom_68k_761;;--os-version 7.6.1;18860;guest;qt;761"
-                      "qt_rom_ppc_86;rom_ppc_86;--no-audio;--backend kpx --jit --image 8.6;18862;guest;qt"
-                      "qt_rom_mameppc_86;rom_ppc_86;--no-audio;--backend kpx --core mame-ppc --jit --image 8.6;18866;guest;qt;mame"
+                      "qt_rom_ppc_86;rom_ppc_86;;--backend kpx --jit --image 8.6;18862;guest;qt"
+                      "qt_rom_mameppc_86;rom_ppc_86;;--backend kpx --core mame-ppc --jit --image 8.6;18866;guest;qt;mame"
                       "qt_executor_761;rom_68k_761;--needs-qt;--backend executor --os-version 7.6.1;18864;guest;qt;761;executor")
   list(GET cell 0 name)
   list(GET cell 1 ref)

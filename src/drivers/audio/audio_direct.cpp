@@ -11,8 +11,9 @@
  *  - Parent sends IPC_INPUT_AUDIO_REQUEST every 20ms
  *  - audio_request_data() wakes the audio thread
  *  - Audio thread triggers INTFLAG_AUDIO → AudioInterrupt() runs
- *  - AudioInterrupt calls Execute68k(adatGetSourceData) to fill buffer
- *  - Audio thread reads PCM from Mac memory → writes to IPC SHM ring buffer
+ *  - AudioInterrupt calls Execute68k(adatGetSourceData) to fill buffer,
+ *    and copies the block out of Mac memory
+ *  - Audio thread writes the blocks to the IPC SHM ring buffer
  */
 
 #include "sysdeps.h"
@@ -45,10 +46,21 @@ static IPCBuffer* g_ipc_shm = nullptr;
 static std::thread audio_thread;
 static std::atomic<bool> audio_thread_running(false);
 
-// Synchronization for AudioInterrupt (audio thread → Mac emulation thread)
+// Synchronization for AudioInterrupt (audio thread → Mac emulation thread).
+// AudioInterrupt copies each block the Apple Mixer made into mixed_frames,
+// on the CPU thread right after GetSourceData (the Mac's buffer is reused by
+// the next call); the audio thread publishes them. An interrupt that comes
+// late (the PowerPC machine defers it while Mac OS has interrupts off) is
+// published at the next request instead of being replaced by silence.
+struct MixedFrame {
+	uint32_t samples, channels;
+	std::vector<uint8_t> s16be;
+};
 static std::mutex audio_irq_mutex;
 static std::condition_variable audio_irq_done_cv;
 static bool audio_irq_done = false;
+static std::vector<MixedFrame> mixed_frames;
+static const size_t MAX_MIXED_FRAMES = 8;
 
 // Synchronization for server audio requests (parent → audio thread)
 static std::mutex audio_request_mutex;
@@ -167,11 +179,45 @@ void audio_exit_stream()
 
 
 /*
+ *  The block the Apple Mixer just made (the stream info's buffer), as
+ *  S16MSB: 8-bit samples are converted.
+ */
+
+static void copy_mixed_frame(MixedFrame &frame)
+{
+	uint32 info = ReadMacInt32(audio_data + adatStreamInfo);
+	if (!info)
+		return;
+	uint32 sample_count = ReadMacInt32(info + scd_sampleCount);
+	uint32 buffer_ptr = ReadMacInt32(info + scd_buffer);
+	uint32 num_channels = ReadMacInt16(info + scd_numChannels);
+	uint32 sample_size = ReadMacInt16(info + scd_sampleSize);
+	if (!sample_count || !buffer_ptr || !num_channels || (sample_size != 8 && sample_size != 16))
+		return;
+	if ((size_t)sample_count * 2 * num_channels > IPC_AUDIO_MAX_FRAME_BYTES)
+		sample_count = IPC_AUDIO_MAX_FRAME_BYTES / (2 * num_channels);
+	uint32_t total = sample_count * num_channels;
+	const uint8_t* src = Mac2HostAddr(buffer_ptr);
+	frame.s16be.resize((size_t)total * 2);
+	if (sample_size == 8) {
+		for (uint32_t i = 0; i < total; i++) {
+			int16_t val = ((int16_t)src[i] - 128) << 8;
+			frame.s16be[i * 2] = (val >> 8) & 0xFF;
+			frame.s16be[i * 2 + 1] = val & 0xFF;
+		}
+	} else
+		memcpy(frame.s16be.data(), src, (size_t)total * 2);
+	frame.samples = sample_count;
+	frame.channels = num_channels;
+}
+
+
+/*
  *  AudioInterrupt - Mac audio interrupt handler
  *
  *  Called from emul_op.cpp when INTFLAG_AUDIO is set.
- *  Calls Execute68k to get Apple Mixer to fill audio buffer,
- *  then signals the audio thread that data is ready.
+ *  Calls Execute68k to get Apple Mixer to fill audio buffer, copies
+ *  it, then signals the audio thread that data is ready.
  *
  *  Ported directly from legacy audio_ipc.cpp
  */
@@ -180,6 +226,7 @@ void AudioInterrupt(void)
 {
 	D(bug("[AudioDirect] AudioInterrupt\n"));
 
+	MixedFrame frame{0, 0, {}};
 	if (!audio_data) {
 		// Audio component closed
 	} else if (AudioStatus.mixer) {
@@ -188,6 +235,7 @@ void AudioInterrupt(void)
 		r.a[1] = AudioStatus.mixer;
 		Execute68k(audio_data + adatGetSourceData, &r);
 		D(bug(" GetSourceData() returns %08lx\n", (unsigned long)r.d[0]));
+		copy_mixed_frame(frame);
 	} else {
 		WriteMacInt32(audio_data + adatStreamInfo, 0);
 	}
@@ -195,6 +243,8 @@ void AudioInterrupt(void)
 	// Signal audio thread that interrupt is complete
 	{
 		std::lock_guard<std::mutex> lock(audio_irq_mutex);
+		if (frame.samples && mixed_frames.size() < MAX_MIXED_FRAMES)
+			mixed_frames.push_back(std::move(frame));
 		audio_irq_done = true;
 	}
 	audio_irq_done_cv.notify_one();
@@ -309,9 +359,8 @@ void audio_request_data(uint32_t requested_samples)
  *  Audio thread - PULL model (waits for requests from parent)
  *
  *  1. Wait for audio_request_data() signal
- *  2. Trigger INTFLAG_AUDIO → AudioInterrupt() → Execute68k
- *  3. Read PCM from Mac memory
- *  4. Write raw S16MSB frame to IPC SHM ring buffer
+ *  2. Trigger INTFLAG_AUDIO → AudioInterrupt() → Execute68k, copy
+ *  3. Write the raw S16MSB frames it made to IPC SHM ring buffer
  */
 
 static void audio_thread_func()
@@ -341,118 +390,56 @@ static void audio_thread_func()
 			uint32_t sample_rate = AudioStatus.sample_rate >> 16;
 			if (sample_rate == 0) sample_rate = 44100;
 
-			// Trigger Mac audio interrupt
-			SetInterruptFlag(INTFLAG_AUDIO);
-			TriggerInterrupt();
+			// Trigger Mac audio interrupt, unless the last one is still due
+			// (they would merge into one); again after half a second, in
+			// case it was lost
+			static bool irq_pending = false;
+			static int pending_requests = 0;
+			if (!irq_pending || ++pending_requests >= 25) {
+				irq_pending = true;
+				pending_requests = 0;
+				SetInterruptFlag(INTFLAG_AUDIO);
+				TriggerInterrupt();
+			}
 
-			// Wait for AudioInterrupt() to complete
-			bool got_irq;
+			// Wait for AudioInterrupt() to complete, up to most of a frame:
+			// a later one is published at the next request
+			std::vector<MixedFrame> frames;
 			{
 				std::unique_lock<std::mutex> lock(audio_irq_mutex);
-				auto timeout = std::chrono::milliseconds(10);
-				audio_irq_done_cv.wait_for(lock, timeout, []{ return audio_irq_done; });
-				got_irq = audio_irq_done;
-				audio_irq_done = false;
-			}
-
-			// Read audio data from Mac memory and write to IPC SHM
-			if (got_irq && audio_data && g_ipc_shm) {
-				uint32 apple_stream_info = ReadMacInt32(audio_data + adatStreamInfo);
-
-				if (apple_stream_info) {
-					uint32 sample_count = ReadMacInt32(apple_stream_info + scd_sampleCount);
-					uint32 buffer_ptr = ReadMacInt32(apple_stream_info + scd_buffer);
-					uint32 num_channels = ReadMacInt16(apple_stream_info + scd_numChannels);
-					uint32 sample_size = ReadMacInt16(apple_stream_info + scd_sampleSize);
-
-					if (sample_count > 0 && buffer_ptr != 0) {
-						// Check ring buffer space
-						uint32_t write_idx = IPC_ATOMIC_LOAD(g_ipc_shm->audio_write_idx);
-						uint32_t read_idx = IPC_ATOMIC_LOAD(g_ipc_shm->audio_read_idx);
-						uint32_t next_write = (write_idx + 1) % IPC_AUDIO_FRAME_RING_SIZE;
-
-						if (next_write == read_idx) {
-							// Ring full, drop frame
-							continue;
-						}
-
-						IPCAudioFrame* frame = &g_ipc_shm->audio_frames[write_idx];
-
-						// Fill metadata
-						frame->sample_rate = sample_rate;
-						frame->channels = num_channels;
-						frame->samples = sample_count;
-						frame->format = 1; // PCM_S16
-
-						// Copy raw audio data (S16MSB, big-endian)
-						uint32_t bytes_per_sample = sample_size >> 3;
-						size_t data_len = sample_count * bytes_per_sample * num_channels;
-						if (data_len > IPC_AUDIO_MAX_FRAME_BYTES) {
-							data_len = IPC_AUDIO_MAX_FRAME_BYTES;
-							frame->samples = data_len / (bytes_per_sample * num_channels);
-						}
-
-						uint8_t* src = Mac2HostAddr(buffer_ptr);
-
-						if (sample_size == 8) {
-							// Convert U8 to S16MSB (big-endian) in-place for consistent format
-							uint8_t* src_u8 = src;
-							int16_t* dst = (int16_t*)frame->data;
-							uint32_t total = frame->samples * num_channels;
-							for (uint32_t i = 0; i < total; i++) {
-								int16_t val = ((int16_t)src_u8[i] - 128) << 8;
-								// Store as big-endian
-								uint8_t* p = (uint8_t*)&dst[i];
-								p[0] = (val >> 8) & 0xFF;
-								p[1] = val & 0xFF;
-							}
-						} else {
-							// S16MSB — direct copy (Mac native format)
-							memcpy(frame->data, src, data_len);
-						}
-
-						// Publish frame
-						IPC_ATOMIC_STORE(g_ipc_shm->audio_write_idx, next_write);
-
-						audio_frames_sent++;
-						if (audio_frames_sent - last_log_frame >= 100) {
-							fprintf(stderr, "[AudioDirect] %" PRIu64 " frames, %u samples, %u Hz, %u ch\n",
-							        audio_frames_sent, frame->samples, sample_rate, num_channels);
-							last_log_frame = audio_frames_sent;
-						}
-						continue;
-					}
+				audio_irq_done_cv.wait_for(lock, std::chrono::milliseconds(15), []{ return audio_irq_done; });
+				if (audio_irq_done) {
+					irq_pending = false;
+					pending_requests = 0;
 				}
+				audio_irq_done = false;
+				frames.swap(mixed_frames);
 			}
 
-			// No data from Mac (or no IPC) — send silence frame if IPC available
-			if (g_ipc_shm) {
+			// Publish the blocks the Mac made; nothing when there are none
+			// (the parent fills an empty ring with silence)
+			for (const MixedFrame& m : frames) {
+				if (!g_ipc_shm)
+					break;
 				uint32_t write_idx = IPC_ATOMIC_LOAD(g_ipc_shm->audio_write_idx);
 				uint32_t read_idx = IPC_ATOMIC_LOAD(g_ipc_shm->audio_read_idx);
 				uint32_t next_write = (write_idx + 1) % IPC_AUDIO_FRAME_RING_SIZE;
+				if (next_write == read_idx)
+					break;	// Ring full, drop frame
 
-				if (next_write != read_idx) {
-					IPCAudioFrame* frame = &g_ipc_shm->audio_frames[write_idx];
-					uint32_t sr = AudioStatus.sample_rate >> 16;
-					if (sr == 0) sr = 44100;
-					uint32_t ch = AudioStatus.channels ? (uint32_t)AudioStatus.channels : 1;
-					uint32_t samples = (sr * 20) / 1000;
-					// Cap silence-frame size to the SHM slot capacity. AudioStatus
-					// values come from the guest and a hostile/buggy combo of
-					// sample_rate + channels could otherwise overrun frame->data.
-					size_t total_bytes = (size_t)samples * 2 * ch;
-					if (total_bytes > IPC_AUDIO_MAX_FRAME_BYTES) {
-						total_bytes = IPC_AUDIO_MAX_FRAME_BYTES;
-						samples = (uint32_t)(total_bytes / (2 * ch));
-					}
+				IPCAudioFrame* frame = &g_ipc_shm->audio_frames[write_idx];
+				frame->sample_rate = sample_rate;
+				frame->channels = m.channels;
+				frame->samples = m.samples;
+				frame->format = 1; // PCM_S16, S16MSB
+				memcpy(frame->data, m.s16be.data(), m.s16be.size());
+				IPC_ATOMIC_STORE(g_ipc_shm->audio_write_idx, next_write);
 
-					frame->sample_rate = sr;
-					frame->channels = ch;
-					frame->samples = samples;
-					frame->format = 1;
-					memset(frame->data, 0, total_bytes);
-
-					IPC_ATOMIC_STORE(g_ipc_shm->audio_write_idx, next_write);
+				audio_frames_sent++;
+				if (audio_frames_sent - last_log_frame >= 100) {
+					fprintf(stderr, "[AudioDirect] %" PRIu64 " frames, %u samples, %u Hz, %u ch\n",
+					        audio_frames_sent, m.samples, sample_rate, m.channels);
+					last_log_frame = audio_frames_sent;
 				}
 			}
 		} else if (g_ipc_shm) {

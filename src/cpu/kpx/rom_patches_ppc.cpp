@@ -350,6 +350,24 @@ void AddSifter(uint32 type, int16 id)
 	num_sifters++;
 }
 
+/*
+ *  The sound output device: ours is the System's 'sdev' 'sing' component,
+ *  its code (sifters) patched to AudioDispatch. It takes the subtype of the
+ *  machine's own output hardware, the one the Sound Manager asks for (the
+ *  ROM's 'sdev': 'awac' on the G3; 'awgc' when the ROM has none), and the
+ *  hardware components ('awac', 'awgc', 'whit', 'asc ', 'sng2' ...) are
+ *  retyped out of the way, so ours is the only output device there is.
+ *  Named 'awgc' on the G3, ours was registered and never opened: the Sound
+ *  Manager played to the ROM's AWACS component, into no hardware.
+ */
+
+uint32 SoundOutputSubtype = FOURCC('a','w','g','c');
+
+void DisableSoundOutputComponent(uint32 thing)
+{
+	WriteMacInt32(thing, FOURCC('x','d','e','v'));
+}
+
 bool FindSifter(uint32 type, int16 id)
 {
 	for (int i=0; i<num_sifters; i++) {
@@ -2342,14 +2360,29 @@ static bool patch_68k(void)
 		fprintf(stderr, "[ROMPATCH] SynchIdleTime skipped (idlewait=false)\n");
 	}
 
+	// The ROM's sound output hardware: its subtype is ours, and it goes
+	uint32 thing = find_rom_resource(FOURCC('t','h','n','g'));
+	while (thing) {
+		thing += ROMBase;
+		if (ReadMacInt32(thing) == FOURCC('s','d','e','v') && ReadMacInt32(thing + 4) != FOURCC('s','i','n','g')) {
+			static bool found;
+			if (!found)
+				SoundOutputSubtype = ReadMacInt32(thing + 4);
+			found = true;
+			D(bug(" sdev %08x in ROM disabled\n", ReadMacInt32(thing + 4)));
+			DisableSoundOutputComponent(thing);
+		}
+		thing = find_rom_resource(FOURCC('t','h','n','g'), 4711, true);
+	}
+
 	// Construct list of all sifters used by sound components in ROM
 	D(bug("Searching for sound components with type sdev in ROM\n"));
-	uint32 thing = find_rom_resource(FOURCC('t','h','n','g'));
+	thing = find_rom_resource(FOURCC('t','h','n','g'));
 	while (thing) {
 		thing += ROMBase;
 		D(bug(" found %c%c%c%c %c%c%c%c\n", ReadMacInt8(thing), ReadMacInt8(thing + 1), ReadMacInt8(thing + 2), ReadMacInt8(thing + 3), ReadMacInt8(thing + 4), ReadMacInt8(thing + 5), ReadMacInt8(thing + 6), ReadMacInt8(thing + 7)));
 		if (ReadMacInt32(thing) == FOURCC('s','d','e','v') && ReadMacInt32(thing + 4) == FOURCC('s','i','n','g')) {
-			WriteMacInt32(thing + 4, FOURCC('a','w','g','c'));
+			WriteMacInt32(thing + 4, SoundOutputSubtype);
 			D(bug(" found sdev component at offset %08x in ROM\n", thing));
 			AddSifter(ReadMacInt32(thing + componentResType), ReadMacInt16(thing + componentResID));
 			if (ReadMacInt32(thing + componentPFCount))

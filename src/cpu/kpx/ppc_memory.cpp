@@ -62,15 +62,14 @@ void SheepMem::Exit(void)
     }
 }
 
-// Microseconds — 64-bit microsecond counter, matching legacy SheepShaver.
-// Uses the virtual PPC instruction clock (instructions * 4ns, from the
-// active core via g_platform.ppc_insn_count) to give time relative to the
-// first call, exactly as legacy's host_uptime() does.
+// Microseconds — 64-bit microsecond counter: host time since the first
+// call, the clock the tick thread and the Time Manager run on. (It was
+// instructions * 4 ns, a nominal 250 MIPS: under the JITs it ran ~5x fast,
+// and QuickTime 3's movie clock with it — movies ended 5x early, their
+// sound cut off.)
 void Microseconds(uint32 &hi, uint32 &lo) {
-    static uint64_t epoch_ns = 0;
-    uint64_t virtual_ns = g_platform.ppc_insn_count ? g_platform.ppc_insn_count() * 4 : 0;
-    if (epoch_ns == 0) epoch_ns = virtual_ns;
-    uint64 usec = (virtual_ns - epoch_ns) / 1000;
+    static const uint64 epoch = GetTicks_usec();
+    uint64 usec = GetTicks_usec() - epoch;
     hi = (uint32)(usec >> 32);
     lo = (uint32)(usec & 0xFFFFFFFF);
 }

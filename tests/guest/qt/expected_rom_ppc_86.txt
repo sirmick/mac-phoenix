@@ -131,7 +131,7 @@ PASS comp.play.04 'pano' 'appl' flags=00000003 Panorama Controller
 PASS comp.play.05 'qtvr' 'appl' flags=00000001 QTVR Controller
 PASS comp.play.06 'stna' 'appl' flags=00000001 QTVR 1.0 Object Controller
 PASS comp.sdev count=1
-PASS comp.sdev.00 'awgc' 'appl' flags=80C00C0C Built-in
+PASS comp.sdev.00 'awac' 'appl' flags=80C00C0C Built-in
 PASS comp.eat_ count=72
 PASS comp.eat_.00 '.WAV' 'soun' flags=00046802 Wave
 PASS comp.eat_.01 '3DMF' 'qd3d' flags=00040802 3DMF
@@ -360,9 +360,9 @@ PASS frame.made-smc.06 crc=EAF0C1A1
 PASS frame.made-smc.07 crc=5728158B
 PASS frame.made-smc.08 crc=E42BDA99
 PASS frame.made-smc.09 crc=19FB9A25
-FAIL play.tone16 done too soon
-FAIL play.tone8 done too soon
-FAIL play.av done too soon
+PASS play.tone16 done in time
+PASS play.tone8 done in time
+PASS play.av done in time
 PASS mc.new
 PASS mc.bounds 0 0 76 80
 PASS mc.draw bar drawn

@@ -50,6 +50,8 @@ extern void PatchNativeResourceManager(void);
 struct audio_status;
 extern void AddSifter(uint32 type, int16 id);
 extern bool FindSifter(uint32 type, int16 id);
+extern uint32 SoundOutputSubtype;
+extern void DisableSoundOutputComponent(uint32 thing);
 
 // Idle
 extern void idle_wait(void);
