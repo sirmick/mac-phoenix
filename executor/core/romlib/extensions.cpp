@@ -29,6 +29,7 @@
 #include <rsys/component.h>
 #include <sound/sounddriver.h>
 #include <rsys/quicktime.h>
+#include <rsys/gestalt.h>
 #include <rsys/version.h>
 #include <prefs/prefs.h>
 #include <util/macstrings.h>
@@ -511,8 +512,7 @@ static void register_quicktime_files(const std::set<std::string> &allow)
     if(FindFolder(-32768 /* kOnSystemDisk */, "macs"_4, false, &vref_g, &sysdir_g) != noErr)
         return;
     INTEGER vref = vref_g;
-    GUEST<LONGINT> arch = 0;
-    bool powerpc = Gestalt(gestaltSysArchitecture, &arch) == noErr && arch == gestaltPowerPC;
+    gestalt_set_quicktime_version(0x02508000);
     for(const char *folder : { "Extensions", "Extensions (Disabled)" })
     {
         LONGINT dirid = sub_folder(vref, sysdir_g, folder, false);
@@ -526,8 +526,14 @@ static void register_quicktime_files(const std::set<std::string> &allow)
                 continue;
             if(listed(allow, name) && !denied(allow, name))
                 continue;
-            /* PowerPlug's are PowerPC code a 68k Mac never loads */
-            if(name == "QuickTime™ PowerPlug" && !powerpc)
+            /* PowerPlug's are PowerPC code a 68k Mac never loads; on a
+               PowerPC Mac they are native codecs QuickTime™ has 68k ones
+               of (one each in a G3's lists), which call back through
+               QuickTimeLib routines Executor doesn't export
+               (ImageCodecBusy, the remap tables) and
+               CallComponentFunctionWithStorageProcInfo: left out, Apple's
+               68k codecs decode through Mixed Mode */
+            if(name == "QuickTime™ PowerPlug")
                 continue;
             /* a component file in Extensions: register_component_files's */
             if(it.type == "thng"_4 && !strcmp(folder, "Extensions"))
@@ -543,6 +549,18 @@ static void register_quicktime_files(const std::set<std::string> &allow)
                 continue;
             int32_t n = ROMlib_register_components(rn, true, true);
             fprintf(stderr, "[Executor] components: %s registered %d (without its INIT)\n", name.c_str(), n);
+            /* Gestalt 'qtim': the version of the QuickTime whose
+               components these are, its 'vers' 1 (3.0.2 on 8.6, as the G3
+               answers; EV Nova wants 3.0) */
+            if(name == "QuickTime™" && n > 0)
+            {
+                INTEGER saved = CurResFile();
+                UseResFile(rn);
+                if(Handle v = Get1Resource("vers"_4, 1))
+                    if(GetHandleSize(v) >= 4)
+                        gestalt_set_quicktime_version(READUL(ptr_to_longint(*v)));
+                UseResFile(saved);
+            }
             CloseResFile(rn);
         }
     }

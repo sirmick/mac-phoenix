@@ -13,6 +13,10 @@
  *       are copied onto the stack and func is jumped to; a storage handle
  *       the caller pushed is then its first argument, and the caller's
  *       result slot is its result slot.
+ *  -2   (private; QuickTime 3's 68k codecs) a fast-dispatch component hands
+ *       the call it is in to another instance: on the stack the instance
+ *       and the call's header long, over the component's own frame; see
+ *       delegate_fast below.
  *
  * Components and instances live here, host side, and are named by opaque
  * 32-bit values ($0001xxxx components, $0002xxxx instances). Name, info
@@ -158,7 +162,9 @@ bool visible(const Comp &c)
    paramSize, what} and the call's parameters on the stack as the caller
    laid them, its storage in the instance's place, the result above: the
    routine its dispatcher picks is then a Pascal function of (storage,
-   parameters...) that pops them and leaves the result. */
+   parameters...) that pops them and leaves the result. A0 points at the
+   storage in that frame: QuickTime 3's codecs read their delegate's
+   instance from their globals through it (selector -2). */
 int32_t call_entry(Comp *c, Inst *in, uint32_t params)
 {
     if(!c->entry)
@@ -177,10 +183,12 @@ int32_t call_entry(Comp *c, Inst *in, uint32_t params)
         PUSHUL(in ? in->storage : 0);
         EM_A7 -= size;
         memmove(SYN68K_TO_US(EM_A7), SYN68K_TO_US(params + 4), size);
-        uint32_t saved_d0 = EM_D0;
+        uint32_t saved_d0 = EM_D0, saved_a0 = EM_A0;
         EM_D0 = READUL(params);
+        EM_A0 = saved_sp - 8; /* the storage, in the frame */
         execute68K(c->entry);
         EM_D0 = saved_d0;
+        EM_A0 = saved_a0;
         /* what the routine left: the result, with the stack as before its
            arguments (a routine that popped too much or too little is set
            right) */
@@ -1081,6 +1089,38 @@ syn68k_addr_t call_component_function(syn68k_addr_t)
     return func;
 }
 
+/* Selector -2: a QuickTime 3 codec's dispatcher, for a call it doesn't
+   answer itself, pushes the header long {flags, paramSize, what} and its
+   delegate's instance (its globals' second long) and calls
+   _ComponentDispatch -2. Under them is its own fast-dispatch frame: the
+   return address, the parameters, the storage and the result. The call
+   goes to the delegate with those parameters, its result into that slot,
+   and returns to the frame's caller with the frame popped, as if the
+   codec had answered. Only if the instance isn't one does it return to
+   the codec, its two arguments popped (the codec then answers
+   badComponentSelector). */
+syn68k_addr_t delegate_fast(syn68k_addr_t)
+{
+    uint32_t ret = POPADDR();
+    uint32_t ci = POPUL();
+    uint32_t header = POPUL();
+    Inst *in = inst_of(ci);
+    if(!in)
+    {
+        warning_unexpected("ComponentDispatch -2: %08x isn't an instance", ci);
+        return ret;
+    }
+    uint32_t frame_ret = POPADDR();
+    uint8_t size = (header >> 16) & 0xFF;
+    uint32_t slot = EM_A7 + size + 4;
+    PUSHUL(header); /* the parameters, in place, behind the header */
+    uint32_t params = EM_A7;
+    int32_t r = call_entry(in->comp, in, params);
+    WRITEUL(slot, r);
+    EM_A7 = slot;
+    return frame_ret;
+}
+
 /* MacPhoenix: CallComponentFunction[WithStorage] for PowerPC callers
    (Components.yaml): the block's arguments onto the 68k stack as the
    68k call lays them (the first argument highest; the storage above
@@ -1107,6 +1147,7 @@ static ComponentResult call_function(uint32_t storage, bool with_storage, Compon
 
 traps::Entrypoint call_component_ep("CallComponent");
 traps::Entrypoint call_component_function_ep("CallComponentFunction");
+traps::Entrypoint delegate_fast_ep("ComponentDispatch -2");
 
 struct RawSelectors : traps::internal::DeferredInit
 {
@@ -1114,6 +1155,7 @@ struct RawSelectors : traps::internal::DeferredInit
     {
         ComponentDispatch.addSelector(0, &call_component_ep, call_component);
         ComponentDispatch.addSelector(0xFFFF, &call_component_function_ep, call_component_function);
+        ComponentDispatch.addSelector(0xFFFE, &delegate_fast_ep, delegate_fast);
     }
 } raw_selectors;
 }

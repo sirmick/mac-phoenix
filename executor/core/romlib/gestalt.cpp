@@ -290,7 +290,8 @@ static gestaltentry_t gtable[] = {
        answer 1 (Canvas 5 can't initialize without it) */
     { gestaltScriptCount, 1 },
     /* MacPhoenix: QuickTime 2.5's, once Executor's own QuickTime has them
-       (rsys/quicktime.h) */
+       (rsys/quicktime.h); 'qtim' the QuickTime™ file's version where its
+       components are registered (extensions.cpp) */
     { "qtim"_4, 0x02508000 },
     { "icmp"_4, 0x12 },
     /* gestaltAliasMgrAttr: 7, above (MacPhoenix) */
@@ -490,6 +491,12 @@ Executor::gestalt_set_memory_size(uint32_t size)
         if(e.selector == gestaltLogicalRAMSize || e.selector == gestaltPhysicalRAMSize
            || e.selector == "rram"_4 || e.selector == "uram"_4)
             e.value = size;
+}
+
+void
+Executor::gestalt_set_quicktime_version(uint32_t version)
+{
+    REPLACE_SELECTOR_IN_TABLE("qtim"_4, version, gtable);
 }
 
 void

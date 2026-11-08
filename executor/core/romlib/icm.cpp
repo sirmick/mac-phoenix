@@ -2375,8 +2375,6 @@ const IcmSelector icm_selectors[] = {
     { 0x79, 8, 2, "CDSequenceSetTimeBase" },
     { 0x7A, 8, 2, "MakeImageDescriptionForPixMap" },
     { 0x7B, 8, 2, "CDSequenceSetSourceDataQueue" },
-    { 0x7C, 12, 2, "ICMSequenceLockBits" },
-    { 0x7D, 8, 2, "ICMSequenceUnlockBits" },
     { 0x7E, 12, 2, "ICMSequenceGetChainMember" },
     { 0x7F, 16, 2, "CDSequenceGetDataSource" },
     { 0x80, 24, 2, "QTNewGWorld" },
@@ -2557,4 +2555,42 @@ void Executor::C_CustomGetFilePreview(FileFilterYDUPP filefilter, INTEGER numtyp
 {
     CustomGetFile(filefilter, numtypes, typelist, replyp, dlgid, where, dlghook, filterproc, activeList,
                   activateproc, yourdatap);
+}
+
+/* The pixel formats QuickTime 3 names (ImageCompression.h): the old
+   depths 1-32 as themselves, the indexed greys (33-40) as 1-8, the
+   four-character ones by their bits; 0 for a format it doesn't know. */
+INTEGER Executor::C_QTGetPixelSize(OSType format)
+{
+    if(format <= 32)
+        return format;
+    if(format >= 33 && format <= 40)
+        return format - 32;
+    switch(format)
+    {
+        case "yuv2"_4: case "yuvs"_4: case "yuvu"_4: case "2vuy"_4:
+        case "L555"_4: case "L565"_4: case "B565"_4: case "b16g"_4:
+            return 16;
+        case "24BG"_4:
+            return 24;
+        case "ABGR"_4: case "BGRA"_4: case "RGBA"_4: case "b32a"_4:
+            return 32;
+        case "b48r"_4:
+            return 48;
+        case "b64a"_4:
+            return 64;
+    }
+    return 0;
+}
+
+/* QuickTime 3: a sequence's destination pixels locked for a codec to
+   write and unlocked after; Executor's offscreen pixels never move. */
+OSErr Executor::C_ICMSequenceLockBits(ImageSequence seqID, PixMapPtr dst, LONGINT flags)
+{
+    return noErr;
+}
+
+OSErr Executor::C_ICMSequenceUnlockBits(ImageSequence seqID, LONGINT flags)
+{
+    return noErr;
 }

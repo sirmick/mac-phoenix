@@ -4165,6 +4165,9 @@ const MovieSelector movie_selectors[] = {
     { 0x01FF, 12, 2, "QTSwapAtoms" },
     { 0x0200, 16, 2, "QTNextChildAnyType" },
     { 0x0201, 10, 2, "QTNewAlias" },
+    /* QuickTime 3.0.2's 'base' image codec, before a band: a {long,
+       routine} record of its own; it drops the result */
+    { 0x0203, 4, 2, "(private $203: QuickTime 3's base codec, a record and routine)" },
     { 0x0205, 8, 2, "SetMovieColorTable" },
     { 0x0206, 8, 2, "GetMovieColorTable" },
     { 0x0207, 28, 2, "MovieSearchText" },

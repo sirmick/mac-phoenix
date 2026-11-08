@@ -593,6 +593,11 @@ public:
     CREATE_FUNCTION_WRAPPER(NAME, &C_##NAME, (#NAME, TRAPNAME, "InterfaceLib"), SubTrapFunction<decltype(C_##NAME) COMMA &C_##NAME COMMA TRAP COMMA SELECTOR>)
 #define PASCAL_SUBTRAP_UNEXPORTED(NAME, TRAP, SELECTOR, TRAPNAME) \
     CREATE_FUNCTION_WRAPPER(NAME, &C_##NAME, (#NAME, TRAPNAME), SubTrapFunction<decltype(C_##NAME) COMMA &C_##NAME COMMA TRAP COMMA SELECTOR>)
+/* MacPhoenix: ... exported by another library instead (`export: false` with
+   `library:`: the ICM's calls, QuickTimeLib's on a Power Mac, not
+   InterfaceLib's). */
+#define PASCAL_SUBTRAP_LIB(NAME, TRAP, SELECTOR, TRAPNAME, LIB) \
+    CREATE_FUNCTION_WRAPPER(NAME, &C_##NAME, (#NAME, TRAPNAME, #LIB), SubTrapFunction<decltype(C_##NAME) COMMA &C_##NAME COMMA TRAP COMMA SELECTOR>)
 #define REGISTER_SUBTRAP(NAME, TRAP, SELECTOR, TRAPNAME, ...) \
     CREATE_FUNCTION_WRAPPER(NAME, &C_##NAME, (#NAME, TRAPNAME, "InterfaceLib"), SubTrapFunction<decltype(C_##NAME) COMMA &C_##NAME COMMA TRAP COMMA SELECTOR COMMA callconv::Register<__VA_ARGS__>>)
 #define REGISTER_SUBTRAP2(NAME, TRAP, SELECTOR, TRAPNAME, ...) \

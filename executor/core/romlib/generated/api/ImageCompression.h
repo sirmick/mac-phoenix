@@ -10,7 +10,7 @@
  *     FileMgr.h       wide                                                  *
  *     Components.h    Component                                             *
  *     QuickDraw.h     CTabHandle, PixMapHandle, RgnHandle, CGrafPtr,        *
- *                     RGBColor, PicHandle                                   *
+ *                     RGBColor, PicHandle, PixMapPtr                        *
  *     CQuickDraw.h    GDHandle, GWorldPtr                                   *
  *     StdFilePkg.h    FileFilterUPP, SFTypeList, DlgHookUPP, SFReply,       *
  *                     StandardFileReply, FileFilterYDUPP, DlgHookYDUPP,     *
@@ -253,166 +253,175 @@ struct ICMProgressProcRecord{GUEST_STRUCT;GUEST<ICMProgressUPP> progressProc;GUE
 
 typedef ICMProgressProcRecord *ICMProgressProcRecordPtr;
 
-OSErr C_CodecManagerVersion(GUEST<LONGINT> *version);PASCAL_SUBTRAP_UNEXPORTED(CodecManagerVersion, 0xAAA3, 0x0000, CodecDispatch);
+OSErr C_CodecManagerVersion(GUEST<LONGINT> *version);PASCAL_SUBTRAP_LIB(CodecManagerVersion, 0xAAA3, 0x0000, CodecDispatch, QuickTimeLib);
 
 
-OSErr C_GetImageDescriptionCTable(ImageDescriptionHandle desc, GUEST<CTabHandle> *ctable);PASCAL_SUBTRAP_UNEXPORTED(GetImageDescriptionCTable, 0xAAA3, 0x001E, CodecDispatch);
+OSErr C_GetImageDescriptionCTable(ImageDescriptionHandle desc, GUEST<CTabHandle> *ctable);PASCAL_SUBTRAP_LIB(GetImageDescriptionCTable, 0xAAA3, 0x001E, CodecDispatch, QuickTimeLib);
 
 
-void C_ICMDecompressComplete(ImageSequence seqID, OSErr err, INTEGER flag, ICMCompletionProcRecordPtr completionRtn);PASCAL_SUBTRAP_UNEXPORTED(ICMDecompressComplete, 0xAAA3, 0x0063, CodecDispatch);
+void C_ICMDecompressComplete(ImageSequence seqID, OSErr err, INTEGER flag, ICMCompletionProcRecordPtr completionRtn);PASCAL_SUBTRAP_LIB(ICMDecompressComplete, 0xAAA3, 0x0063, CodecDispatch, QuickTimeLib);
 
 
-OSErr C_GetCodecNameList(GUEST<CodecNameSpecListPtr> *list, INTEGER showAll);PASCAL_SUBTRAP_UNEXPORTED(GetCodecNameList, 0xAAA3, 0x0001, CodecDispatch);
+OSErr C_GetCodecNameList(GUEST<CodecNameSpecListPtr> *list, INTEGER showAll);PASCAL_SUBTRAP_LIB(GetCodecNameList, 0xAAA3, 0x0001, CodecDispatch, QuickTimeLib);
 
 
-OSErr C_GetCodecInfo(CodecInfo *info, CodecType cType, CodecComponent codec);PASCAL_SUBTRAP_UNEXPORTED(GetCodecInfo, 0xAAA3, 0x0003, CodecDispatch);
+OSErr C_GetCodecInfo(CodecInfo *info, CodecType cType, CodecComponent codec);PASCAL_SUBTRAP_LIB(GetCodecInfo, 0xAAA3, 0x0003, CodecDispatch, QuickTimeLib);
 
 
-OSErr C_GetMaxCompressionSize(PixMapHandle src, const Rect *srcRect, INTEGER colorDepth, CodecQ quality, CodecType cType, CompressorComponent codec, GUEST<LONGINT> *size);PASCAL_SUBTRAP_UNEXPORTED(GetMaxCompressionSize, 0xAAA3, 0x0004, CodecDispatch);
+OSErr C_GetMaxCompressionSize(PixMapHandle src, const Rect *srcRect, INTEGER colorDepth, CodecQ quality, CodecType cType, CompressorComponent codec, GUEST<LONGINT> *size);PASCAL_SUBTRAP_LIB(GetMaxCompressionSize, 0xAAA3, 0x0004, CodecDispatch, QuickTimeLib);
 
 
-OSErr C_GetCompressionTime(PixMapHandle src, const Rect *srcRect, INTEGER colorDepth, CodecType cType, CompressorComponent codec, GUEST<CodecQ> *spatialQuality, GUEST<CodecQ> *temporalQuality, GUEST<ULONGINT> *compressTime);PASCAL_SUBTRAP_UNEXPORTED(GetCompressionTime, 0xAAA3, 0x0005, CodecDispatch);
+OSErr C_GetCompressionTime(PixMapHandle src, const Rect *srcRect, INTEGER colorDepth, CodecType cType, CompressorComponent codec, GUEST<CodecQ> *spatialQuality, GUEST<CodecQ> *temporalQuality, GUEST<ULONGINT> *compressTime);PASCAL_SUBTRAP_LIB(GetCompressionTime, 0xAAA3, 0x0005, CodecDispatch, QuickTimeLib);
 
 
-OSErr C_CompressImage(PixMapHandle src, const Rect *srcRect, CodecQ quality, CodecType cType, ImageDescriptionHandle desc, Ptr data);PASCAL_SUBTRAP_UNEXPORTED(CompressImage, 0xAAA3, 0x0006, CodecDispatch);
+OSErr C_CompressImage(PixMapHandle src, const Rect *srcRect, CodecQ quality, CodecType cType, ImageDescriptionHandle desc, Ptr data);PASCAL_SUBTRAP_LIB(CompressImage, 0xAAA3, 0x0006, CodecDispatch, QuickTimeLib);
 
 
-OSErr C_FCompressImage(PixMapHandle src, const Rect *srcRect, INTEGER colorDepth, CodecQ quality, CodecType cType, CompressorComponent codec, CTabHandle ctable, CodecFlags flags, LONGINT bufferSize, ICMFlushProcRecordPtr flushProc, ICMProgressProcRecordPtr progressProc, ImageDescriptionHandle desc, Ptr data);PASCAL_SUBTRAP_UNEXPORTED(FCompressImage, 0xAAA3, 0x0007, CodecDispatch);
+OSErr C_FCompressImage(PixMapHandle src, const Rect *srcRect, INTEGER colorDepth, CodecQ quality, CodecType cType, CompressorComponent codec, CTabHandle ctable, CodecFlags flags, LONGINT bufferSize, ICMFlushProcRecordPtr flushProc, ICMProgressProcRecordPtr progressProc, ImageDescriptionHandle desc, Ptr data);PASCAL_SUBTRAP_LIB(FCompressImage, 0xAAA3, 0x0007, CodecDispatch, QuickTimeLib);
 
 
-OSErr C_DecompressImage(Ptr data, ImageDescriptionHandle desc, PixMapHandle dst, const Rect *srcRect, const Rect *dstRect, INTEGER mode, RgnHandle mask);PASCAL_SUBTRAP_UNEXPORTED(DecompressImage, 0xAAA3, 0x0008, CodecDispatch);
+OSErr C_DecompressImage(Ptr data, ImageDescriptionHandle desc, PixMapHandle dst, const Rect *srcRect, const Rect *dstRect, INTEGER mode, RgnHandle mask);PASCAL_SUBTRAP_LIB(DecompressImage, 0xAAA3, 0x0008, CodecDispatch, QuickTimeLib);
 
 
-OSErr C_FDecompressImage(Ptr data, ImageDescriptionHandle desc, PixMapHandle dst, const Rect *srcRect, MatrixRecordPtr matrix, INTEGER mode, RgnHandle mask, PixMapHandle matte, const Rect *matteRect, CodecQ accuracy, DecompressorComponent codec, LONGINT bufferSize, ICMDataProcRecordPtr dataProc, ICMProgressProcRecordPtr progressProc);PASCAL_SUBTRAP_UNEXPORTED(FDecompressImage, 0xAAA3, 0x0009, CodecDispatch);
+OSErr C_FDecompressImage(Ptr data, ImageDescriptionHandle desc, PixMapHandle dst, const Rect *srcRect, MatrixRecordPtr matrix, INTEGER mode, RgnHandle mask, PixMapHandle matte, const Rect *matteRect, CodecQ accuracy, DecompressorComponent codec, LONGINT bufferSize, ICMDataProcRecordPtr dataProc, ICMProgressProcRecordPtr progressProc);PASCAL_SUBTRAP_LIB(FDecompressImage, 0xAAA3, 0x0009, CodecDispatch, QuickTimeLib);
 
 
-OSErr C_CompressSequenceBegin(GUEST<ImageSequence> *seqID, PixMapHandle src, PixMapHandle prev, const Rect *srcRect, const Rect *prevRect, INTEGER colorDepth, CodecType cType, CompressorComponent codec, CodecQ spatialQuality, CodecQ temporalQuality, LONGINT keyFrameRate, CTabHandle ctable, CodecFlags flags, ImageDescriptionHandle desc);PASCAL_SUBTRAP_UNEXPORTED(CompressSequenceBegin, 0xAAA3, 0x000A, CodecDispatch);
+OSErr C_CompressSequenceBegin(GUEST<ImageSequence> *seqID, PixMapHandle src, PixMapHandle prev, const Rect *srcRect, const Rect *prevRect, INTEGER colorDepth, CodecType cType, CompressorComponent codec, CodecQ spatialQuality, CodecQ temporalQuality, LONGINT keyFrameRate, CTabHandle ctable, CodecFlags flags, ImageDescriptionHandle desc);PASCAL_SUBTRAP_LIB(CompressSequenceBegin, 0xAAA3, 0x000A, CodecDispatch, QuickTimeLib);
 
 
-OSErr C_CompressSequenceFrame(ImageSequence seqID, PixMapHandle src, const Rect *srcRect, CodecFlags flags, Ptr data, GUEST<LONGINT> *dataSize, UInt8 *similarity, ICMCompletionProcRecordPtr asyncCompletionProc);PASCAL_SUBTRAP_UNEXPORTED(CompressSequenceFrame, 0xAAA3, 0x000B, CodecDispatch);
+OSErr C_CompressSequenceFrame(ImageSequence seqID, PixMapHandle src, const Rect *srcRect, CodecFlags flags, Ptr data, GUEST<LONGINT> *dataSize, UInt8 *similarity, ICMCompletionProcRecordPtr asyncCompletionProc);PASCAL_SUBTRAP_LIB(CompressSequenceFrame, 0xAAA3, 0x000B, CodecDispatch, QuickTimeLib);
 
 
-OSErr C_DecompressSequenceBegin(GUEST<ImageSequence> *seqID, ImageDescriptionHandle desc, CGrafPtr port, GDHandle gdh, const Rect *srcRect, MatrixRecordPtr matrix, INTEGER mode, RgnHandle mask, CodecFlags flags, CodecQ accuracy, DecompressorComponent codec);PASCAL_SUBTRAP_UNEXPORTED(DecompressSequenceBegin, 0xAAA3, 0x000D, CodecDispatch);
+OSErr C_DecompressSequenceBegin(GUEST<ImageSequence> *seqID, ImageDescriptionHandle desc, CGrafPtr port, GDHandle gdh, const Rect *srcRect, MatrixRecordPtr matrix, INTEGER mode, RgnHandle mask, CodecFlags flags, CodecQ accuracy, DecompressorComponent codec);PASCAL_SUBTRAP_LIB(DecompressSequenceBegin, 0xAAA3, 0x000D, CodecDispatch, QuickTimeLib);
 
 
-OSErr C_DecompressSequenceFrame(ImageSequence seqID, Ptr data, CodecFlags inFlags, GUEST<CodecFlags> *outFlags, ICMCompletionProcRecordPtr asyncCompletionProc);PASCAL_SUBTRAP_UNEXPORTED(DecompressSequenceFrame, 0xAAA3, 0x000E, CodecDispatch);
+OSErr C_DecompressSequenceFrame(ImageSequence seqID, Ptr data, CodecFlags inFlags, GUEST<CodecFlags> *outFlags, ICMCompletionProcRecordPtr asyncCompletionProc);PASCAL_SUBTRAP_LIB(DecompressSequenceFrame, 0xAAA3, 0x000E, CodecDispatch, QuickTimeLib);
 
 
-OSErr C_DisposeCodecNameList(CodecNameSpecListPtr list);PASCAL_SUBTRAP_UNEXPORTED(DisposeCodecNameList, 0xAAA3, 0x000F, CodecDispatch);
+OSErr C_DisposeCodecNameList(CodecNameSpecListPtr list);PASCAL_SUBTRAP_LIB(DisposeCodecNameList, 0xAAA3, 0x000F, CodecDispatch, QuickTimeLib);
 
 
-OSErr C_SetDSequenceMatrix(ImageSequence seqID, MatrixRecordPtr matrix);PASCAL_SUBTRAP_UNEXPORTED(SetDSequenceMatrix, 0xAAA3, 0x0010, CodecDispatch);
+OSErr C_SetDSequenceMatrix(ImageSequence seqID, MatrixRecordPtr matrix);PASCAL_SUBTRAP_LIB(SetDSequenceMatrix, 0xAAA3, 0x0010, CodecDispatch, QuickTimeLib);
 
 
-OSErr C_SetDSequenceMatte(ImageSequence seqID, PixMapHandle matte, const Rect *matteRect);PASCAL_SUBTRAP_UNEXPORTED(SetDSequenceMatte, 0xAAA3, 0x0011, CodecDispatch);
+OSErr C_SetDSequenceMatte(ImageSequence seqID, PixMapHandle matte, const Rect *matteRect);PASCAL_SUBTRAP_LIB(SetDSequenceMatte, 0xAAA3, 0x0011, CodecDispatch, QuickTimeLib);
 
 
-OSErr C_SetDSequenceMask(ImageSequence seqID, RgnHandle mask);PASCAL_SUBTRAP_UNEXPORTED(SetDSequenceMask, 0xAAA3, 0x0012, CodecDispatch);
+OSErr C_SetDSequenceMask(ImageSequence seqID, RgnHandle mask);PASCAL_SUBTRAP_LIB(SetDSequenceMask, 0xAAA3, 0x0012, CodecDispatch, QuickTimeLib);
 
 
-OSErr C_SetDSequenceTransferMode(ImageSequence seqID, INTEGER mode, const RGBColor *opColor);PASCAL_SUBTRAP_UNEXPORTED(SetDSequenceTransferMode, 0xAAA3, 0x0013, CodecDispatch);
+OSErr C_SetDSequenceTransferMode(ImageSequence seqID, INTEGER mode, const RGBColor *opColor);PASCAL_SUBTRAP_LIB(SetDSequenceTransferMode, 0xAAA3, 0x0013, CodecDispatch, QuickTimeLib);
 
 
-OSErr C_SetDSequenceDataProc(ImageSequence seqID, ICMDataProcRecordPtr dataProc, LONGINT bufferSize);PASCAL_SUBTRAP_UNEXPORTED(SetDSequenceDataProc, 0xAAA3, 0x0014, CodecDispatch);
+OSErr C_SetDSequenceDataProc(ImageSequence seqID, ICMDataProcRecordPtr dataProc, LONGINT bufferSize);PASCAL_SUBTRAP_LIB(SetDSequenceDataProc, 0xAAA3, 0x0014, CodecDispatch, QuickTimeLib);
 
 
-OSErr C_GetDSequenceImageBuffer(ImageSequence seqID, GUEST<GWorldPtr> *gworld);PASCAL_SUBTRAP_UNEXPORTED(GetDSequenceImageBuffer, 0xAAA3, 0x0015, CodecDispatch);
+OSErr C_GetDSequenceImageBuffer(ImageSequence seqID, GUEST<GWorldPtr> *gworld);PASCAL_SUBTRAP_LIB(GetDSequenceImageBuffer, 0xAAA3, 0x0015, CodecDispatch, QuickTimeLib);
 
 
-OSErr C_GetDSequenceScreenBuffer(ImageSequence seqID, GUEST<GWorldPtr> *gworld);PASCAL_SUBTRAP_UNEXPORTED(GetDSequenceScreenBuffer, 0xAAA3, 0x0016, CodecDispatch);
+OSErr C_GetDSequenceScreenBuffer(ImageSequence seqID, GUEST<GWorldPtr> *gworld);PASCAL_SUBTRAP_LIB(GetDSequenceScreenBuffer, 0xAAA3, 0x0016, CodecDispatch, QuickTimeLib);
 
 
-OSErr C_SetCSequenceQuality(ImageSequence seqID, CodecQ spatialQuality, CodecQ temporalQuality);PASCAL_SUBTRAP_UNEXPORTED(SetCSequenceQuality, 0xAAA3, 0x0017, CodecDispatch);
+OSErr C_SetCSequenceQuality(ImageSequence seqID, CodecQ spatialQuality, CodecQ temporalQuality);PASCAL_SUBTRAP_LIB(SetCSequenceQuality, 0xAAA3, 0x0017, CodecDispatch, QuickTimeLib);
 
 
-OSErr C_SetCSequencePrev(ImageSequence seqID, PixMapHandle prev, const Rect *prevRect);PASCAL_SUBTRAP_UNEXPORTED(SetCSequencePrev, 0xAAA3, 0x0018, CodecDispatch);
+OSErr C_SetCSequencePrev(ImageSequence seqID, PixMapHandle prev, const Rect *prevRect);PASCAL_SUBTRAP_LIB(SetCSequencePrev, 0xAAA3, 0x0018, CodecDispatch, QuickTimeLib);
 
 
-OSErr C_GetCSequencePrevBuffer(ImageSequence seqID, GUEST<GWorldPtr> *gworld);PASCAL_SUBTRAP_UNEXPORTED(GetCSequencePrevBuffer, 0xAAA3, 0x0019, CodecDispatch);
+OSErr C_GetCSequencePrevBuffer(ImageSequence seqID, GUEST<GWorldPtr> *gworld);PASCAL_SUBTRAP_LIB(GetCSequencePrevBuffer, 0xAAA3, 0x0019, CodecDispatch, QuickTimeLib);
 
 
-OSErr C_CDSequenceBusy(ImageSequence seqID);PASCAL_SUBTRAP_UNEXPORTED(CDSequenceBusy, 0xAAA3, 0x001A, CodecDispatch);
+OSErr C_CDSequenceBusy(ImageSequence seqID);PASCAL_SUBTRAP_LIB(CDSequenceBusy, 0xAAA3, 0x001A, CodecDispatch, QuickTimeLib);
 
 
-OSErr C_CDSequenceEnd(ImageSequence seqID);PASCAL_SUBTRAP_UNEXPORTED(CDSequenceEnd, 0xAAA3, 0x001B, CodecDispatch);
+OSErr C_CDSequenceEnd(ImageSequence seqID);PASCAL_SUBTRAP_LIB(CDSequenceEnd, 0xAAA3, 0x001B, CodecDispatch, QuickTimeLib);
 
 
-OSErr C_GetCompressedImageSize(ImageDescriptionHandle desc, Ptr data, LONGINT bufferSize, ICMDataProcRecordPtr dataProc, GUEST<LONGINT> *dataSize);PASCAL_SUBTRAP_UNEXPORTED(GetCompressedImageSize, 0xAAA3, 0x001C, CodecDispatch);
+OSErr C_GetCompressedImageSize(ImageDescriptionHandle desc, Ptr data, LONGINT bufferSize, ICMDataProcRecordPtr dataProc, GUEST<LONGINT> *dataSize);PASCAL_SUBTRAP_LIB(GetCompressedImageSize, 0xAAA3, 0x001C, CodecDispatch, QuickTimeLib);
 
 
-OSErr C_SetImageDescriptionCTable(ImageDescriptionHandle desc, CTabHandle ctable);PASCAL_SUBTRAP_UNEXPORTED(SetImageDescriptionCTable, 0xAAA3, 0x001F, CodecDispatch);
+OSErr C_SetImageDescriptionCTable(ImageDescriptionHandle desc, CTabHandle ctable);PASCAL_SUBTRAP_LIB(SetImageDescriptionCTable, 0xAAA3, 0x001F, CodecDispatch, QuickTimeLib);
 
 
-OSErr C_GetImageDescriptionExtension(ImageDescriptionHandle desc, GUEST<Handle> *extension, LONGINT idType, LONGINT index);PASCAL_SUBTRAP_UNEXPORTED(GetImageDescriptionExtension, 0xAAA3, 0x0020, CodecDispatch);
+OSErr C_GetImageDescriptionExtension(ImageDescriptionHandle desc, GUEST<Handle> *extension, LONGINT idType, LONGINT index);PASCAL_SUBTRAP_LIB(GetImageDescriptionExtension, 0xAAA3, 0x0020, CodecDispatch, QuickTimeLib);
 
 
-OSErr C_AddImageDescriptionExtension(ImageDescriptionHandle desc, Handle extension, LONGINT idType);PASCAL_SUBTRAP_UNEXPORTED(AddImageDescriptionExtension, 0xAAA3, 0x0021, CodecDispatch);
+OSErr C_AddImageDescriptionExtension(ImageDescriptionHandle desc, Handle extension, LONGINT idType);PASCAL_SUBTRAP_LIB(AddImageDescriptionExtension, 0xAAA3, 0x0021, CodecDispatch, QuickTimeLib);
 
 
-OSErr C_FindCodec(CodecType cType, CodecComponent specCodec, GUEST<CompressorComponent> *compressor, GUEST<DecompressorComponent> *decompressor);PASCAL_SUBTRAP_UNEXPORTED(FindCodec, 0xAAA3, 0x0023, CodecDispatch);
+OSErr C_FindCodec(CodecType cType, CodecComponent specCodec, GUEST<CompressorComponent> *compressor, GUEST<DecompressorComponent> *decompressor);PASCAL_SUBTRAP_LIB(FindCodec, 0xAAA3, 0x0023, CodecDispatch, QuickTimeLib);
 
 
-OSErr C_CompressPicture(PicHandle srcPicture, PicHandle dstPicture, CodecQ quality, CodecType cType);PASCAL_SUBTRAP_UNEXPORTED(CompressPicture, 0xAAA3, 0x0024, CodecDispatch);
+OSErr C_CompressPicture(PicHandle srcPicture, PicHandle dstPicture, CodecQ quality, CodecType cType);PASCAL_SUBTRAP_LIB(CompressPicture, 0xAAA3, 0x0024, CodecDispatch, QuickTimeLib);
 
 
-OSErr C_FCompressPicture(PicHandle srcPicture, PicHandle dstPicture, INTEGER colorDepth, CTabHandle ctable, CodecQ quality, INTEGER doDither, INTEGER compressAgain, ICMProgressProcRecordPtr progressProc, CodecType cType, CompressorComponent codec);PASCAL_SUBTRAP_UNEXPORTED(FCompressPicture, 0xAAA3, 0x0025, CodecDispatch);
+OSErr C_FCompressPicture(PicHandle srcPicture, PicHandle dstPicture, INTEGER colorDepth, CTabHandle ctable, CodecQ quality, INTEGER doDither, INTEGER compressAgain, ICMProgressProcRecordPtr progressProc, CodecType cType, CompressorComponent codec);PASCAL_SUBTRAP_LIB(FCompressPicture, 0xAAA3, 0x0025, CodecDispatch, QuickTimeLib);
 
 
-OSErr C_SetDSequenceAccuracy(ImageSequence seqID, CodecQ accuracy);PASCAL_SUBTRAP_UNEXPORTED(SetDSequenceAccuracy, 0xAAA3, 0x0034, CodecDispatch);
+OSErr C_SetDSequenceAccuracy(ImageSequence seqID, CodecQ accuracy);PASCAL_SUBTRAP_LIB(SetDSequenceAccuracy, 0xAAA3, 0x0034, CodecDispatch, QuickTimeLib);
 
 
-OSErr C_SetDSequenceSrcRect(ImageSequence seqID, const Rect *srcRect);PASCAL_SUBTRAP_UNEXPORTED(SetDSequenceSrcRect, 0xAAA3, 0x0035, CodecDispatch);
+OSErr C_SetDSequenceSrcRect(ImageSequence seqID, const Rect *srcRect);PASCAL_SUBTRAP_LIB(SetDSequenceSrcRect, 0xAAA3, 0x0035, CodecDispatch, QuickTimeLib);
 
 
-OSErr C_SetCSequenceKeyFrameRate(ImageSequence seqID, LONGINT keyFrameRate);PASCAL_SUBTRAP_UNEXPORTED(SetCSequenceKeyFrameRate, 0xAAA3, 0x0036, CodecDispatch);
+OSErr C_SetCSequenceKeyFrameRate(ImageSequence seqID, LONGINT keyFrameRate);PASCAL_SUBTRAP_LIB(SetCSequenceKeyFrameRate, 0xAAA3, 0x0036, CodecDispatch, QuickTimeLib);
 
 
-OSErr C_RemoveImageDescriptionExtension(ImageDescriptionHandle desc, LONGINT idType, LONGINT index);PASCAL_SUBTRAP_UNEXPORTED(RemoveImageDescriptionExtension, 0xAAA3, 0x003A, CodecDispatch);
+OSErr C_RemoveImageDescriptionExtension(ImageDescriptionHandle desc, LONGINT idType, LONGINT index);PASCAL_SUBTRAP_LIB(RemoveImageDescriptionExtension, 0xAAA3, 0x003A, CodecDispatch, QuickTimeLib);
 
 
-OSErr C_CountImageDescriptionExtensionType(ImageDescriptionHandle desc, LONGINT idType, GUEST<LONGINT> *count);PASCAL_SUBTRAP_UNEXPORTED(CountImageDescriptionExtensionType, 0xAAA3, 0x003B, CodecDispatch);
+OSErr C_CountImageDescriptionExtensionType(ImageDescriptionHandle desc, LONGINT idType, GUEST<LONGINT> *count);PASCAL_SUBTRAP_LIB(CountImageDescriptionExtensionType, 0xAAA3, 0x003B, CodecDispatch, QuickTimeLib);
 
 
-OSErr C_GetNextImageDescriptionExtensionType(ImageDescriptionHandle desc, GUEST<LONGINT> *idType);PASCAL_SUBTRAP_UNEXPORTED(GetNextImageDescriptionExtensionType, 0xAAA3, 0x003C, CodecDispatch);
+OSErr C_GetNextImageDescriptionExtensionType(ImageDescriptionHandle desc, GUEST<LONGINT> *idType);PASCAL_SUBTRAP_LIB(GetNextImageDescriptionExtensionType, 0xAAA3, 0x003C, CodecDispatch, QuickTimeLib);
 
 
-OSErr C_DecompressSequenceFrameS(ImageSequence seqID, Ptr data, LONGINT dataSize, CodecFlags inFlags, GUEST<CodecFlags> *outFlags, ICMCompletionProcRecordPtr asyncCompletionProc);PASCAL_SUBTRAP_UNEXPORTED(DecompressSequenceFrameS, 0xAAA3, 0x0047, CodecDispatch);
+OSErr C_DecompressSequenceFrameS(ImageSequence seqID, Ptr data, LONGINT dataSize, CodecFlags inFlags, GUEST<CodecFlags> *outFlags, ICMCompletionProcRecordPtr asyncCompletionProc);PASCAL_SUBTRAP_LIB(DecompressSequenceFrameS, 0xAAA3, 0x0047, CodecDispatch, QuickTimeLib);
 
 
-OSErr C_GetCSequenceKeyFrameRate(ImageSequence seqID, GUEST<LONGINT> *keyFrameRate);PASCAL_SUBTRAP_UNEXPORTED(GetCSequenceKeyFrameRate, 0xAAA3, 0x004B, CodecDispatch);
+OSErr C_GetCSequenceKeyFrameRate(ImageSequence seqID, GUEST<LONGINT> *keyFrameRate);PASCAL_SUBTRAP_LIB(GetCSequenceKeyFrameRate, 0xAAA3, 0x004B, CodecDispatch, QuickTimeLib);
 
 
-OSErr C_SetCSequenceFrameNumber(ImageSequence seqID, LONGINT frameNumber);PASCAL_SUBTRAP_UNEXPORTED(SetCSequenceFrameNumber, 0xAAA3, 0x0051, CodecDispatch);
+OSErr C_SetCSequenceFrameNumber(ImageSequence seqID, LONGINT frameNumber);PASCAL_SUBTRAP_LIB(SetCSequenceFrameNumber, 0xAAA3, 0x0051, CodecDispatch, QuickTimeLib);
 
 
-OSErr C_GetCSequenceFrameNumber(ImageSequence seqID, GUEST<LONGINT> *frameNumber);PASCAL_SUBTRAP_UNEXPORTED(GetCSequenceFrameNumber, 0xAAA3, 0x0054, CodecDispatch);
+OSErr C_GetCSequenceFrameNumber(ImageSequence seqID, GUEST<LONGINT> *frameNumber);PASCAL_SUBTRAP_LIB(GetCSequenceFrameNumber, 0xAAA3, 0x0054, CodecDispatch, QuickTimeLib);
 
 
-OSErr C_SetSequenceProgressProc(ImageSequence seqID, ICMProgressProcRecordPtr progressProc);PASCAL_SUBTRAP_UNEXPORTED(SetSequenceProgressProc, 0xAAA3, 0x0056, CodecDispatch);
+OSErr C_SetSequenceProgressProc(ImageSequence seqID, ICMProgressProcRecordPtr progressProc);PASCAL_SUBTRAP_LIB(SetSequenceProgressProc, 0xAAA3, 0x0056, CodecDispatch, QuickTimeLib);
 
 
-OSErr C_SetDSequenceFlags(ImageSequence seqID, LONGINT flags, LONGINT flagsMask);PASCAL_SUBTRAP_UNEXPORTED(SetDSequenceFlags, 0xAAA3, 0x0057, CodecDispatch);
+OSErr C_SetDSequenceFlags(ImageSequence seqID, LONGINT flags, LONGINT flagsMask);PASCAL_SUBTRAP_LIB(SetDSequenceFlags, 0xAAA3, 0x0057, CodecDispatch, QuickTimeLib);
 
 
-OSErr C_DecompressSequenceBeginS(GUEST<ImageSequence> *seqID, ImageDescriptionHandle desc, Ptr data, LONGINT dataSize, CGrafPtr port, GDHandle gdh, const Rect *srcRect, MatrixRecordPtr matrix, INTEGER mode, RgnHandle mask, CodecFlags flags, CodecQ accuracy, DecompressorComponent codec);PASCAL_SUBTRAP_UNEXPORTED(DecompressSequenceBeginS, 0xAAA3, 0x005D, CodecDispatch);
+OSErr C_DecompressSequenceBeginS(GUEST<ImageSequence> *seqID, ImageDescriptionHandle desc, Ptr data, LONGINT dataSize, CGrafPtr port, GDHandle gdh, const Rect *srcRect, MatrixRecordPtr matrix, INTEGER mode, RgnHandle mask, CodecFlags flags, CodecQ accuracy, DecompressorComponent codec);PASCAL_SUBTRAP_LIB(DecompressSequenceBeginS, 0xAAA3, 0x005D, CodecDispatch, QuickTimeLib);
 
 
-OSErr C_CDSequenceFlush(ImageSequence seqID);PASCAL_SUBTRAP_UNEXPORTED(CDSequenceFlush, 0xAAA3, 0x005F, CodecDispatch);
+OSErr C_CDSequenceFlush(ImageSequence seqID);PASCAL_SUBTRAP_LIB(CDSequenceFlush, 0xAAA3, 0x005F, CodecDispatch, QuickTimeLib);
 
 
-OSErr C_MakeImageDescriptionForPixMap(PixMapHandle pixmap, GUEST<ImageDescriptionHandle> *idh);PASCAL_SUBTRAP_UNEXPORTED(MakeImageDescriptionForPixMap, 0xAAA3, 0x007A, CodecDispatch);
+OSErr C_MakeImageDescriptionForPixMap(PixMapHandle pixmap, GUEST<ImageDescriptionHandle> *idh);PASCAL_SUBTRAP_LIB(MakeImageDescriptionForPixMap, 0xAAA3, 0x007A, CodecDispatch, QuickTimeLib);
 
 
-void C_SFGetFilePreview(Point p, ConstStringPtr prompt, FileFilterUPP filef, INTEGER numt, SFTypeList tl, DlgHookUPP dh, SFReply *rep);PASCAL_SUBTRAP_UNEXPORTED(SFGetFilePreview, 0xAAA3, 0x0041, CodecDispatch);
+OSErr C_ICMSequenceLockBits(ImageSequence srcSeqID, PixMapPtr dst, LONGINT flags);PASCAL_SUBTRAP_LIB(ICMSequenceLockBits, 0xAAA3, 0x007C, CodecDispatch, QuickTimeLib);
 
 
-void C_SFPGetFilePreview(Point p, ConstStringPtr prompt, FileFilterUPP filef, INTEGER numt, SFTypeList tl, DlgHookUPP dh, SFReply *rep, INTEGER dig, ModalFilterUPP fp);PASCAL_SUBTRAP_UNEXPORTED(SFPGetFilePreview, 0xAAA3, 0x0042, CodecDispatch);
+OSErr C_ICMSequenceUnlockBits(ImageSequence srcSeqID, LONGINT flags);PASCAL_SUBTRAP_LIB(ICMSequenceUnlockBits, 0xAAA3, 0x007D, CodecDispatch, QuickTimeLib);
 
 
-void C_StandardGetFilePreview(FileFilterUPP filef, INTEGER numt, SFTypeList tl, StandardFileReply *replyp);PASCAL_SUBTRAP_UNEXPORTED(StandardGetFilePreview, 0xAAA3, 0x0043, CodecDispatch);
+INTEGER C_QTGetPixelSize(OSType PixelFormat);PASCAL_SUBTRAP_LIB(QTGetPixelSize, 0xAAA3, 0x0086, CodecDispatch, QuickTimeLib);
 
 
-void C_CustomGetFilePreview(FileFilterYDUPP filefilter, INTEGER numtypes, SFTypeList typelist, StandardFileReply *replyp, INTEGER dlgid, Point where, DlgHookYDUPP dlghook, ModalFilterYDUPP filterproc, Ptr activeList, ActivateYDUPP activateproc, void *yourdatap);PASCAL_SUBTRAP_UNEXPORTED(CustomGetFilePreview, 0xAAA3, 0x0044, CodecDispatch);
+void C_SFGetFilePreview(Point p, ConstStringPtr prompt, FileFilterUPP filef, INTEGER numt, SFTypeList tl, DlgHookUPP dh, SFReply *rep);PASCAL_SUBTRAP_LIB(SFGetFilePreview, 0xAAA3, 0x0041, CodecDispatch, QuickTimeLib);
+
+
+void C_SFPGetFilePreview(Point p, ConstStringPtr prompt, FileFilterUPP filef, INTEGER numt, SFTypeList tl, DlgHookUPP dh, SFReply *rep, INTEGER dig, ModalFilterUPP fp);PASCAL_SUBTRAP_LIB(SFPGetFilePreview, 0xAAA3, 0x0042, CodecDispatch, QuickTimeLib);
+
+
+void C_StandardGetFilePreview(FileFilterUPP filef, INTEGER numt, SFTypeList tl, StandardFileReply *replyp);PASCAL_SUBTRAP_LIB(StandardGetFilePreview, 0xAAA3, 0x0043, CodecDispatch, QuickTimeLib);
+
+
+void C_CustomGetFilePreview(FileFilterYDUPP filefilter, INTEGER numtypes, SFTypeList typelist, StandardFileReply *replyp, INTEGER dlgid, Point where, DlgHookYDUPP dlghook, ModalFilterYDUPP filterproc, Ptr activeList, ActivateYDUPP activateproc, void *yourdatap);PASCAL_SUBTRAP_LIB(CustomGetFilePreview, 0xAAA3, 0x0044, CodecDispatch, QuickTimeLib);
 
 
 } /* namespace Executor */
