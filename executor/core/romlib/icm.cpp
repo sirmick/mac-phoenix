@@ -656,6 +656,23 @@ void show(DState &s)
     SetGWorld(save_port, save_dev);
 }
 
+/* The bands being decompressed, innermost last: the sequence and the
+   pixel map the codec was given (ICMSequenceLockBits answers it). */
+struct Band
+{
+    ImageSequence id;
+    const PixMap *dst;
+};
+std::vector<Band> bands;
+
+int32_t band_decompress(DState &s, CodecDecompressParams &p)
+{
+    bands.push_back({ s.id, &p.dstPixMap });
+    int32_t r = s.codec.call(kCodecBandDecompress, { &p });
+    bands.pop_back();
+    return r;
+}
+
 OSErr decompress_frame(DState &s, Ptr data, int32_t size, CodecFlags *out_flags)
 {
     PixMapHandle dpm = s.dst.pm;
@@ -697,7 +714,7 @@ OSErr decompress_frame(DState &s, Ptr data, int32_t size, CodecFlags *out_flags)
                 SetGWorld(s.dst.port, nullptr);
             else if(s.dst.port)
                 SetPort((GrafPtr)s.dst.port);
-            r = s.codec.call(kCodecBandDecompress, { &p });
+            r = band_decompress(s, p);
             SetGWorld(save_port, save_dev);
         }
         else
@@ -706,7 +723,7 @@ OSErr decompress_frame(DState &s, Ptr data, int32_t size, CodecFlags *out_flags)
             GUEST<GDHandle> save_dev;
             GetGWorld(&save_port, &save_dev);
             SetGWorld(s.off, nullptr);
-            r = s.codec.call(kCodecBandDecompress, { &p });
+            r = band_decompress(s, p);
             SetGWorld(save_port, save_dev);
             if(r == noErr)
                 show(s);
@@ -2583,10 +2600,23 @@ INTEGER Executor::C_QTGetPixelSize(OSType format)
 }
 
 /* QuickTime 3: a sequence's destination pixels locked for a codec to
-   write and unlocked after; Executor's offscreen pixels never move. */
+   write, and unlocked after. dst gets the pixel map the band is being
+   decompressed into (rowBytes without the flags): the 'base' codec works
+   out where its codec's band goes from its baseAddr, bounds, rowBytes and
+   pixelSize (rpza, given none, drew from address 0 over the trap table).
+   Executor's offscreen pixels never move, and the band's destination is
+   locked while it is decompressed. No band of that sequence in progress:
+   an error, and the codec draws some other way. */
 OSErr Executor::C_ICMSequenceLockBits(ImageSequence seqID, PixMapPtr dst, LONGINT flags)
 {
-    return noErr;
+    for(auto it = bands.rbegin(); it != bands.rend(); ++it)
+        if(it->id == seqID)
+        {
+            if(dst)
+                *dst = *it->dst;
+            return noErr;
+        }
+    return paramErr;
 }
 
 OSErr Executor::C_ICMSequenceUnlockBits(ImageSequence seqID, LONGINT flags)

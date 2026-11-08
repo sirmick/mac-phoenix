@@ -248,6 +248,28 @@ int32_t Executor::ROMlib_call_component(uint32_t instance, int16_t what, std::in
 
 namespace
 {
+/* Opens a component's file (for its code, a resource, OpenComponentResFile), and says
+   whether it was open already: then it isn't closed after, for whoever
+   opened it (an OpenComponentResFile of a codec sharing the QuickTime file)
+   still has resources loaded from it. */
+INTEGER open_comp_file(FSSpec *spec, bool *was_open)
+{
+    std::vector<INTEGER> open_before;
+    resmaphand map;
+    WALKMAPTOP(map)
+        open_before.push_back((*map)->resfn);
+    EWALKMAP()
+    INTEGER rn = FSpOpenResFile(spec, fsRdPerm);
+    *was_open = rn != -1 && std::find(open_before.begin(), open_before.end(), rn) != open_before.end();
+    return rn;
+}
+
+void close_comp_file(INTEGER rn, bool was_open)
+{
+    if(!was_open)
+        CloseResFile(rn);
+}
+
 bool load_code(Comp *c)
 {
     if(c->entry)
@@ -257,10 +279,11 @@ bool load_code(Comp *c)
     FSSpec spec = c->file; /* guest-visible: on this stack */
     INTEGER saved = CurResFile();
     INTEGER rn;
+    bool was_open;
     {
         /* the map in the System heap, so the code loads there too */
         TheZoneGuard guard(LM(SysZone));
-        rn = FSpOpenResFile(&spec, fsRdPerm);
+        rn = open_comp_file(&spec, &was_open);
     }
     if(rn == -1)
         return false;
@@ -277,7 +300,7 @@ bool load_code(Comp *c)
         }
     }
     UseResFile(saved);
-    CloseResFile(rn);
+    close_comp_file(rn, was_open);
     if(!h || !*h)
         return false;
     c->code = h;
@@ -924,18 +947,14 @@ INTEGER open_res_file(Component aComponent)
     Comp *c = comp_of(gid(aComponent));
     if(!c || !c->from_file)
         return -1;
-    std::vector<INTEGER> open_before;
-    resmaphand map;
-    WALKMAPTOP(map)
-        open_before.push_back((*map)->resfn);
-    EWALKMAP()
     FSSpec spec = c->file;
-    INTEGER rn = FSpOpenResFile(&spec, fsRdPerm);
+    bool was_open;
+    INTEGER rn = open_comp_file(&spec, &was_open);
     if(rn != -1)
     {
         ResFileUse &u = res_file_uses[rn];
         if(u.opens++ == 0)
-            u.was_open = std::find(open_before.begin(), open_before.end(), rn) != open_before.end();
+            u.was_open = was_open;
     }
     return rn;
 }
@@ -1050,7 +1069,8 @@ OSErr Executor::C_GetComponentResource(Component aComponent, OSType resType, INT
     {
         FSSpec spec = c->file;
         INTEGER saved = CurResFile();
-        INTEGER rn = FSpOpenResFile(&spec, fsRdPerm);
+        bool was_open;
+        INTEGER rn = open_comp_file(&spec, &was_open);
         if(rn != -1)
         {
             UseResFile(rn);
@@ -1063,7 +1083,7 @@ OSErr Executor::C_GetComponentResource(Component aComponent, OSType resType, INT
                 err = noErr;
             }
             UseResFile(saved);
-            CloseResFile(rn);
+            close_comp_file(rn, was_open);
         }
     }
     return err;

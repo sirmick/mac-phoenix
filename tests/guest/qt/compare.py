@@ -11,7 +11,7 @@ pixels and the sound the Mac played.
 * --manifest: tests/lib/qtmovie.py's frame CRCs. The frames of the movies
   it wrote ('raw ' and 'rle ', exact codecs) and of QuickTime's own
   flattened copy must be those pixels, whatever the reference says.
-* --known: result names (one per line, "#" comments) known to differ
+* --known: result names or wildcards (one per line, "#" comments) known to differ
   here, left out of the comparison with the reference (not of the
   manifest's pixel check).
 * --same-frames A=B: QTTest --disk's movie A must draw what B draws (the
@@ -23,6 +23,7 @@ pixels and the sound the Mac played.
 """
 
 import argparse
+import fnmatch
 import struct
 import sys
 
@@ -178,7 +179,8 @@ def main():
                 line = line.split("#", 1)[0].strip()
                 if line:
                     known.add(line.split()[0])
-            skip = lambda lines: [l for l in lines if (l.split(" ", 2) + [""])[1] not in known]
+            is_known = lambda name: any(fnmatch.fnmatchcase(name, k) for k in known)
+            skip = lambda lines: [l for l in lines if not is_known((l.split(" ", 2) + [""])[1])]
             left = len(results) - len(skip(results))
             print("known to differ here: %d names, %d of these results" % (len(known), left))
             results, expected = skip(results), skip(expected)
