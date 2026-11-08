@@ -1,0 +1,2 @@
+# QTTest --disk lines Executor 7.6.1 answers differently from the Quadra's
+# 7.6.1 with QuickTime 2.5 (run_qt.sh --disk --known; ctest qt_disk_executor_761).
