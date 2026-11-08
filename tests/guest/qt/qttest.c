@@ -12,7 +12,9 @@
  * (TEXT files there: QTTest makes them 'MooV' first). QTTest also makes
  * movies in Apple's codecs from raw32.mov's frames (CompressSequence,
  * AddMediaSample, FlattenMovieData) as Host:made-<codec>.mov, decodes them
- * and leaves them for the host to keep (~/storage/qt).
+ * and leaves them for the host to keep (~/storage/qt). With Host:qt.dump
+ * there, every frame checked is also written as Host:<check>.ppm (and the
+ * uncounted first drawing as <check>.first.ppm).
  *
  * Built by tools/mpw/mpw build tests/guest/qt (build.mpw): fat, 68k and
  * PowerPC code. */
@@ -42,6 +44,7 @@ QDGlobals qd;
 
 static FILE *results;
 static int passed, failed, skipped;
+static int dump_frames;                 /* Host:qt.dump exists: frames as PPMs */
 
 static void vout(const char *status, const char *name, const char *fmt, va_list ap)
 {
@@ -168,6 +171,59 @@ static unsigned long pixmap_crc(PixMapHandle pm, const Rect *r)
     }
     UnlockPixels(pm);
     return crc ^ 0xFFFFFFFFUL;
+}
+
+/* Photo-JPEG's sources: every channel v as 96 + v/4. QuickTime 2.5's 68k
+ * JPEG decoder clamps a channel that comes out below 0 with a byte from
+ * outside its range table: the same bytes on the uae and mame-68k cores,
+ * different ones from run to run (raw32's frames 00 and 01 decoded one of
+ * four ways, some runs every JPEG check). Blue goes below 0 where a dark
+ * pixel takes its chroma from yellow beside it (2x2 subsampling): blue is
+ * then the dark pixel's luma less 0.886 of the yellow's range. Within
+ * 96..159 nothing comes out below about 40 or above about 216. */
+static void soften(PixMapHandle pm, const Rect *r)
+{
+    long rb = (**pm).rowBytes & 0x3FFF;
+    Ptr base;
+    int x, y, i;
+
+    LockPixels(pm);
+    base = GetPixBaseAddr(pm);
+    for(y = r->top - (**pm).bounds.top; y < r->bottom - (**pm).bounds.top; y++)
+    {
+        unsigned char *p = (unsigned char *)base + y * rb + (r->left - (**pm).bounds.left) * 4;
+        for(x = r->left; x < r->right; x++, p += 4)
+            for(i = 1; i < 4; i++)
+                p[i] = 96 + p[i] / 4;
+    }
+    UnlockPixels(pm);
+}
+
+/* The rectangle as Host:<test>.ppm, with dumping on. */
+static void pixmap_dump(PixMapHandle pm, const Rect *r, const char *test)
+{
+    char path[80];
+    FILE *f;
+    long rb = (**pm).rowBytes & 0x3FFF;
+    Ptr base;
+    int x, y;
+
+    if(!dump_frames)
+        return;
+    sprintf(path, "Host:%s.ppm", test);
+    if((f = fopen(path, "wb")) == NULL)
+        return;
+    fprintf(f, "P6\n%d %d\n255\n", r->right - r->left, r->bottom - r->top);
+    LockPixels(pm);
+    base = GetPixBaseAddr(pm);
+    for(y = r->top - (**pm).bounds.top; y < r->bottom - (**pm).bounds.top; y++)
+    {
+        unsigned char *p = (unsigned char *)base + y * rb + (r->left - (**pm).bounds.left) * 4;
+        for(x = r->left; x < r->right; x++, p += 4)
+            fwrite(p + 1, 1, 3, f);
+    }
+    UnlockPixels(pm);
+    fclose(f);
 }
 
 /* Pixels of the rectangle unlike its top-left pixel. */
@@ -386,8 +442,7 @@ static void movie_frames(Movie m, const char *name, int frames, long frame_dur)
     }
     SetMovieGWorld(m, gw, NULL);
     /* Decoders at their best, not what time allows; and every frame drawn
-     * once before the pass that counts: Photo-JPEG's first two frames
-     * otherwise come out one of two ways from run to run. */
+     * once before the pass that counts. */
     SetMoviePlayHints(m, hintsHighQuality, hintsHighQuality);
     for(pass = 0; pass < 2; pass++)
         for(k = 0; k < frames; k++)
@@ -399,7 +454,14 @@ static void movie_frames(Movie m, const char *name, int frames, long frame_dur)
             MoviesTask(m, 0);
             err = GetMoviesError();
             if(pass == 0)
+            {
+                char first[72];
+
+                sprintf(first, "%s.first", test);
+                pixmap_dump(GetGWorldPixMap(gw), &box, first);
                 continue;
+            }
+            pixmap_dump(GetGWorldPixMap(gw), &box, test);
             if(err != noErr)
                 FAIL(test, "MoviesTask %d", err);
             else
@@ -573,32 +635,38 @@ static void test_controller(Movie m)
 
 static const OSType codecs[] = { 'raw ', 'rle ', 'rpza', 'cvid', 'jpeg', 'smc ' };
 
-/* src: a 32-bit GWorld with a frame of raw32.mov. */
+/* src: a 32-bit GWorld with a frame of raw32.mov; Photo-JPEG gets it
+ * softened. */
 static void test_icm(GWorldPtr src)
 {
-    PixMapHandle pm = GetGWorldPixMap(src);
+    PixMapHandle pm = GetGWorldPixMap(src), soft_pm;
     Rect r = src->portRect;
-    GWorldPtr dst;
+    GWorldPtr dst, soft;
     char test[64];
     int i;
 
-    if(NewGWorld(&dst, 32, &r, NULL, NULL, 0) != noErr)
+    if(NewGWorld(&dst, 32, &r, NULL, NULL, 0) != noErr || NewGWorld(&soft, 32, &r, NULL, NULL, 0) != noErr)
     {
         FAIL("icm.gworld", "NewGWorld");
         return;
     }
+    soft_pm = GetGWorldPixMap(soft);
     LockPixels(pm);
+    LockPixels(soft_pm);
     LockPixels(GetGWorldPixMap(dst));
     PASS("icm.source", "crc=%08lX", pixmap_crc(pm, &r));
+    CopyBits((BitMap *)*pm, (BitMap *)*soft_pm, &r, &r, srcCopy, NULL);
+    soften(soft_pm, &r);
     for(i = 0; i < sizeof codecs / sizeof codecs[0]; i++)
     {
         long max = 0;
         OSErr err;
         ImageDescriptionHandle desc;
         Ptr data;
+        PixMapHandle from = codecs[i] == 'jpeg' ? soft_pm : pm;
 
         sprintf(test, "icm.%s", fcc(codecs[i], 1));
-        err = GetMaxCompressionSize(pm, &r, 0, codecNormalQuality, codecs[i], anyCodec, &max);
+        err = GetMaxCompressionSize(from, &r, 0, codecNormalQuality, codecs[i], anyCodec, &max);
         if(err != noErr)
         {
             FAIL(test, "GetMaxCompressionSize %d", err);
@@ -612,7 +680,7 @@ static void test_icm(GWorldPtr src)
             DisposeHandle((Handle)desc);
             continue;
         }
-        err = CompressImage(pm, &r, codecNormalQuality, codecs[i], desc, data);
+        err = CompressImage(from, &r, codecNormalQuality, codecs[i], desc, data);
         if(err != noErr)
             FAIL(test, "max=%ld CompressImage %d", max, err);
         else
@@ -635,7 +703,7 @@ static void test_icm(GWorldPtr src)
         DisposeHandle((Handle)desc);
     }
 
-    /* A PICT of the frame, JPEG-compressed, drawn. */
+    /* A PICT of the softened frame, JPEG-compressed, drawn. */
     {
         CGrafPtr port;
         GDHandle dev;
@@ -643,10 +711,10 @@ static void test_icm(GWorldPtr src)
         OSErr err;
 
         GetGWorld(&port, &dev);
-        SetGWorld(src, NULL);
+        SetGWorld(soft, NULL);
         ClipRect(&r);
         pic = OpenPicture(&r);
-        CopyBits((BitMap *)*pm, (BitMap *)*pm, &r, &r, srcCopy, NULL);
+        CopyBits((BitMap *)*soft_pm, (BitMap *)*soft_pm, &r, &r, srcCopy, NULL);
         ClosePicture();
         SetGWorld(port, dev);
         jpic = (PicHandle)NewHandle(0);
@@ -670,6 +738,7 @@ static void test_icm(GWorldPtr src)
         DisposeHandle((Handle)jpic);
     }
     UnlockPixels(pm);
+    DisposeGWorld(soft);
     DisposeGWorld(dst);
 }
 
@@ -753,6 +822,8 @@ static void make_movie(Movie raw, OSType c, short depth, short temporal)
         SetMovieTimeValue(raw, k * 60 + 30);
         UpdateMovie(raw);
         MoviesTask(raw, 0);
+        if(c == 'jpeg')
+            soften(pm, &box);
         if(k == 0)
             err = CompressSequenceBegin(&seq, pm, NULL, &box, NULL, depth, c, anyCodec, codecNormalQuality,
                                         temporal ? codecNormalQuality : 0, temporal ? 5 : 0, NULL,
@@ -889,6 +960,11 @@ int main(void)
     {
         if(fgets(results_name, sizeof results_name, cfg))
             results_name[strcspn(results_name, "\r\n")] = 0;
+        fclose(cfg);
+    }
+    if((cfg = fopen("Host:qt.dump", "r")) != NULL)
+    {
+        dump_frames = 1;
         fclose(cfg);
     }
     sprintf(path, "Host:%s", results_name);

@@ -160,10 +160,10 @@ PASS icm.raw_ max=76804 size=76800 depth=32 crc=B394D8B0
 PASS icm.rle_ max=78840 size=14005 depth=32 crc=64171E11
 PASS icm.rpza max=9604 size=2236 depth=16 crc=3D0F58B7
 PASS icm.cvid max=14496 size=4524 depth=24 crc=5F527BE2
-PASS icm.jpeg max=44398 size=3456 depth=24 crc=D9BA4CDA
+PASS icm.jpeg max=44398 size=2188 depth=24 crc=BEC8E1F0
 PASS icm.smc_ max=19294 size=2251 depth=8 crc=B9FCDBA1
-PASS pict.jpeg.compress pict=18334 jpeg=3800
-PASS pict.jpeg.draw crc=D9BA4CDA
+PASS pict.jpeg.compress pict=18214 jpeg=2532
+PASS pict.jpeg.draw crc=BEC8E1F0
 PASS make.cvid made-cvid.mov samples=10 flattened=movie
 PASS movie.made-cvid.open resId=-1
 PASS movie.made-cvid.info scale=600 duration=600 tracks=1 [vide scale=600 duration=600 samples=10 'cvid' 160x120 depth=24]
@@ -206,16 +206,16 @@ PASS frame.made-rle.09 crc=BB3D9F2C
 PASS make.jpeg made-jpeg.mov samples=10 flattened=movie
 PASS movie.made-jpeg.open resId=-1
 PASS movie.made-jpeg.info scale=600 duration=600 tracks=1 [vide scale=600 duration=600 samples=10 'jpeg' 160x120 depth=24]
-PASS frame.made-jpeg.00 crc=8B4274F9
-PASS frame.made-jpeg.01 crc=028652C2
-PASS frame.made-jpeg.02 crc=C60774A4
-PASS frame.made-jpeg.03 crc=D9BA4CDA
-PASS frame.made-jpeg.04 crc=FAB0BB3F
-PASS frame.made-jpeg.05 crc=2D8E20FC
-PASS frame.made-jpeg.06 crc=29448FDA
-PASS frame.made-jpeg.07 crc=C3040203
-PASS frame.made-jpeg.08 crc=07536B19
-PASS frame.made-jpeg.09 crc=7A6108B1
+PASS frame.made-jpeg.00 crc=5CD639B4
+PASS frame.made-jpeg.01 crc=39EC2D7D
+PASS frame.made-jpeg.02 crc=0C1F1AF1
+PASS frame.made-jpeg.03 crc=BEC8E1F0
+PASS frame.made-jpeg.04 crc=D671BDF8
+PASS frame.made-jpeg.05 crc=4E94923B
+PASS frame.made-jpeg.06 crc=C0F6C310
+PASS frame.made-jpeg.07 crc=2569CB56
+PASS frame.made-jpeg.08 crc=953E0534
+PASS frame.made-jpeg.09 crc=9A01E2BE
 PASS make.smc_ made-smc.mov samples=10 flattened=movie
 PASS movie.made-smc.open resId=-1
 PASS movie.made-smc.info scale=600 duration=600 tracks=1 [vide scale=600 duration=600 samples=10 'smc ' 160x120 depth=8]
