@@ -1,7 +1,7 @@
 # wash-plan: written by Wash as the plan changes.
 # Edit it only between workspaces; plan_set {"from": "<this file>"} loads it.
 
-revision = 125
+revision = 126
 
 [[node]]
   id = "cuts"
@@ -1041,8 +1041,8 @@ revision = 125
   template = "package"
   parent = "qt"
   needs = ["qt-b3"]
-  state = "reported"
-  revision = 125
+  state = "done"
+  revision = 126
 
 [[node]]
   id = "qt-oracle-flake"
