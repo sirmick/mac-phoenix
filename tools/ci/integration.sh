@@ -8,9 +8,9 @@
 #   ctest -L executor            wasm (the gtests under node, executor.web.*)
 #   ctest -L site                wasm (the assembled site, long)
 # and a dated summary: <ci>/runs/<YYYY-MM-DD-HHMM>/summary.md (+ logs, JUnit
-# XML), <ci>/latest pointing at it. <ci> is ~/storage/ci. The tree is a
-# worktree, so its tests have their own ports (tests/lib/ports.py) and run
-# beside anyone else's. One run at a time (<ci>/.lock).
+# XML), <ci>/latest pointing at it. <ci> is ~/storage/ci. Its tests claim
+# free ports as they start (tests/lib/ports.py), so they run beside anyone
+# else's. One run at a time (<ci>/.lock).
 #
 #   --branch REF     what to test (default executor-86-grid2)
 #   --jobs N         ctest -j (default 2); builds are always -j2
@@ -80,7 +80,7 @@ mkdir -p "$TREE/toolchain"
     echo "# Integration run $STAMP"
     echo
     echo "\`$BRANCH\` at \`$COMMIT\` ($SUBJECT), tree $TREE,"
-    echo "port base $(python3 "$TREE/tests/lib/ports.py" base "$TREE" 2>/dev/null || echo '?')."
+    echo "port base $(python3 "$TREE/tests/lib/ports.py" base 2>/dev/null || echo '?')."
     echo
     echo "| step | result | time | log |"
     echo "|---|---|---|---|"

@@ -15,7 +15,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 BINARY="${1:-${MACEMU_BINARY:-$PROJECT_ROOT/build/mac-phoenix}}"
 PORT="${2:-18472}"
-source "$(dirname "$0")/lib/ports.sh"; PORT=$(mp_port "$PORT") || exit 1  # per-worktree (docs/Testing.md)
+source "$(dirname "$0")/lib/ports.sh"; PORT=$(mp_port "$PORT") || exit 1  # a free port (docs/Testing.md "Ports")
 APP="$PROJECT_ROOT/tests/guest/clib/CLibTest.bin"
 [[ -x "$BINARY" ]] || { echo "SKIP: no binary $BINARY"; exit 77; }
 [[ -f "$APP" ]] || { echo "SKIP: no $APP"; exit 77; }

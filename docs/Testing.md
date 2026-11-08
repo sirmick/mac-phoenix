@@ -279,8 +279,8 @@ Tests run in parallel (`ctest -j4`) with their own disk copies (above) and,
 with `--network socket`, their own net-bridge
 (`socket:$TMPDIR/mac-ether-test-PID.sock`; plain `socket` would join the
 shared `/tmp/mac-ether.sock` every running MacPhoenix uses). Each test
-has its own fixed port (below), so `ctest -j` in one checkout never binds a
-port twice, and two checkouts never share one.
+claims free ports of its own as it starts (below), so `ctest -j` in one
+checkout never binds a port twice, and two checkouts never share one.
 
 ### Ports
 
@@ -288,29 +288,35 @@ Every port a test binds is named in one nominal range, **18000-18999**
 (`tests/CMakeLists.txt`'s `--port N`, the scripts' defaults,
 `tools/difftest/run.py`'s 18600/18610/18620, Playwright's 18094;
 `guest_builds_current` also uses the next one), away from a running
-emulator on :11000. A new test needs a nominal port no other uses:
-`ctest --show-only=json-v1` lists the commands.
+emulator on :11000. A new test picks a nominal port no other uses
+(`ctest --show-only=json-v1` lists the commands): it keeps the cells
+readable, and is what `MACPHOENIX_PORT_BASE` maps.
 
-Each checkout moves the range to its own **port base**
-(`tests/lib/ports.py`, sourced by the scripts as `tests/lib/ports.sh`):
+Each nominal port a test asks for gets an **actual port claimed for it**
+(`tests/lib/ports.py`, sourced by the scripts as `tests/lib/ports.sh`:
+`PORT=$(mp_port "$PORT")`): a free port from a pool every checkout on the
+box shares, **32000-32767** (below the ephemeral range, clear of the
+emulators started by hand on :11000 and 19000-19999), locked with an
+exclusive `flock` on `~/.cache/macphoenix/ports/<port>` and skipped while
+anything has it open (`/proc/net/tcp`, any state). The claim lasts as long
+as its owner: the script (`$$`; a small holder process watches it and lets
+go when it exits, killed at a timeout too), a Python caller's process
+(`ports.port()`), Playwright's runner. No checkout needs a slot or a
+registry, any number of worktrees run at once, and `ctest -j` in each.
+`python3 tests/lib/ports.py held` lists the claims (port, owner pid,
+nominal, directory); `ports.py port N --pid P` claims one by hand.
+
+`MACPHOENIX_PORT_BASE` (a multiple of 1000) still overrides with the old
+fixed mapping, no claim:
 
     actual = MACPHOENIX_PORT_BASE + (nominal - 18000)
 
-`MACPHOENIX_PORT_BASE` (a multiple of 1000) sets it. By default each
-checkout gets one from a registry every checkout on the box shares
-(`~/.cache/macphoenix/port-bases`, under `flock`): the main tree takes
-18000 (the historical ports), each git worktree (or a copy of a tree that
-isn't a git checkout) the lowest free base with nothing listening in its
-range at the time (20000, 21000, ... 31000, then 12000-17000, then
-61000-64000: below the ephemeral range, away from 10000-11999), kept for as
-long as its directory exists. `python3 tests/lib/ports.py slots` lists
-them, `ports.py base` the checkout's. A port outside 18000-18999 is taken
-as already mapped (or asked for on purpose) and left alone. An emulator
-started by hand: :11000, or 19000-19999, which no checkout is given. A
-script whose port something already listens on fails at once (`FAIL: port N
-is in use by pid ...`): a session left over from a run ctest killed (an MPW
-service outlives its script) would otherwise hold the test up until its
-timeout.
+and `MACPHOENIX_PORT_POOL=LO-HI` moves the pool. A port outside
+18000-18999 is taken as already mapped (or asked for on purpose) and left
+alone; a script whose such port something already listens on fails at once
+(`FAIL: port N is in use by pid ...`): a session left over from a run ctest
+killed would otherwise hold the test up until its timeout. (The old
+per-checkout registry, `~/.cache/macphoenix/port-bases`, is no longer read.)
 
 ### Guest tests and the bridge
 

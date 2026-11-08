@@ -25,7 +25,9 @@ while [[ $# -gt 0 ]]; do
         *) echo "Unknown arg: $1"; exit 1 ;;
     esac
 done
-source "$(dirname "$0")/lib/ports.sh"; PORT=$(mp_port "$PORT") || exit 1  # per-worktree (docs/Testing.md)
+source "$(dirname "$0")/lib/ports.sh"  # (docs/Testing.md "Ports")
+CW_PORT=$(mp_port "$((PORT + 1))") || exit 1   # CodeWarrior's session: the next one
+PORT=$(mp_port "$PORT") || exit 1
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$PROJECT_ROOT"
 STORAGE="${MACEMU_STORAGE:-$HOME/storage}"
@@ -78,7 +80,7 @@ if [[ -f "$STORAGE/images/mpw-cw.img" ]]; then
         dir=${p%%:*}
         [[ -f "$dir/build.cw.mpw" ]] || continue
         mkdir -p "$OUT/cw/$dir"
-        if MPW_STATE=$CW_STATE MPW_PORT=$((PORT + 1)) MPW_SYSTEM=$CW_SYSTEM \
+        if MPW_STATE=$CW_STATE MPW_PORT=$CW_PORT MPW_SYSTEM=$CW_SYSTEM \
                 $MPW --toolchain cw build "$dir" -o "$OUT/cw/$dir" >"$OUT/build-cw.log" 2>&1; then
             echo "PASS $dir builds with CodeWarrior"
         else
