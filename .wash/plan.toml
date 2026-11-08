@@ -1,7 +1,7 @@
 # wash-plan: written by Wash as the plan changes.
 # Edit it only between workspaces; plan_set {"from": "<this file>"} loads it.
 
-revision = 87
+revision = 90
 
 [[node]]
   id = "cuts"
@@ -951,8 +951,8 @@ revision = 87
   emoji = "🎞️"
   template = "package"
   parent = "qt"
-  state = "active"
-  revision = 86
+  state = "done"
+  revision = 89
 
 [[node]]
   id = "qt-survey"
@@ -962,3 +962,33 @@ revision = 87
   parent = "qt"
   state = "active"
   revision = 87
+
+[[node]]
+  id = "extfs-flatten"
+  title = "ROM machines' ExtFS: FlattenMovieData onto Host: writes a 705-byte stub, returns nil, no error"
+  emoji = "📁"
+  template = "package"
+  parent = "loose-ends"
+  body = "Found by QTTest 2026-11-08: on the ROM machines' Host volume (ExtFS), FlattenMovieData writes 705 bytes and returns nil with no error; on the boot disk (Temporary Items) it works. Some File Manager call ExtFS answers wrongly (allocation/SetEOF/PBAllocate/space queries?)."
+  state = "todo"
+  revision = 90
+
+[[node]]
+  id = "g3-sound-86"
+  title = "G3 ROM machine 8.6: no sound (kpx and mame-ppc): --audio-dump all zeros, sound movies end 3-4x early"
+  emoji = "🔇"
+  template = "package"
+  parent = "loose-ends"
+  body = "Found by QTTest 2026-11-08. On the G3 under 8.6 the Mac plays no sound at all (both cores), and QuickTime sound movies finish early (the sound clock isn't advancing). The Quadra 7.6.1 plays QTTest's tones correctly."
+  state = "todo"
+  revision = 90
+
+[[node]]
+  id = "mameppc-qt"
+  title = "mame-ppc: QuickTime 3's PowerPC codecs fail differently each run on 8.6 (codecOpenErr, garbage decode, Cinepak hang); Kheperix is fine"
+  emoji = "🐞"
+  template = "package"
+  parent = "loose-ends"
+  body = "Found by QTTest 2026-11-08 (~/storage/tmp/qt/qt-client-report.md). The same QTTest on the G3 8.6 with --core kpx passes the same way every run; on --core mame-ppc the PowerPC codecs fail non-deterministically. A CPU-core correctness bug (MAME cores are the long-term goal: docs/cpu/PLAN.md), suspects: recompiled-code invalidation for code the codecs build or move (cache flush / MakeDataExecutable / icbi), FPU or rounding, timing. Also matters for Executor's --executor-ppc, which runs on mame-ppc."
+  state = "todo"
+  revision = 90
