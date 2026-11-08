@@ -22,7 +22,7 @@ int32_t ROMlib_register_components(INTEGER refnum, bool global, bool without_ini
    info and icon); returns its ID. */
 uint32_t ROMlib_register_native_component(uint32_t type, uint32_t subtype,
                                           uint32_t manufacturer, const char *name,
-                                          const char *calls, int32_t version);
+                                          const char *calls, int32_t version, uint32_t flags = 0);
 
 /* A process quit: its components go, and any component, even a global one,
    whose code was in its partition [part_lo, part_hi) (guest addresses). */

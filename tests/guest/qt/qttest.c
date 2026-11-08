@@ -382,7 +382,7 @@ static Movie open_movie(const char *file, const char *name)
 
 static void movie_info(Movie m, const char *name)
 {
-    char test[64], detail[256];
+    char test[64], detail[1024];
     long i, n;
 
     sprintf(test, "movie.%s.info", name);
@@ -503,6 +503,121 @@ static void movie_play(Movie m, const char *test)
     {
         SetMovieGWorld(m, (CGrafPtr)qd.thePort, NULL);
         DisposeGWorld(gw);
+    }
+}
+
+/* --- movies from the disks (Host:qt_disk.txt) --------------------------- */
+
+/* Eight frames at fixed times (1/16, 3/16 ... 15/16 of the duration), as
+ * movie_frames draws them. */
+static void disk_frames(Movie m, const char *name)
+{
+    char test[64];
+    Rect box;
+    GWorldPtr gw;
+    OSErr err;
+    long duration = GetMovieDuration(m);
+    int k, pass;
+
+    GetMovieBox(m, &box);
+    OffsetRect(&box, -box.left, -box.top);
+    SetMovieBox(m, &box);
+    sprintf(test, "disk.%s.gworld", name);
+    if(EmptyRect(&box))
+    {
+        PASS(test, "no picture");
+        return;
+    }
+    err = NewGWorld(&gw, 32, &box, NULL, NULL, 0);
+    if(err != noErr)
+    {
+        FAIL(test, "NewGWorld %d", err);
+        return;
+    }
+    SetMovieGWorld(m, gw, NULL);
+    SetMoviePlayHints(m, hintsHighQuality, hintsHighQuality);
+    for(pass = 0; pass < 2; pass++)
+        for(k = 0; k < 8; k++)
+        {
+            sprintf(test, "disk.%s.%02d", name, k);
+            erase_gworld(gw);
+            SetMovieTimeValue(m, duration * (2 * k + 1) / 16);
+            UpdateMovie(m);
+            MoviesTask(m, 0);
+            err = GetMoviesError();
+            if(pass == 0)
+                continue;
+            pixmap_dump(GetGWorldPixMap(gw), &box, test);
+            if(err != noErr)
+                FAIL(test, "MoviesTask %d", err);
+            else
+                PASS(test, "t=%ld crc=%08lX", duration * (2 * k + 1) / 16, pixmap_crc(GetGWorldPixMap(gw), &box));
+        }
+    SetMovieGWorld(m, (CGrafPtr)qd.thePort, NULL);
+    DisposeGWorld(gw);
+}
+
+/* Played from the start for 2 seconds: the movie's time must have moved
+ * on about that much. */
+static void disk_play(Movie m, const char *name)
+{
+    char test[64];
+    long scale = GetMovieTimeScale(m), t, t0;
+    Rect box;
+    GWorldPtr gw = NULL;
+
+    sprintf(test, "disk.%s.play", name);
+    GetMovieBox(m, &box);
+    if(!EmptyRect(&box) && NewGWorld(&gw, 32, &box, NULL, NULL, 0) == noErr)
+        SetMovieGWorld(m, gw, NULL);
+    GoToBeginningOfMovie(m);
+    PrerollMovie(m, 0, fixed1);
+    t0 = TickCount();
+    StartMovie(m);
+    while(!IsMovieDone(m) && TickCount() - t0 < 120)
+        MoviesTask(m, 0);
+    t = GetMovieTime(m, NULL);
+    StopMovie(m);
+    note("%s: time %ld after %ld ticks (scale %ld)", test, t, TickCount() - t0, scale);
+    if(t < scale * 3 / 2)
+        FAIL(test, "time %ld", t);
+    else if(t > scale * 3)
+        FAIL(test, "time %ld, too far", t);
+    else
+        PASS(test, "time advances");
+    if(gw)
+    {
+        SetMovieGWorld(m, (CGrafPtr)qd.thePort, NULL);
+        DisposeGWorld(gw);
+    }
+}
+
+/* Each line of Host:qt_disk.txt: a movie on Host: and its name in the
+ * test names, separated by a tab (run_qt.sh --disk). */
+static void test_disk_movies(FILE *list)
+{
+    char line[160], test[80], *tab;
+    Movie m;
+
+    while(fgets(line, sizeof line, list))
+    {
+        line[strcspn(line, "\r\n")] = 0;
+        if((tab = strchr(line, '\t')) == NULL)
+            continue;
+        *tab++ = 0;
+        m = open_movie(line, tab);
+        if(m == NULL)
+            continue;
+        movie_info(m, tab);
+        disk_frames(m, tab);
+        if(GetMovieDuration(m) <= 8 * GetMovieTimeScale(m))
+        {
+            sprintf(test, "disk.%s.whole", tab);
+            movie_play(m, test);
+        }
+        else
+            disk_play(m, tab);
+        DisposeMovie(m);
     }
 }
 
@@ -990,6 +1105,14 @@ int main(void)
         goto end;
     }
     PASS("enter_movies", "");
+    if((cfg = fopen("Host:qt_disk.txt", "r")) != NULL)
+    {
+        /* the disks' movies only (run_qt.sh --disk) */
+        test_disk_movies(cfg);
+        fclose(cfg);
+        ExitMovies();
+        goto end;
+    }
     test_components();
 
     for(i = 0; i < sizeof movies / sizeof movies[0]; i++)

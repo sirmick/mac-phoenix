@@ -3,7 +3,7 @@
 # selectors and argument types these are). On a Mac it is QuickTime's INIT;
 # Executor implements it in C++ (movies.cpp; docs/executor/QuickTime.md,
 # route B) over Apple's codecs through its own ICM. The movie controller
-# ('play' component, NewMovieController) is not Executor's yet. PowerPC code
+# ('play' component, NewMovieController) is Executor's own (mc.cpp). PowerPC code
 # reaches these through QuickTimeLib, which Executor doesn't export yet.
 
 - struct:
@@ -138,7 +138,9 @@
 - dispatcher:
     name: QuickTime
     trap: 0xAAAA
-    selector-location: D0W
+    # QuickTime's own components call some selectors with the high bit set
+    # ($821D: QTFindChildByID; $8273): the same routines
+    selector-location: D0<0x7FFF>
 
 # ####
 
@@ -2042,4 +2044,712 @@
         type: Track
     dispatcher: QuickTime
     selector: 0x0172
+    executor: C_
+
+# ####
+
+- function:
+    name: HasMovieChanged
+    return: Boolean
+    args:
+      - name: theMovie
+        type: Movie
+    dispatcher: QuickTime
+    selector: 0x00D9
+    executor: C_
+
+# ####
+
+- function:
+    name: ClearMovieChanged
+    args:
+      - name: theMovie
+        type: Movie
+    dispatcher: QuickTime
+    selector: 0x0113
+    executor: C_
+
+# ####
+
+# The movie controller (Movies.h's MC calls): the 'play' component,
+# Executor's own (mc.cpp), whose calls go through _ComponentDispatch with
+# the controller first.
+
+- typedef:
+    name: MovieController
+    type: ComponentInstance
+
+# ####
+
+- funptr:
+    name: MCActionFilterUPP
+    return: Boolean
+    args:
+      - name: mc
+        type: ComponentInstance
+      - name: action
+        type: INTEGER*
+      - name: params
+        type: void*
+
+# ####
+
+- funptr:
+    name: MCActionFilterWithRefConUPP
+    return: Boolean
+    args:
+      - name: mc
+        type: ComponentInstance
+      - name: action
+        type: INTEGER
+      - name: params
+        type: void*
+      - name: refCon
+        type: LONGINT
+
+# ####
+
+- dispatcher:
+    name: MovieController
+    trap: 0xA82A
+    selector-location: Component
+
+# ####
+
+- function:
+    name: MCSetMovie
+    return: ComponentResult
+    args:
+      - name: mc
+        type: ComponentInstance
+      - name: theMovie
+        type: Movie
+      - name: movieWindow
+        type: WindowRef
+      - name: where
+        type: Point
+    dispatcher: MovieController
+    selector: 0x0002
+    executor: C_
+
+# ####
+
+- function:
+    name: MCRemoveAMovie
+    return: ComponentResult
+    args:
+      - name: mc
+        type: ComponentInstance
+      - name: m
+        type: Movie
+    dispatcher: MovieController
+    selector: 0x0003
+    executor: C_
+
+# ####
+
+- function:
+    name: MCGetIndMovie
+    return: Movie
+    args:
+      - name: mc
+        type: ComponentInstance
+      - name: index
+        type: INTEGER
+    dispatcher: MovieController
+    selector: 0x0005
+    executor: C_
+
+# ####
+
+- function:
+    name: MCRemoveAllMovies
+    return: ComponentResult
+    args:
+      - name: mc
+        type: ComponentInstance
+    dispatcher: MovieController
+    selector: 0x0006
+    executor: C_
+
+# ####
+
+- function:
+    name: MCIsPlayerEvent
+    return: ComponentResult
+    args:
+      - name: mc
+        type: ComponentInstance
+      - name: e
+        type: const EventRecord*
+    dispatcher: MovieController
+    selector: 0x0007
+    executor: C_
+
+# ####
+
+- function:
+    name: MCSetActionFilter
+    return: ComponentResult
+    args:
+      - name: mc
+        type: ComponentInstance
+      - name: blob
+        type: MCActionFilterUPP
+    dispatcher: MovieController
+    selector: 0x0008
+    executor: C_
+
+# ####
+
+- function:
+    name: MCDoAction
+    return: ComponentResult
+    args:
+      - name: mc
+        type: ComponentInstance
+      - name: action
+        type: INTEGER
+      - name: params
+        type: void*
+    dispatcher: MovieController
+    selector: 0x0009
+    executor: C_
+
+# ####
+
+- function:
+    name: MCSetControllerAttached
+    return: ComponentResult
+    args:
+      - name: mc
+        type: ComponentInstance
+      - name: attach
+        type: Boolean
+    dispatcher: MovieController
+    selector: 0x000A
+    executor: C_
+
+# ####
+
+- function:
+    name: MCIsControllerAttached
+    return: ComponentResult
+    args:
+      - name: mc
+        type: ComponentInstance
+    dispatcher: MovieController
+    selector: 0x000B
+    executor: C_
+
+# ####
+
+- function:
+    name: MCSetControllerPort
+    return: ComponentResult
+    args:
+      - name: mc
+        type: ComponentInstance
+      - name: gp
+        type: CGrafPtr
+    dispatcher: MovieController
+    selector: 0x000C
+    executor: C_
+
+# ####
+
+- function:
+    name: MCGetControllerPort
+    return: CGrafPtr
+    args:
+      - name: mc
+        type: ComponentInstance
+    dispatcher: MovieController
+    selector: 0x000D
+    executor: C_
+
+# ####
+
+- function:
+    name: MCSetVisible
+    return: ComponentResult
+    args:
+      - name: mc
+        type: ComponentInstance
+      - name: visible
+        type: Boolean
+    dispatcher: MovieController
+    selector: 0x000E
+    executor: C_
+
+# ####
+
+- function:
+    name: MCGetVisible
+    return: ComponentResult
+    args:
+      - name: mc
+        type: ComponentInstance
+    dispatcher: MovieController
+    selector: 0x000F
+    executor: C_
+
+# ####
+
+- function:
+    name: MCGetControllerBoundsRect
+    return: ComponentResult
+    args:
+      - name: mc
+        type: ComponentInstance
+      - name: bounds
+        type: Rect*
+    dispatcher: MovieController
+    selector: 0x0010
+    executor: C_
+
+# ####
+
+- function:
+    name: MCSetControllerBoundsRect
+    return: ComponentResult
+    args:
+      - name: mc
+        type: ComponentInstance
+      - name: bounds
+        type: const Rect*
+    dispatcher: MovieController
+    selector: 0x0011
+    executor: C_
+
+# ####
+
+- function:
+    name: MCGetControllerBoundsRgn
+    return: RgnHandle
+    args:
+      - name: mc
+        type: ComponentInstance
+    dispatcher: MovieController
+    selector: 0x0012
+    executor: C_
+
+# ####
+
+- function:
+    name: MCGetWindowRgn
+    return: RgnHandle
+    args:
+      - name: mc
+        type: ComponentInstance
+      - name: w
+        type: WindowRef
+    dispatcher: MovieController
+    selector: 0x0013
+    executor: C_
+
+# ####
+
+- function:
+    name: MCMovieChanged
+    return: ComponentResult
+    args:
+      - name: mc
+        type: ComponentInstance
+      - name: m
+        type: Movie
+    dispatcher: MovieController
+    selector: 0x0014
+    executor: C_
+
+# ####
+
+- function:
+    name: MCSetDuration
+    return: ComponentResult
+    args:
+      - name: mc
+        type: ComponentInstance
+      - name: duration
+        type: TimeValue
+    dispatcher: MovieController
+    selector: 0x0015
+    executor: C_
+
+# ####
+
+- function:
+    name: MCGetCurrentTime
+    return: TimeValue
+    args:
+      - name: mc
+        type: ComponentInstance
+      - name: scale
+        type: TimeScale*
+    dispatcher: MovieController
+    selector: 0x0016
+    executor: C_
+
+# ####
+
+- function:
+    name: MCNewAttachedController
+    return: ComponentResult
+    args:
+      - name: mc
+        type: ComponentInstance
+      - name: theMovie
+        type: Movie
+      - name: w
+        type: WindowRef
+      - name: where
+        type: Point
+    dispatcher: MovieController
+    selector: 0x0017
+    executor: C_
+
+# ####
+
+- function:
+    name: MCDraw
+    return: ComponentResult
+    args:
+      - name: mc
+        type: ComponentInstance
+      - name: w
+        type: WindowRef
+    dispatcher: MovieController
+    selector: 0x0018
+    executor: C_
+
+# ####
+
+- function:
+    name: MCActivate
+    return: ComponentResult
+    args:
+      - name: mc
+        type: ComponentInstance
+      - name: w
+        type: WindowRef
+      - name: activate
+        type: Boolean
+    dispatcher: MovieController
+    selector: 0x0019
+    executor: C_
+
+# ####
+
+- function:
+    name: MCIdle
+    return: ComponentResult
+    args:
+      - name: mc
+        type: ComponentInstance
+    dispatcher: MovieController
+    selector: 0x001A
+    executor: C_
+
+# ####
+
+- function:
+    name: MCKey
+    return: ComponentResult
+    args:
+      - name: mc
+        type: ComponentInstance
+      - name: key
+        type: SignedByte
+      - name: modifiers
+        type: LONGINT
+    dispatcher: MovieController
+    selector: 0x001B
+    executor: C_
+
+# ####
+
+- function:
+    name: MCClick
+    return: ComponentResult
+    args:
+      - name: mc
+        type: ComponentInstance
+      - name: w
+        type: WindowRef
+      - name: where
+        type: Point
+      - name: when
+        type: LONGINT
+      - name: modifiers
+        type: LONGINT
+    dispatcher: MovieController
+    selector: 0x001C
+    executor: C_
+
+# ####
+
+- function:
+    name: MCEnableEditing
+    return: ComponentResult
+    args:
+      - name: mc
+        type: ComponentInstance
+      - name: enabled
+        type: Boolean
+    dispatcher: MovieController
+    selector: 0x001D
+    executor: C_
+
+# ####
+
+- function:
+    name: MCIsEditingEnabled
+    return: LONGINT
+    args:
+      - name: mc
+        type: ComponentInstance
+    dispatcher: MovieController
+    selector: 0x001E
+    executor: C_
+
+# ####
+
+- function:
+    name: MCCopy
+    return: Movie
+    args:
+      - name: mc
+        type: ComponentInstance
+    dispatcher: MovieController
+    selector: 0x001F
+    executor: C_
+
+# ####
+
+- function:
+    name: MCCut
+    return: Movie
+    args:
+      - name: mc
+        type: ComponentInstance
+    dispatcher: MovieController
+    selector: 0x0020
+    executor: C_
+
+# ####
+
+- function:
+    name: MCPaste
+    return: ComponentResult
+    args:
+      - name: mc
+        type: ComponentInstance
+      - name: srcMovie
+        type: Movie
+    dispatcher: MovieController
+    selector: 0x0021
+    executor: C_
+
+# ####
+
+- function:
+    name: MCClear
+    return: ComponentResult
+    args:
+      - name: mc
+        type: ComponentInstance
+    dispatcher: MovieController
+    selector: 0x0022
+    executor: C_
+
+# ####
+
+- function:
+    name: MCUndo
+    return: ComponentResult
+    args:
+      - name: mc
+        type: ComponentInstance
+    dispatcher: MovieController
+    selector: 0x0023
+    executor: C_
+
+# ####
+
+- function:
+    name: MCPositionController
+    return: ComponentResult
+    args:
+      - name: mc
+        type: ComponentInstance
+      - name: movieRect
+        type: const Rect*
+      - name: controllerRect
+        type: const Rect*
+      - name: someFlags
+        type: LONGINT
+    dispatcher: MovieController
+    selector: 0x0024
+    executor: C_
+
+# ####
+
+- function:
+    name: MCGetControllerInfo
+    return: ComponentResult
+    args:
+      - name: mc
+        type: ComponentInstance
+      - name: someFlags
+        type: LONGINT*
+    dispatcher: MovieController
+    selector: 0x0025
+    executor: C_
+
+# ####
+
+- function:
+    name: MCSetClip
+    return: ComponentResult
+    args:
+      - name: mc
+        type: ComponentInstance
+      - name: theClip
+        type: RgnHandle
+      - name: movieClip
+        type: RgnHandle
+    dispatcher: MovieController
+    selector: 0x0028
+    executor: C_
+
+# ####
+
+- function:
+    name: MCGetClip
+    return: ComponentResult
+    args:
+      - name: mc
+        type: ComponentInstance
+      - name: theClip
+        type: RgnHandle*
+      - name: movieClip
+        type: RgnHandle*
+    dispatcher: MovieController
+    selector: 0x0029
+    executor: C_
+
+# ####
+
+- function:
+    name: MCDrawBadge
+    return: ComponentResult
+    args:
+      - name: mc
+        type: ComponentInstance
+      - name: movieRgn
+        type: RgnHandle
+      - name: badgeRgn
+        type: RgnHandle*
+    dispatcher: MovieController
+    selector: 0x002A
+    executor: C_
+
+# ####
+
+- function:
+    name: MCSetUpEditMenu
+    return: ComponentResult
+    args:
+      - name: mc
+        type: ComponentInstance
+      - name: modifiers
+        type: LONGINT
+      - name: mh
+        type: MenuHandle
+    dispatcher: MovieController
+    selector: 0x002B
+    executor: C_
+
+# ####
+
+- function:
+    name: MCGetMenuString
+    return: ComponentResult
+    args:
+      - name: mc
+        type: ComponentInstance
+      - name: modifiers
+        type: LONGINT
+      - name: item
+        type: INTEGER
+      - name: aString
+        type: StringPtr
+    dispatcher: MovieController
+    selector: 0x002C
+    executor: C_
+
+# ####
+
+- function:
+    name: MCSetActionFilterWithRefCon
+    return: ComponentResult
+    args:
+      - name: mc
+        type: ComponentInstance
+      - name: blob
+        type: MCActionFilterWithRefConUPP
+      - name: refCon
+        type: LONGINT
+    dispatcher: MovieController
+    selector: 0x002D
+    executor: C_
+
+# ####
+
+- function:
+    name: MCPtInController
+    return: ComponentResult
+    args:
+      - name: mc
+        type: ComponentInstance
+      - name: thePt
+        type: Point
+      - name: inController
+        type: Boolean*
+    dispatcher: MovieController
+    selector: 0x002E
+    executor: C_
+
+# ####
+
+- function:
+    name: MCInvalidate
+    return: ComponentResult
+    args:
+      - name: mc
+        type: ComponentInstance
+      - name: w
+        type: WindowRef
+      - name: invalidRgn
+        type: RgnHandle
+    dispatcher: MovieController
+    selector: 0x002F
+    executor: C_
+
+# ####
+
+- function:
+    name: MCAdjustCursor
+    return: ComponentResult
+    args:
+      - name: mc
+        type: ComponentInstance
+      - name: w
+        type: WindowRef
+      - name: where
+        type: Point
+      - name: modifiers
+        type: LONGINT
+    dispatcher: MovieController
+    selector: 0x0030
     executor: C_

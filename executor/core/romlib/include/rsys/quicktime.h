@@ -14,6 +14,9 @@ bool ROMlib_movie_toolbox_present();
 /* A Movie Toolbox selector by its declaration in Movies.h (movies.cpp):
    its arguments' and result's bytes; false if none is declared. */
 bool ROMlib_movies_unknown_selector(uint32_t sel, uint32_t *arg_bytes, uint32_t *result_bytes, const char **name);
+/* The movie controller, Executor's 'play' component (mc.cpp), registered
+   before the System's components. */
+void ROMlib_install_movie_controller();
 /* A process's partition [lo, hi) went: its movies with it (movies.cpp). */
 void ROMlib_movies_process_exit(uint32_t lo, uint32_t hi);
 /* An ICM selector by its declaration (icm.cpp): its arguments' and

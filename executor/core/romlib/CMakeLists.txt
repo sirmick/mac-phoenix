@@ -570,7 +570,7 @@ set(misc_sources
   version.cpp shutdown.cpp screen-dump.cpp
   process.cpp alias.cpp cursordev.cpp cdevshell.cpp edition.cpp  balloon.cpp
    adb.cpp color_wheel_bits.cpp finder.cpp  
-  icon.cpp redrawscreen.cpp quicktime.cpp qtmath.cpp icm.cpp movies.cpp
+  icon.cpp redrawscreen.cpp quicktime.cpp qtmath.cpp icm.cpp movies.cpp mc.cpp inflate.cpp
   commtool.cpp cfm.cpp cfm68k_glue.cpp pef_hash.cpp
   clib/stdclib.cpp clib/stdio.cpp clib/format.cpp clib/mathlib.cpp
   mixed_mode.cpp appearance.cpp

@@ -1,0 +1,18 @@
+# QTTest --disk lines Executor 7.6.1 answers differently from the Quadra's
+# 7.6.1 with QuickTime 2.5 (run_qt.sh --disk --known; ctest qt_disk_executor_761).
+#
+# 8.6's Sample Movie has QuickTime 3's compressed header ('cmov'), which
+# the Quadra's QuickTime 2.5 refuses (-2002). Executor reads it: the movie
+# is Simple Movie, and run_qt.sh checks its frames are hc-simple's
+# (compare.py --same-frames).
+movie.qt3-sample.open
+movie.qt3-sample.info
+disk.qt3-sample.00
+disk.qt3-sample.01
+disk.qt3-sample.02
+disk.qt3-sample.03
+disk.qt3-sample.04
+disk.qt3-sample.05
+disk.qt3-sample.06
+disk.qt3-sample.07
+disk.qt3-sample.whole

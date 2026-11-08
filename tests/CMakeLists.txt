@@ -1695,11 +1695,16 @@ set_property(TEST ot_retro68_ppc_rom_761 APPEND PROPERTY LABELS flaky)
 # codecs (docs/executor/QuickTime.md) against the Quadra's reference, but for
 # the lines tests/guest/qt/known_executor_761.txt names (QuickDraw's
 # dithering, the movie controller); no sound from movies yet (qt-b5), so no
-# --audio-dump check there.
+# --audio-dump check there. The _disk cells play the movies on our disks
+# (run_qt.sh --disk: Ares, HyperCard's Simple Movie, 7.6.1's Extensions, 8.6's
+# Sample Movie with its compressed header;
+# skipped without their images), frames at fixed times against the Quadra's.
 foreach(cell IN ITEMS "qt_rom_68k_761;rom_68k_761;;--os-version 7.6.1;18860;guest;qt;761"
                       "qt_rom_ppc_86;rom_ppc_86;;--backend kpx --jit --image 8.6;18862;guest;qt"
                       "qt_rom_mameppc_86;rom_ppc_86;;--backend kpx --core mame-ppc --jit --image 8.6;18866;guest;qt;mame"
-                      "qt_executor_761;rom_68k_761;--needs-qt --no-audio --known ${CMAKE_SOURCE_DIR}/tests/guest/qt/known_executor_761.txt;--backend executor --os-version 7.6.1;18864;guest;qt;761;executor")
+                      "qt_executor_761;rom_68k_761;--needs-qt --no-audio --known ${CMAKE_SOURCE_DIR}/tests/guest/qt/known_executor_761.txt;--backend executor --os-version 7.6.1;18864;guest;qt;761;executor"
+                      "qt_disk_rom_68k_761;disk_rom_68k_761;--disk;--os-version 7.6.1;18876;guest;qt;761"
+                      "qt_disk_executor_761;disk_rom_68k_761;--disk --needs-qt --known ${CMAKE_SOURCE_DIR}/tests/guest/qt/known_disk_executor_761.txt;--backend executor --os-version 7.6.1;18878;guest;qt;761;executor")
   list(GET cell 0 name)
   list(GET cell 1 ref)
   list(GET cell 2 qt_args)
@@ -1719,6 +1724,13 @@ foreach(cell IN ITEMS "qt_rom_68k_761;rom_68k_761;;--os-version 7.6.1;18860;gues
     ENVIRONMENT "MACEMU_ROM=$<IF:$<STREQUAL:${ref},rom_ppc_86>,${TEST_PPC_ROM},${TEST_ROM}>"
   )
 endforeach()
+
+# Movies in applications on Executor 7.6.1 through Executor's movie controller
+# (mc.cpp): 7.6.1's Demo click&drag opened in MoviePlayer and SimpleText, the
+# movie and the controller drawn, a click on play plays it
+# (tests/test_qt_apps_executor.sh; skipped without the movie's image).
+add_test(NAME qt_apps_executor_761 COMMAND bash ${TEST_DIR}/test_qt_apps_executor.sh $<TARGET_FILE:mac-phoenix> 18880)
+set_tests_properties(qt_apps_executor_761 PROPERTIES TIMEOUT 400 LABELS "guest;qt;761;executor" SKIP_RETURN_CODE 77)
 
 # QuickTime's fixed-point, wide and matrix routines ($ABC2; tests/guest/qtmath):
 # Executor's own (qtmath.cpp) against a Quadra's 7.6.1 with QuickTime 2.5,

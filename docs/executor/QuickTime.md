@@ -527,11 +527,15 @@ values. QTTest's ICM round trips are B2's pixel check.
   Compressors fill dataSize themselves.
 - **Private selectors** no header names, from the codecs' call sites:
   `$49` (a color translation: CTabHandle, 0, Handle *, 0, short *flags),
-  `$4A` (dispose it), `$60` (lock it), `$58`/`$59` (around a band). `$49`
-  is answered only when no translation is needed (flags high bit), which
-  the ICM's offscreen for an indexed image guarantees; otherwise raw and
-  rle draw without one, and smc's and rle's indexed paths fail into the
-  ICM's offscreen.
+  `$4A` (dispose it), `$60` (lock it), `$58`/`$59` (around a band). The
+  translation is 12 bytes, then for each color the device's pixel repeated
+  to fill a long (smc fills four 8-bit pixels with one; Cinepak's palette
+  codebooks take the long for 32 bits, its high word for 16). Executor
+  makes one for a direct device, or for an indexed one with the image's
+  colors (the ICM's offscreen for an indexed image), where flags' high bit
+  says no translation is needed; Cinepak passes nil flags. Otherwise raw
+  and rle draw without one, smc's and rle's indexed paths fail into the
+  ICM's offscreen, and Cinepak gives up the frame.
 - **Pictures.** DrawPicture draws `$8200` CompressedQuickTime through the
   ICM, the opcode's matrix composed with the frame mapping; PnSize(`$AE`,
   n) right after it skips the n bytes QuickTime writes for a Mac without
@@ -558,7 +562,8 @@ selectors in `QuickTime.yaml`, from Universal Interfaces 3.4's Movies.h.
 
 - **What it answers.**
   - Files: OpenMovieFile/CloseMovieFile, NewMovieFromFile (a `'moov'`
-    resource, or the atom in the data fork: resId -1),
+    resource, or the atom in the data fork: resId -1; QuickTime 3's
+    compressed `'cmov'` header inflated by `inflate.cpp`, RFC 1950/1951),
     NewMovieFromDataFork/Handle, NewMovie, CreateMovieFile, DeleteMovieFile,
     AddMovieResource, UpdateMovieResource, FlattenMovie, FlattenMovieData,
     PutMovieIntoHandle.
@@ -612,19 +617,79 @@ selectors in `QuickTime.yaml`, from Universal Interfaces 3.4's Movies.h.
     ways);
   - the movie controller (B4).
   There is no movie sound yet, so the cell runs without `--audio-dump`.
+- **Movies from our disks** (ctest `qt_disk_executor_761`, run_qt.sh
+  `--disk`): Ares' Part 1-3 (palette Cinepak, 320x160, 11 kHz sound),
+  HyperCard 2.4.1's Simple Movie (smc 8-bit with its own colors, `twos`
+  sound, a sprite track) and 7.6.1's Extensions demos (rle 4-bit), 8
+  frames each at fixed times and a play, against the Quadra: all 80 lines
+  identical, timing to the tick. 8.6's Sample Movie, Simple Movie behind a
+  `'cmov'` header that QuickTime 2.5 refuses, draws hc-simple's frames
+  (`compare.py --same-frames`). `disk_movies.sh` takes them out of the
+  images once into `~/storage/qt/disk-movies`; the cells skip without them.
+  Two ICM fixes made the 8-bit movies right: `$49`'s translation (above:
+  Cinepak called it with nil flags and gave up every frame; smc's fills
+  took the wrong layout), and the `$AAAA` dispatcher matching selectors
+  without their high bit (`$821D` from Apple's components is
+  QTFindChildByID). The private `$273` (a pointer it fills) and `$274`
+  (that value and a Boolean), both OSErr, are sized from their call sites
+  in QuickTime 2.5's tune player and answer paramErr.
 - **Found on the way** (the ICM, 88e92123): a codec drawing directly into
   a port set its colors under the screen's 8-bit device. A 32-bit GWorld
   got white's CLUT index (0) as its background, and CopyBits into it
   colorized white to black. The ICM now makes the destination (a GWorld
   with its own device) current around the band.
 - **Open.**
-  - The movie controller (B4) and sound tracks (B5): sound media only
-    keep time.
-  - `'cmov'` compressed movie headers (QuickTime 3 files): refused, logged
-    (Executor has no zlib).
+  - Sound tracks (B5): sound media only keep time. The movie controller
+    is section 10.
+  - Time base callbacks (NewCallBack, CallMeWhen): none of the surveyed
+    applications calls them. A time base runs on Executor's millisecond
+    clock, the one TickCount and the Time Manager use.
   - QuickTimeLib exports for PowerPC (EV Nova).
   - GetMovieNextInterestingTime is simplified.
   - Movie clip regions apply only as the display clip.
   - Alternate groups pick their first enabled track, not by language or
     quality.
 
+
+## 10. Route B: Executor's movie controller (qt-b4, 2026-11-08)
+
+`mc.cpp`, the `'play'` component in C++ (registered before the System's
+components, so Apple's `'play'` thng is left out). NewMovieController and 44
+MC calls are declared in `QuickTime.yaml` under a component dispatcher
+(`MovieController`), as Executor's sound output component is.
+
+- **What it answers.** NewMovieController (top left, centred, or scaled
+  down to fit, its proportions kept; `mcNotVisible`, `mcWithBadge`),
+  DisposeMovieController; MCSetMovie, MCNewAttachedController, MCGetIndMovie,
+  MCRemoveAMovie/AllMovies; MCIsPlayerEvent, MCIdle, MCKey, MCClick, MCDraw,
+  MCActivate, MCInvalidate, MCAdjustCursor; MCDoAction (play, preroll and
+  play, go to time, volume, step, looping, palindrome, selection, keys, play
+  selection, badge, flags, play every frame, rate, time slider rectangle,
+  drag, cursor setting, color table, and the notices it ignores);
+  MCSetActionFilter and MCSetActionFilterWithRefCon (every action goes to the
+  filter first, MCDoAction's too); attached, visible, port, bounds rectangle
+  and region, window region, MCPositionController, MCMovieChanged,
+  MCSetDuration, MCGetCurrentTime, MCGetControllerInfo, MCSetClip/MCGetClip,
+  MCDrawBadge, MCPtInController. Movie Toolbox: HasMovieChanged and
+  ClearMovieChanged (track edits; MoviePlayer asks before closing).
+- **The bar.** 16 pixels under the movie, as QuickTime 2.5's: a speaker
+  (a click mutes and unmutes), play/pause, the time slider (dragged: the
+  movie follows), steps back and forward (held: they repeat);
+  `mcFlagSuppressSpeakerButton`/`StepButtons` take theirs away; grey when
+  inactive. Executor's own drawing, not Apple's pictures.
+- **Events.** A null event idles the movie (MoviesTask; at the end it stops,
+  loops or turns back). An update draws the movie and the bar and again at
+  the next idle (after the application's own update), and isn't consumed. A
+  click in the bar or the movie is (the movie: play/pause). Keys only with
+  `mcActionSetKeysEnabled`: space or return play/pause, arrows step and
+  change the volume.
+- **Not done.** Editing (cut, copy, paste, clear, undo): MCSetUpEditMenu
+  leaves those items disabled, "Can't Undo". The badge is a small film frame.
+- **Tests.** QTTest's `mc.*` lines (`qt_executor_761`) and its component
+  list now match the Quadra's (`'play'` described as QuickTime 2.5's: subtype
+  `"\0std"`, cmpFastDispatch; Executor enters its native components as
+  native whatever their flags). `qt_apps_executor_761`
+  (`tests/test_qt_apps_executor.sh`): 7.6.1's Demo click&drag opened in
+  MoviePlayer 2.5 and SimpleText 1.4, the movie and the bar drawn, a click on
+  play plays it. `/api/ui` gets no answer while MoviePlayer is in front, so
+  the cell finds the movie by the bar's frame in the screenshot.

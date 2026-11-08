@@ -41,6 +41,7 @@
 #include <ToolboxUtil.h>
 #include <base/functions.impl.h>
 #include <quickdraw/cquick.h>
+#include <rsys/inflate.h>
 #include <rsys/quicktime.h>
 #include <time/time.h>
 #include <file/file.h>
@@ -858,6 +859,7 @@ struct MovieS
     CGrafPtr port = nullptr;
     GDHandle gdh = nullptr;
     bool need_update = true;
+    bool changed = false; /* edited since made, read or ClearMovieChanged */
     int32_t hints = 0;
     RgnHandle clip = nullptr, display_clip = nullptr;
     RgnHandle bounds_rgn = nullptr;
@@ -1301,10 +1303,23 @@ OSErr read_moov(MovieS &m, const uint8_t *p, const uint8_t *end, int16_t flags)
         list = children(*moov);
     else
         list = top;
-    if(find(list, "cmov"_4))
+    if(const Atom *cmov = find(list, "cmov"_4))
     {
-        warning_unimplemented("compressed movie header ('cmov')");
-        return badPublicMovieAtom;
+        /* QuickTime 3's compressed header: 'dcom' names the method, 'cmvd'
+           holds the inflated size and the data, a whole 'moov' atom */
+        auto parts = children(*cmov);
+        const Atom *dcom = find(parts, "dcom"_4), *cmvd = find(parts, "cmvd"_4);
+        if(!dcom || dcom->size < 4 || be32(dcom->data) != "zlib"_4 || !cmvd || cmvd->size < 4)
+        {
+            warning_unimplemented("compressed movie header ('cmov') not zlib");
+            return badPublicMovieAtom;
+        }
+        uint32_t want = be32(cmvd->data);
+        std::vector<uint8_t> moov;
+        if(want > (64u << 20)
+           || !ROMlib_zlib_inflate(cmvd->data + 4, cmvd->size - 4, moov, want) || moov.size() != want)
+            return badPublicMovieAtom;
+        return read_moov(m, moov.data(), moov.data() + moov.size(), flags);
     }
     const Atom *mvhd = find(list, "mvhd"_4);
     if(!mvhd || mvhd->size < 100)
@@ -2788,6 +2803,7 @@ Track Executor::C_NewMovieTrack(Movie theMovie, Fixed width, Fixed height, INTEG
     }
     Track g = (Track)t->guest;
     m->tracks.push_back(std::move(t));
+    m->changed = true;
     return g;
 }
 
@@ -2797,6 +2813,7 @@ void Executor::C_DisposeMovieTrack(Track theTrack)
     if(!t)
         return;
     MovieS *m = t->movie;
+    m->changed = true;
     dispose_track(t);
     m->tracks.erase(std::remove_if(m->tracks.begin(), m->tracks.end(),
                                    [t](const std::unique_ptr<TrackS> &p) { return p.get() == t; }),
@@ -3084,6 +3101,7 @@ OSErr Executor::C_InsertMediaIntoTrack(Track theTrack, TimeValue trackStart, Tim
     if(mediaTime < 0 || mediaDuration < 0 || mediaTime + mediaDuration > t->media->duration)
         return set_error(invalidDuration);
     MovieS &m = *t->movie;
+    m.changed = true;
     Fixed rate = mediaRate ? mediaRate : 0x10000;
     int64_t dur = rescale(mediaDuration, t->media->scale, m.scale) * 0x10000 / rate;
     if(!t->has_edits)
@@ -3309,6 +3327,20 @@ OSErr Executor::C_GetUserDataText(UserData theUserData, Handle data, OSType udTy
         }
     }
     return set_error(userDataItemNotFound);
+}
+
+/* the movie's tracks edited (tracks made, disposed, media inserted):
+   MoviePlayer asks before it closes a movie whether to save it */
+Boolean Executor::C_HasMovieChanged(Movie theMovie)
+{
+    MovieS *m = movie_of(theMovie);
+    return m && m->changed;
+}
+
+void Executor::C_ClearMovieChanged(Movie theMovie)
+{
+    if(MovieS *m = movie_of(theMovie))
+        m->changed = false;
 }
 
 ULONGINT Executor::C_GetMovieCreationTime(Movie theMovie)
@@ -3816,7 +3848,11 @@ OSErr Executor::C_PutMovieIntoHandle(Movie theMovie, Handle publicMovie)
    arguments' and result's bytes (Pascal: a word or less takes 2, the rest
    4): a selector QuickTime.yaml doesn't declare pops its arguments and
    answers paramErr or nil (traps.cpp), as the ICM's do. Generated from the
-   header's declarations. */
+   header's declarations; $273 and $274, which it doesn't name, from their
+   call sites in QuickTime 2.5's own components (the tune player's, which
+   Cythera opens): $273 takes a pointer it fills, $274 that value and a
+   Boolean, both answer an OSErr, and the caller gives up when $273 fails.
+   The high bit of a selector ($8273) is masked off. */
 namespace
 {
 struct MovieSelector
@@ -4162,6 +4198,8 @@ const MovieSelector movie_selectors[] = {
     { 0x0249, 8, 2, "GetMediaInputMap" },
     { 0x024A, 8, 2, "SetMediaInputMap" },
     { 0x0263, 8, 2, "GetTrackDisplayMatrix" },
+    { 0x0273, 4, 2, "QuickTime private $273" },
+    { 0x0274, 6, 2, "QuickTime private $274" },
     { 0x027A, 14, 2, "ITextAddString" },
     { 0x027B, 14, 2, "ITextRemoveString" },
     { 0x027C, 18, 2, "ITextGetString" },

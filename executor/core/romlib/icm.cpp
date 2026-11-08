@@ -2415,15 +2415,18 @@ const IcmSelector icm_selectors[] = {
    they pass and how they use the answer, from their call sites:
 
    $49 (CTabHandle colors, long 0, Handle *translation, short 0,
-        short *flags): a translation of an image's colors (nil: direct
-        pixels) into the current device's. The codecs keep the handle and
-        give it back to $60 (lock: translation, Boolean) around drawing and
-        $4A (dispose). With flags, a set high bit says no translation is
-        needed. Executor answers only that case: the image's table is the
-        current device's (the ICM's offscreen for an indexed image is made
-        with the image's table). Otherwise an error: raw and rle then draw
-        without one, smc and rle's indexed paths fail and the ICM draws
-        through an offscreen with the image's table.
+        short *flags): a translation of an image's colors into the current
+        device's. The codecs keep the handle and give it back to $60 (lock:
+        translation, Boolean) around drawing and $4A (dispose). It is 12
+        bytes, then for each color the device's pixel repeated to fill a
+        long (smc fills four 8-bit pixels with one; Cinepak's palette
+        codebooks take the long for 32 bits, its high word for 16). With
+        flags (smc; Cinepak passes nil), a set high bit says the colors are
+        the device's. Executor makes one for a direct device, or an indexed
+        one with the image's colors (the ICM's offscreen for an indexed
+        image); otherwise an error: raw and rle then draw without one, smc
+        and rle's indexed paths fail and the ICM draws through an offscreen
+        with the image's table, and Cinepak gives up the frame.
    $58, $59 (params, long 1): around a band; nothing to do. */
 namespace
 {
@@ -2454,21 +2457,49 @@ bool Executor::ROMlib_icm_private_selector(uint32_t sel, uint32_t args, int32_t 
             CTabHandle colors = ptr_from_longint<CTabHandle>(READUL(args + 14));
             GDHandle gd = LM(TheGDevice);
             CTabHandle dev = gd && (*gd)->gdPMap ? (CTabHandle)(*(*gd)->gdPMap)->pmTable : nullptr;
-            if(!flags || !out || !same_colors(colors, dev))
+            if(!out || !colors || !*colors || !gd || !(*gd)->gdPMap)
             {
                 *result = paramErr;
                 return true;
             }
-            Handle h = NewHandle(256);
+            int16_t pixel_size = (*(*gd)->gdPMap)->pixelSize;
+            bool direct = pixel_size == 16 || pixel_size == 32;
+            if(!direct && !same_colors(colors, dev))
+            {
+                *result = paramErr;
+                return true;
+            }
+            /* 12 bytes, then for each of the 256 colors the device's pixel
+               repeated to fill a long: smc fills four 8-bit pixels with one,
+               Cinepak's palette codebooks take a 32-bit pixel or the high
+               word for 16 bits */
+            Handle h = NewHandleClear(12 + 256 * 4);
             if(!h)
             {
                 *result = MemError();
                 return true;
             }
+            uint32_t table = US_TO_SYN68K_CHECK0(*h) + 12;
+            int n = (int16_t)(*colors)->ctSize;
             for(int i = 0; i < 256; i++)
-                ((uint8_t *)*h)[i] = i;
+            {
+                uint32_t v = i * 0x01010101u;
+                if(direct && i <= n)
+                {
+                    const RGBColor &c = (*colors)->ctTable[i].rgb;
+                    if(pixel_size == 32)
+                        v = ((uint32_t)(c.red >> 8) << 16) | ((uint32_t)(c.green >> 8) << 8) | (c.blue >> 8);
+                    else
+                    {
+                        uint32_t p16 = ((c.red >> 11) << 10) | ((c.green >> 11) << 5) | (c.blue >> 11);
+                        v = (p16 << 16) | p16;
+                    }
+                }
+                WRITEUL(table + 4 * i, v);
+            }
             WRITEUL(out, ptr_to_longint(h));
-            WRITEUW(flags, 0x8000);
+            if(flags)
+                WRITEUW(flags, direct ? 0 : 0x8000);
             *result = noErr;
             return true;
         }

@@ -33,11 +33,3 @@ pict.jpeg.compress
 # Frames 2-9 match.
 frame.made-jpeg.00
 frame.made-jpeg.01
-#
-# The movie controller ('play') is not Executor's yet (qt-b4):
-# NewMovieController answers nil.
-mc.new
-mc.bounds
-mc.draw
-mc.play
-mc.stop

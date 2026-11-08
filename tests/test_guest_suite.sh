@@ -28,6 +28,8 @@
 # e.g. dev-7.6.1, whose Extensions have the CFM-68K Runtime Enabler.
 # --host-file PATH: put a file on Host: before the launch (repeatable;
 # tools/difftest's probe.start / probe.dump).
+# --host-macbinary PATH: a MacBinary file on Host:, both forks, named as
+# PATH without its .bin (repeatable; QTTest's movies from the disks).
 # --keep-dir DIR: copy the files the guest wrote on Host: to DIR at the end,
 # whatever the outcome (tools/difftest keeps probe logs and pixel dumps;
 # QTTest the movies it made, *.mov).
@@ -68,6 +70,7 @@ ROM_OVERRIDE=""
 EXTRA_FLAGS=()
 DELETE_FILES=()
 HOST_FILES=()
+HOST_MACBINARIES=()
 DISMISS=1
 NETWORK="socket"
 SCRIPT_NAME=""
@@ -103,6 +106,7 @@ while [[ $# -gt 0 ]]; do
         --echo-gateway) ECHO_GATEWAY=1; shift ;;
         --keep-dir) KEEP_DIR="$2"; shift 2 ;;
         --host-file) HOST_FILES+=("$2"); shift 2 ;;
+        --host-macbinary) HOST_MACBINARIES+=("$2"); shift 2 ;;
         --audio-dump) AUDIO_DUMP="$2"; shift 2 ;;
         *) echo "Unknown arg: $1"; exit 1 ;;
     esac
@@ -210,6 +214,9 @@ if [[ -n "$SCRIPT_NAME" ]]; then
 else
     python3 "$GUEST_DIR/install_macbinary.py" "$SUITE_APP" "$EXTFS_DIR" MacPhoenixSuite
     for f in ${HOST_FILES[@]+"${HOST_FILES[@]}"}; do cp "$f" "$EXTFS_DIR"/; done
+    for f in ${HOST_MACBINARIES[@]+"${HOST_MACBINARIES[@]}"}; do
+        python3 "$GUEST_DIR/install_macbinary.py" "$f" "$EXTFS_DIR" "$(basename "$f" .bin)" > /dev/null
+    done
     printf '%s\r%s\r' "$RESULTS_NAME" "$SECTIONS" > "$EXTFS_DIR/suite.cfg"
 fi
 

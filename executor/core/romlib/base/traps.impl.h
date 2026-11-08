@@ -216,6 +216,18 @@ void readComponentArgs(std::tuple<Args...>& args, syn68k_addr_t ptr, std::index_
     (callfrom68K::readCArg(std::get<sizeof...(Args) - 1 - Indices>(args), ptr), ...);
 }
 
+/* MacPhoenix: a component routine's result as the long it returns; a
+   pointer (the movie controller's MCGetIndMovie, MCCopy ...) as its guest
+   address */
+template<typename T>
+int32_t componentResult(T v)
+{
+    if constexpr(std::is_pointer_v<T>)
+        return (int32_t)ptr_to_longint(v);
+    else
+        return (int32_t)v;
+}
+
 template<typename Ret, typename... Args, Ret (*fptr)(Args...)>
 void ComponentFunction<Ret (Args...), fptr>::init()
 {
@@ -225,9 +237,9 @@ void ComponentFunction<Ret (Args...), fptr>::init()
             readComponentArgs(args, params + 4, std::index_sequence_for<Args...>());
 #ifdef EXECUTOR_ENABLE_LOGGING
             if(logging::enabled())
-                return std::apply(logging::makeLoggedFunction1<Ret (Args...)>(name, fptr), args);
+                return componentResult(std::apply(logging::makeLoggedFunction1<Ret (Args...)>(name, fptr), args));
 #endif
-            return std::apply(fptr, args);
+            return componentResult(std::apply(fptr, args));
         });
 }
 

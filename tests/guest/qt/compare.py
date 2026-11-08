@@ -14,6 +14,9 @@ pixels and the sound the Mac played.
 * --known: result names (one per line, "#" comments) known to differ
   here, left out of the comparison with the reference (not of the
   manifest's pixel check).
+* --same-frames A=B: QTTest --disk's movie A must draw what B draws (the
+  same movie, A's header compressed: QuickTime 3's 'cmov'); each
+  disk.A.NN line's detail against disk.B.NN's.
 * --audio: the emulator's --audio-dump (S16LE, 48 kHz, stereo). QTTest
   plays a 1000 Hz tone for 2 s, a 440 Hz one for 1 s, then av.mov's
   1000 Hz for 2 s: both tones must be in it, about that long.
@@ -82,6 +85,21 @@ def check_manifest(results, manifest):
     return errors, checked
 
 
+def check_same(results, pairs):
+    got = by_name(results)
+    errors, checked = [], 0
+    for pair in pairs:
+        a, b = pair.split("=")
+        for name, line in got.items():
+            if not name.startswith("disk.%s." % a) or name.endswith((".play", ".whole")):
+                continue
+            other = got.get("disk.%s.%s" % (b, name.split(".", 2)[2]))
+            checked += 1
+            if other is None or other.split(" ", 2)[2:] != line.split(" ", 2)[2:]:
+                errors.append("same:     %s, but %s" % (line, other))
+    return errors, checked
+
+
 def tone_segments(path, rate=48000):
     """(frequency, seconds) of each stretch of steady tone: 50 ms windows
     with signal, joined while their frequencies (by zero crossings) agree
@@ -130,6 +148,7 @@ def main():
     ap.add_argument("--manifest")
     ap.add_argument("--audio")
     ap.add_argument("--known")
+    ap.add_argument("--same-frames", action="append", default=[])
     ap.add_argument("--record", action="store_true")
     a = ap.parse_args()
 
@@ -138,6 +157,10 @@ def main():
     if a.manifest:
         e, checked = check_manifest(results, a.manifest)
         print("frames against the movies' pixels: %d checked, %d differ" % (checked, len(e)))
+        errors += e
+    if a.same_frames:
+        e, checked = check_same(results, a.same_frames)
+        print("frames the same as another movie's: %d checked, %d differ" % (checked, len(e)))
         errors += e
     if a.audio:
         e, found = check_audio(a.audio)
