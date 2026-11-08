@@ -1,7 +1,7 @@
 # wash-plan: written by Wash as the plan changes.
 # Edit it only between workspaces; plan_set {"from": "<this file>"} loads it.
 
-revision = 90
+revision = 93
 
 [[node]]
   id = "cuts"
@@ -960,8 +960,8 @@ revision = 90
   emoji = "🔎"
   template = "package"
   parent = "qt"
-  state = "active"
-  revision = 87
+  state = "done"
+  revision = 93
 
 [[node]]
   id = "extfs-flatten"
@@ -990,5 +990,5 @@ revision = 90
   template = "package"
   parent = "loose-ends"
   body = "Found by QTTest 2026-11-08 (~/storage/tmp/qt/qt-client-report.md). The same QTTest on the G3 8.6 with --core kpx passes the same way every run; on --core mame-ppc the PowerPC codecs fail non-deterministically. A CPU-core correctness bug (MAME cores are the long-term goal: docs/cpu/PLAN.md), suspects: recompiled-code invalidation for code the codecs build or move (cache flush / MakeDataExecutable / icbi), FPU or rounding, timing. Also matters for Executor's --executor-ppc, which runs on mame-ppc."
-  state = "todo"
-  revision = 90
+  state = "active"
+  revision = 91
