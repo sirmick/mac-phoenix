@@ -1,0 +1,19 @@
+# build.mpw — QTTest, a fat application: 68k (SC, Link) and PowerPC (MrC,
+# PPCLink on QuickTimeLib) code in one file; it writes Host:qt_results.txt
+# (qttest.c).
+#   tools/mpw/mpw build tests/guest/qt -o tests/guest/qt
+# products: QTTest
+Delete -i QTTest QTTest.68k    # Rez -a would add to the last build
+SC -b qttest.c -o qttest.68k.o
+MrC qttest.c -o qttest.ppc.o
+Link -t APPL -c 'QTts' -model near ∂
+	qttest.68k.o ∂
+	"{Libraries}MacRuntime.o" "{Libraries}IntEnv.o" "{CLibraries}StdCLib.o" "{Libraries}Interface.o" ∂
+	-o QTTest.68k
+PPCLink -main __start ∂
+	qttest.ppc.o ∂
+	"{SharedLibraries}InterfaceLib" "{SharedLibraries}StdCLib" "{SharedLibraries}QuickTimeLib" ∂
+	"{PPCLibraries}StdCRuntime.o" "{PPCLibraries}PPCCRuntime.o" ∂
+	-t APPL -c 'QTts' -o QTTest
+Rez -a qttest.r -o QTTest
+SetFile -t APPL -c 'QTts' -a B QTTest

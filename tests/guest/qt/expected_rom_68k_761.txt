@@ -1,0 +1,239 @@
+PASS gestalt.qtim 02508000
+PASS gestalt.icmp 00000012
+PASS enter_movies
+PASS comp.imdc count=16
+PASS comp.imdc.00 '.SGI' 'appl' flags=40000028
+PASS comp.imdc.01 '8BPS' 'appl' flags=40000029
+PASS comp.imdc.02 'PNTG' 'appl' flags=40000001
+PASS comp.imdc.03 'blit' 'appl' flags=40000038
+PASS comp.imdc.04 'cvid' 'appl' flags=40002C7C Apple Cinepak
+PASS comp.imdc.05 'gif ' 'appl' flags=40000038
+PASS comp.imdc.06 'jpeg' 'appl' flags=40400028 Apple Photo - JPEG
+PASS comp.imdc.07 'kpcd' 'appl' flags=40407870 Photo CD Decompressor
+PASS comp.imdc.08 'mjpa' 'appl' flags=40000028 Apple Motion JPEG A
+PASS comp.imdc.09 'mjpb' 'appl' flags=40000028 Apple Motion JPEG B
+PASS comp.imdc.10 'qdgx' 'appl' flags=000BA074
+PASS comp.imdc.11 'raw ' 'appl' flags=40400BFF Apple None
+PASS comp.imdc.12 'rle ' 'appl' flags=40400C7F Apple Animation
+PASS comp.imdc.13 'rpza' 'appl' flags=40000878 Apple Video
+PASS comp.imdc.14 'smc ' 'appl' flags=40400438 Apple Graphics
+PASS comp.imdc.15 'yuv2' 'appl' flags=40000038 Apple Component Video - YUV
+PASS comp.imco count=10
+PASS comp.imco.00 '8BPS' 'appl' flags=40000028 Apple Planar RGB
+PASS comp.imco.01 'cvid' 'appl' flags=40200420 Apple Cinepak
+PASS comp.imco.02 'jpeg' 'appl' flags=40600028 Apple Photo - JPEG
+PASS comp.imco.03 'mjpa' 'appl' flags=40200028 Apple Motion JPEG A
+PASS comp.imco.04 'mjpb' 'appl' flags=40200028 Apple Motion JPEG B
+PASS comp.imco.05 'raw ' 'appl' flags=4060003F Apple None
+PASS comp.imco.06 'rle ' 'appl' flags=4060043F Apple Animation
+PASS comp.imco.07 'rpza' 'appl' flags=40200438 Apple Video
+PASS comp.imco.08 'smc ' 'appl' flags=40600408 Apple Graphics
+PASS comp.imco.09 'yuv2' 'appl' flags=40000020 Apple Component Video - YUV
+PASS comp.mhlr count=10
+PASS comp.mhlr.00 'MPEG' 'appl' flags=40000001 Apple MPEG Media Handler
+PASS comp.mhlr.01 'gnrc' 'appl' flags=40000001 Apple Generic Media Handler
+PASS comp.mhlr.02 'mhlr' 'appl' flags=40000000 Apple Standard Media Handler
+PASS comp.mhlr.03 'musi' 'appl' flags=40000001 Apple Music Media Handler
+PASS comp.mhlr.04 'soun' 'appl' flags=40000000 Apple Sound Media Handler
+PASS comp.mhlr.05 'sprt' 'appl' flags=40000001 Apple Sprite Media Handler
+PASS comp.mhlr.06 'text' 'appl' flags=40000001 Apple Text Media Handler
+PASS comp.mhlr.07 'tmcd' 'appl' flags=40000001 Apple TimeCode Media Handler
+PASS comp.mhlr.08 'twen' 'appl' flags=40000001 Apple Tween Media Handler
+PASS comp.mhlr.09 'vide' 'appl' flags=40000000 Apple Video Media Handler
+PASS comp.dhlr count=5
+PASS comp.dhlr.00 'alis' 'appl' flags=40000002 Streaming file data handler
+PASS comp.dhlr.01 'alis' 'appl' flags=40000000 Apple Alias Data Handler for CDi Discs
+PASS comp.dhlr.02 'alis' 'appl' flags=40000001 Apple Alias Data Handler
+PASS comp.dhlr.03 'hndl' 'appl' flags=40000000 Apple Handle Data Handler
+PASS comp.dhlr.04 'rsrc' 'appl' flags=40000000 Apple Resource Data Handler
+PASS comp.clok count=3
+PASS comp.clok.00 'micr' 'appl' flags=40000003 Apple Microsecond Clock
+PASS comp.clok.01 'soun' 'appl' flags=00000001 Sound Clock
+PASS comp.clok.02 'tick' 'appl' flags=40000001 Apple Tick Clock
+PASS comp.play count=1
+PASS comp.play.00 '.std' 'appl' flags=40000000 Movie Controller
+PASS comp.sdev count=1
+PASS comp.sdev.00 'asc ' 'appl' flags=80000009 Built-in
+PASS comp.eat_ count=19
+PASS comp.eat_.00 'AIFC' 'soun' flags=40000802 AIFC
+PASS comp.eat_.01 'AIFF' 'soun' flags=40000802 AIFF
+PASS comp.eat_.02 'AU  ' 'soun' flags=40001802 µLaw
+PASS comp.eat_.03 'KAR ' 'musi' flags=40801006 Standard MIDI
+PASS comp.eat_.04 'MID ' 'musi' flags=40001006 Standard MIDI
+PASS comp.eat_.05 'MOV ' '....' flags=00001802 Movie
+PASS comp.eat_.06 'MPG ' 'MPEG' flags=00001802 MPEG
+PASS comp.eat_.07 'Midi' 'musi' flags=40000007 Standard MIDI
+PASS comp.eat_.08 'PICS' 'vide' flags=40000006 PICS
+PASS comp.eat_.09 'PICT' 'vide' flags=40000047 Picture
+PASS comp.eat_.10 'TEXT' 'MPEG' flags=00000A02 MPEG
+PASS comp.eat_.11 'TEXT' 'text' flags=40000047 Text
+PASS comp.eat_.12 'ULAW' 'soun' flags=40000802 µLaw
+PASS comp.eat_.13 'WAV ' 'soun' flags=40001802 Wave
+PASS comp.eat_.14 'WAVE' 'soun' flags=40000802 Wave
+PASS comp.eat_.15 'moov' '....' flags=40000001 Movie
+PASS comp.eat_.16 'sfil' 'soun' flags=40000002 Sound
+PASS comp.eat_.17 'snd ' 'soun' flags=40000001 Sound
+PASS comp.eat_.18 'trak' 'soun' flags=40000206 Audio CD
+PASS movie.raw32.open resId=-1
+PASS movie.raw32.info scale=600 duration=600 tracks=1 [vide scale=600 duration=600 samples=10 'raw ' 160x120 depth=32]
+PASS frame.raw32.00 crc=B391B3D8
+PASS frame.raw32.01 crc=7BE8F998
+PASS frame.raw32.02 crc=1A7FA694
+PASS frame.raw32.03 crc=B394D8B0
+PASS frame.raw32.04 crc=653368AE
+PASS frame.raw32.05 crc=982276A3
+PASS frame.raw32.06 crc=276B037D
+PASS frame.raw32.07 crc=5D2B6606
+PASS frame.raw32.08 crc=FE68D3AE
+PASS frame.raw32.09 crc=6CBE598D
+PASS movie.raw16.open resId=-1
+PASS movie.raw16.info scale=30 duration=48 tracks=1 [vide scale=30 duration=48 samples=8 'raw ' 80x60 depth=16]
+PASS frame.raw16.00 crc=B89849BD
+PASS frame.raw16.01 crc=0196F113
+PASS frame.raw16.02 crc=D8929EC6
+PASS frame.raw16.03 crc=B991DC4B
+PASS frame.raw16.04 crc=F0915DBE
+PASS frame.raw16.05 crc=813F39F1
+PASS frame.raw16.06 crc=A564EDB2
+PASS frame.raw16.07 crc=C52BDD22
+PASS movie.rle32.open resId=-1
+PASS movie.rle32.info scale=600 duration=600 tracks=1 [vide scale=600 duration=600 samples=10 'rle ' 160x120 depth=32]
+PASS frame.rle32.00 crc=B391B3D8
+PASS frame.rle32.01 crc=7BE8F998
+PASS frame.rle32.02 crc=1A7FA694
+PASS frame.rle32.03 crc=B394D8B0
+PASS frame.rle32.04 crc=653368AE
+PASS frame.rle32.05 crc=982276A3
+PASS frame.rle32.06 crc=276B037D
+PASS frame.rle32.07 crc=5D2B6606
+PASS frame.rle32.08 crc=FE68D3AE
+PASS frame.rle32.09 crc=6CBE598D
+PASS movie.rle16.open resId=-1
+PASS movie.rle16.info scale=1000 duration=1500 tracks=1 [vide scale=1000 duration=1500 samples=6 'rle ' 64x48 depth=16]
+PASS frame.rle16.00 crc=1F452595
+PASS frame.rle16.01 crc=D02FD7E4
+PASS frame.rle16.02 crc=68386A21
+PASS frame.rle16.03 crc=56084091
+PASS frame.rle16.04 crc=7F88E934
+PASS frame.rle16.05 crc=D65506CD
+PASS movie.tone16.open resId=-1
+PASS movie.tone16.info scale=600 duration=1200 tracks=1 [soun scale=22050 duration=44100 samples=44100 'twos' ch=1 bits=16 rate=22050]
+PASS movie.tone8.open resId=-1
+PASS movie.tone8.info scale=600 duration=600 tracks=1 [soun scale=11025 duration=11025 samples=11025 'raw ' ch=1 bits=8 rate=11025]
+PASS movie.av.open resId=-1
+PASS movie.av.info scale=600 duration=1200 tracks=2 [vide scale=600 duration=1200 samples=20 'raw ' 80x60 depth=32] [soun scale=22050 duration=44100 samples=44100 'twos' ch=1 bits=16 rate=22050]
+PASS frame.av.00 crc=C1135D66
+PASS frame.av.01 crc=8E09B558
+PASS frame.av.02 crc=3C6A0C3D
+PASS frame.av.03 crc=C8D1CE95
+PASS frame.av.04 crc=06FD1C9C
+PASS frame.av.05 crc=266F8B9A
+PASS frame.av.06 crc=F5EFC56D
+PASS frame.av.07 crc=B7D4AEF2
+PASS frame.av.08 crc=460C0667
+PASS frame.av.09 crc=0978AB81
+PASS frame.av.10 crc=88423248
+PASS frame.av.11 crc=E4AC39E9
+PASS frame.av.12 crc=9B9D4311
+PASS frame.av.13 crc=D198B8C2
+PASS frame.av.14 crc=28D54FD1
+PASS frame.av.15 crc=CA2DCC16
+PASS frame.av.16 crc=C1848C81
+PASS frame.av.17 crc=51B347A8
+PASS frame.av.18 crc=96475D63
+PASS frame.av.19 crc=8ABDADB5
+PASS flatten.raw32 returned a movie
+PASS movie.flat-raw32.open resId=-1
+PASS movie.flat-raw32.info scale=600 duration=600 tracks=1 [vide scale=600 duration=600 samples=10 'raw ' 160x120 depth=32]
+PASS frame.flat-raw32.00 crc=B391B3D8
+PASS frame.flat-raw32.01 crc=7BE8F998
+PASS frame.flat-raw32.02 crc=1A7FA694
+PASS frame.flat-raw32.03 crc=B394D8B0
+PASS frame.flat-raw32.04 crc=653368AE
+PASS frame.flat-raw32.05 crc=982276A3
+PASS frame.flat-raw32.06 crc=276B037D
+PASS frame.flat-raw32.07 crc=5D2B6606
+PASS frame.flat-raw32.08 crc=FE68D3AE
+PASS frame.flat-raw32.09 crc=6CBE598D
+PASS icm.source crc=B394D8B0
+PASS icm.raw_ max=76804 size=76800 depth=32 crc=B394D8B0
+PASS icm.rle_ max=78840 size=14005 depth=32 crc=64171E11
+PASS icm.rpza max=9604 size=2236 depth=16 crc=3D0F58B7
+PASS icm.cvid max=14496 size=4524 depth=24 crc=5F527BE2
+PASS icm.jpeg max=44398 size=3456 depth=24 crc=D9BA4CDA
+PASS icm.smc_ max=19294 size=2251 depth=8 crc=B9FCDBA1
+PASS pict.jpeg.compress pict=18334 jpeg=3800
+PASS pict.jpeg.draw crc=D9BA4CDA
+PASS make.cvid made-cvid.mov samples=10 flattened=movie
+PASS movie.made-cvid.open resId=-1
+PASS movie.made-cvid.info scale=600 duration=600 tracks=1 [vide scale=600 duration=600 samples=10 'cvid' 160x120 depth=24]
+PASS frame.made-cvid.00 crc=1B33AD87
+PASS frame.made-cvid.01 crc=A6C05CD3
+PASS frame.made-cvid.02 crc=61346E2C
+PASS frame.made-cvid.03 crc=B5A0EAAF
+PASS frame.made-cvid.04 crc=4C9F530A
+PASS frame.made-cvid.05 crc=EABCA61D
+PASS frame.made-cvid.06 crc=068D0FB1
+PASS frame.made-cvid.07 crc=8BA4C41D
+PASS frame.made-cvid.08 crc=45CC3D26
+PASS frame.made-cvid.09 crc=6CB410D2
+PASS make.rpza made-rpza.mov samples=10 flattened=movie
+PASS movie.made-rpza.open resId=-1
+PASS movie.made-rpza.info scale=600 duration=600 tracks=1 [vide scale=600 duration=600 samples=10 'rpza' 160x120 depth=16]
+PASS frame.made-rpza.00 crc=57994C91
+PASS frame.made-rpza.01 crc=A66E5986
+PASS frame.made-rpza.02 crc=456BFAB4
+PASS frame.made-rpza.03 crc=3D0F58B7
+PASS frame.made-rpza.04 crc=89FD3DEC
+PASS frame.made-rpza.05 crc=6B7B1059
+PASS frame.made-rpza.06 crc=78B334DC
+PASS frame.made-rpza.07 crc=071C0640
+PASS frame.made-rpza.08 crc=9911FA59
+PASS frame.made-rpza.09 crc=31F8EF8B
+PASS make.rle_ made-rle.mov samples=10 flattened=movie
+PASS movie.made-rle.open resId=-1
+PASS movie.made-rle.info scale=600 duration=600 tracks=1 [vide scale=600 duration=600 samples=10 'rle ' 160x120 depth=32]
+PASS frame.made-rle.00 crc=64127579
+PASS frame.made-rle.01 crc=AC6B3F39
+PASS frame.made-rle.02 crc=CDFC6035
+PASS frame.made-rle.03 crc=64171E11
+PASS frame.made-rle.04 crc=B2B0AE0F
+PASS frame.made-rle.05 crc=4FA1B002
+PASS frame.made-rle.06 crc=F0E8C5DC
+PASS frame.made-rle.07 crc=8AA8A0A7
+PASS frame.made-rle.08 crc=29EB150F
+PASS frame.made-rle.09 crc=BB3D9F2C
+PASS make.jpeg made-jpeg.mov samples=10 flattened=movie
+PASS movie.made-jpeg.open resId=-1
+PASS movie.made-jpeg.info scale=600 duration=600 tracks=1 [vide scale=600 duration=600 samples=10 'jpeg' 160x120 depth=24]
+PASS frame.made-jpeg.00 crc=8B4274F9
+PASS frame.made-jpeg.01 crc=028652C2
+PASS frame.made-jpeg.02 crc=C60774A4
+PASS frame.made-jpeg.03 crc=D9BA4CDA
+PASS frame.made-jpeg.04 crc=FAB0BB3F
+PASS frame.made-jpeg.05 crc=2D8E20FC
+PASS frame.made-jpeg.06 crc=29448FDA
+PASS frame.made-jpeg.07 crc=C3040203
+PASS frame.made-jpeg.08 crc=07536B19
+PASS frame.made-jpeg.09 crc=7A6108B1
+PASS make.smc_ made-smc.mov samples=10 flattened=movie
+PASS movie.made-smc.open resId=-1
+PASS movie.made-smc.info scale=600 duration=600 tracks=1 [vide scale=600 duration=600 samples=10 'smc ' 160x120 depth=8]
+PASS frame.made-smc.00 crc=CF383286
+PASS frame.made-smc.01 crc=FE9793FC
+PASS frame.made-smc.02 crc=327F99B6
+PASS frame.made-smc.03 crc=A879D117
+PASS frame.made-smc.04 crc=08573377
+PASS frame.made-smc.05 crc=4ABD4E26
+PASS frame.made-smc.06 crc=408F3D24
+PASS frame.made-smc.07 crc=9904FFE7
+PASS frame.made-smc.08 crc=AF2A6BDF
+PASS frame.made-smc.09 crc=CC84D43F
+PASS play.tone16 done in time
+PASS play.tone8 done in time
+PASS play.av done in time
+PASS mc.new
+PASS mc.bounds 0 0 76 80
+PASS mc.draw bar drawn
+PASS mc.play time advances
+PASS mc.stop time stops

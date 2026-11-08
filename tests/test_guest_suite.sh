@@ -29,7 +29,10 @@
 # --host-file PATH: put a file on Host: before the launch (repeatable;
 # tools/difftest's probe.start / probe.dump).
 # --keep-dir DIR: copy the files the guest wrote on Host: to DIR at the end,
-# whatever the outcome (tools/difftest keeps probe logs and pixel dumps).
+# whatever the outcome (tools/difftest keeps probe logs and pixel dumps;
+# QTTest the movies it made, *.mov).
+# --audio-dump PATH: the sound the Mac played, raw S16LE 48 kHz stereo, to
+# PATH (the emulator's --audio-dump; it runs behind the web server for it).
 # --echo-gateway: on a ROM machine, name net-bridge's echo service
 # (10.0.2.1 port 7) in Host:net_echo.txt, for OTTest.
 # --delete-file: delete a file from the run's copy of the image before the
@@ -100,6 +103,7 @@ while [[ $# -gt 0 ]]; do
         --echo-gateway) ECHO_GATEWAY=1; shift ;;
         --keep-dir) KEEP_DIR="$2"; shift 2 ;;
         --host-file) HOST_FILES+=("$2"); shift 2 ;;
+        --audio-dump) AUDIO_DUMP="$2"; shift 2 ;;
         *) echo "Unknown arg: $1"; exit 1 ;;
     esac
 done
@@ -238,7 +242,7 @@ cleanup() {
     # a crash or a timeout (tools/difftest).
     if [[ -n "${KEEP_DIR:-}" && -d "$EXTFS_DIR" ]]; then
         mkdir -p "$KEEP_DIR"
-        find "$EXTFS_DIR" -maxdepth 1 -type f \( -name '*.txt' -o -name '*.ppm' \) -exec cp {} "$KEEP_DIR"/ \;
+        find "$EXTFS_DIR" -maxdepth 1 -type f \( -name '*.txt' -o -name '*.ppm' -o -name '*.mov' \) -exec cp {} "$KEEP_DIR"/ \;
     fi
     rm -rf "$EXTFS_DIR"
     if [[ -n "$ETHER_SOCK" ]]; then rm -f "$ETHER_SOCK"; fi
@@ -266,9 +270,10 @@ else
 fi
 
 [[ -n "${CORE:-}" ]] && EXTRA_FLAGS+=(--core "$CORE")
+[[ -n "${AUDIO_DUMP:-}" ]] && EXTRA_FLAGS+=(--audio-dump "$AUDIO_DUMP")
 # --headless-http runs the ROM machine in-process, where /api/snapshot has
 # no child to ask; MACTEST_SNAPSHOT runs it behind the web server instead.
-if [[ -n "${MACTEST_SNAPSHOT:-}" ]]; then
+if [[ -n "${MACTEST_SNAPSHOT:-}" || -n "${AUDIO_DUMP:-}" ]]; then
     MODE_FLAGS=(--bridge)
 else
     MODE_FLAGS=(--headless-http)
