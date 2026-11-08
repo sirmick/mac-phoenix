@@ -739,12 +739,22 @@ MC calls are declared in `QuickTime.yaml` under a component dispatcher
   besides the component lists are the G3's (`gestalt.icmp` is `12`, the
   G3's ICM `13`). The component lists differ: the 68k codecs carry
   cmpFastDispatch (`$40000000`) where the G3's PowerPC ones don't, and
-  Executor has 49 decompressors to its 72. **Open:** rpza's band jumps
-  into freed memory (the base codec Enqueues completion records,
-  `$A96F` at its `$B6EC4`, and later runs one; the PowerPlug imports
-  QueueSyncTask and CallMeWhen for the same), so the run stops at
-  `icm.rpza`; cvid, jpeg and smc go the same way. No `qt_executor_ppc_86`
-  cell until it finishes.
+  Executor has 49 decompressors to its 72.
+- **ICMSequenceLockBits** (`$7C`) gives the codec the PixMap the band is
+  decompressed into: the base codec takes its codec's band address from
+  its baseAddr, bounds, rowBytes and pixelSize. Answered noErr with the
+  PixMap left as it was (zeros), rpza decoded its frame from address 0
+  over the trap table and the next SwapMMUMode jumped into a pixel. Now
+  rpza, cvid and Photo-JPEG decompress, with exactly the pixels the
+  Quadra's 68k codecs give on 7.6.1: the G3 runs the PowerPlug's PowerPC
+  codecs, which round differently, so those CRCs are known to differ
+  (`ctest qt_executor_ppc_86`, `tests/guest/qt/known_executor_ppc_86.txt`).
+  **Open:** smc through the base codec ends codecErr (-8960) before any
+  band; the movie made in Photo-JPEG answers MoviesTask -50.
+- Loading a component's code (or GetComponentResource) no longer closes
+  its file when it was open already: QuickTime 3's codecs share the
+  QuickTime file, and closing it under a codec's OpenComponentResFile
+  freed what that codec had loaded.
 - **EV Nova 1.0.10** (`games-ppc`, 8.6, `--executor-ppc`, `--ram 128`: it
   asks for a 51 MB partition) passes its QuickTime 3 check, opens Nova Music
   (an MP3: NewMovieFromFile answers -2048, no MPEG importer) and reaches its
@@ -752,6 +762,10 @@ MC calls are declared in `QuickTime.yaml` under a component dispatcher
   pixmaps over handles (pmVersion 2) and GetPixBaseAddr gave the handle, so
   a 16-bit picture was decoded over the master pointers (fixed in
   `qGWorld.cpp`; gtest `QuickDraw.PixBaseAddrOfHandlePixMap`). Parts of the
-  title (the logo band, the centre panel) are noise, probably because its compressed title
-  pictures go through the base codec, as rpza does (not checked). Its movies (`Race N.mov`,
+  title (the logo band, the centre panel) turn to noise a few seconds in.
+  Not QuickTime: the title makes no ICM call at all (its pictures are its
+  own PICT reader's, 817 GetPicture), only CopyBits between its GWorlds
+  (367,000 in 40 s); still noise with ICMSequenceLockBits fixed. On 7.6.1
+  it quits (QuickTime 2.5), so there is no Executor reference; the G3's 8.6
+  runs at a size and depth EV Nova refuses. Its movies (`Race N.mov`,
   Cinepak) come later.
