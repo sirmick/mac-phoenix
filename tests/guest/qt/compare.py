@@ -2,7 +2,7 @@
 """compare.py — QTTest's results against a reference, the movies' own
 pixels and the sound the Mac played.
 
-    compare.py --results R --expected E [--manifest M] [--audio A] [--record]
+    compare.py --results R --expected E [--manifest M] [--audio A] [--known K] [--record]
 
 * --expected: the reference (tests/guest/qt/expected_*.txt, a ROM
   machine's run): every result line, notes ("#") and the totals left out.
@@ -11,6 +11,9 @@ pixels and the sound the Mac played.
 * --manifest: tests/lib/qtmovie.py's frame CRCs. The frames of the movies
   it wrote ('raw ' and 'rle ', exact codecs) and of QuickTime's own
   flattened copy must be those pixels, whatever the reference says.
+* --known: result names (one per line, "#" comments) known to differ
+  here, left out of the comparison with the reference (not of the
+  manifest's pixel check).
 * --audio: the emulator's --audio-dump (S16LE, 48 kHz, stereo). QTTest
   plays a 1000 Hz tone for 2 s, a 440 Hz one for 1 s, then av.mov's
   1000 Hz for 2 s: both tones must be in it, about that long.
@@ -126,6 +129,7 @@ def main():
     ap.add_argument("--expected", required=True)
     ap.add_argument("--manifest")
     ap.add_argument("--audio")
+    ap.add_argument("--known")
     ap.add_argument("--record", action="store_true")
     a = ap.parse_args()
 
@@ -144,7 +148,18 @@ def main():
             f.write(("\n".join(results) + "\n").encode("utf-8"))
         print("recorded %d lines in %s" % (len(results), a.expected))
     else:
-        e = compare(results, result_lines(a.expected, "utf-8"))
+        expected = result_lines(a.expected, "utf-8")
+        if a.known:
+            known = set()
+            for line in open(a.known, encoding="utf-8"):
+                line = line.split("#", 1)[0].strip()
+                if line:
+                    known.add(line.split()[0])
+            skip = lambda lines: [l for l in lines if (l.split(" ", 2) + [""])[1] not in known]
+            left = len(results) - len(skip(results))
+            print("known to differ here: %d names, %d of these results" % (len(known), left))
+            results, expected = skip(results), skip(expected)
+        e = compare(results, expected)
         print("against %s: %d lines, %d differ" % (a.expected, len(results), len(e)))
         errors += e
     for e in errors:

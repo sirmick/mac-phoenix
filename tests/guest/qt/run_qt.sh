@@ -5,13 +5,14 @@
 # reference (compare.py: tests/guest/qt/expected_NAME.txt, the movies' own
 # pixels, the tones in the sound the Mac played).
 #
-#   tests/guest/qt/run_qt.sh NAME [--record] [--needs-qt] [--no-audio] -- SUITE-ARGS...
+#   tests/guest/qt/run_qt.sh NAME [--record] [--needs-qt] [--no-audio] [--known FILE] -- SUITE-ARGS...
 #
 # NAME: the reference, expected_NAME.txt, and where the movies QTTest made
 # in Apple's codecs are kept, ~/storage/qt/NAME/ (made-*.mov; not git).
 # --record: write the reference from this run instead of comparing.
 # --needs-qt: exit 77 (skip) when QTTest finds no QuickTime (Gestalt
-# 'qtim'), as on Executor until it runs Apple's QuickTime.
+# 'qtim').
+# --known FILE: result names known to differ here (compare.py --known).
 # SUITE-ARGS: test_guest_suite.sh's (--backend, --image, --port ...).
 #
 set -uo pipefail
@@ -21,11 +22,13 @@ shift
 RECORD=""
 NEEDS_QT=""
 AUDIO=1
+KNOWN=()
 while [[ $# -gt 0 && "$1" != "--" ]]; do
     case "$1" in
         --record) RECORD=--record ;;
         --needs-qt) NEEDS_QT=1 ;;
         --no-audio) AUDIO="" ;;
+        --known) KNOWN=(--known "$2"); shift ;;
         *) echo "Unknown arg: $1"; exit 1 ;;
     esac
     shift
@@ -71,7 +74,7 @@ AUDIO_CMP=()
 [[ -n "$AUDIO" && -s "$WORK/audio.raw" ]] && AUDIO_CMP=(--audio "$WORK/audio.raw")
 [[ -n "$AUDIO" && ! -s "$WORK/audio.raw" ]] && echo "sound: nothing in the audio dump" && AUDIO_FAIL=1
 python3 "$HERE/compare.py" --results "$RESULTS" --expected "$EXPECTED" \
-    --manifest "$WORK/movies/manifest.txt" "${AUDIO_CMP[@]}" $RECORD
+    --manifest "$WORK/movies/manifest.txt" "${AUDIO_CMP[@]}" "${KNOWN[@]}" $RECORD
 cmp_rc=$?
 [[ -n "${AUDIO_FAIL:-}" ]] && cmp_rc=1
 if [[ $cmp_rc -eq 0 ]]; then echo "PASS: QTTest as $NAME"; else echo "FAIL: QTTest differs from $NAME"; fi
