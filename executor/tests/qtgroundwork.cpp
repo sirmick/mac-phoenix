@@ -1,8 +1,8 @@
 /* MacPhoenix: what Apple's QuickTime components need from Executor
    without QuickTime's INIT (docs/executor/QuickTime.md, route B): the
    Component Manager's cmpFastDispatch, _HeapDispatch's handle selectors,
-   and no Gestalt 'qtim'/'icmp' while Executor's own QuickTime isn't
-   there. Each from 68k code, as the components call them. */
+   and Gestalt 'qtim'/'icmp' once Executor's own QuickTime is there. Each
+   from 68k code, as the components call them. */
 #include "gtest/gtest.h"
 #include "compat.h"
 
@@ -124,13 +124,16 @@ TEST(QTGroundwork, HeapDispatchHandleSelectors)
 
 /* No QuickTime yet: Gestalt says so, and the Movie Toolbox's stubs fail
    instead of pretending. */
-TEST(QTGroundwork, NoQuickTimeYet)
+/* QuickTime 2.5's answers, Executor's Movie Toolbox and ICM being there */
+TEST(QTGroundwork, QuickTimeAnswers)
 {
-    ASSERT_FALSE(ROMlib_movie_toolbox_present());
+    ASSERT_TRUE(ROMlib_movie_toolbox_present());
     GUEST<LONGINT> v;
-    EXPECT_EQ(gestaltUndefSelectorErr, Gestalt("qtim"_4, &v));
+    EXPECT_EQ(noErr, Gestalt("qtim"_4, &v));
+    EXPECT_EQ(0x02508000, v);
     EXPECT_EQ(ROMlib_icm_present() ? noErr : gestaltUndefSelectorErr, Gestalt("icmp"_4, &v));
-    EXPECT_NE(noErr, C_EnterMovies());
+    EXPECT_EQ(noErr, C_EnterMovies());
+    /* a file that isn't open: no movie */
     GUEST<Movie> m = (Movie)SYN68K_TO_US(0x1234);
     GUEST<INTEGER> id = 0;
     EXPECT_NE(noErr, C_NewMovieFromFile(&m, 0, &id, nullptr, 0, nullptr));

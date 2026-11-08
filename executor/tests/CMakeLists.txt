@@ -52,7 +52,7 @@ set(NATIVE_TEST_SOURCES
         aehdlr.cpp stdclib.cpp
         aedesc.cpp aeresolve.cpp
         hfsplus_unicode.cpp hfsplus_volume.cpp hfs_volume.cpp image_io.cpp
-        exports.cpp cfm.cpp gestalt.cpp timemgr.cpp menus85.cpp widemath.cpp qtmath.cpp qtgroundwork.cpp icm.cpp ot_memory.cpp inputsprocket.cpp nameregistry.cpp hidpi_layout.cpp appearance.cpp sound.cpp
+        exports.cpp cfm.cpp gestalt.cpp timemgr.cpp menus85.cpp widemath.cpp qtmath.cpp qtgroundwork.cpp icm.cpp movies.cpp ot_memory.cpp inputsprocket.cpp nameregistry.cpp hidpi_layout.cpp appearance.cpp sound.cpp
         # Native-only: drives the .IPP driver through the Device Manager.
         # The dual-mode ABI comparison against Apple's headers belongs in
         # TEST_SOURCES later, once the Retro68 side has MacTCP.h.
