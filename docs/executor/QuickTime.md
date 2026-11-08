@@ -426,9 +426,8 @@ QuickTime itself under A.
 ## 7. Route B: what Executor has (qt-b1, 2026-11-08)
 
 The groundwork of section 5's first step. QuickTime's INIT still never
-runs. Gestalt `'icmp'` is answered since qt-b2 (section 8); `'qtim'`
-stays unanswered until Executor's own Movie Toolbox is there
-(`rsys/quicktime.h`).
+runs. Gestalt `'icmp'` is answered since qt-b2 (section 8), `'qtim'`
+since qt-b3 (section 9).
 
 - **Components at startup.** `extensions.cpp` registers the `thng`s of
   QuickTime™ and QuickTime™ Musical Instruments, from Extensions or from
@@ -495,7 +494,7 @@ values. QTTest's ICM round trips are B2's pixel check.
 ## 8. Route B: Executor's ICM (qt-b2, 2026-11-08)
 
 `icm.cpp`, `$AAA3`, over Apple's codecs; Gestalt `'icmp'` is answered
-(18), `'qtim'` waits for the Movie Toolbox (B3).
+(18); `'qtim'` since the Movie Toolbox (B3, section 9).
 
 - **What it answers.** CodecManagerVersion, GetCodecNameList and
   DisposeCodecNameList, GetCodecInfo, FindCodec, GetMaxCompressionSize,
@@ -548,7 +547,84 @@ values. QTTest's ICM round trips are B2's pixel check.
   dithering (Executor's CopyBits draws ditherCopy as srcCopy: `smc `'s
   8-bit source, Cinepak into 16 bits), Executor's own picture recording
   (the source PICTs), and CopyBits' 2:1 shrink at an odd offset.
-- **Open.** QTTest's ICM lines need a movie frame as their source (B3).
-  The preview pane. Codecs scaling and converting depths themselves
+- **Open.** The preview pane. Codecs scaling and converting depths themselves
   (Apple's `$49` translations). ditherCopy in QuickDraw would close most
   of the known differences.
+
+## 9. Route B: Executor's Movie Toolbox (qt-b3, 2026-11-08)
+
+`movies.cpp`, `$AAAA`, Gestalt `'qtim'` = `$02508000` (2.5). 115 more
+selectors in `QuickTime.yaml`, from Universal Interfaces 3.4's Movies.h.
+
+- **What it answers.**
+  - Files: OpenMovieFile/CloseMovieFile, NewMovieFromFile (a `'moov'`
+    resource, or the atom in the data fork: resId -1),
+    NewMovieFromDataFork/Handle, NewMovie, CreateMovieFile, DeleteMovieFile,
+    AddMovieResource, UpdateMovieResource, FlattenMovie, FlattenMovieData,
+    PutMovieIntoHandle.
+  - Playing: MoviesTask, UpdateMovie, Start/StopMovie, GoToBeginning/End,
+    IsMovieDone, PrerollMovie and LoadMovie/TrackIntoRam (no-ops), active,
+    GWorld, box, matrix, clip and display clip, bounds regions, PtInMovie,
+    color table, play hints.
+  - Time: time scale, duration, time, rate, preferred rate and volume,
+    poster, selection, active segment, GetMovieNextInterestingTime; time
+    bases (time, value, rate, flags, start, stop).
+  - Tracks and media: by index, ID and type, enabled, duration, offset,
+    dimensions, matrix, layer, alternates, volume, usage; media scale,
+    duration, handler description, samples and descriptions, language,
+    quality, MediaTimeToSampleNum and back, GetMediaSample.
+  - Editing: NewMovieTrack, NewTrackMedia, Begin/EndMediaEdits,
+    AddMediaSample, InsertMediaIntoTrack, DisposeMovieTrack and
+    DisposeTrackMedia.
+  - User data: GetMovie/TrackUserData, GetUserData, CountUserDataType,
+    GetNextUserDataType, GetUserDataText.
+  - The rest of Movies.h's 402 selectors pop their arguments and answer
+    paramErr or nil, logged (`traps.cpp`), as the ICM's do.
+- **How.**
+  - A movie is read whole from its `'moov'` atom into host structures:
+    tracks with their edit lists, each media's sample tables kept as
+    chunks (offset, first sample, count, description). The guest's Movie,
+    Track, Media, TimeBase and UserData are 8-byte blocks holding the ID.
+  - Data references: the movie's own file (`'alis'`, flag 1), another
+    file through ResolveAlias, or memory for media made without a file.
+    Each file has its own read-only path. AddMediaSample appends to the
+    file the media writes to.
+  - A time base is a rate and a time at an instant of Executor's
+    millisecond clock, worked out when asked; looping time bases wrap.
+  - MoviesTask, for each enabled visual track at the movie's time: edit
+    list, then media time, then sample. The ICM decodes the sample (a
+    decompression sequence per track) into the track's own offscreen at
+    the destination's depth. Temporal codecs keep their previous frame
+    there; a seek decodes from the sync sample before. CopyBits takes the
+    offscreen to the movie's port through the track's and the movie's
+    matrices (layer order, srcCopy/ditherCopy as srcCopy, the display
+    clip).
+  - FlattenMovieData writes `'moov'` then one `'mdat'` (or the movie as a
+    resource), the chunks copied, data references self-contained.
+- **QTTest** (ctest `qt_executor_761`) against the Quadra's 7.6.1 with
+  QuickTime 2.5: 219 of 235 lines identical, 64 of 64 frames the movies'
+  own pixels (`raw `/`rle ` at 32 and 16 bits, the two-track movie, the
+  flattened copy). The movies QTTest makes in Cinepak, Video and
+  Animation decode identically too, as does play.* (done in time).
+  The rest is listed in `tests/guest/qt/known_executor_761.txt`:
+  - `smc ` (dithering, as in QTICM) and Executor's own picture recording;
+  - Photo-JPEG's first two frames (on the Quadra they come out one of two
+    ways);
+  - the movie controller (B4).
+  There is no movie sound yet, so the cell runs without `--audio-dump`.
+- **Found on the way** (the ICM, 88e92123): a codec drawing directly into
+  a port set its colors under the screen's 8-bit device. A 32-bit GWorld
+  got white's CLUT index (0) as its background, and CopyBits into it
+  colorized white to black. The ICM now makes the destination (a GWorld
+  with its own device) current around the band.
+- **Open.**
+  - The movie controller (B4) and sound tracks (B5): sound media only
+    keep time.
+  - `'cmov'` compressed movie headers (QuickTime 3 files): refused, logged
+    (Executor has no zlib).
+  - QuickTimeLib exports for PowerPC (EV Nova).
+  - GetMovieNextInterestingTime is simplified.
+  - Movie clip regions apply only as the display clip.
+  - Alternate groups pick their first enabled track, not by language or
+    quality.
+
