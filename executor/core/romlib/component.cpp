@@ -58,6 +58,7 @@ struct Comp
     uint32_t id;
     uint32_t type, subtype, manufacturer, flags, mask;
     uint32_t entry = 0;     /* guest code; 0 until loaded */
+    bool native = false;    /* Executor's own: entered as native_entry, whatever its flags say */
     Handle code = nullptr;  /* loaded from the resource file */
     bool from_file = false;
     FSSpec file = {};
@@ -168,7 +169,7 @@ int32_t call_entry(Comp *c, Inst *in, uint32_t params)
     int32_t result;
     if(c->ppc)
         result = callPPC(c->entry, { params, in ? in->storage : 0 });
-    else if(c->flags & cmpFastDispatch)
+    else if((c->flags & cmpFastDispatch) && !c->native)
     {
         uint8_t size = READUB(params + 1);
         uint32_t saved_sp = EM_A7;
@@ -653,12 +654,14 @@ Handle sys_pstring(const char *s)
 
 uint32_t Executor::ROMlib_register_native_component(uint32_t type, uint32_t subtype,
                                                     uint32_t manufacturer, const char *name,
-                                                    const char *calls, int32_t version)
+                                                    const char *calls, int32_t version, uint32_t flags)
 {
     auto c = std::make_unique<Comp>();
     c->type = type;
     c->subtype = subtype;
     c->manufacturer = manufacturer;
+    c->flags = flags;
+    c->native = true;
     c->entry = callback_install(native_entry, new NativeComponent{ calls, version });
     c->version = version;
     c->name = sys_pstring(name);

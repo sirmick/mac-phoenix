@@ -28,6 +28,7 @@
 #include <SegmentLdr.h>
 #include <rsys/component.h>
 #include <sound/sounddriver.h>
+#include <rsys/quicktime.h>
 #include <rsys/version.h>
 #include <prefs/prefs.h>
 #include <util/macstrings.h>
@@ -622,6 +623,7 @@ void Executor::ROMlib_load_extensions()
     /* Executor's own components first: the System's of the same types are
        then left out (its 'sdev's stand for sound hardware). */
     ROMlib_install_sound_output_component();
+    ROMlib_install_movie_controller();
     /* The System file's own components first, as its boot code does. */
     int32_t n = ROMlib_register_components(LM(SysMap), true);
     fprintf(stderr, "[Executor] components: System registered %d\n", n);

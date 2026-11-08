@@ -859,6 +859,7 @@ struct MovieS
     CGrafPtr port = nullptr;
     GDHandle gdh = nullptr;
     bool need_update = true;
+    bool changed = false; /* edited since made, read or ClearMovieChanged */
     int32_t hints = 0;
     RgnHandle clip = nullptr, display_clip = nullptr;
     RgnHandle bounds_rgn = nullptr;
@@ -2802,6 +2803,7 @@ Track Executor::C_NewMovieTrack(Movie theMovie, Fixed width, Fixed height, INTEG
     }
     Track g = (Track)t->guest;
     m->tracks.push_back(std::move(t));
+    m->changed = true;
     return g;
 }
 
@@ -2811,6 +2813,7 @@ void Executor::C_DisposeMovieTrack(Track theTrack)
     if(!t)
         return;
     MovieS *m = t->movie;
+    m->changed = true;
     dispose_track(t);
     m->tracks.erase(std::remove_if(m->tracks.begin(), m->tracks.end(),
                                    [t](const std::unique_ptr<TrackS> &p) { return p.get() == t; }),
@@ -3098,6 +3101,7 @@ OSErr Executor::C_InsertMediaIntoTrack(Track theTrack, TimeValue trackStart, Tim
     if(mediaTime < 0 || mediaDuration < 0 || mediaTime + mediaDuration > t->media->duration)
         return set_error(invalidDuration);
     MovieS &m = *t->movie;
+    m.changed = true;
     Fixed rate = mediaRate ? mediaRate : 0x10000;
     int64_t dur = rescale(mediaDuration, t->media->scale, m.scale) * 0x10000 / rate;
     if(!t->has_edits)
@@ -3323,6 +3327,20 @@ OSErr Executor::C_GetUserDataText(UserData theUserData, Handle data, OSType udTy
         }
     }
     return set_error(userDataItemNotFound);
+}
+
+/* the movie's tracks edited (tracks made, disposed, media inserted):
+   MoviePlayer asks before it closes a movie whether to save it */
+Boolean Executor::C_HasMovieChanged(Movie theMovie)
+{
+    MovieS *m = movie_of(theMovie);
+    return m && m->changed;
+}
+
+void Executor::C_ClearMovieChanged(Movie theMovie)
+{
+    if(MovieS *m = movie_of(theMovie))
+        m->changed = false;
 }
 
 ULONGINT Executor::C_GetMovieCreationTime(Movie theMovie)

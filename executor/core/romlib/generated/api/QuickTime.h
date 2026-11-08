@@ -6,12 +6,15 @@
  * Needs:                                                                    *
  *     MacTypes.h            LONGINT, INTEGER, OSErr, Fixed, Boolean,        *
  *                           StringPtr, Rect, OSType, Handle, ULONGINT,      *
- *                           ConstStr255Param                                *
+ *                           ConstStr255Param, SignedByte                    *
  *     FileMgr.h             wide, FSSpec                                    *
  *     QuickDraw.h           CGrafPtr, RgnHandle, CTabHandle                 *
  *     CQuickDraw.h          GDHandle                                        *
  *     Components.h          ComponentInstance, ComponentResult              *
  *     ImageCompression.h    MatrixRecord                                    *
+ *     WindowMgr.h           WindowRef                                       *
+ *     EventMgr.h            EventRecord                                     *
+ *     MenuMgr.h             MenuHandle                                      *
  *                                                                           *
  *                                                                           *
  *****************************************************************************/
@@ -28,6 +31,9 @@
 #include "CQuickDraw.h"
 #include "Components.h"
 #include "ImageCompression.h"
+#include "WindowMgr.h"
+#include "EventMgr.h"
+#include "MenuMgr.h"
 
 #define MODULE_NAME QuickTime
 #include <base/api-module.h>
@@ -476,6 +482,154 @@ ComponentResult C_GetMovieStatus(Movie theMovie, GUEST<Track> *firstProblemTrack
 
 
 ComponentResult C_GetTrackStatus(Track theTrack);PASCAL_SUBTRAP(GetTrackStatus, 0xAAAA, 0x0172, QuickTime);
+
+
+Boolean C_HasMovieChanged(Movie theMovie);PASCAL_SUBTRAP(HasMovieChanged, 0xAAAA, 0x00D9, QuickTime);
+
+
+void C_ClearMovieChanged(Movie theMovie);PASCAL_SUBTRAP(ClearMovieChanged, 0xAAAA, 0x0113, QuickTime);
+
+
+typedef ComponentInstance MovieController;
+
+using MCActionFilterUPP = UPP<Boolean(ComponentInstance mc, GUEST<INTEGER> *action, void *params)>;
+
+
+using MCActionFilterWithRefConUPP = UPP<Boolean(ComponentInstance mc, INTEGER action, void *params, LONGINT refCon)>;
+
+
+
+
+ComponentResult C_MCSetMovie(ComponentInstance mc, Movie theMovie, WindowRef movieWindow, Point where);COMPONENT_FUNCTION(MovieController, MCSetMovie, 0x0002, C_MCSetMovie);
+
+
+ComponentResult C_MCRemoveAMovie(ComponentInstance mc, Movie m);COMPONENT_FUNCTION(MovieController, MCRemoveAMovie, 0x0003, C_MCRemoveAMovie);
+
+
+Movie C_MCGetIndMovie(ComponentInstance mc, INTEGER index);COMPONENT_FUNCTION(MovieController, MCGetIndMovie, 0x0005, C_MCGetIndMovie);
+
+
+ComponentResult C_MCRemoveAllMovies(ComponentInstance mc);COMPONENT_FUNCTION(MovieController, MCRemoveAllMovies, 0x0006, C_MCRemoveAllMovies);
+
+
+ComponentResult C_MCIsPlayerEvent(ComponentInstance mc, const EventRecord *e);COMPONENT_FUNCTION(MovieController, MCIsPlayerEvent, 0x0007, C_MCIsPlayerEvent);
+
+
+ComponentResult C_MCSetActionFilter(ComponentInstance mc, MCActionFilterUPP blob);COMPONENT_FUNCTION(MovieController, MCSetActionFilter, 0x0008, C_MCSetActionFilter);
+
+
+ComponentResult C_MCDoAction(ComponentInstance mc, INTEGER action, void *params);COMPONENT_FUNCTION(MovieController, MCDoAction, 0x0009, C_MCDoAction);
+
+
+ComponentResult C_MCSetControllerAttached(ComponentInstance mc, Boolean attach);COMPONENT_FUNCTION(MovieController, MCSetControllerAttached, 0x000A, C_MCSetControllerAttached);
+
+
+ComponentResult C_MCIsControllerAttached(ComponentInstance mc);COMPONENT_FUNCTION(MovieController, MCIsControllerAttached, 0x000B, C_MCIsControllerAttached);
+
+
+ComponentResult C_MCSetControllerPort(ComponentInstance mc, CGrafPtr gp);COMPONENT_FUNCTION(MovieController, MCSetControllerPort, 0x000C, C_MCSetControllerPort);
+
+
+CGrafPtr C_MCGetControllerPort(ComponentInstance mc);COMPONENT_FUNCTION(MovieController, MCGetControllerPort, 0x000D, C_MCGetControllerPort);
+
+
+ComponentResult C_MCSetVisible(ComponentInstance mc, Boolean visible);COMPONENT_FUNCTION(MovieController, MCSetVisible, 0x000E, C_MCSetVisible);
+
+
+ComponentResult C_MCGetVisible(ComponentInstance mc);COMPONENT_FUNCTION(MovieController, MCGetVisible, 0x000F, C_MCGetVisible);
+
+
+ComponentResult C_MCGetControllerBoundsRect(ComponentInstance mc, Rect *bounds);COMPONENT_FUNCTION(MovieController, MCGetControllerBoundsRect, 0x0010, C_MCGetControllerBoundsRect);
+
+
+ComponentResult C_MCSetControllerBoundsRect(ComponentInstance mc, const Rect *bounds);COMPONENT_FUNCTION(MovieController, MCSetControllerBoundsRect, 0x0011, C_MCSetControllerBoundsRect);
+
+
+RgnHandle C_MCGetControllerBoundsRgn(ComponentInstance mc);COMPONENT_FUNCTION(MovieController, MCGetControllerBoundsRgn, 0x0012, C_MCGetControllerBoundsRgn);
+
+
+RgnHandle C_MCGetWindowRgn(ComponentInstance mc, WindowRef w);COMPONENT_FUNCTION(MovieController, MCGetWindowRgn, 0x0013, C_MCGetWindowRgn);
+
+
+ComponentResult C_MCMovieChanged(ComponentInstance mc, Movie m);COMPONENT_FUNCTION(MovieController, MCMovieChanged, 0x0014, C_MCMovieChanged);
+
+
+ComponentResult C_MCSetDuration(ComponentInstance mc, TimeValue duration);COMPONENT_FUNCTION(MovieController, MCSetDuration, 0x0015, C_MCSetDuration);
+
+
+TimeValue C_MCGetCurrentTime(ComponentInstance mc, GUEST<TimeScale> *scale);COMPONENT_FUNCTION(MovieController, MCGetCurrentTime, 0x0016, C_MCGetCurrentTime);
+
+
+ComponentResult C_MCNewAttachedController(ComponentInstance mc, Movie theMovie, WindowRef w, Point where);COMPONENT_FUNCTION(MovieController, MCNewAttachedController, 0x0017, C_MCNewAttachedController);
+
+
+ComponentResult C_MCDraw(ComponentInstance mc, WindowRef w);COMPONENT_FUNCTION(MovieController, MCDraw, 0x0018, C_MCDraw);
+
+
+ComponentResult C_MCActivate(ComponentInstance mc, WindowRef w, Boolean activate);COMPONENT_FUNCTION(MovieController, MCActivate, 0x0019, C_MCActivate);
+
+
+ComponentResult C_MCIdle(ComponentInstance mc);COMPONENT_FUNCTION(MovieController, MCIdle, 0x001A, C_MCIdle);
+
+
+ComponentResult C_MCKey(ComponentInstance mc, SignedByte key, LONGINT modifiers);COMPONENT_FUNCTION(MovieController, MCKey, 0x001B, C_MCKey);
+
+
+ComponentResult C_MCClick(ComponentInstance mc, WindowRef w, Point where, LONGINT when, LONGINT modifiers);COMPONENT_FUNCTION(MovieController, MCClick, 0x001C, C_MCClick);
+
+
+ComponentResult C_MCEnableEditing(ComponentInstance mc, Boolean enabled);COMPONENT_FUNCTION(MovieController, MCEnableEditing, 0x001D, C_MCEnableEditing);
+
+
+LONGINT C_MCIsEditingEnabled(ComponentInstance mc);COMPONENT_FUNCTION(MovieController, MCIsEditingEnabled, 0x001E, C_MCIsEditingEnabled);
+
+
+Movie C_MCCopy(ComponentInstance mc);COMPONENT_FUNCTION(MovieController, MCCopy, 0x001F, C_MCCopy);
+
+
+Movie C_MCCut(ComponentInstance mc);COMPONENT_FUNCTION(MovieController, MCCut, 0x0020, C_MCCut);
+
+
+ComponentResult C_MCPaste(ComponentInstance mc, Movie srcMovie);COMPONENT_FUNCTION(MovieController, MCPaste, 0x0021, C_MCPaste);
+
+
+ComponentResult C_MCClear(ComponentInstance mc);COMPONENT_FUNCTION(MovieController, MCClear, 0x0022, C_MCClear);
+
+
+ComponentResult C_MCUndo(ComponentInstance mc);COMPONENT_FUNCTION(MovieController, MCUndo, 0x0023, C_MCUndo);
+
+
+ComponentResult C_MCPositionController(ComponentInstance mc, const Rect *movieRect, const Rect *controllerRect, LONGINT someFlags);COMPONENT_FUNCTION(MovieController, MCPositionController, 0x0024, C_MCPositionController);
+
+
+ComponentResult C_MCGetControllerInfo(ComponentInstance mc, GUEST<LONGINT> *someFlags);COMPONENT_FUNCTION(MovieController, MCGetControllerInfo, 0x0025, C_MCGetControllerInfo);
+
+
+ComponentResult C_MCSetClip(ComponentInstance mc, RgnHandle theClip, RgnHandle movieClip);COMPONENT_FUNCTION(MovieController, MCSetClip, 0x0028, C_MCSetClip);
+
+
+ComponentResult C_MCGetClip(ComponentInstance mc, GUEST<RgnHandle> *theClip, GUEST<RgnHandle> *movieClip);COMPONENT_FUNCTION(MovieController, MCGetClip, 0x0029, C_MCGetClip);
+
+
+ComponentResult C_MCDrawBadge(ComponentInstance mc, RgnHandle movieRgn, GUEST<RgnHandle> *badgeRgn);COMPONENT_FUNCTION(MovieController, MCDrawBadge, 0x002A, C_MCDrawBadge);
+
+
+ComponentResult C_MCSetUpEditMenu(ComponentInstance mc, LONGINT modifiers, MenuHandle mh);COMPONENT_FUNCTION(MovieController, MCSetUpEditMenu, 0x002B, C_MCSetUpEditMenu);
+
+
+ComponentResult C_MCGetMenuString(ComponentInstance mc, LONGINT modifiers, INTEGER item, StringPtr aString);COMPONENT_FUNCTION(MovieController, MCGetMenuString, 0x002C, C_MCGetMenuString);
+
+
+ComponentResult C_MCSetActionFilterWithRefCon(ComponentInstance mc, MCActionFilterWithRefConUPP blob, LONGINT refCon);COMPONENT_FUNCTION(MovieController, MCSetActionFilterWithRefCon, 0x002D, C_MCSetActionFilterWithRefCon);
+
+
+ComponentResult C_MCPtInController(ComponentInstance mc, Point thePt, Boolean *inController);COMPONENT_FUNCTION(MovieController, MCPtInController, 0x002E, C_MCPtInController);
+
+
+ComponentResult C_MCInvalidate(ComponentInstance mc, WindowRef w, RgnHandle invalidRgn);COMPONENT_FUNCTION(MovieController, MCInvalidate, 0x002F, C_MCInvalidate);
+
+
+ComponentResult C_MCAdjustCursor(ComponentInstance mc, WindowRef w, Point where, LONGINT modifiers);COMPONENT_FUNCTION(MovieController, MCAdjustCursor, 0x0030, C_MCAdjustCursor);
 
 
 } /* namespace Executor */

@@ -1725,6 +1725,13 @@ foreach(cell IN ITEMS "qt_rom_68k_761;rom_68k_761;;--os-version 7.6.1;18860;gues
   )
 endforeach()
 
+# Movies in applications on Executor 7.6.1 through Executor's movie controller
+# (mc.cpp): 7.6.1's Demo click&drag opened in MoviePlayer and SimpleText, the
+# movie and the controller drawn, a click on play plays it
+# (tests/test_qt_apps_executor.sh; skipped without the movie's image).
+add_test(NAME qt_apps_executor_761 COMMAND bash ${TEST_DIR}/test_qt_apps_executor.sh $<TARGET_FILE:mac-phoenix> 18880)
+set_tests_properties(qt_apps_executor_761 PROPERTIES TIMEOUT 400 LABELS "guest;qt;761;executor" SKIP_RETURN_CODE 77)
+
 # QuickTime's fixed-point, wide and matrix routines ($ABC2; tests/guest/qtmath):
 # Executor's own (qtmath.cpp) against a Quadra's 7.6.1 with QuickTime 2.5,
 # whose run is the reference (qtmath_rom_68k_761 checks it still holds).
