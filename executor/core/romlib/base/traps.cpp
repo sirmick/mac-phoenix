@@ -351,7 +351,20 @@ uint32_t Executor::traps::unknown_selector_68k(const char *trap_name, uint32_t s
     if(strcmp(trap_name, "CodecDispatch") == 0
        && ROMlib_icm_unknown_selector(sel, &icm_args, &icm_result, &icm_name))
     {
-        /* MacPhoenix: the ICM's selectors by their declarations (icm.cpp) */
+        /* MacPhoenix: the ICM's selectors by their declarations (icm.cpp);
+           its private ones that Executor answers */
+        int32_t icm_value;
+        if(ROMlib_icm_private_selector(sel, EM_A7 + 4, &icm_value))
+        {
+            syn68k_addr_t ret = POPADDR();
+            EM_A7 += icm_args;
+            if(icm_result == 2)
+                WRITEUW(EM_A7, (uint16_t)icm_value);
+            else if(icm_result == 4)
+                WRITEUL(EM_A7, icm_value);
+            EM_D0 = icm_value;
+            return ret;
+        }
         snprintf(what, sizeof what, "CodecDispatch selector $%x (%s, %u argument bytes): answered %s",
                  (unsigned)sel, icm_name, (unsigned)icm_args, icm_result == 2 ? "paramErr" : "0");
         log_unimplemented(what);

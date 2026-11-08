@@ -1743,9 +1743,10 @@ endforeach()
 # The Image Compression Manager on a frame of its own (tests/guest/qticm): codec
 # information, compress and decompress (32-bit, 16-bit, a half-size matrix)
 # for Apple's codecs, against a Quadra's 7.6.1 with QuickTime 2.5. Executor's
-# cell skips while Gestalt has no 'icmp' (its ICM isn't complete).
+# own ICM over the same codecs; the lines that differ by dithering are in
+# known_executor_761.txt.
 foreach(cell IN ITEMS "qticm_rom_68k_761;;--os-version 7.6.1;18870;guest;qt;761"
-                      "qticm_executor_761;--needs-icm;--backend executor --os-version 7.6.1;18872;guest;qt;761;executor")
+                      "qticm_executor_761;--needs-icm --known ${CMAKE_SOURCE_DIR}/tests/guest/qticm/known_executor_761.txt;--backend executor --os-version 7.6.1;18872;guest;qt;761;executor")
   list(GET cell 0 name)
   list(GET cell 1 icm_args)
   list(GET cell 2 suite)

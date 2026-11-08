@@ -755,6 +755,256 @@
 
 # ####
 
+- typedef:
+    name: CodecFlags
+    type: uint16_t
+
+# ####
+
+- typedef:
+    name: CodecComponent
+    type: Component
+
+# ####
+
+- typedef:
+    name: CompressorComponent
+    type: Component
+
+# ####
+
+- typedef:
+    name: DecompressorComponent
+    type: Component
+
+# ####
+
+- enum:
+    values:
+      - name: codecErr
+        value: -8960
+      - name: noCodecErr
+        value: -8961
+      - name: codecUnimpErr
+        value: -8962
+      - name: codecSizeErr
+        value: -8963
+      - name: codecScreenBufErr
+        value: -8964
+      - name: codecImageBufErr
+        value: -8965
+      - name: codecSpoolErr
+        value: -8966
+      - name: codecAbortErr
+        value: -8967
+      - name: codecWouldOffscreenErr
+        value: -8968
+      - name: codecBadDataErr
+        value: -8969
+      - name: codecDataVersErr
+        value: -8970
+      - name: codecExtensionNotFoundErr
+        value: -8971
+      - name: codecConditionErr
+        value: -8972
+      - name: codecOpenErr
+        value: -8973
+
+# ####
+
+- enum:
+    values:
+      - name: codecMinQuality
+        value: 0x000
+      - name: codecLowQuality
+        value: 0x100
+      - name: codecNormalQuality
+        value: 0x200
+      - name: codecHighQuality
+        value: 0x300
+      - name: codecMaxQuality
+        value: 0x3FF
+      - name: codecLosslessQuality
+        value: 0x400
+
+# ####
+
+- enum:
+    values:
+      - name: codecProgressOpen
+        value: 0
+      - name: codecProgressUpdatePercent
+        value: 1
+      - name: codecProgressClose
+        value: 2
+
+# ####
+
+- struct:
+    name: CodecInfo
+    members:
+      - name: typeName
+        type: Str31
+      - name: version
+        type: INTEGER
+      - name: revisionLevel
+        type: INTEGER
+      - name: vendor
+        type: LONGINT
+      - name: decompressFlags
+        type: LONGINT
+      - name: compressFlags
+        type: LONGINT
+      - name: formatFlags
+        type: LONGINT
+      - name: compressionAccuracy
+        type: uint8_t
+      - name: decompressionAccuracy
+        type: uint8_t
+      - name: compressionSpeed
+        type: uint16_t
+      - name: decompressionSpeed
+        type: uint16_t
+      - name: compressionLevel
+        type: uint8_t
+      - name: resvd
+        type: uint8_t
+      - name: minimumHeight
+        type: INTEGER
+      - name: minimumWidth
+        type: INTEGER
+      - name: decompressPipelineLatency
+        type: INTEGER
+      - name: compressPipelineLatency
+        type: INTEGER
+      - name: privateData
+        type: LONGINT
+    size: 72
+
+# ####
+
+- struct:
+    name: CodecNameSpec
+    members:
+      - name: codec
+        type: CodecComponent
+      - name: cType
+        type: CodecType
+      - name: typeName
+        type: Str31
+      - name: name
+        type: Handle
+    size: 44
+
+# ####
+
+- struct:
+    name: CodecNameSpecList
+    members:
+      - name: count
+        type: INTEGER
+      - name: list
+        type: CodecNameSpec[1]
+    size: 46
+
+# ####
+
+- typedef:
+    name: CodecNameSpecListPtr
+    type: CodecNameSpecList*
+
+# ####
+
+- funptr:
+    name: ICMDataUPP
+    return: OSErr
+    args:
+      - name: dataP
+        type: Ptr*
+      - name: bytesNeeded
+        type: LONGINT
+      - name: refcon
+        type: LONGINT
+
+# ####
+
+- funptr:
+    name: ICMFlushUPP
+    return: OSErr
+    args:
+      - name: data
+        type: Ptr
+      - name: bytesAdded
+        type: LONGINT
+      - name: refcon
+        type: LONGINT
+
+# ####
+
+- funptr:
+    name: ICMProgressUPP
+    return: OSErr
+    args:
+      - name: message
+        type: INTEGER
+      - name: completeness
+        type: Fixed
+      - name: refcon
+        type: LONGINT
+
+# ####
+
+- struct:
+    name: ICMDataProcRecord
+    members:
+      - name: dataProc
+        type: ICMDataUPP
+      - name: dataRefCon
+        type: LONGINT
+    size: 8
+
+# ####
+
+- typedef:
+    name: ICMDataProcRecordPtr
+    type: ICMDataProcRecord*
+
+# ####
+
+- struct:
+    name: ICMFlushProcRecord
+    members:
+      - name: flushProc
+        type: ICMFlushUPP
+      - name: flushRefCon
+        type: LONGINT
+    size: 8
+
+# ####
+
+- typedef:
+    name: ICMFlushProcRecordPtr
+    type: ICMFlushProcRecord*
+
+# ####
+
+- struct:
+    name: ICMProgressProcRecord
+    members:
+      - name: progressProc
+        type: ICMProgressUPP
+      - name: progressRefCon
+        type: LONGINT
+    size: 8
+
+# ####
+
+- typedef:
+    name: ICMProgressProcRecordPtr
+    type: ICMProgressProcRecord*
+
+# ####
+
 - function:
     name: CodecManagerVersion
     return: OSErr
@@ -804,5 +1054,994 @@
     trap: 0xAAA3
     dispatcher: CodecDispatch
     selector: 0x0063
+    executor: C_
+    export: false
+
+# ####
+
+# The codecs, one per type (showAll 0) or every one: a pointer
+# DisposeCodecNameList frees.
+- function:
+    name: GetCodecNameList
+    return: OSErr
+    args:
+      - name: list
+        type: CodecNameSpecListPtr*
+      - name: showAll
+        type: INTEGER
+    trap: 0xAAA3
+    dispatcher: CodecDispatch
+    selector: 0x0001
+    executor: C_
+    export: false
+
+# ####
+
+# The codec's own answer to its GetCodecInfo (the first of cType for
+# codec 0).
+- function:
+    name: GetCodecInfo
+    return: OSErr
+    args:
+      - name: info
+        type: CodecInfo*
+      - name: cType
+        type: CodecType
+      - name: codec
+        type: CodecComponent
+    trap: 0xAAA3
+    dispatcher: CodecDispatch
+    selector: 0x0003
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: GetMaxCompressionSize
+    return: OSErr
+    args:
+      - name: src
+        type: PixMapHandle
+      - name: srcRect
+        type: const Rect*
+      - name: colorDepth
+        type: INTEGER
+      - name: quality
+        type: CodecQ
+      - name: cType
+        type: CodecType
+      - name: codec
+        type: CompressorComponent
+      - name: size
+        type: LONGINT*
+    trap: 0xAAA3
+    dispatcher: CodecDispatch
+    selector: 0x0004
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: GetCompressionTime
+    return: OSErr
+    args:
+      - name: src
+        type: PixMapHandle
+      - name: srcRect
+        type: const Rect*
+      - name: colorDepth
+        type: INTEGER
+      - name: cType
+        type: CodecType
+      - name: codec
+        type: CompressorComponent
+      - name: spatialQuality
+        type: CodecQ*
+      - name: temporalQuality
+        type: CodecQ*
+      - name: compressTime
+        type: ULONGINT*
+    trap: 0xAAA3
+    dispatcher: CodecDispatch
+    selector: 0x0005
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: CompressImage
+    return: OSErr
+    args:
+      - name: src
+        type: PixMapHandle
+      - name: srcRect
+        type: const Rect*
+      - name: quality
+        type: CodecQ
+      - name: cType
+        type: CodecType
+      - name: desc
+        type: ImageDescriptionHandle
+      - name: data
+        type: Ptr
+    trap: 0xAAA3
+    dispatcher: CodecDispatch
+    selector: 0x0006
+    executor: C_
+    export: false
+
+# ####
+
+# Through an offscreen of the depth the compressor wants when the
+# source isn't at it.
+- function:
+    name: FCompressImage
+    return: OSErr
+    args:
+      - name: src
+        type: PixMapHandle
+      - name: srcRect
+        type: const Rect*
+      - name: colorDepth
+        type: INTEGER
+      - name: quality
+        type: CodecQ
+      - name: cType
+        type: CodecType
+      - name: codec
+        type: CompressorComponent
+      - name: ctable
+        type: CTabHandle
+      - name: flags
+        type: CodecFlags
+      - name: bufferSize
+        type: LONGINT
+      - name: flushProc
+        type: ICMFlushProcRecordPtr
+      - name: progressProc
+        type: ICMProgressProcRecordPtr
+      - name: desc
+        type: ImageDescriptionHandle
+      - name: data
+        type: Ptr
+    trap: 0xAAA3
+    dispatcher: CodecDispatch
+    selector: 0x0007
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: DecompressImage
+    return: OSErr
+    args:
+      - name: data
+        type: Ptr
+      - name: desc
+        type: ImageDescriptionHandle
+      - name: dst
+        type: PixMapHandle
+      - name: srcRect
+        type: const Rect*
+      - name: dstRect
+        type: const Rect*
+      - name: mode
+        type: INTEGER
+      - name: mask
+        type: RgnHandle
+    trap: 0xAAA3
+    dispatcher: CodecDispatch
+    selector: 0x0008
+    executor: C_
+    export: false
+
+# ####
+
+# The decompressor draws into dst itself when it can (its
+# PreDecompress capabilities: depth, scale, mode, mask); otherwise into an
+# offscreen of the depth it wants, CopyBits'd to dst.
+- function:
+    name: FDecompressImage
+    return: OSErr
+    args:
+      - name: data
+        type: Ptr
+      - name: desc
+        type: ImageDescriptionHandle
+      - name: dst
+        type: PixMapHandle
+      - name: srcRect
+        type: const Rect*
+      - name: matrix
+        type: MatrixRecordPtr
+      - name: mode
+        type: INTEGER
+      - name: mask
+        type: RgnHandle
+      - name: matte
+        type: PixMapHandle
+      - name: matteRect
+        type: const Rect*
+      - name: accuracy
+        type: CodecQ
+      - name: codec
+        type: DecompressorComponent
+      - name: bufferSize
+        type: LONGINT
+      - name: dataProc
+        type: ICMDataProcRecordPtr
+      - name: progressProc
+        type: ICMProgressProcRecordPtr
+    trap: 0xAAA3
+    dispatcher: CodecDispatch
+    selector: 0x0009
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: CompressSequenceBegin
+    return: OSErr
+    args:
+      - name: seqID
+        type: ImageSequence*
+      - name: src
+        type: PixMapHandle
+      - name: prev
+        type: PixMapHandle
+      - name: srcRect
+        type: const Rect*
+      - name: prevRect
+        type: const Rect*
+      - name: colorDepth
+        type: INTEGER
+      - name: cType
+        type: CodecType
+      - name: codec
+        type: CompressorComponent
+      - name: spatialQuality
+        type: CodecQ
+      - name: temporalQuality
+        type: CodecQ
+      - name: keyFrameRate
+        type: LONGINT
+      - name: ctable
+        type: CTabHandle
+      - name: flags
+        type: CodecFlags
+      - name: desc
+        type: ImageDescriptionHandle
+    trap: 0xAAA3
+    dispatcher: CodecDispatch
+    selector: 0x000A
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: CompressSequenceFrame
+    return: OSErr
+    args:
+      - name: seqID
+        type: ImageSequence
+      - name: src
+        type: PixMapHandle
+      - name: srcRect
+        type: const Rect*
+      - name: flags
+        type: CodecFlags
+      - name: data
+        type: Ptr
+      - name: dataSize
+        type: LONGINT*
+      - name: similarity
+        type: UInt8*
+      - name: asyncCompletionProc
+        type: ICMCompletionProcRecordPtr
+    trap: 0xAAA3
+    dispatcher: CodecDispatch
+    selector: 0x000B
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: DecompressSequenceBegin
+    return: OSErr
+    args:
+      - name: seqID
+        type: ImageSequence*
+      - name: desc
+        type: ImageDescriptionHandle
+      - name: port
+        type: CGrafPtr
+      - name: gdh
+        type: GDHandle
+      - name: srcRect
+        type: const Rect*
+      - name: matrix
+        type: MatrixRecordPtr
+      - name: mode
+        type: INTEGER
+      - name: mask
+        type: RgnHandle
+      - name: flags
+        type: CodecFlags
+      - name: accuracy
+        type: CodecQ
+      - name: codec
+        type: DecompressorComponent
+    trap: 0xAAA3
+    dispatcher: CodecDispatch
+    selector: 0x000D
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: DecompressSequenceFrame
+    return: OSErr
+    args:
+      - name: seqID
+        type: ImageSequence
+      - name: data
+        type: Ptr
+      - name: inFlags
+        type: CodecFlags
+      - name: outFlags
+        type: CodecFlags*
+      - name: asyncCompletionProc
+        type: ICMCompletionProcRecordPtr
+    trap: 0xAAA3
+    dispatcher: CodecDispatch
+    selector: 0x000E
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: DisposeCodecNameList
+    return: OSErr
+    args:
+      - name: list
+        type: CodecNameSpecListPtr
+    trap: 0xAAA3
+    dispatcher: CodecDispatch
+    selector: 0x000F
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: SetDSequenceMatrix
+    return: OSErr
+    args:
+      - name: seqID
+        type: ImageSequence
+      - name: matrix
+        type: MatrixRecordPtr
+    trap: 0xAAA3
+    dispatcher: CodecDispatch
+    selector: 0x0010
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: SetDSequenceMatte
+    return: OSErr
+    args:
+      - name: seqID
+        type: ImageSequence
+      - name: matte
+        type: PixMapHandle
+      - name: matteRect
+        type: const Rect*
+    trap: 0xAAA3
+    dispatcher: CodecDispatch
+    selector: 0x0011
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: SetDSequenceMask
+    return: OSErr
+    args:
+      - name: seqID
+        type: ImageSequence
+      - name: mask
+        type: RgnHandle
+    trap: 0xAAA3
+    dispatcher: CodecDispatch
+    selector: 0x0012
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: SetDSequenceTransferMode
+    return: OSErr
+    args:
+      - name: seqID
+        type: ImageSequence
+      - name: mode
+        type: INTEGER
+      - name: opColor
+        type: const RGBColor*
+    trap: 0xAAA3
+    dispatcher: CodecDispatch
+    selector: 0x0013
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: SetDSequenceDataProc
+    return: OSErr
+    args:
+      - name: seqID
+        type: ImageSequence
+      - name: dataProc
+        type: ICMDataProcRecordPtr
+      - name: bufferSize
+        type: LONGINT
+    trap: 0xAAA3
+    dispatcher: CodecDispatch
+    selector: 0x0014
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: GetDSequenceImageBuffer
+    return: OSErr
+    args:
+      - name: seqID
+        type: ImageSequence
+      - name: gworld
+        type: GWorldPtr*
+    trap: 0xAAA3
+    dispatcher: CodecDispatch
+    selector: 0x0015
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: GetDSequenceScreenBuffer
+    return: OSErr
+    args:
+      - name: seqID
+        type: ImageSequence
+      - name: gworld
+        type: GWorldPtr*
+    trap: 0xAAA3
+    dispatcher: CodecDispatch
+    selector: 0x0016
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: SetCSequenceQuality
+    return: OSErr
+    args:
+      - name: seqID
+        type: ImageSequence
+      - name: spatialQuality
+        type: CodecQ
+      - name: temporalQuality
+        type: CodecQ
+    trap: 0xAAA3
+    dispatcher: CodecDispatch
+    selector: 0x0017
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: SetCSequencePrev
+    return: OSErr
+    args:
+      - name: seqID
+        type: ImageSequence
+      - name: prev
+        type: PixMapHandle
+      - name: prevRect
+        type: const Rect*
+    trap: 0xAAA3
+    dispatcher: CodecDispatch
+    selector: 0x0018
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: GetCSequencePrevBuffer
+    return: OSErr
+    args:
+      - name: seqID
+        type: ImageSequence
+      - name: gworld
+        type: GWorldPtr*
+    trap: 0xAAA3
+    dispatcher: CodecDispatch
+    selector: 0x0019
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: CDSequenceBusy
+    return: OSErr
+    args:
+      - name: seqID
+        type: ImageSequence
+    trap: 0xAAA3
+    dispatcher: CodecDispatch
+    selector: 0x001A
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: CDSequenceEnd
+    return: OSErr
+    args:
+      - name: seqID
+        type: ImageSequence
+    trap: 0xAAA3
+    dispatcher: CodecDispatch
+    selector: 0x001B
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: GetCompressedImageSize
+    return: OSErr
+    args:
+      - name: desc
+        type: ImageDescriptionHandle
+      - name: data
+        type: Ptr
+      - name: bufferSize
+        type: LONGINT
+      - name: dataProc
+        type: ICMDataProcRecordPtr
+      - name: dataSize
+        type: LONGINT*
+    trap: 0xAAA3
+    dispatcher: CodecDispatch
+    selector: 0x001C
+    executor: C_
+    export: false
+
+# ####
+
+# The table stored after the description's fixed part (clutID 0), or
+# none (nil: clutID -1); extensions after it move along.
+- function:
+    name: SetImageDescriptionCTable
+    return: OSErr
+    args:
+      - name: desc
+        type: ImageDescriptionHandle
+      - name: ctable
+        type: CTabHandle
+    trap: 0xAAA3
+    dispatcher: CodecDispatch
+    selector: 0x001F
+    executor: C_
+    export: false
+
+# ####
+
+# Extensions follow the fixed part and the color table: {size.l,
+# type.l, data}, size counting the header; index from 1.
+- function:
+    name: GetImageDescriptionExtension
+    return: OSErr
+    args:
+      - name: desc
+        type: ImageDescriptionHandle
+      - name: extension
+        type: Handle*
+      - name: idType
+        type: LONGINT
+      - name: index
+        type: LONGINT
+    trap: 0xAAA3
+    dispatcher: CodecDispatch
+    selector: 0x0020
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: AddImageDescriptionExtension
+    return: OSErr
+    args:
+      - name: desc
+        type: ImageDescriptionHandle
+      - name: extension
+        type: Handle
+      - name: idType
+        type: LONGINT
+    trap: 0xAAA3
+    dispatcher: CodecDispatch
+    selector: 0x0021
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: FindCodec
+    return: OSErr
+    args:
+      - name: cType
+        type: CodecType
+      - name: specCodec
+        type: CodecComponent
+      - name: compressor
+        type: CompressorComponent*
+      - name: decompressor
+        type: DecompressorComponent*
+    trap: 0xAAA3
+    dispatcher: CodecDispatch
+    selector: 0x0023
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: CompressPicture
+    return: OSErr
+    args:
+      - name: srcPicture
+        type: PicHandle
+      - name: dstPicture
+        type: PicHandle
+      - name: quality
+        type: CodecQ
+      - name: cType
+        type: CodecType
+    trap: 0xAAA3
+    dispatcher: CodecDispatch
+    selector: 0x0024
+    executor: C_
+    export: false
+
+# ####
+
+# The picture drawn into a 32-bit offscreen of its frame, compressed,
+# and a picture of one CompressedQuickTime opcode ($8200) made of it.
+- function:
+    name: FCompressPicture
+    return: OSErr
+    args:
+      - name: srcPicture
+        type: PicHandle
+      - name: dstPicture
+        type: PicHandle
+      - name: colorDepth
+        type: INTEGER
+      - name: ctable
+        type: CTabHandle
+      - name: quality
+        type: CodecQ
+      - name: doDither
+        type: INTEGER
+      - name: compressAgain
+        type: INTEGER
+      - name: progressProc
+        type: ICMProgressProcRecordPtr
+      - name: cType
+        type: CodecType
+      - name: codec
+        type: CompressorComponent
+    trap: 0xAAA3
+    dispatcher: CodecDispatch
+    selector: 0x0025
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: SetDSequenceAccuracy
+    return: OSErr
+    args:
+      - name: seqID
+        type: ImageSequence
+      - name: accuracy
+        type: CodecQ
+    trap: 0xAAA3
+    dispatcher: CodecDispatch
+    selector: 0x0034
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: SetDSequenceSrcRect
+    return: OSErr
+    args:
+      - name: seqID
+        type: ImageSequence
+      - name: srcRect
+        type: const Rect*
+    trap: 0xAAA3
+    dispatcher: CodecDispatch
+    selector: 0x0035
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: SetCSequenceKeyFrameRate
+    return: OSErr
+    args:
+      - name: seqID
+        type: ImageSequence
+      - name: keyFrameRate
+        type: LONGINT
+    trap: 0xAAA3
+    dispatcher: CodecDispatch
+    selector: 0x0036
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: RemoveImageDescriptionExtension
+    return: OSErr
+    args:
+      - name: desc
+        type: ImageDescriptionHandle
+      - name: idType
+        type: LONGINT
+      - name: index
+        type: LONGINT
+    trap: 0xAAA3
+    dispatcher: CodecDispatch
+    selector: 0x003A
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: CountImageDescriptionExtensionType
+    return: OSErr
+    args:
+      - name: desc
+        type: ImageDescriptionHandle
+      - name: idType
+        type: LONGINT
+      - name: count
+        type: LONGINT*
+    trap: 0xAAA3
+    dispatcher: CodecDispatch
+    selector: 0x003B
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: GetNextImageDescriptionExtensionType
+    return: OSErr
+    args:
+      - name: desc
+        type: ImageDescriptionHandle
+      - name: idType
+        type: LONGINT*
+    trap: 0xAAA3
+    dispatcher: CodecDispatch
+    selector: 0x003C
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: DecompressSequenceFrameS
+    return: OSErr
+    args:
+      - name: seqID
+        type: ImageSequence
+      - name: data
+        type: Ptr
+      - name: dataSize
+        type: LONGINT
+      - name: inFlags
+        type: CodecFlags
+      - name: outFlags
+        type: CodecFlags*
+      - name: asyncCompletionProc
+        type: ICMCompletionProcRecordPtr
+    trap: 0xAAA3
+    dispatcher: CodecDispatch
+    selector: 0x0047
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: GetCSequenceKeyFrameRate
+    return: OSErr
+    args:
+      - name: seqID
+        type: ImageSequence
+      - name: keyFrameRate
+        type: LONGINT*
+    trap: 0xAAA3
+    dispatcher: CodecDispatch
+    selector: 0x004B
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: SetCSequenceFrameNumber
+    return: OSErr
+    args:
+      - name: seqID
+        type: ImageSequence
+      - name: frameNumber
+        type: LONGINT
+    trap: 0xAAA3
+    dispatcher: CodecDispatch
+    selector: 0x0051
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: GetCSequenceFrameNumber
+    return: OSErr
+    args:
+      - name: seqID
+        type: ImageSequence
+      - name: frameNumber
+        type: LONGINT*
+    trap: 0xAAA3
+    dispatcher: CodecDispatch
+    selector: 0x0054
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: SetSequenceProgressProc
+    return: OSErr
+    args:
+      - name: seqID
+        type: ImageSequence
+      - name: progressProc
+        type: ICMProgressProcRecordPtr
+    trap: 0xAAA3
+    dispatcher: CodecDispatch
+    selector: 0x0056
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: SetDSequenceFlags
+    return: OSErr
+    args:
+      - name: seqID
+        type: ImageSequence
+      - name: flags
+        type: LONGINT
+      - name: flagsMask
+        type: LONGINT
+    trap: 0xAAA3
+    dispatcher: CodecDispatch
+    selector: 0x0057
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: DecompressSequenceBeginS
+    return: OSErr
+    args:
+      - name: seqID
+        type: ImageSequence*
+      - name: desc
+        type: ImageDescriptionHandle
+      - name: data
+        type: Ptr
+      - name: dataSize
+        type: LONGINT
+      - name: port
+        type: CGrafPtr
+      - name: gdh
+        type: GDHandle
+      - name: srcRect
+        type: const Rect*
+      - name: matrix
+        type: MatrixRecordPtr
+      - name: mode
+        type: INTEGER
+      - name: mask
+        type: RgnHandle
+      - name: flags
+        type: CodecFlags
+      - name: accuracy
+        type: CodecQ
+      - name: codec
+        type: DecompressorComponent
+    trap: 0xAAA3
+    dispatcher: CodecDispatch
+    selector: 0x005D
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: CDSequenceFlush
+    return: OSErr
+    args:
+      - name: seqID
+        type: ImageSequence
+    trap: 0xAAA3
+    dispatcher: CodecDispatch
+    selector: 0x005F
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: MakeImageDescriptionForPixMap
+    return: OSErr
+    args:
+      - name: pixmap
+        type: PixMapHandle
+      - name: idh
+        type: ImageDescriptionHandle*
+    trap: 0xAAA3
+    dispatcher: CodecDispatch
+    selector: 0x007A
     executor: C_
     export: false

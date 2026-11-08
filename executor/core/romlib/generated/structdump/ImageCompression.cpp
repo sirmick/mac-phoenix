@@ -63,6 +63,72 @@ void describeStruct(const ICMCompletionProcRecord& x, std::ostream& os)
     os << "}";
 }
 
+void describeStruct(const CodecInfo& x, std::ostream& os)
+{
+    os << "CodecInfo{";
+    logging::logField(os, "typeName", x.typeName);
+    logging::logField(os, "version", x.version);
+    logging::logField(os, "revisionLevel", x.revisionLevel);
+    logging::logField(os, "vendor", x.vendor);
+    logging::logField(os, "decompressFlags", x.decompressFlags);
+    logging::logField(os, "compressFlags", x.compressFlags);
+    logging::logField(os, "formatFlags", x.formatFlags);
+    logging::logField(os, "compressionAccuracy", x.compressionAccuracy);
+    logging::logField(os, "decompressionAccuracy", x.decompressionAccuracy);
+    logging::logField(os, "compressionSpeed", x.compressionSpeed);
+    logging::logField(os, "decompressionSpeed", x.decompressionSpeed);
+    logging::logField(os, "compressionLevel", x.compressionLevel);
+    logging::logField(os, "resvd", x.resvd);
+    logging::logField(os, "minimumHeight", x.minimumHeight);
+    logging::logField(os, "minimumWidth", x.minimumWidth);
+    logging::logField(os, "decompressPipelineLatency", x.decompressPipelineLatency);
+    logging::logField(os, "compressPipelineLatency", x.compressPipelineLatency);
+    logging::logField(os, "privateData", x.privateData);
+    os << "}";
+}
+
+void describeStruct(const CodecNameSpec& x, std::ostream& os)
+{
+    os << "CodecNameSpec{";
+    logging::logField(os, "codec", x.codec);
+    logging::logField(os, "cType", x.cType);
+    logging::logField(os, "typeName", x.typeName);
+    logging::logField(os, "name", x.name);
+    os << "}";
+}
+
+void describeStruct(const CodecNameSpecList& x, std::ostream& os)
+{
+    os << "CodecNameSpecList{";
+    logging::logField(os, "count", x.count);
+    logging::logField(os, "list", x.list);
+    os << "}";
+}
+
+void describeStruct(const ICMDataProcRecord& x, std::ostream& os)
+{
+    os << "ICMDataProcRecord{";
+    logging::logField(os, "dataProc", x.dataProc);
+    logging::logField(os, "dataRefCon", x.dataRefCon);
+    os << "}";
+}
+
+void describeStruct(const ICMFlushProcRecord& x, std::ostream& os)
+{
+    os << "ICMFlushProcRecord{";
+    logging::logField(os, "flushProc", x.flushProc);
+    logging::logField(os, "flushRefCon", x.flushRefCon);
+    os << "}";
+}
+
+void describeStruct(const ICMProgressProcRecord& x, std::ostream& os)
+{
+    os << "ICMProgressProcRecord{";
+    logging::logField(os, "progressProc", x.progressProc);
+    logging::logField(os, "progressRefCon", x.progressRefCon);
+    os << "}";
+}
+
 } // namespace Executor
 
 namespace Executor { namespace structdump {
@@ -88,6 +154,30 @@ void dump_ICMCompletionProcRecord(std::ostream& os, const void* p)
 {
     describeStruct(*(const ICMCompletionProcRecord*)p, os);
 }
+void dump_CodecInfo(std::ostream& os, const void* p)
+{
+    describeStruct(*(const CodecInfo*)p, os);
+}
+void dump_CodecNameSpec(std::ostream& os, const void* p)
+{
+    describeStruct(*(const CodecNameSpec*)p, os);
+}
+void dump_CodecNameSpecList(std::ostream& os, const void* p)
+{
+    describeStruct(*(const CodecNameSpecList*)p, os);
+}
+void dump_ICMDataProcRecord(std::ostream& os, const void* p)
+{
+    describeStruct(*(const ICMDataProcRecord*)p, os);
+}
+void dump_ICMFlushProcRecord(std::ostream& os, const void* p)
+{
+    describeStruct(*(const ICMFlushProcRecord*)p, os);
+}
+void dump_ICMProgressProcRecord(std::ostream& os, const void* p)
+{
+    describeStruct(*(const ICMProgressProcRecord*)p, os);
+}
 }
 
 void registerStructDumps_ImageCompression()
@@ -98,6 +188,12 @@ void registerStructDumps_ImageCompression()
         { "MatrixRecord", sizeof(MatrixRecord), &dump_MatrixRecord },
         { "ImageDescription", sizeof(ImageDescription), &dump_ImageDescription },
         { "ICMCompletionProcRecord", sizeof(ICMCompletionProcRecord), &dump_ICMCompletionProcRecord },
+        { "CodecInfo", sizeof(CodecInfo), &dump_CodecInfo },
+        { "CodecNameSpec", sizeof(CodecNameSpec), &dump_CodecNameSpec },
+        { "CodecNameSpecList", sizeof(CodecNameSpecList), &dump_CodecNameSpecList },
+        { "ICMDataProcRecord", sizeof(ICMDataProcRecord), &dump_ICMDataProcRecord },
+        { "ICMFlushProcRecord", sizeof(ICMFlushProcRecord), &dump_ICMFlushProcRecord },
+        { "ICMProgressProcRecord", sizeof(ICMProgressProcRecord), &dump_ICMProgressProcRecord },
     };
     registerTypes(types, sizeof(types) / sizeof(types[0]));
 }

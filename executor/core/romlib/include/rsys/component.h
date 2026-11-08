@@ -1,6 +1,7 @@
 #pragma once
 
 #include <ProcessMgr.h>
+#include <initializer_list>
 
 namespace Executor
 {
@@ -27,4 +28,20 @@ uint32_t ROMlib_register_native_component(uint32_t type, uint32_t subtype,
    whose code was in its partition [part_lo, part_hi) (guest addresses). */
 void ROMlib_components_process_exit(const ProcessSerialNumber *psn,
                                     uint32_t part_lo = 0, uint32_t part_hi = 0);
+
+/* MacPhoenix: a call to a component instance from C++, as an application's
+   glue makes it (the ICM's calls to codecs): the arguments in declaration
+   order, each a word (bytes 2) or a long (4), a parameter block on the 68k
+   stack. badComponentInstance for an instance that isn't one. */
+struct ComponentArg
+{
+    uint32_t value;
+    uint8_t bytes = 4;
+    ComponentArg(uint32_t v) : value(v) {}
+    ComponentArg(uint32_t v, uint8_t b) : value(v), bytes(b) {}
+    template<typename T>
+    ComponentArg(T *p) : value(p ? US_TO_SYN68K(p) : 0) {}
+};
+inline ComponentArg ComponentWord(int16_t v) { return ComponentArg((uint16_t)v, 2); }
+int32_t ROMlib_call_component(uint32_t instance, int16_t what, std::initializer_list<ComponentArg> args);
 }

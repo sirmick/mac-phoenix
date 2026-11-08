@@ -8,12 +8,13 @@
 
 using namespace Executor;
 
-/* MacPhoenix: Executor's QuickTime (route B, docs/executor/QuickTime.md)
-   isn't there yet: Gestalt says so ('qtim', 'icmp' unanswered), and the
-   Movie Toolbox's 1998 stubs below no longer pretend to work. */
+/* MacPhoenix: Executor's QuickTime (route B, docs/executor/QuickTime.md).
+   The Image Compression Manager is there (icm.cpp: Gestalt 'icmp'); the
+   Movie Toolbox isn't yet: no 'qtim', and its 1998 stubs below no longer
+   pretend to work. */
 bool Executor::ROMlib_icm_present()
 {
-    return false;
+    return true;
 }
 
 bool Executor::ROMlib_movie_toolbox_present()

@@ -225,7 +225,10 @@ LONGINT Executor::C_Color2Index(RGBColor *rgb)
     gdev = LM(TheGDevice);
     gd_ctab = PIXMAP_TABLE(GD_PMAP(gdev));
     gd_itab = GD_ITABLE(gdev);
-    if(CTAB_SEED(gd_ctab) != ITAB_SEED(gd_itab))
+    /* MacPhoenix: a direct device needs neither (QuickTime's codecs make
+       one with no inverse table) */
+    if(PIXMAP_PIXEL_SIZE(GD_PMAP(gdev)) <= 8 && gd_ctab && gd_itab
+       && CTAB_SEED(gd_ctab) != ITAB_SEED(gd_itab))
         MakeITable(gd_ctab, gd_itab, GD_RES_PREF(gdev));
 
     for(t = GD_SEARCH_PROC(LM(TheGDevice)), success_p = false;
