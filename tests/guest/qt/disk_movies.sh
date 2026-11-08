@@ -21,6 +21,7 @@ MOVIES=(
     "demo-lock	7.6.1.img	:System Folder:Extensions:Demo drag/lock"
     "demo-single	7.6.1.img	:System Folder:Extensions:Demo single.click"
     "hc-simple	dev-tools-system-7.img	:Languages \xc4:HyperCard 2.4.1 \xc4:HyperCard Stacks:Simple Movie"
+    "qt3-sample	8.6.img	:Applications:QuickTime:Sample Movie"
     "ares-1	games.img	:Ares 1.2.0 \xc4:Ares Data \xc4:Part 1"
     "ares-2	games.img	:Ares 1.2.0 \xc4:Ares Data \xc4:Part 2"
     "ares-3	games.img	:Ares 1.2.0 \xc4:Ares Data \xc4:Part 3"

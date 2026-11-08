@@ -54,7 +54,7 @@ HOST_ARGS=()
 MANIFEST=()
 if [[ -n "$DISK" ]]; then
     DISK_CACHE="${QT_STORE:-$HOME/storage/qt}/disk-movies"
-    names=$(bash "$HERE/disk_movies.sh" "$DISK_CACHE")
+    names=$(bash "$HERE/disk_movies.sh" "$DISK_CACHE" | tr "\n" " ")
     [[ -n "$names" ]] || { echo "SKIP: none of the disks' movies here (disk_movies.sh)"; exit 77; }
     mkdir -p "$WORK/movies"
     : > "$WORK/movies/qt_disk.txt"
@@ -64,6 +64,9 @@ if [[ -n "$DISK" ]]; then
         printf '%s\t%s\r' "$n" "$n" >> "$WORK/movies/qt_disk.txt"
     done
     HOST_ARGS+=(--host-file "$WORK/movies/qt_disk.txt")
+    # 8.6's Sample Movie is Simple Movie behind a compressed header
+    [[ " $names " == *" qt3-sample "* && " $names " == *" hc-simple "* ]] &&
+        MANIFEST=(--same-frames qt3-sample=hc-simple)
 else
     python3 "$ROOT/tests/lib/qtmovie.py" "$WORK/movies" || { echo "FAIL: qtmovie.py"; exit 1; }
     for f in "$WORK"/movies/*.mov; do HOST_ARGS+=(--host-file "$f"); done

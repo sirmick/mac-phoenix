@@ -45,6 +45,7 @@ PASS disk.hc-simple.05 t=2570 crc=D652C07E
 PASS disk.hc-simple.06 t=3037 crc=34EE625A
 PASS disk.hc-simple.07 t=3505 crc=D9E9F16B
 PASS disk.hc-simple.whole done in time
+FAIL movie.qt3-sample.open NewMovieFromFile -2002
 PASS movie.ares-1.open resId=-1
 PASS movie.ares-1.info scale=600 duration=14350 tracks=2 [vide scale=24 duration=574 samples=287 'cvid' 320x160 depth=8] [soun scale=11025 duration=263663 samples=263663 'raw ' ch=1 bits=8 rate=11025]
 PASS disk.ares-1.00 t=896 crc=2C0D2927
