@@ -1,7 +1,7 @@
 # wash-plan: written by Wash as the plan changes.
 # Edit it only between workspaces; plan_set {"from": "<this file>"} loads it.
 
-revision = 106
+revision = 109
 
 [[node]]
   id = "cuts"
@@ -1050,5 +1050,5 @@ revision = 106
   template = "package"
   parent = "qt"
   body = "Found by g3sound 2026-11-08 (before and after its change): the oracle cell qt_rom_68k_761 fails 4 of 6 runs on the Photo-JPEG frame 00 CRC. An oracle must be deterministic: find whether it's QTTest (timing-dependent first frame, uninitialised GWorld, a codec's quality setting), the ROM machine (uae core, FPU), or JPEG's own nondeterminism on a Mac, and fix it or make the check robust (and say why)."
-  state = "todo"
-  revision = 106
+  state = "done"
+  revision = 109
