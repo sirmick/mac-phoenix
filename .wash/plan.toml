@@ -1,7 +1,7 @@
 # wash-plan: written by Wash as the plan changes.
 # Edit it only between workspaces; plan_set {"from": "<this file>"} loads it.
 
-revision = 127
+revision = 128
 
 [[node]]
   id = "cuts"
@@ -1063,3 +1063,12 @@ revision = 127
   body = "From qtb6 2026-11-08: EV Nova's title draws with its own PICT reader and ~367k CopyBits between GWorlds; no ICM calls. Parked 2026-11-08 (owner stopped the team); handoff .wash/local/handoffs/evnova.md has three ranked suspects: (1) StdBits' port path (case 3 low_bit) only LockPixels a handle-based pixmap, never unwrapping baseAddr; (2) C_UnlockPixels restores gw_info->pixels_h even when the app replaced baseAddr; (3) pmVersion ==2 vs bit test."
   state = "parked"
   revision = 127
+
+[[node]]
+  id = "tooling"
+  title = "Friction tooling: merge gate, known-flaky list with rerun-alone, automatic test ports"
+  emoji = "🛠️"
+  template = "package"
+  body = "Owner 2026-11-08 approved items 1-3 of the round's retrospective: (1) tools/ci/merge_gate.sh BRANCH: merge into a temporary copy of grid2 (never the main checkout), build native + wasm checking exit codes, run executor+qt labels native and wasm executor, rerun failures alone against the known-flaky list, one verdict, then fast-forward grid2 only on success; (2) a known-flaky list with automatic rerun-alone in ctest; (3) automatic test ports replacing the full per-worktree registry (tests/lib/ports.py)."
+  state = "active"
+  revision = 128
