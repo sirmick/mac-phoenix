@@ -8,7 +8,10 @@
 # over /api/script; dev-tools-system-7.img, a copy mounted writable, or that
 # part is skipped); in each:
 #   - the movie comes up drawn, with the controller's bar under it;
-#   - a click on the bar's play button plays it: the movie's pixels change;
+#   - a click on the bar's play button plays it: the movie's pixels change,
+#     and its sound is heard (--audio-dump);
+#   - in MoviePlayer, a click on the bar's speaker mutes it: played again,
+#     nothing is heard; a second click unmutes it;
 #   - the application quits.
 # Skipped without the movie (its image) or the test disk.
 set -uo pipefail
@@ -27,6 +30,7 @@ DISK="${MACEMU_DISK:-$(bash "$SCRIPT_DIR/lib/refresh_test_disk.sh" tests-7.6.1 $
 WORK=$(mktemp -d "${TMPDIR:-/tmp}/mactest-qtapps.XXXXXX")
 EXTFS_DIR="$WORK/host"
 LOG="$WORK/emulator.log"
+AUDIO="$WORK/audio.raw"
 mkdir -p "$EXTFS_DIR"
 # the movie twice: MoviePlayer's ('TVOD') and SimpleText's ('ttxt')
 python3 "$SCRIPT_DIR/guest/install_macbinary.py" "$CACHE/demo-click.bin" "$EXTFS_DIR" Demo >/dev/null
@@ -46,7 +50,8 @@ cleanup() {
 }
 trap cleanup EXIT
 
-"$BINARY" --backend executor --config /dev/null --headless-http --port "$PORT" --timeout 300 \
+# behind the web server (not --headless-http): the child's sound to --audio-dump
+"$BINARY" --backend executor --config /dev/null --bridge --audio-dump "$AUDIO" --port "$PORT" --timeout 300 \
     --executor-system "$(basename "$DISK")" --executor-writable-images --extfs "$EXTFS_DIR" \
     ${HC_ARGS[@]+"${HC_ARGS[@]}"} >"$LOG" 2>&1 &
 EMU_PID=$!
@@ -106,10 +111,43 @@ print(sum(1 for x, y in zip(pa, pb) if x != y), len(set(pa)))
 PY
 }
 
-# check_movie APP WIDTH HEIGHT: the movie and its controller on the screen,
-# then played by a click on the bar's play button
+# the dump's length so far, in bytes (S16LE stereo at 48 kHz; once the
+# sound has started it runs on, silence included)
+dump_at() { stat -c %s "$AUDIO" 2>/dev/null || echo 0; }
+
+# seconds of sound in the dump between two of its lengths (heard FROM TO):
+# 50 ms windows with signal
+heard() {
+    python3 - "$AUDIO" "$@" <<'PY'
+import struct, sys
+a, b = int(sys.argv[2]) // 4 * 4, int(sys.argv[3]) // 4 * 4
+try:
+    with open(sys.argv[1], "rb") as f:
+        f.seek(a)
+        data = f.read(max(b - a, 0))
+except OSError:
+    data = b""
+n = len(data) // 4
+left = struct.unpack("<%dh" % (n * 2), data[:n * 4])[0::2]
+win = 2400
+print("%.2f" % (sum(1 for w in range(0, n - win + 1, win)
+                    if max(left[w:w + win]) - min(left[w:w + win]) >= 512) / 20.0))
+PY
+}
+
+click() {   # click X Y
+    api -X POST "$URL/api/mouse" -d "{\"x\":$1,\"y\":$2}" >/dev/null
+    sleep 0.3
+    api -X POST "$URL/api/mouse" -d '{"button":0,"down":true}' >/dev/null
+    sleep 0.1
+    api -X POST "$URL/api/mouse" -d '{"button":0,"down":false}' >/dev/null
+}
+
+# check_movie APP WIDTH HEIGHT [PLAYSECS]: the movie and its controller on
+# the screen, then played by a click on the bar's play button (for PLAYSECS
+# seconds, default 2: the sound looked for there)
 check_movie() {
-    local app="$1" width="$2" height="$3" shot0="$WORK/$1-0.png" shot1="$WORK/$1-1.png"
+    local app="$1" width="$2" height="$3" secs="${4:-2}" shot0="$WORK/$1-0.png" shot1="$WORK/$1-1.png"
     local win=""
     for i in $(seq 1 20); do
         api "$URL/api/screenshot?scale=1" -o "$shot0"
@@ -125,15 +163,44 @@ check_movie() {
     check "$app: the movie drawn ($movie_colours colours)" test "$movie_colours" -gt 1
     check "$app: the controller's bar drawn ($bar_colours colours)" test "$bar_colours" -gt 2
     # play: the second button of the bar (after the speaker)
-    api -X POST "$URL/api/mouse" -d "{\"x\":$((ml + 23)),\"y\":$((mb + 8))}" >/dev/null
-    sleep 0.3
-    api -X POST "$URL/api/mouse" -d '{"button":0,"down":true}' >/dev/null
-    sleep 0.1
-    api -X POST "$URL/api/mouse" -d '{"button":0,"down":false}' >/dev/null
-    sleep 2
+    local a0 a1
+    a0=$(dump_at)
+    click $((ml + 23)) $((mb + 8))
+    sleep "$secs"
     api "$URL/api/screenshot?scale=1" -o "$shot1"
+    a1=$(dump_at)
     read -r changed _ <<< "$(diff_pixels "$shot0" "$shot1" $mt $ml $mb $mr)"
     check "$app: playing changes the movie ($changed pixels)" test "$changed" -gt 100
+    local s
+    s=$(heard "$a0" "$a1")
+    check "$app: its sound heard while it plays ($s s of ${secs} s)" python3 -c "import sys; sys.exit(not $s >= 0.1)"
+    MOVIE_BAR="$ml $mb"
+}
+
+# check_mute APP: the speaker button mutes the movie (MoviePlayer's volume
+# control): from the start again, nothing heard; a second click unmutes it
+check_mute() {
+    local app="$1" ml mb a0 a1 s
+    read -r ml mb <<< "$MOVIE_BAR"
+    sleep 2                                 # the movie at its end
+    click $((ml + 7)) $((mb + 8))           # the speaker: muted
+    sleep 0.5
+    a0=$(dump_at)
+    click $((ml + 23)) $((mb + 8))          # play from the start
+    sleep 2
+    a1=$(dump_at)
+    s=$(heard "$a0" "$a1")
+    check "$app: muted by the speaker, nothing heard ($s s, $(( (a1 - a0) / 192 )) ms of sound out)" \
+        python3 -c "import sys; sys.exit(not ($s == 0 and $a1 - $a0 > 192 * 1000))"
+    sleep 2
+    click $((ml + 7)) $((mb + 8))           # unmuted
+    sleep 0.5
+    a0=$(dump_at)
+    click $((ml + 23)) $((mb + 8))
+    sleep 2
+    a1=$(dump_at)
+    s=$(heard "$a0" "$a1")
+    check "$app: unmuted, heard again ($s s)" python3 -c "import sys; sys.exit(not $s >= 0.1)"
 }
 
 quit_app() {
@@ -148,6 +215,7 @@ run_app() {   # run_app NAME DOCUMENT
     api -X POST "$URL/api/wait" -d "{\"condition\":\"app=$app\",\"timeout\":60}" >/dev/null \
         || { echo "FAIL: $app: not in front"; FAIL=1; return; }
     check_movie "$app" 320 176
+    [[ "$app" == MoviePlayer ]] && check_mute "$app"
     quit_app
 }
 

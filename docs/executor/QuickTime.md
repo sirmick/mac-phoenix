@@ -616,7 +616,8 @@ selectors in `QuickTime.yaml`, from Universal Interfaces 3.4's Movies.h.
   - Photo-JPEG's first two frames (on the Quadra they come out one of two
     ways);
   - the movie controller (B4).
-  There is no movie sound yet, so the cell runs without `--audio-dump`.
+  Movie sound since B5 (section 12): the cell checks QTTest's tones in
+  `--audio-dump`.
 - **Movies from our disks** (ctest `qt_disk_executor_761`, run_qt.sh
   `--disk`): Ares' Part 1-3 (palette Cinepak, 320x160, 11 kHz sound),
   HyperCard 2.4.1's Simple Movie (smc 8-bit with its own colors, `twos`
@@ -639,8 +640,7 @@ selectors in `QuickTime.yaml`, from Universal Interfaces 3.4's Movies.h.
   colorized white to black. The ICM now makes the destination (a GWorld
   with its own device) current around the band.
 - **Open.**
-  - Sound tracks (B5): sound media only keep time. The movie controller
-    is section 10.
+  - Sound tracks: section 12. The movie controller is section 10.
   - Time base callbacks (NewCallBack, CallMeWhen): none of the surveyed
     applications calls them. A time base runs on Executor's millisecond
     clock, the one TickCount and the Time Manager use.
@@ -769,3 +769,82 @@ MC calls are declared in `QuickTime.yaml` under a component dispatcher
   it quits (QuickTime 2.5), so there is no Executor reference; the G3's 8.6
   runs at a size and depth EV Nova refuses. Its movies (`Race N.mov`,
   Cinepak) come later.
+
+## 12. Route B: movie sound (qt-b5, 2026-11-08)
+
+`movies.cpp` (`sound_task`), `sound/sounddecode.cpp`, Executor's Sound
+Manager (`sound/sound.cpp`). From Inside Macintosh: Sound and QuickTime
+(sound sample descriptions, the Sound Manager's commands) and QTTest's
+tones measured on the Quadra.
+
+- **How a sound track plays.** Each sound track gets a Sound Manager
+  channel of its own (`SndNewChannel`, sampledSynth, in the System heap
+  with its buffers). From the movie's time on, its samples are decoded to
+  the mixer's own form (8-bit offset-binary mono: Executor's mixer mixes
+  nothing else) in buffers of an eighth of a second, a `bufferCmd` with a
+  standard sound header each, kept half a second ahead by MoviesTask. The
+  sample rate is the description's times the movie's rate (and an edit's).
+  Edit lists are followed (an empty edit is silence: the Demos' clicks sit
+  behind one), so are the time base's stop and loop flags; a palindrome
+  plays its forward half only.
+- **Sync.** The movie's clock is its time base on Executor's millisecond
+  clock, which paces the mixer too (a Time Manager task each 46 ms). A
+  change of rate, time or flags (StartMovie, StopMovie, SetMovieRate,
+  SetMovieTime*, GoTo*, SetMovieActive, the time base calls) flushes the
+  channel and starts again from the new time, at once (`TimeBaseS::changed`).
+  When the sound falls more than 100 ms behind the clock (the mixer runs at
+  interrupt time), the clock is set back to the sound's (`slip`), as
+  QuickTime's sound clock would hold the movie; none of the cells needed
+  it. IsMovieDone waits, a second at most, for the queued sound to be
+  played: a movie ends when its sound has.
+- **Volume.** The movie's volume times the track's (either negative:
+  muted) through a new `volumeCmd` (46, right << 16 | left, $0100 full;
+  `getVolumeCmd` 47), which Executor's mixer now applies to sampled sound,
+  rounded (truncated, Ares's fades at volume $FF were silent). SetMovieVolume,
+  SetTrackVolume and SetTrackEnabled take effect at once. The movie
+  controller's speaker and arrow keys go through it.
+- **Formats** (Executor's own decoders, `sounddecode.cpp`): `raw `, `twos`,
+  `sowt`, `NONE` at 8 or 16 bits, any number of channels (their mean);
+  `ulaw` and `alaw` (ITU-T G.711); `ima4` (IMA ADPCM, the IMA's tables, in
+  Apple's 34-byte packets of 64 frames, a packet a channel). Why not Apple's
+  `'sdec'` components (the System file and QuickTime™ have them): Executor's
+  Sound Manager isn't built of sound components, and an `'sdec'` pulls its
+  input from a source component through SoundComponentGetSourceData, a
+  chain Executor would have to provide for one decoder; IMA is a few dozen
+  lines. **MACE** (`MAC3`, `MAC6`) is not decoded: there is no published
+  description of it to write a decoder from (only other programs' code),
+  and none of the movies we have uses it. Such a track is logged
+  (`[unimplemented] sound media 'MAC3'`) and keeps time silently.
+- **The movie controller.** MoviePlayer installs an action filter, and the
+  speaker's mute (mcActionSetVolume with a negative volume in the pointer)
+  aborted Executor: a value in MCDoAction's pointer that is no guest
+  address (`-$FF`) can't go through `ptr_to_longint`. `value_of` now
+  inverts the address windows without the range check, and the filter gets
+  the long as it is.
+- **Tests.**
+  - `qt_executor_761` and `qt_executor_ppc_86` run with `--audio-dump`:
+    QTTest's tones (1000 Hz 2 s, 440 Hz 1 s, av.mov's 1000 Hz 2 s) at the
+    right frequency and length, play.* done in time. Executor: 1000 Hz
+    1.95 s, 440 Hz 0.95 s, 1000 Hz 1.95 s (50 ms windows; 2.000 / 1.000 /
+    2.000 s at 10 ms), 122/61/121 ticks for 120/60/120 on 7.6.1,
+    122/61/122 on 8.6. The Quadra: 995 Hz (its emulated output runs 0.5%
+    slow), 121/61/121; the G3: 1000 Hz, 121/60/120.
+  - `qt_disk_*_761` keep the dump (`compare.py --audio-heard`: at least
+    5 s heard with Simple Movie among the movies). Against the Quadra's
+    dump: Simple Movie 6.18 s of sound on both, the same spectral peaks
+    (84, 132, 199, 332 Hz), envelope correlation 0.91; the Ares chapters'
+    peaks the same, 1.90 / 2.05 / 2.00 s heard of their 2 s plays (the
+    Quadra 1.90 / 2.05 / 2.05), the fade-ins window for window; the Demos'
+    clicks at their edits' times (the Quadra drops one of the seven, a
+    different one each run); 8.6's Sample Movie as Simple Movie.
+  - `qt_apps_executor_761` (`--audio-dump`, behind the web server): the
+    sound heard while MoviePlayer, SimpleText and HyperCard (Simple Movie)
+    play; MoviePlayer's speaker mutes it (played again, 2.4 s out and
+    nothing heard) and unmutes it.
+  - gtest `SoundDecode.*`: the formats, worked out by hand from their
+    descriptions.
+- **Open.** MACE. Sound at other rates plays at that pitch (QuickTime 2.5
+  does too); backwards, silence. The mixer is 8-bit mono, so 16-bit and
+  stereo sound lose their low bits and their stereo: balance (SetSoundMediaBalance)
+  is kept, not applied. Time base callbacks still none.
+

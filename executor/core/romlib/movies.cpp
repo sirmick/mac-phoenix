@@ -20,8 +20,9 @@
  * it into the track's own offscreen at the destination's depth (temporal
  * codecs need the previous frame there, a seek decodes from the sync
  * sample before), CopyBits takes that to the movie's port through the
- * track's and the movie's matrices. Sound tracks only keep time (no sound
- * yet: B5).
+ * track's and the movie's matrices. A sound track plays through a Sound
+ * Manager channel of its own, its samples decoded to the mixer's 8-bit mono
+ * and queued a little ahead of the movie's time (sound_task).
  *
  * Editing: NewMovie/CreateMovieFile, NewMovieTrack, NewTrackMedia,
  * AddMediaSample (appended to the media's data file, or kept in memory),
@@ -32,6 +33,7 @@
 #include <ImageCompression.h>
 #include <Components.h>
 #include <MemoryMgr.h>
+#include <mman/mman.h>
 #include <QuickDraw.h>
 #include <CQuickDraw.h>
 #include <ResourceMgr.h>
@@ -47,8 +49,13 @@
 #include <file/file.h>
 #include <syn68k_public.h>
 
+#include <sound/soundopts.h>
+#include <sound/sounddecode.h>
+#include <SoundMgr.h>
+
 #include <algorithm>
 #include <cstring>
+#include <deque>
 #include <map>
 #include <memory>
 #include <string>
@@ -510,9 +517,14 @@ struct UserDataS
     std::vector<UserItem> items;
 };
 
+/* a movie's time base changed: its sound starts over from its time (B5) */
+void sound_retime(MovieS *m);
+
 struct TimeBaseS
 {
     Ptr guest = nullptr;
+    MovieS *movie = nullptr;     /* the movie whose time base it is */
+    uint32_t generation = 0;     /* counts rate, time and flag changes */
     Fixed rate = 0;
     int64_t value = 0;           /* at anchor_ms, in scale */
     int32_t scale = 600;
@@ -551,12 +563,41 @@ struct TimeBaseS
     void set_rate(Fixed r)
     {
         anchor();
+        bool other = r != rate;
         rate = r;
+        if(other)
+            changed();
     }
     void set_time(int64_t t)
     {
         value = t;
         anchor_ms = msecs_elapsed();
+        changed();
+    }
+    /* the time set back to t, as the sound clock says: no change of
+       rate or time to start the sound over for */
+    void slip(int64_t t)
+    {
+        value = t;
+        anchor_ms = msecs_elapsed();
+    }
+    void changed()
+    {
+        generation++;
+        if(movie)
+            sound_retime(movie);
+    }
+    /* milliseconds since it reached its stop time playing forward; < 0
+       before, or not playing */
+    int64_t ms_past_stop()
+    {
+        if(rate <= 0 || (flags & (loopTimeBase | palindromeLoopTimeBase)))
+            return -1;
+        int64_t ms = (int64_t)(msecs_elapsed() - anchor_ms);
+        if(value >= stop)
+            return ms;
+        int64_t reach = (stop - value) * 65536LL * 1000 / ((int64_t)rate * std::max(scale, 1));
+        return ms - reach;
     }
 };
 
@@ -746,6 +787,25 @@ struct TrackS
     int16_t buffer_depth = 0;
     int64_t shown = -1;  /* the sample in buffer */
     bool drawn = false;
+
+    /* sound (sound_task): a Sound Manager channel, the buffers queued on
+       it (oldest first: each with the track time it starts at, movie
+       scale, and the movie time a frame of it lasts), and where the next
+       one starts: an edit and a media time into it */
+    struct Queued
+    {
+        Ptr p;
+        int64_t at;
+        double per_frame;
+    };
+    SndChannelPtr chan = nullptr;
+    std::deque<Queued> queued;
+    uint32_t sound_generation = 0;
+    bool sound_feeding = false;
+    size_t sound_edit = 0;
+    int64_t sound_offset = 0;     /* media time into the edit */
+    int16_t chan_volume = -1;     /* the volume the channel has */
+    bool sound_unknown = false;   /* a format not decoded: said once */
 
     TrackS() { identity(matrix); }
 
@@ -1040,13 +1100,17 @@ MovieS *new_movie()
     m->port = (CGrafPtr)qdGlobals().thePort;
     m->gdh = (GDHandle)LM(TheGDevice);
     m->created = m->modified = LM(Time);
+    m->tb.movie = m.get();
     MovieS *raw = m.get();
     reg.owned[id_of(raw->guest)] = std::move(m);
     return raw;
 }
 
+void sound_dispose(TrackS &t);
+
 void dispose_track(TrackS *t)
 {
+    sound_dispose(*t);
     if(t->media)
     {
         forget(t->media->guest);
@@ -1750,8 +1814,11 @@ void show(TrackS &t)
 }
 
 /* what the movie shows at its time; force: draw even if unchanged */
+void sound_task(MovieS &m);
+
 void task(MovieS &m, bool force)
 {
+    sound_task(m);
     if(!m.active || !m.port)
         return;
     int64_t now = m.tb.now();
@@ -1774,6 +1841,366 @@ void task(MovieS &m, bool force)
         show(*t);
     }
     m.need_update = false;
+}
+
+/* --- sound ------------------------------------------------------------------ */
+
+/* A sound track plays through a Sound Manager channel of its own: its
+   samples, from the movie's time on, decoded (sound/sounddecode.cpp) to
+   the mixer's 8-bit mono in buffers of an eighth of a second, a bufferCmd
+   each, kept half a second ahead by MoviesTask. The movie's clock is the
+   time base's (Executor's millisecond clock, which paces the mixer too);
+   a change of rate, time or flags flushes the channel and starts again
+   from the new time, at the sample rate times the movie's rate. The
+   channel and its buffers are in the System heap, so they don't go with
+   an application's heap before ROMlib_movies_process_exit disposes them. */
+
+const int kSoundBuffersPerSecond = 8;
+const int kSoundLeadBuffers = 4;
+const int kSoundSlipMs = 100;       /* the sound this far behind: the clock waits */
+const LONGINT kInitMono = 0x80;     /* IM: Sound, SndNewChannel's init */
+
+struct SoundFormat
+{
+    uint32_t format = 0;
+    int channels = 1, bits = 8;
+    uint32_t rate = 0;   /* Fixed */
+};
+
+SoundFormat sound_format(const MediaS &md, uint16_t desc)
+{
+    SoundFormat f;
+    if(desc < 1 || desc > md.descs.size() || md.descs[desc - 1].size() < 36)
+        return f;
+    const uint8_t *d = md.descs[desc - 1].data();
+    f.format = be32(d + 4);
+    f.channels = std::max<int>(be16(d + 24), 1);
+    f.bits = be16(d + 26);
+    f.rate = be32(d + 32);
+    if(!f.rate)
+        f.rate = (uint32_t)md.scale << 16;
+    return f;
+}
+
+bool is_sound(const TrackS &t)
+{
+    return t.media && t.media->type == kSoundMediaType;
+}
+
+/* the track's edits; one over the whole media without an edit list */
+std::vector<Edit> edit_list(const TrackS &t)
+{
+    if(t.has_edits)
+        return t.edits;
+    return { { t.duration, 0, 0x10000 } };
+}
+
+/* bufferCmds still on the channel */
+int sound_pending(SndChannelPtr c)
+{
+    int q = c->qLength > 0 ? ((int)c->qTail - (int)c->qHead + c->qLength) % c->qLength : 0;
+    return q + (SND_CHAN_CMDINPROG_P(c) ? 1 : 0);
+}
+
+/* buffers the channel has played: freed */
+void sound_reap(TrackS &t)
+{
+    if(!t.chan)
+        return;
+    int pending = sound_pending(t.chan);
+    while((int)t.queued.size() > pending)
+    {
+        DisposePtr(t.queued.front().p);
+        t.queued.pop_front();
+    }
+}
+
+void sound_flush(TrackS &t)
+{
+    if(t.chan)
+    {
+        SndCommand cmd;
+        cmd.cmd = flushCmd;
+        cmd.param1 = 0;
+        cmd.param2 = 0;
+        C_SndDoImmediate(t.chan, &cmd);
+        cmd.cmd = quietCmd;
+        C_SndDoImmediate(t.chan, &cmd);
+    }
+    for(auto &q : t.queued)
+        DisposePtr(q.p);
+    t.queued.clear();
+    t.sound_feeding = false;
+}
+
+void sound_dispose(TrackS &t)
+{
+    sound_flush(t);
+    if(t.chan)
+    {
+        C_SndDisposeChannel(t.chan, true);
+        DisposePtr((Ptr)t.chan);
+    }
+    t.chan = nullptr;
+    t.chan_volume = -1;
+}
+
+/* the edit at track time tt (movie scale) and how far into it, in media
+   time; false past the last */
+bool sound_position(TrackS &t, int64_t tt)
+{
+    std::vector<Edit> el = edit_list(t);
+    int64_t at = 0;
+    int32_t ms = std::max(t.movie->scale, 1), mds = t.media->scale;
+    for(size_t i = 0; i < el.size(); i++)
+    {
+        if(tt < at + el[i].duration)
+        {
+            t.sound_edit = i;
+            t.sound_offset = std::max<int64_t>(0, tt - at) * mds / ms;
+            return true;
+        }
+        at += el[i].duration;
+    }
+    t.sound_edit = el.size();
+    t.sound_offset = 0;
+    return false;
+}
+
+/* frames of the media from sample s on, decoded into out */
+void sound_read(TrackS &t, uint32_t s, uint32_t frames, uint8_t *out)
+{
+    MediaS &md = *t.media;
+    memset(out, 0x80, frames);
+    uint32_t done = 0;
+    while(done < frames)
+    {
+        const Chunk *c = md.chunk_of(s + done);
+        if(!c || c->dref < 1 || c->dref > md.drefs.size() || !md.drefs[c->dref - 1])
+            return;
+        SoundFormat f = sound_format(md, c->desc);
+        uint32_t here = std::min(frames - done, c->first + c->count - (s + done));
+        uint32_t fpp = ROMlib_sound_frames_per_packet(f.format);
+        uint32_t bpp = ROMlib_sound_bytes_per_packet(f.format, f.channels, f.bits);
+        uint32_t rel = s + done - c->first;
+        uint32_t skip = rel % fpp;
+        uint32_t bytes = (skip + here + fpp - 1) / fpp * bpp;
+        Ptr p = sample_buffer.get(bytes);
+        if(!p)
+            return;
+        bool ok = md.drefs[c->dref - 1]->read(c->offset + (int64_t)(rel / fpp) * bpp, bytes, p) == noErr
+            && ROMlib_decode_sound(f.format, f.channels, f.bits, (const uint8_t *)p, bytes, skip, here, out + done);
+        HUnlock(sample_buffer.h);
+        if(!ok && !t.sound_unknown)
+        {
+            t.sound_unknown = true;
+            warning_unimplemented("sound media '%c%c%c%c' %d-bit: not played",
+                                  (char)(f.format >> 24), (char)(f.format >> 16), (char)(f.format >> 8),
+                                  (char)f.format, f.bits);
+        }
+        done += here;
+    }
+}
+
+/* the next buffer onto the channel; false when there is no more */
+bool sound_feed_one(TrackS &t)
+{
+    MovieS &m = *t.movie;
+    MediaS &md = *t.media;
+    std::vector<Edit> el = edit_list(t);
+    int32_t ms = std::max(m.scale, 1), mds = std::max(md.scale, 1);
+    for(int wraps = 0;;)
+    {
+        int64_t at = 0;
+        for(size_t i = 0; i < t.sound_edit && i < el.size(); i++)
+            at += el[i].duration;
+        if(t.sound_edit < el.size() && at < m.tb.stop)
+        {
+            const Edit &e = el[t.sound_edit];
+            int64_t len = (std::min(at + e.duration, m.tb.stop) - at) * mds / ms;
+            if(t.sound_offset < len)
+            {
+                /* this buffer's frames: the media's samples from s on */
+                uint32_t s = 0;
+                int64_t start = 0, dur = 1;
+                bool empty = e.media_time < 0
+                    || !md.sample_at(e.media_time + t.sound_offset, &s, &start, &dur);
+                const Chunk *c = md.chunk_of(empty ? 0 : s);
+                SoundFormat f = sound_format(md, c ? c->desc : 1);
+                dur = std::max<int64_t>(dur, 1);
+                uint32_t want = std::max<uint32_t>(f.rate / 65536 / kSoundBuffersPerSecond, 64);
+                uint32_t frames = (uint32_t)std::min<int64_t>(want, (len - t.sound_offset + dur - 1) / dur);
+                if(!empty)
+                    frames = std::min<uint32_t>(frames, md.count > s ? md.count - s : 0);
+                if(!frames)
+                    return false;
+                Ptr hp;
+                {
+                    TheZoneGuard guard(LM(SysZone));
+                    hp = NewPtr(offsetof(SoundHeader, sampleArea) + frames);
+                }
+                if(!hp)
+                    return false;
+                SoundHeaderPtr h = (SoundHeaderPtr)hp;
+                uint8_t *data = (uint8_t *)hp + offsetof(SoundHeader, sampleArea);
+                if(empty)
+                    memset(data, 0x80, frames);
+                else
+                    sound_read(t, s, frames, data);
+                h->samplePtr = nullptr;
+                h->length = frames;
+                int64_t rate = (int64_t)f.rate * m.tb.rate / 0x10000;
+                if(e.rate > 0 && e.rate != 0x10000)
+                    rate = rate * e.rate / 0x10000;
+                h->sampleRate = (Fixed)(uint32_t)std::min<int64_t>(rate, 0xFFFFFFFFLL);
+                h->loopStart = 0;
+                h->loopEnd = 0;
+                h->encode = stdSH;
+                h->baseFrequency = 60;
+                SndCommand cmd;
+                cmd.cmd = bufferCmd;
+                cmd.param1 = 0;
+                cmd.param2 = (LONGINT)US_TO_SYN68K(hp);
+                if(C_SndDoCommand(t.chan, &cmd, true) != noErr)
+                {
+                    DisposePtr(hp);
+                    return false;
+                }
+                t.queued.push_back({ hp, at + t.sound_offset * ms / mds, (double)dur * ms / mds });
+                t.sound_offset += (int64_t)frames * dur;
+                return true;
+            }
+            /* this edit is over: the next */
+            if(at + e.duration < m.tb.stop && t.sound_edit + 1 < el.size())
+            {
+                t.sound_edit++;
+                t.sound_offset = 0;
+                continue;
+            }
+        }
+        /* the end: a looping movie goes on from its start */
+        if(!(m.tb.flags & loopTimeBase) || (m.tb.flags & palindromeLoopTimeBase) || wraps++
+           || !sound_position(t, m.tb.start))
+            return false;
+    }
+}
+
+/* the track time (movie scale) of the next sample the mixer takes from
+   the track's channel; false when it has none queued */
+bool sound_time(TrackS &t, double *now)
+{
+    if(!t.chan || t.queued.empty())
+        return false;
+    const TrackS::Queued &q = t.queued.front();
+    double frames = 0;
+    if(SND_CHAN_CMDINPROG_P(t.chan) && ROMlib_sound_rate > 0)
+    {
+        snd_time start = SND_CHAN_CURRENT_START(t.chan), at = SND_PROMOTE(SND_CHAN_TIME(t.chan));
+        if(at > start)
+            frames = (double)(at - start) / 4294967296.0
+                * ((uint32_t)((SoundHeaderPtr)q.p)->sampleRate / 65536.0) / ROMlib_sound_rate;
+    }
+    *now = q.at + frames * q.per_frame;
+    return true;
+}
+
+/* the track's channel's volume: the movie's times the track's; either
+   below zero (muted) is silence */
+int16_t sound_volume(const TrackS &t)
+{
+    const MovieS &m = *t.movie;
+    if(m.volume <= 0 || t.volume <= 0)
+        return 0;
+    return (int16_t)std::min<int32_t>((int32_t)m.volume * t.volume / 0x100, 0x7FFF);
+}
+
+/* each sound track at the movie's time and rate: started, stopped, kept
+   fed, at its volume */
+void sound_task(MovieS &m)
+{
+    bool clocked = false;
+    for(auto &tp : m.tracks)
+    {
+        TrackS &t = *tp;
+        if(!is_sound(t))
+            continue;
+        sound_reap(t);
+        if(!m.active || m.tb.rate <= 0 || !t.enabled || !(t.flags & trackInMovie))
+        {
+            if(t.sound_feeding || !t.queued.empty())
+                sound_flush(t);
+            continue;
+        }
+        /* at the end what is queued plays out */
+        if(m.tb.now() >= m.tb.stop && !(m.tb.flags & loopTimeBase))
+            continue;
+        if(!t.chan)
+        {
+            /* no sound here (or only pretended): the movie keeps time */
+            TheZoneGuard guard(LM(SysZone));
+            GUEST<SndChannelPtr> chan = (SndChannelPtr)NewPtrClear(sizeof(SndChannel));
+            if(!chan)
+                continue;
+            if(C_SndNewChannel(&chan, sampledSynth, kInitMono, nullptr) != noErr
+               || !((SndChannelPtr)chan)->firstMod)
+            {
+                DisposePtr((Ptr)(SndChannelPtr)chan);
+                continue;
+            }
+            t.chan = chan;
+            t.chan_volume = -1;
+            t.sound_feeding = false;
+        }
+        if(!t.sound_feeding || t.sound_generation != m.tb.generation)
+        {
+            sound_flush(t);
+            t.sound_generation = m.tb.generation;
+            if(!sound_position(t, m.tb.now()))
+                continue;
+            t.sound_feeding = true;
+        }
+        int16_t vol = sound_volume(t);
+        if(vol != t.chan_volume)
+        {
+            SndCommand cmd;
+            cmd.cmd = volumeCmd;
+            cmd.param1 = 0;
+            cmd.param2 = (LONGINT)((uint32_t)(uint16_t)vol << 16 | (uint16_t)vol);
+            C_SndDoImmediate(t.chan, &cmd);
+            t.chan_volume = vol;
+        }
+        while(t.queued.size() < (size_t)kSoundLeadBuffers && sound_feed_one(t))
+            ;
+        /* the movie's clock follows the first sound's: when the mixer fell
+           behind (it is fed at interrupt time, which host code holds off)
+           the movie waits for it rather than its sound being cut short */
+        double st;
+        if(!clocked && sound_time(t, &st))
+        {
+            clocked = true;
+            int64_t now = m.tb.now();
+            if(now - st > m.scale * kSoundSlipMs / 1000.0)
+                m.tb.slip((int64_t)st);
+        }
+    }
+}
+
+/* the movie's sound is still playing */
+bool sound_playing(MovieS &m)
+{
+    for(auto &t : m.tracks)
+        if(is_sound(*t) && t->chan)
+        {
+            sound_reap(*t);
+            if(!t->queued.empty())
+                return true;
+        }
+    return false;
+}
+
+void sound_retime(MovieS *m)
+{
+    sound_task(*m);
 }
 
 }  // namespace
@@ -1916,7 +2343,10 @@ Boolean Executor::C_IsMovieDone(Movie movie)
         return false;
     if(m->tb.rate < 0)
         return t <= m->tb.start;
-    return t >= m->tb.stop;
+    if(t < m->tb.stop)
+        return false;
+    /* a movie ends when its sound has played (a second at most more) */
+    return !(m->tb.ms_past_stop() < 1000 && sound_playing(*m));
 }
 
 void Executor::C_SetMovieGWorld(Movie movie, CGrafPtr cgrafp, GDHandle gdh)
@@ -2270,7 +2700,10 @@ INTEGER Executor::C_GetMovieVolume(Movie movie)
 void Executor::C_SetMovieVolume(Movie theMovie, INTEGER volume)
 {
     if(MovieS *m = movie_of(theMovie))
+    {
         m->volume = volume;
+        sound_task(*m);
+    }
 }
 
 INTEGER Executor::C_GetMoviePreferredVolume(Movie theMovie)
@@ -2470,6 +2903,7 @@ void Executor::C_SetTimeBaseFlags(TimeBase tb, LONGINT timeBaseFlags)
     {
         b->anchor();
         b->flags = timeBaseFlags;
+        b->changed();
     }
 }
 
@@ -2599,6 +3033,7 @@ void Executor::C_SetTrackEnabled(Track theTrack, Boolean isEnabled)
     {
         t->enabled = isEnabled;
         t->movie->need_update = true;
+        sound_task(*t->movie);
     }
 }
 
@@ -2731,7 +3166,11 @@ INTEGER Executor::C_GetTrackVolume(Track theTrack)
 void Executor::C_SetTrackVolume(Track theTrack, INTEGER volume)
 {
     if(TrackS *t = track_of(theTrack))
+    {
         t->volume = volume;
+        if(t->movie)
+            sound_task(*t->movie);
+    }
 }
 
 UserData Executor::C_GetTrackUserData(Track theTrack)
@@ -2979,6 +3418,7 @@ void Executor::C_DisposeTrackMedia(Media theMedia)
         return;
     TrackS *t = md->track;
     t->drop_drawing();
+    sound_dispose(*t);
     forget(md->guest);
     t->media.reset();
 }
@@ -4319,6 +4759,7 @@ void Executor::ROMlib_movies_process_exit(uint32_t lo, uint32_t hi)
         /* its blocks went with the heap: forget them without disposing */
         for(auto &t : m->tracks)
         {
+            sound_dispose(*t);   /* in the System heap */
             t->seq_desc_handle = nullptr;
             t->buffer = nullptr;
             if(t->seq)

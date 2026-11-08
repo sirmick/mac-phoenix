@@ -26,6 +26,7 @@
 #include <base/traps.impl.h>
 #include <rsys/component.h>
 #include <rsys/quicktime.h>
+#include <syn68k_public.h>
 
 #include <algorithm>
 #include <cstring>
@@ -155,10 +156,22 @@ Controller *of(ComponentInstance mc)
     return it == controllers.end() ? nullptr : &it->second;
 }
 
-/* a value MCDoAction carries in its pointer, and back */
+/* a value MCDoAction carries in its pointer, and back. Not
+   ptr_to_longint: a value needn't be an address in guest memory (a
+   negative volume, the speaker muting, is in no window), so the guest
+   long is the one whose window's offset gives this host address */
 int32_t value_of(void *params)
 {
-    return (int32_t)ptr_to_longint(params);
+    if(!params)
+        return 0;
+    uint64_t h = (uintptr_t)params;
+    for(int i = 0; i < OFFSET_TABLE_SIZE; i++)
+    {
+        uint64_t g = h - ROMlib_offsets[i];
+        if(g <= 0xFFFFFFFFull && (g >> 30) == (uint64_t)i)
+            return (int32_t)(uint32_t)g;
+    }
+    return (int32_t)h;
 }
 
 void *as_param(int32_t v)
@@ -416,18 +429,21 @@ Rect bounds(const Controller &c)
     return r;
 }
 
-/* the application's filter: true when it handled the action itself */
+/* the application's filter: true when it handled the action itself.
+   params goes as the long it is (value_of): an action's value in it is
+   not always an address in guest memory */
 bool filtered(Controller &c, ComponentInstance mc, int16_t action, void *params)
 {
     if(!c.filter)
         return false;
+    LONGINT p = value_of(params);
     if(c.filter_refcon)
-        return MCActionFilterWithRefConUPP(c.filter)(mc, action, params, c.refcon);
+        return UPP<Boolean(ComponentInstance, INTEGER, LONGINT, LONGINT)>(c.filter)(mc, action, p, c.refcon);
     GUEST<INTEGER> *a = (GUEST<INTEGER> *)NewPtr(sizeof(GUEST<INTEGER>));
     if(!a)
         return false;
     *a = action;
-    bool r = MCActionFilterUPP(c.filter)(mc, a, params);
+    bool r = UPP<Boolean(ComponentInstance, GUEST<INTEGER> *, LONGINT)>(c.filter)(mc, a, p);
     DisposePtr((Ptr)a);
     return r;
 }
