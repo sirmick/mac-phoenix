@@ -41,6 +41,7 @@
 #include <ToolboxUtil.h>
 #include <base/functions.impl.h>
 #include <quickdraw/cquick.h>
+#include <rsys/inflate.h>
 #include <rsys/quicktime.h>
 #include <time/time.h>
 #include <file/file.h>
@@ -1301,10 +1302,23 @@ OSErr read_moov(MovieS &m, const uint8_t *p, const uint8_t *end, int16_t flags)
         list = children(*moov);
     else
         list = top;
-    if(find(list, "cmov"_4))
+    if(const Atom *cmov = find(list, "cmov"_4))
     {
-        warning_unimplemented("compressed movie header ('cmov')");
-        return badPublicMovieAtom;
+        /* QuickTime 3's compressed header: 'dcom' names the method, 'cmvd'
+           holds the inflated size and the data, a whole 'moov' atom */
+        auto parts = children(*cmov);
+        const Atom *dcom = find(parts, "dcom"_4), *cmvd = find(parts, "cmvd"_4);
+        if(!dcom || dcom->size < 4 || be32(dcom->data) != "zlib"_4 || !cmvd || cmvd->size < 4)
+        {
+            warning_unimplemented("compressed movie header ('cmov') not zlib");
+            return badPublicMovieAtom;
+        }
+        uint32_t want = be32(cmvd->data);
+        std::vector<uint8_t> moov;
+        if(want > (64u << 20)
+           || !ROMlib_zlib_inflate(cmvd->data + 4, cmvd->size - 4, moov, want) || moov.size() != want)
+            return badPublicMovieAtom;
+        return read_moov(m, moov.data(), moov.data() + moov.size(), flags);
     }
     const Atom *mvhd = find(list, "mvhd"_4);
     if(!mvhd || mvhd->size < 100)
