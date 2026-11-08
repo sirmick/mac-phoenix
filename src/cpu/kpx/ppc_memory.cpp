@@ -15,6 +15,7 @@
 #include "main.h"
 #include "vm_alloc.h"
 #include "platform.h"
+#include "vclock.h"
 
 #include <cstdio>
 #include <ctime>
@@ -62,14 +63,24 @@ void SheepMem::Exit(void)
     }
 }
 
-// Microseconds — 64-bit microsecond counter: host time since the first
-// call, the clock the tick thread and the Time Manager run on. (It was
-// instructions * 4 ns, a nominal 250 MIPS: under the JITs it ran ~5x fast,
-// and QuickTime 3's movie clock with it — movies ended 5x early, their
-// sound cut off.)
+// Microseconds — 64-bit microsecond counter since the first call: host
+// time (monotonic), the clock the tick thread and the Time Manager run on.
+// It was instructions * 4 ns, a nominal 250 MIPS: under the JITs it ran ~5x
+// fast, and QuickTime 3's movie clock with it (movies ended 5x early, their
+// sound cut off). --deterministic keeps the instruction clock: the PPC
+// machine has no other time that repeats from run to run (vclock_usec()
+// counts 68k instructions only, the PPC cores don't feed it).
 void Microseconds(uint32 &hi, uint32 &lo) {
-    static const uint64 epoch = GetTicks_usec();
-    uint64 usec = GetTicks_usec() - epoch;
+    uint64 now;
+    if (vclock_enabled)
+        now = (g_platform.ppc_insn_count ? g_platform.ppc_insn_count() * 4 : 0) / 1000;
+    else {
+        struct timespec t;
+        clock_gettime(CLOCK_MONOTONIC, &t);
+        now = (uint64)t.tv_sec * 1000000 + t.tv_nsec / 1000;
+    }
+    static const uint64 epoch = now;
+    uint64 usec = now - epoch;
     hi = (uint32)(usec >> 32);
     lo = (uint32)(usec & 0xFFFFFFFF);
 }
