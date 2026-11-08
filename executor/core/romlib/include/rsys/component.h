@@ -7,8 +7,11 @@ namespace Executor
 /* MacPhoenix Component Manager (component.cpp). */
 
 /* Register the 'thng' resources of an open resource file, as
-   RegisterComponentResourceFile does; returns how many registered. */
-int32_t ROMlib_register_components(INTEGER refnum, bool global);
+   RegisterComponentResourceFile does; returns how many registered.
+   without_init: the file's own INIT hasn't run (QuickTime's components
+   with QuickTime off): a component that wants its register message is
+   left out, its code not run. */
+int32_t ROMlib_register_components(INTEGER refnum, bool global, bool without_init = false);
 /* MacPhoenix: a component Executor implements in C++. Its calls are the
    definitions' functions on the dispatcher `calls` (a `selector-location:
    Component` one) that name an Executor routine (COMPONENT_FUNCTION);

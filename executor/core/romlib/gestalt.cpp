@@ -14,6 +14,7 @@
 #include <mman/mman.h>
 #include <rsys/gestalt.h>
 #include <rsys/opentransport.h>
+#include <rsys/quicktime.h>
 #include <rsys/version.h>
 #include <base/functions.impl.h>
 #include <base/traps.impl.h>
@@ -288,6 +289,10 @@ static gestaltentry_t gtable[] = {
     /* MacPhoenix: one script system, Roman: 7.6.1's Quadra and 8.6's G3
        answer 1 (Canvas 5 can't initialize without it) */
     { gestaltScriptCount, 1 },
+    /* MacPhoenix: QuickTime 2.5's, once Executor's own QuickTime has them
+       (rsys/quicktime.h) */
+    { "qtim"_4, 0x02508000 },
+    { "icmp"_4, 0x12 },
     /* gestaltAliasMgrAttr: 7, above (MacPhoenix) */
 
 #define SYSTEM_7_EXTRAS 2
@@ -430,6 +435,14 @@ find_selector_in_table(OSType selector, gestaltentry_t table[],
             break;
         case gestaltSpeechAttr:
             if(!ROMlib_speech_enabled)
+                selector = -1;
+            break;
+        case "qtim"_4:
+            if(!ROMlib_movie_toolbox_present())
+                selector = -1;
+            break;
+        case "icmp"_4:
+            if(!ROMlib_icm_present())
                 selector = -1;
             break;
     }

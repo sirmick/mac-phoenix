@@ -151,7 +151,13 @@ bool visible(const Comp &c)
     return c.owner.highLongOfPSN == me.highLongOfPSN && c.owner.lowLongOfPSN == me.lowLongOfPSN;
 }
 
-/* Call a component's entry point: (ComponentParameters *, storage). */
+/* Call a component's entry point: (ComponentParameters *, storage). A
+   component with cmpFastDispatch in its flags (QuickTime's codecs, media
+   and data handlers) is entered with D0 the block's header long {flags,
+   paramSize, what} and the call's parameters on the stack as the caller
+   laid them, its storage in the instance's place, the result above: the
+   routine its dispatcher picks is then a Pascal function of (storage,
+   parameters...) that pops them and leaves the result. */
 int32_t call_entry(Comp *c, Inst *in, uint32_t params)
 {
     if(!c->entry)
@@ -162,6 +168,24 @@ int32_t call_entry(Comp *c, Inst *in, uint32_t params)
     int32_t result;
     if(c->ppc)
         result = callPPC(c->entry, { params, in ? in->storage : 0 });
+    else if(c->flags & cmpFastDispatch)
+    {
+        uint8_t size = READUB(params + 1);
+        uint32_t saved_sp = EM_A7;
+        PUSHUL(0); /* result */
+        PUSHUL(in ? in->storage : 0);
+        EM_A7 -= size;
+        memmove(SYN68K_TO_US(EM_A7), SYN68K_TO_US(params + 4), size);
+        uint32_t saved_d0 = EM_D0;
+        EM_D0 = READUL(params);
+        execute68K(c->entry);
+        EM_D0 = saved_d0;
+        /* what the routine left: the result, with the stack as before its
+           arguments (a routine that popped too much or too little is set
+           right) */
+        result = READUL(saved_sp - 4);
+        EM_A7 = saved_sp;
+    }
     else
     {
         PUSHUL(0); /* result */
@@ -294,8 +318,19 @@ OSErr close_component(uint32_t ci)
 
 /* Add a component; null if a duplicate it was asked to avoid, or one
    that declined its register message. */
+/* MacPhoenix: register_file's without_init: components that want their
+   register message are left out. */
+bool no_register_message = false;
+
 Comp *add(std::unique_ptr<Comp> c, int16_t global, bool auto_version)
 {
+    if(no_register_message && (c->flags & cmpWantsRegisterMessage))
+    {
+        fprintf(stderr, "[Executor] component '%.4s' '%.4s': wants its register message; "
+                        "left out without its INIT\n",
+                (char *)&c->type, (char *)&c->subtype);
+        return nullptr;
+    }
     for(auto &o : comps)
         if(o->type == c->type && o->subtype == c->subtype && o->manufacturer == c->manufacturer)
         {
@@ -310,16 +345,18 @@ Comp *add(std::unique_ptr<Comp> c, int16_t global, bool auto_version)
     GetCurrentProcess(&c->owner);
     c->id = kCompBase + next_comp++;
     Comp *p = c.get();
-    /* MacPhoenix: in front of the components of the same type and
-       subtype (unless registerComponentAfterExisting), otherwise last: a
-       Mac finds components of one type in the order they were registered
-       (the Sound control panel registers its four 'sndP' pages one by one
-       and lists them as FindNextComponent answers: Alert Sounds first). */
-    auto pos = comps.end();
-    if(!(global & registerComponentAfterExisting))
-        pos = std::find_if(comps.begin(), comps.end(), [&](const auto &o) {
-            return o->type == p->type && o->subtype == p->subtype;
-        });
+    /* MacPhoenix: a Mac (7.6.1) finds the components of one type in the
+       order of their subtype, then manufacturer, the newest of equals
+       first (unless registerComponentAfterExisting): QuickTime's 16 'imdc'
+       come '.SGI', '8BPS' .. 'yuv2' whatever their resource IDs; the
+       Sound control panel lists its 'sndP' pages ('alrt' .. 'vols') as
+       FindNextComponent answers them, and Color Picker 2.0 takes the
+       first 'cpkr', its HSL picker ('hsl ' before 'rgb '). */
+    auto key = [](const Comp &o) { return ((uint64_t)o.subtype << 32) | o.manufacturer; };
+    bool after = global & registerComponentAfterExisting;
+    auto pos = std::find_if(comps.begin(), comps.end(), [&](const auto &o) {
+        return o->type == p->type && (after ? key(*o) > key(*p) : key(*o) >= key(*p));
+    });
     comps.insert(pos, std::move(c));
     changed(p->type);
     if(p->flags & cmpWantsRegisterMessage)
@@ -606,9 +643,12 @@ uint32_t Executor::ROMlib_register_native_component(uint32_t type, uint32_t subt
     return p->id;
 }
 
-int32_t Executor::ROMlib_register_components(INTEGER refnum, bool global)
+int32_t Executor::ROMlib_register_components(INTEGER refnum, bool global, bool without_init)
 {
-    return register_file(refnum, global ? registerComponentGlobal : 0);
+    no_register_message = without_init;
+    int32_t n = register_file(refnum, global ? registerComponentGlobal : 0);
+    no_register_message = false;
+    return n;
 }
 
 void Executor::ROMlib_components_process_exit(const ProcessSerialNumber *psn,

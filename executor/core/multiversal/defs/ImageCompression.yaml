@@ -1,0 +1,808 @@
+# MacPhoenix: QuickTime's Image Compression Manager and its fixed-point,
+# wide and matrix routines (Inside Macintosh: QuickTime, "Image
+# Compression Manager"; Universal Interfaces 3.3.2's ImageCompression.h,
+# FixMath.h, whose selectors these are). On a Mac both are QuickTime's
+# INIT: the ICM is $AAA3, the math the private trap $ABC2, which QuickTime's
+# codecs, media handlers and Movie Toolbox call. Executor implements them
+# in C++ (icm.cpp, qtmath.cpp; docs/executor/QuickTime.md, route B),
+# whether or not Apple's QuickTime is on the disk; where the documents
+# leave rounding and edge cases open, the math answers as a 7.6.1 Quadra
+# with QuickTime 2.5 does (tests/guest/qtmath). PowerPC code reaches them
+# through QuickTimeLib, which Executor doesn't export yet.
+
+- dispatcher:
+    name: QTMathDispatch
+    trap: 0xABC2
+    selector-location: D0W
+    comment: |
+      The selector in D0 (TWOWORDINLINE(0x70nn, 0xABC2): moveq #nn, D0),
+      Pascal arguments on the stack.
+
+# ####
+
+- struct:
+    name: FixedPoint
+    members:
+      - name: x
+        type: Fixed
+      - name: y
+        type: Fixed
+    size: 8
+
+# ####
+
+- struct:
+    name: FixedRect
+    members:
+      - name: left
+        type: Fixed
+      - name: top
+        type: Fixed
+      - name: right
+        type: Fixed
+      - name: bottom
+        type: Fixed
+    size: 16
+
+# ####
+
+# A point (x, y) maps to (x*m[0][0] + y*m[1][0] + m[2][0],
+# x*m[0][1] + y*m[1][1] + m[2][1]) / (x*m[0][2] + y*m[1][2] + m[2][2]);
+# the first two columns are Fixed, the third Fract.
+- struct:
+    name: MatrixRecord
+    members:
+      - name: matrix
+        type: Fixed[3][3]
+    size: 36
+
+# ####
+
+- typedef:
+    name: MatrixRecordPtr
+    type: MatrixRecord*
+
+# ####
+
+- enum:
+    values:
+      - name: identityMatrixType
+        value: 0x00
+      - name: translateMatrixType
+        value: 0x01
+      - name: scaleMatrixType
+        value: 0x02
+      - name: scaleTranslateMatrixType
+        value: 0x03
+      - name: linearMatrixType
+        value: 0x04
+      - name: linearTranslateMatrixType
+        value: 0x05
+      - name: perspectiveMatrixType
+        value: 0x06
+
+# ####
+
+- function:
+    name: CompAdd
+    args:
+      - name: src
+        type: wide*
+      - name: dst
+        type: wide*
+    trap: 0xABC2
+    dispatcher: QTMathDispatch
+    selector: 0x0001
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: CompSub
+    args:
+      - name: src
+        type: wide*
+      - name: dst
+        type: wide*
+    trap: 0xABC2
+    dispatcher: QTMathDispatch
+    selector: 0x0002
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: CompNeg
+    args:
+      - name: dst
+        type: wide*
+    trap: 0xABC2
+    dispatcher: QTMathDispatch
+    selector: 0x0003
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: CompShift
+    args:
+      - name: src
+        type: wide*
+      - name: shift
+        type: INTEGER
+    trap: 0xABC2
+    dispatcher: QTMathDispatch
+    selector: 0x0004
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: CompMul
+    args:
+      - name: src1
+        type: LONGINT
+      - name: src2
+        type: LONGINT
+      - name: dst
+        type: wide*
+    trap: 0xABC2
+    dispatcher: QTMathDispatch
+    selector: 0x0005
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: CompDiv
+    return: LONGINT
+    args:
+      - name: numerator
+        type: wide*
+      - name: denominator
+        type: LONGINT
+      - name: remainder
+        type: LONGINT*
+    trap: 0xABC2
+    dispatcher: QTMathDispatch
+    selector: 0x0006
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: CompFixMul
+    args:
+      - name: compSrc
+        type: wide*
+      - name: fixSrc
+        type: Fixed
+      - name: compDst
+        type: wide*
+    trap: 0xABC2
+    dispatcher: QTMathDispatch
+    selector: 0x0007
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: CompMulDiv
+    args:
+      - name: co
+        type: wide*
+      - name: mul
+        type: LONGINT
+      - name: divisor
+        type: LONGINT
+    trap: 0xABC2
+    dispatcher: QTMathDispatch
+    selector: 0x0008
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: CompCompare
+    return: LONGINT
+    args:
+      - name: a
+        type: const wide*
+      - name: minusb
+        type: const wide*
+    trap: 0xABC2
+    dispatcher: QTMathDispatch
+    selector: 0x0009
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: FixMulDiv
+    return: Fixed
+    args:
+      - name: src
+        type: Fixed
+      - name: mul
+        type: Fixed
+      - name: divisor
+        type: Fixed
+    trap: 0xABC2
+    dispatcher: QTMathDispatch
+    selector: 0x000A
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: FracSinCos
+    return: Fract
+    args:
+      - name: degree
+        type: Fixed
+      - name: cosOut
+        type: Fract*
+    trap: 0xABC2
+    dispatcher: QTMathDispatch
+    selector: 0x000B
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: CompMulDivTrunc
+    args:
+      - name: co
+        type: wide*
+      - name: mul
+        type: LONGINT
+      - name: divisor
+        type: LONGINT
+      - name: remainder
+        type: LONGINT*
+    trap: 0xABC2
+    dispatcher: QTMathDispatch
+    selector: 0x000C
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: UnsignedFixMulDiv
+    return: Fixed
+    args:
+      - name: src
+        type: Fixed
+      - name: mul
+        type: Fixed
+      - name: divisor
+        type: Fixed
+    trap: 0xABC2
+    dispatcher: QTMathDispatch
+    selector: 0x000D
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: FixExp2
+    return: Fixed
+    args:
+      - name: src
+        type: Fixed
+    trap: 0xABC2
+    dispatcher: QTMathDispatch
+    selector: 0x000E
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: FixLog2
+    return: Fixed
+    args:
+      - name: src
+        type: Fixed
+    trap: 0xABC2
+    dispatcher: QTMathDispatch
+    selector: 0x000F
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: FixPow
+    return: Fixed
+    args:
+      - name: base
+        type: Fixed
+      - name: exp
+        type: Fixed
+    trap: 0xABC2
+    dispatcher: QTMathDispatch
+    selector: 0x0010
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: CompSquareRoot
+    return: ULONGINT
+    args:
+      - name: src
+        type: const wide*
+    trap: 0xABC2
+    dispatcher: QTMathDispatch
+    selector: 0x0011
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: GetMatrixType
+    return: INTEGER
+    args:
+      - name: m
+        type: const MatrixRecord*
+    trap: 0xABC2
+    dispatcher: QTMathDispatch
+    selector: 0x0014
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: SetIdentityMatrix
+    args:
+      - name: matrix
+        type: MatrixRecord*
+    trap: 0xABC2
+    dispatcher: QTMathDispatch
+    selector: 0x0015
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: RotateMatrix
+    args:
+      - name: m
+        type: MatrixRecord*
+      - name: degrees
+        type: Fixed
+      - name: aboutX
+        type: Fixed
+      - name: aboutY
+        type: Fixed
+    trap: 0xABC2
+    dispatcher: QTMathDispatch
+    selector: 0x0016
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: ScaleMatrix
+    args:
+      - name: m
+        type: MatrixRecord*
+      - name: scaleX
+        type: Fixed
+      - name: scaleY
+        type: Fixed
+      - name: aboutX
+        type: Fixed
+      - name: aboutY
+        type: Fixed
+    trap: 0xABC2
+    dispatcher: QTMathDispatch
+    selector: 0x0017
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: SkewMatrix
+    args:
+      - name: m
+        type: MatrixRecord*
+      - name: skewX
+        type: Fixed
+      - name: skewY
+        type: Fixed
+      - name: aboutX
+        type: Fixed
+      - name: aboutY
+        type: Fixed
+    trap: 0xABC2
+    dispatcher: QTMathDispatch
+    selector: 0x0018
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: TranslateMatrix
+    args:
+      - name: m
+        type: MatrixRecord*
+      - name: deltaH
+        type: Fixed
+      - name: deltaV
+        type: Fixed
+    trap: 0xABC2
+    dispatcher: QTMathDispatch
+    selector: 0x0019
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: ConcatMatrix
+    args:
+      - name: a
+        type: const MatrixRecord*
+      - name: b
+        type: MatrixRecord*
+    trap: 0xABC2
+    dispatcher: QTMathDispatch
+    selector: 0x001B
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: InverseMatrix
+    return: Boolean
+    args:
+      - name: m
+        type: const MatrixRecord*
+      - name: im
+        type: MatrixRecord*
+    trap: 0xABC2
+    dispatcher: QTMathDispatch
+    selector: 0x001C
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: MapMatrix
+    args:
+      - name: matrix
+        type: MatrixRecord*
+      - name: fromRect
+        type: const Rect*
+      - name: toRect
+        type: const Rect*
+    trap: 0xABC2
+    dispatcher: QTMathDispatch
+    selector: 0x001D
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: RectMatrix
+    args:
+      - name: matrix
+        type: MatrixRecord*
+      - name: srcRect
+        type: const Rect*
+      - name: dstRect
+        type: const Rect*
+    trap: 0xABC2
+    dispatcher: QTMathDispatch
+    selector: 0x001E
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: CopyMatrix
+    args:
+      - name: m1
+        type: const MatrixRecord*
+      - name: m2
+        type: MatrixRecord*
+    trap: 0xABC2
+    dispatcher: QTMathDispatch
+    selector: 0x0020
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: EqualMatrix
+    return: Boolean
+    args:
+      - name: m1
+        type: const MatrixRecord*
+      - name: m2
+        type: const MatrixRecord*
+    trap: 0xABC2
+    dispatcher: QTMathDispatch
+    selector: 0x0021
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: TransformFixedPoints
+    return: OSErr
+    args:
+      - name: m
+        type: const MatrixRecord*
+      - name: fpt
+        type: FixedPoint*
+      - name: count
+        type: LONGINT
+    trap: 0xABC2
+    dispatcher: QTMathDispatch
+    selector: 0x0022
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: TransformPoints
+    return: OSErr
+    args:
+      - name: mp
+        type: const MatrixRecord*
+      - name: pt1
+        type: Point*
+      - name: count
+        type: LONGINT
+    trap: 0xABC2
+    dispatcher: QTMathDispatch
+    selector: 0x0023
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: TransformFixedRect
+    return: Boolean
+    args:
+      - name: m
+        type: const MatrixRecord*
+      - name: fr
+        type: FixedRect*
+      - name: fpp
+        type: FixedPoint*
+    trap: 0xABC2
+    dispatcher: QTMathDispatch
+    selector: 0x0024
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: TransformRect
+    return: Boolean
+    args:
+      - name: m
+        type: const MatrixRecord*
+      - name: r
+        type: Rect*
+      - name: fpp
+        type: FixedPoint*
+    trap: 0xABC2
+    dispatcher: QTMathDispatch
+    selector: 0x0025
+    executor: C_
+    export: false
+
+# ####
+
+# MacPhoenix: the Image Compression Manager (Inside Macintosh: QuickTime,
+# "Image Compression Manager"; QuickTime Components, "Image Compressor
+# Components"), trap $AAA3: Executor's own (icm.cpp), over Apple's codec
+# components. A selector in D0's low word (TWOWORDINLINE(0x70nn, 0xAAA3),
+# or FOURWORDINLINE(0x203C, size, sel, 0xAAA3) with the parameters' size
+# in the high word); Pascal arguments on the stack. Codecs call it too,
+# through its trap-table slot ($188C) as well as the trap.
+- dispatcher:
+    name: CodecDispatch
+    trap: 0xAAA3
+    selector-location: D0W
+
+# ####
+
+- typedef:
+    name: CodecType
+    type: OSType
+
+# ####
+
+- typedef:
+    name: CodecQ
+    type: LONGINT
+
+# ####
+
+- typedef:
+    name: ImageSequence
+    type: LONGINT
+
+# ####
+
+- struct:
+    name: ImageDescription
+    members:
+      - name: idSize
+        type: LONGINT
+      - name: cType
+        type: CodecType
+      - name: resvd1
+        type: LONGINT
+      - name: resvd2
+        type: INTEGER
+      - name: dataRefIndex
+        type: INTEGER
+      - name: version
+        type: INTEGER
+      - name: revisionLevel
+        type: INTEGER
+      - name: vendor
+        type: LONGINT
+      - name: temporalQuality
+        type: CodecQ
+      - name: spatialQuality
+        type: CodecQ
+      - name: width
+        type: INTEGER
+      - name: height
+        type: INTEGER
+      - name: hRes
+        type: Fixed
+      - name: vRes
+        type: Fixed
+      - name: dataSize
+        type: LONGINT
+      - name: frameCount
+        type: INTEGER
+      - name: name
+        type: Str31
+      - name: depth
+        type: INTEGER
+      - name: clutID
+        type: INTEGER
+    size: 86
+
+# ####
+
+- typedef:
+    name: ImageDescriptionPtr
+    type: ImageDescription*
+
+# ####
+
+- typedef:
+    name: ImageDescriptionHandle
+    type: ImageDescription**
+
+# ####
+
+- funptr:
+    name: ICMCompletionUPP
+    args:
+      - name: result
+        type: OSErr
+      - name: flags
+        type: INTEGER
+      - name: refcon
+        type: LONGINT
+
+# ####
+
+- struct:
+    name: ICMCompletionProcRecord
+    members:
+      - name: completionProc
+        type: ICMCompletionUPP
+      - name: completionRefCon
+        type: LONGINT
+    size: 8
+
+# ####
+
+- typedef:
+    name: ICMCompletionProcRecordPtr
+    type: ICMCompletionProcRecord*
+
+# ####
+
+- enum:
+    values:
+      - name: codecCompletionSource
+        value: 1
+      - name: codecCompletionDest
+        value: 2
+
+# ####
+
+- function:
+    name: CodecManagerVersion
+    return: OSErr
+    args:
+      - name: version
+        type: LONGINT*
+    trap: 0xAAA3
+    dispatcher: CodecDispatch
+    selector: 0x0000
+    executor: C_
+    export: false
+
+# ####
+
+# The color table of an image description: its 'clut' resource (clutID
+# above 0), the table stored after it (0), or none (-1: nil).
+- function:
+    name: GetImageDescriptionCTable
+    return: OSErr
+    args:
+      - name: desc
+        type: ImageDescriptionHandle
+      - name: ctable
+        type: CTabHandle*
+    trap: 0xAAA3
+    dispatcher: CodecDispatch
+    selector: 0x001E
+    executor: C_
+    export: false
+
+# ####
+
+# A codec's word that it is done with the source or destination of a
+# decompression (flag: codecCompletionSource, codecCompletionDest): the
+# caller's completion routine is called, if it gave one.
+- function:
+    name: ICMDecompressComplete
+    args:
+      - name: seqID
+        type: ImageSequence
+      - name: err
+        type: OSErr
+      - name: flag
+        type: INTEGER
+      - name: completionRtn
+        type: ICMCompletionProcRecordPtr
+    trap: 0xAAA3
+    dispatcher: CodecDispatch
+    selector: 0x0063
+    executor: C_
+    export: false

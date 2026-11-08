@@ -4,18 +4,35 @@
 
 #include <base/common.h>
 #include <QuickTime.h>
+#include <rsys/quicktime.h>
 
 using namespace Executor;
 
+/* MacPhoenix: Executor's QuickTime (route B, docs/executor/QuickTime.md)
+   isn't there yet: Gestalt says so ('qtim', 'icmp' unanswered), and the
+   Movie Toolbox's 1998 stubs below no longer pretend to work. */
+bool Executor::ROMlib_icm_present()
+{
+    return false;
+}
+
+bool Executor::ROMlib_movie_toolbox_present()
+{
+    return false;
+}
+
+/* MacPhoenix: what EnterMovies and NewMovieFromFile answer while there is
+   no Movie Toolbox: an application that calls them although Gestalt has
+   no 'qtim' stops there instead of using a movie that isn't. */
+enum
+{
+    unimpErr = -4,
+};
 
 OSErr Executor::C_EnterMovies()
 {
-    OSErr retval;
-
     warning_unimplemented("");
-    retval = noErr;
-
-    return retval;
+    return ROMlib_movie_toolbox_present() ? noErr : unimpErr;
 }
 
 void Executor::C_ExitMovies()
@@ -112,12 +129,10 @@ OSErr Executor::C_NewMovieFromFile(GUEST<Movie> *moviep, INTEGER refnum,
                                    GUEST<INTEGER> *residp, StringPtr resnamep,
                                    INTEGER flags, Boolean *datarefwaschangedp)
 {
-    OSErr retval;
-
     warning_unimplemented("");
-    retval = noErr;
-
-    return retval;
+    if(moviep)
+        *moviep = nullptr;
+    return unimpErr;
 }
 
 Fixed Executor::C_GetMoviePreferredRate(Movie movie)

@@ -1,16 +1,17 @@
-/* QTCodecProbe: can Executor use Apple's QuickTime components without
-   QuickTime's INIT (route B in docs/executor/QuickTime.md)? An application:
-   registers the components of QuickTime(TM) in the Extensions folder with
-   RegisterComponentResourceFile, lists them by type, then opens the 'raw '
-   and 'rle ' decompressors and drives them through the codec component
-   interface as the Image Compression Manager would (PreDecompress,
-   BandDecompress into a GWorld), with no ICM: the ICM is part of the INIT.
-   One line per step, to qtprobe.txt next to the application; the pixels
-   decoded are printed so the run can be compared with a ROM machine's.
+/* QTCodecProbe: Apple's QuickTime components without QuickTime's INIT
+   (route B in docs/executor/QuickTime.md). An application: the components
+   by type (Executor registers QuickTime(TM)'s at startup; without them it
+   registers the file itself), then the 'raw ' and 'rle ' decompressors
+   driven through the codec component interface as the Image Compression
+   Manager would (GetCodecInfo, PreDecompress, BandDecompress into a
+   GWorld), not through the ICM. One line per step, then "---", to
+   Host:<suite.cfg's name> (run by tests/test_guest_suite.sh), else
+   qtprobe.txt next to it; the decoded pixels are printed so the run can
+   be compared with a ROM machine's.
 
      tools/mpw/mpw build tools/qt/probe
-     mac-phoenix --backend executor --executor-system 7.6.1.img \
-         --executor-app tools/qt/probe/build/QTCodecProbe.bin */
+     tests/test_guest_suite.sh --app tools/qt/probe/build/QTCodecProbe.bin \
+         --results qtprobe.txt --backend executor --os-version 7.6.1 */
 #include <Types.h>
 #include <Memory.h>
 #include <Files.h>
@@ -106,50 +107,13 @@ pascal ComponentResult CodecPreDecompress(ComponentInstance ci, DecompParams *p)
 pascal ComponentResult CodecBandDecompress(ComponentInstance ci, DecompParams *p)
     = {0x2F3C, 0x0004, 0x0006, 0x7000, 0xA82A};
 
-/* The same calls made as the Component Manager makes them to a component
-   with cmpFastDispatch set in its flags (QuickTime's codecs): D0 the
-   {flags, paramSize, what} long, the caller's parameters left where they
-   are with the instance replaced by its storage, the entry point called. */
-pascal long FastCall(Handle storage, void *p1, long header, ProcPtr entry)
-    = {0x205F, 0x201F, 0x4E90};       /* movea.l (sp)+,a0; move.l (sp)+,d0; jsr (a0) */
-
-/* HeapDispatch ($A0A4) selectors 0-5, as the 7.6.1 System's 'gpch' 667
-   has them: HLock, HUnlock, HPurge, HNoPurge, HGetState, HSetState (A1)
-   on the handle in A0. QuickTime calls them throughout; Executor stops
-   at them, so the probe puts this in the trap table while it runs. */
-static unsigned short heapDispatch[] = {
-    0x4A40, 0x6716, 0x5340, 0x6716, 0x5340, 0x6716, 0x5340, 0x6716,
-    0x5340, 0x6716, 0x5340, 0x6716, 0x4E75,
-    0xA029, 0x4E75, 0xA02A, 0x4E75, 0xA049, 0x4E75, 0xA04A, 0x4E75,
-    0xA069, 0x4E75, 0x2009, 0xA06A, 0x4E75};
-
-/* The Image Compression Manager ($AAA3) is part of QuickTime's INIT: a
-   stub that answers CodecManagerVersion (selector 0) and, for any other
-   selector, makes Executor log it (an OS trap it lacks, with D0 the
-   selector) and quits: the next ICM call a codec needs, one per run. */
-static unsigned short icmStub[] = {
-    0x4A40, 0x660E,                  /* tst.w d0; bne.s other */
-    0x205F, 0x225F,                  /* movea.l (sp)+,a0; movea.l (sp)+,a1 */
-    0x22BC, 0x0011, 0x0000,          /* move.l #$00110000,(a1) */
-    0x4257, 0x4ED0,                  /* clr.w (sp); jmp (a0) */
-    0xA0FE, 0xA9F4};                 /* other: unimplemented trap; ExitToShell */
-
-static Boolean fast;                 /* make the calls ourselves, as above */
-static ProcPtr entry;
-static Boolean icm = true;           /* patch the ICM stub too */
-static Handle storage;
-
 static long Call(ComponentInstance ci, short what, void *p1)
 {
-    if(!fast)
-    {
-        if(what == 0)
-            return CodecGetCodecInfo(ci, p1);
-        if(what == 5)
-            return CodecPreDecompress(ci, (DecompParams *)p1);
-        return CodecBandDecompress(ci, (DecompParams *)p1);
-    }
-    return FastCall(storage, p1, (4L << 16) | (unsigned short)what, entry);
+    if(what == 0)
+        return CodecGetCodecInfo(ci, p1);
+    if(what == 5)
+        return CodecPreDecompress(ci, (DecompParams *)p1);
+    return CodecBandDecompress(ci, (DecompParams *)p1);
 }
 
 static void typestr(OSType t, char *s)
@@ -231,40 +195,9 @@ static void Decode(OSType sub, short depth, Ptr data, long size, short w, short 
         return;
     }
     ci = OpenComponent(c);
-    printf("decode '%s'%s: OpenComponent %s\n", st, fast ? " (fast dispatch)" : "", ci ? "ok" : "failed");
+    printf("decode '%s': OpenComponent %s\n", st, ci ? "ok" : "failed");
     if(!ci)
         return;
-    if(fast)
-    {   /* the component's code, as its 'thng' names it; open it again
-           the fast way, so it sets its storage on the instance */
-        ComponentDescription cd;
-        Handle th = NewHandle(0);
-        long r2;
-        GetComponentInfo(c, &cd, 0, 0, 0);
-        r2 = GetComponentRefcon(c);
-        {
-            Handle code = 0;
-            short i;
-            for(i = 1; i <= Count1Resources('thng') && !code; i++)
-            {
-                Handle t = Get1IndResource('thng', i);
-                if(t && ((long *)*t)[1] == sub && ((long *)*t)[0] == 'imdc')
-                    code = Get1Resource(((long *)*t)[5], ((short *)*t)[12]);
-            }
-            if(!code)
-            {
-                printf("decode '%s': no code resource\n", st);
-                return;
-            }
-            HLockHi(code);
-            entry = (ProcPtr)StripAddress(*code);
-        }
-        storage = 0;
-        r2 = FastCall(0, (void *)ci, (4L << 16) | 0xFFFF, entry);   /* kComponentOpenSelect */
-        storage = GetComponentInstanceStorage(ci);
-        printf("decode '%s': open (fast) %ld, storage %s\n", st, r2, storage ? "set" : "none");
-        DisposeHandle(th);
-    }
     memset(info, 0, sizeof info);
     r = Call(ci, 0, info);
     printf("decode '%s': GetCodecInfo %ld\n", st, (long)r);
@@ -352,6 +285,8 @@ int main(void)
     FSSpec spec;
     OSErr e;
     long n;
+    FILE *cfg;
+    char results_name[64] = "qtprobe.txt", path[80];
     static unsigned long raw[2][4] = {
         {0x00FF0000, 0x0000FF00, 0x000000FF, 0x00FFFFFF},
         {0x00123456, 0x00654321, 0x00000000, 0x00808080}};
@@ -371,65 +306,61 @@ int main(void)
     TEInit();
     InitDialogs(0);
     InitCursor();
-    out = fopen("qtprobe.txt", "w");
+    /* run by tests/test_guest_suite.sh: Host:suite.cfg names the file */
+    if((cfg = fopen("Host:suite.cfg", "r")) != NULL)
+    {
+        if(fgets(results_name, sizeof results_name, cfg))
+            results_name[strcspn(results_name, "\r\n")] = 0;
+        fclose(cfg);
+        sprintf(path, "Host:%s", results_name);
+    }
+    else
+        strcpy(path, results_name);
+    out = fopen(path, "w");
     if(!out)
         return 1;
 
-    printf("Gestalt 'qtim' %d", (int)Gestalt('qtim', &v));
-    printf(" %08lX\n", v);
-    v = 0;
-    printf("Gestalt 'icmp' %d %08lX\n", (int)Gestalt('icmp', &v), v);
-    v = 0;
-    printf("Gestalt 'cpnt' %d %08lX\n", (int)Gestalt('cpnt', &v), v);
-    printf("before: imdc %ld imco %ld mhlr %ld clok %ld play %ld\n",
-           Count('imdc', 0), Count('imco', 0), Count('mhlr', 0), Count('clok', 0), Count('play', 0));
+    e = Gestalt('qtim', &v);
+    printf("Gestalt 'qtim' %d %08lX\n", (int)e, e ? 0L : v);
+    e = Gestalt('icmp', &v);
+    printf("Gestalt 'icmp' %d %08lX\n", (int)e, e ? 0L : v);
+    e = Gestalt('cpnt', &v);
+    printf("Gestalt 'cpnt' %d %08lX\n", (int)e, e ? 0L : v);
+    n = Count('imdc', 0);
+    printf("before: imdc %ld\n", n);
 
-    /* The Extensions folder; on Executor, where a policy-off extension
-       isn't copied into its System Folder, the boot image's. */
-    e = FindFolder(kOnSystemDisk, kExtensionFolderType, false, &vRef, &dirID);
-    if(e == noErr)
-        e = FSMakeFSSpec(vRef, dirID, "\pQuickTime\252", &spec);
-    printf("QuickTime file in the Extensions folder: %d\n", (int)e);
-    if(e != noErr)
+    /* Executor registers QuickTime's components at startup, without its
+       INIT (extensions.cpp); a Mac's INIT does. Otherwise: the file in
+       the Extensions folder, or the boot image's (Executor's System
+       Folder lacks a policy-off extension). */
+    if(n == 0)
     {
-        e = FSMakeFSSpec(0, 0, "\pMacintosh HD:System Folder:Extensions:QuickTime\252", &spec);
-        printf("QuickTime file on Macintosh HD: %d\n", (int)e);
+        e = FindFolder(kOnSystemDisk, kExtensionFolderType, false, &vRef, &dirID);
+        if(e == noErr)
+            e = FSMakeFSSpec(vRef, dirID, "\pQuickTime\252", &spec);
+        printf("QuickTime file in the Extensions folder: %d\n", (int)e);
+        if(e != noErr)
+        {
+            e = FSMakeFSSpec(0, 0, "\pMacintosh HD:System Folder:Extensions:QuickTime\252", &spec);
+            printf("QuickTime file on Macintosh HD: %d\n", (int)e);
+        }
+        if(e != noErr)
+            goto done;
+        ref = FSpOpenResFile(&spec, fsRdPerm);
+        printf("FSpOpenResFile %d (ResError %d)\n", (int)ref, (int)ResError());
+        if(ref == -1)
+            goto done;
+        n = RegisterComponentResourceFile(ref, 1);
+        printf("RegisterComponentResourceFile %ld\n", n);
     }
-    if(e != noErr)
-        return 1;
-    ref = FSpOpenResFile(&spec, fsRdPerm);
-    printf("FSpOpenResFile %d (ResError %d)\n", (int)ref, (int)ResError());
-    if(ref == -1)
-        return 1;
-    n = RegisterComponentResourceFile(ref, 1);
-    printf("RegisterComponentResourceFile %ld\n", n);
-    printf("after: imdc %ld imco %ld mhlr %ld dhlr %ld clok %ld play %ld tune %ld sdev %ld eat %ld\n",
+    printf("components: imdc %ld imco %ld mhlr %ld dhlr %ld clok %ld play %ld tune %ld sdev %ld eat %ld\n",
            Count('imdc', 0), Count('imco', 0), Count('mhlr', 0), Count('dhlr', 0), Count('clok', 0),
            Count('play', 0), Count('tune', 0), Count('sdev', 0), Count('eat ', 0));
     ListType('imdc', 1);
     Decode('raw ', 32, (Ptr)raw, sizeof raw, 4, 2);
     Decode('rle ', 24, (Ptr)rle, sizeof rle, 4, 2);
-    fast = true;
-    UseResFile(ref);
-    {
-        UniversalProcPtr old = NGetTrapAddress(0xA0A4, OSTrap);
-        UniversalProcPtr oldICM = NGetTrapAddress(0xAAA3, ToolTrap);
-        NSetTrapAddress((UniversalProcPtr)heapDispatch, 0xA0A4, OSTrap);
-        printf("HeapDispatch 0-5 patched by the probe\n");
-        if(icm)
-        {
-            NSetTrapAddress((UniversalProcPtr)icmStub, 0xAAA3, ToolTrap);
-            printf("ICM stub ($AAA3) patched by the probe\n");
-        }
-        Decode('raw ', 32, (Ptr)raw, sizeof raw, 4, 2);
-        Decode('rle ', 24, (Ptr)rle, sizeof rle, 4, 2);
-        NSetTrapAddress(old, 0xA0A4, OSTrap);
-        NSetTrapAddress(oldICM, 0xAAA3, ToolTrap);
-    }
-    printf("without the HeapDispatch patch:\n");
-    Decode('raw ', 32, (Ptr)raw, sizeof raw, 4, 2);
-    Decode('rle ', 24, (Ptr)rle, sizeof rle, 4, 2);
-    printf("done\n");
+done:
+    printf("done\n---\n");
     fclose(out);
     return 0;
 }

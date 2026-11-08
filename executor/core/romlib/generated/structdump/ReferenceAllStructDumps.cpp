@@ -48,6 +48,7 @@ void registerStructDumps_Finder();
 void registerStructDumps_FontMgr();
 void registerStructDumps_Gestalt();
 void registerStructDumps_HelpMgr();
+void registerStructDumps_ImageCompression();
 void registerStructDumps_InputSprocket();
 void registerStructDumps_IntlUtil();
 void registerStructDumps_LibraryManager();
@@ -139,6 +140,7 @@ void registerAllStructDumps()
     registerStructDumps_FontMgr();
     registerStructDumps_Gestalt();
     registerStructDumps_HelpMgr();
+    registerStructDumps_ImageCompression();
     registerStructDumps_InputSprocket();
     registerStructDumps_IntlUtil();
     registerStructDumps_LibraryManager();
