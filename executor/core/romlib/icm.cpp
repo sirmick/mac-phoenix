@@ -25,6 +25,8 @@
 #include <CQuickDraw.h>
 #include <ResourceMgr.h>
 #include <OSUtil.h>
+#include <FontMgr.h>
+#include <ToolboxUtil.h>
 #include <base/functions.impl.h>
 #include <quickdraw/cquick.h>
 #include <rsys/component.h>
@@ -34,6 +36,7 @@
 #include <cstring>
 #include <map>
 #include <memory>
+#include <string>
 #include <vector>
 
 using namespace Executor;
@@ -92,6 +95,8 @@ enum : uint32_t
 enum : int16_t
 {
     kDitherCopy = 64, /* QuickDraw's ditherCopy */
+    OP_PnSize_ = 0x0007, /* the picture opcode */
+    kGeneva = 3,
 };
 
 enum : uint16_t
@@ -1892,7 +1897,205 @@ void Executor::C_ICMDecompressComplete(ImageSequence, OSErr err, INTEGER flag,
         completionRtn->completionProc(err, flag, completionRtn->completionRefCon);
 }
 
-/* Pictures */
+/* Pictures (Inside Macintosh: QuickTime, "Compressing Pictures"). A
+   compressed picture, as QuickTime 2.5 makes one (QTICM's pict.* lines on
+   the Quadra): the version 2 header, a ClipRgn of the frame, then opcode
+   $8200 CompressedQuickTime, its data
+     version.w 0, matrix (image to picture), matteSize.l, matteRect,
+     mode.w, srcRect (the image's), accuracy.l, maskSize.l,
+     [matte description and data], [mask region], the image description,
+     the compressed data (padded to a word);
+   then PnSize($AE, n): the n bytes of opcodes after it tell a Mac without
+   QuickTime what it would need ("QuickTime and a Photo - JPEG
+   decompressor are needed to see this picture.", Geneva 12 scaled to the
+   frame's width); a reader with QuickTime skips them. */
+
+void Executor::ROMlib_draw_quicktime_opcode(uint16_t opcode, Ptr data, int32_t n, const Rect *src_frame,
+                                            const Rect *dst_frame)
+{
+    if(opcode != 0x8200)
+    {
+        /* UncompressedQuickTime: a matrix and matte for the opcodes that
+           follow, which draw the image themselves */
+        warning_unimplemented("UncompressedQuickTime ($8201) picture opcode: its matte and matrix left out");
+        return;
+    }
+    const uint8_t *b = (const uint8_t *)data;
+    auto rd32 = [&](int32_t at) {
+        return at + 4 <= n ? (int32_t)((b[at] << 24) | (b[at + 1] << 16) | (b[at + 2] << 8) | b[at + 3]) : 0;
+    };
+    auto rd16 = [&](int32_t at) { return at + 2 <= n ? (int16_t)((b[at] << 8) | b[at + 1]) : (int16_t)0; };
+    auto rect_at = [&](int32_t at) {
+        Rect r;
+        r.top = rd16(at);
+        r.left = rd16(at + 2);
+        r.bottom = rd16(at + 4);
+        r.right = rd16(at + 6);
+        return r;
+    };
+    if(n < 68)
+        return;
+    MatrixRecord m;
+    for(int i = 0; i < 9; i++)
+        m.matrix[i / 3][i % 3] = rd32(2 + 4 * i);
+    int32_t matte_size = rd32(38);
+    int16_t mode = rd16(50);
+    Rect src_rect = rect_at(52);
+    CodecQ accuracy = rd32(60);
+    int32_t mask_size = rd32(64);
+    int32_t at = 68;
+    if(matte_size < 0 || mask_size < 0 || at + matte_size + mask_size > n)
+        return;
+    if(matte_size)
+        warning_unimplemented("CompressedQuickTime picture opcode: its matte left out");
+    at += matte_size;
+    RgnHandle mask = nullptr;
+    if(mask_size >= 10)
+    {
+        mask = NewRgn();
+        SetHandleSize((Handle)mask, mask_size);
+        memcpy(*mask, b + at, mask_size);
+        MapRgn(mask, src_frame, dst_frame);
+    }
+    at += mask_size;
+    int32_t id_size = rd32(at);
+    if(id_size < (int32_t)sizeof(ImageDescription) || at + id_size > n)
+    {
+        if(mask)
+            DisposeRgn(mask);
+        return;
+    }
+    ImageDescriptionHandle desc = (ImageDescriptionHandle)NewHandle(id_size);
+    if(!desc)
+    {
+        if(mask)
+            DisposeRgn(mask);
+        return;
+    }
+    memcpy(*desc, b + at, id_size);
+    Ptr image = data + at + id_size;
+    int32_t image_size = std::min<int32_t>((*desc)->dataSize, n - at - id_size);
+
+    /* the picture's coordinates to the port's */
+    TranslateMatrix(&m, -((Fixed)src_frame->left << 16), -((Fixed)src_frame->top << 16));
+    ScaleMatrix(&m, FixRatio(dst_frame->right - dst_frame->left, src_frame->right - src_frame->left),
+                FixRatio(dst_frame->bottom - dst_frame->top, src_frame->bottom - src_frame->top), 0, 0);
+    TranslateMatrix(&m, (Fixed)dst_frame->left << 16, (Fixed)dst_frame->top << 16);
+
+    DState s;
+    if(s.codec.open(kDecompressorType, (*desc)->cType, nullptr) == noErr)
+    {
+        s.desc = desc;
+        s.dst.set((CGrafPtr)qdGlobals().thePort, nullptr);
+        s.src_rect = EmptyRect(&src_rect) ? image_rect(desc) : src_rect;
+        s.matrix = m;
+        s.mode = mode;
+        s.mask = mask;
+        s.accuracy = accuracy;
+        HLock((Handle)desc);
+        decompress_frame(s, image, image_size, nullptr);
+    }
+    else
+    {
+        uint32_t t = (*desc)->cType;
+        char fourcc[5] = { (char)(t >> 24), (char)(t >> 16), (char)(t >> 8), (char)t, 0 };
+        warning_unimplemented("CompressedQuickTime picture opcode: no '%s' decompressor", fourcc);
+    }
+    s.desc = nullptr;
+    s.mask = nullptr;
+    DisposeHandle((Handle)desc);
+    if(mask)
+        DisposeRgn(mask);
+}
+
+namespace
+{
+struct PictWriter
+{
+    std::vector<uint8_t> b;
+    void w8(uint8_t v) { b.push_back(v); }
+    void w16(int32_t v)
+    {
+        w8(v >> 8);
+        w8(v);
+    }
+    void w32(int32_t v)
+    {
+        w16(v >> 16);
+        w16(v);
+    }
+    void rect(const Rect &r)
+    {
+        w16(r.top);
+        w16(r.left);
+        w16(r.bottom);
+        w16(r.right);
+    }
+    void bytes(const void *p, size_t n) { b.insert(b.end(), (const uint8_t *)p, (const uint8_t *)p + n); }
+    void pad()
+    {
+        if(b.size() & 1)
+            w8(0);
+    }
+};
+
+/* What a Mac without QuickTime draws of a compressed picture: three
+   centred lines in Geneva 12, the text scaled to the frame's width */
+void fallback_text(PictWriter &w, const Rect &frame, const unsigned char *type_name)
+{
+    std::string lines[3];
+    lines[0] = "QuickTime\xAA and a";
+    lines[1] = std::string((const char *)type_name + 1, type_name[0]) + " decompressor";
+    lines[2] = "are needed to see this picture.";
+    INTEGER widths[3], widest = 1;
+    {
+        GUEST<INTEGER> font = qdGlobals().thePort->txFont, size = qdGlobals().thePort->txSize;
+        Style face = qdGlobals().thePort->txFace;
+        TextFont(kGeneva);
+        TextSize(12);
+        TextFace(0);
+        for(int i = 0; i < 3; i++)
+        {
+            Str255 s;
+            s[0] = lines[i].size();
+            memcpy(&s[1], lines[i].data(), lines[i].size());
+            widths[i] = StringWidth(s);
+            widest = std::max(widest, widths[i]);
+        }
+        TextFont(font);
+        TextSize(size);
+        TextFace(face);
+    }
+    int width = frame.right - frame.left;
+    int spacing = 12 * width / widest;
+    int mid = frame.top + (frame.bottom - frame.top) / 2;
+    w.w16(OP_PnSize_);
+    w.w16(1);
+    w.w16(1);
+    w.w16(0x0003); /* TxFont */
+    w.w16(kGeneva);
+    w.w16(0x0004); /* TxFace */
+    w.w8(0);
+    w.pad();
+    w.w16(0x000D); /* TxSize */
+    w.w16(12);
+    w.w16(0x0010); /* TxRatio */
+    w.w16(width);
+    w.w16(width);
+    w.w16(widest);
+    w.w16(widest);
+    for(int i = 0; i < 3; i++)
+    {
+        w.w16(0x0028); /* LongText */
+        w.w16(mid + (i - 1) * spacing);
+        w.w16(frame.left + (width - widths[i] * width / widest) / 2);
+        w.w8(lines[i].size());
+        w.bytes(lines[i].data(), lines[i].size());
+        w.pad();
+    }
+    w.w16(0x0000); /* NOP */
+}
+}
 
 OSErr Executor::C_CompressPicture(PicHandle srcPicture, PicHandle dstPicture, CodecQ quality, CodecType cType)
 {
@@ -1904,7 +2107,121 @@ OSErr Executor::C_FCompressPicture(PicHandle srcPicture, PicHandle dstPicture, I
                                    ICMProgressProcRecordPtr progressProc, CodecType cType,
                                    CompressorComponent codec)
 {
-    return codecUnimpErr;
+    if(!srcPicture || !*srcPicture || !dstPicture)
+        return paramErr;
+    Rect frame = (*srcPicture)->picFrame;
+    if(EmptyRect(&frame))
+        return paramErr;
+    /* the picture drawn */
+    GWorldPtr off = new_offscreen(32, frame, nullptr);
+    if(!off)
+        return memFullErr;
+    PixMapHandle pm = GetGWorldPixMap(off);
+    GUEST<CGrafPtr> save_port;
+    GUEST<GDHandle> save_dev;
+    GetGWorld(&save_port, &save_dev);
+    SetGWorld(off, nullptr);
+    ClipRect(&frame);
+    EraseRect(&frame);
+    DrawPicture(srcPicture, &frame);
+    OSErr err = noErr;
+    if(cType == "raw "_4)
+    {
+        /* uncompressed: a picture of the pixels, without QuickTime */
+        PicHandle pic = OpenPicture(&frame);
+        CopyBits((BitMap *)*pm, (BitMap *)*pm, &frame, &frame, srcCopy, nullptr);
+        ClosePicture();
+        SetGWorld(save_port, save_dev);
+        Size n = GetHandleSize((Handle)pic);
+        SetHandleSize((Handle)dstPicture, n);
+        err = MemError();
+        if(err == noErr)
+            memcpy(*dstPicture, *pic, n);
+        KillPicture(pic);
+        DisposeGWorld(off);
+        return err;
+    }
+    SetGWorld(save_port, save_dev);
+
+    GUEST<LONGINT> max = 0;
+    err = C_GetMaxCompressionSize(pm, &frame, colorDepth, quality, cType, codec, &max);
+    ImageDescriptionHandle desc = (ImageDescriptionHandle)NewHandle(sizeof(ImageDescription));
+    Ptr data = err == noErr && desc ? NewPtr(max) : nullptr;
+    if(err == noErr && !data)
+        err = memFullErr;
+    if(err == noErr)
+        err = C_FCompressImage(pm, &frame, colorDepth, quality, cType, codec, ctable, 0, 0, nullptr, progressProc,
+                               desc, data);
+    CodecInfo info;
+    zero(info);
+    if(err == noErr)
+        C_GetCodecInfo(&info, cType, nullptr);
+    DisposeGWorld(off);
+    if(err != noErr)
+    {
+        if(data)
+            DisposePtr(data);
+        if(desc)
+            DisposeHandle((Handle)desc);
+        return err;
+    }
+
+    PictWriter w;
+    w.w16(0); /* picSize, below */
+    w.rect(frame);
+    w.w16(0x0011); /* VersionOp */
+    w.w16(0x02FF);
+    w.w16(0x0C00); /* HeaderOp */
+    w.w16(-2);
+    w.w16(0);
+    w.w32((*desc)->hRes);
+    w.w32((*desc)->vRes);
+    w.rect(frame);
+    w.w32(0);
+    w.w16(0x0001); /* ClipRgn */
+    w.w16(10);
+    w.rect(frame);
+    w.w16(0x8200); /* CompressedQuickTime */
+    size_t length_at = w.b.size();
+    w.w32(0);
+    w.w16(0); /* version */
+    MatrixRecord m;
+    SetIdentityMatrix(&m);
+    TranslateMatrix(&m, (Fixed)frame.left << 16, (Fixed)frame.top << 16);
+    for(int i = 0; i < 9; i++)
+        w.w32(m.matrix[i / 3][i % 3]);
+    w.w32(0); /* matteSize */
+    w.w32(0); /* matteRect */
+    w.w32(0);
+    w.w16(srcCopy);
+    w.rect(image_rect(desc));
+    w.w32(codecHighQuality); /* accuracy */
+    w.w32(0); /* maskSize */
+    int32_t id_size = (*desc)->idSize;
+    w.bytes(*desc, id_size);
+    w.bytes(data, (*desc)->dataSize);
+    w.pad();
+    int32_t length = w.b.size() - length_at - 4;
+    for(int i = 0; i < 4; i++)
+        w.b[length_at + i] = length >> (24 - 8 * i);
+    /* for a Mac without QuickTime */
+    PictWriter text;
+    fallback_text(text, frame, info.typeName);
+    w.w16(OP_PnSize_);
+    w.w16(0x00AE);
+    w.w16(text.b.size());
+    w.bytes(text.b.data(), text.b.size());
+    w.w16(0x00FF); /* OpEndPic */
+    w.b[0] = w.b.size() >> 8;
+    w.b[1] = w.b.size();
+    DisposePtr(data);
+    DisposeHandle((Handle)desc);
+
+    SetHandleSize((Handle)dstPicture, w.b.size());
+    err = MemError();
+    if(err == noErr)
+        memcpy(*dstPicture, w.b.data(), w.b.size());
+    return err;
 }
 
 /* The ICM's selectors as Universal Interfaces 3.3.2's ImageCompression.h

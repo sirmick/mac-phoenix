@@ -14,3 +14,19 @@ decompress.smc_.16
 decompress.smc_.16.half
 # Cinepak into a 16-bit world: the Quadra's pixels are dithered.
 decompress.cvid.16
+#
+# Pictures: the source picture is Executor's OpenPicture/CopyBits recording,
+# which isn't the Quadra's bytes (9358 against 3660: Executor's header and
+# packing); CompressPicture with 'raw ' records the pixels the same way.
+# The compressed pictures themselves ('jpeg', 'rle ') are the Quadra's.
+pict.raw.source
+pict.jpeg.source
+pict.rle.source
+pict.raw.compress
+pict.raw.head
+# DrawPicture at half size: CopyBits' 2:1 shrink into the rectangle at
+# (16,12) samples other pixels than the Quadra's, a plain picture too
+# (pict.raw.draw.half); DecompressImage's at (32,24) is the Quadra's.
+pict.raw.draw.half
+pict.jpeg.draw.half
+pict.rle.draw.half

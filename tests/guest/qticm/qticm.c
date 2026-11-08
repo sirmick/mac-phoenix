@@ -1,6 +1,7 @@
 /* QTICM: the Image Compression Manager on a frame of its own, no movie:
    codec information, GetMaxCompressionSize, CompressImage and
-   DecompressImage for Apple's codecs, every result CRC'd. A ROM machine's
+   DecompressImage for Apple's codecs, every result CRC'd; CompressPicture's
+   pictures (their bytes around the compressed data) drawn by DrawPicture. A ROM machine's
    run with QuickTime is the reference Executor's own ICM is compared with
    (run_qticm.sh). One "PASS name value" line per check, to Host:<suite.cfg's
    name> (default qticm_results.txt), then "---".
@@ -242,6 +243,111 @@ static void test_round_trip(GWorldPtr src, OSType t, short dst_depth, const char
 
 static const OSType codecs[] = { 'raw ', 'rle ', 'rpza', 'cvid', 'jpeg', 'smc ' };
 
+/* n bytes from p as hex, at most 160 of them */
+static void hex(char *out, const unsigned char *p, long n)
+{
+    static const char digits[] = "0123456789ABCDEF";
+    if(n > 160)
+        n = 160;
+    while(n-- > 0)
+    {
+        *out++ = digits[*p >> 4];
+        *out++ = digits[*p++ & 15];
+    }
+    *out = 0;
+}
+
+/* A picture of src (one CopyBits), CompressPicture'd: its bytes around the
+   compressed data (header and opcode fields before it, what follows it),
+   then drawn whole and at half size into cleared 32-bit worlds. */
+static void test_picture(GWorldPtr src, OSType t, const char *tag)
+{
+    PixMapHandle pm = GetGWorldPixMap(src);
+    Rect r = src->portRect, half;
+    CGrafPtr port;
+    GDHandle dev;
+    PicHandle pic, cpic;
+    GWorldPtr dst;
+    OSErr err;
+    long size, i, data_at = -1, data_size = 0;
+    unsigned char *b;
+    char s[8], name[64], line[400];
+
+    GetGWorld(&port, &dev);
+    SetGWorld(src, NULL);
+    ClipRect(&r);
+    pic = OpenPicture(&r);
+    CopyBits((BitMap *)*pm, (BitMap *)*pm, &r, &r, srcCopy, NULL);
+    ClosePicture();
+    SetGWorld(port, dev);
+    HLock((Handle)pic);
+    sprintf(line, "size=%ld crc=%08lX", GetHandleSize((Handle)pic),
+            crc_bytes(0xFFFFFFFFUL, (unsigned char *)*pic, GetHandleSize((Handle)pic)) ^ 0xFFFFFFFFUL);
+    HUnlock((Handle)pic);
+    sprintf(name, "pict.%s.source", tag);
+    put(name, line);
+    cpic = (PicHandle)NewHandle(0);
+    err = CompressPicture(pic, cpic, codecNormalQuality, t);
+    sprintf(name, "pict.%s", tag);
+    if(err != noErr)
+    {
+        sprintf(line, "CompressPicture %d", err);
+        fail(name, line);
+        KillPicture(pic);
+        DisposeHandle((Handle)cpic);
+        return;
+    }
+    size = GetHandleSize((Handle)cpic);
+    HLock((Handle)cpic);
+    b = (unsigned char *)*cpic;
+    /* the image description: 'idSize' 86 then the codec type */
+    for(i = 0; i + 8 <= size; i++)
+        if(b[i] == 0 && b[i + 1] == 0 && b[i + 2] == 0 && b[i + 3] == 86 && memcmp(b + i + 4, &t, 4) == 0)
+        {
+            data_size = ((long)b[i + 44] << 24) | ((long)b[i + 45] << 16) | ((long)b[i + 46] << 8) | b[i + 47];
+            data_at = i + 86;
+            break;
+        }
+    sprintf(line, "size=%ld crc=%08lX desc_at=%ld data=%ld", size,
+            crc_bytes(0xFFFFFFFFUL, b, size) ^ 0xFFFFFFFFUL, data_at - 86, data_size);
+    sprintf(name, "pict.%s.compress", tag);
+    put(name, line);
+    hex(line, b, data_at > 0 ? data_at : size);
+    sprintf(name, "pict.%s.head", tag);
+    put(name, line);
+    if(data_at > 0 && data_at + data_size <= size)
+    {
+        hex(line, b + data_at + data_size, size - data_at - data_size);
+        sprintf(name, "pict.%s.tail", tag);
+        put(name, line);
+    }
+    HUnlock((Handle)cpic);
+
+    if(NewGWorld(&dst, 32, &r, NULL, NULL, 0) == noErr)
+    {
+        SetGWorld(dst, NULL);
+        EraseRect(&r);
+        DrawPicture(cpic, &r);
+        err = QDError();
+        SetGWorld(port, dev);
+        sprintf(name, "pict.%s.draw", tag);
+        sprintf(line, "err=%d crc=%08lX", err, pixmap_crc(GetGWorldPixMap(dst)));
+        put(name, line);
+        SetGWorld(dst, NULL);
+        EraseRect(&r);
+        SetRect(&half, r.right / 4, r.bottom / 4, r.right / 4 + r.right / 2, r.bottom / 4 + r.bottom / 2);
+        DrawPicture(cpic, &half);
+        SetGWorld(port, dev);
+        sprintf(name, "pict.%s.draw.half", tag);
+        sprintf(line, "crc=%08lX", pixmap_crc(GetGWorldPixMap(dst)));
+        put(name, line);
+        DisposeGWorld(dst);
+    }
+    KillPicture(pic);
+    DisposeHandle((Handle)cpic);
+    (void)fcc(t, s);
+}
+
 int main(void)
 {
     char results_name[64] = "qticm_results.txt";
@@ -291,6 +397,9 @@ int main(void)
             test_round_trip(src, codecs[i], 32, "32");
             test_round_trip(src, codecs[i], 16, "16");
         }
+        test_picture(src, 'raw ', "raw");
+        test_picture(src, 'jpeg', "jpeg");
+        test_picture(src, 'rle ', "rle");
     }
     fprintf(out, "---\n");
     fclose(out);
