@@ -626,7 +626,11 @@ void show(DState &s)
     SignedByte state = 0;
     if(s.dst.to_port())
     {
-        SetPort((GrafPtr)s.dst.port);
+        /* a GWorld with its own device current, as for the codec */
+        if(GRAPHICS_WORLD_P(s.dst.port))
+            SetGWorld(s.dst.port, nullptr);
+        else
+            SetPort((GrafPtr)s.dst.port);
         dst_bits = PORT_BITS_FOR_COPY(s.dst.port);
     }
     else
@@ -681,7 +685,21 @@ OSErr decompress_frame(DState &s, Ptr data, int32_t size, CodecFlags *out_flags)
         p.conditionFlags = codecConditionFirstBand | codecConditionLastBand
             | (s.frame <= 1 ? codecConditionFirstFrame : 0);
         if(s.direct)
+        {
+            /* the codec draws in the current port: the destination, with
+               a GWorld's own device (a codec setting the port's colors
+               under the screen's device gave a 32-bit GWorld an 8-bit
+               background, and CopyBits into it black) */
+            GUEST<CGrafPtr> save_port;
+            GUEST<GDHandle> save_dev;
+            GetGWorld(&save_port, &save_dev);
+            if(s.dst.port && GRAPHICS_WORLD_P(s.dst.port))
+                SetGWorld(s.dst.port, nullptr);
+            else if(s.dst.port)
+                SetPort((GrafPtr)s.dst.port);
             r = s.codec.call(kCodecBandDecompress, { &p });
+            SetGWorld(save_port, save_dev);
+        }
         else
         {
             GUEST<CGrafPtr> save_port;
