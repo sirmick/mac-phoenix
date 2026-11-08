@@ -426,8 +426,9 @@ QuickTime itself under A.
 ## 7. Route B: what Executor has (qt-b1, 2026-11-08)
 
 The groundwork of section 5's first step. QuickTime's INIT still never
-runs, and Gestalt `'qtim'`/`'icmp'` stay unanswered until Executor's own
-Movie Toolbox and ICM are there (`rsys/quicktime.h`).
+runs. Gestalt `'icmp'` is answered since qt-b2 (section 8); `'qtim'`
+stays unanswered until Executor's own Movie Toolbox is there
+(`rsys/quicktime.h`).
 
 - **Components at startup.** `extensions.cpp` registers the `thng`s of
   QuickTime™ and QuickTime™ Musical Instruments, from Extensions or from
@@ -490,3 +491,64 @@ through GetCodecInfo, PreDecompress (the Quadra's flags) and
 BandDecompress. `rle `'s pixels equal the Quadra's. `raw `'s are the
 input's, where the Quadra, driven this way without its ICM, gives other
 values. QTTest's ICM round trips are B2's pixel check.
+
+## 8. Route B: Executor's ICM (qt-b2, 2026-11-08)
+
+`icm.cpp`, `$AAA3`, over Apple's codecs; Gestalt `'icmp'` is answered
+(18), `'qtim'` waits for the Movie Toolbox (B3).
+
+- **What it answers.** CodecManagerVersion, GetCodecNameList and
+  DisposeCodecNameList, GetCodecInfo, FindCodec, GetMaxCompressionSize,
+  GetCompressionTime, CompressImage, FCompressImage, DecompressImage,
+  FDecompressImage, GetCompressedImageSize; CompressSequenceBegin/Frame
+  and their setters (quality, previous frame, key frame rate, frame
+  number); DecompressSequenceBegin(S)/Frame(S) and their setters (matrix,
+  matte, mask, transfer mode, data proc, accuracy, source rectangle,
+  flags); CDSequenceBusy/End/Flush, SetSequenceProgressProc; image
+  description color tables and extensions; MakeImageDescriptionForPixMap;
+  CompressPicture/FCompressPicture; the Standard File previews $41-$44
+  (Standard File's dialogs, Apple's PACK 3 on an Apple System, without the
+  preview pane). The other selectors still pop their arguments and answer
+  paramErr, logged.
+- **Calling a codec.** `ROMlib_call_component` (`component.cpp`) builds
+  the parameter block on the 68k stack as an application's glue does.
+  Each image is one band. PreDecompress with the real destination says
+  what the codec wants; it draws straight into the destination when it
+  can do all of it (depth, no scaling, mode, mask, the port's regions);
+  otherwise into an offscreen at the depth it wants, CopyBits doing the
+  rest. A band that fails there (a depth the codec converts to through
+  Apple's private ICM routines) is redone at the image's own depth. Screen
+  destinations always go through an offscreen, so QuickDraw sees them
+  change.
+- **What Apple's codecs expect** (found against the Quadra with QTICM):
+  rowBytes without the pixel map flags (they multiply by it as a signed
+  word; the flags made rle read garbage and write over the heap);
+  srcPixMap's baseAddr is the map's origin and bounds the rectangle to
+  compress; locked pixels (a GWorld's baseAddr is its pixels only then).
+  Compressors fill dataSize themselves.
+- **Private selectors** no header names, from the codecs' call sites:
+  `$49` (a color translation: CTabHandle, 0, Handle *, 0, short *flags),
+  `$4A` (dispose it), `$60` (lock it), `$58`/`$59` (around a band). `$49`
+  is answered only when no translation is needed (flags high bit), which
+  the ICM's offscreen for an indexed image guarantees; otherwise raw and
+  rle draw without one, and smc's and rle's indexed paths fail into the
+  ICM's offscreen.
+- **Pictures.** DrawPicture draws `$8200` CompressedQuickTime through the
+  ICM, the opcode's matrix composed with the frame mapping; PnSize(`$AE`,
+  n) right after it skips the n bytes QuickTime writes for a Mac without
+  it (the "QuickTime and a ... decompressor are needed to see this
+  picture." text). `$8201` is passed over. CompressPicture writes what
+  QuickTime 2.5 writes: header, ClipRgn, the opcode (accuracy
+  codecHighQuality), the fallback text in Geneva 12 scaled to the frame;
+  `'raw '` a plain picture of the pixels.
+- **QTICM** (`tests/guest/qticm`; ctest `qticm_executor_761`) against the
+  Quadra: 46 of 61 lines identical. Codec information, every `raw `, `rle `,
+  `rpza`, `jpeg` and 32-bit `cvid` line, and the compressed pictures byte
+  for byte. The 15 others are QuickDraw's (`known_executor_761.txt`):
+  dithering (Executor's CopyBits draws ditherCopy as srcCopy: `smc `'s
+  8-bit source, Cinepak into 16 bits), Executor's own picture recording
+  (the source PICTs), and CopyBits' 2:1 shrink at an odd offset.
+- **Open.** QTTest's ICM lines need a movie frame as their source (B3).
+  The preview pane. Codecs scaling and converting depths themselves
+  (Apple's `$49` translations). ditherCopy in QuickDraw would close most
+  of the known differences.
