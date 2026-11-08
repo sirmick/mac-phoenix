@@ -667,7 +667,7 @@ std::vector<Band> bands;
 
 int32_t band_decompress(DState &s, CodecDecompressParams &p)
 {
-    bands.push_back({ s.id, &p.dstPixMap });
+    bands.push_back({ static_cast<ImageSequence>(s.id), &p.dstPixMap });
     int32_t r = s.codec.call(kCodecBandDecompress, { &p });
     bands.pop_back();
     return r;
