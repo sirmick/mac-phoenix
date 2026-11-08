@@ -77,417 +77,559 @@ DISPATCHER_TRAP(QuickTime, 0xAAAA, D0<0x7FFF>);
 
 
 OSErr C_EnterMovies();PASCAL_SUBTRAP(EnterMovies, 0xAAAA, 0x0001, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, EnterMovies, InterfaceLib);
 
 
 void C_ExitMovies();PASCAL_SUBTRAP(ExitMovies, 0xAAAA, 0x0002, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, ExitMovies, InterfaceLib);
 
 
 void C_MoviesTask(Movie movie, LONGINT maxmillisecs);PASCAL_SUBTRAP(MoviesTask, 0xAAAA, 0x0005, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, MoviesTask, InterfaceLib);
 
 
 OSErr C_PrerollMovie(Movie movie, TimeValue time, Fixed rate);PASCAL_SUBTRAP(PrerollMovie, 0xAAAA, 0x0006, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, PrerollMovie, InterfaceLib);
 
 
 void C_SetMovieActive(Movie movie, Boolean active);PASCAL_SUBTRAP(SetMovieActive, 0xAAAA, 0x0009, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, SetMovieActive, InterfaceLib);
 
 
 void C_StartMovie(Movie movie);PASCAL_SUBTRAP(StartMovie, 0xAAAA, 0x000B, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, StartMovie, InterfaceLib);
 
 
 void C_StopMovie(Movie movie);PASCAL_SUBTRAP(StopMovie, 0xAAAA, 0x000C, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, StopMovie, InterfaceLib);
 
 
 void C_GoToBeginningOfMovie(Movie movie);PASCAL_SUBTRAP(GoToBeginningOfMovie, 0xAAAA, 0x000D, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, GoToBeginningOfMovie, InterfaceLib);
 
 
 void C_SetMovieGWorld(Movie movie, CGrafPtr cgrafp, GDHandle gdh);PASCAL_SUBTRAP(SetMovieGWorld, 0xAAAA, 0x0016, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, SetMovieGWorld, InterfaceLib);
 
 
 OSErr C_UpdateMovie(Movie movie);PASCAL_SUBTRAP(UpdateMovie, 0xAAAA, 0x001F, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, UpdateMovie, InterfaceLib);
 
 
 void C_DisposeMovie(Movie movie);PASCAL_SUBTRAP(DisposeMovie, 0xAAAA, 0x0023, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, DisposeMovie, InterfaceLib);
 
 
 INTEGER C_GetMovieVolume(Movie movie);PASCAL_SUBTRAP(GetMovieVolume, 0xAAAA, 0x002E, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, GetMovieVolume, InterfaceLib);
 
 
 OSErr C_CloseMovieFile(INTEGER refnum);PASCAL_SUBTRAP(CloseMovieFile, 0xAAAA, 0x00D5, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, CloseMovieFile, InterfaceLib);
 
 
 Boolean C_IsMovieDone(Movie movie);PASCAL_SUBTRAP(IsMovieDone, 0xAAAA, 0x00DD, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, IsMovieDone, InterfaceLib);
 
 
 OSErr C_NewMovieFromFile(GUEST<Movie> *moviep, INTEGER refnum, GUEST<INTEGER> *residp, StringPtr resnamep, INTEGER flags, Boolean *datarefwaschangedp);PASCAL_SUBTRAP(NewMovieFromFile, 0xAAAA, 0x00F0, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, NewMovieFromFile, InterfaceLib);
 
 
 Fixed C_GetMoviePreferredRate(Movie movie);PASCAL_SUBTRAP(GetMoviePreferredRate, 0xAAAA, 0x00F3, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, GetMoviePreferredRate, InterfaceLib);
 
 
 void C_GetMovieBox(Movie movie, Rect *boxp);PASCAL_SUBTRAP(GetMovieBox, 0xAAAA, 0x00F9, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, GetMovieBox, InterfaceLib);
 
 
 void C_SetMovieBox(Movie movie, const Rect *boxp);PASCAL_SUBTRAP(SetMovieBox, 0xAAAA, 0x00FA, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, SetMovieBox, InterfaceLib);
 
 
 ComponentInstance C_NewMovieController(Movie movie, const Rect *mrectp, LONGINT flags);PASCAL_SUBTRAP(NewMovieController, 0xAAAA, 0x018A, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, NewMovieController, InterfaceLib);
 
 
 void C_DisposeMovieController(ComponentInstance cntrller);PASCAL_SUBTRAP(DisposeMovieController, 0xAAAA, 0x018B, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, DisposeMovieController, InterfaceLib);
 
 
 OSErr C_OpenMovieFile(const FSSpec *filespecp, GUEST<INTEGER> *refnump, uint8_t perm);PASCAL_SUBTRAP(OpenMovieFile, 0xAAAA, 0x0192, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, OpenMovieFile, InterfaceLib);
 
 
 OSErr C_GetMoviesError();PASCAL_SUBTRAP(GetMoviesError, 0xAAAA, 0x0003, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, GetMoviesError, InterfaceLib);
 
 
 void C_ClearMoviesStickyError();PASCAL_SUBTRAP(ClearMoviesStickyError, 0xAAAA, 0x00DE, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, ClearMoviesStickyError, InterfaceLib);
 
 
 OSErr C_GetMoviesStickyError();PASCAL_SUBTRAP(GetMoviesStickyError, 0xAAAA, 0x0004, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, GetMoviesStickyError, InterfaceLib);
 
 
 OSErr C_LoadMovieIntoRam(Movie theMovie, TimeValue time, TimeValue duration, LONGINT flags);PASCAL_SUBTRAP(LoadMovieIntoRam, 0xAAAA, 0x0007, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, LoadMovieIntoRam, InterfaceLib);
 
 
 OSErr C_LoadTrackIntoRam(Track theTrack, TimeValue time, TimeValue duration, LONGINT flags);PASCAL_SUBTRAP(LoadTrackIntoRam, 0xAAAA, 0x016E, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, LoadTrackIntoRam, InterfaceLib);
 
 
 Boolean C_GetMovieActive(Movie theMovie);PASCAL_SUBTRAP(GetMovieActive, 0xAAAA, 0x000A, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, GetMovieActive, InterfaceLib);
 
 
 void C_GoToEndOfMovie(Movie theMovie);PASCAL_SUBTRAP(GoToEndOfMovie, 0xAAAA, 0x000E, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, GoToEndOfMovie, InterfaceLib);
 
 
 void C_GetMovieGWorld(Movie theMovie, GUEST<CGrafPtr> *port, GUEST<GDHandle> *gdh);PASCAL_SUBTRAP(GetMovieGWorld, 0xAAAA, 0x0015, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, GetMovieGWorld, InterfaceLib);
 
 
 void C_GetMovieMatrix(Movie theMovie, MatrixRecord *matrix);PASCAL_SUBTRAP(GetMovieMatrix, 0xAAAA, 0x0031, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, GetMovieMatrix, InterfaceLib);
 
 
 void C_SetMovieMatrix(Movie theMovie, const MatrixRecord *matrix);PASCAL_SUBTRAP(SetMovieMatrix, 0xAAAA, 0x0032, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, SetMovieMatrix, InterfaceLib);
 
 
 RgnHandle C_GetMovieDisplayBoundsRgn(Movie theMovie);PASCAL_SUBTRAP(GetMovieDisplayBoundsRgn, 0xAAAA, 0x00FB, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, GetMovieDisplayBoundsRgn, InterfaceLib);
 
 
 RgnHandle C_GetMovieBoundsRgn(Movie theMovie);PASCAL_SUBTRAP(GetMovieBoundsRgn, 0xAAAA, 0x00FE, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, GetMovieBoundsRgn, InterfaceLib);
 
 
 RgnHandle C_GetMovieClipRgn(Movie theMovie);PASCAL_SUBTRAP(GetMovieClipRgn, 0xAAAA, 0x0100, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, GetMovieClipRgn, InterfaceLib);
 
 
 void C_SetMovieClipRgn(Movie theMovie, RgnHandle theClip);PASCAL_SUBTRAP(SetMovieClipRgn, 0xAAAA, 0x0101, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, SetMovieClipRgn, InterfaceLib);
 
 
 RgnHandle C_GetMovieDisplayClipRgn(Movie theMovie);PASCAL_SUBTRAP(GetMovieDisplayClipRgn, 0xAAAA, 0x00FC, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, GetMovieDisplayClipRgn, InterfaceLib);
 
 
 void C_SetMovieDisplayClipRgn(Movie theMovie, RgnHandle theClip);PASCAL_SUBTRAP(SetMovieDisplayClipRgn, 0xAAAA, 0x00FD, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, SetMovieDisplayClipRgn, InterfaceLib);
 
 
 Boolean C_PtInMovie(Movie theMovie, Point pt);PASCAL_SUBTRAP(PtInMovie, 0xAAAA, 0x009A, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, PtInMovie, InterfaceLib);
 
 
 OSErr C_GetMovieColorTable(Movie theMovie, GUEST<CTabHandle> *ctab);PASCAL_SUBTRAP(GetMovieColorTable, 0xAAAA, 0x0206, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, GetMovieColorTable, InterfaceLib);
 
 
 OSErr C_SetMovieColorTable(Movie theMovie, CTabHandle ctab);PASCAL_SUBTRAP(SetMovieColorTable, 0xAAAA, 0x0205, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, SetMovieColorTable, InterfaceLib);
 
 
 TimeBase C_GetMovieTimeBase(Movie theMovie);PASCAL_SUBTRAP(GetMovieTimeBase, 0xAAAA, 0x0012, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, GetMovieTimeBase, InterfaceLib);
 
 
 TimeScale C_GetMovieTimeScale(Movie theMovie);PASCAL_SUBTRAP(GetMovieTimeScale, 0xAAAA, 0x0029, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, GetMovieTimeScale, InterfaceLib);
 
 
 void C_SetMovieTimeScale(Movie theMovie, TimeScale timeScale);PASCAL_SUBTRAP(SetMovieTimeScale, 0xAAAA, 0x002A, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, SetMovieTimeScale, InterfaceLib);
 
 
 TimeValue C_GetMovieDuration(Movie theMovie);PASCAL_SUBTRAP(GetMovieDuration, 0xAAAA, 0x002B, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, GetMovieDuration, InterfaceLib);
 
 
 Fixed C_GetMovieRate(Movie theMovie);PASCAL_SUBTRAP(GetMovieRate, 0xAAAA, 0x002C, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, GetMovieRate, InterfaceLib);
 
 
 void C_SetMovieRate(Movie theMovie, Fixed rate);PASCAL_SUBTRAP(SetMovieRate, 0xAAAA, 0x002D, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, SetMovieRate, InterfaceLib);
 
 
 void C_SetMoviePreferredRate(Movie theMovie, Fixed rate);PASCAL_SUBTRAP(SetMoviePreferredRate, 0xAAAA, 0x00F4, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, SetMoviePreferredRate, InterfaceLib);
 
 
 TimeValue C_GetMovieTime(Movie theMovie, TimeRecord *currentTime);PASCAL_SUBTRAP(GetMovieTime, 0xAAAA, 0x0039, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, GetMovieTime, InterfaceLib);
 
 
 void C_SetMovieTime(Movie theMovie, const TimeRecord *newtime);PASCAL_SUBTRAP(SetMovieTime, 0xAAAA, 0x003C, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, SetMovieTime, InterfaceLib);
 
 
 void C_SetMovieTimeValue(Movie theMovie, TimeValue newtime);PASCAL_SUBTRAP(SetMovieTimeValue, 0xAAAA, 0x003D, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, SetMovieTimeValue, InterfaceLib);
 
 
 void C_SetMovieVolume(Movie theMovie, INTEGER volume);PASCAL_SUBTRAP(SetMovieVolume, 0xAAAA, 0x002F, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, SetMovieVolume, InterfaceLib);
 
 
 INTEGER C_GetMoviePreferredVolume(Movie theMovie);PASCAL_SUBTRAP(GetMoviePreferredVolume, 0xAAAA, 0x00F5, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, GetMoviePreferredVolume, InterfaceLib);
 
 
 void C_SetMoviePreferredVolume(Movie theMovie, INTEGER volume);PASCAL_SUBTRAP(SetMoviePreferredVolume, 0xAAAA, 0x00F6, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, SetMoviePreferredVolume, InterfaceLib);
 
 
 void C_SetMoviePlayHints(Movie theMovie, LONGINT flags, LONGINT flagsMask);PASCAL_SUBTRAP(SetMoviePlayHints, 0xAAAA, 0x01A1, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, SetMoviePlayHints, InterfaceLib);
 
 
 TimeValue C_GetMoviePosterTime(Movie theMovie);PASCAL_SUBTRAP(GetMoviePosterTime, 0xAAAA, 0x0035, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, GetMoviePosterTime, InterfaceLib);
 
 
 void C_SetMoviePosterTime(Movie theMovie, TimeValue posterTime);PASCAL_SUBTRAP(SetMoviePosterTime, 0xAAAA, 0x0036, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, SetMoviePosterTime, InterfaceLib);
 
 
 void C_GetMovieSelection(Movie theMovie, GUEST<TimeValue> *selectionTime, GUEST<TimeValue> *selectionDuration);PASCAL_SUBTRAP(GetMovieSelection, 0xAAAA, 0x0037, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, GetMovieSelection, InterfaceLib);
 
 
 void C_SetMovieSelection(Movie theMovie, TimeValue selectionTime, TimeValue selectionDuration);PASCAL_SUBTRAP(SetMovieSelection, 0xAAAA, 0x0038, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, SetMovieSelection, InterfaceLib);
 
 
 void C_GetMovieActiveSegment(Movie theMovie, GUEST<TimeValue> *startTime, GUEST<TimeValue> *duration);PASCAL_SUBTRAP(GetMovieActiveSegment, 0xAAAA, 0x015D, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, GetMovieActiveSegment, InterfaceLib);
 
 
 void C_SetMovieActiveSegment(Movie theMovie, TimeValue startTime, TimeValue duration);PASCAL_SUBTRAP(SetMovieActiveSegment, 0xAAAA, 0x015C, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, SetMovieActiveSegment, InterfaceLib);
 
 
 void C_GetMovieNextInterestingTime(Movie theMovie, INTEGER interestingTimeFlags, INTEGER numMediaTypes, const GUEST<OSType> *whichMediaTypes, TimeValue time, Fixed rate, GUEST<TimeValue> *interestingTime, GUEST<TimeValue> *interestingDuration);PASCAL_SUBTRAP(GetMovieNextInterestingTime, 0xAAAA, 0x010E, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, GetMovieNextInterestingTime, InterfaceLib);
 
 
 TimeValue C_GetTimeBaseTime(TimeBase tb, TimeScale s, TimeRecord *tr);PASCAL_SUBTRAP(GetTimeBaseTime, 0xAAAA, 0x00A6, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, GetTimeBaseTime, InterfaceLib);
 
 
 void C_SetTimeBaseTime(TimeBase tb, const TimeRecord *tr);PASCAL_SUBTRAP(SetTimeBaseTime, 0xAAAA, 0x00A7, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, SetTimeBaseTime, InterfaceLib);
 
 
 void C_SetTimeBaseValue(TimeBase tb, TimeValue t, TimeScale s);PASCAL_SUBTRAP(SetTimeBaseValue, 0xAAAA, 0x00A8, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, SetTimeBaseValue, InterfaceLib);
 
 
 Fixed C_GetTimeBaseRate(TimeBase tb);PASCAL_SUBTRAP(GetTimeBaseRate, 0xAAAA, 0x00A9, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, GetTimeBaseRate, InterfaceLib);
 
 
 void C_SetTimeBaseRate(TimeBase tb, Fixed r);PASCAL_SUBTRAP(SetTimeBaseRate, 0xAAAA, 0x00AA, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, SetTimeBaseRate, InterfaceLib);
 
 
 LONGINT C_GetTimeBaseFlags(TimeBase tb);PASCAL_SUBTRAP(GetTimeBaseFlags, 0xAAAA, 0x00B1, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, GetTimeBaseFlags, InterfaceLib);
 
 
 void C_SetTimeBaseFlags(TimeBase tb, LONGINT timeBaseFlags);PASCAL_SUBTRAP(SetTimeBaseFlags, 0xAAAA, 0x00B2, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, SetTimeBaseFlags, InterfaceLib);
 
 
 TimeValue C_GetTimeBaseStartTime(TimeBase tb, TimeScale s, TimeRecord *tr);PASCAL_SUBTRAP(GetTimeBaseStartTime, 0xAAAA, 0x00AB, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, GetTimeBaseStartTime, InterfaceLib);
 
 
 TimeValue C_GetTimeBaseStopTime(TimeBase tb, TimeScale s, TimeRecord *tr);PASCAL_SUBTRAP(GetTimeBaseStopTime, 0xAAAA, 0x00AD, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, GetTimeBaseStopTime, InterfaceLib);
 
 
 void C_SetTimeBaseStartTime(TimeBase tb, const TimeRecord *tr);PASCAL_SUBTRAP(SetTimeBaseStartTime, 0xAAAA, 0x00AC, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, SetTimeBaseStartTime, InterfaceLib);
 
 
 void C_SetTimeBaseStopTime(TimeBase tb, const TimeRecord *tr);PASCAL_SUBTRAP(SetTimeBaseStopTime, 0xAAAA, 0x00AE, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, SetTimeBaseStopTime, InterfaceLib);
 
 
 LONGINT C_GetMovieTrackCount(Movie theMovie);PASCAL_SUBTRAP(GetMovieTrackCount, 0xAAAA, 0x003F, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, GetMovieTrackCount, InterfaceLib);
 
 
 Track C_GetMovieTrack(Movie theMovie, LONGINT trackID);PASCAL_SUBTRAP(GetMovieTrack, 0xAAAA, 0x0040, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, GetMovieTrack, InterfaceLib);
 
 
 Track C_GetMovieIndTrack(Movie theMovie, LONGINT index);PASCAL_SUBTRAP(GetMovieIndTrack, 0xAAAA, 0x0117, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, GetMovieIndTrack, InterfaceLib);
 
 
 Track C_GetMovieIndTrackType(Movie theMovie, LONGINT index, OSType trackType, LONGINT flags);PASCAL_SUBTRAP(GetMovieIndTrackType, 0xAAAA, 0x0208, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, GetMovieIndTrackType, InterfaceLib);
 
 
 LONGINT C_GetTrackID(Track theTrack);PASCAL_SUBTRAP(GetTrackID, 0xAAAA, 0x0127, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, GetTrackID, InterfaceLib);
 
 
 Movie C_GetTrackMovie(Track theTrack);PASCAL_SUBTRAP(GetTrackMovie, 0xAAAA, 0x00D0, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, GetTrackMovie, InterfaceLib);
 
 
 Media C_GetTrackMedia(Track theTrack);PASCAL_SUBTRAP(GetTrackMedia, 0xAAAA, 0x0062, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, GetTrackMedia, InterfaceLib);
 
 
 Boolean C_GetTrackEnabled(Track theTrack);PASCAL_SUBTRAP(GetTrackEnabled, 0xAAAA, 0x0045, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, GetTrackEnabled, InterfaceLib);
 
 
 void C_SetTrackEnabled(Track theTrack, Boolean isEnabled);PASCAL_SUBTRAP(SetTrackEnabled, 0xAAAA, 0x0046, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, SetTrackEnabled, InterfaceLib);
 
 
 TimeValue C_GetTrackDuration(Track theTrack);PASCAL_SUBTRAP(GetTrackDuration, 0xAAAA, 0x004B, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, GetTrackDuration, InterfaceLib);
 
 
 TimeValue C_GetTrackOffset(Track theTrack);PASCAL_SUBTRAP(GetTrackOffset, 0xAAAA, 0x004C, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, GetTrackOffset, InterfaceLib);
 
 
 void C_GetTrackDimensions(Track theTrack, GUEST<Fixed> *width, GUEST<Fixed> *height);PASCAL_SUBTRAP(GetTrackDimensions, 0xAAAA, 0x005D, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, GetTrackDimensions, InterfaceLib);
 
 
 void C_SetTrackDimensions(Track theTrack, Fixed width, Fixed height);PASCAL_SUBTRAP(SetTrackDimensions, 0xAAAA, 0x005E, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, SetTrackDimensions, InterfaceLib);
 
 
 void C_GetTrackMatrix(Track theTrack, MatrixRecord *matrix);PASCAL_SUBTRAP(GetTrackMatrix, 0xAAAA, 0x0056, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, GetTrackMatrix, InterfaceLib);
 
 
 void C_SetTrackMatrix(Track theTrack, const MatrixRecord *matrix);PASCAL_SUBTRAP(SetTrackMatrix, 0xAAAA, 0x0057, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, SetTrackMatrix, InterfaceLib);
 
 
 INTEGER C_GetTrackLayer(Track theTrack);PASCAL_SUBTRAP(GetTrackLayer, 0xAAAA, 0x0050, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, GetTrackLayer, InterfaceLib);
 
 
 void C_SetTrackLayer(Track theTrack, INTEGER layer);PASCAL_SUBTRAP(SetTrackLayer, 0xAAAA, 0x0051, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, SetTrackLayer, InterfaceLib);
 
 
 Track C_GetTrackAlternate(Track theTrack);PASCAL_SUBTRAP(GetTrackAlternate, 0xAAAA, 0x0052, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, GetTrackAlternate, InterfaceLib);
 
 
 void C_SetTrackAlternate(Track theTrack, Track alternateT);PASCAL_SUBTRAP(SetTrackAlternate, 0xAAAA, 0x0053, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, SetTrackAlternate, InterfaceLib);
 
 
 INTEGER C_GetTrackVolume(Track theTrack);PASCAL_SUBTRAP(GetTrackVolume, 0xAAAA, 0x0054, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, GetTrackVolume, InterfaceLib);
 
 
 void C_SetTrackVolume(Track theTrack, INTEGER volume);PASCAL_SUBTRAP(SetTrackVolume, 0xAAAA, 0x0055, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, SetTrackVolume, InterfaceLib);
 
 
 UserData C_GetTrackUserData(Track theTrack);PASCAL_SUBTRAP(GetTrackUserData, 0xAAAA, 0x005F, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, GetTrackUserData, InterfaceLib);
 
 
 LONGINT C_GetTrackUsage(Track theTrack);PASCAL_SUBTRAP(GetTrackUsage, 0xAAAA, 0x0047, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, GetTrackUsage, InterfaceLib);
 
 
 void C_SetTrackUsage(Track theTrack, LONGINT usage);PASCAL_SUBTRAP(SetTrackUsage, 0xAAAA, 0x0048, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, SetTrackUsage, InterfaceLib);
 
 
 Track C_NewMovieTrack(Movie theMovie, Fixed width, Fixed height, INTEGER trackVolume);PASCAL_SUBTRAP(NewMovieTrack, 0xAAAA, 0x0188, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, NewMovieTrack, InterfaceLib);
 
 
 void C_DisposeMovieTrack(Track theTrack);PASCAL_SUBTRAP(DisposeMovieTrack, 0xAAAA, 0x0042, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, DisposeMovieTrack, InterfaceLib);
 
 
 Track C_GetMediaTrack(Media theMedia);PASCAL_SUBTRAP(GetMediaTrack, 0xAAAA, 0x00C5, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, GetMediaTrack, InterfaceLib);
 
 
 TimeScale C_GetMediaTimeScale(Media theMedia);PASCAL_SUBTRAP(GetMediaTimeScale, 0xAAAA, 0x0068, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, GetMediaTimeScale, InterfaceLib);
 
 
 void C_SetMediaTimeScale(Media theMedia, TimeScale timeScale);PASCAL_SUBTRAP(SetMediaTimeScale, 0xAAAA, 0x0069, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, SetMediaTimeScale, InterfaceLib);
 
 
 TimeValue C_GetMediaDuration(Media theMedia);PASCAL_SUBTRAP(GetMediaDuration, 0xAAAA, 0x006A, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, GetMediaDuration, InterfaceLib);
 
 
 void C_GetMediaHandlerDescription(Media theMedia, GUEST<OSType> *mediaType, StringPtr creatorName, GUEST<OSType> *creatorManufacturer);PASCAL_SUBTRAP(GetMediaHandlerDescription, 0xAAAA, 0x006F, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, GetMediaHandlerDescription, InterfaceLib);
 
 
 LONGINT C_GetMediaSampleCount(Media theMedia);PASCAL_SUBTRAP(GetMediaSampleCount, 0xAAAA, 0x0079, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, GetMediaSampleCount, InterfaceLib);
 
 
 LONGINT C_GetMediaSampleDescriptionCount(Media theMedia);PASCAL_SUBTRAP(GetMediaSampleDescriptionCount, 0xAAAA, 0x0077, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, GetMediaSampleDescriptionCount, InterfaceLib);
 
 
 void C_GetMediaSampleDescription(Media theMedia, LONGINT index, SampleDescriptionHandle descH);PASCAL_SUBTRAP(GetMediaSampleDescription, 0xAAAA, 0x0078, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, GetMediaSampleDescription, InterfaceLib);
 
 
 INTEGER C_GetMediaLanguage(Media theMedia);PASCAL_SUBTRAP(GetMediaLanguage, 0xAAAA, 0x006B, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, GetMediaLanguage, InterfaceLib);
 
 
 INTEGER C_GetMediaQuality(Media theMedia);PASCAL_SUBTRAP(GetMediaQuality, 0xAAAA, 0x006D, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, GetMediaQuality, InterfaceLib);
 
 
 Media C_NewTrackMedia(Track theTrack, OSType mediaType, TimeScale timeScale, Handle dataRef, OSType dataRefType);PASCAL_SUBTRAP(NewTrackMedia, 0xAAAA, 0x018E, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, NewTrackMedia, InterfaceLib);
 
 
 void C_DisposeTrackMedia(Media theMedia);PASCAL_SUBTRAP(DisposeTrackMedia, 0xAAAA, 0x0061, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, DisposeTrackMedia, InterfaceLib);
 
 
 OSErr C_BeginMediaEdits(Media theMedia);PASCAL_SUBTRAP(BeginMediaEdits, 0xAAAA, 0x0072, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, BeginMediaEdits, InterfaceLib);
 
 
 OSErr C_EndMediaEdits(Media theMedia);PASCAL_SUBTRAP(EndMediaEdits, 0xAAAA, 0x0073, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, EndMediaEdits, InterfaceLib);
 
 
 OSErr C_AddMediaSample(Media theMedia, Handle dataIn, LONGINT inOffset, ULONGINT size, TimeValue durationPerSample, SampleDescriptionHandle sampleDescriptionH, LONGINT numberOfSamples, INTEGER sampleFlags, GUEST<TimeValue> *sampleTime);PASCAL_SUBTRAP(AddMediaSample, 0xAAAA, 0x007C, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, AddMediaSample, InterfaceLib);
 
 
 OSErr C_InsertMediaIntoTrack(Track theTrack, TimeValue trackStart, TimeValue mediaTime, TimeValue mediaDuration, Fixed mediaRate);PASCAL_SUBTRAP(InsertMediaIntoTrack, 0xAAAA, 0x0183, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, InsertMediaIntoTrack, InterfaceLib);
 
 
 void C_MediaTimeToSampleNum(Media theMedia, TimeValue time, GUEST<LONGINT> *sampleNum, GUEST<TimeValue> *sampleTime, GUEST<TimeValue> *sampleDuration);PASCAL_SUBTRAP(MediaTimeToSampleNum, 0xAAAA, 0x007B, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, MediaTimeToSampleNum, InterfaceLib);
 
 
 void C_SampleNumToMediaTime(Media theMedia, LONGINT logicalSampleNum, GUEST<TimeValue> *sampleTime, GUEST<TimeValue> *sampleDuration);PASCAL_SUBTRAP(SampleNumToMediaTime, 0xAAAA, 0x007A, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, SampleNumToMediaTime, InterfaceLib);
 
 
 OSErr C_GetMediaSample(Media theMedia, Handle dataOut, LONGINT maxSizeToGrow, GUEST<LONGINT> *size, TimeValue time, GUEST<TimeValue> *sampleTime, GUEST<TimeValue> *durationPerSample, SampleDescriptionHandle sampleDescriptionH, GUEST<LONGINT> *sampleDescriptionIndex, LONGINT maxNumberOfSamples, GUEST<LONGINT> *numberOfSamples, GUEST<INTEGER> *sampleFlags);PASCAL_SUBTRAP(GetMediaSample, 0xAAAA, 0x007E, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, GetMediaSample, InterfaceLib);
 
 
 OSErr C_NewMovieFromHandle(GUEST<Movie> *theMovie, Handle h, INTEGER newMovieFlags, Boolean *dataRefWasChanged);PASCAL_SUBTRAP(NewMovieFromHandle, 0xAAAA, 0x00F1, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, NewMovieFromHandle, InterfaceLib);
 
 
 OSErr C_NewMovieFromDataFork(GUEST<Movie> *theMovie, INTEGER fRefNum, LONGINT fileOffset, INTEGER newMovieFlags, Boolean *dataRefWasChanged);PASCAL_SUBTRAP(NewMovieFromDataFork, 0xAAAA, 0x01B3, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, NewMovieFromDataFork, InterfaceLib);
 
 
 Movie C_NewMovie(LONGINT flags);PASCAL_SUBTRAP(NewMovie, 0xAAAA, 0x0187, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, NewMovie, InterfaceLib);
 
 
 OSErr C_CreateMovieFile(const FSSpec *fileSpec, OSType creator, INTEGER scriptTag, LONGINT createMovieFileFlags, GUEST<INTEGER> *resRefNum, GUEST<Movie> *newmovie);PASCAL_SUBTRAP(CreateMovieFile, 0xAAAA, 0x0191, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, CreateMovieFile, InterfaceLib);
 
 
 OSErr C_DeleteMovieFile(const FSSpec *fileSpec);PASCAL_SUBTRAP(DeleteMovieFile, 0xAAAA, 0x0175, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, DeleteMovieFile, InterfaceLib);
 
 
 OSErr C_AddMovieResource(Movie theMovie, INTEGER resRefNum, GUEST<INTEGER> *resId, ConstStr255Param resName);PASCAL_SUBTRAP(AddMovieResource, 0xAAAA, 0x00D7, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, AddMovieResource, InterfaceLib);
 
 
 OSErr C_UpdateMovieResource(Movie theMovie, INTEGER resRefNum, INTEGER resId, ConstStr255Param resName);PASCAL_SUBTRAP(UpdateMovieResource, 0xAAAA, 0x00D8, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, UpdateMovieResource, InterfaceLib);
 
 
 void C_FlattenMovie(Movie theMovie, LONGINT movieFlattenFlags, const FSSpec *theFile, OSType creator, INTEGER scriptTag, LONGINT createMovieFileFlags, GUEST<INTEGER> *resId, ConstStr255Param resName);PASCAL_SUBTRAP(FlattenMovie, 0xAAAA, 0x019B, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, FlattenMovie, InterfaceLib);
 
 
 Movie C_FlattenMovieData(Movie theMovie, LONGINT movieFlattenFlags, const FSSpec *theFile, OSType creator, INTEGER scriptTag, LONGINT createMovieFileFlags);PASCAL_SUBTRAP(FlattenMovieData, 0xAAAA, 0x019C, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, FlattenMovieData, InterfaceLib);
 
 
 OSErr C_PutMovieIntoHandle(Movie theMovie, Handle publicMovie);PASCAL_SUBTRAP(PutMovieIntoHandle, 0xAAAA, 0x0022, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, PutMovieIntoHandle, InterfaceLib);
 
 
 UserData C_GetMovieUserData(Movie theMovie);PASCAL_SUBTRAP(GetMovieUserData, 0xAAAA, 0x003E, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, GetMovieUserData, InterfaceLib);
 
 
 OSErr C_GetUserData(UserData theUserData, Handle data, OSType udType, LONGINT index);PASCAL_SUBTRAP(GetUserData, 0xAAAA, 0x009E, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, GetUserData, InterfaceLib);
+
+
+OSErr C_GetUserDataItem(UserData theUserData, void *data, LONGINT size, OSType udType, LONGINT index);PASCAL_SUBTRAP(GetUserDataItem, 0xAAAA, 0x0126, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, GetUserDataItem, InterfaceLib);
 
 
 INTEGER C_CountUserDataType(UserData theUserData, OSType udType);PASCAL_SUBTRAP(CountUserDataType, 0xAAAA, 0x014B, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, CountUserDataType, InterfaceLib);
 
 
 LONGINT C_GetNextUserDataType(UserData theUserData, OSType udType);PASCAL_SUBTRAP(GetNextUserDataType, 0xAAAA, 0x01A5, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, GetNextUserDataType, InterfaceLib);
 
 
 OSErr C_GetUserDataText(UserData theUserData, Handle data, OSType udType, LONGINT index, INTEGER itlRegionTag);PASCAL_SUBTRAP(GetUserDataText, 0xAAAA, 0x014D, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, GetUserDataText, InterfaceLib);
 
 
 ULONGINT C_GetMovieCreationTime(Movie theMovie);PASCAL_SUBTRAP(GetMovieCreationTime, 0xAAAA, 0x0026, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, GetMovieCreationTime, InterfaceLib);
 
 
 ULONGINT C_GetMovieModificationTime(Movie theMovie);PASCAL_SUBTRAP(GetMovieModificationTime, 0xAAAA, 0x0027, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, GetMovieModificationTime, InterfaceLib);
 
 
 ComponentResult C_GetMovieStatus(Movie theMovie, GUEST<Track> *firstProblemTrack);PASCAL_SUBTRAP(GetMovieStatus, 0xAAAA, 0x0173, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, GetMovieStatus, InterfaceLib);
 
 
 ComponentResult C_GetTrackStatus(Track theTrack);PASCAL_SUBTRAP(GetTrackStatus, 0xAAAA, 0x0172, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, GetTrackStatus, InterfaceLib);
 
 
 Boolean C_HasMovieChanged(Movie theMovie);PASCAL_SUBTRAP(HasMovieChanged, 0xAAAA, 0x00D9, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, HasMovieChanged, InterfaceLib);
 
 
 void C_ClearMovieChanged(Movie theMovie);PASCAL_SUBTRAP(ClearMovieChanged, 0xAAAA, 0x0113, QuickTime);
+LIBRARY_ALSO(QuickTimeLib, ClearMovieChanged, InterfaceLib);
 
 
 typedef ComponentInstance MovieController;
@@ -500,135 +642,179 @@ using MCActionFilterWithRefConUPP = UPP<Boolean(ComponentInstance mc, INTEGER ac
 
 
 
+COMPONENT_CALL(QuickTimeLib, MCSetMovie, 0x0002, "444");
 ComponentResult C_MCSetMovie(ComponentInstance mc, Movie theMovie, WindowRef movieWindow, Point where);COMPONENT_FUNCTION(MovieController, MCSetMovie, 0x0002, C_MCSetMovie);
 
 
+COMPONENT_CALL(QuickTimeLib, MCRemoveAMovie, 0x0003, "4");
 ComponentResult C_MCRemoveAMovie(ComponentInstance mc, Movie m);COMPONENT_FUNCTION(MovieController, MCRemoveAMovie, 0x0003, C_MCRemoveAMovie);
 
 
+COMPONENT_CALL(QuickTimeLib, MCGetIndMovie, 0x0005, "2");
 Movie C_MCGetIndMovie(ComponentInstance mc, INTEGER index);COMPONENT_FUNCTION(MovieController, MCGetIndMovie, 0x0005, C_MCGetIndMovie);
 
 
+COMPONENT_CALL(QuickTimeLib, MCRemoveAllMovies, 0x0006, "");
 ComponentResult C_MCRemoveAllMovies(ComponentInstance mc);COMPONENT_FUNCTION(MovieController, MCRemoveAllMovies, 0x0006, C_MCRemoveAllMovies);
 
 
+COMPONENT_CALL(QuickTimeLib, MCIsPlayerEvent, 0x0007, "4");
 ComponentResult C_MCIsPlayerEvent(ComponentInstance mc, const EventRecord *e);COMPONENT_FUNCTION(MovieController, MCIsPlayerEvent, 0x0007, C_MCIsPlayerEvent);
 
 
+COMPONENT_CALL(QuickTimeLib, MCSetActionFilter, 0x0008, "4");
 ComponentResult C_MCSetActionFilter(ComponentInstance mc, MCActionFilterUPP blob);COMPONENT_FUNCTION(MovieController, MCSetActionFilter, 0x0008, C_MCSetActionFilter);
 
 
+COMPONENT_CALL(QuickTimeLib, MCDoAction, 0x0009, "24");
 ComponentResult C_MCDoAction(ComponentInstance mc, INTEGER action, void *params);COMPONENT_FUNCTION(MovieController, MCDoAction, 0x0009, C_MCDoAction);
 
 
+COMPONENT_CALL(QuickTimeLib, MCSetControllerAttached, 0x000A, "2");
 ComponentResult C_MCSetControllerAttached(ComponentInstance mc, Boolean attach);COMPONENT_FUNCTION(MovieController, MCSetControllerAttached, 0x000A, C_MCSetControllerAttached);
 
 
+COMPONENT_CALL(QuickTimeLib, MCIsControllerAttached, 0x000B, "");
 ComponentResult C_MCIsControllerAttached(ComponentInstance mc);COMPONENT_FUNCTION(MovieController, MCIsControllerAttached, 0x000B, C_MCIsControllerAttached);
 
 
+COMPONENT_CALL(QuickTimeLib, MCSetControllerPort, 0x000C, "4");
 ComponentResult C_MCSetControllerPort(ComponentInstance mc, CGrafPtr gp);COMPONENT_FUNCTION(MovieController, MCSetControllerPort, 0x000C, C_MCSetControllerPort);
 
 
+COMPONENT_CALL(QuickTimeLib, MCGetControllerPort, 0x000D, "");
 CGrafPtr C_MCGetControllerPort(ComponentInstance mc);COMPONENT_FUNCTION(MovieController, MCGetControllerPort, 0x000D, C_MCGetControllerPort);
 
 
+COMPONENT_CALL(QuickTimeLib, MCSetVisible, 0x000E, "2");
 ComponentResult C_MCSetVisible(ComponentInstance mc, Boolean visible);COMPONENT_FUNCTION(MovieController, MCSetVisible, 0x000E, C_MCSetVisible);
 
 
+COMPONENT_CALL(QuickTimeLib, MCGetVisible, 0x000F, "");
 ComponentResult C_MCGetVisible(ComponentInstance mc);COMPONENT_FUNCTION(MovieController, MCGetVisible, 0x000F, C_MCGetVisible);
 
 
+COMPONENT_CALL(QuickTimeLib, MCGetControllerBoundsRect, 0x0010, "4");
 ComponentResult C_MCGetControllerBoundsRect(ComponentInstance mc, Rect *bounds);COMPONENT_FUNCTION(MovieController, MCGetControllerBoundsRect, 0x0010, C_MCGetControllerBoundsRect);
 
 
+COMPONENT_CALL(QuickTimeLib, MCSetControllerBoundsRect, 0x0011, "4");
 ComponentResult C_MCSetControllerBoundsRect(ComponentInstance mc, const Rect *bounds);COMPONENT_FUNCTION(MovieController, MCSetControllerBoundsRect, 0x0011, C_MCSetControllerBoundsRect);
 
 
+COMPONENT_CALL(QuickTimeLib, MCGetControllerBoundsRgn, 0x0012, "");
 RgnHandle C_MCGetControllerBoundsRgn(ComponentInstance mc);COMPONENT_FUNCTION(MovieController, MCGetControllerBoundsRgn, 0x0012, C_MCGetControllerBoundsRgn);
 
 
+COMPONENT_CALL(QuickTimeLib, MCGetWindowRgn, 0x0013, "4");
 RgnHandle C_MCGetWindowRgn(ComponentInstance mc, WindowRef w);COMPONENT_FUNCTION(MovieController, MCGetWindowRgn, 0x0013, C_MCGetWindowRgn);
 
 
+COMPONENT_CALL(QuickTimeLib, MCMovieChanged, 0x0014, "4");
 ComponentResult C_MCMovieChanged(ComponentInstance mc, Movie m);COMPONENT_FUNCTION(MovieController, MCMovieChanged, 0x0014, C_MCMovieChanged);
 
 
+COMPONENT_CALL(QuickTimeLib, MCSetDuration, 0x0015, "4");
 ComponentResult C_MCSetDuration(ComponentInstance mc, TimeValue duration);COMPONENT_FUNCTION(MovieController, MCSetDuration, 0x0015, C_MCSetDuration);
 
 
+COMPONENT_CALL(QuickTimeLib, MCGetCurrentTime, 0x0016, "4");
 TimeValue C_MCGetCurrentTime(ComponentInstance mc, GUEST<TimeScale> *scale);COMPONENT_FUNCTION(MovieController, MCGetCurrentTime, 0x0016, C_MCGetCurrentTime);
 
 
+COMPONENT_CALL(QuickTimeLib, MCNewAttachedController, 0x0017, "444");
 ComponentResult C_MCNewAttachedController(ComponentInstance mc, Movie theMovie, WindowRef w, Point where);COMPONENT_FUNCTION(MovieController, MCNewAttachedController, 0x0017, C_MCNewAttachedController);
 
 
+COMPONENT_CALL(QuickTimeLib, MCDraw, 0x0018, "4");
 ComponentResult C_MCDraw(ComponentInstance mc, WindowRef w);COMPONENT_FUNCTION(MovieController, MCDraw, 0x0018, C_MCDraw);
 
 
+COMPONENT_CALL(QuickTimeLib, MCActivate, 0x0019, "42");
 ComponentResult C_MCActivate(ComponentInstance mc, WindowRef w, Boolean activate);COMPONENT_FUNCTION(MovieController, MCActivate, 0x0019, C_MCActivate);
 
 
+COMPONENT_CALL(QuickTimeLib, MCIdle, 0x001A, "");
 ComponentResult C_MCIdle(ComponentInstance mc);COMPONENT_FUNCTION(MovieController, MCIdle, 0x001A, C_MCIdle);
 
 
+COMPONENT_CALL(QuickTimeLib, MCKey, 0x001B, "24");
 ComponentResult C_MCKey(ComponentInstance mc, SignedByte key, LONGINT modifiers);COMPONENT_FUNCTION(MovieController, MCKey, 0x001B, C_MCKey);
 
 
+COMPONENT_CALL(QuickTimeLib, MCClick, 0x001C, "4444");
 ComponentResult C_MCClick(ComponentInstance mc, WindowRef w, Point where, LONGINT when, LONGINT modifiers);COMPONENT_FUNCTION(MovieController, MCClick, 0x001C, C_MCClick);
 
 
+COMPONENT_CALL(QuickTimeLib, MCEnableEditing, 0x001D, "2");
 ComponentResult C_MCEnableEditing(ComponentInstance mc, Boolean enabled);COMPONENT_FUNCTION(MovieController, MCEnableEditing, 0x001D, C_MCEnableEditing);
 
 
+COMPONENT_CALL(QuickTimeLib, MCIsEditingEnabled, 0x001E, "");
 LONGINT C_MCIsEditingEnabled(ComponentInstance mc);COMPONENT_FUNCTION(MovieController, MCIsEditingEnabled, 0x001E, C_MCIsEditingEnabled);
 
 
+COMPONENT_CALL(QuickTimeLib, MCCopy, 0x001F, "");
 Movie C_MCCopy(ComponentInstance mc);COMPONENT_FUNCTION(MovieController, MCCopy, 0x001F, C_MCCopy);
 
 
+COMPONENT_CALL(QuickTimeLib, MCCut, 0x0020, "");
 Movie C_MCCut(ComponentInstance mc);COMPONENT_FUNCTION(MovieController, MCCut, 0x0020, C_MCCut);
 
 
+COMPONENT_CALL(QuickTimeLib, MCPaste, 0x0021, "4");
 ComponentResult C_MCPaste(ComponentInstance mc, Movie srcMovie);COMPONENT_FUNCTION(MovieController, MCPaste, 0x0021, C_MCPaste);
 
 
+COMPONENT_CALL(QuickTimeLib, MCClear, 0x0022, "");
 ComponentResult C_MCClear(ComponentInstance mc);COMPONENT_FUNCTION(MovieController, MCClear, 0x0022, C_MCClear);
 
 
+COMPONENT_CALL(QuickTimeLib, MCUndo, 0x0023, "");
 ComponentResult C_MCUndo(ComponentInstance mc);COMPONENT_FUNCTION(MovieController, MCUndo, 0x0023, C_MCUndo);
 
 
+COMPONENT_CALL(QuickTimeLib, MCPositionController, 0x0024, "444");
 ComponentResult C_MCPositionController(ComponentInstance mc, const Rect *movieRect, const Rect *controllerRect, LONGINT someFlags);COMPONENT_FUNCTION(MovieController, MCPositionController, 0x0024, C_MCPositionController);
 
 
+COMPONENT_CALL(QuickTimeLib, MCGetControllerInfo, 0x0025, "4");
 ComponentResult C_MCGetControllerInfo(ComponentInstance mc, GUEST<LONGINT> *someFlags);COMPONENT_FUNCTION(MovieController, MCGetControllerInfo, 0x0025, C_MCGetControllerInfo);
 
 
+COMPONENT_CALL(QuickTimeLib, MCSetClip, 0x0028, "44");
 ComponentResult C_MCSetClip(ComponentInstance mc, RgnHandle theClip, RgnHandle movieClip);COMPONENT_FUNCTION(MovieController, MCSetClip, 0x0028, C_MCSetClip);
 
 
+COMPONENT_CALL(QuickTimeLib, MCGetClip, 0x0029, "44");
 ComponentResult C_MCGetClip(ComponentInstance mc, GUEST<RgnHandle> *theClip, GUEST<RgnHandle> *movieClip);COMPONENT_FUNCTION(MovieController, MCGetClip, 0x0029, C_MCGetClip);
 
 
+COMPONENT_CALL(QuickTimeLib, MCDrawBadge, 0x002A, "44");
 ComponentResult C_MCDrawBadge(ComponentInstance mc, RgnHandle movieRgn, GUEST<RgnHandle> *badgeRgn);COMPONENT_FUNCTION(MovieController, MCDrawBadge, 0x002A, C_MCDrawBadge);
 
 
+COMPONENT_CALL(QuickTimeLib, MCSetUpEditMenu, 0x002B, "44");
 ComponentResult C_MCSetUpEditMenu(ComponentInstance mc, LONGINT modifiers, MenuHandle mh);COMPONENT_FUNCTION(MovieController, MCSetUpEditMenu, 0x002B, C_MCSetUpEditMenu);
 
 
+COMPONENT_CALL(QuickTimeLib, MCGetMenuString, 0x002C, "424");
 ComponentResult C_MCGetMenuString(ComponentInstance mc, LONGINT modifiers, INTEGER item, StringPtr aString);COMPONENT_FUNCTION(MovieController, MCGetMenuString, 0x002C, C_MCGetMenuString);
 
 
+COMPONENT_CALL(QuickTimeLib, MCSetActionFilterWithRefCon, 0x002D, "44");
 ComponentResult C_MCSetActionFilterWithRefCon(ComponentInstance mc, MCActionFilterWithRefConUPP blob, LONGINT refCon);COMPONENT_FUNCTION(MovieController, MCSetActionFilterWithRefCon, 0x002D, C_MCSetActionFilterWithRefCon);
 
 
+COMPONENT_CALL(QuickTimeLib, MCPtInController, 0x002E, "44");
 ComponentResult C_MCPtInController(ComponentInstance mc, Point thePt, Boolean *inController);COMPONENT_FUNCTION(MovieController, MCPtInController, 0x002E, C_MCPtInController);
 
 
+COMPONENT_CALL(QuickTimeLib, MCInvalidate, 0x002F, "44");
 ComponentResult C_MCInvalidate(ComponentInstance mc, WindowRef w, RgnHandle invalidRgn);COMPONENT_FUNCTION(MovieController, MCInvalidate, 0x002F, C_MCInvalidate);
 
 
+COMPONENT_CALL(QuickTimeLib, MCAdjustCursor, 0x0030, "444");
 ComponentResult C_MCAdjustCursor(ComponentInstance mc, WindowRef w, Point where, LONGINT modifiers);COMPONENT_FUNCTION(MovieController, MCAdjustCursor, 0x0030, C_MCAdjustCursor);
 
 

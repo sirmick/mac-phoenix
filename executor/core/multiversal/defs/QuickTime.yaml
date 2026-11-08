@@ -4,7 +4,7 @@
 # Executor implements it in C++ (movies.cpp; docs/executor/QuickTime.md,
 # route B) over Apple's codecs through its own ICM. The movie controller
 # ('play' component, NewMovieController) is Executor's own (mc.cpp). PowerPC code
-# reaches these through QuickTimeLib, which Executor doesn't export yet.
+# reaches these through QuickTimeLib, Executor's (library: QuickTimeLib).
 
 - struct:
     name: MovieRecord
@@ -149,6 +149,7 @@
     return: OSErr
     dispatcher: QuickTime
     selector: 0x0001
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -157,6 +158,7 @@
     name: ExitMovies
     dispatcher: QuickTime
     selector: 0x0002
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -170,6 +172,7 @@
         type: LONGINT
     dispatcher: QuickTime
     selector: 0x0005
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -186,6 +189,7 @@
         type: Fixed
     dispatcher: QuickTime
     selector: 0x0006
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -199,6 +203,7 @@
         type: Boolean
     dispatcher: QuickTime
     selector: 0x0009
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -210,6 +215,7 @@
         type: Movie
     dispatcher: QuickTime
     selector: 0x000B
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -221,6 +227,7 @@
         type: Movie
     dispatcher: QuickTime
     selector: 0x000C
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -232,6 +239,7 @@
         type: Movie
     dispatcher: QuickTime
     selector: 0x000D
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -247,6 +255,7 @@
         type: GDHandle
     dispatcher: QuickTime
     selector: 0x0016
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -259,6 +268,7 @@
         type: Movie
     dispatcher: QuickTime
     selector: 0x001F
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -270,6 +280,7 @@
         type: Movie
     dispatcher: QuickTime
     selector: 0x0023
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -282,6 +293,7 @@
         type: Movie
     dispatcher: QuickTime
     selector: 0x002E
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -294,6 +306,7 @@
         type: INTEGER
     dispatcher: QuickTime
     selector: 0x00D5
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -306,6 +319,7 @@
         type: Movie
     dispatcher: QuickTime
     selector: 0x00DD
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -328,6 +342,7 @@
         type: Boolean*
     dispatcher: QuickTime
     selector: 0x00F0
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -340,6 +355,7 @@
         type: Movie
     dispatcher: QuickTime
     selector: 0x00F3
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -353,6 +369,7 @@
         type: Rect*
     dispatcher: QuickTime
     selector: 0x00F9
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -366,6 +383,7 @@
         type: const Rect*
     dispatcher: QuickTime
     selector: 0x00FA
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -382,6 +400,7 @@
         type: LONGINT
     dispatcher: QuickTime
     selector: 0x018A
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -393,6 +412,7 @@
         type: ComponentInstance
     dispatcher: QuickTime
     selector: 0x018B
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -409,6 +429,7 @@
         type: uint8_t
     dispatcher: QuickTime
     selector: 0x0192
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -418,6 +439,7 @@
     return: OSErr
     dispatcher: QuickTime
     selector: 0x0003
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -426,6 +448,7 @@
     name: ClearMoviesStickyError
     dispatcher: QuickTime
     selector: 0x00DE
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -435,6 +458,7 @@
     return: OSErr
     dispatcher: QuickTime
     selector: 0x0004
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -453,6 +477,7 @@
         type: LONGINT
     dispatcher: QuickTime
     selector: 0x0007
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -471,6 +496,7 @@
         type: LONGINT
     dispatcher: QuickTime
     selector: 0x016E
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -483,6 +509,7 @@
         type: Movie
     dispatcher: QuickTime
     selector: 0x000A
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -494,6 +521,7 @@
         type: Movie
     dispatcher: QuickTime
     selector: 0x000E
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -509,6 +537,7 @@
         type: GDHandle*
     dispatcher: QuickTime
     selector: 0x0015
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -522,6 +551,7 @@
         type: MatrixRecord*
     dispatcher: QuickTime
     selector: 0x0031
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -535,6 +565,7 @@
         type: const MatrixRecord*
     dispatcher: QuickTime
     selector: 0x0032
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -547,6 +578,7 @@
         type: Movie
     dispatcher: QuickTime
     selector: 0x00FB
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -559,6 +591,7 @@
         type: Movie
     dispatcher: QuickTime
     selector: 0x00FE
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -571,6 +604,7 @@
         type: Movie
     dispatcher: QuickTime
     selector: 0x0100
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -584,6 +618,7 @@
         type: RgnHandle
     dispatcher: QuickTime
     selector: 0x0101
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -596,6 +631,7 @@
         type: Movie
     dispatcher: QuickTime
     selector: 0x00FC
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -609,6 +645,7 @@
         type: RgnHandle
     dispatcher: QuickTime
     selector: 0x00FD
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -623,6 +660,7 @@
         type: Point
     dispatcher: QuickTime
     selector: 0x009A
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -637,6 +675,7 @@
         type: CTabHandle*
     dispatcher: QuickTime
     selector: 0x0206
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -651,6 +690,7 @@
         type: CTabHandle
     dispatcher: QuickTime
     selector: 0x0205
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -663,6 +703,7 @@
         type: Movie
     dispatcher: QuickTime
     selector: 0x0012
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -675,6 +716,7 @@
         type: Movie
     dispatcher: QuickTime
     selector: 0x0029
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -688,6 +730,7 @@
         type: TimeScale
     dispatcher: QuickTime
     selector: 0x002A
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -700,6 +743,7 @@
         type: Movie
     dispatcher: QuickTime
     selector: 0x002B
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -712,6 +756,7 @@
         type: Movie
     dispatcher: QuickTime
     selector: 0x002C
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -725,6 +770,7 @@
         type: Fixed
     dispatcher: QuickTime
     selector: 0x002D
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -738,6 +784,7 @@
         type: Fixed
     dispatcher: QuickTime
     selector: 0x00F4
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -752,6 +799,7 @@
         type: TimeRecord*
     dispatcher: QuickTime
     selector: 0x0039
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -765,6 +813,7 @@
         type: const TimeRecord*
     dispatcher: QuickTime
     selector: 0x003C
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -778,6 +827,7 @@
         type: TimeValue
     dispatcher: QuickTime
     selector: 0x003D
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -791,6 +841,7 @@
         type: INTEGER
     dispatcher: QuickTime
     selector: 0x002F
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -803,6 +854,7 @@
         type: Movie
     dispatcher: QuickTime
     selector: 0x00F5
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -816,6 +868,7 @@
         type: INTEGER
     dispatcher: QuickTime
     selector: 0x00F6
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -831,6 +884,7 @@
         type: LONGINT
     dispatcher: QuickTime
     selector: 0x01A1
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -843,6 +897,7 @@
         type: Movie
     dispatcher: QuickTime
     selector: 0x0035
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -856,6 +911,7 @@
         type: TimeValue
     dispatcher: QuickTime
     selector: 0x0036
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -871,6 +927,7 @@
         type: TimeValue*
     dispatcher: QuickTime
     selector: 0x0037
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -886,6 +943,7 @@
         type: TimeValue
     dispatcher: QuickTime
     selector: 0x0038
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -901,6 +959,7 @@
         type: TimeValue*
     dispatcher: QuickTime
     selector: 0x015D
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -916,6 +975,7 @@
         type: TimeValue
     dispatcher: QuickTime
     selector: 0x015C
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -941,6 +1001,7 @@
         type: TimeValue*
     dispatcher: QuickTime
     selector: 0x010E
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -957,6 +1018,7 @@
         type: TimeRecord*
     dispatcher: QuickTime
     selector: 0x00A6
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -970,6 +1032,7 @@
         type: const TimeRecord*
     dispatcher: QuickTime
     selector: 0x00A7
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -985,6 +1048,7 @@
         type: TimeScale
     dispatcher: QuickTime
     selector: 0x00A8
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -997,6 +1061,7 @@
         type: TimeBase
     dispatcher: QuickTime
     selector: 0x00A9
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -1010,6 +1075,7 @@
         type: Fixed
     dispatcher: QuickTime
     selector: 0x00AA
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -1022,6 +1088,7 @@
         type: TimeBase
     dispatcher: QuickTime
     selector: 0x00B1
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -1035,6 +1102,7 @@
         type: LONGINT
     dispatcher: QuickTime
     selector: 0x00B2
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -1051,6 +1119,7 @@
         type: TimeRecord*
     dispatcher: QuickTime
     selector: 0x00AB
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -1067,6 +1136,7 @@
         type: TimeRecord*
     dispatcher: QuickTime
     selector: 0x00AD
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -1080,6 +1150,7 @@
         type: const TimeRecord*
     dispatcher: QuickTime
     selector: 0x00AC
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -1093,6 +1164,7 @@
         type: const TimeRecord*
     dispatcher: QuickTime
     selector: 0x00AE
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -1105,6 +1177,7 @@
         type: Movie
     dispatcher: QuickTime
     selector: 0x003F
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -1119,6 +1192,7 @@
         type: LONGINT
     dispatcher: QuickTime
     selector: 0x0040
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -1133,6 +1207,7 @@
         type: LONGINT
     dispatcher: QuickTime
     selector: 0x0117
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -1151,6 +1226,7 @@
         type: LONGINT
     dispatcher: QuickTime
     selector: 0x0208
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -1163,6 +1239,7 @@
         type: Track
     dispatcher: QuickTime
     selector: 0x0127
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -1175,6 +1252,7 @@
         type: Track
     dispatcher: QuickTime
     selector: 0x00D0
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -1187,6 +1265,7 @@
         type: Track
     dispatcher: QuickTime
     selector: 0x0062
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -1199,6 +1278,7 @@
         type: Track
     dispatcher: QuickTime
     selector: 0x0045
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -1212,6 +1292,7 @@
         type: Boolean
     dispatcher: QuickTime
     selector: 0x0046
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -1224,6 +1305,7 @@
         type: Track
     dispatcher: QuickTime
     selector: 0x004B
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -1236,6 +1318,7 @@
         type: Track
     dispatcher: QuickTime
     selector: 0x004C
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -1251,6 +1334,7 @@
         type: Fixed*
     dispatcher: QuickTime
     selector: 0x005D
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -1266,6 +1350,7 @@
         type: Fixed
     dispatcher: QuickTime
     selector: 0x005E
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -1279,6 +1364,7 @@
         type: MatrixRecord*
     dispatcher: QuickTime
     selector: 0x0056
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -1292,6 +1378,7 @@
         type: const MatrixRecord*
     dispatcher: QuickTime
     selector: 0x0057
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -1304,6 +1391,7 @@
         type: Track
     dispatcher: QuickTime
     selector: 0x0050
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -1317,6 +1405,7 @@
         type: INTEGER
     dispatcher: QuickTime
     selector: 0x0051
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -1329,6 +1418,7 @@
         type: Track
     dispatcher: QuickTime
     selector: 0x0052
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -1342,6 +1432,7 @@
         type: Track
     dispatcher: QuickTime
     selector: 0x0053
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -1354,6 +1445,7 @@
         type: Track
     dispatcher: QuickTime
     selector: 0x0054
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -1367,6 +1459,7 @@
         type: INTEGER
     dispatcher: QuickTime
     selector: 0x0055
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -1379,6 +1472,7 @@
         type: Track
     dispatcher: QuickTime
     selector: 0x005F
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -1391,6 +1485,7 @@
         type: Track
     dispatcher: QuickTime
     selector: 0x0047
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -1404,6 +1499,7 @@
         type: LONGINT
     dispatcher: QuickTime
     selector: 0x0048
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -1422,6 +1518,7 @@
         type: INTEGER
     dispatcher: QuickTime
     selector: 0x0188
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -1433,6 +1530,7 @@
         type: Track
     dispatcher: QuickTime
     selector: 0x0042
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -1445,6 +1543,7 @@
         type: Media
     dispatcher: QuickTime
     selector: 0x00C5
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -1457,6 +1556,7 @@
         type: Media
     dispatcher: QuickTime
     selector: 0x0068
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -1470,6 +1570,7 @@
         type: TimeScale
     dispatcher: QuickTime
     selector: 0x0069
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -1482,6 +1583,7 @@
         type: Media
     dispatcher: QuickTime
     selector: 0x006A
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -1499,6 +1601,7 @@
         type: OSType*
     dispatcher: QuickTime
     selector: 0x006F
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -1511,6 +1614,7 @@
         type: Media
     dispatcher: QuickTime
     selector: 0x0079
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -1523,6 +1627,7 @@
         type: Media
     dispatcher: QuickTime
     selector: 0x0077
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -1538,6 +1643,7 @@
         type: SampleDescriptionHandle
     dispatcher: QuickTime
     selector: 0x0078
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -1550,6 +1656,7 @@
         type: Media
     dispatcher: QuickTime
     selector: 0x006B
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -1562,6 +1669,7 @@
         type: Media
     dispatcher: QuickTime
     selector: 0x006D
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -1582,6 +1690,7 @@
         type: OSType
     dispatcher: QuickTime
     selector: 0x018E
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -1593,6 +1702,7 @@
         type: Media
     dispatcher: QuickTime
     selector: 0x0061
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -1605,6 +1715,7 @@
         type: Media
     dispatcher: QuickTime
     selector: 0x0072
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -1617,6 +1728,7 @@
         type: Media
     dispatcher: QuickTime
     selector: 0x0073
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -1645,6 +1757,7 @@
         type: TimeValue*
     dispatcher: QuickTime
     selector: 0x007C
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -1665,6 +1778,7 @@
         type: Fixed
     dispatcher: QuickTime
     selector: 0x0183
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -1684,6 +1798,7 @@
         type: TimeValue*
     dispatcher: QuickTime
     selector: 0x007B
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -1701,6 +1816,7 @@
         type: TimeValue*
     dispatcher: QuickTime
     selector: 0x007A
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -1735,6 +1851,7 @@
         type: INTEGER*
     dispatcher: QuickTime
     selector: 0x007E
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -1753,6 +1870,7 @@
         type: Boolean*
     dispatcher: QuickTime
     selector: 0x00F1
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -1773,6 +1891,7 @@
         type: Boolean*
     dispatcher: QuickTime
     selector: 0x01B3
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -1785,6 +1904,7 @@
         type: LONGINT
     dispatcher: QuickTime
     selector: 0x0187
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -1807,6 +1927,7 @@
         type: Movie*
     dispatcher: QuickTime
     selector: 0x0191
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -1819,6 +1940,7 @@
         type: const FSSpec*
     dispatcher: QuickTime
     selector: 0x0175
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -1837,6 +1959,7 @@
         type: ConstStr255Param
     dispatcher: QuickTime
     selector: 0x00D7
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -1855,6 +1978,7 @@
         type: ConstStr255Param
     dispatcher: QuickTime
     selector: 0x00D8
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -1880,6 +2004,7 @@
         type: ConstStr255Param
     dispatcher: QuickTime
     selector: 0x019B
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -1902,6 +2027,7 @@
         type: LONGINT
     dispatcher: QuickTime
     selector: 0x019C
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -1916,6 +2042,7 @@
         type: Handle
     dispatcher: QuickTime
     selector: 0x0022
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -1928,6 +2055,7 @@
         type: Movie
     dispatcher: QuickTime
     selector: 0x003E
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -1946,6 +2074,28 @@
         type: LONGINT
     dispatcher: QuickTime
     selector: 0x009E
+    library: QuickTimeLib
+    executor: C_
+
+# ####
+
+- function:
+    name: GetUserDataItem
+    return: OSErr
+    args:
+      - name: theUserData
+        type: UserData
+      - name: data
+        type: void*
+      - name: size
+        type: LONGINT
+      - name: udType
+        type: OSType
+      - name: index
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x0126
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -1960,6 +2110,7 @@
         type: OSType
     dispatcher: QuickTime
     selector: 0x014B
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -1974,6 +2125,7 @@
         type: OSType
     dispatcher: QuickTime
     selector: 0x01A5
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -1994,6 +2146,7 @@
         type: INTEGER
     dispatcher: QuickTime
     selector: 0x014D
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -2006,6 +2159,7 @@
         type: Movie
     dispatcher: QuickTime
     selector: 0x0026
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -2018,6 +2172,7 @@
         type: Movie
     dispatcher: QuickTime
     selector: 0x0027
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -2032,6 +2187,7 @@
         type: Track*
     dispatcher: QuickTime
     selector: 0x0173
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -2044,6 +2200,7 @@
         type: Track
     dispatcher: QuickTime
     selector: 0x0172
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -2056,6 +2213,7 @@
         type: Movie
     dispatcher: QuickTime
     selector: 0x00D9
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -2067,6 +2225,7 @@
         type: Movie
     dispatcher: QuickTime
     selector: 0x0113
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -2130,6 +2289,7 @@
         type: Point
     dispatcher: MovieController
     selector: 0x0002
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -2144,6 +2304,7 @@
         type: Movie
     dispatcher: MovieController
     selector: 0x0003
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -2158,6 +2319,7 @@
         type: INTEGER
     dispatcher: MovieController
     selector: 0x0005
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -2170,6 +2332,7 @@
         type: ComponentInstance
     dispatcher: MovieController
     selector: 0x0006
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -2184,6 +2347,7 @@
         type: const EventRecord*
     dispatcher: MovieController
     selector: 0x0007
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -2198,6 +2362,7 @@
         type: MCActionFilterUPP
     dispatcher: MovieController
     selector: 0x0008
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -2214,6 +2379,7 @@
         type: void*
     dispatcher: MovieController
     selector: 0x0009
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -2228,6 +2394,7 @@
         type: Boolean
     dispatcher: MovieController
     selector: 0x000A
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -2240,6 +2407,7 @@
         type: ComponentInstance
     dispatcher: MovieController
     selector: 0x000B
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -2254,6 +2422,7 @@
         type: CGrafPtr
     dispatcher: MovieController
     selector: 0x000C
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -2266,6 +2435,7 @@
         type: ComponentInstance
     dispatcher: MovieController
     selector: 0x000D
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -2280,6 +2450,7 @@
         type: Boolean
     dispatcher: MovieController
     selector: 0x000E
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -2292,6 +2463,7 @@
         type: ComponentInstance
     dispatcher: MovieController
     selector: 0x000F
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -2306,6 +2478,7 @@
         type: Rect*
     dispatcher: MovieController
     selector: 0x0010
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -2320,6 +2493,7 @@
         type: const Rect*
     dispatcher: MovieController
     selector: 0x0011
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -2332,6 +2506,7 @@
         type: ComponentInstance
     dispatcher: MovieController
     selector: 0x0012
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -2346,6 +2521,7 @@
         type: WindowRef
     dispatcher: MovieController
     selector: 0x0013
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -2360,6 +2536,7 @@
         type: Movie
     dispatcher: MovieController
     selector: 0x0014
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -2374,6 +2551,7 @@
         type: TimeValue
     dispatcher: MovieController
     selector: 0x0015
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -2388,6 +2566,7 @@
         type: TimeScale*
     dispatcher: MovieController
     selector: 0x0016
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -2406,6 +2585,7 @@
         type: Point
     dispatcher: MovieController
     selector: 0x0017
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -2420,6 +2600,7 @@
         type: WindowRef
     dispatcher: MovieController
     selector: 0x0018
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -2436,6 +2617,7 @@
         type: Boolean
     dispatcher: MovieController
     selector: 0x0019
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -2448,6 +2630,7 @@
         type: ComponentInstance
     dispatcher: MovieController
     selector: 0x001A
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -2464,6 +2647,7 @@
         type: LONGINT
     dispatcher: MovieController
     selector: 0x001B
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -2484,6 +2668,7 @@
         type: LONGINT
     dispatcher: MovieController
     selector: 0x001C
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -2498,6 +2683,7 @@
         type: Boolean
     dispatcher: MovieController
     selector: 0x001D
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -2510,6 +2696,7 @@
         type: ComponentInstance
     dispatcher: MovieController
     selector: 0x001E
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -2522,6 +2709,7 @@
         type: ComponentInstance
     dispatcher: MovieController
     selector: 0x001F
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -2534,6 +2722,7 @@
         type: ComponentInstance
     dispatcher: MovieController
     selector: 0x0020
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -2548,6 +2737,7 @@
         type: Movie
     dispatcher: MovieController
     selector: 0x0021
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -2560,6 +2750,7 @@
         type: ComponentInstance
     dispatcher: MovieController
     selector: 0x0022
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -2572,6 +2763,7 @@
         type: ComponentInstance
     dispatcher: MovieController
     selector: 0x0023
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -2590,6 +2782,7 @@
         type: LONGINT
     dispatcher: MovieController
     selector: 0x0024
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -2604,6 +2797,7 @@
         type: LONGINT*
     dispatcher: MovieController
     selector: 0x0025
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -2620,6 +2814,7 @@
         type: RgnHandle
     dispatcher: MovieController
     selector: 0x0028
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -2636,6 +2831,7 @@
         type: RgnHandle*
     dispatcher: MovieController
     selector: 0x0029
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -2652,6 +2848,7 @@
         type: RgnHandle*
     dispatcher: MovieController
     selector: 0x002A
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -2668,6 +2865,7 @@
         type: MenuHandle
     dispatcher: MovieController
     selector: 0x002B
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -2686,6 +2884,7 @@
         type: StringPtr
     dispatcher: MovieController
     selector: 0x002C
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -2702,6 +2901,7 @@
         type: LONGINT
     dispatcher: MovieController
     selector: 0x002D
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -2718,6 +2918,7 @@
         type: Boolean*
     dispatcher: MovieController
     selector: 0x002E
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -2734,6 +2935,7 @@
         type: RgnHandle
     dispatcher: MovieController
     selector: 0x002F
+    library: QuickTimeLib
     executor: C_
 
 # ####
@@ -2752,4 +2954,5 @@
         type: LONGINT
     dispatcher: MovieController
     selector: 0x0030
+    library: QuickTimeLib
     executor: C_

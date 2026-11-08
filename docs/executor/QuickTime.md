@@ -693,3 +693,63 @@ MC calls are declared in `QuickTime.yaml` under a component dispatcher
   MoviePlayer 2.5 and SimpleText 1.4, the movie and the bar drawn, a click on
   play plays it. `/api/ui` gets no answer while MoviePlayer is in front, so
   the cell finds the movie by the bar's frame in the screenshot.
+- **HyperCard.** `qt_apps_executor_761` also has HyperCard 2.4.1 play
+  Simple Movie: the QuickTime Tools stack open on a writable copy of
+  `dev-tools-system-7.img`, a HyperTalk `movie "Host:Simple Movie",
+  "windoid","200,120"` over `/api/script`, a click on play. The Movie XCMD
+  reads its settings with GetUserDataItem (`$126`).
+
+## 11. Route B: PowerPC, and QuickTime 3.0.2's codecs on 8.6 (qt-b4, 2026-11-08)
+
+- **QuickTimeLib.** `library: QuickTimeLib` on the Movie Toolbox and movie
+  controller declarations (`QuickTime.yaml`) and on the ICM calls Executor
+  answers (`ImageCompression.yaml`), as PPCLibs.md did StdCLib. The ICM's
+  calls are `export: false`, not InterfaceLib's: the generator gives such a
+  subtrap with a `library:` to that library alone (`PASCAL_SUBTRAP_LIB`).
+  CFM connects Executor's QuickTimeLib before the QuickTime™ PowerPlug in
+  8.6's Extensions (Apple's PowerPC QuickTime, glue that needs the INIT),
+  kFindLib too, once Executor's Movie Toolbox is there. QTTest's 52
+  QuickTimeLib imports and EV Nova's 22 all resolve.
+- **8.6's components are QuickTime 3.0.2's.** Gestalt `'qtim'` is now the
+  QuickTime™ file's `'vers'` 1 where its components are registered:
+  `03028000` on 8.6, as the G3 answers, `02508000` on 7.6.1. The
+  PowerPlug's components are left out: native duplicates of the 68k codecs
+  (the G3 lists each codec once) that import QuickTimeLib routines Executor
+  lacks (ImageCodecBusy, the remap tables, ICMDecompressComplete) and
+  CallComponentFunctionWithStorageProcInfo. The 68k codecs run through
+  Mixed Mode.
+- **QuickTime 3's 68k codecs delegate.** A codec answers few selectors
+  itself; its dispatcher hands the rest to its delegate, the `'base'`
+  codec, with `move.l header,-(sp); move.l delegate,-(sp); moveq #-2,d0;
+  _ComponentDispatch`, reading the delegate from its globals through A0.
+  So a fast-dispatch component is entered with A0 pointing at the storage
+  in its frame, and ComponentDispatch -2 makes the call to the delegate on
+  the codec's own frame and returns to the codec's caller with the result
+  in its slot (`component.cpp` `delegate_fast`); only when the instance
+  isn't one does it return to the codec, which then answers
+  badComponentSelector. The base codec drives the codec through QuickTime
+  3's band calls (selectors `$200`-`$204`) and calls QTGetPixelSize
+  (`$AAA3 $86`), ICMSequenceLockBits/UnlockBits (`$7C`/`$7D`, noErr) and a
+  private Movie Toolbox `$203` (one pointer, its result dropped; sized and
+  answered paramErr).
+- **QTTest's PowerPC code on Executor 8.6** (`run_qt.sh rom_ppc_86
+  --needs-qt --no-audio -- --backend executor --executor-ppc --image 8.6`):
+  raw32, raw16, rle32, rle16, av and the flattened movie draw the movies'
+  own pixels, `icm.raw_` and `icm.rle_` as the G3; 86 of the first 87 lines
+  besides the component lists are the G3's (`gestalt.icmp` is `12`, the
+  G3's ICM `13`). The component lists differ: the 68k codecs carry
+  cmpFastDispatch (`$40000000`) where the G3's PowerPC ones don't, and
+  Executor has 49 decompressors to its 72. **Open:** rpza's band jumps
+  into freed memory (the base codec Enqueues completion records,
+  `$A96F` at its `$B6EC4`, and later runs one; the PowerPlug imports
+  QueueSyncTask and CallMeWhen for the same), so the run stops at
+  `icm.rpza`; cvid, jpeg and smc go the same way. No `qt_executor_ppc_86`
+  cell until it finishes.
+- **EV Nova 1.0.10** (`games-ppc`, 8.6, `--executor-ppc`, `--ram 128`: it
+  asks for a 51 MB partition) passes its QuickTime 3 check, opens Nova Music
+  (an MP3: NewMovieFromFile answers -2048, no MPEG importer) and loads its
+  title pictures, then crashes in its own picture-stream reader: a
+  BlockMoveData from a handle whose master pointer reads `$80008000`, right
+  after a DisposeHandle. Not QuickTime; its movies (`Race N.mov`, Cinepak)
+  come after the title screen and need the base codec's completion queue
+  above.

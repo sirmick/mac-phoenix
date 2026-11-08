@@ -3267,6 +3267,23 @@ OSErr Executor::C_GetUserData(UserData theUserData, Handle data, OSType udType, 
     return set_error(noErr);
 }
 
+/* an item's data into a buffer of size bytes, which must hold it
+   (HyperCard's Movie XCMD reads its settings so) */
+OSErr Executor::C_GetUserDataItem(UserData theUserData, void *data, LONGINT size, OSType udType, LONGINT index)
+{
+    UserDataS *u = lookup(reg.userdatas, theUserData);
+    if(!u)
+        return set_error(paramErr);
+    const UserItem *i = user_item(u, udType, index ? index : 1);
+    if(!i)
+        return set_error(userDataItemNotFound);
+    if((LONGINT)i->data.size() > size)
+        return set_error(paramErr);
+    if(data)
+        memcpy(data, i->data.data(), i->data.size());
+    return set_error(noErr);
+}
+
 INTEGER Executor::C_CountUserDataType(UserData theUserData, OSType udType)
 {
     UserDataS *u = lookup(reg.userdatas, theUserData);
@@ -4148,6 +4165,9 @@ const MovieSelector movie_selectors[] = {
     { 0x01FF, 12, 2, "QTSwapAtoms" },
     { 0x0200, 16, 2, "QTNextChildAnyType" },
     { 0x0201, 10, 2, "QTNewAlias" },
+    /* QuickTime 3.0.2's 'base' image codec, before a band: a {long,
+       routine} record of its own; it drops the result */
+    { 0x0203, 4, 2, "(private $203: QuickTime 3's base codec, a record and routine)" },
     { 0x0205, 8, 2, "SetMovieColorTable" },
     { 0x0206, 8, 2, "GetMovieColorTable" },
     { 0x0207, 28, 2, "MovieSearchText" },

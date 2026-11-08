@@ -22,6 +22,7 @@
 #include <mman/fullheap.h>
 #include <base/traps.h>
 #include <rsys/opentransport.h>
+#include <rsys/quicktime.h>
 #include <PEFBinaryFormat.h>
 #include <file/file.h>
 #include <rsys/launch.h>
@@ -1455,6 +1456,19 @@ OSErr Executor::C_GetSharedLibrary(ConstStr63Param library, OSType arch,
             *mainaddrp = nullptr;
             return noErr;
         }
+    /* ... and so is QuickTimeLib once Executor's Movie Toolbox is there:
+       the QuickTime PowerPlug in 8.6's Extensions is Apple's PowerPC
+       QuickTime, which needs Apple's QuickTime INIT (never run: route B,
+       docs/executor/QuickTime.md). */
+    bool own_quicktime = arch == "pwpc"_4 && ROMlib_movie_toolbox_present()
+        && EqualString(library, (StringPtr) "\014QuickTimeLib", false, true);
+    if(retval == fragLibNotFound && loadflags == kFindLib && own_quicktime)
+        if(ConnectionID cid = builtinlibs::getBuiltinLib(library, arch))
+        {
+            *cidp = cid;
+            *mainaddrp = nullptr;
+            return noErr;
+        }
     if(retval == fragLibNotFound && loadflags == kFindLib)
         return find_library(library, arch, cidp, mainaddrp, errName);
     if(retval == fragLibNotFound && arch == "pwpc"_4)
@@ -1471,6 +1485,9 @@ OSErr Executor::C_GetSharedLibrary(ConstStr63Param library, OSType arch,
        OTClientLib & co.): Apple's files need Apple's OT kernel. */
     if(retval == fragLibNotFound && arch == "pwpc"_4 && ROMlib_open_transport
        && ROMlib_ot_library(std::string((const char *)library + 1, library[0]))
+       && connect_builtin(library, arch, cidp, mainaddrp) == noErr)
+        return noErr;
+    if(retval == fragLibNotFound && own_quicktime
        && connect_builtin(library, arch, cidp, mainaddrp) == noErr)
         return noErr;
     if(retval == fragLibNotFound)
