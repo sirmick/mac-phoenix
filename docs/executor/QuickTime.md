@@ -752,6 +752,6 @@ MC calls are declared in `QuickTime.yaml` under a component dispatcher
   pixmaps over handles (pmVersion 2) and GetPixBaseAddr gave the handle, so
   a 16-bit picture was decoded over the master pointers (fixed in
   `qGWorld.cpp`; gtest `QuickDraw.PixBaseAddrOfHandlePixMap`). Parts of the
-  title (the logo band, the centre panel) are noise: its compressed title
-  pictures go through the base codec, as rpza does. Its movies (`Race N.mov`,
+  title (the logo band, the centre panel) are noise, probably because its compressed title
+  pictures go through the base codec, as rpza does (not checked). Its movies (`Race N.mov`,
   Cinepak) come later.
