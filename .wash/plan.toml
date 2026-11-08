@@ -1,7 +1,7 @@
 # wash-plan: written by Wash as the plan changes.
 # Edit it only between workspaces; plan_set {"from": "<this file>"} loads it.
 
-revision = 110
+revision = 112
 
 [[node]]
   id = "cuts"
@@ -1009,8 +1009,8 @@ revision = 110
   template = "package"
   parent = "qt"
   needs = ["qt-b1"]
-  state = "reported"
-  revision = 110
+  state = "done"
+  revision = 111
   overrides = ["2026-11-08: started by Orchestrator before qt-b1 (reported): qt-b1 merged into grid2 (de50013b); its acceptance waits only on the full test run"]
 
 [[node]]
@@ -1020,8 +1020,8 @@ revision = 110
   template = "package"
   parent = "qt"
   needs = ["qt-b2"]
-  state = "todo"
-  revision = 94
+  state = "active"
+  revision = 112
 
 [[node]]
   id = "qt-b4"
