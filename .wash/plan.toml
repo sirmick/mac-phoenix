@@ -1,7 +1,7 @@
 # wash-plan: written by Wash as the plan changes.
 # Edit it only between workspaces; plan_set {"from": "<this file>"} loads it.
 
-revision = 114
+revision = 115
 
 [[node]]
   id = "cuts"
@@ -1020,8 +1020,8 @@ revision = 114
   template = "package"
   parent = "qt"
   needs = ["qt-b2"]
-  state = "failed"
-  revision = 113
+  state = "done"
+  revision = 115
 
 [[node]]
   id = "qt-b4"
