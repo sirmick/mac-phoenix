@@ -1,7 +1,7 @@
 # wash-plan: written by Wash as the plan changes.
 # Edit it only between workspaces; plan_set {"from": "<this file>"} loads it.
 
-revision = 101
+revision = 106
 
 [[node]]
   id = "cuts"
@@ -980,8 +980,8 @@ revision = 101
   template = "package"
   parent = "loose-ends"
   body = "Found by QTTest 2026-11-08. On the G3 under 8.6 the Mac plays no sound at all (both cores), and QuickTime sound movies finish early (the sound clock isn't advancing). The Quadra 7.6.1 plays QTTest's tones correctly."
-  state = "active"
-  revision = 98
+  state = "done"
+  revision = 105
 
 [[node]]
   id = "mameppc-qt"
@@ -1042,3 +1042,13 @@ revision = 101
   needs = ["qt-b3"]
   state = "todo"
   revision = 94
+
+[[node]]
+  id = "qt-oracle-flake"
+  title = "QTTest on the Quadra (qt_rom_68k_761) flaky: Photo-JPEG frame 00 differs in 4 of 6 runs"
+  emoji = "🎲"
+  template = "package"
+  parent = "qt"
+  body = "Found by g3sound 2026-11-08 (before and after its change): the oracle cell qt_rom_68k_761 fails 4 of 6 runs on the Photo-JPEG frame 00 CRC. An oracle must be deterministic: find whether it's QTTest (timing-dependent first frame, uninitialised GWorld, a codec's quality setting), the ROM machine (uae core, FPU), or JPEG's own nondeterminism on a Mac, and fix it or make the check robust (and say why)."
+  state = "todo"
+  revision = 106
