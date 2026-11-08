@@ -373,7 +373,7 @@ set(sound_sources
     sound/soundfake.h
     
     sound/sounddriver.cpp sound/sound.cpp sound/soundIMVI.cpp sound/soundfake.cpp
-    sound/snth5.cpp
+    sound/snth5.cpp sound/sounddecode.h sound/sounddecode.cpp
 
     SpeechManager.cpp sound/snddispatch.cpp)
 if(HOST_OS STREQUAL macosx)

@@ -20,6 +20,8 @@ pixels and the sound the Mac played.
 * --audio: the emulator's --audio-dump (S16LE, 48 kHz, stereo). QTTest
   plays a 1000 Hz tone for 2 s, a 440 Hz one for 1 s, then av.mov's
   1000 Hz for 2 s: both tones must be in it, about that long.
+* --audio-heard A SECS: the same dump of QTTest --disk, which plays each
+  movie for 2 s from its start: at least SECS seconds of it not silent.
 """
 
 import argparse
@@ -142,12 +144,30 @@ def check_audio(path):
     return errors, found
 
 
+def heard_seconds(path, rate=48000):
+    """The 50 ms windows with signal in the dump, in seconds, and the
+    stretches of them (start, seconds)."""
+    data = open(path, "rb").read()
+    n = len(data) // 4
+    left = struct.unpack("<%dh" % (n * 2), data[:n * 4])[0::2]
+    win = rate // 20
+    on = [max(left[w:w + win]) - min(left[w:w + win]) >= 512 for w in range(0, n - win, win)]
+    stretches = []
+    for i, v in enumerate(on):
+        if v and (i == 0 or not on[i - 1]):
+            stretches.append([i / 20.0, 0.0])
+        if v:
+            stretches[-1][1] += 0.05
+    return sum(on) / 20.0, stretches
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--results", required=True)
     ap.add_argument("--expected", required=True)
     ap.add_argument("--manifest")
     ap.add_argument("--audio")
+    ap.add_argument("--audio-heard", nargs=2, metavar=("DUMP", "SECS"))
     ap.add_argument("--known")
     ap.add_argument("--same-frames", action="append", default=[])
     ap.add_argument("--record", action="store_true")
@@ -167,6 +187,11 @@ def main():
         e, found = check_audio(a.audio)
         print("sound: %s" % found)
         errors += e
+    if a.audio_heard:
+        secs, stretches = heard_seconds(a.audio_heard[0])
+        print("sound: %.2f s heard: %s" % (secs, "; ".join("%.2f s at %.2f" % (d, t) for t, d in stretches)))
+        if secs < float(a.audio_heard[1]):
+            errors.append("sound:    want %s s heard; heard %.2f s" % (a.audio_heard[1], secs))
     if a.record:
         with open(a.expected, "wb") as f:
             f.write(("\n".join(results) + "\n").encode("utf-8"))

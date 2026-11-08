@@ -14,7 +14,9 @@
 # 'qtim').
 # --known FILE: result names known to differ here (compare.py --known).
 # --disk: the movies on our disks instead (disk_movies.sh: Ares, HyperCard,
-# 7.6.1's Extensions), frames at fixed times and a play, no sound check;
+# 7.6.1's Extensions), frames at fixed times and a play; the sound: at
+# least 5 s heard with HyperCard's Simple Movie among them (6 s of sound
+# from its start), any without (QT_DISK_HEARD=SECS: that instead);
 # exit 77 when none of their images is here. QT_DISK_ONLY="NAME ...": only
 # those (disk_movies.sh's names).
 # SUITE-ARGS: test_guest_suite.sh's (--backend, --image, --port ...).
@@ -34,7 +36,7 @@ while [[ $# -gt 0 && "$1" != "--" ]]; do
         --needs-qt) NEEDS_QT=1 ;;
         --no-audio) AUDIO="" ;;
         --known) KNOWN=(--known "$2"); shift ;;
-        --disk) DISK=1; AUDIO="" ;;
+        --disk) DISK=1 ;;
         *) echo "Unknown arg: $1"; exit 1 ;;
     esac
     shift
@@ -97,6 +99,11 @@ fi
 echo "--- compare ---"
 AUDIO_CMP=()
 [[ -n "$AUDIO" && -s "$WORK/audio.raw" ]] && AUDIO_CMP=(--audio "$WORK/audio.raw")
+if [[ -n "$AUDIO" && -n "$DISK" && -s "$WORK/audio.raw" ]]; then
+    heard=0.1
+    tr '\r' '\n' < "$WORK/movies/qt_disk.txt" | grep -q '^hc-simple' && heard=5
+    AUDIO_CMP=(--audio-heard "$WORK/audio.raw" "${QT_DISK_HEARD:-$heard}")
+fi
 [[ -n "$AUDIO" && ! -s "$WORK/audio.raw" ]] && echo "sound: nothing in the audio dump" && AUDIO_FAIL=1
 python3 "$HERE/compare.py" --results "$RESULTS" --expected "$EXPECTED" \
     ${MANIFEST[@]+"${MANIFEST[@]}"} ${AUDIO_CMP[@]+"${AUDIO_CMP[@]}"} ${KNOWN[@]+"${KNOWN[@]}"} $RECORD

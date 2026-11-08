@@ -73,6 +73,17 @@ struct ModifierStub
     bool sq_on;
     bool cmd_started;
     snd_time cmd_end;
+    /* MacPhoenix: the channel's volume (volumeCmd), $0100 full each side;
+       sampled sound is scaled by it as it is mixed (the output is mono:
+       by the two sides' mean). */
+    uint16_t vol_left, vol_right;
+};
+
+/* IM: Sound, "Sound Commands": not in SoundMgr.yaml's list */
+enum
+{
+    volumeCmd = 46,
+    getVolumeCmd = 47,
 };
 
 /* A command leaves the queue: it has not started yet. */
@@ -89,6 +100,9 @@ struct ModifierStub
 #define SND_CHAN_DBINPROG_P(c) ((c)->flags & CHAN_DBINPROG_FLAG)
 
 extern syn68k_addr_t sound_callback(syn68k_addr_t, void *);
+
+/* MacPhoenix: the rate the driver mixes at (0 before the first mix) */
+extern int ROMlib_sound_rate;
 
 extern bool sound_disabled_p;
 
