@@ -27,6 +27,7 @@
 #include <OSUtil.h>
 #include <FontMgr.h>
 #include <ToolboxUtil.h>
+#include <StdFilePkg.h>
 #include <base/functions.impl.h>
 #include <quickdraw/cquick.h>
 #include <rsys/component.h>
@@ -1832,11 +1833,12 @@ OSErr Executor::C_GetNextImageDescriptionExtensionType(ImageDescriptionHandle de
 {
     if(!desc || !*desc || !idType)
         return paramErr;
-    /* the first extension type after *idType (0: the first one) */
+    /* the types in the order they first appear; the one after *idType
+       (0: the first), 0 after the last */
     uint32_t after = (uint32_t)(LONGINT)*idType;
     int32_t end = std::min<int32_t>((*desc)->idSize, GetHandleSize((Handle)desc));
     int32_t at = extensions_start(desc);
-    bool passed = after == 0;
+    std::vector<uint32_t> types;
     while(at + 8 <= end)
     {
         const uint8_t *p = (const uint8_t *)*desc + at;
@@ -1844,16 +1846,14 @@ OSErr Executor::C_GetNextImageDescriptionExtensionType(ImageDescriptionHandle de
         uint32_t t = (uint32_t)((p[4] << 24) | (p[5] << 16) | (p[6] << 8) | p[7]);
         if(size < 8)
             break;
-        if(passed && t != after)
-        {
-            *idType = t;
-            return noErr;
-        }
-        if(t == after)
-            passed = true;
+        if(std::find(types.begin(), types.end(), t) == types.end())
+            types.push_back(t);
         at += size;
     }
-    *idType = 0;
+    size_t next = 0;
+    if(after)
+        next = std::find(types.begin(), types.end(), after) - types.begin() + 1;
+    *idType = next < types.size() ? types[next] : 0;
     return noErr;
 }
 
@@ -2480,4 +2480,32 @@ bool Executor::ROMlib_icm_unknown_selector(uint32_t sel, uint32_t *arg_bytes, ui
             return true;
         }
     return false;
+}
+
+/* Standard File with previews: the dialogs without the preview pane */
+
+void Executor::C_SFGetFilePreview(Point p, ConstStringPtr prompt, FileFilterUPP filef, INTEGER numt, SFTypeList tl,
+                                  DlgHookUPP dh, SFReply *rep)
+{
+    SFGetFile(p, prompt, filef, numt, tl, dh, rep);
+}
+
+void Executor::C_SFPGetFilePreview(Point p, ConstStringPtr prompt, FileFilterUPP filef, INTEGER numt, SFTypeList tl,
+                                   DlgHookUPP dh, SFReply *rep, INTEGER dig, ModalFilterUPP fp)
+{
+    SFPGetFile(p, prompt, filef, numt, tl, dh, rep, dig, fp);
+}
+
+void Executor::C_StandardGetFilePreview(FileFilterUPP filef, INTEGER numt, SFTypeList tl, StandardFileReply *replyp)
+{
+    StandardGetFile(filef, numt, tl, replyp);
+}
+
+void Executor::C_CustomGetFilePreview(FileFilterYDUPP filefilter, INTEGER numtypes, SFTypeList typelist,
+                                      StandardFileReply *replyp, INTEGER dlgid, Point where, DlgHookYDUPP dlghook,
+                                      ModalFilterYDUPP filterproc, Ptr activeList, ActivateYDUPP activateproc,
+                                      void *yourdatap)
+{
+    CustomGetFile(filefilter, numtypes, typelist, replyp, dlgid, where, dlghook, filterproc, activeList,
+                  activateproc, yourdatap);
 }

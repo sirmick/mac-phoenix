@@ -5,12 +5,17 @@
  *                                                                           *
  * Needs:                                                                    *
  *     MacTypes.h      Fixed, INTEGER, LONGINT, Fract, ULONGINT, Boolean,    *
- *                     Rect, OSErr, OSType, Str31, Handle, Ptr, UInt8        *
+ *                     Rect, OSErr, OSType, Str31, Handle, Ptr, UInt8,       *
+ *                     ConstStringPtr                                        *
  *     FileMgr.h       wide                                                  *
  *     Components.h    Component                                             *
  *     QuickDraw.h     CTabHandle, PixMapHandle, RgnHandle, CGrafPtr,        *
  *                     RGBColor, PicHandle                                   *
  *     CQuickDraw.h    GDHandle, GWorldPtr                                   *
+ *     StdFilePkg.h    FileFilterUPP, SFTypeList, DlgHookUPP, SFReply,       *
+ *                     StandardFileReply, FileFilterYDUPP, DlgHookYDUPP,     *
+ *                     ActivateYDUPP                                         *
+ *     DialogMgr.h     ModalFilterUPP, ModalFilterYDUPP                      *
  *                                                                           *
  *                                                                           *
  *****************************************************************************/
@@ -26,6 +31,8 @@
 #include "Components.h"
 #include "QuickDraw.h"
 #include "CQuickDraw.h"
+#include "StdFilePkg.h"
+#include "DialogMgr.h"
 
 #define MODULE_NAME ImageCompression
 #include <base/api-module.h>
@@ -394,6 +401,18 @@ OSErr C_CDSequenceFlush(ImageSequence seqID);PASCAL_SUBTRAP_UNEXPORTED(CDSequenc
 
 
 OSErr C_MakeImageDescriptionForPixMap(PixMapHandle pixmap, GUEST<ImageDescriptionHandle> *idh);PASCAL_SUBTRAP_UNEXPORTED(MakeImageDescriptionForPixMap, 0xAAA3, 0x007A, CodecDispatch);
+
+
+void C_SFGetFilePreview(Point p, ConstStringPtr prompt, FileFilterUPP filef, INTEGER numt, SFTypeList tl, DlgHookUPP dh, SFReply *rep);PASCAL_SUBTRAP_UNEXPORTED(SFGetFilePreview, 0xAAA3, 0x0041, CodecDispatch);
+
+
+void C_SFPGetFilePreview(Point p, ConstStringPtr prompt, FileFilterUPP filef, INTEGER numt, SFTypeList tl, DlgHookUPP dh, SFReply *rep, INTEGER dig, ModalFilterUPP fp);PASCAL_SUBTRAP_UNEXPORTED(SFPGetFilePreview, 0xAAA3, 0x0042, CodecDispatch);
+
+
+void C_StandardGetFilePreview(FileFilterUPP filef, INTEGER numt, SFTypeList tl, StandardFileReply *replyp);PASCAL_SUBTRAP_UNEXPORTED(StandardGetFilePreview, 0xAAA3, 0x0043, CodecDispatch);
+
+
+void C_CustomGetFilePreview(FileFilterYDUPP filefilter, INTEGER numtypes, SFTypeList typelist, StandardFileReply *replyp, INTEGER dlgid, Point where, DlgHookYDUPP dlghook, ModalFilterYDUPP filterproc, Ptr activeList, ActivateYDUPP activateproc, void *yourdatap);PASCAL_SUBTRAP_UNEXPORTED(CustomGetFilePreview, 0xAAA3, 0x0044, CodecDispatch);
 
 
 } /* namespace Executor */

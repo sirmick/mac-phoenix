@@ -2045,3 +2045,112 @@
     selector: 0x007A
     executor: C_
     export: false
+
+# ####
+
+# Standard File's dialogs with a preview of the file: on Executor the
+# dialogs Standard File (Apple's PACK 3 on an Apple System) shows without
+# one; the preview pane isn't there yet.
+- function:
+    name: SFGetFilePreview
+    args:
+      - name: p
+        type: Point
+      - name: prompt
+        type: ConstStringPtr
+      - name: filef
+        type: FileFilterUPP
+      - name: numt
+        type: INTEGER
+      - name: tl
+        type: SFTypeList
+      - name: dh
+        type: DlgHookUPP
+      - name: rep
+        type: SFReply*
+    trap: 0xAAA3
+    dispatcher: CodecDispatch
+    selector: 0x0041
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: SFPGetFilePreview
+    args:
+      - name: p
+        type: Point
+      - name: prompt
+        type: ConstStringPtr
+      - name: filef
+        type: FileFilterUPP
+      - name: numt
+        type: INTEGER
+      - name: tl
+        type: SFTypeList
+      - name: dh
+        type: DlgHookUPP
+      - name: rep
+        type: SFReply*
+      - name: dig
+        type: INTEGER
+      - name: fp
+        type: ModalFilterUPP
+    trap: 0xAAA3
+    dispatcher: CodecDispatch
+    selector: 0x0042
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: StandardGetFilePreview
+    args:
+      - name: filef
+        type: FileFilterUPP
+      - name: numt
+        type: INTEGER
+      - name: tl
+        type: SFTypeList
+      - name: replyp
+        type: StandardFileReply*
+    trap: 0xAAA3
+    dispatcher: CodecDispatch
+    selector: 0x0043
+    executor: C_
+    export: false
+
+# ####
+
+- function:
+    name: CustomGetFilePreview
+    args:
+      - name: filefilter
+        type: FileFilterYDUPP
+      - name: numtypes
+        type: INTEGER
+      - name: typelist
+        type: SFTypeList
+      - name: replyp
+        type: StandardFileReply*
+      - name: dlgid
+        type: INTEGER
+      - name: where
+        type: Point
+      - name: dlghook
+        type: DlgHookYDUPP
+      - name: filterproc
+        type: ModalFilterYDUPP
+      - name: activeList
+        type: Ptr
+      - name: activateproc
+        type: ActivateYDUPP
+      - name: yourdatap
+        type: void*
+    trap: 0xAAA3
+    dispatcher: CodecDispatch
+    selector: 0x0044
+    executor: C_
+    export: false
