@@ -1,0 +1,424 @@
+# QuickTime on Executor: the decision (survey, 2026-11-08)
+
+QuickTime is the last open part of M3f ("QuickTime movie plays in
+SimpleText"), and STRAGGLERS put it off. This document has the data for
+choosing how QuickTime comes to Executor, and a recommendation. Three routes:
+
+- **A**: Apple's QuickTime™ INIT run as it is, switched on per System or app disk.
+- **B**: Executor registers Apple's QuickTime components (codecs, sound
+  converters, the music synthesizer: the `thng`s) itself and provides
+  its own C++ Movie Toolbox, ICM and movie controller. No INIT, no patches.
+- **C**: staged, mixing the two.
+
+The owner's worry was that Apple's INIT is invasive. It is, more than the
+draft thought (section 2). The surveyed apps use a small, regular part of
+the API (section 1). On Executor, Apple's codecs already register and open
+without the INIT, and their first missing pieces are small (section 3).
+
+**Recommendation: C, B first** (section 5). First lay the groundwork both
+routes need. Then write Executor's own Movie Toolbox, ICM and movie
+controller over Apple's codecs, for the calls in section 1. Keep A as a
+per-disk switch, used only for applications that need what B doesn't
+cover (editing, QTVR, sprites, wired movies).
+
+Data, tools and detail files:
+
+| What | Where |
+|---|---|
+| Call lists per app, traced (tables) | `tools/qt/survey/calls.md` |
+| Call lists per app, static (68k glue, PowerPC imports) | `tools/qt/survey/static.md` |
+| Patch inventory, INIT structure, what QuickTime reads (full) | `tools/qt/survey/patches.md` |
+| Trace an app on the Quadra (`--trace-atraps`) and snapshot it | `tools/qt/trace_app.py` |
+| QuickTime calls in a snapshot, by app (`--resolve`: component instance → its `thng`) | `tools/qt/qt_calls.py` |
+| An extension's trap installs on a traced boot | `tools/qt/qt_patches.py` |
+| Static scan of an app on an image | `tools/qt/qt_static.py` |
+| Route B probe (68k app, MPW) | `tools/qt/probe/QTCodecProbe.c` |
+| Snapshots | `~/storage/snapshots/qt-{ares3,movieplayer25,hypercard25,simpletext25,canvas25}` (7.6.1, QT 2.5), `qt3-cythera` (7.6.1 with QT 3.0.2) |
+
+## 1. What the applications call
+
+These were traced on the Quadra 650 (UAE, `--trace-atraps`, 7.6.1 with
+QuickTime 2.5, or with 8.6's QuickTime 3.0.2 copied in). Each count is
+the app's own calls: from its code, not at interrupt time, not nested
+inside QuickTime. Static lists cover the code paths the runs didn't reach.
+
+### MoviePlayer 2.5 (open a movie, play, click into it)
+
+- **Movie Toolbox, 26 routines.** `EnterMovies`, `OpenMovieFile`,
+  `NewMovieFromFile`, `SetMovieGWorld`, `SetMovieActive`,
+  `SetMovieProgressProc`, `GetMovieBox`/`SetMovieBox` (4/1),
+  `GetMovieMatrix`, `GetMovieDuration`, `GetMovieTrackCount`,
+  `GetMovieIndTrack` (6), `GetMovieIndTrackType`, `GetTrackEnabled` (6),
+  `GetTrackAlternate` (6), `GetMovieUserData`/`GetUserData` (5),
+  `QTFindChildByID`, `GetMoviesError` (5), and 2 selectors Universal
+  Interfaces doesn't name ($273, $274).
+- **Movie controller (`'play'`).** `NewMovieController`, `MCIsPlayerEvent`
+  (3880, once per event), `MCDoAction` (10), `MCGetControllerInfo`,
+  `MCGetControllerBoundsRect`, `MCSetUpEditMenu`, `MCEnableEditing`,
+  `MCSetActionFilterWithRefCon`.
+- **Component Manager.** `RegisterComponentResourceFile`, `GetComponentInfo`.
+- **Static.** 363 glue sites, about 100 distinct routines: editing,
+  export and the rest of the menus. MoviePlayer 3.0 on 8.6 is 68k only,
+  with 419 sites.
+
+### SimpleText 1.4 (File > Open with preview, play)
+
+- **Movie Toolbox.** `EnterMovies`/`ExitMovies`, `OpenMovieFile`,
+  `NewMovieFromFile`, `CloseMovieFile`, `DisposeMovie`, `SetMovieGWorld`,
+  `GetMovieBox`/`SetMovieBox`, `IsMovieDone` (1255), `GetMoviesError`.
+- **Movie controller.** `NewMovieController`, `DisposeMovieController`,
+  `MCIsPlayerEvent` (1177), `MCDoAction`, `MCGetControllerBoundsRect`.
+- **ICM.** `CustomGetFilePreview`, `AlignWindow`.
+
+### HyperCard 2.4.1 (QuickTime Tools stack, the Movie XCMD, play)
+
+- **Movie Toolbox, 38 routines.** `GetMovieTime` (2 direct, 15064
+  nested), `GetMovieDisplayBoundsRgn` (1587), `PtInMovie` (1586),
+  `GetMovieRate`, `SetMovieRate`, `PrerollMovie`, `GoToBeginningOfMovie`,
+  volume, time scale, duration, tracks, media, `GetMediaHandlerDescription`,
+  user data.
+- **Movie controller.** `MCIdle` (2227), `MCDrawBadge` (1114),
+  `MCIsPlayerEvent` (1111), `MCDoAction`, `MCSetVisible`/`MCGetVisible`,
+  `MCPositionController`, `MCSetClip`, `MCMovieChanged`,
+  `MCSetControllerAttached`, `MCGetControllerBoundsRect`,
+  `MCGetControllerInfo`, `MCSetActionFilterWithRefCon`.
+- **ICM.** `CustomGetFilePreview`.
+- **Where the code is.** All of this is in the stack's XCMDs, not in
+  HyperCard's CODE (5 glue sites).
+
+### Canvas 5.0.2 (launch, new document, Open dialog)
+
+- **Traced.** `EnterMovies`, `CustomGetFilePreview`, and its own
+  component (`RegisterComponent`, `SetDefaultComponent`).
+- **Static.** ICM `DecompressImage` (2 sites, for compressed PICTs).
+
+### Ares 1.2.0 (fat: 68k traced on the Quadra, PowerPC static)
+
+- **Traced.** Intro, menu and a tutorial level make one call:
+  `EnterMovies`. Its music and sound effects are Sound Manager
+  (`SndPlayDoubleBuffer`, `SndChannelStatus` 2715).
+- **The movies.** "Part 1–3" (4 MB each) play at story chapters, which
+  the run didn't reach.
+- **Static, 19 Movie Toolbox routines,** the same in the 68k code and in
+  `QuickTimeLib` imports: `EnterMovies`/`ExitMovies`,
+  `OpenMovieFile`/`CloseMovieFile`, `NewMovieFromFile`/`DisposeMovie`,
+  `SetMovieGWorld`, `GetMovieBox`/`SetMovieBox`,
+  `GetMovieColorTable`/`SetMovieColorTable`, `PrerollMovie`,
+  `StartMovie`/`StopMovie`, `MoviesTask`, `IsMovieDone`, `GetMovieRate`,
+  `SetMovieVolume`, `GetMoviesError`.
+- **No movie controller.**
+
+### EV Nova 1.0.10 (PowerPC; static)
+
+- **What 8.6 runs.** The `EV Nova.ppc` fragment (InterfaceLib); there
+  is also an `EV Nova.carbon` one.
+- **22 `QuickTimeLib` imports.** `EnterMovies`/`ExitMovies`,
+  `OpenMovieFile`/`CloseMovieFile`, `NewMovieFromFile`/`DisposeMovie`,
+  `LoadMovieIntoRam`, `SetMovieGWorld`, `GetMovieBox`/`SetMovieBox`,
+  `GetMovieDuration`, `GetMovieTimeBase`,
+  `GetTimeBaseFlags`/`SetTimeBaseFlags`, `GoToBeginningOfMovie`,
+  `SetMoviePlayHints`, `SetMovieRate`, `SetMovieVolume`,
+  `StartMovie`/`StopMovie`, `MoviesTask`, `IsMovieDone`.
+- **No movie controller.**
+- **Its movies.** The "Race N.mov" intros in Nova Files.
+
+### Cythera 1.0.4 (needs QT 3.0; traced on 7.6.1 with 3.0.2)
+
+- **Music only, through the Music Architecture.**
+  `OpenDefaultComponent('tune')` → QuickTime™ `'tune'` -19028:
+  `TuneSetHeader`, `TuneSetTimeScale`, `TunePreroll`, `TuneQueue`,
+  `TuneSetVolume`, and `TuneGetStatus`, polled 6.8 million times in
+  90 s (a busy loop). Plus Sound Manager calls.
+- **PowerPC imports also include** the note allocator (`NANewNoteChannel`,
+  `NAPlayNote`, `NAStuffToneDescription`, `NADisposeNoteChannel`),
+  `TuneStop`/`TuneUnroll`, and the preview calls `StandardGetFilePreview`,
+  `MakeFilePreview`, `AddFilePreview` and `MakeThumbnailFromPixMap`
+  (saved games).
+- **No movies.**
+
+### How PowerPC applications call QuickTime
+
+- **QuickTimeLib is glue.** QuickTime™ PowerPlug 2.5's QuickTimeLib
+  exports 1182 routines and imports only `CallUniversalProc` (3.0.2:
+  1502 exports, plus `CallOSTrapUniversalProc`). Its exports are glue
+  into the 68k `$AAAA`/`$AAA3`/`$A82A` traps.
+- **Logging them on the G3.** A PowerPC app's QuickTime calls reach the
+  ROM's 68k emulator as A-traps. A hook there gives the same `atraps.tsv`
+  as UAE: on the nanokernel's A-trap path, or on mame-68k under
+  `--m68k-host 2`. That hook is not written; this survey used the static
+  import lists for EV Nova and Cythera.
+- **On Executor.** Executor's PowerPC import logging, or
+  `--executor-ppc-break '!Routine'`, would count them once QuickTimeLib
+  has exports.
+
+### What the apps have in common
+
+- **The Movie Toolbox calls used are a small, stable set.** Open, new
+  from file, GWorld, box, start/stop, `MoviesTask`/`IsMovieDone`, rate,
+  volume, time, duration, preroll, dispose. Add track and user-data
+  enumeration for MoviePlayer and HyperCard, about 45 routines in all.
+- **Movie controller.** About 15 `MC…` calls: event, idle, action,
+  bounds, visible, badge, clip.
+- **ICM.** The Standard File previews, and `DecompressImage` for
+  compressed PICTs.
+- **Music Architecture.** Only Cythera uses it, through the tune player.
+- **Nothing else.** No editing beyond MoviePlayer's menus. No QTVR,
+  sprites or wired movies in these apps.
+
+## 2. QuickTime's own code: the patch inventory
+
+What QuickTime's INIT changes on a traced 7.6.1 boot (`tools/qt/qt_patches.py`),
+and what each patch does (disassembly). Full tables with routine offsets:
+`tools/qt/survey/patches.md`.
+
+### What the INIT does
+
+- **Installs.** INIT 0 checks Color QuickDraw, `QDExtensions`, Gestalt,
+  and that Gestalt `'qtim'` is absent. It then runs `inst` resources
+  through its own loader. Nothing goes through the System's patch loader.
+- **`$AAAA` has no SetTrapAddress.** INIT 0 writes `StripAddress(*'code'
+  -19103)` straight into trap-table slot **$18A8**. QuickTime's code then
+  often calls `jsr ($18A8)` and `jsr ($188C)` (the ICM) directly,
+  not through traps.
+- **Globals.** QuickTime's own at **$DE8** and **$DF0** (its segment
+  loader). The ICM's go at **`($28A)+8`**, inside the Component
+  Manager's globals.
+- **The lpch loader the draft feared runs only on System 6.** The lpchs
+  bring System 7's extended Time Manager to System 6. On an unknown ROM
+  they put up SysError 98.
+- **The 7.x ROM check is `inst -19063`.** It reads `ROMBase+8`. Unless
+  the value is a Plus, SE or Power Mac, it runs `'pach' -19070`. That
+  binds ROM-internal addresses for five ROM versions and installs
+  `$A0B3` (a File Manager internal); an unknown version gets
+  SysError 99. Gestalt `'bugx'` bit 11 skips it.
+- **Its own Component Manager (`inst -19071`).** It is kept off when
+  Gestalt `'cpnt'` ≥ 6 (2.5) or ≥ 7 (3.0.2). On 7.6.1 (`'cpnt'` 6)
+  QT 3.0.2 **replaced** the System's ComponentDispatch; 2.5 didn't.
+- **Its own Microseconds (`inst -19069`).** It reads VIA1 timer 2 and
+  the Time Manager globals at $B30, unless Gestalt `'bugz'` bit 8 is set.
+
+### The traps it patches (2.5; 3.0.2 adds the last four)
+
+| Trap | What the patch does | For |
+|---|---|---|
+| `$AAAA` _QuickTime | the Movie Toolbox dispatcher ($286 selectors; 3.0.2 $2E3) | movies |
+| `$AAA3` _CodecDispatch | the ICM (121 selectors, version 18/19) | movies |
+| `$ABC2` (private) | fixed/wide math and matrices: FixMulDiv, CompMul…, TransformRect, InverseMatrix (38 selectors) | movies (codecs call it) |
+| InitGDevice, MoveWindow, ZoomWindow, JShowCursor/JShieldCursor hooks | tell the ICM the screen or a movie's window changed, and shield the cursor | movies (direct-to-screen) |
+| StdOpcodeProc `$ABF8`, DrawPicture | decompress `$8200`/`$8201` QuickTime opcodes in PICTs | compressed PICT |
+| SetStdCProcs, CopyDeepMask | QuickTime's StdPix bottleneck in `newProc1`; deep masks through it | compressed pixmaps, pictures |
+| Pack3 | selector 9: SFGetFilePreview | Standard File preview |
+| SetCCursor | colour cursor changes at VBL time | side |
+| UnloadScrap | nil ScrapHandle → noErr | side |
+| PBOpenRF, AliasDispatch, PBMountVol, PBUnmountVol | data-reference aliases, volume tracking, releasing a movie's file | side |
+| OpenCPort | `_ABC0` selector 9 on the new port (unidentified 7.x trap) | bookkeeping |
+| QDExtensions | NewGWorld depth 24 → 32; shrinks direct GWorlds' inverse table (reads `grafVars^^+26`) | bookkeeping |
+| MaxApplZone, InitGraf | bug fix; hooks `_CompactMem` in the system heap's grow-zone proc | bookkeeping (memory) |
+| SetApplLimit, InsTime/PrimeTime, MoveHLow | patched by writing the trap table directly | bookkeeping |
+| **3.0.2:** ComponentDispatch | its own Component Manager, when `'cpnt'` < 7 | components |
+| **3.0.2:** Microseconds | made strictly increasing | movies (timing) |
+| **3.0.2:** SectRgn | clears MemErr | bookkeeping |
+| **3.0.2:** FSDispatch (PBGetCatInfo), PBGetFInfo | type/creator from the name's extension (`'fttl'` table: .avi, .gif, .jpg…) | side |
+
+### Which Executor already does natively
+
+None. Executor has no `$AAA3`, `$ABF8`, `$ABC2` or `$ABA8`. DrawPicture
+skips `$8200`/`$8201` and never calls `opcodeProc`. SetStdCProcs leaves
+`newProc1` nil. CopyDeepMask is CopyMask. Pack3 has no selector 9.
+Microseconds is the host clock (monotonic, but two calls can return the
+same value). Executor's QuickTime is `romlib/quicktime.cpp`, stubs that
+return noErr.
+
+### Which are needed for movies
+
+The dispatchers (`$AAAA`, `$AAA3`, `$ABC2`), the ICM's
+screen-change notices, and a usable Microseconds. Everything else is a
+side feature (compressed PICTs, previews, file typing) or bookkeeping
+for Apple's Memory Manager and QuickDraw.
+
+## 3. Route B: Apple's components without the INIT (probe result)
+
+`tools/qt/probe/QTCodecProbe.c`, a 68k app built with `tools/mpw`, was
+run on Executor 7.6.1 with QuickTime™ off by policy, as it is now:
+
+1. **`RegisterComponentResourceFile`** on the QuickTime™ file (the
+   locked 7.6.1 image's: policy keeps it out of Executor's System Folder)
+   returns **115** components on Executor's own C++ Component Manager.
+   These are 16 `imdc` (Animation, Graphics, JPEG, Motion JPEG A/B,
+   Video, None, Photo CD, Cinepak, YUV2, …), 10 `imco`, 10 `mhlr`,
+   5 `dhlr`, 3 `clok`, 1 `play`, 1 `tune`, 1 `sdev`, and 19 `eat `.
+   `OpenComponent` on the `raw ` and `rle ` decompressors works.
+2. **Every codec call returns -50 without a single trap.** QuickTime's
+   codecs set **`cmpFastDispatch`** (thng flags `$40000000`). Their entry
+   expects D0 = the `{flags, paramSize, what}` long and the caller's
+   parameters left in place, with the instance replaced by its storage.
+   Executor's `call_entry` always uses the standard
+   (params, storage) frame. This is a missing Component Manager feature,
+   about 30 lines.
+3. **With the probe making the fast-dispatch call itself,** the codec's
+   open succeeds and sets its storage. `ImageCodecGetCodecInfo` then
+   calls **HeapDispatch selector 2**, and Executor stops the session.
+4. **With the probe also putting HeapDispatch 0–5 in the trap table,**
+   `GetCodecInfo` returns 0. `ImageCodecPreDecompress` returns 0 and asks
+   for 32-bit pixels, band 1/1. It draws into the GWorld with GetPort,
+   SetPort, RGBBackColor, NewRgn and SetRectRgn.
+5. **`ImageCodecBandDecompress` then jumps into Executor's
+   unimplemented-trap handler,** with D0 = 0 and A0 = the handler's
+   address: a call through an address obtained for a routine Executor
+   lacks. The fatal alert names `A873`, the last trap dispatched, not
+   the culprit. The `raw ` codec's calls outside the Toolbox Executor
+   has are:
+   - `$ABC2` math, 3 sites;
+   - `$AAA3` ICM, 5 sites: `GetImageDescriptionCTable` ($1E) and the
+     private $49/$4A;
+   - `$AB1D` QDExtensions, 4 sites;
+   - `$A0A4`, 3 sites.
+
+   The jump is one of these, reached by address. The probe also put a
+   stub on `$AAA3` and that changed nothing, so the culprit isn't
+   pinned down. The next probe step is a stub for `$ABC2` and the ICM
+   slot `$188C`.
+
+**So B is feasible.** Apple's binaries run on Executor's Component
+Manager, and the codec's own calls are ordinary Toolbox calls plus a
+small, documented layer:
+
+- **`cmpFastDispatch`** in component.cpp.
+- **HeapDispatch 0–5.** These are trivial; 6, 8 and 13/14 are for the
+  media handlers.
+- **`$ABC2`.** About 38 fixed-point and matrix routines, documented in
+  `FixMath.h` and `ImageCompression.h`.
+- **The ICM utility calls codecs make back:** `CodecManagerVersion`
+  first, then the rest of the codec-side calls (Inside Macintosh:
+  QuickTime Components, "Image Compressor Components").
+- **The ICM's trap-table slot `$188C` pointing at Executor's ICM.**
+  Codecs call through the slot, not the trap.
+
+What the probe did not reach: an actual decoded frame. The next blockers
+are among `$ABC2`, the ICM callbacks ($1E, $49, $4A for `raw `) and
+QDExtensions. Media handlers
+(`mhlr`) and data handlers (`dhlr`) call back into the Movie Toolbox
+itself. So B would parse movies and drive the codecs in C++, and leave
+those two out.
+
+## 4. Route A: Apple's INIT on Executor (first run and what it needs)
+
+**The first run.** With the INIT allowed on 7.6.1, Executor stops at
+**HeapDispatch ($A0A4) selector 0**.
+
+- **What HeapDispatch is.** On 7.6.1 it is the System's own `'gpch' 667`,
+  not QuickTime's: an 18-selector Memory Manager dispatcher. Selectors
+  0–5 are fast HLock, HUnlock, HPurge, HNoPurge, HGetState and HSetState
+  (A1) on the handle in A0. They set the master-pointer flags byte at
+  `*h-11` directly, with no checks. 6–9 add or remove handle-trash
+  notifications. 10–12 trash a zone, a range or a process. 13–15 are
+  NewHandleSys/NewPtrSys variants that respect the system-heap reserve
+  (ExpandMem+$1AE). 16/17 set and get the trash list.
+- **How QuickTime uses it.** Its code wraps nearly every Movie Toolbox
+  call in selectors 2 and 3. Over the 7.6.1 session (MoviePlayer,
+  HyperCard and SimpleText each playing a movie), QuickTime's own code
+  made 3474 and 3369 such calls. It also uses 0, 1, 6 and 8. Codecs, media handlers and data
+  handlers call 0–5.
+- **Why it doesn't install its own.** Executor implements `$A0A4`
+  (selectors $A and $20 only), so QuickTime's `inst -19064` sees it as
+  present.
+
+What A needs from Executor, beyond HeapDispatch (from `tools/qt/survey/patches.md`
+§4 and the boot's call list):
+
+- **Gestalt.**
+  - `'bugz'` bit 8, or QuickTime installs a VIA-timer Microseconds that
+    returns garbage on Executor's zeroed VIA and empty $B30.
+  - `'bugx'` bit 11, or it runs `'pach' -19070` against Executor's
+    10-byte fake ROM (version $067C) and installs `$A0B3` with pointers
+    into nothing.
+- **Component Manager globals at `$28A`.** Executor never sets them,
+  and with Executor's CM kept (`'cpnt'` $30000) the ICM would write its
+  globals to address 8. The other choice is to answer `'cpnt'` 6 and let
+  QT 3.0.2 replace Executor's CM with Apple's 68k one.
+- **`$ABA8`.** With `'qd  '` = $0230 QuickTime writes a long at
+  `($1CA0)+8`, inside Executor's unimplemented-trap code. That is a hook
+  into 32-bit QuickDraw's internal `$ABA8`, which Executor lacks.
+- **GrafVars.** The QDExtensions patch reads `grafVars^^+26` as the
+  GWorld's device. Executor's GrafVars is 26 bytes, so the patch would
+  resize a garbage handle.
+- **DrawPicture** must call `opcodeProc` for `$8200`/`$8201`, or
+  compressed PICTs stay blank.
+- **Patch routing (`stub_NAME`).** Executor's C++ calls DrawPicture,
+  MoveWindow, ZoomWindow, InitGDevice, Pack3, SetStdCProcs and the
+  cursor hooks directly, so QuickTime's patches never see those calls.
+  Movies on screen would not follow window moves, and Executor's own
+  pictures and Standard File dialogs would skip QuickTime.
+- **MoveHLow `$A09D` and `_ABC0`.** QuickTime calls MoveHLow (105 times
+  around NewMovieFromFile and the ICM) and `_ABC0` (from OpenCPort, 40
+  times). Executor has neither.
+- **PowerPC.** On `--executor-ppc`, QuickTime™ PowerPlug's glue into the
+  68k traps goes through Mixed Mode, and 3.0.2's native pieces (`npch`
+  math, `pbok` fixes, the data fork's PEF code) through CFM.
+- **Other versions.** Each QuickTime version (2.1 on 7.5.5, 2.5,
+  3.0.2, 4.0.3) has its own thresholds, ROM tables and patch sets, and
+  needs this list checked again.
+
+The inits.yaml list from the draft is mostly done: `OpenComponentResFile`,
+`CloseComponentResFile`, the mod seeds and `SetComponentInstanceStorage`
+are in component.cpp now. `QuickTime#80E9` and `#81E5` are QuickTime's
+own private `$AAAA` selectors (alias search, volume mount), served by
+QuickTime itself under A.
+
+## 5. Effort, risk, recommendation
+
+| | A: Apple's INIT | B: Executor's Movie Toolbox over Apple's components | C: staged (B first, A as a switch) |
+|---|---|---|---|
+| **What Executor writes** | Gestalt answers, `$28A`, `$ABA8` dummy, GrafVars layout, HeapDispatch 0–16, MoveHLow, `_ABC0`, DrawPicture opcodeProc, patch routing for ~10 traps, Mixed Mode for PowerPlug | cmpFastDispatch, HeapDispatch 0–5, `$ABC2`, an ICM (DecompressImage, sequences, previews, codec callbacks), a Movie Toolbox subset (~45 calls) with a `moov` parser, a movie controller (~15 calls), sound through Executor's Sound Manager, QuickTimeLib exports for PowerPC | B, then A's items only for the apps that need them |
+| **Effort** | 2–4 weeks to boot clean with 2.5 and play in MoviePlayer. Then an open-ended tail per app, and again per QuickTime version | Groundwork 2–3 days; codecs decoding through the ICM 1 week; Movie Toolbox and playback timing 2–3 weeks; controller 1 week; sound 1–2 weeks; PowerPC exports 1 week. Music Architecture separately (Cythera) | B's, then A's items one at a time |
+| **Risk** | High. QuickTime writes into Executor's code and low memory, relies on Apple's block headers, grow-zone proc and GrafVars, and is bypassed by Executor's direct C++ calls. Each fix bends Executor toward Apple's internals | Medium. The API surface is known (section 1) and documented. Codecs proved callable. Unknowns: the full set of ICM callbacks, sound (IMA/MACE through Apple's `sdec`/Sound Converter or our own decoders), and edge cases of timing | Lowest. B covers the measured apps; A stays possible without being the foundation |
+| **Fits Executor** | Poorly. Opposite of how Executor runs the Toolbox: patches see none of its C++ | Well. The same shape as Executor's Sound Manager, Component Manager, CFM and PPC libraries: C++ behind the API, Apple's components as binaries | Well |
+| **Versions** | 2.1/2.5/3.0.2/4.0.3 each separately | One Movie Toolbox; Apple's codecs from any version (or ours) | As B |
+| **PowerPC apps** | PowerPlug through Mixed Mode | Native QuickTimeLib exports in C++ (as docs/executor/PPCLibs.md did StdCLib/MathLib) | As B |
+| **Own System / wasm tab** | No (Apple's INIT needed) | Movie Toolbox, ICM and controller are ours. Movies need codecs: Apple's from a QuickTime™ file on the disk, or later ours (`raw `, `rle `, Cinepak are documented) | As B |
+
+**Recommendation: C, B first**, in this order:
+
+1. **Groundwork (both routes).**
+   - cmpFastDispatch in component.cpp.
+   - HeapDispatch 0–5, plus 6/8 accepted.
+   - `$ABC2` math and matrices.
+   - Gestalt `'qtim'`/`'icmp'` answered only when Executor's QuickTime
+     is there, never from the stubs.
+   - A guest test: QTCodecProbe grown into qt-client's QTTest, decoding
+     `raw `/`rle `/Cinepak frames and comparing them with the Quadra's.
+2. **ICM.** `DecompressImage`/`FDecompressImage`, `DecompressSequenceBegin`
+   and `DecompressSequenceFrame`, `GetCodecInfo`, the codec callbacks
+   (driven by the probe), and the `$188C` slot. Then DrawPicture's
+   `$8200`/`$8201` through it (Canvas), and SFGetFilePreview /
+   CustomGetFilePreview (Pack3 selector 9, `$AAA3` $41–$44).
+3. **Movie Toolbox subset.** The calls in section 1 (Ares, EV Nova,
+   SimpleText first): `moov` parsing, sample tables, a time base on the
+   Time Manager, `MoviesTask` drawing through the ICM, sound tracks
+   through Executor's Sound Manager.
+4. **Movie controller,** the ~15 `MC…` calls (MoviePlayer, SimpleText,
+   HyperCard), then PowerPC `QuickTimeLib` exports.
+5. **A, only if an app needs what B lacks** (editing, QTVR, sprites,
+   the Music Architecture for Cythera if Apple's `'tune'`/`'note'`
+   components won't run under B). A per-disk switch, with A's blockers
+   (section 4) fixed as they come up.
+
+## 6. Notes from the survey
+
+- **Testing without built movies.** Movies are already on the disks:
+  7.6.1's Extensions "Demo click&drag" (and others), HyperCard's
+  "Simple Movie", the Kid Pix movies on Creative, Ares' "Part 1–3",
+  EV Nova's "Race N.mov", 8.6/9.0.4's "Sample Movie". qt-client's
+  generated movies (`tests/lib/qtmovie.py`) remain the basis for
+  checksummed tests.
+- **Cythera** runs on 7.6.1 with 8.6's QuickTime™ 3.0.2 copied in
+  (`~/storage/tmp/qt-survey/qt3/7.6.1-qt3.img`). This is useful for
+  tracing 3.0.2 on the Quadra.
+- **`--trace-atraps` is UAE-only.** `trap_installs.tsv` from a traced
+  boot is the quickest patch inventory for any extension
+  (`tools/qt/qt_patches.py --file NAME`). The resolver misattributes
+  installs made from code copied into heap blocks.
+- **A fix outside this survey.** `tools/macdecode/dispatch.py` failed on
+  every run after the multiversal YAML gained component-selector
+  dispatchers (`selector-location: Component`). It now skips them
+  (a component's selectors, not a trap's).
