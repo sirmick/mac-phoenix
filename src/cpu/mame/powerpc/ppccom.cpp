@@ -1655,9 +1655,15 @@ void ppc_device::ppc_check_translation(ppc_entry_check *chk)
 
 bool ppc_device::invalidate_code_range(offs_t start, offs_t end)
 {
-	// A sequence starting on an earlier page can extend into this range, but
-	// invalidate_range() backs the start up by the maximum sequence length to
-	// catch those, so only the pages actually touched need to be considered.
+	// A block compiled at an entry covers COMPILE_BACKWARDS_BYTES before it and
+	// COMPILE_FORWARDS_BYTES after, and each of its sequence heads is hashed.  A
+	// local branch from one sequence into another skips the target's checksum,
+	// so a block hashed up to that reach on either side of a changed page can
+	// still run the page's old code: entered after a call inside a loop, it
+	// branches back into a page rewritten before it (QuickTime 3's PowerPC
+	// codecs, loaded where other code was, on Mac OS 8.6).  Drop those entries
+	// too, not only the page's own.
+	constexpr uint32_t reach = COMPILE_BACKWARDS_BYTES + COMPILE_FORWARDS_BYTES;
 	uint32_t page = start >> 12;
 	uint32_t const lastpage = end >> 12;
 	bool invalidated = false;
@@ -1673,7 +1679,10 @@ bool ppc_device::invalidate_code_range(offs_t start, offs_t end)
 
 		if (BIT(m_codepage_bits[page >> 3], page & 7))
 		{
-			m_drcuml->hash_invalidate_range(page << 12, (page << 12) | 0xfff);
+			uint32_t const first = page << 12;
+			uint32_t const last = first | 0xfff;
+			m_drcuml->hash_invalidate_range(first - std::min(first, reach),
+					(last > 0xffff'ffffu - reach) ? 0xffff'ffffu : last + reach);
 			invalidated = true;
 		}
 		page++;
