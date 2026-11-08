@@ -339,6 +339,27 @@ keeps failures of earlier runs that this one didn't run again. The
 `flaky` ctest label (`ctest -LE flaky`) is separate: it marks
 `ot_retro68_ppc_rom_761` only.
 
+### Merge gate
+
+`tools/ci/merge_gate.sh BRANCH [--into executor-86-grid2] [--jobs N]
+[--apply]` tests a branch merged into the target before the target takes
+it, in a worktree of its own (`~/storage/ci/gate/tree`, its builds kept
+between gates; one gate at a time): the target's head, `git merge --no-ff
+BRANCH` (a conflict: **FAIL**, the files listed), the native and wasm builds
+(`tools/ci/lib.sh`, the configuration `tools/ci/integration.sh` uses; a
+failed build: **FAIL**, no tests run), `ctest -L 'executor|qt'` native
+(from a copy of the binary) and `ctest -L executor` wasm, failures through
+`rerun_flaky.py`. The verdict, a table of the steps with their logs, goes
+to `~/storage/ci/gate/<branch>-<date>.md` (logs in `<branch>-<date>/`):
+**MERGE** (all passed), **FLAKES-ONLY** (every failure passed alone; new
+flakes named), **FAIL** (exit 0, 3, 1). The tested merge commit is kept as
+`refs/ci-gate/<branch>`. `--apply` with MERGE moves the target to it with
+`git update-ref` (the target's value at the start checked, so a change
+meanwhile aborts); a target checked out in a worktree (the main checkout)
+is not moved under its index: the gate prints the `git -C TREE merge
+--ff-only SHA` that takes it (which refuses if the target has moved).
+`--ctest-args "-R qt_"` narrows both suites; `--build-jobs N` (default 4).
+
 ### Guest tests and the bridge
 
 The guest tests run with `--bridge` (or `--headless-http`, which implies it)

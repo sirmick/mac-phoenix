@@ -14,3 +14,4 @@ hidpi_windows_executor          2026-11-08  intermittent; passes alone
 ot_retro68_ppc_rom_761          2026-11-08  Apple's OT 1.1.1 on the G3 crashes in tcp_async about half the runs (STRAGGLERS 66; also labelled flaky)
 aslm_executor                   2026-11-08  intermittent host SIGSEGV (cause not found yet)
 multiversal_retro68             2026-11-08  fails under ctest -j; passes alone
+executor.web.input_86            2026-11-08  failed in the first merge gate run (wasm, -j4); passed alone

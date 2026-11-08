@@ -19,11 +19,12 @@
 #   --ctest-args A   more ctest arguments (e.g. "-R difftest_")
 #
 # Exit status: 0 if every suite passed, 1 otherwise. Configuration as the
-# main tree's (Release, net-bridge, Executor regenerate, Skia; wasm with the
-# EXECUTOR_WEB_* of /home/mick/src/mac-phoenix/build-wasm).
+# main tree's (tools/ci/lib.sh).
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/../.." && pwd)"
+# shellcheck source=lib.sh
+source "$REPO/tools/ci/lib.sh"
 CI="${MACPHOENIX_CI_DIR:-$HOME/storage/ci}"
 BRANCH=executor-86-grid2
 JOBS=2
@@ -61,20 +62,11 @@ has() { [[ " $ONLY " == *" $1 "* ]]; }
 
 # --- the tree -------------------------------------------------------------
 if (( BUILD )); then
-    if [[ ! -e "$TREE/.git" ]]; then
-        git -C "$REPO" worktree add --detach "$TREE" "$BRANCH" > "$RUN/checkout.log" 2>&1 || {
-            echo "worktree add failed: $RUN/checkout.log" >&2; exit 1; }
-    fi
-    # the builds rewrite committed binaries (BridgeAgent.bin, MacBrowser):
-    # back to the branch's
-    git -C "$TREE" checkout --force --detach "$BRANCH" >> "$RUN/checkout.log" 2>&1 || {
+    ci_tree "$REPO" "$TREE" "$BRANCH" "$RUN/checkout.log" || {
         echo "checkout failed: $RUN/checkout.log" >&2; exit 1; }
-    git -C "$TREE" clean -fdq -e build -e build-wasm -e toolchain -e ci-bin >> "$RUN/checkout.log" 2>&1
 fi
 COMMIT=$(git -C "$TREE" rev-parse --short HEAD)
 SUBJECT=$(git -C "$TREE" log -1 --format=%s)
-mkdir -p "$TREE/toolchain"
-[[ -e "$TREE/toolchain/retro68" ]] || ln -s "$HOME/opt/retro68/build/toolchain" "$TREE/toolchain/retro68"
 
 {
     echo "# Integration run $STAMP"
@@ -88,15 +80,13 @@ mkdir -p "$TREE/toolchain"
 row() { echo "| $1 | $2 | $3 | $4 |" >> "$SUMMARY"; }
 mins() { printf '%dm%02ds' $(( $1 / 60 )) $(( $1 % 60 )); }
 
-build() {   # name dir log: cmake --build, -j2 (macbrowser-app -j1 first)
+build() {   # name dir log: cmake --build, -j2 (tools/ci/lib.sh)
     local t=$(date +%s) rc
     log "build $1"
-    { [[ "$1" == wasm ]] || cmake --build "$2" --target macbrowser-app -j1; } > "$3" 2>&1 &&
-        cmake --build "$2" -j2 >> "$3" 2>&1
+    ci_build "$1" "$TREE" "$2" "$3" 2
     rc=$?
-    git -C "$TREE" checkout -- BridgeAgent MacBrowser 2>/dev/null
     if (( rc )); then
-        row "build $1" "**failed**: $(grep -m1 -E 'error:|Error [0-9]' "$3" | cut -c1-120 | tr '|' '/')" "$(mins $(( $(date +%s) - t )))" "$3"
+        row "build $1" "**failed**: $(ci_first_error "$3")" "$(mins $(( $(date +%s) - t )))" "$3"
         STATUS=1
     else
         row "build $1" ok "$(mins $(( $(date +%s) - t )))" "$3"
@@ -134,10 +124,8 @@ if has native; then
     NB="$TREE/build"
     ok=1
     if (( BUILD )); then
-        cmake -B "$NB" -S "$TREE" -DCMAKE_BUILD_TYPE=Release -DBUILD_NET_BRIDGE=ON \
-            -DEXECUTOR_REGENERATE=ON -DEXECUTOR_SKIA=ON \
-            -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
-            > "$RUN/configure-native.log" 2>&1 && build native "$NB" "$RUN/build-native.log" || ok=0
+        ci_configure_native "$TREE" "$NB" "$RUN/configure-native.log" &&
+            build native "$NB" "$RUN/build-native.log" || ok=0
     fi
     if (( ok )); then
         # the tests run a copy (a rebuild mid-run can't pull it from under
@@ -164,14 +152,8 @@ if has wasm || has site; then
     WB="$TREE/build-wasm"
     ok=1
     if (( BUILD )); then
-        WEBCACHE=/home/mick/src/mac-phoenix/build-wasm/CMakeCache.txt
-        webopt() { grep -m1 "^$1:" "$WEBCACHE" 2>/dev/null | cut -d= -f2-; }
-        # shellcheck disable=SC1091
-        source "$HOME/emsdk/emsdk_env.sh" > /dev/null 2>&1
-        emcmake cmake -B "$WB" -S "$TREE" -DCMAKE_BUILD_TYPE=Release -DEXECUTOR_SKIA=ON \
-            -DEXECUTOR_WEB_NODE_PATH="$(webopt EXECUTOR_WEB_NODE_PATH)" \
-            -DEXECUTOR_WEB_CHROMIUM="$(webopt EXECUTOR_WEB_CHROMIUM)" \
-            > "$RUN/configure-wasm.log" 2>&1 && build wasm "$WB" "$RUN/build-wasm.log" || ok=0
+        ci_configure_wasm "$TREE" "$WB" "$RUN/configure-wasm.log" &&
+            build wasm "$WB" "$RUN/build-wasm.log" || ok=0
     fi
     if (( ok )); then
         has wasm && suite wasm "$WB" executor
