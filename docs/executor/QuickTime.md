@@ -735,7 +735,7 @@ MC calls are declared in `QuickTime.yaml` under a component dispatcher
 - **QTTest's PowerPC code on Executor 8.6** (`run_qt.sh rom_ppc_86
   --needs-qt --no-audio -- --backend executor --executor-ppc --image 8.6`):
   raw32, raw16, rle32, rle16, av and the flattened movie draw the movies'
-  own pixels, `icm.raw_` and `icm.rle_` as the G3; 87 of the first 88 lines
+  own pixels, `icm.raw_` and `icm.rle_` as the G3; 86 of the first 87 lines
   besides the component lists are the G3's (`gestalt.icmp` is `12`, the
   G3's ICM `13`). The component lists differ: the 68k codecs carry
   cmpFastDispatch (`$40000000`) where the G3's PowerPC ones don't, and
