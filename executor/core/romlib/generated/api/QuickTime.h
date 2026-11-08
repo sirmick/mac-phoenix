@@ -67,7 +67,7 @@ typedef SampleDescription *SampleDescriptionPtr;
 
 typedef GUEST<SampleDescription*> *SampleDescriptionHandle;
 
-DISPATCHER_TRAP(QuickTime, 0xAAAA, D0W);
+DISPATCHER_TRAP(QuickTime, 0xAAAA, D0<0x7FFF>);
 
 
 OSErr C_EnterMovies();PASCAL_SUBTRAP(EnterMovies, 0xAAAA, 0x0001, QuickTime);

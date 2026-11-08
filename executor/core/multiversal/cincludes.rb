@@ -213,7 +213,7 @@ class CIncludesGenerator < Generator
             if dispatcher then
                 sel = Integer(fun["selector"])
                 case dispatcher["selector-location"]
-                when "D0W", "D0<0xFF>", "D0<0xF>"
+                when "D0W", "D0<0x7FFF>", "D0<0xFF>", "D0<0xF>"
                     if sel >= -128 and sel <= 127 then
                         m68kinlines << (0x7000 | (sel & 0xFF))
                     else

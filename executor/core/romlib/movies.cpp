@@ -3816,7 +3816,11 @@ OSErr Executor::C_PutMovieIntoHandle(Movie theMovie, Handle publicMovie)
    arguments' and result's bytes (Pascal: a word or less takes 2, the rest
    4): a selector QuickTime.yaml doesn't declare pops its arguments and
    answers paramErr or nil (traps.cpp), as the ICM's do. Generated from the
-   header's declarations. */
+   header's declarations; $273 and $274, which it doesn't name, from their
+   call sites in QuickTime 2.5's own components (the tune player's, which
+   Cythera opens): $273 takes a pointer it fills, $274 that value and a
+   Boolean, both answer an OSErr, and the caller gives up when $273 fails.
+   The high bit of a selector ($8273) is masked off. */
 namespace
 {
 struct MovieSelector
@@ -4162,6 +4166,8 @@ const MovieSelector movie_selectors[] = {
     { 0x0249, 8, 2, "GetMediaInputMap" },
     { 0x024A, 8, 2, "SetMediaInputMap" },
     { 0x0263, 8, 2, "GetTrackDisplayMatrix" },
+    { 0x0273, 4, 2, "QuickTime private $273" },
+    { 0x0274, 6, 2, "QuickTime private $274" },
     { 0x027A, 14, 2, "ITextAddString" },
     { 0x027B, 14, 2, "ITextRemoveString" },
     { 0x027C, 18, 2, "ITextGetString" },

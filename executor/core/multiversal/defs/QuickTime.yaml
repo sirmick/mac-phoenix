@@ -138,7 +138,9 @@
 - dispatcher:
     name: QuickTime
     trap: 0xAAAA
-    selector-location: D0W
+    # QuickTime's own components call some selectors with the high bit set
+    # ($821D: QTFindChildByID; $8273): the same routines
+    selector-location: D0<0x7FFF>
 
 # ####
 
