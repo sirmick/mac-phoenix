@@ -25,8 +25,8 @@ frame.made-cvid.*
 frame.made-rpza.*
 frame.made-jpeg.*
 #
-# 'smc ' compresses 8-bit pixels the ICM copied from the 32-bit frame
-# without dithering (Executor's CopyBits draws ditherCopy as srcCopy; see
+# 'smc ' compresses 8-bit pixels the ICM dithered from the 32-bit frame,
+# some colours matched otherwise than on the Mac (see
 # known_executor_761.txt), and the G3 runs the PowerPC smc: the data and
 # so the decoded frames differ. They decode (they ended codecErr while the
 # ICM gave the codec a pixel map without QuickTime 3's pixelFormat).

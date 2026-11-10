@@ -55,6 +55,9 @@ enum {grayishTextOr = 49,
 enum {hilite = 50,
 };
 
+enum {ditherCopy = 64,
+};
+
 enum {blackColor = 33,
 whiteColor = 30,
 redColor = 205,

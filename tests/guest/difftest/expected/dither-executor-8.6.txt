@@ -1,0 +1,24 @@
+# dither on Executor (8.6 System) against the G3 (8.6): known differences.
+# key-glob<TAB>reason. Remove a line when Executor matches (run.py lists those).
+
+# The colour each pixel is matched to: Executor's inverse table (MakeITable,
+# Color2Index) picks other entries than 8.6's for some colours, srcCopy as
+# well as ditherCopy (the dither carries each difference on along the row
+# and down). Standard 8-bit table: 7 of 256 random pixels; the 8-bit table
+# of greys: 253 of 256 (another grey each time); 4 bits: 16 of a grey ramp,
+# 25 of 256 random; 1 bit: 47 of 256 random (the black/white threshold).
+# The diffusion itself matches wherever the matching does.
+random8.random8.copy.*	inverse table: 7 of 256 colours matched otherwise
+random8.random8.dither.*	inverse table (as random8.copy), carried by the dither
+random8.random8.part.copy.*	inverse table: 4 of 256 colours matched otherwise
+random8.random8.part.dither.*	inverse table (as random8.part.copy), carried by the dither
+grey8.grey8.random.copy.*	inverse table of a 256-grey table: 253 of 256 colours to another grey
+grey8.grey8.random.dither.*	inverse table of a 256-grey table (as grey8.random.copy)
+depth4.depth4.ramp.copy.*	4-bit inverse table: 16 of 256 greys matched otherwise
+depth4.depth4.ramp.dither.*	4-bit inverse table (as depth4.ramp.copy)
+depth4.depth4.random.copy.*	4-bit inverse table: 25 of 256 colours matched otherwise
+depth4.depth4.random.dither.*	4-bit inverse table (as depth4.random.copy)
+depth1.depth1.random.copy.*	1-bit: 47 of 256 colours on the other side of black/white
+depth1.depth1.random.dither.*	1-bit (as depth1.random.copy)
+solid8.solid8.123456.dither.*	inverse table: 8.6 matches the error-carried colour to a grey (0x444444) where Executor's table gives a cube entry
+solid8.solid8.edcba9.dither.*	inverse table: 8.6 matches the error-carried colour to a grey (0xBBBBBB) where Executor's table gives a cube entry

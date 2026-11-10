@@ -1,11 +1,12 @@
 # QTICM lines Executor's ICM is known to answer differently from the Quadra
-# (run_qticm.sh --known). Both come from dithering, which Apple's QuickDraw
-# does and Executor's CopyBits doesn't (ditherCopy is drawn as srcCopy):
+# (run_qticm.sh --known):
 #
 # 'smc ' compresses 8-bit pixels: the ICM copies the 32-bit source to an
-# 8-bit offscreen first, and the Quadra's copy is dithered (1662 bytes of
-# smc against Executor's 347 from flat colour bands); its decompressions
-# then decode other data.
+# 8-bit offscreen with ditherCopy first. Executor dithers as the Mac does,
+# but its inverse table matches some colours to other entries (difftest
+# dither) and the dither carries that on: 1619 bytes of smc against the
+# Quadra's 1662 (347 before Executor dithered); its decompressions then
+# decode other data.
 compress.smc_.32
 decompress.smc_.32
 decompress.smc_.32.half

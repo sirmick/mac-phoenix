@@ -551,6 +551,13 @@ ROMlib_real_copy_bits_helper(PixMap *src, PixMap *dst,
     the_gd_pmap = GD_PMAP(the_gd);
     current_port = qdGlobals().thePort;
 
+    /* ditherCopy (64, or added to another copy mode): a direct source to
+       an indexed destination is dithered on the way (dither_pixmap); the
+       blit is the mode without it */
+    bool dither = (mode & ditherCopy) && mode < 2 * ditherCopy;
+    if(dither)
+        mode &= ~ditherCopy;
+
     dst_rgb_spec = pixmap_rgb_spec(dst);
     dst_depth = dst->pixelSize;
 
@@ -658,7 +665,8 @@ ROMlib_real_copy_bits_helper(PixMap *src, PixMap *dst,
         /* don't initialize the color table of new_src; we assume that
 	 it has the same color space as the current graphics device */
 
-        convert_pixmap(src, new_src, widened_src_rect, nullptr);
+        if(!(dither && dither_pixmap(src, new_src, src_rect)))
+            convert_pixmap(src, new_src, widened_src_rect, nullptr);
 
         src = new_src;
         /* `convert_pixmap ()' jukes the coordinates of the

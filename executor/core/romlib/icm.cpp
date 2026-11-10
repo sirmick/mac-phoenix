@@ -857,7 +857,10 @@ bool source_pixmap(PixMap *out, PixMapHandle src, const Rect &r, int16_t wanted,
     SetGWorld(*buf, nullptr);
     SignedByte state = HGetState((Handle)src);
     HLock((Handle)src);
-    CopyBits((BitMap *)*src, (BitMap *)*bpm, &r, &b, srcCopy, nullptr);
+    /* to fewer bits than a direct source has: dithered, as the Quadra's
+       ICM gives 'smc ' its 8-bit frame (QTTest icm.smc_) */
+    short mode = bits > 8 && wanted <= 8 ? ditherCopy : srcCopy;
+    CopyBits((BitMap *)*src, (BitMap *)*bpm, &r, &b, mode, nullptr);
     HSetState((Handle)src, state);
     SetGWorld(save_port, save_dev);
     *out = **bpm;

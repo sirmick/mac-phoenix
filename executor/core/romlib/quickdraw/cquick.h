@@ -592,6 +592,10 @@ extern void ROMlib_blt_rgn_update_dirty_rect(RgnHandle, int16_t, bool, int,
 extern void convert_pixmap(const PixMap *old_pixmap, PixMap *new_pixmap,
                            const Rect *rect, CTabPtr conv_table);
 
+/* convert_pixmap's direct (16, 32 bits) to indexed case, dithered
+   (ditherCopy); false: not those depths, nothing done */
+extern bool dither_pixmap(const PixMap *src, PixMap *dst, const Rect *rect);
+
 #define ROMlib_invalidate_conversion_tables()
 /* extern void ROMlib_invalidate_conversion_tables (void); */
 
