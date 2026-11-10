@@ -1813,14 +1813,16 @@ void show(TrackS &t)
     t.drawn = true;
 }
 
-/* what the movie shows at its time; force: draw even if unchanged */
+/* what the movie shows at its time; force: draw even if unchanged. The
+   first frame that failed to decode, else noErr. */
 void sound_task(MovieS &m);
 
-void task(MovieS &m, bool force)
+OSErr task(MovieS &m, bool force)
 {
+    OSErr result = noErr;
     sound_task(m);
     if(!m.active || !m.port)
-        return;
+        return result;
     int64_t now = m.tb.now();
     std::vector<TrackS *> order;
     for(auto &t : m.tracks)
@@ -1836,11 +1838,20 @@ void task(MovieS &m, bool force)
             continue;
         if(!force && t->shown == s && t->drawn)
             continue;
-        if(t->shown != s && decode_to(*t, s) != noErr)
-            continue;
+        if(t->shown != s)
+        {
+            OSErr err = decode_to(*t, s);
+            if(err != noErr)
+            {
+                if(result == noErr)
+                    result = err;
+                continue;
+            }
+        }
         show(*t);
     }
     m.need_update = false;
+    return result;
 }
 
 /* --- sound ------------------------------------------------------------------ */
@@ -2241,17 +2252,21 @@ void Executor::C_MoviesTask(Movie movie, LONGINT maxmillisecs)
         std::vector<MovieS *> all;
         for(auto &e : reg.movies)
             all.push_back(e.second);
+        OSErr err = noErr;
         for(MovieS *m : all)
-            task(*m, m->need_update);
-        set_error(noErr);
+        {
+            OSErr e = task(*m, m->need_update);
+            if(err == noErr)
+                err = e;
+        }
+        set_error(err);
         return;
     }
+    /* MoviesTask's own result: what its frames gave, not what a call a
+       component made meanwhile left (QuickTime 3's base codec asks
+       GetTimeBaseTime of a nil time base each frame: paramErr) */
     if(MovieS *m = movie_of(movie))
-    {
-        task(*m, m->need_update);
-        if(movies_error == invalidMovie)
-            set_error(noErr);
-    }
+        set_error(task(*m, m->need_update));
 }
 
 OSErr Executor::C_UpdateMovie(Movie movie)

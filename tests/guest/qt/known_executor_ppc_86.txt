@@ -23,10 +23,12 @@ pict.jpeg.compress
 pict.jpeg.draw
 frame.made-cvid.*
 frame.made-rpza.*
+frame.made-jpeg.*
 #
-# Open: 'smc ' through the 'base' codec ends -8960 (codecErr) on
-# DecompressImage and on 9 of the 10 frames of the movie made in it; the
-# movie made in Photo-JPEG answers MoviesTask -50.
+# 'smc ' compresses 8-bit pixels the ICM copied from the 32-bit frame
+# without dithering (Executor's CopyBits draws ditherCopy as srcCopy; see
+# known_executor_761.txt), and the G3 runs the PowerPC smc: the data and
+# so the decoded frames differ. They decode (they ended codecErr while the
+# ICM gave the codec a pixel map without QuickTime 3's pixelFormat).
 icm.smc_
 frame.made-smc.*
-frame.made-jpeg.*
