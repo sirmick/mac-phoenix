@@ -362,7 +362,7 @@ Executor's origin and what we changed: `docs/executor/README.md`
 
 ## Dependencies
 
-Required: CMake, pkg-config, OpenSSL (`libssl-dev`: libdatachannel's DTLS/SRTP),
+Required: CMake, pkg-config, OpenSSL (`libssl-dev`: libdatachannel's DTLS/SRTP), zlib (`zlib1g-dev`),
 Qt 6.4+ (`qt6-base-dev`: Core, Network, Widgets; executor-desktop needs Widgets,
 `-DEXECUTOR_DESKTOP=OFF` leaves it out). Optional: cargo (net-bridge),
 Ruby + Bison + Perl (only for `-DEXECUTOR_REGENERATE=ON`, after editing
