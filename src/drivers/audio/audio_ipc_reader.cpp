@@ -17,6 +17,7 @@
 #include "encoders/audio_config.h"
 
 #include <cinttypes>
+#include <cstdlib>
 #include <cstdio>
 #include <cstring>
 #include <shared_mutex>
@@ -161,6 +162,16 @@ void audio_ipc_reader_start(IPCClient* client, AudioOutput* output, const char* 
 
     g_reader_running.store(true, std::memory_order_release);
     g_reader_thread = std::thread(audio_ipc_reader_loop, client, output);
+
+    // exit() from another thread (the guest powering off under
+    // --headless-http) runs the static destructors: a joinable
+    // g_reader_thread aborted the server ("terminate called without an
+    // active exception"). An atexit handler runs before them.
+    static bool at_exit = false;
+    if (!at_exit) {
+        at_exit = true;
+        atexit(audio_ipc_reader_stop);
+    }
 }
 
 void audio_ipc_reader_stop(void)
