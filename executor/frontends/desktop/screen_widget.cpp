@@ -108,6 +108,7 @@ void ScreenWidget::paintEvent(QPaintEvent *ev)
 void ScreenWidget::resizeEvent(QResizeEvent *)
 {
     updateCursor();
+    emit resized();
 }
 
 void ScreenWidget::moveTo(const QPointF &pos)
@@ -252,8 +253,11 @@ void ScreenWidget::updateCursor()
         setCursor(Qt::BlankCursor);
         return;
     }
+    /* the image at a whole-number scale: a Wayland cursor's buffer scale is
+       one (a 1.45 one, rounded, gave a pointer 1.45 times too big); the
+       compositor brings it to the display's */
     double zoom = macSize_.isEmpty() ? 1.0 : target().width() / macSize_.width();
-    double dpr = devicePixelRatioF();
+    double dpr = std::max(1.0, std::ceil(devicePixelRatioF() - 0.05));
     int px = std::max(16, (int)std::lround(16 * zoom * dpr));
     QImage img(16, 16, QImage::Format_ARGB32);
     for(int y = 0; y < 16; y++)

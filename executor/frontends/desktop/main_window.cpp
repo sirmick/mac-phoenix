@@ -37,6 +37,7 @@
 #include <QStatusBar>
 #include <QTimer>
 
+#include <algorithm>
 #include <cmath>
 #include <QToolBar>
 #include <QVBoxLayout>
@@ -64,6 +65,12 @@ MainWindow::MainWindow(Settings &settings, Disks &disks, const Automation &autom
 
     auto &e = Emulator::instance();
     connect(screen_, &ScreenWidget::geometryChanged, this, &MainWindow::sizeToMac);
+    /* Auto screen size: the Mac's screen follows the window as it is
+       resized (fitScreen, after the resizing stops) */
+    connect(screen_, &ScreenWidget::resized, this, [this] {
+        if(settings_.boolean("display.fit_window"))
+            fitTimer_->start();
+    });
     connect(&e, &Emulator::finished, this, [this](int rc) {
         fprintf(stderr, "[desktop] Executor finished (%d)\n", rc);
         quit(rc);
@@ -411,8 +418,13 @@ void MainWindow::fitScreen()
 {
     if(!settings_.boolean("display.fit_window") || !Emulator::instance().running())
         return;
+    /* within the sizes Executor takes (512x342 to 3840x2400,
+       quickdraw/displays.cpp): a larger window shows the largest */
     QSize s = screen_->size();
-    Emulator::instance().request("resize", QString("%1x%2").arg(s.width() & ~7).arg(s.height()));
+    int w = std::clamp(s.width(), 512, 3840) & ~7, h = std::clamp(s.height(), 342, 2400);
+    if(QSize(w, h) == Emulator::instance().macSize())
+        return;
+    Emulator::instance().request("resize", QString("%1x%2").arg(w).arg(h));
 }
 
 /* The window at the Mac's size the first time (and when it changes, unless
