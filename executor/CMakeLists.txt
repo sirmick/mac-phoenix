@@ -70,6 +70,9 @@ option(EXECUTOR_SKIA "Executor's high-resolution rendering, with Skia (docs/exec
 if(EXECUTOR_SKIA)
     if(EMSCRIPTEN)
         set(_skia_target wasm-wasm)
+    elseif(WIN32)
+        # built with llvm-mingw from source: tools/skia/build-windows.sh
+        set(_skia_target windows-x64)
     elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64")
         set(_skia_target linux-arm64)
     else()

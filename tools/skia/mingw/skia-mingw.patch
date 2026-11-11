@@ -1,0 +1,332 @@
+# Skia (m144, e2e66233743d) built for Windows with mingw-w64 (llvm-mingw) instead
+# of MSVC: GN learns is_mingw/is_msvc, and every MSVC-only setting (cl.exe
+# flags, the msvc toolchain, the Visual Studio lookup) is is_msvc's alone.
+# Applied by tools/skia/build-windows.sh. The approach follows MSYS2's
+# mingw-w64-skia patches (github.com/msys2/MINGW-packages, BSD-3-Clause),
+# redone for this Skia revision and for cross-compiling from Linux.
+
+diff --git a/BUILD.gn b/BUILD.gn
+index 4360218..2bf4a41 100644
+--- a/BUILD.gn
++++ b/BUILD.gn
+@@ -176,7 +176,7 @@ is_loong64 = current_cpu == "loong64"
+ opts("hsw") {
+   enabled = is_x86
+   sources = skia_opts.hsw_sources
+-  if (is_win) {
++  if (is_msvc) {
+     cflags = [ "/arch:AVX2" ]
+   } else {
+     cflags = [ "-march=haswell" ]
+@@ -186,7 +186,7 @@ opts("hsw") {
+ opts("skx") {
+   enabled = is_x86
+   sources = skia_opts.skx_sources
+-  if (is_win) {
++  if (is_msvc) {
+     cflags = [ "/arch:AVX512" ]
+   } else {
+     cflags = [ "-march=skylake-avx512" ]
+diff --git a/gn/BUILDCONFIG.gn b/gn/BUILDCONFIG.gn
+index b08ab14..de9608c 100644
+--- a/gn/BUILDCONFIG.gn
++++ b/gn/BUILDCONFIG.gn
+@@ -71,6 +71,15 @@ is_mac = current_os == "mac"
+ is_wasm = current_os == "wasm"
+ is_win = current_os == "win"
+ 
++# mingw-w64 (gcc or clang, e.g. llvm-mingw's x86_64-w64-mingw32-clang++)
++# rather than MSVC/clang-cl: Windows sources, GCC-style flags and toolchain
++is_mingw = is_win && filter_include([ cxx ],
++                                    [
++                                      "*g++",
++                                      "*clang++",
++                                    ]) != []
++is_msvc = is_win && !is_mingw
++
+ # Dawn has references to fuchsia, but Skia's GN rules do not
+ is_fuchsia = false
+ 
+@@ -96,7 +105,7 @@ if (current_cpu == "") {
+ 
+ is_clang = is_android || is_ios || is_mac || is_wasm ||
+            (cc == "clang" && cxx == "clang++") || clang_win != ""
+-if (!is_clang && !is_win) {
++if (!is_clang && !is_msvc) {
+   is_clang = exec_script("//gn/is_clang.py",
+                          [
+                            cc,
+@@ -128,7 +137,7 @@ if (is_android) {
+   }
+ }
+ 
+-if (target_os == "win") {
++if (is_msvc) {
+   # By default we look for 2017 (Enterprise, Pro, and Community), then 2015. If MSVC is installed in a
+   # non-default location, you can set win_vc to inform us where it is.
+ 
+@@ -139,7 +148,7 @@ if (target_os == "win") {
+                         # directory.
+ }
+ 
+-if (target_os == "win") {
++if (is_msvc) {
+   if (win_toolchain_version == "") {
+     win_toolchain_version = exec_script("//gn/highest_version_dir.py",
+                                         [
+@@ -233,7 +242,7 @@ if (!is_official_build) {
+       [ "//gn/skia:warnings_for_public_headers" ]
+ }
+ 
+-if (is_win) {
++if (is_msvc) {
+   # Windows tool chain
+   set_default_toolchain("//gn/toolchain:msvc")
+   default_toolchain_name = "msvc"
+diff --git a/gn/skia/BUILD.gn b/gn/skia/BUILD.gn
+index 8fda912..0db59e7 100644
+--- a/gn/skia/BUILD.gn
++++ b/gn/skia/BUILD.gn
+@@ -59,7 +59,7 @@ config("default") {
+   # Disable warnings about unknown attributes.
+   # (These unknown attribute warnings are on by default, so we don't make
+   # disabling them part of :warnings, as some targets remove :warnings.)
+-  if (is_win && !is_clang) {
++  if (is_msvc && !is_clang) {
+     cflags += [
+       "/wd5030",
+       "/wd5051",
+@@ -68,13 +68,13 @@ config("default") {
+     cflags += [ "-Wno-attributes" ]
+   }
+ 
+-  if (is_clang && !is_win) {
++  if (is_clang && !is_msvc) {
+     # In Clang 14, this default was changed. We turn this off to (hopefully) make our
+     # GMs more consistent in the transition.
+     cflags += [ "-ffp-contract=off" ]
+   }
+ 
+-  if (is_win) {
++  if (is_msvc) {
+     if (is_clang && current_cpu == "arm64") {
+       cflags += [ "--target=arm64-windows" ]
+     }
+@@ -120,10 +120,10 @@ config("default") {
+       "$win_vc/Tools/MSVC/$win_toolchain_version/lib/$current_cpu",
+     ]
+   } else {
+-    cflags += [
+-      "-fPIC",
+-      "-fvisibility=hidden",
+-    ]
++    if (!is_mingw) {
++      cflags += [ "-fPIC" ]  # PE/COFF has no -fPIC
++    }
++    cflags += [ "-fvisibility=hidden" ]
+     cflags_cc += [ "-fvisibility-inlines-hidden" ]
+     cflags_cc += [ "-std=c++20" ]
+   }
+@@ -134,7 +134,7 @@ config("default") {
+       "-mfpu=neon",
+       "-mthumb",
+     ]
+-  } else if (current_cpu == "x86" && !is_win) {
++  } else if (current_cpu == "x86" && !is_msvc) {
+     asmflags += [ "-m32" ]
+     cflags += [
+       "-m32",
+@@ -149,7 +149,7 @@ config("default") {
+     ]
+   }
+ 
+-  if (malloc != "" && !is_win) {
++  if (malloc != "" && !is_msvc) {
+     cflags += [
+       "-fno-builtin-malloc",
+       "-fno-builtin-calloc",
+@@ -166,7 +166,7 @@ config("default") {
+ 
+   if (show_includes) {
+     assert(is_clang, "show_includes requires clang to build.")
+-    if (is_win) {
++    if (is_msvc) {
+       cflags += [
+         "/clang:-H",
+         "/clang:-fshow-skipped-includes",
+@@ -310,7 +310,7 @@ config("default") {
+     sanitize = ""
+   }
+ 
+-  if (is_win && !is_clang && sanitize == "ASAN") {
++  if (is_msvc && !is_clang && sanitize == "ASAN") {
+     sanitizers = "address"
+     cflags += [ "/fsanitize=$sanitizers" ]
+   } else if (sanitize != "" && sanitize != "MSVC") {
+@@ -346,7 +346,7 @@ config("default") {
+       cflags += [ "-fno-sanitize=function" ]
+     }
+ 
+-    if (is_win) {
++    if (is_msvc) {
+       cflags += [
+         # On Release builds, we get strange warnings about string literals.
+         "/GF-",
+@@ -378,14 +378,14 @@ config("default") {
+ 
+ # See skbug.com/40041063.
+ config("recover_pointer_overflow") {
+-  if (sanitize == "ASAN" && !(is_win && !is_clang)) {
++  if (sanitize == "ASAN" && !(is_msvc && !is_clang)) {
+     cflags = [ "-fsanitize-recover=pointer-overflow" ]
+   }
+ }
+ 
+ config("no_exceptions") {
+   # Exceptions are disabled by default on Windows.  (Use /EHsc to enable them.)
+-  if (!is_win) {
++  if (!is_msvc) {
+     cflags_cc = [ "-fno-exceptions" ]
+     cflags_objcc = cflags_cc
+   }
+@@ -398,14 +398,14 @@ config("warnings") {
+   cflags_objcc = []
+ 
+   if (werror) {
+-    if (is_win) {
++    if (is_msvc) {
+       cflags += [ "/WX" ]
+     } else {
+       cflags += [ "-Werror" ]
+     }
+   }
+ 
+-  if (is_win) {
++  if (is_msvc) {
+     cflags += [
+       "/W3",  # Turn on lots of warnings.
+ 
+@@ -478,7 +478,7 @@ config("warnings") {
+     #   - clang-cl doesn't recognize the flag
+     #   - The (old) Mac/iOS SDK used on the bots breaks this rule in various headers
+     #     TODO: Re-enable on Apple when we update XCode
+-    if (!is_win && !is_apple && current_cpu != "loong64") {
++    if (!is_msvc && !is_apple && current_cpu != "loong64") {
+       cflags += [ "-fno-lax-vector-conversions" ]
+     }
+ 
+@@ -608,7 +608,7 @@ config("warnings") {
+   }
+ 
+   # !is_clang is a proxy for gcc.
+-  if (!is_clang && !is_win) {
++  if (!is_clang && !is_msvc) {
+     cflags += [
+       "-Wno-unreachable-code",  # Causes false positives in old GCC; removed
+                                 # from modern GCC entirely
+@@ -652,7 +652,7 @@ config("debug_symbols") {
+       "-gline-tables-only",
+       "-funwind-tables",  # Helps make in-process backtraces fuller.
+     ]
+-  } else if (is_win) {
++  } else if (is_msvc) {
+     cflags = [ "/Z7" ]
+     if (is_clang) {
+       cflags += [ "-gcodeview-ghash" ]
+@@ -672,7 +672,7 @@ config("no_rtti") {
+   # -fsanitize=vptr requires RTTI which is enabled as a part of
+   # -fsanitize=undefined
+   if (sanitize != "ASAN") {
+-    if (is_win) {
++    if (is_msvc) {
+       cflags_cc = [ "/GR-" ]
+     } else {
+       cflags_cc = [ "-fno-rtti" ]
+@@ -683,7 +683,7 @@ config("no_rtti") {
+ 
+ config("optimize") {
+   ldflags = []
+-  if (is_win) {
++  if (is_msvc) {
+     cflags = [
+       "/O2",
+       "/Zc:inline",
+@@ -738,12 +738,12 @@ config("trivial_abi") {
+ #
+ # As of 2024, only GCC is aggressive about strict aliasing. Clang isn't.
+ config("strict_aliasing") {
+-  if (!is_win) {
++  if (!is_msvc) {
+     cflags = [ "-fstrict-aliasing" ]
+   }
+ }
+ config("no_strict_aliasing") {
+-  if (!is_win) {
++  if (!is_msvc) {
+     cflags = [ "-fno-strict-aliasing" ]
+   }
+ }
+@@ -761,7 +761,9 @@ config("executable") {
+       "-rdynamic",
+       "-Wl,-rpath,\$ORIGIN",
+     ]
+-  } else if (is_win) {
++  } else if (is_mingw) {
++    ldflags = [ "-mconsole" ]
++  } else if (is_msvc) {
+     ldflags = [
+       "/SUBSYSTEM:CONSOLE",  # Quiet "no subsystem specified; CONSOLE assumed".
+       "/INCREMENTAL:NO",  # Quiet warnings about failing to incrementally link
+diff --git a/modules/skcms/BUILD.gn b/modules/skcms/BUILD.gn
+index 5d037a9..a2edadd 100644
+--- a/modules/skcms/BUILD.gn
++++ b/modules/skcms/BUILD.gn
+@@ -33,7 +33,7 @@ template("arch") {
+ arch("skcms_TransformHsw") {
+   enabled = current_cpu == "x64" && target_os != "android"
+   sources = skcms_TransformHsw
+-  if (is_win) {
++  if (is_msvc) {
+     if (is_clang) {
+       cflags = [
+         "/clang:-mavx2",
+@@ -55,7 +55,7 @@ arch("skcms_TransformHsw") {
+ arch("skcms_TransformSkx") {
+   enabled = current_cpu == "x64" && target_os != "android"
+   sources = skcms_TransformSkx
+-  if (is_win) {
++  if (is_msvc) {
+     if (is_clang) {
+       cflags = [
+         "/clang:-mavx512f",
+@@ -82,7 +82,7 @@ arch("skcms_TransformSkx") {
+ 
+ static_library("skcms") {
+   cflags = []
+-  if (!is_win || is_clang) {
++  if (!is_msvc || is_clang) {
+     cflags += [ "-std=c11" ]
+   }
+   if (target_cpu != "x64" || target_os == "android") {
+diff --git a/third_party/third_party.gni b/third_party/third_party.gni
+index cbcd16c..207380f 100644
+--- a/third_party/third_party.gni
++++ b/third_party/third_party.gni
+@@ -13,7 +13,7 @@ template("third_party_config") {
+     if (enabled) {
+       forward_variables_from(invoker, "*", [ "include_dirs" ])
+       cflags = []
+-      if (is_win) {
++      if (is_msvc) {
+         include_dirs = invoker.include_dirs
+         if (is_clang) {
+           foreach(dir, invoker.include_dirs) {
+@@ -92,7 +92,7 @@ template("third_party") {
+       if (!defined(cflags)) {
+         cflags = []
+       }
+-      if (is_win) {
++      if (is_msvc) {
+         cflags += [ "/w" ]
+       } else {
+         cflags += [ "-w" ]

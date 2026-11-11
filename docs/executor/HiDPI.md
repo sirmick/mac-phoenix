@@ -337,6 +337,21 @@ explicitly alongside `libskia`/`libfreetype2` (harmless if unreferenced:
 a static archive only pulls in the object files a symbol reference
 actually needs).
 
+**Windows (2026-11-11).** skia-pack's Windows package is MSVC-built and
+can't link into the llvm-mingw build (libc++ and the Itanium ABI against
+MSVC's), and Skia's GN knows Windows only through MSVC (clang-cl).
+`tools/skia/build-windows.sh` builds the same revision with the same
+minimal config as `build-wasm.sh`, cross-compiled with llvm-mingw, after
+`tools/skia/mingw/skia-mingw.patch` (GN gets `is_mingw`/`is_msvc`; every
+MSVC-only setting, the cl.exe flags, the msvc toolchain and the Visual
+Studio lookup, becomes `is_msvc`'s; no `-fPIC` for PE/COFF), the approach
+of MSYS2's mingw-w64-skia patches. Output:
+`~/storage/deps/skia-m144-windows-x64`, the usual layout;
+`tools/windows/build.sh` configures `-DEXECUTOR_SKIA=ON` when it's there.
+No extra Windows libraries are needed at link time. Checked under Wine:
+`tools/windows/smoke.sh ZIP DIR --system System7_5_3.img --scale 2` (the
+Finder at 2x, its 1280x960 screenshot drawn from outlines).
+
 Built this way, `executor-web.wasm` (Release, `source
 ~/emsdk/emsdk_env.sh && emcmake cmake -B build-wasm -DEXECUTOR_SKIA=ON
 -DCMAKE_BUILD_TYPE=Release && cmake --build build-wasm -j3 --target

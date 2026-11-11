@@ -209,6 +209,9 @@ int main(int argc, char **argv)
         sc = std::max(1, (int)std::ceil(app.devicePixelRatio() - 0.05)); /* 1.45: 2 */
     if(sc > 1)
         add("--scale"), add(QString::number(sc));
+    /* --scale on the command line holds: Auto sharpness doesn't follow
+       the window's display scale then (MainWindow::poll) */
+    app.setProperty("executor.scale_fixed", !scale.isEmpty());
     QStringList mountedNow;
     for(const QString &d : disks)
     {

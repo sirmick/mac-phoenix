@@ -8,7 +8,8 @@
 # The same romlib, CPU facade and MAME cores as the native build, with the
 # host edges' Windows sides (cpu/host/windows: VirtualAlloc). None of
 # mac-phoenix itself (the web server, WebRTC, codecs, net-bridge), the ROM
-# machines or UAE. No network yet (EXECUTOR_NET=none) and no Skia.
+# machines or UAE. No network yet (EXECUTOR_NET=none). Skia (HiDPI) built
+# from source with llvm-mingw: tools/skia/build-windows.sh.
 # =============================================================================
 
 set(BUILD_EXECUTOR ON)

@@ -6,19 +6,22 @@
 #   - --crash-test writes crash-*.dmp and crash-*.txt beside the log;
 #   - executor-standalone.exe serves the tab (curl).
 #
-#   tools/windows/smoke.sh ZIP WORKDIR [--system IMAGE [--ppc]]
+#   tools/windows/smoke.sh ZIP WORKDIR [--system IMAGE [--ppc] [--scale N]]
 #
 # IMAGE is a path on this machine (mounted read-only); the run's data stays
-# in WORKDIR. Exit 0: every check passed.
+# in WORKDIR. --scale N: the System's run draws at N (HiDPI, a Skia build):
+# its screenshot is then also taken at N (apple-hidpi.png). Exit 0: every
+# check passed.
 set -uo pipefail
 ZIP=$(realpath "$1")
 WORK=$(realpath -m "$2")
 shift 2
-SYSTEM= PPC=
+SYSTEM= PPC= SCALE=
 while [ $# -gt 0 ]; do
     case $1 in
         --system) SYSTEM=$(realpath "$2"); shift ;;
         --ppc) PPC=--ppc ;;
+        --scale) SCALE=$2; shift ;;
     esac
     shift
 done
@@ -58,10 +61,14 @@ check "UTF-8 code page" grep -q 'code page 65001' "$WORK/own.txt"
 check "no crash report files from a run that didn't crash" bash -c "! ls '$WORK'/own/logs/crash-* > /dev/null 2>&1"
 
 if [ -n "$SYSTEM" ]; then
-    echo "== $(basename "$SYSTEM") $PPC"
-    wine_run "$EXE --data 'Z:\\work\\apple' --system 'Z:\\sys\\$(basename "$SYSTEM")' $PPC --screenshot 'Z:\\work\\apple.png' --screenshot-delay 3 --quit --timeout 150 > /work/apple.txt 2>&1"
+    echo "== $(basename "$SYSTEM") $PPC ${SCALE:+--scale $SCALE}"
+    wine_run "$EXE --data 'Z:\\work\\apple' --system 'Z:\\sys\\$(basename "$SYSTEM")' $PPC ${SCALE:+--scale $SCALE} --screenshot 'Z:\\work\\apple.png' --screenshot-delay 3 --quit --timeout 150 > /work/apple.txt 2>&1"
     check "Apple's System: the Finder in its event loop" grep -q 'Finder is in its event loop' "$WORK/apple.txt"
     check "Apple's System: screenshot" test -s "$WORK/apple.png"
+    if [ -n "$SCALE" ]; then
+        check "--scale $SCALE: Skia, not the 1x fallback" bash -c "! grep -q 'built without Skia' '$WORK/apple.txt'"
+        check "--scale $SCALE: the screenshot at that scale" test -s "$WORK/apple-hidpi.png"
+    fi
 fi
 
 echo "== --crash-test"

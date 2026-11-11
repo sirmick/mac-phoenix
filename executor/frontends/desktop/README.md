@@ -159,8 +159,10 @@ module+offset, the log's tail) to `logs/` and say so in a dialog
 (`windows_support.h`). The data folder is `%AppData%\MacPhoenix\Executor`.
 Mac names that Windows forbids in a file name map to the Services for
 Macintosh private-use characters (`util/macstrings.cpp`). Not yet: the
-network (`EXECUTOR_NET=none`: Winsock types only), Skia (HiDPI), the
-gtests on Windows. Keys' set 1 table and WASAPI sound are untested on real
+network (`EXECUTOR_NET=none`: Winsock types only), the gtests on Windows.
+HiDPI: Skia built for mingw with `tools/skia/build-windows.sh`;
+`tools/windows/build.sh` turns it on when it's there
+(`tools/windows/smoke.sh ... --scale 2` checks it under Wine). Keys' set 1 table and WASAPI sound are untested on real
 Windows (Wine has neither keyboard input offscreen nor a sound device).
 
 Disk images given on the command line without `--disk` (opened from a

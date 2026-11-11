@@ -46,7 +46,8 @@ ctest --test-dir build -L executor
 # ctest -R 'clib_|guest_suite_ppc_executor'). Heaps that fill: docs/executor/FullHeap.md.
 # Calls Executor lacks: "[unimplemented]" in the log, and ~/storage/executor/unimplemented.log.
 
-# HiDPI (docs/executor/HiDPI.md): prebuilt Skia, off by default
+# HiDPI (docs/executor/HiDPI.md): prebuilt Skia, off by default (Windows: tools/skia/build-windows.sh,
+# then tools/windows/build.sh turns it on; wasm: tools/skia/build-wasm.sh)
 tools/skia/fetch.sh && cmake -B build -DEXECUTOR_SKIA=ON
 ./build/mac-phoenix --backend executor --executor-system 8.6.img --executor-ppc --executor-scale 2
 
@@ -358,7 +359,7 @@ Executor's origin and what we changed: `docs/executor/README.md`
 - **Executor front ends**: all run Executor through `executor/frontends/phoenix` (`executor_host.h`); the tab and the desktop app share `executor/host` (session, disks, requests).
 - **Disk images never written by the tab or desktop app**: the Mac's changes go to an overlay of changed 4 KB blocks (`executor/host/overlay.h` over `core/romlib/hfs/image_io.h`), the same format as `executor/server/overlay.go`, so each reads the other's.
 - **executor-standalone**: one Go binary per OS with the tab embedded, the tab's only server: images only, no accounts; the first browser to open it claims it (cookie); it keeps the overlays and settings.
-- **Windows**: the desktop app and executor-standalone, cross-built on Linux with llvm-mingw (cmake/ExecutorWindows.cmake): no network, no Skia, none of mac-phoenix itself.
+- **Windows**: the desktop app and executor-standalone, cross-built on Linux with llvm-mingw (cmake/ExecutorWindows.cmake): no network, none of mac-phoenix itself; Skia built from source for mingw (tools/skia/build-windows.sh).
 
 ## Dependencies
 

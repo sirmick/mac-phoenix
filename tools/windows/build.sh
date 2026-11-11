@@ -8,6 +8,10 @@
 #   tools/windows/build.sh [BUILD_DIR]     # default build-windows
 #   -> BUILD_DIR/executor-desktop.exe
 #
+# HiDPI (Skia) when its Windows build is there (tools/skia/build-windows.sh
+# makes it: ~/storage/deps/skia-m144-windows-x64, or SKIA_WINDOWS=DIR);
+# without it the application draws at 1x and says so in its log.
+#
 # Wine smoke test and the zip: tools/windows/package.sh.
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
@@ -38,13 +42,21 @@ if [ "$host_qt" != "$QT_VERSION" ]; then
     echo "warning: the build machine's moc is Qt ${host_qt:-(none)}, the Windows Qt $QT_VERSION" >&2
 fi
 
+SKIA_WINDOWS=${SKIA_WINDOWS:-$HOME/storage/deps/skia-m144-windows-x64}
+if [ -f "$SKIA_WINDOWS/out/Release-windows-x64/libskia.a" ]; then
+    SKIA=(-DEXECUTOR_SKIA=ON -DSKIA_DIR="$SKIA_WINDOWS")
+else
+    echo "note: no Windows Skia in $SKIA_WINDOWS (tools/skia/build-windows.sh): HiDPI off" >&2
+    SKIA=(-DEXECUTOR_SKIA=OFF)
+fi
+
 if [ ! -f "$BUILD/CMakeCache.txt" ]; then
     cmake -S "$ROOT" -B "$BUILD" -G Ninja \
         -DCMAKE_TOOLCHAIN_FILE="$ROOT/tools/windows/llvm-mingw.cmake" \
         -DLLVM_MINGW="$LLVM_MINGW" -DQT_WINDOWS="$QT" \
-        -DCMAKE_BUILD_TYPE=RelWithDebInfo
+        -DCMAKE_BUILD_TYPE=RelWithDebInfo "${SKIA[@]}"
 else
-    cmake "$BUILD" > /dev/null   # the version (git describe) again
+    cmake "$BUILD" "${SKIA[@]}" > /dev/null   # the version (git describe) again
 fi
 cmake --build "$BUILD" -j"${JOBS:-4}" --target executor-desktop
 ls -l "$BUILD/executor-desktop.exe"

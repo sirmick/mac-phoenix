@@ -490,7 +490,7 @@ void MainWindow::poll()
     /* Auto sharpness from the window's own display scale: on Wayland a
        fractional one (1.45) is known only once the window is shown (the
        start, from the application's, had 1), and changes with the screen */
-    if(settings_.integer("display.scale") == 0)
+    if(settings_.integer("display.scale") == 0 && !qApp->property("executor.scale_fixed").toBool())
     {
         int want = std::max(1, (int)std::ceil(devicePixelRatioF() - 0.05));
         if(want != autoScale_ && std::lround(e.scale()) != want)
