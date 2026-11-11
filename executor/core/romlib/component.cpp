@@ -23,6 +23,7 @@
  * and icon handles and loaded code are in the System heap. A component
  * registered from a resource ('thng') loads its code the first time it is
  * opened. */
+#include <rsys/cfm.h>
 #include <base/common.h>
 #include <FileMgr.h>
 #include <MemoryMgr.h>
@@ -420,6 +421,14 @@ Comp *add(std::unique_ptr<Comp> c, int16_t global, bool auto_version)
     changed(p->type);
     if(p->flags & cmpWantsRegisterMessage)
     {
+        /* MacPhoenix: a global component's register routine runs for the
+           system: the fragments it loads are the system's, not the heap's
+           of whatever process is current (9.0.4's AppleScript loads
+           Built-inHandlers and installs 274 system coercion handlers into
+           it; in the startup's heap it went with it, the Finder's code
+           was read over it and the first coercion jumped into that) */
+        bool was_owned = ROMlib_cfm_system_owned(false);
+        ROMlib_cfm_system_owned(was_owned || p->global);
         OSErr err;
         uint32_t ci = open_component(p, &err);
         int32_t r = 0;
@@ -429,6 +438,7 @@ Comp *add(std::unique_ptr<Comp> c, int16_t global, bool auto_version)
             r = call_select(p, inst_of(ci), kComponentRegisterSelect, args, 0);
             close_component(ci);
         }
+        ROMlib_cfm_system_owned(was_owned);
         if(!ci || r != 0)
         {
             comps.erase(std::find_if(comps.begin(), comps.end(),

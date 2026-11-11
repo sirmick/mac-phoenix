@@ -468,8 +468,14 @@ cfm_new_ptr(Size n)
     }
     if(system_owned)
     {
+        /* MacPhoenix: the Process Manager's zone only once it is that:
+           during startup it is the startup's heap (ApplZone), rebuilt when
+           the Finder launches, and a fragment a global component loaded
+           there for the system was gone (9.0.4's AppleScript's
+           Built-inHandlers, its 274 system coercion handlers left pointing
+           into FinderLib): then the System heap */
         Ptr p = nullptr;
-        if(ROMlib_pm_zone)
+        if(ROMlib_pm_zone && ROMlib_pm_zone != LM(ApplZone))
         {
             TheZoneGuard guard(ROMlib_pm_zone);
             p = NewPtr(n);
@@ -2552,7 +2558,7 @@ OSErr Executor::C_GetDiskFragment(FSSpecPtr fsp, LONGINT offset,
            container never loaded. */
         LONGINT len = length == kWholeFork ? eof - offset : length;
         Ptr p = nullptr;
-        if(len > 0 && loading_import_library && ROMlib_pm_zone)
+        if(len > 0 && loading_import_library && ROMlib_pm_zone && !system_owned)
         {
             TheZoneGuard guard(ROMlib_pm_zone);
             p = NewPtr(len);

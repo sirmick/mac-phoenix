@@ -92,6 +92,7 @@ while [[ $# -gt 0 ]]; do
         --executor-logtraps) EXTRA_FLAGS+=("$1"); shift ;;       # Executor logs every trap call
         --executor-logtraps-nesting|--executor-logtraps-filter) EXTRA_FLAGS+=("$1" "$2"); shift 2 ;;
         --executor-ppc) EXTRA_FLAGS+=("$1"); shift ;;            # Executor runs fat apps' PowerPC code
+        --executor-ppc-break) EXTRA_FLAGS+=("$1" "$2"); shift 2 ;;  # PowerPC breakpoint/trace (docs/executor/PPCTrace.md)
         --arch) ARCH="$2"; shift 2 ;;
         --os-version) OS_VERSION="$2"; shift 2 ;;
         --network) NETWORK="$2"; shift 2 ;;

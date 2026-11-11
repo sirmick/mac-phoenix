@@ -1532,7 +1532,7 @@ set_tests_properties(aehdlr68k_executor_86 PROPERTIES
 
 # ... and on Executor's 9.0.4 (its own System) against the G3's 9.0.4, for
 # calls 9.0 added.
-foreach(probe vminfo)
+foreach(probe aevt vminfo)
   add_test(
     NAME difftest_${probe}_executor_904
     COMMAND python3 ${CMAKE_SOURCE_DIR}/tools/difftest/run.py ${probe} --target executor-9.0.4 --no-refresh
