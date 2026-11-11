@@ -341,7 +341,7 @@ keeps failures of earlier runs that this one didn't run again. The
 
 ### Merge gate
 
-`tools/ci/merge_gate.sh BRANCH [--into executor-86-grid2] [--jobs N]
+`tools/ci/merge_gate.sh BRANCH [--into main] [--jobs N]
 [--apply]` tests a branch merged into the target before the target takes
 it, in a worktree of its own (`~/storage/ci/gate/tree`, its builds kept
 between gates; one gate at a time): the target's head, `git merge --no-ff

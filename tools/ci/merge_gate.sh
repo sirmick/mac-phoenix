@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tools/ci/merge_gate.sh BRANCH [options]: would merging BRANCH break the
-# target (default executor-86-grid2)? In its own git worktree (<ci>/gate,
+# target (default main)? In its own git worktree (<ci>/gate,
 # detached at the target's head; the main checkout and its index are never
 # touched):
 #   git merge --no-ff BRANCH     a conflict stops here: FAIL, the files listed
@@ -16,7 +16,7 @@
 #   FAIL         a conflict, a failed build, or a test that fails alone
 # The tested merge commit is kept as refs/ci-gate/<branch>.
 #
-#   --into REF       the target branch (default executor-86-grid2)
+#   --into REF       the target branch (default main)
 #   --jobs N         ctest -j (default 4)
 #   --build-jobs N   cmake --build -j (default 4)
 #   --apply          with MERGE: move the target to the tested merge commit
@@ -35,7 +35,7 @@ REPO="$(cd "$(dirname "$0")/../.." && pwd)"
 # shellcheck source=lib.sh
 source "$REPO/tools/ci/lib.sh"
 CI="${MACPHOENIX_CI_DIR:-$HOME/storage/ci}"
-INTO=executor-86-grid2
+INTO=main
 JOBS=4
 BUILD_JOBS=4
 APPLY=0

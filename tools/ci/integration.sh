@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tools/ci/integration.sh [options]: a fresh integration run of a branch
-# (default executor-86-grid2): its own git worktree (<ci>/integration, detached at
+# (default main): its own git worktree (<ci>/integration, detached at
 # the branch's head), the native and wasm builds there, then
 #   ctest -L executor            native, the emulator run from a copy
 #                                (<ci>/integration/ci-bin), difftests made to run
@@ -12,7 +12,7 @@
 # free ports as they start (tests/lib/ports.py), so they run beside anyone
 # else's. One run at a time (<ci>/.lock).
 #
-#   --branch REF     what to test (default executor-86-grid2)
+#   --branch REF     what to test (default main)
 #   --jobs N         ctest -j (default 2); builds are always -j2
 #   --only LIST      some of: native wasm site (default all three)
 #   --no-build       test what is built (no checkout either)
@@ -26,7 +26,7 @@ REPO="$(cd "$(dirname "$0")/../.." && pwd)"
 # shellcheck source=lib.sh
 source "$REPO/tools/ci/lib.sh"
 CI="${MACPHOENIX_CI_DIR:-$HOME/storage/ci}"
-BRANCH=executor-86-grid2
+BRANCH=main
 JOBS=2
 ONLY="native wasm site"
 BUILD=1
