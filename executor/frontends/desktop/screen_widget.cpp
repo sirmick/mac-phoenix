@@ -38,12 +38,17 @@ QRectF ScreenWidget::target() const
 {
     if(macSize_.isEmpty())
         return rect();
-    /* whole times the Mac's size when it fits (sharp pixels), else the
-       largest that fits */
-    double z = std::min((double)width() / macSize_.width(), (double)height() / macSize_.height());
-    if(z >= 1.0)
-        z = std::floor(z + 1e-9);
-    double w = macSize_.width() * z, h = macSize_.height() * z;
+    /* each of the frame's pixels a whole number of the display's when
+       that nearly fills the window (sharp pixels), else the largest that
+       fits (smoothed: paintEvent). Counted in device pixels: at a
+       fractional display scale (1.45) a whole number of logical pixels is
+       a mix of 1- and 2-pixel-wide ones. */
+    double dpr = devicePixelRatioF();
+    QSize fs = frameSize_.isEmpty() ? macSize_ : frameSize_;
+    double fit = std::min(width() * dpr / fs.width(), height() * dpr / fs.height());
+    double whole = std::floor(fit + 1e-9);
+    double z = whole >= 1.0 && whole >= 0.8 * fit ? whole : fit;
+    double w = fs.width() * z / dpr, h = fs.height() * z / dpr;
     return QRectF((width() - w) / 2, (height() - h) / 2, w, h);
 }
 
@@ -91,7 +96,12 @@ void ScreenWidget::paintEvent(QPaintEvent *ev)
         p.fillRect(t, Qt::black);
         return;
     }
-    p.setRenderHint(QPainter::SmoothPixmapTransform, smooth_);
+    /* a frame pixel not a whole number of the display's (2x drawn, shown
+       at 1.45; 1x filling the window): always smoothed, which keeps 2x
+       text and evens out the pixels; whole numbers as the setting says */
+    double per = t.width() * devicePixelRatioF() / std::max(1, f.width());
+    bool whole = std::fabs(per - std::round(per)) < 0.01 && per >= 0.99;
+    p.setRenderHint(QPainter::SmoothPixmapTransform, smooth_ || !whole);
     p.drawImage(t, f, QRectF(f.rect()));
 }
 

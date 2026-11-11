@@ -36,6 +36,8 @@
 #include <QScreen>
 #include <QStatusBar>
 #include <QTimer>
+
+#include <cmath>
 #include <QToolBar>
 #include <QVBoxLayout>
 #include <QWindow>
@@ -391,7 +393,7 @@ void MainWindow::applyLive(const QString &key)
     {
         int scale = settings_.integer("display.scale");
         if(scale == 0)
-            scale = std::max(1, (int)std::lround(devicePixelRatioF()));
+            scale = autoScale_ = std::max(1, (int)std::ceil(devicePixelRatioF() - 0.05)); /* 1.45: 2 */
         e.request("scale", QString::number(scale), [this](const QString &r) {
             QJsonObject o = QJsonDocument::fromJson(r.toUtf8()).object();
             if(!o.value("ok").toBool())
@@ -473,6 +475,16 @@ void MainWindow::poll()
     auto &e = Emulator::instance();
     if(!e.running())
         return;
+    /* Auto sharpness from the window's own display scale: on Wayland a
+       fractional one (1.45) is known only once the window is shown (the
+       start, from the application's, had 1), and changes with the screen */
+    if(settings_.integer("display.scale") == 0)
+    {
+        int want = std::max(1, (int)std::ceil(devicePixelRatioF() - 0.05));
+        if(want != autoScale_ && std::lround(e.scale()) != want)
+            applyLive("display.scale");
+        autoScale_ = want;
+    }
     std::string app = executor_host::current_app_name();
     if(QString::fromStdString(app) != app_)
     {
