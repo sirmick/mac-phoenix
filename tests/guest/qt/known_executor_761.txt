@@ -7,9 +7,11 @@
 comp.sdev.00
 #
 # 'smc ' compresses 8-bit pixels: the ICM copies the 32-bit frame to an
-# 8-bit offscreen first, and the Quadra's copy is dithered, Executor's
-# CopyBits not (ditherCopy drawn as srcCopy; QTICM's known lines too). The
-# movie made in smc then decodes other data.
+# 8-bit offscreen with ditherCopy first. Executor dithers as 8.6 does
+# (difftest dither), but matches some colours to other table entries than
+# the Mac's inverse table does (difftest dither's expected list), and the
+# dither carries each difference on: 2090 bytes of smc against the
+# Quadra's 2251. The movie made in smc then decodes other data.
 icm.smc_
 frame.made-smc.00
 frame.made-smc.01

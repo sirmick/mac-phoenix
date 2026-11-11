@@ -36,6 +36,8 @@ public slots:
 signals:
     /* The Mac's screen changed size or scale: the window may follow */
     void geometryChanged();
+    /* the widget's size changed (Auto screen size follows it) */
+    void resized();
 
 protected:
     void paintEvent(QPaintEvent *) override;

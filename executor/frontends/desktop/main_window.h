@@ -81,6 +81,7 @@ private:
     QTimer *fitTimer_ = nullptr;
     QString app_;
     bool idleSeen_ = false, shotTaken_ = false, sized_ = false, quitting_ = false;
+    int autoScale_ = 0; /* the sharpness Auto last asked for (display.scale 0) */
     QStringList mounted_;        // images in the Mac now
     QStringList pendingMounts_;  // being put in
 };

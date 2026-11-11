@@ -157,7 +157,9 @@ OSErr aggr_desc_get_addr(Handle aggr_desc_h,
     else
         inline_desc = (inline_desc_t *)(aggr_desc_p + offset);
 
-    if(create_p)
+    /* MacPhoenix: deleting resizes too (it was only done when creating:
+       AEDeleteItem, AEDeleteParam and AEDeleteKeyDesc removed nothing) */
+    if(create_p || delete_p)
     {
         int diff, aggr_desc_size;
         int old_size, new_size;
@@ -770,6 +772,15 @@ OSErr Executor::C_AECreateDesc(DescType type, const void* data, Size data_size,
 {
     Handle h;
 
+    /* MacPhoenix: a null descriptor has no data handle (8.6, difftest aevt
+       spec.desc.null) */
+    if(type == typeNull)
+    {
+        DESC_TYPE(desc_out) = typeNull;
+        DESC_DATA(desc_out) = nullptr;
+        AE_RETURN_ERROR(noErr);
+    }
+
     h = NewHandle(data_size);
     if(h == nullptr)
         AE_RETURN_ERROR(memFullErr);
@@ -833,8 +844,12 @@ OSErr Executor::C_AECreateList(const void *list_elt_prefix, Size list_elt_prefix
     list_header_t header;
     DescType type;
 
-    /* #### */
-    gui_assert(!list_elt_prefix_size);
+    /* MacPhoenix: factoring (the prefix each item's data starts with) is
+       how a list is stored, not what it answers: items go in and come out
+       whole either way, so the list keeps them whole. It stopped Executor
+       (8.6 answers noErr: difftest aevt spec.list.factored). */
+    (void)list_elt_prefix;
+    (void)list_elt_prefix_size;
 
     type = is_record_p ? typeAERecord : typeAEList;
 
@@ -968,10 +983,15 @@ OSErr Executor::C_AEDeleteItem(AEDescList *list, int32_t index)
     if(!LIST_CLASS_P(list))
         AE_RETURN_ERROR(errAEWrongDataType);
 
-    if(aggr_delete_index(DESC_DATA(list), false, index))
+    /* MacPhoenix: an index the list doesn't have is errAEDescNotFound, and
+       a deletion that worked noErr (it answered errAEIllegalIndex for both:
+       8.6, difftest aevt spec.list.delete1, delete_past) */
+    GUEST<int32_t> count;
+    if(AECountItems(list, &count) != noErr || index < 1 || index > count)
+        AE_RETURN_ERROR(errAEDescNotFound);
+    if(!aggr_delete_index(DESC_DATA(list), false, index))
         AE_RETURN_ERROR(errAEIllegalIndex);
-    else
-        AE_RETURN_ERROR(noErr);
+    AE_RETURN_ERROR(noErr);
 }
 
 OSErr Executor::C_AESizeOfNthItem(AEDescList *list, int32_t index,
@@ -1172,7 +1192,13 @@ OSErr Executor::C_AEGetAttributePtr(AppleEvent *evt, AEKeyword keyword,
     err = AECoerceDesc(desc, desired_type, coerced_desc);
     AEDisposeDesc(desc);
     if(err != noErr)
+    {
+        /* MacPhoenix: the type given back is typeNull (8.6, difftest aevt
+           spec.event.returnid: a return ID asked for as a short) */
+        if(type_out)
+            *type_out = typeNull;
         AE_RETURN_ERROR(err);
+    }
 
     *type_out = DESC_TYPE(coerced_desc);
     ae_desc_to_ptr(coerced_desc,

@@ -50,7 +50,7 @@ set(NATIVE_TEST_SOURCES
         typeselect.cpp datetime.cpp numformat.cpp textedit.cpp sysheap.cpp memorymgr.cpp fullheap.cpp
         sysroutines.cpp resprivate.cpp unknownselectors.cpp folders.cpp cursordev.cpp dialogs.cpp printing.cpp displaymode.cpp
         aehdlr.cpp stdclib.cpp
-        aedesc.cpp aeresolve.cpp
+        aedesc.cpp aeresolve.cpp appleevents_upstream.cpp
         hfsplus_unicode.cpp hfsplus_volume.cpp hfs_volume.cpp image_io.cpp
         exports.cpp cfm.cpp gestalt.cpp timemgr.cpp menus85.cpp widemath.cpp qtmath.cpp qtgroundwork.cpp icm.cpp movies.cpp inflate.cpp ot_memory.cpp inputsprocket.cpp nameregistry.cpp hidpi_layout.cpp appearance.cpp sound.cpp sounddecode.cpp
         # Native-only: drives the .IPP driver through the Device Manager.

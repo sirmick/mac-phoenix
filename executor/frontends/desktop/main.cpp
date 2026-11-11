@@ -206,7 +206,7 @@ int main(int argc, char **argv)
     add(size.isEmpty() ? settings.str("machine.screen") : size);
     int sc = scale.isEmpty() ? settings.integer("display.scale") : (int)std::lround(scale.toDouble());
     if(sc == 0)
-        sc = std::max(1, (int)std::lround(app.devicePixelRatio()));
+        sc = std::max(1, (int)std::ceil(app.devicePixelRatio() - 0.05)); /* 1.45: 2 */
     if(sc > 1)
         add("--scale"), add(QString::number(sc));
     QStringList mountedNow;

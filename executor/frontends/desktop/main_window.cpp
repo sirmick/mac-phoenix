@@ -36,6 +36,9 @@
 #include <QScreen>
 #include <QStatusBar>
 #include <QTimer>
+
+#include <algorithm>
+#include <cmath>
 #include <QToolBar>
 #include <QVBoxLayout>
 #include <QWindow>
@@ -62,6 +65,12 @@ MainWindow::MainWindow(Settings &settings, Disks &disks, const Automation &autom
 
     auto &e = Emulator::instance();
     connect(screen_, &ScreenWidget::geometryChanged, this, &MainWindow::sizeToMac);
+    /* Auto screen size: the Mac's screen follows the window as it is
+       resized (fitScreen, after the resizing stops) */
+    connect(screen_, &ScreenWidget::resized, this, [this] {
+        if(settings_.boolean("display.fit_window"))
+            fitTimer_->start();
+    });
     connect(&e, &Emulator::finished, this, [this](int rc) {
         fprintf(stderr, "[desktop] Executor finished (%d)\n", rc);
         quit(rc);
@@ -391,7 +400,7 @@ void MainWindow::applyLive(const QString &key)
     {
         int scale = settings_.integer("display.scale");
         if(scale == 0)
-            scale = std::max(1, (int)std::lround(devicePixelRatioF()));
+            scale = autoScale_ = std::max(1, (int)std::ceil(devicePixelRatioF() - 0.05)); /* 1.45: 2 */
         e.request("scale", QString::number(scale), [this](const QString &r) {
             QJsonObject o = QJsonDocument::fromJson(r.toUtf8()).object();
             if(!o.value("ok").toBool())
@@ -409,8 +418,13 @@ void MainWindow::fitScreen()
 {
     if(!settings_.boolean("display.fit_window") || !Emulator::instance().running())
         return;
+    /* within the sizes Executor takes (512x342 to 3840x2400,
+       quickdraw/displays.cpp): a larger window shows the largest */
     QSize s = screen_->size();
-    Emulator::instance().request("resize", QString("%1x%2").arg(s.width() & ~7).arg(s.height()));
+    int w = std::clamp(s.width(), 512, 3840) & ~7, h = std::clamp(s.height(), 342, 2400);
+    if(QSize(w, h) == Emulator::instance().macSize())
+        return;
+    Emulator::instance().request("resize", QString("%1x%2").arg(w).arg(h));
 }
 
 /* The window at the Mac's size the first time (and when it changes, unless
@@ -473,6 +487,16 @@ void MainWindow::poll()
     auto &e = Emulator::instance();
     if(!e.running())
         return;
+    /* Auto sharpness from the window's own display scale: on Wayland a
+       fractional one (1.45) is known only once the window is shown (the
+       start, from the application's, had 1), and changes with the screen */
+    if(settings_.integer("display.scale") == 0)
+    {
+        int want = std::max(1, (int)std::ceil(devicePixelRatioF() - 0.05));
+        if(want != autoScale_ && std::lround(e.scale()) != want)
+            applyLive("display.scale");
+        autoScale_ = want;
+    }
     std::string app = executor_host::current_app_name();
     if(QString::fromStdString(app) != app_)
     {

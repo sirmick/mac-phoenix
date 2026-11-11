@@ -65,6 +65,13 @@
 
 - enum:
     values:
+      - name: ditherCopy
+        value: 64
+
+# ####
+
+- enum:
+    values:
       - name: blackColor
         value: 33
       - name: whiteColor

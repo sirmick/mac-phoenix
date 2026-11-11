@@ -47,11 +47,18 @@ set_tests_properties(cpu_cores PROPERTIES TIMEOUT 10 LABELS "unit;mame")
 # Skips (77) without Retro68's m68k compiler.
 find_program(RETRO68_PPC_GCC powerpc-apple-macos-gcc
   HINTS "$ENV{HOME}/opt/retro68/build-ppc/toolchain/bin")
+# Arguments only for the compilers found: an empty generator expression
+# in add_test is still an argument ('').
+set(MULTIVERSAL_RETRO68_ARGS)
+if(RETRO68_GCC)
+  list(APPEND MULTIVERSAL_RETRO68_ARGS --gcc ${RETRO68_GCC})
+endif()
+if(RETRO68_PPC_GCC)
+  list(APPEND MULTIVERSAL_RETRO68_ARGS --ppc-gcc ${RETRO68_PPC_GCC})
+endif()
 add_test(
   NAME multiversal_retro68
-  COMMAND bash ${TEST_DIR}/test_multiversal_retro68.sh
-          $<$<BOOL:${RETRO68_GCC}>:--gcc> $<$<BOOL:${RETRO68_GCC}>:${RETRO68_GCC}>
-          $<$<BOOL:${RETRO68_PPC_GCC}>:--ppc-gcc> $<$<BOOL:${RETRO68_PPC_GCC}>:${RETRO68_PPC_GCC}>
+  COMMAND bash ${TEST_DIR}/test_multiversal_retro68.sh ${MULTIVERSAL_RETRO68_ARGS}
 )
 set_tests_properties(multiversal_retro68 PROPERTIES
   TIMEOUT 120
@@ -1529,7 +1536,7 @@ endforeach()
 # Differential probes (docs/executor/DiffTest.md): each probe's answers on
 # Executor (8.6 System) against the committed G3 8.6 reference, known
 # differences in tests/guest/difftest/expected/. Fails on a new difference.
-foreach(probe aevt appr ctl desk intl menu mman patalign proc qdorigin snd sys text textutil wide wind)
+foreach(probe aevt appr ctl desk dither intl menu mman patalign proc qdorigin snd sys text textutil wide wind)
   add_test(
     NAME difftest_${probe}_executor_86
     COMMAND python3 ${CMAKE_SOURCE_DIR}/tools/difftest/run.py ${probe} --no-refresh

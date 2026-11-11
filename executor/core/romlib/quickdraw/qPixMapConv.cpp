@@ -17,6 +17,7 @@
 #include <mman/mman.h>
 #include <vdriver/vdriver.h>
 #include <algorithm>
+#include <vector>
 
 using namespace Executor;
 
@@ -570,4 +571,113 @@ void Executor::convert_pixmap(const PixMap *src, PixMap *dst,
     dst->bounds = *rect;
 
     TEMP_ALLOC_FREE(temp_scratch_pm_bits);
+}
+
+/* ditherCopy from a direct pixel map to an indexed one, as Apple's
+   QuickDraw does it (measured on the G3's 8.6 with the dither difftest
+   probe, tests/guest/difftest/dither.c, not taken from its code): error
+   diffusion at 8 bits a component, rows alternately left to right and right
+   to left. A pixel's colour plus the error carried to it, each component
+   clamped to 0-255, is looked up through the inverse table as srcCopy does;
+   the difference from the colour chosen (its high bytes) goes half, rounded
+   down, to the next pixel along the row and the rest to the one below. */
+bool Executor::dither_pixmap(const PixMap *src, PixMap *dst, const Rect *rect)
+{
+    int src_bpp = src->pixelSize, dst_bpp = dst->pixelSize;
+    if((src_bpp != 16 && src_bpp != 32) || dst_bpp > 8)
+        return false;
+    int width = RECT_WIDTH(rect), height = RECT_HEIGHT(rect);
+    if(width <= 0 || height <= 0)
+        return false;
+
+    GDHandle gd = LM(TheGDevice);
+    PixMapHandle gd_pmap = GD_PMAP(gd);
+    CTabHandle target_table = (dst_bpp == 1 && BITMAP_P(dst))
+        ? (CTabHandle)ROMlib_bw_ctab : (CTabHandle)PIXMAP_TABLE(gd_pmap);
+    if(!target_itab)
+    {
+        TheZoneGuard guard(LM(SysZone));
+        target_itab = (ITabHandle)NewHandle(sizeof(ITab));
+        ITAB_SEED(target_itab) = -1;
+    }
+    if(ITAB_SEED(target_itab) != CTAB_SEED(target_table))
+        MakeITable(target_table, target_itab, DEFAULT_ITABLE_RESOLUTION);
+
+    /* Color2Index through the target's tables, as the conversion does */
+    GUEST<CTabHandle> ctab_save = PIXMAP_TABLE(gd_pmap);
+    GUEST<ITabHandle> itab_save = GD_ITABLE(gd);
+    PIXMAP_TABLE(gd_pmap) = target_table;
+    GD_ITABLE(gd) = target_itab;
+
+    int n = CTAB_SIZE(target_table) + 1;
+    std::vector<uint8_t> entry(3 * 256, 0);
+    for(int i = 0; i < n && i < 256; i++) /* by position, as Color2Index answers */
+    {
+        const ColorSpec &cs = CTAB_TABLE(target_table)[i];
+        entry[3 * i] = cs.rgb.red >> 8;
+        entry[3 * i + 1] = cs.rgb.green >> 8;
+        entry[3 * i + 2] = cs.rgb.blue >> 8;
+    }
+
+    int src_row_bytes = BITMAP_ROWBYTES(src);
+    const uint8_t *src_base = (const uint8_t *)(src->baseAddr
+        + (rect->top - src->bounds.top) * src_row_bytes
+        + (rect->left - src->bounds.left) * src_bpp / 8);
+    int dst_row_bytes = BITMAP_ROWBYTES(dst);
+    uint8_t *dst_base = (uint8_t *)(Ptr)dst->baseAddr;
+    memset(dst_base, 0, dst_row_bytes * height);
+
+    /* the error carried into this row (from the row above) and the next */
+    std::vector<int> down(3 * width, 0), next_down(3 * width, 0);
+    int mask = (1 << dst_bpp) - 1;
+    for(int y = 0; y < height; y++)
+    {
+        bool reverse = y & 1;
+        int ahead[3] = { 0, 0, 0 };
+        std::fill(next_down.begin(), next_down.end(), 0);
+        const uint8_t *srow = src_base + y * src_row_bytes;
+        uint8_t *drow = dst_base + y * dst_row_bytes;
+        for(int k = 0; k < width; k++)
+        {
+            int x = reverse ? width - 1 - k : k;
+            int c[3];
+            if(src_bpp == 32)
+            {
+                const uint8_t *p = srow + 4 * x;
+                c[0] = p[1], c[1] = p[2], c[2] = p[3];
+            }
+            else
+            {
+                unsigned v = (srow[2 * x] << 8) | srow[2 * x + 1];
+                for(int i = 0; i < 3; i++)
+                {
+                    unsigned f = (v >> (10 - 5 * i)) & 0x1F;
+                    c[i] = (f << 3) | (f >> 2);
+                }
+            }
+            RGBColor want;
+            int w[3];
+            for(int i = 0; i < 3; i++)
+                w[i] = std::clamp(c[i] + ahead[i] + down[3 * x + i], 0, 255);
+            want.red = w[0] * 0x101;
+            want.green = w[1] * 0x101;
+            want.blue = w[2] * 0x101;
+            int index = Color2Index(&want) & mask;
+            int shift = 8 - dst_bpp - (x * dst_bpp) % 8;
+            drow[x * dst_bpp / 8] |= index << shift;
+            for(int i = 0; i < 3; i++)
+            {
+                int e = w[i] - entry[3 * index + i];
+                int half = e >> 1; /* rounded down */
+                ahead[i] = half;
+                next_down[3 * x + i] = e - half;
+            }
+        }
+        std::swap(down, next_down);
+    }
+
+    PIXMAP_TABLE(gd_pmap) = ctab_save;
+    GD_ITABLE(gd) = itab_save;
+    dst->bounds = *rect;
+    return true;
 }

@@ -1,0 +1,472 @@
+# probe 0fc0f0f967001bf8c23c1ccbfaa3a42c2e95315d3dbebc043a16538c2c46812a
+== solid8
+solid8.solid8.808080.dither.0: f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa
+solid8.solid8.808080.dither.1: fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9
+solid8.solid8.808080.dither.2: f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa
+solid8.solid8.808080.dither.3: fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9
+solid8.solid8.808080.dither.4: f9 fa f9 fa f9 fa f9 f9 f9 fa f9 fa f9 f9 f9 fa f9 fa f9 f9 f9 fa f9 fa f9 f9 f9 fa f9 fa f9 fa
+solid8.solid8.808080.dither.5: fa f9 fa f9 fa f9 f9 fa fa f9 fa f9 f9 fa fa f9 fa f9 f9 fa fa f9 fa f9 f9 fa fa f9 fa f9 fa f9
+solid8.solid8.808080.dither.6: f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 f9 fa f9 f9 fa f9 fa
+solid8.solid8.808080.dither.7: fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa fa f9 fa fa f9 fa f9
+solid8.solid8.808080.copy.0: f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9
+solid8.solid8.808080.copy.1: f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9
+solid8.solid8.808080.copy.2: f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9
+solid8.solid8.808080.copy.3: f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9
+solid8.solid8.808080.copy.4: f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9
+solid8.solid8.808080.copy.5: f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9
+solid8.solid8.808080.copy.6: f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9
+solid8.solid8.808080.copy.7: f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9
+solid8.solid8.404040.dither.0: fc ac fc fc ac fc fc ac fc fc ac fc fc ac fc fc ac fc fc ac fc fc ac fc fc ac fc fc ac fc fc ac
+solid8.solid8.404040.dither.1: ac fc fc ac fc fc ac fc fc ac fc fc ac fc fc ac fc fc ac fc fc ac fc fc ac fc fc ac fc fc ac fc
+solid8.solid8.404040.dither.2: fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc
+solid8.solid8.404040.dither.3: fc fc ac fc fc ac fc fc ac fc fc ac fc fc ac fc fc ac fc fc ac fc fc ac fc fc ac fc ac fc fc ac
+solid8.solid8.404040.dither.4: ac fc fc ac fc fc ac fc fc ac fc fc ac fc fc ac fc fc ac fc fc ac fc fc ac fc fc fc fc ac fc fc
+solid8.solid8.404040.dither.5: fc fc fc fc ac fc fc fc fc fc ac fc fc fc fc fc ac fc fc fc fc fc ac fc fc fc fc ac fc fc fc fc
+solid8.solid8.404040.dither.6: fc ac fc fc fc fc ac fc fc fc fc ac fc fc ac fc fc fc ac fc fc fc fc ac fc fc fc fc ac fc ac fc
+solid8.solid8.404040.dither.7: ac fc fc fc fc ac fc fc fc ac fc fc fc ac fc fc fc ac fc fc fc ac fc fc fc ac fc ac fc fc fc fc
+solid8.solid8.404040.copy.0: fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc
+solid8.solid8.404040.copy.1: fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc
+solid8.solid8.404040.copy.2: fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc
+solid8.solid8.404040.copy.3: fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc
+solid8.solid8.404040.copy.4: fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc
+solid8.solid8.404040.copy.5: fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc
+solid8.solid8.404040.copy.6: fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc
+solid8.solid8.404040.copy.7: fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc
+solid8.solid8.c0c0c0.dither.0: 2b f7 f7 2b f7 2b f7 f7 2b f7 2b f7 f7 2b f7 2b f7 f7 2b f7 2b f7 f7 2b f7 2b f7 f7 2b f7 2b f7
+solid8.solid8.c0c0c0.dither.1: f7 f7 2b f7 f7 f7 f7 2b f7 f7 f7 f7 2b f7 f7 f7 f7 2b f7 f7 f7 f7 2b f7 f7 f7 f7 2b f7 f7 f7 2b
+solid8.solid8.c0c0c0.dither.2: 2b f7 f7 2b f7 2b f7 f7 2b f7 2b f7 f7 2b f7 2b f7 f7 2b f7 2b f7 f7 2b f7 2b f7 f7 f7 2b f7 f7
+solid8.solid8.c0c0c0.dither.3: f7 2b f7 f7 2b f7 f7 2b f7 f7 f7 2b f7 f7 2b f7 f7 2b f7 f7 f7 2b f7 f7 2b f7 f7 2b f7 f7 2b f7
+solid8.solid8.c0c0c0.dither.4: f7 f7 2b f7 f7 f7 2b f7 f7 2b f7 f7 2b f7 f7 f7 2b f7 f7 2b f7 f7 2b f7 f7 f7 2b f7 f7 2b f7 f7
+solid8.solid8.c0c0c0.dither.5: f7 2b f7 f7 f7 2b f7 f7 f7 f7 2b f7 f7 f7 f7 2b f7 f7 f7 f7 2b f7 f7 f7 f7 2b f7 f7 2b f7 f7 2b
+solid8.solid8.c0c0c0.dither.6: 2b f7 f7 2b f7 f7 2b f7 2b f7 f7 2b f7 2b f7 f7 2b f7 2b f7 f7 2b f7 2b f7 f7 f7 f7 f7 f7 2b f7
+solid8.solid8.c0c0c0.dither.7: f7 f7 f7 f7 2b f7 f7 2b f7 f7 f7 f7 2b f7 f7 f7 f7 2b f7 f7 2b f7 f7 f7 f7 2b f7 2b f7 2b f7 f7
+solid8.solid8.c0c0c0.copy.0: 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b
+solid8.solid8.c0c0c0.copy.1: 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b
+solid8.solid8.c0c0c0.copy.2: 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b
+solid8.solid8.c0c0c0.copy.3: 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b
+solid8.solid8.c0c0c0.copy.4: 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b
+solid8.solid8.c0c0c0.copy.5: 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b
+solid8.solid8.c0c0c0.copy.6: 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b
+solid8.solid8.c0c0c0.copy.7: 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b 2b
+solid8.solid8.101010.dither.0: fe ff fe fe fe fe ff fe fe fe fe ff fe fe fe fe ff fe fe fe fe ff fe fe fe fe ff fe fe fe fe ff
+solid8.solid8.101010.dither.1: fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe
+solid8.solid8.101010.dither.2: fe fe fe fe ff fe fe fe fe fe fe fe fe fe ff fe fe fe fe fe fe fe fe fe ff fe fe fe fe fe fe fe
+solid8.solid8.101010.dither.3: fe fe fe fe fe fe fe fe fe ff fe fe fe fe fe fe fe fe fe ff fe fe fe fe fe fe fe fe fe ff fe fe
+solid8.solid8.101010.dither.4: fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe
+solid8.solid8.101010.dither.5: fe ff fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe
+solid8.solid8.101010.dither.6: fe fe fe fe fe fe fe fe fe fe fe ff fe fe fe fe fe fe fe fe fe ff fe fe fe fe fe fe fe fe fe ff
+solid8.solid8.101010.dither.7: fe fe fe fe fe fe fe ff fe fe fe fe fe fe fe fe fe ff fe fe fe fe fe fe fe fe fe ff fe fe fe fe
+solid8.solid8.101010.copy.0: fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe
+solid8.solid8.101010.copy.1: fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe
+solid8.solid8.101010.copy.2: fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe
+solid8.solid8.101010.copy.3: fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe
+solid8.solid8.101010.copy.4: fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe
+solid8.solid8.101010.copy.5: fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe
+solid8.solid8.101010.copy.6: fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe
+solid8.solid8.101010.copy.7: fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe fe
+solid8.solid8.f0f0f0.dither.0: 00 f5 f5 f5 00 f5 f5 f5 00 f5 f5 f5 00 f5 f5 f5 00 f5 f5 f5 00 f5 f5 f5 00 f5 f5 f5 00 f5 f5 f5
+solid8.solid8.f0f0f0.dither.1: f5 f5 f5 f5 f5 f5 00 f5 f5 f5 f5 f5 f5 f5 00 f5 f5 f5 f5 f5 f5 f5 00 f5 f5 f5 f5 f5 f5 f5 f5 00
+solid8.solid8.f0f0f0.dither.2: f5 f5 00 f5 f5 f5 f5 f5 f5 f5 00 f5 f5 f5 f5 f5 f5 f5 00 f5 f5 f5 f5 f5 f5 f5 00 f5 f5 f5 f5 f5
+solid8.solid8.f0f0f0.dither.3: 00 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5
+solid8.solid8.f0f0f0.dither.4: f5 f5 f5 f5 f5 00 f5 f5 00 f5 f5 f5 f5 00 f5 f5 00 f5 f5 f5 f5 00 f5 f5 00 f5 f5 f5 00 f5 f5 00
+solid8.solid8.f0f0f0.dither.5: f5 f5 f5 00 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5
+solid8.solid8.f0f0f0.dither.6: 00 f5 f5 f5 f5 f5 f5 00 f5 f5 f5 00 f5 f5 f5 f5 f5 f5 00 f5 f5 f5 f5 00 f5 f5 f5 00 f5 f5 f5 f5
+solid8.solid8.f0f0f0.dither.7: f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 00 f5 f5 f5 f5 00 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 00
+solid8.solid8.f0f0f0.copy.0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+solid8.solid8.f0f0f0.copy.1: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+solid8.solid8.f0f0f0.copy.2: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+solid8.solid8.f0f0f0.copy.3: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+solid8.solid8.f0f0f0.copy.4: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+solid8.solid8.f0f0f0.copy.5: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+solid8.solid8.f0f0f0.copy.6: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+solid8.solid8.f0f0f0.copy.7: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+solid8.solid8.800000.dither.0: db dc db dc db dc db dc db dc db dc db dc db dc db dc db dc db dc db dc db dc db dc db dc db dc
+solid8.solid8.800000.dither.1: dc db dc db dc db dc db dc db dc db dc db dc db dc db dc db dc db dc db dc db dc db dc db dc db
+solid8.solid8.800000.dither.2: db dc db dc db dc db dc db dc db dc db dc db dc db dc db dc db dc db dc db dc db dc db dc db dc
+solid8.solid8.800000.dither.3: dc db dc db dc db dc db dc db dc db dc db dc db dc db dc db dc db dc db dc db dc db dc db dc db
+solid8.solid8.800000.dither.4: db dc db dc db dc db db db dc db dc db db db dc db dc db db db dc db dc db db db dc db dc db dc
+solid8.solid8.800000.dither.5: dc db dc db dc db db dc dc db dc db db dc dc db dc db db dc dc db dc db db dc dc db dc db dc db
+solid8.solid8.800000.dither.6: db dc db dc db dc db dc db dc db dc db dc db dc db dc db dc db dc db dc db db dc db db dc db dc
+solid8.solid8.800000.dither.7: dc db dc db dc db dc db dc db dc db dc db dc db dc db dc db dc db dc db dc dc db dc dc db dc db
+solid8.solid8.800000.copy.0: db db db db db db db db db db db db db db db db db db db db db db db db db db db db db db db db
+solid8.solid8.800000.copy.1: db db db db db db db db db db db db db db db db db db db db db db db db db db db db db db db db
+solid8.solid8.800000.copy.2: db db db db db db db db db db db db db db db db db db db db db db db db db db db db db db db db
+solid8.solid8.800000.copy.3: db db db db db db db db db db db db db db db db db db db db db db db db db db db db db db db db
+solid8.solid8.800000.copy.4: db db db db db db db db db db db db db db db db db db db db db db db db db db db db db db db db
+solid8.solid8.800000.copy.5: db db db db db db db db db db db db db db db db db db db db db db db db db db db db db db db db
+solid8.solid8.800000.copy.6: db db db db db db db db db db db db db db db db db db db db db db db db db db db db db db db db
+solid8.solid8.800000.copy.7: db db db db db db db db db db db db db db db db db db db db db db db db db db db db db db db db
+solid8.solid8.008000.dither.0: e5 e6 e5 e6 e5 e6 e5 e6 e5 e6 e5 e6 e5 e6 e5 e6 e5 e6 e5 e6 e5 e6 e5 e6 e5 e6 e5 e6 e5 e6 e5 e6
+solid8.solid8.008000.dither.1: e6 e5 e6 e5 e6 e5 e6 e5 e6 e5 e6 e5 e6 e5 e6 e5 e6 e5 e6 e5 e6 e5 e6 e5 e6 e5 e6 e5 e6 e5 e6 e5
+solid8.solid8.008000.dither.2: e5 e6 e5 e6 e5 e6 e5 e6 e5 e6 e5 e6 e5 e6 e5 e6 e5 e6 e5 e6 e5 e6 e5 e6 e5 e6 e5 e6 e5 e6 e5 e6
+solid8.solid8.008000.dither.3: e6 e5 e6 e5 e6 e5 e6 e5 e6 e5 e6 e5 e6 e5 e6 e5 e6 e5 e6 e5 e6 e5 e6 e5 e6 e5 e6 e5 e6 e5 e6 e5
+solid8.solid8.008000.dither.4: e5 e6 e5 e6 e5 e6 e5 e5 e5 e6 e5 e6 e5 e5 e5 e6 e5 e6 e5 e5 e5 e6 e5 e6 e5 e5 e5 e6 e5 e6 e5 e6
+solid8.solid8.008000.dither.5: e6 e5 e6 e5 e6 e5 e5 e6 e6 e5 e6 e5 e5 e6 e6 e5 e6 e5 e5 e6 e6 e5 e6 e5 e5 e6 e6 e5 e6 e5 e6 e5
+solid8.solid8.008000.dither.6: e5 e6 e5 e6 e5 e6 e5 e6 e5 e6 e5 e6 e5 e6 e5 e6 e5 e6 e5 e6 e5 e6 e5 e6 e5 e5 e6 e5 e5 e6 e5 e6
+solid8.solid8.008000.dither.7: e6 e5 e6 e5 e6 e5 e6 e5 e6 e5 e6 e5 e6 e5 e6 e5 e6 e5 e6 e5 e6 e5 e6 e5 e6 e6 e5 e6 e6 e5 e6 e5
+solid8.solid8.008000.copy.0: e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5
+solid8.solid8.008000.copy.1: e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5
+solid8.solid8.008000.copy.2: e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5
+solid8.solid8.008000.copy.3: e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5
+solid8.solid8.008000.copy.4: e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5
+solid8.solid8.008000.copy.5: e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5
+solid8.solid8.008000.copy.6: e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5
+solid8.solid8.008000.copy.7: e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5 e5
+solid8.solid8.000080.dither.0: ef f0 ef f0 ef f0 ef f0 ef f0 ef f0 ef f0 ef f0 ef f0 ef f0 ef f0 ef f0 ef f0 ef f0 ef f0 ef f0
+solid8.solid8.000080.dither.1: f0 ef f0 ef f0 ef f0 ef f0 ef f0 ef f0 ef f0 ef f0 ef f0 ef f0 ef f0 ef f0 ef f0 ef f0 ef f0 ef
+solid8.solid8.000080.dither.2: ef f0 ef f0 ef f0 ef f0 ef f0 ef f0 ef f0 ef f0 ef f0 ef f0 ef f0 ef f0 ef f0 ef f0 ef f0 ef f0
+solid8.solid8.000080.dither.3: f0 ef f0 ef f0 ef f0 ef f0 ef f0 ef f0 ef f0 ef f0 ef f0 ef f0 ef f0 ef f0 ef f0 ef f0 ef f0 ef
+solid8.solid8.000080.dither.4: ef f0 ef f0 ef f0 ef ef ef f0 ef f0 ef ef ef f0 ef f0 ef ef ef f0 ef f0 ef ef ef f0 ef f0 ef f0
+solid8.solid8.000080.dither.5: f0 ef f0 ef f0 ef ef f0 f0 ef f0 ef ef f0 f0 ef f0 ef ef f0 f0 ef f0 ef ef f0 f0 ef f0 ef f0 ef
+solid8.solid8.000080.dither.6: ef f0 ef f0 ef f0 ef f0 ef f0 ef f0 ef f0 ef f0 ef f0 ef f0 ef f0 ef f0 ef ef f0 ef ef f0 ef f0
+solid8.solid8.000080.dither.7: f0 ef f0 ef f0 ef f0 ef f0 ef f0 ef f0 ef f0 ef f0 ef f0 ef f0 ef f0 ef f0 f0 ef f0 f0 ef f0 ef
+solid8.solid8.000080.copy.0: ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef
+solid8.solid8.000080.copy.1: ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef
+solid8.solid8.000080.copy.2: ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef
+solid8.solid8.000080.copy.3: ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef
+solid8.solid8.000080.copy.4: ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef
+solid8.solid8.000080.copy.5: ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef
+solid8.solid8.000080.copy.6: ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef
+solid8.solid8.000080.copy.7: ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef ef
+solid8.solid8.ff8000.dither.0: 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17
+solid8.solid8.ff8000.dither.1: 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11
+solid8.solid8.ff8000.dither.2: 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17
+solid8.solid8.ff8000.dither.3: 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11
+solid8.solid8.ff8000.dither.4: 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17
+solid8.solid8.ff8000.dither.5: 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11
+solid8.solid8.ff8000.dither.6: 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17
+solid8.solid8.ff8000.dither.7: 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11 17 11
+solid8.solid8.ff8000.copy.0: 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11
+solid8.solid8.ff8000.copy.1: 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11
+solid8.solid8.ff8000.copy.2: 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11
+solid8.solid8.ff8000.copy.3: 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11
+solid8.solid8.ff8000.copy.4: 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11
+solid8.solid8.ff8000.copy.5: 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11
+solid8.solid8.ff8000.copy.6: 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11
+solid8.solid8.ff8000.copy.7: 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11
+solid8.solid8.80ff80.dither.0: 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f
+solid8.solid8.80ff80.dither.1: 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a
+solid8.solid8.80ff80.dither.2: 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f
+solid8.solid8.80ff80.dither.3: 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a
+solid8.solid8.80ff80.dither.4: 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f
+solid8.solid8.80ff80.dither.5: 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a
+solid8.solid8.80ff80.dither.6: 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f
+solid8.solid8.80ff80.dither.7: 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a 6f 4a
+solid8.solid8.80ff80.copy.0: 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a
+solid8.solid8.80ff80.copy.1: 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a
+solid8.solid8.80ff80.copy.2: 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a
+solid8.solid8.80ff80.copy.3: 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a
+solid8.solid8.80ff80.copy.4: 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a
+solid8.solid8.80ff80.copy.5: 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a
+solid8.solid8.80ff80.copy.6: 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a
+solid8.solid8.80ff80.copy.7: 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a 4a
+solid8.solid8.336699.dither.0: a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4
+solid8.solid8.336699.dither.1: a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4
+solid8.solid8.336699.dither.2: a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4
+solid8.solid8.336699.dither.3: a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4
+solid8.solid8.336699.dither.4: a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4
+solid8.solid8.336699.dither.5: a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4
+solid8.solid8.336699.dither.6: a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4
+solid8.solid8.336699.dither.7: a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4
+solid8.solid8.336699.copy.0: a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4
+solid8.solid8.336699.copy.1: a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4
+solid8.solid8.336699.copy.2: a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4
+solid8.solid8.336699.copy.3: a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4
+solid8.solid8.336699.copy.4: a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4
+solid8.solid8.336699.copy.5: a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4
+solid8.solid8.336699.copy.6: a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4
+solid8.solid8.336699.copy.7: a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4 a4
+solid8.solid8.123456.dither.0: cf d0 cf ab d0 cf cf ac cf cf d0 ab cf d0 cf ab d0 cf cf ac cf cf d0 ab cf d0 cf ab d0 cf cf ac
+solid8.solid8.123456.dither.1: ac cf ab d0 ab cf ac cf ab d0 ab cf ac cf ab d0 ab cf ac cf ab d0 ab cf ac cf ab d0 ab cf ac cf
+solid8.solid8.123456.dither.2: cf ab d0 cf cf ac cf cf d0 ab cf d0 cf ab d0 cf cf ac cf cf d0 ab cf d0 cf ab d0 cf cf ac cf cf
+solid8.solid8.123456.dither.3: ab d0 cf cf ac cf cf d0 ab cf d0 cf ab d0 cf cf ac cf cf d0 ab cf d0 cf ab d0 cf ab cf cf ac cf
+solid8.solid8.123456.dither.4: cf ab d0 ab cf ab d0 ab cf ab cf ac cf ab cf ac cf ab cf ab d0 ab cf ab d0 cf ab d0 ab cf cf ac
+solid8.solid8.123456.dither.5: cf d0 ab cf cf d0 ab cf d0 cf ac cf cf cf ac cf cf d0 ab d0 cf cf ab d0 cf ab d0 cf d0 cf ac cf
+solid8.solid8.123456.dither.6: ac cf cf ac cf ab d0 ab cf fc cf d0 ab d0 cf ab d0 ab cf ab d0 cf d0 ab cf d0 ab cf ab d0 cf ab
+solid8.solid8.123456.dither.7: cf cf fc cf ab d0 cf cf ac cf cf ab d0 cf ab d0 ab cf d0 cf ab d0 ab cf d0 ab cf ab d0 cf ab d0
+solid8.solid8.123456.copy.0: cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf
+solid8.solid8.123456.copy.1: cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf
+solid8.solid8.123456.copy.2: cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf
+solid8.solid8.123456.copy.3: cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf
+solid8.solid8.123456.copy.4: cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf
+solid8.solid8.123456.copy.5: cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf
+solid8.solid8.123456.copy.6: cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf
+solid8.solid8.123456.copy.7: cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf cf
+solid8.solid8.edcba9.dither.0: 08 07 2c 08 07 08 2c 07 08 08 2b 08 08 07 2c 08 07 08 2c 07 08 08 2b 08 08 07 2c 08 07 08 2c 07
+solid8.solid8.edcba9.dither.1: 2b 08 08 2b 08 2c 07 2c 08 2b 08 2c 07 2c 08 2b 08 2c 07 2c 08 2b 08 2c 07 2c 08 2b 08 2c 07 08
+solid8.solid8.edcba9.dither.2: 08 2c 07 08 2c 07 08 08 2b 08 08 07 2c 08 07 08 2c 07 08 08 2b 08 08 07 2c 08 07 08 2c 07 2c 08
+solid8.solid8.edcba9.dither.3: 2c 07 08 2c 07 08 08 2b 08 08 07 2c 08 07 08 2c 07 08 08 2b 08 08 07 2c 08 07 2c 08 07 2c 08 07
+solid8.solid8.edcba9.dither.4: 08 2c 07 08 2c 08 2b 08 2c 08 2c 07 2c 08 2c 07 2c 08 2c 08 2b 08 2c 08 07 2c 08 2c 08 07 2c 08
+solid8.solid8.edcba9.dither.5: 2c 07 08 2c 08 2b 08 08 07 2c 07 08 08 2c 07 08 08 2b 08 07 08 2c 08 07 2c 08 2c 07 08 2c 07 08
+solid8.solid8.edcba9.dither.6: 07 08 2c 07 08 08 2c 07 2c 08 2c 07 2c 07 2c 08 2c 08 f7 08 07 08 f7 08 07 08 07 2c 07 08 2c 07
+solid8.solid8.edcba9.dither.7: 08 2c 07 2c 07 2c 07 2c 08 07 08 2c 07 08 08 f7 08 07 08 2c 08 2b 08 08 2c 07 2c 08 08 2b 08 2c
+solid8.solid8.edcba9.copy.0: 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08
+solid8.solid8.edcba9.copy.1: 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08
+solid8.solid8.edcba9.copy.2: 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08
+solid8.solid8.edcba9.copy.3: 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08
+solid8.solid8.edcba9.copy.4: 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08
+solid8.solid8.edcba9.copy.5: 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08
+solid8.solid8.edcba9.copy.6: 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08
+solid8.solid8.edcba9.copy.7: 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08 08
+solid8.solid8.7f7f7f.dither.0: fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9
+solid8.solid8.7f7f7f.dither.1: f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa
+solid8.solid8.7f7f7f.dither.2: fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9
+solid8.solid8.7f7f7f.dither.3: f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa
+solid8.solid8.7f7f7f.dither.4: fa f9 fa f9 fa f9 fa fa fa f9 fa fa fa f9 fa fa fa f9 fa fa fa f9 fa fa fa f9 fa fa fa f9 fa f9
+solid8.solid8.7f7f7f.dither.5: f9 fa f9 fa f9 fa fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 f9 fa fa f9 f9 fa f9 fa
+solid8.solid8.7f7f7f.dither.6: fa f9 fa f9 fa f9 f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa
+solid8.solid8.7f7f7f.dither.7: f9 fa f9 fa f9 fa fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9 fa f9
+solid8.solid8.7f7f7f.copy.0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+solid8.solid8.7f7f7f.copy.1: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+solid8.solid8.7f7f7f.copy.2: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+solid8.solid8.7f7f7f.copy.3: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+solid8.solid8.7f7f7f.copy.4: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+solid8.solid8.7f7f7f.copy.5: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+solid8.solid8.7f7f7f.copy.6: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+solid8.solid8.7f7f7f.copy.7: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+solid8.solid8.010101.dither.0: ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
+solid8.solid8.010101.dither.1: ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
+solid8.solid8.010101.dither.2: ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
+solid8.solid8.010101.dither.3: ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
+solid8.solid8.010101.dither.4: ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
+solid8.solid8.010101.dither.5: ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
+solid8.solid8.010101.dither.6: ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
+solid8.solid8.010101.dither.7: ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
+solid8.solid8.010101.copy.0: ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
+solid8.solid8.010101.copy.1: ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
+solid8.solid8.010101.copy.2: ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
+solid8.solid8.010101.copy.3: ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
+solid8.solid8.010101.copy.4: ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
+solid8.solid8.010101.copy.5: ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
+solid8.solid8.010101.copy.6: ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
+solid8.solid8.010101.copy.7: ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
+== ramp8
+ramp8.ramp8.grey.dither.0: ff ff fe fe fd fd ac ac fc fc fb fb 81 81 fa fa f9 f9 56 56 f8 f8 f7 f7 2b 2b f6 f6 f5 f5 00 00
+ramp8.ramp8.grey.dither.1: ff ff fe fe fd fd ac ac fc fc fb fb 81 81 fa fa f9 f9 56 56 f8 f8 f8 f7 2b 2b 2b f6 f5 f5 f5 00
+ramp8.ramp8.grey.dither.2: ff fe fe fd fd ac ac ac fc fb fc 81 fb fa 81 fa f9 f9 56 56 56 f7 f7 f7 f7 2b f6 f6 f6 f5 00 00
+ramp8.ramp8.grey.dither.3: ff ff fe fe fd fd ac ac fc fc fb fb 81 81 fa fa f9 f9 56 56 f8 f8 f8 f7 2b 2b 2b f6 f5 f5 f5 00
+ramp8.ramp8.grey.dither.4: ff fe fe fe fd fd ac fc fc fc fb fb 81 81 fa fa f9 f9 f9 56 f8 f8 f7 f7 2b 2b f6 f6 f6 f5 00 00
+ramp8.ramp8.grey.dither.5: ff ff fe fe fd ac ac ac fc fc fb fb 81 81 fa fa f9 f9 56 56 f8 f8 f8 f7 2b 2b 2b f6 f5 f5 00 00
+ramp8.ramp8.grey.dither.6: ff ff fe fd fd fd ac ac fc fb fb fb 81 81 fa fa f9 f9 56 56 f8 f8 f7 f7 f7 2b f6 f6 f6 f5 f5 00
+ramp8.ramp8.grey.dither.7: ff fe fe fe fd fd ac ac fc fc fb fb 81 81 fa fa f9 f9 56 56 56 f8 f7 f7 2b 2b 2b f6 f5 f5 00 00
+ramp8.ramp8.grey.copy.0: ff ff fe fe fd fd ac ac fc fc fb fb 81 81 fa fa f9 f9 56 56 f8 f8 f7 f7 2b 2b f6 f6 f5 f5 00 00
+ramp8.ramp8.grey.copy.1: ff ff fe fe fd fd ac ac fc fc fb fb 81 81 fa fa f9 f9 56 56 f8 f8 f7 f7 2b 2b f6 f6 f5 f5 00 00
+ramp8.ramp8.grey.copy.2: ff ff fe fe fd fd ac ac fc fc fb fb 81 81 fa fa f9 f9 56 56 f8 f8 f7 f7 2b 2b f6 f6 f5 f5 00 00
+ramp8.ramp8.grey.copy.3: ff ff fe fe fd fd ac ac fc fc fb fb 81 81 fa fa f9 f9 56 56 f8 f8 f7 f7 2b 2b f6 f6 f5 f5 00 00
+ramp8.ramp8.grey.copy.4: ff ff fe fe fd fd ac ac fc fc fb fb 81 81 fa fa f9 f9 56 56 f8 f8 f7 f7 2b 2b f6 f6 f5 f5 00 00
+ramp8.ramp8.grey.copy.5: ff ff fe fe fd fd ac ac fc fc fb fb 81 81 fa fa f9 f9 56 56 f8 f8 f7 f7 2b 2b f6 f6 f5 f5 00 00
+ramp8.ramp8.grey.copy.6: ff ff fe fe fd fd ac ac fc fc fb fb 81 81 fa fa f9 f9 56 56 f8 f8 f7 f7 2b 2b f6 f6 f5 f5 00 00
+ramp8.ramp8.grey.copy.7: ff ff fe fe fd fd ac ac fc fc fb fb 81 81 fa fa f9 f9 56 56 f8 f8 f7 f7 2b 2b f6 f6 f5 f5 00 00
+ramp8.ramp8.red.dither.0: ff ff e0 e0 df df b3 b3 de de dd dd 8f 8f dc dc db db 6b 6b da da d9 d9 47 47 d8 d8 d7 d7 23 23
+ramp8.ramp8.red.dither.1: ff ff e0 e0 df df b3 b3 de de dd dd 8f 8f dc dc db db 6b 6b da da da d9 47 47 47 d8 d7 d7 d7 23
+ramp8.ramp8.red.dither.2: ff e0 e0 df df b3 b3 b3 de dd de 8f dd dc 8f dc db db 6b 6b 6b d9 d9 d9 d9 47 d8 d8 d8 d7 23 23
+ramp8.ramp8.red.dither.3: ff ff e0 e0 df df b3 b3 de de dd dd 8f 8f dc dc db db 6b 6b da da da d9 47 47 47 d8 d7 d7 d7 23
+ramp8.ramp8.red.dither.4: ff e0 e0 e0 df df b3 de de de dd dd 8f 8f dc dc db db db 6b da da d9 d9 47 47 d8 d8 d8 d7 23 23
+ramp8.ramp8.red.dither.5: ff ff e0 e0 df b3 b3 b3 de de dd dd 8f 8f dc dc db db 6b 6b da da da d9 47 47 47 d8 d7 d7 23 23
+ramp8.ramp8.red.dither.6: ff ff e0 df df df b3 b3 de dd dd dd 8f 8f dc dc db db 6b 6b da da d9 d9 d9 47 d8 d8 d8 d7 d7 23
+ramp8.ramp8.red.dither.7: ff e0 e0 e0 df df b3 b3 de de dd dd 8f 8f dc dc db db 6b 6b 6b da d9 d9 47 47 47 d8 d7 d7 23 23
+ramp8.ramp8.red.copy.0: ff ff e0 e0 df df b3 b3 de de dd dd 8f 8f dc dc db db 6b 6b da da d9 d9 47 47 d8 d8 d7 d7 23 23
+ramp8.ramp8.red.copy.1: ff ff e0 e0 df df b3 b3 de de dd dd 8f 8f dc dc db db 6b 6b da da d9 d9 47 47 d8 d8 d7 d7 23 23
+ramp8.ramp8.red.copy.2: ff ff e0 e0 df df b3 b3 de de dd dd 8f 8f dc dc db db 6b 6b da da d9 d9 47 47 d8 d8 d7 d7 23 23
+ramp8.ramp8.red.copy.3: ff ff e0 e0 df df b3 b3 de de dd dd 8f 8f dc dc db db 6b 6b da da d9 d9 47 47 d8 d8 d7 d7 23 23
+ramp8.ramp8.red.copy.4: ff ff e0 e0 df df b3 b3 de de dd dd 8f 8f dc dc db db 6b 6b da da d9 d9 47 47 d8 d8 d7 d7 23 23
+ramp8.ramp8.red.copy.5: ff ff e0 e0 df df b3 b3 de de dd dd 8f 8f dc dc db db 6b 6b da da d9 d9 47 47 d8 d8 d7 d7 23 23
+ramp8.ramp8.red.copy.6: ff ff e0 e0 df df b3 b3 de de dd dd 8f 8f dc dc db db 6b 6b da da d9 d9 47 47 d8 d8 d7 d7 23 23
+ramp8.ramp8.red.copy.7: ff ff e0 e0 df df b3 b3 de de dd dd 8f 8f dc dc db db 6b 6b da da d9 d9 47 47 d8 d8 d7 d7 23 23
+ramp8.ramp8.green.dither.0: ff ff ea ea e9 e9 d1 d1 e8 e8 e7 e7 cb cb e6 e6 e5 e5 c5 c5 e4 e4 e3 e3 bf bf e2 e2 e1 e1 b9 b9
+ramp8.ramp8.green.dither.1: ff ff ea ea e9 e9 d1 d1 e8 e8 e7 e7 cb cb e6 e6 e5 e5 c5 c5 e4 e4 e4 e3 bf bf bf e2 e1 e1 e1 b9
+ramp8.ramp8.green.dither.2: ff ea ea e9 e9 d1 d1 d1 e8 e7 e8 cb e7 e6 cb e6 e5 e5 c5 c5 c5 e3 e3 e3 e3 bf e2 e2 e2 e1 b9 b9
+ramp8.ramp8.green.dither.3: ff ff ea ea e9 e9 d1 d1 e8 e8 e7 e7 cb cb e6 e6 e5 e5 c5 c5 e4 e4 e4 e3 bf bf bf e2 e1 e1 e1 b9
+ramp8.ramp8.green.dither.4: ff ea ea ea e9 e9 d1 e8 e8 e8 e7 e7 cb cb e6 e6 e5 e5 e5 c5 e4 e4 e3 e3 bf bf e2 e2 e2 e1 b9 b9
+ramp8.ramp8.green.dither.5: ff ff ea ea e9 d1 d1 d1 e8 e8 e7 e7 cb cb e6 e6 e5 e5 c5 c5 e4 e4 e4 e3 bf bf bf e2 e1 e1 b9 b9
+ramp8.ramp8.green.dither.6: ff ff ea e9 e9 e9 d1 d1 e8 e7 e7 e7 cb cb e6 e6 e5 e5 c5 c5 e4 e4 e3 e3 e3 bf e2 e2 e2 e1 e1 b9
+ramp8.ramp8.green.dither.7: ff ea ea ea e9 e9 d1 d1 e8 e8 e7 e7 cb cb e6 e6 e5 e5 c5 c5 c5 e4 e3 e3 bf bf bf e2 e1 e1 b9 b9
+ramp8.ramp8.green.copy.0: ff ff ea ea e9 e9 d1 d1 e8 e8 e7 e7 cb cb e6 e6 e5 e5 c5 c5 e4 e4 e3 e3 bf bf e2 e2 e1 e1 b9 b9
+ramp8.ramp8.green.copy.1: ff ff ea ea e9 e9 d1 d1 e8 e8 e7 e7 cb cb e6 e6 e5 e5 c5 c5 e4 e4 e3 e3 bf bf e2 e2 e1 e1 b9 b9
+ramp8.ramp8.green.copy.2: ff ff ea ea e9 e9 d1 d1 e8 e8 e7 e7 cb cb e6 e6 e5 e5 c5 c5 e4 e4 e3 e3 bf bf e2 e2 e1 e1 b9 b9
+ramp8.ramp8.green.copy.3: ff ff ea ea e9 e9 d1 d1 e8 e8 e7 e7 cb cb e6 e6 e5 e5 c5 c5 e4 e4 e3 e3 bf bf e2 e2 e1 e1 b9 b9
+ramp8.ramp8.green.copy.4: ff ff ea ea e9 e9 d1 d1 e8 e8 e7 e7 cb cb e6 e6 e5 e5 c5 c5 e4 e4 e3 e3 bf bf e2 e2 e1 e1 b9 b9
+ramp8.ramp8.green.copy.5: ff ff ea ea e9 e9 d1 d1 e8 e8 e7 e7 cb cb e6 e6 e5 e5 c5 c5 e4 e4 e3 e3 bf bf e2 e2 e1 e1 b9 b9
+ramp8.ramp8.green.copy.6: ff ff ea ea e9 e9 d1 d1 e8 e8 e7 e7 cb cb e6 e6 e5 e5 c5 c5 e4 e4 e3 e3 bf bf e2 e2 e1 e1 b9 b9
+ramp8.ramp8.green.copy.7: ff ff ea ea e9 e9 d1 d1 e8 e8 e7 e7 cb cb e6 e6 e5 e5 c5 c5 e4 e4 e3 e3 bf bf e2 e2 e1 e1 b9 b9
+ramp8.ramp8.blue.dither.0: ff ff f4 f4 f3 f3 d6 d6 f2 f2 f1 f1 d5 d5 f0 f0 ef ef d4 d4 ee ee ed ed d3 d3 ec ec eb eb d2 d2
+ramp8.ramp8.blue.dither.1: ff ff f4 f4 f3 f3 d6 d6 f2 f2 f1 f1 d5 d5 f0 f0 ef ef d4 d4 ee ee ee ed d3 d3 d3 ec eb eb eb d2
+ramp8.ramp8.blue.dither.2: ff f4 f4 f3 f3 d6 d6 d6 f2 f1 f2 d5 f1 f0 d5 f0 ef ef d4 d4 d4 ed ed ed ed d3 ec ec ec eb d2 d2
+ramp8.ramp8.blue.dither.3: ff ff f4 f4 f3 f3 d6 d6 f2 f2 f1 f1 d5 d5 f0 f0 ef ef d4 d4 ee ee ee ed d3 d3 d3 ec eb eb eb d2
+ramp8.ramp8.blue.dither.4: ff f4 f4 f4 f3 f3 d6 f2 f2 f2 f1 f1 d5 d5 f0 f0 ef ef ef d4 ee ee ed ed d3 d3 ec ec ec eb d2 d2
+ramp8.ramp8.blue.dither.5: ff ff f4 f4 f3 d6 d6 d6 f2 f2 f1 f1 d5 d5 f0 f0 ef ef d4 d4 ee ee ee ed d3 d3 d3 ec eb eb d2 d2
+ramp8.ramp8.blue.dither.6: ff ff f4 f3 f3 f3 d6 d6 f2 f1 f1 f1 d5 d5 f0 f0 ef ef d4 d4 ee ee ed ed ed d3 ec ec ec eb eb d2
+ramp8.ramp8.blue.dither.7: ff f4 f4 f4 f3 f3 d6 d6 f2 f2 f1 f1 d5 d5 f0 f0 ef ef d4 d4 d4 ee ed ed d3 d3 d3 ec eb eb d2 d2
+ramp8.ramp8.blue.copy.0: ff ff f4 f4 f3 f3 d6 d6 f2 f2 f1 f1 d5 d5 f0 f0 ef ef d4 d4 ee ee ed ed d3 d3 ec ec eb eb d2 d2
+ramp8.ramp8.blue.copy.1: ff ff f4 f4 f3 f3 d6 d6 f2 f2 f1 f1 d5 d5 f0 f0 ef ef d4 d4 ee ee ed ed d3 d3 ec ec eb eb d2 d2
+ramp8.ramp8.blue.copy.2: ff ff f4 f4 f3 f3 d6 d6 f2 f2 f1 f1 d5 d5 f0 f0 ef ef d4 d4 ee ee ed ed d3 d3 ec ec eb eb d2 d2
+ramp8.ramp8.blue.copy.3: ff ff f4 f4 f3 f3 d6 d6 f2 f2 f1 f1 d5 d5 f0 f0 ef ef d4 d4 ee ee ed ed d3 d3 ec ec eb eb d2 d2
+ramp8.ramp8.blue.copy.4: ff ff f4 f4 f3 f3 d6 d6 f2 f2 f1 f1 d5 d5 f0 f0 ef ef d4 d4 ee ee ed ed d3 d3 ec ec eb eb d2 d2
+ramp8.ramp8.blue.copy.5: ff ff f4 f4 f3 f3 d6 d6 f2 f2 f1 f1 d5 d5 f0 f0 ef ef d4 d4 ee ee ed ed d3 d3 ec ec eb eb d2 d2
+ramp8.ramp8.blue.copy.6: ff ff f4 f4 f3 f3 d6 d6 f2 f2 f1 f1 d5 d5 f0 f0 ef ef d4 d4 ee ee ed ed d3 d3 ec ec eb eb d2 d2
+ramp8.ramp8.blue.copy.7: ff ff f4 f4 f3 f3 d6 d6 f2 f2 f1 f1 d5 d5 f0 f0 ef ef d4 d4 ee ee ed ed d3 d3 ec ec eb eb d2 d2
+== random8
+random8.random8.dither.0: 24 ad 5c a4 c1 86 0c 58 fd aa 15 4e f6 3b 54 03 7f c2 3e bc 38 98 32 1c 55 8d a8 59 79 90 6b 20
+random8.random8.dither.1: 77 09 2f 93 41 69 ae f8 64 41 cd 69 7c 04 34 3c 6e 7c 94 1a aa 2a 50 84 7a 9e 57 66 3c 7c 7b 6e
+random8.random8.dither.2: a4 89 fc 29 74 f8 20 f1 e7 68 c7 d9 32 10 2c 51 2e 70 03 d0 cd 0e 9d 7c 99 36 f9 ac 89 a5 80 2f
+random8.random8.dither.3: 21 94 2c 3b ca 3c 22 76 4c 71 8a 40 d6 1e 9e 1d 04 64 c0 88 84 80 94 74 4b f9 a6 f1 0a 51 15 3f
+random8.random8.dither.4: 37 71 a1 9e 39 73 6c 77 09 59 ae 8c 51 3f 51 4c b1 79 13 8b 22 a3 3a c1 72 62 5a 53 3a 72 5f 03
+random8.random8.dither.5: 5e 4e 7c b2 4e ae 33 cf 2b 8e 9e e5 c8 9c f7 9e 2e 43 ba 51 39 d3 78 0c 8c 2f 8e c7 74 58 9c 0a
+random8.random8.dither.6: 0a 2e 8d 28 a5 0c 86 3b 86 6a 2c b6 68 fc 04 5c 2a 82 35 01 a4 a9 12 89 1a db 49 79 3d 66 c2 42
+random8.random8.dither.7: 19 a2 1b 6e 12 cc 01 0a 5b 5e dd 3a a2 57 12 66 95 1f 79 9b 31 c9 08 6c 99 05 3b 08 a9 44 21 34
+random8.random8.copy.0: 24 89 5c 9d c1 86 0c 58 ad ce 15 4e f6 3b 54 03 55 c2 3e bc 38 97 32 1c 31 b1 a8 59 79 90 6a 20
+random8.random8.copy.1: 77 09 2f 75 65 69 ae 56 64 47 cd 69 76 0a 2d 19 92 76 94 1a aa 2a f8 84 7a 7a 5c 66 3c 52 fa 6e
+random8.random8.copy.2: a4 dd 88 29 74 56 44 f1 e8 68 c7 d9 38 10 2d 51 2e 70 27 d0 cd 0e 96 7c 99 5a 55 fd 89 ab 7a 2f
+random8.random8.copy.3: 45 70 2c 3b a6 3c 22 76 70 71 8a 46 f2 1f 79 1d 29 64 ba 88 8a fa 94 93 50 56 a6 f2 0a 51 15 3f
+random8.random8.copy.4: 38 71 a1 9f 3f 72 4f 77 09 59 ae 8c 51 3f 51 4c 8d a3 13 8b 21 86 34 a3 6c 61 5a 59 34 72 5e 03
+random8.random8.copy.5: 63 48 82 b2 4e ae 33 cf 2b 8e c2 e5 a4 9c f7 9e 2e 43 96 51 3f eb 78 0c 8c 53 6a c1 74 58 9c 0a
+random8.random8.copy.6: 0b 34 8d 28 c9 0c 8c 17 86 da f7 b7 85 88 04 5c 2a 82 35 01 80 c7 12 88 1a 6b 4f 79 37 66 c2 43
+random8.random8.copy.7: 19 a2 15 6e 12 a8 01 0a 5b 5e 8f 3a a3 57 13 60 94 1f 79 9b 31 c9 08 6c 9a 05 3b 08 a9 44 22 33
+random8.random8.part.dither.0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+random8.random8.part.dither.1: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+random8.random8.part.dither.2: 00 00 00 69 8a 56 64 47 cd 69 76 0a 2d 19 92 7c 93 1a ab 2a 50 8a 7a 7a f9 66 3c 76 81 6e 00 00
+random8.random8.part.dither.3: 00 00 00 32 44 f1 e7 68 c7 d9 38 0f 2d 51 2e 70 03 d0 cd 33 96 7c 99 5b 55 a7 88 ac 7a 2f 00 00
+random8.random8.part.dither.4: 00 00 00 3c 22 75 4d 70 8a 40 d6 1f 9d 1d 28 64 ba 88 8a 80 94 6e 51 56 a6 f1 0a 4b 1b 3f 00 00
+random8.random8.part.dither.5: 00 00 00 73 6c 77 09 59 ae 8d 74 3f 2d 70 8d 7f 13 8b 1b 7f 3a c8 6c 62 60 59 34 78 5e 04 00 00
+random8.random8.part.dither.6: 00 00 00 ae 33 cf 2b 8e c2 c5 a4 9c f7 9e 2e 3d 96 51 64 eb 78 0c 8d 53 88 c6 75 57 9c 0a 00 00
+random8.random8.part.dither.7: 00 00 00 0d b0 17 86 da 2b bd 61 ac 04 5d 2a fc 35 01 80 c7 12 89 19 da 4f 79 37 42 c2 42 00 00
+random8.random8.part.copy.0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+random8.random8.part.copy.1: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+random8.random8.part.copy.2: 00 00 00 69 ae 56 64 47 cd 69 76 0a 2d 19 92 76 94 1a aa 2a f8 84 7a 7a 5c 66 3c 52 fa 6e 00 00
+random8.random8.part.copy.3: 00 00 00 56 44 f1 e8 68 c7 d9 38 10 2d 51 2e 70 27 d0 cd 0e 96 7c 99 5a 55 fd 89 ab 7a 2f 00 00
+random8.random8.part.copy.4: 00 00 00 3c 22 76 70 71 8a 46 f2 1f 79 1d 29 64 ba 88 8a fa 94 93 50 56 a6 f2 0a 51 15 3f 00 00
+random8.random8.part.copy.5: 00 00 00 72 4f 77 09 59 ae 8c 51 3f 51 4c 8d a3 13 8b 21 86 34 a3 6c 61 5a 59 34 72 5e 03 00 00
+random8.random8.part.copy.6: 00 00 00 ae 33 cf 2b 8e c2 e5 a4 9c f7 9e 2e 43 96 51 3f eb 78 0c 8c 53 6a c1 74 58 9c 0a 00 00
+random8.random8.part.copy.7: 00 00 00 0c 8c 17 86 da f7 b7 85 88 04 5c 2a 82 35 01 80 c7 12 88 1a 6b 4f 79 37 66 c2 43 00 00
+== grey8
+grey8.grey8.ramp.dither.0: ff f7 ef e7 df d6 ce c6 be b5 ad a5 9d 95 8c 84 7c 74 6b 63 5b 53 4b 42 3a 32 2a 21 19 11 09 00
+grey8.grey8.ramp.dither.1: ff f7 ef e7 df d6 ce c6 be b5 ad a5 9d 95 8c 84 7c 74 6b 63 5b 53 4b 42 3a 32 2a 21 19 11 09 00
+grey8.grey8.ramp.dither.2: ff f7 ef e7 df d6 ce c6 be b5 ad a5 9d 95 8c 84 7c 74 6b 63 5b 53 4b 42 3a 32 2a 21 19 11 09 00
+grey8.grey8.ramp.dither.3: ff f7 ef e7 df d6 ce c6 be b5 ad a5 9d 95 8c 84 7c 74 6b 63 5b 53 4b 42 3a 32 2a 21 19 11 09 00
+grey8.grey8.ramp.dither.4: ff f7 ef e7 df d6 ce c6 be b5 ad a5 9d 95 8c 84 7c 74 6b 63 5b 53 4b 42 3a 32 2a 21 19 11 09 00
+grey8.grey8.ramp.dither.5: ff f7 ef e7 df d6 ce c6 be b5 ad a5 9d 95 8c 84 7c 74 6b 63 5b 53 4b 42 3a 32 2a 21 19 11 09 00
+grey8.grey8.ramp.dither.6: ff f7 ef e7 df d6 ce c6 be b5 ad a5 9d 95 8c 84 7c 74 6b 63 5b 53 4b 42 3a 32 2a 21 19 11 09 00
+grey8.grey8.ramp.dither.7: ff f7 ef e7 df d6 ce c6 be b5 ad a5 9d 95 8c 84 7c 74 6b 63 5b 53 4b 42 3a 32 2a 21 19 11 09 00
+grey8.grey8.ramp.copy.0: ff f7 ef e7 df d6 ce c6 be b5 ad a5 9d 95 8c 84 7c 74 6b 63 5b 53 4b 42 3a 32 2a 21 19 11 09 00
+grey8.grey8.ramp.copy.1: ff f7 ef e7 df d6 ce c6 be b5 ad a5 9d 95 8c 84 7c 74 6b 63 5b 53 4b 42 3a 32 2a 21 19 11 09 00
+grey8.grey8.ramp.copy.2: ff f7 ef e7 df d6 ce c6 be b5 ad a5 9d 95 8c 84 7c 74 6b 63 5b 53 4b 42 3a 32 2a 21 19 11 09 00
+grey8.grey8.ramp.copy.3: ff f7 ef e7 df d6 ce c6 be b5 ad a5 9d 95 8c 84 7c 74 6b 63 5b 53 4b 42 3a 32 2a 21 19 11 09 00
+grey8.grey8.ramp.copy.4: ff f7 ef e7 df d6 ce c6 be b5 ad a5 9d 95 8c 84 7c 74 6b 63 5b 53 4b 42 3a 32 2a 21 19 11 09 00
+grey8.grey8.ramp.copy.5: ff f7 ef e7 df d6 ce c6 be b5 ad a5 9d 95 8c 84 7c 74 6b 63 5b 53 4b 42 3a 32 2a 21 19 11 09 00
+grey8.grey8.ramp.copy.6: ff f7 ef e7 df d6 ce c6 be b5 ad a5 9d 95 8c 84 7c 74 6b 63 5b 53 4b 42 3a 32 2a 21 19 11 09 00
+grey8.grey8.ramp.copy.7: ff f7 ef e7 df d6 ce c6 be b5 ad a5 9d 95 8c 84 7c 74 6b 63 5b 53 4b 42 3a 32 2a 21 19 11 09 00
+grey8.grey8.random.dither.0: 23 cb 8e 8e 98 af 35 70 c7 c3 69 49 26 8a 5c 23 74 97 8f 74 78 5b 59 89 66 d1 c0 6d 7c 4d bc 97
+grey8.grey8.random.dither.1: 6c 2b 47 5b a5 b6 c7 64 af b4 c4 bd 75 2e 4f 80 50 7a 54 84 b7 3c 50 b1 74 74 7a a5 84 66 8c 47
+grey8.grey8.random.dither.2: 92 d3 c2 3a 4f 64 a7 e6 ce c3 a2 c2 6c 52 46 50 3a 4d 23 cc bc 5a 68 7a 79 73 65 c9 b8 bc 84 57
+grey8.grey8.random.dither.3: a2 53 3a 77 b5 85 a9 69 46 47 c4 b0 ea 96 78 88 2b 9f 74 be b9 89 63 53 4b 67 b9 ec 42 4a 78 8d
+grey8.grey8.random.dither.4: 79 51 8d 89 89 43 3d 6a 32 77 cb c2 63 94 45 4c ca 8b 69 be 9a a6 72 97 41 a3 8d 6c 6b 5a 92 26
+grey8.grey8.random.dither.5: 98 35 9c de 40 ca 56 d3 32 da 95 ad ab 81 4c 7f 4e 94 57 59 8f df 70 3e c0 63 c1 96 64 7c 67 3e
+grey8.grey8.random.dither.6: 38 52 cb 37 a2 40 c7 83 b3 c1 41 6c aa bb 22 86 32 af 6d 16 8f b1 64 b5 83 c0 3c 7b 73 ac 8c a1
+grey8.grey8.random.dither.7: 6f 8f 7c 47 4f bf 0f 3d 7c 98 d9 89 91 6f 5c 9a 5b 9d 73 74 5c ab 31 40 68 31 7a 39 c8 9e b1 62
+grey8.grey8.random.copy.0: 23 cb 8e 8e 98 af 35 70 c7 c3 69 49 26 8a 5c 23 74 97 8f 74 78 5b 59 89 66 d1 c0 6d 7c 4d bc 97
+grey8.grey8.random.copy.1: 6c 2b 47 5b a5 b6 c7 64 af b4 c4 bd 75 2e 4f 80 50 7a 54 84 b7 3c 50 b1 74 74 7a a5 84 66 8c 47
+grey8.grey8.random.copy.2: 92 d3 c2 3a 4f 64 a7 e6 ce c3 a2 c2 6c 52 46 50 3a 4d 23 cc bc 5a 68 7a 79 73 65 c9 b8 bc 84 57
+grey8.grey8.random.copy.3: a2 53 3a 77 b5 85 a9 69 46 47 c4 b0 ea 96 78 88 2b 9f 74 be b9 89 63 53 4b 67 b9 ec 42 4a 78 8d
+grey8.grey8.random.copy.4: 79 51 8d 89 89 43 3d 6a 32 77 cb c2 63 94 45 4c ca 8b 69 be 9a a6 72 97 41 a3 8d 6c 6b 5a 92 26
+grey8.grey8.random.copy.5: 98 35 9c de 40 ca 56 d3 32 da 95 ad ab 81 4c 7f 4e 94 57 59 8f df 70 3e c0 63 c1 96 64 7c 67 3e
+grey8.grey8.random.copy.6: 38 52 cb 37 a2 40 c7 83 b3 c1 41 6c aa bb 22 86 32 af 6d 16 8f b1 64 b5 83 c0 3c 7b 73 ac 8c a1
+grey8.grey8.random.copy.7: 6f 8f 7c 47 4f bf 0f 3d 7c 98 d9 89 91 6f 5c 9a 5b 9d 73 74 5c ab 31 40 68 31 7a 39 c8 9e b1 62
+== depth4
+depth4.depth4.grey80.dither.0: dddddddddddddddddddddddddddddddd
+depth4.depth4.grey80.dither.1: dddddddddddddddddddddddddddddddd
+depth4.depth4.grey80.dither.2: dddddddddddddddddddddddddddddddd
+depth4.depth4.grey80.dither.3: dddddddddddddddddddddddddddddddd
+depth4.depth4.grey80.dither.4: dddddddddddddddddddddddddddddddd
+depth4.depth4.grey80.dither.5: dddddddddddddddddddddddddddddddd
+depth4.depth4.grey80.dither.6: dddddddddddddddddddddddddddddddd
+depth4.depth4.grey80.dither.7: dddddddddddddddddddddddddddddddd
+depth4.depth4.grey80.copy.0: dddddddddddddddddddddddddddddddd
+depth4.depth4.grey80.copy.1: dddddddddddddddddddddddddddddddd
+depth4.depth4.grey80.copy.2: dddddddddddddddddddddddddddddddd
+depth4.depth4.grey80.copy.3: dddddddddddddddddddddddddddddddd
+depth4.depth4.grey80.copy.4: dddddddddddddddddddddddddddddddd
+depth4.depth4.grey80.copy.5: dddddddddddddddddddddddddddddddd
+depth4.depth4.grey80.copy.6: dddddddddddddddddddddddddddddddd
+depth4.depth4.grey80.copy.7: dddddddddddddddddddddddddddddddd
+depth4.depth4.ramp.dither.0: fffafeeeeeededdddddcdcccccc0c000
+depth4.depth4.ramp.dither.1: fffffefeeeeededdddcdcdcccc0c0000
+depth4.depth4.ramp.dither.2: ffefefeeeededdeddddcdcccccc0c000
+depth4.depth4.ramp.dither.3: fffefeeeedeededddcddcccccc0c0c00
+depth4.depth4.ramp.dither.4: ffffefeeeeededdddddcdcdcccc0c000
+depth4.depth4.ramp.dither.5: fffefeaeeedededdddcddccccc0c0000
+depth4.depth4.ramp.dither.6: ffefefeeeeededdddddccdccccc0c0c0
+depth4.depth4.ramp.dither.7: fffffeeeeeeeddedddcddccccc0c0000
+depth4.depth4.ramp.copy.0: ffffaaeeeeeeddddddddcccccccc0000
+depth4.depth4.ramp.copy.1: ffffaaeeeeeeddddddddcccccccc0000
+depth4.depth4.ramp.copy.2: ffffaaeeeeeeddddddddcccccccc0000
+depth4.depth4.ramp.copy.3: ffffaaeeeeeeddddddddcccccccc0000
+depth4.depth4.ramp.copy.4: ffffaaeeeeeeddddddddcccccccc0000
+depth4.depth4.ramp.copy.5: ffffaaeeeeeeddddddddcccccccc0000
+depth4.depth4.ramp.copy.6: ffffaaeeeeeeddddddddcccccccc0000
+depth4.depth4.ramp.copy.7: ffffaaeeeeeeddddddddcccccccc0000
+depth4.depth4.random.dither.0: 0ad75d0be5bc02dcd747bcd2c56bd7b4
+depth4.depth4.random.dither.1: 8c1ba46d3b5de1cc7b8d5cc57dd4cbdd
+depth4.depth4.random.dither.2: dae1dd469473d2cb1d1e7c7b8cd5eed1
+depth4.depth4.random.dither.3: 48cb9c48186354d21b7e5d8dcdee1d4b
+depth4.depth4.random.dither.4: d188cd08c155dcdbd50545c7c5ddb0b1
+depth4.depth4.random.dither.5: d095c6deca78d7ccbc7cd6dcdbd7db7c
+depth4.depth4.random.dither.6: 1b51905253c86b1dce20d6034acdc574
+depth4.depth4.random.dither.7: 472d060bceadd50d84c8cec7812c643d
+depth4.depth4.random.copy.0: 0ad7750be52cc2c1d7d747c2c56bd734
+depth4.depth4.random.copy.1: 8118235db36381c47884ecc5ddd5cbdd
+depth4.depth4.random.copy.2: daa1dd4f9573d2cc1b1e6d7b8cdeaed1
+depth4.depth4.random.copy.3: 48c2ec481153f4d21b7e5d8dddef1d22
+depth4.depth4.random.copy.4: c1884cc81b55d4bb55c545b775dbb7b1
+depth4.depth4.random.copy.5: b0bfc5deca7957cdc47db6705ba7db71
+depth4.depth4.random.copy.6: 1b51905253c85e1dce20560e43cdc574
+depth4.depth4.random.copy.7: 472d0601dbab5dc584d8c9c7812c543b
+== depth1
+depth1.depth1.grey80.dither.0: 01010101010101010101010101010101
+depth1.depth1.grey80.dither.1: 10101010101010101010101010101010
+depth1.depth1.grey80.dither.2: 01010101010101010101010101010101
+depth1.depth1.grey80.dither.3: 10101010101010101010101010101010
+depth1.depth1.grey80.dither.4: 01010101010101010101010101010101
+depth1.depth1.grey80.dither.5: 10101010101010101010101010101010
+depth1.depth1.grey80.dither.6: 01010101010101010101010101010101
+depth1.depth1.grey80.dither.7: 10101010101010101010101010101010
+depth1.depth1.grey80.copy.0: 00000000000000000000000000000000
+depth1.depth1.grey80.copy.1: 00000000000000000000000000000000
+depth1.depth1.grey80.copy.2: 00000000000000000000000000000000
+depth1.depth1.grey80.copy.3: 00000000000000000000000000000000
+depth1.depth1.grey80.copy.4: 00000000000000000000000000000000
+depth1.depth1.grey80.copy.5: 00000000000000000000000000000000
+depth1.depth1.grey80.copy.6: 00000000000000000000000000000000
+depth1.depth1.grey80.copy.7: 00000000000000000000000000000000
+depth1.depth1.ramp.dither.0: 11111111101101010101000100000000
+depth1.depth1.ramp.dither.1: 11111011011010101010101000100000
+depth1.depth1.ramp.dither.2: 11111110110111010100010010000000
+depth1.depth1.ramp.dither.3: 11111101111010101010101000010000
+depth1.depth1.ramp.dither.4: 11111111010101010101000100000000
+depth1.depth1.ramp.dither.5: 11111011101110101010001000100000
+depth1.depth1.ramp.dither.6: 11111101110101010101010010001000
+depth1.depth1.ramp.dither.7: 11101111011011101000100100000000
+depth1.depth1.ramp.copy.0: 11111111111111110000000000000000
+depth1.depth1.ramp.copy.1: 11111111111111110000000000000000
+depth1.depth1.ramp.copy.2: 11111111111111110000000000000000
+depth1.depth1.ramp.copy.3: 11111111111111110000000000000000
+depth1.depth1.ramp.copy.4: 11111111111111110000000000000000
+depth1.depth1.ramp.copy.5: 11111111111111110000000000000000
+depth1.depth1.ramp.copy.6: 11111111111111110000000000000000
+depth1.depth1.ramp.copy.7: 11111111111111110000000000000000
+depth1.depth1.random.dither.0: 01010101110001001010100101101010
+depth1.depth1.random.dither.1: 00101110101110010101010101010101
+depth1.depth1.random.dither.2: 11000011110100100001101010111010
+depth1.depth1.random.dither.3: 10011110001111010110110001010001
+depth1.depth1.random.dither.4: 01010001001101001011010101101010
+depth1.depth1.random.dither.5: 10110101011010010100011010010100
+depth1.depth1.random.dither.6: 00101010110101001010101101010111
+depth1.depth1.random.dither.7: 01100100101011010101010010101010
+depth1.depth1.random.copy.0: 01111100110001000110000101100011
+depth1.depth1.random.copy.1: 00001110111100010001100100011010
+depth1.depth1.random.copy.2: 11100011111100000001100000011110
+depth1.depth1.random.copy.3: 10001110001111010101110000110001
+depth1.depth1.random.copy.4: 00111000001101001101110101100010
+depth1.depth1.random.copy.5: 10110101011111000100110010110000
+depth1.depth1.random.copy.6: 00101011110011010100110111000111
+depth1.depth1.random.copy.7: 01000100011110010100010000001110
+== end

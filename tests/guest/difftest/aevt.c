@@ -839,6 +839,183 @@ int main(void)
         AEDisposeDesc(&evt);
         AEDisposeDesc(&target);
     }
+
+    /* The checks of upstream Executor's tests/appleevents.cpp (its Apple
+       Event Manager written from a spec, autc04/executor 1af5b3e2), made
+       on 8.6: what the descriptor, list, attribute, coercion, handler,
+       array and AEManagerInfo calls answer, the values they give. */
+    if(SECTION("spec"))
+    {
+        AEDesc d;
+        AEDescList list;
+        AEKeyword kw;
+        DescType type;
+        Size size;
+        long count, v32;
+        short v16;
+        OSErr err;
+
+        /* AEDisposeDesc empties the descriptor; a typeNull one has no handle */
+        err = AECreateDesc(typeChar, "hello", 5, &d);
+        out("desc.create", "%d size %ld", err, d.dataHandle ? (long)GetHandleSize(d.dataHandle) : -1L);
+        err = AEDisposeDesc(&d);
+        out("desc.dispose", "%d type %.4s handle %s", err, (char *)&d.descriptorType,
+            d.dataHandle ? "set" : "nil");
+        memset(&d, SENTINEL, sizeof d);
+        err = AECreateDesc(typeNull, NULL, 0, &d);
+        out("desc.null", "%d type %.4s handle %s", err, (char *)&d.descriptorType,
+            d.dataHandle ? "set" : "nil");
+        AEDisposeDesc(&d);
+
+        /* a list item put as text, got coerced to a long */
+        AECreateList(NULL, 0, false, &list);
+        err = AEPutPtr(&list, 0, typeChar, "42", 2);
+        count = -1;
+        AECountItems(&list, &count);
+        out("list.put0", "%d count %ld", err, count);
+        v32 = -1;
+        type = 0;
+        size = -1;
+        err = AEGetNthPtr(&list, 1, typeLongInteger, &kw, &type, &v32, 4, &size);
+        out("list.get_coerced", "%d type %.4s size %ld value %ld", err, (char *)&type, (long)size, v32);
+        AEDisposeDesc(&list);
+
+        /* AEDeleteItem, then an index past the end */
+        AECreateList(NULL, 0, false, &list);
+        v32 = 0;
+        AEPutPtr(&list, 0, typeLongInteger, &v32, 4);
+        v32 = 7;
+        AEPutPtr(&list, 0, typeLongInteger, &v32, 4);
+        err = AEDeleteItem(&list, 1);
+        count = -1;
+        AECountItems(&list, &count);
+        v32 = -1;
+        AEGetNthPtr(&list, 1, typeLongInteger, &kw, &type, &v32, 4, &size);
+        out("list.delete1", "%d count %ld first %ld", err, count, v32);
+        out("list.delete_past", "%d", AEDeleteItem(&list, 2));
+        AEDisposeDesc(&list);
+
+        /* a longer item replacing the first keeps the second; -1 is the last */
+        AECreateList(NULL, 0, false, &list);
+        AEPutPtr(&list, 0, typeChar, "a", 1);
+        v32 = 42;
+        AEPutPtr(&list, 0, typeLongInteger, &v32, 4);
+        err = AEPutPtr(&list, 1, typeChar, "long", 4);
+        v32 = -1;
+        AEGetNthPtr(&list, 2, typeLongInteger, &kw, &type, &v32, 4, &size);
+        out("list.replace1", "%d second %ld", err, v32);
+        v32 = 99;
+        err = AEPutPtr(&list, -1, typeLongInteger, &v32, 4);
+        count = -1;
+        AECountItems(&list, &count);
+        v32 = -1;
+        AEGetNthPtr(&list, 2, typeLongInteger, &kw, &type, &v32, 4, &size);
+        out("list.put_minus1", "%d count %ld second %ld", err, count, v32);
+        AEDisposeDesc(&list);
+
+        /* AECreateList with factoring arguments */
+        {
+            char prefix[8];
+            memset(prefix, 0, sizeof prefix);
+            err = AECreateList(prefix, sizeof prefix, false, &list);
+            out("list.factored", "%d type %.4s", err, (char *)&list.descriptorType);
+            if(err == noErr)
+                AEDisposeDesc(&list);
+        }
+
+        /* a new event's return and transaction IDs, as short and long */
+        {
+            AEAddressDesc target;
+            AppleEvent evt;
+            long tid = 0;
+            target.descriptorType = typeNull;
+            target.dataHandle = NULL;
+            err = AECreateAppleEvent('TEST', 'EVNT', &target, kAutoGenerateReturnID, 123, &evt);
+            out("event.create", "%d", err);
+            v16 = 0;
+            err = AEGetAttributePtr(&evt, keyReturnIDAttr, typeShortInteger, &type, &v16, 2, &size);
+            out("event.returnid", "%d type %.4s %s", err, (char *)&type,
+                v16 == 0 ? "zero" : v16 == kAutoGenerateReturnID ? "auto" : "generated");
+            err = AEGetAttributePtr(&evt, keyTransactionIDAttr, typeLongInteger, &type, &tid, 4, &size);
+            out("event.transactionid", "%d type %.4s %ld", err, (char *)&type, tid);
+            AEDisposeDesc(&evt);
+        }
+
+        /* the default text to number coercion */
+        memset(&d, SENTINEL, sizeof d);
+        err = AECoercePtr(typeChar, (Ptr) "123", 3, typeLongInteger, &d);
+        v32 = -1;
+        if(err == noErr && d.dataHandle)
+            BlockMoveData(*d.dataHandle, &v32, 4);
+        out("coerce.text_long", "%d type %.4s value %ld", err, (char *)&d.descriptorType, v32);
+        if(err == noErr)
+            AEDisposeDesc(&d);
+
+        /* installing a handler again for the same event; removing it with
+           another handler */
+        {
+            AEEventHandlerUPP a = NewAEEventHandlerUPP(send_handler), b = NewAEEventHandlerUPP(handler), got = NULL;
+            long refcon = 0;
+            err = AEInstallEventHandler('CLAS', 'EVNT', a, 1, false);
+            out("hdlr.install1", "%d", err);
+            err = AEInstallEventHandler('CLAS', 'EVNT', b, 2, false);
+            AEGetEventHandler('CLAS', 'EVNT', &got, &refcon, false);
+            out("hdlr.install2", "%d got %s refcon %ld", err, got == b ? "second" : got == a ? "first" : "other",
+                refcon);
+            out("hdlr.remove_other", "%d", AERemoveEventHandler('CLAS', 'EVNT', a, false));
+            out("hdlr.remove_it", "%d", AERemoveEventHandler('CLAS', 'EVNT', b, false));
+            got = NULL;
+            out("hdlr.after", "%d", AEGetEventHandler('CLAS', 'EVNT', &got, &refcon, false));
+            /* which of the two removed it: one never installed, and one
+               removed naming another handler, then looked up */
+            out("hdlr.remove_absent", "%d", AERemoveEventHandler('NONE', 'EVNT', a, false));
+            AEInstallEventHandler('CLAS', 'EVN2', b, 5, false);
+            err = AERemoveEventHandler('CLAS', 'EVN2', a, false);
+            refcon = 0;
+            out("hdlr.remove_other2", "%d then get %d refcon %ld", err,
+                AEGetEventHandler('CLAS', 'EVN2', &got, &refcon, false), refcon);
+            AERemoveEventHandler('CLAS', 'EVN2', b, false);
+            /* a wildcard ID and an exact one: which AEGetEventHandler gives */
+            AEInstallEventHandler('CLAS', typeWildCard, a, 3, false);
+            AEInstallEventHandler('CLAS', 'EXAC', b, 4, false);
+            refcon = 0;
+            err = AEGetEventHandler('CLAS', 'EXAC', &got, &refcon, false);
+            out("hdlr.get_exact", "%d refcon %ld", err, refcon);
+            refcon = 0;
+            err = AEGetEventHandler('CLAS', 'OTHR', &got, &refcon, false);
+            out("hdlr.get_other", "%d refcon %ld", err, refcon);
+            refcon = 0;
+            err = AEGetEventHandler('CLAS', typeWildCard, &got, &refcon, false);
+            out("hdlr.get_wild", "%d refcon %ld", err, refcon);
+            AERemoveEventHandler('CLAS', typeWildCard, a, false);
+            AERemoveEventHandler('CLAS', 'EXAC', b, false);
+        }
+
+        /* AEPutArray and AEGetArray, a data array of shorts */
+        {
+            short in[3] = { 1, 2, 3 }, outv[3] = { 0, 0, 0 };
+            DescType itype = 0;
+            Size isize = 0;
+            long icount = 0;
+            AECreateList(NULL, 0, false, &list);
+            err = AEPutArray(&list, kAEDataArray, (AEArrayDataPointer)in, typeShortInteger, 2, 3);
+            out("array.put", "%d", err);
+            err = AEGetArray(&list, kAEDataArray, (AEArrayDataPointer)outv, sizeof outv, &itype, &isize, &icount);
+            out("array.get", "%d type %.4s size %ld count %ld values %d %d %d", err, (char *)&itype, (long)isize,
+                icount, outv[0], outv[1], outv[2]);
+            AEDisposeDesc(&list);
+        }
+
+        /* AEManagerInfo */
+        {
+            long r = -1;
+            err = AEManagerInfo(keyAEVersion, &r);
+            out("info.version", "%d %08lx", err, r);
+            r = -1;
+            err = AEManagerInfo(keyAERecorderCount, &r);
+            out("info.recorders", "%d %ld", err, r);
+        }
+    }
     probe_close();
     return 0;
 }

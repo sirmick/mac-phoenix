@@ -13,7 +13,8 @@ pixels and the sound the Mac played.
   flattened copy must be those pixels, whatever the reference says.
 * --known: result names or wildcards (one per line, "#" comments) known to differ
   here, left out of the comparison with the reference (not of the
-  manifest's pixel check).
+  manifest's pixel check). A known result the reference passes must still
+  pass here, its detail may differ; "NAME may-fail" lets it fail too.
 * --same-frames A=B: QTTest --disk's movie A must draw what B draws (the
   same movie, A's header compressed: QuickTime 3's 'cmov'); each
   disk.A.NN line's detail against disk.B.NN's.
@@ -200,14 +201,24 @@ def main():
         expected = result_lines(a.expected, "utf-8")
         if a.known:
             known = set()
+            may_fail = set()
             for line in open(a.known, encoding="utf-8"):
-                line = line.split("#", 1)[0].strip()
-                if line:
-                    known.add(line.split()[0])
-            is_known = lambda name: any(fnmatch.fnmatchcase(name, k) for k in known)
-            skip = lambda lines: [l for l in lines if not is_known((l.split(" ", 2) + [""])[1])]
+                words = line.split("#", 1)[0].split()
+                if words:
+                    known.add(words[0])
+                    if "may-fail" in words[1:]:
+                        may_fail.add(words[0])
+            name_of = lambda l: (l.split(" ", 2) + [""])[1]
+            matches = lambda name, pats: any(fnmatch.fnmatchcase(name, k) for k in pats)
+            skip = lambda lines: [l for l in lines if not matches(name_of(l), known)]
             left = len(results) - len(skip(results))
             print("known to differ here: %d names, %d of these results" % (len(known), left))
+            status = {name_of(l): l.split(" ", 1)[0] for l in results}
+            for l in expected:
+                n = name_of(l)
+                if (l.startswith("PASS ") and matches(n, known) and not matches(n, may_fail)
+                        and status.get(n, "PASS") != "PASS"):
+                    errors.append("known:    %s passes in the reference, %s here" % (n, status[n]))
             results, expected = skip(results), skip(expected)
         e = compare(results, expected)
         print("against %s: %d lines, %d differ" % (a.expected, len(results), len(e)))

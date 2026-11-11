@@ -749,8 +749,22 @@ MC calls are declared in `QuickTime.yaml` under a component dispatcher
   Quadra's 68k codecs give on 7.6.1: the G3 runs the PowerPlug's PowerPC
   codecs, which round differently, so those CRCs are known to differ
   (`ctest qt_executor_ppc_86`, `tests/guest/qt/known_executor_ppc_86.txt`).
-  **Open:** smc through the base codec ends codecErr (-8960) before any
-  band; the movie made in Photo-JPEG answers MoviesTask -50.
+- **pixelFormat.** QuickTime 3 reads a pixel map's format from its
+  planeBytes field (Universal Interfaces 3.x's `pixelFormat`). 8.6's smc
+  decompressor checks it on a first frame (conditionFlags `$A0C`) and
+  answers codecErr unless it is 8, 16 or 32; the ICM gave it 0, so the
+  first band of every sequence failed (and the frame after it decoded). The
+  ICM's copies of the destination and the compressor's source carry the
+  pixel size there when it is 0 (`set_pixel_format`); smc decodes, its
+  pixels the 7.6.1 difference (an undithered 8-bit source).
+- **MoviesTask's error is its own.** QuickTime 3's base codec asks
+  `GetTimeBaseTime` of a nil time base on each frame (paramErr), and that
+  stayed the Movie Toolbox's error after MoviesTask: the Photo-JPEG movie
+  drew every frame and answered -50. MoviesTask sets its own result, the
+  first frame that failed or noErr.
+- `compare.py --known`: a known line the reference passes must still pass
+  (its detail may differ; `NAME may-fail` lets it fail), so a known codec
+  difference can't hide a codec failure.
 - Loading a component's code (or GetComponentResource) no longer closes
   its file when it was open already: QuickTime 3's codecs share the
   QuickTime file, and closing it under a codec's OpenComponentResFile

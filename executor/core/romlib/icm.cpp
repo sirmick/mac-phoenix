@@ -474,9 +474,21 @@ void fill_dparams(CodecDecompressParams &p, DState &s, CodecCapabilities *caps, 
     p.accuracy = s.accuracy;
 }
 
+/* QuickTime 3's codecs read a pixel map's format from planeBytes, its
+   pixelFormat since QuickTime 3 (Universal Interfaces 3.x's PixMap): for
+   QuickDraw's own depths the format is the pixel size (k8IndexedPixelFormat
+   8, k16BE555PixelFormat 16, k32ARGBPixelFormat 32). 8.6's 'smc '
+   decompressor checks it on a first frame and answers codecErr for 0;
+   QuickTime 2.5's codecs don't read it. */
+void set_pixel_format(PixMap &pm)
+{
+    if(pm.planeBytes == 0)
+        pm.planeBytes = pm.pixelSize;
+}
+
 /* The codec into the destination itself, or into an offscreen. Its copy of
    the pixel map has rowBytes without the flags, as a compressor's source
-   (source_pixmap). */
+   (source_pixmap), and a pixel format. */
 void aim(CodecDecompressParams &p, DState &s, MatrixRecord *m, bool direct)
 {
     if(direct)
@@ -502,6 +514,7 @@ void aim(CodecDecompressParams &p, DState &s, MatrixRecord *m, bool direct)
         SetIdentityMatrix(m);
         p.transferMode = srcCopy;
     }
+    set_pixel_format(p.dstPixMap);
     INTEGER type = GetMatrixType(m);
     p.matrixType = type;
     p.matrixFlags = 0;
@@ -818,6 +831,7 @@ bool source_pixmap(PixMap *out, PixMapHandle src, const Rect &r, int16_t wanted,
         b.right = r.right - pm.bounds.left;
         pm.bounds = b;
         pm.rowBytes = pm.rowBytes & 0x3FFF;
+        set_pixel_format(pm);
         *out = pm;
         return true;
     }
@@ -843,11 +857,15 @@ bool source_pixmap(PixMap *out, PixMapHandle src, const Rect &r, int16_t wanted,
     SetGWorld(*buf, nullptr);
     SignedByte state = HGetState((Handle)src);
     HLock((Handle)src);
-    CopyBits((BitMap *)*src, (BitMap *)*bpm, &r, &b, srcCopy, nullptr);
+    /* to fewer bits than a direct source has: dithered, as the Quadra's
+       ICM gives 'smc ' its 8-bit frame (QTTest icm.smc_) */
+    short mode = bits > 8 && wanted <= 8 ? ditherCopy : srcCopy;
+    CopyBits((BitMap *)*src, (BitMap *)*bpm, &r, &b, mode, nullptr);
     HSetState((Handle)src, state);
     SetGWorld(save_port, save_dev);
     *out = **bpm;
     out->rowBytes = out->rowBytes & 0x3FFF;
+    set_pixel_format(*out);
     return true;
 }
 

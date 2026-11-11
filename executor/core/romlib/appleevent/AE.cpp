@@ -5,6 +5,7 @@
 /* AppleEvents implementation */
 
 #include <base/common.h>
+#include <prefs/prefs.h>
 
 #include <EventMgr.h>
 #include <NotifyMgr.h>
@@ -486,6 +487,19 @@ OSErr Executor::C_AEGetArray(AEDescList *list, AEArrayType array_type,
                              GUEST<Size> *return_item_size,
                              GUEST<int32_t> *return_item_count)
 {
+    /* MacPhoenix: a data array of a list AEPutArray filled, unfactored:
+       errAEWrongDataType, type '****', size -1, count 0 (8.6 and 9.0.4,
+       difftest aevt spec.array.get). The other forms aren't done. */
+    if(array_type == kAEDataArray)
+    {
+        if(return_item_type)
+            *return_item_type = typeWildCard;
+        if(return_item_size)
+            *return_item_size = -1;
+        if(return_item_count)
+            *return_item_count = 0;
+        AE_RETURN_ERROR(errAEWrongDataType);
+    }
     warning_unimplemented("");
     AE_RETURN_ERROR(noErr);
 }
@@ -562,7 +576,17 @@ OSErr Executor::C_AECoercePtr(DescType data_type, const void *data_ptr, Size dat
                                    &is_desc_hdlr_p,
                                    true);
         if(err != noErr)
-            AE_RETURN_ERROR(errAECoercionFail);
+        {
+            /* MacPhoenix: no handler: the Apple Event Manager's own
+               coercions, as AECoerceDesc has them (8.6, difftest aevt
+               spec.coerce.text_long) */
+            AEDesc tmp;
+            if(AECreateDesc(data_type, data, data_size, &tmp) != noErr)
+                AE_RETURN_ERROR(memFullErr);
+            err = AECoerceDesc(&tmp, result_type, desc_out);
+            AEDisposeDesc(&tmp);
+            AE_RETURN_ERROR(err == noErr ? noErr : (OSErr)errAECoercionFail);
+        }
     }
 
     /* swap things to a normal state */
@@ -798,6 +822,51 @@ static bool coerce_alias(AEDesc *desc, DescType result_type, AEDesc *desc_out)
     return false;
 }
 
+/* MacPhoenix: text to an integer, the Apple Event Manager's own (8.6,
+   difftest aevt spec.list.get_coerced, spec.coerce.text_long: "42" read as
+   a long is 42). Digits with an optional sign, spaces around them; the
+   value has to fit. */
+static bool coerce_text_integer(AEDesc *desc, DescType result_type, AEDesc *desc_out)
+{
+    if(DESC_TYPE(desc) != typeChar
+       || (result_type != typeLongInteger && result_type != typeShortInteger))
+        return false;
+    Handle h = DESC_DATA(desc);
+    if(!h)
+        return false;
+    Size n = GetHandleSize(h);
+    const char *p = (const char *)*h, *end = p + n;
+    while(p < end && *p == ' ')
+        p++;
+    while(end > p && end[-1] == ' ')
+        end--;
+    bool negative = p < end && (*p == '-' || *p == '+') && *p++ == '-';
+    if(p == end)
+        return false;
+    int64_t v = 0;
+    for(; p < end; p++)
+    {
+        if(*p < '0' || *p > '9')
+            return false;
+        v = v * 10 + (*p - '0');
+        if(v > (int64_t)INT32_MAX + 1)
+            return false;
+    }
+    if(negative)
+        v = -v;
+    if(result_type == typeLongInteger && v >= INT32_MIN && v <= INT32_MAX)
+    {
+        GUEST<int32_t> out = (int32_t)v;
+        return AECreateDesc(typeLongInteger, &out, sizeof out, desc_out) == noErr;
+    }
+    if(result_type == typeShortInteger && v >= INT16_MIN && v <= INT16_MAX)
+    {
+        GUEST<int16_t> out = (int16_t)v;
+        return AECreateDesc(typeShortInteger, &out, sizeof out, desc_out) == noErr;
+    }
+    return false;
+}
+
 OSErr Executor::C_AECoerceDesc(AEDesc *desc, DescType result_type,
                                AEDesc *desc_out)
 {
@@ -837,6 +906,7 @@ OSErr Executor::C_AECoerceDesc(AEDesc *desc, DescType result_type,
         if(err != noErr)
         {
             if(coerce_integer(desc, result_type, desc_out)
+               || coerce_text_integer(desc, result_type, desc_out)
                || coerce_alias(desc, result_type, desc_out)
                || coerce_single_item_list(desc, result_type, desc_out)
                || coerce_record(desc, result_type, desc_out)
@@ -883,11 +953,24 @@ fail:
 /* MacPhoenix: 7.5.5's PACK 8 has no AEManagerInfo (its routine table ends
    at $3E), so the call is paramErr on a real System of that age; Disk Copy
    6.3.3 takes that and gives up on noErr with a version of 0. */
+/* MacPhoenix: 7.5.5's PACK 8 answers paramErr (Disk Copy goes on without
+   AppleScript); 8.6's and 9.0.4's answer the Apple Event Manager's version,
+   1.0.5, and no recorders (difftest aevt spec.info). 7.6.1 is taken to be
+   7.5.5's, unmeasured. */
 OSErr Executor::C_AEManagerInfo(AEKeyword keyWord, GUEST<LONGINT> *resultp)
 {
-    (void)keyWord;
     if(resultp)
         *resultp = 0;
+    if(system_version < 0x0800)
+        return paramErr;
+    if(keyWord == keyAEVersion)
+    {
+        if(resultp)
+            *resultp = 0x01058000;
+        return noErr;
+    }
+    if(keyWord == keyAERecorderCount)
+        return noErr;
     return paramErr;
 }
 

@@ -191,6 +191,24 @@ TEST(Movies, TimeAndRate)
     C_DisposeMovie(m);
 }
 
+/* MoviesTask answers for itself: an error a call made before it isn't its
+   result. (Nor is one a codec's call makes meanwhile, QuickTime 3's base
+   codec asking GetTimeBaseTime of a nil time base each frame: that takes a
+   codec, qt_executor_ppc_86's frame.made-jpeg.) */
+TEST(Movies, TaskErrorIsItsOwn)
+{
+    Movie m = three_samples(nullptr, nullptr);
+    C_SetMovieActive(m, false); /* nothing to draw (the test has no codecs) */
+    C_GetTimeBaseTime(nullptr, 1000, nullptr);
+    EXPECT_EQ(paramErr, C_GetMoviesError());
+    C_MoviesTask(m, 0);
+    EXPECT_EQ(noErr, C_GetMoviesError());
+    C_GetTimeBaseTime(nullptr, 1000, nullptr);
+    C_MoviesTask(nullptr, 0);
+    EXPECT_EQ(noErr, C_GetMoviesError());
+    C_DisposeMovie(m);
+}
+
 TEST(Movies, ThroughAHandle)
 {
     Movie m = three_samples(nullptr, nullptr);
