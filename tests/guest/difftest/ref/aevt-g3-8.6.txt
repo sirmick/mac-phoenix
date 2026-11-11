@@ -1,4 +1,4 @@
-# probe a697cf51ef7e18cb2249bf4e3875215453d378fa45e238390e83d3346b157e6d
+# probe 905d406482611909467d3eda8e8650786fe85425ff1765da4bfebc6ed6cf1ddd
 == received
 received.install: 0
 received.process: 0
@@ -284,7 +284,7 @@ coerce.vol.alis.fss.same: yes
 == layout
 layout.new: size 90 params at 90 attributes 0 parameters 0
 layout.new.end: ;;;;
-layout.new.bytes: 00 00 00 00 00 00 00 00 00 00 00 5a 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 54 65 73 74 4c 61 79 31 00 01 02 7d 70 73
+layout.new.bytes: 00 00 00 00 00 00 00 00 00 00 00 5a 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 54 65 73 74 4c 61 79 31 00 01 02 87 70 73
 layout.appended: 0
 layout.appended.value: TxtW
 layout.cleared44: 0
@@ -292,3 +292,32 @@ layout.cleared44.class: Test
 layout.cleared44.id: Lay1
 layout.put: size 106 params at 90 parameters 1
 layout.put.at: kocl
+== spec
+spec.desc.create: 0 size 5
+spec.desc.dispose: 0 type null handle nil
+spec.desc.null: 0 type null handle nil
+spec.list.put0: 0 count 1
+spec.list.get_coerced: 0 type long size 4 value 42
+spec.list.delete1: 0 count 1 first 7
+spec.list.delete_past: -1701
+spec.list.replace1: 0 second 42
+spec.list.put_minus1: -1719 count 2 second 42
+spec.list.factored: 0 type list
+spec.event.create: 0
+spec.event.returnid: -1700 type null zero
+spec.event.transactionid: 0 type long 123
+spec.coerce.text_long: 0 type long value 123
+spec.hdlr.install1: 0
+spec.hdlr.install2: 0 got second refcon 2
+spec.hdlr.remove_other: 0
+spec.hdlr.remove_it: 0
+spec.hdlr.after: -1717
+spec.hdlr.remove_absent: -1717
+spec.hdlr.remove_other2: 0 then get 0 refcon 5
+spec.hdlr.get_exact: 0 refcon 4
+spec.hdlr.get_other: -1717 refcon 0
+spec.hdlr.get_wild: 0 refcon 3
+spec.array.put: 0
+spec.array.get: -1703 type **** size -1 count 0 values 0 0 0
+spec.info.version: 0 01058000
+spec.info.recorders: 0 0

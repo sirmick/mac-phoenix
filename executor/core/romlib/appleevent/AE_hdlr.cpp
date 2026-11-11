@@ -135,7 +135,11 @@ hdlr_table_elt(AE_hdlr_table_h table,
     {
         elt = &elts[elt_index];
 
-        if((hdlr == nullptr
+        /* MacPhoenix: installing goes by the key alone and the caller
+           replaces the value: a second handler for an event replaces the
+           first (8.6, difftest aevt spec.hdlr.install2; a new entry beside
+           it was never found) */
+        if((hdlr == nullptr || create_p
             || hdlr->fn == elt->hdlr.fn)
            && elt->selector.sel0 == selector->sel0
            && elt->selector.sel1 == selector->sel1)
@@ -385,7 +389,16 @@ OSErr Executor::C_AERemoveEventHandler(AEEventClass event_class,
     selector.sel0 = event_class;
     selector.sel1 = event_id;
 
-    /* #### fail if `hdlr' is not the currently installed handler? */
+    /* MacPhoenix: as 8.6 (difftest aevt spec.hdlr.remove_*): an event
+       with no handler is errAEHandlerNotFound; naming another handler than
+       the one installed is noErr and removes nothing; the installed one is
+       removed */
+    AE_hdlr_table_elt_t *elt;
+    OSErr err = hdlr_table_elt(table, &selector, nullptr, false, &elt);
+    if(err != noErr)
+        AE_RETURN_ERROR(err);
+    if(elt->hdlr.fn != (void *)hdlr)
+        AE_RETURN_ERROR(noErr);
     AE_RETURN_ERROR(_AE_hdlr_delete(table, 0, &selector));
 }
 
