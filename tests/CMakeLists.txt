@@ -1517,6 +1517,19 @@ set_tests_properties(mman68k_executor_761 PROPERTIES
   SKIP_RETURN_CODE 77
 )
 
+# The private Apple event handler-table calls (Pack8 $092E $0830 ...; 68k
+# only) on Executor's own Apple Event Manager (8.6) against the Quadra's
+# 7.6.1 PACK 8 (HyperCard fills its own tables with $0830).
+add_test(
+  NAME aehdlr68k_executor_86
+  COMMAND bash ${CMAKE_SOURCE_DIR}/tests/guest/difftest/aehdlr68k.sh --backend executor --image 8.6 --port 18574
+)
+set_tests_properties(aehdlr68k_executor_86 PROPERTIES
+  TIMEOUT 230
+  LABELS "guest;86;executor"
+  SKIP_RETURN_CODE 77
+)
+
 # ... and on Executor's 9.0.4 (its own System) against the G3's 9.0.4, for
 # calls 9.0 added.
 foreach(probe vminfo)
@@ -1741,6 +1754,12 @@ endforeach()
 # (tests/test_qt_apps_executor.sh; skipped without the movie's image).
 add_test(NAME qt_apps_executor_761 COMMAND bash ${TEST_DIR}/test_qt_apps_executor.sh $<TARGET_FILE:mac-phoenix> 18880)
 set_tests_properties(qt_apps_executor_761 PROPERTIES TIMEOUT 400 LABELS "guest;qt;761;executor" SKIP_RETURN_CODE 77)
+
+# HyperCard 2.4.1 scripted ("do script") on Executor's own Apple Event
+# Manager (8.6): its own handler tables (Pack8 $0830) and the current event
+# suspended and resumed to run the script at idle.
+add_test(NAME hypercard_script_executor_86 COMMAND bash ${TEST_DIR}/test_hypercard_executor.sh $<TARGET_FILE:mac-phoenix> 18894)
+set_tests_properties(hypercard_script_executor_86 PROPERTIES TIMEOUT 300 LABELS "guest;86;executor" SKIP_RETURN_CODE 77)
 
 # QuickTime's fixed-point, wide and matrix routines ($ABC2; tests/guest/qtmath):
 # Executor's own (qtmath.cpp) against a Quadra's 7.6.1 with QuickTime 2.5,

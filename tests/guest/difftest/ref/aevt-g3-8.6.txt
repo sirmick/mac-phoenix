@@ -1,4 +1,4 @@
-# probe 905d406482611909467d3eda8e8650786fe85425ff1765da4bfebc6ed6cf1ddd
+# probe 6f36e429f4fd3b84e175a8528e3ed9850588e25b97b5fecd07365798bb24a782
 == received
 received.install: 0
 received.process: 0
@@ -90,6 +90,7 @@ send.h1.optk: err -1701
 send.h1.from: psn  8 self
 send.h1.timo: err -1701
 send.h1.subj: err -1701
+send.h1.current: 0 this event
 send.h1.reply: aevt params 0
 send.h1.reply.put: 0
 send.send1: 0
@@ -122,6 +123,7 @@ send.h2.optk: err -1701
 send.h2.from: psn  8 self
 send.h2.timo: err -1701
 send.h2.subj: err -1701
+send.h2.current: 0 this event
 send.h2.reply: aevt params 0
 send.h2.reply.put: 0
 send.send2: -1234
@@ -171,6 +173,7 @@ send.h3.optk: err -1701
 send.h3.from: psn  8 self
 send.h3.timo: err -1701
 send.h3.subj: err -1701
+send.h3.current: 0 this event
 send.h3.reply: null
 send.send4: 0
 send.send4.reply: null
@@ -284,7 +287,7 @@ coerce.vol.alis.fss.same: yes
 == layout
 layout.new: size 90 params at 90 attributes 0 parameters 0
 layout.new.end: ;;;;
-layout.new.bytes: 00 00 00 00 00 00 00 00 00 00 00 5a 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 54 65 73 74 4c 61 79 31 00 01 02 87 70 73
+layout.new.bytes: 00 00 00 00 00 00 00 00 00 00 00 5a 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 54 65 73 74 4c 61 79 31 00 01 02 8a 70 73
 layout.appended: 0
 layout.appended.value: TxtW
 layout.cleared44: 0

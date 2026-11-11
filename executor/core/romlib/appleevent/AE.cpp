@@ -4,6 +4,7 @@
 
 /* AppleEvents implementation */
 
+#include <syn68k_public.h>
 #include <base/common.h>
 #include <prefs/prefs.h>
 
@@ -34,6 +35,29 @@ using namespace Executor;
 /* MacPhoenix: the application's table, then the system's; in each the
    exact entry, then the wildcard ones (8.6's Script Editor installs only
    '****' '****' and gets its 'oapp' there) */
+/* MacPhoenix: the current event (Inside Macintosh: Interapplication Communication, Apple Event Manager): the one a handler is
+   handling while it runs, and so AEGetTheCurrentEvent's answer; a handler
+   that suspends it (AESuspendTheCurrentEvent) keeps it past its return,
+   and finishes it with AEResumeTheCurrentEvent. HyperCard 2.4.1 runs a
+   'dosc' script so, at idle: given no current event its handler gave up
+   and the script never ran (the stubs did nothing). */
+static AppleEvent current_event = { typeNull, nullptr };
+static bool current_suspended;
+
+static OSErr call_handler(AEEventHandlerUPP hdlr, AppleEvent *evt, AppleEvent *reply,
+                          int32_t refcon, bool *suspended)
+{
+    AppleEvent saved = current_event;
+    bool saved_suspended = current_suspended;
+    current_event = *evt;
+    current_suspended = false;
+    OSErr err = hdlr(evt, reply, refcon);
+    *suspended = current_suspended;
+    current_event = saved;
+    current_suspended = saved_suspended;
+    return err;
+}
+
 static OSErr find_handler(AEEventClass event_class, AEEventID event_id,
                           GUEST<AEEventHandlerUPP> *hdlr_s, GUEST<int32_t> *refcon_s)
 {
@@ -107,7 +131,18 @@ static OSErr send_direct(AppleEvent *evt, AppleEvent *reply, bool want_reply)
     else
     {
         AEEventHandlerUPP hdlr = hdlr_s;
-        retval = hdlr(copy, answer, (int32_t)refcon_s);
+        bool suspended;
+        retval = call_handler(hdlr, copy, answer, (int32_t)refcon_s, &suspended);
+        if(suspended)
+        {
+            /* the application finishes it later: no reply now */
+            if(reply)
+            {
+                DESC_TYPE(reply) = typeNull;
+                DESC_DATA(reply) = nullptr;
+            }
+            return noErr;
+        }
     }
     AEDisposeDesc(copy);
 
@@ -281,7 +316,12 @@ OSErr Executor::C_AEProcessAppleEvent(EventRecord *evtrec)
         DESC_TYPE(reply) = typeNull;
         DESC_DATA(reply) = nullptr;
 
-        retval = hdlr(evt, reply, refcon);
+        bool suspended;
+        retval = call_handler(hdlr, evt, reply, refcon, &suspended);
+        /* suspended: the application's now, AEResumeTheCurrentEvent
+           disposes of both */
+        if(suspended)
+            AE_RETURN_ERROR(noErr);
         AEDisposeDesc(reply);
     }
 
@@ -453,29 +493,95 @@ OSErr Executor::C_AESend(AppleEvent *evt, AppleEvent *reply,
     }
 }
 
+/* MacPhoenix: the current event, see call_handler */
 OSErr Executor::C_AESuspendTheCurrentEvent(AppleEvent *evt)
 {
-    warning_unimplemented("");
+    if(evt && DESC_DATA(evt) && DESC_DATA(evt) == DESC_DATA(&current_event))
+        current_suspended = true;
     AE_RETURN_ERROR(noErr);
 }
 
+/* AEResumeTheCurrentEvent's special dispatchers (AppleEvents.h) */
+enum : uint32_t
+{
+    kAENoDispatchValue = 0,
+    kAEUseStandardDispatchValue = 0xFFFFFFFF,
+};
+
+/* the guest long a routine pointer argument holds: kAEUseStandardDispatch
+   (-1) is in no window, so not ptr_to_longint (as mc.cpp's value_of) */
+static uint32_t guest_long_of(void *p)
+{
+    if(!p)
+        return 0;
+    uint64_t h = (uintptr_t)p;
+    for(int i = 0; i < OFFSET_TABLE_SIZE; i++)
+    {
+        uint64_t g = h - ROMlib_offsets[i];
+        if(g <= 0xFFFFFFFFull && (g >> 30) == (uint64_t)i)
+            return (uint32_t)g;
+    }
+    return (uint32_t)h;
+}
+
+/* A suspended event finished: kAENoDispatch disposes of it and its reply,
+   kAEUseStandardDispatch dispatches it as AEProcessAppleEvent would, and
+   any other routine is called as its handler (IM: Interapplication Communication) */
 OSErr Executor::C_AEResumeTheCurrentEvent(
     AppleEvent *evt, AppleEvent *reply, AEEventHandlerUPP dispatcher,
     int32_t refcon)
 {
-    warning_unimplemented("");
-    AE_RETURN_ERROR(noErr);
+    if(!evt)
+        AE_RETURN_ERROR(paramErr);
+    OSErr err = noErr;
+    uint32_t which = guest_long_of((void *)dispatcher);
+    if(which != kAENoDispatchValue)
+    {
+        AEEventHandlerUPP hdlr = dispatcher;
+        int32_t rc = refcon;
+        if(which == kAEUseStandardDispatchValue)
+        {
+            GUEST<AEEventClass> class_s;
+            GUEST<AEEventID> id_s;
+            GUEST<DescType> type;
+            GUEST<Size> size;
+            GUEST<AEEventHandlerUPP> hdlr_s;
+            GUEST<int32_t> refcon_s;
+            err = AEGetAttributePtr(evt, keyEventClassAttr, typeType, &type, &class_s, sizeof class_s, &size);
+            if(err == noErr)
+                err = AEGetAttributePtr(evt, keyEventIDAttr, typeType, &type, &id_s, sizeof id_s, &size);
+            if(err == noErr)
+                err = find_handler(class_s, id_s, &hdlr_s, &refcon_s);
+            hdlr = hdlr_s;
+            rc = refcon_s;
+        }
+        if(err == noErr)
+        {
+            bool suspended;
+            err = call_handler(hdlr, evt, reply, rc, &suspended);
+            if(suspended)
+                AE_RETURN_ERROR(noErr);
+        }
+    }
+    AEDisposeDesc(evt);
+    if(reply)
+        AEDisposeDesc(reply);
+    AE_RETURN_ERROR(err);
 }
 
 OSErr Executor::C_AEGetTheCurrentEvent(AppleEvent *return_evt)
 {
-    warning_unimplemented("");
+    if(!return_evt)
+        AE_RETURN_ERROR(paramErr);
+    *return_evt = current_event;
     AE_RETURN_ERROR(noErr);
 }
 
 OSErr Executor::C_AESetTheCurrentEvent(AppleEvent *evt)
 {
-    warning_unimplemented("");
+    if(!evt)
+        AE_RETURN_ERROR(paramErr);
+    current_event = *evt;
     AE_RETURN_ERROR(noErr);
 }
 

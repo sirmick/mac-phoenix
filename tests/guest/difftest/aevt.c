@@ -132,6 +132,18 @@ static pascal OSErr send_handler(const AppleEvent *evt, AppleEvent *reply, long 
     sprintf(key, "h%ld", refcon);
     hout(key, "%s", in_send ? "called in AESend" : "called later");
     dump_attrs(key, evt, kAutoGenerateReturnID);
+    {
+        /* the current event while a handler runs: the one it was given?
+           (HyperCard suspends it to run a script at idle) */
+        AppleEvent cur;
+        OSErr cerr;
+        memset(&cur, SENTINEL, sizeof cur);
+        cerr = AEGetTheCurrentEvent(&cur);
+        sprintf(key, "h%ld.current", refcon);
+        hout(key, "%d %s", cerr,
+             cur.dataHandle == evt->dataHandle ? "this event"
+             : cur.descriptorType == typeNull ? "null" : "another");
+    }
     sprintf(key, "h%ld.reply", refcon);
     if(reply->descriptorType == typeAppleEvent)
     {

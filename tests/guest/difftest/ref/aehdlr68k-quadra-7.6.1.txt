@@ -1,0 +1,18 @@
+# aehdlr68k on the Quadra 650, System 7.6.1 (Apple's PACK 8): tests/guest/difftest/aehdlr68k.sh
+== table
+table.alloc: 0 table set
+table.empty.lookup: -1723 00000000 00000000
+table.0830.absent: 0 buffer kept
+table.after0830.lookup: 0 11111111 12121212
+table.0830.present: -1722 buffer 22222222 23232323
+table.after0830again.lookup: 0 11111111 12121212
+table.0831.present: 0
+table.after0831.lookup: 0 33333333 34343434
+table.0831.absent: 0
+table.k2.lookup: 0 22222222 23232323
+table.delete: 0
+table.afterdelete.lookup: -1723 00000000 00000000
+table.delete.absent: 0
+table.042F: 0 table nil
+DONE 0
+---

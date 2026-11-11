@@ -222,14 +222,13 @@ OSErr Executor::C__AE_hdlr_table_alloc(int32_t n_elts, int32_t unknown_2,
     AE_RETURN_ERROR(noErr);
 }
 
-OSErr Executor::C__AE_hdlr_delete(AE_hdlr_table_h table, int32_t unknown_1,
-                                  AE_hdlr_selector_t *selector)
+/* a key's entry out of a table: errAEHandlerNotFound when there is none
+   (what the public calls answer) */
+static OSErr table_delete(AE_hdlr_table_h table, AE_hdlr_selector_t *selector)
 {
     AE_hdlr_table_elt_t *elt, *elts;
     int n_elts, elt_offset;
     OSErr err;
-
-    gui_assert(unknown_1 == 0);
 
     err = hdlr_table_elt(table, selector, nullptr, false, &elt);
     if(err != noErr)
@@ -247,6 +246,31 @@ OSErr Executor::C__AE_hdlr_delete(AE_hdlr_table_h table, int32_t unknown_1,
     AE_RETURN_ERROR(noErr);
 }
 
+/* MacPhoenix: the trap, as the Quadra's 7.6.1 PACK 8: a key the table
+   doesn't have is deleted already, noErr (difftest aehdlr68k
+   table.delete.absent) */
+OSErr Executor::C__AE_hdlr_delete(AE_hdlr_table_h table, int32_t unknown_1,
+                                  AE_hdlr_selector_t *selector)
+{
+    gui_assert(unknown_1 == 0);
+    OSErr err = table_delete(table, selector);
+    AE_RETURN_ERROR(err == errAEHandlerNotFound ? (OSErr)noErr : err);
+}
+
+/* MacPhoenix: Pack8 $042F: the table disposed of and *table nil (the
+   Quadra's 7.6.1, difftest aehdlr68k table.042F); it stopped Executor as an
+   unknown selector */
+OSErr Executor::C__AE_hdlr_table_free(GUEST<AE_hdlr_table_h> *table, int32_t imports)
+{
+    (void)imports;
+    if(!table)
+        AE_RETURN_ERROR(paramErr);
+    if(AE_hdlr_table_h t = *table)
+        DisposeHandle((Handle)t);
+    *table = nullptr;
+    AE_RETURN_ERROR(noErr);
+}
+
 OSErr Executor::C__AE_hdlr_lookup(AE_hdlr_table_h table, int32_t unknown_1,
                                   AE_hdlr_selector_t *selector,
                                   AE_hdlr_t *hdlr_return)
@@ -256,34 +280,37 @@ OSErr Executor::C__AE_hdlr_lookup(AE_hdlr_table_h table, int32_t unknown_1,
 
     gui_assert(unknown_1 == 0);
 
+    /* MacPhoenix: a key the table doesn't have is errAEKeyNotFound, the
+       value given back zeros (the Quadra's 7.6.1, difftest aehdlr68k
+       table.empty.lookup) */
     err = hdlr_table_elt(table, selector, nullptr, false, &elt);
     if(err != noErr)
-        AE_RETURN_ERROR(err);
+    {
+        if(hdlr_return)
+            memset(hdlr_return, 0, value_size(table));
+        AE_RETURN_ERROR(err == errAEHandlerNotFound ? (OSErr)errAEKeyNotFound : err);
+    }
 
     memcpy(hdlr_return, &elt->hdlr, value_size(table));
     AE_RETURN_ERROR(noErr);
 }
 
-/* MacPhoenix: Pack8 $0830, beside install ($0831), delete ($0832) and
-   lookup ($0833): a lookup, its key and value buffers laid out as
-   _AE_hdlr_lookup's. HyperCard 2.4.1 calls it on its fresh tables, an
-   event handler's key ('aevt' 'oapp') and a property's ('pnam' '????'),
-   and goes on when they aren't there; unknown before, it stopped the
-   session ("Unknown selector 0x830 for trap Pack8") and HyperCard never
-   came up. */
+/* MacPhoenix: Pack8 $0830, beside install ($0831): an install that
+   refuses a key the table has already, errAEDuplicateKey, the entry as it
+   was (the Quadra's 7.6.1 PACK 8, difftest aehdlr68k table.0830.*; upstream
+   Executor's PACK 8 reading says the same). HyperCard 2.4.1 fills its own
+   tables with it: an event handler's key ('aevt' 'oapp'), a property's
+   ('pnam' '????'). It was taken for a lookup, and HyperCard's tables
+   stayed empty. */
 OSErr Executor::C__AE_hdlr_0830(AE_hdlr_table_h table, int32_t unknown_1,
-                                AE_hdlr_selector_t *selector, AE_hdlr_t *hdlr_return)
+                                AE_hdlr_selector_t *selector, AE_hdlr_t *hdlr)
 {
     AE_hdlr_table_elt_t *elt;
-    (void)unknown_1;
     if(!table || !selector)
         AE_RETURN_ERROR(paramErr);
-    OSErr err = hdlr_table_elt(table, selector, nullptr, false, &elt);
-    if(err != noErr)
-        AE_RETURN_ERROR(err);
-    if(hdlr_return)
-        memcpy(hdlr_return, &elt->hdlr, value_size(table));
-    AE_RETURN_ERROR(noErr);
+    if(hdlr_table_elt(table, selector, nullptr, false, &elt) == noErr)
+        AE_RETURN_ERROR(errAEDuplicateKey);
+    AE_RETURN_ERROR(C__AE_hdlr_install(table, unknown_1, selector, hdlr));
 }
 
 OSErr Executor::C__AE_hdlr_install(AE_hdlr_table_h table, int32_t unknown_1,
@@ -399,7 +426,7 @@ OSErr Executor::C_AERemoveEventHandler(AEEventClass event_class,
         AE_RETURN_ERROR(err);
     if(elt->hdlr.fn != (void *)hdlr)
         AE_RETURN_ERROR(noErr);
-    AE_RETURN_ERROR(_AE_hdlr_delete(table, 0, &selector));
+    AE_RETURN_ERROR(table_delete(table, &selector));
 }
 
 /* coercion handler functions */
@@ -487,7 +514,7 @@ OSErr Executor::C_AERemoveCoercionHandler(
     selector.sel1 = to_type;
 
     /* #### fail if `hdlr' is not the currently installed handler? */
-    AE_RETURN_ERROR(_AE_hdlr_delete(table, 0, &selector));
+    AE_RETURN_ERROR(table_delete(table, &selector));
 }
 
 /* special handler functions */
@@ -562,7 +589,7 @@ OSErr Executor::C_AERemoveSpecialHandler(
     selector.sel1 = k_special_sel1;
 
     /* #### fail if `hdlr' is not the currently installed handler? */
-    AE_RETURN_ERROR(_AE_hdlr_delete(table, 0, &selector));
+    AE_RETURN_ERROR(table_delete(table, &selector));
 }
 
 /* MacPhoenix: the Object Support Library's accessor table and callbacks,
@@ -647,7 +674,7 @@ OSErr Executor::C_AERemoveObjectAccessor(DescType desiredClass, DescType contain
     AE_hdlr_table_elt_t *elt;
     if(!table || hdlr_table_elt(table, &selector, &hdlr, false, &elt) != noErr)
         AE_RETURN_ERROR(errAEAccessorNotFound);
-    AE_RETURN_ERROR(_AE_hdlr_delete(table, 0, &selector));
+    AE_RETURN_ERROR(table_delete(table, &selector));
 }
 
 OSErr Executor::C_AECallObjectAccessor(DescType desiredClass, AEDesc *containerToken,

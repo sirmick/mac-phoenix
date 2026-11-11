@@ -79,18 +79,32 @@ TEST(AEHdlr, InstallHonoursReservedCapacity)
 
 /* Pack8 $0830 (a lookup beside install $0831 and lookup $0833): HyperCard
    2.4.1 calls it on its fresh tables; unknown, it stopped the session. */
-TEST(AEHdlr, Selector0830LooksUp)
+/* $0830 is an install that refuses a key already there; lookup of an
+   absent key is errAEKeyNotFound with the value zeroed; deleting an absent
+   key is noErr; $042F frees the table (the Quadra's 7.6.1 PACK 8: difftest
+   aehdlr68k, ctest aehdlr68k_executor_86). HyperCard 2.4.1 fills its own
+   tables with $0830. */
+TEST(AEHdlr, Selector0830InstallsUnique)
 {
     GUEST<AE_hdlr_table_h> table = nullptr;
     ASSERT_EQ(noErr, C__AE_hdlr_table_alloc(175, 0x80008, 0, 0, &table));
     AE_hdlr_selector_t oapp = { "aevt"_4, "oapp"_4 };
-    AE_hdlr_t got = {}, put = {};
-    put.refcon = 42;
-    EXPECT_EQ(errAEHandlerNotFound, C__AE_hdlr_0830((AE_hdlr_table_h)table, 0, &oapp, &got));
-    EXPECT_EQ(noErr, C__AE_hdlr_install((AE_hdlr_table_h)table, 0, &oapp, &put));
-    EXPECT_EQ(noErr, C__AE_hdlr_0830((AE_hdlr_table_h)table, 0, &oapp, &got));
+    AE_hdlr_t got = {}, first = {}, second = {};
+    first.refcon = 42;
+    second.refcon = 43;
+    got.refcon = 99;
+    EXPECT_EQ(errAEKeyNotFound, C__AE_hdlr_lookup((AE_hdlr_table_h)table, 0, &oapp, &got));
+    EXPECT_EQ(0, (int32_t)got.refcon);
+    EXPECT_EQ(noErr, C__AE_hdlr_0830((AE_hdlr_table_h)table, 0, &oapp, &first));
+    EXPECT_EQ(noErr, C__AE_hdlr_lookup((AE_hdlr_table_h)table, 0, &oapp, &got));
     EXPECT_EQ(42, (int32_t)got.refcon);
-    DisposeHandle((Handle)(AE_hdlr_table_h)table);
+    EXPECT_EQ(errAEDuplicateKey, C__AE_hdlr_0830((AE_hdlr_table_h)table, 0, &oapp, &second));
+    EXPECT_EQ(noErr, C__AE_hdlr_lookup((AE_hdlr_table_h)table, 0, &oapp, &got));
+    EXPECT_EQ(42, (int32_t)got.refcon);
+    EXPECT_EQ(noErr, C__AE_hdlr_delete((AE_hdlr_table_h)table, 0, &oapp));
+    EXPECT_EQ(noErr, C__AE_hdlr_delete((AE_hdlr_table_h)table, 0, &oapp));
+    EXPECT_EQ(noErr, C__AE_hdlr_table_free(&table, 0));
+    EXPECT_EQ(nullptr, (AE_hdlr_table_h)table);
 }
 
 /* Before the first application there are no application tables (a fresh

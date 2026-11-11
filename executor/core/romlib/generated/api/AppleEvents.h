@@ -234,12 +234,18 @@ OSErr C__AE_hdlr_table_alloc(int32_t n_elts, int32_t unknown_2, int32_t unknown_
 OSErr C__AE_hdlr_delete(AE_hdlr_table_h , int32_t , GUEST<AE_hdlr_selector_t> *);PASCAL_SUBTRAP(_AE_hdlr_delete, 0xA816, 0x0632, Pack8);
 
 
+// Private/undocumented: disposes of a table _AE_hdlr_table_alloc made,
+// and sets *table to nil (the Quadra's 7.6.1 PACK 8, difftest aehdlr68k).
+OSErr C__AE_hdlr_table_free(GUEST<AE_hdlr_table_h> *table, int32_t imports);PASCAL_SUBTRAP(_AE_hdlr_table_free, 0xA816, 0x042F, Pack8);
+
+
 OSErr C__AE_hdlr_lookup(AE_hdlr_table_h , int32_t , GUEST<AE_hdlr_selector_t> *, GUEST<AE_hdlr_t> *);PASCAL_SUBTRAP(_AE_hdlr_lookup, 0xA816, 0x0833, Pack8);
 
 
 // Private/undocumented entry point beside _AE_hdlr_install (0x0831):
-// a lookup, its arguments as _AE_hdlr_lookup's; HyperCard 2.4.1 calls
-// it right after _AE_hdlr_table_alloc.
+// an install that refuses a key already there (errAEDuplicateKey), its
+// arguments as _AE_hdlr_install's (the Quadra's 7.6.1, difftest
+// aehdlr68k); HyperCard 2.4.1 fills its own tables with it.
 OSErr C__AE_hdlr_0830(AE_hdlr_table_h , int32_t , GUEST<AE_hdlr_selector_t> *, GUEST<AE_hdlr_t> *);PASCAL_SUBTRAP(_AE_hdlr_0830, 0xA816, 0x0830, Pack8);
 
 
